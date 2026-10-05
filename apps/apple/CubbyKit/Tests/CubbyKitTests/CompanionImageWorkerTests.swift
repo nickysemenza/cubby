@@ -90,6 +90,65 @@ struct CompanionImageWorkerTests {
         let notPaused = CompanionImageWorkerActivity(phase: .idle)
         #expect(!notPaused.remotePaused)
     }
+
+    // MARK: - Drain state
+
+    /// Regression: the worker reports idle before it records the result, so `cubby companion`
+    /// stopped on a stale "nothing pending" while a finished result was still unrecorded. Every
+    /// drain-state read must count a finished command as outstanding, pending, or both until the server
+    /// acknowledges it.
+    @Test func drainStateCountsACommandUntilItsResultIsDurablyRecorded() async throws {
+        let gate = ExecutionGate()
+        let worker = CompanionImageWorker(
+            baseURL: URL(string: "http://localhost:3000")!,
+            credentials: try credentials(bearer: "tok"),
+            deviceID: UUID(), deviceName: "Test phone", foreground: true, isParticipating: false,
+            outbox: try outbox(), execute: { await gate.run($0) })
+        await worker.startCommand(try describeCommand(), socket: nil)
+        while !(await gate.started) { try await Task.sleep(for: .milliseconds(2)) }
+        #expect(
+            try await worker.drainState()
+                == .init(connected: false, outstandingCommands: 1, pendingResults: 0))
+
+        await gate.release()
+        for _ in 0..<500 {
+            let state = try await worker.drainState()
+            #expect(state.outstandingCommands + state.pendingResults >= 1)
+            if state.outstandingCommands == 0 { break }
+            await Task.yield()
+        }
+        #expect(
+            try await worker.drainState()
+                == .init(connected: false, outstandingCommands: 0, pendingResults: 1))
+    }
+
+    private func describeCommand() throws -> ImageProcessingCommand {
+        let value = """
+            {"kind":"describe_image","jobId":"00000000-0000-4000-8000-000000000001","attemptId":"00000000-0000-4000-8000-000000000002","deadline":"2099-01-01T00:00:00Z","source":{"url":"https://example.test/panel.jpg","sha256":"\(String(repeating: "a", count: 64))","contentType":"image/jpeg"},"promptRevision":1,"resultSchemaRevision":1}
+            """
+        return try JSONDecoder.companionImageProcessing.decode(
+            ImageProcessingCommand.self, from: Data(value.utf8))
+    }
+}
+
+private actor ExecutionGate {
+    private(set) var started = false
+    private var waiter: CheckedContinuation<Void, Never>?
+
+    func run(_ command: ImageProcessingCommand) async -> ImageProcessingResult {
+        started = true
+        await withCheckedContinuation { waiter = $0 }
+        return .init(
+            jobId: command.companionJobID, attemptId: command.companionAttemptID, completedAt: .now,
+            outcome: .init(
+                value3: .init(
+                    kind: .describeImage, status: .failed, retryable: true, reason: "Synthetic failure")))
+    }
+
+    func release() {
+        waiter?.resume()
+        waiter = nil
+    }
 }
 
 private actor FailureBox {

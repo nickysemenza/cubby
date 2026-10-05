@@ -15,8 +15,9 @@ struct CompanionCommand: AsyncParsableCommand {
         discussion: """
             Connects to the companion socket with the stored `auth login` session, executes the jobs \
             the server dispatches, and posts their results. Prints one line per job and each worker \
-            phase change. SIGINT/SIGTERM waits up to \(Int(stopGrace.components.seconds))s for \
-            running jobs and result acknowledgements, then stops; a second signal stops at once.
+            phase change. One process serves a host at a time. SIGINT/SIGTERM waits up to \
+            \(Int(stopGrace.components.seconds))s for outstanding jobs and result \
+            acknowledgements, then stops; a second signal stops at once.
             """
     )
 
@@ -26,8 +27,8 @@ struct CompanionCommand: AsyncParsableCommand {
     @OptionGroup var global: GlobalOptions
     @Flag(
         help: """
-            Exit after the worker has been connected with no running job and no unacknowledged \
-            result for --idle-seconds; exit 1 if any job failed or the socket never connected \
+            Exit after the worker has been connected with no outstanding job (queued, running, or \
+            recording) and no unacknowledged result for --idle-seconds; exit 1 if any job failed or the socket never connected \
             within --connect-timeout.
             """)
     var once = false
@@ -37,7 +38,7 @@ struct CompanionCommand: AsyncParsableCommand {
         name: .customLong("connect-timeout"),
         help: "--once: seconds disconnected (at start or after a drop) before giving up.")
     var connectTimeoutSeconds: Int = 30
-    @Flag(help: "Also print socket errors, job ids on each processing phase, and outbox counts.")
+    @Flag(help: "Also print socket errors, job ids on each processing phase, and drain-state changes.")
     var verbose = false
 
     private enum Event: Sendable {
@@ -67,11 +68,27 @@ struct CompanionCommand: AsyncParsableCommand {
     }
 
     private func work(_ context: CLIContext) async throws {
-        let deviceID = try CompanionDeviceID.current()
-        let deviceName = "\(ProcessInfo.processInfo.hostName) (cubby CLI)"
-        // Namespaced apart from the app's outbox so neither replays the other device's results.
+        // Namespaced apart from the app's outbox so neither replays the other device's results, and
+        // owned by one CLI process per host so overlapping runs cannot overwrite each other's.
+        let namespace = "cubby-cli-\(context.host)"
+        let lock: CompanionOwnerLock
+        do {
+            lock = try CompanionOwnerLock.acquire(
+                at: URL.applicationSupportDirectory.appending(
+                    path: "Cubby/ImageProcessing/\(namespace).lock"))
+        } catch let failure as CompanionOwnerLock.Failure {
+            throw CLIError.message(
+                "Another `cubby companion` already serves \(context.host) (\(failure)); stop it first.")
+        }
+        defer { lock.release() }
         let outbox = try CompanionResultOutbox<ImageProcessingResult>.applicationSupport(
-            namespace: "cubby-cli-\(context.host)")
+            namespace: namespace)
+        // The CLI is its own device: the app keeps its id in a data-protection Keychain item under
+        // its signed team identity, which the ad-hoc-signed CLI cannot read, and sharing one id
+        // would make the server treat the app's and the CLI's sockets as one device.
+        let deviceID = try CompanionDeviceIdentity.loadOrCreate(
+            at: URL.applicationSupportDirectory.appending(path: "Cubby/companion-device-id"))
+        let deviceName = "\(ProcessInfo.processInfo.hostName) (cubby CLI)"
 
         log(
             "device \(deviceID.uuidString.lowercased()) \"\(deviceName)\" → \(context.baseURL.absoluteString)"
@@ -113,39 +130,46 @@ struct CompanionCommand: AsyncParsableCommand {
             idleWindow: .seconds(idleSeconds), connectTimeout: .seconds(connectTimeoutSeconds),
             startedAt: .now)
         var lastActivity: CompanionImageWorkerActivity?
-        var pending = 0
+        var lastState: CompanionDrainState?
         var stopDeadline: ContinuousClock.Instant?
         var outcome: Ending = .stopped
 
         await worker.start()
         loop: for await event in events {
-            let now = ContinuousClock.now
             switch event {
             case .activity(let activity):
                 report(activity, after: lastActivity)
                 lastActivity = activity
-                policy.observe(activity, at: now)
             case .job(let job):
                 log(Self.line(for: job))
-                policy.observeJobFinished(job.status, at: now)
+                policy.observeJobFinished(job.status, at: .now)
             case .failure(let message):
                 if verbose { log("socket error: \(message)", toStandardError: true) }
             case .tick:
-                let count = try await outbox.pending().count
-                if verbose, count != pending { log("outbox: \(count) unacknowledged result(s)") }
-                pending = count
-                policy.observePendingResults(count, at: now)
+                break
             case .signal(let number):
                 guard stopDeadline == nil else {
                     log("signal \(number) again: stopping now")
                     break loop
                 }
-                log("signal \(number): finishing running jobs (up to \(Self.stopGrace))")
-                stopDeadline = now + Self.stopGrace
+                log("signal \(number): finishing outstanding jobs (up to \(Self.stopGrace))")
+                stopDeadline = .now + Self.stopGrace
             }
 
+            // Decide on the worker's current state, never on the activity phase or an earlier
+            // read: the phase turns idle before a finished result is recorded.
+            let state = try await worker.drainState()
+            let now = ContinuousClock.now
+            if verbose, state != lastState {
+                log(
+                    "state: connected=\(state.connected) outstanding=\(state.outstandingCommands) "
+                        + "unacknowledged=\(state.pendingResults)")
+            }
+            lastState = state
+            policy.observe(state, at: now)
+
             if let stopDeadline {
-                if (lastActivity?.phase != .processing && pending == 0) || now >= stopDeadline { break loop }
+                if state.isSettled || now >= stopDeadline { break loop }
             } else if once {
                 switch policy.decision(at: now) {
                 case .keepRunning: continue
@@ -202,27 +226,5 @@ struct CompanionCommand: AsyncParsableCommand {
         let line = "\(Date.now.formatted(.iso8601.time(includingFractionalSeconds: false))) \(message)"
         if toStandardError { CLI.printError(line) } else { print(line) }
         fflush(stdout)
-    }
-}
-
-/// The CLI's companion device identity: one per macOS user account, apart from the app's. The app
-/// keeps its id in a data-protection Keychain item under its signed team identity, which the
-/// ad-hoc-signed CLI cannot read, and two processes sharing one id would make the server treat the
-/// app and the CLI as one device.
-enum CompanionDeviceID {
-    static func current(
-        fileURL: URL = URL.applicationSupportDirectory.appending(path: "Cubby/companion-device-id")
-    ) throws -> UUID {
-        let path = fileURL.path(percentEncoded: false)
-        if let text = try? String(contentsOfFile: path, encoding: .utf8),
-            let id = UUID(uuidString: text.trimmingCharacters(in: .whitespacesAndNewlines))
-        {
-            return id
-        }
-        let id = UUID()
-        try FileManager.default.createDirectory(
-            at: fileURL.deletingLastPathComponent(), withIntermediateDirectories: true)
-        try Data(id.uuidString.lowercased().utf8).write(to: fileURL, options: .atomic)
-        return id
     }
 }

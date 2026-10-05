@@ -80,7 +80,7 @@ public actor CompanionImageWorker {
     private let baseURL: URL
     private let credentials: CredentialProvider
     private let session: URLSession
-    private let executor: CompanionImageCommandExecutor
+    private let execute: @Sendable (ImageProcessingCommand) async -> ImageProcessingResult
     private let outbox: CompanionResultOutbox<ImageProcessingResult>
     private let failureObserver: FailureObserver?
     private let activityObserver: ActivityObserver?
@@ -99,6 +99,8 @@ public actor CompanionImageWorker {
     private var connectionGeneration = 0
     private var connectionTask: Task<Void, Never>?
     private var socket: URLSessionWebSocketTask?
+    /// The socket whose hello has been sent; `drainState()` is connected only while it is `socket`.
+    private var greetedSocket: URLSessionWebSocketTask?
     private var backgroundTask: Task<Bool, Never>?
     private let backgroundRunner: CompanionImageBackgroundRunner
     /// The server dispatches every queued job at once; executing each inline in the receive loop
@@ -124,6 +126,27 @@ public actor CompanionImageWorker {
         activityObserver: ActivityObserver? = nil,
         jobObserver: JobObserver? = nil
     ) {
+        self.init(
+            baseURL: baseURL, credentials: credentials, deviceID: deviceID, deviceName: deviceName,
+            foreground: foreground, isParticipating: isParticipating, outbox: outbox,
+            session: session, failureObserver: failureObserver, activityObserver: activityObserver,
+            jobObserver: jobObserver, execute: { command in await executor.execute(command) })
+    }
+
+    init(
+        baseURL: URL,
+        credentials: CredentialProvider,
+        deviceID: UUID,
+        deviceName: String,
+        foreground: Bool,
+        isParticipating: Bool = true,
+        outbox: CompanionResultOutbox<ImageProcessingResult>,
+        session: URLSession = .cubbyShared,
+        failureObserver: FailureObserver? = nil,
+        activityObserver: ActivityObserver? = nil,
+        jobObserver: JobObserver? = nil,
+        execute: @escaping @Sendable (ImageProcessingCommand) async -> ImageProcessingResult
+    ) {
         self.baseURL = baseURL
         self.credentials = credentials
         self.deviceID = deviceID
@@ -132,13 +155,12 @@ public actor CompanionImageWorker {
         self.isParticipating = isParticipating
         self.outbox = outbox
         self.session = session
-        self.executor = executor
+        self.execute = execute
         self.failureObserver = failureObserver
         self.activityObserver = activityObserver
         self.jobObserver = jobObserver
         self.backgroundRunner = CompanionImageBackgroundRunner(
-            outbox: outbox, execute: { command in await executor.execute(command) },
-            failureObserver: failureObserver)
+            outbox: outbox, execute: execute, failureObserver: failureObserver)
     }
 
     deinit {
@@ -313,6 +335,7 @@ public actor CompanionImageWorker {
                 deviceID: deviceID, deviceName: deviceName, foreground: advertisedForeground,
                 imageDescriptionAvailable: descriptionAvailable, automaticWork: isParticipating),
             on: socket)
+        greetedSocket = socket
         activityObserver?(.init(phase: .idle))
         for pending in try await outbox.pending() {
             try await send(.companionResult(pending.result), on: socket)
@@ -351,15 +374,33 @@ public actor CompanionImageWorker {
                 try await send(.companionResult(completed), on: socket)
                 return
             }
-            guard commandTasks[key] == nil else { return }
-            commandTasks[key] = Task { [weak self] in
-                await self?.run(command, key: key, socket: socket)
-            }
+            startCommand(command, socket: socket)
         }
     }
 
+    /// Tracks the command in `commandTasks` from acceptance until its result is durably recorded,
+    /// which is what `drainState()` counts as outstanding. A `nil` socket (tests) records the
+    /// result without sending it, exactly like a socket that dropped mid-command.
+    func startCommand(_ command: ImageProcessingCommand, socket: URLSessionWebSocketTask?) {
+        let key = CompanionImageProcessingProtocol.attemptKey(
+            jobID: command.companionJobID, attemptID: command.companionAttemptID)
+        guard commandTasks[key] == nil else { return }
+        commandTasks[key] = Task { [weak self] in
+            await self?.run(command, key: key, socket: socket)
+        }
+    }
+
+    /// Read commands before the outbox: a command leaves `commandTasks` only after its result is
+    /// recorded, so this order can over-count a finishing command but never miss it.
+    public func drainState() async throws -> CompanionDrainState {
+        let connected = socket != nil && socket === greetedSocket
+        let outstanding = commandTasks.count
+        let pending = try await outbox.pending().count
+        return .init(connected: connected, outstandingCommands: outstanding, pendingResults: pending)
+    }
+
     private func run(
-        _ command: ImageProcessingCommand, key: String, socket: URLSessionWebSocketTask
+        _ command: ImageProcessingCommand, key: String, socket: URLSessionWebSocketTask?
     ) async {
         await acquireSlot()
         defer {
@@ -372,7 +413,7 @@ public actor CompanionImageWorker {
             startedAt: .now)
         reportActivity()
         let started = ContinuousClock.now
-        let result = await executor.execute(command)
+        let result = await execute(command)
         running[key] = nil
         reportActivity()
         guard !Task.isCancelled else { return }
@@ -380,7 +421,7 @@ public actor CompanionImageWorker {
         do {
             try await outbox.record(result, for: key)
             // A reconnect replays the outbox, so a result from a dropped socket is not lost.
-            guard self.socket === socket else { return }
+            guard let socket, self.socket === socket else { return }
             try await send(.companionResult(result), on: socket)
         } catch {
             failureObserver?(error)

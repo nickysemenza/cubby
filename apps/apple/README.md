@@ -93,22 +93,30 @@ None of these attach a debugger; for breakpoints use the Xcode schemes below.
 using the session from `cubby auth login` (an API key cannot open the socket). It registers as
 its own device: the id lives in `~/Library/Application Support/Cubby/companion-device-id`,
 because the app's id is a data-protection Keychain item the ad-hoc-signed CLI cannot read, and
-sharing one id would merge two sockets into one device. Its outbox is namespaced
-`cubby-cli-<host>`, apart from the app's.
+sharing one id would merge two sockets into one device. Concurrent first starts all get the same
+id, and a damaged id file is an error, not a new device. Its outbox is namespaced
+`cubby-cli-<host>`, apart from the app's. Only one `cubby companion` process can serve a host at
+a time (a `flock` on `Cubby/ImageProcessing/cubby-cli-<host>.lock`), because two processes
+rewriting one outbox could erase each other's unacknowledged results. A second invocation exits
+with a message.
 
 At startup it prints whether Foundation Models can describe images in this process and, if not,
 the exact reason (`SystemLanguageModel.default.availability` or a missing `.vision` capability).
 That value is what the hello advertises as `actualImageDescription.available`. After that it
 prints each worker phase change and one line per job: kind, job id, outcome, reason, duration.
-`--once` exits after the worker has been connected with no running job and no unacknowledged
-result for `--idle-seconds` (default 10). It exits 1 if any job failed or if it stays
-disconnected for `--connect-timeout` (default 30). Without `--once` it runs until
-SIGINT/SIGTERM, then gives running jobs and acknowledgements up to 10s before it stops. Results
-that are still unacknowledged stay in the outbox and replay on the next connection.
+`--once` exits after the worker has been connected for `--idle-seconds` (default 10) with no
+outstanding job and no unacknowledged result. A job counts as outstanding while it is queued,
+running, or being recorded, and it stays outstanding across a reconnect. It exits 1 if any job
+failed or if it stays disconnected for `--connect-timeout` (default 30), even while a job runs.
+Without `--once` it runs until SIGINT/SIGTERM, then gives outstanding jobs and acknowledgements up
+to 10s before it stops. Both exits are judged on the worker's current state. Results that are
+still unacknowledged stay in the outbox and replay on the next connection.
 
-The server only pushes a job when that job wakes up: on creation or retry, or when the web shell
-or the daily cron runs the `maintenance.recover` catch-up. A companion that connects later does
-not pull `waiting_for_device` jobs, so they wait for the next wakeup.
+When waiting jobs get dispatched depends on the server. Older servers re-offer a
+`waiting_for_device` job only when it wakes up: on creation or retry, or when the web shell or
+the daily cron runs the `maintenance.recover` catch-up. A companion that connects in between gets
+nothing until then. A server that wakes waiting work on hello dispatches it as soon as the
+companion connects. Either way, a quiet `--once` run does not prove the queue is empty.
 
 To keep it resident, build a copy outside the worktree's `.build` and load a user agent. For
 example, save `~/Library/LaunchAgents/com.example.cubby-companion.plist` with:

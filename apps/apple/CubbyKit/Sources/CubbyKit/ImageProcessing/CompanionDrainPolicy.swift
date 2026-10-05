@@ -1,11 +1,32 @@
 import Foundation
 
-/// When `cubby companion --once` stops: the worker is connected, runs no job, and has no
-/// unacknowledged result in its outbox, continuously for `idleWindow` — the server dispatches every
-/// queued job right after hello, so a quiet window means the queue it would give this device is
-/// drained. Any job start, job finish, or new pending result restarts that window, and so does a
-/// reconnect. Disconnected for `connectTimeout` (counted from start, or from a drop) is
-/// `.unreachable`.
+/// The worker's authoritative drain inputs, read from `CompanionImageWorker.drainState()`.
+/// Connectivity and commands are independent: a command outlives a reconnect, and the activity
+/// phase is reported for jobs whether or not a socket is open.
+public struct CompanionDrainState: Sendable, Equatable {
+    /// A socket is open and this connection's hello has been sent.
+    public let connected: Bool
+    /// Commands accepted and not yet finished: queued for a slot, executing, or recording.
+    public let outstandingCommands: Int
+    /// Recorded results the server has not acknowledged.
+    public let pendingResults: Int
+
+    public init(connected: Bool, outstandingCommands: Int, pendingResults: Int) {
+        self.connected = connected
+        self.outstandingCommands = outstandingCommands
+        self.pendingResults = pendingResults
+    }
+
+    /// Nothing accepted remains to execute, record, or deliver.
+    public var isSettled: Bool { outstandingCommands == 0 && pendingResults == 0 }
+}
+
+/// When `cubby companion --once` stops: connected and settled (no outstanding command, no
+/// unacknowledged result) continuously for `idleWindow`. A job finishing, a state becoming
+/// settled again, and a reconnect each restart that window. The window only bounds how long this
+/// process waits for the server to dispatch: whether waiting jobs are offered on hello at all is
+/// the server's choice, so a quiet window is not proof the household queue is empty. Disconnected for `connectTimeout` (counted
+/// from start, or from a drop, regardless of running jobs) is `.unreachable`.
 public struct CompanionDrainPolicy: Sendable {
     public enum Decision: Sendable, Equatable {
         case keepRunning
@@ -19,8 +40,6 @@ public struct CompanionDrainPolicy: Sendable {
 
     private var disconnectedSince: ContinuousClock.Instant?
     private var quietSince: ContinuousClock.Instant?
-    private var processing = false
-    private var pendingResults = 0
 
     public init(idleWindow: Duration, connectTimeout: Duration, startedAt: ContinuousClock.Instant) {
         self.idleWindow = idleWindow
@@ -28,34 +47,24 @@ public struct CompanionDrainPolicy: Sendable {
         self.disconnectedSince = startedAt
     }
 
-    public mutating func observe(
-        _ activity: CompanionImageWorkerActivity, at now: ContinuousClock.Instant
-    ) {
-        switch activity.phase {
-        case .stopped, .connecting:
-            if disconnectedSince == nil { disconnectedSince = now }
-            processing = false
-        case .idle:
+    public mutating func observe(_ state: CompanionDrainState, at now: ContinuousClock.Instant) {
+        if state.connected {
             disconnectedSince = nil
-            processing = false
-        case .processing:
-            disconnectedSince = nil
-            processing = true
+        } else if disconnectedSince == nil {
+            disconnectedSince = now
         }
-        refreshQuiet(at: now, restart: false)
-    }
-
-    public mutating func observePendingResults(_ count: Int, at now: ContinuousClock.Instant) {
-        let cleared = pendingResults > 0 && count == 0
-        pendingResults = count
-        refreshQuiet(at: now, restart: cleared)
+        if state.connected, state.isSettled {
+            if quietSince == nil { quietSince = now }
+        } else {
+            quietSince = nil
+        }
     }
 
     public mutating func observeJobFinished(
         _ status: CompanionImageJobReport.Status, at now: ContinuousClock.Instant
     ) {
         if status == .failed { failedJobs += 1 }
-        refreshQuiet(at: now, restart: true)
+        if quietSince != nil { quietSince = now }
     }
 
     public func decision(at now: ContinuousClock.Instant) -> Decision {
@@ -64,13 +73,5 @@ public struct CompanionDrainPolicy: Sendable {
         }
         if let quietSince, quietSince.duration(to: now) >= idleWindow { return .drained }
         return .keepRunning
-    }
-
-    private mutating func refreshQuiet(at now: ContinuousClock.Instant, restart: Bool) {
-        guard disconnectedSince == nil, !processing, pendingResults == 0 else {
-            quietSince = nil
-            return
-        }
-        if restart || quietSince == nil { quietSince = now }
     }
 }
