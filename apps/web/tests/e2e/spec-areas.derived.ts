@@ -398,6 +398,9 @@ export const DERIVED_SPEC_GLOBS: SpecGlobMap = {
     "apps/web/src/routes/_authenticated/financial-accounts.index.tsx",
     "apps/web/src/routes/_authenticated/vendors.$shortcode.tsx",
   ],
+  "table-column-layout.spec.ts": [
+    "apps/web/src/routes/_authenticated/vendors.index.tsx",
+  ],
   "tools-flow.spec.ts": [
     "apps/web/src/app/projects/**",
     "apps/web/src/app/tools/**",
