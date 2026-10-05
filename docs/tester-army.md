@@ -59,6 +59,16 @@ form content; treating it as an opaque overlay blocks semantic field editing.
 Toolbars with controls or smaller bounds still block covered targets. The iOS
 rename journey exercises this regression through real semantic agent actions.
 
+The patch also keeps text entry on the input that was tapped. The runner binds a
+coordinate-chosen or tapped input by query index; when focusing it opens the
+keyboard or scrolls the form, that index resolves to a neighboring input, and
+XCTest then typed into an unfocused field until the runner watchdog fired (a
+Product's external-ID Source resolved to URL; External id to ISBN). The runner
+now re-queries such an input by its accessibility identifier when that is unique,
+which stays bound to the same input. The runner's focused-input lookup cannot
+recover it: it returns nil on iOS. The external-ID and recipe-line journeys
+exercise it.
+
 ## Configuration and commands
 
 Use a Cloudflare API token authorized for inference through Unified Billing.

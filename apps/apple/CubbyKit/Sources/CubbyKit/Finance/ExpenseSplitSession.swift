@@ -195,6 +195,6 @@ public final class ExpenseSplitSession {
             "parts": .array(parts.map(\.json)),
         ]
         if let attributionPolicy { body["attributionPolicy"] = .string(attributionPolicy) }
-        return try await client.checkExpenseSplit(JSONValue.object(body).decoded())
+        return try await client.sending(.object(body), client.checkExpenseSplit)
     }
 }

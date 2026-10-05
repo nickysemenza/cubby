@@ -5,6 +5,7 @@ import {
   agentHintsLabel,
   cardNumbersLabel,
   categoryPathLabel,
+  externalIdsLabel,
   possibleVendorLabel,
   provenanceEvidenceLabel,
   recipeCompositionLabel,
@@ -27,6 +28,22 @@ describe("categoryPathLabel", () => {
       ]),
     ).toBe("Pantry / Spices / Cumin");
     expect(categoryPathLabel([])).toBeNull();
+  });
+});
+
+describe("externalIdsLabel", () => {
+  // Native shows this text in place of web's product-external-ids cell; without it the row
+  // read "1 item" and the identifier itself never appeared.
+  it("names each id's source and kind, and says nothing for none", () => {
+    expect(
+      externalIdsLabel([
+        { source: "synthetic-shop", kind: "asin", externalId: "B0SYNTH001" },
+        { source: "synthetic-mill", kind: "item_number", externalId: "SM-42" },
+      ]),
+    ).toBe(
+      "synthetic-shop (asin): B0SYNTH001, synthetic-mill (item number): SM-42",
+    );
+    expect(externalIdsLabel([])).toBeNull();
   });
 });
 

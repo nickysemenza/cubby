@@ -4,7 +4,7 @@ import Testing
 
 @testable import CubbyKit
 
-private final class PatchNullStub: URLProtocol, @unchecked Sendable {
+private final class JSONNullStub: URLProtocol, @unchecked Sendable {
     static let handler = Mutex<StubNetworking.Handler?>(nil)
     override class func canInit(with request: URLRequest) -> Bool { true }
     override class func canonicalRequest(for request: URLRequest) -> URLRequest { request }
@@ -16,11 +16,11 @@ private final class PatchNullStub: URLProtocol, @unchecked Sendable {
     static func session() -> URLSession { StubNetworking.session(protocolClass: self) }
 }
 
-/// The generated client encodes an optional with `encodeIfPresent`, so a typed update body can
-/// never say `null`; `CubbyClient.update(_:id:patch:)` routes `patch.cleared` through
-/// `PatchNullMiddleware` instead. These pin the exact bytes a real save puts on the wire.
-@Suite("PatchNullMiddleware wire shape", .serialized)
-struct PatchNullMiddlewareTests {
+/// The generated client encodes an optional with `encodeIfPresent`, so a typed body can never
+/// say `null`; `CubbyClient.sending(_:_:)` restores the composed body's nulls through
+/// `JSONNullMiddleware`. These pin the exact bytes a real save puts on the wire.
+@Suite("JSONNullMiddleware wire shape", .serialized)
+struct JSONNullMiddlewareTests {
     private struct Seen: Sendable {
         let method: String?
         let path: String
@@ -34,15 +34,15 @@ struct PatchNullMiddlewareTests {
         let credentials = CredentialProvider(host: "localhost:3000", store: store)
         return CubbyClient(
             baseURL: URL(string: "http://localhost:3000")!, credentials: credentials,
-            session: PatchNullStub.session())
+            session: JSONNullStub.session())
     }
 
     /// Captures every request; the stub rejects with a bare `ApiError` so the test stays about
     /// the outgoing body rather than response mapping.
     private func capture(_ body: (CubbyClient) async throws -> Void) async throws -> [Seen] {
-        defer { PatchNullStub.handler.withLock { $0 = nil } }
+        defer { JSONNullStub.handler.withLock { $0 = nil } }
         let seen = Mutex<[Seen]>([])
-        PatchNullStub.handler.withLock { handler in
+        JSONNullStub.handler.withLock { handler in
             handler = { request in
                 let data = (try? Self.requestBody(request)) ?? Data()
                 let fields = (try? JSONDecoder().decode([String: JSONValue].self, from: data)) ?? [:]
@@ -90,6 +90,51 @@ struct PatchNullMiddlewareTests {
         #expect(request.body == ["manufacturer": "Lodge", "categoryId": .null])
         // The rewritten body's length, not the generated client's.
         #expect(request.contentLength == String(try JSONEncoder().encode(request.body).count))
+    }
+
+    /// A required, nullable key inside a structured value (an alias's `externalAccountId`) is
+    /// sent as `null`. The typed body would drop it, and the server rejects the absent key
+    /// ("expected string, received undefined").
+    @Test func aNestedNullInAnUpdateReachesTheWire() async throws {
+        let aliases: JSONValue = [
+            ["source": "synthetic-bank", "alias": "SYN CHK 0001", "externalAccountId": .null]
+        ]
+        let requests = try await capture { client in
+            await #expect(throws: CubbyAPIError.self) {
+                try await client.update(
+                    EntityCatalog[.financialAccount], id: "FAC-2345",
+                    patch: EntityPatch(values: ["sourceAliases": aliases]))
+            }
+        }
+        #expect(requests.map(\.body) == [["sourceAliases": aliases]])
+    }
+
+    /// Restoring nulls buffers the body; a body with none must not inherit that buffer's limit.
+    @Test func aLargeBodyWithoutNullsIsSentUnchanged() async throws {
+        let notes = String(repeating: "a", count: 2 << 20)
+        let requests = try await capture { client in
+            await #expect(throws: CubbyAPIError.self) {
+                try await client.update(
+                    EntityCatalog[.product], id: "PRD-2345",
+                    patch: EntityPatch(values: ["notes": .string(notes)]))
+            }
+        }
+        #expect(requests.map(\.body) == [["notes": .string(notes)]])
+    }
+
+    @Test func aNestedNullInACreateReachesTheWire() async throws {
+        let aliases: JSONValue = [
+            ["source": "synthetic-bank", "alias": "SYN CHK 0001", "externalAccountId": .null]
+        ]
+        let body: [String: JSONValue] = [
+            "name": "Synthetic checking", "identity": ["kind": "cash"], "sourceAliases": aliases,
+        ]
+        let requests = try await capture { client in
+            await #expect(throws: CubbyAPIError.self) {
+                _ = try await client.create(EntityCatalog[.financialAccount], body: body)
+            }
+        }
+        #expect(requests.map(\.body) == [body])
     }
 
     /// With nothing cleared the middleware must not touch the body: an update that only changes

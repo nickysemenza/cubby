@@ -5,6 +5,8 @@ wait "role=Button label=Find" 240000
 open "cubby://entity/${RECIPE_ID}"
 wait "role=Button label=More" 90000
 wait text "Composition" 90000
+wait text "Can I make this?" 90000
+scroll down 0.3
 scroll down 0.4 --until "id=recipe.workflow.cook"
 wait "id=recipe.workflow.cook" 90000
 wait "label=\"250 g Synthetic Flour\"" 90000

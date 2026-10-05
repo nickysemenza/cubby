@@ -106,18 +106,28 @@ export const journeys: Journey[] = [
     start: "product",
     steps: [
       {
-        goal: "Use the Record sale action on this product: enter a cost of -12.50 and save the new expense.",
+        // A sale has no project or purchase to inherit a trade from, and the server requires one
+        // on a principal line, so the goal names it rather than leaving the agent to improvise.
+        goal: 'Use the Record sale action on this product: name it "Synthetic chair sale", enter a cost of -12.50, set Trade to "Appliances & Furniture", and save the new expense.',
       },
     ],
     visible: () => [],
     db: [
       {
         label: "sale expense with disposition defaults",
-        sql: `SELECT e.cost::float8 AS cost, e."costType" AS "costType", (e."projectId" IS NULL) AS "noProject"
+        sql: `SELECT e.cost::float8 AS cost, e."costType" AS "costType", e."lineKind" AS "lineKind", e.trade, (e."projectId" IS NULL) AS "noProject"
               FROM "Expense" e JOIN "Product" p ON p.id = e."productId"
               WHERE p.shortcode = $1 AND e."deletedAt" IS NULL`,
         params: only("product"),
-        rows: () => [{ cost: -12.5, costType: "tools", noProject: true }],
+        rows: () => [
+          {
+            cost: -12.5,
+            costType: "tools",
+            lineKind: "principal",
+            trade: "appliances",
+            noProject: true,
+          },
+        ],
       },
     ],
   },

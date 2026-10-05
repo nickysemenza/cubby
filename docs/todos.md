@@ -241,6 +241,15 @@ See also the image operational passes at the end of this file.
 
 ## Native app
 
+- 🤔 **Keep a focused structured-editor input clear of the keyboard.**
+  `StructuredValueControl` draws a whole array row (an external ID's source,
+  kind, id, URL) inside one Form row, so keyboard avoidance scrolls that tall
+  cell and a lower input stays under the prediction bar (measured: zero
+  clearance on the iPhone simulator; the Tester Army agent could not reach the
+  input it had focused). Give each input its own row or scroll the focused
+  input itself; verify with the external-ID journey. Owner:
+  `App/Shared/Editors/StructuredValueEditor.swift`.
+
 - 🤔 **Cluster and reproduce the native app-hang corpus before changing
   code.** Collect sanitized release, duration, foreground state, and top
   symbolicated main-thread frames per Sentry family; group by shared frames.
@@ -515,6 +524,20 @@ spanner"` → `adjustable wrench` (product); `"wet dry vac"` → `shop vacuum`
 ---
 
 ## Dev tooling, tests & CI
+
+- 🤔 **Stop the simulator build from dirtying the checkout.** Every
+  `test:e2e:sim` lane's Xcode build rewrites the tracked
+  `apps/apple/CubbyKit/Package.resolved` (adding the app-only Nuke pin), so
+  each native E2E bundle records `dirty: true` and is not replayable evidence.
+  Give the app project its own resolved file or build with a resolution that
+  leaves CubbyKit's untouched. Owner: `apps/apple/project.yml`,
+  `apps/web/tooling/sim-e2e.ts`.
+
+- 🤔 **Make Tester Army `--replay` able to hit.** Two consecutive warm web
+  runs of `product-rename` (2026-10-04) both reported `replayed 0, missed 1`
+  and used the model each time. Each run seeds fresh records, so on-screen
+  shortcodes differ; find which observed state the SDK keys the cache on and
+  either stabilize it or drop the flag. Owner: `apps/web/tooling/tester-army/`.
 
 - 🤔 **Measure the delegate-less routing change.** Around 2026-10-06,
   re-measure 30 days of Claude session transcripts against the baseline in

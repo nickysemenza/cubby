@@ -952,6 +952,8 @@ export const productWithFoodOut = z.object({
   recipeUsages: z.array(recipeUsageOut),
   /** Live cookbooks whose physical copies are this product. */
   cookbooks: z.array(productCookbookRefOut),
+  // Server-composed text for the External IDs detail row (`display.detailLabelPath`).
+  externalIdsLabel: listLabel,
   ...productQuantityFields,
 });
 export type ProductWithFoodOut = z.infer<typeof productWithFoodOut>;

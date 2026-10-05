@@ -141,9 +141,11 @@ private struct StructuredSchemaView: View {
             )
             .multilineTextAlignment(.trailing)
             .labelsHidden()
-            .autocorrectionDisabled(format != nil)
+            // A structured value's text is mostly a key or code (a source, an alias, an external
+            // id); autocorrect rewrote "synthetic-shop" to "synthetic-shoptalk" as it was typed.
+            .autocorrectionDisabled()
             #if os(iOS)
-                .textInputAutocapitalization(format == nil ? .sentences : .never)
+                .textInputAutocapitalization(.never)
                 .keyboardType(format == "uri" ? .URL : format == "email" ? .emailAddress : .default)
             #endif
         }

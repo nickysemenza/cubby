@@ -1043,6 +1043,7 @@ export default defineEntity({
           list: true,
           detail: true,
           renderer: { detail: "product-external-ids" },
+          detailLabelPath: "externalIdsLabel",
           listHidden: true,
           width: "md",
           mobile: { slot: "meta", priority: 85 },
@@ -1511,6 +1512,7 @@ export default defineEntity({
       labelField("ledgerExpectedQuantityLabel", "Expense quantity ledger"),
       labelField("quantityVarianceLabel", "Counted inventory and ledger"),
       labelField("unitPriceLabel", "Product price and unit mappings"),
+      labelField("externalIdsLabel", "Product identifiers"),
       {
         key: "quantityVariance",
         kind: "number",
