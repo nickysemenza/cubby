@@ -20,6 +20,6 @@ wait stable 500 10000
 click "label=\"Approve 1 items\" hittable=true"
 wait text "Settled items" 90000
 scroll top
-wait "role=Text label=Completed" 15000
-scroll down 0.6
+wait "label=\"Completed\"" 15000
+scroll bottom
 wait text "Run completed" 15000
