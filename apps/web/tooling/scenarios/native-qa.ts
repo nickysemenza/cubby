@@ -277,13 +277,16 @@ export async function seedPendingApprovalRun(
 export async function seedProposedPhotoRun(
   pool: Pool,
   userId: string,
+  options: { finalReview?: boolean } = {},
 ): Promise<Record<string, string>> {
   const db = buildScenarioDatabase(pool);
   const run = await startPhotoInventoryRun(db, {
     actorUserId: testUserId(userId),
   });
   const images = [];
-  for (const name of ["unselected-mug", "selected-shirt"])
+  for (const name of options.finalReview
+    ? ["selected-shirt", "front", "back", "label", "detail"]
+    : ["unselected-mug", "selected-shirt"])
     images.push(
       await insertWithShortcode(db, "image", {
         // Unique per seed: a retried journey seeds a second photo Run.
@@ -311,7 +314,8 @@ export async function seedProposedPhotoRun(
         targetFingerprint: `synthetic-qa-photo-${position}`,
       })),
     );
-  const [mug, shirt] = images;
+  const mug = images[0];
+  const shirt = images.at(-1);
   // Product names are unique per seed: a retried journey reseeds after the first attempt may
   // have committed, and the photo writer refuses a name another Run's Product already uses.
   const unselectedName = `Synthetic Unselected Mug ${run.publicId}`;
@@ -324,25 +328,34 @@ export async function seedProposedPhotoRun(
       {
         groupKey: "synthetic-qa-a-unselected-mug",
         images: [
-          { id: parseShortcodeFor("image", mug.shortcode), purpose: "item" },
+          {
+            id: parseShortcodeFor("image", mug.shortcode),
+            purpose: "item" as const,
+          },
         ],
         product: {
-          kind: "create",
+          kind: "create" as const,
           create: { name: unselectedName },
         },
       },
       {
         groupKey: "synthetic-qa-b-selected-shirt",
-        images: [
-          { id: parseShortcodeFor("image", shirt.shortcode), purpose: "item" },
-        ],
+        images: (options.finalReview ? images : [shirt]).map((image) => ({
+          id: parseShortcodeFor("image", image.shortcode),
+          purpose: "item" as const,
+        })),
         product: {
-          kind: "create",
+          kind: "create" as const,
           create: { name: selectedName },
         },
       },
-    ],
+    ].slice(options.finalReview ? -1 : 0),
   });
+  if (options.finalReview)
+    await pool.query('UPDATE "Run" SET status = $2 WHERE shortcode = $1', [
+      run.publicId,
+      "needs_review",
+    ]);
   return {
     PHOTO_RUN_ID: run.publicId,
     PHOTO_SELECTED_NAME: selectedName,
