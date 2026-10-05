@@ -1255,16 +1255,14 @@ export const submitReceiptEvidenceOut = z.object({
 });
 
 export const listReceiptHuntsInput = z.object({});
-export const listReceiptHuntsOut = z.object({
-  items: z.array(
-    z.object({
-      id: z.uuid(),
-      transactionDate: z.iso.date(),
-      merchant: z.string().nullable(),
-      amountInCents: z.number().int().nonnegative(),
-    }),
-  ),
+/** A card charge still waiting on a person-confirmed photo of its receipt. */
+export const receiptHunt = z.object({
+  id: z.uuid(),
+  transactionDate: z.iso.date(),
+  merchant: z.string().nullable(),
+  amountInCents: z.number().int().nonnegative(),
 });
+export const listReceiptHuntsOut = z.object({ items: z.array(receiptHunt) });
 
 export const importAuditFinding = z.object({
   kind: runFindingKind,

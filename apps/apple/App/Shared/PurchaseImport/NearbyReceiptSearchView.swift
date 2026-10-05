@@ -19,13 +19,6 @@ struct NearbyReceiptSearchView: View {
         self.onConfirm = onConfirm
     }
 
-    init(context: NearbyReceiptSearchContext, submitter: any ConfirmedReceiptImportSubmitting) {
-        self.init(context: context) { file, context in
-            try await submitter.submitConfirmedReceipt(
-                ConfirmedReceiptImport(context: context, file: file))
-        }
-    }
-
     var body: some View {
         List {
             summary

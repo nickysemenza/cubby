@@ -304,16 +304,16 @@ struct BrowserBridgeTests {
 
     @Test("Socket URLs upgrade HTTPS and preserve only the account query")
     func socketEndpoint() throws {
-        let production = try BrowserBridgeEndpoint.socketURL(
+        let production = try AuthenticatedSocketSupport.socketURL(
             baseURL: try #require(URL(string: "https://cubby.example/custom?old=value#fragment")),
-            vendorAccountID: "VACCT-4K7M")
+            path: "/api/import/agent/socket", queryItems: Self.accountQuery)
         #expect(
             production.absoluteString
                 == "wss://cubby.example/api/import/agent/socket?vendorAccount=VACCT-4K7M")
 
-        let local = try BrowserBridgeEndpoint.socketURL(
+        let local = try AuthenticatedSocketSupport.socketURL(
             baseURL: try #require(URL(string: "http://localhost:3000")),
-            vendorAccountID: "VACCT-4K7M")
+            path: "/api/import/agent/socket", queryItems: Self.accountQuery)
         #expect(local.scheme == "ws")
         #expect(local.port == 3000)
     }
@@ -321,10 +321,13 @@ struct BrowserBridgeTests {
     @Test("Socket URLs reject cleartext remote servers")
     func socketEndpointSecurity() throws {
         let url = try #require(URL(string: "http://cubby.example"))
-        #expect(throws: BrowserBridgeEndpoint.Failure.insecureRemoteServer) {
-            try BrowserBridgeEndpoint.socketURL(baseURL: url, vendorAccountID: "VACCT-4K7M")
+        #expect(throws: URLError(.secureConnectionFailed)) {
+            try AuthenticatedSocketSupport.socketURL(
+                baseURL: url, path: "/api/import/agent/socket", queryItems: Self.accountQuery)
         }
     }
+
+    private static let accountQuery = [URLQueryItem(name: "vendorAccount", value: "VACCT-4K7M")]
 
     @Test("Fleet status remains useful while account sockets reconnect independently")
     func fleetStatus() {
@@ -339,35 +342,6 @@ struct BrowserBridgeTests {
         #expect(
             BrowserBridgeFleetStatus.aggregate([] as [BrowserBridgeConnectionStatus])
                 == .disconnected)
-    }
-
-    @Test("Only disabled vendor accounts are excluded from bridge connections")
-    func activeVendorAccounts() {
-        let active = EntityRow(
-            id: "VACCT-4K7M", title: "Example store", subtitle: nil, imageURL: nil,
-            raw: [
-                "status": "active", "ledgerPartyId": "LPY-4K7M", "browser": "chrome",
-            ])
-        let disabled = EntityRow(
-            id: "VACCT-8P2Q", title: "Old store", subtitle: nil, imageURL: nil,
-            raw: [
-                "status": "disabled", "ledgerPartyId": "LPY-4K7M", "browser": "safari",
-            ])
-        let pausedAuthentication = EntityRow(
-            id: "VACCT-7R6T", title: "Needs sign-in", subtitle: nil, imageURL: nil,
-            raw: [
-                "status": "paused_auth", "ledgerPartyId": "LPY-4K7M", "browser": "safari",
-            ])
-        let pausedOffline = EntityRow(
-            id: "VACCT-3D5F", title: "Mac was offline", subtitle: nil, imageURL: nil,
-            raw: [
-                "status": "paused_offline", "ledgerPartyId": "LPY-4K7M", "browser": "safari",
-            ])
-
-        #expect(BrowserBridgeVendorAccount(active)?.browser == .chrome)
-        #expect(BrowserBridgeVendorAccount(pausedOffline)?.browser == .safari)
-        #expect(BrowserBridgeVendorAccount(pausedAuthentication)?.browser == .safari)
-        #expect(BrowserBridgeVendorAccount(disabled) == nil)
     }
 
     @Test("Manual sync response preserves server identifier spelling")

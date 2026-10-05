@@ -1,4 +1,5 @@
 import CubbyAPI
+import CubbyAPISupport
 import Foundation
 
 /// A detail slot the server composes a report for (`entityReport.get`); the raw value is the
@@ -502,21 +503,12 @@ public struct ReportPresentation: Hashable, Sendable {
         return money ? value.usd : String(Int(value.rounded()))
     }
 
-    /// An ISO-8601 instant with or without fractional seconds.
     private static func instant(_ text: String) -> Date? {
-        let withFraction = ISO8601DateFormatter()
-        withFraction.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
-        let plain = ISO8601DateFormatter()
-        plain.formatOptions = [.withInternetDateTime]
-        return withFraction.date(from: text) ?? plain.date(from: text)
+        try? LenientISO8601DateTranscoder().decode(text)
     }
 
     /// A household calendar day (`yyyy-MM-dd`) as the start of that day in UTC.
     private static func day(_ string: String) -> Date? {
-        let parts = string.split(separator: "-").compactMap { Int($0) }
-        guard parts.count == 3 else { return nil }
-        var calendar = Calendar(identifier: .gregorian)
-        calendar.timeZone = .gmt
-        return calendar.date(from: DateComponents(year: parts[0], month: parts[1], day: parts[2]))
+        PlainDate(rawValue: string).date(in: .gmt)
     }
 }

@@ -1,5 +1,4 @@
 import CoreGraphics
-import CryptoKit
 import Foundation
 import Vision
 
@@ -167,7 +166,7 @@ public struct LocalPhotoAnalyzer: Sendable {
         async let classifications = classifyIfAvailable(image)
         async let recognizedText = recognizeTextIfAvailable(image)
         async let featurePrint = makeFeaturePrintIfAvailable(image)
-        async let sha256 = hash(input.file.url)
+        async let sha256 = hash(input.file)
         async let perceptualHashTask = try? PerceptualHash64.compute(fileURL: input.file.url)
         let perceptualHash = await perceptualHashTask
         let result = try await PhotoLocalAnalysis(
@@ -292,8 +291,7 @@ public struct LocalPhotoAnalyzer: Sendable {
         }
     }
 
-    @concurrent private func hash(_ url: URL) async throws -> String {
-        let digest = SHA256.hash(data: try Data(contentsOf: url, options: .mappedIfSafe))
-        return digest.map { String(format: "%02x", $0) }.joined()
+    @concurrent private func hash(_ file: PhotoFile) async throws -> String {
+        try file.sha256()
     }
 }
