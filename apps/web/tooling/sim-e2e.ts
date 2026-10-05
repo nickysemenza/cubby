@@ -1455,6 +1455,7 @@ async function runQaJourneys(
   const stopRecording = video
     ? await recordSimulatorVideo(common[3] ?? "")
     : undefined;
+  const flaky: string[] = [];
   try {
     for (const journey of journeys) {
       // A scroll can land short while a detail page is still laying out; a journey only
@@ -1477,7 +1478,8 @@ async function runQaJourneys(
               "--reporter",
               "default",
               "--reporter",
-              `junit:${path.join(artifacts, `junit-${journey}.xml`)}`,
+              // Per attempt, so a retried pass keeps the failed attempt's report beside it.
+              `junit:${path.join(artifacts, `junit-${journey}-attempt-${attempt}.xml`)}`,
               ...Object.entries(qaIds).flatMap(([key, value]) => [
                 "-e",
                 `${key}=${value}`,
@@ -1487,6 +1489,7 @@ async function runQaJourneys(
           );
           break;
         } catch (error) {
+          flaky.push(journey);
           if (attempt >= 2 || interrupted) throw error;
           console.log(
             `[${lane}] ${journey} attempt ${attempt} failed; retrying`,
@@ -1496,6 +1499,10 @@ async function runQaJourneys(
     }
   } finally {
     await stopRecording?.();
+    if (flaky.length > 0)
+      console.log(
+        `[${lane}] Failed an attempt: ${[...new Set(flaky)].join(", ")}`,
+      );
   }
   await assertQaOutcomes();
 }

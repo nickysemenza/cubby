@@ -41,67 +41,33 @@ index 12326d822cf912aeacdbf5c673f3ec43fc237410..3b4aa4a78b38dc3973317dff1e92894d
  ## Bounded depth recovery
  
 diff --git a/dist/apple/runner/AgentDeviceRunner/AgentDeviceRunnerUITests/RunnerTests+CommandExecution.swift b/dist/apple/runner/AgentDeviceRunner/AgentDeviceRunnerUITests/RunnerTests+CommandExecution.swift
-index e37f95cc015faa4d7d8d0274e5f1bc5337bc1737..52174f01dc3fc12a282bcfaea6c0e51cb5129183 100644
+index e37f95cc015faa4d7d8d0274e5f1bc5337bc1737..16bba15223df0bc72a23cba1e62defc0241588ec 100644
 --- a/dist/apple/runner/AgentDeviceRunner/AgentDeviceRunnerUITests/RunnerTests+CommandExecution.swift
 +++ b/dist/apple/runner/AgentDeviceRunner/AgentDeviceRunnerUITests/RunnerTests+CommandExecution.swift
-@@ -91,7 +91,7 @@ extension RunnerTests {
-               if isTextEntry {
-                 waitForTextEntryReadinessAfterTap(app: activeApp, element: element)
-               }
--              rememberTextEntryTap(isTextEntry ? element : nil)
-+              rememberTextEntryTap(isTextEntry ? element : nil, app: activeApp)
-               return gestureResponse(
-                 message: match.usedNonHittableFallback
-                   ? "tapped via non-hittable coordinate fallback"
-@@ -127,7 +127,7 @@ extension RunnerTests {
-           if isTextEntry {
-             waitForTextEntryReadinessAfterTap(app: activeApp, element: element)
+@@ -66,6 +66,8 @@ extension RunnerTests {
+               message: "element resolved off-screen at (\(Int(frame.midX)), \(Int(frame.midY)))"))
            }
--          rememberTextEntryTap(isTextEntry ? element : nil)
-+          rememberTextEntryTap(isTextEntry ? element : nil, app: activeApp)
-           return gestureResponse(
-             message: match.usedNonHittableFallback ? "tapped via non-hittable coordinate fallback" : "tapped",
-             timing: timing,
-@@ -171,7 +171,7 @@ extension RunnerTests {
-             synthesizedTapAt(app: activeApp, x: x, y: y, context: context)
-           }) {
-           case .performed(let timing):
--            rememberTextEntryTap(textInput)
-+            rememberTextEntryTap(textInput, app: activeApp)
-             return gestureResponse(message: "tapped", timing: timing)
-           case .xctestFallback(let message, let hint):
-             fallback = GestureFallback(strategy: "xctest-coordinate-tap", message: message, hint: hint)
-@@ -186,7 +186,7 @@ extension RunnerTests {
-           clearRememberedTextEntryTap()
-           return response
-         }
--        rememberTextEntryTap(textInput)
-+        rememberTextEntryTap(textInput, app: activeApp)
-         return gestureResponse(
-           message: "tapped",
-           timing: timing,
+           let isTextEntry = isTextEntryElement(element)
++          // Cubby patch: bind a text input by identifier before the tap scrolls the form.
++          let element = isTextEntry ? rebindByIdentifier(app: activeApp, element) : element
+           let touchPoint = expectedPoint ?? CGPoint(x: frame.midX, y: frame.midY)
+           let touchFrame = resolvedTouchVisualizationFrame(
+             app: activeApp,
+@@ -151,7 +153,9 @@ extension RunnerTests {
+         )
+         let textInput: XCUIElement?
+         if !xCTestTextInputProbeSkipped {
++          // Cubby patch: bind the input by identifier before the tap scrolls the form.
+           textInput = coordinateTapTextInputAt(app: activeApp, x: x, y: y)
++            .map { rebindByIdentifier(app: activeApp, $0) }
+         } else {
+ 
+           textInput = nil
 diff --git a/dist/apple/runner/AgentDeviceRunner/AgentDeviceRunnerUITests/RunnerTests+TextEntryFocus.swift b/dist/apple/runner/AgentDeviceRunner/AgentDeviceRunnerUITests/RunnerTests+TextEntryFocus.swift
-index 27f621b6e880e7a40ed98e6693d33853454b00eb..6aeb8f99764fe9d5d410ab88b51f4210c467535a 100644
+index 27f621b6e880e7a40ed98e6693d33853454b00eb..125f55d4e42714b43057751f59d82eec3313f73c 100644
 --- a/dist/apple/runner/AgentDeviceRunner/AgentDeviceRunnerUITests/RunnerTests+TextEntryFocus.swift
 +++ b/dist/apple/runner/AgentDeviceRunner/AgentDeviceRunnerUITests/RunnerTests+TextEntryFocus.swift
-@@ -7,13 +7,14 @@ import XCTest
- 
- extension RunnerTests {
-   @MainActor
--  func rememberTextEntryTap(_ element: XCUIElement?) {
-+  func rememberTextEntryTap(_ element: XCUIElement?, app: XCUIApplication) {
-     guard let element, isTextEntryElement(element) else {
-       clearRememberedTextEntryTap()
-       return
-     }
-     textEntryTapWitness = TextEntryTapWitness(
--      element: element,
-+      // Cubby patch: a later `type` must reach this input even after the form scrolls.
-+      element: rebindByIdentifier(app: app, element),
-       bundleId: mainOwned.bundleId,
-       processIdentifier: mainOwned.processIdentifier
-     )
-@@ -112,7 +113,11 @@ extension RunnerTests {
+@@ -112,7 +112,11 @@ extension RunnerTests {
      }
  
      let keyboardVisibleBeforeTap = isKeyboardVisible(app: app)
@@ -114,13 +80,14 @@ index 27f621b6e880e7a40ed98e6693d33853454b00eb..6aeb8f99764fe9d5d410ab88b51f4210
      let requestedPoint = CGPoint(x: x, y: y)
      if let target {
        let frame = target.frame
-@@ -155,6 +160,16 @@ extension RunnerTests {
+@@ -155,6 +159,17 @@ extension RunnerTests {
      )
    }
  
-+  /// `element` re-queried by its accessibility identifier when it has one that is unique.
++  /// `element` re-queried by its accessibility identifier when it has one that is unique. Call it
++  /// before the gesture that focuses the input: afterwards the index may already name another.
 +  @MainActor
-+  private func rebindByIdentifier(app: XCUIApplication, _ element: XCUIElement) -> XCUIElement {
++  func rebindByIdentifier(app: XCUIApplication, _ element: XCUIElement) -> XCUIElement {
 +    let identifier = safely("TEXT_INPUT_IDENTIFIER", "", { element.identifier })
 +    guard !identifier.isEmpty else { return element }
 +    let query = app.descendants(matching: element.elementType).matching(identifier: identifier)
