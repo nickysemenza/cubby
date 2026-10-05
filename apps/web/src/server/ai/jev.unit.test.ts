@@ -399,7 +399,10 @@ describe("runJevChoice", () => {
       expect(sentBody.model).toBe(model);
       expect(sentBody.input).toMatchObject({ state: "pick red" });
       expect(sentBody.input.model).toBe(selector);
-      expect(sentBody.options.gateway.id).toBe("cubby");
+      expect(new Headers(call?.init?.headers).get("cf-aig-gateway-id")).toBe(
+        "cubby",
+      );
+      expect(sentBody).not.toHaveProperty("options.gateway");
     },
   );
 
