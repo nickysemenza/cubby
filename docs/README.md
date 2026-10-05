@@ -29,6 +29,7 @@ these pages stay within Documentation.
 | `agents/`                | Current agent rules and validation contracts.                          |
 | `application-framework/` | Entity framework design and ownership records.                         |
 | `plans/`                 | Proposed or in-progress work; status at the top of each plan governs.  |
+| `reports/`               | Dated measurements and audits; a snapshot, not current behavior.       |
 | `runbooks/`              | Operational procedures that require current-environment checks.        |
 
 Current behavior lives in code and maintained contracts. Historical experiment

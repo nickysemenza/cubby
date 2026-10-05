@@ -1,3 +1,15 @@
+/**
+ * The web Worker entry. Sections, in file order:
+ * - `handler.fetch`: env bridging, maintenance mode, direct sockets, then
+ *   TanStack Start.
+ * - `handler.queue`: `cubby-telemetry`, then background tasks
+ *   (`server/background-tasks/consume`).
+ * - `handler.scheduled`: the one daily maintenance cron.
+ * - `PurchaseImportService`: the purchase agent's service binding; each method
+ *   wraps a `server/purchase-import/run-service` function (flow:
+ *   `server/purchase-import/README.md`).
+ * - Durable Object and Workflow re-exports, then the Sentry-wrapped default.
+ */
 import { AsyncLocalStorage } from "node:async_hooks";
 
 import type {

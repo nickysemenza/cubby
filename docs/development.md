@@ -33,6 +33,10 @@ JSONL routes    →  cancellable workflow streams
   `2 cups → $5.00 → 333g`.
 - USDA data comes from the `usda-api` Worker through the ts-rest contract
   `@cubby/usda/contract`. Its client is `apps/web/src/server/clients/usda.ts`.
+- Purchase imports run across the web Worker, the `purchase-agent` Worker and a
+  Mac browser bridge. The map of queue events, service-binding methods and
+  owning files is
+  [`apps/web/src/server/purchase-import/README.md`](../apps/web/src/server/purchase-import/README.md).
 
 ## Commands
 

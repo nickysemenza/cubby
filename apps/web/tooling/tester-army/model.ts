@@ -1,7 +1,5 @@
-import { existsSync, readFileSync } from "node:fs";
-import { parseEnv } from "node:util";
-import { fileURLToPath } from "node:url";
 import { CF_ACCOUNT_ID } from "../../src/server/cf-env";
+import { localSecret } from "../local-secret";
 import { createOpenAI } from "@ai-sdk/openai";
 import { generateText, tool } from "ai";
 import { z } from "zod";
@@ -23,19 +21,12 @@ const configuration = z.object({
 });
 
 export function modelConfiguration() {
-  const envFile =
-    process.env.TESTER_ARMY_ENV_FILE ??
-    fileURLToPath(new URL("../../.env", import.meta.url));
-  const local = existsSync(envFile)
-    ? parseEnv(readFileSync(envFile, "utf8"))
-    : {};
   const result = configuration.safeParse({
     ...process.env,
-    TESTER_ARMY_CF_API_TOKEN:
-      process.env.TESTER_ARMY_CF_API_TOKEN ??
-      process.env.AI_GATEWAY_API_KEY ??
-      local.TESTER_ARMY_CF_API_TOKEN ??
-      local.AI_GATEWAY_API_KEY,
+    TESTER_ARMY_CF_API_TOKEN: localSecret(
+      ["TESTER_ARMY_CF_API_TOKEN", "AI_GATEWAY_API_KEY"],
+      { envFile: process.env.TESTER_ARMY_ENV_FILE },
+    ),
   });
   if (!result.success)
     throw new Error(

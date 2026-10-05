@@ -1,10 +1,11 @@
-import { readFileSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
 import { z } from "zod";
 
 import { CF_ACCOUNT_ID, CF_AIG_GATEWAY_ID } from "~/server/cf-env";
+
+import { localSecret } from "../../../tooling/local-secret";
 
 /**
  * Shared plumbing for the opt-in, billed import-run agent evals: the
@@ -64,11 +65,7 @@ export function evalCostUsd(model: EvalCandidate["model"], usage: EvalUsage) {
 }
 
 function gatewayApiKey() {
-  if (process.env.AI_GATEWAY_API_KEY) return process.env.AI_GATEWAY_API_KEY;
-  const line = readFileSync(path.join(evalWebRoot, ".env"), "utf8")
-    .split("\n")
-    .find((entry) => entry.startsWith("AI_GATEWAY_API_KEY="));
-  const key = line?.slice("AI_GATEWAY_API_KEY=".length).replace(/^"|"$/gu, "");
+  const key = localSecret(["AI_GATEWAY_API_KEY"]);
   if (!key) throw new Error("AI_GATEWAY_API_KEY is required for the live eval");
   return key;
 }

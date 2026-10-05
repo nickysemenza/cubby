@@ -49,7 +49,7 @@ checks.
 `pnpm --dir apps/web test:e2e:affected` runs only the specs the current diff
 plausibly touches, for a faster local loop than the full suite —
 `apps/web/tests/e2e/spec-areas.ts` maps each spec to the routes, feature
-dirs, and shared contract files it exercises, and `scripts/e2e-affected.ts`
+dirs, and shared contract files it exercises, and `apps/web/scripts/e2e-affected.ts`
 matches changed files (committed since `origin/main` plus the working tree)
 against it. The routes and feature dirs a spec visits are generated into
 `spec-areas.derived.ts` (`node scripts/generate-spec-areas.ts` from `apps/web`;

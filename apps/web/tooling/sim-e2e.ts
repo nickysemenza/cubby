@@ -54,6 +54,40 @@ const kitRoot = path.join(repoRoot, "apps/apple/CubbyKit");
 const appleRoot = path.join(repoRoot, "apps/apple");
 // `pnpm test:e2e:sim -- <flags>` may forward the separator itself.
 const rawFlags = process.argv.slice(2).filter((argument) => argument !== "--");
+// Agents read this 2k-line file in slices to learn its modes; keep this the
+// one place that answers "which flag, which env, where are the artifacts".
+if (rawFlags.includes("--help") || rawFlags.includes("-h")) {
+  console.log(`pnpm test:e2e:sim -- [mode] [modifiers]
+
+Each run creates a fresh cubby_sim_<hex> database on localhost:55432, builds
+the web Worker (reused when provenance matches), and drops the database after.
+
+Modes (one per run; no mode = full native journey in the iOS simulator):
+  --headless                 Swift CubbyKit CLI against the Worker, no simulator
+    --photo [--purchase]     synthetic photo-inventory (+ wardrobe purchase) run
+    --statement-csv          Swift CSV statement preview/import
+    --watch                  stay up; press Enter to rerun
+  --watch                    simulator app against real API data; Enter replays
+  --video                    full journey plus MP4 and contact sheet
+  --layout [--video]         layout probe screens
+  --product-clarity [--video]  focused synthetic Product journey (Maestro)
+  --input-journey [--video]  PhotosPicker/Files input acceptance
+  --emoji-review [--video]   category emoji review replay
+  --qa [--hold] [--video]    seeded synthetic household QA pass; --hold keeps it up
+  --tester-army [--journey a,b] [--replay] [--wrong]
+                             live-model agent journeys (billed; see docs/tester-army.md)
+
+Environment:
+  CUBBY_SIM_DEVICE           simulator name or UDID to prefer
+  CUBBY_SIM_DB_EXTERNAL=1    skip starting PostgreSQL (already running)
+  CUBBY_E2E_PREBUILT_WEB=1   trust the existing web build
+  TESTER_ARMY_*              Tester Army model/journey settings
+  R2_*, BETTER_AUTH_SECRET and DATABASE_URL are set to local simulation values.
+
+Artifacts: artifacts/<lane>/<cubby_sim_hex>/ (run-manifest.json, logs, video).
+Workflow guide: apps/apple/ITERATION.md; acceptance map: docs/agents/core-journey-e2e.md.`);
+  process.exit(0);
+}
 const journeyFlag = rawFlags.indexOf("--journey");
 if (journeyFlag >= 0) {
   const value = rawFlags[journeyFlag + 1];
@@ -138,7 +172,7 @@ if (
   )
 )
   throw new Error(
-    "Usage: sim-e2e.ts [--emoji-review [--video] | --input-journey [--video] | --tester-army [--journey a,b] [--replay] [--wrong] | --video | --layout [--video] | --product-clarity [--video] | --qa [--hold] [--video] | --watch | --headless [--watch | --photo [--purchase] | --statement-csv]]",
+    "Usage (see --help): sim-e2e.ts [--emoji-review [--video] | --input-journey [--video] | --tester-army [--journey a,b] [--replay] [--wrong] | --video | --layout [--video] | --product-clarity [--video] | --qa [--hold] [--video] | --watch | --headless [--watch | --photo [--purchase] | --statement-csv]]",
   );
 const lane = qa
   ? "sim-qa-e2e"

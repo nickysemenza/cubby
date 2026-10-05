@@ -44,7 +44,11 @@ resolved profile (`scripts/lib/dev-profile.ts`) and should not be set by hand.
 Unset inherited application
 database and storage overrides before starting; the supervisor rejects values
 that target another database or origin. Local startup ignores production `.env`
-and `.dev.vars` files and supplies its own auth/storage values.
+and `.dev.vars` files and supplies its own auth/storage values. Worktrees get no
+`.env` copy; an opt-in billed tool (live evals, Tester Army) reads its one
+credential through `localSecret` (`apps/web/tooling/local-secret.ts`): shell,
+then this checkout's `apps/web/.env`, then the primary checkout's. Use it
+instead of grepping another checkout's `.env`.
 
 Ctrl-C stops the owned runtime and keeps persistent data. `pnpm dev:down` stops
 that checkout's supervisor. `pnpm dev:reset` stops it and resets its database and

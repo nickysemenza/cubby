@@ -79,7 +79,7 @@ existing block. Extend the generic path when it almost fits. See
 - Entity data: `buildEntity` / `createEntity` and the repo writer variant
   (`apps/web/tooling/factories/`), seeded Faker for filler, `seedBaseWorld`.
   Never hand-parse a `*CreateInput` in a test.
-- Shared builders: `packages/schemas/src/testing`; deferreds via
+- Shared builders: `packages/schemas/src/test-support`; deferreds via
   `Promise.withResolvers()`.
 - Import convergence: `apps/web/tooling/convergence-harness.ts`.
 - Scripts: `scripts/lib/tree-digest.ts` (`walkFiles`, `digestFiles`),

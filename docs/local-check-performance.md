@@ -81,7 +81,7 @@ make the invalidated set large:
   `@tanstack/react-start` server entry. A closure that reaches it re-checks
   all 3,457 files (about 37 s of wall time before the fixes). `types:generate` now rewrites those imports
   to the type-only `src/server/worker-bindings.ts`
-  (`scripts/worker-type-imports.ts`; Wrangler's `--check` compares only its
+  (`apps/web/scripts/worker-type-imports.ts`; Wrangler's `--check` compares only its
   hash header), where the heavy Durable Objects bind through the RPC
   interfaces their classes implement. Each interface lives in a type-only
   `rpc.ts` (or `image-processing/contracts.ts`) that imports only schema
