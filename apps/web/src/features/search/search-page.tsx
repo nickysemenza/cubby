@@ -1,20 +1,15 @@
 import type {
-  SearchComponentPlacement,
   SearchDestination,
-  SearchInventoryPlacement,
   SearchResultGroup,
   SearchType,
 } from "@cubby/schemas/search";
 import { searchableEntities } from "@cubby/schemas/search";
-import { CaretRightIcon } from "@phosphor-icons/react/dist/csr/CaretRight";
 import { MagnifyingGlassIcon } from "@phosphor-icons/react/dist/csr/MagnifyingGlass";
-import { MapPinIcon } from "@phosphor-icons/react/dist/csr/MapPin";
 import { useDebouncedValue } from "@tanstack/react-pacer";
 import { keepPreviousData, useQuery } from "@tanstack/react-query";
 import { Link, useNavigate } from "@tanstack/react-router";
 import { uniq } from "es-toolkit";
 import {
-  type ReactNode,
   useCallback,
   useEffect,
   useId,
@@ -25,7 +20,6 @@ import {
 
 import { MobileCard } from "~/entity/components/mobile-card";
 import { entities } from "~/entity/entities";
-import { enumFieldLabel } from "~/entity/enum-field-display";
 import { search } from "~/integrations/tanstack-query/generated/catalog.gen";
 import { cn } from "~/lib/utils";
 import { ErrorDisplay } from "~/ui/feedback/error-display";
@@ -39,6 +33,16 @@ import {
   type EntityPreviewRowData,
   useEntityPreview,
 } from "../../ui/hooks/useEntityPreview";
+import {
+  ProductFamilyChildContent,
+  productFamilyChildren,
+  productFamilyHasChildren,
+  ProductFamilyRegion,
+  type ProductSearchGroup,
+  productFamilySummary,
+  ProductFamilyToggle,
+  useExpandedFamilies,
+} from "./product-family";
 import {
   entityKindMap,
   getSearchMatchText,
@@ -305,9 +309,7 @@ function SearchResults({
   onPrefetch: SearchPreviewHandler;
   onPrefetchEnd: SearchPreviewHandler;
 }) {
-  const [expandedKeys, setExpandedKeys] = useState<Set<string>>(
-    () => new Set(),
-  );
+  const families = useExpandedFamilies();
   const feedback = getSearchResultsFeedback({
     isLoading,
     error,
@@ -323,19 +325,12 @@ function SearchResults({
         group.kind === "product" ? (
           <ProductSearchRow
             key={group.key}
-            expanded={expandedKeys.has(group.key)}
+            expanded={families.isExpanded(group.key)}
             group={group}
             onPreview={onPreview}
             onPrefetch={onPrefetch}
             onPrefetchEnd={onPrefetchEnd}
-            onToggle={() =>
-              setExpandedKeys((current) => {
-                const updated = new Set(current);
-                if (updated.has(group.key)) updated.delete(group.key);
-                else updated.add(group.key);
-                return updated;
-              })
-            }
+            onToggle={() => families.toggle(group.key)}
           />
         ) : (
           <SearchRow
@@ -412,58 +407,6 @@ function SearchRow({
   );
 }
 
-const formatPlacement = (placement: SearchInventoryPlacement) => {
-  const { value, upperValue, unit } = placement.amount;
-  return `${value}${upperValue === undefined ? "" : `–${upperValue}`} ${unit} · ${enumFieldLabel("inventory", "placement", placement.placement)}`;
-};
-
-const placementSearchDestination = (
-  group: Extract<SearchResultGroup, { kind: "product" }>,
-  placement: SearchInventoryPlacement,
-): SearchDestination => ({
-  id: placement.id,
-  entityKind: "inventory",
-  title: group.primary.title,
-  subtitle: placement.locationPath,
-  typeHint: group.primary.typeHint,
-  imageUrl: group.primary.imageUrl,
-});
-
-const componentPlacementSearchDestination = (
-  componentPlacement: SearchComponentPlacement,
-): SearchDestination => ({
-  ...componentPlacement.component,
-  id: componentPlacement.placement.id,
-  entityKind: "inventory",
-  subtitle: componentPlacement.placement.locationPath,
-});
-
-const searchProductSummary = (
-  group: Extract<SearchResultGroup, { kind: "product" }>,
-) => {
-  const placements = group.placements.length;
-  const componentPlacements = group.componentPlacements.length;
-  const activity = group.matchedActivity.length;
-  const locationPaths = [
-    ...group.placements.map((placement) => placement.locationPath),
-    ...group.componentPlacements.map(({ placement }) => placement.locationPath),
-  ];
-  return [
-    ...(placements > 0
-      ? [
-          `${placements} ${componentPlacements > 0 ? "direct " : ""}${placements === 1 ? "placement" : "placements"}`,
-        ]
-      : componentPlacements === 0
-        ? ["0 placements"]
-        : []),
-    ...(componentPlacements > 0 ? ["Kit contents placed"] : []),
-    ...[...new Set(locationPaths)].slice(0, 2),
-    ...(activity > 0
-      ? [`${activity} matching ${activity === 1 ? "record" : "records"}`]
-      : []),
-  ].join(" · ");
-};
-
 function PreviewButton({ onClick }: { onClick: () => void }) {
   return (
     <button
@@ -476,120 +419,32 @@ function PreviewButton({ onClick }: { onClick: () => void }) {
   );
 }
 
-function PlacementRow({
-  destination,
-  compact,
-  leading,
-  title,
-  detail,
-  trailing,
-}: {
-  destination: SearchDestination;
-  compact: boolean;
-  leading: ReactNode;
-  title: ReactNode;
-  detail: ReactNode;
-  trailing: ReactNode;
-}) {
-  return (
-    <Link
-      {...getSearchResultRoute(destination)}
-      className={cn(
-        "flex min-h-11 items-center gap-3 py-1.5 hover:bg-muted/60",
-        compact ? "px-3" : "px-5",
-      )}
-    >
-      {leading}
-      <span className="min-w-0 flex-1">
-        <span className="block truncate text-xs font-medium">{title}</span>
-        <span className="block truncate text-2xs text-muted-foreground">
-          {detail}
-        </span>
-      </span>
-      {trailing}
-    </Link>
-  );
-}
-
-const placementCode = (id: string) => (
-  <span className="font-mono text-2xs text-muted-foreground tabular-nums">
-    {id}
-  </span>
-);
-
-/** A product row's expanded children: its placements, kit placements, and matched activity. */
-function ProductFamilyRegion({
+/** A product row's expanded children: every placement, kit placement, and matched record. */
+function ProductFamilyLinks({
   id,
   group,
   compact = false,
 }: {
   id: string;
-  group: Extract<SearchResultGroup, { kind: "product" }>;
-  /** The phone layout: tighter inset, command-size media, no match text. */
+  group: ProductSearchGroup;
+  /** The phone layout: tighter inset, no match text. */
   compact?: boolean;
 }) {
-  const mediaVariant = compact ? "command" : undefined;
   return (
-    <fieldset
-      id={id}
-      aria-label={`${group.primary.title} placements and matching records`}
-      className="border-t border-border bg-muted/25 py-1"
-    >
-      {group.placements.map((placement) => (
-        <PlacementRow
-          key={placement.id}
-          destination={placementSearchDestination(group, placement)}
-          compact={compact}
-          leading={
-            <MapPinIcon className="size-4 shrink-0 text-muted-foreground" />
-          }
-          title={placement.locationPath}
-          detail={formatPlacement(placement)}
-          trailing={placementCode(placement.id)}
-        />
+    <ProductFamilyRegion id={id} group={group} className="border-t">
+      {productFamilyChildren(group).children.map((child) => (
+        <Link
+          key={child.key}
+          {...getSearchResultRoute(child.destination)}
+          className={cn(
+            "flex min-h-11 items-center gap-3 py-1.5 hover:bg-muted/60",
+            compact ? "px-3" : "px-5",
+          )}
+        >
+          <ProductFamilyChildContent child={child} showMatch={!compact} />
+        </Link>
       ))}
-      {group.componentPlacements.map((componentPlacement) => (
-        <PlacementRow
-          key={`${componentPlacement.component.id}:${componentPlacement.placement.id}`}
-          destination={componentPlacementSearchDestination(componentPlacement)}
-          compact={compact}
-          leading={
-            <SearchResultMedia
-              item={componentPlacement.component}
-              variant={mediaVariant}
-            />
-          }
-          title={componentPlacement.component.title}
-          detail={
-            <>
-              {componentPlacement.componentQuantity > 1
-                ? `${componentPlacement.componentQuantity}× kit content`
-                : "Kit content"}{" "}
-              · {componentPlacement.placement.locationPath} ·{" "}
-              {formatPlacement(componentPlacement.placement)}
-            </>
-          }
-          trailing={placementCode(componentPlacement.placement.id)}
-        />
-      ))}
-      {group.matchedActivity.map((item) => (
-        <PlacementRow
-          key={`${item.entityKind}:${item.id}`}
-          destination={item}
-          compact={compact}
-          leading={<SearchResultMedia item={item} variant={mediaVariant} />}
-          title={item.title}
-          detail={`${entities[entityKindMap[item.entityKind]].label} · ${item.id} · Linked to ${group.primary.title}`}
-          trailing={
-            compact ? null : (
-              <span className="max-w-36 truncate text-2xs text-muted-foreground">
-                {getSearchMatchText(item)}
-              </span>
-            )
-          }
-        />
-      ))}
-    </fieldset>
+    </ProductFamilyRegion>
   );
 }
 
@@ -602,7 +457,7 @@ function ProductSearchRow({
   onToggle,
 }: {
   expanded: boolean;
-  group: Extract<SearchResultGroup, { kind: "product" }>;
+  group: ProductSearchGroup;
   onPreview: SearchPreviewHandler;
   onPrefetch: SearchPreviewHandler;
   onPrefetchEnd: SearchPreviewHandler;
@@ -610,29 +465,18 @@ function ProductSearchRow({
 }) {
   const previewRow = { original: group.primary };
   const regionId = `search-family-${group.primary.id}`;
-  const hasChildren =
-    group.placements.length > 0 ||
-    group.componentPlacements.length > 0 ||
-    group.matchedActivity.length > 0;
+  const hasChildren = productFamilyHasChildren(group);
   return (
     <div className="border-b border-border last:border-b-0">
       <div className="group flex items-center gap-3 px-2 py-2 hover:bg-muted/45">
         {hasChildren && (
-          <button
-            type="button"
-            aria-label={`${expanded ? "Collapse" : "Expand"} ${group.primary.title} placements and matching records`}
-            aria-expanded={expanded}
-            aria-controls={regionId}
-            onClick={onToggle}
-            className="flex size-8 shrink-0 items-center justify-center text-muted-foreground hover:text-foreground focus-visible:outline-2 focus-visible:outline-primary"
-          >
-            <CaretRightIcon
-              className={cn(
-                "size-4 transition-transform motion-reduce:transition-none",
-                expanded && "rotate-90",
-              )}
-            />
-          </button>
+          <ProductFamilyToggle
+            group={group}
+            expanded={expanded}
+            regionId={regionId}
+            onToggle={onToggle}
+            className="size-8"
+          />
         )}
         <SearchResultMedia item={group.primary} variant="list" />
         <div className="min-w-0 flex-1">
@@ -651,7 +495,7 @@ function ProductSearchRow({
             {group.primary.title}
           </Link>
           <span className="block truncate text-xs text-muted-foreground">
-            {[group.primary.subtitle, searchProductSummary(group)]
+            {[group.primary.subtitle, productFamilySummary(group)]
               .filter(Boolean)
               .join(" · ")}
           </span>
@@ -673,7 +517,7 @@ function ProductSearchRow({
         </div>
       </div>
       {expanded && hasChildren && (
-        <ProductFamilyRegion id={regionId} group={group} />
+        <ProductFamilyLinks id={regionId} group={group} />
       )}
     </div>
   );
@@ -691,9 +535,7 @@ function MobileSearchResults({
   onRetry: () => void;
 }) {
   const navigate = useNavigate();
-  const [expandedKeys, setExpandedKeys] = useState<Set<string>>(
-    () => new Set(),
-  );
+  const families = useExpandedFamilies();
   const feedback = getSearchResultsFeedback({
     isLoading,
     error,
@@ -713,11 +555,8 @@ function MobileSearchResults({
     <div className="border-y border-border">
       {data.map((group) => {
         if (group.kind === "product") {
-          const expanded = expandedKeys.has(group.key);
-          const hasChildren =
-            group.placements.length > 0 ||
-            group.componentPlacements.length > 0 ||
-            group.matchedActivity.length > 0;
+          const expanded = families.isExpanded(group.key);
+          const hasChildren = productFamilyHasChildren(group);
           const regionId = `mobile-search-family-${group.primary.id}`;
           return (
             <div
@@ -729,7 +568,7 @@ function MobileSearchResults({
                   <MobileCard
                     variant="row"
                     title={group.primary.title}
-                    subtitle={searchProductSummary(group)}
+                    subtitle={productFamilySummary(group)}
                     imageSlot={
                       <SearchResultMedia
                         item={group.primary}
@@ -751,32 +590,17 @@ function MobileSearchResults({
                   />
                 </div>
                 {hasChildren && (
-                  <button
-                    type="button"
-                    aria-label={`${expanded ? "Collapse" : "Expand"} ${group.primary.title} placements and matching records`}
-                    aria-expanded={expanded}
-                    aria-controls={regionId}
-                    onClick={() =>
-                      setExpandedKeys((current) => {
-                        const updated = new Set(current);
-                        if (updated.has(group.key)) updated.delete(group.key);
-                        else updated.add(group.key);
-                        return updated;
-                      })
-                    }
-                    className="flex min-h-11 min-w-11 items-center justify-center text-muted-foreground hover:bg-muted hover:text-foreground focus-visible:outline-2 focus-visible:outline-primary"
-                  >
-                    <CaretRightIcon
-                      className={cn(
-                        "size-4 transition-transform motion-reduce:transition-none",
-                        expanded && "rotate-90",
-                      )}
-                    />
-                  </button>
+                  <ProductFamilyToggle
+                    group={group}
+                    expanded={expanded}
+                    regionId={regionId}
+                    onToggle={() => families.toggle(group.key)}
+                    className="min-h-11 min-w-11 hover:bg-muted"
+                  />
                 )}
               </div>
               {expanded && hasChildren && (
-                <ProductFamilyRegion id={regionId} group={group} compact />
+                <ProductFamilyLinks id={regionId} group={group} compact />
               )}
             </div>
           );

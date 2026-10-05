@@ -75,18 +75,24 @@ test("the search page and command menu open the same Product family", async ({
     `/search?${new URLSearchParams({ q: name })}`,
   );
   await expect(page.getByRole("link", { name, exact: true })).toBeVisible();
+  const summary =
+    /1 direct placement · Kit contents placed · .+, .+ · 3 matching records$/;
+  const pageSummary = await page.getByText(summary).textContent();
   await page.getByRole("button", { name: toggleName }).click();
   const pageFamily = page.getByRole("group", { name: regionName });
   const pageChildren = pageFamily.getByRole("link");
   await expect(pageChildren).toHaveCount(2 + chores.length);
-  await expect(
-    pageFamily.getByRole("link", { name: new RegExp(escapeRegExp(direct.id)) }),
-  ).toContainText(shelfName);
-  await expect(
-    pageFamily.getByRole("link", {
-      name: new RegExp(escapeRegExp(kitContent.id)),
-    }),
-  ).toContainText("2× kit content");
+  const pageDirect = pageFamily.getByRole("link", {
+    name: new RegExp(escapeRegExp(direct.id)),
+  });
+  await expect(pageDirect).toContainText(shelfName);
+  await expect(pageDirect).toContainText("kg · Stock");
+  const pageKit = pageFamily.getByRole("link", {
+    name: new RegExp(escapeRegExp(kitContent.id)),
+  });
+  await expect(pageKit).toContainText("2× kit content");
+  const pageDirectText = await pageDirect.textContent();
+  const pageKitText = await pageKit.textContent();
   for (const chore of chores)
     await expect(
       pageFamily.getByRole("link", { name: new RegExp(escapeRegExp(chore)) }),
@@ -96,7 +102,8 @@ test("the search page and command menu open the same Product family", async ({
     .click();
   await expect(page).toHaveURL(new RegExp(`/inventory/${kitContent.id}$`));
 
-  // Command menu: the same family, keyboard-driven, capped at two per category.
+  // Command menu: the same family, keyboard-driven, capped at two placements
+  // and two matched records.
   const palette = await openCommandPalette(page);
   const input = palette.getByPlaceholder("Search or jump to a page…");
   await input.fill(name);
@@ -107,23 +114,29 @@ test("the search page and command menu open the same Product family", async ({
   });
   await expect(parent).toHaveAttribute("aria-expanded", "false");
   await expect(parent).toHaveAttribute("aria-selected", "true");
-  await palette.getByRole("button", { name: toggleName }).click();
+  // Both surfaces word the family identically (one shared formatter).
+  await expect(palette.getByText(summary)).toHaveText(pageSummary!);
+  // Focus stays in the input: the arrows disclose the selected family.
+  await input.press("ArrowRight");
+  await expect(parent).toHaveAttribute("aria-expanded", "true");
+  await input.press("ArrowLeft");
+  await expect(parent).toHaveAttribute("aria-expanded", "false");
+  await input.press("ArrowRight");
   const menuFamily = palette.getByRole("group", { name: regionName });
   await expect(menuFamily).toBeVisible();
   await expect(
     menuFamily.getByRole("option", {
       name: new RegExp(escapeRegExp(direct.id)),
     }),
-  ).toBeVisible();
+  ).toHaveText(pageDirectText!);
   await expect(
     menuFamily.getByRole("option", {
       name: new RegExp(escapeRegExp(kitContent.id)),
     }),
-  ).toContainText("2× kit content");
+  ).toHaveText(pageKitText!);
   await expect(
     menuFamily.getByRole("option", { name: /^See 1 more in full search$/ }),
   ).toBeVisible();
-  await input.focus();
   await input.press("ArrowDown");
   await input.press("Enter");
   await expect(page).toHaveURL(new RegExp(`/inventory/${direct.id}$`));
