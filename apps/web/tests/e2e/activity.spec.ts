@@ -22,26 +22,28 @@ test("Runs pages history, attempts, and events past one cursor page", async ({
   const sample = await seedPagedActivityHistory(name, 22);
   await page.setViewportSize({ width: 1440, height: 900 });
   const table = page.getByRole("table", { name: "Runs and image jobs" });
-  const scrollUntil = async (filename: string) => {
-    await expect
-      .poll(async () => {
-        await table.hover();
-        await page.mouse.wheel(0, 4000);
-        return (await table.textContent())?.includes(filename) ?? false;
-      })
-      .toBe(true);
+  // The list loads its next page on its own whenever the first 20 rows do not
+  // fill the viewport, so whether page two is present yet is a race; assert
+  // only the settled listing. All 22 jobs, each exactly once and in the
+  // scope's order, can only come from following the cursor without skipping
+  // or repeating a row.
+  const filenamePattern = new RegExp(`${name} (\\d{2})\\.png`, "g");
+  const listedJobs = async () => {
+    await table.hover();
+    await page.mouse.wheel(0, 4000);
+    const text = (await table.textContent()) ?? "";
+    return Array.from(text.matchAll(filenamePattern), (match) => match[1]);
   };
+  const newestFirst = Array.from({ length: 22 }, (_, index) =>
+    String(index + 1).padStart(2, "0"),
+  );
   const history = `/runs?submissionId=${sample.submissionId}`;
 
   await gotoAuthenticatedPage(page, history);
-  await expect(table).toContainText(`${name} 01.png`);
-  await expect(table).not.toContainText(`${name} 22.png`);
-  await scrollUntil(`${name} 22.png`);
+  await expect.poll(listedJobs).toEqual(newestFirst);
 
   await gotoAuthenticatedPage(page, `${history}&sort=oldest`);
-  await expect(table).toContainText(`${name} 22.png`);
-  await expect(table).not.toContainText(`${name} 01.png`);
-  await scrollUntil(`${name} 01.png`);
+  await expect.poll(listedJobs).toEqual([...newestFirst].reverse());
 
   await gotoAuthenticatedPage(page, `/runs/jobs/${sample.newestJobId}`);
   const attempt = (number: number) =>
