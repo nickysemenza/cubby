@@ -1,3 +1,4 @@
+import { importRunIdFromAgentIdentity } from "@cubby/schemas/import-run-agent";
 /**
  * The purchase agent's host: the exported Durable Object and the narrowed
  * environment that is the agent's only view of this Worker.
@@ -18,6 +19,7 @@ import { DurableObject } from "cloudflare:workers";
 import type {
   DispatchInput,
   PurchaseAgentEnvironment,
+  PurchaseAgentQueueEnvironment,
   PurchaseImportRunAgentRpc,
 } from "~/server/purchase-agent/environment";
 
@@ -27,10 +29,14 @@ import { purchaseAgentMcpTools, runServicesFor } from "./agent-services";
 
 type HostContext = { waitUntil(promise: Promise<unknown>): void };
 
-/** The agent's whole environment, built from this Worker's bindings. */
-export function purchaseAgentEnvironment(
+/**
+ * One coordinator's whole environment, built from this Worker's bindings. Its
+ * services are bound to `runId`, which the host reads from the object's name.
+ */
+function purchaseAgentEnvironment(
   env: Env,
   ctx: HostContext,
+  runId: string,
 ): PurchaseAgentEnvironment {
   // SAFETY: the workerd harness adds this service binding to the Worker; it
   // is deliberately absent from wrangler.jsonc, so production never has it.
@@ -45,10 +51,20 @@ export function purchaseAgentEnvironment(
         run: (data, options) => gateway.run(data, options),
       };
     },
-    run: (runId) => runServicesFor(env, ctx, runId),
+    services: runServicesFor(env, ctx, runId),
     mcpTools: purchaseAgentMcpTools,
-    coordinator: (agentId) => env.PURCHASE_IMPORT_RUN.getByName(agentId),
     ...(testModel && { testModel }),
+  };
+}
+
+/** The queue consumer's environment: any Run's services and coordinator. */
+export function purchaseAgentQueueEnvironment(
+  env: Env,
+  ctx: HostContext,
+): PurchaseAgentQueueEnvironment {
+  return {
+    run: (runId) => runServicesFor(env, ctx, runId),
+    coordinator: (agentId) => env.PURCHASE_IMPORT_RUN.getByName(agentId),
   };
 }
 
@@ -58,7 +74,9 @@ type RunAgent =
 /**
  * One import Run's coordinator Durable Object. Every entry point loads the
  * agent (once per instance) and forwards to it; the agent's Lifecycle jobs
- * wake it through `alarm`.
+ * wake it through `alarm`. The SDK initializes the agent inside its own
+ * `fetch` and `alarm` (the alarm's memory-limit circuit breaker covers boot
+ * hydration), so only the `dispatch` RPC initializes it here.
  */
 class PurchaseImportRunAgentHost
   extends DurableObject<Env>
@@ -66,15 +84,18 @@ class PurchaseImportRunAgentHost
 {
   private agent: Promise<RunAgent> | undefined;
 
-  private started(): Promise<RunAgent> {
+  private loaded(): Promise<RunAgent> {
     this.agent ??= import("~/server/purchase-agent/run-agent")
-      .then(async ({ PurchaseImportRunAgent }) => {
-        const agent = new PurchaseImportRunAgent(
+      .then(({ PurchaseImportRunAgent }) => {
+        const runId = importRunIdFromAgentIdentity(this.ctx.id.name);
+        if (!runId)
+          throw new Error(
+            "Purchase agent object is not named for an import Run",
+          );
+        return new PurchaseImportRunAgent(
           this.ctx,
-          purchaseAgentEnvironment(this.env, this.ctx),
+          purchaseAgentEnvironment(this.env, this.ctx, runId),
         );
-        await agent.__unsafe_ensureInitialized();
-        return agent;
       })
       .catch((error) => {
         this.agent = undefined;
@@ -84,15 +105,17 @@ class PurchaseImportRunAgentHost
   }
 
   async fetch(request: Request): Promise<Response> {
-    return (await this.started()).fetch(request);
+    return (await this.loaded()).fetch(request);
   }
 
   async alarm(): Promise<void> {
-    await (await this.started()).alarm();
+    await (await this.loaded()).alarm();
   }
 
   async dispatch(input: DispatchInput): Promise<{ accepted: boolean }> {
-    return (await this.started()).dispatch(input);
+    const agent = await this.loaded();
+    await agent.__unsafe_ensureInitialized();
+    return agent.dispatch(input);
   }
 }
 

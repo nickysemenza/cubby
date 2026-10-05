@@ -54,7 +54,7 @@ import {
 import { withUnhandledErrorBody } from "./server/errors/unhandled-error-body";
 import { isMaintenanceMode, maintenanceResponse } from "./server/maintenance";
 import type { PurchaseAgentQueueBatch } from "./server/purchase-agent/environment";
-import { purchaseAgentEnvironment } from "./server/purchase-import/agent-host";
+import { purchaseAgentQueueEnvironment } from "./server/purchase-import/agent-host";
 import type { SearchDocumentCursor } from "./server/repo/search-document";
 import type { TelemetryQueueBatch } from "./server/telemetry-queue-types";
 import { getRequestId, withManualTrace, withTrace } from "./server/tracing";
@@ -566,7 +566,7 @@ const handler = {
         await import("./server/purchase-agent/queue");
       await consumePurchaseAgentQueue(
         batch,
-        purchaseAgentEnvironment(env, ctx),
+        purchaseAgentQueueEnvironment(env, ctx),
       );
       return;
     }

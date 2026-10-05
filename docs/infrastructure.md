@@ -111,25 +111,44 @@ runs in this Worker behind an in-process boundary enforced by construction:
   Its host (`server/purchase-import/agent-host.ts`) builds a narrowed
   environment (`server/purchase-agent/environment.ts`): the AI Gateway, the
   scripted test model in the workerd harness, the purpose's MCP tool
-  definitions, the coordinator stub for the queue consumer, and the services
-  of one Run. The Agents SDK base class gets an empty environment.
+  definitions, and the services of the one Run the object's name identifies
+  (`importRunIdFromAgentIdentity`), so a coordinator cannot address another
+  Run. The queue consumer gets a separate environment that resolves any Run's
+  services and coordinator. The Agents SDK base class gets an empty
+  environment.
 - Every Cubby effect is a Run service (`server/purchase-import/agent-services.ts`):
   bound to one Run when created, it parses its input
   (`@cubby/schemas/purchase-agent-services`), opens its own database scope,
   and resolves every target from that Run. No input names a Run, party,
-  account, vendor, SQL, script, or generic mutation target.
+  account, vendor, SQL, script, or generic mutation target. A new coordinator
+  first calls `authorize`, which requires the member's live Purchase Agent
+  grant and otherwise pauses the Run for authorization.
 - MCP calls run Cubby's MCP handler in process. For each request the host
   mints a fresh five-minute delegation bearer bound to the Run and the
   member's live Purchase Agent grant; the MCP handler verifies it, the grant,
   and LedgerParty ownership exactly as for any external client, and narrows
   every tool to the purpose's manifest actions
   (`importRunAgentManifest[purpose].mcpActions`). The agent never holds the
-  token.
+  token, and the host reads the agent's request before opening its database
+  scope.
 - Oxlint rule `cubby/purchase-agent-boundary` (`tools/oxlint/cubby/`) fails
   any import from that directory outside its runtime packages, pure Cubby
   contracts (`@cubby/schemas`, `@cubby/shared`, `@cubby/worker-tracing`), its
-  own files, and the bundled skill Markdown, and any read of `process.env` or
-  `this.env`. A new agent capability is a new Run service, never an import.
+  own files, and the bundled skill Markdown, and any reach for an `env` or
+  `exports` property (including `ctx.exports`, the Worker's loopback
+  bindings) or the `process`, `globalThis`, `self`, and `require` globals,
+  under any spelling. A new agent capability is a new Run service, never an
+  import.
+
+What the boundary does and does not cover: the model never runs code — its
+only authority is the tool set, and every tool is a Run service or an MCP
+call checked as above. The boundary keeps Cubby's own agent code on that
+path. It is not a sandbox: the agent shares the Worker's isolate, so its
+dependencies (the Agents SDK, pi) run with the same runtime authority as any
+Worker code, including `process.env` populated by `nodejs_compat`. The
+separate Worker also contained a compromised dependency; adding a
+dependency to the agent therefore deserves the same review as one in the
+web app.
 
 One Worker removes the circular service bindings, the internal agent route
 and its header marker, and the `PurchaseImportService` RPC entrypoint whose

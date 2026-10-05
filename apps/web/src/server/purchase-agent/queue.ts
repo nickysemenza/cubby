@@ -4,7 +4,7 @@ import * as Sentry from "@sentry/cloudflare";
 
 import { parsePurchaseAgentEvent, type PurchaseAgentEvent } from "./contracts";
 import type {
-  PurchaseAgentEnvironment,
+  PurchaseAgentQueueEnvironment,
   PurchaseAgentQueueBatch,
   PurchaseAgentQueueDeliveredMessage,
 } from "./environment";
@@ -28,7 +28,7 @@ type DispatchOutcome =
 
 async function deliverEvent(
   event: PurchaseAgentEvent,
-  env: PurchaseAgentEnvironment,
+  env: PurchaseAgentQueueEnvironment,
 ): Promise<
   Extract<DispatchOutcome, "dispatched" | "fenced" | "acknowledged_by_peer">
 > {
@@ -68,7 +68,7 @@ async function deliverEvent(
 
 async function consumeMessage(
   message: PurchaseAgentQueueDeliveredMessage,
-  env: PurchaseAgentEnvironment,
+  env: PurchaseAgentQueueEnvironment,
   span: WorkerSpan,
 ): Promise<void> {
   const { attempts } = message;
@@ -120,7 +120,7 @@ async function consumeMessage(
 
 export async function consumePurchaseAgentQueue(
   batch: PurchaseAgentQueueBatch,
-  env: PurchaseAgentEnvironment,
+  env: PurchaseAgentQueueEnvironment,
 ): Promise<void> {
   for (const message of batch.messages) {
     await withSpan("job.purchase_agent_event", (span) =>

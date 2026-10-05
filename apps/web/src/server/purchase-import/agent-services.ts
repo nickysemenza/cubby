@@ -82,8 +82,26 @@ export function runServicesFor(
         }),
       ),
 
-    mcpFetch: (request) =>
+    authorize: () =>
       withDatabase(async (db, service) => {
+        const scope = await service.loadRunScope(db, runId);
+        const { findActivePurchaseAgentGrant } = await import("./agent-auth");
+        if (await findActivePurchaseAgentGrant(db, scope.actorUserId)) return;
+        await service.pauseRunForAuthorization(db, runId);
+        throw new Error("Purchase Agent authorization is required");
+      }),
+
+    mcpFetch: async (request) => {
+      // Read the agent's request before entering the database scope, so no
+      // agent-supplied code runs inside it.
+      const target = new URL(MCP_URL);
+      target.search = new URL(request.url).search;
+      const headers = new Headers(request.headers);
+      const body =
+        request.method === "GET" || request.method === "HEAD"
+          ? undefined
+          : await request.arrayBuffer();
+      return withDatabase(async (db, service) => {
         const scope = await service.loadRunScope(db, runId);
         const [
           { findActivePurchaseAgentGrant, issuePurchaseAgentDelegation },
@@ -99,27 +117,20 @@ export function runServicesFor(
         }
         // A fresh run-bound bearer per request; the MCP handler verifies it,
         // the live grant, and LedgerParty ownership exactly as for any client.
-        const token = await issuePurchaseAgentDelegation({
-          runId,
-          userId: scope.actorUserId,
-          grantId: grant.id,
-          secret: env.BETTER_AUTH_SECRET,
-        });
-        const target = new URL(MCP_URL);
-        target.search = new URL(request.url).search;
-        const headers = new Headers(request.headers);
-        headers.set("authorization", `Bearer ${token}`);
-        return handleMcpHttpRequest(
-          new Request(target, {
-            method: request.method,
-            headers,
-            body:
-              request.method === "GET" || request.method === "HEAD"
-                ? undefined
-                : await request.arrayBuffer(),
-          }),
+        headers.set(
+          "authorization",
+          `Bearer ${await issuePurchaseAgentDelegation({
+            runId,
+            userId: scope.actorUserId,
+            grantId: grant.id,
+            secret: env.BETTER_AUTH_SECRET,
+          })}`,
         );
-      }),
+        return handleMcpHttpRequest(
+          new Request(target, { method: request.method, headers, body }),
+        );
+      });
+    },
 
     claimNextWork: (input) => {
       const ref = purchaseAgentOperationRef.parse(input);

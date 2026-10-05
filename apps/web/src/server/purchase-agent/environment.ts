@@ -53,6 +53,11 @@ type OperationRef = z.input<typeof purchaseAgentOperationRef>;
 
 /** One Run's services. No method takes a Run: the host bound it. */
 export interface RunServices {
+  /**
+   * Require the member's live Purchase Agent grant before a new coordinator
+   * starts; without one the host pauses the Run for authorization and throws.
+   */
+  authorize(): Promise<void>;
   /** The Run's public identity: its purpose and agent instance name. */
   loadScope(): Promise<{ purpose: AgentImportRunPurpose; agentId: string }>;
   canDispatchCoordinator(eventId: string): Promise<boolean>;
@@ -117,21 +122,31 @@ export interface AgentGateway {
   ): Promise<Response>;
 }
 
-/** The narrowed environment of the agent Durable Object and queue consumer. */
+/**
+ * The narrowed environment of one coordinator Durable Object. Its services
+ * are bound to the Run its object name identifies, so the agent cannot
+ * address another Run.
+ */
 export interface PurchaseAgentEnvironment {
   /** Cubby's AI Gateway through the Worker's AI binding. */
   gateway(): AgentGateway;
-  /** The services of one Run. */
-  run(runId: string): RunServices;
+  /** The services of this object's Run. */
+  readonly services: RunServices;
   /**
    * The purpose's Cubby MCP tools as the server describes them to the agent,
    * derived from the same compiled catalog the MCP server lists.
    */
   mcpTools(purpose: AgentImportRunPurpose): Promise<McpToolDefinition[]>;
-  /** The coordinator Durable Object for an agent identity (queue consumer). */
-  coordinator(agentId: string): PurchaseImportRunAgentRpc;
   /** Workerd harness only: the scripted model peer replacing the Gateway. */
   testModel?: { fetch(request: Request): Promise<Response> };
+}
+
+/** The narrowed environment of the queue consumer, which serves every Run. */
+export interface PurchaseAgentQueueEnvironment {
+  /** The services of the Run an event names. */
+  run(runId: string): RunServices;
+  /** The coordinator Durable Object for an agent identity. */
+  coordinator(agentId: string): PurchaseImportRunAgentRpc;
 }
 
 /** One `cubby-purchase-agent` delivery. */

@@ -7,7 +7,9 @@ import type { ESTree } from "@oxlint/plugins";
  * vendor pages, mail, and photos inside the web Worker. Its only authority is
  * the narrowed environment its host passes in (`environment.ts`): this rule
  * keeps the directory from importing anything that could reach the database,
- * a binding, or a secret, and from reading the Worker's raw environment.
+ * a binding, or a secret, and from reaching the Worker's environment, its
+ * loopback bindings (`ctx.exports`), or ambient globals (`process`,
+ * `globalThis`) under any spelling.
  * docs/infrastructure.md#purchase-agent explains the boundary.
  */
 
@@ -42,16 +44,20 @@ function staticSource(node: ESTree.Node | null | undefined) {
   return String(node.value);
 }
 
-function memberOf(node: ESTree.Node, object: string, property: string) {
-  if (node.type !== "MemberExpression" || node.computed) return false;
-  const left =
-    (node.object.type === "Identifier" && node.object.name === object) ||
-    (object === "this" && node.object.type === "ThisExpression");
-  return (
-    left &&
-    node.property.type === "Identifier" &&
-    node.property.name === property
-  );
+/** Properties that hold a Worker environment or loopback bindings. */
+const AMBIENT_PROPERTIES = new Set(["env", "exports"]);
+/** Globals that reach ambient state or bypass the import allowlist. */
+const AMBIENT_GLOBALS = new Set(["process", "globalThis", "self", "require"]);
+
+/** `x.env`, `x["env"]`, `x.exports`, … under any spelling. */
+function ambientProperty(node: ESTree.Node): string | undefined {
+  if (node.type !== "MemberExpression") return;
+  const name = node.computed
+    ? staticSource(node.property)
+    : node.property.type === "Identifier"
+      ? node.property.name
+      : undefined;
+  return name !== undefined && AMBIENT_PROPERTIES.has(name) ? name : undefined;
 }
 
 export const purchaseAgentBoundaryRule = defineRule({
@@ -64,7 +70,7 @@ export const purchaseAgentBoundaryRule = defineRule({
     messages: {
       import: `The purchase agent may not import "{{source}}": it reaches Cubby only through its narrowed environment (environment.ts), whose Run services the host implements. Add the capability as a run-scoped service instead. ${BOUNDARY}`,
       dynamicImport: `The purchase agent may import only static, allowed modules. ${BOUNDARY}`,
-      env: `The purchase agent may not read {{what}}; its host passes everything it may use in the narrowed environment (environment.ts). ${BOUNDARY}`,
+      env: `The purchase agent may not reach {{what}}: Worker environments, loopback bindings, and ambient globals are outside its narrowed environment (environment.ts). ${BOUNDARY}`,
     },
   },
   createOnce(context) {
@@ -92,18 +98,46 @@ export const purchaseAgentBoundaryRule = defineRule({
           context.report({ node, messageId: "dynamicImport" });
         else checkSource(node, node.source);
       },
+      TSImportEqualsDeclaration(node) {
+        context.report({ node, messageId: "dynamicImport" });
+      },
       MemberExpression(node) {
-        if (memberOf(node, "process", "env"))
+        const property = ambientProperty(node);
+        if (property)
           context.report({
             node,
             messageId: "env",
-            data: { what: "process.env" },
+            data: { what: `.${property}` },
           });
-        if (memberOf(node, "this", "env"))
+      },
+      // Destructuring (`const { env } = process`) names the property here.
+      Property(node) {
+        if (
+          node.parent.type === "ObjectPattern" &&
+          !node.computed &&
+          node.key.type === "Identifier" &&
+          AMBIENT_PROPERTIES.has(node.key.name)
+        )
           context.report({
             node,
             messageId: "env",
-            data: { what: "this.env" },
+            data: { what: `.${node.key.name}` },
+          });
+      },
+      Identifier(node) {
+        if (
+          AMBIENT_GLOBALS.has(node.name) &&
+          !(
+            node.parent.type === "MemberExpression" &&
+            node.parent.property === node &&
+            !node.parent.computed
+          ) &&
+          !(node.parent.type === "Property" && node.parent.key === node)
+        )
+          context.report({
+            node,
+            messageId: "env",
+            data: { what: node.name },
           });
       },
     };

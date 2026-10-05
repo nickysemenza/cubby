@@ -163,11 +163,8 @@ export class PurchaseImportRunAgent
     return raw === undefined ? fallback : Number(raw);
   }
 
-  /** The bound Run's services; the run is fixed at its first dispatch. */
   private services(): RunServices {
-    const identity = this.identity();
-    if (!identity) throw new Error("Import run agent has no Run yet");
-    return this.agentEnv.run(identity.runId);
+    return this.agentEnv.services;
   }
 
   private report<TError>(error: TError): void {
@@ -311,7 +308,12 @@ export class PurchaseImportRunAgent
       (stored.runId !== identity.runId || stored.purpose !== identity.purpose)
     )
       throw new Error("Import run agent is bound to another Run");
-    if (!stored) this.writeState(STATE_KEYS.identity, JSON.stringify(identity));
+    if (!stored) {
+      // A new coordinator starts only for a member who still authorizes the
+      // agent; the host pauses the Run for authorization otherwise.
+      await this.services().authorize();
+      this.writeState(STATE_KEYS.identity, JSON.stringify(identity));
+    }
     await this.ensureRunReady(identity);
     const receipt = await this.harness.submit(renderSignal(input.signal), {
       operationId: input.operationId,
