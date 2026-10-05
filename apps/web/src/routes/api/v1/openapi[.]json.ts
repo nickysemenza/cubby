@@ -10,7 +10,20 @@ type OpenApiDocument = typeof import("~/lib/generated/http-openapi.gen.json");
  * The ~1.7 MB document ships as a hashed static asset, not a Worker module, so
  * an unchanged document costs no Worker upload bytes on deploy.
  */
-async function loadOpenApiDocument(): Promise<OpenApiDocument> {
+let openApiDocumentPromise: Promise<OpenApiDocument> | undefined;
+
+function loadOpenApiDocument(): Promise<OpenApiDocument> {
+  if (openApiDocumentPromise) return openApiDocumentPromise;
+  // Parse once per isolate; a failed read must not poison the cache.
+  const loadPromise = readOpenApiDocument();
+  openApiDocumentPromise = loadPromise.catch(() => {
+    openApiDocumentPromise = undefined;
+    return loadPromise;
+  });
+  return openApiDocumentPromise;
+}
+
+async function readOpenApiDocument(): Promise<OpenApiDocument> {
   const assetsFetch = getAssetsFetcher();
   if (assetsFetch) {
     const response = await assetsFetch(

@@ -581,9 +581,10 @@ export function CookbookImport({
       // where nothing can load it.
       if (import.meta.env.SSR)
         throw new Error("Cookbook bundles open only in the browser");
-      const { CookbookBundleWorker } = await import("./bundle-worker");
-      const worker = new CookbookBundleWorker();
+      let worker: CookbookBundleWorker | undefined;
       try {
+        const { CookbookBundleWorker } = await import("./bundle-worker");
+        worker = new CookbookBundleWorker();
         const metadata = await worker.open(file);
         const prior = bindSource
           ? books.find((book) => book.source === bindSource)
@@ -637,7 +638,7 @@ export function CookbookImport({
             "Bundle ready; imported recipes and photos are preserved.",
           );
       } catch (error) {
-        worker.close();
+        worker?.close();
         showErrorToast(error, "Could not open cookbook bundle");
       }
     },
