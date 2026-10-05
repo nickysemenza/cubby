@@ -35,10 +35,6 @@ struct EntityPickerSheet: View {
     @State private var term = ""
     @State private var selected: [EntityPick]
     @State private var model: GenericEntityListModel?
-    @State private var hits: [EntityPick] = []
-    @State private var searchError: String?
-    @State private var isSearching = false
-    private let debouncer = SearchDebouncer()
 
     init(
         target: EntityKey, multiple: Bool = false, selected: [String] = [],
@@ -81,10 +77,14 @@ struct EntityPickerSheet: View {
                     }
                 }
                 Section {
-                    if usesSearchRPC {
-                        searchRows
-                    } else if let model {
-                        listRows(model)
+                    if let model {
+                        if model.isSearching, let search = model.searchModel {
+                            searchRows(search)
+                        } else if usesSearchRPC {
+                            Text("Type to search").foregroundStyle(.secondary)
+                        } else {
+                            listRows(model)
+                        }
                     }
                 }
             }
@@ -108,26 +108,42 @@ struct EntityPickerSheet: View {
                     }
                 }
             }
-            .task {
-                await reload(term: "")
-                for await value in debouncer.values() {
-                    await reload(term: value)
+            .task(id: scope) {
+                let source = pageSource()
+                if let model {
+                    await model.setSource(source)
+                    await model.loadInitial()
+                } else {
+                    let fresh = GenericEntityListModel(
+                        descriptor: descriptor, client: appModel.client, source: source)
+                    model = fresh
+                    fresh.setSearchQuery(term)
+                    await fresh.loadInitial()
                 }
             }
-            .onChange(of: term) { _, value in debouncer.send(value) }
+            .onChange(of: term) { _, value in model?.setSearchQuery(value) }
         }
         .nativeSheet(.picker)
     }
 
     @ViewBuilder
-    private var searchRows: some View {
-        if isSearching { LoadingIndicator(label: "Searching") }
-        if let searchError { Text(searchError).foregroundStyle(.secondary) }
-        if hits.isEmpty, !isSearching, searchError == nil {
-            Text(term.isEmpty ? "Type to search" : "No matches").foregroundStyle(.secondary)
+    private func searchRows(_ search: EntityListSearchModel) -> some View {
+        switch search.phase {
+        case .idle: EmptyView()
+        case .debouncing, .loading: LoadingIndicator(label: "Searching")
+        case .failed(let message): Text(message).foregroundStyle(.secondary)
+        case .loaded:
+            if search.rows.isEmpty { Text("No matches").foregroundStyle(.secondary) }
         }
-        ForEach(hits, id: \.resultRowIdentity) { hit in
-            pickRow(hit, imageURL: nil)
+        ForEach(search.rows, id: \.entityPickerResultIdentity) { row in
+            pickRow(
+                EntityPick(id: row.id, title: row.title), imageURL: row.imageURL,
+                emoji: descriptor.recordEmoji(in: row))
+        }
+        if let message = search.nextPageError { Text(message).foregroundStyle(.secondary) }
+        if search.hasMore {
+            Button("Load more") { Task { await search.loadNextPage() } }
+                .disabled(search.phase != .loaded)
         }
     }
 
@@ -184,42 +200,52 @@ struct EntityPickerSheet: View {
         .accessibilityAddTraits(isSelected ? .isSelected : [])
     }
 
-    private func reload(term: String) async {
-        if let scope, !scope.ready {
-            hits = []
-            model = nil
-            return
-        }
-        if usesSearchRPC {
-            guard !term.isEmpty else {
-                hits = []
-                return
+    private func pageSource() -> EntityListPageSource {
+        let client = appModel.client
+        let descriptor = descriptor
+        let target = target
+        let scope = scope
+        let filters = scope?.filters ?? EntityFilterState()
+        let ready = scope?.ready ?? true
+        let searchRPC = usesSearchRPC
+        let searchKey: String? =
+            if let textFilter, case .param(let name) = textFilter.wire {
+                name
+            } else {
+                descriptor.primarySearch?.key
             }
-            isSearching = true
-            defer { isSearching = false }
-            do {
-                let results = try await appModel.client.search(term, kinds: [target], limit: 25)
-                hits = results.map { EntityPick(id: $0.id, title: $0.title) }
-                searchError = nil
-            } catch {
-                searchError = error.userMessage
-                Diagnostics.report(error, context: "picker.search")
-            }
-            return
+        let emptyPage: @Sendable (Int) -> ListPage<EntityRow> = { page in
+            ListPage(items: [], meta: ListPageMeta(pageIndex: page, pageSize: 25, totalCount: 0))
         }
-        var filters = scope?.filters ?? EntityFilterState()
-        if let textFilter, case .param(let name) = textFilter.wire {
-            filters.set(.single(term), for: name)
-        } else if let primarySearch = descriptor.primarySearch {
-            // Scoped candidates use the list operation so the dependent
-            // filters remain server-enforced; its primary search key keeps
-            // typed text on the same request instead of widening to search.find.
-            filters.set(.single(term), for: primarySearch.key)
-        }
-        let fresh = GenericEntityListModel(
-            descriptor: descriptor, client: appModel.client, pageSize: 25, filters: filters, view: .table)
-        model = fresh
-        await fresh.loadInitial()
+        return EntityListPageSource(
+            id: scope,
+            loadPage: { page in
+                guard ready, !searchRPC else { return emptyPage(page) }
+                return try await client.list(descriptor, page: page, pageSize: 25, filters: filters)
+            },
+            searchPage: { query, page in
+                guard ready else { return emptyPage(page) }
+                if searchRPC {
+                    do {
+                        let hits = try await client.search(query, kinds: [target], limit: 25)
+                        let rows = hits.map {
+                            EntityRow(
+                                id: $0.id, title: $0.title, subtitle: nil, imageURL: nil, raw: .null)
+                        }
+                        return ListPage(
+                            items: page == 1 ? rows : [],
+                            meta: ListPageMeta(pageIndex: page, pageSize: 25, totalCount: rows.count))
+                    } catch {
+                        await MainActor.run { Diagnostics.report(error, context: "picker.search") }
+                        throw error
+                    }
+                }
+                // Search stays on the scoped list route; a global search would widen candidates.
+                var scopedFilters = filters
+                if let searchKey { scopedFilters.set(.single(query), for: searchKey) }
+                return try await client.list(
+                    descriptor, page: page, pageSize: 25, filters: scopedFilters)
+            })
     }
 }
 

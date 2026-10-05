@@ -199,3 +199,8 @@ existing block. Extend the generic path when it almost fits. See
   do not come from the declared list route (scoped picker, photo lane, relationship cursor,
   wardrobe) injects an `EntityListPageSource` (contract in its doc comment) and swaps scope with
   `setSource(_:)` instead of keeping its own page/busy/error/generation state.
+
+  Editor pickers preserve scoped list filters, stored selection ids, and distinct selected/result
+  row identities. Native editor pickers select existing records; create-from-picker belongs to
+  the web picker workflow. A dependent editor field changes scope after closing and reopening
+  its picker; an in-flight source swap is guarded in the shared model.
