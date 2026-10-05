@@ -1,8 +1,6 @@
 import { type HouseholdContributionLedgerOut } from "@cubby/schemas/household-contribution";
-import { contributionGapLabels } from "@cubby/schemas/household-contribution-labels";
 import { ArrowsLeftRightIcon } from "@phosphor-icons/react/dist/csr/ArrowsLeftRight";
 import { CheckCircleIcon } from "@phosphor-icons/react/dist/csr/CheckCircle";
-import { WarningIcon } from "@phosphor-icons/react/dist/csr/Warning";
 import { XCircleIcon } from "@phosphor-icons/react/dist/csr/XCircle";
 import { useQuery } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
@@ -10,11 +8,10 @@ import { useId, useMemo, useState } from "react";
 
 import { fieldEnumOptions } from "~/entity/enum-field-display";
 import {
-  ContributionGapTargets,
+  ContributionGapsTable,
   MoneyCell,
 } from "~/features/finance/household-contribution-format";
 import { householdContribution } from "~/integrations/tanstack-query/generated/catalog.gen";
-import { countLabel } from "~/lib/pluralize";
 import { formatCurrency } from "~/lib/utils";
 import { renderOptionCell } from "~/ui/data-table/columnHelpers";
 import { DatePickerInput } from "~/ui/date-picker-input";
@@ -223,37 +220,7 @@ export function HouseholdContributionLedgerReport({
             </AlertDescription>
           </Alert>
         ) : (
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead className="w-56">Issue</TableHead>
-                <TableHead className="w-32 text-right">Amount</TableHead>
-                <TableHead className="w-52">Records</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {data.gaps.map((gap) => (
-                <TableRow key={`${gap.code}:${gap.targetIds.join(":")}`}>
-                  <TableCell>
-                    <Row align="center" gap="xs">
-                      <WarningIcon className="size-3.5 shrink-0 text-warning-ink" />
-                      {contributionGapLabels[gap.code]}
-                    </Row>
-                  </TableCell>
-                  <MoneyCell value={gap.amount} empty="—" />
-                  <TableCell className="font-mono text-2xs text-muted-foreground">
-                    {/* Aggregated codes stand for many expenses and carry no
-                        targets — a count is the honest thing to show. */}
-                    {gap.count === undefined ? (
-                      <ContributionGapTargets targetIds={gap.targetIds} />
-                    ) : (
-                      countLabel(gap.count, "expense")
-                    )}
-                  </TableCell>
-                </TableRow>
-              ))}
-            </TableBody>
-          </Table>
+          <ContributionGapsTable gaps={data.gaps} />
         )}
       </section>
     </Stack>

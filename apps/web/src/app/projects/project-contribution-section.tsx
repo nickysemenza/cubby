@@ -1,19 +1,13 @@
 import { type ProjectContributionOut } from "@cubby/schemas/household-contribution";
-import { contributionGapLabels } from "@cubby/schemas/household-contribution-labels";
 import { UsersIcon } from "@phosphor-icons/react/dist/csr/Users";
 import { WalletIcon } from "@phosphor-icons/react/dist/csr/Wallet";
-import { WarningIcon } from "@phosphor-icons/react/dist/csr/Warning";
 import type { Icon } from "@phosphor-icons/react/lib";
 import { useQuery } from "@tanstack/react-query";
 import { useId } from "react";
 
 import { fieldEnumOptions } from "~/entity/enum-field-display";
-import {
-  ContributionGapTargets,
-  MoneyCell,
-} from "~/features/finance/household-contribution-format";
+import { ContributionGapsTable } from "~/features/finance/household-contribution-format";
 import { householdContribution } from "~/integrations/tanstack-query/generated/catalog.gen";
-import { countLabel } from "~/lib/pluralize";
 import { formatCurrency } from "~/lib/utils";
 import { renderOptionCell } from "~/ui/data-table/columnHelpers";
 import { ErrorDisplay } from "~/ui/feedback/error-display";
@@ -174,37 +168,7 @@ export function ProjectContributionReport({
               <Badge variant="warning">First 200 shown</Badge>
             )}
           </div>
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>Issue</TableHead>
-                <TableHead className="w-28 text-right">Amount</TableHead>
-                <TableHead className="w-40">Records</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {data.gaps.map((gap) => (
-                <TableRow key={`${gap.code}:${gap.targetIds.join(":")}`}>
-                  {/* Narrower column than the ledger's, and Table defaults to
-                      table-fixed with nowrap cells, so labels must wrap. */}
-                  <TableCell className="whitespace-normal">
-                    <Row align="center" gap="xs">
-                      <WarningIcon className="size-3.5 shrink-0 text-warning-ink" />
-                      {contributionGapLabels[gap.code]}
-                    </Row>
-                  </TableCell>
-                  <MoneyCell value={gap.amount} empty="—" />
-                  <TableCell className="font-mono text-2xs text-muted-foreground">
-                    {gap.count === undefined ? (
-                      <ContributionGapTargets targetIds={gap.targetIds} />
-                    ) : (
-                      countLabel(gap.count, "expense")
-                    )}
-                  </TableCell>
-                </TableRow>
-              ))}
-            </TableBody>
-          </Table>
+          <ContributionGapsTable gaps={data.gaps} />
         </section>
       )}
     </Stack>
