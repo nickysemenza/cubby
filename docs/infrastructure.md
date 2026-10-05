@@ -439,7 +439,8 @@ development calls use gateway `cubby`. Production uses the Workers AI Gateway
 binding: `AI.run` with an explicit gateway for Workers AI models, and
 `AI.gateway("cubby").run` for other providers. Tools outside Workers use
 explicitly authenticated REST requests. Workers AI REST calls use the account
-`/ai/run` endpoint with the gateway in the request options, avoiding a nested
+`/ai/run` endpoint with gateway routing, metadata, caching, and timeout controls
+in `cf-aig-*` headers (not body options), avoiding a nested
 unscoped provider call.
 Every REST request names the gateway explicitly so it cannot create `default`.
 

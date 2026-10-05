@@ -75,7 +75,7 @@ export function workersAiModel(endpoint: string): string {
   return model;
 }
 
-/** The binding's `GatewayOptions`, as the REST run body carries them. */
+/** Gateway controls translated to REST headers at the transport boundary. */
 export interface WorkersAiRunGateway {
   id: string;
   metadata: AiGatewayMetadata;
@@ -86,8 +86,8 @@ export interface WorkersAiRunGateway {
 
 /**
  * A Workers AI model call over the account REST `/ai/run`, scoped to a
- * gateway in its own body — the REST twin of the binding's
- * `AI.run(model, input, { gateway })`.
+ * gateway through documented `cf-aig-*` headers. The binding instead takes
+ * these controls in `AI.run(model, input, { gateway })` options.
  *
  * Regression: the gateway's provider route
  * (`gateway.ai.cloudflare.com/v1/<account>/<gateway>/workers-ai/run/<model>`)
@@ -104,18 +104,29 @@ export function workersAiRunRequest(args: {
   gateway: WorkersAiRunGateway;
   signal?: AbortSignal;
 }) {
+  const headers = new Headers({
+    authorization: `Bearer ${args.token}`,
+    "content-type": "application/json",
+    "cf-aig-gateway-id": args.gateway.id,
+    "cf-aig-metadata": JSON.stringify(args.gateway.metadata),
+  });
+  if (args.gateway.skipCache !== undefined)
+    headers.set("cf-aig-skip-cache", String(args.gateway.skipCache));
+  if (args.gateway.cacheTtl !== undefined)
+    headers.set("cf-aig-cache-ttl", String(args.gateway.cacheTtl));
+  if (args.gateway.requestTimeoutMs !== undefined)
+    headers.set(
+      "cf-aig-request-timeout",
+      String(args.gateway.requestTimeoutMs),
+    );
   return {
     url: `https://api.cloudflare.com/client/v4/accounts/${args.accountId}/ai/run`,
     init: {
       method: "POST",
-      headers: {
-        authorization: `Bearer ${args.token}`,
-        "content-type": "application/json",
-      },
+      headers,
       body: JSON.stringify({
         model: args.model,
         input: args.input,
-        options: { gateway: args.gateway },
       }),
       signal: args.signal,
     } satisfies RequestInit,

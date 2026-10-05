@@ -162,20 +162,16 @@ it("runs Workers AI through the account run route, scoped to cubby", async () =>
     `https://api.cloudflare.com/client/v4/accounts/${env.ACCOUNT_ID}/ai/run`,
   );
   expect(sent.headers.get("authorization")).toBe("Bearer synthetic-token");
+  expect(sent.headers.get("cf-aig-gateway-id")).toBe("cubby");
+  expect(sent.headers.get("cf-aig-skip-cache")).toBe("true");
+  expect(JSON.parse(sent.headers.get("cf-aig-metadata") ?? "{}")).toEqual({
+    environment: "ci",
+    feature: "field-suggestion",
+    operation: "decide",
+  });
   expect(JSON.parse(sent.body)).toEqual({
     model: "typesafe/jev",
     input,
-    options: {
-      gateway: {
-        id: "cubby",
-        metadata: {
-          environment: "ci",
-          feature: "field-suggestion",
-          operation: "decide",
-        },
-        skipCache: true,
-      },
-    },
   });
 
   upstream.mockClear();

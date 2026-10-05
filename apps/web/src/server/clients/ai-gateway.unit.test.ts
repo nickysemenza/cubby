@@ -475,7 +475,7 @@ describe("gatewayFetch Workers AI", () => {
     ]);
   });
 
-  it("names the cubby gateway in the REST run body", async () => {
+  it("sends REST gateway routing and controls as headers", async () => {
     const devFetch = await devGatewayFetch("dev-token");
     const sent: { url: string; init: RequestInit | undefined }[] = [];
     vi.stubGlobal("fetch", (url: string, init?: RequestInit) => {
@@ -483,10 +483,15 @@ describe("gatewayFetch Workers AI", () => {
       return Promise.resolve(new Response("{}"));
     });
 
-    await devFetch("workers-ai", { metadata, skipCache: true })(
-      `${gatewayBaseURL("workers-ai")}/run/typesafe/jev`,
-      { method: "POST", body: JSON.stringify(jevInput) },
-    );
+    await devFetch("workers-ai", {
+      metadata,
+      skipCache: true,
+      cacheTtlSeconds: 600,
+      requestTimeoutMs: 30000,
+    })(`${gatewayBaseURL("workers-ai")}/run/typesafe/jev`, {
+      method: "POST",
+      body: JSON.stringify(jevInput),
+    });
 
     const [call] = sent;
     expect(call?.url).toBe(
@@ -494,12 +499,16 @@ describe("gatewayFetch Workers AI", () => {
     );
     const headers = new Headers(call?.init?.headers);
     expect(headers.get("authorization")).toBe("Bearer dev-token");
+    expect(headers.get("cf-aig-gateway-id")).toBe("cubby");
+    expect(JSON.parse(headers.get("cf-aig-metadata") ?? "{}")).toEqual(
+      outbound,
+    );
+    expect(headers.get("cf-aig-skip-cache")).toBe("true");
+    expect(headers.get("cf-aig-cache-ttl")).toBe("600");
+    expect(headers.get("cf-aig-request-timeout")).toBe("30000");
     expect(JSON.parse(String(call?.init?.body))).toEqual({
       model: "typesafe/jev",
       input: jevInput,
-      options: {
-        gateway: { id: "cubby", metadata: outbound, skipCache: true },
-      },
     });
   });
 });
