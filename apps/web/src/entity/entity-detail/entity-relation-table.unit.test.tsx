@@ -5,7 +5,13 @@ import {
 } from "@cubby/schemas/purchase";
 import { testShortcode } from "@cubby/schemas/testing";
 import { formatCategoryLabel } from "@cubby/shared";
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import {
+  fireEvent,
+  render,
+  screen,
+  waitFor,
+  within,
+} from "@testing-library/react";
 import { renderToString } from "react-dom/server";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
@@ -372,11 +378,18 @@ describe("EntityRelationTable", () => {
       await screen.findByRole("link", { name: product.name }),
     ).toBeVisible();
     const row = screen.getByRole("link", { name: product.name }).closest("tr");
-    expect(row).not.toBeNull();
+    if (row === null) throw new Error("Expected the product row");
     expect(row).toHaveTextContent(formatCategoryLabel(category));
+    // Regression: the category pill replaced the reference link, so it
+    // rendered as inert text instead of opening the category.
+    expect(
+      within(row).getByRole("link", {
+        name: formatCategoryLabel(category),
+      }),
+    ).toHaveAttribute("href", `/product-categories/${category.id}`);
     expect(row).toHaveTextContent(product.externalIds[0]!.source);
     expect(row).not.toHaveTextContent('"externalId"');
-    expect(row?.querySelector("pre")).toBeNull();
+    expect(row.querySelector("pre")).toBeNull();
   });
 
   // Regression: the embedded table used to build its columns with no
