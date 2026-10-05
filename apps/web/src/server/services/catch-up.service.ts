@@ -3,7 +3,6 @@ import * as Sentry from "@sentry/tanstackstart-react";
 
 import { publishBackgroundTasks } from "~/server/background-tasks/publish";
 import {
-  getGmailOAuthCredentials,
   getPurchaseAgentQueue,
   getPurchaseImportNamespace,
   isCloudflareRuntime,
@@ -46,14 +45,16 @@ export async function recoverMissedWork(db: Database) {
   const [
     { repairImageProcessingWork },
     { expireOfflineRuns, expireStaleRuns },
-    { recoverStaleVendorMailSearchJobs },
+    { reconcileWorkflowRuns },
+    { pruneRoutineRuns },
   ] = await Promise.all([
     import("~/server/repo/image-processing-maintenance"),
     import("~/server/purchase-import/run-service"),
-    import("~/server/purchase-import/gmail/search-job"),
+    import("~/server/workflow-runs/lifecycle"),
+    import("~/server/purchase-import/gmail/discovery"),
   ]);
   const namespace = getPurchaseImportNamespace();
-  const [image, offlineResult, staleResult, vendorMailResult] =
+  const [image, offlineResult, staleResult, workflowResult, pruneResult] =
     await Promise.allSettled([
       repairImageProcessingWork(db),
       expireOfflineRuns(db),
@@ -62,9 +63,16 @@ export async function recoverMissedWork(db: Database) {
         : isCloudflareRuntime()
           ? Promise.reject(new Error("PURCHASE_IMPORT binding is unavailable"))
           : Promise.resolve(null),
-      recoverStaleVendorMailSearchJobs(db),
+      reconcileWorkflowRuns(db),
+      pruneRoutineRuns(db),
     ]);
-  const errors = [image, offlineResult, staleResult, vendorMailResult]
+  const errors = [
+    image,
+    offlineResult,
+    staleResult,
+    workflowResult,
+    pruneResult,
+  ]
     .filter((result) => result.status === "rejected")
     .map((result) => String(result.reason));
   const offline =
@@ -74,8 +82,10 @@ export async function recoverMissedWork(db: Database) {
     offlineExpired: offline?.expired,
     staleExpired: stale?.expired,
     staleFailures: stale?.failures.length,
-    vendorMailRepublished:
-      vendorMailResult.status === "fulfilled" ? vendorMailResult.value : null,
+    workflowRunsFailed:
+      workflowResult.status === "fulfilled" ? workflowResult.value : null,
+    routineRunsPruned:
+      pruneResult.status === "fulfilled" ? pruneResult.value : null,
   });
   for (const failure of stale?.failures ?? [])
     Sentry.captureMessage(
@@ -86,50 +96,28 @@ export async function recoverMissedWork(db: Database) {
   return { offline, stale };
 }
 
-async function gmailCredentials() {
-  const worker = getGmailOAuthCredentials();
-  if (worker) return worker;
-  const { env } = await import("~/env");
-  return {
-    clientId: env.GOOGLE_CLIENT_ID,
-    clientSecret: env.GOOGLE_CLIENT_SECRET,
-  };
-}
-
+/**
+ * Find new purchase evidence: open charge hunts, start one Gmail discovery
+ * Workflow per connected mailbox, and dispatch browser hunts. Gmail work runs
+ * in its Workflow, not here; a hunt waiting on mail has a grace period before
+ * it goes to the browser, which covers the pass's lag.
+ */
 export async function discoverPurchases(db: Database) {
   const [
-    { runGmailHourlySync },
-    { createBetterAuthGmailAccountStore },
-    { createGmailProviderFactory },
-    { listGmailSyncTargets },
     { discoverImportHunts, dispatchImportHunts },
-    { processOrderMails },
+    { startMailDiscovery },
+    { gmailOAuthConfigured },
   ] = await Promise.all([
-    import("~/server/purchase-import/gmail/hourly"),
-    import("~/server/purchase-import/gmail/persistence"),
-    import("~/server/purchase-import/gmail/tokens"),
-    import("~/server/purchase-import/gmail/targets"),
     import("~/server/purchase-import/hunts"),
-    import("~/server/purchase-import/gmail/process"),
+    import("~/server/purchase-import/gmail/discovery"),
+    import("~/server/purchase-import/gmail/provider"),
   ]);
-  const { clientId, clientSecret } = await gmailCredentials();
-  if (!clientId || !clientSecret)
+  const gmailConfigured = gmailOAuthConfigured();
+  if (!gmailConfigured)
     log.info("Gmail discovery skipped: Google OAuth is not configured");
   const [huntResult, gmailResult] = await Promise.allSettled([
     discoverImportHunts(db),
-    clientId && clientSecret
-      ? runGmailHourlySync({
-          db,
-          listTargets: () => listGmailSyncTargets(db),
-          providerForUser: createGmailProviderFactory({
-            store: createBetterAuthGmailAccountStore(db),
-            clientId,
-            clientSecret,
-          }),
-          includeAttachmentData: true,
-          processMessages: processOrderMails,
-        })
-      : Promise.resolve(null),
+    gmailConfigured ? startMailDiscovery(db) : Promise.resolve(null),
   ]);
   const queue = getPurchaseAgentQueue();
   const dispatchResult = await Promise.allSettled([
@@ -143,24 +131,18 @@ export async function discoverPurchases(db: Database) {
   ]);
   const huntsCreated =
     huntResult.status === "fulfilled" ? huntResult.value : null;
-  const summary = gmailResult.status === "fulfilled" ? gmailResult.value : null;
+  const mail = gmailResult.status === "fulfilled" ? gmailResult.value : null;
   const huntsDispatched =
     dispatchResult[0]?.status === "fulfilled" ? dispatchResult[0].value : 0;
   log.info("purchase discovery", {
     huntsCreated,
     huntsDispatched,
-    gmailAttempted: summary?.attempted,
-    gmailSucceeded: summary?.succeeded,
-    gmailFailures: summary?.failures.length,
+    mailPassesStarted: mail?.started,
+    mailPassesRunning: mail?.running,
   });
   const errors = [huntResult, gmailResult, ...dispatchResult]
     .filter((result) => result.status === "rejected")
     .map((result) => String(result.reason));
-  for (const failure of summary?.failures ?? [])
-    Sentry.captureMessage(
-      `Gmail purchase discovery failed for an account: ${failure.error}`,
-      "warning",
-    );
   if (errors.length) throw new Error(errors.join("; "));
-  return { huntsCreated, huntsDispatched, summary };
+  return { huntsCreated, huntsDispatched, mail };
 }

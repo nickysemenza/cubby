@@ -2,6 +2,7 @@ import { runShortcode } from "@cubby/schemas/identifiers";
 import {
   chargeHuntOutcomeOf,
   chargeHuntRunInput,
+  mailDiscoveryRunProgress,
   mailSearchRunInput,
   mailSearchRunProgress,
   orderMailImportRunInput,
@@ -19,9 +20,56 @@ import {
   runProgress,
 } from "~/server/db/schema";
 import { getDb } from "~/server/repo/database-helpers";
+import {
+  isWorkflowRunPurpose,
+  workflowInstanceId,
+} from "~/server/workflow-runs/contract";
+import {
+  productionWorkflowLauncher,
+  type WorkflowInstanceStatus,
+  type WorkflowLauncher,
+} from "~/server/workflow-runs/launcher";
+
+/**
+ * Cloudflare's view of the Run's current attempt, or null when it cannot be
+ * read (no binding outside the Worker, an API error). Diagnostics only: the
+ * Run row stays the record, and a missing instance is reported as such.
+ */
+async function instanceStatus(
+  launcher: WorkflowLauncher,
+  purpose: Parameters<WorkflowLauncher["status"]>[0],
+  id: string,
+): Promise<WorkflowInstanceStatus | null> {
+  try {
+    return await launcher.status(purpose, id);
+  } catch {
+    // SILENT: an unreadable instance only drops the optional diagnostic line.
+    return null;
+  }
+}
+
+/** The Workflow attempt behind a Gmail Run, with Cloudflare's view of it. */
+async function workflowAttempt(
+  launcher: WorkflowLauncher,
+  run: { purpose: string; shortcode: string },
+  attempt: number,
+) {
+  if (!isWorkflowRunPurpose(run.purpose) || attempt === 0) return null;
+  const instanceId = workflowInstanceId(run.shortcode, attempt);
+  return {
+    purpose: run.purpose,
+    attempt,
+    instanceId,
+    instance: await instanceStatus(launcher, run.purpose, instanceId),
+  };
+}
 
 /** The small, durable progress read shared by every Run detail page. */
-export async function getRunLiveProgress(db: Database, shortcode: string) {
+export async function getRunLiveProgress(
+  db: Database,
+  shortcode: string,
+  launcher: WorkflowLauncher = productionWorkflowLauncher,
+) {
   const database = getDb(db);
   const [record] = await database
     .select({ run })
@@ -36,6 +84,15 @@ export async function getRunLiveProgress(db: Database, shortcode: string) {
           progress: mailSearchRunProgress.parse(record.run.progress),
         }
       : null;
+  const discovery =
+    record.run.purpose === "mail_discovery"
+      ? mailDiscoveryRunProgress.safeParse(record.run.progress).data
+      : undefined;
+  const workflow = await workflowAttempt(
+    launcher,
+    record.run,
+    search?.progress.attempt ?? discovery?.attempt ?? 0,
+  );
   const events = await database
     .select({
       id: runProgress.eventId,
@@ -106,8 +163,22 @@ export async function getRunLiveProgress(db: Database, shortcode: string) {
           searchTerms: search.input.searchTerms,
           startedFromOlderPage: search.progress.pageToken !== null,
           hasMorePages: search.progress.nextPageToken !== null,
+          retryAt: search.progress.retryAt ?? null,
           error: search.progress.error ?? record.run.dispatchError,
         }
       : null,
+    discovery: discovery
+      ? {
+          mode: discovery.mode ?? null,
+          batchesDone: discovery.batchesDone,
+          batches: discovery.batches?.length ?? null,
+          saved: discovery.saved,
+          deleted: discovery.deleted,
+          events: discovery.events,
+          droppedEvents: discovery.droppedEvents,
+          routine: record.run.routine,
+        }
+      : null,
+    workflow,
   };
 }

@@ -8,7 +8,7 @@ import {
   vendorAccountShortcode,
   vendorShortcode,
 } from "./identifier-fields.js";
-import { chargeHuntOutcome } from "./run-fields.js";
+import { chargeHuntOutcome, mailSearchPhase } from "./run-fields.js";
 
 export const vendorOrderMailInput = z.object({
   vendorId: vendorShortcode,
@@ -26,7 +26,7 @@ export const vendorSearchMailInput = z.object({
 
 export const vendorSearchMailOut = z.object({
   runShortcode,
-  status: z.enum(["queued", "running", "completed", "failed"]),
+  status: mailSearchPhase,
   searched: z.number().int().nonnegative(),
   skipped: z.number().int().nonnegative(),
   reviewable: z.number().int().nonnegative(),

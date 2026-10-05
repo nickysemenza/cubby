@@ -264,7 +264,8 @@ function OrderMailWorklist({
     enabled: canSearch,
     refetchInterval: (query) =>
       query.state.data?.status === "queued" ||
-      query.state.data?.status === "running"
+      query.state.data?.status === "running" ||
+      query.state.data?.status === "waiting"
         ? 2_000
         : false,
   });
@@ -282,7 +283,9 @@ function OrderMailWorklist({
       ? savedJob
       : searchPage;
   const jobActive =
-    currentJob?.status === "queued" || currentJob?.status === "running";
+    currentJob?.status === "queued" ||
+    currentJob?.status === "running" ||
+    currentJob?.status === "waiting";
   const completedPage = currentJob?.status === "completed" ? currentJob : null;
   const resumablePage =
     currentJob?.status === "failed" && currentJob.nextPageToken
@@ -364,17 +367,15 @@ function OrderMailWorklist({
               >
                 View run
               </Link>
-              {currentJob.status === "queued" ? (
-                currentJob.error ? (
-                  <div>
-                    <span>Rate limited. This page will retry shortly.</span>
+              {currentJob.status === "waiting" ? (
+                <div>
+                  <span>Rate limited. This page will retry shortly.</span>
+                  {currentJob.error ? (
                     <TechnicalError error={currentJob.error} tone="muted" />
-                  </div>
-                ) : (
-                  "Waiting for the background worker. View the Run for wait time and retry."
-                )
+                  ) : null}
+                </div>
               ) : null}
-              {currentJob.status === "running"
+              {currentJob.status === "queued" || currentJob.status === "running"
                 ? "Scanning Gmail. You can leave this page and return."
                 : null}
               {currentJob.status === "completed" ? (

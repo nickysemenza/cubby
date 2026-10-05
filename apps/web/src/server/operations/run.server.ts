@@ -1,9 +1,10 @@
+import { runShortcode } from "@cubby/schemas/identifiers";
 import { runPurpose, runStatus } from "@cubby/schemas/run-fields";
 import { and, eq, isNull } from "drizzle-orm";
 
 import { runContract } from "~/contracts/run.contract";
 import { getPurchaseAgentQueue } from "~/server/cf-env";
-import { oauthRefreshToken } from "~/server/db/schema";
+import { oauthRefreshToken, run as runTable } from "~/server/db/schema";
 import { executeEntityAs } from "~/server/entity-kernel";
 import { implementOperationDomain } from "~/server/operation-domain.server";
 import {
@@ -40,6 +41,7 @@ import { getDb } from "~/server/repo/database-helpers";
 import { getRunByShortcode } from "~/server/repo/run";
 import { resolveOrThrow } from "~/server/repo/shortcode-resolver";
 import type { AuthenticatedRequestContext } from "~/server/request-context";
+import { isWorkflowRunPurpose } from "~/server/workflow-runs/contract";
 
 /** Import runs belong to a household member's ledger party. */
 async function memberParty(context: AuthenticatedRequestContext) {
@@ -61,15 +63,6 @@ export const runHandlers = implementOperationDomain(runContract, {
     return { items: result.items, meta: result.meta };
   },
   detail: (context, input) => getRunByShortcode(context.db, input.shortcode),
-  retryGmailSearch: async (context, input) => {
-    const { retryStalledVendorMailSearchJob } =
-      await import("~/server/purchase-import/gmail/search-job");
-    return retryStalledVendorMailSearchJob(
-      context.db,
-      input.shortcode,
-      context.actorContext,
-    );
-  },
   workSnapshot: async (context, input) => {
     const run = await loadRunDetail(context.db, input.runId);
     return {
@@ -135,6 +128,23 @@ export const runHandlers = implementOperationDomain(runContract, {
   },
   control: async (context, { runId, ...input }) => {
     await memberParty(context);
+    const [target] = await getDb(context.db)
+      .select({ purpose: runTable.purpose })
+      .from(runTable)
+      .where(eq(runTable.shortcode, runShortcode.parse(runId)))
+      .limit(1);
+    // A Workflow executes these Runs: cancel and retry act on its instance.
+    if (target && isWorkflowRunPurpose(target.purpose)) {
+      const { controlWorkflowRun } =
+        await import("~/server/workflow-runs/control");
+      await controlWorkflowRun(
+        context.db,
+        context.actorContext,
+        { runPublicId: runId, action: input.action },
+        target.purpose,
+      );
+      return { run: await loadRunDetail(context.db, runId), successor: null };
+    }
     const control = await controlRun(context.db, context.actorContext, {
       runPublicId: runId,
       ...input,

@@ -104,10 +104,6 @@ export interface GmailProvider {
   ): Promise<GmailAttachmentPayload>;
 }
 
-export type GmailCursor = {
-  historyId: string | null;
-};
-
 export type GmailOrderMailAttachment = {
   sourceKey: string;
   mailboxId: string;
@@ -148,9 +144,6 @@ export type GmailNormalizedMessage = {
   attachments: readonly GmailOrderMailAttachment[];
 };
 
-type GmailSyncMode = "bootstrap" | "incremental" | "full_resync";
-export type GmailSyncReason = "first_sync" | "history_expired" | "incremental";
-
 export type GmailBootstrapInput = {
   knownSenders: readonly string[];
   earliestUnresolvedHuntAt?: Date | null;
@@ -161,13 +154,4 @@ export type GmailBootstrapInput = {
 export type GmailBootstrapPlan = {
   knownSenderQueries: readonly string[];
   unknownOrderQuery: string;
-};
-
-export type GmailSyncResult = {
-  mode: GmailSyncMode;
-  reason: GmailSyncReason;
-  cursor: GmailCursor;
-  messages: readonly GmailOrderMail[];
-  events: readonly GmailOrderMailEvent[];
-  attachments: readonly GmailOrderMailAttachment[];
 };

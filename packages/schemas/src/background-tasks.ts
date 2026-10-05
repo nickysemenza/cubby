@@ -23,7 +23,6 @@ export const backgroundTaskKinds = [
   "image-metadata.extract",
   "maintenance.recover",
   "maintenance.purchase-discovery",
-  "vendor-mail.search",
   "calendar-feed.mark-dirty",
 ] as const;
 
@@ -122,13 +121,6 @@ export const maintenancePurchaseDiscoveryTaskSchema = z.object({
   ...taskEnvelopeFields,
 });
 
-export const vendorMailSearchTaskSchema = z.object({
-  kind: z.literal("vendor-mail.search"),
-  ...taskEnvelopeFields,
-  jobId: z.uuid(),
-  page: z.number().int().nonnegative().optional(),
-});
-
 /**
  * Fallback for a dirty-mark RPC that failed every in-request retry. `markDirty`
  * only sets a flag on the origin's calendar Durable Object, so replay is
@@ -151,7 +143,6 @@ export const backgroundTaskSchema = z.discriminatedUnion("kind", [
   imageMetadataExtractTaskSchema,
   maintenanceRecoverTaskSchema,
   maintenancePurchaseDiscoveryTaskSchema,
-  vendorMailSearchTaskSchema,
   calendarFeedMarkDirtyTaskSchema,
 ]);
 

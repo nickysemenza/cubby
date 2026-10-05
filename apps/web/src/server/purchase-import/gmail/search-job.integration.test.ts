@@ -1,579 +1,376 @@
-import type { BackgroundTaskInput } from "@cubby/schemas/background-tasks";
+/**
+ * A vendor Gmail search is one `mail_search` Run that a Workflow instance
+ * walks page by page. The Run row is the durable record; these scenarios
+ * drive the step bodies the Workflow calls, with Cloudflare's binding faked.
+ *
+ * Failure modes guarded:
+ * - a step retried after its write committed scans (and counts) a page twice;
+ * - an AI Gateway 429 fails the search or spends a step retry instead of
+ *   waiting the `Retry-After` it was given;
+ * - a failure loses its diagnostic and Sentry event before the Run fails;
+ * - a cancelled Run, or an attempt superseded by a retry, keeps writing;
+ * - a retry restarts from page one instead of the saved position;
+ * - a Run whose instance never started, or ended without its failure step,
+ *   stays `running` forever.
+ */
 import { runEntityId } from "@cubby/schemas/identifiers";
 import { eq } from "drizzle-orm";
 import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it, vi } from "vitest";
 
-import type { publishBackgroundTasks } from "~/server/background-tasks/publish";
+import { wrapAiGatewayError } from "~/server/clients/ai-gateway-error";
 import { run, runProgress } from "~/server/db/schema";
 import { getDb } from "~/server/repo/database-helpers";
 import { getRunLiveProgress } from "~/server/repo/run-progress";
 import { insertWithShortcode } from "~/server/repo/shortcode-utils";
-import { ensureRun } from "~/server/runs/ensure-run";
+import { controlWorkflowRun } from "~/server/workflow-runs/control";
+import type {
+  WorkflowInstanceState,
+  WorkflowLauncher,
+} from "~/server/workflow-runs/launcher";
+import { reconcileWorkflowRuns } from "~/server/workflow-runs/lifecycle";
 
 import {
+  beginVendorMailSearchAttempt,
+  failVendorMailSearch,
   latestVendorMailSearchJob,
-  recoverStaleVendorMailSearchJobs,
-  retryStalledVendorMailSearchJob,
-  runVendorMailSearchJob,
+  scanVendorMailPage,
   startVendorMailSearchJob,
 } from "./search-job";
 
-describe("Vendor Gmail search jobs", () => {
+const fakeLauncher = () => {
+  const created: { id: string; runId: string; attempt: number }[] = [];
+  const terminated: string[] = [];
+  const states = new Map<string, WorkflowInstanceState>();
+  const launcher: WorkflowLauncher = {
+    create: async (_purpose, id, params) => {
+      created.push({ id, ...params });
+      states.set(id, "running");
+    },
+    terminate: async (_purpose, id) => {
+      terminated.push(id);
+      states.set(id, "terminated");
+    },
+    status: async (_purpose, id) => ({
+      state: states.get(id) ?? "missing",
+      error: null,
+    }),
+  };
+  return { launcher, created, terminated, states };
+};
+
+const page = (
+  overrides: Partial<{
+    searched: number;
+    skipped: number;
+    reviewable: number;
+    nextPageToken: string | null;
+  }> = {},
+) => ({
+  searched: 10,
+  skipped: 4,
+  reviewable: 1,
+  after: "2025/01/02",
+  nextPageToken: null,
+  ...overrides,
+});
+
+describe("Vendor Gmail search Runs", () => {
   const ctx = withTestDb();
 
-  it("persists the search input and page progress on the Run", async () => {
+  const seed = async () => {
     await insertWithShortcode(ctx.db, "ledgerParty", {
-      name: "Synthetic progress member",
+      name: "Synthetic search member",
       kind: "member",
       userId: ctx.actor.userId,
     });
     const vendor = await insertWithShortcode(ctx.db, "vendor", {
-      name: "Synthetic progress vendor",
+      name: "Synthetic search vendor",
       website: "https://example.test",
     });
+    const fake = fakeLauncher();
     const started = await startVendorMailSearchJob(
       ctx.db,
       { vendorId: vendor.shortcode, after: "2025/01/02" },
       ctx.actor,
-      { publish: async () => ({ transport: "queue", count: 1 }) },
+      { launcher: fake.launcher },
     );
-    const readRun = async () => {
-      const [row] = await getDb(ctx.db)
-        .select({
-          id: run.id,
-          purpose: run.purpose,
-          status: run.status,
-          input: run.input,
-          progress: run.progress,
-          skipped: run.skipped,
-          dispatchError: run.dispatchError,
-        })
-        .from(run)
-        .where(eq(run.shortcode, started.runShortcode));
-      if (!row) throw new Error("Synthetic Run was not saved");
-      return row;
-    };
-    const queued = await readRun();
-    expect(queued).toMatchObject({
-      purpose: "mail_search",
-      input: { after: "2025/01/02", searchTerms: ["example.test"] },
-      progress: { phase: "queued", pagesScanned: 0 },
-    });
-
-    await runVendorMailSearchJob(ctx.db, queued.id, {
-      search: async () => ({
-        searched: 10,
-        skipped: 6,
-        reviewable: 2,
-        after: "2025/01/02",
-        nextPageToken: "saved-cursor",
-      }),
-      publish: async () => ({ transport: "queue", count: 1 }),
-    });
-    expect(await readRun()).toMatchObject({
-      status: "running",
-      skipped: 6,
-      progress: {
-        phase: "queued",
-        pagesScanned: 1,
-        searched: 10,
-        reviewable: 2,
-        nextPageToken: "saved-cursor",
-      },
-    });
-
-    await runVendorMailSearchJob(ctx.db, queued.id, {
-      page: 1,
-      search: async () => {
-        throw new Error("Synthetic permanent search failure");
-      },
-      reportError: () => "ffffffffffffffffffffffffffffffff",
-    });
-    const failed = await readRun();
-    expect(failed).toMatchObject({
-      status: "failed",
-      // A failed page keeps the last saved checkpoint.
-      progress: { phase: "failed", pagesScanned: 1, searched: 10 },
-      dispatchError: expect.stringContaining(
-        "Synthetic permanent search failure",
-      ),
-    });
-  });
-
-  it("keeps a rate-limited page queued with a concise cause for retry", async () => {
-    await insertWithShortcode(ctx.db, "ledgerParty", {
-      name: "Synthetic member",
-      kind: "member",
-      userId: ctx.actor.userId,
-    });
-    const vendor = await insertWithShortcode(ctx.db, "vendor", {
-      name: "Synthetic vendor",
-      website: "https://example.test",
-    });
-    const started = await startVendorMailSearchJob(
-      ctx.db,
-      { vendorId: vendor.shortcode },
-      ctx.actor,
-      { publish: async () => ({ transport: "queue", count: 1 }) },
-    );
-    const [saved] = await getDb(ctx.db)
+    const [row] = await getDb(ctx.db)
       .select({ id: run.id })
       .from(run)
       .where(eq(run.shortcode, started.runShortcode));
-    if (!saved) throw new Error("Synthetic Run was not saved");
-    const provider = Object.assign(new Error("Wholesale Rate limited"), {
-      status: 429,
-      code: 2018,
-    });
-    provider.stack =
-      "Error: Wholesale Rate limited\n    at provider (synthetic.ts:12:3)";
-    const error = new Error(
-      "AI Gateway request failed (model: synthetic-model)",
-      {
-        cause: provider,
-      },
-    );
+    if (!row) throw new Error("Synthetic Run was not saved");
+    return { vendor, fake, started, runId: row.id };
+  };
 
-    await expect(
-      runVendorMailSearchJob(ctx.db, saved.id, {
-        search: async () => {
-          throw error;
-        },
-      }),
-    ).rejects.toBe(error);
-
-    const progress = await getRunLiveProgress(ctx.db, started.runShortcode);
-    expect(progress).toMatchObject({
-      status: "running",
-      gmail: {
-        status: "queued",
-        pagesScanned: 0,
-        error: expect.stringContaining("model: synthetic-model"),
-      },
-      progress: expect.arrayContaining([
-        expect.objectContaining({ phase: "rate_limited" }),
-      ]),
-    });
-    expect(progress?.gmail?.error).not.toContain("synthetic.ts:12:3");
-    expect(progress?.gmail?.error).toContain("HTTP 429");
-  });
-
-  it("resends only an overdue queued page and leaves its checkpoint intact", async () => {
-    await insertWithShortcode(ctx.db, "ledgerParty", {
-      name: "Synthetic retry member",
-      kind: "member",
-      userId: ctx.actor.userId,
-    });
-    const vendor = await insertWithShortcode(ctx.db, "vendor", {
-      name: "Synthetic retry vendor",
-      website: "https://example.test",
-    });
-    const publish = vi.fn<typeof publishBackgroundTasks>(async () => ({
-      transport: "queue",
-      count: 1,
-    }));
-    const started = await startVendorMailSearchJob(
-      ctx.db,
-      { vendorId: vendor.shortcode },
-      ctx.actor,
-      { publish },
-    );
-    await expect(
-      retryStalledVendorMailSearchJob(ctx.db, started.runShortcode, ctx.actor, {
-        publish,
-      }),
-    ).rejects.toThrow(/still waiting/u);
-    expect(publish).toHaveBeenCalledTimes(1);
-    const [saved] = await getDb(ctx.db)
-      .select({ runId: run.id })
+  const readRun = async (runId: string) => {
+    const [row] = await getDb(ctx.db)
+      .select()
       .from(run)
-      .where(eq(run.shortcode, started.runShortcode));
-    if (!saved) throw new Error("Synthetic Run was not saved");
-    await getDb(ctx.db)
-      .update(run)
-      .set({ updatedAt: new Date(Date.now() - 4 * 60_000) })
-      .where(eq(run.id, saved.runId));
-    await retryStalledVendorMailSearchJob(
-      ctx.db,
-      started.runShortcode,
-      ctx.actor,
-      {
-        publish,
-      },
-    );
-    expect(publish).toHaveBeenCalledTimes(2);
-    expect(publish.mock.calls[1]?.[1]).toMatchObject([
-      { kind: "vendor-mail.search", jobId: saved.runId, page: 0 },
+      .where(eq(run.id, runEntityId.parse(runId)));
+    if (!row) throw new Error("Run is missing");
+    return row;
+  };
+
+  it("saves the search on the Run and starts one instance per attempt", async () => {
+    const { vendor, fake, started, runId } = await seed();
+
+    expect(fake.created).toEqual([
+      { id: `${started.runShortcode}-1`, runId, attempt: 1 },
     ]);
-    await expect(
-      retryStalledVendorMailSearchJob(ctx.db, started.runShortcode, ctx.actor, {
-        publish,
-      }),
-    ).rejects.toThrow(/still waiting/u);
-    expect(publish).toHaveBeenCalledTimes(2);
-    await getDb(ctx.db)
-      .update(run)
-      .set({ updatedAt: new Date(Date.now() - 4 * 60_000) })
-      .where(eq(run.id, saved.runId));
-    await expect(
-      retryStalledVendorMailSearchJob(ctx.db, started.runShortcode, ctx.actor, {
-        publish: async () => {
-          throw new Error("Synthetic queue unavailable");
-        },
-      }),
-    ).rejects.toThrow("Synthetic queue unavailable");
-    expect(
-      (await getRunLiveProgress(ctx.db, started.runShortcode))?.progress.at(-1),
-    ).toMatchObject({
-      phase: "retry_failed",
-      detail: "Synthetic queue unavailable",
-    });
-    await retryStalledVendorMailSearchJob(
-      ctx.db,
-      started.runShortcode,
-      ctx.actor,
-      { publish },
-    );
-    expect(publish).toHaveBeenCalledTimes(3);
-  });
-
-  it("reads durable progress for a Run without a Gmail job", async () => {
-    const runId = await ensureRun(
-      ctx.db,
-      { ...ctx.actor, runId: null },
-      {
-        purpose: "background",
-        trigger: "manual",
-        notes: "Synthetic background work",
-      },
-    );
-    const [record] = await getDb(ctx.db)
-      .select({ shortcode: run.shortcode })
-      .from(run)
-      .where(eq(run.id, runId));
-    if (!record) throw new Error("Synthetic Run was not saved");
-    await getDb(ctx.db).insert(runProgress).values({
-      runId,
-      eventId: crypto.randomUUID(),
-      phase: "work_started",
-      detail: "Processing synthetic task",
-    });
-    expect(await getRunLiveProgress(ctx.db, record.shortcode)).toMatchObject({
-      status: "running",
-      gmail: null,
-      progress: [
-        expect.objectContaining({
-          phase: "work_started",
-          detail: "Processing synthetic task",
-        }),
-      ],
-    });
-  });
-
-  it("scans every page in one Run, retains inputs, and skips replayed pages", async () => {
-    const member = await insertWithShortcode(ctx.db, "ledgerParty", {
-      name: "Synthetic Gmail member",
-      kind: "member",
-      userId: ctx.actor.userId,
-    });
-    const vendor = await insertWithShortcode(ctx.db, "vendor", {
-      name: "Synthetic Gmail vendor",
-      website: "https://example.test",
-    });
-    const published: BackgroundTaskInput[][] = [];
-    const publish = vi.fn<typeof publishBackgroundTasks>(async (_db, tasks) => {
-      published.push([...tasks]);
-      return { transport: "queue", count: tasks.length };
-    });
-    const input = { vendorId: vendor.shortcode };
-    const first = await startVendorMailSearchJob(ctx.db, input, ctx.actor, {
-      publish,
-    });
-    const duplicate = await startVendorMailSearchJob(ctx.db, input, ctx.actor, {
-      publish,
-    });
-    expect(first.status).toBe("queued");
-    expect(first.runShortcode).toMatch(/^RUN-/u);
-    expect(duplicate.createdAt).toBe(first.createdAt);
-    expect(publish).toHaveBeenCalledTimes(1);
-    const [ownedRun] = await getDb(ctx.db)
-      .select({
-        purpose: run.purpose,
-        status: run.status,
-        vendorId: run.vendorId,
-        ledgerPartyId: run.ledgerPartyId,
-      })
-      .from(run)
-      .where(eq(run.vendorId, vendor.id))
-      .limit(1);
-    expect(ownedRun).toMatchObject({
+    expect(await readRun(runId)).toMatchObject({
       purpose: "mail_search",
       status: "running",
-      vendorId: vendor.id,
-      ledgerPartyId: member.id,
+      input: { after: "2025/01/02", searchTerms: ["example.test"] },
+      progress: expect.objectContaining({
+        phase: "queued",
+        attempt: 1,
+        pagesScanned: 0,
+      }),
     });
-    const task = published[0]?.[0];
-    if (!task || task.kind !== "vendor-mail.search")
-      throw new Error("test setup: missing Gmail search task");
-    const search = vi.fn(async (_db, _input, _actor, onProgress) => {
-      await onProgress("gmail_list", "Found 10 messages", {
-        searched: 10,
-      });
-      expect(
-        await getRunLiveProgress(ctx.db, first.runShortcode),
-      ).toMatchObject({
-        status: "running",
-        gmail: expect.objectContaining({ searched: 10 }),
-        progress: expect.arrayContaining([
-          expect.objectContaining({ phase: "gmail_list" }),
-        ]),
-      });
-      return {
-        searched: 10,
-        skipped: 7,
-        reviewable: 2,
-        after: "2025/09/27",
-        nextPageToken: "older-page",
-      };
-    });
-    await expect(
-      runVendorMailSearchJob(ctx.db, task.jobId, { search, publish }),
-    ).resolves.toBe("succeeded");
-    await expect(
-      runVendorMailSearchJob(ctx.db, task.jobId, { search, publish }),
-    ).resolves.toBe("skipped");
-    expect(search).toHaveBeenCalledTimes(1);
-    expect(search).toHaveBeenCalledWith(
+    const duplicate = await startVendorMailSearchJob(
       ctx.db,
-      expect.objectContaining({ vendorId: vendor.shortcode }),
-      expect.objectContaining({ runId: task.jobId }),
-      expect.any(Function),
+      { vendorId: vendor.shortcode },
+      ctx.actor,
+      { launcher: fake.launcher },
     );
-    const [pendingRun] = await getDb(ctx.db)
-      .select({ status: run.status, endedAt: run.endedAt })
-      .from(run)
-      .where(eq(run.id, runEntityId.parse(task.jobId)))
-      .limit(1);
-    expect(pendingRun).toMatchObject({ status: "running", endedAt: null });
-    expect(published[1]?.[0]).toMatchObject({
-      kind: "vendor-mail.search",
-      jobId: task.jobId,
-      page: 1,
+    expect(duplicate.runShortcode).toBe(started.runShortcode);
+    expect(fake.created).toHaveLength(1);
+  });
+
+  it("walks pages once each, even when a committed step replays", async () => {
+    const { vendor, started, runId } = await seed();
+    const params = { runId, attempt: 1 };
+    const search = vi
+      .fn()
+      .mockResolvedValueOnce(page({ nextPageToken: "older-page" }))
+      .mockResolvedValueOnce(
+        page({ searched: 3, skipped: 1, reviewable: 2, nextPageToken: null }),
+      );
+
+    expect(await beginVendorMailSearchAttempt(ctx.db, params)).toEqual({
+      kind: "page",
+      page: 0,
+    });
+    expect(await scanVendorMailPage(ctx.db, params, 0, { search })).toEqual({
+      kind: "more",
+      nextPage: 1,
+    });
+    // The step's write committed but its result was lost: the retry sees it.
+    expect(await scanVendorMailPage(ctx.db, params, 0, { search })).toEqual({
+      kind: "more",
+      nextPage: 1,
+    });
+    expect(await scanVendorMailPage(ctx.db, params, 1, { search })).toEqual({
+      kind: "done",
+    });
+    expect(search).toHaveBeenCalledTimes(2);
+    expect(search.mock.calls[1]?.[1]).toMatchObject({
+      pageToken: "older-page",
+      searchTerms: ["example.test"],
     });
     expect(
-      await latestVendorMailSearchJob(ctx.db, vendor.shortcode, ctx.actor),
+      await getRunLiveProgress(ctx.db, started.runShortcode),
     ).toMatchObject({
-      status: "queued",
-      searched: 10,
-      skipped: 7,
-      reviewable: 2,
-      nextPageToken: "older-page",
-    });
-    const nextTask = published[1]?.[0];
-    if (!nextTask || nextTask.kind !== "vendor-mail.search")
-      throw new Error("test setup: missing second page task");
-    await runVendorMailSearchJob(ctx.db, nextTask.jobId, {
-      page: nextTask.page,
-      publish,
-      search: async (_db, input) => {
-        expect(input).toMatchObject({
-          after: first.after,
-          pageToken: "older-page",
-          searchTerms: ["example.test"],
-        });
-        return {
-          searched: 4,
-          skipped: 2,
-          reviewable: 1,
-          after: first.after,
-          nextPageToken: null,
-        };
-      },
-    });
-    expect(await getRunLiveProgress(ctx.db, first.runShortcode)).toMatchObject({
       status: "completed",
       gmail: expect.objectContaining({
-        searched: 14,
-        skipped: 9,
+        status: "completed",
+        searched: 13,
+        skipped: 5,
         reviewable: 3,
         pagesScanned: 2,
-        after: first.after,
-        searchTerms: ["example.test"],
       }),
-      progress: expect.arrayContaining([
-        expect.objectContaining({ phase: "completed" }),
-      ]),
     });
-
-    const older = await startVendorMailSearchJob(
-      ctx.db,
-      { ...input, after: first.after, pageToken: "older-page" },
-      ctx.actor,
-      { publish },
-    );
-    expect(older.status).toBe("queued");
-    const olderTask = published[2]?.[0];
-    if (!olderTask || olderTask.kind !== "vendor-mail.search")
-      throw new Error("test setup: missing older Gmail search task");
-    const captured = vi.fn(() => "ffffffffffffffffffffffffffffffff");
-    await expect(
-      runVendorMailSearchJob(ctx.db, olderTask.jobId, {
-        search: async () => {
-          throw new Error("Synthetic permanent search failure");
-        },
-        reportError: captured,
-      }),
-    ).resolves.toBe("succeeded");
-    expect(captured).toHaveBeenCalledOnce();
     expect(
       await latestVendorMailSearchJob(ctx.db, vendor.shortcode, ctx.actor),
-    ).toMatchObject({
-      status: "failed",
-      error: expect.stringContaining("Synthetic permanent search failure"),
+    ).toMatchObject({ status: "completed", searched: 13 });
+  });
+
+  it("waits out an AI Gateway 429 without failing or counting the page", async () => {
+    const { runId } = await seed();
+    const params = { runId, attempt: 1 };
+    const rateLimit = new Error("Gmail page retrieval failed", {
+      cause: wrapAiGatewayError(
+        new Error("generic"),
+        {
+          model: "synthetic-model",
+          provider: "openai",
+          route: "openai-responses",
+          feature: "mail-classification",
+          operation: "classify",
+        },
+        {
+          status: 429,
+          statusText: "Too Many Requests",
+          body: "{}",
+          retryAfter: "45",
+        },
+      ),
     });
-    expect(
-      (await latestVendorMailSearchJob(ctx.db, vendor.shortcode, ctx.actor))
-        ?.error,
-    ).toContain("Sentry event: ffffffffffffffffffffffffffffffff");
-    const [failedRun] = await getDb(ctx.db)
-      .select({ status: run.status, failureCode: run.failureCode })
-      .from(run)
-      .where(eq(run.id, runEntityId.parse(olderTask.jobId)))
-      .limit(1);
-    expect(failedRun).toMatchObject({
+    const search = vi.fn(async (_db, _input, _actor, onProgress) => {
+      await onProgress("gmail_list", "Found 10 messages", { searched: 10 });
+      throw rateLimit;
+    });
+
+    const result = await scanVendorMailPage(ctx.db, params, 0, {
+      search,
+      now: () => new Date("2026-10-05T12:00:00.000Z"),
+    });
+
+    expect(result).toEqual({ kind: "rate_limited", retryAfterMs: 45_000 });
+    expect(await readRun(runId)).toMatchObject({
+      status: "running",
+      progress: expect.objectContaining({
+        phase: "waiting",
+        searched: 0,
+        pagesScanned: 0,
+        retryAt: "2026-10-05T12:00:45.000Z",
+      }),
+    });
+    const resumed = await scanVendorMailPage(ctx.db, params, 0, {
+      search: async () => page(),
+    });
+    expect(resumed).toEqual({ kind: "done" });
+    expect(await readRun(runId)).toMatchObject({
+      status: "completed",
+      progress: expect.objectContaining({ searched: 10, retryAt: null }),
+    });
+  });
+
+  it("keeps a failed page's diagnostic and Sentry event for the failure step", async () => {
+    const { runId } = await seed();
+    const params = { runId, attempt: 1 };
+    const reportError = vi.fn(() => "ffffffffffffffffffffffffffffffff");
+    const failure = Object.assign(new Error("Synthetic upstream failure"), {
+      status: 503,
+    });
+
+    await expect(
+      scanVendorMailPage(ctx.db, params, 0, {
+        search: async () => {
+          throw failure;
+        },
+        reportError,
+      }),
+    ).rejects.toThrow("Synthetic upstream failure");
+    expect(reportError).toHaveBeenCalledTimes(1);
+
+    await failVendorMailSearch(ctx.db, params, "Workflow step failed");
+    expect(await readRun(runId)).toMatchObject({
       status: "failed",
       failureCode: "vendor_mail_search_failed",
-    });
-    await expect(
-      runVendorMailSearchJob(ctx.db, olderTask.jobId, {
-        search: async () => {
-          throw new Error("A failed delivery must not replay");
-        },
-      }),
-    ).resolves.toBe("skipped");
-    const retried = await startVendorMailSearchJob(
-      ctx.db,
-      { ...input, after: first.after, pageToken: "older-page" },
-      ctx.actor,
-      { publish },
-    );
-    expect(retried.status).toBe("queued");
-    expect(publish).toHaveBeenCalledTimes(4);
-    const retriedTask = published[3]?.[0];
-    if (!retriedTask || retriedTask.kind !== "vendor-mail.search")
-      throw new Error("test setup: missing retried Gmail search task");
-    await runVendorMailSearchJob(ctx.db, retriedTask.jobId, {
-      search: async () => {
-        const cause = Object.assign(new Error("invalid UUID input"), {
-          code: "22P02",
-        });
-        throw new Error("Failed query: synthetic", { cause });
-      },
-    });
-    expect(
-      (await latestVendorMailSearchJob(ctx.db, vendor.shortcode, ctx.actor))
-        ?.error,
-    ).toContain("22P02: invalid UUID input");
-  });
-
-  it("requeues a stale checkpoint without changing its totals", async () => {
-    await insertWithShortcode(ctx.db, "ledgerParty", {
-      name: "Synthetic recovery member",
-      kind: "member",
-      userId: ctx.actor.userId,
-    });
-    const vendor = await insertWithShortcode(ctx.db, "vendor", {
-      name: "Synthetic recovery vendor",
-      website: "https://example.test",
-    });
-    const publish = vi.fn<typeof publishBackgroundTasks>(
-      async (_db, tasks) => ({
-        transport: "queue",
-        count: tasks.length,
-      }),
-    );
-    const started = await startVendorMailSearchJob(
-      ctx.db,
-      { vendorId: vendor.shortcode },
-      ctx.actor,
-      { publish },
-    );
-    const [saved] = await getDb(ctx.db)
-      .select({ runId: run.id })
-      .from(run)
-      .where(eq(run.shortcode, started.runShortcode));
-    if (!saved) throw new Error("Synthetic job was not saved");
-    await getDb(ctx.db)
-      .update(run)
-      .set({
-        progress: {
-          phase: "queued",
-          pagesScanned: 1,
-          searched: 10,
-          reviewable: 0,
-          pageToken: null,
-          nextPageToken: "checkpoint",
-        },
-        updatedAt: new Date(Date.now() - 20 * 60_000),
-      })
-      .where(eq(run.id, saved.runId));
-    await recoverStaleVendorMailSearchJobs(ctx.db, { publish });
-    expect(publish).toHaveBeenCalledTimes(2);
-    expect(publish.mock.calls[1]?.[1]).toMatchObject([
-      { kind: "vendor-mail.search", jobId: saved.runId, page: 1 },
-    ]);
-    expect(
-      await latestVendorMailSearchJob(ctx.db, vendor.shortcode, ctx.actor),
-    ).toMatchObject({
-      status: "queued",
-      searched: 10,
-      nextPageToken: "checkpoint",
+      dispatchError:
+        "HTTP 503: Synthetic upstream failure\nSentry event: ffffffffffffffffffffffffffffffff",
+      progress: expect.objectContaining({ phase: "failed" }),
     });
   });
 
-  it("keeps a completed page's counts and cursor when the next handoff fails", async () => {
-    await insertWithShortcode(ctx.db, "ledgerParty", {
-      name: "Synthetic handoff member",
-      kind: "member",
-      userId: ctx.actor.userId,
+  it("stops a cancelled attempt and resumes a retry from the saved page", async () => {
+    const { fake, started, runId } = await seed();
+    const first = { runId, attempt: 1 };
+    await scanVendorMailPage(ctx.db, first, 0, {
+      search: async () => page({ nextPageToken: "older-page" }),
     });
-    const vendor = await insertWithShortcode(ctx.db, "vendor", {
-      name: "Synthetic handoff vendor",
-      website: "https://example.test",
-    });
-    const started = await startVendorMailSearchJob(
+
+    await controlWorkflowRun(
       ctx.db,
-      { vendorId: vendor.shortcode },
       ctx.actor,
-      { publish: async () => ({ transport: "queue", count: 1 }) },
+      { runPublicId: started.runShortcode, action: "cancel" },
+      "mail_search",
+      fake.launcher,
     );
-    const [saved] = await getDb(ctx.db)
-      .select({ runId: run.id })
-      .from(run)
-      .where(eq(run.shortcode, started.runShortcode));
-    if (!saved) throw new Error("Synthetic job was not saved");
-    await runVendorMailSearchJob(ctx.db, saved.runId, {
-      search: async () => ({
-        searched: 10,
-        skipped: 6,
-        reviewable: 2,
-        after: started.after,
-        nextPageToken: "saved-cursor",
-      }),
-      publish: async () => {
-        throw new Error("Synthetic queue outage");
-      },
-    });
-    expect(
-      await latestVendorMailSearchJob(ctx.db, vendor.shortcode, ctx.actor),
-    ).toMatchObject({
+    expect(fake.terminated).toEqual([`${started.runShortcode}-1`]);
+    expect(await readRun(runId)).toMatchObject({
       status: "failed",
-      searched: 10,
-      skipped: 6,
-      reviewable: 2,
-      nextPageToken: "saved-cursor",
-      error: expect.stringContaining("Synthetic queue outage"),
+      failureCode: "user_cancelled",
     });
+    const search = vi.fn(async () => page());
+    expect(await scanVendorMailPage(ctx.db, first, 1, { search })).toEqual({
+      kind: "stopped",
+    });
+    expect(search).not.toHaveBeenCalled();
+
+    await controlWorkflowRun(
+      ctx.db,
+      ctx.actor,
+      { runPublicId: started.runShortcode, action: "retry" },
+      "mail_search",
+      fake.launcher,
+    );
+    expect(fake.created.at(-1)).toEqual({
+      id: `${started.runShortcode}-2`,
+      runId,
+      attempt: 2,
+    });
+    expect(await readRun(runId)).toMatchObject({
+      status: "running",
+      failureCode: null,
+      progress: expect.objectContaining({ phase: "queued", attempt: 2 }),
+    });
+    expect(await scanVendorMailPage(ctx.db, first, 1, { search })).toEqual({
+      kind: "stopped",
+    });
+    expect(
+      await beginVendorMailSearchAttempt(ctx.db, { runId, attempt: 2 }),
+    ).toEqual({ kind: "page", page: 1 });
+    expect(
+      await scanVendorMailPage(ctx.db, { runId, attempt: 2 }, 1, { search }),
+    ).toEqual({ kind: "done" });
+    expect(search).toHaveBeenCalledTimes(1);
+  });
+
+  it("fails the Run when Cloudflare refuses the instance", async () => {
+    await insertWithShortcode(ctx.db, "ledgerParty", {
+      name: "Synthetic refused member",
+      kind: "member",
+      userId: ctx.actor.userId,
+    });
+    const vendor = await insertWithShortcode(ctx.db, "vendor", {
+      name: "Synthetic refused vendor",
+      website: "https://example.test",
+    });
+    const launcher: WorkflowLauncher = {
+      ...fakeLauncher().launcher,
+      create: async () => {
+        throw new Error("Synthetic Workflow binding outage");
+      },
+    };
+
+    await expect(
+      startVendorMailSearchJob(
+        ctx.db,
+        { vendorId: vendor.shortcode },
+        ctx.actor,
+        { launcher },
+      ),
+    ).rejects.toThrow("Synthetic Workflow binding outage");
+    const [failed] = await getDb(ctx.db)
+      .select({ status: run.status, failureCode: run.failureCode })
+      .from(run)
+      .where(eq(run.vendorId, vendor.id));
+    expect(failed).toEqual({
+      status: "failed",
+      failureCode: "workflow_dispatch_failed",
+    });
+  });
+
+  it("fails a quiet Run whose instance ended, and leaves a waiting one", async () => {
+    const { fake, started, runId } = await seed();
+    const later = new Date(Date.now() + 60 * 60_000);
+
+    fake.states.set(`${started.runShortcode}-1`, "waiting");
+    expect(await reconcileWorkflowRuns(ctx.db, fake.launcher, later)).toBe(0);
+    fake.states.set(`${started.runShortcode}-1`, "errored");
+    expect(await reconcileWorkflowRuns(ctx.db, fake.launcher, later)).toBe(1);
+    expect(await readRun(runId)).toMatchObject({
+      status: "failed",
+      failureCode: "workflow_instance_ended",
+    });
+    expect(
+      await getDb(ctx.db)
+        .select({ phase: runProgress.phase })
+        .from(runProgress)
+        .where(eq(runProgress.runId, runId)),
+    ).toEqual(expect.arrayContaining([{ phase: "failed" }]));
   });
 });

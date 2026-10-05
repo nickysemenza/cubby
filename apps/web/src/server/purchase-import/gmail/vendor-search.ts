@@ -1,35 +1,21 @@
-import { mergeAttachmentPayload, normalizeMessage } from "./normalize";
-import type { VendorMailSearchProgress } from "./search";
-import type {
-  GmailOrderMail,
-  GmailOrderMailAttachment,
-  GmailProvider,
-} from "./types";
-import {
-  matchesVendorSender,
-  vendorSearchTerms,
-  type VendorMailIdentity,
-} from "./vendor-identity";
+import type { GmailProvider } from "./types";
+import { vendorSearchTerms, type VendorMailIdentity } from "./vendor-identity";
 
 const PAGE_SIZE = 10;
 
-export async function loadVendorMailPage(
+/**
+ * One page of a vendor's Gmail search, as message ids only. The caller
+ * fetches and saves the ones it has not classified yet, one at a time
+ * (`ingestGmailMessages`), so a page never holds its messages' attachments.
+ */
+export async function listVendorMailPage(
   provider: GmailProvider,
   input: {
     identity: VendorMailIdentity;
     after: string;
     pageToken: string | null;
-    knownMessageIds?: (ids: string[]) => Promise<ReadonlySet<string>>;
-    onProgress?: VendorMailSearchProgress;
   },
-): Promise<{
-  messages: GmailOrderMail[];
-  attachments: GmailOrderMailAttachment[];
-  searched: number;
-  skipped: number;
-  messageIds: string[];
-  nextPageToken: string | null;
-}> {
+): Promise<{ messageIds: string[]; nextPageToken: string | null }> {
   const terms = vendorSearchTerms(input.identity);
   if (terms.length === 0)
     throw new Error("Add a Vendor website to search Gmail for its order mail.");
@@ -41,59 +27,8 @@ export async function loadVendorMailPage(
   };
   if (input.pageToken) request.pageToken = input.pageToken;
   const page = await provider.listMessages(request);
-  const messages: GmailOrderMail[] = [];
-  const attachments: GmailOrderMailAttachment[] = [];
-  const refs = (page.messages ?? []).slice(0, PAGE_SIZE);
-  const known = input.knownMessageIds
-    ? await input.knownMessageIds(refs.map((ref) => ref.id))
-    : new Set<string>();
-  await input.onProgress?.("gmail_list", `Found ${refs.length} messages`, {
-    searched: refs.length,
-    skipped: known.size,
-  });
-  let handled = 0;
-  for (const ref of refs) {
-    if (known.has(ref.id)) {
-      handled += 1;
-      continue;
-    }
-    const normalized = normalizeMessage(
-      "me",
-      await provider.getMessage(ref.id),
-    );
-    if (
-      !matchesVendorSender(normalized.mail.headers.from ?? "", input.identity)
-    ) {
-      handled += 1;
-      await input.onProgress?.(
-        "gmail_fetch",
-        `Checked ${handled} of ${refs.length} messages`,
-      );
-      continue;
-    }
-    messages.push(normalized.mail);
-    for (const attachment of normalized.attachments) {
-      attachments.push(
-        attachment.attachmentId
-          ? mergeAttachmentPayload(
-              attachment,
-              await provider.getAttachment(ref.id, attachment.attachmentId),
-            )
-          : attachment,
-      );
-    }
-    handled += 1;
-    await input.onProgress?.(
-      "gmail_fetch",
-      `Checked ${handled} of ${refs.length} messages`,
-    );
-  }
   return {
-    messages,
-    attachments,
-    searched: refs.length,
-    skipped: refs.filter((ref) => known.has(ref.id)).length,
-    messageIds: refs.map((ref) => ref.id),
+    messageIds: (page.messages ?? []).slice(0, PAGE_SIZE).map((ref) => ref.id),
     nextPageToken: page.nextPageToken ?? null,
   };
 }

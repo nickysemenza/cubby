@@ -11,7 +11,6 @@ private final class FakeReports: ReportServing {
         var reads: [String] = []
         var controls: [RunControlInput] = []
         var findings: [ResolveRunFindingInput] = []
-        var retries = 0
         var reparses: [RecipeReparseLineInput] = []
         var flows: [RecipeFlowGenerateInput] = []
         var reprocessed: [CookbookReprocessChunkInput] = []
@@ -58,10 +57,6 @@ private final class FakeReports: ReportServing {
     func resolveFinding(_ input: ResolveRunFindingInput) async throws -> Bool {
         calls.withLock { $0.findings.append(input) }
         return input.action == .apply
-    }
-    func resendGmailSearch(_ input: RunRetryGmailSearchInput) async throws {
-        calls.withLock { $0.retries += 1 }
-        throw URLError(.badServerResponse)
     }
     func reparseLine(_ input: RecipeReparseLineInput) async throws -> RecipeReparseLineOutput {
         calls.withLock { $0.reparses.append(input) }

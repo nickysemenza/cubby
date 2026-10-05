@@ -180,17 +180,3 @@ export const normalizeHistoryPage = (
   }
   return events;
 };
-
-export const mergeAttachmentPayload = (
-  attachment: GmailOrderMailAttachment,
-  payload: { data?: string; size?: number },
-): GmailOrderMailAttachment => {
-  const merged: GmailOrderMailAttachment = {
-    ...attachment,
-    size:
-      payload.size ??
-      (payload.data ? byteLength(payload.data) : attachment.size),
-  };
-  if (payload.data) merged.dataBase64Url = payload.data;
-  return merged;
-};

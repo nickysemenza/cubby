@@ -205,7 +205,6 @@ private final class FakeCommit: ReportServing {
     func reports(slots: [ReportSlot], id: String) async throws -> [(ReportSlot, EntityReportOut)] { [] }
     func controlRun(_ input: RunControlInput) async throws -> String? { nil }
     func resolveFinding(_ input: ResolveRunFindingInput) async throws -> Bool { false }
-    func resendGmailSearch(_ input: RunRetryGmailSearchInput) async throws {}
     func commitPrepared(_ input: RunCommitPreparedInput) async throws {
         if let failure { throw failure }
         committed.withLock { $0.append(input) }

@@ -111,7 +111,7 @@ export function searchWithInitialFilter(
     return search;
   return {
     ...search,
-    ...encodeFilters(specs, filterGetterFromColumnFilters(initial)),
+    ...encodeFilters(specs, filterGetterFromColumnFilters<unknown>(initial)),
   };
 }
 

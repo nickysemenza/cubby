@@ -1,23 +1,21 @@
 import type { ActorContext } from "@cubby/schemas/context";
+import type { LedgerPartyId } from "@cubby/schemas/identifiers";
 import { and, eq, inArray } from "drizzle-orm";
 
-import { env } from "~/env";
-import { localGoogleProviderOrigin } from "~/lib/e2e-google-provider";
-import { getGmailOAuthCredentials } from "~/server/cf-env";
 import type { Database } from "~/server/db";
 import { orderMail } from "~/server/db/schema";
 import { getDb } from "~/server/repo/database-helpers";
 
-import {
-  createBetterAuthGmailAccountStore,
-  persistGmailSyncResult,
-} from "./persistence";
+import { ingestGmailMessages } from "./ingest";
 import { processOrderMails } from "./process";
+import { gmailProviderForUser } from "./provider";
 import { listVendorOrderMail } from "./review";
 import { resolveVendorMailSearchTarget } from "./targets";
-import { createGmailProviderFactory } from "./tokens";
-import { identityFromSearchTerms } from "./vendor-identity";
-import { loadVendorMailPage } from "./vendor-search";
+import {
+  identityFromSearchTerms,
+  matchesVendorSender,
+} from "./vendor-identity";
+import { listVendorMailPage } from "./vendor-search";
 
 export type VendorMailSearchProgress = (
   phase: string,
@@ -25,16 +23,36 @@ export type VendorMailSearchProgress = (
   counts?: { searched?: number; skipped?: number },
 ) => Promise<void>;
 
-const localGmailEndpoints = () => {
-  const origin = localGoogleProviderOrigin(
-    env.E2E_AUTH_TEST_MODE,
-    env.E2E_GOOGLE_PROVIDER_URL,
+/** Saved messages already classified at their current content; skipped on a re-scan. */
+async function classifiedMessageIds(
+  db: Database,
+  memberId: LedgerPartyId,
+  ids: readonly string[],
+): Promise<ReadonlySet<string>> {
+  if (ids.length === 0) return new Set();
+  const saved = await getDb(db)
+    .select({
+      messageId: orderMail.messageId,
+      rawChecksum: orderMail.rawChecksum,
+      classifiedChecksum: orderMail.classifiedChecksum,
+    })
+    .from(orderMail)
+    .where(
+      and(
+        eq(orderMail.ledgerPartyId, memberId),
+        inArray(orderMail.messageId, [...ids]),
+      ),
+    );
+  return new Set(
+    saved
+      .filter(
+        (row) =>
+          row.classifiedChecksum !== null &&
+          row.classifiedChecksum === row.rawChecksum,
+      )
+      .map((row) => row.messageId),
   );
-  return {
-    gmailBaseUrl: origin ? `${origin}/gmail/v1` : undefined,
-    tokenEndpoint: origin ? `${origin}/token` : undefined,
-  };
-};
+}
 
 export async function searchVendorOrderMail(
   db: Database,
@@ -49,59 +67,22 @@ export async function searchVendorOrderMail(
 ) {
   await onProgress("gmail_connect", "Connecting to Gmail");
   const target = await resolveVendorMailSearchTarget(db, input.vendorId, actor);
-  const worker = getGmailOAuthCredentials();
-  const environment = worker ? null : (await import("~/env")).env;
-  const clientId = worker?.clientId ?? environment?.GOOGLE_CLIENT_ID;
-  const clientSecret =
-    worker?.clientSecret ?? environment?.GOOGLE_CLIENT_SECRET;
-  if (!clientId || !clientSecret)
-    throw new Error("Google OAuth is not configured for Gmail search.");
-  const provider = await createGmailProviderFactory({
-    store: createBetterAuthGmailAccountStore(db),
-    clientId,
-    clientSecret,
-    ...localGmailEndpoints(),
-  })(target.userId);
+  const provider = await gmailProviderForUser(db, target.userId);
   const after =
     input.after ??
     new Date(Date.now() - 365 * 86_400_000)
       .toISOString()
       .slice(0, 10)
       .replaceAll("-", "/");
-  let page: Awaited<ReturnType<typeof loadVendorMailPage>>;
+  const identity = input.searchTerms?.length
+    ? identityFromSearchTerms(input.searchTerms)
+    : target.identity;
+  let page: Awaited<ReturnType<typeof listVendorMailPage>>;
   try {
-    page = await loadVendorMailPage(provider, {
-      identity: input.searchTerms?.length
-        ? identityFromSearchTerms(input.searchTerms)
-        : target.identity,
+    page = await listVendorMailPage(provider, {
+      identity,
       after,
       pageToken: input.pageToken ?? null,
-      onProgress,
-      knownMessageIds: async (ids) => {
-        if (ids.length === 0) return new Set();
-        const saved = await getDb(db)
-          .select({
-            messageId: orderMail.messageId,
-            rawChecksum: orderMail.rawChecksum,
-            classifiedChecksum: orderMail.classifiedChecksum,
-          })
-          .from(orderMail)
-          .where(
-            and(
-              eq(orderMail.ledgerPartyId, target.memberId),
-              inArray(orderMail.messageId, ids),
-            ),
-          );
-        return new Set(
-          saved
-            .filter(
-              (row) =>
-                row.classifiedChecksum !== null &&
-                row.classifiedChecksum === row.rawChecksum,
-            )
-            .map((row) => row.messageId),
-        );
-      },
     });
   } catch (error) {
     throw new Error(
@@ -109,31 +90,36 @@ export async function searchVendorOrderMail(
       { cause: error },
     );
   }
-  if (page.messages.length > 0) {
-    await onProgress("mail_save", `Saving ${page.messages.length} messages`, {
-      searched: page.searched,
-      skipped: page.skipped,
-    });
-    const persisted = await persistGmailSyncResult(db, {
-      ledgerPartyId: target.memberId,
-      advanceCursor: false,
-      result: {
-        mode: "bootstrap",
-        reason: "first_sync",
-        cursor: { historyId: null },
-        messages: page.messages,
-        events: [],
-        attachments: page.attachments,
-      },
-    });
+  const known = await classifiedMessageIds(
+    db,
+    target.memberId,
+    page.messageIds,
+  );
+  const searched = page.messageIds.length;
+  const skipped = page.messageIds.filter((id) => known.has(id)).length;
+  await onProgress("gmail_list", `Found ${searched} messages`, {
+    searched,
+    skipped,
+  });
+  const ingested = await ingestGmailMessages(db, provider, {
+    ledgerPartyId: target.memberId,
+    mailboxId: "me",
+    messageIds: page.messageIds.filter((id) => !known.has(id)),
+    accept: (mail) => matchesVendorSender(mail.headers.from ?? "", identity),
+    onMessage: (handled) =>
+      onProgress(
+        "gmail_fetch",
+        `Checked ${skipped + handled} of ${searched} messages`,
+      ),
+  });
+  if (ingested.saved.length > 0) {
     await onProgress(
       "mail_classify",
-      `Classifying ${persisted.messageIds.length} messages`,
+      `Classifying ${ingested.saved.length} messages`,
     );
     await processOrderMails(
       db,
-      persisted.messageIds,
-      page.attachments,
+      ingested.saved,
       undefined,
       actor.runId ?? undefined,
     );
@@ -152,8 +138,8 @@ export async function searchVendorOrderMail(
     reviewable = pageWorklist.items.length;
   }
   return {
-    searched: page.searched,
-    skipped: page.skipped,
+    searched,
+    skipped,
     reviewable,
     after,
     nextPageToken: page.nextPageToken,

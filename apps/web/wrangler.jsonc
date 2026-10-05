@@ -169,11 +169,27 @@
   ],
   // Durable, page-oriented search-index repair. The request that starts the
   // instance may disconnect; progress is replayed from retained Workflow events.
+  //
+  // Gmail work: a vendor mail search walks one `mail_search` Run's pages, and
+  // scheduled discovery runs one `mail_discovery` pass per mailbox. Their Run
+  // row is the durable record and each instance is one attempt at it
+  // (`<runShortcode>-<attempt>`), so retention only bounds diagnostics
+  // (`server/workflow-runs/launcher.ts` sets it per instance).
   "workflows": [
     {
       "binding": "SEARCH_INDEX_REPAIR",
       "name": "cubby-search-index-repair",
       "class_name": "SearchIndexRepairWorkflow"
+    },
+    {
+      "binding": "VENDOR_MAIL_SEARCH",
+      "name": "cubby-vendor-mail-search",
+      "class_name": "VendorMailSearchWorkflow"
+    },
+    {
+      "binding": "MAIL_DISCOVERY",
+      "name": "cubby-mail-discovery",
+      "class_name": "MailDiscoveryWorkflow"
     }
   ],
   // Background tasks offloaded off the request path. A message is the whole

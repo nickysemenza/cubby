@@ -120,9 +120,7 @@ test("queues a local synthetic Gmail search, shows progress, and continues to ol
     page.getByRole("button", { name: "Search Gmail now" }),
   );
   await page.getByRole("button", { name: "Search Gmail now" }).click();
-  await expect(
-    page.getByText(/Waiting for the background worker/u),
-  ).toBeVisible();
+  await expect(page.getByText(/Scanning Gmail/u)).toBeVisible();
   await expect(page.getByRole("link", { name: "View run" })).toHaveAttribute(
     "href",
     "/runs/RUN-TEST",
@@ -232,24 +230,30 @@ test("updates a Run's progress live and retains its completed search summary", a
   ).toBeVisible();
 });
 
-test("shows how long a queued Gmail Run has waited and offers retry", async ({
+test("retries a failed Gmail Run as a new Workflow attempt and cancels it", async ({
   page,
 }) => {
-  const seed = await seedLiveVendorMailSearchRun(
+  const seed = await seedFailedVendorMailSearchRun(
     page,
-    `Synthetic queued search ${Date.now()}`,
+    `Synthetic retried search ${Date.now()}`,
   );
-  await seed.ageQueue();
   await gotoAuthenticatedPage(
     page,
     `/runs/${seed.runShortcode}`,
-    page.getByText("Waiting for background worker"),
+    page.getByRole("button", { name: "Retry run" }),
   );
-  await expect(page.getByText(/Waiting for 4m/u)).toBeVisible();
   await expect(
-    page.getByRole("button", { name: "Retry queue delivery" }),
+    page.getByText(`Attempt 1 · ${seed.runShortcode}-1`),
   ).toBeVisible();
-  await expect(page.getByText("Updating live")).toHaveCount(0);
+  await page.getByRole("button", { name: "Retry run" }).click();
+  // A real instance starts in the Worker; the Run reopens under attempt 2.
+  await expect(
+    page.getByText(`Attempt 2 · ${seed.runShortcode}-2`),
+  ).toBeVisible();
+  await page.getByRole("button", { name: "Cancel run" }).click();
+  await expect(page.getByText("Run failed")).toBeVisible();
+  await expect(page.getByText("Cancelled by a member").first()).toBeVisible();
+  await expect(page.getByRole("button", { name: "Retry run" })).toBeVisible();
 });
 
 test("keeps one Run live through every Gmail page and shows saved search inputs", async ({

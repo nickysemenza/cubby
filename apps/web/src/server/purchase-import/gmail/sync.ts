@@ -1,19 +1,12 @@
 import { dateOnly } from "~/server/utils/date-only";
 
-import {
-  mergeAttachmentPayload,
-  normalizeHistoryPage,
-  normalizeMessage,
-} from "./normalize";
+import { normalizeHistoryPage } from "./normalize";
 import {
   GmailApiError,
   type GmailBootstrapInput,
   type GmailBootstrapPlan,
-  type GmailCursor,
-  type GmailOrderMailAttachment,
+  type GmailOrderMailEvent,
   type GmailProvider,
-  type GmailSyncReason,
-  type GmailSyncResult,
 } from "./types";
 
 const DAY_MS = 24 * 60 * 60 * 1_000;
@@ -26,7 +19,8 @@ const historyNumber = (value: string): bigint | null => {
   }
 };
 
-const maxHistoryId = (
+/** The later of two Gmail history ids; a cursor never moves backwards. */
+export const maxHistoryId = (
   current: string | null,
   candidate: string | undefined,
 ): string | null => {
@@ -38,17 +32,6 @@ const maxHistoryId = (
     return right > left ? candidate : current;
   return candidate > current ? candidate : current;
 };
-
-/**
- * Advance only from a completed page sequence. Callers should persist the
- * returned cursor after all messages and attachment fetches succeed.
- */
-export const advanceGmailCursor = (
-  cursor: GmailCursor,
-  observedHistoryId: string | undefined,
-): GmailCursor => ({
-  historyId: maxHistoryId(cursor.historyId, observedHistoryId),
-});
 
 const subtractDays = (value: Date, days: number): Date =>
   new Date(value.getTime() - days * DAY_MS);
@@ -115,158 +98,89 @@ const listMessageIds = async (
   return ids;
 };
 
-const loadMessages = async (
+/**
+ * What changed in a mailbox since `historyId`, as message ids and history
+ * events only: no message body or attachment is fetched here, so listing a
+ * large backlog costs ids, not bytes. A first sync (no cursor) or an expired
+ * cursor (`history.list` 404) lists the bootstrap queries instead, from a
+ * profile baseline captured before scanning so mail arriving mid-scan is
+ * picked up by the next pass rather than skipped.
+ */
+export type GmailChanges = {
+  mode: "bootstrap" | "full_resync" | "incremental";
+  /** Where the cursor moves once every listed message is processed. */
+  targetHistoryId: string | null;
+  messageIds: string[];
+  events: GmailOrderMailEvent[];
+};
+
+const listBootstrap = async (
   provider: GmailProvider,
-  mailboxId: string,
-  messageIds: Iterable<string>,
-  includeAttachmentData: boolean,
-): Promise<{
-  messages: GmailSyncResult["messages"];
-  attachments: GmailSyncResult["attachments"];
-}> => {
-  const normalized = [];
-  for (const messageId of sortedUnique(messageIds)) {
-    const message = normalizeMessage(
-      mailboxId,
-      await provider.getMessage(messageId),
-    );
-    const attachments: GmailOrderMailAttachment[] = [];
-    for (const attachment of message.attachments) {
-      if (includeAttachmentData && attachment.attachmentId) {
-        attachments.push(
-          mergeAttachmentPayload(
-            attachment,
-            await provider.getAttachment(messageId, attachment.attachmentId),
-          ),
-        );
-      } else {
-        attachments.push(attachment);
-      }
-    }
-    normalized.push({ mail: message.mail, attachments });
-  }
+  plan: GmailBootstrapPlan,
+  maxResults: number,
+  mode: "bootstrap" | "full_resync",
+): Promise<GmailChanges> => {
+  const profile = await provider.getProfile();
+  const ids: string[] = [];
+  for (const query of [...plan.knownSenderQueries, plan.unknownOrderQuery])
+    ids.push(...(await listMessageIds(provider, query, maxResults)));
   return {
-    messages: normalized.map(({ mail }) => mail),
-    attachments: normalized
-      .flatMap(({ attachments }) => attachments)
-      .sort((a, b) => a.sourceKey.localeCompare(b.sourceKey)),
+    mode,
+    targetHistoryId: profile.historyId,
+    messageIds: sortedUnique(ids),
+    events: [],
   };
 };
 
-const fullResync = async (
+export const listGmailChanges = async (
   provider: GmailProvider,
   options: {
     mailboxId: string;
-    plan: GmailBootstrapPlan;
-    maxResults: number;
-    includeAttachmentData: boolean;
-    reason: Extract<GmailSyncReason, "first_sync" | "history_expired">;
+    historyId: string | null;
+    bootstrap: GmailBootstrapInput;
+    maxResults?: number;
   },
-): Promise<GmailSyncResult> => {
-  // Capture the baseline before scanning pages. Changes arriving during the
-  // scan are picked up by the next history sync instead of being skipped.
-  const profile = await provider.getProfile();
-  const queries = [
-    ...options.plan.knownSenderQueries,
-    options.plan.unknownOrderQuery,
-  ];
-  const ids: string[] = [];
-  for (const query of queries) {
-    ids.push(...(await listMessageIds(provider, query, options.maxResults)));
-  }
-  const loaded = await loadMessages(
-    provider,
-    options.mailboxId,
-    ids,
-    options.includeAttachmentData,
-  );
-  return {
-    mode: options.reason === "first_sync" ? "bootstrap" : "full_resync",
-    reason: options.reason,
-    cursor: { historyId: profile.historyId },
-    messages: loaded.messages,
-    events: [],
-    attachments: loaded.attachments,
-  };
-};
-
-export type GmailSyncOptions = {
-  mailboxId: string;
-  cursor: GmailCursor;
-  bootstrap: GmailBootstrapInput;
-  maxResults?: number;
-  includeAttachmentData?: boolean;
-};
-
-export const syncGmailMailbox = async (
-  provider: GmailProvider,
-  options: GmailSyncOptions,
-): Promise<GmailSyncResult> => {
+): Promise<GmailChanges> => {
   if (!options.mailboxId.trim())
     throw new Error("Gmail mailbox id is required");
   const maxResults = options.maxResults ?? 100;
   if (!Number.isInteger(maxResults) || maxResults < 1 || maxResults > 500) {
     throw new Error("Gmail maxResults must be between 1 and 500");
   }
-  const includeAttachmentData = options.includeAttachmentData ?? false;
   const plan = buildBootstrapPlan(options.bootstrap);
+  if (!options.historyId)
+    return listBootstrap(provider, plan, maxResults, "bootstrap");
 
-  if (!options.cursor.historyId) {
-    return await fullResync(provider, {
-      mailboxId: options.mailboxId,
-      plan,
-      maxResults,
-      includeAttachmentData,
-      reason: "first_sync",
-    });
-  }
-
+  const events: GmailOrderMailEvent[] = [];
+  let observedHistoryId: string | null = options.historyId;
+  let pageToken: string | undefined;
   try {
-    let pageToken: string | undefined;
-    let observedHistoryId: string | undefined;
-    const events = [];
     do {
       const request: Parameters<GmailProvider["listHistory"]>[0] = {
-        startHistoryId: options.cursor.historyId,
+        startHistoryId: options.historyId,
         maxResults,
       };
       if (pageToken) request.pageToken = pageToken;
       const page = await provider.listHistory(request);
-      observedHistoryId =
-        maxHistoryId(observedHistoryId ?? null, page.historyId) ??
-        observedHistoryId;
+      observedHistoryId = maxHistoryId(observedHistoryId, page.historyId);
       events.push(...normalizeHistoryPage(options.mailboxId, page));
       pageToken = page.nextPageToken;
     } while (pageToken);
-
-    const uniqueEvents = [
-      ...new Map(events.map((event) => [event.sourceKey, event])).values(),
-    ].sort((a, b) => a.sourceKey.localeCompare(b.sourceKey));
-    const messageIds = uniqueEvents
-      .filter((event) => event.kind !== "message_deleted")
-      .map((event) => event.messageId);
-    const loaded = await loadMessages(
-      provider,
-      options.mailboxId,
-      messageIds,
-      includeAttachmentData,
-    );
-    return {
-      mode: "incremental",
-      reason: "incremental",
-      cursor: advanceGmailCursor(options.cursor, observedHistoryId),
-      messages: loaded.messages,
-      events: uniqueEvents,
-      attachments: loaded.attachments,
-    };
   } catch (error) {
     if (!(error instanceof GmailApiError) || error.status !== 404) throw error;
-    return await fullResync(provider, {
-      mailboxId: options.mailboxId,
-      plan,
-      maxResults,
-      includeAttachmentData,
-      reason: "history_expired",
-    });
+    return listBootstrap(provider, plan, maxResults, "full_resync");
   }
+  const uniqueEvents = [
+    ...new Map(events.map((event) => [event.sourceKey, event])).values(),
+  ].sort((a, b) => a.sourceKey.localeCompare(b.sourceKey));
+  return {
+    mode: "incremental",
+    targetHistoryId: observedHistoryId,
+    messageIds: sortedUnique(
+      uniqueEvents
+        .filter((event) => event.kind !== "message_deleted")
+        .map((event) => event.messageId),
+    ),
+    events: uniqueEvents,
+  };
 };

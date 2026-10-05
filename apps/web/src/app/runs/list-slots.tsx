@@ -19,6 +19,7 @@ const searchSchema = z.object({
   state: z.string().optional().catch(undefined),
   status: z.string().optional().catch(undefined),
   trigger: runTrigger.optional().catch(undefined),
+  routine: z.enum(["true", "false"]).optional().catch(undefined),
   vendorAccountId: z.string().optional().catch(undefined),
   vendorId: z.string().optional().catch(undefined),
   ledgerPartyId: z.string().optional().catch(undefined),
@@ -36,20 +37,22 @@ const searchSchema = z.object({
 });
 
 /**
- * The Run declaration's default filter, as the triggers it hides: the
- * history opens without them until the URL names a filter of its own or
- * records clearing the default (`filters=none`), like every declared list.
+ * The Run declaration's default filter, as the triggers it hides and whether
+ * it hides routine runs: the history opens without them until the URL names
+ * a filter of its own or records clearing the default (`filters=none`), like
+ * every declared list.
  */
-const declaredTriggers = entityInspectorMetadata.run.list.initialFilter.flatMap(
-  (filter) =>
-    filter.id === "trigger" && Array.isArray(filter.value)
-      ? [filter.value]
-      : [],
+const declaredFilter = entityInspectorMetadata.run.list.initialFilter;
+const declaredTriggers = declaredFilter.flatMap((filter) =>
+  filter.id === "trigger" && Array.isArray(filter.value) ? [filter.value] : [],
 )[0];
 const shownByDefault = new Set<string>(declaredTriggers);
 const hiddenByDefault = declaredTriggers
   ? runTrigger.options.filter((trigger) => !shownByDefault.has(trigger))
   : [];
+const routineHiddenByDefault = declaredFilter.some(
+  (filter) => filter.id === "routine" && filter.value === "false",
+);
 
 function RunHistorySlot({ search, navigate }: ListSlotProps) {
   const parsed = searchSchema.parse(search);
@@ -60,12 +63,18 @@ function RunHistorySlot({ search, navigate }: ListSlotProps) {
     entityInspectorMetadata.run.filterUrlKeys.some((key) =>
       Boolean(search[key]),
     );
+  const hasDefaultFilter = hiddenByDefault.length > 0 || routineHiddenByDefault;
   const hideDefault =
-    hiddenByDefault.length > 0 && !namesFilter && parsed.filters !== "none";
+    hasDefaultFilter && !namesFilter && parsed.filters !== "none";
   const filters = {
     ...parsed,
-    excludeTriggers: hideDefault ? hiddenByDefault : undefined,
-    hasDefaultFilter: hiddenByDefault.length > 0,
+    excludeTriggers:
+      hideDefault && hiddenByDefault.length ? hiddenByDefault : undefined,
+    excludeRoutine:
+      (hideDefault && routineHiddenByDefault) || parsed.routine === "false"
+        ? true
+        : undefined,
+    hasDefaultFilter,
     kind: parsed.kind ?? activityKind.safeParse(parsed.purpose).data,
     state: parsed.state ?? parsed.status,
   };

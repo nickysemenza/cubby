@@ -1,7 +1,8 @@
 # Vendor Gmail continuous scan
 
-The continuous scan walks a vendor's mailbox one page at a time, so a
-search resumes from its checkpoint instead of restarting. The checkpoint is
+The continuous scan walks a vendor's mailbox one page at a time in a
+Workflow, so a search (or its retry) resumes from its checkpoint instead of
+restarting. The checkpoint is
 part of the search's `mail_search` Run: `Run.input.searchTerms` holds the exact
 sender and domain terms saved at launch, and `Run.progress.pagesScanned`,
 `pageToken`, and `nextPageToken` record where the walk stands. Field meanings

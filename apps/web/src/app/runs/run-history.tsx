@@ -127,6 +127,7 @@ export function RunHistory({
       state: filters.state,
       trigger: filters.trigger,
       excludeTriggers: filters.excludeTriggers,
+      excludeRoutine: filters.excludeRoutine,
       vendorAccountId: filters.vendorAccountId,
       vendorId: filters.vendorId,
       ledgerPartyId: filters.ledgerPartyId,
@@ -144,6 +145,7 @@ export function RunHistory({
       filters.state,
       filters.trigger,
       filters.excludeTriggers,
+      filters.excludeRoutine,
       filters.vendorAccountId,
       filters.vendorId,
       filters.ledgerPartyId,
@@ -592,12 +594,13 @@ export function RunHistory({
               })
             }
           >
-            <option value="">Hide ephemeral runs</option>
+            <option value="">Hide ephemeral and routine runs</option>
             <option value="all">All triggers</option>
             <option value="foreground">Foreground</option>
             <option value="discovery">Discovery</option>
             <option value="manual">Manual</option>
             <option value="backfill">Backfill</option>
+            <option value="scheduled">Scheduled</option>
             <option value="ephemeral">Ephemeral</option>
           </NativeSelect>
           <Input

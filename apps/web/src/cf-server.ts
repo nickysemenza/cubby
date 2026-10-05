@@ -839,5 +839,9 @@ export { ImageProcessingDurableObject } from "./server/image-processing/durable-
 export { PurchaseImportRunAgent } from "./server/purchase-import/agent-host";
 export { PurchaseImportDurableObject } from "./server/purchase-import/durable-object";
 export { SearchIndexRepairWorkflow } from "./server/search-index-repair-workflow";
+export {
+  MailDiscoveryWorkflow,
+  VendorMailSearchWorkflow,
+} from "./server/gmail-workflows";
 
 export default Sentry.withSentry(workerSentryOptions, handler);

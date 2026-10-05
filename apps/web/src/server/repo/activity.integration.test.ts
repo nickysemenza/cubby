@@ -541,4 +541,56 @@ describe("unified Runs history", () => {
       expect.objectContaining({ parentRunId: null, recordType: "image_job" }),
     ]);
   });
+
+  // The Runs list hides routine passes by default; a productive or failed
+  // scheduled pass and every other Run must stay.
+  it("hides routine runs only when asked, keeping image jobs and other runs", async () => {
+    const party = await insertWithShortcode(ctx.db, "ledgerParty", {
+      name: "Routine member",
+      kind: "member",
+      userId: ctx.actor.userId,
+    });
+    const scheduled = (routine: boolean, status: "completed" | "failed") => ({
+      shortcode: generateShortcode("run"),
+      ledgerPartyId: party.id,
+      actorUserId: ctx.actor.userId,
+      actorName: "Routine member",
+      actorEmail: "routine@example.test",
+      actorLedgerPartyShortcode: party.shortcode,
+      actorLedgerPartyName: party.name,
+      actorLedgerPartyKind: party.kind,
+      purpose: "mail_discovery" as const,
+      trigger: "scheduled" as const,
+      status,
+      routine,
+      startedAt: new Date(),
+      endedAt: new Date(),
+    });
+    const [quiet, productive, failed] = await getDb(ctx.db)
+      .insert(runTable)
+      .values([
+        scheduled(true, "completed"),
+        scheduled(false, "completed"),
+        scheduled(false, "failed"),
+      ])
+      .returning({ shortcode: runTable.shortcode });
+    const shown = async (excludeRoutine?: boolean) =>
+      (
+        await listActivity(ctx.db, null, {
+          executor: "all",
+          limit: 100,
+          sort: "newest",
+          excludeRoutine,
+        })
+      ).items.map((row) => row.id);
+
+    expect(await shown()).toEqual(
+      expect.arrayContaining([quiet?.shortcode, productive?.shortcode]),
+    );
+    const filtered = await shown(true);
+    expect(filtered).not.toContain(quiet?.shortcode);
+    expect(filtered).toEqual(
+      expect.arrayContaining([productive?.shortcode, failed?.shortcode]),
+    );
+  });
 });

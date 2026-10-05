@@ -37,10 +37,6 @@ export function useReportCommands() {
         ? "Applied import correction"
         : "Dismissed import finding",
   });
-  const retry = useActionMutation({
-    mutationFn: run.retryGmailSearch.mutationOptions,
-    error: "Could not resend Gmail work",
-  });
   const reprocess = useActionMutation({
     mutationFn: recipe.reprocessCookbookOnce.mutationOptions,
     error: "Could not reprocess the cookbook",
@@ -86,7 +82,6 @@ export function useReportCommands() {
     pending:
       control.isPending ||
       finding.isPending ||
-      retry.isPending ||
       reparse.isPending ||
       flow.isPending ||
       reprocess.isPending ||
@@ -126,9 +121,6 @@ export function useReportCommands() {
             input.reviewedFingerprint = r.reviewedFingerprint;
           finding.mutate(input);
         })
-        .with({ kind: "retry-gmail-search" }, (r) =>
-          retry.mutate({ shortcode: r.runId }),
-        )
         // Bounded calls, one window at a time; the first error stops the loop (the hook has
         // already shown it).
         .with({ kind: "reprocess-cookbook" }, async (r) => {
