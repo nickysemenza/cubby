@@ -119,6 +119,7 @@ import { withPhotoImportTransaction } from "~/server/repo/photo-import";
 import { getRunByShortcode } from "~/server/repo/run";
 import {
   completeOperation,
+  DEBUG_EVENT_KIND,
   failOperation,
   failOperationsForRun,
   insertOperation,
@@ -1993,7 +1994,14 @@ export async function issueBrowserCommand(
         ),
     ]);
   }
-  await completeOperation(database, key, { command, commandId });
+  // A replay re-enqueues a command the broker already answered; its recorded
+  // terminal failure (`readBrowserCommandResult`) is still the diagnostic.
+  await completeOperation(
+    database,
+    key,
+    { command, commandId },
+    { keepError: true },
+  );
   return { commandId, state: connected ? "dispatched" : "paused_offline" };
 }
 
@@ -3613,7 +3621,6 @@ export async function loadRunDetail(
   };
 }
 
-const DEBUG_EVENT_KIND = "__debug_event";
 const MAX_LOG_ENTRIES = 2_000;
 
 const emptyLogMetadata = {

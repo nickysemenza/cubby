@@ -3,11 +3,10 @@ import { createFileRoute } from "@tanstack/react-router";
 import { and, eq, inArray } from "drizzle-orm";
 
 import { purchaseImportDebugEventsRequest } from "~/lib/purchase-import-debug";
-import { run as runTable, runOperation } from "~/server/db/schema";
+import { run as runTable } from "~/server/db/schema";
 import { getDb } from "~/server/repo/database-helpers";
+import { insertDebugEventOperations } from "~/server/repo/run-operation";
 import { createRequestContext, requireActor } from "~/server/request-context";
-
-const DEBUG_EVENT_KIND = "__debug_event";
 
 export const Route = createFileRoute("/api/import/agent/debug-events")({
   server: {
@@ -59,23 +58,11 @@ export const Route = createFileRoute("/api/import/agent/debug-events")({
           );
         }
 
-        const inserted = await database
-          .insert(runOperation)
-          .values(
-            parsed.data.events.map((event) => ({
-              runId: event.runId,
-              operationId: `${DEBUG_EVENT_KIND}:${event.id}`,
-              kind: DEBUG_EVENT_KIND,
-              inputFingerprint: event.id,
-              state: "completed",
-              result: event,
-              executor: event.executor ?? null,
-              completedAt: new Date(),
-            })),
-          )
-          .onConflictDoNothing()
-          .returning({ id: runOperation.id });
-        return Response.json({ accepted: inserted.length });
+        const accepted = await insertDebugEventOperations(
+          database,
+          parsed.data.events,
+        );
+        return Response.json({ accepted });
       },
     },
   },

@@ -1,12 +1,21 @@
-import { commitPurchaseImportInput } from "@cubby/schemas/purchase-import";
-import type { BrowserBridgeRequest } from "@cubby/schemas/purchase-import";
+import {
+  commitProductEnrichmentInput,
+  commitPurchaseImportInput,
+  type BrowserBridgeRequest,
+  type BrowserBridgeResult,
+} from "@cubby/schemas/purchase-import";
 import { sha256Hex, sha256Uuid } from "@cubby/shared/sha256";
 import { fromPartial } from "@total-typescript/shoehorn";
-import { and, eq } from "drizzle-orm";
+import { and, eq, sql } from "drizzle-orm";
 import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 
-import { run as runTable, runApproval, runOperation } from "~/server/db/schema";
+import {
+  product,
+  run as runTable,
+  runApproval,
+  runOperation,
+} from "~/server/db/schema";
 import { McpOperationContext } from "~/server/mcp/operation-context";
 import {
   executePurchaseAgentMutation,
@@ -14,15 +23,23 @@ import {
 } from "~/server/mcp/purchase-agent-protocol";
 import type { ToolExtra } from "~/server/mcp/tools/tool-registration";
 import {
+  commitProductEnrichment,
   commitPurchaseImport,
   preparePurchaseImport,
 } from "~/server/purchase-import/import-orders";
 import {
   controlRun,
   issueBrowserCommand,
+  readBrowserCommandResult,
   startOrResumeRun,
+  startTargetedRun,
 } from "~/server/purchase-import/run-service";
 import { getDb } from "~/server/repo/database-helpers";
+import {
+  createProductFixture,
+  makeProductInput,
+} from "~/server/repo/repo.fixtures";
+import { insertDebugEventOperations } from "~/server/repo/run-operation";
 import { insertWithShortcode } from "~/server/repo/shortcode-utils";
 import { requireActor } from "~/server/request-context";
 import { createTestRequestContext } from "~/server/testing/request-context";
@@ -293,7 +310,8 @@ describe("RunOperation rows written by earlier code", () => {
     });
   });
 
-  it("approves and executes a paused MCP mutation proposed by earlier code", async () => {
+  /** A paused `mcp:<tool>` proposal as earlier code stored it, approved by a member. */
+  const seedApprovedMcpMutation = async () => {
     const party = await insertWithShortcode(ctx.db, "ledgerParty", {
       name: "Synthetic paused member",
       kind: "member",
@@ -383,12 +401,224 @@ describe("RunOperation rows written by earlier code", () => {
         },
         baseExtra: fromPartial<ToolExtra>({}),
       });
+    return {
+      run,
+      operationId,
+      execute,
+      executions: () => executions,
+    };
+  };
+
+  it("approves and executes a paused MCP mutation proposed by earlier code", async () => {
+    const { run, operationId, execute, executions } =
+      await seedApprovedMcpMutation();
     await expect(execute()).resolves.toEqual({ accepted: true });
     await expect(execute()).resolves.toEqual({ accepted: true });
-    expect(executions).toBe(1);
+    expect(executions()).toBe(1);
     expect(await stored(run.id, operationId)).toMatchObject({
       state: "completed",
       result: { accepted: true },
+    });
+  });
+
+  it("locks the Run before the operation when executing an approved mutation", async () => {
+    const { run, operationId, execute, executions } =
+      await seedApprovedMcpMutation();
+    let pending: Promise<unknown> | undefined;
+    // A transaction holding the Run lock stands in for `controlRun`, which
+    // locks the Run before the operation. The mutation must queue behind the
+    // Run lock without first taking the operation row; otherwise the two wait
+    // on each other.
+    await getDb(ctx.db).transaction(async (tx) => {
+      await tx
+        .select({ id: runTable.id })
+        .from(runTable)
+        .where(eq(runTable.id, run.id))
+        .for("update");
+      pending = execute();
+      pending.catch(() => undefined);
+      await expect
+        .poll(
+          async () => {
+            const waiting = await getDb(ctx.db).execute<{ count: number }>(
+              sql`SELECT count(*)::int AS count FROM pg_stat_activity
+                  WHERE datname = current_database() AND wait_event_type = 'Lock'`,
+            );
+            return waiting.rows[0]?.count;
+          },
+          { timeout: 10_000 },
+        )
+        .toBe(1);
+      await expect(
+        tx
+          .select({ id: runOperation.id })
+          .from(runOperation)
+          .where(
+            and(
+              eq(runOperation.runId, run.id),
+              eq(runOperation.operationId, operationId),
+            ),
+          )
+          .for("update", { noWait: true }),
+      ).resolves.toHaveLength(1);
+    });
+    await expect(pending).resolves.toEqual({ accepted: true });
+    expect(executions()).toBe(1);
+  });
+
+  it("keeps a failed browser command's diagnostic when the command is replayed", async () => {
+    const { run } = await startRun();
+    const operationId = "browser-command:bad-link";
+    let issued: BrowserBridgeRequest | undefined;
+    const broker = {
+      enqueue: async (request: BrowserBridgeRequest) => {
+        issued = request;
+      },
+      result: async (): Promise<BrowserBridgeResult> => ({
+        protocolVersion: 2,
+        commandID: issued!.id,
+        operationID: issued!.operationId,
+        runID: run.id,
+        completedAt: new Date().toISOString(),
+        outcome: {
+          status: "failed",
+          code: "disallowed_url",
+          message: "Navigation left the vendor allowlist",
+          retryable: false,
+        },
+      }),
+      cancel: async () => undefined,
+      connected: async () => true,
+      pendingCommands: async () => [],
+      notifyRunCompleted: async () => undefined,
+      requestAuthentication: async () => undefined,
+    };
+    const namespace = { getByName: () => broker };
+    const input = {
+      runId: run.id,
+      operationId,
+      operation: {
+        type: "navigate" as const,
+        url: "https://shop.example.test/orders",
+        allowedHosts: ["shop.example.test"],
+      },
+    };
+    await issueBrowserCommand(ctx.db, namespace, input);
+    await readBrowserCommandResult(ctx.db, namespace, {
+      runId: run.id,
+      operationId,
+    });
+    await issueBrowserCommand(ctx.db, namespace, input);
+
+    expect(await stored(run.id, operationId)).toMatchObject({
+      state: "completed",
+      error: "disallowed_url: Navigation left the vendor allowlist",
+    });
+  });
+
+  it("replays a product enrichment commit by its parsed-input fingerprint", async () => {
+    const { party } = await startRun();
+    const vendor = await insertWithShortcode(ctx.db, "vendor", {
+      name: `Synthetic enrichment vendor ${crypto.randomUUID()}`,
+      website: "https://shop.example.test",
+      browserDomains: ["shop.example.test"],
+    });
+    const target = await createProductFixture(
+      ctx.db,
+      makeProductInput({ name: `Synthetic enrichment ${crypto.randomUUID()}` }),
+      ctx.actor,
+    );
+    const [productRow] = await getDb(ctx.db)
+      .select({ shortcode: product.shortcode })
+      .from(product)
+      .where(eq(product.id, target.entityId));
+    const started = await startTargetedRun(ctx.db, {
+      ledgerPartyId: party.id,
+      purpose: "product_enrichment",
+      vendorId: vendor.id,
+      trigger: "manual",
+      targets: [
+        {
+          kind: "product",
+          productId: target.entityId,
+          targetFingerprint: "c".repeat(64),
+        },
+      ],
+    });
+    if (!started.created) throw new Error("Expected enrichment admission");
+    await getDb(ctx.db)
+      .update(runTable)
+      .set({ status: "running" })
+      .where(eq(runTable.id, started.run.id));
+    const input = commitProductEnrichmentInput.parse({
+      _runExecution: { runId: started.run.id, operationId: "enrich:1" },
+      productId: productRow!.shortcode,
+      targetFingerprint: "c".repeat(64),
+      changes: { manufacturer: "Synthetic Works" },
+    });
+    const recorded = {
+      runId: started.run.publicId,
+      operationId: "enrich:1",
+      productId: productRow!.shortcode,
+      status: "running",
+      changedFields: ["manufacturer"],
+      skippedIdentifiers: [],
+    };
+    await seed({
+      runId: started.run.id,
+      operationId: "enrich:1",
+      kind: "commit_product_enrichment",
+      inputFingerprint: await sha256Hex(JSON.stringify(input)),
+      state: "completed",
+      result: recorded,
+      completedAt: new Date(),
+    });
+
+    await expect(
+      commitProductEnrichment(ctx.db, input, ctx.actor),
+    ).resolves.toEqual(recorded);
+    // Replay performed no write: the Product keeps its blank manufacturer.
+    const [after] = await getDb(ctx.db)
+      .select({ manufacturer: product.manufacturer })
+      .from(product)
+      .where(eq(product.id, target.entityId));
+    expect(after?.manufacturer ?? "").not.toBe("Synthetic Works");
+  });
+
+  it("ignores a re-sent device debug-event batch instead of duplicating it", async () => {
+    const { run } = await startRun();
+    const event = {
+      id: crypto.randomUUID(),
+      occurredAt: "2026-10-05T12:00:00.000Z",
+      event: "command.started" as const,
+      runId: run.id,
+      operationKind: "navigate" as const,
+    };
+    const second = { ...event, id: crypto.randomUUID() };
+
+    await expect(
+      insertDebugEventOperations(getDb(ctx.db), [event]),
+    ).resolves.toBe(1);
+    // The device retries the whole batch after a lost response.
+    await expect(
+      insertDebugEventOperations(getDb(ctx.db), [event, second]),
+    ).resolves.toBe(1);
+    await expect(
+      insertDebugEventOperations(getDb(ctx.db), [event, second]),
+    ).resolves.toBe(0);
+
+    const rows = await getDb(ctx.db)
+      .select()
+      .from(runOperation)
+      .where(eq(runOperation.kind, "__debug_event"));
+    expect(rows.filter((row) => row.runId === run.id)).toHaveLength(2);
+    expect(await stored(run.id, `__debug_event:${event.id}`)).toMatchObject({
+      kind: "__debug_event",
+      inputFingerprint: event.id,
+      state: "completed",
+      result: event,
+      executor: null,
+      completedAt: expect.any(Date),
     });
   });
 

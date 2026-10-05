@@ -9,9 +9,11 @@
  * input. These functions store that fingerprint verbatim; they never
  * canonicalize it and never add `kind` to the identity.
  */
-import type { RunId } from "@cubby/schemas/identifiers";
+import { type RunId, runEntityId } from "@cubby/schemas/identifiers";
 import { and, eq, inArray } from "drizzle-orm";
+import type { z } from "zod";
 
+import type { purchaseImportDebugEvent } from "~/lib/purchase-import-debug";
 import type { DrizzleClient, DrizzleTransaction } from "~/server/db";
 import { runOperation } from "~/server/db/schema";
 
@@ -57,36 +59,74 @@ export async function readOperation(
   return row;
 }
 
+type OperationRow = OperationKey & {
+  kind: string;
+  inputFingerprint: string;
+  state?: OperationState;
+  result?: OperationResult;
+  error?: string;
+  /** The device or agent that performed the operation, when one reported it. */
+  executor?: typeof runOperation.$inferInsert.executor;
+};
+
 /**
- * Record a new operation, `started` unless a state is given. A duplicate key
- * throws, except with `ifAbsent`, which leaves the existing row (another
- * attempt's outcome) untouched. Returns whether this call inserted the row.
+ * Record one or more new operations, `started` unless a state is given. A
+ * duplicate key throws, except with `ifAbsent` (`ON CONFLICT DO NOTHING`),
+ * which leaves an existing row (another attempt's outcome) untouched. Returns
+ * how many rows this call inserted.
  */
 export async function insertOperation(
   client: Client,
-  row: OperationKey & {
-    kind: string;
-    inputFingerprint: string;
-    state?: OperationState;
-    result?: OperationResult;
-    error?: string;
-  },
+  rows: OperationRow | OperationRow[],
   options: { ifAbsent?: boolean } = {},
 ) {
-  const insert = client.insert(runOperation).values({
-    runId: row.runId,
-    operationId: row.operationId,
-    kind: row.kind,
-    inputFingerprint: row.inputFingerprint,
-    state: row.state ?? "started",
-    result: row.result,
-    error: row.error === undefined ? undefined : boundedError(row.error),
-    completedAt: row.state === "completed" ? new Date() : undefined,
-  });
+  const list = Array.isArray(rows) ? rows : [rows];
+  if (list.length === 0) return 0;
+  const insert = client.insert(runOperation).values(
+    list.map((row) => ({
+      runId: row.runId,
+      operationId: row.operationId,
+      kind: row.kind,
+      inputFingerprint: row.inputFingerprint,
+      state: row.state ?? "started",
+      result: row.result,
+      error: row.error === undefined ? undefined : boundedError(row.error),
+      executor: row.executor,
+      completedAt: row.state === "completed" ? new Date() : undefined,
+    })),
+  );
   const inserted = await (
     options.ifAbsent ? insert.onConflictDoNothing() : insert
   ).returning({ id: runOperation.id });
-  return inserted.length > 0;
+  return inserted.length;
+}
+
+type PurchaseImportDebugEvent = z.output<typeof purchaseImportDebugEvent>;
+
+/** The reserved kind for device diagnostics recorded on a Run's ledger. */
+export const DEBUG_EVENT_KIND = "__debug_event";
+
+/**
+ * Record device debug events as completed ledger rows keyed by event id, so a
+ * re-sent batch is ignored rather than duplicated. Returns how many were new.
+ */
+export function insertDebugEventOperations(
+  client: Client,
+  events: readonly PurchaseImportDebugEvent[],
+) {
+  return insertOperation(
+    client,
+    events.map((event) => ({
+      runId: runEntityId.parse(event.runId),
+      operationId: `${DEBUG_EVENT_KIND}:${event.id}`,
+      kind: DEBUG_EVENT_KIND,
+      inputFingerprint: event.id,
+      state: "completed" as const,
+      result: event,
+      executor: event.executor ?? null,
+    })),
+    { ifAbsent: true },
+  );
 }
 
 /**
@@ -121,18 +161,23 @@ export async function reclaimOperation(
   return claimed.length > 0;
 }
 
-/** Store the operation's replayable result and mark it `completed`. */
+/**
+ * Store the operation's replayable result and mark it `completed`, clearing a
+ * previous attempt's error unless `keepError` (a re-dispatched browser command
+ * whose recorded terminal failure the broker still holds).
+ */
 export async function completeOperation(
   client: Client,
   key: OperationKey,
   result: OperationResult,
+  options: { keepError?: boolean } = {},
 ) {
   await client
     .update(runOperation)
     .set({
       state: "completed",
       result,
-      error: null,
+      error: options.keepError ? undefined : null,
       completedAt: new Date(),
       updatedAt: new Date(),
     })

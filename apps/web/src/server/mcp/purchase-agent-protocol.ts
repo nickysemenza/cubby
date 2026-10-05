@@ -233,26 +233,29 @@ export async function executePurchaseAgentMutation<T>(input: {
   return input.operationContext.inTransaction(async (prepared) => {
     const transactionDb = prepared.entityKernel.db;
     const database = getDb(transactionDb);
-    const [[lockedRun], lockedOperation, [lockedApproval]] = await Promise.all([
-      database
-        .select({ status: runTable.status })
-        .from(runTable)
-        .where(eq(runTable.id, run.id))
-        .limit(1)
-        .for("update"),
-      readOperation(database, operationKey, { forUpdate: true }),
-      database
-        .select({
-          state: runApproval.state,
-          argsFingerprint: runApproval.argsFingerprint,
-          targetFingerprint: runApproval.targetFingerprint,
-          evidenceFingerprint: runApproval.evidenceFingerprint,
-        })
-        .from(runApproval)
-        .where(eq(runApproval.id, approval.id))
-        .limit(1)
-        .for("update"),
-    ]);
+    // Lock order is Run → RunOperation → RunApproval, the order `controlRun`
+    // takes; issuing them concurrently or reordered can deadlock against an
+    // overlapping cancel or approval decision.
+    const [lockedRun] = await database
+      .select({ status: runTable.status })
+      .from(runTable)
+      .where(eq(runTable.id, run.id))
+      .limit(1)
+      .for("update");
+    const lockedOperation = await readOperation(database, operationKey, {
+      forUpdate: true,
+    });
+    const [lockedApproval] = await database
+      .select({
+        state: runApproval.state,
+        argsFingerprint: runApproval.argsFingerprint,
+        targetFingerprint: runApproval.targetFingerprint,
+        evidenceFingerprint: runApproval.evidenceFingerprint,
+      })
+      .from(runApproval)
+      .where(eq(runApproval.id, approval.id))
+      .limit(1)
+      .for("update");
     const currentTargetFingerprint = await purchaseAgentTargetFingerprint(
       transactionDb,
       args,

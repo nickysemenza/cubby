@@ -65,7 +65,9 @@ existing block. Extend the generic path when it almost fits. See
   `screamingSnake` (`@cubby/shared/text-case`). Never hand-roll
   `crypto.subtle.digest` + hex or `btoa` alphabet swaps.
 - Run operation replay: every `RunOperation` read by key and every write goes
-  through `server/repo/run-operation.ts` (`readOperation`, `insertOperation`,
+  through `server/repo/run-operation.ts` (`readOperation`, `insertOperation`
+  (one row or a batch; `ifAbsent` is `ON CONFLICT DO NOTHING`),
+  `insertDebugEventOperations`,
   `reclaimOperation`, `completeOperation`, `setOperationResult`,
   `failOperation`, `failOperationsForRun`); agent tools whose work runs outside
   the ledger transaction use the leased policy `executeLeasedOperation`
