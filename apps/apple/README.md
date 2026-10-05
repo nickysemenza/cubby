@@ -115,11 +115,10 @@ only after a check that first closes command acceptance, so no job can start bet
 and stop. Results that are
 still unacknowledged stay in the outbox and replay on the next connection.
 
-When waiting jobs get dispatched depends on the server. Older servers re-offer a
-`waiting_for_device` job only when it wakes up: on creation or retry, or when the web shell or
-the daily cron runs the `maintenance.recover` catch-up. A companion that connects in between gets
-nothing until then. A server that wakes waiting work on hello dispatches it as soon as the
-companion connects. Either way, a quiet `--once` run does not prove the queue is empty.
+On hello and after each result, the server hands the companion the next pending or
+`waiting_for_device` job it can run, so `--once` drains a backlog one job at a time. A job that
+just found no device backs off for a minute before it can be claimed again, so a quiet
+`--once` run right after such a miss does not prove the queue is empty.
 
 To keep it resident, build a copy outside the worktree's `.build` and load a user agent. For
 example, save `~/Library/LaunchAgents/com.example.cubby-companion.plist` with:
