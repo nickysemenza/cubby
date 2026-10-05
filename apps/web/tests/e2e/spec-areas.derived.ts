@@ -16,6 +16,10 @@ export const DERIVED_SPEC_GLOBS: SpecGlobMap = {
     "apps/web/src/routes/_authenticated/runs.jobs.$id.tsx",
     "apps/web/src/routes/_authenticated/settings.tsx",
   ],
+  "assignment-picker-dialog.spec.ts": [
+    "apps/web/src/routes/_authenticated/locations.index.tsx",
+    "apps/web/src/routes/api/v1/$resource/$operation.ts",
+  ],
   "browser-operation-dispatch.spec.ts": [
     "apps/web/src/routes/api/v1/$resource.ts",
     "apps/web/src/routes/api/v1/$resource/$operation.ts",
