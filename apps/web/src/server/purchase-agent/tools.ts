@@ -1,4 +1,4 @@
-import { tradeValues } from "@cubby/schemas/task-fields";
+import { purchaseAgentToolInputs } from "@cubby/schemas/purchase-agent-services";
 import type { Context, JsonValue } from "@earendil-works/chord";
 import { Type, type TSchema } from "@earendil-works/pi-ai";
 import {
@@ -11,10 +11,8 @@ import { z } from "zod";
 
 import type { RunServices } from "./environment";
 
-const operationId = Type.String({ minLength: 1, maxLength: 200 });
-const boundedUrl = Type.String({ format: "uri", maxLength: 2_048 });
-const picklist = <const T extends readonly string[]>(values: T) =>
-  Type.Union(values.map((value) => Type.Literal(value)));
+type ToolInputs = typeof purchaseAgentToolInputs;
+type ToolName = keyof ToolInputs;
 
 /** The lifecycle fields of a browser command result. */
 const browserCommandState = z.looseObject({
@@ -57,10 +55,87 @@ function result(output: JsonValue, terminate = false): ToolExecutionResult {
   return { content, control: { terminate: true } };
 }
 
-const tool = <P extends TSchema>(definition: ToolRegistration<P>) =>
-  // Every typed tool is replay-safe: its effects are memoized steps keyed by
-  // the model's operation id.
-  defineTool({ replay: "safe", ...definition });
+type JsonSchema = z.core.JSONSchema._JSONSchema;
+
+/**
+ * A contract's JSON Schema rebuilt from TypeBox builders, every other keyword
+ * kept as is. pi converts a call's arguments with TypeBox `Value.Convert`
+ * before validating, and that sees only TypeBox-built nodes: behind
+ * `Type.Unsafe` pi's narrower coercion refused a model's `"TRUE"` or `"0"`
+ * for a boolean. A shape this does not know fails when the tools are built.
+ */
+function typeboxSchema(node: JsonSchema): TSchema {
+  if (node === true || node === false)
+    throw new Error("Unsupported boolean schema");
+  const { type, properties, required, items, ...options } = node;
+  switch (type) {
+    case "object":
+      return Type.Object(
+        Object.fromEntries(
+          Object.entries(properties ?? {}).map(([key, value]) => {
+            const property = typeboxSchema(value);
+            return [
+              key,
+              required?.includes(key) ? property : Type.Optional(property),
+            ];
+          }),
+        ),
+        options,
+      );
+    case "array":
+      if (items === undefined || Array.isArray(items))
+        throw new Error("Unsupported array schema");
+      return Type.Array(typeboxSchema(items), options);
+    case "string":
+      return Type.String(options);
+    case "boolean":
+      return Type.Boolean(options);
+    case "number":
+    case "integer": {
+      // Draft-7 exclusive bounds are numbers; only draft-04's are booleans.
+      const { exclusiveMinimum: min, exclusiveMaximum: max, ...rest } = options;
+      const bounds = {
+        ...rest,
+        ...(min !== undefined && { exclusiveMinimum: z.number().parse(min) }),
+        ...(max !== undefined && { exclusiveMaximum: z.number().parse(max) }),
+      };
+      return type === "number" ? Type.Number(bounds) : Type.Integer(bounds);
+    }
+    default:
+      throw new Error(`Unsupported tool schema ${JSON.stringify(node)}`);
+  }
+}
+
+/**
+ * One typed tool: its contract's JSON Schema is what the model sees and what
+ * pi validates the call against before `execute`.
+ */
+function tool<N extends ToolName>(
+  name: N,
+  definition: {
+    description: string;
+    execute: (
+      args: z.input<ToolInputs[N]>,
+      api: ToolExecutionApi,
+      context: Context,
+    ) => Promise<ToolExecutionResult>;
+  },
+) {
+  const { $schema: _dialect, ...schema } = z.toJSONSchema(
+    purchaseAgentToolInputs[name],
+    { target: "draft-7", io: "input" },
+  );
+  return defineTool<TSchema>({
+    name,
+    // Non-strict, like the MCP tools in `cubby-mcp.ts`: pi-ai
+    // `structuredClone`s strict tool parameters (see `ai/run-feature.ts`).
+    parameters: typeboxSchema(schema),
+    // Every typed tool is replay-safe: its effects are memoized steps keyed
+    // by the model's operation id.
+    replay: "safe",
+    ...definition,
+  });
+}
 
 /**
  * Typed run services are deliberately limited to seams that cannot travel
@@ -74,13 +149,10 @@ const tool = <P extends TSchema>(definition: ToolRegistration<P>) =>
 export function purchaseImportTools(
   services: () => RunServices,
 ): ToolRegistration[] {
-  const op = Type.Object({ operationId });
   return [
-    tool({
-      name: "claim_next_import_work",
+    tool("claim_next_import_work", {
       description:
         "Claim and describe the run's next bounded work item. Use this before choosing saved mail, receipt or browser evidence work, and again after each committed item. For settlement_verification, verify the named existing Purchase against saved statement evidence, then finish or stop for review rather than claiming this item repeatedly. Otherwise continue until none.",
-      parameters: op,
       execute: async (args, api, context) =>
         result(
           await step(api, context, `claim-work:${args.operationId}`, () =>
@@ -88,11 +160,9 @@ export function purchaseImportTools(
           ),
         ),
     }),
-    tool({
-      name: "extract_receipt_evidence",
+    tool("extract_receipt_evidence", {
       description:
         "Run Cubby's bounded receipt extractor for the receipt assigned to this run. Its returned immutable source, checksum, extraction, image id, and stable ids are the input to purchase_import.prepare.",
-      parameters: op,
       execute: async (args, api, context) =>
         result(
           await step(api, context, `extract-receipt:${args.operationId}`, () =>
@@ -100,11 +170,9 @@ export function purchaseImportTools(
           ),
         ),
     }),
-    tool({
-      name: "extract_run_evidence",
+    tool("extract_run_evidence", {
       description:
         "Extract the saved confirmation assigned to mail_evidence work, or immutable uploaded evidence for a purchase validation target. Pass the returned source, checksum, extraction, revision and stable ids unchanged to purchase_import.prepare. Use this instead of a shared Image or document API.",
-      parameters: op,
       execute: async (args, api, context) =>
         result(
           await step(
@@ -115,22 +183,9 @@ export function purchaseImportTools(
           ),
         ),
     }),
-    tool({
-      name: "issue_browser_command",
+    tool("issue_browser_command", {
       description:
         "Request one fixed read-only browser action. A pending command ends this submission; a queue event resumes this same agent when evidence is ready.",
-      parameters: Type.Object({
-        operationId,
-        command: Type.Object({
-          kind: picklist([
-            "navigate_orders",
-            "capture_order",
-            "capture_pdf",
-            "capture_screenshot",
-          ]),
-          target: Type.Optional(Type.String({ maxLength: 2_048 })),
-        }),
-      }),
       execute: async (args, api, context) => {
         await step(api, context, `browser-progress:${args.operationId}`, () =>
           services().updateAgentProgress({
@@ -153,11 +208,11 @@ export function purchaseImportTools(
         return result(output, pendingResult(output));
       },
     }),
-    tool({
-      name: "read_browser_command_result",
+    tool("read_browser_command_result", {
       description:
         "Read the persisted result for a browser command. A pending result ends this submission; do not poll it.",
-      parameters: op,
+      // Deliberately not a memoized step: a stored pending answer would hide
+      // the completed result the resumed agent comes back to read.
       execute: async (args) => {
         const output = z.json().parse(
           (await services().readBrowserCommandResult({
@@ -167,16 +222,9 @@ export function purchaseImportTools(
         return result(output, pendingResult(output));
       },
     }),
-    tool({
-      name: "import_browser_order_evidence",
+    tool("import_browser_order_evidence", {
       description:
         "Bind a completed browser command's retained evidence to its exact run target before preparation or enrichment. Use the commandId returned by the browser result. For an order page, pass defaultTrade (and defaultProjectId when known) exactly as for purchase_import.commit: a principal line without a trade from its Purchase or Project is refused.",
-      parameters: Type.Object({
-        operationId,
-        commandId: Type.String({ format: "uuid" }),
-        defaultTrade: Type.Optional(picklist(tradeValues)),
-        defaultProjectId: Type.Optional(Type.String({ minLength: 1 })),
-      }),
       execute: async (args, api, context) =>
         result(
           await step(
@@ -187,25 +235,9 @@ export function purchaseImportTools(
           ),
         ),
     }),
-    tool({
-      name: "report_agent_progress",
+    tool("report_agent_progress", {
       description:
         "Publish the current import phase for the live run UI. Set awaitingApproval when a Cubby tool requires a human decision; approval and review phases end this submission.",
-      parameters: Type.Object({
-        operationId,
-        phase: picklist([
-          "preparing",
-          "investigating",
-          "awaiting_browser",
-          "awaiting_approval",
-          "committing",
-          "review",
-          "complete",
-        ]),
-        currentItem: Type.Optional(Type.String({ maxLength: 500 })),
-        awaitingApproval: Type.Optional(Type.Boolean()),
-        detail: Type.Optional(Type.String({ maxLength: 1_000 })),
-      }),
       execute: async (args, api, context) => {
         await step(api, context, `agent-progress:${args.operationId}`, () =>
           services().updateAgentProgress({
@@ -237,20 +269,9 @@ export function purchaseImportTools(
         );
       },
     }),
-    tool({
-      name: "save_navigation_hints",
+    tool("save_navigation_hints", {
       description:
         "Persist observed vendor navigation hints. The server accepts only URLs inside the vendor's existing browser allowlist; this tool cannot expand browser authority.",
-      parameters: Type.Object({
-        operationId,
-        hints: Type.Array(
-          Type.Object({
-            url: boundedUrl,
-            label: Type.Optional(Type.String({ maxLength: 500 })),
-          }),
-          { minItems: 1, maxItems: 25 },
-        ),
-      }),
       execute: async (args, api, context) =>
         result(
           await step(api, context, `navigation-hints:${args.operationId}`, () =>
@@ -258,14 +279,9 @@ export function purchaseImportTools(
           ),
         ),
     }),
-    tool({
-      name: "mark_history_expired",
+    tool("mark_history_expired", {
       description:
         "Record the earliest order timestamp the vendor still exposes after the bounded history scan proves older orders are unavailable.",
-      parameters: Type.Object({
-        operationId,
-        earliestAvailableOrderAt: Type.String({ format: "date-time" }),
-      }),
       execute: async (args, api, context) =>
         result(
           await step(api, context, `history-expired:${args.operationId}`, () =>
@@ -273,11 +289,9 @@ export function purchaseImportTools(
           ),
         ),
     }),
-    tool({
-      name: "finish_import_run",
+    tool("finish_import_run", {
       description:
         "Complete the run only after every selected order or hunt is resolved or explicitly exhausted. The server refuses pending hunts and enforces all required audit batches before completion.",
-      parameters: op,
       execute: async (args, api, context) =>
         result(
           await step(api, context, `finish-run:${args.operationId}`, () =>
@@ -286,20 +300,9 @@ export function purchaseImportTools(
           true,
         ),
     }),
-    tool({
-      name: "stop_import_run_for_review",
+    tool("stop_import_run_for_review", {
       description:
         "Stop on ambiguous or unreadable evidence without speculative writes. The server creates one run-scoped finding, runs required audits, fences the run, and records needs_review.",
-      parameters: Type.Object({
-        operationId,
-        reason: picklist([
-          "navigation_ambiguity",
-          "unreadable_evidence",
-          "provider_failure",
-          "other",
-        ]),
-        detail: Type.Optional(Type.String({ minLength: 1, maxLength: 1_000 })),
-      }),
       execute: async (args, api, context) =>
         result(
           await step(api, context, `stop-review:${args.operationId}`, () =>
@@ -308,15 +311,9 @@ export function purchaseImportTools(
           true,
         ),
     }),
-    tool({
-      name: "defer_order_for_review",
+    tool("defer_order_for_review", {
       description:
         "Leave one listed order from this account-sync worklist for human review when its evidence stays ambiguous or unreadable, then continue with the remaining orders. The server records one finding naming the order and marks it skipped; the run then ends in review instead of claiming a complete import.",
-      parameters: Type.Object({
-        operationId,
-        orderId: Type.String({ minLength: 1, maxLength: 200 }),
-        detail: Type.String({ minLength: 1, maxLength: 1_000 }),
-      }),
       execute: async (args, api, context) =>
         result(
           await step(api, context, `defer-order:${args.operationId}`, () =>
@@ -324,16 +321,9 @@ export function purchaseImportTools(
           ),
         ),
     }),
-    tool({
-      name: "settle_charge_hunt",
+    tool("settle_charge_hunt", {
       description:
         "Record the outcome of one statement charge this run was asked to find, when importing evidence did not settle it. Use not_found after searching the vendor account for the charge's amount and date window without a matching order; use needs_review when a candidate order exists but stays ambiguous or unreadable. The server records the outcome for that one charge and the run continues with the remaining charges; it then ends in review instead of claiming a complete import. A charge the server already settled is recorded as resolved.",
-      parameters: Type.Object({
-        operationId,
-        huntId: Type.String({ format: "uuid" }),
-        outcome: picklist(["not_found", "needs_review"]),
-        detail: Type.String({ minLength: 1, maxLength: 1_000 }),
-      }),
       execute: async (args, api, context) =>
         result(
           await step(

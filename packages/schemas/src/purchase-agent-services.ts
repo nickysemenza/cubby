@@ -130,3 +130,52 @@ export type AgentProgressEvent = z.infer<typeof agentProgressEvent>;
 
 /** The run-scoped form the agent reports; the host supplies the Run. */
 export const agentProgressReport = agentProgressEvent.omit({ runId: true });
+
+/** The phases the model may report; the host also accepts its own. */
+const agentProgressPhase = z.enum([
+  "preparing",
+  "investigating",
+  "awaiting_browser",
+  "awaiting_approval",
+  "committing",
+  "review",
+  "complete",
+]);
+
+/**
+ * The model's operation id. Each tool prefixes it with its own namespace
+ * (`browser-command:`, `agent-progress-review:`, …) before calling the host,
+ * so it stays under the host's 256 with room for the longest prefix.
+ */
+const modelId = {
+  operationId: purchaseAgentOperationRef.shape.operationId.max(200),
+};
+const modelOperationRef = z.object(modelId);
+
+/**
+ * The inputs of the agent's typed tools (`server/purchase-agent/tools.ts`),
+ * keyed by tool name and published to the model as their JSON Schema. Each is
+ * its host contract above, narrowed where the model gets less: the shorter
+ * operation id, and for progress the closed phase list and 1,000-character
+ * detail instead of the host's open phase text and 2,000.
+ */
+export const purchaseAgentToolInputs = {
+  claim_next_import_work: modelOperationRef,
+  extract_receipt_evidence: modelOperationRef,
+  extract_run_evidence: modelOperationRef,
+  issue_browser_command: issueBrowserCommandInput.extend(modelId),
+  read_browser_command_result: modelOperationRef,
+  import_browser_order_evidence: importOrderEvidenceInput.extend(modelId),
+  report_agent_progress: modelOperationRef.extend({
+    phase: agentProgressPhase,
+    currentItem: agentProgressReport.shape.currentItem,
+    awaitingApproval: agentProgressReport.shape.awaitingApproval,
+    detail: agentProgressReport.shape.detail.unwrap().max(1_000).optional(),
+  }),
+  save_navigation_hints: saveNavigationHintsInput.extend(modelId),
+  mark_history_expired: markHistoryExpiredInput.extend(modelId),
+  finish_import_run: modelOperationRef,
+  stop_import_run_for_review: stopForReviewInput.extend(modelId),
+  defer_order_for_review: deferOrderForReviewInput.extend(modelId),
+  settle_charge_hunt: settleChargeHuntInput.extend(modelId),
+};
