@@ -1420,6 +1420,22 @@ async function assertQaOutcomes(): Promise<void> {
       throw new Error(
         `Run approval must be granted: ${JSON.stringify(approvals)}`,
       );
+    const groups = await rows<{ groupKey: string; state: string }>(
+      `SELECT g."groupKey", g.state FROM "PhotoGroupProposal" g JOIN "Run" r ON r.id = g."runId"
+       WHERE r.shortcode = $1 ORDER BY g."groupKey"`,
+      [qaIds.PHOTO_RUN_ID],
+    );
+    const photoProducts = await rows<{ name: string }>(
+      `SELECT name FROM "Product" WHERE name LIKE 'Synthetic % Mug' OR name LIKE 'Synthetic % Shirt'`,
+    );
+    if (
+      groups.map((row) => `${row.groupKey}:${row.state}`).join() !==
+        "synthetic-qa-a-unselected-mug:proposed,synthetic-qa-b-selected-shirt:committed" ||
+      photoProducts.map((row) => row.name).join() !== "Synthetic Selected Shirt"
+    )
+      throw new Error(
+        `Approving the selection must commit only the selected ready group: ${JSON.stringify({ groups, photoProducts })}`,
+      );
     console.log(`[${lane}] Native QA writes verified in ${simName}`);
   } finally {
     await checkPool.end();

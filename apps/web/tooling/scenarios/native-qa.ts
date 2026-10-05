@@ -1,8 +1,13 @@
 import { testUserId } from "@cubby/schemas/testing";
 import type { Pool } from "pg";
 
-import { parseEntityId } from "@cubby/schemas/identifiers";
-import { startOrResumeRun } from "~/server/purchase-import/run-service";
+import { parseEntityId, parseShortcodeFor } from "@cubby/schemas/identifiers";
+import { runTarget } from "~/server/db/schema";
+import { proposePhotoGroups } from "~/server/photo-import-run/proposals";
+import {
+  startOrResumeRun,
+  startPhotoInventoryRun,
+} from "~/server/purchase-import/run-service";
 import { getDb } from "~/server/repo/database-helpers";
 import { insertOperation } from "~/server/repo/run-operation";
 import { insertWithShortcode } from "~/server/repo/shortcode-utils";
@@ -118,9 +123,11 @@ export async function seedNativeQa(
   });
   const split = await seedSplitSettlement(pool, userId);
   const approvalRun = await seedPendingApprovalRun(pool, userId);
+  const photoRun = await seedProposedPhotoRun(pool, userId);
   return {
     ...split,
     ...approvalRun,
+    ...photoRun,
     LOCATION_ID: kitchen.id,
     SHELF_ID: shelf.id,
     INGREDIENT_ID: ingredient.id,
@@ -250,4 +257,75 @@ export async function seedPendingApprovalRun(
     APPROVAL_RUN_ID: run.publicId,
     APPROVAL_ID: approval.rows[0]?.id ?? "",
   };
+}
+
+/**
+ * A running photo-inventory Run with two ready proposed groups. The native journey selects only
+ * the second group and approves the selection; the first must stay proposed.
+ */
+export async function seedProposedPhotoRun(
+  pool: Pool,
+  userId: string,
+): Promise<Record<string, string>> {
+  const db = buildScenarioDatabase(pool);
+  const run = await startPhotoInventoryRun(db, {
+    actorUserId: testUserId(userId),
+  });
+  const images = [];
+  for (const name of ["unselected-mug", "selected-shirt"])
+    images.push(
+      await insertWithShortcode(db, "image", {
+        key: `synthetic-qa-photo-${name}`,
+        filename: `synthetic-qa-photo-${name}.png`,
+        contentType: "image/png",
+        size: 100,
+        status: "UPLOADED",
+      }),
+    );
+  const runRow = await pool.query<{ id: string }>(
+    'SELECT id FROM "Run" WHERE shortcode = $1',
+    [run.publicId],
+  );
+  // No describe job exists for these images, so neither group waits on an AI description.
+  await getDb(db)
+    .insert(runTarget)
+    .values(
+      images.map((image, position) => ({
+        runId: parseEntityId("run", runRow.rows[0]?.id ?? ""),
+        entityKind: "image" as const,
+        entityId: parseEntityId("image", image.id),
+        position,
+        state: "pending" as const,
+        targetFingerprint: `synthetic-qa-photo-${position}`,
+      })),
+    );
+  const [mug, shirt] = images;
+  if (!mug || !shirt) throw new Error("Synthetic photo images are missing");
+  // Proposals list by creation time, then group key: the selected group is deliberately second.
+  await proposePhotoGroups(db, {
+    runId: parseShortcodeFor("run", run.publicId),
+    groups: [
+      {
+        groupKey: "synthetic-qa-a-unselected-mug",
+        images: [
+          { id: parseShortcodeFor("image", mug.shortcode), purpose: "item" },
+        ],
+        product: {
+          kind: "create",
+          create: { name: "Synthetic Unselected Mug" },
+        },
+      },
+      {
+        groupKey: "synthetic-qa-b-selected-shirt",
+        images: [
+          { id: parseShortcodeFor("image", shirt.shortcode), purpose: "item" },
+        ],
+        product: {
+          kind: "create",
+          create: { name: "Synthetic Selected Shirt" },
+        },
+      },
+    ],
+  });
+  return { PHOTO_RUN_ID: run.publicId };
 }

@@ -155,6 +155,9 @@ struct RunPhotoReviewSections: View {
                         }
                     }
                     .frame(minHeight: FieldGuideTokens.touchTarget, alignment: .leading)
+                    // A plain button only takes taps on drawn content; without this the space
+                    // after the name ignored taps, so the open group did not change.
+                    .contentShape(.rect)
                 }
                 .buttonStyle(.plain)
                 .accessibilityAddTraits(selectedProposal?.groupKey == group.groupKey ? .isSelected : [])
@@ -318,6 +321,10 @@ struct RunPhotoReviewSections: View {
             }
         }
         .padding(.vertical, FieldGuideTokens.Space.xs)
+        // The whole workspace is one List row. A row's automatic-style buttons and links all fire
+        // on any tap in it, so Select also pushed both match and draft screens; an explicit
+        // style keeps each control to its own hit area.
+        .buttonStyle(.borderless)
     }
 
     private func groupName(_ group: PhotoGroupProposal) -> String {
