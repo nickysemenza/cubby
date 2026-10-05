@@ -192,3 +192,37 @@ export async function seedPurchaseHeicAttachment(page: Page, name: string) {
   });
   return { purchase, filename: attached.filename };
 }
+
+/**
+ * A project whose contribution has two party kinds (a member and a guest), a
+ * credit, and one expense with no recorded funder (an attribution gap).
+ */
+export async function seedProjectContributionPrerequisite(
+  page: Page,
+  name: string,
+) {
+  const member = await ensureMemberParty(page, name);
+  const guest = await createEntityFixture(page, "ledgerParty", {
+    name: `${name} guest`,
+    kind: "guest",
+  });
+  const project = await createEntityFixture(page, "project", { name });
+  const expense = (label: string, cost: number, funded: boolean) =>
+    createEntityFixture(page, "expense", {
+      name: `${name} ${label}`,
+      projectId: project.id,
+      date: "2026-09-01",
+      cost,
+      trade: "other",
+      costType: "materials",
+      beneficiaries: [
+        { partyId: member.shortcode, weight: 3 },
+        { partyId: guest.id, weight: 1 },
+      ],
+      funders: funded ? [{ partyId: member.shortcode, weight: 1 }] : [],
+    });
+  await expense("lumber", 100, true);
+  await expense("returned lumber", -20, true);
+  const unfunded = await expense("paint", 40, false);
+  return { project, member, guestName: `${name} guest`, unfunded };
+}
