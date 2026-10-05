@@ -1,6 +1,9 @@
 import { describe, expect, it } from "vitest";
 
-import { assertSimulatorAdminUrl } from "./sim-db-guard";
+import {
+  assertSimulatorAdminUrl,
+  assertSimulatorDatabaseName,
+} from "./sim-db-guard";
 
 describe("simulator database guard", () => {
   it.each([
@@ -25,4 +28,20 @@ describe("simulator database guard", () => {
       ).hostname,
     ).toBe("localhost");
   });
+});
+// An interpolated identifier must never escape the disposable namespace.
+it.each([
+  "postgres",
+  "cubby_dev_deadbeef",
+  "cubby_sim_deadbeef",
+  'cubby_sim_0000000000000000"; DROP DATABASE postgres; --',
+])("rejects an unsafe named database: %s", (name) => {
+  expect(() => assertSimulatorDatabaseName(name)).toThrow(
+    /disposable database name/u,
+  );
+});
+it("accepts a disposable database name", () => {
+  expect(() =>
+    assertSimulatorDatabaseName("cubby_sim_0123456789abcdef"),
+  ).not.toThrow();
 });

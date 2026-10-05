@@ -10,6 +10,7 @@ import { z } from "zod";
 
 import { createE2EDatabase } from "../tests/e2e/e2e-database";
 import { createE2EWorkerRuntime } from "../tests/e2e/e2e-worker-runtime";
+import { createE2EObjectStorage } from "./local-object-storage";
 import { scenarioControls } from "./purchase-agent-workerd-harness";
 import { prepareTemplate } from "./test-database-lease";
 import { withTestDb } from "./test-setup";
@@ -257,6 +258,56 @@ describe("workerd test runtime profiles", () => {
 });
 
 describe("workerd test runtime lifecycle", () => {
+  // Caller-owned storage must survive both normal close and failed prepare;
+  // its public URL can differ from the S3 endpoint.
+  it.each([false, true])(
+    "borrows storage without closing it (prepare fails: %s)",
+    async (prepareFails) => {
+      const storage = await createE2EObjectStorage();
+      try {
+        const opened = openWorkerdRuntime(
+          {
+            profile: "offline",
+            database: { borrowed: ctx.databaseUrl },
+            objectStorage: {
+              borrowed: {
+                endpoint: storage.url,
+                publicUrl: "https://objects.example.test",
+              },
+            },
+          },
+          async (runtime) => {
+            const env = await runtime.harness
+              .getWorker<{ R2_ENDPOINT: string; R2_PUBLIC_URL: string }>()
+              .getEnv();
+            expect(env.R2_ENDPOINT).toBe(storage.url);
+            expect(env.R2_PUBLIC_URL).toBe("https://objects.example.test");
+            if (prepareFails)
+              throw new Error("synthetic borrowed prepare failure");
+          },
+        );
+        const outcome = await opened.then(
+          async ({ runtime }) => {
+            await runtime.close();
+            await runtime.close();
+            return "closed";
+          },
+          (error) => (error instanceof Error ? error.message : String(error)),
+        );
+        expect(outcome).toBe(
+          prepareFails ? "synthetic borrowed prepare failure" : "closed",
+        );
+        await storage.bucket.put("survives-close", "synthetic object");
+        expect(await (await storage.bucket.get("survives-close"))?.text()).toBe(
+          "synthetic object",
+        );
+      } finally {
+        await storage.close();
+      }
+    },
+    120_000,
+  );
+
   it("a start that fails partway leaks nothing and the next start works", async () => {
     const before = environment();
     const workerdBefore = workerdChildren();

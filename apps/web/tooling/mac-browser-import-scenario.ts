@@ -26,22 +26,21 @@ import {
 } from "./scenarios/context";
 import { MacImportDriver } from "./mac-import-driver";
 import type { createMacRetailerFixture } from "./mac-retailer-fixture";
-import type { WorkerdHarness } from "./workerd-harness";
+import type { WorkerdRuntime } from "./workerd-runtime";
 import { buildEntity } from "./factories/build";
 
 type Input = {
-  databaseURL: string;
+  runtime: WorkerdRuntime;
   userId: string;
   artifacts: string;
   repoRoot: string;
   nonce: string;
-  harness: WorkerdHarness;
   retailer: Awaited<ReturnType<typeof createMacRetailerFixture>>;
 };
 
 /** Fixture setup creates only auth/vendor/run prerequisites; every capture crosses the real broker. */
 export async function createMacBrowserScenario(input: Input) {
-  const pool = new Pool({ connectionString: input.databaseURL });
+  const pool = new Pool({ connectionString: input.runtime.databaseUrl });
   const db = buildScenarioDatabase(pool);
   const kernel = buildKernelContext(db, testUserId(input.userId));
   const browserDriver = new MacImportDriver(
@@ -95,7 +94,7 @@ export async function createMacBrowserScenario(input: Input) {
       vendorAccountId: accountId,
       trigger: "manual",
     });
-    const { PURCHASE_IMPORT: namespace } = await input.harness
+    const { PURCHASE_IMPORT: namespace } = await input.runtime.harness
       .getWorker<{ PURCHASE_IMPORT: PurchaseImportNamespace }>()
       .getEnv();
     const broker = namespace.getByName(accountId);
@@ -129,7 +128,7 @@ export async function createMacBrowserScenario(input: Input) {
       return result(operationId);
     }
     async function awaitNativeRetry(appDriver: MacImportDriver) {
-      const continuation = input.harness.getWorker(
+      const continuation = input.runtime.harness.getWorker(
         "native-import-continuation",
       );
       const deliveries = z.object({

@@ -26,9 +26,10 @@ const release = await acquireHarnessLock("synthetic holder", { pollMs: 50, logEv
 console.log("ACQUIRED " + Date.now());
 ${extra}
 await new Promise((resolve) => ${holdMs} < 0 ? process.stdin.once("data", resolve) : setTimeout(resolve, ${holdMs}));
+const heldUntil = Date.now();
 release();
 process.stdin.destroy();
-console.log("RELEASED " + Date.now());`,
+console.log("RELEASED " + heldUntil);`,
     ],
     { env: { ...process.env, CUBBY_HARNESS_LOCK_DIR: lockDir } },
   );

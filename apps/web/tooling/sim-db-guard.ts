@@ -16,3 +16,11 @@ export function assertSimulatorAdminUrl(value: string): URL {
     );
   return url;
 }
+
+/** Only a freshly named native fixture may be interpolated in CREATE/DROP. */
+export function assertSimulatorDatabaseName(name: string): void {
+  if (!/^cubby_sim_[0-9a-f]{16}$/u.test(name))
+    throw new Error(
+      "Native E2E requires a disposable database name cubby_sim_<16 hex>",
+    );
+}
