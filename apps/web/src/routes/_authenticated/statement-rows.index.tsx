@@ -6,7 +6,7 @@ import { createFileRoute, stripSearchParams } from "@tanstack/react-router";
 import { Link } from "@tanstack/react-router";
 import { z } from "zod";
 
-import { listChromePage } from "~/entity/routing/entity-routes";
+import { listChromePage } from "~/entity/routing/list-page";
 import { StatementRowList } from "~/features/statement-rows/statement-row-list";
 import { pageTitle } from "~/lib/page-title";
 import { urlStringParam } from "~/lib/search-params";
@@ -42,7 +42,7 @@ const searchDefaults = {
 } as const;
 
 // Bound to a const, not inlined into the options object below: see
-// `entity-routes.tsx`'s doc comment on why the splitter needs a literal
+// `list-page.tsx`'s doc comment on why the splitter needs a literal
 // identifier here, not an inline factory call.
 const StatementRowsPage = listChromePage({
   title: "Statement Rows",

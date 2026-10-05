@@ -30,7 +30,7 @@ import {
 import { listOverrides } from "~/entity/list-columns";
 import { mealNameUpdate } from "~/entity/list-columns/meal";
 import { listReadFields, projectListRows } from "~/entity/list-read-schema";
-import { listPage } from "~/entity/routing/entity-routes";
+import { listPage } from "~/entity/routing/list-page";
 import { createBrowserTestHarness } from "~/lib/test/browser-harness";
 import { mock } from "~/lib/test/mock-schema";
 import type {

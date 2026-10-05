@@ -4,7 +4,7 @@ import { createFileRoute } from "@tanstack/react-router";
 import { z } from "zod";
 
 import { ActivityChanges } from "~/app/activity/activity-changes";
-import { listChromePage } from "~/entity/routing/entity-routes";
+import { listChromePage } from "~/entity/routing/list-page";
 import { auditLogListOptions } from "~/lib/audit-log-list";
 import { pageTitle } from "~/lib/page-title";
 
