@@ -169,14 +169,19 @@ test("an unchecked checkbox writes false, while leaving it unchanged writes noth
   await expect(dialog).not.toBeVisible();
   await expect.poll(readStockTracked).toBe(false);
 
-  // "Set value" then "Leave unchanged" returns the dialog to pristine.
+  // A dirtied value, then "Leave unchanged", returns the dialog to pristine.
   dialog = await openBulkEdit(page, path, [name]);
   const modes = dialog.getByRole("group", { name: "Stock tracked change" });
   await modes.getByRole("button", { name: "Set value", exact: true }).click();
+  await tracked.click();
+  await expect(tracked).toBeChecked();
+  await expect(update).toBeEnabled();
   await modes
     .getByRole("button", { name: "Leave unchanged", exact: true })
     .click();
   await expect(update).toBeDisabled();
+  await page.keyboard.press("Escape");
+  await expect.poll(readStockTracked).toBe(false);
 });
 
 test("a nullable reference is set through its picker and then cleared", async ({
