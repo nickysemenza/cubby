@@ -22,7 +22,11 @@ existing block. Extend the generic path when it almost fits. See
   `chart`, `table`, `schedule`, `note`, `records` in `packages/schemas/src/entity-report.ts`).
   Web draws them with `ReportBlocks` (`entity/entity-detail/report-slot.tsx`),
   native with `ReportDetailSlot`/`ReportPresentation`; add a slot id and a
-  builder, never client-side derivation. A `records` block is rows that are
+  builder, never client-side derivation. A `table` block is display text under
+  column headings: clients right-align figure columns, open a row's `ref`, link
+  shortcodes in cells (web) and say when it is `truncated`. A row that is a
+  record of its own (a ledger party) is a `records` row instead, with its kind
+  as a neutral `statuses` chip (`badges` read as warnings). A `records` block is rows that are
   records of their own (label, thumbnail, badges, a record to open) with verbs
   from `COLLECTION_ACTION_SCOPES`: web fills each verb in
   `entity-detail/collection-actions.tsx`, native runs its plan in

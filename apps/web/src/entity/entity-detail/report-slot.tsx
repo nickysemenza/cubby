@@ -9,8 +9,10 @@ import {
   useQuery,
   useQueryClient,
 } from "@tanstack/react-query";
+import { Link } from "@tanstack/react-router";
 import { type ReactNode, useEffect } from "react";
 
+import { entityDetailLink } from "~/entity/entities";
 import { ripple } from "~/integrations/tanstack-query/cache-tags";
 import { cursorQueryOptions } from "~/integrations/tanstack-query/cursor-query-options";
 import { entityReport } from "~/integrations/tanstack-query/generated/catalog.gen";
@@ -23,6 +25,14 @@ import { Button } from "~/ui/primitives/button";
 import { Description } from "~/ui/primitives/description";
 import { Eyebrow } from "~/ui/primitives/eyebrow";
 import { Skeleton } from "~/ui/primitives/skeleton";
+import {
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+  Table as UiTable,
+} from "~/ui/primitives/table";
 import { ShortcodeProse } from "~/ui/shortcode-prose";
 
 import { RecordsBlockView, ReportVerb } from "./records-block";
@@ -130,27 +140,72 @@ function Chart({ block }: { block: Extract<ReportBlock, { kind: "chart" }> }) {
   );
 }
 
+/** A column whose every filled cell is a figure (money, a count, a dash) aligns right. */
+const FIGURE = /^(?:[-−+]?[$€£]?[\d.,]+%?|—)$/;
+const figureColumns = (block: Extract<ReportBlock, { kind: "table" }>) =>
+  block.columns.map(
+    (_, index) =>
+      block.rows.some((row) => row.cells[index]) &&
+      block.rows.every(
+        (row) => !row.cells[index] || FIGURE.test(row.cells[index]),
+      ),
+  );
+
+/** The server's cells under its column headings; a row with a `ref` opens that record. */
 function Table({ block }: { block: Extract<ReportBlock, { kind: "table" }> }) {
   if (block.rows.length === 0)
     return block.empty ? (
       <Description size="xs">{block.empty}</Description>
     ) : null;
+  const figures = figureColumns(block);
   return (
-    <Stack as="ul" gap="xs">
-      {block.rows.map((row) => (
-        <Row
-          as="li"
-          key={row.id}
-          align="center"
-          justify="between"
-          className="text-xs"
-        >
-          <span className="truncate pr-2">{row.cells[0]}</span>
-          <span className="font-mono tabular-nums">
-            {row.cells.slice(1).join(" · ")}
-          </span>
-        </Row>
-      ))}
+    <Stack gap="xs">
+      <UiTable>
+        <TableHeader>
+          <TableRow>
+            {block.columns.map((column, index) => (
+              <TableHead
+                key={column}
+                className={cn(
+                  "h-8 whitespace-normal",
+                  figures[index] && "w-24 text-right",
+                )}
+              >
+                {column}
+              </TableHead>
+            ))}
+          </TableRow>
+        </TableHeader>
+        <TableBody>
+          {block.rows.map((row) => (
+            <TableRow key={row.id}>
+              {row.cells.map((cell, index) => (
+                <TableCell
+                  key={block.columns[index] ?? index}
+                  className={cn(
+                    "align-top break-words whitespace-normal",
+                    figures[index] && "text-right font-mono tabular-nums",
+                  )}
+                >
+                  {index === 0 && row.ref ? (
+                    <Link
+                      {...entityDetailLink(row.ref.entity, row.ref.id)}
+                      className="text-primary underline-offset-2 hover:underline"
+                    >
+                      {cell}
+                    </Link>
+                  ) : (
+                    <ShortcodeProse>{cell}</ShortcodeProse>
+                  )}
+                </TableCell>
+              ))}
+            </TableRow>
+          ))}
+        </TableBody>
+      </UiTable>
+      {block.truncated ? (
+        <Description size="xs">Showing the first rows only.</Description>
+      ) : null}
     </Stack>
   );
 }
@@ -191,8 +246,9 @@ function ReportBlocks({
             return <Chart key={key} block={block} />;
           case "table":
             return (
-              <div
+              <section
                 key={key}
+                aria-label={block.title}
                 className={cn(
                   block.title && "mt-2 border-t border-border pt-2",
                 )}
@@ -201,7 +257,7 @@ function ReportBlocks({
                   <Eyebrow className="mb-1">{block.title}</Eyebrow>
                 )}
                 <Table block={block} />
-              </div>
+              </section>
             );
           case "note":
             return (

@@ -6,6 +6,7 @@ import {
   type ProjectShortcode,
   projectShortcode,
 } from "@cubby/schemas/identifiers";
+import { LEDGER_PARTY_KIND_LABELS } from "@cubby/schemas/ledger-party-fields";
 import { expenseFiltersSchema } from "@cubby/schemas/project";
 import { sum } from "es-toolkit";
 
@@ -238,6 +239,18 @@ export async function projectContributionReport(
     value,
     format: "money" as const,
   });
+  // A party row opens the party; its kind is a neutral chip, not a warning badge.
+  const partyRow = (
+    party: (typeof data.parties)[number]["party"],
+    amount: number,
+  ) => ({
+    entity: "ledgerParty",
+    id: party.id,
+    title: party.name,
+    subtitle: null,
+    trailing: formatCurrency(amount),
+    statuses: [{ label: LEDGER_PARTY_KIND_LABELS[party.kind] }],
+  });
   return [
     {
       kind: "note",
@@ -249,7 +262,8 @@ export async function projectContributionReport(
         figure("Whole-group cost", data.wholeGroupCost),
         figure("Actual", data.actualSpend),
         figure("Committed", data.committedSpend),
-        figure("Credits", -data.creditsReceived),
+        // A negative adjustment on every client; `0 -` keeps no credit at 0, not -0.
+        figure("Credits", 0 - data.creditsReceived),
         figure("Household initial exposure", data.householdInitialExposure),
         figure("Guest initial funding", data.guestInitialFunding),
         figure("Unattributed consumption", data.unattributedConsumption),
@@ -257,24 +271,20 @@ export async function projectContributionReport(
       ],
     },
     {
-      kind: "table",
+      kind: "records",
       title: "Beneficiaries",
-      columns: ["Beneficiary", "Kind", "Consumed"],
-      rows: data.parties.map(({ party, consumed }) => ({
-        id: party.id,
-        cells: [party.name, party.kind, formatCurrency(consumed)],
-      })),
+      rows: data.parties.map(({ party, consumed }) =>
+        partyRow(party, consumed),
+      ),
       empty:
         "No beneficiaries attributed. Record who consumed the project’s spend to compare contributions fairly.",
     },
     {
-      kind: "table",
+      kind: "records",
       title: "Original funders",
-      columns: ["Party", "Kind", "Initially funded"],
-      rows: data.funders.map(({ party, initiallyFunded }) => ({
-        id: party.id,
-        cells: [party.name, party.kind, formatCurrency(initiallyFunded)],
-      })),
+      rows: data.funders.map(({ party, initiallyFunded }) =>
+        partyRow(party, initiallyFunded),
+      ),
       empty:
         "No original funders attributed. Initial funding can be recorded without implying a later reimbursement.",
     },

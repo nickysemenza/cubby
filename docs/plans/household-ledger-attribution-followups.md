@@ -245,7 +245,7 @@ consolidate same-shape cases into table-driven tests.
   aggregated codes the filtered count equals the report count. Table-driven over
   codes and scopes.
 - **Links** (UI unit, extending
-  `apps/web/src/app/projects/project-contribution-section.unit.test.tsx` and the
+  `apps/web/tests/e2e/project-contribution.spec.ts` and the
   household ledger test): the project section links every code; the household
   page links no assumed-household row; each link carries the report's scope.
 
