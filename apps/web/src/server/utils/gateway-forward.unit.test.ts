@@ -37,7 +37,10 @@ const request = {
 // A faithful stand-in for the forwarder's surroundings: it keeps what the
 // transport shim was asked for and what was recorded, so the test reads them
 // back typed.
-function fakePort(respond: () => Response) {
+function fakePort(
+  respond: () => Response,
+  selected: "gateway" | "chatgpt" = "gateway",
+) {
   const sent: {
     provider: GatewayProvider;
     opts: GatewayCallOptions;
@@ -47,6 +50,7 @@ function fakePort(respond: () => Response) {
   const recorded: Parameters<GatewayForwardPort["recordUsage"]>[1][] = [];
   const port: GatewayForwardPort = {
     transport: (provider, opts) => (input, init) => {
+      opts.onTransport?.(selected);
       sent.push({ provider, opts, url: String(input), init: init ?? {} });
       return Promise.resolve(respond());
     },
@@ -125,6 +129,32 @@ describe("forwardGatewayRequest", () => {
         outputTokens: 5,
         estimatedCost: 0.000035,
         cacheStatus: "none",
+        transport: "gateway",
+      }),
+    ]);
+  });
+
+  // The crate's OpenAI Responses calls ride the household's ChatGPT plan when
+  // it is connected; that answer is plan usage, not an API-priced call.
+  it("attributes a ChatGPT plan answer to chatgpt at no API cost", async () => {
+    const { port, recorded } = fakePort(
+      () =>
+        new Response('{"usage":{"input_tokens":10,"output_tokens":5}}', {
+          status: 200,
+        }),
+      "chatgpt",
+    );
+    await forwardGatewayRequest(
+      { ...request, path: "/openai/responses" },
+      { db, runId, feature: "cookbook-epub-parsing" },
+      port,
+    );
+    expect(recorded).toEqual([
+      expect.objectContaining({
+        inputTokens: 10,
+        outputTokens: 5,
+        estimatedCost: 0,
+        transport: "chatgpt",
       }),
     ]);
   });
@@ -149,10 +179,13 @@ describe("forwardGatewayRequest", () => {
         outputTokens: 5,
         estimatedCost: 0,
         cacheStatus: "hit",
+        // A Gateway response-cache hit still went through the Gateway;
+        // `cache` is only an app-side replay with no upstream call.
+        transport: "gateway",
       }),
     ]);
   });
-  it("returns provider errors as-is without recording usage", async () => {
+  it("returns provider errors as-is and records the failed attempt", async () => {
     const { port, recorded } = fakePort(
       () =>
         new Response(
@@ -168,8 +201,69 @@ describe("forwardGatewayRequest", () => {
     expect(out.status).toBe(429);
     expect(out.headers).toContainEqual(["retry-after", "7"]);
     expect(out.body).toContain("Wholesale");
-    expect(recorded).toEqual([]);
+    expect(recorded).toEqual([
+      expect.objectContaining({
+        feature: "cookbook-epub-parsing",
+        model: "claude-haiku-4-5",
+        status: "failed",
+        transport: "gateway",
+      }),
+    ]);
   });
+
+  // A connected ChatGPT plan that throws before any response is still a
+  // failed ChatGPT call: recorded as such, at no API cost, error unchanged.
+  it("records a thrown ChatGPT plan failure as a failed chatgpt call", async () => {
+    const { port, recorded } = fakePort(() => {
+      throw new Error("ChatGPT plan connection reset");
+    }, "chatgpt");
+    await expect(
+      forwardGatewayRequest(
+        { ...request, path: "/openai/responses" },
+        { db, runId, feature: "cookbook-epub-parsing" },
+        port,
+      ),
+    ).rejects.toThrow("Gateway request failed: ChatGPT plan connection reset");
+    expect(recorded).toEqual([
+      expect.objectContaining({
+        status: "failed",
+        transport: "chatgpt",
+        estimatedCost: 0,
+      }),
+    ]);
+  });
+
+  it.each([200, 429])(
+    "records exactly one failed call when a %s response stream disconnects",
+    async (status) => {
+      const { port, recorded } = fakePort(
+        () =>
+          new Response(
+            new ReadableStream({
+              start(controller) {
+                controller.error(new Error("synthetic stream reset"));
+              },
+            }),
+            { status },
+          ),
+        "chatgpt",
+      );
+      await expect(
+        forwardGatewayRequest(
+          { ...request, path: "/openai/responses" },
+          { db, runId, feature: "cookbook-epub-parsing" },
+          port,
+        ),
+      ).rejects.toThrow("synthetic stream reset");
+      expect(recorded).toEqual([
+        expect.objectContaining({
+          status: "failed",
+          transport: "chatgpt",
+          estimatedCost: 0,
+        }),
+      ]);
+    },
+  );
 
   it("turns a network failure into a thrown error", async () => {
     const { port } = fakePort(() => {

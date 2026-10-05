@@ -41,7 +41,8 @@ JSONL routes    →  cancellable workflow streams
   Settings, retaining the declared Luna/Sol choices. `CHATGPT_PLAN` owns OAuth
   credentials and serializes rotating refreshes. Other providers and embeddings
   use the existing AI Gateway. [ChatGPT setup](runbooks/chatgpt-plan.md) explains
-  local authorization, the read-only account model catalog, and limitations.
+  local authorization, the read-only account model catalog, limitations, and
+  how each `AiUsage` row records its transport.
 
 ## Commands
 

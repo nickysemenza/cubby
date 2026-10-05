@@ -275,7 +275,7 @@ async function recordFlowCacheHit(
       operation: "generateRecipeFlow",
       entity: { entityKind: "recipe", entityId: recipeId },
     },
-    { durationMs: 0, cacheStatus: "hit" },
+    { transport: "cache", durationMs: 0, cacheStatus: "hit" },
   );
 }
 

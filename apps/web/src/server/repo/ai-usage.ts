@@ -1,6 +1,10 @@
+import type {
+  AiUsageRecentFilters,
+  AiUsageRecentInput,
+} from "@cubby/schemas/ai";
 import type { RunId } from "@cubby/schemas/identifiers";
 import { encodeBase64Url, decodeBase64UrlText } from "@cubby/shared/base64";
-import { and, desc, eq, lt, or, sql } from "drizzle-orm";
+import { and, desc, eq, ilike, lt, or, sql } from "drizzle-orm";
 import { z } from "zod";
 
 import { estimateAiUsageCostUsd } from "~/server/ai/models";
@@ -8,7 +12,32 @@ import type { Database } from "~/server/db";
 import { aiUsage } from "~/server/db/schema";
 import { getDb, notDeleted } from "~/server/repo/database-helpers";
 
-export async function listRecentAiUsage(db: Database, limit: number) {
+function recentFilterConditions(filters: AiUsageRecentFilters = {}) {
+  // LIKE metacharacters in a search are literal text.
+  const pattern = filters.query
+    ? `%${filters.query.replace(/[\\%_]/g, "\\$&")}%`
+    : null;
+  return [
+    filters.transport ? eq(aiUsage.transport, filters.transport) : undefined,
+    filters.status ? eq(aiUsage.status, filters.status) : undefined,
+    filters.provider ? eq(aiUsage.provider, filters.provider) : undefined,
+    filters.model ? eq(aiUsage.model, filters.model) : undefined,
+    filters.feature ? eq(aiUsage.feature, filters.feature) : undefined,
+    pattern
+      ? or(
+          ilike(aiUsage.feature, pattern),
+          ilike(aiUsage.model, pattern),
+          ilike(aiUsage.operation, pattern),
+        )
+      : undefined,
+  ];
+}
+
+/** The newest calls matching `filters`; filters apply before `limit`. */
+export async function listRecentAiUsage(
+  db: Database,
+  input: AiUsageRecentInput,
+) {
   const rows = await getDb(db)
     .select({
       id: aiUsage.id,
@@ -29,14 +58,15 @@ export async function listRecentAiUsage(db: Database, limit: number) {
       durationMs: aiUsage.durationMs,
       cacheStatus: aiUsage.cacheStatus,
       applicationCacheStatus: aiUsage.applicationCacheStatus,
+      transport: aiUsage.transport,
       entityKind: aiUsage.entityKind,
       entityId: aiUsage.entityId,
       createdAt: aiUsage.createdAt,
     })
     .from(aiUsage)
-    .where(notDeleted(aiUsage))
-    .orderBy(desc(aiUsage.createdAt))
-    .limit(limit);
+    .where(and(notDeleted(aiUsage), ...recentFilterConditions(input.filters)))
+    .orderBy(desc(aiUsage.createdAt), desc(aiUsage.id))
+    .limit(input.limit);
 
   return rows.map((row) => ({
     ...row,
@@ -67,6 +97,7 @@ export async function summarizeAiUsage(db: Database, days: number) {
       jobId: aiUsage.jobId,
       cacheStatus: aiUsage.cacheStatus,
       applicationCacheStatus: aiUsage.applicationCacheStatus,
+      transport: aiUsage.transport,
       count: sql<number>`count(*)::int`,
       // bigint to avoid int4 overflow on cumulative token/duration sums; the pg
       // driver returns bigint as a string, so these are Number()-coerced below.
@@ -95,6 +126,7 @@ export async function summarizeAiUsage(db: Database, days: number) {
       aiUsage.jobId,
       aiUsage.cacheStatus,
       aiUsage.applicationCacheStatus,
+      aiUsage.transport,
     )
     .orderBy(sql`${usageDayGroup} DESC`, aiUsage.feature, aiUsage.model);
 
@@ -190,6 +222,7 @@ export async function listAiUsageForRun(
         gatewayLogId: aiUsage.gatewayLogId,
         cacheStatus: aiUsage.cacheStatus,
         applicationCacheStatus: aiUsage.applicationCacheStatus,
+        transport: aiUsage.transport,
         durationMs: aiUsage.durationMs,
         estimatedCost: aiUsage.estimatedCost,
       })

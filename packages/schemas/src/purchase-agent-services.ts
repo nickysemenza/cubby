@@ -9,6 +9,7 @@
 import { z } from "zod";
 
 import { tradeSchema } from "./task-fields";
+import { aiUsageTransport } from "./telemetry";
 
 export const purchaseAgentOperationRef = z.object({
   operationId: z.string().min(1).max(256),
@@ -112,6 +113,8 @@ export const agentUsageEvent = purchaseAgentEventRef.extend({
   cacheWriteTokens: z.number(),
   durationMs: z.number(),
   status: z.enum(["succeeded", "failed"]),
+  /** Selected before the request left; `unknown` if none was selected. */
+  transport: aiUsageTransport,
   gatewayLogId: z.string().optional(),
   estimatedCost: z.number().optional(),
 });

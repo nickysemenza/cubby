@@ -317,7 +317,7 @@ export const aiHandlers = implementOperationDomain(aiContract, {
       operation: "suggestExternalIdKind",
       cacheStatus: "none",
     }),
-  usageRecent: (context, input) => listRecentAiUsage(context.db, input.limit),
+  usageRecent: (context, input) => listRecentAiUsage(context.db, input),
   usageSummary: (context, input) => summarizeAiUsage(context.db, input.days),
 });
 

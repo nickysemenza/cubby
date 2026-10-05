@@ -909,6 +909,7 @@ describe("aiUsageBlocks", () => {
         gatewayLogId: "log-1",
         cacheStatus: "miss" as const,
         applicationCacheStatus: "hit" as const,
+        transport: "chatgpt" as const,
         estimatedCost: null,
       },
     ],
@@ -923,11 +924,16 @@ describe("aiUsageBlocks", () => {
   it("describes each call with its tokens, cache and cost", () => {
     const [call] = recordsOf(aiUsageBlocks(usage)).rows;
     expect(call?.title).toBe("extract · import · fixture-provider");
-    expect(call?.statuses).toEqual([{ label: "succeeded", tone: "positive" }]);
+    expect(call?.statuses).toEqual([
+      { label: "succeeded", tone: "positive" },
+      { label: "ChatGPT plan" },
+    ]);
     expect(call?.lines?.map((l) => l.text)).toEqual([
       "fixture-model · attempt 1",
       "100 in / — out",
-      "Application hit · no model call · Gateway miss · 5 read / — write",
+      // `cacheStatus` is the caller's cache (an analysis or prompt cache),
+      // never a claim that the Gateway carried the call.
+      "Application hit · no model call · Cache miss · 5 read / — write",
       "1.5s · unpriced · log-1",
     ]);
   });

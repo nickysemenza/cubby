@@ -1,3 +1,4 @@
+import type { AiUsageTransport } from "@cubby/schemas/telemetry";
 import {
   endpointFor,
   gatewayBaseURL,
@@ -79,9 +80,15 @@ export interface GatewayCallOptions {
   requestTimeoutMs?: number;
   /** Preserve a failed HTTP response even if the provider SDK replaces it. */
   onErrorResponse?: (failure: GatewayResponseFailure) => void;
-  /** Subscription inference has no separately billed API token cost. */
-  onChatGptPlan?: () => void;
+  /**
+   * Called before the request leaves with what will carry it: `chatgpt` once
+   * the connected plan is selected (its failures never fall back to the
+   * gateway), `gateway` otherwise.
+   */
+  onTransport?: (transport: GatewayTransport) => void;
 }
+
+export type GatewayTransport = Extract<AiUsageTransport, "gateway" | "chatgpt">;
 
 async function captureFailure(response: Response, opts: GatewayCallOptions) {
   if (response.ok || !opts.onErrorResponse) return response;
@@ -161,6 +168,8 @@ export function gatewayFetch(
 
     const testGateway = getTestAiGateway();
     if (testGateway) {
+      // The test binding stands in for the gateway.
+      opts.onTransport?.("gateway");
       headers.set("cf-aig-metadata", JSON.stringify(metadata));
       // Only the wire fields cross the test service binding: a provider SDK's
       // init carries extra properties (and its own AbortSignal) that a
@@ -177,13 +186,15 @@ export function gatewayFetch(
     if (provider === "openai" && endpoint === "responses") {
       const subscription = await chatGptInference(
         await gatewayQuery(init?.body),
-        { signal, requestTimeoutMs: opts.requestTimeoutMs },
+        {
+          signal,
+          requestTimeoutMs: opts.requestTimeoutMs,
+          onSelected: () => opts.onTransport?.("chatgpt"),
+        },
       );
-      if (subscription) {
-        opts.onChatGptPlan?.();
-        return captureFailure(subscription, opts);
-      }
+      if (subscription) return captureFailure(subscription, opts);
     }
+    opts.onTransport?.("gateway");
 
     const gateway = getAiGateway();
     if (gateway) {

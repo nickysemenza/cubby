@@ -30,6 +30,7 @@ describe("recordAiUsage", () => {
         durationMs: 31,
         cacheStatus: "none",
         applicationCacheStatus: "hit",
+        transport: "cache",
         attempt: 0,
         estimatedCost: 0,
         entity: {
@@ -50,6 +51,7 @@ describe("recordAiUsage", () => {
         jobId: "IMRUN-fixture",
         inputTokens: 0,
         applicationCacheStatus: "hit",
+        transport: "cache",
         attempt: 0,
         estimatedCost: 0,
         outputTokens: 0,

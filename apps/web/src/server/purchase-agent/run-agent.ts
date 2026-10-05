@@ -12,6 +12,7 @@ import {
   importRunAgentIdentity,
   importRunAgentManifest,
 } from "@cubby/schemas/import-run-agent";
+import type { AiUsageTransport } from "@cubby/schemas/telemetry";
 import { createLogger } from "@cubby/worker-tracing";
 import { BACKGROUND_CONTEXT } from "@earendil-works/chord/context";
 import type { AssistantMessage } from "@earendil-works/pi-ai";
@@ -107,6 +108,8 @@ export class PurchaseImportRunAgent
   private readonly recorder = createContextRecorder();
   private installed: string | undefined;
   private requestStartedAt = 0;
+  /** What carried the current model request; the coordinator runs one at a time. */
+  private requestTransport: AiUsageTransport = "unknown";
 
   readonly harness = new PiHarness({
     harness: (input) => this.openPi(input),
@@ -188,6 +191,9 @@ export class PurchaseImportRunAgent
       recorder: this.recorder,
       testModel: this.agentEnv.testModel,
       subscription: this.agentEnv.chatGptInference,
+      onTransport: (transport) => {
+        this.requestTransport = transport;
+      },
     }))
       models.setProvider(provider);
     // A cold start reinstalls the run's tools before pi resumes any task, so
@@ -227,6 +233,7 @@ export class PurchaseImportRunAgent
           hook(GenerationTask, {
             beforeRequest: () => {
               this.requestStartedAt = Date.now();
+              this.requestTransport = "unknown";
               return undefined;
             },
             afterResponse: (message) => this.afterResponse(message),
@@ -285,6 +292,7 @@ export class PurchaseImportRunAgent
         cacheWriteTokens: message.usage.cacheWrite,
         durationMs: Math.max(0, Date.now() - this.requestStartedAt),
         status: message.stopReason === "error" ? "failed" : "succeeded",
+        transport: this.requestTransport,
         estimatedCost: message.usage.cost.total,
       });
     } catch (error) {

@@ -250,3 +250,73 @@ describe("gatewayFetch on the dev REST fallback", () => {
     ).rejects.toThrow("AI_GATEWAY_API_KEY is not configured");
   });
 });
+
+describe("gatewayFetch transport selection", () => {
+  /** The binding plus a household ChatGPT plan whose inference fails. */
+  function bindingWithPlan(connected: boolean) {
+    const runs: GatewayRun[] = [];
+    const infer = vi.fn(async () => {
+      throw new Error("ChatGPT plan connection reset");
+    });
+    setCfEnv(
+      fromPartial<Env>({
+        AI: {
+          gateway: () =>
+            fromPartial<AiGatewayBinding>({
+              run: (...args: GatewayRun) => {
+                runs.push(args);
+                return Promise.resolve(new Response("{}"));
+              },
+            }),
+        },
+        CHATGPT_PLAN: {
+          getByName: () => ({
+            status: async () => ({ connected }),
+            infer,
+            cancel: async () => {},
+          }),
+        },
+      }),
+    );
+    return { runs, infer };
+  }
+
+  // Selected before the request leaves, so a failure that never produces an
+  // HTTP response keeps its ChatGPT attribution — and a connected plan's
+  // failure is the caller's failure, never a paid API retry.
+  it("reports chatgpt before a connected plan's failed inference, without falling back", async () => {
+    const { runs, infer } = bindingWithPlan(true);
+    const transports: string[] = [];
+
+    await expect(
+      gatewayFetch("openai", {
+        metadata,
+        onTransport: (transport) => transports.push(transport),
+      })(`${gatewayBaseURL("openai")}/responses`, {
+        method: "POST",
+        body: JSON.stringify({ model: "gpt-6-sol", input: [] }),
+      }),
+    ).rejects.toThrow(/connection reset/);
+
+    expect(infer).toHaveBeenCalledOnce();
+    expect(transports).toEqual(["chatgpt"]);
+    expect(runs).toHaveLength(0);
+  });
+
+  it("reports gateway when no plan is connected", async () => {
+    const { runs, infer } = bindingWithPlan(false);
+    const transports: string[] = [];
+
+    await gatewayFetch("openai", {
+      metadata,
+      onTransport: (transport) => transports.push(transport),
+    })(`${gatewayBaseURL("openai")}/responses`, {
+      method: "POST",
+      body: JSON.stringify({ model: "gpt-6-sol", input: [] }),
+    });
+
+    expect(infer).not.toHaveBeenCalled();
+    expect(transports).toEqual(["gateway"]);
+    expect(runs).toHaveLength(1);
+  });
+});

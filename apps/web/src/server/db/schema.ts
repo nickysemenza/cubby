@@ -27,9 +27,11 @@ import {
   purchaseDocumentKindValues,
 } from "@cubby/schemas/purchase";
 import type { SearchableEntity } from "@cubby/schemas/search";
-import type {
-  McpToolCallOutcome,
-  McpToolCallSurface,
+import {
+  aiUsageTransportValues,
+  type AiUsageTransport,
+  type McpToolCallOutcome,
+  type McpToolCallSurface,
 } from "@cubby/schemas/telemetry";
 import type { ShortcodeType } from "@cubby/shared";
 import { relations, sql } from "drizzle-orm";
@@ -855,6 +857,14 @@ export const aiUsage = pgTable(
     applicationCacheStatus: text("applicationCacheStatus").$type<
       "hit" | "miss" | "none"
     >(),
+    // Every current writer names what carried the call. The default covers
+    // writers deployed before this column (the migration runs before the new
+    // Worker deploys) and rows without evidence; the migration backfilled
+    // history from positive evidence only.
+    transport: text("transport")
+      .notNull()
+      .default("unknown")
+      .$type<AiUsageTransport>(),
     ...entityRef<string>({ nullable: true }),
     createdAt: timestamp("createdAt", { mode: "date" }).notNull().defaultNow(),
     ...softDeletedAt(),
@@ -871,6 +881,10 @@ export const aiUsage = pgTable(
     index("AiUsage_entity_idx").on(table.entityKind, table.entityId),
     index("AiUsage_job_idx").on(table.jobKind, table.jobId),
     index("AiUsage_run_idx").on(table.runId),
+    check(
+      "AiUsage_transport_check",
+      sql`${table.transport} IN (${sql.raw(aiUsageTransportValues.map((value) => `'${value}'`).join(", "))})`,
+    ),
     // Both columns are nullable (a call may have no subject entity); MATCH
     // SIMPLE skips the FK check whenever either is null (ADR 0006).
     entityRefFk("AiUsage_entity_fk", table),

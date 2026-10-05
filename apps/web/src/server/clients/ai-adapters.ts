@@ -82,7 +82,13 @@ export function piCallTarget(
   const gatewayRoute = gatewayRouteFor(config.route);
   const models = createModels();
   for (const provider of cubbyPiProviders((route, onUnbilledResponse) =>
-    gatewayFetch(route, { ...call, onChatGptPlan: onUnbilledResponse }),
+    gatewayFetch(route, {
+      ...call,
+      onTransport: (transport) => {
+        call.onTransport?.(transport);
+        if (transport === "chatgpt") onUnbilledResponse?.();
+      },
+    }),
   )) {
     models.setProvider(provider);
   }

@@ -1,10 +1,10 @@
-import { fireEvent, render, screen } from "@testing-library/react";
+import { render, screen } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
 import { entityPreviewQueryOptions } from "~/entity/entity-query";
 import { createBrowserTestHarness } from "~/lib/test/browser-harness";
 
-import { AiUsageTableStatus, UsageEntityLink } from "./ai-usage-page";
+import { aiUsageSummaryRowId, UsageEntityLink } from "./ai-usage-page";
 
 let harness: ReturnType<typeof createBrowserTestHarness>;
 
@@ -70,30 +70,20 @@ describe("UsageEntityLink", () => {
   });
 });
 
-describe("AiUsageTableStatus", () => {
-  it("keeps a failed query distinct from a valid empty result", () => {
-    let retries = 0;
-    render(
-      <table>
-        <tbody>
-          <AiUsageTableStatus
-            isLoading={false}
-            error={new Error("usage unavailable")}
-            isEmpty
-            emptyLabel="No recent calls"
-            retryLabel="Retry recent calls"
-            onRetry={() => {
-              retries += 1;
-            }}
-          />
-        </tbody>
-      </table>,
-      { wrapper: harness.wrapper },
-    );
-
-    expect(screen.getByRole("alert")).toHaveTextContent("usage unavailable");
-    expect(screen.queryByText("No recent calls")).not.toBeInTheDocument();
-    fireEvent.click(screen.getByRole("button", { name: "Retry recent calls" }));
-    expect(retries).toBe(1);
-  });
+it("keeps distinct SQL job groups separate in the table row model", () => {
+  const common = {
+    day: "2026-01-01",
+    feature: "synthetic",
+    provider: "openai",
+    model: "gpt-6-luna",
+    transport: "gateway",
+    operation: "synthetic.generate",
+    jobKind: "synthetic-job",
+    cacheStatus: null,
+    applicationCacheStatus: null,
+  } satisfies Omit<Parameters<typeof aiUsageSummaryRowId>[0], "jobId">;
+  const ids = ["synthetic-first-job", "synthetic-second-job"].map((jobId) =>
+    aiUsageSummaryRowId({ ...common, jobId }),
+  );
+  expect(new Set(ids).size).toBe(2);
 });

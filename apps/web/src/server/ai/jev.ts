@@ -3,6 +3,7 @@
  * Jev over Workers AI. The chat-tier counterpart is `run-feature.ts`.
  */
 import type { Confidence } from "@cubby/schemas/ai";
+import type { AiUsageTransport } from "@cubby/schemas/telemetry";
 import { retryWithBackoff } from "@cubby/shared/retry";
 import { z } from "zod";
 
@@ -142,10 +143,15 @@ async function requestJev(
     operation: ctx.operation,
   };
   if (ctx.entity) metadata.entityKind = ctx.entity.entityKind;
-  const fetch = gatewayFetch(
-    "workers-ai",
-    feature.cache ? cachedCall({ metadata, force: ctx.force }) : { metadata },
-  );
+  let transport: AiUsageTransport = "unknown";
+  const fetch = gatewayFetch("workers-ai", {
+    ...(feature.cache
+      ? cachedCall({ metadata, force: ctx.force })
+      : { metadata }),
+    onTransport: (selected) => {
+      transport = selected;
+    },
+  });
 
   const startedAt = performance.now();
   const controller = new AbortController();
@@ -209,6 +215,7 @@ async function requestJev(
   } finally {
     clearTimeout(deadline);
     await recordFeatureUsage(feature, ctx, {
+      transport,
       inputTokens: parsed?.usage?.input_tokens ?? null,
       outputTokens: parsed?.usage?.output_tokens ?? null,
       durationMs: Math.max(0, Math.round(performance.now() - startedAt)),

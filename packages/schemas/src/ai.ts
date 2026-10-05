@@ -15,6 +15,11 @@ import {
   spendingCategoryShortcode,
 } from "./identifiers";
 import { productCategory } from "./product-fields";
+import {
+  aiUsageTransport,
+  aiUsageTransportValues,
+  type AiUsageTransport,
+} from "./telemetry";
 import { foodSummaryWithLinkedProducts } from "./usda";
 
 // Confidence level values - single source of truth
@@ -279,9 +284,28 @@ export const aiEnrichmentProposalEventSchema = z.discriminatedUnion("type", [
 export const aiUsageCacheStatus = z.enum(["hit", "miss", "none"]);
 export type AiUsageCacheStatus = z.infer<typeof aiUsageCacheStatus>;
 
+export { aiUsageTransport, aiUsageTransportValues, type AiUsageTransport };
+
+const aiUsageStatus = z.enum(["succeeded", "failed"]);
+
+/** Filters narrow the whole history before `limit` takes the newest rows. */
+const aiUsageRecentFilters = z.object({
+  transport: aiUsageTransport.optional(),
+  status: aiUsageStatus.optional(),
+  /** Exact matches. */
+  provider: z.string().min(1).optional(),
+  model: z.string().min(1).optional(),
+  feature: z.string().min(1).optional(),
+  /** Case-insensitive substring of feature, model, or operation. */
+  query: z.string().trim().min(1).optional(),
+});
+export type AiUsageRecentFilters = z.infer<typeof aiUsageRecentFilters>;
+
 export const aiUsageRecentInput = z.object({
   limit: z.number().int().min(1).max(200).default(50),
+  filters: aiUsageRecentFilters.optional(),
 });
+export type AiUsageRecentInput = z.infer<typeof aiUsageRecentInput>;
 
 // Grouping dimensions shared by per-row usage entries and rolled-up summaries.
 const aiUsageGroupFields = {
@@ -293,6 +317,7 @@ const aiUsageGroupFields = {
   jobId: z.string().nullable(),
   cacheStatus: aiUsageCacheStatus.nullable(),
   applicationCacheStatus: aiUsageCacheStatus.nullable(),
+  transport: aiUsageTransport,
 };
 
 export const aiUsageEntrySchema = z.object({
@@ -303,7 +328,7 @@ export const aiUsageEntrySchema = z.object({
   cacheReadTokens: z.number().int().nullable(),
   cacheWriteTokens: z.number().int().nullable(),
   attempt: z.number().int().nonnegative(),
-  status: z.enum(["succeeded", "failed"]),
+  status: aiUsageStatus,
   gatewayLogId: z.string().nullable(),
   estimatedCost: moneyNullable,
   durationMs: z.number().int(),
@@ -344,6 +369,7 @@ export const aiRunUsageOut = z.object({
       gatewayLogId: true,
       cacheStatus: true,
       applicationCacheStatus: true,
+      transport: true,
       estimatedCost: true,
     }),
   ),

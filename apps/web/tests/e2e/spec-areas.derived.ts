@@ -16,6 +16,7 @@ export const DERIVED_SPEC_GLOBS: SpecGlobMap = {
     "apps/web/src/routes/_authenticated/runs.jobs.$id.tsx",
     "apps/web/src/routes/_authenticated/settings.tsx",
   ],
+  "ai-usage.spec.ts": ["apps/web/src/routes/_authenticated/ai-usage.tsx"],
   "browser-operation-dispatch.spec.ts": [
     "apps/web/src/routes/api/v1/$resource.ts",
     "apps/web/src/routes/api/v1/$resource/$operation.ts",

@@ -5,13 +5,14 @@ import {
 } from "@cubby/schemas/import-recipe";
 import { z } from "zod";
 
-import { getErrorMessage } from "~/lib/error-utils";
+import { getErrorMessage, type UnparsedError } from "~/lib/error-utils";
 import { wasm } from "~/lib/wasm";
 import { recordAiUsage } from "~/server/ai-usage";
 import {
   gatewayBaseURL,
   gatewayFetch,
   gatewayProviderSchema,
+  type GatewayTransport,
 } from "~/server/clients/ai-gateway";
 import type { Database } from "~/server/db";
 
@@ -179,7 +180,7 @@ async function sendWithTimeout(
 /**
  * One AiUsage row for a successful call, priced by the crate. An answer the
  * gateway served from its own cache repeats the provider's usage figures but
- * cost nothing.
+ * cost nothing, as does a ChatGPT plan answer (plan usage, not API spend).
  */
 function usageRecord(
   feature: string,
@@ -188,6 +189,7 @@ function usageRecord(
   usage: GatewayCallUsage,
   durationMs: number,
   gatewayHit: boolean,
+  transport: GatewayTransport | "unknown",
   runId: RunId,
 ): AiUsageRecord {
   const cacheStatus = gatewayHit
@@ -205,14 +207,17 @@ function usageRecord(
     runId,
     inputTokens: usage.usage.input_tokens,
     outputTokens: usage.usage.output_tokens,
-    estimatedCost: gatewayHit ? 0 : usage.cost_usd,
+    estimatedCost: gatewayHit || transport === "chatgpt" ? 0 : usage.cost_usd,
     durationMs,
     cacheStatus,
+    transport,
   };
 }
 
 /**
  * Forward one gateway request built by the `cookbook` crate in the browser.
+ * A failed attempt (thrown or non-2xx) records a failed row on its selected
+ * transport.
  * The body and provider path pass through untouched; the server strips any
  * client-supplied credentials, authenticates through the shared gateway
  * transport (Worker binding in prod, REST in dev), pins the metadata
@@ -229,14 +234,45 @@ export async function forwardGatewayRequest(
   const { model, purpose } = gatewayMetadataKeys.parse(metadata);
   const { provider, endpoint } = splitProviderRoute(request.path);
   const startedAt = performance.now();
+  let transport: GatewayTransport | "unknown" = "unknown";
+  const recordFailure = async () => {
+    if (!opts.db || !opts.runId || !model) return;
+    await port.recordUsage(opts.db, {
+      feature: opts.feature,
+      provider,
+      model,
+      operation: purpose ? `cookbook.${purpose}` : "cookbook.extract",
+      runId: opts.runId,
+      durationMs: Math.max(0, Math.round(performance.now() - startedAt)),
+      status: "failed",
+      transport,
+      estimatedCost: transport === "chatgpt" ? 0 : null,
+    });
+  };
+  // Non-2xx responses are still returned for the ladder; only the usage row
+  // marks them failed.
   const response = await sendWithTimeout(
     // The crate decides its own caching; only the app-side adapters skip it.
-    port.transport(provider, { metadata }),
+    port.transport(provider, {
+      metadata,
+      onTransport: (selected) => {
+        transport = selected;
+      },
+    }),
     `${gatewayBaseURL(provider)}/${endpoint}`,
     forwardHeaders(request),
     JSON.stringify(request.body),
-  );
-  const body = await response.text();
+  ).catch(async (error: UnparsedError) => {
+    await recordFailure();
+    throw error;
+  });
+  if (!response.ok) await recordFailure();
+  const body = await response.text().catch(async (error: UnparsedError) => {
+    // A non-2xx response already has its failed row; a broken success stream
+    // has not reported usage yet.
+    if (response.ok) await recordFailure();
+    throw error;
+  });
   const durationMs = Math.max(0, Math.round(performance.now() - startedAt));
 
   const usage =
@@ -253,6 +289,7 @@ export async function forwardGatewayRequest(
         usage,
         durationMs,
         gatewayHit,
+        transport,
         opts.runId,
       ),
     );

@@ -12,12 +12,35 @@ function chatGptPlan(): ChatGptPlanRpc | undefined {
   return getChatGptPlanNamespace()?.getByName("household");
 }
 
+export interface ChatGptCallOptions {
+  signal?: AbortSignal;
+  requestTimeoutMs?: number;
+  /**
+   * Called once the connected plan is chosen, before inference starts, so a
+   * failure without any response still belongs to the ChatGPT plan.
+   */
+  onSelected?: () => void;
+}
+
 export async function chatGptInference(
   body: Awaited<ReturnType<typeof gatewayQuery>>,
-  options?: { signal?: AbortSignal; requestTimeoutMs?: number },
+  options?: ChatGptCallOptions,
 ): Promise<Response | null> {
   const plan = chatGptPlan();
-  if (!plan || !(await plan.status()).connected) return null;
+  return plan ? connectedChatGptInference(plan, body, options) : null;
+}
+
+/**
+ * Null only when the plan is not connected. A connected plan's failure throws:
+ * the caller must never retry it as a paid API call.
+ */
+export async function connectedChatGptInference(
+  plan: ChatGptPlanRpc,
+  body: Awaited<ReturnType<typeof gatewayQuery>>,
+  options: ChatGptCallOptions = {},
+): Promise<Response | null> {
+  if (!(await plan.status()).connected) return null;
+  options.onSelected?.();
   return inferChatGptPlan(plan, body, options);
 }
 

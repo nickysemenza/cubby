@@ -23,7 +23,7 @@ import type {
   PurchaseImportRunAgentRpc,
 } from "~/server/purchase-agent/environment";
 
-import { inferChatGptPlan } from "../ai/chatgpt/client";
+import { connectedChatGptInference } from "../ai/chatgpt/client";
 import { CF_AIG_GATEWAY_ID } from "../cf-env";
 import { workerSentryOptions } from "../worker-sentry";
 import { purchaseAgentMcpTools, runServicesFor } from "./agent-services";
@@ -45,11 +45,12 @@ function purchaseAgentEnvironment(
     CUBBY_PURCHASE_AGENT_TEST_MODEL?: PurchaseAgentEnvironment["testModel"];
   };
   return {
-    chatGptInference: async (body, options) => {
-      const plan = env.CHATGPT_PLAN.getByName("household");
-      if (!(await plan.status()).connected) return null;
-      return inferChatGptPlan(plan, body, options);
-    },
+    chatGptInference: (body, options) =>
+      connectedChatGptInference(
+        env.CHATGPT_PLAN.getByName("household"),
+        body,
+        options,
+      ),
     gateway: () => {
       const gateway = env.AI.gateway(CF_AIG_GATEWAY_ID);
       return {
