@@ -23,6 +23,7 @@ import { readImageProcessingSettings } from "~/server/repo/image-processing-main
 import {
   generatePresignedDownloadUrl,
   generatePresignedUploadUrl,
+  imageAnalysisKey,
 } from "~/server/utils/s3";
 
 import { completeCloudImageDescription } from "./cloud-description";
@@ -151,7 +152,7 @@ export async function prepareCompanionImageCommand(
       claimed.originalContentType === "image/avif" &&
       claimed.processorRevision !== IMAGE_APPLE_DESCRIPTION_PROCESSOR_REVISION
     ) {
-      const key = `cubby/analysis-staging/${claimed.attemptId}.jpg`;
+      const key = imageAnalysisKey("staging", claimed.attemptId);
       command.analysisOutput = {
         key,
         contentType: "image/jpeg",

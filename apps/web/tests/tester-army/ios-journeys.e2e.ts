@@ -5,7 +5,7 @@ import { selectedJourneys } from "../../tooling/tester-army/journey";
 import { runJourney } from "../../tooling/tester-army/journey-run";
 import { journeys } from "../../tooling/tester-army/journeys";
 
-for (const journey of selectedJourneys(journeys))
+for (const journey of selectedJourneys(journeys, "ios"))
   test(journey.title, async ({ app, agent, screen, device }) => {
     await runJourney(journey, "ios", {
       agent,
@@ -19,5 +19,7 @@ for (const journey of selectedJourneys(journeys))
         const link = ios ?? (entity ? `cubby://entity/${entity}` : undefined);
         if (link) await device.openLink(link);
       },
+      reload: () =>
+        Promise.reject(new Error("iOS journeys never wait on a live run")),
     });
   });

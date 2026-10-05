@@ -26,6 +26,15 @@ history is the archive. Permanent product constraints live in the
 
 ## Images & photos
 
+- 🤔 **Cloud image description fails on Gemini since the pi-ai move.**
+  Gemini 2.5 Flash answers the forced `respond` tool for
+  `IMAGE_DESCRIPTION_FEATURE` with HTTP 400 "schema produces a constraint
+  that has too many states". Decide between simplifying the schema (a new
+  prompt/schema revision) and another vision model; either obsoletes queued
+  `describe_image` jobs (`IMAGE_DESCRIPTION_PROCESSOR_REVISION`). The
+  `import-photo-inventory` Tester Army journey fails at its description wait
+  until this lands; check `LOCATION_DESCRIPTION_FEATURE` too.
+
 - 🧱 **Full capture metadata from the Photos library.** The library match path
   (`LibraryMetadataSync` → `image.recordSightings`) already backfills
   `capturedAt` and location for every strong perceptual-hash match across the

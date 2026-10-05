@@ -35,7 +35,7 @@ import {
 } from "~/server/repo/image-processing";
 import { inspectImageFile } from "~/server/services/image-integrity";
 import { getR2PublicUrl } from "~/server/utils/r2-public-url";
-import { uploadToS3 } from "~/server/utils/s3";
+import { imageAnalysisKey, uploadToS3 } from "~/server/utils/s3";
 
 /**
  * The edge rendition normalizes EXIF/HEIF orientation and requests a provider-
@@ -168,8 +168,7 @@ export async function describeOriginalImage(
   let analysisUrl = imageAnalysisRenditionUrl(getR2PublicUrl(source.key));
   // Companions receive a rewritable staging PUT, never this server-owned snapshot key.
   const key =
-    input.normalizedInput?.key ??
-    `cubby/analysis-inputs/${input.attemptId}-${crypto.randomUUID()}.jpg`;
+    input.normalizedInput?.key ?? imageAnalysisKey("input", input.attemptId);
   if (
     !input.normalizedInput &&
     !(await reserveImageAnalysisInput(db, input.attemptId, key))

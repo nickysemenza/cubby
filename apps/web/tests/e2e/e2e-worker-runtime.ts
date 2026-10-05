@@ -125,12 +125,12 @@ export async function createE2EWorkerRuntime({
     // The purchase-agent harness runs the Worker's agent and queue consumer
     // against a scripted model and gateway instead of offline peers.
     harness = purchaseAgent
-      ? createWorkerdHarness(
-          database.databaseUrl,
-          undefined,
-          undefined,
-          objectStorage.url,
-        )
+      ? createWorkerdHarness(database.databaseUrl, undefined, undefined, {
+          objectStorage: {
+            endpoint: objectStorage.url,
+            publicUrl: objectStorage.url,
+          },
+        })
       : createLocalWorkerdHarness(
           database.databaseUrl,
           objectStorage.url,

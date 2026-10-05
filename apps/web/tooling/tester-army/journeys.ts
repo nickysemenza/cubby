@@ -1,5 +1,5 @@
-import { JOURNEY_NAMES } from "./names";
-import type { DbCheck, Journey, JourneyIds } from "./journey";
+import { JOURNEY_NAMES, LIVE_IMPORT } from "./names";
+import type { DbCheck, Journey, JourneyIds, RunWait } from "./journey";
 
 /**
  * Every journey, described once. The agent follows the goals on whichever
@@ -31,6 +31,175 @@ const purchaseParts = (parts: number, cents: number): DbCheck => ({
   params: only("purchase"),
   rows: () => [{ parts, cents }],
 });
+
+/** The vendor's purchases, each with its order id and summed expense cents. */
+const importedOrder = (orderId: string, cents: number): DbCheck => ({
+  label: "the vendor's one purchase carries the source order and amount",
+  sql: `SELECT p."orderId", round(sum(e.cost) * 100)::int AS cents
+          FROM "Purchase" p
+          JOIN "Vendor" v ON v.id = p."vendorId"
+          JOIN "Expense" e ON e."purchaseId" = p.id AND e."deletedAt" IS NULL
+         WHERE v.shortcode = $1 AND p."deletedAt" IS NULL
+         GROUP BY p.id, p."orderId"`,
+  params: only("vendor"),
+  rows: () => [{ orderId, cents }],
+});
+
+/** A live coordinator run: minutes of real model turns, never instant. */
+const LIVE_RUN_MS = 480_000;
+
+const vendorRun = (until: RunWait["until"]): RunWait => ({
+  sql: `SELECT r.id FROM "Run" r JOIN "Vendor" v ON v.id = r."vendorId"
+         WHERE v.shortcode = $1 ORDER BY r."startedAt" DESC LIMIT 1`,
+  params: only("vendor"),
+  until,
+  timeoutMs: LIVE_RUN_MS,
+});
+
+const photoRun = (until: RunWait["until"]): RunWait => ({
+  sql: `SELECT id FROM "Run" WHERE shortcode = $1`,
+  params: only("run"),
+  until,
+  timeoutMs: LIVE_RUN_MS,
+});
+
+/** The run the member started again from the seeded, finished sync. */
+const successorRun = (until: RunWait["until"]): RunWait => ({
+  sql: `SELECT r.id FROM "Run" r JOIN "Run" prior ON prior.id = r."predecessorRunId"
+         WHERE prior.shortcode = $1`,
+  params: only("run"),
+  until,
+  timeoutMs: LIVE_RUN_MS,
+});
+
+/**
+ * Journeys on the coupled harness: nothing behind the browser is scripted
+ * except the synthetic sources (a saved confirmation, uploaded photos, and a
+ * simulated Mac browser answering by URL). The coordinator, extraction,
+ * audit, and image description call real models.
+ */
+const coupledJourneys: Journey[] = [
+  {
+    id: "import-order-mail",
+    title: "import a saved order confirmation through the live agent",
+    coupled: true,
+    timeoutMs: 600_000,
+    context:
+      "A vendor page lists saved order confirmation emails; each importable order has an Import order button, which starts an agent run and then shows a View import link to that run's page.",
+    start: "vendor",
+    steps: [
+      {
+        goal: `Import the saved order confirmation for order ${LIVE_IMPORT.mail.orderId}, then open the import it starts.`,
+        // The run page streams the coordinator's live conversation.
+        check: { visible: () => ["Live agent"] },
+      },
+    ],
+    awaitRun: vendorRun("completed"),
+    visible: () => ["Purchases changed"],
+    db: [importedOrder(LIVE_IMPORT.mail.orderId, LIVE_IMPORT.mail.cents)],
+  },
+  {
+    id: "import-photo-inventory",
+    title: "group uploaded photos into items and approve them",
+    coupled: true,
+    timeoutMs: 900_000,
+    context:
+      "A photo import run page shows photo processing progress, a Start grouping button once cloud descriptions are ready, and the agent's proposed item groups, each with an Approve button.",
+    start: "run",
+    steps: [
+      {
+        ready: {
+          label: "every uploaded photo has a cloud description",
+          // `lastError` puts a failing description's cause in the assertion.
+          sql: `SELECT j.state, j."lastError", count(*)::int AS photos
+                  FROM "ImageProcessingJob" j
+                  JOIN "RunTarget" t ON t."entityId" = j."imageId"
+                  JOIN "Run" r ON r.id = t."runId"
+                 WHERE r.shortcode = $1 AND j.kind = 'describe_image'
+                 GROUP BY j.state, j."lastError"`,
+          params: only("run"),
+          rows: () => [
+            {
+              state: "ready",
+              lastError: null,
+              photos: LIVE_IMPORT.photos.length,
+            },
+          ],
+          timeoutMs: 240_000,
+        },
+        goal: "Select Start grouping, then finish once the page says the agent is preparing item groups.",
+      },
+      {
+        awaitRun: photoRun("awaiting_approval"),
+        goal: "Approve every proposed item group on this page, one group at a time, until none is left to approve.",
+      },
+    ],
+    awaitRun: photoRun("completed"),
+    visible: () => ["Review complete"],
+    db: [
+      {
+        label: "every photo is settled on a committed item",
+        sql: `SELECT t.state, count(*)::int AS photos
+                FROM "RunTarget" t JOIN "Run" r ON r.id = t."runId"
+               WHERE r.shortcode = $1 GROUP BY t.state`,
+        params: only("run"),
+        rows: () => [{ state: "completed", photos: LIVE_IMPORT.photos.length }],
+      },
+      {
+        // Each uploaded photo is in the gallery of the live Product its
+        // committed group names, and the two photos name two Products.
+        label: "each photo is in its committed item's product gallery",
+        sql: `SELECT count(DISTINCT p.id)::int AS products,
+                     count(DISTINCT a."imageId")::int AS photos
+                FROM "PhotoGroupProposal" g
+                JOIN "Run" r ON r.id = g."runId"
+                JOIN "Product" p ON p.id = g."productId" AND p."deletedAt" IS NULL
+                JOIN "RunTarget" t ON t."runId" = r.id
+                JOIN "EntityAttachment" a
+                  ON a."imageId" = t."entityId" AND a."entityId" = p.id
+                 AND a."entityKind" = 'product' AND a."deletedAt" IS NULL
+               WHERE r.shortcode = $1 AND g.state = 'committed'`,
+        params: only("run"),
+        rows: () => [
+          {
+            products: LIVE_IMPORT.photos.length,
+            photos: LIVE_IMPORT.photos.length,
+          },
+        ],
+      },
+    ],
+  },
+  {
+    id: "import-account-sync",
+    title: "sync a vendor account through the browser and import its order",
+    coupled: true,
+    timeoutMs: 900_000,
+    context:
+      "A finished import run page offers Start new run with same inputs, which starts a new run for the same vendor account and opens it.",
+    start: "run",
+    steps: [
+      {
+        goal: "Start a new run with the same inputs, then open the new run.",
+        check: { visible: () => ["Live agent"] },
+      },
+    ],
+    awaitRun: successorRun("completed"),
+    visible: () => ["Purchases changed"],
+    db: [
+      importedOrder(LIVE_IMPORT.sync.orderId, LIVE_IMPORT.sync.cents),
+      {
+        label: "the order listed on the history page was imported",
+        sql: `SELECT c."orderId", c.state
+                FROM "RunOrderCandidate" c
+                JOIN "Run" r ON r.id = c."runId"
+                JOIN "Run" prior ON prior.id = r."predecessorRunId"
+               WHERE prior.shortcode = $1`,
+        params: only("run"),
+        rows: () => [{ orderId: LIVE_IMPORT.sync.orderId, state: "imported" }],
+      },
+    ],
+  },
+];
 
 export const journeys: Journey[] = [
   {
@@ -501,4 +670,5 @@ export const journeys: Journey[] = [
       },
     ],
   },
+  ...coupledJourneys,
 ];

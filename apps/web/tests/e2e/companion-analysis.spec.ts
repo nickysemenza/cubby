@@ -217,7 +217,9 @@ test("companion normalization preserves originals and rejects stale or corrupt r
     .from(imageProcessingAttempt)
     .where(eq(imageProcessingAttempt.id, command.attemptId));
   expect(finished?.state, finished?.error ?? "No attempt error").toBe("ready");
-  expect(finished?.inputKey).toMatch(/^cubby\/analysis-inputs\//);
+  // The runtime's own key prefix: a hardcoded `cubby/` key is unreachable
+  // through the public URL of any other deployment.
+  expect(finished?.inputKey).toMatch(/^e2e\/analysis-inputs\//);
   expect(finished?.inputKey).not.toBe(output.key);
   expect(finished?.diagnostics).toMatchObject({
     cached: true,
