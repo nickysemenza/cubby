@@ -1,3 +1,5 @@
+import { assertManifestWire, renderManifestWire } from "./manifest-wire.ts";
+import type { ManifestWire } from "../../../../packages/schemas/src/manifest-wire.ts";
 import { capitalize } from "../../../../packages/shared/src/text-case.ts";
 import {
   entityFieldControlKinds,
@@ -183,7 +185,7 @@ const renderVocabularyEnum = ({ name, doc, cases }: VocabularyEnum) => {
 type EntityKeyLookup = (raw: string, context: string) => string;
 
 // The manifest JSON is shaped as Swift's synthesized `Codable` encodes the
-// types in `EntityManifest.swift`: property names as keys, `String` enums as
+// shared manifest-wire description: property names as keys, `String` enums as
 // their raw value, an enum case with associated values as
 // `{"case": {"label": value}}` (`_0` for an unlabelled one), a payload-less
 // case as `{"case": {}}`, and every optional present as `null` when absent.
@@ -305,7 +307,7 @@ const fieldJSON = (
   entityKey: EntityKeyLookup,
   entityForPrefix: EntityForPrefix,
   context: string,
-) => {
+): ManifestWire<"FieldDescriptor"> => {
   const where = `${context}.fields.${field.key}`;
   return {
     key: field.key,
@@ -388,16 +390,27 @@ const detailSectionJSON = (entity: string, section: DetailSection) => {
 
 type ListView = CompiledEntity["inspector"]["list"]["views"][number];
 
-const listViewJSON = (entity: string, view: ListView) =>
-  isSlotListView(view)
-    ? {
-        slot: {
-          id: `${entity}.${view.id}`,
-          label: view.label,
-          searchKeys: [...view.searchKeys],
-        },
-      }
-    : { [view]: {} };
+const listViewJSON = (
+  entity: string,
+  view: ListView,
+): ManifestWire<"ListView"> => {
+  if (isSlotListView(view))
+    return {
+      slot: {
+        id: `${entity}.${view.id}`,
+        label: view.label,
+        searchKeys: [...view.searchKeys],
+      },
+    };
+  switch (view) {
+    case "table":
+      return { table: {} };
+    case "shelf":
+      return { shelf: {} };
+    case "timeline":
+      return { timeline: {} };
+  }
+};
 
 const presentationJSON = (
   entity: string,
@@ -488,7 +501,7 @@ const entityJSON = (
   entity: CompiledEntity,
   entityKey: EntityKeyLookup,
   entityForPrefix: EntityForPrefix,
-) => {
+): ManifestWire<"EntityDescriptor"> => {
   if (entity.route === null) {
     throw new Error(
       `${entity.key} has no route; EntityCatalog needs a basePath.`,
@@ -575,8 +588,8 @@ const checkCatalogKeys = (entities: readonly CompiledEntity[]) => {
  * `CubbyAPISupport` target, where the generated client's `Entity` schema is
  * overridden to it so the wire enum and the catalog key are one type) and
  * `entity-manifest.json`, one `EntityDescriptor` per declared entity carrying
- * the declaration's `presentation` block, decoded by the hand-written
- * descriptor types in `Catalog/EntityManifest.swift`, and
+ * the declaration's `presentation` block, decoded by descriptor types generated from
+ * `packages/schemas/src/manifest-wire.ts`, and
  * `EntityVocabulary.swift`, the `String` enums those descriptors decode, minted
  * here from the TS vocabulary so the two cannot drift.
  */
@@ -746,7 +759,17 @@ export const renderSwiftEntityCatalog = (
       })),
     },
   ];
+  const descriptors = entities.map((entity) =>
+    entityJSON(entity, entityKey, entityForPrefix),
+  );
+  for (const descriptor of descriptors)
+    assertManifestWire("EntityDescriptor", descriptor);
   return [
+    {
+      relativePath:
+        "apps/apple/CubbyKit/Sources/CubbyKit/Generated/EntityDescriptors.swift",
+      source: renderManifestWire(),
+    },
     {
       relativePath:
         "apps/apple/CubbyKit/Sources/CubbyAPISupport/Generated/EntityKey.swift",
@@ -770,13 +793,7 @@ export const renderSwiftEntityCatalog = (
     {
       relativePath:
         "apps/apple/CubbyKit/Sources/CubbyKit/Generated/entity-manifest.json",
-      source: `${JSON.stringify(
-        entities.map((entity) =>
-          entityJSON(entity, entityKey, entityForPrefix),
-        ),
-        null,
-        2,
-      )}\n`,
+      source: `${JSON.stringify(descriptors, null, 2)}\n`,
     },
     {
       relativePath:

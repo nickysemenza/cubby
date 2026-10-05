@@ -299,6 +299,16 @@ server-side: issues land at `GenericEntityEditModel.nestedError(key, path:)` on 
 nested form path on web. A new structured field needs only its Zod input schema, a renderer in that
 list or a `structuredField` entry, and a vector, never per-entity UI.
 
+The descriptor wire shape is declared once in `packages/schemas/src/manifest-wire.ts`:
+property types, Swift associated-value labels (`_0` for unlabelled payloads), raw enums,
+conformances, and public initializer defaults. `structured-value-schema.ts` derives web types
+from it; the native catalog generator validates its JSON and emits `EntityDescriptors.swift`,
+including recursive `ValueSchema`. Synthesized Codable still owns encoding and decoding;
+optionals and initializer defaults stay distinct, and the catalog stays bundled JSON to avoid
+the Release compiler stall from a giant Swift literal. `LabeledOption.color` is explicitly
+wire-only: existing JSON carries this web hint and native continues to ignore it. Computed
+native conveniences remain extensions in `Catalog/EntityManifest.swift`.
+
 A source claim is edited under the identity its read exposes: the read carries `sourceKey` (a hash
 of the provider id or the evidence, so the provider id is unrecoverable) and the input accepts it
 (`ledgerSourceClaimInput.sourceKey`, opaque, exclusive with `providerId`). The server
