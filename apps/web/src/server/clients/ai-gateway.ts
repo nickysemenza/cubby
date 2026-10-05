@@ -1,10 +1,21 @@
 import type { AiUsageTransport } from "@cubby/schemas/telemetry";
 import {
+  type AiGatewayCallMetadata,
+  type AiGatewayEnvironment,
+  type AiGatewayMetadata,
+  aiGatewayEnvironment,
+  aiGatewayMetadataSchema,
+  CUBBY_AI_GATEWAY_ID,
+} from "@cubby/shared/ai-gateway-metadata";
+import {
   endpointFor,
   gatewayBaseURL,
   gatewayQuery,
   requestUrl,
   strippedHeaders,
+  type WorkersAiRunGateway,
+  workersAiModel,
+  workersAiRunRequest,
 } from "@cubby/shared/ai-gateway-request";
 import { z } from "zod";
 
@@ -12,17 +23,17 @@ import { env } from "~/env";
 import { chatGptInference } from "~/server/ai/chatgpt/client";
 import {
   CF_ACCOUNT_ID,
-  CF_AIG_GATEWAY_ID,
+  getAi,
   getAiGateway,
   getTestAiGateway,
 } from "~/server/cf-env";
 
 /**
- * Up to 5 string/number/boolean entries surfaced in the AI Gateway
- * dashboard/logs for filtering.
+ * A call's gateway labels (`feature`, `operation`, optional `entityKind`);
+ * {@link gatewayFetch} adds `environment`. See `aiGatewayMetadataSchema`.
  * https://developers.cloudflare.com/ai-gateway/observability/custom-metadata/
  */
-export type GatewayMetadata = Record<string, string | number | boolean>;
+export type GatewayMetadata = AiGatewayCallMetadata;
 
 export interface GatewayResponseFailure {
   status: number;
@@ -30,9 +41,6 @@ export interface GatewayResponseFailure {
   body: string;
   retryAfter: string | null;
 }
-
-/** The gateway keeps at most five metadata entries; the rest are dropped. */
-const MAX_METADATA_ENTRIES = 5;
 
 export { gatewayBaseURL };
 
@@ -137,29 +145,95 @@ function validatedCacheTtlSeconds(ttl: number | undefined): number | undefined {
   return ttl;
 }
 
-function cappedMetadata(metadata: GatewayMetadata): GatewayMetadata {
-  const entries = Object.entries(metadata);
-  if (entries.length <= MAX_METADATA_ENTRIES) return metadata;
-  return Object.fromEntries(entries.slice(0, MAX_METADATA_ENTRIES));
+const callMetadataSchema = aiGatewayMetadataSchema.omit({ environment: true });
+
+/**
+ * The caller's labels, validated, plus the runtime's environment. A caller
+ * that passes any other key (or its own `environment`) throws here rather
+ * than having it truncated or forwarded.
+ */
+function outboundMetadata(metadata: GatewayMetadata): AiGatewayMetadata {
+  return aiGatewayMetadataSchema.parse({
+    ...callMetadataSchema.parse(metadata),
+    environment: gatewayEnvironment(),
+  });
+}
+
+/** This runtime's `environment` label, from runtime variables only. */
+export function gatewayEnvironment(): AiGatewayEnvironment {
+  return aiGatewayEnvironment({
+    NODE_ENV: env.NODE_ENV,
+    E2E_AUTH_TEST_MODE: env.E2E_AUTH_TEST_MODE,
+    CI: process.env.CI,
+  });
+}
+
+function requiredApiKey(): string {
+  if (!env.AI_GATEWAY_API_KEY) {
+    throw new Error(
+      "AI_GATEWAY_API_KEY is not configured. Add it to your .env file.",
+    );
+  }
+  return env.AI_GATEWAY_API_KEY;
+}
+
+/**
+ * A Workers AI model call, scoped to the gateway: `AI.run` with `gateway.id`
+ * on the binding (it posts to the binding's gateway-scoped run endpoint,
+ * workerd `ai-api.ts`), else the REST twin. Never Universal `gateway.run` or
+ * the gateway's provider route, which the account's `default` gateway logs a
+ * second time (see `workersAiRunRequest`).
+ */
+async function workersAiFetch(
+  endpoint: string,
+  body: BodyInit | null | undefined,
+  gateway: WorkersAiRunGateway,
+  signal: AbortSignal | undefined,
+): Promise<Response> {
+  const model = workersAiModel(endpoint);
+  const input = await gatewayQuery(body);
+  const ai = getAi();
+  if (!ai) {
+    const run = workersAiRunRequest({
+      accountId: CF_ACCOUNT_ID,
+      token: requiredApiKey(),
+      model,
+      input,
+      gateway,
+      signal,
+    });
+    return fetch(run.url, run.init);
+  }
+  const response = await ai.run(model, input, {
+    gateway,
+    returnRawResponse: true,
+    signal,
+  });
+  // `returnRawResponse` resolves to the HTTP Response; the unknown-model
+  // overload's declared return type does not model that option.
+  if (response instanceof Response) return response;
+  throw new Error(`Workers AI binding returned no raw Response for ${model}`);
 }
 
 /**
  * The one AI Gateway transport: a `fetch` any provider SDK can be handed.
  *
- * In prod the Worker's `env.AI.gateway("cubby")` binding carries the request
- * over the Universal endpoint, so the Worker's own identity authenticates and
- * unified billing / BYOK apply — no token in the request at all. The dev Node
- * server has no binding (`setCfEnv` only runs in `cf-server.ts`), so it falls
- * back to the gateway's REST endpoint with `AI_GATEWAY_API_KEY`.
+ * In prod the Worker's `env.AI` binding carries the request — Workers AI
+ * models through `AI.run` scoped to the `cubby` gateway, every other provider
+ * over `env.AI.gateway("cubby")`'s Universal endpoint — so the Worker's own
+ * identity authenticates and unified billing / BYOK apply, with no token in
+ * the request. A Node process without the binding falls back to REST with
+ * `AI_GATEWAY_API_KEY`: the gateway's provider route, or the account
+ * `/ai/run` for Workers AI.
  *
- * Both branches return the gateway's `Response` untouched, so streaming bodies
+ * Every branch returns the gateway's `Response` untouched, so streaming bodies
  * pass straight through to the SDK.
  */
 export function gatewayFetch(
   provider: GatewayProvider,
   opts: GatewayCallOptions,
 ): typeof fetch {
-  const metadata = cappedMetadata(opts.metadata);
+  const metadata = outboundMetadata(opts.metadata);
   const cacheTtlSeconds = validatedCacheTtlSeconds(opts.cacheTtlSeconds);
   return async (input, init) => {
     const endpoint = endpointFor(provider, requestUrl(input));
@@ -195,6 +269,24 @@ export function gatewayFetch(
       if (subscription) return captureFailure(subscription, opts);
     }
     opts.onTransport?.("gateway");
+    const gatewayOptions = {
+      skipCache: opts.skipCache,
+      cacheTtl: cacheTtlSeconds,
+      metadata,
+      requestTimeoutMs: opts.requestTimeoutMs,
+    };
+
+    if (provider === "workers-ai") {
+      return captureFailure(
+        await workersAiFetch(
+          endpoint,
+          init?.body,
+          { id: CUBBY_AI_GATEWAY_ID, ...gatewayOptions },
+          signal,
+        ),
+        opts,
+      );
+    }
 
     const gateway = getAiGateway();
     if (gateway) {
@@ -206,26 +298,13 @@ export function gatewayFetch(
             headers: Object.fromEntries(headers.entries()),
             query: await gatewayQuery(init?.body),
           },
-          {
-            gateway: {
-              skipCache: opts.skipCache,
-              cacheTtl: cacheTtlSeconds,
-              metadata,
-              requestTimeoutMs: opts.requestTimeoutMs,
-            },
-            signal,
-          },
+          { gateway: gatewayOptions, signal },
         ),
         opts,
       );
     }
 
-    if (!env.AI_GATEWAY_API_KEY) {
-      throw new Error(
-        "AI_GATEWAY_API_KEY is not configured. Add it to your .env file.",
-      );
-    }
-    headers.set("cf-aig-authorization", `Bearer ${env.AI_GATEWAY_API_KEY}`);
+    headers.set("cf-aig-authorization", `Bearer ${requiredApiKey()}`);
     headers.set("cf-aig-metadata", JSON.stringify(metadata));
     if (opts.skipCache) headers.set("cf-aig-skip-cache", "true");
     if (cacheTtlSeconds !== undefined) {
@@ -236,7 +315,7 @@ export function gatewayFetch(
     }
     return captureFailure(
       await fetch(
-        `${GATEWAY_REST_BASE}/${CF_ACCOUNT_ID}/${CF_AIG_GATEWAY_ID}/${provider}/${endpoint}`,
+        `${GATEWAY_REST_BASE}/${CF_ACCOUNT_ID}/${CUBBY_AI_GATEWAY_ID}/${provider}/${endpoint}`,
         { ...init, headers, signal },
       ),
       opts,

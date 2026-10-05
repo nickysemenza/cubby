@@ -1,5 +1,7 @@
 import { z } from "zod";
 
+import type { AiGatewayMetadata } from "./ai-gateway-metadata";
+
 /**
  * Pure request-shaping helpers shared by every AI Gateway `fetch` shim (web
  * and purchase-agent). No Cloudflare types: each shim owns its own transport.
@@ -64,4 +66,58 @@ export async function gatewayQuery(
     .catch(() => undefined);
   const parsed = gatewayQuerySchema.safeParse(decoded);
   return parsed.success ? parsed.data : {};
+}
+
+/** The model a `${gatewayBaseURL("workers-ai")}/run/<model>` call names. */
+export function workersAiModel(endpoint: string): string {
+  const model = /^run\/(.+)$/u.exec(endpoint)?.[1];
+  if (!model) throw new Error(`Unsupported Workers AI endpoint: ${endpoint}`);
+  return model;
+}
+
+/** The binding's `GatewayOptions`, as the REST run body carries them. */
+export interface WorkersAiRunGateway {
+  id: string;
+  metadata: AiGatewayMetadata;
+  skipCache?: boolean;
+  cacheTtl?: number;
+  requestTimeoutMs?: number;
+}
+
+/**
+ * A Workers AI model call over the account REST `/ai/run`, scoped to a
+ * gateway in its own body — the REST twin of the binding's
+ * `AI.run(model, input, { gateway })`.
+ *
+ * Regression: the gateway's provider route
+ * (`gateway.ai.cloudflare.com/v1/<account>/<gateway>/workers-ai/run/<model>`)
+ * and Universal `gateway.run({provider: "workers-ai"})` forwarded the model
+ * call unscoped, so the account's `default` gateway logged every call a
+ * second time with no metadata and recreated itself after deletion. A
+ * `cf-aig-gateway-id` header on those routes did not prevent it.
+ */
+export function workersAiRunRequest(args: {
+  accountId: string;
+  token: string;
+  model: string;
+  input: unknown;
+  gateway: WorkersAiRunGateway;
+  signal?: AbortSignal;
+}) {
+  return {
+    url: `https://api.cloudflare.com/client/v4/accounts/${args.accountId}/ai/run`,
+    init: {
+      method: "POST",
+      headers: {
+        authorization: `Bearer ${args.token}`,
+        "content-type": "application/json",
+      },
+      body: JSON.stringify({
+        model: args.model,
+        input: args.input,
+        options: { gateway: args.gateway },
+      }),
+      signal: args.signal,
+    } satisfies RequestInit,
+  };
 }

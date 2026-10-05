@@ -119,11 +119,7 @@ export async function embedTexts(
       "ai.dimensions": config.dimensions,
       "ai.input_count": texts.length,
     });
-    const metadata: GatewayMetadata = {
-      feature,
-      operation,
-      inputCount: texts.length,
-    };
+    const metadata: GatewayMetadata = { feature, operation };
     const runId = opts?.db
       ? (opts.runId ??
         (await ensureRun(opts.db, systemActor(), {

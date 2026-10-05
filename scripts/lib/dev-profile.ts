@@ -16,7 +16,7 @@ export interface DevProfile {
   port: number;
   inspectorPort: number;
   vars: Record<string, string>;
-  integration?: { vectorizeIndex: string; aiGatewayId: string };
+  integration?: { vectorizeIndex: string };
 }
 
 function assertDatabaseOverrides(
@@ -64,17 +64,14 @@ function resolveIntegrations(
 ): DevProfile["integration"] {
   let integration: DevProfile["integration"];
   if (profile === "integrations") {
-    const aiGatewayId = inherited.CUBBY_DEV_AI_GATEWAY_ID;
+    // AI calls share the `cubby` gateway (labelled `development`); only the
+    // vector index, which local writes would corrupt, is checkout-isolated.
     const vectorizeIndex = inherited.CUBBY_DEV_VECTORIZE_INDEX;
-    if (
-      !aiGatewayId ||
-      !/^cubby-dev(?:elopment)?(?:-[a-z0-9-]+)?$/u.test(aiGatewayId) ||
-      !vectorizeIndex?.startsWith(`cubby-dev-${id}`)
-    )
+    if (!vectorizeIndex?.startsWith(`cubby-dev-${id}`))
       throw new Error(
-        `integrations requires CUBBY_DEV_AI_GATEWAY_ID=cubby-dev[...] and CUBBY_DEV_VECTORIZE_INDEX=cubby-dev-${id}[...]`,
+        `integrations requires CUBBY_DEV_VECTORIZE_INDEX=cubby-dev-${id}[...]`,
       );
-    integration = { aiGatewayId, vectorizeIndex };
+    integration = { vectorizeIndex };
   }
   return integration;
 }
@@ -107,7 +104,6 @@ interface LocalSettings {
   name: string;
   databaseUrl: string;
   profile: DevProfile["profile"];
-  integration: DevProfile["integration"];
   inherited: Partial<NodeJS.ProcessEnv>;
   migrationCount: number;
   migrationHash: string;
@@ -118,7 +114,6 @@ function localVars({
   name,
   databaseUrl,
   profile,
-  integration,
   inherited,
   migrationCount,
   migrationHash,
@@ -148,7 +143,6 @@ function localVars({
     CUBBY_DEV_DB_NAME: name,
     CUBBY_DEV_MIGRATION_COUNT: String(migrationCount),
     CUBBY_DEV_MIGRATION_HASH: migrationHash,
-    AI_GATEWAY_ID: integration?.aiGatewayId ?? "cubby-dev-offline",
     CUBBY_DEV_PROFILE: profile,
     AI_GATEWAY_API_KEY:
       profile === "integrations"
@@ -200,7 +194,6 @@ export function resolveDevProfile(
     name,
     databaseUrl,
     profile,
-    integration,
     inherited,
     migrationCount,
     migrationHash,

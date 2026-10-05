@@ -434,7 +434,30 @@ Local and preview environments retain password login.
 
 ## AI providers
 
-Production calls use the Workers AI Gateway binding and gateway `cubby`.
+All billed application, Tester Army, live-evaluation, and integration-enabled
+development calls use gateway `cubby`. Production uses the Workers AI Gateway
+binding: `AI.run` with an explicit gateway for Workers AI models, and
+`AI.gateway("cubby").run` for other providers. Tools outside Workers use
+explicitly authenticated REST requests. Workers AI REST calls use the account
+`/ai/run` endpoint with the gateway in the request options, avoiding a nested
+unscoped provider call.
+Every REST request names the gateway explicitly so it cannot create `default`.
+
+Gateway metadata has three stable dimensions: `environment` (`production`,
+`ci`, or `development`), `feature`, and `operation`, with optional `entityKind`.
+The outbound transport filters to that contract. Model/provider, input counts,
+entity and run identifiers, document paths, chunks, revisions, and prompt
+versions remain in application accounting or traces rather than gateway
+metadata. Cookbook metadata used for model pricing is read before outbound
+filtering. Tester Army preserves application feature/operation attribution,
+sets its own environment, and always bypasses gateway caching.
+
+The shared gateway also shares Cloudflare's Unified Billing allowance of
+200 requests per 60 seconds; this is an accepted capacity tradeoff. A spend
+limit can filter by `environment` to budget CI independently, but cannot
+separate that request allowance. See the
+[consolidation research](research/ai-gateway-consolidation.md) for current
+Cloudflare contracts and their limits.
 Provider routing and model identifiers live in
 `apps/web/src/server/ai/models.ts`. Provider credentials or unified-billing
 configuration are Cloudflare AI Gateway state; no provider key belongs in this
@@ -456,8 +479,10 @@ application-cache hits. `CLEF_TRAFFIC_SHARE` in `models.ts` controls the trial:
 0 returns all calls to Jev; 1 selects Clef for all calls. Clef requires
 `model: "clef"` in its body and is priced from its registry rate while absent
 from the pinned Rust catalog. Jev's gateway response wraps `answers` and
-`usage` under `result`; Clef returns them at the root. The decision parser
-accepts both envelopes and validates the same choice contract. Gateway test
+`usage` under `result`; Clef can return them at the root. The scoped Workers AI
+run API can additionally wrap the model output in a `Completed` run result.
+The decision parser accepts these observed envelopes, rejects incomplete or
+failed run results, and validates the same choice contract. Gateway test
 fixtures must preserve each model's observed response shape. Both models keep
 the existing 254-candidate and 32,000-byte input bounds; oversized rosters
 still use the chat overflow tier.

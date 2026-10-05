@@ -4,12 +4,15 @@ import liveGateway from "./live-gateway";
 // Failure modes: the agent keeps its pinned model; the swap drops other
 // request or reasoning settings; the web peer (no swap configured) or a
 // non-Responses route is rewritten; the run bundle cannot show which wire
-// model actually answered.
+// model actually answered; the caller's feature and operation are replaced,
+// or its diagnostics or claimed environment reach the gateway; a Workers AI
+// call takes the provider route that duplicates it into `default`.
 const env = {
-  GATEWAY_BASE_URL: "https://gateway.test/v1/account/gateway",
+  ACCOUNT_ID: "0123456789abcdef0123456789abcdef",
   GATEWAY_TOKEN: "synthetic-token",
-  RUN_REVISION: "local",
+  GATEWAY_ENVIRONMENT: "ci" as const,
 };
+const GATEWAY_BASE_URL = `https://gateway.ai.cloudflare.com/v1/${env.ACCOUNT_ID}/cubby`;
 const agentEnv = {
   ...env,
   RESPONSES_MODEL: "gpt-6-luna",
@@ -33,7 +36,8 @@ async function send(
   pathname: string,
   body: string,
   contentType = "application/json",
-): Promise<{ url: string; body: string }> {
+  metadata?: string,
+): Promise<{ url: string; body: string; headers: Headers }> {
   vi.stubGlobal("fetch", upstream);
   upstream.mockResolvedValue(new Response("ok"));
   await liveGateway.fetch(
@@ -43,13 +47,20 @@ async function send(
   await liveGateway.fetch(
     new Request(`https://ai-gateway.invalid${pathname}`, {
       method: "POST",
-      headers: { "content-type": contentType },
+      headers: {
+        "content-type": contentType,
+        ...(metadata && { "cf-aig-metadata": metadata }),
+      },
       body,
     }),
     gatewayEnv,
   );
   const [url, init] = upstream.mock.lastCall ?? [];
-  return { url: String(url), body: await new Response(init?.body).text() };
+  return {
+    url: String(url),
+    body: await new Response(init?.body).text(),
+    headers: new Headers(init?.headers),
+  };
 }
 
 async function usage(gatewayEnv: typeof env) {
@@ -72,7 +83,7 @@ it("swaps the configured model and effort into Responses calls", async () => {
     "/openai/responses",
     JSON.stringify(responsesBody),
   );
-  expect(sent.url).toBe(`${env.GATEWAY_BASE_URL}/openai/responses`);
+  expect(sent.url).toBe(`${GATEWAY_BASE_URL}/openai/responses`);
   expect(JSON.parse(sent.body)).toEqual(swapped);
   expect(await usage(agentEnv)).toMatchObject({
     openai: { requests: 1, models: { "gpt-6-luna": 1 } },
@@ -103,10 +114,78 @@ it("forwards unconfigured peers and other routes unchanged", async () => {
     messages,
   );
   // Model counting is telemetry: a body it cannot read is still forwarded.
-  expect((await send(env, "/workers-ai/run", "{not json")).body).toBe(
+  expect((await send(env, "/openai/responses", "{not json")).body).toBe(
     "{not json",
   );
   expect(await usage(env)).toMatchObject({
-    "workers-ai": { requests: 1, models: {} },
+    openai: { requests: 1, models: {} },
   });
+});
+
+it("keeps the caller's labels under the launcher's environment", async () => {
+  const sent = await send(
+    env,
+    "/anthropic/v1/messages",
+    "{}",
+    "application/json",
+    JSON.stringify({
+      environment: "production",
+      feature: "field-suggestion",
+      operation: "suggest",
+      entityKind: "product",
+      entityId: "synthetic-entity",
+      runId: "synthetic-run",
+    }),
+  );
+  expect(JSON.parse(sent.headers.get("cf-aig-metadata") ?? "{}")).toEqual({
+    environment: "ci",
+    feature: "field-suggestion",
+    operation: "suggest",
+    entityKind: "product",
+  });
+  const unlabelled = await send(env, "/anthropic/v1/messages", "{}");
+  expect(JSON.parse(unlabelled.headers.get("cf-aig-metadata") ?? "{}")).toEqual(
+    { environment: "ci", feature: "tester-army", operation: "coupled.proxy" },
+  );
+});
+
+it("runs Workers AI through the account run route, scoped to cubby", async () => {
+  const input = { state: "synthetic", questions: {} };
+  const sent = await send(
+    env,
+    "/workers-ai/run/typesafe/jev",
+    JSON.stringify(input),
+    "application/json",
+    JSON.stringify({ feature: "field-suggestion", operation: "decide" }),
+  );
+  expect(sent.url).toBe(
+    `https://api.cloudflare.com/client/v4/accounts/${env.ACCOUNT_ID}/ai/run`,
+  );
+  expect(sent.headers.get("authorization")).toBe("Bearer synthetic-token");
+  expect(JSON.parse(sent.body)).toEqual({
+    model: "typesafe/jev",
+    input,
+    options: {
+      gateway: {
+        id: "cubby",
+        metadata: {
+          environment: "ci",
+          feature: "field-suggestion",
+          operation: "decide",
+        },
+        skipCache: true,
+      },
+    },
+  });
+
+  upstream.mockClear();
+  const response = await liveGateway.fetch(
+    new Request("https://ai-gateway.invalid/workers-ai/run/typesafe/jev", {
+      method: "POST",
+      body: "{not json",
+    }),
+    env,
+  );
+  expect(response.status).toBe(400);
+  expect(upstream).not.toHaveBeenCalled();
 });

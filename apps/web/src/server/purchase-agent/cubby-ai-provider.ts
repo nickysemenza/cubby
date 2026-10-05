@@ -1,5 +1,9 @@
 import type { AiUsageTransport } from "@cubby/schemas/telemetry";
 import {
+  type AiGatewayCallMetadata,
+  aiGatewayMetadataSchema,
+} from "@cubby/shared/ai-gateway-metadata";
+import {
   endpointFor,
   gatewayQuery,
   requestUrl,
@@ -46,23 +50,25 @@ export function withSequentialToolCalls(
   return { ...body, parallel_tool_calls: false };
 }
 
+/**
+ * Every coordinator model call's gateway labels; `run-agent` books the same
+ * feature and operation, with the Run, in its usage rows.
+ */
+const COORDINATOR_CALL = {
+  feature: "purchase_import_agent",
+  operation: "agent.generation",
+} satisfies AiGatewayCallMetadata;
+
 /** Provider fetch through Cubby's binding-authenticated Universal Gateway. */
 export function createCubbyGatewayFetch(
   route: GatewayRoute,
   gatewayForRequest: () => AgentGateway,
-  runId: () => string | undefined,
   subscription?: ChatGptInference,
   /** Called before the request leaves with what will carry it. */
   onTransport?: (transport: AgentTransport) => void,
 ): typeof fetch {
   return async (input, init) => {
     const headers = strippedHeaders(init);
-    const base = {
-      feature: "purchase_import_agent",
-      jobKind: "purchase_import_run",
-    };
-    const run = runId();
-    const metadata = run ? { ...base, runId: run } : base;
     const body = withSequentialToolCalls(route, await gatewayQuery(init?.body));
     if (route === "openai" && subscription) {
       const response = await subscription(body, {
@@ -73,6 +79,10 @@ export function createCubbyGatewayFetch(
     }
     onTransport?.("gateway");
     const gateway = gatewayForRequest();
+    const metadata = aiGatewayMetadataSchema.parse({
+      ...COORDINATOR_CALL,
+      environment: gateway.environment,
+    });
     return gateway.run(
       {
         provider: route,
@@ -102,10 +112,13 @@ function testModelFetch(
     // The scripted peer stands in for the Gateway.
     onTransport?.("gateway");
     const body = withSequentialToolCalls(route, await gatewayQuery(init?.body));
+    // A live test peer forwards these labels under its own environment.
+    const headers = new Headers(init?.headers);
+    headers.set("cf-aig-metadata", JSON.stringify(COORDINATOR_CALL));
     return testModel.fetch(
       new Request(requestUrl(input), {
         method: init?.method ?? "POST",
-        headers: init?.headers,
+        headers,
         body: JSON.stringify(body),
       }),
     );
@@ -119,7 +132,6 @@ function testModelFetch(
  */
 export function cubbyAgentProviders(input: {
   gateway: () => AgentGateway;
-  runId: () => string | undefined;
   recorder: ContextRecorder;
   testModel?: TestModel;
   subscription?: ChatGptInference;
@@ -133,7 +145,6 @@ export function cubbyAgentProviders(input: {
         : createCubbyGatewayFetch(
             route,
             input.gateway,
-            input.runId,
             input.subscription,
             (transport) => {
               input.onTransport?.(transport);

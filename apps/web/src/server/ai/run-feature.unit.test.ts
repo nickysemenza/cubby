@@ -145,7 +145,9 @@ describe("planStructuredRun", () => {
     expect(plan.call.cacheTtlSeconds).toBeUndefined();
   });
 
-  it("labels the gateway call with the spec's feature and the caller's entity", () => {
+  // The entity id stays in the usage ledger; a gateway label per record
+  // would split every spend-limit rule into one bucket per entity.
+  it("labels the gateway call with the spec's feature and the caller's entity kind", () => {
     const plan = planStructuredRun(LOCATION_DESCRIPTION_FEATURE, {
       db,
       runId,
@@ -157,7 +159,6 @@ describe("planStructuredRun", () => {
       feature: "location-description",
       operation: "locationDescription",
       entityKind: "location",
-      entityId: "loc-1",
     });
   });
 });

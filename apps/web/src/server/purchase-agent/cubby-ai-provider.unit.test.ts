@@ -9,7 +9,11 @@ import {
 } from "./cubby-ai-provider";
 import type { AgentGateway } from "./environment";
 
-const runId = "f47ac10b-58cc-4372-a567-0e02b2c3d479";
+const gateway = (run: AgentGateway["run"]): AgentGateway => ({
+  id: "cubby",
+  environment: "production",
+  run,
+});
 
 describe("createCubbyGatewayFetch", () => {
   // Subscription responses must not acquire API prices in the persisted pi
@@ -31,8 +35,7 @@ describe("createCubbyGatewayFetch", () => {
     let subscribed = true;
     const models = createModels();
     for (const provider of cubbyAgentProviders({
-      gateway: () => ({ id: "cubby", run: async () => response() }),
-      runId: () => undefined,
+      gateway: () => gateway(async () => response()),
       recorder: createContextRecorder(),
       subscription: async (_body, options) => {
         if (!subscribed) return null;
@@ -59,8 +62,7 @@ describe("createCubbyGatewayFetch", () => {
     const transports: string[] = [];
     const gatewayFetch = createCubbyGatewayFetch(
       "openai",
-      () => ({ id: "cubby", run }),
-      () => runId,
+      () => gateway(run),
       async (_body, options) => {
         options?.onSelected?.();
         throw new Error("ChatGPT plan connection reset");
@@ -82,8 +84,7 @@ describe("createCubbyGatewayFetch", () => {
     const transports: string[] = [];
     const gatewayFetch = createCubbyGatewayFetch(
       "openai",
-      () => ({ id: "cubby", run }),
-      () => runId,
+      () => gateway(run),
       async () => null,
       (transport) => transports.push(transport),
     );
@@ -93,27 +94,6 @@ describe("createCubbyGatewayFetch", () => {
     });
     expect(transports).toEqual(["gateway"]);
     expect(run).toHaveBeenCalledOnce();
-  });
-
-  it("attributes a coordinator request to its import run", async () => {
-    const run = vi.fn(
-      async (
-        _query: Parameters<AgentGateway["run"]>[0],
-        _options: Parameters<AgentGateway["run"]>[1],
-      ) => new Response("stream"),
-    );
-    const gatewayFetch = createCubbyGatewayFetch(
-      "openai",
-      () => ({ id: "cubby", run }),
-      () => runId,
-    );
-    await gatewayFetch("https://ai-gateway.invalid/openai/responses", {
-      method: "POST",
-      body: JSON.stringify({ model: "gpt-6-sol" }),
-    });
-    expect(run.mock.calls[0]?.[1]).toMatchObject({
-      gateway: { metadata: { runId } },
-    });
   });
 
   it.each([
@@ -132,10 +112,8 @@ describe("createCubbyGatewayFetch", () => {
   ])("routes $route through the Cubby Universal Gateway", async (test) => {
     const expected = new Response("stream", { status: 200 });
     const run = vi.fn(async () => expected);
-    const gatewayFetch = createCubbyGatewayFetch(
-      test.route,
-      () => ({ id: "cubby", run }),
-      () => undefined,
+    const gatewayFetch = createCubbyGatewayFetch(test.route, () =>
+      gateway(run),
     );
 
     const response = await gatewayFetch(test.url, {
@@ -160,9 +138,12 @@ describe("createCubbyGatewayFetch", () => {
       {
         gateway: {
           id: "cubby",
+          // Regression: the run id and a jobKind duplicating the feature
+          // once rode here; the Run's usage rows keep its attribution.
           metadata: {
+            environment: "production",
             feature: "purchase_import_agent",
-            jobKind: "purchase_import_run",
+            operation: "agent.generation",
           },
         },
         signal: undefined,

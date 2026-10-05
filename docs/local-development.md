@@ -36,7 +36,7 @@ A real checkout path determines a stable development id. Its database is
 that id. PostgreSQL's container is shared; databases, D1/R2/DO/queue state, and
 session files belong to each checkout. Four settings are meant for people:
 `PORT` (default 3000), `CUBBY_DEV_PROFILE` (`offline`, or `integrations` with
-`CUBBY_DEV_AI_GATEWAY_ID` and `CUBBY_DEV_VECTORIZE_INDEX`), `CUBBY_DEV_INSTANCE`
+`CUBBY_DEV_VECTORIZE_INDEX`), `CUBBY_DEV_INSTANCE`
 (another isolated instance within the same checkout), and `CUBBY_DEV_DB_NAME`
 (a branch's own `cubby_dev_<name>` database). Everything else, including
 `CUBBY_DEV_ID` and the database name the Worker verifies, is derived by one
@@ -106,10 +106,10 @@ Purchase-agent starts fail immediately with `dispatch_failed` before an offline
 producer can enqueue work. Unexpected queue deliveries are retried and throw
 rather than acknowledged as successful work. Telemetry is off unless `CUBBY_DEV_TELEMETRY=true` is explicit.
 
-For billed AI/provider work, use `pnpm dev:integrations` with explicit isolated
-development bindings: `CUBBY_DEV_AI_GATEWAY_ID` must name a `cubby-dev...` gateway,
-and `CUBBY_DEV_VECTORIZE_INDEX` must start with `cubby-dev-<id>`. Set
-`CUBBY_DEV_AI_GATEWAY_API_KEY` explicitly when that development gateway requires
+For billed AI/provider work, use `pnpm dev:integrations`. AI requests use the
+shared `cubby` gateway with `environment=development`; the Vectorize binding
+remains isolated: `CUBBY_DEV_VECTORIZE_INDEX` must start with `cubby-dev-<id>`.
+Set `CUBBY_DEV_AI_GATEWAY_API_KEY` explicitly when REST authentication requires
 a token. Wrangler must be authenticated for those bindings. This profile runs the local purchase agent
 with remote AI and callbacks to the local Cubby Worker; PostgreSQL and storage
 remain local. Stop a running offline session before switching profiles.

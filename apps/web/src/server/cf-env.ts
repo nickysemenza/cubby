@@ -7,6 +7,8 @@
 
 import { AsyncLocalStorage } from "node:async_hooks";
 
+import { CUBBY_AI_GATEWAY_ID } from "@cubby/shared/ai-gateway-metadata";
+
 import type { BackgroundQueueProducer } from "./background-queue-types";
 import type { PurchaseAgentQueueProducer } from "./purchase-agent-queue-types";
 import type { VectorizeIndexBinding } from "./semantic/vector-store";
@@ -108,18 +110,19 @@ export const getPurchaseImportRunAgentNamespace = () =>
 /** Connected native image workers share this transport; job authority stays in Postgres. */
 export const getImageProcessingNamespace = () => cfEnv?.IMAGE_PROCESSING;
 
-// Cubby's Cloudflare account + AI Gateway identifiers. Single source of truth
-// for the gateway binding (below) and the gateway-REST base URL built in
-// `~/server/clients/ai-gateway`.
+// Cubby's Cloudflare account: the gateway-REST and Workers AI REST base URLs
+// built in `~/server/clients/ai-gateway`.
 export const CF_ACCOUNT_ID = "9f10f078d35d86c78dedece2300a6b88";
-export const CF_AIG_GATEWAY_ID = process.env.AI_GATEWAY_ID || "cubby";
 
 /**
- * The optional AI Gateway binding (`env.AI.gateway("cubby")`) from the Worker
- * environment. The transport shim in `~/server/clients/ai-gateway` can use
- * Worker identity or gateway-REST with an explicitly configured API key.
+ * The optional Workers AI binding (`env.AI`) from the Worker environment. The
+ * transport shim in `~/server/clients/ai-gateway` runs Workers AI models on it
+ * directly and reaches every other provider through `getAiGateway`.
  */
-export const getAiGateway = () => cfEnv?.AI?.gateway(CF_AIG_GATEWAY_ID);
+export const getAi = () => cfEnv?.AI;
+
+/** The binding's Universal endpoint for Cubby's gateway (`env.AI.gateway("cubby")`). */
+export const getAiGateway = () => cfEnv?.AI?.gateway(CUBBY_AI_GATEWAY_ID);
 
 /**
  * The deterministic gateway peer that exists only in the workerd harness's

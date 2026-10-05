@@ -187,7 +187,6 @@ export class PurchaseImportRunAgent
     const models = createModels();
     for (const provider of cubbyAgentProviders({
       gateway: () => this.agentEnv.gateway(),
-      runId: () => this.identity()?.runId,
       recorder: this.recorder,
       testModel: this.agentEnv.testModel,
       subscription: this.agentEnv.chatGptInference,

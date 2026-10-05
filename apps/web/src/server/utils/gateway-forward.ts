@@ -49,7 +49,8 @@ const RETURNED_RESPONSE_HEADERS = new Set([
 ]);
 
 // The `cf-aig-metadata` the crate sends: up to five string/number/boolean
-// entries. Only `model` and `purpose` are read here; the rest is passed on.
+// entries. Only `model` and `purpose` are read, for the usage row; none of it
+// is passed on (its cookbook, chunk, and contract tags are per-call values).
 const gatewayMetadataSchema = z.record(
   z.string(),
   z.union([z.string(), z.number(), z.boolean()]),
@@ -106,23 +107,18 @@ const productionGatewayForwardPort: GatewayForwardPort = {
   recordUsage: recordAiUsage,
 };
 
-/** The metadata header, parsed, with `feature` forced to the server's value. */
-function metadataWithFeature(
-  headers: readonly (readonly [string, string])[],
-  feature: string,
-) {
+/** The crate's `model` and `purpose`, read from its metadata header. */
+function crateCallTags(headers: readonly (readonly [string, string])[]) {
   const raw = headers.find(
     ([name]) => name.toLowerCase() === "cf-aig-metadata",
   );
   const parsed = raw ? gatewayMetadataHeader.safeParse(raw[1]) : null;
-  const metadata = parsed?.success ? parsed.data : {};
-  // The gateway keeps at most five metadata keys; feature is one of them.
-  const kept = Object.entries(metadata)
-    .filter(([key]) => key !== "feature")
-    .slice(0, 4);
-  return { ...Object.fromEntries(kept), feature } satisfies z.input<
-    typeof gatewayMetadataSchema
-  >;
+  return gatewayMetadataKeys.parse(parsed?.success ? parsed.data : {});
+}
+
+/** The usage ledger's and the gateway's operation for one crate call. */
+function cookbookOperation(purpose: string | undefined) {
+  return purpose ? `cookbook.${purpose}` : "cookbook.extract";
 }
 
 /** The outgoing headers: the request's own minus credentials. */
@@ -203,7 +199,7 @@ function usageRecord(
     feature,
     provider: usage.provider,
     model,
-    operation: purpose ? `cookbook.${purpose}` : "cookbook.extract",
+    operation: cookbookOperation(purpose),
     runId,
     inputTokens: usage.usage.input_tokens,
     outputTokens: usage.usage.output_tokens,
@@ -220,8 +216,8 @@ function usageRecord(
  * transport.
  * The body and provider path pass through untouched; the server strips any
  * client-supplied credentials, authenticates through the shared gateway
- * transport (Worker binding in prod, REST in dev), pins the metadata
- * `feature`, and records usage and cost for the AI-usage ledger. Non-2xx
+ * transport (Worker binding in prod, REST in dev), labels the call with the
+ * server's `feature` and the crate's purpose as `operation`, and records usage and cost for the AI-usage ledger. Non-2xx
  * responses are returned as-is so the Rust ladder can react (retry, step
  * down, mark a model exhausted); only a transport failure throws.
  */
@@ -230,8 +226,8 @@ export async function forwardGatewayRequest(
   opts: { db?: Database; runId?: RunId; feature: string },
   port: GatewayForwardPort = productionGatewayForwardPort,
 ): Promise<GatewayForwardResponse> {
-  const metadata = metadataWithFeature(request.headers, opts.feature);
-  const { model, purpose } = gatewayMetadataKeys.parse(metadata);
+  const { model, purpose } = crateCallTags(request.headers);
+  const operation = cookbookOperation(purpose);
   const { provider, endpoint } = splitProviderRoute(request.path);
   const startedAt = performance.now();
   let transport: GatewayTransport | "unknown" = "unknown";
@@ -241,7 +237,7 @@ export async function forwardGatewayRequest(
       feature: opts.feature,
       provider,
       model,
-      operation: purpose ? `cookbook.${purpose}` : "cookbook.extract",
+      operation,
       runId: opts.runId,
       durationMs: Math.max(0, Math.round(performance.now() - startedAt)),
       status: "failed",
@@ -254,7 +250,7 @@ export async function forwardGatewayRequest(
   const response = await sendWithTimeout(
     // The crate decides its own caching; only the app-side adapters skip it.
     port.transport(provider, {
-      metadata,
+      metadata: { feature: opts.feature, operation },
       onTransport: (selected) => {
         transport = selected;
       },

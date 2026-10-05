@@ -23,6 +23,10 @@ import type {
   settleChargeHuntInput,
   stopForReviewInput,
 } from "@cubby/schemas/purchase-agent-services";
+import type {
+  AiGatewayEnvironment,
+  AiGatewayMetadata,
+} from "@cubby/shared/ai-gateway-metadata";
 import type { gatewayQuery } from "@cubby/shared/ai-gateway-request";
 import type { JSONType, z } from "zod";
 
@@ -109,6 +113,8 @@ export interface RunServices {
 /** Cubby's AI Gateway as the model providers call it (`AiGateway.run`). */
 export interface AgentGateway {
   readonly id: string;
+  /** The runtime's `environment` label for every call's metadata. */
+  readonly environment: AiGatewayEnvironment;
   run(
     request: {
       provider: string;
@@ -117,7 +123,7 @@ export interface AgentGateway {
       query: unknown;
     },
     options: {
-      gateway: { id: string; metadata: Record<string, string> };
+      gateway: { id: string; metadata: AiGatewayMetadata };
       signal?: AbortSignal;
     },
   ): Promise<Response>;

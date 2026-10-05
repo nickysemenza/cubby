@@ -1,5 +1,5 @@
 import { fromPartial } from "@total-typescript/shoehorn";
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { type getAiGateway, setCfEnv } from "~/server/cf-env";
 
@@ -7,6 +7,12 @@ import { gatewayBaseURL, gatewayFetch } from "./ai-gateway";
 
 type AiGatewayBinding = NonNullable<ReturnType<typeof getAiGateway>>;
 type GatewayRun = Parameters<AiGatewayBinding["run"]>;
+
+// Vitest runs with NODE_ENV=test; a CI runner's own `CI` would otherwise
+// change the expected `environment` between a laptop and GitHub.
+beforeEach(() => {
+  vi.stubEnv("CI", "");
+});
 
 afterEach(() => {
   setCfEnv(undefined);
@@ -46,6 +52,8 @@ function fakeBinding(response: Response) {
 }
 
 const metadata = { feature: "recipe-flow", operation: "generate" };
+/** What leaves the Worker: the caller's labels plus the derived environment. */
+const outbound = { ...metadata, environment: "development" };
 
 describe("gatewayFetch on the Worker binding", () => {
   it("addresses the gateway by provider and endpoint, without the SDK's credentials", async () => {
@@ -78,7 +86,7 @@ describe("gatewayFetch on the Worker binding", () => {
     });
     expect(options?.gateway).toEqual({
       skipCache: true,
-      metadata,
+      metadata: outbound,
       requestTimeoutMs: undefined,
     });
     expect(options?.signal).toBe(controller.signal);
@@ -218,7 +226,7 @@ describe("gatewayFetch on the dev REST fallback", () => {
     expect(headers.get("cf-aig-skip-cache")).toBe("true");
     expect(headers.get("cf-aig-request-timeout")).toBe("30000");
     expect(JSON.parse(headers.get("cf-aig-metadata") ?? "{}")).toEqual(
-      metadata,
+      outbound,
     );
   });
 
@@ -318,5 +326,180 @@ describe("gatewayFetch transport selection", () => {
     expect(infer).not.toHaveBeenCalled();
     expect(transports).toEqual(["gateway"]);
     expect(runs).toHaveLength(1);
+  });
+});
+
+// Failure modes: production traffic labelled `ci` because the deploy build ran
+// on a CI runner; harness traffic labelled `production`; a run, batch, chunk,
+// or entity id reaching the gateway (a spend-limit bucket per value, and past
+// five keys the gateway silently drops entries) instead of failing loudly.
+describe("gatewayFetch metadata contract", () => {
+  async function freshBinding(vars: Record<string, string>) {
+    for (const [key, value] of Object.entries(vars)) vi.stubEnv(key, value);
+    vi.resetModules();
+    const cfEnv = await import("~/server/cf-env");
+    const calls: GatewayRun[] = [];
+    cfEnv.setCfEnv(
+      fromPartial<Env>({
+        AI: {
+          gateway: () =>
+            fromPartial<AiGatewayBinding>({
+              run: (...args: GatewayRun) => {
+                calls.push(args);
+                return Promise.resolve(new Response("{}"));
+              },
+            }),
+        },
+      }),
+    );
+    const { gatewayFetch: send } = await import("./ai-gateway");
+    await send("openai", { metadata })(
+      `${gatewayBaseURL("openai")}/responses`,
+      {
+        method: "POST",
+        body: "{}",
+      },
+    );
+    return calls[0]?.[1]?.gateway?.metadata;
+  }
+
+  it("labels the deployed Worker production even when its build ran in CI", async () => {
+    expect(
+      await freshBinding({
+        NODE_ENV: "production",
+        E2E_AUTH_TEST_MODE: "false",
+        CI: "true",
+      }),
+    ).toEqual({ ...metadata, environment: "production" });
+  });
+
+  it("labels harness and test traffic ci on a CI runner and development elsewhere", async () => {
+    expect(await freshBinding({ NODE_ENV: "test", CI: "true" })).toMatchObject({
+      environment: "ci",
+    });
+    expect(
+      await freshBinding({
+        NODE_ENV: "production",
+        E2E_AUTH_TEST_MODE: "true",
+        CI: "",
+      }),
+    ).toMatchObject({ environment: "development" });
+    expect(await freshBinding({ NODE_ENV: "development" })).toMatchObject({
+      environment: "development",
+    });
+  });
+
+  it("rejects diagnostic metadata instead of truncating or forwarding it", () => {
+    fakeBinding(new Response("{}"));
+    for (const extra of [
+      { entityId: "synthetic-entity" },
+      { runId: "synthetic-run" },
+      { chunk: "k001", batchId: "synthetic-batch" },
+      { environment: "production" },
+    ])
+      expect(() =>
+        gatewayFetch("openai", {
+          // SAFETY: deliberately outside the declared contract.
+          metadata: { ...metadata, ...extra } as typeof metadata,
+        }),
+      ).toThrow(/Unrecognized key/);
+  });
+
+  it("keeps an optional entityKind", async () => {
+    const calls = fakeBinding(new Response("{}"));
+    await gatewayFetch("openai", {
+      metadata: { ...metadata, entityKind: "location" },
+    })(`${gatewayBaseURL("openai")}/responses`, { method: "POST", body: "{}" });
+    expect(calls[0]?.[1]?.gateway?.metadata).toEqual({
+      ...outbound,
+      entityKind: "location",
+    });
+  });
+});
+
+// Regression: Universal `gateway.run({provider: "workers-ai"})` forwarded the
+// model call unscoped, so the account's `default` gateway logged (and
+// recreated itself for) every Jev decision a second time with no metadata.
+// `AI.run` with `gateway.id` posts to the binding's `/ai-gateway/run`
+// (workerd `ai-api.ts`), and REST names the gateway in `cf-aig-gateway-id`
+// (https://developers.cloudflare.com/ai-gateway/usage/rest-api/).
+describe("gatewayFetch Workers AI", () => {
+  const jevInput = { choices: ["red", "blue"], prompt: "synthetic" };
+
+  it("runs the model natively on the binding, scoped to the cubby gateway", async () => {
+    const universal = vi.fn();
+    const runs: unknown[][] = [];
+    const answer = new Response('{"result":{}}');
+    setCfEnv(
+      fromPartial<Env>({
+        AI: {
+          gateway: () => fromPartial<AiGatewayBinding>({ run: universal }),
+          run: (...args: unknown[]) => {
+            runs.push(args);
+            return Promise.resolve(answer);
+          },
+        },
+      }),
+    );
+    const controller = new AbortController();
+
+    const response = await gatewayFetch("workers-ai", {
+      metadata,
+      cacheTtlSeconds: 604_800,
+      requestTimeoutMs: 30_000,
+    })(`${gatewayBaseURL("workers-ai")}/run/typesafe/jev`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify(jevInput),
+      signal: controller.signal,
+    });
+
+    expect(response).toBe(answer);
+    expect(universal).not.toHaveBeenCalled();
+    expect(runs).toEqual([
+      [
+        "typesafe/jev",
+        jevInput,
+        {
+          gateway: {
+            id: "cubby",
+            metadata: outbound,
+            skipCache: undefined,
+            cacheTtl: 604_800,
+            requestTimeoutMs: 30_000,
+          },
+          returnRawResponse: true,
+          signal: controller.signal,
+        },
+      ],
+    ]);
+  });
+
+  it("names the cubby gateway in the REST run body", async () => {
+    const devFetch = await devGatewayFetch("dev-token");
+    const sent: { url: string; init: RequestInit | undefined }[] = [];
+    vi.stubGlobal("fetch", (url: string, init?: RequestInit) => {
+      sent.push({ url: String(url), init });
+      return Promise.resolve(new Response("{}"));
+    });
+
+    await devFetch("workers-ai", { metadata, skipCache: true })(
+      `${gatewayBaseURL("workers-ai")}/run/typesafe/jev`,
+      { method: "POST", body: JSON.stringify(jevInput) },
+    );
+
+    const [call] = sent;
+    expect(call?.url).toBe(
+      "https://api.cloudflare.com/client/v4/accounts/9f10f078d35d86c78dedece2300a6b88/ai/run",
+    );
+    const headers = new Headers(call?.init?.headers);
+    expect(headers.get("authorization")).toBe("Bearer dev-token");
+    expect(JSON.parse(String(call?.init?.body))).toEqual({
+      model: "typesafe/jev",
+      input: jevInput,
+      options: {
+        gateway: { id: "cubby", metadata: outbound, skipCache: true },
+      },
+    });
   });
 });

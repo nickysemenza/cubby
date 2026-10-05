@@ -31,6 +31,11 @@ function answerFor(
   };
 }
 
+/** The model a REST `/ai/run` request names in its body. */
+function sentModel(init: RequestInit | undefined): string {
+  return JSON.parse(String(init?.body)).model;
+}
+
 function jevFor(choice: string, probabilities: Record<string, number>) {
   const port: JevPort = vi.fn(async () => answerFor(choice, probabilities));
   return port;
@@ -130,6 +135,59 @@ describe("runJevChoice", () => {
     const body = "synthetic provider diagnostic ".repeat(20);
     vi.stubGlobal("fetch", async () => new Response(body, { status: 401 }));
     await expect(request({ ...base, choices: ["one"] })).rejects.toThrow(body);
+  });
+
+  // Regression: the gateway-scoped `/ai/run` (REST, and the binding's
+  // `AI.run` with `gateway.id`) wraps Jev's answer in a completed-run layer
+  // the old `/workers-ai/run/<model>` route did not; an unrecognized wrapper
+  // failed every decision as "invalid choice response".
+  it("unwraps the gateway run route's completed-run envelope", async () => {
+    vi.stubEnv("AI_GATEWAY_API_KEY", "dev-token");
+    vi.resetModules();
+    const { runJevChoice: request } = await import("./jev");
+    vi.stubGlobal(
+      "fetch",
+      async () =>
+        new Response(
+          JSON.stringify({
+            result: {
+              state: "Completed",
+              result: {
+                model: "jev-synthetic",
+                ...answerFor("c0", { c0: 0.9, none: 0.1 }),
+                usage: { input_tokens: 300, output_tokens: 30 },
+              },
+            },
+            success: true,
+            errors: [],
+            messages: [],
+          }),
+        ),
+    );
+    await expect(request({ ...base, choices: ["one"] })).resolves.toMatchObject(
+      { selectedIndex: 0, probability: 0.9 },
+    );
+  });
+
+  it("surfaces an unfinished run's state and errors instead of a generic parse failure", async () => {
+    vi.stubEnv("AI_GATEWAY_API_KEY", "dev-token");
+    vi.resetModules();
+    const { runJevChoice: request } = await import("./jev");
+    vi.stubGlobal(
+      "fetch",
+      async () =>
+        new Response(
+          JSON.stringify({
+            result: { state: "Failed" },
+            success: false,
+            errors: [{ code: 5000, message: "synthetic run failure" }],
+            messages: [],
+          }),
+        ),
+    );
+    const failure = request({ ...base, choices: ["one"] });
+    await expect(failure).rejects.toThrow(/Failed/);
+    await expect(failure).rejects.toThrow(/synthetic run failure/);
   });
 
   it("aborts a stalled gateway request at the overall deadline", async () => {
@@ -293,10 +351,9 @@ describe("runJevChoice", () => {
     { random: 0.25, model: "typesafe/jev", selector: undefined },
     { random: 0.75, model: "@cf/cloudflare/clef", selector: "clef" },
   ])(
-    "posts the selected $model to its Workers AI run route",
+    "posts the selected $model to the gateway-scoped run route",
     async ({ random, model, selector }) => {
-      // Jev wraps its answer in `result`; Clef returns the answer directly.
-      // Both shapes were verified against the live gateway on 2026-10-05.
+      // Jev wraps its answer in a completed run; Clef returns it directly.
       vi.stubEnv("AI_GATEWAY_API_KEY", "dev-token");
       vi.spyOn(Math, "random").mockReturnValue(random);
       vi.resetModules();
@@ -334,14 +391,15 @@ describe("runJevChoice", () => {
         ],
       });
       const [call] = sent;
-      expect(call?.url).toMatch(new RegExp(`/workers-ai/run/${model}$`));
-      expect(new Headers(call?.init?.headers).get("cf-aig-authorization")).toBe(
+      expect(call?.url).toMatch(/\/ai\/run$/);
+      expect(new Headers(call?.init?.headers).get("authorization")).toBe(
         "Bearer dev-token",
       );
-      expect(JSON.parse(String(call?.init?.body))).toMatchObject({
-        state: "pick red",
-      });
-      expect(JSON.parse(String(call?.init?.body)).model).toBe(selector);
+      const sentBody = JSON.parse(String(call?.init?.body));
+      expect(sentBody.model).toBe(model);
+      expect(sentBody.input).toMatchObject({ state: "pick red" });
+      expect(sentBody.input.model).toBe(selector);
+      expect(sentBody.options.gateway.id).toBe("cubby");
     },
   );
 
@@ -366,8 +424,8 @@ describe("runJevChoice", () => {
     vi.resetModules();
     const { runJevChoice: request } = await import("./jev");
     const sent: string[] = [];
-    vi.stubGlobal("fetch", async (url: string) => {
-      sent.push(String(url));
+    vi.stubGlobal("fetch", async (_url: string, init?: RequestInit) => {
+      sent.push(sentModel(init));
       random.mockReturnValue(0.25);
       return sent.length === 1
         ? new Response("Rate limited", { status: 429 })
@@ -380,9 +438,7 @@ describe("runJevChoice", () => {
       vi.runAllTimersAsync(),
     ]);
     expect(sent).toHaveLength(2);
-    expect(sent.every((url) => url.endsWith("/run/@cf/cloudflare/clef"))).toBe(
-      true,
-    );
+    expect(sent).toEqual(["@cf/cloudflare/clef", "@cf/cloudflare/clef"]);
   });
 
   it("isolates and reuses each model's cached choice for the same input", async () => {
@@ -391,9 +447,9 @@ describe("runJevChoice", () => {
     vi.resetModules();
     const { runJevChoice: request } = await import("./jev");
     const sent: string[] = [];
-    vi.stubGlobal("fetch", async (url: string) => {
-      sent.push(String(url));
-      const clef = String(url).endsWith("/run/@cf/cloudflare/clef");
+    vi.stubGlobal("fetch", async (_url: string, init?: RequestInit) => {
+      sent.push(sentModel(init));
+      const clef = sentModel(init) === "@cf/cloudflare/clef";
       return Response.json(
         clef
           ? answerFor("c1", { c0: 0.05, c1: 0.9, none: 0.05 })

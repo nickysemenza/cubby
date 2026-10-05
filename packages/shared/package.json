@@ -7,6 +7,7 @@
   "types": "./src/index.ts",
   "exports": {
     ".": "./src/index.ts",
+    "./ai-gateway-metadata": "./src/ai-gateway-metadata.ts",
     "./ai-gateway-request": "./src/ai-gateway-request.ts",
     "./base64": "./src/base64.ts",
     "./client-constants": "./src/client-constants.ts",
