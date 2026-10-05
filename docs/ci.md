@@ -134,8 +134,8 @@ Native, auxiliary, Rust, web, and PostgreSQL/E2E lanes run only when their input
 can affect them. A manual run selects all lanes. `Web checks` is the stable
 required aggregate: it checks the web, PostgreSQL, and browser matrix results
 whenever web validation is selected. A single `Build Workers` job builds the
-purchase-agent and web Cloudflare bundles once and uploads them with the WASM
-package as the `worker-build` artifact; the PostgreSQL integration and browser
+web Cloudflare bundle (which hosts the purchase agent) once and uploads it
+with the MCP App assets and the WASM package as the `worker-build` artifact; the PostgreSQL integration and browser
 lanes `need` it and download that exact bundle. The browser lanes retain the discovery and no-skip guard;
 desktop Chromium runs as two Playwright shards (two workers each). Phone-web and
 WebKit browser coverage was removed from PR CI and the Playwright suite; native
@@ -147,6 +147,14 @@ build is marked as not exactly replayable. The manually dispatched native
 simulator E2E saves the same bundle format with its app build fingerprint and
 runtime. Raw reports, traces, screenshots, and logs stay local because they may
 contain household data or credentials.
+`E2E tests (purchase import agent, optional)` runs the Playwright project of
+that name (`purchase-import-run.spec.ts`: the purchase agent with a scripted
+model and gateway, driven through the browser) on the same `worker-build`
+artifact. It is informative only: it is not in `Web checks` or the ruleset,
+and it runs on pushes to `main` and on PRs that touch the agent, purchase
+import, the Run, Purchase and vendor order-mail UI, its harness, or the
+bundled skills (`importE2e` in `scripts/ci-change-scope.ts`). It saves the
+same run bundle as the desktop shards.
 PostgreSQL integration tests run as three Vitest `--shard` jobs (one
 aggregate result through `Web checks`, so required-check names do not change
 with the shard count). Jobs that need the databases (`test-postgres`,

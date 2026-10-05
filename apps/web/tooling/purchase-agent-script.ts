@@ -11,6 +11,7 @@ export type ScriptValue =
   | null
   | ScriptValue[]
   | { $from: string; path: string }
+  | { $runId: true }
   | { [key: string]: ScriptValue };
 
 export type ScriptStep =
@@ -23,7 +24,12 @@ export type ScriptStep =
    */
   | { await: AwaitMarker[]; text?: string }
   /** Record a violation when a prior tool output lacks a substring. */
-  | { check: string; includes: string };
+  | { check: string; includes: string }
+  /**
+   * Hold the model's next response until the test releases this gate, so a
+   * browser can observe the run mid-flight without racing it.
+   */
+  | { gate: string };
 
 /** Read a value from a prior tool call's output: `from("claim", "kind")`. */
 export const from = (callId: string, path: string) => ({
@@ -37,11 +43,17 @@ export const call = (
   args: Record<string, ScriptValue> = {},
 ): ScriptStep => ({ call: id, tool, args: { operationId: id, ...args } });
 
+/**
+ * The run id from the coordinator's instructions, as a real model reads it:
+ * a run started from the UI has no id until the member clicks.
+ */
+export const currentRunId: ScriptValue = { $runId: true };
+
 /** An MCP mutation: Cubby's stable run envelope plus the tool's own fields. */
 export const mcp = (
   id: string,
   tool: string,
-  runId: string,
+  runId: ScriptValue,
   args: Record<string, ScriptValue>,
   envelope: Record<string, ScriptValue> = {},
 ): ScriptStep => ({

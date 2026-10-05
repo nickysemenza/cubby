@@ -221,14 +221,21 @@ WHERE c.client_id = 'cubby-purchase-agent'
 GROUP BY c.client_id, c.public, c.require_pkce;
 ```
 
-Two local suites exercise the real agent in the workerd harness
+Three suites exercise the real agent in the workerd harness
 (`apps/web/tooling/purchase-agent-workerd-harness.ts`, the built `cubby`
 Worker with a scripted model and gateway).
 `apps/web/src/server/purchase-import/purchase-agent-scenarios.integration.test.ts`
 (PostgreSQL tier) scripts only the coordinator model and the web Worker's
 extractor/audit model, and asserts the database graph, run status, findings,
 approvals, and replay fences of whole purchase journeys; it proves
-orchestration, not model judgment. The opt-in, billed decision eval runs live
+orchestration, not model judgment.
+`apps/web/tests/e2e/purchase-import-run.spec.ts` drives the same harness
+through the browser: a vendor page's saved order mail is imported (one
+confirmation, a stale-evidence refusal, and a selected batch), the live Run
+page streams the conversation while a script `gate` holds the model
+mid-run, and the committed Purchase is read back from the page and the
+database. A script reads the run id from the coordinator's instructions
+(`currentRunId`), as a real model does, because the browser creates the run. The opt-in, billed decision eval runs live
 candidate models on 32 synthetic Product-identity, line-role, reversal,
 settlement, and incomplete-evidence cases and scores each outcome correct,
 unsafe, or reviewable miss, with latency and token cost. The web Worker is the

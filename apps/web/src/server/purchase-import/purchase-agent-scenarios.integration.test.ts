@@ -1,10 +1,5 @@
-import { agentConversationSchema } from "@cubby/schemas/agent-conversation";
 /* eslint-disable anti-slop/no-unsafe-dictionary-type -- Browser outcomes and extractor outputs are external wire payloads. */
 import { parseEntityId, runEntityId } from "@cubby/schemas/identifiers";
-import {
-  agentImportRunPurpose,
-  importRunAgentIdentity,
-} from "@cubby/schemas/import-run-agent";
 import { chargeRunStartInput } from "@cubby/schemas/order-mail-review";
 import { and, eq, inArray } from "drizzle-orm";
 import {
@@ -65,6 +60,9 @@ import {
 import { discoverImportHunts } from "./hunts";
 import {
   authorizePurchaseAgent,
+  mailCommit,
+  mailPrepare,
+  readyExtraction,
   type ScenarioHarness,
   startScenarioHarness,
   waitFor,
@@ -104,43 +102,6 @@ const capturedOrder = (orderId: string, readableText: string) => ({
     evidence: [],
     variantMarkers: [],
   },
-});
-
-type Line = {
-  title: string;
-  amount: number;
-  lineKind: "principal" | "tax" | "shipping";
-  sku?: string;
-};
-
-/** The extractor's wire shape: every optional field is an explicit null. */
-const readyExtraction = (
-  orderId: string,
-  orderedAt: string,
-  lines: Line[],
-) => ({
-  status: "ready",
-  candidate: {
-    orderId,
-    orderedAt,
-    merchant: "Scenario garden shop",
-    currency: "USD",
-    printedGrandTotal: lines.reduce((sum, line) => sum + line.amount, 0),
-    lines: lines.map((line) => ({
-      title: line.title,
-      amount: line.amount,
-      lineKind: line.lineKind,
-      quantity: line.lineKind === "principal" ? 1 : null,
-      productUrl: null,
-      imageUrl: null,
-      sku: line.sku ?? null,
-      seller: null,
-    })),
-    payments: [],
-    allShipmentsDelivered: false,
-  },
-  reason: null,
-  detail: null,
 });
 
 const unreadableExtraction = (detail: string) => ({
@@ -857,150 +818,6 @@ describe("purchase-agent scripted scenarios", () => {
     return { vendor, runId: run.id, start: sent[0] };
   };
 
-  it("mail evidence: prepares and commits the frozen confirmation unchanged, replays the commit by operation id, and completes", async () => {
-    const seeded = await seedOrderMail(
-      "SCN30001",
-      "Order SCN30001. Synthetic pruning saw, SKU SAW-30, quantity 1, $9.00. Grand Total $9.00 USD.",
-    );
-    const runId = seeded.runId;
-    const order = (path: string) => from("extract-1", path);
-    const commit = (id: string) =>
-      mcp(
-        id,
-        "purchase_import",
-        runId,
-        {
-          action: "commit",
-          prepareOperationId: "prepare-1",
-          // A principal Expense needs a trade; nothing else supplies one.
-          defaultTrade: "other",
-          resolutions: [
-            {
-              stableOrderId: order("stableOrderId"),
-              stableLineId: order("lineIds.0"),
-              resolution: { kind: "new" },
-            },
-          ],
-        },
-        { operationId: "commit-1" },
-      );
-    scenario = await startScenarioHarness(ctx.databaseUrl, {
-      steps: [
-        call("claim-1", "claim_next_import_work"),
-        { check: "claim-1", includes: "mail_evidence" },
-        call("extract-1", "extract_run_evidence"),
-        mcp(
-          "prepare-1",
-          "purchase_import",
-          runId,
-          {
-            action: "prepare",
-            orders: [
-              {
-                stableOrderId: order("stableOrderId"),
-                itemOperationId: order("itemOperationId"),
-                source: order("source"),
-                evidenceChecksum: order("evidenceChecksum"),
-                extractionRevision: order("extractionRevision"),
-                extraction: order("extraction"),
-                lineIds: order("lineIds"),
-                primaryDocumentImageId: null,
-                screenshotImageId: null,
-              },
-            ],
-          },
-          { itemOperationIds: [order("itemOperationId")] },
-        ),
-        commit("commit-1-first"),
-        // The identical commit under the same operation id is a replay.
-        commit("commit-1-replay"),
-        settlementRead("settlement-1"),
-        call("claim-2", "claim_next_import_work"),
-        { check: "claim-2", includes: "settlement_verification" },
-        call("finish-1", "finish_import_run"),
-      ],
-      extractions: [
-        {
-          match: "SCN30001",
-          output: readyExtraction("SCN30001", "2026-09-24T12:00:00.000Z", [
-            {
-              title: "Synthetic pruning saw",
-              amount: 9,
-              lineKind: "principal",
-              sku: "SAW-30",
-            },
-          ]),
-        },
-      ],
-    });
-    await scenario.dispatch(seeded.start);
-    await waitForStatus(runId, "completed");
-
-    // The run page reads the coordinator's conversation as a snapshot and a
-    // live stream; both must speak the shared contract.
-    const [{ purpose } = { purpose: undefined }] = await getDb(ctx.db)
-      .select({ purpose: runTable.purpose })
-      .from(runTable)
-      .where(eq(runTable.id, runEntityId.parse(runId)));
-    const agentId = importRunAgentIdentity(
-      runId,
-      agentImportRunPurpose.parse(purpose),
-    );
-    // The server completes the Run inside the finish tool, a moment before
-    // the coordinator commits that tool's result and goes idle.
-    let read = await scenario.conversation(agentId);
-    await waitForRun(
-      runId,
-      async () => {
-        read = (await scenario?.conversation(agentId)) ?? read;
-        return (
-          read.snapshot.status === 200 &&
-          agentConversationSchema.parse(JSON.parse(read.snapshot.body))
-            .status === "idle"
-        );
-      },
-      "Agent conversation never settled",
-    );
-    const snapshot = agentConversationSchema.parse(
-      JSON.parse(read.snapshot.body),
-    );
-    expect(
-      snapshot.messages.flatMap((message) => message.parts),
-    ).toContainEqual(
-      expect.objectContaining({
-        type: "tool",
-        toolName: "finish_import_run",
-        state: "output-available",
-      }),
-    );
-    expect({ status: read.stream.status }).toEqual({ status: 200 });
-    expect(read.stream.contentType).toBe("text/event-stream");
-    expect(
-      agentConversationSchema.parse(
-        JSON.parse(read.stream.firstFrame.replace(/^data: /u, "").trim()),
-      ).messages,
-    ).toHaveLength(snapshot.messages.length);
-
-    const graph = await purchaseGraph(seeded.vendor.id);
-    expect(graph.purchases).toMatchObject([{ orderId: "SCN30001" }]);
-    expect(graph.expenses).toMatchObject([{ cost: 9, lineKind: "principal" }]);
-    expect(graph.expenses[0]?.productId).not.toBeNull();
-    expect(graph.claims).toHaveLength(1);
-    expect(graph.inventory).toEqual([]);
-    expect(
-      await getDb(ctx.db)
-        .select({ state: runOperation.state })
-        .from(runOperation)
-        .where(
-          and(
-            eq(runOperation.runId, runId),
-            eq(runOperation.operationId, "commit-1"),
-          ),
-        ),
-    ).toEqual([{ state: "completed" }]);
-    expect(await scenario.violations()).toEqual([]);
-  }, 90_000);
-
   it("mail evidence: a confirmation with no itemization stops for review without preparing anything", async () => {
     const seeded = await seedOrderMail(
       "SCN50001",
@@ -1184,52 +1001,13 @@ describe("purchase-agent scripted scenarios", () => {
     const runId = row.id;
     scenarioRunId = runId;
     await authorizePurchaseAgent(ctx.db, ctx.actor.userId);
-    const order = (path: string) => from("extract-1", path);
     scenario = await startScenarioHarness(ctx.databaseUrl, {
       steps: [
         call("claim-1", "claim_next_import_work"),
         { check: "claim-1", includes: "SCN70001" },
         call("extract-1", "extract_run_evidence"),
-        mcp(
-          "prepare-1",
-          "purchase_import",
-          runId,
-          {
-            action: "prepare",
-            orders: [
-              {
-                stableOrderId: order("stableOrderId"),
-                itemOperationId: order("itemOperationId"),
-                source: order("source"),
-                evidenceChecksum: order("evidenceChecksum"),
-                extractionRevision: order("extractionRevision"),
-                extraction: order("extraction"),
-                lineIds: order("lineIds"),
-                primaryDocumentImageId: null,
-                screenshotImageId: null,
-              },
-            ],
-          },
-          { itemOperationIds: [order("itemOperationId")] },
-        ),
-        mcp(
-          "commit-1",
-          "purchase_import",
-          runId,
-          {
-            action: "commit",
-            prepareOperationId: "prepare-1",
-            defaultTrade: "other",
-            resolutions: [
-              {
-                stableOrderId: order("stableOrderId"),
-                stableLineId: order("lineIds.0"),
-                resolution: { kind: "new" },
-              },
-            ],
-          },
-          { operationId: "commit-1" },
-        ),
+        mailPrepare("extract-1", "1", runId),
+        mailCommit("extract-1", "1", runId),
         settlementRead("settlement-1"),
         call("claim-2", "claim_next_import_work"),
         { check: "claim-2", includes: "SCN70002" },

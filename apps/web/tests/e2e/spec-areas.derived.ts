@@ -277,6 +277,12 @@ export const DERIVED_SPEC_GLOBS: SpecGlobMap = {
     "apps/web/src/routes/_authenticated/tasks.$shortcode.tsx",
     "apps/web/src/routes/_authenticated/tasks.index.tsx",
   ],
+  "purchase-import-run.spec.ts": [
+    "apps/web/src/routes/_authenticated/purchases.$shortcode.tsx",
+    "apps/web/src/routes/_authenticated/runs.$shortcode.tsx",
+    "apps/web/src/routes/_authenticated/runs.index.tsx",
+    "apps/web/src/routes/_authenticated/vendors.$shortcode.tsx",
+  ],
   "purchase-split-settlement.spec.ts": [
     "apps/web/src/routes/_authenticated/purchases.$shortcode.tsx",
   ],

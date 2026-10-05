@@ -741,6 +741,11 @@ function TerminalAgentSurface({ run }: { run: RunDetail }) {
   const history = useQuery({
     queryKey: ["agent-history", run.publicId],
     queryFn: () => fetchAgentHistory(run.publicId),
+    // The server ends the Run inside the finish tool, a moment before the
+    // coordinator commits that tool's result; a read in between is missing
+    // it, so keep reading until the conversation settles.
+    refetchInterval: (query) =>
+      query.state.data?.status === "running" ? 1_000 : false,
   });
   return (
     <Section description="This terminal run is view-only. The complete materialized conversation remains available as durable evidence.">

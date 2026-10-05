@@ -11,16 +11,22 @@ import {
 } from "./e2e-worker-runtime";
 
 type TestFixtures = { e2eFailureDiagnostics: void };
-type WorkerFixtures = { e2eRuntime: E2EWorkerRuntime; gmailJourney: boolean };
+type WorkerFixtures = {
+  e2eRuntime: E2EWorkerRuntime;
+  gmailJourney: boolean;
+  purchaseAgent: boolean;
+};
 
 const test = base.extend<TestFixtures, WorkerFixtures>({
   gmailJourney: [false, { scope: "worker", option: true }],
+  purchaseAgent: [false, { scope: "worker", option: true }],
   e2eRuntime: [
-    async ({ gmailJourney }, provide, workerInfo) => {
+    async ({ gmailJourney, purchaseAgent }, provide, workerInfo) => {
       const runtime = await createE2EWorkerRuntime({
         authenticated: workerInfo.project.metadata.authenticated === true,
         parallelIndex: workerInfo.parallelIndex,
         gmailJourney,
+        purchaseAgent,
       });
       try {
         await provide(runtime);
