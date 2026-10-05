@@ -293,6 +293,10 @@ export const DERIVED_SPEC_GLOBS: SpecGlobMap = {
   "product-ssr.spec.ts": [
     "apps/web/src/routes/_authenticated/products.$shortcode.tsx",
   ],
+  "project-contribution.spec.ts": [
+    "apps/web/src/routes/_authenticated/expenses.$shortcode.tsx",
+    "apps/web/src/routes/_authenticated/projects.$shortcode.tsx",
+  ],
   "project-tracker.spec.ts": [
     "apps/web/src/routes/_authenticated/tasks.$shortcode.tsx",
     "apps/web/src/routes/_authenticated/tasks.index.tsx",
@@ -350,6 +354,12 @@ export const DERIVED_SPEC_GLOBS: SpecGlobMap = {
     "apps/web/src/routes/_authenticated/inventory.$shortcode.tsx",
     "apps/web/src/routes/_authenticated/locations.$shortcode.tsx",
     "apps/web/src/routes/_authenticated/settings.tsx",
+  ],
+  "route-status.spec.ts": [
+    "apps/web/src/app/recommendations/**",
+    "apps/web/src/routes/_authenticated/$shortcode.tsx",
+    "apps/web/src/routes/_authenticated/connections.tsx",
+    "apps/web/src/routes/_authenticated/recommendations.workbench.tsx",
   ],
   "shelf-triage.spec.ts": [
     "apps/web/src/routes/_authenticated/inventory.triage.tsx",

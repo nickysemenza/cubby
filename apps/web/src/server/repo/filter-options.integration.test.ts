@@ -6,6 +6,7 @@ import { createExpense } from "./expense/crud";
 import { getFilterOptions } from "./filter-options";
 import { createIngredient } from "./ingredient/crud";
 import { createLedgerParty } from "./ledger-party";
+import { createMealWithEntityId } from "./meal/crud";
 import { createProduct } from "./product/crud";
 import { createProject } from "./project/crud";
 import { createPurchase } from "./purchase";
@@ -15,6 +16,50 @@ import { findOrCreateVendor, getVendorByID } from "./vendor";
 
 describe("entity reference filter options", () => {
   const ctx = withTestDb();
+
+  // Nullable stored titles must not break a roster, selected-value hydration,
+  // or searching the fallback label that the picker actually displays.
+  it("uses the shortcode for an unnamed entity in pages, search, and selected values", async () => {
+    const unnamed = await createMealWithEntityId(
+      ctx.db,
+      buildEntity("meal", { date: "2026-08-01", name: null }),
+      TEST_ACTOR,
+    );
+    const named = await createMealWithEntityId(
+      ctx.db,
+      buildEntity("meal", { date: "2026-08-02", name: "Synthetic lunch" }),
+      TEST_ACTOR,
+    );
+    const input = {
+      source: "entity" as const,
+      entity: "meal" as const,
+      search: "",
+      selectedIds: [],
+      limit: 25,
+      include: [],
+    };
+    const fallback = { id: unnamed.output.id, label: unnamed.output.id };
+    const roster = await getFilterOptions(ctx.db, input);
+    expect(roster.items).toEqual(
+      expect.arrayContaining([
+        fallback,
+        { id: named.output.id, label: "Synthetic lunch" },
+      ]),
+    );
+    expect(
+      (await getFilterOptions(ctx.db, { ...input, search: unnamed.output.id }))
+        .items,
+    ).toEqual([fallback]);
+    expect(
+      (
+        await getFilterOptions(ctx.db, {
+          ...input,
+          search: "no page match",
+          selectedIds: [unnamed.output.id],
+        })
+      ).items,
+    ).toEqual([fallback]);
+  });
 
   it("searches live shortcode entities and hydrates selected values outside the page query", async () => {
     const crop = await createIngredient(

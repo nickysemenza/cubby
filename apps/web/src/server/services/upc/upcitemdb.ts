@@ -1,3 +1,4 @@
+import { getErrorMessage } from "@cubby/shared";
 import { createLogger } from "@cubby/worker-tracing";
 
 import { extractBestPrice } from "./price";
@@ -42,8 +43,14 @@ export async function lookupUPCitemdb(
     if (!response.ok) {
       // 404 = definitively absent; anything else (429/5xx) = transient.
       if (response.status === 404) return { status: "not_found" };
-      log.warn(`API error: ${response.status}`);
-      return { status: "error" };
+      const error = Object.assign(
+        new Error(
+          `UPCitemdb request failed (HTTP ${response.status}): ${await response.text()}`,
+        ),
+        { status: response.status },
+      );
+      log.warn("API error", { error });
+      return { status: "error", error };
     }
 
     const parsed = upcitemdbResponseSchema.safeParse(await response.json());
@@ -51,7 +58,7 @@ export async function lookupUPCitemdb(
       // A changed/malformed upstream shape is transient from our side — do NOT
       // cache it as a miss; surface as an error so the UPC is retried later.
       log.warn("Malformed response", { error: parsed.error });
-      return { status: "error" };
+      return { status: "error", error: parsed.error };
     }
     const data = parsed.data;
 
@@ -84,22 +91,20 @@ export async function lookupUPCitemdb(
         category: item.category || null,
         description: item.description || null,
         priceDollars,
-        imageUrl:
-          item.images && item.images.length > 0 ? item.images[0]! : null,
+        imageUrl: item.images?.[0] ?? null,
         source: "upcitemdb",
         sourceData: JSON.stringify(data),
       },
     };
   } catch (error) {
-    if (
-      error instanceof Error &&
-      (error.name === "AbortError" || error.name === "TimeoutError")
-    ) {
-      log.warn("API timeout");
-    } else {
-      log.warn("API error", { error });
-    }
+    log.warn("API error", { error });
     // Transient (timeout / network) — not a definitive miss.
-    return { status: "error" };
+    return {
+      status: "error",
+      error:
+        error instanceof Error
+          ? error
+          : new Error(getErrorMessage(error), { cause: error }),
+    };
   }
 }

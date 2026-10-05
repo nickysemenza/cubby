@@ -4,7 +4,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { EntityListCardDensityProvider } from "~/entity/entity-list/generic-entity-list";
 import { entitySearch } from "~/entity/generated/entity-search.gen";
-import { listChromePage } from "~/entity/routing/entity-routes";
+import { listChromePage } from "~/entity/routing/list-page";
 import { usdaFood } from "~/integrations/tanstack-query/generated/catalog.gen";
 import { createBrowserTestHarness } from "~/lib/test/browser-harness";
 

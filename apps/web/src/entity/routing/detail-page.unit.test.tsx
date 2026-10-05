@@ -3,7 +3,7 @@ import { afterEach, describe, expect, it } from "vitest";
 
 import { createBrowserTestHarness } from "~/lib/test/browser-harness";
 
-import { detailPage } from "./entity-routes";
+import { detailPage } from "./detail-page";
 
 let harness: ReturnType<typeof createBrowserTestHarness> | undefined;
 

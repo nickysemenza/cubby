@@ -13,7 +13,7 @@ import { z } from "zod";
  * ⚠️ `loader` is deliberately NOT in the router plugin's split groupings — it
  * has to run before the route's chunk loads, which is the whole point of a
  * prefetching loader. So everything reachable from here is eager, and this
- * module stays React-free on purpose. Page bodies belong in `./entity-routes`,
+ * module stays React-free on purpose. Page bodies belong in `./list-page` and `./detail-page`,
  * which no unsplittable route property may reference.
  */
 export async function ensureDetailRecord<

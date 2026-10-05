@@ -24,7 +24,7 @@ interface ExternalProductData {
 export type ExternalLookupResult =
   | { status: "found"; data: ExternalProductData }
   | { status: "not_found" }
-  | { status: "error" };
+  | { status: "error"; error: Error };
 
 // UPCitemdb API response — zod-validated at the fetch boundary (sources/
 // upcitemdb.ts) so a changed/malformed upstream payload fails loud as a

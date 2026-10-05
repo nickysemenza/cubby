@@ -10,7 +10,7 @@
  */
 import { AsyncLocalStorage } from "node:async_hooks";
 
-import { createLogger } from "@cubby/worker-tracing";
+import { createLogger, originalLoggedError } from "@cubby/worker-tracing";
 import * as Sentry from "@sentry/cloudflare";
 // CF Workers production entry point.
 //
@@ -146,11 +146,13 @@ console.error = (...args: unknown[]) => {
   if (holder) {
     // `createLogger` passes errors inside its fields bag, so look one level in.
     for (const arg of args) {
-      if (arg instanceof Error) {
-        holder.error = arg;
+      const directError = originalLoggedError(arg);
+      if (directError) {
+        holder.error = directError;
       } else if (arg instanceof Object) {
         for (const value of Object.values(arg)) {
-          if (value instanceof Error) holder.error = value;
+          const error = originalLoggedError(value);
+          if (error) holder.error = error;
         }
       }
     }
