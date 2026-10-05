@@ -8,7 +8,7 @@ const IDEMPOTENT_METHODS = new Set(["GET", "HEAD", "OPTIONS", "PUT", "DELETE"]);
  * timeout, while Playwright's request agent keeps idle sockets indefinitely.
  * A request written to a reused socket just as workerd closes it is never
  * processed and fails with "socket hang up" (ECONNRESET). Retry idempotent
- * requests once on a fresh socket; Playwright only retries ECONNRESET, and a
+ * requests once; Playwright only retries ECONNRESET, and a
  * POST or PATCH is never replayed.
  */
 export function retryStaleKeepAlive(api: APIRequestContext): void {

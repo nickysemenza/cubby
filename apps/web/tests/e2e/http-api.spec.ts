@@ -2,6 +2,7 @@ import { createHash, randomBytes } from "node:crypto";
 import { request as apiRequest } from "@playwright/test";
 import { z } from "zod";
 import { Pool } from "pg";
+import { retryStaleKeepAlive } from "../../tooling/stale-keep-alive";
 import { createCubbyClient } from "./http-api-client";
 import {
   settledCalendarFeedRevision,
@@ -270,6 +271,8 @@ test("bearer tokens authenticate a cookie-less native client", async ({
   const cookieless = { baseURL, storageState: { cookies: [], origins: [] } };
   const login = await apiRequest.newContext(cookieless);
   const native = await apiRequest.newContext(cookieless);
+  retryStaleKeepAlive(login);
+  retryStaleKeepAlive(native);
   const appOrigin = { Origin: "cubby-mobile://" };
   try {
     const signedIn = await login.post("/api/auth/sign-in/email", {
@@ -343,6 +346,8 @@ test("native handoff exchanges PKCE once for a signed API session", async ({
   const cookieless = { baseURL, storageState: { cookies: [], origins: [] } };
   const exchange = await apiRequest.newContext(cookieless);
   const native = await apiRequest.newContext(cookieless);
+  retryStaleKeepAlive(exchange);
+  retryStaleKeepAlive(native);
   const origin = { Origin: "cubby-mobile://" };
   const verifier = randomBytes(32).toString("base64url");
   const state = randomBytes(32).toString("base64url");
