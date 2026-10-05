@@ -21,6 +21,7 @@ import {
   parseEntityRef,
   parseShortcodeFor,
 } from "@cubby/schemas/identifiers";
+import { encodeBase64Url, decodeBase64UrlText } from "@cubby/shared/base64";
 import {
   and,
   desc,
@@ -172,10 +173,7 @@ export function encodeAuditCursor(entry: {
     createdAt: entry.createdAt.toISOString(),
     id: entry.id,
   });
-  return `${AUDIT_CURSOR_PREFIX}${btoa(payload)
-    .replaceAll("+", "-")
-    .replaceAll("/", "_")
-    .replace(/=+$/u, "")}`;
+  return `${AUDIT_CURSOR_PREFIX}${encodeBase64Url(payload)}`;
 }
 
 /** Decode v1 cursors while retaining the former ISO timestamp wire format. */
@@ -189,10 +187,9 @@ export function decodeAuditCursor(cursor: string): DecodedAuditCursor {
   }
 
   try {
-    const encoded = cursor.slice(AUDIT_CURSOR_PREFIX.length);
-    const base64 = encoded.replaceAll("-", "+").replaceAll("_", "/");
-    const padded = base64.padEnd(Math.ceil(base64.length / 4) * 4, "=");
-    const payload = auditCursorPayloadSchema.parse(JSON.parse(atob(padded)));
+    const payload = auditCursorPayloadSchema.parse(
+      JSON.parse(decodeBase64UrlText(cursor.slice(AUDIT_CURSOR_PREFIX.length))),
+    );
     const createdAt = new Date(payload.createdAt);
     if (Number.isNaN(createdAt.getTime())) {
       throw new Error("Malformed audit log cursor");

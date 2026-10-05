@@ -19,13 +19,3 @@ export const selectedPhotoItemIds = (
   recipesById: ReadonlyMap<string, CookbookRecipe>,
   ids: readonly string[],
 ): string[] => ids.filter((id) => heroPhoto(recipesById.get(id)) !== undefined);
-
-/** Avoid `String.fromCharCode(...bytes)`, which overflows for ordinary photos. */
-export const bytesToBase64 = (bytes: Uint8Array): string => {
-  let binary = "";
-  const chunkSize = 0x8000;
-  for (let start = 0; start < bytes.length; start += chunkSize) {
-    binary += String.fromCharCode(...bytes.subarray(start, start + chunkSize));
-  }
-  return btoa(binary);
-};

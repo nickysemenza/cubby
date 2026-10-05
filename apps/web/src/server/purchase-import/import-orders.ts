@@ -34,6 +34,7 @@ import {
   type PreparePurchaseImportInput,
   type ValidatePurchaseImportInput,
 } from "@cubby/schemas/purchase-import";
+import { sha256Hex } from "@cubby/shared/sha256";
 import * as Sentry from "@sentry/tanstackstart-react";
 import { and, asc, eq, ilike, inArray, or, sql } from "drizzle-orm";
 import { z } from "zod";
@@ -75,7 +76,6 @@ import {
   type ExternalIdPair,
 } from "~/server/repo/product/find-by-external-ids";
 import { resolveOrThrow } from "~/server/repo/shortcode-resolver";
-import { sha256Hex } from "~/server/semantic/hash";
 import { scheduleImageProcessingJobs } from "~/server/services/image-processing.service";
 import {
   deleteStoredObjects,

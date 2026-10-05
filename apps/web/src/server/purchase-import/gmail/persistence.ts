@@ -1,4 +1,5 @@
 import { parseEntityId } from "@cubby/schemas/identifiers";
+import { sha256Hex } from "@cubby/shared/sha256";
 import { and, eq, inArray } from "drizzle-orm";
 
 import type { Database, DrizzleTransaction } from "~/server/db";
@@ -10,7 +11,6 @@ import {
   orderMailEvent,
 } from "~/server/db/schema";
 import { getDb, withTransaction } from "~/server/repo/database-helpers";
-import { sha256Hex } from "~/server/semantic/hash";
 
 import {
   orderMailAttachmentKey,

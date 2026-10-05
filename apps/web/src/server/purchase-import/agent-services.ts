@@ -24,9 +24,9 @@ import {
   settleChargeHuntInput,
   stopForReviewInput,
 } from "@cubby/schemas/purchase-agent-services";
+import { sha256Uuid } from "@cubby/shared/sha256";
 
 import type { RunServices } from "~/server/purchase-agent/environment";
-import { sha256Uuid } from "~/server/semantic/hash";
 
 import { runWithExecutionCtx, setCfEnv } from "../cf-env";
 import { resolvePurchaseAgentBrowserOperation } from "./agent-browser-command";

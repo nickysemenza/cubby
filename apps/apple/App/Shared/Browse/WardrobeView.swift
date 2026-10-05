@@ -36,12 +36,8 @@ struct WardrobeView: View {
         case .idle, .loading:
             LoadingIndicator.screen(label: "Loading wardrobe")
         case .failed(let message):
-            ContentUnavailableView {
-                Label("Couldn’t load wardrobe", systemImage: "tshirt")
-            } description: {
-                Text(message)
-            } actions: {
-                Button("Retry") { Task { await model.load(search: searchText) } }
+            LoadFailureView(title: "Couldn’t load wardrobe", message: message) {
+                await model.load(search: searchText)
             }
         case .loaded:
             if model.rows.isEmpty {

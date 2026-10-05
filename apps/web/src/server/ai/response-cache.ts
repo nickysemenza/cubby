@@ -1,10 +1,10 @@
 import { sleep } from "@cubby/shared/retry";
+import { sha256Hex } from "@cubby/shared/sha256";
 import { createLogger } from "@cubby/worker-tracing";
 import { z } from "zod";
 
 import type { AiChatRequest } from "~/server/ai/run-feature";
 import { getAiResponseCacheNamespace } from "~/server/cf-env";
-import { sha256Hex } from "~/server/semantic/hash";
 
 const log = createLogger("ai-response-cache");
 

@@ -168,9 +168,9 @@ struct ActivityView: View {
             filters
             Section {
                 if let error = model.error {
-                    ContentUnavailableView(
-                        "Couldn’t load activity", systemImage: "exclamationmark.triangle",
-                        description: Text(error))
+                    LoadFailureView(title: "Couldn’t load activity", message: error) {
+                        await model.load(client: appModel.client)
+                    }
                 } else if model.runs.isEmpty, !model.loading {
                     ContentUnavailableView(
                         "No activity", systemImage: "clock.arrow.trianglehead.counterclockwise.rotate.90")
@@ -607,9 +607,9 @@ struct ActivityDetailView: View {
                 attemptsSection(detail: detail)
                 eventsSection()
             } else if let error = model.error {
-                ContentUnavailableView(
-                    "Couldn’t load run", systemImage: "exclamationmark.triangle",
-                    description: Text(error))
+                LoadFailureView(title: "Couldn’t load run", message: error) {
+                    await model.load(id: id, client: appModel.client)
+                }
             } else {
                 ProgressView("Loading activity…")
             }

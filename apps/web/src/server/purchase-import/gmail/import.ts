@@ -16,6 +16,7 @@ import {
   orderMailImportRunInput,
   orderMailImportRunOrders,
 } from "@cubby/schemas/run-fields";
+import { sha256Hex } from "@cubby/shared/sha256";
 import { and, desc, eq, inArray, isNull, sql } from "drizzle-orm";
 
 import type { Database, DrizzleTransaction } from "~/server/db";
@@ -37,7 +38,6 @@ import {
   withTransaction,
 } from "~/server/repo/database-helpers";
 import { insertWithShortcode } from "~/server/repo/shortcode-utils";
-import { sha256Hex } from "~/server/semantic/hash";
 
 import { dispatchRunEvent } from "../dispatch";
 

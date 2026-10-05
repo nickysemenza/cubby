@@ -111,8 +111,7 @@ struct ProductSimilarityDetailSlot: View {
                 LoadingIndicator(label: "Loading similar products")
             }
             if let error {
-                Text(error).foregroundStyle(.secondary)
-                Button("Retry") { Task { await load() } }
+                InlineLoadFailure(message: error) { await load() }
             }
         }
         .task(id: productID) {
@@ -169,8 +168,7 @@ struct ProductEnrichmentHistorySlot: View {
                 LoadingIndicator(label: "Loading enrichment history")
             }
             if let error {
-                Text(error).foregroundStyle(.secondary)
-                Button("Retry") { Task { await load() } }
+                InlineLoadFailure(message: error) { await load() }
             }
         }
         .task(id: productID) {

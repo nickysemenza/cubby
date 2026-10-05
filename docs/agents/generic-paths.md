@@ -52,13 +52,16 @@ existing block. Extend the generic path when it almost fits. See
   all money is `SUM(Expense.cost)`.
 - Postgres errors: `findPgError`, `isUniqueViolation`, `isStatementTimeout`
   (`server/errors/db-errors.ts`) walk Drizzle's `cause` chain.
-- Hashing: `sha256Hex` (`server/semantic/hash.ts`).
 - Logging and tracing: `createLogger`, `withSpan`/span core
   (`@cubby/worker-tracing`); no raw `console.*` in server or Worker code.
 - Retries and waiting: `sleep`, `retryWithBackoff`, `pollUntil`
   (`@cubby/shared/retry`).
-- Digests: `sha256Hex` and the stable row-id `sha256Uuid`
-  (`server/semantic/hash.ts`); never hand-roll `crypto.subtle.digest` + hex.
+- Digests, encodings, and casing (browser, Worker, and scripts alike):
+  `sha256Hex`, the stable row-id `sha256Uuid` (`@cubby/shared/sha256`);
+  `encodeBase64`, `encodeBase64Url`, `decodeBase64Url`, `decodeBase64UrlText`
+  (`@cubby/shared/base64`); `capitalize`, `pascalCase`, `humanize`,
+  `screamingSnake` (`@cubby/shared/text-case`). Never hand-roll
+  `crypto.subtle.digest` + hex or `btoa` alphabet swaps.
 - Cross-Worker RPC: one Zod contract per boundary, `z.infer` on both sides.
 - GTIN and barcodes: recipebridge `scan_code_gtin14` and `@cubby/shared/upc`.
 

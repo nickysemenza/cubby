@@ -80,13 +80,7 @@ private struct SpecialistLoadView<Value, Content: View>: View {
             case .loading:
                 LoadingIndicator.screen(label: loadingLabel)
             case .failed(let message):
-                ContentUnavailableView {
-                    Label("Couldn't load view", systemImage: "exclamationmark.triangle")
-                } description: {
-                    Text(message)
-                } actions: {
-                    Button("Retry") { Task { await loader.reload() } }
-                }
+                LoadFailureView(title: "Couldn't load view", message: message) { await loader.reload() }
             case .ready(let value):
                 content(value, loader)
             }

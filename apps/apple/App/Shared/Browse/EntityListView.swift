@@ -377,12 +377,8 @@ struct EntityListView: View {
             case .unavailable(let message):
                 ContentUnavailableView(message, systemImage: entitySymbol(for: key))
             case .failed(let message):
-                ContentUnavailableView {
-                    Label("Couldn't load \(descriptor.plural)", systemImage: "exclamationmark.triangle")
-                } description: {
-                    Text(message)
-                } actions: {
-                    Button("Retry") { Task { await model.loadInitial() } }
+                LoadFailureView(title: "Couldn't load \(descriptor.plural)", message: message) {
+                    await model.loadInitial()
                 }
             case .loaded:
                 VStack {
@@ -417,12 +413,8 @@ struct EntityListView: View {
                 case .idle, .debouncing, .loading:
                     LoadingIndicator.screen(label: "Searching \(descriptor.plural)")
                 case .failed(let message):
-                    ContentUnavailableView {
-                        Label("Couldn't search \(descriptor.plural)", systemImage: "exclamationmark.triangle")
-                    } description: {
-                        Text(message)
-                    } actions: {
-                        Button("Retry") { search.retry() }
+                    LoadFailureView(title: "Couldn't search \(descriptor.plural)", message: message) {
+                        search.retry()
                     }
                 case .loaded:
                     VStack {
@@ -466,8 +458,7 @@ struct EntityListView: View {
         List {
             if let error = model.timelineError {
                 Section {
-                    Text(error).foregroundStyle(.secondary)
-                    Button("Retry") { Task { await model.loadTimeline() } }
+                    InlineLoadFailure(message: error) { await model.loadTimeline() }
                 }
             } else if let timeline = model.timeline {
                 EntityTimelineView(timeline: timeline)
@@ -803,7 +794,6 @@ struct EntityRowView: View {
                 NavigationLink(value: Route.entityDetail(.product, id: row.id)) {
                     EntityRowView(key: .product, row: row)
                 }
-                .fieldGuideListRow()
             }
         }
         .listStyle(.plain)

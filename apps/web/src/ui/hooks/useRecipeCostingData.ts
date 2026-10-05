@@ -1,3 +1,4 @@
+import { ID_CHUNK_SIZE } from "@cubby/schemas/entity-media";
 import type { RecipeShortcode } from "@cubby/schemas/identifiers";
 import type { IngredientWithFoodLeanOut } from "@cubby/schemas/ingredient";
 import type { RecipeGraphOut, RecipeOut } from "@cubby/schemas/recipe";
@@ -9,7 +10,6 @@ import {
   ingredient,
   recipe,
 } from "~/integrations/tanstack-query/generated/catalog.gen";
-import { ID_CHUNK_SIZE } from "~/lib/array-helpers";
 import {
   collectIngredientIds,
   collectSubRecipeIds,

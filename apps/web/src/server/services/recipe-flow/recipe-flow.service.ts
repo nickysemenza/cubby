@@ -10,6 +10,7 @@ import {
   recipeFlowArtifactSchema,
   safeNormalizeRecipeFlowAiPlan,
 } from "@cubby/schemas/recipe-flow";
+import { sha256Hex } from "@cubby/shared/sha256";
 
 import { RECIPE_FLOW_PRIMARY_FEATURE } from "~/server/ai/features";
 import { recordFeatureUsage } from "~/server/ai/run-feature";
@@ -22,7 +23,6 @@ import {
   upsertAiAnalysis,
 } from "~/server/repo/ai-analysis";
 import { getRecipeByID } from "~/server/repo/recipe/crud";
-import { sha256Hex } from "~/server/semantic/hash";
 
 import { validateRecipeFlowPlan } from "./validation";
 

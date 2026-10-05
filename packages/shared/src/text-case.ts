@@ -23,6 +23,17 @@ export const capitalize = <S extends string>(value: S): Capitalize<S> =>
   `${value.charAt(0).toUpperCase()}${value.slice(1)}` as Capitalize<S>;
 
 /**
+ * `ledger-party`, `mcp_tool`, `a.b` → `LedgerParty`, `McpTool`, `AB`: splits
+ * on every non-alphanumeric run and upper-cases each part's first character,
+ * leaving the rest as written (`productTopLevelOut` → `ProductTopLevelOut`).
+ */
+export const pascalCase = (value: string): string =>
+  value
+    .split(/[^A-Za-z0-9]+/u)
+    .map(capitalize)
+    .join("");
+
+/**
  * An identifier into a human label: splits camelCase and digit-then-letter
  * boundaries, and underscores/dashes, into spaces, then upper-cases only the
  * first character of the whole result — every other letter keeps its

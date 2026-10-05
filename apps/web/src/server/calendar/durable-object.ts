@@ -1,11 +1,11 @@
 import type { DurableObjectState } from "@cloudflare/workers-types";
 import { userId, type UserId } from "@cubby/schemas/identifiers";
+import { sha256Hex } from "@cubby/shared/sha256";
 import { DurableObject } from "cloudflare:workers";
 
 import { httpRouteTemplate } from "~/lib/http-route-template";
 import { runWithExecutionCtx, setCfEnv } from "~/server/cf-env";
 import { recordDatabaseWrite } from "~/server/database-freshness/client";
-import { sha256Hex } from "~/server/semantic/hash";
 import { withTrace } from "~/server/tracing";
 
 import { authenticateCalendar } from "./caldav-auth";

@@ -4,6 +4,7 @@ import { runEntityId } from "@cubby/schemas/identifiers";
 import type { CubbyMcpMutationAction } from "@cubby/schemas/mcp-tools";
 import { purchaseImportRunExecution } from "@cubby/schemas/purchase-import";
 import { parseShortcode } from "@cubby/shared";
+import { sha256Hex } from "@cubby/shared/sha256";
 import { and, desc, eq, inArray } from "drizzle-orm";
 import { isEqual } from "es-toolkit";
 import { z } from "zod";
@@ -19,7 +20,6 @@ import type { McpOperationContext } from "~/server/mcp/operation-context";
 import { recordRunWrites } from "~/server/purchase-import/run-audit";
 import { getDb } from "~/server/repo/database-helpers";
 import { resolveLiveShortcode } from "~/server/repo/shortcode-resolver";
-import { sha256Hex } from "~/server/semantic/hash";
 
 import type { ToolExtra } from "./tools/tool-registration";
 

@@ -16,6 +16,7 @@ import {
   validationDiff,
   validationPlanLine,
 } from "@cubby/schemas/purchase-import";
+import { sha256Hex } from "@cubby/shared/sha256";
 import { and, eq } from "drizzle-orm";
 import { z } from "zod";
 
@@ -39,7 +40,6 @@ import {
   updateExpense,
 } from "~/server/repo/expense/crud";
 import { updatePurchase } from "~/server/repo/purchase";
-import { sha256Hex } from "~/server/semantic/hash";
 
 import { loadRunScopeByShortcode } from "./run-service";
 import {

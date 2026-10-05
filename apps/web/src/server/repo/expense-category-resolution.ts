@@ -12,6 +12,7 @@ import type {
   SpendingCategoryMappingMode,
   VendorSpendingProfile,
 } from "@cubby/schemas/spending-classification";
+import { sha256Hex } from "@cubby/shared/sha256";
 import { sql, type SQL } from "drizzle-orm";
 import { z } from "zod";
 
@@ -199,9 +200,5 @@ export async function spendingClassificationRevision(
       'vendors',(SELECT jsonb_agg(jsonb_build_array(id,"spendingProfile","defaultSpendingCategoryId") ORDER BY id) FROM "Vendor" WHERE "deletedAt" IS NULL)) AS policy
   `);
   const policy = z.object({ policy: z.json() }).parse(result.rows[0]).policy;
-  const bytes = new TextEncoder().encode(JSON.stringify(policy));
-  const digest = await crypto.subtle.digest("SHA-256", bytes);
-  return [...new Uint8Array(digest)]
-    .map((byte) => byte.toString(16).padStart(2, "0"))
-    .join("");
+  return sha256Hex(JSON.stringify(policy));
 }

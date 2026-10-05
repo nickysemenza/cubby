@@ -1,10 +1,10 @@
 import type { SearchableEntity } from "@cubby/schemas/search";
+import { sha256Hex } from "@cubby/shared/sha256";
 import { and, eq, inArray } from "drizzle-orm";
 
 import type { Database, DrizzleTransaction } from "~/server/db";
 import { suggestionDismissal } from "~/server/db/schema";
 import { getDb, notDeleted } from "~/server/repo/database-helpers";
-import { sha256Hex } from "~/server/semantic/hash";
 
 /**
  * Versioned positional input deliberately avoids free-form JSON key ordering.

@@ -3,6 +3,7 @@ import type {
   CalendarFeedInspection,
 } from "@cubby/schemas/calendar";
 import type { UserId } from "@cubby/schemas/identifiers";
+import { encodeBase64Url } from "@cubby/shared/base64";
 
 import type {
   CalDavCollection,
@@ -87,9 +88,7 @@ export function inspectCalendarDocument(
 }
 
 export function createCalendarFeedToken(): string {
-  return Buffer.from(crypto.getRandomValues(new Uint8Array(32))).toString(
-    "base64url",
-  );
+  return encodeBase64Url(crypto.getRandomValues(new Uint8Array(32)));
 }
 
 export function etagMatches(ifNoneMatch: string | null, etag: string): boolean {

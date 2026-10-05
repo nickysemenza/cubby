@@ -5,6 +5,7 @@ import type {
 } from "@cubby/schemas/identifiers";
 import type { InventoryPlacement } from "@cubby/schemas/inventory";
 import type { InventoryOwnershipMode } from "@cubby/schemas/inventory-ownership";
+import { sha256Hex } from "@cubby/shared/sha256";
 import { and, eq, isNull } from "drizzle-orm";
 
 import { inventoryEntry } from "~/server/db/schema";
@@ -77,11 +78,5 @@ export const inventorySnapshotToken = async (
       amount: { unit: row.amountUnit, value: row.amountValue },
     }))
     .sort((a, b) => a.id.localeCompare(b.id));
-  const digest = await crypto.subtle.digest(
-    "SHA-256",
-    new TextEncoder().encode(JSON.stringify(snapshot)),
-  );
-  return [...new Uint8Array(digest)]
-    .map((byte) => byte.toString(16).padStart(2, "0"))
-    .join("");
+  return sha256Hex(JSON.stringify(snapshot));
 };

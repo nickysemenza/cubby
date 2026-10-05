@@ -1,3 +1,4 @@
+import { pascalCase } from "../../../packages/shared/src/text-case.ts";
 import { join } from "node:path";
 import { pathToFileURL } from "node:url";
 import { z } from "zod";
@@ -205,12 +206,6 @@ const renderServerBindings = (tools: ResolvedTool[]): string => {
   );
 };
 
-const pascal = (name: string) =>
-  name
-    .split("_")
-    .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
-    .join("");
-
 const renderNames = (tools: ResolvedTool[]): string => {
   const table = tools
     .map(
@@ -225,7 +220,7 @@ const renderNames = (tools: ResolvedTool[]): string => {
   const perTool = tools
     .map(
       (tool) =>
-        `export type ${pascal(tool.name)}Action = CubbyMcpToolActionName<${JSON.stringify(tool.name)}>;`,
+        `export type ${pascalCase(tool.name)}Action = CubbyMcpToolActionName<${JSON.stringify(tool.name)}>;`,
     )
     .join("\n");
   return (

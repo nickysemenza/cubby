@@ -4,6 +4,7 @@ import {
   type RunId,
 } from "@cubby/schemas/identifiers";
 import { importRunAgentIdentity } from "@cubby/schemas/import-run-agent";
+import { sha256Hex } from "@cubby/shared/sha256";
 import {
   and,
   eq,
@@ -43,7 +44,6 @@ import {
   findOrCreateWithShortcode,
   insertWithShortcode,
 } from "~/server/repo/shortcode-utils";
-import { sha256Hex } from "~/server/semantic/hash";
 import { attachFileToEntity } from "~/server/services/image-storage.service";
 
 import {

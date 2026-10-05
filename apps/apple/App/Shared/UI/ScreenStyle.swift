@@ -15,12 +15,70 @@ extension View {
     func keyboardDismissBar() -> some View {
         modifier(KeyboardDismissBar())
     }
+}
 
-    /// Compatibility for specialized lists: the system owns row surfaces and separators.
-    func fieldGuideListRow() -> some View {
-        self
+/// The one failed-load state for a screen or sheet body whose content never arrived: what failed,
+/// the raw server message, and Retry. A section or slot beside loaded content uses
+/// `InlineLoadFailure` instead.
+struct LoadFailureView: View {
+    let title: String
+    let message: String
+    let retry: @MainActor () async -> Void
+
+    var body: some View {
+        ContentUnavailableView {
+            Label(title, systemImage: "exclamationmark.triangle")
+        } description: {
+            Text(message)
+        } actions: {
+            Button("Retry") { Task { await retry() } }
+                .buttonStyle(.bordered)
+        }
     }
+}
 
+/// A failed load inside a section or slot whose siblings stay visible. The warning tone is paired
+/// with the symbol, never color alone. `isRetrying` keeps the message up while a retry runs.
+struct InlineLoadFailure: View {
+    let message: String
+    var isRetrying = false
+    let retry: @MainActor () async -> Void
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: FieldGuideTokens.Space.sm) {
+            Label(message, systemImage: "exclamationmark.triangle")
+                .font(.callout)
+                .foregroundStyle(FieldGuideTokens.warning)
+                .fixedSize(horizontal: false, vertical: true)
+            HStack(spacing: FieldGuideTokens.Space.sm) {
+                // Borderless so a List row fires only the button, not a row-wide tap.
+                // The frame sits inside the label: outside it, it grows layout but not the hit area.
+                Button {
+                    Task { await retry() }
+                } label: {
+                    Text("Retry")
+                        .frame(
+                            minWidth: FieldGuideTokens.touchTarget,
+                            minHeight: FieldGuideTokens.touchTarget
+                        )
+                        .contentShape(Rectangle())
+                }
+                .buttonStyle(.borderless)
+                .disabled(isRetrying)
+                if isRetrying { LoadingIndicator(label: "Retrying") }
+            }
+        }
+    }
+}
+
+#Preview("Load failures") {
+    List {
+        Section("Inline") {
+            InlineLoadFailure(message: "HTTP 503: upstream unavailable") {}
+            InlineLoadFailure(message: "HTTP 503: upstream unavailable", isRetrying: true) {}
+        }
+        LoadFailureView(title: "Couldn't load products", message: "HTTP 503: upstream unavailable") {}
+    }
 }
 
 /// A `ProgressView` with an accessibility label — a bare `ProgressView()` reads nothing to

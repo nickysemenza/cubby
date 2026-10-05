@@ -50,7 +50,6 @@ struct LocationPickerSheet: View {
                     .contentShape(Rectangle())
                 }
                 .buttonStyle(.plain)
-                .fieldGuideListRow()
                 .accessibilityIdentifier("capture.location.\(option.id.rawValue)")
             }
             .listStyle(.plain)

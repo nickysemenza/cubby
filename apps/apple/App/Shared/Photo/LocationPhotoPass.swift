@@ -182,13 +182,7 @@ struct LocationPhotoPassView: View {
         case .loading:
             LoadingIndicator.screen(label: "Loading photo pass")
         case .failed(let message):
-            ContentUnavailableView {
-                Label("Couldn't load locations", systemImage: "exclamationmark.triangle")
-            } description: {
-                Text(message)
-            } actions: {
-                Button("Retry") { Task { await pass.load() } }
-            }
+            LoadFailureView(title: "Couldn't load locations", message: message) { await pass.load() }
         case .ready:
             ScrollView {
                 VStack(alignment: .leading, spacing: FieldGuideTokens.Space.lg) {

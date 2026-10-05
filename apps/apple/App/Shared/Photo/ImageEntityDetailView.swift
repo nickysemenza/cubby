@@ -54,8 +54,7 @@ struct ImageEntityDetailView: View {
                     ImageDiagnosticsCompareView(model: diagnostics)
                 }
             } else if let error {
-                Text(error).foregroundStyle(FieldGuideTokens.destructive)
-                Button("Retry") { Task { await load() } }
+                InlineLoadFailure(message: error) { await load() }
             } else {
                 ProgressView("Loading image…")
             }

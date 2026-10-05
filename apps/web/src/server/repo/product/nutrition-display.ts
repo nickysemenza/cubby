@@ -8,7 +8,7 @@ import {
   type NutritionInfo,
 } from "@cubby/usda";
 
-import { roundTo } from "~/lib/number-format";
+import { roundTo } from "~/lib/round-to";
 
 const EMPTY_MESSAGE =
   "No nutrition on file — link a USDA food or enter the package label.";

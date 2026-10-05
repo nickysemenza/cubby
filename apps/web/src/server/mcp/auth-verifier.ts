@@ -1,5 +1,6 @@
 import { type UserId, userId } from "@cubby/schemas/identifiers";
 import { getErrorMessage } from "@cubby/shared";
+import { decodeBase64UrlText } from "@cubby/shared/base64";
 import type { verifyJwsAccessToken } from "better-auth/oauth2";
 import { z } from "zod";
 
@@ -103,14 +104,7 @@ function decodeUnverifiedClaims(token: string) {
   if (segments.length !== 3 || !segments[1]) return null;
 
   try {
-    const decoded = JSON.parse(
-      new TextDecoder().decode(
-        Uint8Array.from(
-          atob(segments[1].replace(/-/g, "+").replace(/_/g, "/")),
-          (character) => character.charCodeAt(0),
-        ),
-      ),
-    );
+    const decoded = JSON.parse(decodeBase64UrlText(segments[1]));
     const claims = unverifiedClaimsSchema.safeParse(decoded);
     return claims.success ? claims.data : null;
   } catch {

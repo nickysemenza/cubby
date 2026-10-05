@@ -1,5 +1,6 @@
 import { MAX_IMAGE_UPLOAD_BYTES } from "@cubby/schemas/image";
 import { cookbookBundleMetadataSchema } from "@cubby/schemas/import-recipe";
+import { sha256Hex } from "@cubby/shared/sha256";
 
 const READ_CHUNK = 64 * 1024;
 const MAX_DIRECTORY = 8 * 1024 * 1024;
@@ -234,11 +235,7 @@ export async function openCookbookBundle(file: Blob, signal?: AbortSignal) {
       );
       if (!image) throw new Error(`Bundle image is missing: ${sourcePath}`);
       const bytes = await readEntry(image.path, MAX_IMAGE_UPLOAD_BYTES);
-      const digest = Array.from(
-        new Uint8Array(await crypto.subtle.digest("SHA-256", bytes)),
-        (byte) => byte.toString(16).padStart(2, "0"),
-      ).join("");
-      if (digest !== image.sha256)
+      if ((await sha256Hex(bytes)) !== image.sha256)
         throw new Error(
           `Bundle image hash differs from manifest: ${image.path}`,
         );

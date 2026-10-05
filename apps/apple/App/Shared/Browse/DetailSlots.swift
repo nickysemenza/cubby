@@ -215,12 +215,16 @@ private struct MealNutritionSlot: View {
                 case .loading:
                     LoadingIndicator(label: "Loading nutrition")
                 case .failed(let message):
-                    failure(message, nutrition)
+                    InlineLoadFailure(message: message, isRetrying: nutrition.isLoading) {
+                        await nutrition.refresh()
+                    }
                 case .loaded(let summary):
                     MealNutritionPeopleView(summary: summary)
                 }
                 if let error = nutrition.refreshError, case .loaded = nutrition.state {
-                    failure(error, nutrition)
+                    InlineLoadFailure(message: error, isRetrying: nutrition.isLoading) {
+                        await nutrition.refresh()
+                    }
                 }
             } else {
                 LoadingIndicator(label: "Loading nutrition")
@@ -238,11 +242,4 @@ private struct MealNutritionSlot: View {
         }
     }
 
-    private func failure(_ message: String, _ nutrition: MealNutritionModel) -> some View {
-        VStack(alignment: .leading, spacing: FieldGuideTokens.Space.sm) {
-            Text(message).font(.callout).foregroundStyle(.secondary)
-            if nutrition.isLoading { LoadingIndicator(label: "Retrying") }
-            Button("Retry") { Task { await nutrition.refresh() } }.disabled(nutrition.isLoading)
-        }
-    }
 }

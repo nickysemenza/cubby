@@ -1,3 +1,5 @@
+import { decodeBase64UrlText } from "@cubby/shared/base64";
+
 import type {
   GmailHistoryPage,
   GmailHistoryRecord,
@@ -8,14 +10,6 @@ import type {
   GmailNormalizedMessage,
   GmailHistoryEventKind,
 } from "./types";
-
-const asText = (data: string): string => {
-  const normalized = data.replace(/-/gu, "+").replace(/_/gu, "/");
-  const padded = normalized.padEnd(Math.ceil(normalized.length / 4) * 4, "=");
-  const binary = atob(padded);
-  const bytes = Uint8Array.from(binary, (character) => character.charCodeAt(0));
-  return new TextDecoder().decode(bytes);
-};
 
 const byteLength = (data: string): number => {
   const normalized = data.replace(/-/gu, "+").replace(/_/gu, "/");
@@ -79,10 +73,10 @@ const walkParts = (
     mimeType === "text/plain" &&
     body.text === null
   ) {
-    body.text = asText(data);
+    body.text = decodeBase64UrlText(data);
   }
   if (!isAttachment && data && mimeType === "text/html" && body.html === null) {
-    body.html = asText(data);
+    body.html = decodeBase64UrlText(data);
   }
 
   if (!isAttachment) return;

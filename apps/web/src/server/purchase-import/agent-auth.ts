@@ -1,3 +1,4 @@
+import { encodeBase64Url } from "@cubby/shared/base64";
 import { signJWT, verifyJWT } from "better-auth/crypto";
 import { and, desc, eq, gt, isNull, or } from "drizzle-orm";
 import { z } from "zod";
@@ -265,13 +266,10 @@ export function readCookie(request: Request, name: string): string | null {
 
 export async function createPkcePair() {
   const bytes = crypto.getRandomValues(new Uint8Array(48));
-  const verifier = Buffer.from(bytes).toString("base64url");
+  const verifier = encodeBase64Url(bytes);
   const digest = await crypto.subtle.digest(
     "SHA-256",
     new TextEncoder().encode(verifier),
   );
-  return {
-    verifier,
-    challenge: Buffer.from(digest).toString("base64url"),
-  };
+  return { verifier, challenge: encodeBase64Url(new Uint8Array(digest)) };
 }
