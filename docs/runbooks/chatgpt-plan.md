@@ -27,7 +27,10 @@ diagnostics; a connected account never silently falls back to paid API billing.
    credential. CubbyKit opens the system browser. Choose the ChatGPT
    account/workspace and allow plan usage.
 
-4. Return to Settings and choose Check connection. Refresh models retrieves the
+4. Wait for the CLI to report Connected. The browser's “Authorization received”
+   page only confirms the local callback; an exchange or persistence failure
+   appears in the CLI and leaves setup incomplete.
+5. Return to Settings and choose Check connection. Refresh models retrieves the
    live account catalog; Manage usage opens ChatGPT's usage controls.
 
 The shared macOS CubbyKit flow runs an HTTP callback on `127.0.0.1` with state, nonce, and PKCE.
@@ -45,7 +48,11 @@ The Mac can close after setup; Workers owns refreshes.
 
 The shared household connection lives in the `CHATGPT_PLAN` SQLite Durable
 Object named `household`. Its RPC surface returns account status, models and
-inference responses, never access or refresh tokens. Concurrent refreshes are
+inference responses, never access or refresh tokens. The HTTP `chatgpt.connect`
+operation calls the internal `authorizePlan` RPC because Cloudflare reserves
+`connect` on Durable Object stubs for sockets. A real Workers regression test
+checks that authorization reaches session validation across this boundary.
+Concurrent refreshes are
 serialized; the replacement access/refresh pair is persisted together before
 use. No PostgreSQL schema change or new environment secret is required.
 

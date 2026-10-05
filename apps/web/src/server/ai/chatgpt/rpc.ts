@@ -146,7 +146,7 @@ export class ChatGptInferenceRequests {
 export interface ChatGptPlanRpc {
   status(): Promise<ChatGptStatus>;
   authorizationHost(): Promise<{ hostId: string; clientId: string | null }>;
-  connect(input: ChatGptAuthorization): Promise<ChatGptStatus>;
+  authorizePlan(input: ChatGptAuthorization): Promise<ChatGptStatus>;
   models(): Promise<ChatGptModel[]>;
   disconnect(): Promise<void>;
   infer(

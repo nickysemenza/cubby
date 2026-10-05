@@ -28,7 +28,8 @@ export class ChatGptPlanDurableObject extends DurableObject<Env> {
   authorizationHost() {
     return this.session.authorizationHost();
   }
-  connect(input: ChatGptAuthorization) {
+  // `connect` is reserved by the Durable Object stub's socket API.
+  authorizePlan(input: ChatGptAuthorization) {
     return this.session.connect(input);
   }
   models() {
