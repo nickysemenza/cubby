@@ -27,6 +27,12 @@ and replays it without duplicating economics. Run this lane directly or with
 sanitized results and replay command are checksummed under
 `artifacts/headless-e2e/statement-csv/`.
 
+`pnpm test:e2e:sim -- --qa-photo-completion` checks that approving the final selected
+ready group of a stopped `needs_review` photo Run updates the same open console’s
+hero and Progress report to completed without manual refresh. The fixture is synthetic;
+the runner reads the completed Run and committed proposal back and saves checksummed
+evidence through the usual QA artifact path. This guard also runs in the full QA lane.
+
 `pnpm test:e2e:sim -- --qa` seeds a synthetic household (`tooling/scenarios/native-qa.ts`) and replays
 every `apps/apple/e2e/qa-*.ad` journey against it: hero Discard with a shelf choice, statement match
 save, Run approval, approving only the selected ready group of a photo Run, a structured

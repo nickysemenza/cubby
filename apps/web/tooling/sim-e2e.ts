@@ -74,6 +74,7 @@ Modes (one per run; no mode = full native journey in the iOS simulator):
   --input-journey [--video]  PhotosPicker/Files input acceptance
   --emoji-review [--video]   category emoji review replay
   --qa [--hold] [--video]    seeded synthetic household QA pass; --hold keeps it up
+  --qa-photo-completion     stopped photo Run final approval updates hero and reports
   --tester-army [--journey a,b] [--replay] [--wrong]
                              live-model agent journeys (billed; see docs/tester-army.md)
 
@@ -111,12 +112,17 @@ const emojiReview = flags.includes("--emoji-review");
 const testerArmy = flags.includes("--tester-army");
 const testerArmyReplay = flags.includes("--replay");
 const wrongName = flags.includes("--wrong") || flags.includes("--wrong-name");
-const qa = flags.includes("--qa");
+const qaPhotoCompletion = flags.includes("--qa-photo-completion");
+const qa = flags.includes("--qa") || qaPhotoCompletion;
 const qaHold = flags.includes("--hold");
 if (
   (qa &&
     flags.some(
-      (flag) => flag !== "--qa" && flag !== "--hold" && flag !== "--video",
+      (flag) =>
+        flag !== "--qa" &&
+        flag !== "--qa-photo-completion" &&
+        flag !== "--hold" &&
+        flag !== "--video",
     )) ||
   (qaHold && !qa) ||
   (emojiReview &&
@@ -166,6 +172,7 @@ if (
         "--replay",
         "--wrong-name",
         "--qa",
+        "--qa-photo-completion",
         "--hold",
         "--wrong",
       ].includes(argument),
@@ -1491,37 +1498,65 @@ async function runQaJourneys(
     ? await recordSimulatorVideo(common[3] ?? "")
     : undefined;
   const flaky: string[] = [];
+  const replay = (
+    journey: string,
+    attempt: number,
+    variables: Record<string, string>,
+  ) =>
+    run(
+      "pnpm",
+      [
+        "exec",
+        "agent-device",
+        "test",
+        `apps/apple/e2e/${journey}`,
+        ...common,
+        "--retries",
+        "0",
+        "--artifacts-dir",
+        artifacts,
+        "--reporter",
+        "default",
+        "--reporter",
+        // Per attempt, so a retried pass keeps the failed attempt's report beside it.
+        `junit:${path.join(artifacts, `junit-${journey}-attempt-${attempt}.xml`)}`,
+        ...Object.entries(variables).flatMap(([key, value]) => [
+          "-e",
+          `${key}=${value}`,
+        ]),
+      ],
+      repoRoot,
+    );
+  const completePhotoRun = async () => {
+    const { runNativePhotoCompletionJourney } =
+      await import("./scenarios/native-photo-completion");
+    const pool = new Pool({ connectionString: databaseURL });
+    try {
+      await relaunch();
+      scenarioEvidence.push(
+        await runNativePhotoCompletionJourney({
+          pool,
+          userId: qaUserId,
+          artifacts,
+          replay: (journey, variables) => replay(journey, 1, variables),
+        }),
+      );
+    } finally {
+      await pool.end();
+    }
+  };
   try {
+    if (qaPhotoCompletion) {
+      await completePhotoRun();
+      return;
+    }
     for (const journey of journeys) {
       // A scroll can land short while a detail page is still laying out; a journey only
       // writes after its last scroll, so one retry from a relaunched app is a clean replay.
       for (let attempt = 1; ; attempt += 1) {
         await relaunch();
         try {
-          await run(
-            "pnpm",
-            [
-              "exec",
-              "agent-device",
-              "test",
-              `apps/apple/e2e/${journey}`,
-              ...common,
-              "--retries",
-              "0",
-              "--artifacts-dir",
-              artifacts,
-              "--reporter",
-              "default",
-              "--reporter",
-              // Per attempt, so a retried pass keeps the failed attempt's report beside it.
-              `junit:${path.join(artifacts, `junit-${journey}-attempt-${attempt}.xml`)}`,
-              ...Object.entries(qaIds).flatMap(([key, value]) => [
-                "-e",
-                `${key}=${value}`,
-              ]),
-            ],
-            repoRoot,
-          );
+          await replay(journey, attempt, qaIds);
           break;
         } catch (error) {
           flaky.push(journey);
@@ -1533,6 +1568,35 @@ async function runQaJourneys(
         }
       }
     }
+    // The stop guard's two phases share one open screen, so only the first relaunches; a
+    // retry seeds a fresh running Run.
+    const { runNativeRunStopJourney } =
+      await import("./scenarios/native-run-stop");
+    const stopPool = new Pool({ connectionString: databaseURL });
+    try {
+      for (let attempt = 1; ; attempt += 1) {
+        await relaunch();
+        try {
+          scenarioEvidence.push(
+            await runNativeRunStopJourney({
+              pool: stopPool,
+              userId: qaUserId,
+              artifacts,
+              replay: (journey, variables) =>
+                replay(journey, attempt, variables),
+            }),
+          );
+          break;
+        } catch (error) {
+          flaky.push("run-stop");
+          if (attempt >= 2 || interrupted) throw error;
+          console.log(`[${lane}] run-stop attempt ${attempt} failed; retrying`);
+        }
+      }
+    } finally {
+      await stopPool.end();
+    }
+    await completePhotoRun();
   } finally {
     await stopRecording?.();
     if (flaky.length > 0)

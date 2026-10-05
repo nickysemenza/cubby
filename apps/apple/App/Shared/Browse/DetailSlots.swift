@@ -76,23 +76,17 @@ enum DetailSlotRegistry {
         .runImportDebugLog: { runReportSlot(.run_importDebugLog, $0) },
         .runAiUsage: { runReportSlot(.run_aiUsage, $0, imports: false) },
         .runChanges: { runReportSlot(.run_changes, $0, imports: false) },
+        // Native has no control command (pause, resume and stop are web's), so a paused import
+        // says what it waits for and hands off to web; other states have nothing to show.
         .runImportControls: { row in
-            guard row.raw["purpose"]?.stringValue != "photo_inventory" else { return nil }
-            return AnyView(
-                NavigationLink {
-                    RunReviewView(runID: row.id)
-                } label: {
-                    Label("Open live run", systemImage: "arrow.up.right.square")
-                })
+            guard SharedConstants.importWorkflowPurposes.contains(row.raw["purpose"]?.stringValue ?? ""),
+                let paused = RunPausedHandoff.Reason(rawValue: row.raw["status"]?.stringValue ?? "")
+            else { return nil }
+            return AnyView(RunPausedHandoff(runID: row.id, reason: paused))
         },
         .runPhotoBatch: { row in
             guard row.raw["purpose"]?.stringValue == "photo_inventory" else { return nil }
-            return AnyView(
-                NavigationLink {
-                    RunReviewView(runID: row.id)
-                } label: {
-                    Label("Review photos and items", systemImage: "photo.on.rectangle")
-                })
+            return AnyView(RunPhotoBatchSlot(runID: row.id))
         },
     ]
 
@@ -187,6 +181,36 @@ private struct ProductJourneySummaryView: View {
         .font(.caption)
         .frame(maxWidth: .infinity, alignment: .leading)
         .padding(.top, FieldGuideTokens.Space.xs)
+    }
+}
+
+/// `run.import-controls` for a paused import: what the Run waits for, and the web controls that
+/// resume it.
+private struct RunPausedHandoff: View {
+    enum Reason: String {
+        case pausedAuth = "paused_auth"
+        case pausedOffline = "paused_offline"
+    }
+
+    let runID: String
+    let reason: Reason
+    @Environment(AppModel.self) private var appModel
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: FieldGuideTokens.Space.xs) {
+            Label(
+                reason == .pausedAuth ? "Waiting for retailer sign-in" : "Waiting for Mac browser",
+                systemImage: "person.crop.circle.badge.clock"
+            )
+            .font(.subheadline.weight(.medium))
+            Text(
+                reason == .pausedAuth
+                    ? "Finish sign-in in the Cubby-managed Chrome tab on your Mac, then resume this run."
+                    : "Reconnect the Cubby Mac browser and leave the retailer tab open before resuming."
+            )
+            .font(.caption).foregroundStyle(.secondary)
+            Link("Open sign-in and resume controls", destination: appModel.webURL(for: .run, id: runID))
+        }
     }
 }
 

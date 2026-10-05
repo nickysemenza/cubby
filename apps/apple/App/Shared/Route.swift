@@ -8,7 +8,6 @@ enum Route: Hashable {
     case photosLibrary
     case browseCatalog
     case statementCsvImport
-    case photoReview(String)
     case graph(EntityRef?)
     case nutrition(day: String)
     case activityDetail(String)

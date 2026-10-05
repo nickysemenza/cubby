@@ -58,13 +58,12 @@ struct RouteDestinationView: View {
         case .photosLibrary: PhotosRootView()
         case .browseCatalog: BrowseRootView()
         case .statementCsvImport: StatementCsvImportView()
-        case .photoReview(let id): RunReviewView(runID: id)
         case .graph(let root): GraphWorkspaceView(initialRoot: root)
         case .nutrition(let day): DailyNutritionView(day: day)
         case .activityDetail(let id): ActivityDetailView(id: id)
         case .localActivity(let id): LocalActivityDetailView(id: id)
         case .entityDetail(.image, let id): ImageEntityDetailView(id: ImageCode(id))
-        case .entityDetail(.run, let id): RunReviewView(runID: id)
+        case .entityDetail(.run, let id): RunConsoleView(runID: id).id(id)
         // Keyed by record: a deep link opened over a visible detail reuses this view's
         // identity, and its model/sections are bound to the first record's descriptor.
         case .entityDetail(let key, let id):

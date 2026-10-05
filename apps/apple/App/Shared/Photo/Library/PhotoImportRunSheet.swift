@@ -352,7 +352,7 @@ private struct RunningView: View {
                 Text("The agent will propose item groups for your review before products are created.")
                     .font(.fieldGuideBody)
                 NavigationLink {
-                    RunReviewView(runID: runID)
+                    RunConsoleView(runID: runID)
                 } label: {
                     Label("Review item groups", systemImage: "square.stack.3d.up")
                         .frame(maxWidth: .infinity)

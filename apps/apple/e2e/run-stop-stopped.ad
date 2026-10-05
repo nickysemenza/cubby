@@ -1,0 +1,6 @@
+context platform=ios timeout=240000
+
+# Phase two of the ordinary-Run stop guard: no relaunch, so the Run detail phase one opened
+# is still on screen. The server stopped the Run; the screen must redraw it from its own poll.
+open com.nickysemenza.cubby
+wait text "Failed" 90000

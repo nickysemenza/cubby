@@ -221,7 +221,7 @@ struct NavigationTests {
             #expect(navigator.selectedActivity == nil)
             #expect(
                 navigator.path(for: PhoneTab.work).wrappedValue == [
-                    .activityList, .photoReview("RUN-4K7M"),
+                    .activityList, .entityDetail(.run, id: "RUN-4K7M"),
                 ])
         }
     #endif
