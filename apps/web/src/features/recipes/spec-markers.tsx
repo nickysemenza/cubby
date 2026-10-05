@@ -11,10 +11,8 @@
 import type { ReactNode } from "react";
 import { match } from "ts-pattern";
 
-import {
-  EntityRefLink,
-  dottedEntityLink,
-} from "~/entity/components/entity-ref-link";
+import { EntityRefLink } from "~/entity/components/entity-ref-link";
+import { dottedEntityLink } from "~/entity/components/ref-link/leaf";
 import { cn } from "~/lib/utils";
 
 import { type RecipeTreeRow, recipeTreeDisplayImage } from "./recipe-tree";
