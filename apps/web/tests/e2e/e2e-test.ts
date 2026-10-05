@@ -17,7 +17,14 @@ type WorkerFixtures = {
   purchaseAgent: boolean;
 };
 
+/** `CUBBY_E2E_VIDEO=1` records every test in the run; specs pace demos on it. */
+const recordingVideo = process.env.CUBBY_E2E_VIDEO === "1";
+
 const test = base.extend<TestFixtures, WorkerFixtures>({
+  // `video` is worker-scoped: a spec's `test.use({ video })`, even to the
+  // default, splits its tests into separate workers, each booting another
+  // browser, database, and Worker harness. Recording is chosen per run here.
+  video: [recordingVideo ? "on" : "off", { scope: "worker" }],
   gmailJourney: [false, { scope: "worker", option: true }],
   purchaseAgent: [false, { scope: "worker", option: true }],
   e2eRuntime: [
@@ -80,4 +87,4 @@ const test = base.extend<TestFixtures, WorkerFixtures>({
   ],
 });
 
-export { expect, test };
+export { expect, recordingVideo, test };
