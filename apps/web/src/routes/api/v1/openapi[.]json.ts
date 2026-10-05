@@ -1,17 +1,49 @@
 import { createFileRoute } from "@tanstack/react-router";
 
+import { APP_ORIGIN } from "~/lib/auth-constants";
+import openApiDocumentUrl from "~/lib/generated/http-openapi.gen.json?url";
+import { getAssetsFetcher } from "~/server/cf-env";
+
+type OpenApiDocument = typeof import("~/lib/generated/http-openapi.gen.json");
+
+/**
+ * The ~1.7 MB document ships as a hashed static asset, not a Worker module, so
+ * an unchanged document costs no Worker upload bytes on deploy.
+ */
+async function loadOpenApiDocument(): Promise<OpenApiDocument> {
+  const assetsFetch = getAssetsFetcher();
+  if (assetsFetch) {
+    const response = await assetsFetch(
+      new Request(new URL(openApiDocumentUrl, APP_ORIGIN)),
+    );
+    if (!response.ok) {
+      throw new Error(
+        `Failed to load OpenAPI document asset (${response.status} ${response.statusText})`,
+      );
+    }
+    return response.json();
+  }
+  // Vitest has no ASSETS binding; production builds drop this branch so the
+  // JSON never re-enters the Worker bundle.
+  if (import.meta.env.DEV) {
+    return (await import("~/lib/generated/http-openapi.gen.json")).default;
+  }
+  throw new Error(
+    "The ASSETS binding is required to serve the OpenAPI document",
+  );
+}
+
 export const Route = createFileRoute("/api/v1/openapi.json")({
   server: {
     handlers: {
-      // Loaded on request: the document is ~1.7 MB and its cookie helper pulls
-      // the OAuth provider chunk, both of which otherwise load on every request.
+      // Loaded on request: the cookie helper pulls the OAuth provider chunk,
+      // which otherwise loads on every request.
       GET: async ({ request }) => {
-        const [{ default: document }, { getCookies }, { auth }] =
-          await Promise.all([
-            import("~/lib/generated/http-openapi.gen.json"),
-            import("better-auth/cookies"),
-            import("~/lib/auth"),
-          ]);
+        const [document, { getCookies }, { auth }] = await Promise.all([
+          loadOpenApiDocument(),
+          import("better-auth/cookies"),
+          import("~/lib/auth"),
+        ]);
         return Response.json({
           ...document,
           servers: [{ url: new URL(request.url).origin }],

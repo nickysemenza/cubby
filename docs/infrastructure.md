@@ -526,8 +526,11 @@ expose the active trace ID. These references also survive native API decoding.
 Source maps for `apps/web` are generated ("hidden" — emitted to disk but not
 referenced by a `//# sourceMappingURL` comment) and uploaded at deploy by
 `sentryTanstackStart` (`vite.config.ts`), under release `cubby@<short sha>` —
-the same value the browser (`router.tsx`) and Worker (`cf-server.ts`) SDKs
-report via `Sentry.init`/`withSentry`. Uploaded `.map` files are deleted from
+the same value the browser (`router.tsx`) and Worker (`worker-sentry.ts`) SDKs
+report via `Sentry.init`/`withSentry`. The plugin does not inject the release
+into chunks (`release.inject: false`): stamping the commit into every chunk
+would change every client asset's content on every deploy, so each deploy would
+re-upload them all. Uploaded `.map` files are deleted from
 `dist/` afterward so none are served as Worker static assets. Map sources are
 rewritten to repo-relative paths (`apps/web/src/...`, `packages/*/src/...`) so
 a single Sentry GitHub code mapping (repo root -> repo root on `main`) resolves

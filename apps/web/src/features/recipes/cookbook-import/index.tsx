@@ -58,7 +58,7 @@ import { Description } from "~/ui/primitives/description";
 
 import { BookGroupCard } from "./book-group-card";
 import { runTwoAtATime } from "./bundle";
-import { CookbookBundleWorker } from "./bundle-worker";
+import type { CookbookBundleWorker } from "./bundle-worker";
 import { CookbookDropzone } from "./cookbook-dropzone";
 import { asStoredExtraction, toBookEstimate } from "./extraction-result";
 import { createGatewaySend } from "./gateway-transport";
@@ -576,6 +576,12 @@ export function CookbookImport({
 
   const loadBundle = useCallback(
     async (file: File, bindSource?: string) => {
+      // A static import puts the `new Worker(new URL(...))` site in the SSR
+      // graph, which emits the ~640 kB worker bundle into the Worker upload
+      // where nothing can load it.
+      if (import.meta.env.SSR)
+        throw new Error("Cookbook bundles open only in the browser");
+      const { CookbookBundleWorker } = await import("./bundle-worker");
       const worker = new CookbookBundleWorker();
       try {
         const metadata = await worker.open(file);
