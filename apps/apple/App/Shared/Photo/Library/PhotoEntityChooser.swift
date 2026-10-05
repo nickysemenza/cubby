@@ -88,9 +88,9 @@ struct PhotoEntityChooser: View {
         .onChange(of: searchText) { _, value in model?.setSearchQuery(value) }
         .task(id: key) {
             searchText = ""
-            if model == nil {
+            if model?.descriptor.key != key {
                 model = PhotoEntityChooserModel(
-                    descriptor: descriptor, captureDates: captureDates,
+                    descriptor: descriptor, client: appModel.client, captureDates: captureDates,
                     loader: { filters, query, page, sort in
                         if let query, !query.isEmpty {
                             return try await PhotoRecordSearch.page(
@@ -103,6 +103,11 @@ struct PhotoEntityChooser: View {
             }
             await model?.loadInitial()
         }
+        // Draining survives scope-task replacement; dismissal is the boundary that stops it.
+        // Returning re-runs the initial task, joining a surviving page before continuing.
+        .onDisappear { model?.stopPaging() }
+        // The capture dates are the lanes' scope: a changed selection re-scopes them in place.
+        .task(id: captureDates) { await model?.setScope(captureDates: captureDates) }
         .task(id: rankingInputID) {
             await rankLoadedRows()
         }
