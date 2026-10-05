@@ -4,6 +4,10 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { z } from "zod";
 
+import {
+  type BuildSource,
+  sourceFingerprint,
+} from "../../../scripts/lib/source-fingerprint.ts";
 import { digestFiles, walkFiles } from "../../../scripts/lib/tree-digest.ts";
 
 const buildStampSchema = z.object({
@@ -83,86 +87,41 @@ function stampPath(repoRoot: string): string {
   return path.join(repoRoot, "apps/web/dist/web-build-provenance.json");
 }
 
-const sourceGlobs = [
-  "apps/web/src/**",
-  "apps/web/public/**",
-  "apps/web/tooling/**",
-  "apps/web/scripts/**",
-  "apps/web/*.{ts,json,jsonc,toml,html}",
-  "apps/mcp-apps/**",
-  "packages/**",
-  "recipebridge/**",
-  "scripts/**",
-  "*.{json,jsonc,yaml,yml,toml,lock}",
-  ".npmrc",
-];
+const AGENT_SKILLS =
+  ".claude/skills/{purchase-import,photo-inventory-import,product-enrichment}/**/*.md";
 
-function excludedSource(file: string): boolean {
-  return (
-    file.startsWith("packages/wasm/") ||
-    file
-      .split("/")
-      .some(
-        (part) =>
-          [
-            "dist",
-            "node_modules",
-            "target",
-            "artifacts",
-            "test-results",
-            "playwright-report",
-            "coverage",
-            ".auth",
-            ".git",
-            ".nx",
-            "certificates",
-            "secrets",
-          ].includes(part) ||
-          part.startsWith(".env") ||
-          part.startsWith(".dev.vars") ||
-          part.startsWith(".wrangler") ||
-          part.startsWith(".cache"),
-      )
-  );
-}
-
-function sourceFilesUnder(repoRoot: string, relative: string): string[] {
-  if (excludedSource(relative)) return [];
-  const absolute = path.join(repoRoot, relative);
-  return walkFiles(absolute, {
-    skip: (name) => excludedSource(name),
-  }).map((file) => path.relative(repoRoot, file));
-}
+const WEB_BUILD_SOURCE = {
+  globs: [
+    "apps/web/src/**",
+    "apps/web/public/**",
+    "apps/web/tooling/**",
+    "apps/web/scripts/**",
+    "apps/web/*.{ts,json,jsonc,toml,html}",
+    "apps/mcp-apps/**",
+    "packages/**",
+    "recipebridge/**",
+    "scripts/**",
+    "docs/**/*.md",
+    AGENT_SKILLS,
+    "*.{json,jsonc,yaml,yml,toml,lock}",
+    ".npmrc",
+  ],
+  // The in-app docs route bundles docs/**/*.md (docs-registry.tsx); the
+  // purchase agent bundles its skills (purchase-agent/import-run-workflows.ts).
+  bundledMarkdown: ["docs/**/*.md", AGENT_SKILLS],
+  generatedRoots: [
+    "apps/web/src",
+    "apps/web/public",
+    "apps/mcp-apps",
+    "packages",
+  ],
+} satisfies BuildSource;
 
 export function webBuildSourceFingerprint(repoRoot: string): string {
-  const gitFiles = execFileSync(
-    "git",
-    ["ls-files", "-z", "--cached", "--others", "--exclude-standard"],
-    { cwd: repoRoot, encoding: "utf8" },
-  )
-    .split("\0")
-    .filter(
-      (file) =>
-        file && sourceGlobs.some((glob) => path.matchesGlob(file, glob)),
-    );
-  // Generated TS/routes are ignored by Git but still consumed by the build.
-  // Include their actual bytes and paths so edits, additions and deletions fail
-  // freshness verification just like hand-written inputs.
-  const files = [
-    ...gitFiles,
-    ...["apps/web/src", "apps/web/public", "apps/mcp-apps", "packages"].flatMap(
-      (root) => sourceFilesUnder(repoRoot, root),
-    ),
-  ]
-    .filter((file) => !excludedSource(file))
-    .filter(
-      (file) => !/\.(?:test|spec)\.[^.]+$/u.test(file) && !file.endsWith(".md"),
-    );
-  return digestFiles(
-    repoRoot,
-    [...new Set(files)].sort().map((file) => path.join(repoRoot, file)),
-    { seed: `preview-build:${process.env.CUBBY_DEV_PREVIEW_BUILD === "true"}` },
-  );
+  return sourceFingerprint(repoRoot, {
+    ...WEB_BUILD_SOURCE,
+    seed: `preview-build:${process.env.CUBBY_DEV_PREVIEW_BUILD === "true"}`,
+  });
 }
 
 export function writeWebBuildProvenance(

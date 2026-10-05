@@ -17,12 +17,20 @@ packages need `pnpm -r --filter '!@cubby/web' run test` after changing
 `packages/*`.
 
 Target a browser spec as `pnpm test:e2e <spec>` without an extra `--`. E2E
-serves `dist/`, so build it before a standalone run; `verify:local` does. A
+serves `dist/`, so build it before a standalone run; `verify:local` does. The
+coupled Workers harness rebuilds a stale web Worker itself. A
 standalone Playwright request context inherits project storage state unless it
 sets empty cookies and origins. workerd drops an idle keep-alive socket after 5s
 while Playwright reuses it, so the E2E fixtures retry an idempotent
 `page.request`/`request` call once on `ECONNRESET` ("socket hang up"); a POST
-or PATCH is never replayed. RTable's placeholder transition can eat clicks;
+or PATCH is never replayed.
+
+Playwright E2E and the coupled Workers harness share a machine-wide lock
+(`/tmp/cubby-harness.lock`, `scripts/lib/harness-lock.ts`): a second suite on
+the same machine queues and logs who holds the lock instead of starving both
+of CPU. A lock whose owner process exited is reclaimed. Processes the holder
+spawns pass straight through. `test:e2e:watch` (`--ui`) skips the lock, since
+its idle session would otherwise hold it indefinitely. RTable's placeholder transition can eat clicks;
 cell-edit tests retry opening and filling as one action.
 
 The `Purchase import agent` Playwright project

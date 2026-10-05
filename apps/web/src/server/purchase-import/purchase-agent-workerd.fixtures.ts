@@ -257,14 +257,20 @@ export async function startScenarioHarness(
       "WRANGLER_HYPERDRIVE_LOCAL_CONNECTION_STRING_HYPERDRIVE_CACHED",
     ].map((key) => [key, process.env[key]]),
   );
-  for (const key of hyperdrive.keys()) process.env[key] = databaseUrl;
-  const harness = createWorkerdHarness(databaseUrl);
   const restore = () => {
     for (const [key, value] of hyperdrive) {
       if (value === undefined) delete process.env[key];
       else process.env[key] = value;
     }
   };
+  for (const key of hyperdrive.keys()) process.env[key] = databaseUrl;
+  let harness: Awaited<ReturnType<typeof createWorkerdHarness>>;
+  try {
+    harness = await createWorkerdHarness(databaseUrl);
+  } catch (error) {
+    restore();
+    throw error;
+  }
   try {
     await harness.listen();
     const controls = scenarioControls(harness);
