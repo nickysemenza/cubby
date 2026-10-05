@@ -15,7 +15,7 @@ after(() => rmSync(fixtureRoot, { recursive: true, force: true }));
 
 writeFileSync(
   path.join(fixtureRoot, "vitest.config.mjs"),
-  `export default { test: { globals: true, include: ["*.fixture.mjs"], reporters: ["dot", ${JSON.stringify(reporter)}] } };\n`,
+  `export default { test: { globals: true, reporters: ["dot", ${JSON.stringify(reporter)}], projects: [{ test: { name: "fixtures", globals: true, include: ["*.fixture.mjs"] } }, { test: { name: "focused", globals: true, include: ["selection.fixture.mjs"], testNamePattern: /alpha/g } }] } };\n`,
 );
 writeFileSync(
   path.join(fixtureRoot, "selection.fixture.mjs"),
@@ -27,6 +27,7 @@ writeFileSync(
 );
 
 function vitest(...args: string[]) {
+  if (!args.includes("--project")) args.unshift("--project", "fixtures");
   const result = spawnSync(
     path.join(webRoot, "node_modules/.bin/vitest"),
     ["run", "--root", fixtureRoot, "--config", "vitest.config.mjs", ...args],
@@ -56,4 +57,9 @@ test("an unfocused run rejects skipped tests", () => {
   const run = vitest("skipped.fixture.mjs");
   assert.notEqual(run.status, 0, run.output);
   assert.match(run.output, /did not execute: .*alpha forgotten/);
+});
+
+test("a project-level name pattern is honored, including a /g pattern", () => {
+  const run = vitest("--project", "focused");
+  assert.equal(run.status, 0, run.output);
 });

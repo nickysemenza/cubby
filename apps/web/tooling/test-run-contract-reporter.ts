@@ -3,27 +3,29 @@ import type { Reporter, TestModule, Vitest } from "vitest/node";
 import { assertTestRunContract } from "./test-run-contract";
 
 export default class TestRunContractReporter implements Reporter {
-  private namePattern: RegExp | undefined;
+  private rootNamePattern: RegExp | undefined;
 
   onInit(vitest: Vitest): void {
-    this.namePattern = vitest.config.testNamePattern;
+    this.rootNamePattern = vitest.config.testNamePattern;
   }
 
   onTestRunEnd(testModules: ReadonlyArray<TestModule>): void {
-    const namePattern = this.namePattern;
     assertTestRunContract(
       testModules.flatMap((testModule) =>
         [...testModule.children.allTests()].map((testCase) => {
           const state = testCase.result().state;
+          const namePattern =
+            testCase.project.config.testNamePattern ?? this.rootNamePattern;
           return {
             name: `${testModule.relativeModuleId} > ${testCase.fullName}`,
             state,
-            // Vitest skips `-t` misses by matching this same full name, so a
+            // Vitest skips `-t` misses with this same `fullName.match`, so a
             // skipped test the pattern still matches is a real `.skip`.
+            // (`match`, not `test`: a /g pattern's lastIndex must not leak.)
             deselected:
               state === "skipped" &&
               namePattern !== undefined &&
-              !namePattern.test(testCase.fullName),
+              !testCase.fullName.match(namePattern),
           };
         }),
       ),
