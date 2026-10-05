@@ -1,0 +1,25 @@
+context platform=ios timeout=240000
+
+# A stopped photo Run has one ready group left. Approval completes it; the same open
+# console must update from its stopped report batch without a manual refresh.
+open com.nickysemenza.cubby
+wait "role=Button label=Find" 240000
+open "cubby://entity/${PHOTO_RUN_ID}"
+wait "id=review.workspace" 90000
+wait text "Proposed items · 1" 90000
+# Establish the stopped report cache before approval; evidence keeps the report offscreen afterward.
+scroll bottom
+wait "label=\"Needs review\"" 90000
+scroll top
+click "role=Button label=\"${PHOTO_SELECTED_NAME}\""
+click "role=Button label=Select"
+wait "role=Button label=Selected" 30000
+click "label=\"Approve selected · 1\""
+wait "label=\"Approve 1 items\" hittable=true" 30000
+wait stable 500 10000
+click "label=\"Approve 1 items\" hittable=true"
+wait text "Settled items" 90000
+scroll top
+wait "label=\"Completed\"" 15000
+scroll down 0.8
+wait text "Run completed" 15000

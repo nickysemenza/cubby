@@ -40,6 +40,7 @@ import { resolveOrThrow } from "~/server/repo/shortcode-resolver";
 import { ensureRun } from "~/server/runs/ensure-run";
 
 afterEach(() => {
+  vi.restoreAllMocks();
   vi.unstubAllEnvs();
   vi.unstubAllGlobals();
   vi.resetModules();
@@ -51,6 +52,54 @@ describe("AiUsage accounting", () => {
   async function usageRows() {
     return await getDb(ctx.db).select().from(aiUsage);
   }
+
+  it.each([
+    { random: 0.25, model: "typesafe/jev", provider: "typesafe" },
+    { random: 0.75, model: "@cf/cloudflare/clef", provider: "cloudflare" },
+  ])(
+    "records exactly one usage row for the selected $model",
+    async ({ random, model, provider }) => {
+      vi.stubEnv("AI_GATEWAY_API_KEY", "test-gateway-key");
+      vi.spyOn(Math, "random").mockReturnValue(random);
+      vi.resetModules();
+      vi.stubGlobal("fetch", async () =>
+        Response.json({
+          result: {
+            answers: {
+              selection: {
+                type: "choice",
+                choice: "c0",
+                confidence: 0.9,
+                probabilities: { c0: 0.9, none: 0.1 },
+              },
+            },
+            usage: { input_tokens: 100, output_tokens: 0 },
+          },
+        }),
+      );
+      const { runJevChoice } = await import("./jev");
+      const runId = await ensureRun(ctx.db, ctx.actor, {
+        purpose: "ai_suggest",
+      });
+      await runJevChoice({
+        feature: { ...FIELD_SUGGESTION_FEATURE, cache: false },
+        subject: "synthetic decision",
+        rules: "Choose one.",
+        choices: ["one"],
+        usage: { db: ctx.db, runId, operation: "decision-model-trial" },
+      });
+      const rows = await usageRows();
+      expect(rows).toHaveLength(1);
+      expect(rows[0]).toMatchObject({
+        model,
+        provider,
+        inputTokens: 100,
+        outputTokens: 0,
+        status: "succeeded",
+        attempt: 1,
+      });
+    },
+  );
 
   it("records one row for one embeddings call", async () => {
     vi.stubEnv("AI_GATEWAY_API_KEY", "test-gateway-key");

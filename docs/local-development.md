@@ -148,7 +148,8 @@ launcher sets a development server marker and persists that server choice.
 Manual Settings exploration uses the same synthetic account and database.
 
 Disposable test services remain separate from this persistent session.
-`pnpm test:e2e:sim` and `pnpm test:e2e:local` retain their own databases, runtime,
+`pnpm test:e2e:sim` and `pnpm test:e2e:local` use the shared Workerd runtime
+with guarded named database leases, and own their native processes
 and sanitized replay artifacts; see [validation](agents/validation.md) and
 [Apple iteration](../apps/apple/ITERATION.md). A manual local session does not
 replace the exact-head GitHub merge gate.
@@ -206,3 +207,14 @@ establish a controlled overall before/after speedup. Concurrent host workloads
 produced substantially slower startup samples. Physical-device networking,
 live provider quality, CDN transformations, and production signature enforcement
 need separate validation.
+
+Native E2E app builds preserve `CubbyKit/Package.resolved` as the package's
+owned lockfile. Xcode can write its app graph (including app-only dependencies
+from `apps/apple/project.yml`) into that local package file while resolving.
+`withKitPackageResolution` verifies every Kit pin remains unchanged, permits
+only added package URLs declared by the app, and restores the original Kit
+serialization after success or failure. A changed Kit pin fails acceptance;
+update Kit pins through its package workflow, rather than accepting build
+churn. The generated Xcode project owns its app resolution state. Build
+fingerprints and simulator cache certification are recorded after restoring
+the Kit file, so clean final-head artifacts remain replayable.

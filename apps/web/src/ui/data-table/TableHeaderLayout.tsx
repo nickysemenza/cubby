@@ -1,8 +1,7 @@
 import { humanize } from "@cubby/shared";
-import { closestCenter, DndContext, type DragEndEvent } from "@dnd-kit/core";
+import { DndContext, type DragEndEvent } from "@dnd-kit/core";
 import { restrictToHorizontalAxis } from "@dnd-kit/modifiers";
 import {
-  arrayMove,
   horizontalListSortingStrategy,
   SortableContext,
   useSortable,
@@ -14,22 +13,18 @@ import { ArrowUpIcon } from "@phosphor-icons/react/dist/csr/ArrowUp";
 import { DotsSixVerticalIcon } from "@phosphor-icons/react/dist/csr/DotsSixVertical";
 import type { Header, RowData } from "@tanstack/react-table";
 import { flexRender } from "@tanstack/react-table";
-import { useId } from "react";
 
 import { FieldProvenance } from "~/entity/field-provenance";
 import { cn } from "~/lib/utils";
-import {
-  createDndAnnouncements,
-  cubbyDndScreenReaderInstructions,
-} from "~/ui/dnd/accessibility";
-import { useCubbyDndSensors } from "~/ui/dnd/sensors";
 import { Button } from "~/ui/primitives/button";
 import { TableHead, TableRow } from "~/ui/primitives/table";
 
 import {
   columnWidthValue,
   isLockedColumn,
+  moveColumn,
   spacerWidthValue,
+  useColumnLayoutDndProps,
 } from "./column-layout";
 import { ColumnResizeHandle } from "./ColumnResizeHandle";
 import type { cubbyTableFeatures, CubbyTable as Table } from "./table-features";
@@ -245,44 +240,16 @@ export default function TableHeaderLayout<TData extends RowData>({
   styles: HeaderStyles;
   isDebugEnabled: boolean;
 }) {
-  const sensors = useCubbyDndSensors({ touchDelay: 150, touchTolerance: 5 });
-  // dnd-kit's default `DndDescribedBy-<n>` id comes from a module-level counter
-  // that advances differently on the server and the client, so every sortable
-  // header's `aria-describedby` hydration-mismatches. `useId` is tree-stable
-  // across SSR and hydration; dnd-kit uses a provided `id` verbatim.
-  const describedById = `DndDescribedBy-${useId()}`;
-  const region = (id: string) => table.getColumn(id)?.getIsPinned() || "center";
+  const dndProps = useColumnLayoutDndProps("column position");
+  // Header drags stay inside their pin region; the customizer moves columns
+  // between regions.
   const onDragEnd = ({ active, over }: DragEndEvent) => {
-    if (!over || active.id === over.id) return;
-    const activeId = String(active.id);
-    const overId = String(over.id);
-    const activeColumn = table.getColumn(activeId);
-    const overColumn = table.getColumn(overId);
-    if (
-      (activeColumn && isLockedColumn(activeColumn)) ||
-      (overColumn && isLockedColumn(overColumn))
-    ) {
-      return;
-    }
-    if (region(activeId) !== region(overId)) return;
-    const activeRegion = region(activeId);
-    if (activeRegion === "start" || activeRegion === "end") {
-      const pinning = table.state.columnPinning;
-      const ids = [...(pinning[activeRegion] ?? [])];
-      const from = ids.indexOf(activeId);
-      const to = ids.indexOf(overId);
-      if (from >= 0 && to >= 0) {
-        table.setColumnPinning({
-          ...pinning,
-          [activeRegion]: arrayMove(ids, from, to),
-        });
-      }
-      return;
-    }
-    const order = table.getAllLeafColumns().map((column) => column.id);
-    const from = order.indexOf(activeId);
-    const to = order.indexOf(overId);
-    if (from >= 0 && to >= 0) table.setColumnOrder(arrayMove(order, from, to));
+    if (!over) return;
+    moveColumn(table, {
+      kind: "reorder",
+      id: String(active.id),
+      over: String(over.id),
+    });
   };
 
   const start = table.getStartHeaderGroups();
@@ -292,19 +259,9 @@ export default function TableHeaderLayout<TData extends RowData>({
 
   return (
     <DndContext
-      id={describedById}
-      sensors={sensors}
-      collisionDetection={closestCenter}
+      {...dndProps}
       modifiers={[restrictToHorizontalAxis]}
       onDragEnd={onDragEnd}
-      accessibility={{
-        container: globalThis.document?.body,
-        screenReaderInstructions: cubbyDndScreenReaderInstructions,
-        announcements: createDndAnnouncements({
-          item: (id) => `${id} column`,
-          target: (id) => `${id} column position`,
-        }),
-      }}
     >
       <SortableContext
         items={table.getVisibleLeafColumns().map((column) => column.id)}

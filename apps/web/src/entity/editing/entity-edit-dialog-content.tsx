@@ -348,8 +348,11 @@ export function EntityEditDialogContent<E extends EditableEntity>({
               }
               toast.success(presentation.successMessage(result.result));
               toastMutationWarnings(result.result.sideEffects);
-              close();
+              // Success before close: a create-from-picker caller resolves its
+              // pending selection in `onSuccess`, and closing first rejects
+              // that pending selection as a cancel.
               onSuccess?.(result.result);
+              close();
             })
             .catch((error: UnparsedError) =>
               setShellError(getErrorMessage(error)),

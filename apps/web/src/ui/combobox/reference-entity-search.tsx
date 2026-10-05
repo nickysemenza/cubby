@@ -138,11 +138,17 @@ function GenericEntitySearch({
   );
 }
 
+type SearchProvider = (props: SearchProviderProps<string>) => ReactNode;
+
+/** One provider component per generic entity. Callers look a provider up
+ * during render and mount it as an element type, so a fresh function per
+ * lookup would remount the picker, dropping its search state and the label
+ * of the item it just selected or created. */
+const genericSearchProviders = new Map<PickerEntity, SearchProvider>();
+
 /** One manifest target -> one established picker/search path. The picker is
  * intentionally ID-based at the write boundary; labels are display-only. */
-export function referenceEntitySearch(
-  entity: PickerEntity,
-): (props: SearchProviderProps<string>) => ReactNode {
+export function referenceEntitySearch(entity: PickerEntity): SearchProvider {
   switch (entity) {
     case "productCategory":
       return WithProductCategorySearch;
@@ -150,20 +156,23 @@ export function referenceEntitySearch(
       // SAFETY: this is the persisted-shortcode vendor provider, not the
       // name-minting picker used by the specialized expense editor.
       return WithVendorShortcodeSearch as never;
-    default:
+    default: {
+      const cached = genericSearchProviders.get(entity);
+      if (cached) return cached;
       // SAFETY: the switch removed all specialized providers; remaining
       // PickerEntity literals are exactly EntitySearchEntity's union.
-      return (props) => (
+      const provider: SearchProvider = (props) => (
         <GenericEntitySearch entity={entity as never} {...props} />
       );
+      genericSearchProviders.set(entity, provider);
+      return provider;
+    }
   }
 }
 
 /** The lookup for a manifest-declared reference target that arrives as a plain
  * string; a target with no picker is a declaration bug, so it throws. */
-export function requireReferenceEntitySearch(
-  entity: string,
-): (props: SearchProviderProps<string>) => ReactNode {
+export function requireReferenceEntitySearch(entity: string): SearchProvider {
   if (!isReferencePickerEntity(entity)) {
     throw new Error(`No reference picker for ${entity}`);
   }

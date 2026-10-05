@@ -85,25 +85,7 @@ struct CubbyApp: App {
         #endif
     }
 
-    @ViewBuilder private var appContent: some View {
-        #if DEBUG && os(iOS)
-            if ProcessInfo.processInfo.arguments.contains("--cubby-preview-photo-run") {
-                NavigationStack {
-                    RunReviewView(
-                        runID: RunReviewPreviewFixture.runID,
-                        previewModel: RunReviewPreviewFixture.model())
-                }
-                .environment(model)
-                .tint(FieldGuideTokens.interaction)
-            } else {
-                normalAppContent
-            }
-        #else
-            normalAppContent
-        #endif
-    }
-
-    private var normalAppContent: some View {
+    private var appContent: some View {
         RootView()
             .environment(model)
             .tint(FieldGuideTokens.interaction)

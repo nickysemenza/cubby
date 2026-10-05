@@ -32,11 +32,8 @@ import {
   getOptionalProductShortcode,
   requiredProductField,
 } from "~/ui/form-fields";
-import {
-  ComboboxField,
-  NullableNumericField,
-  UnifiedTextField,
-} from "~/ui/form-utils";
+import { NullableNumericField, UnifiedTextField } from "~/ui/form-utils";
+import { EntityItemField } from "~/ui/form-utils/entity-value-field";
 import { useImageState } from "~/ui/hooks/useImageState";
 import { Row } from "~/ui/layout";
 import { Button } from "~/ui/primitives/button";
@@ -300,7 +297,7 @@ export function QuickInventoryAdd({
           <div className="flex flex-col gap-2">
             <Row align="end" gap="sm">
               <div className="flex-1">
-                <ComboboxField
+                <EntityItemField
                   entity="product"
                   form={selectForm}
                   name="product"

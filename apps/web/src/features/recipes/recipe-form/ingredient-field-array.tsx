@@ -20,7 +20,7 @@ import { Input } from "~/ui/primitives/input";
 import { QuantityInput } from "~/ui/primitives/quantity-input";
 
 import { useEntityListSource } from "../../../ui/combobox/with-search-hook";
-import { ComboboxField } from "../../../ui/form-utils";
+import { EntityItemField } from "../../../ui/form-utils/entity-value-field";
 import { IngredientReparse } from "./ingredient-reparse";
 import type { IngItem, RecipeFormValues } from "./types";
 
@@ -149,7 +149,7 @@ const IngredientEntityPicker: FC<{
   return (
     <>
       {dialog}
-      <ComboboxField
+      <EntityItemField
         entity="ingredient"
         form={form}
         name={`${path}.ingredient`}
@@ -184,7 +184,7 @@ const RecipeEntityPicker: FC<{
   return (
     <>
       {dialog}
-      <ComboboxField
+      <EntityItemField
         entity="recipe"
         form={form}
         name={`${path}.recipe`}

@@ -441,8 +441,26 @@ configuration are Cloudflare AI Gateway state; no provider key belongs in this
 repository. Verify that every model in the checked-in registry is enabled in
 the gateway before relying on a feature that selects it.
 
-Each feature's tier, and so its model, is declared once in
-`apps/web/src/server/ai/features.ts`. Retier a feature only on live-eval
+Closed-set decision calls run a random 50/50 trial between `typesafe/jev` and
+`@cf/cloudflare/clef` (the full model). The shared runner samples once before
+the application-cache lookup and keeps that model through retries. Each model
+has its own cache key, so repeated identical inputs can return either model's
+cached answer. Cache hits do not place an upstream request; 50/50 is the
+request-assignment probability, not a guaranteed split of billed calls.
+The selected answer drives the normal decision, including the existing 0.85
+high-confidence/autofill threshold. There are no shadow calls or paired
+comparison records. Existing AI usage records retain the selected model,
+provider, latency, token counts and failures, including model-specific cache
+hits. Compare upstream latency on rows with `attempt > 0`, excluding
+application-cache hits. `CLEF_TRAFFIC_SHARE` in `models.ts` controls the trial:
+0 returns all calls to Jev; 1 selects Clef for all calls. Clef requires
+`model: "clef"` in its body and is priced from its registry rate while absent
+from the pinned Rust catalog. Both models keep the existing 254-candidate and
+32,000-byte input bounds; oversized rosters still use the chat overflow tier.
+
+Each feature's tier is declared once in `apps/web/src/server/ai/features.ts`.
+Chat and embedding models derive from that tier; decision calls sample the
+trial model as described above. Retier a feature only on live-eval
 evidence: `pnpm --dir apps/web eval:features` (opt-in, billed) places the
 production purchase-import audit, extraction-repair, and recipe-flow prompts
 through the Gateway as each candidate, with the production schema, validator,

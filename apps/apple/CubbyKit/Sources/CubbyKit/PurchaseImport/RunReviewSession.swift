@@ -29,11 +29,11 @@ public enum RunReviewAction: Sendable {
 public final class RunReviewSession {
     public private(set) var snapshot: RunWorkSnapshotOutput?
     public private(set) var review: PhotoRunReviewResponse?
-    public private(set) var usage: AiRunUsageOut?
-    public private(set) var usageError: String?
     public private(set) var error: String?
     public private(set) var actionError: String?
     public private(set) var busy = false
+    /// Successful commands invalidate reports even when a stopped Run has no active poll.
+    public private(set) var actionRevision = 0
 
     @ObservationIgnored private let reportDiagnostic: @MainActor (any Error, String) -> Void
 
@@ -52,19 +52,11 @@ public final class RunReviewSession {
 
     public func refresh(runID: String, client: CubbyClient) async {
         do {
-            async let usageRequest = client.runAiUsage(.init(runId: runID, limit: 1))
             let next = try await client.runWorkSnapshot(.init(runId: runID))
             snapshot = next
             error = nil
             if next.purpose == .photoInventory {
                 review = try await client.photoRunReview(.init(runId: runID))
-            }
-            do {
-                usage = try await usageRequest
-                usageError = nil
-            } catch {
-                reportDiagnostic(error, "Load run AI usage")
-                usageError = error.localizedDescription
             }
         } catch {
             reportDiagnostic(error, "Load import run review")
@@ -119,6 +111,7 @@ public final class RunReviewSession {
                     .init(reviewedFingerprint: fingerprint, id: id, action: apply ? .apply : .dismiss))
             }
             await refresh(runID: runID, client: client)
+            actionRevision += 1
             return true
         } catch {
             reportDiagnostic(error, "Update import run")

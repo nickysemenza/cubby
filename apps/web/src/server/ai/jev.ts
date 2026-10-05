@@ -1,6 +1,6 @@
 /**
- * The decision-tier runner: one closed-set choice placed with TypeSafe's
- * Jev over Workers AI. The chat-tier counterpart is `run-feature.ts`.
+ * The decision-tier runner: one closed-set choice placed with Jev or Clef
+ * over Workers AI. The chat-tier counterpart is `run-feature.ts`.
  */
 import type { Confidence } from "@cubby/schemas/ai";
 import type { AiUsageTransport } from "@cubby/schemas/telemetry";
@@ -8,6 +8,11 @@ import { retryWithBackoff } from "@cubby/shared/retry";
 import { z } from "zod";
 
 import type { AiDecisionFeature } from "~/server/ai/features";
+import {
+  getDecisionModelConfig,
+  providerFor,
+  selectDecisionModel,
+} from "~/server/ai/models";
 import {
   type ApplicationCacheStatus,
   withAiResponseCache,
@@ -25,7 +30,7 @@ import {
 } from "~/server/clients/ai-gateway";
 import { wrapAiGatewayError } from "~/server/clients/ai-gateway-error";
 
-/** Jev's 32k context, applied to the request body's UTF-8 byte length. */
+/** Common trial bounds: Jev's 32k context, conservatively measured in bytes. */
 const JEV_CONTEXT_BYTE_LIMIT = 32_000;
 const JEV_MAX_CHOICES = 255;
 /** One slot is reserved for `none`. */
@@ -108,7 +113,7 @@ export interface JevChoiceResult {
 
 /**
  * The one seam tests fake: the model answer for an input, not the transport.
- * Production always runs the real transport, so a Jev failure throws instead
+ * Production always runs the real transport, so a model failure throws instead
  * of answering from another model.
  */
 export type JevPort = (input: JevChoiceInput) => Promise<JevChoiceResponse>;
@@ -129,7 +134,7 @@ export function decisionConfidence(probability: number): Confidence {
 function parseJevResponse(response: unknown): JevChoiceResponse {
   const enveloped = jevGatewayEnvelopeSchema.safeParse(response);
   if (enveloped.success) return enveloped.data.result;
-  throw new Error("Jev returned an invalid choice response.");
+  throw new Error("Decision model returned an invalid choice response.");
 }
 
 async function requestJev(
@@ -154,9 +159,15 @@ async function requestJev(
   });
 
   const startedAt = performance.now();
+  const selector = getDecisionModelConfig(feature.model).selector;
+  const requestBody = JSON.stringify(
+    selector ? { ...input, model: selector } : input,
+  );
   const controller = new AbortController();
   const deadline = setTimeout(() => {
-    controller.abort(new Error("Jev request exceeded its 30-second deadline."));
+    controller.abort(
+      new Error("Decision request exceeded its 30-second deadline."),
+    );
   }, JEV_DEADLINE_MS);
   let parsed: JevChoiceResponse | undefined;
   let attempt = 0;
@@ -171,7 +182,7 @@ async function requestJev(
           {
             method: "POST",
             headers: { "content-type": "application/json" },
-            body: JSON.stringify(input),
+            body: requestBody,
             signal: controller.signal,
           },
         );
@@ -197,7 +208,7 @@ async function requestJev(
     );
     if (!response.ok) {
       throw Object.assign(
-        new Error(`Jev request failed (${response.status}): ${body}`),
+        new Error(`Decision request failed (${response.status}): ${body}`),
         { status: response.status },
       );
     }
@@ -206,7 +217,7 @@ async function requestJev(
   } catch (error) {
     throw wrapAiGatewayError(error, {
       model: feature.model,
-      provider: "typesafe",
+      provider: providerFor(feature.model),
       route: "workers-ai",
       feature: feature.feature,
       operation: ctx.operation,
@@ -346,22 +357,26 @@ export async function runJevChoice(args: {
     }
     return result;
   };
+  // Pin the sampled model before cache lookup; retries and usage keep it.
+  const feature = args.port
+    ? args.feature
+    : { ...args.feature, model: selectDecisionModel() };
   return withAiResponseCache({
-    enabled: args.feature.cache && !args.port,
+    enabled: feature.cache && !args.port,
     force: args.usage.force,
     keyInput: {
-      feature: args.feature.feature,
-      model: args.feature.model,
-      promptVersion: args.feature.promptVersion,
+      feature: feature.feature,
+      model: feature.model,
+      promptVersion: feature.promptVersion,
       input,
     },
     validate,
     onHit: (durationMs) =>
-      recordApplicationCacheHit(args.feature, args.usage, durationMs),
+      recordApplicationCacheHit(feature, args.usage, durationMs),
     compute: async (applicationCacheStatus) => {
       const response = await (args.port
         ? args.port(input)
-        : requestJev(input, args.usage, args.feature, applicationCacheStatus));
+        : requestJev(input, args.usage, feature, applicationCacheStatus));
       const answer = response.answers.selection;
       validateProbabilities(
         answer.probabilities,

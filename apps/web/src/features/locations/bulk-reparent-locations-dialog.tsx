@@ -1,4 +1,7 @@
-import type { LocationShortcode } from "@cubby/schemas/identifiers";
+import {
+  locationShortcode,
+  type LocationShortcode,
+} from "@cubby/schemas/identifiers";
 import type { LocationListItemOut } from "@cubby/schemas/location";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useMutation } from "@tanstack/react-query";
@@ -8,17 +11,18 @@ import { toast } from "sonner";
 import { z } from "zod";
 
 import { location } from "~/integrations/tanstack-query/generated/catalog.gen";
+import { referenceEntitySearch } from "~/ui/combobox/reference-entity-search";
 import { BulkActionDialog } from "~/ui/dialogs/bulk-action-dialog";
-import { getLocationId, requiredLocationField } from "~/ui/form-fields";
-import { ComboboxFieldWithSearch } from "~/ui/form-utils/combobox-field-with-search";
+import { requiredLocationCode } from "~/ui/form-fields";
+import { EntityValueField } from "~/ui/form-utils/entity-value-field";
 import { Stack } from "~/ui/layout";
 import { StatusText } from "~/ui/primitives/status-text";
 
 const formSchema = z.object({
-  targetParent: requiredLocationField,
+  targetParent: requiredLocationCode,
 });
 
-type FormValues = z.input<typeof formSchema>;
+const LocationSearch = referenceEntitySearch("location");
 
 interface BulkReparentLocationsDialogProps {
   open: boolean;
@@ -34,15 +38,23 @@ export function BulkReparentLocationsDialog({
   onSuccess,
 }: BulkReparentLocationsDialogProps) {
   const [error, setError] = useState<string | null>(null);
+  // The form stores the parent's shortcode; the effect list shows its name.
+  const [targetParentName, setTargetParentName] = useState<string | null>(null);
   const selectedIds = new Set<LocationShortcode>(
     locations.map((location) => location.id),
   );
 
-  const form = useForm<FormValues>({
+  const form = useForm<
+    z.input<typeof formSchema>,
+    unknown,
+    z.output<typeof formSchema>
+  >({
     resolver: zodResolver(formSchema),
-    defaultValues: { targetParent: null },
+    defaultValues: { targetParent: "" },
   });
-  const targetParent = form.watch("targetParent");
+  const targetParentId = locationShortcode.safeParse(
+    form.watch("targetParent"),
+  ).data;
 
   const bulkUpdateParent = useMutation({
     ...location.bulkUpdateParent.mutationOptions(),
@@ -57,12 +69,8 @@ export function BulkReparentLocationsDialog({
     onError: (err) => setError(err.message || "Failed to move locations"),
   });
 
-  const handleSubmit = async () => {
-    const valid = await form.trigger();
-    if (!valid) return;
-
-    const targetParentId = getLocationId(form.getValues("targetParent"));
-    if (selectedIds.has(targetParentId)) {
+  const handleSubmit = form.handleSubmit(async ({ targetParent }) => {
+    if (selectedIds.has(targetParent)) {
       setError("Choose a parent that is not one of the selected locations.");
       return;
     }
@@ -70,9 +78,9 @@ export function BulkReparentLocationsDialog({
     setError(null);
     await bulkUpdateParent.mutateAsync({
       ids: [...selectedIds],
-      parentId: targetParentId,
+      parentId: targetParent,
     });
-  };
+  });
 
   const handleOpenChange = (nextOpen: boolean) => {
     if (!nextOpen) {
@@ -98,13 +106,13 @@ export function BulkReparentLocationsDialog({
         // named as its own new parent is a real blocker, not a no-op: the
         // submit guard below refuses the whole write, so say so up front.
         effect={
-          targetParent
+          targetParentId
             ? (location) => ({
                 from: location.parent?.name ?? "Home",
-                to: targetParent.name,
-                unchanged: location.parent?.id === targetParent.id,
+                to: targetParentName ?? targetParentId,
+                unchanged: location.parent?.id === targetParentId,
                 blocked:
-                  location.id === targetParent.id
+                  location.id === targetParentId
                     ? "a location cannot be its own parent"
                     : undefined,
               })
@@ -115,11 +123,14 @@ export function BulkReparentLocationsDialog({
         isPending={bulkUpdateParent.isPending}
       >
         <Stack gap="md">
-          <ComboboxFieldWithSearch
+          <EntityValueField
             form={form}
             name="targetParent"
             label="New Parent Location"
-            searchType="location"
+            entity="location"
+            SearchProvider={LocationSearch}
+            clearable
+            onSelect={(item) => setTargetParentName(item?.name ?? null)}
           />
 
           {error && (

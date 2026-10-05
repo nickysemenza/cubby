@@ -445,7 +445,12 @@ export const SPEC_EXTRA_GLOBS: SpecGlobMap = {
     `${WEB}/src/server/repo/task/**`,
     `${WEB}/src/features/command-menu/command-menu.tsx`,
     `${WEB}/src/features/command-menu/command-menu-loader.ts`,
-    `${WEB}/src/features/command-menu/command-menu-search-groups.unit.test.tsx`,
+  ],
+  "search-product-family.spec.ts": [
+    `${WEB}/src/routes/_authenticated/search.index.tsx`,
+    `${WEB}/src/features/search/**`,
+    `${WEB}/src/features/command-menu/**`,
+    `${WEB}/src/server/services/search-grouping.service.ts`,
   ],
   "quality-explanations.spec.ts": [
     `${WEB}/src/ui/data-table/**`,

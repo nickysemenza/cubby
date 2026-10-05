@@ -13,6 +13,14 @@ existing block. Extend the generic path when it almost fits. See
   (`apps/web/src/entity/entity-display.tsx`); named renderers in
   `apps/web/src/entity/list-field-renderers.tsx`. Hand overrides in
   `entity/list-columns/` are only for mutation-bound cells.
+- Run detail: every Run route (`Route.entityDetail(.run, …)`) opens `RunConsoleView`, the
+  declared hero and `run` slots through `DetailSlotRegistry`. Its status follows the batched
+  report poll (`ReportBatchModel.status`/`revision`), never a second Run poll. Specialist
+  reviews are slots or owned sections of it: a photo Run's review is the `photo-batch` slot
+  (`RunPhotoReviewSections` with `.photoReviewConfirmations` on the console's list), led
+  ahead of the reports. Successful photo commands advance `RunReviewSession.actionRevision`
+  to refresh the report batch even while stopped; ordinary session refreshes never advance it
+  or feed back into polling. Never link a Run slot back to the Run screen.
 - Edit forms: generated intents plus the typed `editHooks` map in
   `apps/web/src/entity/editing/`.
 - Saved views: `presentation.list.views` on the declaration.
@@ -38,9 +46,12 @@ existing block. Extend the generic path when it almost fits. See
   `purchase.checkSplit` / `purchase.checkLinkExpenses` return the body to send or the
   reason not to (`server/repo/purchase-split-draft.ts`, `purchase-link-draft.ts`).
 - Swift: generated OpenAPI client, `entity-manifest.json`, the generated manifest
-  vocabulary enums (`Generated/EntityVocabulary.swift`, from
-  `scripts/generator/entities/render/swift-catalog.ts`), and the generic list
-  and detail views; no hand-written mapping layer.
+  vocabulary enums (`Generated/EntityVocabulary.swift`) and descriptor types
+  (`Generated/EntityDescriptors.swift`, including `ValueSchema`). The typed description in
+  `packages/schemas/src/manifest-wire.ts` drives descriptor JSON validation, Swift storage,
+  and web structured-value types; `scripts/generator/entities/render/swift-catalog.ts`
+  emits the bundle and declarations. Native conveniences stay extensions. The generic list
+  and detail views consume that bundle; no hand-written mapping layer.
 
 ## Server
 
@@ -118,14 +129,25 @@ existing block. Extend the generic path when it almost fits. See
 - Dialogs: `WorkflowDialog`, `ResponsiveDialog` + `DialogFormActions`,
   `DeleteEntityDialog` + `useStagedDialogAction`, `LocationMoveDialog`.
 - Pickers: `EntityPicker` / `EntityReferencePicker`, `referenceEntitySearch`;
-  no direct `ui/combobox` use outside picker builders.
+  no direct `ui/combobox` use outside picker builders. A form field binds one
+  through `ui/form-utils/entity-value-field.tsx`: `EntityValueField` stores the
+  shortcode (assignment forms and dialogs), `EntityItemField` stores the whole
+  item (recipe rows, quick add). Both share one binding for validation,
+  suggestions, and the selected label.
 - Tables: `RTable` and the generic relation table; raw `<table>` only for
-  matrices, cross-tabs, and debug views.
+  matrices, cross-tabs, and debug views. Column-layout changes go through
+  `moveColumn` / `applyColumnLayout` (`ui/data-table/column-layout.ts`), never
+  direct `setColumnOrder` / `setColumnPinning` / `column.pin` calls.
 - Formatting: `lib/utils` formatters (`formatCurrency`, `formatCount`,
   `formatPercent`, `roundTo`, compact variants) and the WASM amount formatter.
   Currency, bare numbers, amounts, and the compact nutrition cell are one Rust
   implementation (`recipebridge/src/display_format.rs`) shared with native via
   UniFFI; add a rule there and to `golden-vectors/display-format.json`.
+- Search results: `features/search/search-utils.tsx` (routes, media, match
+  text) and `features/search/product-family.tsx`, the one Product-family
+  model (summary, child rows, destinations, keys, disclosure) behind both the
+  search page and the command menu. Each surface keeps its own outer element
+  and child limit.
 - Errors and clipboard: `showErrorToast`, `ErrorDisplay`, `copyTextWithToast`.
 - Data: generated query catalog operations, `useActionMutation`,
   `useUpdateMutation`, `useDeletableConfig`, `useAllEntityRecords`.

@@ -23,14 +23,17 @@ export interface WorkerdRuntimeOptions {
   database: { lease: () => Promise<DatabaseLease> } | { borrowed: string };
   /**
    * Omitted: object storage is unreachable. Present: local S3-compatible
-   * storage; `publish` also serves it at a public origin, for live model
-   * peers that fetch the Worker's public object URLs.
+   * storage owned by the runtime; `publish` also serves it at a public origin, for live model
+   * peers that fetch the Worker's public object URLs. A borrowed endpoint and
+   * public URL belong to the caller and survive close or failed acquisition.
    */
-  objectStorage?: {
-    publish?: (
-      url: string,
-    ) => Promise<{ origin: string; close(): Promise<void> }>;
-  };
+  objectStorage?:
+    | { borrowed: NonNullable<WorkerdHarnessOptions["objectStorage"]> }
+    | {
+        publish?: (
+          url: string,
+        ) => Promise<{ origin: string; close(): Promise<void> }>;
+      };
   models?: WorkerdHarnessOptions["models"];
   /** Called after each acquisition, to attribute a slow or failed start. */
   onPhase?: (phase: string) => void;
@@ -84,7 +87,9 @@ export async function openWorkerdRuntime<T>(
     }
 
     let objectStorage: WorkerdHarnessOptions["objectStorage"];
-    if (options.objectStorage) {
+    if (options.objectStorage && "borrowed" in options.objectStorage) {
+      objectStorage = options.objectStorage.borrowed;
+    } else if (options.objectStorage) {
       const storage = await createE2EObjectStorage();
       cleanup.push("object storage", storage.close);
       let publicUrl = storage.url;

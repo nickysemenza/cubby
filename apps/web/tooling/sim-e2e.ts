@@ -12,6 +12,7 @@ import {
   simulatorBuildFingerprint,
   stampSimulatorBuild,
 } from "../../../scripts/apple-simulator-build-cache.ts";
+import { withKitPackageResolution } from "../../../scripts/apple-package-resolution.ts";
 import { createHash, randomBytes } from "node:crypto";
 import {
   appendFileSync,
@@ -27,7 +28,6 @@ import { homedir } from "node:os";
 import { createInterface } from "node:readline";
 import { fileURLToPath } from "node:url";
 import { request } from "@playwright/test";
-import { drizzle } from "drizzle-orm/node-postgres";
 import { Pool } from "pg";
 import { z } from "zod";
 
@@ -42,7 +42,8 @@ import {
   selectIOSSimulator,
 } from "../../../scripts/apple-simulator-selection.ts";
 import { scrubErrorMessage } from "../src/lib/error-diagnostics";
-import { assertSimulatorAdminUrl } from "./sim-db-guard";
+import { openWorkerdRuntime, type WorkerdRuntime } from "./workerd-runtime";
+import { leaseNamedDatabase } from "./test-database-lease";
 import { ensureWebBuild, readWebBuildProvenance } from "./web-build-provenance";
 
 const webRoot = path.resolve(
@@ -74,6 +75,7 @@ Modes (one per run; no mode = full native journey in the iOS simulator):
   --input-journey [--video]  PhotosPicker/Files input acceptance
   --emoji-review [--video]   category emoji review replay
   --qa [--hold] [--video]    seeded synthetic household QA pass; --hold keeps it up
+  --qa-photo-completion     stopped photo Run final approval updates hero and reports
   --tester-army [--journey a,b] [--replay] [--wrong]
                              live-model agent journeys (billed; see docs/tester-army.md)
 
@@ -111,12 +113,17 @@ const emojiReview = flags.includes("--emoji-review");
 const testerArmy = flags.includes("--tester-army");
 const testerArmyReplay = flags.includes("--replay");
 const wrongName = flags.includes("--wrong") || flags.includes("--wrong-name");
-const qa = flags.includes("--qa");
+const qaPhotoCompletion = flags.includes("--qa-photo-completion");
+const qa = flags.includes("--qa") || qaPhotoCompletion;
 const qaHold = flags.includes("--hold");
 if (
   (qa &&
     flags.some(
-      (flag) => flag !== "--qa" && flag !== "--hold" && flag !== "--video",
+      (flag) =>
+        flag !== "--qa" &&
+        flag !== "--qa-photo-completion" &&
+        flag !== "--hold" &&
+        flag !== "--video",
     )) ||
   (qaHold && !qa) ||
   (emojiReview &&
@@ -166,6 +173,7 @@ if (
         "--replay",
         "--wrong-name",
         "--qa",
+        "--qa-photo-completion",
         "--hold",
         "--wrong",
       ].includes(argument),
@@ -819,7 +827,9 @@ function startDatabaseWatchdog(): void {
       simName,
       String(process.pid),
       path.join(artifacts, "watchdog.log"),
-      ...(headless
+      // The watchdog accepts a session to close only for the simulator watch
+      // lane (artifacts/sim-dev); every other run gets database-only cleanup.
+      ...(headless || !watch
         ? []
         : [`cubby-sim-${simName}`, path.join(artifacts, "agent-device-state")]),
     ],
@@ -1491,37 +1501,65 @@ async function runQaJourneys(
     ? await recordSimulatorVideo(common[3] ?? "")
     : undefined;
   const flaky: string[] = [];
+  const replay = (
+    journey: string,
+    attempt: number,
+    variables: Record<string, string>,
+  ) =>
+    run(
+      "pnpm",
+      [
+        "exec",
+        "agent-device",
+        "test",
+        `apps/apple/e2e/${journey}`,
+        ...common,
+        "--retries",
+        "0",
+        "--artifacts-dir",
+        artifacts,
+        "--reporter",
+        "default",
+        "--reporter",
+        // Per attempt, so a retried pass keeps the failed attempt's report beside it.
+        `junit:${path.join(artifacts, `junit-${journey}-attempt-${attempt}.xml`)}`,
+        ...Object.entries(variables).flatMap(([key, value]) => [
+          "-e",
+          `${key}=${value}`,
+        ]),
+      ],
+      repoRoot,
+    );
+  const completePhotoRun = async () => {
+    const { runNativePhotoCompletionJourney } =
+      await import("./scenarios/native-photo-completion");
+    const pool = new Pool({ connectionString: databaseURL });
+    try {
+      await relaunch();
+      scenarioEvidence.push(
+        await runNativePhotoCompletionJourney({
+          pool,
+          userId: qaUserId,
+          artifacts,
+          replay: (journey, variables) => replay(journey, 1, variables),
+        }),
+      );
+    } finally {
+      await pool.end();
+    }
+  };
   try {
+    if (qaPhotoCompletion) {
+      await completePhotoRun();
+      return;
+    }
     for (const journey of journeys) {
       // A scroll can land short while a detail page is still laying out; a journey only
       // writes after its last scroll, so one retry from a relaunched app is a clean replay.
       for (let attempt = 1; ; attempt += 1) {
         await relaunch();
         try {
-          await run(
-            "pnpm",
-            [
-              "exec",
-              "agent-device",
-              "test",
-              `apps/apple/e2e/${journey}`,
-              ...common,
-              "--retries",
-              "0",
-              "--artifacts-dir",
-              artifacts,
-              "--reporter",
-              "default",
-              "--reporter",
-              // Per attempt, so a retried pass keeps the failed attempt's report beside it.
-              `junit:${path.join(artifacts, `junit-${journey}-attempt-${attempt}.xml`)}`,
-              ...Object.entries(qaIds).flatMap(([key, value]) => [
-                "-e",
-                `${key}=${value}`,
-              ]),
-            ],
-            repoRoot,
-          );
+          await replay(journey, attempt, qaIds);
           break;
         } catch (error) {
           flaky.push(journey);
@@ -1533,6 +1571,35 @@ async function runQaJourneys(
         }
       }
     }
+    // The stop guard's two phases share one open screen, so only the first relaunches; a
+    // retry seeds a fresh running Run.
+    const { runNativeRunStopJourney } =
+      await import("./scenarios/native-run-stop");
+    const stopPool = new Pool({ connectionString: databaseURL });
+    try {
+      for (let attempt = 1; ; attempt += 1) {
+        await relaunch();
+        try {
+          scenarioEvidence.push(
+            await runNativeRunStopJourney({
+              pool: stopPool,
+              userId: qaUserId,
+              artifacts,
+              replay: (journey, variables) =>
+                replay(journey, attempt, variables),
+            }),
+          );
+          break;
+        } catch (error) {
+          flaky.push("run-stop");
+          if (attempt >= 2 || interrupted) throw error;
+          console.log(`[${lane}] run-stop attempt ${attempt} failed; retrying`);
+        }
+      }
+    } finally {
+      await stopPool.end();
+    }
+    await completePhotoRun();
   } finally {
     await stopRecording?.();
     if (flaky.length > 0)
@@ -1630,17 +1697,7 @@ async function runNativeJourney(
 
 // eslint-disable-next-line complexity -- All disposable native lanes share one exception, artifact and cleanup boundary.
 async function main(): Promise<void> {
-  assertSimulatorAdminUrl(adminURL);
-  const admin = new Pool({ connectionString: adminURL });
-  let created = false;
-  let harness: import("./workerd-harness").WorkerdHarness | undefined;
-  let objectStorage:
-    | Awaited<
-        ReturnType<
-          (typeof import("./local-object-storage"))["createE2EObjectStorage"]
-        >
-      >
-    | undefined;
+  let runtime: WorkerdRuntime | undefined;
   let suggestionPeer:
     | Awaited<
         ReturnType<
@@ -1690,12 +1747,7 @@ async function main(): Promise<void> {
       errors.push(error instanceof Error ? error : new Error(String(error)));
     }
     try {
-      await harness?.close();
-    } catch (error) {
-      errors.push(error instanceof Error ? error : new Error(String(error)));
-    }
-    try {
-      await objectStorage?.close();
+      await runtime?.close();
     } catch (error) {
       errors.push(error instanceof Error ? error : new Error(String(error)));
     }
@@ -1718,25 +1770,6 @@ async function main(): Promise<void> {
       } catch (error) {
         errors.push(error instanceof Error ? error : new Error(String(error)));
       }
-    }
-    if (created) {
-      try {
-        await admin.query(`DROP DATABASE "${simName}" WITH (FORCE)`);
-        const remaining = await admin.query<{ exists: boolean }>(
-          "SELECT EXISTS (SELECT 1 FROM pg_database WHERE datname = $1) AS exists",
-          [simName],
-        );
-        if (remaining.rows[0]?.exists)
-          errors.push(new Error(`Cleanup failed for ${simName}`));
-        else console.log(`[${lane}] Dropped ${simName}`);
-      } catch (error) {
-        errors.push(error instanceof Error ? error : new Error(String(error)));
-      }
-    }
-    try {
-      await admin.end();
-    } catch (error) {
-      errors.push(error instanceof Error ? error : new Error(String(error)));
     }
     return errors;
   };
@@ -1777,6 +1810,7 @@ async function main(): Promise<void> {
     console.log(`[${lane}] Web build ${buildAction}`);
     phase = "database";
     const databaseStarted = performance.now();
+    let workerStarted = databaseStarted;
     if (process.env.CUBBY_SIM_DB_EXTERNAL !== "1")
       await run(
         "node",
@@ -1786,36 +1820,40 @@ async function main(): Promise<void> {
         false,
         bootstrapEnvironment,
       );
-    await admin.query(`CREATE DATABASE "${simName}"`);
-    created = true;
-    console.log(`[${lane}] Disposable database ${simName}`);
-    if (watch) startDatabaseWatchdog();
-    const pool = new Pool({ connectionString: databaseURL });
-    try {
-      const { migrateDatabase } = await import("./db-migrate");
-      await migrateDatabase(drizzle(pool));
-    } finally {
-      await pool.end();
-    }
-
-    phase = "worker-startup";
-    phases.push({
-      name: "database",
-      durationMs: Math.round(performance.now() - databaseStarted),
-    });
-    const workerStarted = performance.now();
-    const { startWorkerdHarness } = await import("./workerd-harness");
-    const { createE2EObjectStorage } = await import("./local-object-storage");
-    objectStorage = await createE2EObjectStorage();
-    harness = await startWorkerdHarness({
-      profile: "offline",
-      databaseUrl: databaseURL,
-      objectStorage: {
-        endpoint: objectStorage.url,
-        publicUrl: objectStorage.url,
+    ({ runtime } = await openWorkerdRuntime(
+      {
+        profile: "offline",
+        database: {
+          lease: async () => {
+            const { lease } = await leaseNamedDatabase(
+              {
+                adminUrl: adminURL,
+                name: simName,
+                retention: "drop",
+                onCreated: () => {
+                  console.log(`[${lane}] Disposable database ${simName}`);
+                  startDatabaseWatchdog();
+                },
+              },
+              async () => undefined,
+            );
+            phases.push({
+              name: "database",
+              durationMs: Math.round(performance.now() - databaseStarted),
+            });
+            phase = "worker-startup";
+            workerStarted = performance.now();
+            return lease;
+          },
+        },
+        objectStorage: {},
       },
-    });
-    const { url } = await harness.listen();
+      async () => undefined,
+    ));
+    const url = new URL(runtime.origin);
+    const objectStorageUrl = runtime.objectStorageUrl;
+    if (!objectStorageUrl)
+      throw new Error("Native runtime is missing object storage");
     if (testerArmy) process.env.TESTER_ARMY_ORIGIN = url.origin;
     const context = await request.newContext({
       baseURL: url.origin,
@@ -1863,7 +1901,7 @@ async function main(): Promise<void> {
       if (statementCsv) {
         await runHeadlessStatementCsvScenario(url, userId);
       } else if (photo) {
-        await runHeadlessPhotoScenario(url, objectStorage.url, userId);
+        await runHeadlessPhotoScenario(url, objectStorageUrl, userId);
         if (purchase) {
           const { runWardrobeConvergenceScenario } =
             await import("./scenarios/wardrobe-convergence");
@@ -1960,10 +1998,9 @@ async function main(): Promise<void> {
           hosted &&
           hasMatchingSimulatorBuild(repoRoot, nativeToolchain, buildArgs);
         if (hosted && !reuseCertifiedApp) {
-          await run("xcodebuild", [
-            ...buildArgs,
-            "-resolvePackageDependencies",
-          ]);
+          await withKitPackageResolution(repoRoot, () =>
+            run("xcodebuild", [...buildArgs, "-resolvePackageDependencies"]),
+          );
           try {
             certifiedInput = simulatorBuildFingerprint(
               repoRoot,
@@ -1984,7 +2021,9 @@ async function main(): Promise<void> {
         if (reuseCertifiedApp) {
           console.log(`[${lane}] Reusing the verified simulator app bundle`);
         } else {
-          await run("xcodebuild", [...buildArgs, "build"]);
+          await withKitPackageResolution(repoRoot, () =>
+            run("xcodebuild", [...buildArgs, "build"]),
+          );
           if (certifiedInput)
             stampSimulatorBuild(
               repoRoot,

@@ -1,7 +1,6 @@
 import {
   type IngredientShortcode,
   ingredientShortcode,
-  type LocationShortcode,
   locationShortcode,
   type ProductShortcode,
   productShortcode,
@@ -17,31 +16,18 @@ export const requiredProductField = ComboboxItem.nullable().refine(
   { message: "Please select a product" },
 );
 
-export const requiredLocationField = ComboboxItem.nullable().refine(
-  (item) => item !== null,
-  { message: "Please select a location" },
-);
-
-export const optionalLocationField = ComboboxItem.nullable();
-
-export function getLocationId(
-  item: z.input<typeof requiredLocationField>,
-): LocationShortcode {
-  return locationShortcode.parse(item!.id);
-}
+/** An id-valued location picker (`EntityValueField`) that must be filled;
+ * the picker writes "" when cleared. */
+export const requiredLocationCode = z
+  .string()
+  .min(1, "Please select a location")
+  .pipe(locationShortcode);
 
 export function getOptionalProductShortcode(
   item: ComboboxItem | null | undefined,
 ): ProductShortcode | undefined {
   if (!item?.id) return undefined;
   return productShortcode.parse(item.id);
-}
-
-export function getOptionalLocationId(
-  item: ComboboxItem | null | undefined,
-): LocationShortcode | undefined {
-  if (!item?.id) return undefined;
-  return locationShortcode.parse(item.id);
 }
 
 export function getOptionalIngredientId(

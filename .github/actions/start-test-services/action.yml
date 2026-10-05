@@ -2,6 +2,8 @@ name: "Start test database services"
 description: >-
   Starts PostgreSQL 17 with pgvector (and optionally IntegreSQL) on localhost
   5432 and 5000, the endpoints scripts/test-services.ts uses in external mode.
+  The same PostgreSQL is also published on 55432, the only admin
+  target the native named-database lease guard (sim-db-guard.ts) accepts.
   A composite action cannot declare `services:`, so this runs the same images
   the jobs previously declared inline and waits until they answer.
 
@@ -33,6 +35,7 @@ runs:
         # jit=off matches production, which has no JIT provider; see the same
         # setting in scripts/test-services.ts for the measured failure.
         docker run -d --name postgres --network cubby-test -p 5432:5432 \
+          -p 55432:5432 \
           -e POSTGRES_USER=postgres -e POSTGRES_DB=cubby \
           -e POSTGRES_HOST_AUTH_METHOD=trust \
           --health-cmd "pg_isready -U postgres" --health-interval 2s \

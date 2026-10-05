@@ -1,3 +1,5 @@
+import { closestCenter } from "@dnd-kit/core";
+import { arrayMove } from "@dnd-kit/sortable";
 import type {
   CellData,
   ColumnOrderState,
@@ -11,17 +13,25 @@ import {
   type Dispatch,
   type SetStateAction,
   useEffect,
+  useId,
   useMemo,
   useRef,
 } from "react";
+import { z } from "zod";
 
 import { isInspectableFieldProvenance } from "~/entity/field-provenance";
+import {
+  createDndAnnouncements,
+  cubbyDndScreenReaderInstructions,
+} from "~/ui/dnd/accessibility";
+import { useCubbyDndSensors } from "~/ui/dnd/sensors";
 
 import { CELL_RAIL_SLOT_PX } from "./cell-frame";
 import {
   materializeCubbyColumns,
   type CubbyColumnCollection,
   type CubbyColumnDef,
+  type CubbyTable,
 } from "./table-features";
 import type { CubbyColumnMeta, EntityColumnRole } from "./table-meta";
 
@@ -70,18 +80,180 @@ export function isLockedColumn(column: RoleBearingColumn) {
 
 /**
  * Re-sorts an id list so the locked-end columns trail it, preserving the order
- * of everything else. The drag handlers reject a locked column as the drag
- * subject, but a drop onto empty space past it still appends after it — this is
- * what keeps that landing spot from outranking the actions menu.
+ * of everything else. A placement appends to its region, and a saved view's
+ * layout is hand-written — this keeps either from outranking the actions menu.
  */
-export function withLockedEndLast(
+function withLockedEndLast<TData extends RowData>(
+  table: CubbyTable<TData>,
   ids: readonly string[],
-  lockedEndIds: ReadonlySet<string>,
 ) {
-  const locked = ids.filter((id) => lockedEndIds.has(id));
-  return locked.length === 0
-    ? [...ids]
-    : [...ids.filter((id) => !lockedEndIds.has(id)), ...locked];
+  const lockedEnd = new Set(
+    table
+      .getAllLeafColumns()
+      .filter((column) => {
+        const role = column.columnDef.meta?.entityColumnRole;
+        return role != null && LOCKED_END_COLUMN_ROLES.includes(role);
+      })
+      .map((column) => column.id),
+  );
+  return [
+    ...ids.filter((id) => !lockedEnd.has(id)),
+    ...ids.filter((id) => lockedEnd.has(id)),
+  ];
+}
+
+export const columnRegionSchema = z.enum(["start", "center", "end"]);
+export type ColumnRegion = z.infer<typeof columnRegionSchema>;
+
+export function columnRegion(column: {
+  getIsPinned: () => false | "start" | "end";
+}): ColumnRegion {
+  return column.getIsPinned() || "center";
+}
+
+/**
+ * One user change to the live column layout.
+ *
+ * - `reorder`: move `id` onto `over`'s slot inside their shared region (header
+ *   drag, move earlier/later). A cross-region pair is rejected.
+ * - `place`: put `id` in `region` — onto `over`'s slot when given (customizer
+ *   drag), else at the end of a pinned region (pin) or back in its own
+ *   `columnOrder` slot among the unpinned columns (unpin).
+ */
+export type ColumnMove =
+  | { kind: "reorder"; id: string; over: string }
+  | { kind: "place"; id: string; region: ColumnRegion; over?: string };
+
+/**
+ * Each region's columns in display order. Pinned regions follow
+ * `columnPinning`, the center follows `columnOrder` — the same sources the
+ * header renders from, so every surface lists one order.
+ */
+export function columnsByRegion<TData extends RowData>(
+  table: CubbyTable<TData>,
+) {
+  return {
+    start: table.getStartLeafColumns(),
+    center: table.getCenterLeafColumns(),
+    end: table.getEndLeafColumns(),
+  };
+}
+
+/**
+ * `ids` with `id` moved onto `over`'s slot: `arrayMove` within one region,
+ * otherwise inserted before `over`, or appended when there is none.
+ */
+function placed(
+  ids: readonly string[],
+  id: string,
+  over: string | undefined,
+  sameRegion: boolean,
+) {
+  if (sameRegion && over !== undefined && ids.includes(id)) {
+    return arrayMove([...ids], ids.indexOf(id), ids.indexOf(over));
+  }
+  const rest = ids.filter((item) => item !== id);
+  const index = over === undefined ? -1 : rest.indexOf(over);
+  rest.splice(index < 0 ? rest.length : index, 0, id);
+  return rest;
+}
+
+/** The move's columns and regions, or nothing when the policy rejects it. */
+function allowedMove<TData extends RowData>(
+  table: CubbyTable<TData>,
+  move: ColumnMove,
+) {
+  const column = table.getColumn(move.id);
+  const target =
+    move.over === undefined ? undefined : table.getColumn(move.over);
+  if (!column || isLockedColumn(column) || move.id === move.over) return;
+  if (target && isLockedColumn(target)) return;
+  if (move.kind === "reorder" && !target) return;
+  const region = columnRegion(column);
+  const landing = move.kind === "place" ? move.region : region;
+  if (target && columnRegion(target) !== landing) return;
+  return { column, target, region, landing };
+}
+
+/**
+ * The single writer of user column-layout changes. Locked structural columns
+ * are never the subject or the target of a move, and the locked-end columns
+ * stay last in the `end` region.
+ *
+ * A pinned region's order lives only in `columnPinning`; the center's lives in
+ * `columnOrder`, which keeps a pinned column's center slot so unpinning returns
+ * it there. Regression: a pinned reorder was once read back from
+ * `columnOrder`, so the Columns dialog disagreed with the header and the next
+ * placement reverted it. A same-region move uses `arrayMove`, which is where
+ * dnd-kit's sortable preview shows the dragged column landing.
+ */
+export function moveColumn<TData extends RowData>(
+  table: CubbyTable<TData>,
+  move: ColumnMove,
+) {
+  const resolved = allowedMove(table, move);
+  if (!resolved) return;
+  const { column, target, region, landing } = resolved;
+  const pinning = table.state.columnPinning;
+  const pins = { start: pinning.start ?? [], end: pinning.end ?? [] };
+  const sameRegion = region === landing;
+  if (!sameRegion && region !== "center") {
+    pins[region] = pins[region].filter((id) => id !== column.id);
+  }
+  if (landing !== "center") {
+    pins[landing] = placed(pins[landing], column.id, target?.id, sameRegion);
+  } else if (target) {
+    const order = table.getAllLeafColumns().map(({ id }) => id);
+    table.setColumnOrder(placed(order, column.id, target.id, sameRegion));
+  }
+  if (sameRegion && region === "center") return;
+  table.setColumnPinning({
+    start: pins.start,
+    end: withLockedEndLast(table, pins.end),
+  });
+}
+
+/**
+ * `DndContext` props shared by the header and the customizer, which keep their
+ * own drag strategies but announce and sense drags the same way.
+ */
+export function useColumnLayoutDndProps(targetNoun: string) {
+  const sensors = useCubbyDndSensors({ touchDelay: 150, touchTolerance: 5 });
+  // dnd-kit's default `DndDescribedBy-<n>` id comes from a module-level counter
+  // that advances differently on the server and the client, so every sortable
+  // handle's `aria-describedby` hydration-mismatches. `useId` is tree-stable
+  // across SSR and hydration; dnd-kit uses a provided `id` verbatim.
+  const id = `DndDescribedBy-${useId()}`;
+  return {
+    id,
+    sensors,
+    collisionDetection: closestCenter,
+    accessibility: {
+      container: globalThis.document?.body,
+      screenReaderInstructions: cubbyDndScreenReaderInstructions,
+      announcements: createDndAnnouncements({
+        item: (column) => `${column} column`,
+        target: (column) => `${column} ${targetNoun}`,
+      }),
+    },
+  };
+}
+
+/**
+ * Replaces the live layout wholesale: Restore default, or a saved view's
+ * declared layout (`DataTableViews`).
+ */
+export function applyColumnLayout<TData extends RowData>(
+  table: CubbyTable<TData>,
+  layout: CubbyDefaultTableLayout,
+) {
+  table.setColumnOrder(withLockedEndLast(table, layout.columnOrder));
+  table.setColumnPinning({
+    start: layout.columnPinning.start ?? [],
+    end: withLockedEndLast(table, layout.columnPinning.end ?? []),
+  });
+  table.setColumnVisibility(layout.columnVisibility);
+  table.setColumnSizing(layout.columnSizing);
 }
 
 function columnIdHash(id: string) {

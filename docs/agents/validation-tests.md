@@ -29,7 +29,8 @@ Playwright E2E and the coupled Workers harness share a machine-wide lock
 (`/tmp/cubby-harness.lock`, `scripts/lib/harness-lock.ts`): a second suite on
 the same machine queues and logs who holds the lock instead of starving both
 of CPU. A lock whose owner process exited is reclaimed. Processes the holder
-spawns pass straight through. `test:e2e:watch` (`--ui`) skips the lock, since
+spawns pass straight through. Lock regression tests measure the held interval
+up to immediately before unlock; output after unlock is outside that interval. `test:e2e:watch` (`--ui`) skips the lock, since
 its idle session would otherwise hold it indefinitely. A spec's `test.use` of a
 worker-scoped option (`video`, `trace`, `screenshot`, browser launch options),
 even to its default, moves its tests into extra workers that each boot another
@@ -38,21 +39,43 @@ workers (`tooling/e2e-worker-pool.unit.test.ts`). Record video for a
 run with `CUBBY_E2E_VIDEO=1`. RTable's placeholder transition can eat clicks;
 cell-edit tests retry opening and filling as one action.
 
+Responsive table toolbars mount both desktop and phone branches during SSR.
+After navigation, use a retrying `toHaveCount(1)` assertion on the role locator
+and `toBeEnabled()` before a strict search action. Playwright resolves strict
+locators before waiting for hydration-disabled controls to become enabled;
+the assertion preserves uniqueness while the responsive branches settle.
+Do not select `.first()` or add a sleep to bypass duplicate controls.
+
 ### Workerd test runtime and profiles
 
-Browser workers, Tester Army, the purchase-agent Vitest scenarios and the
+Browser workers, Tester Army, native runners, the purchase-agent Vitest scenarios and the
 live evals start the built Worker through `openWorkerdRuntime`
 (`apps/web/tooling/workerd-runtime.ts`); a caller that runs work after
 startup uses `withWorkerdRuntime`, which closes the runtime even when that
 work throws. The runtime acquires the database (a lease it releases, or a
-borrowed Vitest database it never closes), object storage it starts itself,
+borrowed database it never closes), owned or borrowed object storage,
 the profile's peers, and the harness. `close()` releases them newest first
 and runs every release even when one fails; a start that fails at any step
-releases everything acquired before it. The native runners (`sim-e2e.ts`,
-`mac-import-e2e.ts`) are the exception until wave 3: they own their database
-and object storage and call `startWorkerdHarness`
-(`apps/web/tooling/workerd-harness.ts`) directly. The runtime cannot yet
-borrow object storage a caller already started.
+releases everything acquired before it. Borrowed storage carries its S3
+endpoint and public URL separately; neither startup failure nor close stops
+caller-owned storage. Native runners keep their build, process, simulator,
+watchdog, scenario and artifact boundaries outside the runtime. Their
+`leaseNamedDatabase` backend in `test-database-lease.ts` creates and migrates
+only `cubby_sim_<16 hex>` names on the guarded loopback admin server at port 55432. Normal close verifies the database was dropped; `retention: "retain"`
+explicitly leaves it available for debugging. Failed acquisition always drops
+the database it created, including in retain mode; a name collision never
+gives ownership of an existing database. The lease's `onCreated` hook runs
+right after CREATE succeeds and before migration. The Mac import runner and
+every `sim-e2e.ts` run start their detached database watchdog there, so a
+runner killed at any point after CREATE, including mid-migration, still has
+its database dropped; only the simulator watch lane (`sim-dev`) also has the
+watchdog close its agent-device session. Native scenario seeding stays in the
+runner's lease `setup` callback, which runs after migration. Both callbacks
+receive only the name and URL, never the lease's `close`. The lease
+regressions (`named-database-lease.integration.test.ts`) need the guarded
+55432 endpoint: CI publishes it from `start-test-services`, and locally the
+suite runs `scripts/dev-db.ts up` unless `CUBBY_SIM_DB_EXTERNAL=1`. IntegreSQL namespaces and reset policies stay
+unchanged.
 
 A profile (`WORKERD_PROFILES` in `workerd-harness.ts`) routes each production
 queue consumer to one of:

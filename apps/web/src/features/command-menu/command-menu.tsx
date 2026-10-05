@@ -1,19 +1,16 @@
 import type {
   SearchableEntity,
-  SearchComponentPlacement,
   SearchDestination,
-  SearchInventoryPlacement,
   SearchResultGroup,
 } from "@cubby/schemas/search";
 import { type ParsedShortcode, parseShortcode } from "@cubby/shared";
-import { CaretRightIcon } from "@phosphor-icons/react/dist/csr/CaretRight";
 import { EqualsIcon } from "@phosphor-icons/react/dist/csr/Equals";
 import { GearIcon } from "@phosphor-icons/react/dist/csr/Gear";
 import { MagnifyingGlassIcon } from "@phosphor-icons/react/dist/csr/MagnifyingGlass";
-import { MapPinIcon } from "@phosphor-icons/react/dist/csr/MapPin";
 import { XIcon } from "@phosphor-icons/react/dist/csr/X";
 import { useQuery } from "@tanstack/react-query";
 import { useNavigate } from "@tanstack/react-router";
+import { useCommandState } from "cmdk";
 import * as React from "react";
 
 import {
@@ -23,9 +20,6 @@ import {
   isBrowserRoutedEntity,
 } from "~/entity/entities";
 import { entityDetailFor } from "~/entity/entity-detail";
-import { enumFieldLabel } from "~/entity/enum-field-display";
-import { tryFormatAmount } from "~/features/inventory/format-amount";
-import { cn } from "~/lib/utils";
 import { ErrorDisplay } from "~/ui/feedback/error-display";
 import { useDebug } from "~/ui/hooks/useDebug";
 import { Row } from "~/ui/layout";
@@ -42,6 +36,17 @@ import { Spinner } from "~/ui/primitives/spinner";
 
 import { completeNavLeaves } from "../../ui/navigation/nav-items";
 import type { NavItem } from "../../ui/navigation/nav-items";
+import {
+  type ExpandedFamilies,
+  ProductFamilyChildContent,
+  productFamilyChildren,
+  productFamilyHasChildren,
+  ProductFamilyRegion,
+  type ProductSearchGroup,
+  productFamilySummary,
+  ProductFamilyToggle,
+  useExpandedFamilies,
+} from "../search/product-family";
 import {
   entityKindMap,
   getSearchMatchText,
@@ -155,6 +160,24 @@ export function GlobalCommandMenu({
 
   const { results, filteredActions, isLoading, isEmpty, error, retry } =
     useGlobalSearch(search, searchScope ?? undefined);
+  const families = useExpandedFamilies();
+  const { collapseAll } = families;
+  React.useEffect(() => collapseAll(), [collapseAll, search]);
+
+  // cmdk keeps focus in the input, so a family's arrow-key disclosure is read
+  // from the input against the selected item; an item's own key handler
+  // never fires.
+  const discloseSelectedFamily = (selectedValue: string, expand: boolean) => {
+    const group = results?.find(
+      (candidate): candidate is ProductSearchGroup =>
+        candidate.kind === "product" &&
+        familyItemValue(candidate) === selectedValue &&
+        productFamilyHasChildren(candidate),
+    );
+    if (!group || families.isExpanded(group.key) === expand) return false;
+    families.toggle(group.key, expand);
+    return true;
+  };
   const conversion = useConversionAnswer(searchScope ? "" : search);
 
   const { parsedShortcode, shortcodeName } = useShortcodePreview(
@@ -269,6 +292,7 @@ export function GlobalCommandMenu({
         >
           <CommandMenuInput
             clearSearchScope={clearSearchScope}
+            onDisclose={discloseSelectedFamily}
             onPaste={handleSearchPaste}
             onSearchChange={handleSearchChange}
             search={search}
@@ -335,6 +359,7 @@ export function GlobalCommandMenu({
 
               <SearchResults
                 error={error}
+                families={families}
                 hasResults={hasResults}
                 isDevtoolsVisible={isDevtoolsVisible}
                 isLoading={isLoading}
@@ -375,6 +400,7 @@ export function GlobalCommandMenu({
 
 function CommandMenuInput({
   clearSearchScope,
+  onDisclose,
   onPaste,
   onSearchChange,
   search,
@@ -383,6 +409,8 @@ function CommandMenuInput({
   scopeLabel,
 }: {
   clearSearchScope: () => void;
+  /** Expand or collapse the selected family; false leaves the key to the caret. */
+  onDisclose: (selectedValue: string, expand: boolean) => boolean;
   onPaste: (event: React.ClipboardEvent<HTMLInputElement>) => void;
   onSearchChange: (value: string) => void;
   search: string;
@@ -391,6 +419,7 @@ function CommandMenuInput({
   scopeLabel: string | null;
 }) {
   const hasScope = searchScope !== null && scopeLabel !== null;
+  const selectedValue = useCommandState((state) => state.value);
 
   return (
     <CommandInput
@@ -402,6 +431,27 @@ function CommandMenuInput({
       onValueChange={onSearchChange}
       onPaste={onPaste}
       onKeyDown={(event) => {
+        const input = event.currentTarget;
+        // Disclosure owns the arrows only where they would not edit text: an
+        // unmodified key, no IME composition (cmdk's own composition guard
+        // runs after this handler), and a collapsed caret at the end.
+        const atEnd =
+          input.selectionStart === input.value.length &&
+          input.selectionEnd === input.value.length;
+        const modified =
+          event.shiftKey || event.altKey || event.metaKey || event.ctrlKey;
+        const composing =
+          event.nativeEvent.isComposing || event.keyCode === 229;
+        if (
+          (event.key === "ArrowLeft" || event.key === "ArrowRight") &&
+          atEnd &&
+          !modified &&
+          !composing &&
+          onDisclose(selectedValue, event.key === "ArrowRight")
+        ) {
+          event.preventDefault();
+          return;
+        }
         if (event.key !== "Backspace" || search.length > 0 || !searchScope) {
           return;
         }
@@ -495,6 +545,7 @@ function MatchingQuickActions({
 
 function SearchResults({
   error,
+  families,
   hasResults,
   isDevtoolsVisible,
   isLoading,
@@ -508,6 +559,7 @@ function SearchResults({
   scopeLabel,
 }: {
   error: unknown;
+  families: ExpandedFamilies;
   hasResults: boolean;
   isDevtoolsVisible: boolean;
   isLoading: boolean;
@@ -520,11 +572,6 @@ function SearchResults({
   searchScope: SearchableEntity | null;
   scopeLabel: string | null;
 }) {
-  const [expandedKeys, setExpandedKeys] = React.useState<Set<string>>(
-    () => new Set(),
-  );
-  React.useEffect(() => setExpandedKeys(new Set()), [search]);
-
   if (error && !isLoading) {
     return (
       <CommandGroup heading="Search unavailable">
@@ -536,14 +583,12 @@ function SearchResults({
   }
   if (!hasResults || isLoading || !results) return null;
 
-  const toggleExpanded = (key: string, next?: boolean) => {
-    setExpandedKeys((current) => {
-      const updated = new Set(current);
-      const shouldExpand = next ?? !updated.has(key);
-      if (shouldExpand) updated.add(key);
-      else updated.delete(key);
-      return updated;
+  const seeAll = () => {
+    navigate({
+      to: "/search",
+      search: { q: search, type: searchScope ?? undefined },
     });
+    onClose();
   };
 
   return (
@@ -554,30 +599,18 @@ function SearchResults({
         {results.map((group) => (
           <SearchGroupItem
             key={group.key}
-            expanded={expandedKeys.has(group.key)}
+            expanded={families.isExpanded(group.key)}
             group={group}
             isDevtoolsVisible={isDevtoolsVisible}
-            onSeeAll={() => {
-              navigate({
-                to: "/search",
-                search: { q: search, type: searchScope ?? undefined },
-              });
-              onClose();
-            }}
+            onSeeAll={seeAll}
             onSelect={onSelectResult}
-            onToggle={(next) => toggleExpanded(group.key, next)}
+            onToggle={() => families.toggle(group.key)}
           />
         ))}
       </CommandGroup>
       <CommandGroup>
         <CommandItem
-          onSelect={() => {
-            navigate({
-              to: "/search",
-              search: { q: search, type: searchScope ?? undefined },
-            });
-            onClose();
-          }}
+          onSelect={seeAll}
           className="justify-center text-muted-foreground"
         >
           <MagnifyingGlassIcon className="mr-2 size-4" />
@@ -588,60 +621,13 @@ function SearchResults({
   );
 }
 
-const formatPlacementAmount = (placement: SearchInventoryPlacement) =>
-  tryFormatAmount(placement.amount);
+/** The menu shows two placements and two matched records per family. */
+const COMMAND_FAMILY_CHILD_LIMIT = 2;
 
-const placementDestination = (
-  group: Extract<SearchResultGroup, { kind: "product" }>,
-  placement: SearchInventoryPlacement,
-): SearchDestination => ({
-  id: placement.id,
-  entityKind: "inventory",
-  title: group.primary.title,
-  subtitle: placement.locationPath,
-  typeHint: group.primary.typeHint,
-  imageUrl: group.primary.imageUrl,
-});
+const familyItemValue = (group: ProductSearchGroup) =>
+  `product-${group.primary.id}`;
 
-const componentPlacementDestination = (
-  componentPlacement: SearchComponentPlacement,
-): SearchDestination => ({
-  ...componentPlacement.component,
-  id: componentPlacement.placement.id,
-  entityKind: "inventory",
-  subtitle: componentPlacement.placement.locationPath,
-});
-
-function productGroupSummary(
-  group: Extract<SearchResultGroup, { kind: "product" }>,
-) {
-  const placementCount = group.placements.length;
-  const componentPlacementCount = group.componentPlacements.length;
-  const paths = [
-    ...group.placements.map((placement) => placement.locationPath),
-    ...group.componentPlacements.map(({ placement }) => placement.locationPath),
-  ];
-  const parts = [];
-  if (placementCount > 0) {
-    parts.push(
-      `${placementCount} ${componentPlacementCount > 0 ? "direct " : ""}${placementCount === 1 ? "placement" : "placements"}`,
-    );
-  } else if (componentPlacementCount === 0) {
-    parts.push("0 placements");
-  }
-  if (componentPlacementCount > 0) {
-    parts.push("Kit contents placed");
-  }
-  const distinctPaths = [...new Set(paths)].slice(0, 2);
-  if (distinctPaths.length > 0) parts.push(distinctPaths.join(", "));
-  if (group.matchedActivity.length > 0) {
-    const count = group.matchedActivity.length;
-    parts.push(`${count} matching ${count === 1 ? "record" : "records"}`);
-  }
-  return parts.join(" · ");
-}
-
-export function SearchGroupItem({
+function SearchGroupItem({
   expanded,
   group,
   isDevtoolsVisible,
@@ -654,7 +640,7 @@ export function SearchGroupItem({
   isDevtoolsVisible: boolean;
   onSeeAll: () => void;
   onSelect: (item: SearchDestination) => void;
-  onToggle: (expanded?: boolean) => void;
+  onToggle: () => void;
 }) {
   if (group.kind === "entity") {
     return (
@@ -667,39 +653,19 @@ export function SearchGroupItem({
   }
 
   const matchText = getSearchMatchText(group.bestMatch);
-  const hasChildren =
-    group.placements.length > 0 ||
-    group.componentPlacements.length > 0 ||
-    group.matchedActivity.length > 0;
-  const placements = group.placements.slice(0, 2);
-  const componentPlacements = group.componentPlacements.slice(
-    0,
-    2 - placements.length,
+  const hasChildren = productFamilyHasChildren(group);
+  const { children, hiddenCount } = productFamilyChildren(
+    group,
+    COMMAND_FAMILY_CHILD_LIMIT,
   );
-  const activity = group.matchedActivity.slice(0, 2);
-  const hiddenCount =
-    group.placements.length -
-    placements.length +
-    (group.componentPlacements.length - componentPlacements.length) +
-    (group.matchedActivity.length - activity.length);
   const regionId = `command-search-${group.primary.id}`;
 
   return (
     <>
       <div className="flex items-stretch">
         <CommandItem
-          value={`product-${group.primary.id}`}
+          value={familyItemValue(group)}
           onSelect={() => onSelect(group.primary)}
-          onKeyDown={(event) => {
-            if (!hasChildren) return;
-            if (event.key === "ArrowRight") {
-              event.preventDefault();
-              onToggle(true);
-            } else if (event.key === "ArrowLeft") {
-              event.preventDefault();
-              onToggle(false);
-            }
-          }}
           aria-expanded={hasChildren ? expanded : undefined}
           aria-controls={hasChildren ? regionId : undefined}
           className="min-w-0 flex-1 items-center gap-2"
@@ -708,7 +674,7 @@ export function SearchGroupItem({
           <div className="min-w-0 flex-1">
             <div className="truncate text-sm">{group.primary.title}</div>
             <div className="truncate text-xs text-muted-foreground">
-              {[group.primary.subtitle, productGroupSummary(group)]
+              {[group.primary.subtitle, productFamilySummary(group)]
                 .filter(Boolean)
                 .join(" · ")}
             </div>
@@ -731,107 +697,26 @@ export function SearchGroupItem({
           </div>
         </CommandItem>
         {hasChildren && (
-          <button
-            type="button"
-            aria-label={`${expanded ? "Collapse" : "Expand"} ${group.primary.title} placements and matching records`}
-            aria-expanded={expanded}
-            aria-controls={regionId}
-            onClick={() => onToggle()}
-            className="flex size-11 shrink-0 items-center justify-center text-muted-foreground hover:bg-muted hover:text-foreground focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-primary sm:size-9"
-          >
-            <CaretRightIcon
-              className={cn(
-                "size-4 transition-transform motion-reduce:transition-none",
-                expanded && "rotate-90",
-              )}
-            />
-          </button>
+          <ProductFamilyToggle
+            group={group}
+            expanded={expanded}
+            regionId={regionId}
+            onToggle={onToggle}
+            className="size-11 hover:bg-muted focus-visible:outline-offset-[-2px] sm:size-9"
+          />
         )}
       </div>
       {expanded && hasChildren && (
-        <fieldset
-          id={regionId}
-          aria-label={`${group.primary.title} placements and matching records`}
-          className="border-y border-border bg-muted/25 py-1"
-        >
-          {placements.map((placement) => {
-            const destination = placementDestination(group, placement);
-            return (
-              <CommandItem
-                key={placement.id}
-                value={`placement-${placement.id}`}
-                onSelect={() => onSelect(destination)}
-                className="min-h-11 gap-2 pl-8 sm:min-h-9"
-              >
-                <MapPinIcon className="size-4 shrink-0 text-muted-foreground" />
-                <div className="min-w-0 flex-1">
-                  <div className="truncate text-xs font-medium">
-                    {placement.locationPath}
-                  </div>
-                  <div className="truncate text-2xs text-muted-foreground">
-                    {formatPlacementAmount(placement)} ·{" "}
-                    {enumFieldLabel(
-                      "inventory",
-                      "placement",
-                      placement.placement,
-                    )}
-                  </div>
-                </div>
-                <span className="font-mono text-2xs text-muted-foreground tabular-nums">
-                  {placement.id}
-                </span>
-              </CommandItem>
-            );
-          })}
-          {componentPlacements.map((componentPlacement) => {
-            const destination =
-              componentPlacementDestination(componentPlacement);
-            return (
-              <CommandItem
-                key={`${componentPlacement.component.id}-${componentPlacement.placement.id}`}
-                value={`component-placement-${componentPlacement.placement.id}`}
-                onSelect={() => onSelect(destination)}
-                className="min-h-11 gap-2 pl-8 sm:min-h-9"
-              >
-                <SearchResultMedia item={componentPlacement.component} />
-                <div className="min-w-0 flex-1">
-                  <div className="truncate text-xs font-medium">
-                    {componentPlacement.component.title}
-                  </div>
-                  <div className="truncate text-2xs text-muted-foreground">
-                    {componentPlacement.componentQuantity > 1
-                      ? `${componentPlacement.componentQuantity}× kit content`
-                      : "Kit content"}{" "}
-                    · {componentPlacement.placement.locationPath} ·{" "}
-                    {formatPlacementAmount(componentPlacement.placement)} ·{" "}
-                    {enumFieldLabel(
-                      "inventory",
-                      "placement",
-                      componentPlacement.placement.placement,
-                    )}
-                  </div>
-                </div>
-                <span className="font-mono text-2xs text-muted-foreground tabular-nums">
-                  {componentPlacement.placement.id}
-                </span>
-              </CommandItem>
-            );
-          })}
-          {activity.map((item) => (
+        <ProductFamilyRegion id={regionId} group={group} className="border-y">
+          {children.map((child) => (
             <CommandItem
-              key={`${item.entityKind}-${item.id}`}
-              value={`activity-${item.entityKind}-${item.id}`}
-              onSelect={() => onSelect(item)}
+              key={child.key}
+              // Two open families can share a kit component's placement.
+              value={`${familyItemValue(group)}:${child.key}`}
+              onSelect={() => onSelect(child.destination)}
               className="min-h-11 gap-2 pl-8 sm:min-h-9"
             >
-              <SearchResultMedia item={item} />
-              <div className="min-w-0 flex-1">
-                <div className="truncate text-xs font-medium">{item.title}</div>
-                <div className="truncate text-2xs text-muted-foreground">
-                  {entities[entityKindMap[item.entityKind]].label} · {item.id} ·
-                  Linked to {group.primary.title}
-                </div>
-              </div>
+              <ProductFamilyChildContent child={child} />
             </CommandItem>
           ))}
           {hiddenCount > 0 && (
@@ -844,7 +729,7 @@ export function SearchGroupItem({
               See {hiddenCount} more in full search
             </CommandItem>
           )}
-        </fieldset>
+        </ProductFamilyRegion>
       )}
     </>
   );

@@ -10,7 +10,6 @@ import {
   resolvedTableColumnWidths,
   useRevealTableColumnsOnce,
   useTableColumnLayout,
-  withLockedEndLast,
 } from "./column-layout";
 import {
   createCubbyColumnCollection,
@@ -189,21 +188,6 @@ describe("isTableLayoutCustomized", () => {
 
   it("is never customized without a computed default", () => {
     expect(isTableLayoutCustomized(defaults, undefined)).toBe(false);
-  });
-});
-
-describe("withLockedEndLast", () => {
-  it("moves locked-end ids to the tail and leaves everything else in place", () => {
-    const lockedEnd = new Set(["actions"]);
-    expect(withLockedEndLast(["actions", "cost", "name"], lockedEnd)).toEqual([
-      "cost",
-      "name",
-      "actions",
-    ]);
-    expect(withLockedEndLast(["cost", "name"], lockedEnd)).toEqual([
-      "cost",
-      "name",
-    ]);
   });
 });
 

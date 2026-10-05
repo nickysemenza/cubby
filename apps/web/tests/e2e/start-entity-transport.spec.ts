@@ -203,9 +203,14 @@ test("server error references remain usable on desktop", async ({
     .click();
   // Navigation can reuse prefetched core rows; a new filter exercises the
   // browser error boundary rather than depending on that cache's freshness.
-  await page
-    .getByRole("textbox", { name: "Search products or shortcode" })
-    .fill("Synthetic diagnostic filter");
+  const search = page.getByRole("textbox", {
+    name: "Search products or shortcode",
+  });
+  // SSR mounts both responsive toolbars. Strict actions resolve before their
+  // enabled wait, so first require the route to expose one hydrated search.
+  await expect(search).toHaveCount(1);
+  await expect(search).toBeEnabled();
+  await search.fill("Synthetic diagnostic filter");
   await expect(
     page.getByText("Server request failed (HTTP 500)", { exact: true }).first(),
   ).toBeVisible();

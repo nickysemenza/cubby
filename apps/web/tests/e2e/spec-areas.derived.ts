@@ -17,6 +17,10 @@ export const DERIVED_SPEC_GLOBS: SpecGlobMap = {
     "apps/web/src/routes/_authenticated/settings.tsx",
   ],
   "ai-usage.spec.ts": ["apps/web/src/routes/_authenticated/ai-usage.tsx"],
+  "assignment-picker-dialog.spec.ts": [
+    "apps/web/src/routes/_authenticated/locations.index.tsx",
+    "apps/web/src/routes/api/v1/$resource/$operation.ts",
+  ],
   "browser-operation-dispatch.spec.ts": [
     "apps/web/src/routes/api/v1/$resource.ts",
     "apps/web/src/routes/api/v1/$resource/$operation.ts",
@@ -363,6 +367,9 @@ export const DERIVED_SPEC_GLOBS: SpecGlobMap = {
     "apps/web/src/routes/_authenticated/connections.tsx",
     "apps/web/src/routes/_authenticated/recommendations.workbench.tsx",
   ],
+  "search-product-family.spec.ts": [
+    "apps/web/src/routes/_authenticated/inventory.$shortcode.tsx",
+  ],
   "shelf-triage.spec.ts": [
     "apps/web/src/routes/_authenticated/inventory.triage.tsx",
     "apps/web/src/routes/_authenticated/products.index.tsx",
@@ -398,6 +405,9 @@ export const DERIVED_SPEC_GLOBS: SpecGlobMap = {
     "apps/web/src/routes/_authenticated/expenses.$shortcode.tsx",
     "apps/web/src/routes/_authenticated/financial-accounts.index.tsx",
     "apps/web/src/routes/_authenticated/vendors.$shortcode.tsx",
+  ],
+  "table-column-layout.spec.ts": [
+    "apps/web/src/routes/_authenticated/vendors.index.tsx",
   ],
   "tools-flow.spec.ts": [
     "apps/web/src/app/projects/**",
