@@ -60,7 +60,11 @@ import { resolveOrThrow } from "~/server/repo/shortcode-resolver";
 import { imageDescriptionInputFingerprint } from "~/server/services/image-description.service";
 import { inspectImageFile } from "~/server/services/image-integrity";
 import { hasMeaningfulPngTransparency } from "~/server/services/image-transparency";
-import { deleteS3Object, getS3Object } from "~/server/utils/s3";
+import {
+  deleteS3Object,
+  getS3Object,
+  imageAnalysisKey,
+} from "~/server/utils/s3";
 
 const IMAGE_PROCESSING_WAKEUP_SOURCE = "image-processing";
 
@@ -238,7 +242,7 @@ async function completeNormalizedImageInput(
   >,
 ): Promise<{ adopted: boolean }> {
   const context = await getLeasedImageProcessingJobContext(db, result);
-  const stageKey = `cubby/analysis-staging/${result.attemptId}.jpg`;
+  const stageKey = imageAnalysisKey("staging", result.attemptId);
   if (
     !context ||
     context.kind !== "describe_image" ||
@@ -248,7 +252,7 @@ async function completeNormalizedImageInput(
     outcome.key !== stageKey
   )
     return { adopted: false };
-  const snapshotKey = `cubby/analysis-inputs/${result.attemptId}-${crypto.randomUUID()}.jpg`;
+  const snapshotKey = imageAnalysisKey("input", result.attemptId);
   if (
     !(await reserveImageAnalysisInput(
       db,

@@ -5,7 +5,7 @@ on:
     branches: [main]
   push:
     branches: [main]
-  # Weekly live Tester Army import run; never a merge gate.
+  # Weekly live Tester Army import journeys (the coupled harness); never a merge gate.
   schedule:
     - cron: "17 9 * * 1"
   workflow_dispatch:
@@ -698,7 +698,7 @@ jobs:
       - uses: ./.github/actions/reuse-worker-build
       - uses: ./.github/actions/start-test-services
       - run: pnpm --filter @cubby/web run test:e2e:install-browser chromium --with-deps
-      - run: pnpm test:e2e:agent:web
+      - run: pnpm test:e2e:agent:web -- --harness standard
       - name: Save sanitized web run bundle
         if: always()
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
@@ -713,7 +713,7 @@ jobs:
             artifacts/tester-army/web/*/SHA256SUMS
 
   tester-army-import:
-    name: Tester Army import (manual or weekly, live models)
+    name: Tester Army import journeys (manual or weekly, live models)
     needs: tester-army-inputs
     if: needs.tester-army-inputs.outputs.lane == 'import'
     runs-on: ubuntu-latest
@@ -735,7 +735,7 @@ jobs:
       - uses: ./.github/actions/reuse-worker-build
       - uses: ./.github/actions/start-test-services
       - run: pnpm --filter @cubby/web run test:e2e:install-browser chromium --with-deps
-      - run: pnpm test:e2e:agent:import
+      - run: pnpm test:e2e:agent:web -- --harness coupled
       - name: Save sanitized import run bundle
         if: always()
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
@@ -744,11 +744,11 @@ jobs:
           retention-days: 7
           if-no-files-found: warn
           path: |
-            artifacts/tester-army/import/*/run-manifest.json
-            artifacts/tester-army/import/*/run-results.json
-            artifacts/tester-army/import/*/agent-summary.json
-            artifacts/tester-army/import/*/gateway-usage.json
-            artifacts/tester-army/import/*/SHA256SUMS
+            artifacts/tester-army/web/*/run-manifest.json
+            artifacts/tester-army/web/*/run-results.json
+            artifacts/tester-army/web/*/agent-summary.json
+            artifacts/tester-army/web/*/gateway-usage.json
+            artifacts/tester-army/web/*/SHA256SUMS
 
   tester-army-ios:
     name: Tester Army iOS (manual)

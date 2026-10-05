@@ -1,4 +1,4 @@
-import { readFileSync, writeFileSync } from "node:fs";
+import { existsSync, readFileSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import type { Reporter } from "e2e";
@@ -77,6 +77,51 @@ export function readTesterArmySummary(output: string) {
   )
     throw new Error("Tester Army passed without every journey passing");
   return summary;
+}
+
+/**
+ * One summary for a lane that ran its journeys in several harnesses. A phase
+ * that left no summary (it crashed before reporting) fails the whole run.
+ */
+export function mergeTesterArmySummaries(phases: string[], output: string) {
+  const summaries = phases.map((phase) =>
+    existsSync(path.join(phase, "agent-summary.json"))
+      ? summarySchema.parse(
+          JSON.parse(
+            readFileSync(path.join(phase, "agent-summary.json"), "utf8"),
+          ),
+        )
+      : undefined,
+  );
+  const reported = summaries.filter((summary) => summary !== undefined);
+  const first = reported[0];
+  if (!first) return;
+  const sum = (pick: (summary: (typeof reported)[number]) => number) =>
+    reported.reduce((total, summary) => total + pick(summary), 0);
+  const costs = reported.map((summary) => summary.estimatedCostUsd);
+  const merged = summarySchema.parse({
+    ...first,
+    status:
+      reported.length === phases.length &&
+      reported.every((summary) => summary.status === "passed")
+        ? "passed"
+        : "failed",
+    tokens: sum((summary) => summary.tokens),
+    modelCalls: sum((summary) => summary.modelCalls),
+    estimatedCostUsd: costs.every((cost) => cost !== undefined)
+      ? costs.reduce((total, cost) => total + cost, 0)
+      : undefined,
+    cases: reported.flatMap((summary) => summary.cases),
+    replay: {
+      replayed: sum((summary) => summary.replay.replayed),
+      handedOff: sum((summary) => summary.replay.handedOff),
+      missed: sum((summary) => summary.replay.missed),
+    },
+  });
+  writeFileSync(
+    path.join(output, "agent-summary.json"),
+    `${JSON.stringify(merged, null, 2)}\n`,
+  );
 }
 
 export function testerArmyRawOutput(runDirectory: string) {

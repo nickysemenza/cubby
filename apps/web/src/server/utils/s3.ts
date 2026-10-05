@@ -127,6 +127,21 @@ export const generateImageKey = (filename: string): string => {
 };
 
 /**
+ * Keys for image-analysis renditions, under this deployment's prefix like
+ * every other object: the description model reads them back through the
+ * public URL, which serves only `{prefix}/` keys. `staging` is the one key a
+ * companion device normalizes into; `input` is the immutable snapshot an
+ * attempt analyzed.
+ */
+export const imageAnalysisKey = (
+  kind: "staging" | "input",
+  attemptId: string,
+): string =>
+  kind === "staging"
+    ? `${env.R2_KEY_PREFIX}/analysis-staging/${attemptId}.jpg`
+    : `${env.R2_KEY_PREFIX}/analysis-inputs/${attemptId}-${crypto.randomUUID()}.jpg`;
+
+/**
  * Generate a key for a document (PDF manual). Unlike images, the original
  * filename is preserved (no timestamp) so the public URL stays readable, and
  * an optional folder (the owning entity's shortcode) namespaces the object:

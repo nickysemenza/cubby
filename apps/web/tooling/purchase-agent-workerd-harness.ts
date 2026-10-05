@@ -12,7 +12,7 @@ const webRoot = path.resolve(
   path.dirname(fileURLToPath(import.meta.url)),
   "..",
 );
-function workerdWebConfig(databaseUrl: string) {
+function workerdWebConfig(databaseUrl: string, backgroundQueue: boolean) {
   const config = JSON.parse(
     readFileSync(path.join(webRoot, "dist/server/wrangler.json"), "utf8"),
   ) as Record<string, unknown> & {
@@ -37,7 +37,8 @@ function workerdWebConfig(databaseUrl: string) {
       .filter(
         (consumer) =>
           consumer.queue === "cubby-telemetry" ||
-          consumer.queue === "cubby-purchase-agent",
+          consumer.queue === "cubby-purchase-agent" ||
+          (backgroundQueue && consumer.queue === "cubby-background"),
       )
       .map((consumer) => ({ ...consumer, max_batch_timeout: 0 }));
   // `configPath` resolves this relative to dist/server; the inline config is
@@ -76,6 +77,23 @@ const DETERMINISTIC_GATEWAY: WorkerdModelWorker = {
 };
 
 /**
+ * What browser runs add to the scripted scenarios: real object storage
+ * (`createE2EObjectStorage`) for pages with images and uploaded photos, and
+ * the background queue consumer that runs image processing. Scripted
+ * scenarios keep neither, so no background task reaches a deterministic
+ * model peer.
+ */
+type WorkerdHarnessServices = {
+  objectStorage?: {
+    /** S3 endpoint the Worker writes through. */
+    endpoint: string;
+    /** Origin of public object URLs the Worker itself fetches back. */
+    publicUrl: string;
+  };
+  backgroundQueue?: boolean;
+};
+
+/**
  * The purchase-agent workerd harness: the built `cubby` Worker, which hosts
  * the agent and consumes its queue. Its model worker is `cubby-test-model`
  * (the agent's provider) and its gateway worker is `cubby-test-gateway` (the
@@ -86,22 +104,29 @@ export function createWorkerdHarness(
   databaseUrl: string,
   modelWorker: WorkerdModelWorker = DETERMINISTIC_MODEL,
   gatewayWorker: WorkerdModelWorker = DETERMINISTIC_GATEWAY,
-  // Browser E2E serves pages with images; scenario tests need no storage.
-  objectStorageUrl = "http://127.0.0.1:9",
+  services: WorkerdHarnessServices = {},
 ) {
+  // Port 9 refuses connections: storage stays unreachable unless supplied.
+  const storage = services.objectStorage ?? {
+    endpoint: "http://127.0.0.1:9",
+    publicUrl: "http://127.0.0.1:9",
+  };
   return createTestHarness({
     root: webRoot,
     workers: [
       // The web Worker is primary: `listen()` serves the app a browser drives.
       {
-        config: workerdWebConfig(databaseUrl),
+        config: workerdWebConfig(
+          databaseUrl,
+          services.backgroundQueue ?? false,
+        ),
         vars: {
           ALLOW_SIGNUP: "true",
           INSECURE_AUTH_COOKIES: "true",
           E2E_AUTH_TEST_MODE: "true",
           DATABASE_URL: databaseUrl,
-          R2_ENDPOINT: objectStorageUrl,
-          R2_PUBLIC_URL: objectStorageUrl,
+          R2_ENDPOINT: storage.endpoint,
+          R2_PUBLIC_URL: storage.publicUrl,
           R2_BUCKET_NAME: "e2e-bucket",
           R2_KEY_PREFIX: "e2e",
           R2_ACCESS_KEY_ID: "dummy",

@@ -450,7 +450,7 @@ describe("image execution history conservation", () => {
       .where(eq(image.id, source.id));
     const lease = await claim(jobId);
     await assignCloud(jobId, lease.attemptId);
-    const key = `cubby/analysis-staging/${lease.attemptId}.jpg`;
+    const key = storage.imageAnalysisKey("staging", lease.attemptId);
     await reserveImageAnalysisInput(ctx.db, lease.attemptId, key);
     const result = {
       jobId,
@@ -506,7 +506,7 @@ describe("image execution history conservation", () => {
     await reserveImageAnalysisInput(
       ctx.db,
       lease.attemptId,
-      `cubby/analysis-staging/${lease.attemptId}.jpg`,
+      storage.imageAnalysisKey("staging", lease.attemptId),
     );
     expect(
       await completeCompanionImageProcessingResult(ctx.db, {
