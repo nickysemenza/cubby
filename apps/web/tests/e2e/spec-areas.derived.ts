@@ -6,6 +6,7 @@ import type { SpecGlobMap } from "../../scripts/generate-spec-areas.ts";
 
 export const DERIVED_SPEC_GLOBS: SpecGlobMap = {
   "activity.spec.ts": [
+    "apps/web/src/app/account/**",
     "apps/web/src/app/activity/**",
     "apps/web/src/app/calendar/**",
     "apps/web/src/app/problems/**",
@@ -42,6 +43,15 @@ export const DERIVED_SPEC_GLOBS: SpecGlobMap = {
   "calendar.spec.ts": [
     "apps/web/src/app/calendar/**",
     "apps/web/src/routes/_authenticated/calendar.tsx",
+  ],
+  "chatgpt-settings.spec.ts": [
+    "apps/web/src/app/account/**",
+    "apps/web/src/app/activity/**",
+    "apps/web/src/app/calendar/**",
+    "apps/web/src/app/problems/**",
+    "apps/web/src/routes/_authenticated/settings.tsx",
+    "apps/web/src/routes/api/ai/chatgpt.ts",
+    "apps/web/src/routes/api/v1/$resource/$operation.ts",
   ],
   "companion-analysis.spec.ts": [
     "apps/web/src/routes/api/v1/$resource/$operation.ts",
@@ -195,6 +205,7 @@ export const DERIVED_SPEC_GLOBS: SpecGlobMap = {
     "apps/web/src/routes/_authenticated/purchases.$shortcode.tsx",
   ],
   "input-first-import.spec.ts": [
+    "apps/web/src/app/account/**",
     "apps/web/src/app/activity/**",
     "apps/web/src/app/calendar/**",
     "apps/web/src/app/finance/**",
@@ -336,6 +347,7 @@ export const DERIVED_SPEC_GLOBS: SpecGlobMap = {
     "apps/web/src/routes/api/v1/$resource/$operation.ts",
   ],
   "retired-fieldwork.spec.ts": [
+    "apps/web/src/app/account/**",
     "apps/web/src/app/activity/**",
     "apps/web/src/app/calendar/**",
     "apps/web/src/app/problems/**",

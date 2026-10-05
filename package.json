@@ -3,6 +3,7 @@
   "private": true,
   "type": "module",
   "scripts": {
+    "chatgpt:connect": "node scripts/chatgpt-connect.ts",
     "ci:flakes": "node scripts/ci-flakes.ts",
     "agent:setup": "pnpm install --frozen-lockfile && node scripts/ensure-wasm.ts",
     "dev": "pnpm --filter @cubby/web dev",

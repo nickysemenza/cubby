@@ -94,6 +94,14 @@ export interface SpecAreaEntry {
 
 /** Hand-written globs per spec; see the header for what belongs here. */
 export const SPEC_EXTRA_GLOBS: SpecGlobMap = {
+  "chatgpt-settings.spec.ts": [
+    `${WEB}/src/server/ai/chatgpt/**`,
+    "packages/schemas/src/chatgpt.ts",
+    `${WEB}/src/contracts/chatgpt.contract.ts`,
+    `${WEB}/src/server/operations/chatgpt.server.ts`,
+    `${WEB}/src/app/account/chatgpt-plan-card.tsx`,
+    "scripts/chatgpt-connect.ts",
+  ],
   "companion-analysis.spec.ts": [
     `${WEB}/src/server/image-processing/**`,
     `${WEB}/src/server/repo/image-processing*.ts`,

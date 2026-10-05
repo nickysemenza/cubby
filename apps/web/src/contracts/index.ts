@@ -1,3 +1,4 @@
+export { chatgptContract } from "./chatgpt.contract";
 export { activityContract } from "./activity.contract";
 /**
  * Every operation contract, by export name. The registry generator imports

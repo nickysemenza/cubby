@@ -8,6 +8,7 @@ import type { Rpc } from "@cloudflare/workers-types";
 import type { SearchIndexRepairCounters } from "@cubby/schemas/maintenance";
 import type { WorkflowEvent, WorkflowStep } from "cloudflare:workers";
 
+import type { ChatGptPlanRpc } from "./ai/chatgpt/rpc";
 import type { CalendarFeedDurableObjectRpc } from "./calendar/rpc";
 import type { DatabaseFreshnessRpc } from "./database-freshness/rpc";
 import type { ImageProcessingCompanionRpc } from "./image-processing/contracts";
@@ -16,6 +17,8 @@ import type { PurchaseImportDurableObjectRpc } from "./purchase-import/rpc";
 
 // Its implementation imports nothing from the app.
 export type { AiResponseCacheDurableObject } from "./ai/response-cache-durable-object";
+export type ChatGptPlanDurableObject = ChatGptPlanRpc &
+  Rpc.DurableObjectBranded;
 
 export type CalendarFeedDurableObject = CalendarFeedDurableObjectRpc &
   Rpc.DurableObjectBranded;

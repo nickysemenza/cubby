@@ -62,6 +62,8 @@ build order above lazily (the xcframework from the Nx cache; xcodegen with `--us
 `project.yml` edit regenerates and an unchanged spec is a no-op), prints each step's wall-clock
 time, and then:
 
+- `pnpm apple cli chatgpt connect --base-url https://cubby.example.com` — macOS
+  ChatGPT plan setup, reusing the stored Cubby login and shared CubbyKit OAuth flow.
 - `pnpm apple cli <args…>` — incremental `swift build` of the `cubby` CLI and run it
 - `pnpm apple cli photo analyze <file> --json` — on-device Vision/routing debug dump for a local
   image, no network or auth

@@ -187,6 +187,7 @@ export class PurchaseImportRunAgent
       runId: () => this.identity()?.runId,
       recorder: this.recorder,
       testModel: this.agentEnv.testModel,
+      subscription: this.agentEnv.chatGptInference,
     }))
       models.setProvider(provider);
     // A cold start reinstalls the run's tools before pi resumes any task, so
