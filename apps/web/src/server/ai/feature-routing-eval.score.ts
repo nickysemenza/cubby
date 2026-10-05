@@ -1,4 +1,7 @@
-import type { ImportAuditOutput } from "@cubby/schemas/purchase-import";
+import type {
+  ExtractedOrderCandidate,
+  ImportAuditOutput,
+} from "@cubby/schemas/purchase-import";
 import type { RecipeFlowPlan } from "@cubby/schemas/recipe-flow";
 
 /**
@@ -77,12 +80,17 @@ export function scoreAudit(
   return verdictOf(unsafe, [...new Set(misses)]);
 }
 
+type RepairLine = Pick<
+  ExtractedOrderCandidate["lines"][number],
+  "title" | "amount" | "lineKind"
+>;
+
 export type ExpectedRepair = {
   /** `ready` when the page's own lines equal its printed total. */
   status: "ready" | "needs_review";
   printedTotal: number;
-  /** Every line amount the page prints, adjustments included. */
-  pageAmounts: number[];
+  /** Every line the page prints, adjustments included. */
+  pageLines: RepairLine[];
 };
 
 type ObservedRepair = {
@@ -90,17 +98,43 @@ type ObservedRepair = {
   reason?: string | null;
   candidate?: {
     printedGrandTotal: number | null;
-    lines: ReadonlyArray<{ amount: number }>;
+    lines: readonly RepairLine[];
   } | null;
 };
 
 const cents = (amount: number) => Math.round(amount * 100);
-const sameAmounts = (left: readonly number[], right: readonly number[]) => {
-  const sorted = (values: readonly number[]) =>
-    values.map(cents).sort((a, b) => a - b);
-  return JSON.stringify(sorted(left)) === JSON.stringify(sorted(right));
+const titleWords = (title: string) =>
+  title.toLowerCase().match(/[a-z0-9]{3,}/gu) ?? [];
+
+/** A model may retitle a line lightly, but never move its amount or role. */
+const sameLine = (page: RepairLine, observed: RepairLine) => {
+  if (cents(page.amount) !== cents(observed.amount)) return false;
+  if (page.lineKind !== observed.lineKind) return false;
+  const words = new Set(titleWords(observed.title));
+  const expected = titleWords(page.title);
+  return (
+    expected.filter((word) => words.has(word)).length * 2 >= expected.length
+  );
 };
 
+const matchesPage = (
+  page: readonly RepairLine[],
+  observed: readonly RepairLine[],
+) => {
+  if (page.length !== observed.length) return false;
+  const unused = [...observed];
+  return page.every((line) => {
+    const index = unused.findIndex((candidate) => sameLine(line, candidate));
+    if (index < 0) return false;
+    unused.splice(index, 1);
+    return true;
+  });
+};
+
+/**
+ * Score the extraction production keeps after its one repair turn (already
+ * passed through `settleRepairedExtraction`, so a `ready` answer balances).
+ */
 export function scoreRepair(
   expected: ExpectedRepair,
   observed: ObservedRepair | Error,
@@ -109,27 +143,28 @@ export function scoreRepair(
   const unsafe: string[] = [];
   const misses: string[] = [];
   const candidate = observed.candidate;
-  const amounts = candidate?.lines.map(({ amount }) => amount) ?? [];
-  const matchesPage = sameAmounts(amounts, expected.pageAmounts);
+  const pageLines = matchesPage(expected.pageLines, candidate?.lines ?? []);
   if (
     candidate?.printedGrandTotal != null &&
     cents(candidate.printedGrandTotal) !== cents(expected.printedTotal)
   )
     unsafe.push("changed_printed_total");
   if (observed.status === "ready") {
-    if (!matchesPage) unsafe.push("lines_differ_from_page");
-    if (expected.status === "needs_review" && matchesPage)
+    if (!pageLines) unsafe.push("lines_differ_from_page");
+    if (expected.status === "needs_review" && pageLines)
       misses.push("ready_despite_mismatch");
   } else if (expected.status === "ready") misses.push("stopped_for_review");
-  else if (observed.reason !== "sum_mismatch" || !matchesPage)
+  else if (observed.reason !== "sum_mismatch" || !pageLines)
     misses.push("review_without_page_lines");
   return verdictOf(unsafe, misses);
 }
 
 export type ExpectedRecipeFlow = {
-  /** Every authored instruction and ingredient line, for number checks. */
-  sourceText: string;
-  /** Instruction indexes (section 0) that are environment-only setup. */
+  /** Section 0's authored instructions, in order. */
+  instructions: string[];
+  /** Each listed usage's authored ingredient line. */
+  usages: Array<{ usageId: string; rawLine: string }>;
+  /** Instruction indexes that are environment-only setup. */
   setupInstructions: number[];
   /** [before, after]: an operation citing `after` depends on one citing `before`. */
   orderings: Array<[number, number]>;
@@ -144,36 +179,75 @@ export type ObservedRecipeFlowPlan = Pick<
 
 const numbersIn = (text: string) => text.match(/\d+(?:[.,]\d+)?/gu) ?? [];
 
+/**
+ * Every displayed field may repeat only a number its own evidence states: a
+ * step's cited instructions, a usage's ingredient line, a stop's operations'
+ * instructions; the overview may draw on any instruction.
+ */
+function inventedNumbers(
+  expected: ExpectedRecipeFlow,
+  plan: ObservedRecipeFlowPlan,
+) {
+  const cited = (refs: ReadonlyArray<{ instructionIndex: number }>) =>
+    refs.map((ref) => expected.instructions[ref.instructionIndex] ?? "");
+  const allInstructions = expected.instructions;
+  const operationRefs = new Map(
+    plan.operations.map((op) => [op.id, op.instructionRefs]),
+  );
+  const fields: Array<{ texts: Array<string | null>; evidence: string[] }> = [
+    ...plan.setup.map((step) => ({
+      texts: [step.label, ...step.annotations.map(({ text }) => text)],
+      evidence: cited(step.instructionRefs),
+    })),
+    ...plan.operations.map((op) => ({
+      texts: [
+        op.label,
+        op.outputLabel,
+        ...op.annotations.map(({ text }) => text),
+      ],
+      evidence: cited(op.instructionRefs),
+    })),
+    ...plan.sources.map((source) =>
+      source.kind === "usage"
+        ? {
+            texts: [source.role],
+            evidence: [
+              ...expected.usages
+                .filter(({ usageId }) => usageId === source.usageId)
+                .map(({ rawLine }) => rawLine),
+              ...allInstructions,
+            ],
+          }
+        : { texts: [source.label], evidence: cited(source.instructionRefs) },
+    ),
+    {
+      texts: [plan.walkthrough?.overview ?? null],
+      evidence: allInstructions,
+    },
+    ...(plan.walkthrough?.stops ?? []).map((stop) => ({
+      texts: [stop.title, stop.explanation],
+      evidence: stop.operationIds.flatMap((id) =>
+        cited(operationRefs.get(id) ?? []),
+      ),
+    })),
+  ];
+  const invented = new Set<string>();
+  for (const field of fields) {
+    const stated = new Set(field.evidence.flatMap(numbersIn));
+    for (const text of field.texts)
+      for (const value of numbersIn(text ?? ""))
+        if (!stated.has(value)) invented.add(value);
+  }
+  return [...invented].map((value) => `invented_number:${value}`);
+}
+
 export function scoreRecipeFlow(
   expected: ExpectedRecipeFlow,
   observed: { plan: ObservedRecipeFlowPlan; issues: readonly string[] } | Error,
 ): FeatureScore {
   if (observed instanceof Error) return invalid(observed);
   const { plan } = observed;
-  const stated = new Set(numbersIn(expected.sourceText));
-  const prose = [
-    ...plan.setup.flatMap((step) => [
-      step.label,
-      ...step.annotations.map(({ text }) => text),
-    ]),
-    ...plan.operations.flatMap((operation) => [
-      operation.label,
-      ...operation.annotations.map(({ text }) => text),
-    ]),
-    plan.walkthrough?.overview ?? "",
-    ...(plan.walkthrough?.stops ?? []).flatMap((stop) => [
-      stop.title,
-      stop.explanation,
-    ]),
-  ];
-  const unsafe = [
-    ...new Set(
-      prose
-        .flatMap(numbersIn)
-        .filter((value) => !stated.has(value))
-        .map((value) => `invented_number:${value}`),
-    ),
-  ];
+  const unsafe = inventedNumbers(expected, plan);
   const misses = observed.issues.map((issue) => `invalid_plan:${issue}`);
   for (const index of expected.setupInstructions)
     if (

@@ -739,7 +739,6 @@ export const purchaseDecisionCases: DecisionCase[] = [
         { transaction: "card-a", amount: 10 },
         { transaction: "card-b", amount: 9.44 },
       ],
-      true,
     ),
   },
   {
@@ -787,7 +786,6 @@ export const purchaseDecisionCases: DecisionCase[] = [
         [tax(1.44), none],
       ],
       [{ transaction: "card-a", amount: 19.44 }],
-      true,
     ),
   },
   {

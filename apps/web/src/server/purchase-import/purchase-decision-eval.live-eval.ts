@@ -385,6 +385,12 @@ describe("purchase coordinator decision eval", () => {
                 deletedAt: new Date(),
               })
               .where(gte(product.createdAt, caseStartedAt));
+            // A retained Purchase keeps its printed payment evidence, which
+            // would compete with a later case's charge for settlement.
+            await getDb(ctx.db)
+              .update(purchase)
+              .set({ deletedAt: new Date() })
+              .where(gte(purchase.createdAt, caseStartedAt));
             // Written per run so a later failure keeps finished results.
             writeFileSync(
               path.join(outDir, "results.jsonl"),

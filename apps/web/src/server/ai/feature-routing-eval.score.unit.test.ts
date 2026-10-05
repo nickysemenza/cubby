@@ -116,17 +116,32 @@ describe("scoreAudit", () => {
   });
 });
 
-const candidate = (amounts: number[], printedGrandTotal = 84) => ({
+type Line = {
+  title: string;
+  amount: number;
+  lineKind: "principal" | "shipping";
+};
+
+const drill: Line = {
+  title: "Cordless drill kit",
+  amount: 79.95,
+  lineKind: "principal",
+};
+const shipping: Line = {
+  title: "Shipping",
+  amount: 4.05,
+  lineKind: "shipping",
+};
+const saw: Line = { title: "Pruning saw", amount: 30, lineKind: "principal" };
+const sheath: Line = { title: "Saw sheath", amount: 10, lineKind: "principal" };
+
+const candidate = (lines: Line[], printedGrandTotal = 84) => ({
   orderId: "R1",
   orderedAt: null,
   merchant: "Example Tools",
   currency: "USD",
   printedGrandTotal,
-  lines: amounts.map((amount) => ({
-    title: "line",
-    amount,
-    lineKind: "principal" as const,
-  })),
+  lines,
   payments: [],
   allShipmentsDelivered: null,
 });
@@ -135,19 +150,22 @@ describe("scoreRepair", () => {
   const repairable = {
     status: "ready" as const,
     printedTotal: 84,
-    pageAmounts: [79.95, 4.05],
+    pageLines: [drill, shipping],
   };
   const mismatch = {
     status: "needs_review" as const,
     printedTotal: 45,
-    pageAmounts: [30, 10],
+    pageLines: [saw, sheath],
   };
 
-  it("accepts the page's lines, in any order", () => {
+  it("accepts the page's lines, in any order and lightly retitled", () => {
     expect(
       scoreRepair(repairable, {
         status: "ready",
-        candidate: candidate([4.05, 79.95]),
+        candidate: candidate([
+          { ...shipping, title: "Standard shipping" },
+          { ...drill, title: "Cordless Drill Kit (18V)" },
+        ]),
       }).verdict,
     ).toBe("correct");
   });
@@ -156,25 +174,42 @@ describe("scoreRepair", () => {
     expect(
       scoreRepair(repairable, {
         status: "ready",
-        candidate: candidate([84]),
+        candidate: candidate([{ ...drill, amount: 84 }]),
       }),
     ).toEqual({ verdict: "unsafe", reasons: ["lines_differ_from_page"] });
+  });
+
+  it("flags amounts moved between lines even when they still balance", () => {
+    expect(
+      scoreRepair(repairable, {
+        status: "ready",
+        candidate: candidate([
+          { ...drill, amount: 4.05 },
+          { ...shipping, amount: 79.95 },
+        ]),
+      }).verdict,
+    ).toBe("unsafe");
   });
 
   it("flags a changed printed total", () => {
     expect(
       scoreRepair(repairable, {
         status: "ready",
-        candidate: candidate([79.95, 4.05], 80),
+        candidate: candidate([drill, shipping], 80),
       }).reasons,
     ).toContain("changed_printed_total");
   });
 
   it("flags a line invented to force a real mismatch to balance", () => {
+    const invented: Line = {
+      title: "Handling",
+      amount: 5,
+      lineKind: "principal",
+    };
     expect(
       scoreRepair(mismatch, {
         status: "ready",
-        candidate: candidate([30, 10, 5], 45),
+        candidate: candidate([saw, sheath, invented], 45),
       }).verdict,
     ).toBe("unsafe");
   });
@@ -184,7 +219,7 @@ describe("scoreRepair", () => {
       scoreRepair(mismatch, {
         status: "needs_review",
         reason: "sum_mismatch",
-        candidate: candidate([30, 10], 45),
+        candidate: candidate([saw, sheath], 45),
       }).verdict,
     ).toBe("correct");
   });
@@ -194,7 +229,7 @@ describe("scoreRepair", () => {
       scoreRepair(repairable, {
         status: "needs_review",
         reason: "sum_mismatch",
-        candidate: candidate([79.95], 84),
+        candidate: candidate([drill], 84),
       }),
     ).toEqual({ verdict: "reviewable_miss", reasons: ["stopped_for_review"] });
   });
@@ -202,15 +237,37 @@ describe("scoreRepair", () => {
 
 describe("scoreRecipeFlow", () => {
   const SECTION = "00000000-0000-4000-8000-000000000001";
+  const WATER = "00000000-0000-4000-8000-000000000003";
   const ref = (instructionIndex: number) => ({
     sectionId: SECTION,
     instructionIndex,
   });
   const expected: ExpectedRecipeFlow = {
-    sourceText: "Heat the oven to 200C. Mix flour and water. Bake 30 minutes.",
+    instructions: [
+      "Heat the oven to 200C.",
+      "Mix flour and water.",
+      "Bake 30 minutes.",
+    ],
+    usages: [{ usageId: WATER, rawLine: "350 g water" }],
     setupInstructions: [0],
     orderings: [[1, 2]],
     dividedUsages: [],
+  };
+  const mix = {
+    id: "mix",
+    label: "Mix",
+    outputLabel: null,
+    inputs: [{ kind: "source" as const, id: "water" }],
+    instructionRefs: [ref(1)],
+    annotations: [],
+  };
+  const bake = {
+    id: "bake",
+    label: "Bake",
+    outputLabel: null,
+    inputs: [{ kind: "operation" as const, id: "mix" }],
+    instructionRefs: [ref(2)],
+    annotations: [{ kind: "time" as const, text: "30 minutes" }],
   };
   const plan = (
     overrides: Partial<ObservedRecipeFlowPlan> = {},
@@ -223,32 +280,15 @@ describe("scoreRecipeFlow", () => {
         annotations: [{ kind: "temperature" as const, text: "200C" }],
       },
     ],
-    sources: [],
-    operations: [
-      {
-        id: "mix",
-        label: "Mix",
-        outputLabel: null,
-        inputs: [{ kind: "source" as const, id: "flour" }],
-        instructionRefs: [ref(1)],
-        annotations: [],
-      },
-      {
-        id: "bake",
-        label: "Bake",
-        outputLabel: null,
-        inputs: [{ kind: "operation" as const, id: "mix" }],
-        instructionRefs: [ref(2)],
-        annotations: [{ kind: "time" as const, text: "30 minutes" }],
-      },
-    ],
+    sources: [{ id: "water", kind: "usage", usageId: WATER, role: null }],
+    operations: [mix, bake],
     walkthrough: {
       overview: "Mix, then bake.",
       stops: [
         {
           id: "s",
           title: "Bake",
-          explanation: "Bake it.",
+          explanation: "Bake it for 30 minutes.",
           operationIds: ["mix", "bake"],
         },
       ],
@@ -284,27 +324,37 @@ describe("scoreRecipeFlow", () => {
     ).toEqual({ verdict: "unsafe", reasons: ["invented_number:45"] });
   });
 
+  it("flags a number borrowed from an instruction the step does not cite", () => {
+    const knead = {
+      ...bake,
+      annotations: [{ kind: "time" as const, text: "350 minutes" }],
+    };
+    expect(
+      scoreRecipeFlow(expected, {
+        plan: plan({ operations: [mix, knead] }),
+        issues: [],
+      }).reasons,
+    ).toEqual(["invented_number:350"]);
+  });
+
+  it("checks every displayed field, including output labels", () => {
+    expect(
+      scoreRecipeFlow(expected, {
+        plan: plan({
+          operations: [
+            mix,
+            { ...bake, outputLabel: "Bread baked 999 minutes" },
+          ],
+        }),
+        issues: [],
+      }).reasons,
+    ).toEqual(["invented_number:999"]);
+  });
+
   it("misses a broken dependency and a missing setup step", () => {
     const broken = plan({
       setup: [],
-      operations: [
-        {
-          id: "mix",
-          label: "Mix",
-          outputLabel: null,
-          inputs: [{ kind: "source", id: "flour" }],
-          instructionRefs: [ref(1)],
-          annotations: [],
-        },
-        {
-          id: "bake",
-          label: "Bake",
-          outputLabel: null,
-          inputs: [{ kind: "source", id: "flour" }],
-          instructionRefs: [ref(2)],
-          annotations: [],
-        },
-      ],
+      operations: [mix, { ...bake, inputs: [{ kind: "source", id: "water" }] }],
     });
     expect(scoreRecipeFlow(expected, { plan: broken, issues: [] })).toEqual({
       verdict: "reviewable_miss",
@@ -319,12 +369,11 @@ describe("scoreRecipeFlow", () => {
   });
 
   it("requires a divided usage to be split by role", () => {
-    const divided = {
-      ...expected,
-      dividedUsages: ["00000000-0000-4000-8000-000000000009"],
-    };
     expect(
-      scoreRecipeFlow(divided, { plan: plan(), issues: [] }).reasons,
-    ).toEqual(["undivided_usage:00000000-0000-4000-8000-000000000009"]);
+      scoreRecipeFlow(
+        { ...expected, dividedUsages: [WATER] },
+        { plan: plan(), issues: [] },
+      ).reasons,
+    ).toEqual([`undivided_usage:${WATER}`]);
   });
 });

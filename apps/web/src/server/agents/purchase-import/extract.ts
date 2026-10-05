@@ -168,16 +168,25 @@ const extractPurchaseText = async (
       },
     ),
   );
-  const repairedValidation = validateExtraction(repaired);
-  if (repairedValidation.ok) return repaired;
-  if (!repaired.candidate) return repaired;
-  return {
-    status: "needs_review" as const,
-    candidate: repaired.candidate,
-    reason: "sum_mismatch" as const,
-    detail: repairedValidation.issues.join(" ").slice(0, 2_000),
-  };
+  return settleRepairedExtraction(repaired);
 };
+
+/**
+ * What production keeps from the one repair answer: a repair that still does
+ * not balance is retained for review as `sum_mismatch`, never used as ready.
+ */
+export function settleRepairedExtraction(
+  repaired: ImportExtractionOutcome,
+): ImportExtractionOutcome {
+  const validation = validateExtraction(repaired);
+  if (validation.ok || !repaired.candidate) return repaired;
+  return {
+    status: "needs_review",
+    candidate: repaired.candidate,
+    reason: "sum_mismatch",
+    detail: validation.issues.join(" ").slice(0, 2_000),
+  };
+}
 
 function purchaseRepairMessages(
   originalMessages: readonly AiMessage[],

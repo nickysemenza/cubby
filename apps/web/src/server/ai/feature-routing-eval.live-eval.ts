@@ -21,7 +21,7 @@ import { localSecret } from "../../../tooling/local-secret";
 import {
   auditCases,
   recipeFlowCases,
-  recipeSourceText,
+  recipeEvidence,
   repairCases,
 } from "./feature-routing-eval.fixtures";
 import {
@@ -54,7 +54,7 @@ process.env.AI_GATEWAY_API_KEY = apiKey;
 // reaches the gateway loads only after the key is in place; a static import
 // would be hoisted above it and fail every call as a "Connection error".
 const [
-  { purchaseRepairRequest },
+  { purchaseRepairRequest, settleRepairedExtraction },
   { purchaseAuditPrompt },
   { buildRecipeFlowRequest },
   { piCallTarget },
@@ -146,7 +146,11 @@ const suites: Array<{
             purchaseRepairRequest(entry.capture, entry.previous),
             { ...ctx, operation: "eval.purchaseImport.repair" },
             ports,
-          ).then(normalizeImportExtractionModelOutput),
+          ).then((output) =>
+            settleRepairedExtraction(
+              normalizeImportExtractionModelOutput(output),
+            ),
+          ),
         );
         return scoreRepair(entry.expected, observed);
       },
@@ -181,7 +185,7 @@ const suites: Array<{
           }),
         );
         return scoreRecipeFlow(
-          { ...entry.expected, sourceText: recipeSourceText(entry.recipe) },
+          { ...entry.expected, ...recipeEvidence(entry.recipe) },
           observed,
         );
       },

@@ -275,7 +275,7 @@ const repairCase = (
           ? "ready"
           : "needs_review",
       printedTotal: page.printedTotal,
-      pageAmounts: page.lines.map((entry) => entry.amount),
+      pageLines: page.lines,
     },
   };
 };
@@ -465,7 +465,7 @@ function recipeOf(
 export type RecipeFlowCase = {
   name: string;
   recipe: RecipeOut;
-  expected: Omit<ExpectedRecipeFlow, "sourceText">;
+  expected: Omit<ExpectedRecipeFlow, "instructions" | "usages">;
 };
 
 export const recipeFlowCases: RecipeFlowCase[] = [
@@ -611,12 +611,16 @@ export const recipeFlowCases: RecipeFlowCase[] = [
   },
 ];
 
-/** Every authored number a plan may repeat, for `scoreRecipeFlow`. */
-export function recipeSourceText(recipe: RecipeOut) {
-  return recipe.sections
-    .flatMap((section) => [
-      ...section.ingredients.map((usage) => usage.rawLine ?? ""),
-      ...section.instructions.map(({ instruction }) => instruction),
-    ])
-    .join("\n");
+/** The authored evidence `scoreRecipeFlow` grounds a plan's numbers in. */
+export function recipeEvidence(recipe: RecipeOut) {
+  const [section] = recipe.sections;
+  return {
+    instructions:
+      section?.instructions.map(({ instruction }) => instruction) ?? [],
+    usages:
+      section?.ingredients.map((usage) => ({
+        usageId: usage.id,
+        rawLine: usage.rawLine ?? "",
+      })) ?? [],
+  };
 }
