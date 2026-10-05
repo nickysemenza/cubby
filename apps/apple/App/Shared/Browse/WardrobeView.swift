@@ -53,8 +53,9 @@ struct WardrobeView: View {
             if !search.rows.isEmpty {
                 shelf(
                     rows: search.rows, totalCount: search.meta?.totalCount, hasMore: search.hasMore,
-                    isLoadingMore: search.phase == .loading, error: search.nextPageError
-                ) { await search.loadNextPage() }
+                    isBusy: search.phase == .loading, refreshError: search.refreshError,
+                    nextPageError: search.nextPageError, refresh: { await search.refresh() },
+                    loadMore: { await search.loadNextPage() })
             } else if case .failed(let message) = search.phase {
                 LoadFailureView(title: "Couldn’t load wardrobe", message: message) { search.retry() }
             } else if search.phase == .loaded {
@@ -65,8 +66,9 @@ struct WardrobeView: View {
         } else if !model.rows.isEmpty {
             shelf(
                 rows: model.rows, totalCount: model.meta?.totalCount, hasMore: model.hasMore,
-                isLoadingMore: model.activity != .idle, error: model.nextPageError
-            ) { await model.loadNextPage() }
+                isBusy: model.activity != .idle, refreshError: model.refreshError,
+                nextPageError: model.nextPageError, refresh: { await model.refresh() },
+                loadMore: { await model.loadNextPage() })
         } else if case .failed(let message) = model.phase {
             LoadFailureView(title: "Couldn’t load wardrobe", message: message) { await model.refresh() }
         } else if model.phase == .loaded {
@@ -76,11 +78,18 @@ struct WardrobeView: View {
         }
     }
 
+    /// Loaded rows stay on screen when a refresh or next page fails; the raw failure shows beside
+    /// them with its own retry.
     private func shelf(
-        rows: [EntityRow], totalCount: Int?, hasMore: Bool, isLoadingMore: Bool, error: String?,
-        loadMore: @escaping () async -> Void
+        rows: [EntityRow], totalCount: Int?, hasMore: Bool, isBusy: Bool, refreshError: String?,
+        nextPageError: String?, refresh: @escaping @MainActor () async -> Void,
+        loadMore: @escaping @MainActor () async -> Void
     ) -> some View {
         ScrollView {
+            if let refreshError {
+                InlineLoadFailure(message: refreshError, isRetrying: isBusy, retry: refresh)
+                    .padding(.horizontal, FieldGuideTokens.Space.md)
+            }
             if let totalCount {
                 Text("\(totalCount.formatted()) items")
                     .font(.caption)
@@ -90,15 +99,12 @@ struct WardrobeView: View {
             }
             EntityShelfView(
                 descriptor: EntityCatalog[.product], rows: rows, subtitleOverride: { $0.subtitle })
-            if let error {
-                Text(error)
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
+            if let nextPageError {
+                InlineLoadFailure(message: nextPageError, isRetrying: isBusy, retry: loadMore)
                     .padding(.horizontal, FieldGuideTokens.Space.md)
-            }
-            if hasMore {
+            } else if hasMore {
                 Button("Load more") { Task { await loadMore() } }
-                    .disabled(isLoadingMore)
+                    .disabled(isBusy)
                     .padding()
             }
         }

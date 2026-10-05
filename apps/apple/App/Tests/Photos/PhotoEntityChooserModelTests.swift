@@ -38,12 +38,15 @@ struct PhotoEntityChooserModelTests {
 
     /// A query still in flight neither empties nor merges the lanes: both lanes page on (recents
     /// over a capture-day-only page) and keep their own rows, and the query lands only in search.
-    /// Changing the capture-date scope while a query is pending re-scopes both lanes, replays the
-    /// query, and discards the old scope's late response.
+    /// Capture-date scopes changed A→B→C while a query is pending, with C's date page resolving
+    /// before B's, leave both lanes on C: B's late continuation never re-scopes either lane.
     @Test func scopeChangeWhileQueryIsPendingKeepsDateAndRecentLanesApart() async throws {
         let searchCalls = Mutex(0)
         let firstQuery = Gate()
-        let staleQuery = Gate()
+        let secondQuery = Gate()
+        let dateStarted = Mutex<Set<String>>([])
+        let scopeB = Gate()
+        let scopeC = Gate()
         let model = PhotoEntityChooserModel(
             descriptor: EntityCatalog[.meal], client: try makeClient(),
             captureDates: [Self.day("2026-09-10")],
@@ -56,16 +59,17 @@ struct PhotoEntityChooserModelTests {
                         value += 1
                         return value
                     }
-                    if call == 1 { await firstQuery.wait() }
-                    if call == 2 { await staleQuery.wait() }
-                    let id = call == 2 ? "MEA-stale-\(query)" : "MEA-\(query)"
-                    return Self.page([Self.row(id, date: "2026-08-01")], page: page, total: 1)
+                    await (call == 1 ? firstQuery : secondQuery).wait()
+                    return Self.page([Self.row("MEA-\(query)", date: "2026-08-01")], page: page, total: 1)
                 }
                 if let day = filters["from"]?.strings.first {
+                    dateStarted.withLock { _ = $0.insert(day) }
+                    if page == 1, day == "2026-09-05" { await scopeB.wait() }
+                    if page == 1, day == "2026-09-01" { await scopeC.wait() }
                     return Self.page([Self.row("MEA-\(day)-\(page)", date: day)], page: page, total: 2)
                 }
-                let date = ["2026-09-01", "2026-09-10", "2026-09-05"][page - 1]
-                return Self.page([Self.row("MEA-recent-\(date)", date: date)], page: page, total: 3)
+                let date = ["2026-09-01", "2026-09-10", "2026-09-05", "2026-09-03"][page - 1]
+                return Self.page([Self.row("MEA-recent-\(date)", date: date)], page: page, total: 4)
             })
 
         await model.loadInitial()
@@ -79,7 +83,6 @@ struct PhotoEntityChooserModelTests {
         #expect(model.dateMatches.map(\.id) == ["MEA-2026-09-10-1", "MEA-2026-09-10-2"])
         #expect(model.recentRows.map(\.id) == ["MEA-recent-2026-09-01", "MEA-recent-2026-09-05"])
         #expect(!model.hasMoreDateMatches)
-        #expect(!model.hasMoreRecents)
 
         firstQuery.open()
         #expect(await waitUntil { model.searchRows.map(\.id) == ["MEA-plum"] })
@@ -87,22 +90,33 @@ struct PhotoEntityChooserModelTests {
 
         model.setSearchQuery("fig")
         #expect(await waitUntil { searchCalls.withLock { $0 } == 2 })
-        await model.setScope(captureDates: [Self.day("2026-09-01"), nil])
+        let toB = Task { await model.setScope(captureDates: [Self.day("2026-09-05")]) }
+        #expect(await waitUntil { dateStarted.withLock { $0.contains("2026-09-05") } })
+        let toC = Task { await model.setScope(captureDates: [Self.day("2026-09-01"), nil]) }
+        #expect(await waitUntil { dateStarted.withLock { $0.contains("2026-09-01") } })
+        // Both lanes describe C while its date page is in flight: C's day leaves recents and
+        // B's and A's days stay in them.
+        #expect(model.dateMatches.isEmpty)
+        #expect(model.recentRows.map(\.id) == ["MEA-recent-2026-09-10", "MEA-recent-2026-09-05"])
 
-        // The new capture day's row moves out of recents; the old capture day's row moves in.
+        scopeC.open()
+        await toC.value
+        scopeB.open()
+        await toB.value
         #expect(model.dateMatches.map(\.id) == ["MEA-2026-09-01-1"])
-        #expect(model.recentRows.map(\.id) == ["MEA-recent-2026-09-10"])
+        #expect(model.recentRows.map(\.id) == ["MEA-recent-2026-09-10", "MEA-recent-2026-09-05"])
+
+        secondQuery.open()
         #expect(await waitUntil { model.searchRows.map(\.id) == ["MEA-fig"] })
 
         await model.loadMoreDateMatches()
         await model.loadMoreRecents()
         #expect(model.dateMatches.map(\.id) == ["MEA-2026-09-01-1", "MEA-2026-09-01-2"])
-        #expect(model.recentRows.map(\.id) == ["MEA-recent-2026-09-10", "MEA-recent-2026-09-05"])
-
-        staleQuery.open()
-        try await Task.sleep(nanoseconds: 20_000_000)
-        #expect(model.searchRows.map(\.id) == ["MEA-fig"])
-        #expect(Set(model.dateMatches.map(\.id)).isDisjoint(with: model.recentRows.map(\.id)))
+        #expect(
+            model.recentRows.map(\.id) == [
+                "MEA-recent-2026-09-10", "MEA-recent-2026-09-05", "MEA-recent-2026-09-03",
+            ])
+        #expect(!model.hasMoreRecents)
     }
 
     @Test func noCaptureDateLoadsOnlyRecentLane() async throws {

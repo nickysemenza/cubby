@@ -133,10 +133,13 @@ struct PhotoRelatedDestinationChooser: View {
                 .buttonStyle(.plain)
                 .accessibilityIdentifier("photos.destination.related.\(row.id)")
             }
-            if model.hasMore, search.isEmpty {
-                if let error = model.nextPageError {
-                    Text(error).foregroundStyle(.secondary)
+            // This sheet has no refresh gesture, so `refreshError` can't arise; a failed next page
+            // keeps the loaded rows and shows its raw error with a retry.
+            if let error = model.nextPageError, search.isEmpty {
+                InlineLoadFailure(message: error, isRetrying: model.activity != .idle) {
+                    await model.loadNextPage()
                 }
+            } else if model.hasMore, search.isEmpty {
                 Button {
                     Task { await model.loadNextPage() }
                 } label: {
