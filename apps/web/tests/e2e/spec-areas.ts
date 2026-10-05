@@ -556,7 +556,7 @@ export const SPEC_EXTRA_GLOBS: SpecGlobMap = {
     `${WEB}/src/server/purchase-import/gmail/**`,
   ],
   "purchase-import-run.spec.ts": [
-    `${WEB}/src/app/vendors/**`,
+    `${WEB}/src/app/vendors/order-mail*`,
     `${WEB}/src/app/purchases/**`,
     `${WEB}/src/app/runs/**`,
     `${WEB}/src/server/purchase-import/**`,
