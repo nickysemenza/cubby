@@ -1,0 +1,427 @@
+{
+  "claim_next_import_work": {
+    "type": "object",
+    "required": [
+      "operationId"
+    ],
+    "properties": {
+      "operationId": {
+        "type": "string",
+        "minLength": 1,
+        "maxLength": 200
+      }
+    }
+  },
+  "extract_receipt_evidence": {
+    "type": "object",
+    "required": [
+      "operationId"
+    ],
+    "properties": {
+      "operationId": {
+        "type": "string",
+        "minLength": 1,
+        "maxLength": 200
+      }
+    }
+  },
+  "extract_run_evidence": {
+    "type": "object",
+    "required": [
+      "operationId"
+    ],
+    "properties": {
+      "operationId": {
+        "type": "string",
+        "minLength": 1,
+        "maxLength": 200
+      }
+    }
+  },
+  "issue_browser_command": {
+    "type": "object",
+    "required": [
+      "operationId",
+      "command"
+    ],
+    "properties": {
+      "operationId": {
+        "type": "string",
+        "minLength": 1,
+        "maxLength": 200
+      },
+      "command": {
+        "type": "object",
+        "required": [
+          "kind"
+        ],
+        "properties": {
+          "kind": {
+            "anyOf": [
+              {
+                "type": "string",
+                "const": "navigate_orders"
+              },
+              {
+                "type": "string",
+                "const": "capture_order"
+              },
+              {
+                "type": "string",
+                "const": "capture_pdf"
+              },
+              {
+                "type": "string",
+                "const": "capture_screenshot"
+              }
+            ]
+          },
+          "target": {
+            "type": "string",
+            "maxLength": 2048
+          }
+        }
+      }
+    }
+  },
+  "read_browser_command_result": {
+    "type": "object",
+    "required": [
+      "operationId"
+    ],
+    "properties": {
+      "operationId": {
+        "type": "string",
+        "minLength": 1,
+        "maxLength": 200
+      }
+    }
+  },
+  "import_browser_order_evidence": {
+    "type": "object",
+    "required": [
+      "operationId",
+      "commandId"
+    ],
+    "properties": {
+      "operationId": {
+        "type": "string",
+        "minLength": 1,
+        "maxLength": 200
+      },
+      "commandId": {
+        "type": "string",
+        "format": "uuid"
+      },
+      "defaultTrade": {
+        "anyOf": [
+          {
+            "type": "string",
+            "const": "planning"
+          },
+          {
+            "type": "string",
+            "const": "demolition"
+          },
+          {
+            "type": "string",
+            "const": "building"
+          },
+          {
+            "type": "string",
+            "const": "drywall"
+          },
+          {
+            "type": "string",
+            "const": "electrical"
+          },
+          {
+            "type": "string",
+            "const": "plumbing"
+          },
+          {
+            "type": "string",
+            "const": "mechanical"
+          },
+          {
+            "type": "string",
+            "const": "cabinetry"
+          },
+          {
+            "type": "string",
+            "const": "countertop"
+          },
+          {
+            "type": "string",
+            "const": "flooring"
+          },
+          {
+            "type": "string",
+            "const": "millwork"
+          },
+          {
+            "type": "string",
+            "const": "finishes"
+          },
+          {
+            "type": "string",
+            "const": "appliances"
+          },
+          {
+            "type": "string",
+            "const": "landscaping"
+          },
+          {
+            "type": "string",
+            "const": "logistics"
+          },
+          {
+            "type": "string",
+            "const": "metalworking"
+          },
+          {
+            "type": "string",
+            "const": "crafts"
+          },
+          {
+            "type": "string",
+            "const": "auto"
+          },
+          {
+            "type": "string",
+            "const": "other"
+          }
+        ]
+      },
+      "defaultProjectId": {
+        "type": "string",
+        "minLength": 1
+      }
+    }
+  },
+  "report_agent_progress": {
+    "type": "object",
+    "required": [
+      "operationId",
+      "phase"
+    ],
+    "properties": {
+      "operationId": {
+        "type": "string",
+        "minLength": 1,
+        "maxLength": 200
+      },
+      "phase": {
+        "anyOf": [
+          {
+            "type": "string",
+            "const": "preparing"
+          },
+          {
+            "type": "string",
+            "const": "investigating"
+          },
+          {
+            "type": "string",
+            "const": "awaiting_browser"
+          },
+          {
+            "type": "string",
+            "const": "awaiting_approval"
+          },
+          {
+            "type": "string",
+            "const": "committing"
+          },
+          {
+            "type": "string",
+            "const": "review"
+          },
+          {
+            "type": "string",
+            "const": "complete"
+          }
+        ]
+      },
+      "currentItem": {
+        "type": "string",
+        "maxLength": 500
+      },
+      "awaitingApproval": {
+        "type": "boolean"
+      },
+      "detail": {
+        "type": "string",
+        "maxLength": 1000
+      }
+    }
+  },
+  "save_navigation_hints": {
+    "type": "object",
+    "required": [
+      "operationId",
+      "hints"
+    ],
+    "properties": {
+      "operationId": {
+        "type": "string",
+        "minLength": 1,
+        "maxLength": 200
+      },
+      "hints": {
+        "type": "array",
+        "items": {
+          "type": "object",
+          "required": [
+            "url"
+          ],
+          "properties": {
+            "url": {
+              "type": "string",
+              "format": "uri",
+              "maxLength": 2048
+            },
+            "label": {
+              "type": "string",
+              "maxLength": 500
+            }
+          }
+        },
+        "minItems": 1,
+        "maxItems": 25
+      }
+    }
+  },
+  "mark_history_expired": {
+    "type": "object",
+    "required": [
+      "operationId",
+      "earliestAvailableOrderAt"
+    ],
+    "properties": {
+      "operationId": {
+        "type": "string",
+        "minLength": 1,
+        "maxLength": 200
+      },
+      "earliestAvailableOrderAt": {
+        "type": "string",
+        "format": "date-time"
+      }
+    }
+  },
+  "finish_import_run": {
+    "type": "object",
+    "required": [
+      "operationId"
+    ],
+    "properties": {
+      "operationId": {
+        "type": "string",
+        "minLength": 1,
+        "maxLength": 200
+      }
+    }
+  },
+  "stop_import_run_for_review": {
+    "type": "object",
+    "required": [
+      "operationId",
+      "reason"
+    ],
+    "properties": {
+      "operationId": {
+        "type": "string",
+        "minLength": 1,
+        "maxLength": 200
+      },
+      "reason": {
+        "anyOf": [
+          {
+            "type": "string",
+            "const": "navigation_ambiguity"
+          },
+          {
+            "type": "string",
+            "const": "unreadable_evidence"
+          },
+          {
+            "type": "string",
+            "const": "provider_failure"
+          },
+          {
+            "type": "string",
+            "const": "other"
+          }
+        ]
+      },
+      "detail": {
+        "type": "string",
+        "minLength": 1,
+        "maxLength": 1000
+      }
+    }
+  },
+  "defer_order_for_review": {
+    "type": "object",
+    "required": [
+      "operationId",
+      "orderId",
+      "detail"
+    ],
+    "properties": {
+      "operationId": {
+        "type": "string",
+        "minLength": 1,
+        "maxLength": 200
+      },
+      "orderId": {
+        "type": "string",
+        "minLength": 1,
+        "maxLength": 200
+      },
+      "detail": {
+        "type": "string",
+        "minLength": 1,
+        "maxLength": 1000
+      }
+    }
+  },
+  "settle_charge_hunt": {
+    "type": "object",
+    "required": [
+      "operationId",
+      "huntId",
+      "outcome",
+      "detail"
+    ],
+    "properties": {
+      "operationId": {
+        "type": "string",
+        "minLength": 1,
+        "maxLength": 200
+      },
+      "huntId": {
+        "type": "string",
+        "format": "uuid"
+      },
+      "outcome": {
+        "anyOf": [
+          {
+            "type": "string",
+            "const": "not_found"
+          },
+          {
+            "type": "string",
+            "const": "needs_review"
+          }
+        ]
+      },
+      "detail": {
+        "type": "string",
+        "minLength": 1,
+        "maxLength": 1000
+      }
+    }
+  }
+}
