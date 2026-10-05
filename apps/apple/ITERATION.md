@@ -120,6 +120,15 @@ and press Enter again. `agent-device replay --save-script` can capture a repaire
 flow, and `--from` can resume a divergent replay using the digest in its error.
 Use the full `test:e2e:sim` flow to check navigation through Search.
 
+A runner watchdog timeout while typing is not by itself evidence of a slow app:
+sample both the app and the runner and check the runner's selected identifier and
+`TEXT_ENTRY_PHASE` timings first. agent-device binds a coordinate-chosen input by
+query index, which resolves to a different input once focusing scrolls the form;
+the pinned patch types into the focused input carrying the tapped identifier
+instead (see [Tester Army](../../docs/tester-army.md)). A focused input touching the
+keyboard's prediction bar is a separate layout issue; successful automation does
+not verify keyboard clearance.
+
 Ctrl-C closes the runner's agent-device session and drops its database. The
 detached watchdog closes the session and drops that database if the runner is
 killed. Simulator runs leave evidence under `artifacts/sim-dev/<database>/`,

@@ -241,6 +241,15 @@ See also the image operational passes at the end of this file.
 
 ## Native app
 
+- 🤔 **Keep a focused structured-editor input clear of the keyboard.**
+  `StructuredValueControl` draws a whole array row (an external ID's source,
+  kind, id, URL) inside one Form row, so keyboard avoidance scrolls that tall
+  cell and a lower input stays under the prediction bar (measured: zero
+  clearance on the iPhone simulator; the Tester Army agent could not reach the
+  input it had focused). Give each input its own row or scroll the focused
+  input itself; verify with the external-ID journey. Owner:
+  `App/Shared/Editors/StructuredValueEditor.swift`.
+
 - 🤔 **Cluster and reproduce the native app-hang corpus before changing
   code.** Collect sanitized release, duration, foreground state, and top
   symbolicated main-thread frames per Sentry family; group by shared frames.
