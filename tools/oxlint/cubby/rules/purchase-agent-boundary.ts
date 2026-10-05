@@ -110,18 +110,19 @@ export const purchaseAgentBoundaryRule = defineRule({
             data: { what: `.${property}` },
           });
       },
-      // Destructuring (`const { env } = process`) names the property here.
+      // Destructuring (`const { env } = process`, `{ "exports": b }`,
+      // `{ ["exports"]: b }`) names the property here.
       Property(node) {
-        if (
-          node.parent.type === "ObjectPattern" &&
-          !node.computed &&
-          node.key.type === "Identifier" &&
-          AMBIENT_PROPERTIES.has(node.key.name)
-        )
+        if (node.parent.type !== "ObjectPattern") return;
+        const name =
+          !node.computed && node.key.type === "Identifier"
+            ? node.key.name
+            : staticSource(node.key);
+        if (name !== undefined && AMBIENT_PROPERTIES.has(name))
           context.report({
             node,
             messageId: "env",
-            data: { what: `.${node.key.name}` },
+            data: { what: `.${name}` },
           });
       },
       Identifier(node) {

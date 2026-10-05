@@ -16,7 +16,7 @@ dependency.
 | Concern                       | Provider                           | Production resource                                                                   |
 | ----------------------------- | ---------------------------------- | ------------------------------------------------------------------------------------- |
 | Web application and APIs      | Cloudflare Workers                 | Worker `cubby`, custom domain `cubby.nickysemenza.com`                                |
-| Purchase-import orchestration | Agents SDK + pi-durable            | Private Worker `purchase-agent`, queue `cubby-purchase-agent`, SQLite Durable Objects |
+| Purchase-import orchestration | Agents SDK + pi-durable            | Worker `cubby`: queue `cubby-purchase-agent`, Durable Object `PurchaseImportRunAgent` |
 | PostgreSQL                    | Neon through Cloudflare Hyperdrive | One Neon origin, two Hyperdrive configurations                                        |
 | Images and documents          | Cloudflare R2                      | Bucket `foo`, public origin `https://media.nickysemenza.com`                          |
 | Product lookup                | Main Worker + PostgreSQL           | `UpcLookupCache` table, upcitemdb fallback (no key)                                   |
@@ -527,9 +527,11 @@ For a new account or disaster recovery:
 4. Restore Worker and GitHub secrets through their providers.
 5. Recreate Google Auth Platform configuration and rotate the Google client
    secret rather than copying it through documentation.
-6. Deploy `cubby`, then the private `purchase-agent`; verify their exact source
-   revision, queue/service binding, agent storage, Gateway usage, and run
-   authenticated database, media, AI, Gmail, and auxiliary-service smoke tests.
+6. Deploy `cubby`; verify its exact source revision, that it is the only
+   consumer of each of its queues (including `cubby-purchase-agent`), the
+   `PURCHASE_IMPORT_RUN` agent namespace, Gateway usage, and run authenticated
+   database, media, AI, Gmail, purchase-agent, and auxiliary-service smoke
+   tests.
 7. Reconnect native clients and regrant local macOS permissions.
 
 Before deleting apparently unused provider state, search the repository, check
