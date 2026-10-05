@@ -34,30 +34,6 @@ export function ErrorDisplay({
 }: ErrorDisplayProps) {
   const { code, reason, message } = getAppErrorDetails(error);
 
-  if (code === "UNAUTHORIZED") {
-    return (
-      <div role="alert" className={cn("flex items-center gap-2.5", className)}>
-        <span
-          aria-hidden
-          className="size-2 shrink-0 rounded-full bg-destructive"
-        />
-        <div className="flex items-center gap-2 text-sm">
-          <span>Please sign in to continue</span>
-          <Button
-            variant="link"
-            size="sm"
-            render={
-              <Link to="/auth/$authView" params={{ authView: "sign-in" }} />
-            }
-            nativeButton={false}
-          >
-            Sign in
-          </Button>
-        </div>
-      </div>
-    );
-  }
-
   const headline = title ? `Couldn't load ${title}.` : message;
   // Once `title` claims the headline, the raw message becomes the reason
   // line; without a title the message already is the headline, so only the
@@ -81,10 +57,26 @@ export function ErrorDisplay({
           </span>
         ) : null}
         <ErrorDetails error={error} />
-        {onRetry ? (
-          <Button variant="outline" size="sm" onClick={onRetry}>
-            Retry
-          </Button>
+        {code === "UNAUTHORIZED" || onRetry ? (
+          <div className="flex items-center gap-2">
+            {code === "UNAUTHORIZED" ? (
+              <Button
+                variant="link"
+                size="sm"
+                render={
+                  <Link to="/auth/$authView" params={{ authView: "sign-in" }} />
+                }
+                nativeButton={false}
+              >
+                Sign in
+              </Button>
+            ) : null}
+            {onRetry ? (
+              <Button variant="outline" size="sm" onClick={onRetry}>
+                Retry
+              </Button>
+            ) : null}
+          </div>
         ) : null}
       </div>
     </div>
