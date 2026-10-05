@@ -310,7 +310,7 @@ export const PURCHASE_IMPORT_MAIL_FEATURE = defineFeature({
 
 /**
  * Moved from Sol after `eval:features` (2026-10-04): Luna at high effort
- * matched Sol high 12/16 with zero unsafe answers on both, at about 1/28 of
+ * matched Sol high 12/16 with zero unsafe answers on both, at about 1/19 of
  * the cost. Its schema still carries no array bounds: a failed call is
  * retried on the Anthropic recovery model (`extract.ts`).
  */
