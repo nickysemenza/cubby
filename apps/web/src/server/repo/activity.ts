@@ -15,13 +15,13 @@ import {
   imageDescriptionAnalysis,
   imageDescriptionResult,
 } from "@cubby/schemas/image-processing";
-import { and, desc, eq, isNull, sql, type SQL } from "drizzle-orm";
+import { and, desc, eq, sql, type SQL } from "drizzle-orm";
 import { z } from "zod";
 
 import type { Database } from "~/server/db";
 import { imageProcessingAttempt } from "~/server/db/image-processing-schema";
 import { aiAnalysis, aiUsage } from "~/server/db/schema";
-import { getDb } from "~/server/repo/database-helpers";
+import { getDb, notDeleted } from "~/server/repo/database-helpers";
 import { resolveOrThrow } from "~/server/repo/shortcode-resolver";
 
 import {
@@ -652,7 +652,7 @@ export async function imageAnalysisHistory(
     eq(aiAnalysis.entityKind, "image"),
     eq(aiAnalysis.entityId, imageId),
     eq(aiAnalysis.feature, "image-description"),
-    isNull(aiAnalysis.deletedAt),
+    notDeleted(aiAnalysis),
   );
   const cursor = decodeCursor(input.cursor);
   const [rows, totals, current] = await Promise.all([

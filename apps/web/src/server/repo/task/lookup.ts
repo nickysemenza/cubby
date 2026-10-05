@@ -1,4 +1,3 @@
-import type { ShortcodeEntity } from "@cubby/schemas/entity-manifest";
 import type { EntityId } from "@cubby/schemas/identifiers";
 import type {
   PaginationParams,
@@ -62,25 +61,6 @@ import { taskDependencyIds, taskSubtaskCounts } from "./crud";
 import { dbTaskToAPI, effectiveTaskDueDateSql } from "./helpers";
 
 /**
- * Resolve a batch of shortcodes to their (unbranded) uuids for use in a WHERE
- * clause. Unknown/malformed codes simply drop out — a filter naming a code
- * that doesn't exist should match nothing, not throw. The `entity` parameter
- * pins the expected type so a wrong-prefix code (a `LOC-` code passed as a
- * task filter) is silently dropped rather than matching an unrelated row —
- * mirrors `expense/lookup.ts`'s and `project/lookup.ts`'s siblings.
- *
- * `resolveAllPresent` applies the same live-row semantics as the list itself,
- * including canonical/legacy shortcode normalization.
- */
-const toUuids = async <E extends ShortcodeEntity>(
-  db: Database,
-  codes: readonly string[],
-  entity: E,
-): Promise<EntityId<E>[]> => {
-  return resolveAllPresent(db, entity, codes);
-};
-
-/**
  * The `task.projectId` WHERE condition for a `projectId` + `includeSubProjects`
  * filter pair: a plain equality match, or — when `includeSubProjects` is set —
  * an `inArray` over the project plus every live descendant (walking
@@ -126,15 +106,19 @@ async function resolveTaskFilterReferences(db: Database, filters: TaskFilters) {
     scopedProjectIds,
     subjectProductIds,
   ] = await Promise.all([
-    toUuids(db, filters.projectId ? [filters.projectId].flat() : [], "project"),
-    toUuids(db, parentTaskCodes, "task"),
+    resolveAllPresent(
+      db,
+      "project",
+      filters.projectId ? [filters.projectId].flat() : [],
+    ),
+    resolveAllPresent(db, "task", parentTaskCodes),
     filters.projectScope
       ? matchingEmbeddedProjectIds(db, filters.projectScope)
       : Promise.resolve(null),
-    toUuids(
+    resolveAllPresent(
       db,
-      filters.subjectProductId ? [filters.subjectProductId].flat() : [],
       "product",
+      filters.subjectProductId ? [filters.subjectProductId].flat() : [],
     ),
   ]);
   let projectIds = selectedProjectIds;

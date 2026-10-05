@@ -168,8 +168,8 @@ export const buildProjectListQuery = async (
   // `resolveShortcodes` keys its result Map by the CANONICAL code (see its
   // docstring), so the lookup goes through `parseShortcode(code).shortcode`
   // rather than the raw input — otherwise a lowercase or legacy-prefix code
-  // resolves fine in SQL but misses the Map here, same trap as
-  // `expense/lookup.ts`'s and `task/lookup.ts`'s `toUuids`.
+  // resolves fine in SQL but misses the Map here (the trap `resolveAllPresent`
+  // handles for single-entity lists).
   const parentProjectUuids = parentCodes.flatMap((code) => {
     const parsed = parseShortcode(code);
     const resolved = parsed ? resolvedParents.get(parsed.shortcode) : undefined;

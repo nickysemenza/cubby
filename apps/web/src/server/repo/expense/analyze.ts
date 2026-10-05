@@ -233,22 +233,14 @@ export const expenseAnalysisWhere = (
     ? and(where, eq(expense.lineKind, "principal"))
     : where;
 
-const aggregateForCost = (cost: SQL<number | null>) => ({
-  actual: sql<number>`coalesce(sum(${cost}) filter (where ${cost} > 0 and ${expense.future} = false), 0)::float`,
-  committed: sql<number>`coalesce(sum(${cost}) filter (where ${cost} > 0 and ${expense.future} = true), 0)::float`,
-  credits: sql<number>`coalesce(-sum(${cost}) filter (where ${cost} < 0), 0)::float`,
-  net: sql<number>`coalesce(sum(${cost}), 0)::float`,
-  count: sql<number>`count(*)::int`,
-});
-
 const analysisAggregateFields = (
   allocationScope: ExpenseAllocationProjectScope | undefined,
 ) =>
-  allocationScope
-    ? aggregateForCost(
-        expenseAllocatedCostSql(sql`${expense.id}`, allocationScope),
-      )
-    : expenseAggregateFields();
+  expenseAggregateFields(
+    allocationScope
+      ? expenseAllocatedCostSql(sql`${expense.id}`, allocationScope)
+      : expense.cost,
+  );
 
 async function scopeAggregate(
   db: Database,

@@ -128,18 +128,6 @@ async function batchFetchResults(
     .filter((r): r is InventoryEntryDeepDB => r != null);
 }
 
-const loadInventoryEntryPricing = async (
-  db: Database,
-  entries: ReadonlyArray<InventoryEntryDeepDB>,
-) =>
-  loadProductPricing(
-    db,
-    entries.map((entry) => ({
-      id: entry.product.id,
-      price: entry.product.price,
-    })),
-  );
-
 const assertInventoryProductsLive = async (
   tx: DrizzleTransaction,
   productIds: ProductId[],
@@ -414,7 +402,10 @@ export const addInventoryEntries = async (
 
   const [pricing, ownership, dataQualities, locationQualities, valuations] =
     await Promise.all([
-      loadInventoryEntryPricing(db, processed.results),
+      loadProductPricing(
+        db,
+        processed.results.map((entry) => entry.product),
+      ),
       loadEffectiveInventoryOwnership(db, processed.results),
       loadDataQualities(
         db,
@@ -790,7 +781,10 @@ export const moveInventoryEntries = async (
 
   const [pricing, ownership, dataQualities, locationQualities, valuations] =
     await Promise.all([
-      loadInventoryEntryPricing(db, processedItems),
+      loadProductPricing(
+        db,
+        processedItems.map((entry) => entry.product),
+      ),
       loadEffectiveInventoryOwnership(db, processedItems),
       loadDataQualities(
         db,
@@ -1157,7 +1151,10 @@ export const reconcileLocationSession = async (
 
   const [pricing, ownership, dataQualities, locationQualities, valuations] =
     await Promise.all([
-      loadInventoryEntryPricing(db, processed),
+      loadProductPricing(
+        db,
+        processed.map((entry) => entry.product),
+      ),
       loadEffectiveInventoryOwnership(db, processed),
       loadDataQualities(
         db,

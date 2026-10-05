@@ -53,7 +53,6 @@ import {
 } from "drizzle-orm";
 import type { PgColumn } from "drizzle-orm/pg-core";
 import { uniq } from "es-toolkit";
-import { z } from "zod";
 
 import { projectListRows } from "~/entity/list-read-schema";
 import { startOperationDefinition } from "~/lib/start-operation-observability";
@@ -80,6 +79,7 @@ import {
   task,
 } from "~/server/db/schema";
 import { createAppError } from "~/server/errors/app-error";
+import { findPgError } from "~/server/errors/db-errors";
 import { observeOperationPhase } from "~/server/observed-request";
 import { computeChanges, logAuditEntry } from "~/server/repo/audit-log";
 import { loadDataQualities } from "~/server/repo/data-quality/hydrate";
@@ -1651,17 +1651,19 @@ export const productSearch = async (
 
   const { take, skip } = buildTakeSkip(pagination);
 
-  const { data: results, count } = await executeListQueryWithCount(
+  const { data: results, count } = await executeListQueryWithCount({
+    kind: "page",
     // No `...relations.product.full` — scalar columns only. The picker output
     // schema omits relations that were not loaded.
-    getDb(db).query.product.findMany({
-      where: whereClause,
-      orderBy: orderByArray,
-      limit: take,
-      offset: skip,
-    }),
-    countWhere(db, product, whereClause),
-  );
+    rows: () =>
+      getDb(db).query.product.findMany({
+        where: whereClause,
+        orderBy: orderByArray,
+        limit: take,
+        offset: skip,
+      }),
+    count: () => countWhere(db, product, whereClause),
+  });
 
   const categories = await loadCategorySummaries(db);
   const resultIds = results.map((result) => result.id);
@@ -1726,42 +1728,6 @@ export const getProductPickerItemsByIds = async (
 };
 
 /**
- * Walk an error's `cause` chain looking for a Postgres unique-violation (23505).
- * Drizzle wraps the driver error as "Failed query: …" and hides the real cause,
- * so the raw message never says "duplicate" — we dig it out here.
- */
-const databaseErrorNodeSchema = z
-  .object({
-    code: z.string().optional(),
-    constraint: z.string().optional(),
-    detail: z.string().optional(),
-    cause: z
-      .union([z.instanceof(Error), z.object({}).passthrough()])
-      .optional(),
-  })
-  .passthrough();
-
-function findUniqueViolation<TError>(
-  error: TError,
-  depth = 0,
-): { constraint: string; detail: string } | null {
-  if (depth >= 6) return null;
-  const parsedError = databaseErrorNodeSchema.safeParse(error);
-  if (!parsedError.success) return null;
-
-  const current = parsedError.data;
-  if (current.code === "23505") {
-    return {
-      constraint: current.constraint ?? "",
-      detail: current.detail ?? "",
-    };
-  }
-  return current.cause === undefined
-    ? null
-    : findUniqueViolation(current.cause, depth + 1);
-}
-
-/**
  * Translate a Product unique-constraint violation into a clear, actionable
  * CONFLICT error (naming the conflicting product/ingredient where possible).
  * No-op if the error isn't a unique violation, so callers can rethrow.
@@ -1773,9 +1739,9 @@ async function throwIfDuplicateProduct<TError>(
   },
   error: TError,
 ): Promise<void> {
-  const violation = findUniqueViolation(error);
-  if (!violation) return;
-  const { constraint } = violation;
+  const violation = findPgError(error);
+  if (violation?.code !== "23505") return;
+  const constraint = violation.constraint ?? "";
 
   // Retargeted from `Product_upc_key` to the identifier table's global unique,
   // which is now what stops two live products claiming one barcode. This is not

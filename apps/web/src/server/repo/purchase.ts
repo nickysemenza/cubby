@@ -124,6 +124,7 @@ import {
   repointEdge,
   resolveMergeTargets,
 } from "~/server/repo/merge/core";
+import { cents } from "~/server/repo/money";
 import { syncChangedEffectivePrices } from "~/server/repo/product/price-sync";
 import { loadEffectiveProductPricesById } from "~/server/repo/product/pricing";
 import {
@@ -573,7 +574,7 @@ const reconciliationCondition = (
 ): SQL | undefined => {
   const selected = values ? [values].flat() : [];
   if (selected.length === 0) return undefined;
-  const toleranceInCents = Math.round(RECONCILIATION_TOLERANCE * 100);
+  const toleranceInCents = cents(RECONCILIATION_TOLERANCE);
   const gapInCents = sql`abs(
     floor((${purchase.statedTotal} * 100)::numeric + 0.5) -
     floor((${purchaseVendorExpenseTotal} * 100)::numeric + 0.5)

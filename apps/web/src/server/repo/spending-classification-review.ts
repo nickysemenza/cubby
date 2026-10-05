@@ -9,7 +9,7 @@ import {
   type SpendingClassificationReviewApplyInput,
   type SpendingClassificationReviewInput,
 } from "@cubby/schemas/spending-classification-review";
-import { and, eq, isNull, sql } from "drizzle-orm";
+import { and, eq, sql } from "drizzle-orm";
 import { z } from "zod";
 
 import type { Database } from "~/server/db";
@@ -20,7 +20,11 @@ import {
 } from "~/server/entity-kernel";
 import { createAppError } from "~/server/errors/app-error";
 
-import { unwrapDb, withTransactionDatabase } from "./database-helpers";
+import {
+  notDeleted,
+  unwrapDb,
+  withTransactionDatabase,
+} from "./database-helpers";
 import {
   expenseSpendingCategoryResolutionSql,
   spendingClassificationRevision,
@@ -67,7 +71,7 @@ async function draftFor(
       const [current] = await unwrapDb(db)
         .select()
         .from(product)
-        .where(and(eq(product.id, id), isNull(product.deletedAt)));
+        .where(and(eq(product.id, id), notDeleted(product)));
       if (!current) return fail("Product is no longer live.");
       if (
         ((await getCategoryFeature(db, current.categoryId)) === "food") !==
@@ -83,7 +87,7 @@ async function draftFor(
           and(
             eq(entityExternalId.entityId, id),
             eq(entityExternalId.entityKind, "product"),
-            isNull(entityExternalId.deletedAt),
+            notDeleted(entityExternalId),
           ),
         );
       const requiredFeature = hasFoodIndicators(current)

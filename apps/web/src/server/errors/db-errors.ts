@@ -21,6 +21,7 @@ const databaseErrorNodeSchema = z
     code: z.string().optional(),
     constraint: z.string().optional(),
     detail: z.string().optional(),
+    message: z.string().optional(),
     table: z.string().optional(),
     column: z.string().optional(),
     cause: z
@@ -36,7 +37,10 @@ export type UnparsedDatabaseError = z.input<typeof unparsedDatabaseErrorSchema>;
 type PgError = z.output<typeof postgresErrorSchema>;
 
 /** Walk an error's `cause` chain for a Postgres error (5-digit SQLSTATE code). */
-function findPgError(error: UnparsedDatabaseError, depth = 0): PgError | null {
+export function findPgError(
+  error: UnparsedDatabaseError,
+  depth = 0,
+): PgError | null {
   if (depth >= 8) return null;
   try {
     const parsedPostgresError = postgresErrorSchema.safeParse(error);
@@ -93,6 +97,11 @@ export function isUniqueViolation(
 /** True when Postgres aborted a SERIALIZABLE transaction as a stale snapshot. */
 export function isSerializationFailure(error: UnparsedDatabaseError): boolean {
   return findPgError(error)?.code === "40001";
+}
+
+/** True when Postgres cancelled the statement (`statement_timeout`). */
+export function isStatementTimeout(error: UnparsedDatabaseError): boolean {
+  return findPgError(error)?.code === "57014";
 }
 
 /**

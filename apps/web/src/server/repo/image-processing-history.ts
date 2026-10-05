@@ -13,6 +13,7 @@ import {
 import { image } from "~/server/db/schema";
 import {
   getDb,
+  insertAndReturn,
   unwrapDb,
   withTransaction,
 } from "~/server/repo/database-helpers";
@@ -174,14 +175,8 @@ export async function isAssignedImageProcessingDevice(
   );
 }
 
-export async function createImageProcessingSubmission(db: Database) {
-  const [row] = await getDb(db)
-    .insert(imageProcessingSubmission)
-    .values({})
-    .returning();
-  if (!row) throw new Error("Image processing submission was not persisted");
-  return row;
-}
+export const createImageProcessingSubmission = (db: Database) =>
+  insertAndReturn(db, imageProcessingSubmission, {});
 
 /** Serializes membership with leasing so a reused job is never billed twice. */
 export async function attachSubmissionJobs(
