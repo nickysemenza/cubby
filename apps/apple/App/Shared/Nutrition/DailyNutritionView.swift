@@ -77,12 +77,12 @@ struct DailyNutritionView: View {
                 case .loading:
                     LoadingIndicator(label: "Loading nutrition")
                 case .failed(let message):
-                    failure(message, isLoading: isLoading, retry: onRefresh)
+                    InlineLoadFailure(message: message, isRetrying: isLoading, retry: onRefresh)
                 case .loaded(let summary):
                     MealNutritionPeopleView(summary: summary, showMealHeadings: true)
                 }
                 if let refreshError {
-                    failure(refreshError, isLoading: isLoading, retry: onRefresh)
+                    InlineLoadFailure(message: refreshError, isRetrying: isLoading, retry: onRefresh)
                 }
             }
         }
@@ -114,15 +114,6 @@ struct DailyNutritionView: View {
         selectedDay = HouseholdDay.string(for: moved)
     }
 
-    private func failure(
-        _ message: String, isLoading: Bool, retry: @escaping @Sendable () async -> Void
-    ) -> some View {
-        VStack(alignment: .leading, spacing: FieldGuideTokens.Space.sm) {
-            Text(message).font(.callout).foregroundStyle(.secondary)
-            if isLoading { LoadingIndicator(label: "Retrying") }
-            Button("Retry") { Task { await retry() } }.disabled(isLoading)
-        }
-    }
 }
 
 #Preview("Daily nutrition") {

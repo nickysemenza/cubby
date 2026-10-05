@@ -43,7 +43,6 @@ struct StraysView: View {
                         }
                     }
                     .padding(.vertical, FieldGuideTokens.Space.xs)
-                    .fieldGuideListRow()
                     .swipeActions {
                         Button("Skip", role: .destructive) { session.dismissStray(stray.productID) }
                     }
@@ -52,7 +51,6 @@ struct StraysView: View {
                     Text(summary)
                         .font(.fieldGuideBody)
                         .foregroundStyle(FieldGuideTokens.graphiteSecondary)
-                        .fieldGuideListRow()
                 }
             }
             .listStyle(.plain)

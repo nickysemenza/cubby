@@ -890,8 +890,7 @@ struct RelationSectionView: View {
         case .idle, .loading:
             LoadingIndicator(label: "Loading \(model.target.plural)")
         case .unavailable(let message), .failed(let message):
-            Text(message).foregroundStyle(.secondary)
-            Button("Retry") { Task { await list.loadInitial() } }
+            InlineLoadFailure(message: message) { await list.loadInitial() }
         case .loaded:
             // `collapseWhenEmpty` folds an empty section down to its header and create button.
             if list.rows.isEmpty && !model.spec.collapseWhenEmpty {
@@ -945,8 +944,7 @@ struct EntityJournalSectionView: View {
             case .idle, .loading:
                 LoadingIndicator(label: "Loading journal")
             case .unavailable(let message), .failed(let message):
-                Text(message).foregroundStyle(.secondary)
-                Button("Retry") { Task { await list.loadInitial() } }
+                InlineLoadFailure(message: message) { await list.loadInitial() }
             case .loaded:
                 if list.rows.isEmpty { Text("No entries yet.").foregroundStyle(.secondary) }
                 ForEach(list.rows) { row in

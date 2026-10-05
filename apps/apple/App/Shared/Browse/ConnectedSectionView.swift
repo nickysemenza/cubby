@@ -51,8 +51,7 @@ struct ConnectedSectionView: View {
             if !model.loaded || model.totalCount > 0 || model.error != nil {
                 Section {
                     if let error = model.error {
-                        Text(error).foregroundStyle(.secondary)
-                        Button("Retry") { Task { await model.refresh() } }
+                        InlineLoadFailure(message: error) { await model.refresh() }
                     } else if !model.loaded {
                         LoadingIndicator(label: "Loading \(model.spec.title)")
                     } else {

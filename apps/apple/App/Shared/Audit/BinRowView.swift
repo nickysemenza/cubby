@@ -136,7 +136,6 @@ private struct BinMoveToSheet: View {
                     .contentShape(Rectangle())
                 }
                 .buttonStyle(.plain)
-                .fieldGuideListRow()
             }
             .listStyle(.plain)
             .fieldGuideScreen()

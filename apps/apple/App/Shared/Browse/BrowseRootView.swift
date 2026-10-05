@@ -136,7 +136,6 @@ struct BrowseRootView: View {
             .foregroundStyle(FieldGuideTokens.graphiteSecondary)
             .padding(.vertical, FieldGuideTokens.Space.sm)
             .listRowInsets(browseRowInsets)
-            .fieldGuideListRow()
     }
 
     /// The row owns its own 44pt height, so the list must not add its default vertical padding

@@ -43,8 +43,7 @@ struct PurchaseReceivingSlot: View {
     var body: some View {
         VStack(alignment: .leading, spacing: FieldGuideTokens.Space.sm) {
             if let error {
-                Text(error).foregroundStyle(.red)
-                Button("Retry") { Task { await load() } }
+                InlineLoadFailure(message: error) { await load() }
             } else if lines == nil {
                 LoadingIndicator(label: "Loading lines")
             } else if productLines.isEmpty {
@@ -101,13 +100,7 @@ struct ReceiveExpenseSheet: View {
                 case .loading:
                     LoadingIndicator(label: "Checking existing stock")
                 case .failed(let message):
-                    ContentUnavailableView {
-                        Label("Could not load stock", systemImage: "exclamationmark.triangle")
-                    } description: {
-                        Text(message)
-                    } actions: {
-                        Button("Retry") { Task { await model.load() } }
-                    }
+                    LoadFailureView(title: "Could not load stock", message: message) { await model.load() }
                 case .loaded:
                     form
                 }

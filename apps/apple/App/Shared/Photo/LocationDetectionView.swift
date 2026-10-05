@@ -20,12 +20,8 @@ struct LocationDetectionView: View {
                         }
                     }
                 case .failed(let message):
-                    ContentUnavailableView {
-                        Label("Couldn't read the photo", systemImage: "exclamationmark.triangle")
-                    } description: {
-                        Text(message)
-                    } actions: {
-                        Button("Retry") { Task { await model.detect() } }
+                    LoadFailureView(title: "Couldn't read the photo", message: message) {
+                        await model.detect()
                     }
                 case .ready:
                     if !model.summary.isEmpty {
