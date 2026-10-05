@@ -275,7 +275,8 @@ export async function seedProposedPhotoRun(
   for (const name of ["unselected-mug", "selected-shirt"])
     images.push(
       await insertWithShortcode(db, "image", {
-        key: `synthetic-qa-photo-${name}`,
+        // Unique per seed: a retried journey seeds a second photo Run.
+        key: `synthetic-qa-photo-${run.publicId}-${name}`,
         filename: `synthetic-qa-photo-${name}.png`,
         contentType: "image/png",
         size: 100,

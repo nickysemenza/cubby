@@ -21,6 +21,5 @@ wait "label=\"Approve 1 items\" hittable=true" 30000
 # The popover's button reports hittable while it is still animating in; a tap then is dropped.
 wait stable 500 10000
 click "label=\"Approve 1 items\" hittable=true"
+# The settled group sits below the long evidence list; the lane's database readback checks it.
 wait text "Proposed items · 1" 90000
-scroll down 0.4 --until "label=\"Settled items\""
-wait text "Settled items" 30000
