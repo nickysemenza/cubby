@@ -85,6 +85,8 @@ const STATE_KEYS = {
   identity: "identity",
   toolRounds: "tool_rounds",
   nudgedAt: "nudged_at",
+  latestSubmission: "latest_submission",
+  receivedEvents: "received_events",
 } as const;
 
 /**
@@ -114,6 +116,10 @@ export class PurchaseImportRunAgent
     () => this.services(),
     (error) => this.report(error),
     (settled) => this.recordSettlement(settled),
+    {
+      latest: () => this.readState(STATE_KEYS.latestSubmission),
+      receivedEventIds: () => this.receivedEventIds(),
+    },
   );
 
   constructor(
@@ -319,11 +325,36 @@ export class PurchaseImportRunAgent
       operationId: input.operationId,
       whenBusy: "steer",
     });
-    if (receipt.accepted)
-      await this.settlement.watch({
-        operationId: receipt.operationId,
-      });
+    const eventId = input.signal.attributes?.eventId;
+    if (eventId) this.recordReceived(eventId);
+    if (receipt.accepted) await this.watchSettlement(receipt.operationId);
+    // A redelivery of the newest submission restores a watcher its first
+    // delivery may have lost; the job id makes this idempotent.
+    else if (
+      this.readState(STATE_KEYS.latestSubmission) === receipt.operationId
+    )
+      await this.settlement.watch({ operationId: receipt.operationId });
     return { accepted: receipt.accepted };
+  }
+
+  /** The newest submission is the one whose settlement speaks for the run. */
+  private async watchSettlement(operationId: string) {
+    this.writeState(STATE_KEYS.latestSubmission, operationId);
+    await this.settlement.watch({ operationId });
+  }
+
+  private receivedEventIds(): string[] {
+    const raw = this.readState(STATE_KEYS.receivedEvents);
+    return raw ? z.array(z.string()).parse(JSON.parse(raw)) : [];
+  }
+
+  private recordReceived(eventId: string) {
+    const received = this.receivedEventIds();
+    if (received.includes(eventId)) return;
+    this.writeState(
+      STATE_KEYS.receivedEvents,
+      JSON.stringify([...received, eventId]),
+    );
   }
 
   private async ensureRunReady(identity: RunIdentity): Promise<void> {
@@ -374,9 +405,7 @@ export class PurchaseImportRunAgent
       operationId: `prompt:${crypto.randomUUID()}`,
       whenBusy: "steer",
     });
-    await this.settlement.watch({
-      operationId: receipt.operationId,
-    });
+    if (receipt.accepted) await this.watchSettlement(receipt.operationId);
     return Response.json({ operationId: receipt.operationId }, { status: 202 });
   }
 

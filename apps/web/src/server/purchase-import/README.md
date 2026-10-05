@@ -35,7 +35,12 @@ conversation: it reaches Cubby through one Run's services and nothing else
    `import-orders.ts`, which are deterministic and stock-neutral.
    `finishRun`, `stopForReview` and `markRunFailed` set the terminal state.
    `server/purchase-agent/run-settlement.ts` reports each operation's
-   settlement through a durable Lifecycle job to `reconcileSettledRun`.
+   settlement through a durable Lifecycle job to `reconcileSettledRun`. Only
+   the newest submission reports, once the conversation is idle, and it lists
+   every queue event the agent has received. The run stays `running` while
+   the server has issued a wake the agent has not received (the current
+   dispatch generation, an approval decision, a Mac browser result): that
+   event resumes the conversation.
 6. **UI.** The run page proxies the agent conversation through
    `agent-proxy.ts` to the run's agent Durable Object. Member controls go
    through `controlRun` and `recordRunControlEvent`.

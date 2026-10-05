@@ -7,7 +7,7 @@ import {
 } from "agents/lifecycle";
 
 import type { RunServices } from "./environment";
-import { settlementReport } from "./settlement";
+import { reportSettlement, type SubmissionLedger } from "./settlement";
 
 const POLL_MS = 10_000;
 
@@ -26,6 +26,7 @@ export class RunSettlement extends LifecycleCapability {
     private readonly services: () => RunServices,
     private readonly report: <TError>(error: TError) => void,
     private readonly onSettled: (settled: AgentConversationSettlement) => void,
+    private readonly submissions: SubmissionLedger,
   ) {
     super("cubby-run-settlement");
   }
@@ -43,41 +44,18 @@ export class RunSettlement extends LifecycleCapability {
   async onJob({ job }: LifecycleJobContext): Promise<LifecycleJobOutcome> {
     // SAFETY: only `watch` pushes jobs for this capability, with this payload.
     const { operationId } = job.payload as SettlementJob;
-    const pending = await this.harness.pending();
-    if (pending.some((operation) => operation.operationId === operationId))
-      return { rescheduleAt: Date.now() + POLL_MS };
-    const result = await this.harness.wait(operationId);
-    const settled: AgentConversationSettlement = {
+    const outcome = await reportSettlement(
+      {
+        harness: this.harness,
+        services: this.services(),
+        submissions: this.submissions,
+        onSettled: this.onSettled,
+        report: this.report,
+      },
       operationId,
-      outcome: result.status,
-    };
-    if (result.reason) settled.reason = result.reason;
-    this.onSettled(settled);
-    const report = settlementReport(result);
-    const services = this.services();
-    const settledId = `submission-settled:${operationId}`;
-    try {
-      if (report.kind === "reconcile") {
-        await services.reconcileSettledRun({ operationId: settledId });
-        return undefined;
-      }
-      await Promise.all([
-        services.markRunFailed({
-          operationId: settledId,
-          failureCode: report.failureCode,
-          detail: report.detail,
-        }),
-        services.updateAgentProgress({
-          eventId: settledId,
-          phase: "review",
-          detail: report.detail,
-        }),
-      ]);
-    } catch (error) {
-      // The report failed (a database or network fault); try again.
-      this.report(error);
-      return { rescheduleAt: Date.now() + POLL_MS };
-    }
-    return undefined;
+    );
+    return outcome === "retry"
+      ? { rescheduleAt: Date.now() + POLL_MS }
+      : undefined;
   }
 }
