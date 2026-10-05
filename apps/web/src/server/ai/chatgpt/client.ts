@@ -8,7 +8,7 @@ import { chatGptInferenceDeadline, chatGptResponseLifetime } from "./rpc";
 const inferenceBody = z.looseObject({ model: z.string().min(1) });
 
 /** Household-wide connection, including unattended jobs without a user session. */
-export function chatGptPlan(): ChatGptPlanRpc | undefined {
+function chatGptPlan(): ChatGptPlanRpc | undefined {
   return getChatGptPlanNamespace()?.getByName("household");
 }
 

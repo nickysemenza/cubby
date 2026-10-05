@@ -7,7 +7,7 @@ import type { gatewayQuery } from "@cubby/shared/ai-gateway-request";
 import { z } from "zod";
 
 const MAX_INFERENCE_MS = 5 * 60_000;
-export const chatGptInferenceOptions = z.object({
+const chatGptInferenceOptions = z.object({
   requestId: z.string().min(1).max(128),
   timeoutMs: z.number().int().positive().max(MAX_INFERENCE_MS),
 });
