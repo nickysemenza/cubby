@@ -136,8 +136,10 @@ A cold cache still requires compilation; warm-cache performance must be
 measured from the full hosted job, not just the agent test duration.
 
 Dispatch **CI** manually with `tester_army` set to `web`, `ios`, `both`, or `import` and
-`simulator_e2e` disabled. These optional jobs do not run on PRs and do not replace
-the required checks. Run each engine three times for the live acceptance sample.
+`simulator_e2e` disabled. CI also runs the `import` lane weekly on `main`
+(Mondays 09:17 UTC); a scheduled run has empty inputs and skips every other job.
+These optional jobs do not run on PRs and do not replace the required checks.
+Run each engine three times for the live acceptance sample.
 
 Append `-- --wrong` to either journey command to deliberately expect wrong
 database values; it must fail the exact assertion. For a local replay comparison,
@@ -157,9 +159,18 @@ replaced by `tooling/tester-army/live-gateway.ts`, so the pi coordinator and
 the web Worker's extraction and audit call real models. The driver uses the
 same `cubby-testing` gateway and token. The journey passes only when the run
 completes on its own and the committed Purchase carries the confirmation's
-order and amount. The run page must also stream the agent transcript. The
-bundle adds `gateway-usage.json`: request counts per gateway route, never
-content. Deterministic coverage of the same orchestration stays in
+order and amount. The run page must also stream the agent transcript.
+
+The agent's peer swaps the coordinator model under test into its
+`/openai/responses` calls (`tooling/responses-model-swap.ts`, shared with the
+live coordinator eval): `gpt-6-luna` at `high` effort by default, overridden by
+`TESTER_ARMY_AGENT_MODEL` and `TESTER_ARMY_AGENT_EFFORT` locally or as Actions
+repository variables. The web peer's calls are forwarded unchanged. The run
+manifest records `agentModel` and `agentEffort`, and the bundle adds
+`gateway-usage.json`: request counts and wire models per gateway route for each
+peer, never content. Those two files are the record of the swap: the run page's
+generation telemetry and AI spend still name and price the agent's pinned
+model. A run costs roughly $0.40–0.50 on `gpt-6-sol` at high effort. Deterministic coverage of the same orchestration stays in
 `purchase-agent-scenarios.integration.test.ts`; this lane checks that real
 models complete it.
 

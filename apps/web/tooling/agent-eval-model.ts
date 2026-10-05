@@ -1,4 +1,9 @@
 import { z } from "zod";
+import {
+  type ModelSwap,
+  modelSwapSchema,
+  swapResponsesModel,
+} from "./responses-model-swap";
 
 /**
  * The purchase agent's model peer for a live coordinator eval. The agent pins
@@ -7,12 +12,6 @@ import { z } from "zod";
  * totals the usage each streamed response reports.
  */
 type Env = { GATEWAY_OPENAI_URL: string; AI_GATEWAY_API_KEY: string };
-
-const candidateSchema = z.object({
-  model: z.string().min(1),
-  effort: z.enum(["none", "low", "medium", "high"]),
-});
-type Candidate = z.infer<typeof candidateSchema>;
 
 const responseUsage = z.object({
   input_tokens: z.number(),
@@ -30,9 +29,6 @@ const completedEvent = z.object({
   type: z.literal("response.completed"),
   response: z.object({ usage: responseUsage }),
 });
-const requestBody = z.looseObject({
-  reasoning: z.looseObject({}).optional(),
-});
 
 const emptyUsage = () => ({
   requests: 0,
@@ -44,7 +40,7 @@ const emptyUsage = () => ({
   modelMs: 0,
 });
 
-let candidate: Candidate | undefined;
+let candidate: ModelSwap | undefined;
 let usage = emptyUsage();
 
 function tally(event: z.infer<typeof completedEvent>) {
@@ -89,7 +85,7 @@ export default {
   ): Promise<Response> {
     const url = new URL(request.url);
     if (url.pathname === "/configure") {
-      candidate = candidateSchema.parse(await request.json());
+      candidate = modelSwapSchema.parse(await request.json());
       usage = emptyUsage();
       return new Response(null, { status: 204 });
     }
@@ -99,9 +95,7 @@ export default {
 
     // The agent's provider addresses `https://ai-gateway.invalid/openai/<endpoint>`.
     const endpoint = url.pathname.replace(/^\/openai\//u, "");
-    const body = requestBody.parse(await request.json());
-    body.model = candidate.model;
-    body.reasoning = { ...body.reasoning, effort: candidate.effort };
+    const body = swapResponsesModel(await request.json(), candidate);
     const headers = new Headers(request.headers);
     for (const name of ["authorization", "x-api-key", "content-length"])
       headers.delete(name);
