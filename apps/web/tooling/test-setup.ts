@@ -205,11 +205,8 @@ async function readTruncateTargets(pool: Pool): Promise<string> {
 async function getFileDb() {
   if (fileDb) return fileDb;
 
-  // IntegreSQL serves a fixed ring of databases and, told nothing, eventually
-  // re-hands one that is still in use. Holding one for a whole file makes that
-  // certain — two parallel files would share a database and the second seed
-  // dies on `duplicate key ... "user_pkey"` — so {@link closeTestDb} must
-  // release it.
+  // Held for the whole file, so {@link closeTestDb} must release it: an
+  // unreleased slot is re-handed to a parallel file while still in use.
   const {
     lease,
     prepared: { pool, tables },
