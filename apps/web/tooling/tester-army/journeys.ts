@@ -146,12 +146,26 @@ const coupledJourneys: Journey[] = [
         rows: () => [{ state: "completed", photos: LIVE_IMPORT.photos.length }],
       },
       {
-        label: "the two pictured items became two products",
-        sql: `SELECT count(DISTINCT g."productId")::int AS products
-                FROM "PhotoGroupProposal" g JOIN "Run" r ON r.id = g."runId"
+        // Each uploaded photo is in the gallery of the live Product its
+        // committed group names, and the two photos name two Products.
+        label: "each photo is in its committed item's product gallery",
+        sql: `SELECT count(DISTINCT p.id)::int AS products,
+                     count(DISTINCT a."imageId")::int AS photos
+                FROM "PhotoGroupProposal" g
+                JOIN "Run" r ON r.id = g."runId"
+                JOIN "Product" p ON p.id = g."productId" AND p."deletedAt" IS NULL
+                JOIN "RunTarget" t ON t."runId" = r.id
+                JOIN "EntityAttachment" a
+                  ON a."imageId" = t."entityId" AND a."entityId" = p.id
+                 AND a."entityKind" = 'product' AND a."deletedAt" IS NULL
                WHERE r.shortcode = $1 AND g.state = 'committed'`,
         params: only("run"),
-        rows: () => [{ products: LIVE_IMPORT.photos.length }],
+        rows: () => [
+          {
+            products: LIVE_IMPORT.photos.length,
+            photos: LIVE_IMPORT.photos.length,
+          },
+        ],
       },
     ],
   },

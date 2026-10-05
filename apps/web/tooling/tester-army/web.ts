@@ -168,26 +168,37 @@ async function runCoupled() {
   const { createE2EObjectStorage } = await import("../local-object-storage");
   const { seedCoupledJourneys } =
     await import("../scenarios/tester-army-coupled");
-  await prepareE2EDatabaseTemplate();
-  const database = await createE2EDatabase();
-  const storage = await createE2EObjectStorage();
-  const publicStorage = await publicStorageOrigin(storage.url);
-  // The web Worker's Hyperdrive bindings resolve through these in workerd.
-  for (const key of [
-    "WRANGLER_HYPERDRIVE_LOCAL_CONNECTION_STRING_HYPERDRIVE",
-    "WRANGLER_HYPERDRIVE_LOCAL_CONNECTION_STRING_HYPERDRIVE_CACHED",
-  ])
-    process.env[key] = database.databaseUrl;
-  const harness = createWorkerdHarness(
-    database.databaseUrl,
-    liveGatewayWorker(agentModel),
-    liveGatewayWorker(),
-    {
-      objectStorage: { endpoint: storage.url, publicUrl: publicStorage.origin },
-      backgroundQueue: true,
-    },
-  );
+  // Every acquired resource closes, newest first, even when a later
+  // acquisition or an earlier close fails: a leaked workerd keeps the runner alive.
+  const closers: Array<() => Promise<void>> = [];
+  const failures: unknown[] = [];
   try {
+    await prepareE2EDatabaseTemplate();
+    const database = await createE2EDatabase();
+    closers.push(() => database.close());
+    const storage = await createE2EObjectStorage();
+    closers.push(() => storage.close());
+    const publicStorage = await publicStorageOrigin(storage.url);
+    closers.push(() => publicStorage.close());
+    // The web Worker's Hyperdrive bindings resolve through these in workerd.
+    for (const key of [
+      "WRANGLER_HYPERDRIVE_LOCAL_CONNECTION_STRING_HYPERDRIVE",
+      "WRANGLER_HYPERDRIVE_LOCAL_CONNECTION_STRING_HYPERDRIVE_CACHED",
+    ])
+      process.env[key] = database.databaseUrl;
+    const harness = createWorkerdHarness(
+      database.databaseUrl,
+      liveGatewayWorker(agentModel),
+      liveGatewayWorker(),
+      {
+        objectStorage: {
+          endpoint: storage.url,
+          publicUrl: publicStorage.origin,
+        },
+        backgroundQueue: true,
+      },
+    );
+    closers.push(() => harness.close());
     const { url } = await harness.listen();
     const storageState = await authenticate(url.origin);
     const queue = harness.getWorker("cubby-queue-producer");
@@ -231,15 +242,19 @@ async function runCoupled() {
         `${JSON.stringify({ agent: await usageOf("cubby-test-model"), web: await usageOf("cubby-test-gateway") }, null, 2)}\n`,
       );
     }
-  } finally {
+  } catch (error) {
+    failures.push(error);
+  }
+  for (const close of closers.reverse()) {
     try {
-      await harness.close();
-      await publicStorage.close();
-      await storage.close();
-    } finally {
-      await database.close();
+      await close();
+    } catch (error) {
+      failures.push(error);
     }
   }
+  // The journey's own failure comes first; cleanup failures follow it.
+  if (failures.length === 1) throw failures[0];
+  if (failures.length) throw new AggregateError(failures, "Coupled run failed");
 }
 
 async function runWithServices() {
