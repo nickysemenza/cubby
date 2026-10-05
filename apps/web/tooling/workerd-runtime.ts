@@ -131,3 +131,32 @@ export async function openWorkerdRuntime<T>(
     }
   });
 }
+
+/**
+ * Open a runtime, run `run` against it, and close it whether `run` succeeds
+ * or throws. A failure in `run` comes first; a cleanup failure after it is
+ * aggregated with it rather than replacing it.
+ */
+export async function withWorkerdRuntime<T>(
+  options: WorkerdRuntimeOptions,
+  run: (runtime: WorkerdRuntime) => Promise<T>,
+): Promise<T> {
+  const { runtime } = await openWorkerdRuntime(options, async () => undefined);
+  let result: T;
+  try {
+    result = await run(runtime);
+  } catch (error) {
+    try {
+      await runtime.close();
+    } catch (cleanupError) {
+      throw new AggregateError(
+        [error, cleanupError],
+        "Workerd runtime run failed and its cleanup failed",
+        { cause: cleanupError },
+      );
+    }
+    throw error;
+  }
+  await runtime.close();
+  return result;
+}

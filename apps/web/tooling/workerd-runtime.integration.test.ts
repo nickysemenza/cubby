@@ -18,7 +18,7 @@ import {
   holdWorkerdHarness,
   type WorkerdProfile,
 } from "./workerd-harness";
-import { openWorkerdRuntime } from "./workerd-runtime";
+import { openWorkerdRuntime, withWorkerdRuntime } from "./workerd-runtime";
 
 // Failure modes pinned at the real workerd boundary:
 // - a profile silently stops running a real queue consumer (or starts one it
@@ -357,6 +357,69 @@ describe("workerd test runtime lifecycle", () => {
       await pollUntil(
         () => (workerdChildren().length === workerdBefore ? true : undefined),
         { label: "workerd exited after the failed start", timeoutMs: 20_000 },
+      );
+    },
+    120_000,
+  );
+
+  // The live evals run billed cases inside `withWorkerdRuntime`; a case or
+  // report failure after startup must still stop workerd before Vitest
+  // releases the database it points at.
+  it.each([
+    {
+      cleanupFails: false,
+      expected: { message: "synthetic case failure" },
+    },
+    {
+      cleanupFails: true,
+      // The case failure stays first; the cleanup failure follows it.
+      expected: {
+        message: "Workerd runtime run failed and its cleanup failed",
+        errors: [
+          expect.objectContaining({ message: "synthetic case failure" }),
+          expect.any(Error),
+        ],
+      },
+    },
+  ])(
+    "a failure after startup still closes the runtime (cleanup fails: $cleanupFails)",
+    async ({ cleanupFails, expected }) => {
+      const before = environment();
+      const workerdBefore = workerdChildren().length;
+      let released = 0;
+      let reached = false;
+      await expect(
+        withWorkerdRuntime(
+          {
+            profile: "purchase-agent",
+            database: {
+              lease: async () => {
+                const lease = await createE2EDatabase();
+                return {
+                  ...lease,
+                  close: async () => {
+                    released += 1;
+                    await lease.close();
+                    if (cleanupFails)
+                      throw new Error("synthetic release failure");
+                  },
+                };
+              },
+            },
+          },
+          async ({ origin, databaseUrl }) => {
+            await expectWriteLands({ origin, databaseUrl });
+            reached = true;
+            throw new Error("synthetic case failure");
+          },
+        ),
+      ).rejects.toMatchObject(expected);
+      expect(reached).toBe(true);
+      expect(released).toBe(1);
+      expect(environment()).toEqual(before);
+      await pollUntil(
+        () => (workerdChildren().length === workerdBefore ? true : undefined),
+        { label: "workerd exited after the failed run", timeoutMs: 20_000 },
       );
     },
     120_000,
