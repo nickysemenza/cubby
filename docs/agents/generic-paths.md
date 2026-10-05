@@ -122,6 +122,10 @@ existing block. Extend the generic path when it almost fits. See
 - Disposable IntegreSQL databases: `apps/web/tooling/test-database-lease.ts`
   (`prepareTemplate`, `leaseDatabase`, one template per namespace). Vitest
   keeps `withTestDb`; browser workers use `createE2EDatabase`.
+- A running Cubby Worker for tests: `apps/web/tooling/workerd-runtime.ts`
+  (`openWorkerdRuntime`) under a `WORKERD_PROFILES` profile
+  (`apps/web/tooling/workerd-harness.ts`); browser specs wrap it in
+  `createE2EWorkerRuntime`. Add a profile rather than assembling a harness.
 - Scripts: `scripts/lib/tree-digest.ts` (`walkFiles`, `digestFiles`),
   `scripts/lib/run.ts` (child processes).
 

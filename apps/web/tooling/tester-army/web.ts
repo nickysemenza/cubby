@@ -3,7 +3,7 @@ import path from "node:path";
 import { Pool } from "pg";
 import { z } from "zod";
 import { runOrThrow } from "../../../../scripts/lib/run.ts";
-import type { WorkerdModelWorker } from "../purchase-agent-workerd-harness";
+import type { WorkerdModelWorker } from "../workerd-harness";
 import { modelSwapSchema } from "../responses-model-swap";
 import { applyJourneyFlags } from "./flags";
 import { harnessOf, selectedJourneys, type Harness } from "./journey";
@@ -22,8 +22,8 @@ import {
 
 /**
  * The shared journey catalog on the web engine. Standard journeys run on the
- * browser E2E runtime; coupled journeys run on the purchase-agent workerd
- * harness with live model peers. A run covering both starts each harness in
+ * browser E2E runtime's `offline` profile; coupled journeys on its `coupled`
+ * profile with live model peers. A run covering both starts each runtime in
  * turn and merges their summaries.
  */
 const flags = process.argv.slice(2).filter((argument) => argument !== "--");
@@ -98,12 +98,8 @@ async function runJourneys(harness: Harness, runtime: Runtime) {
 }
 
 async function runStandard() {
-  const { writeLocalWorkerdConfig } = await import("../e2e-worker-config");
-  const { prepareTemplate } = await import("../test-database-lease");
   const { createE2EWorkerRuntime } =
     await import("../../tests/e2e/e2e-worker-runtime");
-  writeLocalWorkerdConfig(webRoot);
-  await prepareTemplate("browser");
   const runtime = await createE2EWorkerRuntime({
     authenticated: true,
     parallelIndex: 0,
@@ -159,97 +155,61 @@ function liveGatewayWorker(swap?: typeof agentModel): WorkerdModelWorker {
 }
 
 async function runCoupled() {
-  const { prepareTemplate } = await import("../test-database-lease");
-  const { createE2EDatabase } = await import("../../tests/e2e/e2e-database");
-  const { authenticate } = await import("../../tests/e2e/e2e-worker-runtime");
-  const { createWorkerdHarness } =
+  const { createE2EWorkerRuntime } =
+    await import("../../tests/e2e/e2e-worker-runtime");
+  const { scenarioControls } =
     await import("../purchase-agent-workerd-harness");
-  const { createE2EObjectStorage } = await import("../local-object-storage");
   const { seedCoupledJourneys } =
     await import("../scenarios/tester-army-coupled");
-  // Every acquired resource closes, newest first, even when a later
-  // acquisition or an earlier close fails: a leaked workerd keeps the runner alive.
-  const closers: Array<() => Promise<void>> = [];
+  const runtime = await createE2EWorkerRuntime({
+    authenticated: true,
+    parallelIndex: 0,
+    profile: "coupled",
+    models: {
+      agent: liveGatewayWorker(agentModel),
+      gateway: liveGatewayWorker(),
+    },
+    objectStorage: { publish: publicStorageOrigin },
+  });
+  const { harness, baseURL: origin, storageState } = runtime;
   const failures: unknown[] = [];
   try {
-    await prepareTemplate("browser");
-    const database = await createE2EDatabase();
-    closers.push(() => database.close());
-    const storage = await createE2EObjectStorage();
-    closers.push(() => storage.close());
-    const publicStorage = await publicStorageOrigin(storage.url);
-    closers.push(() => publicStorage.close());
-    // The web Worker's Hyperdrive bindings resolve through these in workerd.
-    for (const key of [
-      "WRANGLER_HYPERDRIVE_LOCAL_CONNECTION_STRING_HYPERDRIVE",
-      "WRANGLER_HYPERDRIVE_LOCAL_CONNECTION_STRING_HYPERDRIVE_CACHED",
-    ])
-      process.env[key] = database.databaseUrl;
-    const harness = await createWorkerdHarness(
-      database.databaseUrl,
-      liveGatewayWorker(agentModel),
-      liveGatewayWorker(),
-      {
-        objectStorage: {
-          endpoint: storage.url,
-          publicUrl: publicStorage.origin,
-        },
-        backgroundQueue: true,
-      },
-    );
-    closers.push(() => harness.close());
-    const { url } = await harness.listen();
-    const storageState = await authenticate(url.origin);
-    const queue = harness.getWorker("cubby-queue-producer");
+    await runJourneys("coupled", {
+      origin,
+      databaseUrl: runtime.databaseUrl,
+      storageState,
+      seed: (pool, userId) =>
+        seedCoupledJourneys(pool, userId, {
+          origin,
+          cookies: storageState.cookies,
+          connectBrowser: scenarioControls(harness).connectBrowser,
+        }),
+    });
+  } catch (error) {
+    failures.push(error);
+  } finally {
+    // Request counts per Gateway route, for the run bundle; never content.
+    const usageOf = async (worker: string) =>
+      routeUsage.parse(
+        await (
+          await harness
+            .getWorker(worker)
+            .fetch("https://live-gateway.test/usage")
+        ).json(),
+      );
     try {
-      await runJourneys("coupled", {
-        origin: url.origin,
-        databaseUrl: database.databaseUrl,
-        storageState,
-        seed: (pool, userId) =>
-          seedCoupledJourneys(pool, userId, {
-            origin: url.origin,
-            cookies: storageState.cookies,
-            connectBrowser: async (input) => {
-              const response = await queue.fetch(
-                "https://queue.test/browser-connect",
-                {
-                  method: "POST",
-                  headers: { "content-type": "application/json" },
-                  body: JSON.stringify(input),
-                },
-              );
-              if (!response.ok)
-                throw new Error(
-                  `Simulated browser connect ${response.status}: ${await response.text()}`,
-                );
-            },
-          }),
-      });
-    } finally {
-      // Request counts per Gateway route, for the run bundle; never content.
-      const usageOf = async (worker: string) =>
-        routeUsage.parse(
-          await (
-            await harness
-              .getWorker(worker)
-              .fetch("https://live-gateway.test/usage")
-          ).json(),
-        );
       writeFileSync(
         usageFile,
         `${JSON.stringify({ agent: await usageOf("cubby-test-model"), web: await usageOf("cubby-test-gateway") }, null, 2)}\n`,
       );
-    }
-  } catch (error) {
-    failures.push(error);
-  }
-  for (const close of closers.reverse()) {
-    try {
-      await close();
     } catch (error) {
       failures.push(error);
     }
+  }
+  try {
+    await runtime.close();
+  } catch (error) {
+    failures.push(error);
   }
   // The journey's own failure comes first; cleanup failures follow it.
   if (failures.length === 1) throw failures[0];
@@ -258,6 +218,8 @@ async function runCoupled() {
 
 async function runWithServices() {
   applyServiceDefaults();
+  const { prepareTemplate } = await import("../test-database-lease");
+  await prepareTemplate("browser");
   const failures: unknown[] = [];
   // Each harness owns workerd and its database; never run two at once.
   for (const harness of harnesses) {

@@ -25,8 +25,8 @@ import {
   createFixtureWithContext,
 } from "./scenarios/context";
 import { MacImportDriver } from "./mac-import-driver";
-import type { createLocalWorkerdHarness } from "./local-workerd-harness";
 import type { createMacRetailerFixture } from "./mac-retailer-fixture";
+import type { WorkerdHarness } from "./workerd-harness";
 import { buildEntity } from "./factories/build";
 
 type Input = {
@@ -35,7 +35,7 @@ type Input = {
   artifacts: string;
   repoRoot: string;
   nonce: string;
-  harness: ReturnType<typeof createLocalWorkerdHarness>;
+  harness: WorkerdHarness;
   retailer: Awaited<ReturnType<typeof createMacRetailerFixture>>;
 };
 

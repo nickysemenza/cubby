@@ -221,9 +221,10 @@ WHERE c.client_id = 'cubby-purchase-agent'
 GROUP BY c.client_id, c.public, c.require_pkce;
 ```
 
-Three suites exercise the real agent in the workerd harness
-(`apps/web/tooling/purchase-agent-workerd-harness.ts`, the built `cubby`
-Worker with a scripted model and gateway).
+Three suites exercise the real agent in the workerd harness's
+`purchase-agent` profile (`apps/web/tooling/workerd-harness.ts`, the built
+`cubby` Worker with a scripted model and gateway, driven through
+`apps/web/tooling/purchase-agent-workerd-harness.ts`).
 `apps/web/src/server/purchase-import/purchase-agent-scenarios.integration.test.ts`
 (PostgreSQL tier) scripts only the coordinator model and the web Worker's
 extractor/audit model, and asserts the database graph, run status, findings,
@@ -249,9 +250,9 @@ pnpm --dir apps/web eval:purchase-decisions
 
 Neither uses an authenticated household session or production data.
 
-`createWorkerdHarness` (`apps/web/tooling/purchase-agent-workerd-harness.ts`)
-first takes the machine-wide harness lock, then checks every Worker build it
-loads (`COUPLED_WORKER_BUILDS` in `apps/web/tooling/worker-builds.ts`; today
+The `purchase-agent` and `coupled` profiles (`startWorkerdHarness`,
+`apps/web/tooling/workerd-harness.ts`) first take the machine-wide harness
+lock, then check every Worker build they load (`COUPLED_WORKER_BUILDS` in `apps/web/tooling/worker-builds.ts`; today
 only the web Worker, which hosts the agent) against the content hash in
 `dist/web-build-provenance.json`. Locally a stale build is rebuilt in place
 before workerd starts; in CI, where the Worker artifact must be current, a

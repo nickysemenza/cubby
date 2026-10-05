@@ -8,11 +8,11 @@ import {
   type ScriptValue,
 } from "tooling/purchase-agent-script";
 import {
-  createWorkerdHarness,
   type ScriptedScenario,
   scenarioControls,
 } from "tooling/purchase-agent-workerd-harness";
 import type { TestDbContext } from "tooling/test-setup";
+import { openWorkerdRuntime } from "tooling/workerd-runtime";
 import type { TestHarness } from "wrangler";
 
 import {
@@ -251,44 +251,13 @@ export async function startScenarioHarness(
   databaseUrl: string,
   scenario: ScriptedScenario,
 ) {
-  const hyperdrive = new Map(
-    [
-      "WRANGLER_HYPERDRIVE_LOCAL_CONNECTION_STRING_HYPERDRIVE",
-      "WRANGLER_HYPERDRIVE_LOCAL_CONNECTION_STRING_HYPERDRIVE_CACHED",
-    ].map((key) => [key, process.env[key]]),
+  const { runtime, prepared: controls } = await openWorkerdRuntime(
+    { profile: "purchase-agent", database: { borrowed: databaseUrl } },
+    async ({ harness }) => {
+      const controls = scenarioControls(harness);
+      await controls.configure(scenario);
+      return controls;
+    },
   );
-  const restore = () => {
-    for (const [key, value] of hyperdrive) {
-      if (value === undefined) delete process.env[key];
-      else process.env[key] = value;
-    }
-  };
-  for (const key of hyperdrive.keys()) process.env[key] = databaseUrl;
-  let harness: Awaited<ReturnType<typeof createWorkerdHarness>>;
-  try {
-    harness = await createWorkerdHarness(databaseUrl);
-  } catch (error) {
-    restore();
-    throw error;
-  }
-  try {
-    await harness.listen();
-    const controls = scenarioControls(harness);
-    await controls.configure(scenario);
-    return {
-      harness,
-      ...controls,
-      close: async () => {
-        try {
-          await harness.close();
-        } finally {
-          restore();
-        }
-      },
-    };
-  } catch (error) {
-    await harness.close();
-    restore();
-    throw error;
-  }
+  return { harness: runtime.harness, ...controls, close: runtime.close };
 }
