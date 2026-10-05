@@ -165,9 +165,9 @@ describe("custom list readers", () => {
       ["Paging alpha", "Paging beta"],
       ["Paging gamma"],
     ]);
-    expect(pages.map((result) => [result.count, result.sums])).toEqual([
-      [3, { costEstimate: 60 }],
-      [3, { costEstimate: 60 }],
+    expect(pages).toMatchObject([
+      { count: 3, sums: { costEstimate: 60 } },
+      { count: 3, sums: { costEstimate: 60 } },
     ]);
     expect(await read(0, "count")).toEqual({ data: [], count: 3 });
   });

@@ -44,7 +44,9 @@ existing block. Extend the generic path when it almost fits. See
   (`apps/web/src/server/entity-kernel/execute.ts`).
 - Repositories: `defineRepository`, `createEntityReader`, `createEntityCrud`
   (`server/repo/repository.ts`), `declaredFilterPredicates` /
-  `listScaffold` (`server/repo/list.ts`), `insertAndReturn`,
+  `listScaffold` (`server/repo/list.ts`; a list read goes through its `list`,
+  passing its own `where`, `orderBy`, `select` or `count` instead of calling
+  `executeListQueryWithCount`), `insertAndReturn`,
   `updateAndReturn`, `withTransaction`, `formatSearchTerm`, `notDeleted`,
   `buildSearchConditions`, the shortcode resolver, `finalizeMerge`,
   policy-driven removal (`server/repo/removal/`).

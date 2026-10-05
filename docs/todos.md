@@ -438,9 +438,11 @@ See also the image operational passes at the end of this file.
   `findMany` (root aliased) with an unaliased `$count`, so a predicate
   referencing the outer row compiles on one leg and fails on the other — six
   shipped occurrences (#456, #462, #481, #762, #785, CUBBY-11R), guarded by
-  `server/entity-kernel/list-smoke.integration.test.ts`. Decide: plain-select
-  rows with explicit joins, one shared `alias(table, name)`, or Drizzle
-  relations v2.
+  `server/entity-kernel/list-smoke.integration.test.ts`. The count leg is
+  `listScaffold.list`'s default `countWhere` (`server/repo/list.ts`); Image
+  already reads both legs through one `aliasedTable` and overrides `count`.
+  Inventory still runs its own page/count pair. Decide: plain-select rows with
+  explicit joins, one shared `alias(table, name)`, or Drizzle relations v2.
 
 - 🤔 **Declarative "many, clamped to one" cardinality.** Image provenance
   chose a many-row `ImageSighting` child plus derived `one` Image fields over
