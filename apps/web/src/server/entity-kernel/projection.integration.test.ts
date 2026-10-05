@@ -1,7 +1,10 @@
 import type { SearchableEntity } from "@cubby/schemas/entity-manifest";
 import { parseShortcodeFor } from "@cubby/schemas/identifiers";
 import { fromPartial } from "@total-typescript/shoehorn";
-import { and, eq } from "drizzle-orm";
+import { and, eq, inArray, isNull, sql } from "drizzle-orm";
+import { createEntity } from "tooling/factories/create";
+import { fakerFromSeed, hashSeed } from "tooling/factories/faker";
+import { buildKernelContext } from "tooling/scenarios/context";
 import { TEST_ACTOR, withTestDb } from "tooling/test-setup";
 import { afterEach, describe, expect, it } from "vitest";
 
@@ -213,5 +216,121 @@ describe("entity kernel search projections", () => {
     expect(
       await searchDocumentTitle(ctx.db, "gardenEntry", entityId),
     ).toContain("Projected garden entry bed");
+  });
+
+  describe("a category edit re-projects descendant Products and Inventory", () => {
+    const seedCategoryFamily = async () => {
+      const faker = fakerFromSeed(hashSeed("kernel-category-projection"));
+      const kernel = buildKernelContext(ctx.db, ctx.actor.userId);
+      const category = await createEntity(
+        kernel,
+        "productCategory",
+        { name: "Projected covers" },
+        { faker },
+      );
+      const place = await createEntity(
+        kernel,
+        "location",
+        { name: "Projected cover shed" },
+        { faker },
+      );
+      const cover = await createEntity(
+        kernel,
+        "product",
+        { name: "Projected tarp", categoryId: category.id },
+        { faker },
+      );
+      const stock = await createEntity(
+        kernel,
+        "inventory",
+        {
+          productId: cover.id,
+          locationId: place.id,
+          amount: { value: 1, unit: "each" },
+        },
+        { faker },
+      );
+      const productId = await resolveLiveShortcode(ctx.db, cover.id, "product");
+      const inventoryId = await resolveLiveShortcode(
+        ctx.db,
+        stock.id,
+        "inventory",
+      );
+      if (!productId || !inventoryId) throw new Error("seed did not resolve");
+      return { category, productId, ids: [productId, inventoryId] };
+    };
+    const typeHints = async (ids: string[]) =>
+      (
+        await getDb(ctx.db)
+          .select({ typeHint: searchDocument.typeHint })
+          .from(searchDocument)
+          .where(
+            and(
+              inArray(searchDocument.entityId, ids),
+              isNull(searchDocument.deletedAt),
+            ),
+          )
+      ).map((row) => row.typeHint);
+    const rename = (code: string, name: string) =>
+      executeEntity(context(), {
+        action: "update",
+        entity: "productCategory",
+        id: parseShortcodeFor("productCategory", code),
+        data: { name },
+      });
+
+    it("inside the write, before the queue runs anything", async () => {
+      const { category, ids } = await seedCategoryFamily();
+      recordingQueue();
+
+      await rename(category.id, "Projected awnings");
+
+      expect(await typeHints(ids)).toEqual([
+        "Projected awnings",
+        "Projected awnings",
+      ]);
+    });
+
+    // A descendant projection runs in the category's write transaction, so
+    // its failure undoes the edit, as for every other search dependency.
+    it("rolls the edit back when a descendant projection fails", async () => {
+      const { category, productId, ids } = await seedCategoryFamily();
+      recordingQueue();
+      const db = getDb(ctx.db);
+      await db.execute(sql`
+        CREATE FUNCTION reject_projection() RETURNS trigger
+        LANGUAGE plpgsql AS $$
+        BEGIN RAISE EXCEPTION 'synthetic projection failure'; END $$`);
+      await db.execute(
+        sql.raw(`CREATE TRIGGER reject_projection
+          BEFORE INSERT OR UPDATE ON "SearchDocument" FOR EACH ROW
+          WHEN (NEW."entityId" = '${productId}'::uuid)
+          EXECUTE FUNCTION reject_projection()`),
+      );
+      try {
+        // The raised message rides on `cause`; the thrown error names the query.
+        await expect(rename(category.id, "Projected awnings")).rejects.toThrow(
+          'INSERT INTO "SearchDocument"',
+        );
+      } finally {
+        await db.execute(
+          sql`DROP TRIGGER reject_projection ON "SearchDocument"`,
+        );
+        await db.execute(sql`DROP FUNCTION reject_projection()`);
+      }
+
+      const after = await executeEntity(context(), {
+        action: "get",
+        entity: "productCategory",
+        id: category.id,
+        missing: "error",
+      });
+      if (after.action !== "get") throw new Error("expected get");
+      expect(after.item).toMatchObject({ name: "Projected covers" });
+      expect(await typeHints(ids)).toEqual([
+        "Projected covers",
+        "Projected covers",
+      ]);
+    });
   });
 });
