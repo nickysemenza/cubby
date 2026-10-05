@@ -67,6 +67,10 @@ existing block. Extend the generic path when it almost fits. See
   Credential-shaped values are scrubbed; SQL and upstream response diagnostics
   remain visible. `scrubErrorMessage` comes from
   `@cubby/worker-tracing/scrub-error-message`; the web helper re-exports it.
+  At the console sink, regression checks assert serialized diagnostic values,
+  not native Error instances. When changing this boundary, search every consumer
+  assertion across unit and integration tests; capture/callback boundaries still
+  receive native errors.
 - Retries and waiting: `sleep`, `retryWithBackoff`, `pollUntil`
   (`@cubby/shared/retry`).
   Provider failures retain HTTP status, full upstream response bodies, and
