@@ -4,6 +4,7 @@ import { uniq } from "es-toolkit";
 import { formatPlainDate } from "~/lib/plain-date";
 import type { Database } from "~/server/db";
 import { getCalendarRange } from "~/server/repo/calendar";
+import { sha256Hex } from "~/server/semantic/hash";
 
 import type {
   CalendarRefreshResult,
@@ -28,12 +29,7 @@ export interface CalendarSnapshot extends CalendarRefreshResult {
 }
 
 async function etagFor(body: string): Promise<string> {
-  const bytes = new TextEncoder().encode(body);
-  const digest = await crypto.subtle.digest("SHA-256", bytes);
-  const hex = Array.from(new Uint8Array(digest), (byte) =>
-    byte.toString(16).padStart(2, "0"),
-  ).join("");
-  return `"${hex}"`;
+  return `"${await sha256Hex(body)}"`;
 }
 
 export async function buildCalendarSnapshot(

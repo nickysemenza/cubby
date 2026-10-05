@@ -10,6 +10,7 @@ import type { Database } from "~/server/db";
 import { createAppError } from "~/server/errors/app-error";
 import { expenseChargeContextWorkflow } from "~/server/operations/expense.server";
 import { getExpenseByShortcode } from "~/server/repo/expense/crud";
+import { cents } from "~/server/repo/money";
 
 import { sectionBlocks, sectionOut } from "./finance-section";
 
@@ -59,7 +60,7 @@ export const composeExpenseSettlementSection = (
   // has no cost recorded is a different problem from one whose price is wrong.
   const unpriced = lines.length - priced.length;
   const totalCents = priced.reduce(
-    (sum, line) => sum + Math.round((line.cost ?? 0) * 100),
+    (sum, line) => sum + cents(line.cost ?? 0),
     0,
   );
   return sectionOut({

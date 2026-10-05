@@ -10,10 +10,8 @@ import { WarningIcon } from "@phosphor-icons/react/dist/csr/Warning";
 import { Link } from "@tanstack/react-router";
 import { useId, useMemo } from "react";
 
-import {
-  EntityRefLink,
-  dottedEntityLink,
-} from "~/entity/components/entity-ref-link";
+import { EntityRefLink } from "~/entity/components/entity-ref-link";
+import { dottedEntityLink } from "~/entity/components/ref-link/leaf";
 import { cn } from "~/lib/utils";
 import { Badge } from "~/ui/primitives/badge";
 import { Table, TableBody, TableCell, TableRow } from "~/ui/primitives/table";

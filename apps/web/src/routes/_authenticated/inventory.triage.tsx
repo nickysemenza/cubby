@@ -8,8 +8,8 @@ import { z } from "zod";
 
 import { pageTitle } from "~/lib/page-title";
 import { SimpleLoading } from "~/ui/feedback/loading-skeletons";
-import { RouteErrorComponent } from "~/ui/lazy-route-error";
 import { Page } from "~/ui/page/Page";
+import { RouteErrorComponent } from "~/ui/route-error";
 import { DetailPagePending } from "~/ui/route-pending";
 
 /** Lazy: it pulls in the stock and discard dialogs, which almost no cold load needs. */

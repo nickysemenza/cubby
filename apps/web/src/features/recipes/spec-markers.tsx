@@ -9,8 +9,13 @@
  * defaults (the ml-2 / align-middle nudge) so call sites stay declarative.
  */
 import type { ReactNode } from "react";
+import { match } from "ts-pattern";
 
+import { EntityRefLink } from "~/entity/components/entity-ref-link";
+import { dottedEntityLink } from "~/entity/components/ref-link/leaf";
 import { cn } from "~/lib/utils";
+
+import { type RecipeTreeRow, recipeTreeDisplayImage } from "./recipe-tree";
 
 /** Numbered circle marking a method step. */
 export const StepNumberBadge = ({
@@ -83,3 +88,51 @@ export const StubWarning = ({
     {children}
   </span>
 );
+
+/**
+ * The entity a tree row links to: ingredient leaves → their ingredient,
+ * sub-recipe rows → their child recipe. Stub rows (cycle/missing) have no
+ * target and render as plain text.
+ */
+const entityRefForRow = (
+  row: RecipeTreeRow,
+): { entity: "recipe" | "ingredient"; id: string } | null =>
+  match(row)
+    .with({ kind: "subrecipe" }, (r) => ({
+      entity: "recipe" as const,
+      id: r.child.recipe.id,
+    }))
+    .with({ kind: "ingredient" }, (r) =>
+      r.row.type === "ingredient"
+        ? { entity: "ingredient" as const, id: r.row.ingredient.id }
+        : null,
+    )
+    .with({ kind: "stub" }, () => null)
+    .exhaustive();
+
+/** A tree row's name, linked with a hover preview when it has a target. */
+export function TreeRowNameLink({
+  row,
+  name,
+}: {
+  row: RecipeTreeRow;
+  name: string;
+}) {
+  const ref = entityRefForRow(row);
+  if (!ref) return name;
+  return (
+    <EntityRefLink
+      variant="preview"
+      displayImage={
+        row.kind === "subrecipe"
+          ? recipeTreeDisplayImage(row.child.recipe)
+          : null
+      }
+      entity={ref.entity}
+      id={ref.id}
+      className={dottedEntityLink}
+    >
+      {name}
+    </EntityRefLink>
+  );
+}

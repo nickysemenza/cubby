@@ -1,11 +1,12 @@
 import type { Entity } from "@cubby/schemas/entity";
 import type { ShortcodeEntity } from "@cubby/schemas/entity-manifest";
+import { humanize } from "@cubby/shared";
 
-import type { FilterConfig } from "~/ui/data-table/columnHelpers";
 import {
   barFieldFromConfig,
   type FilterBarField,
 } from "~/ui/data-table/filter-bar-core";
+import type { FilterConfig } from "~/ui/data-table/table-meta";
 import {
   deferredFilterOptionSource,
   filterOptionItems,
@@ -16,7 +17,6 @@ import type { FilterableComboboxItem } from "~/ui/primitives/combobox";
 import {
   type FilterKind,
   type FilterSpecCore,
-  humanize,
   isMultiFilterKind,
   nullableSentinelOptions,
 } from "./filters";

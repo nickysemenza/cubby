@@ -14,15 +14,14 @@ import { createEntityDisplayColumns } from "~/entity/entity-display";
 import { identityWidthClassName } from "~/entity/entity-list/identity-list-config";
 import { manifestFilterConfig } from "~/entity/filter-manifest";
 import { createUnitMappingsColumn } from "~/entity/list-columns/product";
+import { type FilterConfig } from "~/ui/data-table/table-meta";
 
 import {
   createActionsColumn,
-  createCreatedAtColumn,
   createImageColumn,
   isImageColumnId,
   createNameColumn,
-  createUpdatedAtColumn,
-  type FilterConfig,
+  createTimestampColumn,
   multiSelectFilterFn,
   type RowLinkResolver,
 } from "../data-table/columnHelpers";
@@ -410,8 +409,8 @@ export function useStandardColumns<TData extends BaseListRow>({
         // Every Cubby entity read shape carries both timestamps. Keep the audit
         // pair together at the end; list hooks make both default-hidden while the
         // View menu lets users opt them in.
-        add(createCreatedAtColumn(columnHelper));
-        add(createUpdatedAtColumn(columnHelper));
+        add(createTimestampColumn(columnHelper, "createdAt"));
+        add(createTimestampColumn(columnHelper, "updatedAt"));
 
         // Append actions column (always last)
         add(

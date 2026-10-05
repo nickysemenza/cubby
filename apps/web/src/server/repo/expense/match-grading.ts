@@ -1,5 +1,7 @@
 import type { ExpenseMatchRatioLabel } from "@cubby/schemas/project";
 
+import { cents } from "~/server/repo/money";
+
 /**
  * Pure presentation-grade signals for reconciliation candidates. They must
  * never decide which rows SQL returns; see match.ts for the query boundary.
@@ -53,8 +55,7 @@ export const classifyMatchRatio = (
   ratio: number | null,
   taxRate: number,
 ): ExpenseMatchRatioLabel => {
-  if (amountDelta !== null && Math.round(Math.abs(amountDelta) * 100) <= 1)
-    return "exact";
+  if (amountDelta !== null && cents(Math.abs(amountDelta)) <= 1) return "exact";
   if (ratio === null) return "other";
   const band = 0.005;
   if (Math.abs(ratio - (1 + taxRate)) <= band) return "plus_tax";

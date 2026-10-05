@@ -75,6 +75,7 @@ import {
   cookbookRunInput,
   ensureRun,
 } from "~/server/runs/ensure-run";
+import { sha256Hex } from "~/server/semantic/hash";
 import {
   type ImageUrlImportPort,
   importRecipeImageFromUrl,
@@ -320,15 +321,7 @@ const attachCookbookRecipePhoto = bindWorkflow(
           .call("request", async (_, { input: values }) => {
             const { input, source } = values;
             const filename = source.path.split("/").at(-1) || "recipe-photo";
-            const pathDigest = Array.from(
-              new Uint8Array(
-                await crypto.subtle.digest(
-                  "SHA-256",
-                  new TextEncoder().encode(source.path),
-                ),
-              ),
-              (byte) => byte.toString(16).padStart(2, "0"),
-            ).join("");
+            const pathDigest = await sha256Hex(source.path);
             return {
               entityKind: "recipe" as const,
               entityId: input.recipeId,

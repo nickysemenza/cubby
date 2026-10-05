@@ -11,8 +11,12 @@ import {
   mcpRead,
   type ScriptStep,
 } from "tooling/purchase-agent-script";
+import {
+  HOLD_WORKERD_HARNESS_TIMEOUT_MS,
+  holdWorkerdHarness,
+} from "tooling/purchase-agent-workerd-harness";
 import { type TestDbContext, withTestDb } from "tooling/test-setup";
-import { afterEach, describe, expect, it } from "vitest";
+import { afterAll, afterEach, beforeAll, describe, expect, it } from "vitest";
 import { z } from "zod";
 
 import {
@@ -149,6 +153,11 @@ let scenarioRunId: string | undefined;
 
 describe("purchase-agent scripted scenarios", () => {
   const ctx = withTestDb();
+  let releaseHarness: (() => void) | undefined;
+  beforeAll(async () => {
+    releaseHarness = await holdWorkerdHarness();
+  }, HOLD_WORKERD_HARNESS_TIMEOUT_MS);
+  afterAll(() => releaseHarness?.());
 
   afterEach(async ({ task }) => {
     // A failed scenario prints what the model was told to do, what the server

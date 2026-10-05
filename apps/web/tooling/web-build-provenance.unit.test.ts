@@ -181,10 +181,32 @@ describe("web build freshness", () => {
     put(".env.local", "TOKEN=synthetic");
     put("apps/web/.dev.vars", "TOKEN=synthetic");
     put("artifacts/synthetic.json");
-    put("docs/synthetic.md");
+    put("apps/web/src/synthetic.md");
     expect(readWebBuildProvenance(root)).toMatchObject({
       sourceFresh: true,
       matchesSource: false,
     });
+  });
+  it("treats docs the in-app docs route bundles as source", () => {
+    const { root, put } = fixture();
+    writeWebBuildProvenance(root);
+    put("docs/synthetic.md");
+    expect(readWebBuildProvenance(root).details.reason).toBe("source-changed");
+  });
+  // The purchase agent's workflows ship inside the web Worker (#1581); a
+  // stale build would run coupled tests on the old instructions.
+  it("treats the agent skills the Worker bundles as source", () => {
+    for (const skill of [
+      "purchase-import",
+      "photo-inventory-import",
+      "product-enrichment",
+    ]) {
+      const { root, put } = fixture();
+      writeWebBuildProvenance(root);
+      put(`.claude/skills/${skill}/references/run-workflow.md`);
+      expect(readWebBuildProvenance(root).details.reason).toBe(
+        "source-changed",
+      );
+    }
   });
 });

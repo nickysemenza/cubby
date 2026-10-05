@@ -11,8 +11,8 @@ import { installNavigationTracker } from "~/lib/perf/navigation-tracker";
 import { sentryEnvironment } from "~/lib/sentry-environment";
 import { SENTRY_IGNORED_ERRORS } from "~/lib/sentry-noise";
 import { scrubSentryEvent } from "~/lib/sentry-scrub";
-import { RouteErrorComponent } from "~/ui/lazy-route-error";
-import { RouteNotFound } from "~/ui/lazy-route-not-found";
+import { RouteErrorComponent } from "~/ui/route-error";
+import { RouteNotFound } from "~/ui/route-not-found";
 import { RoutePending } from "~/ui/route-pending";
 
 import * as TanstackQuery from "./integrations/tanstack-query/root-provider";

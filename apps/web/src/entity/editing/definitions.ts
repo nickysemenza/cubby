@@ -26,6 +26,10 @@ import { isNutrientKey } from "@cubby/usda";
 import { isEqual } from "es-toolkit";
 import { z } from "zod";
 
+import type {
+  EntityEditValue,
+  EntityEditValueBag,
+} from "~/entity/editing/value-schema";
 import { householdLocalDate } from "~/lib/household-date";
 import {
   isCanonicalPriceMapping,
@@ -51,8 +55,6 @@ import type {
   EntityEditIssue,
   EntityEditOperation,
   EntityEditRecord,
-  EntityEditValue,
-  EntityEditValueBag,
 } from "./types";
 import { projectEntityEditRecordValue } from "./value-schema";
 

@@ -4,6 +4,7 @@ import type { ReactNode } from "react";
 import { useCallback, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 
+import type { EntityActionDefinition } from "~/entity/actions/entity-action-definition";
 import type { EditableEntity, EntityEditResult } from "~/entity/editing/types";
 import { useEntityCommands } from "~/entity/editing/use-entity-commands";
 import {
@@ -23,10 +24,7 @@ import {
 } from "../../entity/actions/action-verb-ui";
 import { DeleteEntityDialog } from "../../entity/actions/delete-entity-action";
 import { defineEntityAction } from "../../entity/actions/entity-action-definition";
-import type {
-  EntityActionDefinition,
-  EntityActionRow,
-} from "../../entity/actions/entity-actions";
+import type { EntityActionRow } from "../../entity/actions/entity-actions";
 import type { ImpactPreviewOperations } from "../../entity/actions/entity-operation-impact-preview";
 import type { BulkAction } from "../data-table/bulk-actions.types";
 import type {

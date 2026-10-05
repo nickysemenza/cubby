@@ -18,6 +18,7 @@ import type { z } from "zod";
 
 import { formatCurrency } from "~/lib/utils";
 import { assertQuantitySignMatchesCost } from "~/server/repo/expense/helpers";
+import { cents, dollars, round2 } from "~/server/repo/money";
 
 /**
  * The split form's rules, kept on the server so web and native share one answer and the write
@@ -48,13 +49,10 @@ type CheckOut = z.output<typeof purchaseSplitCheckOut>;
 type StartOut = z.output<typeof purchaseSplitStartOut>;
 type CheckInput = z.output<typeof purchaseSplitCheckInput>;
 
-const toCents = (dollars: number) => Math.round(dollars * 100);
-const toDollars = (cents: number) => cents / 100;
-
 const DECIMAL = /^-?(?:\d+(?:\.\d{0,2})?|\.\d{1,2})$/;
 const NUMBER = /^-?(?:\d+(?:\.\d+)?|\.\d+)$/;
 
-const dollars = (raw: string): number | null => {
+const parseDollars = (raw: string): number | null => {
   const text = raw.trim();
   if (text === "") return 0;
   return DECIMAL.test(text) ? Number(text) : null;
@@ -106,9 +104,9 @@ export function startSplitDraft(original: SplitOriginal): StartOut {
 const note = (partsCents: number, original: number | null) => {
   if (original === null)
     return "The original has no cost recorded, so there's nothing to reconcile against.";
-  const delta = partsCents - toCents(original);
+  const delta = partsCents - cents(original);
   if (delta === 0) return "Parts add up to the original cost.";
-  return `Parts are ${formatCurrency(Math.abs(toDollars(delta)))} ${delta > 0 ? "over" : "under"} the original — a split must add up to it exactly.`;
+  return `Parts are ${formatCurrency(Math.abs(dollars(delta)))} ${delta > 0 ? "over" : "under"} the original — a split must add up to it exactly.`;
 };
 
 export function checkSplitDraft(
@@ -122,13 +120,13 @@ export function checkSplitDraft(
   };
   const label = (index: number) => `Part ${index + 1}`;
 
-  const costs = parts.map((part) => dollars(part.cost));
+  const costs = parts.map((part) => parseDollars(part.cost));
   const partsCents = costs.reduce<number>(
-    (sum, cost) => sum + (cost === null ? 0 : toCents(cost)),
+    (sum, cost) => sum + (cost === null ? 0 : cents(cost)),
     0,
   );
   const delta =
-    original.cost === null ? null : partsCents - toCents(original.cost);
+    original.cost === null ? null : partsCents - cents(original.cost);
 
   if (!original.purchaseId) refuse(SPLIT_NEEDS_PURCHASE_REASON);
   if (original.imported)
@@ -189,7 +187,7 @@ export function checkSplitDraft(
     }
     body.push({
       name,
-      cost: toDollars(toCents(cost)),
+      cost: round2(cost),
       costType: part.costType,
       trade: part.trade,
       projectId: project,
@@ -207,7 +205,7 @@ export function checkSplitDraft(
       "Choose whether the parts inherit or clear the original household attribution.",
     );
 
-  const total = toDollars(partsCents);
+  const total = dollars(partsCents);
   let split: SplitExpenseInput | null = null;
   if (reason === null) {
     split = { expenseId: input.expenseId, parts: body };
@@ -219,7 +217,7 @@ export function checkSplitDraft(
     split,
     partsTotal: total,
     originalCost: original.cost,
-    delta: delta === null ? null : toDollars(delta),
+    delta: delta === null ? null : dollars(delta),
     reason,
     note: note(partsCents, original.cost),
     needsAttributionPolicy: original.hasAttribution,

@@ -284,8 +284,8 @@ export const buildWishWhere = async (
       ? filters.candidateProductId
       : [filters.candidateProductId]
     : undefined;
-  // Resolved to uuids up front, same idiom as `expense/lookup.ts`'s
-  // `toUuids`: matching the raw shortcode STRING against `p.shortcode`
+  // Resolved to uuids up front, same idiom as `resolveAllPresent`:
+  // matching the raw shortcode STRING against `p.shortcode`
   // compares byte-for-byte, so a lowercase code would silently match nothing
   // instead of being canonicalized — the #591 bug class, guarded generically
   // by `shortcode.integration.test.ts`. `resolveLiveShortcodes` also means an

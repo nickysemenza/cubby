@@ -3,17 +3,9 @@ import { timingSafeEqual } from "node:crypto";
 import { userId } from "@cubby/schemas/identifiers";
 import { parse } from "basic-auth";
 
-import type { CalendarSqlStore } from "./sql-store";
+import { sha256Hex } from "~/server/semantic/hash";
 
-export async function calendarDigest(value: string): Promise<string> {
-  const bytes = await crypto.subtle.digest(
-    "SHA-256",
-    new TextEncoder().encode(value),
-  );
-  return Array.from(new Uint8Array(bytes), (byte) =>
-    byte.toString(16).padStart(2, "0"),
-  ).join("");
-}
+import type { CalendarSqlStore } from "./sql-store";
 
 export async function authenticateCalendar(
   store: CalendarSqlStore,
@@ -22,7 +14,7 @@ export async function authenticateCalendar(
   const credentials = parse(authorization ?? "");
   if (!credentials) return null;
   const record = store.credentialByUsername(credentials.name);
-  const actual = await calendarDigest(credentials.pass);
+  const actual = await sha256Hex(credentials.pass);
   const expected = record?.hash ?? "0".repeat(64);
   const valid = timingSafeEqual(
     new TextEncoder().encode(actual),

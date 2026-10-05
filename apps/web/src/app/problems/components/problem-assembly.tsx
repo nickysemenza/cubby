@@ -1,5 +1,6 @@
 import type { Entity } from "@cubby/schemas/entity";
 import type { ProblemsCoverage } from "@cubby/schemas/problems";
+import { humanize } from "@cubby/shared";
 import { CaretDownIcon } from "@phosphor-icons/react/dist/csr/CaretDown";
 import { FunnelIcon } from "@phosphor-icons/react/dist/csr/Funnel";
 import { Fragment } from "react";
@@ -14,7 +15,6 @@ import {
   encodeFilters,
   FILTER_ANY,
   FILTER_NONE,
-  humanize,
   sortToParam,
 } from "~/entity/filters";
 import type { ProblemQuery } from "~/entity/problem-query";

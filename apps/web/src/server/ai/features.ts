@@ -52,12 +52,11 @@ import {
   DECISION_MODEL,
   FAST_MODEL,
   type SupportedChatModel,
-  VISION_BATCH_MODEL,
 } from "~/server/ai/models";
-import type { CompatEffort, OpenAiEffort } from "~/server/clients/ai-adapters";
+import type { OpenAiEffort } from "~/server/clients/ai-adapters";
 
 /** Embeddings share the catalog, while retaining their vector runner. */
-type AiTier = "fast" | "visionBatch" | "decision" | "embedding";
+type AiTier = "fast" | "decision" | "embedding";
 
 /**
  * The single place a tier's model is written down. `models.ts` owns the
@@ -65,7 +64,6 @@ type AiTier = "fast" | "visionBatch" | "decision" | "embedding";
  */
 const MODEL_FOR_TIER = {
   fast: FAST_MODEL,
-  visionBatch: VISION_BATCH_MODEL,
   decision: DECISION_MODEL,
   embedding: DEFAULT_EMBEDDING_MODEL,
 } as const satisfies Record<AiTier, AiModel | SupportedEmbeddingModel>;
@@ -84,15 +82,8 @@ interface AiFeatureShared {
   cache: boolean;
 }
 
-/**
- * A chat tier and its reasoning dial, typed by the provider-options helper
- * that will receive it — `effort: "none"` is valid on the fast tier and
- * rejected on the vision batch tier, at compile time.
- */
-type AiChatFeatureTier = (
-  | { tier: "fast"; effort: OpenAiEffort }
-  | { tier: "visionBatch"; effort?: CompatEffort }
-) & {
+/** A chat tier and its reasoning dial. */
+type AiChatFeatureTier = { tier: "fast"; effort: OpenAiEffort } & {
   /** Output cap. Reasoning/thinking tokens count against it on every tier. */
   maxTokens: number;
 };
@@ -290,8 +281,9 @@ export const PURCHASE_IMPORT_EXTRACTION_FEATURE = defineFeature({
 
 export const PURCHASE_IMPORT_RECEIPT_FEATURE = defineFeature({
   feature: "purchase-import-receipt-extraction",
-  tier: "visionBatch",
+  tier: "fast",
   maxTokens: 4_000,
+  effort: "low",
   cache: false,
   promptVersion: "2026-09-19.1",
   schema: importExtractionModelOutput,
@@ -360,14 +352,17 @@ export const RECIPE_FLOW_PRIMARY_FEATURE = defineFeature({
   AiAnalysisFeature<RecipeFlowArtifact>;
 
 // ---------------------------------------------------------------------------
-// Vision batch tier — Gemini 2.5 Flash. Cheap, accurate, ~14 s to first
-// token: backfill only. No `effort`: keep Gemini's own thinking on.
+// Vision descriptions. Moved from Gemini 2.5 Flash (2026-10-05), which
+// rejected the description schema as too complex to constrain (HTTP 400);
+// Luna is cheaper per token and already reads images for product
+// identification and the photo agent.
 // ---------------------------------------------------------------------------
 
 export const LOCATION_DESCRIPTION_FEATURE = defineFeature({
   feature: "location-description",
-  tier: "visionBatch",
+  tier: "fast",
   maxTokens: 1500,
+  effort: "low",
   cache: true,
   promptVersion: "2026-09-11.1",
   schema: locationDescriptionSchema,
@@ -378,8 +373,9 @@ export const LOCATION_DESCRIPTION_FEATURE = defineFeature({
 /** Cloud is the preferred image-description provider until an explicit policy changes it. */
 export const IMAGE_DESCRIPTION_FEATURE = defineFeature({
   feature: "image-description",
-  tier: "visionBatch",
+  tier: "fast",
   maxTokens: 2_500,
+  effort: "low",
   cache: true,
   promptVersion: "2",
   schema: imageDescriptionResult,

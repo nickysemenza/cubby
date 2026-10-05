@@ -4,8 +4,6 @@ import {
 } from "./generated/entity-lists.gen";
 import type { ListEnrichmentGroup, ListReadRow } from "./list-read-fields";
 
-export { compileListReadSchema } from "./list-read-fields";
-
 export const listReadFields = (entity: ListEntity) =>
   ENTITY_LIST_READ_SCHEMAS[entity].fields;
 

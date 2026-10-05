@@ -1,6 +1,11 @@
 import { describe, expect, it } from "vitest";
 import { z } from "zod";
 
+import type {
+  EntityEditValue,
+  EntityEditValueBag,
+} from "~/entity/editing/value-schema";
+
 import { entityEditRegistry } from "./definitions";
 import {
   buildEntityEdit,
@@ -17,8 +22,6 @@ import type {
   EntityEditDefinition,
   EntityEditField,
   EntityEditRecord,
-  EntityEditValue,
-  EntityEditValueBag,
 } from "./types";
 
 const editable = { mode: "editable" } as const;

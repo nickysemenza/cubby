@@ -13,6 +13,7 @@ import {
   vendorExpenseCountSql,
   vendorUnpricedExpenseCountSql,
 } from "~/server/repo/financial-reconciliation";
+import { cents } from "~/server/repo/money";
 import {
   purchaseEvidenceExpectationSql,
   purchaseEvidenceFingerprintSql,
@@ -68,7 +69,7 @@ const statedCents = (t: Purchase) => moneyCents(sql`${t.statedTotal}`);
 const refundCents = (t: Purchase) =>
   moneyCents(sql.raw(postedRefundTotalSql(aliasOf(t))));
 
-const tolerance = sql.raw(String(Math.round(RECONCILIATION_TOLERANCE * 100)));
+const tolerance = sql.raw(String(cents(RECONCILIATION_TOLERANCE)));
 
 /**
  * Mirrors `reconcilePurchase`: stated total present, at least one line (a
@@ -79,7 +80,7 @@ const tolerance = sql.raw(String(Math.round(RECONCILIATION_TOLERANCE * 100)));
 const paperworkMismatch = (t: Purchase) => {
   const delta = sql`(${expenseCents(t)} - floor((${t.statedTotal} * 100)::numeric + 0.5))`;
   const fullyPriced = sql`${vendorUnpricedExpenseCount(t)} = 0`;
-  const refundAdjusted = sql`(${fullyPriced} AND ${delta} < ${sql.raw(`-${Math.round(RECONCILIATION_TOLERANCE * 100)}`)}
+  const refundAdjusted = sql`(${fullyPriced} AND ${delta} < ${sql.raw(`-${cents(RECONCILIATION_TOLERANCE)}`)}
     AND floor((${sql.raw(postedRefundTotalSql(aliasOf(t)))} * 100)::numeric + 0.5) = ${delta})`;
   return sql`(${t.statedTotal} IS NOT NULL
     AND ${vendorExpenseCount(t)} > 0

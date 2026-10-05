@@ -1,7 +1,7 @@
 import type { Entity } from "@cubby/schemas/entity";
 import type { FieldExplanationOutput } from "@cubby/schemas/field-explanation";
 import type { FieldResolution } from "@cubby/schemas/field-resolution";
-import { parseShortcode } from "@cubby/shared";
+import { capitalize, parseShortcode } from "@cubby/shared";
 import type { ReactNode } from "react";
 import { z } from "zod";
 
@@ -18,9 +18,6 @@ import {
 import { resolutionState, type ResolutionTone } from "./field-resolution";
 
 type Evidence = NonNullable<FieldExplanationOutput["resolutionEvidence"]>;
-
-const sentenceCase = (value: string): string =>
-  value.length === 0 ? value : value.charAt(0).toUpperCase() + value.slice(1);
 
 /** A resolution value: a linked record, a labeled enum option, or the same
  * generic rendering the rest of the popover already uses. */
@@ -315,7 +312,7 @@ function resolutionStats(
             <span className="flex min-w-0 flex-wrap items-center gap-x-1.5">
               {/* Some resolvers name the source record itself as the source. */}
               {resolution.source === resolution.sourceEntity?.name ? null : (
-                <span>{sentenceCase(resolution.source)}</span>
+                <span>{capitalize(resolution.source)}</span>
               )}
               <SourceLink source={resolution.sourceEntity} />
             </span>

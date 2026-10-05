@@ -298,18 +298,21 @@ async function attachPendingMailEvidence(
   }
 }
 
-const externalSource = (url: string | undefined, vendorId: string): string => {
+export const externalSource = (
+  url: string | undefined,
+  vendorId: string,
+): string => {
   if (!url) return `vendor-${vendorId}`;
-  const host = new URL(url).hostname.toLowerCase().replace(/^www\./, "");
+  const host = new URL(url).hostname.toLowerCase().replace(/^www\./u, "");
   return (
     host
       .split(".")[0]
-      ?.replaceAll(/[^a-z0-9]+/g, "-")
-      .replaceAll(/^-|-$/g, "") || "vendor"
+      ?.replaceAll(/[^a-z0-9]+/gu, "-")
+      .replaceAll(/^-|-$/gu, "") || "vendor"
   );
 };
 
-const amazonAsin = (url: string | undefined): string | null => {
+export const amazonAsin = (url: string | undefined): string | null => {
   if (!url) return null;
   const parsed = new URL(url);
   if (!/(^|\.)amazon\./u.test(parsed.hostname.toLowerCase())) return null;
@@ -322,23 +325,26 @@ const amazonAsin = (url: string | undefined): string | null => {
 
 const lineIdentifiers = (
   line: Pick<ExtractedPurchaseLine, "productUrl" | "sku">,
-) => [
-  ...(line.sku
-    ? [{ kind: PURCHASE_EXTERNAL_ID_KIND, externalId: line.sku }]
-    : []),
-  ...(amazonAsin(line.productUrl)
-    ? [{ kind: "asin" as const, externalId: amazonAsin(line.productUrl)! }]
-    : []),
-];
+) => {
+  const asin = amazonAsin(line.productUrl);
+  return [
+    ...(line.sku
+      ? [{ kind: PURCHASE_EXTERNAL_ID_KIND, externalId: line.sku }]
+      : []),
+    ...(asin ? [{ kind: "asin" as const, externalId: asin }] : []),
+  ];
+};
 
 /** The same vendor SKU in one order must resolve to one Product decision. */
 export const lineExternalIdentity = (
   line: Pick<ExtractedPurchaseLine, "productUrl" | "sku">,
   vendorId: string,
-): string | null =>
-  lineIdentifiers(line)[0]
-    ? `${externalSource(line.productUrl, vendorId)}:${lineIdentifiers(line)[0]?.kind}:${lineIdentifiers(line)[0]?.externalId}`
+): string | null => {
+  const [first] = lineIdentifiers(line);
+  return first
+    ? `${externalSource(line.productUrl, vendorId)}:${first.kind}:${first.externalId}`
     : null;
+};
 
 export type LineIdentityDecision = {
   productId: string | null;
@@ -410,12 +416,13 @@ export async function chooseLineStage(
   });
 }
 
-const productSearchPatterns = (title: string) =>
+/** Letter/number tokens never carry LIKE wildcards, so they need no escaping. */
+export const productSearchPatterns = (title: string) =>
   title
     .split(/[^\p{L}\p{N}]+/u)
     .filter((token) => token.length >= 3)
     .slice(0, 3)
-    .map((token) => `%${token.replaceAll("%", "\\%").replaceAll("_", "\\_")}%`);
+    .map((token) => `%${token}%`);
 
 // The staged decision pipeline intentionally keeps all five model decisions and
 // deterministic short-circuits in one ordered pass over each source line.

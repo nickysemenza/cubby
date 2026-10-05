@@ -5,6 +5,7 @@ import { entityFieldModels } from "@cubby/schemas/entity-fields";
 import type { ControlRendererId } from "@cubby/schemas/entity-manifest";
 import { entitySummary } from "@cubby/schemas/entity-summary";
 import { resolveExpenseLineKind } from "@cubby/schemas/expense-line-kind";
+import { capitalize } from "@cubby/shared";
 import {
   type ComponentType,
   type ReactNode,
@@ -874,8 +875,7 @@ export type FieldGroup = Readonly<{
 function humanizeSectionId(id: string): string {
   const words = id.split(/[-_]+/).filter(Boolean);
   if (words.length === 0) return id;
-  const joined = words.join(" ").toLowerCase();
-  return joined.charAt(0).toUpperCase() + joined.slice(1);
+  return capitalize(words.join(" ").toLowerCase());
 }
 
 /**

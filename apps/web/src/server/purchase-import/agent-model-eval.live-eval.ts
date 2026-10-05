@@ -115,7 +115,7 @@ describe("photo coordinator model eval", () => {
         "WRANGLER_HYPERDRIVE_LOCAL_CONNECTION_STRING_HYPERDRIVE_CACHED",
       ])
         process.env[key] = ctx.databaseUrl;
-      const harness = createWorkerdHarness(
+      const harness = await createWorkerdHarness(
         ctx.databaseUrl,
         liveEvalModelWorker(),
       );

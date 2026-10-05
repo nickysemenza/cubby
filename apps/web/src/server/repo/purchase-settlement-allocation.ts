@@ -5,18 +5,17 @@ import {
 import type { SettlementAllocationDraft } from "@cubby/schemas/purchase";
 
 import { formatCurrency } from "~/lib/utils";
+import { cents, dollars } from "~/server/repo/money";
 
 /**
  * The allocation form's rules, kept on the server so web and native share one
  * answer. All arithmetic is in integer cents: `0.1 + 0.2` is not `0.3`, and a
  * settlement that is off by a cent must never read as complete.
  */
-const toCents = (dollars: number) => Math.round(dollars * 100);
-const toDollars = (cents: number) => cents / 100;
 /** `4250` -> `"42.50"`, the form the amount input takes; no float formatting involved. */
-const centsToInput = (cents: number) => {
-  const magnitude = Math.abs(cents);
-  return `${cents < 0 ? "-" : ""}${Math.trunc(magnitude / 100)}.${String(magnitude % 100).padStart(2, "0")}`;
+const centsToInput = (value: number) => {
+  const magnitude = Math.abs(value);
+  return `${value < 0 ? "-" : ""}${Math.trunc(magnitude / 100)}.${String(magnitude % 100).padStart(2, "0")}`;
 };
 
 /**
@@ -30,8 +29,8 @@ export function proposeSettlementAllocations(
   transaction: { amount: number; kind: string },
   purchase: { statedTotal: number | null },
 ): SettlementAllocationDraft[] {
-  const totalCents = toCents(transaction.amount);
-  const statedCents = toCents(purchase.statedTotal ?? 0);
+  const totalCents = cents(transaction.amount);
+  const statedCents = cents(purchase.statedTotal ?? 0);
   const firstCents =
     transaction.kind === "purchase" && statedCents > 0
       ? Math.min(totalCents, statedCents)
@@ -64,7 +63,7 @@ export function checkSettlementAllocationDraft(
   rows: readonly SettlementAllocationDraft[],
   transactionAmount: number,
 ): SettlementAllocationCheck {
-  const totalCents = toCents(transactionAmount);
+  const totalCents = cents(transactionAmount);
   const parsed: { purchaseId: PurchaseShortcode; cents: number }[] = [];
   const seen = new Set<string>();
   let allocatedCents = 0;
@@ -82,16 +81,20 @@ export function checkSettlementAllocationDraft(
     }
     const purchaseId = code.data;
     const amount = Number(row.amount);
-    const cents = toCents(amount);
-    if (!row.amount.trim() || !Number.isSafeInteger(cents) || cents === 0) {
+    const amountCents = cents(amount);
+    if (
+      !row.amount.trim() ||
+      !Number.isSafeInteger(amountCents) ||
+      amountCents === 0
+    ) {
       refuse(`${rowLabel(index)}: enter a non-zero amount.`);
       return;
     }
-    if (Math.abs(amount * 100 - cents) > 0.000001) {
+    if (Math.abs(amount * 100 - amountCents) > 0.000001) {
       refuse(`${rowLabel(index)}: amounts are whole cents.`);
       return;
     }
-    if (Math.sign(cents) !== Math.sign(totalCents)) {
+    if (Math.sign(amountCents) !== Math.sign(totalCents)) {
       refuse(
         `${rowLabel(index)}: the amount must have the same sign as the ${formatCurrency(transactionAmount)} statement entry.`,
       );
@@ -102,23 +105,23 @@ export function checkSettlementAllocationDraft(
       return;
     }
     seen.add(purchaseId);
-    allocatedCents += cents;
-    parsed.push({ purchaseId, cents });
+    allocatedCents += amountCents;
+    parsed.push({ purchaseId, cents: amountCents });
   });
 
   if (reason === null && allocatedCents !== totalCents)
-    reason = `Allocations total ${formatCurrency(toDollars(allocatedCents))}, not ${formatCurrency(transactionAmount)}.`;
+    reason = `Allocations total ${formatCurrency(dollars(allocatedCents))}, not ${formatCurrency(transactionAmount)}.`;
 
   return {
     allocations:
       reason === null
-        ? parsed.map(({ purchaseId, cents }) => ({
-            purchaseId,
-            amount: toDollars(cents),
+        ? parsed.map((allocation) => ({
+            purchaseId: allocation.purchaseId,
+            amount: dollars(allocation.cents),
           }))
         : null,
-    allocatedTotal: toDollars(allocatedCents),
-    remaining: toDollars(totalCents - allocatedCents),
+    allocatedTotal: dollars(allocatedCents),
+    remaining: dollars(totalCents - allocatedCents),
     reason,
   };
 }

@@ -355,6 +355,38 @@ function RelationEmptyState({
   );
 }
 
+/** Skeleton cells sized like the data they'll hold, no shimmer. */
+function SkeletonBody({
+  rows,
+  columnKeys,
+}: {
+  rows: number;
+  columnKeys: readonly (string | number)[];
+}) {
+  return (
+    <tbody>
+      {Array.from({ length: rows }, (_, rowIndex) => (
+        <tr key={rowIndex} className="h-7 border-b border-border/60">
+          {columnKeys.map((key, cellIndex) => (
+            <td key={key} className="px-2">
+              {cellIndex === 0 && rowIndex === 0 ? (
+                <span className="sr-only">Loading</span>
+              ) : null}
+              <div
+                aria-hidden
+                className="h-3 rounded-sm bg-muted"
+                style={{
+                  width: `${40 + ((cellIndex * 17 + rowIndex * 11) % 40)}%`,
+                }}
+              />
+            </td>
+          ))}
+        </tr>
+      ))}
+    </tbody>
+  );
+}
+
 /**
  * The declaration renders its header and columns immediately; only cells are
  * skeletons, sized like the data they'll hold, no shimmer — `RTable`'s own
@@ -395,26 +427,10 @@ function RelationLoadingSkeleton<TItem extends RowData>({
           </tr>
         ))}
       </thead>
-      <tbody>
-        {Array.from({ length: rows }, (_, rowIndex) => (
-          <tr key={rowIndex} className="h-7 border-b border-border/60">
-            {leafHeaders.map((header, cellIndex) => (
-              <td key={header.id} className="px-2">
-                {cellIndex === 0 && rowIndex === 0 ? (
-                  <span className="sr-only">Loading</span>
-                ) : null}
-                <div
-                  aria-hidden
-                  className="h-3 rounded-sm bg-muted"
-                  style={{
-                    width: `${40 + ((cellIndex * 17 + rowIndex * 11) % 40)}%`,
-                  }}
-                />
-              </td>
-            ))}
-          </tr>
-        ))}
-      </tbody>
+      <SkeletonBody
+        rows={rows}
+        columnKeys={leafHeaders.map((header) => header.id)}
+      />
     </table>
   );
 }
@@ -484,26 +500,10 @@ function RelationStaticSkeleton({ rows }: { rows: number }) {
           ))}
         </tr>
       </thead>
-      <tbody>
-        {Array.from({ length: rows }, (_, rowIndex) => (
-          <tr key={rowIndex} className="h-7 border-b border-border/60">
-            {Array.from({ length: columns }, (_, cellIndex) => (
-              <td key={cellIndex} className="px-2">
-                {cellIndex === 0 && rowIndex === 0 ? (
-                  <span className="sr-only">Loading</span>
-                ) : null}
-                <div
-                  aria-hidden
-                  className="h-3 rounded-sm bg-muted"
-                  style={{
-                    width: `${40 + ((cellIndex * 17 + rowIndex * 11) % 40)}%`,
-                  }}
-                />
-              </td>
-            ))}
-          </tr>
-        ))}
-      </tbody>
+      <SkeletonBody
+        rows={rows}
+        columnKeys={Array.from({ length: columns }, (_, index) => index)}
+      />
     </table>
   );
 }

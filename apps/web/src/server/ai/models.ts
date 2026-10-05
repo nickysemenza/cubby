@@ -14,23 +14,21 @@ interface AiTokenUsage {
   cacheWriteTokens?: number | null;
 }
 
-const aiProvider = z.enum(["anthropic", "openai", "google", "typesafe"]);
+const aiProvider = z.enum(["anthropic", "openai", "typesafe"]);
 type AiProvider = z.infer<typeof aiProvider>;
 
 /**
- * The wire format a chat model is reached over, mirroring the cookbook crate's
- * `Route` enum: `anthropic` is `/anthropic/v1/messages`, `openai-responses` is
- * `/openai/responses`, and `compat` is the gateway's unified
- * `/compat/chat/completions` (the only path to Google AI Studio).
+ * The wire format a chat model is reached over: `anthropic` is
+ * `/anthropic/v1/messages` and `openai-responses` is `/openai/responses`.
  */
-const chatRoute = z.enum(["anthropic", "openai-responses", "compat"]);
+const chatRoute = z.enum(["anthropic", "openai-responses"]);
 export type ChatRoute = z.infer<typeof chatRoute>;
 
 interface ChatAiModelConfig {
   role: "chat";
   provider: AiProvider;
   route: ChatRoute;
-  /** The id the provider itself wants; `compat` prefixes the gateway vendor. */
+  /** The id the provider itself wants. */
   wireModel: string;
   vision: boolean;
   /** Provider USD-per-million prompt-cache rates for normalized cache tokens. */
@@ -68,8 +66,6 @@ type AiModelConfig =
 const supportedChatModel = z.enum([
   "gpt-6-luna",
   "gpt-6-sol",
-  "gemini-2.5-flash",
-  "gemini-2.5-flash-lite",
   "claude-sonnet-5",
   "claude-opus-5-5",
   "claude-haiku-4-5",
@@ -91,8 +87,6 @@ type SupportedAiModel = z.infer<typeof supportedAiModel>;
 
 /** The two measured chat tiers every chat feature is assigned to. */
 export const FAST_MODEL = "gpt-6-luna" satisfies SupportedChatModel;
-export const VISION_BATCH_MODEL =
-  "gemini-2.5-flash" satisfies SupportedChatModel;
 export const AUDIT_RECOVERY_MODEL =
   "claude-opus-5-5" satisfies SupportedChatModel;
 /**
@@ -123,22 +117,6 @@ const AI_MODEL_REGISTRY = {
     wireModel: "gpt-6-sol",
     vision: true,
     cachePricing: { read: 0.2, write: 2.5 },
-  },
-  "gemini-2.5-flash": {
-    role: "chat",
-    provider: "google",
-    route: "compat",
-    wireModel: "google-ai-studio/gemini-2.5-flash",
-    vision: true,
-    cachePricing: { read: 0.03, write: 0 },
-  },
-  "gemini-2.5-flash-lite": {
-    role: "chat",
-    provider: "google",
-    route: "compat",
-    wireModel: "google-ai-studio/gemini-2.5-flash-lite",
-    vision: true,
-    cachePricing: { read: 0.01, write: 0 },
   },
   "claude-sonnet-5": {
     role: "chat",

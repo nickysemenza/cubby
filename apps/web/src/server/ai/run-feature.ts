@@ -57,7 +57,6 @@ import {
   cachedCall,
   piCallTarget,
   type AnthropicEffort,
-  type CompatEffort,
   type OpenAiEffort,
   type PiCallTarget,
   type SharedEffort,
@@ -81,9 +80,8 @@ export interface AiImagePart {
 }
 /** A document (e.g. a PDF receipt). Resolved the same way as an image — see
  * {@link resolveImageContent} — since pi-ai's `Message` has no document
- * content type; this is the one caller (the vision-batch/Gemini receipt
- * tier) that sends one, and Gemini accepts inline PDF bytes the same way it
- * accepts an inline image. */
+ * content type; the shared OpenAI provider (`@cubby/shared/pi-gateway`)
+ * rewrites the resulting PDF image block into the Responses `input_file`. */
 interface AiDocumentPart {
   type: "document";
   source: { type: "url"; value: string; mimeType: string };
@@ -579,7 +577,7 @@ async function placeStructuredCall<T>(args: {
   request: AiChatRequest;
   schema: z.ZodType<T>;
   maxTokens: number;
-  effort?: OpenAiEffort | AnthropicEffort | CompatEffort;
+  effort?: OpenAiEffort | AnthropicEffort;
 }): Promise<{ value: T; message: AssistantMessage }> {
   const { tool, optionalPaths } = respondToolFor(args.schema);
   const target = args.ports.callTarget(args.model, args.call);

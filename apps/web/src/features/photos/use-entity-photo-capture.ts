@@ -62,9 +62,9 @@ import { useCallback } from "react";
 import {
   entityMutationOptionsFactory,
   type EntityMutationData,
-  type EntityMutationTransport,
   type EntityMutationVariables,
 } from "~/entity/entity-contracts";
+import { type EntityMutationTransport } from "~/entity/entity-mutation-command";
 import { ripple } from "~/integrations/tanstack-query/cache-tags";
 import { imageUpload } from "~/integrations/tanstack-query/generated/catalog.gen";
 import { invalidateOperationTags } from "~/integrations/tanstack-query/operation-cache";

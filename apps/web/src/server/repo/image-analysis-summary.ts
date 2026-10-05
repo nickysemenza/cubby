@@ -1,12 +1,12 @@
 import { imageAnalysisSummarySchema } from "@cubby/schemas/image";
 import type { ImageAnalysisSummary } from "@cubby/schemas/image";
 import { imageDescriptionResult } from "@cubby/schemas/image-processing";
-import { and, desc, eq, inArray, isNull } from "drizzle-orm";
+import { and, desc, eq, inArray } from "drizzle-orm";
 import { z } from "zod";
 
 import type { Database, DrizzleTransaction } from "~/server/db";
 import { aiAnalysis, image } from "~/server/db/schema";
-import { unwrapDb } from "~/server/repo/database-helpers";
+import { notDeleted, unwrapDb } from "~/server/repo/database-helpers";
 
 /**
  * The slice of an on-device `photo-local-analysis` row this reader needs.
@@ -45,7 +45,7 @@ async function loadNewestAnalysisByImage(
         eq(aiAnalysis.entityKind, "image"),
         inArray(image.shortcode, [...imageShortcodes]),
         eq(aiAnalysis.feature, feature),
-        isNull(aiAnalysis.deletedAt),
+        notDeleted(aiAnalysis),
       ),
     )
     .orderBy(desc(aiAnalysis.createdAt));

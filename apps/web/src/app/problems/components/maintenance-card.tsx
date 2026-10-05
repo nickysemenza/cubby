@@ -1,11 +1,16 @@
-import type { SearchIndexRepairCounters } from "@cubby/schemas/maintenance";
+import type {
+  BackfillImageMetadataOut,
+  ClassifyImageProvenanceOut,
+  SearchIndexRepairCounters,
+} from "@cubby/schemas/maintenance";
 import type { MaintenanceCounts } from "@cubby/schemas/problems";
-import { useQuery } from "@tanstack/react-query";
+import { useMutation, useQuery } from "@tanstack/react-query";
 import type { ReactNode } from "react";
 
 import { openRecipeRecomputeAllStream } from "~/app/recipes/recipe-streams";
 import { ripple } from "~/integrations/tanstack-query/cache-tags";
 import {
+  maintenance,
   recipe,
   problems,
 } from "~/integrations/tanstack-query/generated/catalog.gen";
@@ -28,9 +33,7 @@ import { Description } from "~/ui/primitives/description";
 import { Eyebrow } from "~/ui/primitives/eyebrow";
 
 import { BACKFILL } from "./backfill-registry";
-import { ImageMetadataMaintenance } from "./image-metadata-maintenance";
 import { ImageProcessingMaintenance } from "./image-processing-maintenance";
-import { ImageProvenanceMaintenance } from "./image-provenance-maintenance";
 import { BackfillButton } from "./problem-backfill-action";
 
 /** One labeled maintenance action: description left, dry-run count + run-button right. */
@@ -259,6 +262,92 @@ function RepairIndexAction() {
   );
 }
 
+// Bounded loop for a `metadataRevision` backlog a lost queue wakeup left behind
+// (e.g. after an `IMAGE_METADATA_REVISION` bump); see
+// `image-metadata-backfill.service.ts`.
+function ImageMetadataAction() {
+  const backfill = useMutation(
+    maintenance.backfillImageMetadata.mutationOptions(),
+  );
+  const result = backfill.data;
+  return (
+    <Row align="center" gap="sm">
+      {result && (
+        <span
+          className="font-mono text-2xs text-muted-foreground tabular-nums"
+          title={`${countLabel(result.skipped, "image")} skipped (missing bytes or already fresh); ${BATCH_STOPPED_LABEL[result.stopped]}`}
+        >
+          {result.extracted} of {result.scanned} extracted · {result.remaining}{" "}
+          stale
+        </span>
+      )}
+      <Button
+        size="sm"
+        disabled={backfill.isPending}
+        onClick={() => backfill.mutate({ batchSize: 25, maxBatches: 20 })}
+      >
+        {backfill.isPending ? "Extracting…" : "Run"}
+      </Button>
+    </Row>
+  );
+}
+
+// Filename/dimension heuristics for images still `source = unknown` (see
+// `image-provenance-heuristics.ts`); Preview is a dry run of the next batch.
+function ImageProvenanceAction() {
+  const classify = useMutation(
+    maintenance.classifyImageProvenance.mutationOptions(),
+  );
+  const result = classify.data;
+  return (
+    <MaintenanceDryRunRow
+      summary={result && <ProvenanceSummary result={result} />}
+      onDryRun={() =>
+        classify.mutate({ dryRun: true, batchSize: 25, maxBatches: 1 })
+      }
+      dryRunPending={classify.isPending}
+      backfill={
+        <Button
+          size="sm"
+          disabled={classify.isPending}
+          onClick={() =>
+            classify.mutate({ dryRun: false, batchSize: 25, maxBatches: 20 })
+          }
+        >
+          Apply
+        </Button>
+      }
+    />
+  );
+}
+
+const BATCH_STOPPED_LABEL = {
+  complete: "no more candidates",
+  limit: "batch limit reached — more may remain",
+  no_progress: "the last batch made no progress",
+} satisfies Record<
+  (BackfillImageMetadataOut | ClassifyImageProvenanceOut)["stopped"],
+  string
+>;
+
+function ProvenanceSummary({ result }: { result: ClassifyImageProvenanceOut }) {
+  const rules = Object.entries(result.byRule)
+    .filter(([, count]) => count > 0)
+    .map(([ruleId, count]) => `${ruleId}: ${count}`);
+  const detail = [
+    BATCH_STOPPED_LABEL[result.stopped],
+    result.capturedAtSeeded > 0 &&
+      `seeded capture date on ${countLabel(result.capturedAtSeeded, "image")}`,
+    ...rules,
+  ].filter(Boolean);
+  return (
+    <span title={detail.join(" · ")}>
+      {result.dryRun ? "would classify" : "classified"} {result.classified} of{" "}
+      {result.scanned} · {result.remaining} unknown
+    </span>
+  );
+}
+
 // One-off tools, grouped by what they rebuild. Declared as data (each row's
 // typed action lives in `action`); the card maps groups then rows. Rows share
 // one grammar — plain description, an always-on count only where it is cheap,
@@ -311,6 +400,23 @@ const MAINTENANCE_GROUPS: { group: string; tools: MaintenanceTool[] }[] = [
     ],
   },
   {
+    group: "Images",
+    tools: [
+      {
+        label: "Classify provenance",
+        description:
+          "Guess a still-unknown image's source from its filename and dimensions (legacy uploader, camera-roll naming, catalog markers, screenshot resolutions), and seed a missing capture date from on-device photo analysis. Preview first — Apply writes the guesses.",
+        action: <ImageProvenanceAction />,
+      },
+      {
+        label: "Extract EXIF metadata",
+        description:
+          "Read each stale image's stored bytes for capture date, GPS, and camera, and feed them into capture attribution. Every upload already schedules this — run it only to repair a backlog.",
+        action: <ImageMetadataAction />,
+      },
+    ],
+  },
+  {
     group: "Products",
     tools: [
       {
@@ -353,8 +459,6 @@ export function MaintenanceCard() {
       <CardContent>
         <Stack gap="lg">
           <ImageProcessingMaintenance />
-          <ImageProvenanceMaintenance />
-          <ImageMetadataMaintenance />
           {MAINTENANCE_GROUPS.map(({ group, tools }) => (
             <Stack key={group} gap="tight">
               <Eyebrow>{group}</Eyebrow>

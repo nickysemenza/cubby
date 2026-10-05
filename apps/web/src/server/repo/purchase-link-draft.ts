@@ -16,6 +16,7 @@ import type { z } from "zod";
 
 import { formatCalendarDay } from "~/lib/date-format";
 import { formatCurrency } from "~/lib/utils";
+import { cents, dollars } from "~/server/repo/money";
 
 /**
  * The rules of the two attach dialogs, kept on the server so web and native offer the same
@@ -120,8 +121,6 @@ export function composeLinkExpenseCandidates(
 
 type CheckOut = z.output<typeof purchaseLinkExpensesCheckOut>;
 
-const toCents = (dollars: number) => Math.round(dollars * 100);
-
 const countLabel = (count: number) =>
   `${count} expense${count === 1 ? "" : "s"}`;
 
@@ -171,7 +170,7 @@ export function checkLinkExpenses(
     );
 
   const totalCents = present.reduce(
-    (sum, line) => sum + (line.cost === null ? 0 : toCents(line.cost)),
+    (sum, line) => sum + (line.cost === null ? 0 : cents(line.cost)),
     0,
   );
   const unpriced = present.filter((line) => line.cost === null).length;
@@ -181,7 +180,7 @@ export function checkLinkExpenses(
     expenseIds: ids,
     selectedCount: ids.length,
     selectedTotal,
-    resultingTotal: (toCents(purchase.expenseTotal) + totalCents) / 100,
+    resultingTotal: dollars(cents(purchase.expenseTotal) + totalCents),
     movedCount,
     reason: null,
     note: `${countLabel(ids.length)} selected · ${formatCurrency(selectedTotal)}${
@@ -190,7 +189,7 @@ export function checkLinkExpenses(
       purchase.unpricedExpenseCount > 0
         ? ` · ${purchase.unpricedExpenseCount} already on this purchase without a cost`
         : ""
-    }. Purchase expense total would go to ${formatCurrency((toCents(purchase.expenseTotal) + totalCents) / 100)}.`,
+    }. Purchase expense total would go to ${formatCurrency(dollars(cents(purchase.expenseTotal) + totalCents))}.`,
     confirm:
       movedCount > 0
         ? `Attaching moves ${countLabel(movedCount)} off ${movedCount === 1 ? "its" : "their"} current purchase.`

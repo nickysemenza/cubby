@@ -20,15 +20,13 @@ import {
   WithVendorSearch,
 } from "~/ui/combobox/with-vendor-search";
 import { entityCellData, specFromCellData } from "~/ui/data-table/cell-data";
-import {
-  createTextColumn,
-  type MobileColumnMeta,
-} from "~/ui/data-table/columnHelpers";
+import { createTextColumn } from "~/ui/data-table/columnHelpers";
 import { EditableEntityCell } from "~/ui/data-table/editable-entity-cell";
 import {
   type CubbyColumnHelper as ColumnHelper,
   type CubbyFilterFn as FilterFn,
 } from "~/ui/data-table/table-features";
+import { type MobileColumnMeta } from "~/ui/data-table/table-meta";
 import { attachCubbyColumnMeta } from "~/ui/data-table/table-meta";
 import { badgeVariantColor } from "~/ui/primitives/badge";
 import type { FilterableComboboxItem } from "~/ui/primitives/combobox";

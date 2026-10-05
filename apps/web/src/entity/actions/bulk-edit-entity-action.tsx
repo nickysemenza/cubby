@@ -564,8 +564,7 @@ export function BulkEditDialogBody({
 }
 
 /**
- * The generic `bulkEdit` verb: stages rows the same way the tracker's private
- * `useStagedRows` (in `tracker-entity-actions.tsx`) does, then edits
+ * The generic `bulkEdit` verb: stages the selected rows, then edits
  * `capabilities.bulkUpdate.fields` through {@link BulkEditFields}. The
  * mutation payload is RHF's `dirtyFields` subset — a field the user never
  * touched is omitted entirely, and a nullable reference or select field the

@@ -5,7 +5,7 @@ import {
   fieldResolutionsSchema,
   type FieldResolution,
 } from "@cubby/schemas/field-resolution";
-import { parseShortcode } from "@cubby/shared";
+import { capitalize, parseShortcode } from "@cubby/shared";
 import { ArrowBendDownRightIcon } from "@phosphor-icons/react/dist/csr/ArrowBendDownRight";
 import { ArrowCounterClockwiseIcon } from "@phosphor-icons/react/dist/csr/ArrowCounterClockwise";
 import { ChartPieIcon } from "@phosphor-icons/react/dist/csr/ChartPie";
@@ -170,7 +170,7 @@ export function resolutionState(resolution: FieldResolution): ResolutionState {
     case "allocated":
       return {
         tone: "allocated",
-        label: sentenceCase(resolution.source),
+        label: capitalize(resolution.source),
         Icon: ChartPieIcon,
       };
     case "none":
@@ -197,11 +197,11 @@ function resolutionPhrase(resolution: FieldResolution): string {
     case "inherit":
       return resolution.sourceEntity
         ? `From ${resolution.sourceEntity.entityKind === "task" ? "parent task" : entitySummary[resolution.sourceEntity.entityKind].singular.toLowerCase()}`
-        : sentenceCase(resolution.source);
+        : capitalize(resolution.source);
     case "allocated":
       return resolution.sourceEntity
         ? "Allocated from"
-        : sentenceCase(resolution.source);
+        : capitalize(resolution.source);
     case "none":
       return "Set to none here";
     case "explicit":
@@ -210,9 +210,6 @@ function resolutionPhrase(resolution: FieldResolution): string {
         : "Set here";
   }
 }
-
-const sentenceCase = (value: string): string =>
-  value.charAt(0).toUpperCase() + value.slice(1);
 
 /** Caption actions read as inline text links, not 24px buttons. */
 export const resolutionActionClassName = "h-auto p-0 text-xs";

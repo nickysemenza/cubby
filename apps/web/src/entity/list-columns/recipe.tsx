@@ -6,7 +6,7 @@ import { entityMutationOptionsFactory } from "~/entity/entity-contracts";
 import type { EntityListParamsByEntity } from "~/entity/generated/entity-lists.gen";
 import { EditableTagsCell } from "~/features/recipes/editable-tags-cell";
 import { RecipeTag } from "~/features/recipes/recipe-tag";
-import { formatYield } from "~/features/recipes/recipe-utils";
+import { formatYield } from "~/features/recipes/recipe-yield";
 import { relatedData } from "~/integrations/tanstack-query/generated/catalog.gen";
 import { countLabel } from "~/lib/pluralize";
 import {

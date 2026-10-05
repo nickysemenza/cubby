@@ -1,12 +1,12 @@
 import type { Entity } from "@cubby/schemas/entity";
 import { useMemo, useRef } from "react";
 
+import { type EntityActionDefinition } from "~/entity/actions/entity-action-definition";
 import { useRedundantOverrideBulkAction } from "~/entity/field-resolution";
 import { generatedBrowserCrudEntities } from "~/entity/generated/entity-routes.gen";
 
 import { verbBulkAction } from "../../entity/actions/action-verb-ui";
 import {
-  type EntityActionDefinition,
   type EntityActionsEntry,
   useEntityActions,
 } from "../../entity/actions/entity-actions";

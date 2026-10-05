@@ -1,3 +1,5 @@
+import type { EntityEditValueBag } from "~/entity/editing/value-schema";
+
 import { type EntityEditRegistry, getEntityEditDefinition } from "./registry";
 import type {
   EditableEntity,
@@ -10,7 +12,6 @@ import type {
   EntityEditOperationDefinition,
   EntityEditRecord,
   EntityEditValueSource,
-  EntityEditValueBag,
   RuntimeEntityEditRequest,
 } from "./types";
 import { entityEditValueBagSchema } from "./value-schema";

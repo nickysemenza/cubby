@@ -47,19 +47,25 @@ existing block. Extend the generic path when it almost fits. See
   `buildSearchConditions`, the shortcode resolver, `finalizeMerge`,
   policy-driven removal (`server/repo/removal/`).
 - Unbounded reads: `listAll` (never a literal huge `pageSize`).
-- Money: `cents`, `round2` (`server/repo/money.ts`); all money is
-  `SUM(Expense.cost)`.
+- Money: `cents`, `dollars`, `round2` (`server/repo/money.ts`); expense
+  rollups select `expenseAggregateFields` (`server/repo/expense-aggregate-sql.ts`);
+  all money is `SUM(Expense.cost)`.
+- Postgres errors: `findPgError`, `isUniqueViolation`, `isStatementTimeout`
+  (`server/errors/db-errors.ts`) walk Drizzle's `cause` chain.
+- Hashing: `sha256Hex` (`server/semantic/hash.ts`).
 - Logging and tracing: `createLogger`, `withSpan`/span core
   (`@cubby/worker-tracing`); no raw `console.*` in server or Worker code.
 - Retries and waiting: `sleep`, `retryWithBackoff`, `pollUntil`
   (`@cubby/shared/retry`).
+- Digests: `sha256Hex` and the stable row-id `sha256Uuid`
+  (`server/semantic/hash.ts`); never hand-roll `crypto.subtle.digest` + hex.
 - Cross-Worker RPC: one Zod contract per boundary, `z.infer` on both sides.
 - GTIN and barcodes: recipebridge `scan_code_gtin14` and `@cubby/shared/upc`.
 
 ## Web UI
 
 - Dialogs: `WorkflowDialog`, `ResponsiveDialog` + `DialogFormActions`,
-  `DeleteEntityDialog` + `useStagedRow`, `LocationMoveDialog`.
+  `DeleteEntityDialog` + `useStagedDialogAction`, `LocationMoveDialog`.
 - Pickers: `EntityPicker` / `EntityReferencePicker`, `referenceEntitySearch`;
   no direct `ui/combobox` use outside picker builders.
 - Tables: `RTable` and the generic relation table; raw `<table>` only for

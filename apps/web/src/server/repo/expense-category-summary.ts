@@ -17,6 +17,7 @@ import {
   financialTransactionAllocation,
   purchase,
 } from "~/server/db/schema";
+import { cents, dollars } from "~/server/repo/money";
 
 import { notDeleted, unwrapDb } from "./database-helpers";
 import {
@@ -82,9 +83,7 @@ function summarize(
       const amount =
         !monetary || row.amount === null || existing?.amount === null
           ? null
-          : (Math.round((existing?.amount ?? 0) * 100) +
-              Math.round(row.amount * 100)) /
-            100;
+          : dollars(cents(existing?.amount ?? 0) + cents(row.amount));
       categories.set(id, { id, name: row.spendingCategoryName, amount });
     }
   }

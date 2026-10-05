@@ -1,3 +1,4 @@
+import { cents } from "~/server/repo/money";
 /** A line's Product decision, by fixture catalog key. */
 export type ProductDecision =
   | { kind: "existing"; product: string }
@@ -50,7 +51,6 @@ export type DecisionVerdict = "correct" | "unsafe" | "reviewable_miss";
 
 export type DecisionScore = { verdict: DecisionVerdict; reasons: string[] };
 
-const cents = (amount: number) => Math.round(amount * 100);
 const sameAllocation = (left: Allocation, right: Allocation) =>
   left.transaction === right.transaction &&
   cents(left.amount) === cents(right.amount);

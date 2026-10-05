@@ -19,6 +19,7 @@ import type { McpOperationContext } from "~/server/mcp/operation-context";
 import { recordRunWrites } from "~/server/purchase-import/run-audit";
 import { getDb } from "~/server/repo/database-helpers";
 import { resolveLiveShortcode } from "~/server/repo/shortcode-resolver";
+import { sha256Hex } from "~/server/semantic/hash";
 
 import type { ToolExtra } from "./tools/tool-registration";
 
@@ -38,16 +39,6 @@ const SELF_GOVERNED_ACTIONS = new Set<string>([
 
 export const purchaseAgentSelfGoverned = (action: string) =>
   SELF_GOVERNED_ACTIONS.has(action);
-
-const sha256 = async (value: string): Promise<string> => {
-  const digest = await crypto.subtle.digest(
-    "SHA-256",
-    new TextEncoder().encode(value),
-  );
-  return [...new Uint8Array(digest)]
-    .map((byte) => byte.toString(16).padStart(2, "0"))
-    .join("");
-};
 
 const purchaseAgentArguments = z.json();
 type PurchaseAgentArguments = z.infer<typeof purchaseAgentArguments>;
@@ -110,7 +101,7 @@ export async function purchaseAgentTargetFingerprint(
   db: Database,
   args: PurchaseAgentArguments,
 ) {
-  return sha256(JSON.stringify(await targetSnapshot(db, args)));
+  return sha256Hex(JSON.stringify(await targetSnapshot(db, args)));
 }
 
 type TrustedPurchaseAgent = { runId: string; grantId: string };
@@ -139,7 +130,7 @@ export async function executePurchaseAgentMutation<T>(input: {
     toolName: input.toolName,
     params: purchaseAgentArguments.parse(input.args),
   };
-  const argsFingerprint = await sha256(JSON.stringify(args));
+  const argsFingerprint = await sha256Hex(JSON.stringify(args));
   const evidenceFingerprint = argsFingerprint;
   const [run] = await getDb(input.db)
     .select({
