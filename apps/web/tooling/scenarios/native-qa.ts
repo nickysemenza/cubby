@@ -301,6 +301,10 @@ export async function seedProposedPhotoRun(
       })),
     );
   const [mug, shirt] = images;
+  // Product names are unique per seed: a retried journey reseeds after the first attempt may
+  // have committed, and the photo writer refuses a name another Run's Product already uses.
+  const unselectedName = `Synthetic Unselected Mug ${run.publicId}`;
+  const selectedName = `Synthetic Selected Shirt ${run.publicId}`;
   if (!mug || !shirt) throw new Error("Synthetic photo images are missing");
   // Proposals list by creation time, then group key: the selected group is deliberately second.
   await proposePhotoGroups(db, {
@@ -313,7 +317,7 @@ export async function seedProposedPhotoRun(
         ],
         product: {
           kind: "create",
-          create: { name: "Synthetic Unselected Mug" },
+          create: { name: unselectedName },
         },
       },
       {
@@ -323,10 +327,14 @@ export async function seedProposedPhotoRun(
         ],
         product: {
           kind: "create",
-          create: { name: "Synthetic Selected Shirt" },
+          create: { name: selectedName },
         },
       },
     ],
   });
-  return { PHOTO_RUN_ID: run.publicId };
+  return {
+    PHOTO_RUN_ID: run.publicId,
+    PHOTO_SELECTED_NAME: selectedName,
+    PHOTO_UNSELECTED_NAME: unselectedName,
+  };
 }

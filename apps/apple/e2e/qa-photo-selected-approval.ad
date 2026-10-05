@@ -11,8 +11,8 @@ open "cubby://entity/${PHOTO_RUN_ID}"
 wait "id=review.workspace" 90000
 wait text "Proposed items · 2" 90000
 # The groups, decision and header controls all fit on the first iPhone 17 screen.
-click "role=Button label=\"Synthetic Selected Shirt\""
-wait "role=Button label=\"Synthetic Selected Shirt\" selected=true" 30000
+click "role=Button label=\"${PHOTO_SELECTED_NAME}\""
+wait "role=Button label=\"${PHOTO_SELECTED_NAME}\" selected=true" 30000
 click "role=Button label=Select"
 wait "role=Button label=Selected" 30000
 click "label=\"Approve selected · 1\""

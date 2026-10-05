@@ -1435,7 +1435,7 @@ async function assertQaOutcomes(): Promise<void> {
     if (
       groups.map((row) => `${row.groupKey}:${row.state}`).join() !==
         "synthetic-qa-a-unselected-mug:proposed,synthetic-qa-b-selected-shirt:committed" ||
-      photoProducts.map((row) => row.name).join() !== "Synthetic Selected Shirt"
+      photoProducts.map((row) => row.name).join() !== qaIds.PHOTO_SELECTED_NAME
     )
       throw new Error(
         `Approving the selection must commit only the selected ready group: ${JSON.stringify({ groups, photoProducts })}`,
