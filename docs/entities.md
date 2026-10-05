@@ -411,9 +411,12 @@ entity declares for bulk editing — there is no per-entity bulk-edit verb to
 write. The web list registers one generic `bulkEdit` action
 (`apps/web/src/entity/actions/bulk-edit-entity-action.tsx`) for every
 entity whose manifest declares it, and its dialog renders exactly those
-fields through the same reference/select/date rendering `EntityIntentFields`
-uses. The mutation payload is the form's dirty-field subset: an untouched
-field is omitted, and a cleared nullable field sends `null`. Native has no
+fields through `renderIntentField`, the dispatcher `EntityIntentFields` uses,
+wrapping each in unchanged/set/clear assignment modes
+(`FieldAssignmentPolicy` in `entity-primitive-fields.tsx`). The mutation
+payload is the form's dirty-field subset: an untouched field is omitted, an
+unchecked touched checkbox sends `false`, and a cleared nullable field sends
+`null`. Native has no
 `bulkUpdate` route or multi-select delete.
 
 `capabilities.images` is `false`, `"gallery"` (an ordered `<Entity>Image` join
