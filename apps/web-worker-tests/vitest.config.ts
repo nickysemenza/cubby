@@ -19,7 +19,16 @@ export default defineConfig({
           ) {
             return new Response("synthetic token rejection", { status: 400 });
           }
-          return fetch(request);
+          // Miniflare's Request is not Node's native Request class.
+          return fetch(request.url, {
+            method: request.method,
+            headers: [...request.headers],
+            redirect: request.redirect,
+            body:
+              request.method === "GET" || request.method === "HEAD"
+                ? undefined
+                : await request.arrayBuffer(),
+          });
         },
       },
       wrangler: {
