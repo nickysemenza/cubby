@@ -265,19 +265,13 @@ export function readCookie(request: Request, name: string): string | null {
 
 export async function createPkcePair() {
   const bytes = crypto.getRandomValues(new Uint8Array(48));
-  const verifier = base64Url(bytes);
+  const verifier = Buffer.from(bytes).toString("base64url");
   const digest = await crypto.subtle.digest(
     "SHA-256",
     new TextEncoder().encode(verifier),
   );
-  return { verifier, challenge: base64Url(new Uint8Array(digest)) };
-}
-
-function base64Url(bytes: Uint8Array) {
-  let binary = "";
-  for (const byte of bytes) binary += String.fromCharCode(byte);
-  return btoa(binary)
-    .replaceAll("+", "-")
-    .replaceAll("/", "_")
-    .replaceAll("=", "");
+  return {
+    verifier,
+    challenge: Buffer.from(digest).toString("base64url"),
+  };
 }

@@ -120,7 +120,7 @@ import {
   findOrCreateWithShortcode,
   insertWithShortcode,
 } from "~/server/repo/shortcode-utils";
-import { sha256Hex } from "~/server/semantic/hash";
+import { sha256Hex, sha256Uuid } from "~/server/semantic/hash";
 import { publishImageProcessingWakeups } from "~/server/services/image-processing.service";
 import {
   productionPhotoImportCommitPorts,
@@ -375,21 +375,7 @@ export async function runImportOperation<T extends object | null>(
 }
 
 const operationUuid = async (runId: string, operationId: string) => {
-  const hex = await sha256Hex(`${runId}:${operationId}`);
-  const bytes = Uint8Array.from(
-    hex.slice(0, 32).match(/.{2}/gu) ?? [],
-    (value) => Number.parseInt(value, 16),
-  );
-  bytes[6] = ((bytes[6] ?? 0) & 0x0f) | 0x50;
-  bytes[8] = ((bytes[8] ?? 0) & 0x3f) | 0x80;
-  const normalized = [...bytes]
-    .map((byte) => byte.toString(16).padStart(2, "0"))
-    .join("");
-  return z
-    .uuid()
-    .parse(
-      `${normalized.slice(0, 8)}-${normalized.slice(8, 12)}-${normalized.slice(12, 16)}-${normalized.slice(16, 20)}-${normalized.slice(20, 32)}`,
-    );
+  return z.uuid().parse(await sha256Uuid(`${runId}:${operationId}`));
 };
 
 export type PurchaseImportNamespace = {
@@ -4071,10 +4057,7 @@ export async function controlRun(
     const bytes = await response.arrayBuffer();
     if (bytes.byteLength !== evidence.byteSize)
       throw new Error("Manual evidence size does not match its upload record");
-    const digest = await crypto.subtle.digest("SHA-256", bytes);
-    const checksum = [...new Uint8Array(digest)]
-      .map((byte) => byte.toString(16).padStart(2, "0"))
-      .join("");
+    const checksum = await sha256Hex(bytes);
     if (checksum !== evidence.checksum)
       throw new Error(
         "Manual evidence checksum does not match its upload record",

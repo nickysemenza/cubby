@@ -22,6 +22,7 @@ import {
   upsertAiAnalysis,
 } from "~/server/repo/ai-analysis";
 import { getRecipeByID } from "~/server/repo/recipe/crud";
+import { sha256Hex } from "~/server/semantic/hash";
 
 import { validateRecipeFlowPlan } from "./validation";
 
@@ -188,19 +189,11 @@ export function flowPromptInput(recipe: RecipeOut): RecipeFlowPromptInput {
   };
 }
 
-const toHex = (bytes: ArrayBuffer): string =>
-  [...new Uint8Array(bytes)]
-    .map((byte) => byte.toString(16).padStart(2, "0"))
-    .join("");
-
 async function contentFingerprint(
   promptInput: RecipeFlowPromptInput,
   guidance: string | null,
 ): Promise<string> {
-  const encoded = new TextEncoder().encode(
-    JSON.stringify({ recipe: promptInput, guidance }),
-  );
-  return toHex(await crypto.subtle.digest("SHA-256", encoded));
+  return sha256Hex(JSON.stringify({ recipe: promptInput, guidance }));
 }
 
 /**

@@ -34,6 +34,7 @@ import { productEnrichmentTarget } from "~/server/purchase-import/product-enrich
 import { startTargetedRun } from "~/server/purchase-import/run-service";
 import { getDb, notDeleted } from "~/server/repo/database-helpers";
 import { resolveOrThrow } from "~/server/repo/shortcode-resolver";
+import { sha256Hex } from "~/server/semantic/hash";
 
 type SourceClaim = {
   id: string;
@@ -56,15 +57,8 @@ type TargetFingerprintInput =
   /** A Product that was not found; a live one uses `productEnrichmentTarget`. */
   | { product: undefined };
 
-const fingerprint = async (value: TargetFingerprintInput) => {
-  const digest = await crypto.subtle.digest(
-    "SHA-256",
-    new TextEncoder().encode(JSON.stringify(value)),
-  );
-  return [...new Uint8Array(digest)]
-    .map((byte) => byte.toString(16).padStart(2, "0"))
-    .join("");
-};
+const fingerprint = (value: TargetFingerprintInput) =>
+  sha256Hex(JSON.stringify(value));
 
 /**
  * Hand a committed run to the coordinator queue. A missing queue or a failed

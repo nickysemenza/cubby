@@ -27,18 +27,13 @@ import {
   attachStatementObservation,
   updateStatementRows,
 } from "~/server/repo/statement-row";
+import { sha256Hex } from "~/server/semantic/hash";
 
 async function parseFile(input: StatementCsvFileInput) {
   const headers = statementCsvHeaders(input.text);
   const needsMapping = !input.mapping && !recognizedStatementSource(headers);
   if (needsMapping) return { headers, parsed: null };
-  const hash = await crypto.subtle.digest(
-    "SHA-256",
-    new TextEncoder().encode(input.text),
-  );
-  const fingerprint = Array.from(new Uint8Array(hash), (byte) =>
-    byte.toString(16).padStart(2, "0"),
-  ).join("");
+  const fingerprint = await sha256Hex(input.text);
   const parsed = input.mapping
     ? parseMappedStatementCsv(
         input.text,

@@ -4,6 +4,7 @@ import { z } from "zod";
 
 import type { AiChatRequest } from "~/server/ai/run-feature";
 import { getAiResponseCacheNamespace } from "~/server/cf-env";
+import { sha256Hex } from "~/server/semantic/hash";
 
 const log = createLogger("ai-response-cache");
 
@@ -146,13 +147,9 @@ export async function aiResponseCacheKey(
   }
   const parsed = jsonSchema.safeParse(JSON.parse(serialized));
   if (!parsed.success) return null;
-  const bytes = new TextEncoder().encode(
+  return sha256Hex(
     JSON.stringify(canonical({ version: 1, payload: parsed.data })),
   );
-  const digest = await crypto.subtle.digest("SHA-256", bytes);
-  return [...new Uint8Array(digest)]
-    .map((byte) => byte.toString(16).padStart(2, "0"))
-    .join("");
 }
 
 function cacheStore(key: string): CacheStore {

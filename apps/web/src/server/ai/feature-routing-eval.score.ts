@@ -4,6 +4,8 @@ import type {
 } from "@cubby/schemas/purchase-import";
 import type { RecipeFlowPlan } from "@cubby/schemas/recipe-flow";
 
+import { cents } from "~/server/repo/money";
+
 /**
  * Answer keys and verdicts for the structured-feature routing eval
  * (`feature-routing-eval.live-eval.ts`). `unsafe` is an answer production
@@ -102,7 +104,6 @@ type ObservedRepair = {
   } | null;
 };
 
-const cents = (amount: number) => Math.round(amount * 100);
 const titleWords = (title: string) =>
   title.toLowerCase().match(/[a-z0-9]{3,}/gu) ?? [];
 
