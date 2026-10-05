@@ -48,7 +48,9 @@ browsers must be available; [test tiers](agents/validation-tests.md) cover datab
 PostgreSQL remains the authoritative integration tier; Playwright defaults to
 one worker on hosted runners and two on local macOS (`tooling/e2e-workers.ts`),
 the CI workflow passes `--workers=2` for each shard, and there are no retries. Both tiers reject an empty selection or an
-unexpected skipped test without freezing the suite to a hand-maintained count.
+unexpected skipped test without freezing the suite to a hand-maintained count;
+a Vitest `-t` run accepts tests the pattern left out but still fails when the
+pattern matches nothing or a matched test is skipped.
 Browser verification always follows the current web build (the `e2e` target
 `dependsOn: ["build-cf"]`).
 
