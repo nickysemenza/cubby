@@ -24,6 +24,7 @@ import {
   notDeleted,
   withTransaction,
 } from "~/server/repo/database-helpers";
+import { cents } from "~/server/repo/money";
 import { resolveOrThrow } from "~/server/repo/shortcode-resolver";
 import { insertWithShortcode } from "~/server/repo/shortcode-utils";
 import { getR2PublicUrl } from "~/server/utils/r2-public-url";
@@ -122,7 +123,7 @@ export async function listReceiptHunts(db: Database, actor: ActorContext) {
       id: row.id,
       transactionDate: row.transactionDate,
       merchant: row.merchant,
-      amountInCents: Math.round(Math.abs(row.amount) * 100),
+      amountInCents: cents(Math.abs(row.amount)),
     })),
   });
 }

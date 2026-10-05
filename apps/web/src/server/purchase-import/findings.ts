@@ -43,6 +43,7 @@ import {
 import { logAuditEntries } from "~/server/repo/audit-log";
 import { notDeleted, withTransaction } from "~/server/repo/database-helpers";
 import { validateExpenseInheritance } from "~/server/repo/expense-inheritance";
+import { cents } from "~/server/repo/money";
 import { cascadeRemoval } from "~/server/repo/removal/core";
 import { insertWithShortcode } from "~/server/repo/shortcode-utils";
 
@@ -75,7 +76,7 @@ export async function refundTally(
   executor: DrizzleClient | DrizzleTransaction,
   input: { purchaseId: string; ledgerPartyId: string; amount: number },
 ): Promise<{ booked: number; evidenced: number }> {
-  const refundCents = Math.round(Math.abs(input.amount) * 100);
+  const refundCents = cents(Math.abs(input.amount));
   const purchaseId = parseEntityId("purchase", input.purchaseId);
   // Sequential: a transaction handle runs one statement at a time.
   const [booked] = await executor

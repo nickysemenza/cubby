@@ -53,6 +53,8 @@ existing block. Extend the generic path when it almost fits. See
   (`@cubby/worker-tracing`); no raw `console.*` in server or Worker code.
 - Retries and waiting: `sleep`, `retryWithBackoff`, `pollUntil`
   (`@cubby/shared/retry`).
+- Digests: `sha256Hex` and the stable row-id `sha256Uuid`
+  (`server/semantic/hash.ts`); never hand-roll `crypto.subtle.digest` + hex.
 - Cross-Worker RPC: one Zod contract per boundary, `z.infer` on both sides.
 - GTIN and barcodes: recipebridge `scan_code_gtin14` and `@cubby/shared/upc`.
 
