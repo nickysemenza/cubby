@@ -233,6 +233,23 @@ const hasExplicitCredential = (request: Request) =>
   request.headers.has("x-api-key") ||
   /^bearer\s+\S/iu.test(request.headers.get("authorization") ?? "");
 
+export async function verifyHttpApiKeyActor(
+  request: Request,
+  auth: Pick<HttpApiPorts["auth"], "verifyApiKey">,
+): Promise<RequestActor | null> {
+  const key = request.headers.get("x-api-key");
+  const verification = key
+    ? await auth.verifyApiKey({ body: { key, configId: "http-api" } })
+    : null;
+  return verification?.valid && verification.key?.configId === "http-api"
+    ? {
+        userId: userId.parse(verification.key.referenceId),
+        sessionId: null,
+        channel: "api",
+      }
+    : null;
+}
+
 const sessionDataCookieName =
   /^(?:__Secure-)?better-auth\.session_data(?:\.\d+)?$/u;
 
@@ -282,18 +299,7 @@ export function createHttpApiHandler(ports: HttpApiPorts) {
       );
       let actor: RequestActor | null = null;
       if (request.headers.has("x-api-key")) {
-        const key = request.headers.get("x-api-key");
-        const verification = key
-          ? await ports.auth.verifyApiKey({
-              body: { key, configId: "http-api" },
-            })
-          : null;
-        if (verification?.valid && verification.key?.configId === "http-api")
-          actor = {
-            userId: userId.parse(verification.key.referenceId),
-            sessionId: null,
-            channel: "api",
-          };
+        actor = await verifyHttpApiKeyActor(request, ports.auth);
       } else {
         const sessionResult = await authenticateHttpSession({
           headers: request.headers,

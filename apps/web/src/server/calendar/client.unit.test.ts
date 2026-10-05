@@ -87,7 +87,7 @@ describe("scheduleCalendarFeedDirty", () => {
       expect.objectContaining({
         reason: "test.write",
         attempt: 2,
-        error: expect.any(Error),
+        error: expect.objectContaining({ message: "stub RPC failure" }),
       }),
     );
     consoleError.mockRestore();
@@ -193,7 +193,7 @@ describe("scheduleCalendarFeedDirty", () => {
       "[calendar-feed] failed to enqueue mark-dirty fallback",
       expect.objectContaining({
         reason: "test.write",
-        error: expect.any(Error),
+        error: expect.objectContaining({ message: "queue down" }),
       }),
     );
     consoleError.mockRestore();

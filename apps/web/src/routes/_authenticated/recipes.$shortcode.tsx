@@ -11,7 +11,7 @@ import { entityDetailFor } from "~/entity/entity-detail";
 import { GenericEntityDetail } from "~/entity/entity-detail/generic-entity-detail";
 import type { EntityDetailByEntity } from "~/entity/generated/entity-details.gen";
 import { ensureDetailRecord } from "~/entity/routing/detail-loader";
-import { detailPage, notFoundPage } from "~/entity/routing/entity-routes";
+import { detailPage, notFoundPage } from "~/entity/routing/detail-page";
 import EditRecipeForm from "~/features/recipes/edit-recipe";
 import { shortcodeHead } from "~/lib/page-title";
 import { Page } from "~/ui/page/Page";

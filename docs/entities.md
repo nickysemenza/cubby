@@ -220,8 +220,11 @@ in `packages/schemas/src/entity-report.ts`) and web (`ReportBlocks`) and native
 (`ReportDetailSlot`, Swift Charts) only draw it. Add the slot id to
 `reportSlots`, a builder to `BUILDERS`, and register the slot on both clients;
 money in a report is `SUM(Expense.cost)` or the persisted valuation, never
-recomputed on a client. The finance slots (purchase reconciliation, project
-allocation and financial settlement, expense settlement, statement-charge
+recomputed on a client. Money summaries and chart labels preserve cents, matching
+the report rows. Linked record names truncate within the available row width,
+leaving trailing amounts visible on phones. The finance slots (purchase
+reconciliation, project allocation and financial settlement, expense settlement,
+statement-charge
 search) also use the `records` block: rows a person can open or check, plus the
 verbs that act on them (`SECTION_ACTION_IDS`). Each row's and verb's
 `disabledReason`, every amount and the footer are the server's; a verb runs an
@@ -511,6 +514,10 @@ does not accidentally widen the candidate set. Scope constrains discovery,
 not stored values: existing selections remain visible and can be removed even
 when another field changes and they no longer match the candidate query.
 
+Generic entity filter-option rosters use the shortcode when the stored display
+name is null. Page ordering, search, and selected-value hydration use that same
+label, without loading full entity records.
+
 `control.suggest: { basis, mode }` marks a field whose value the decision tier
 (Jev/Clef trial) infers from named sibling fields, so the browser editor can auto-fill it
 while untouched and offer a one-tap apply once a value already exists. `basis`
@@ -522,6 +529,12 @@ read. `mode: "fill"` (the default) targets a select-controlled enum, a singular
 resolve to a model field, a basis key naming the field itself, and any cycle in
 the basis → target edges across an entity's suggest fields, so one request can
 always resolve every target in dependency order.
+
+Shared AI selection sends the entire shown roster to Jev only when it fits
+both the 254-choice limit and the 32,000-byte serialized UTF-8 envelope,
+including subject, rules, labels, and the none option. Otherwise the fast chat
+tier selects from that same roster with explicit candidate ids, even when its
+labels are positional; an unshown candidate id resolves to null.
 
 `mode: "prune"` targets a `text-array` field instead (the compiler rejects any
 other kind) and proposes _removals_ rather than a value: entries whose value

@@ -1,0 +1,329 @@
+{
+  "claim_next_import_work": {
+    "type": "object",
+    "required": [
+      "operationId"
+    ],
+    "properties": {
+      "operationId": {
+        "type": "string",
+        "minLength": 1,
+        "maxLength": 200
+      }
+    }
+  },
+  "extract_receipt_evidence": {
+    "type": "object",
+    "required": [
+      "operationId"
+    ],
+    "properties": {
+      "operationId": {
+        "type": "string",
+        "minLength": 1,
+        "maxLength": 200
+      }
+    }
+  },
+  "extract_run_evidence": {
+    "type": "object",
+    "required": [
+      "operationId"
+    ],
+    "properties": {
+      "operationId": {
+        "type": "string",
+        "minLength": 1,
+        "maxLength": 200
+      }
+    }
+  },
+  "issue_browser_command": {
+    "type": "object",
+    "required": [
+      "operationId",
+      "command"
+    ],
+    "properties": {
+      "operationId": {
+        "type": "string",
+        "minLength": 1,
+        "maxLength": 200
+      },
+      "command": {
+        "type": "object",
+        "required": [
+          "kind"
+        ],
+        "properties": {
+          "kind": {
+            "type": "string",
+            "enum": [
+              "navigate_orders",
+              "capture_order",
+              "capture_pdf",
+              "capture_screenshot"
+            ]
+          },
+          "target": {
+            "type": "string",
+            "maxLength": 2048
+          }
+        }
+      }
+    }
+  },
+  "read_browser_command_result": {
+    "type": "object",
+    "required": [
+      "operationId"
+    ],
+    "properties": {
+      "operationId": {
+        "type": "string",
+        "minLength": 1,
+        "maxLength": 200
+      }
+    }
+  },
+  "import_browser_order_evidence": {
+    "type": "object",
+    "required": [
+      "operationId",
+      "commandId"
+    ],
+    "properties": {
+      "operationId": {
+        "type": "string",
+        "minLength": 1,
+        "maxLength": 200
+      },
+      "commandId": {
+        "type": "string",
+        "format": "uuid",
+        "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+      },
+      "defaultTrade": {
+        "type": "string",
+        "enum": [
+          "planning",
+          "demolition",
+          "building",
+          "drywall",
+          "electrical",
+          "plumbing",
+          "mechanical",
+          "cabinetry",
+          "countertop",
+          "flooring",
+          "millwork",
+          "finishes",
+          "appliances",
+          "landscaping",
+          "logistics",
+          "metalworking",
+          "crafts",
+          "auto",
+          "other"
+        ]
+      },
+      "defaultProjectId": {
+        "type": "string",
+        "minLength": 1
+      }
+    }
+  },
+  "report_agent_progress": {
+    "type": "object",
+    "required": [
+      "operationId",
+      "phase"
+    ],
+    "properties": {
+      "operationId": {
+        "type": "string",
+        "minLength": 1,
+        "maxLength": 200
+      },
+      "phase": {
+        "type": "string",
+        "enum": [
+          "preparing",
+          "investigating",
+          "awaiting_browser",
+          "awaiting_approval",
+          "committing",
+          "review",
+          "complete"
+        ]
+      },
+      "currentItem": {
+        "type": "string",
+        "minLength": 1,
+        "maxLength": 500
+      },
+      "awaitingApproval": {
+        "type": "boolean"
+      },
+      "detail": {
+        "type": "string",
+        "minLength": 1,
+        "maxLength": 1000
+      }
+    }
+  },
+  "save_navigation_hints": {
+    "type": "object",
+    "required": [
+      "operationId",
+      "hints"
+    ],
+    "properties": {
+      "operationId": {
+        "type": "string",
+        "minLength": 1,
+        "maxLength": 200
+      },
+      "hints": {
+        "type": "array",
+        "items": {
+          "type": "object",
+          "required": [
+            "url"
+          ],
+          "properties": {
+            "url": {
+              "type": "string",
+              "maxLength": 2048,
+              "format": "uri"
+            },
+            "label": {
+              "type": "string",
+              "maxLength": 500
+            }
+          }
+        },
+        "minItems": 1,
+        "maxItems": 25
+      }
+    }
+  },
+  "mark_history_expired": {
+    "type": "object",
+    "required": [
+      "operationId",
+      "earliestAvailableOrderAt"
+    ],
+    "properties": {
+      "operationId": {
+        "type": "string",
+        "minLength": 1,
+        "maxLength": 200
+      },
+      "earliestAvailableOrderAt": {
+        "type": "string",
+        "format": "date-time",
+        "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z|([+-](?:[01]\\d|2[0-3]):[0-5]\\d)))$"
+      }
+    }
+  },
+  "finish_import_run": {
+    "type": "object",
+    "required": [
+      "operationId"
+    ],
+    "properties": {
+      "operationId": {
+        "type": "string",
+        "minLength": 1,
+        "maxLength": 200
+      }
+    }
+  },
+  "stop_import_run_for_review": {
+    "type": "object",
+    "required": [
+      "operationId",
+      "reason"
+    ],
+    "properties": {
+      "operationId": {
+        "type": "string",
+        "minLength": 1,
+        "maxLength": 200
+      },
+      "reason": {
+        "type": "string",
+        "enum": [
+          "navigation_ambiguity",
+          "unreadable_evidence",
+          "provider_failure",
+          "other"
+        ]
+      },
+      "detail": {
+        "type": "string",
+        "minLength": 1,
+        "maxLength": 1000
+      }
+    }
+  },
+  "defer_order_for_review": {
+    "type": "object",
+    "required": [
+      "operationId",
+      "orderId",
+      "detail"
+    ],
+    "properties": {
+      "operationId": {
+        "type": "string",
+        "minLength": 1,
+        "maxLength": 200
+      },
+      "orderId": {
+        "type": "string",
+        "minLength": 1,
+        "maxLength": 200
+      },
+      "detail": {
+        "type": "string",
+        "minLength": 1,
+        "maxLength": 1000
+      }
+    }
+  },
+  "settle_charge_hunt": {
+    "type": "object",
+    "required": [
+      "operationId",
+      "huntId",
+      "outcome",
+      "detail"
+    ],
+    "properties": {
+      "operationId": {
+        "type": "string",
+        "minLength": 1,
+        "maxLength": 200
+      },
+      "huntId": {
+        "type": "string",
+        "format": "uuid",
+        "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+      },
+      "outcome": {
+        "type": "string",
+        "enum": [
+          "not_found",
+          "needs_review"
+        ]
+      },
+      "detail": {
+        "type": "string",
+        "minLength": 1,
+        "maxLength": 1000
+      }
+    }
+  }
+}

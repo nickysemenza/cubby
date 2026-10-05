@@ -45,7 +45,7 @@ struct GlobalOptions: ParsableArguments {
 ///
 /// `--api-key` (or `$CUBBY_API_KEY`) always resolves to an in-memory credential store — an
 /// environment-supplied key is never persisted to Keychain — while the default path uses the
-/// real Keychain store so `auth login` survives across CLI invocations.
+/// file session store so `auth login` survives across CLI invocations.
 struct CLIContext {
     let baseURL: URL
     /// Same value as `credentials.host`, kept here too since `CredentialProvider` is an actor and

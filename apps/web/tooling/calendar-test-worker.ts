@@ -10,6 +10,14 @@ export { CalendarFeedDurableObject };
  */
 export default {
   async fetch(request: Request, env: Env): Promise<Response> {
+    if (new URL(request.url).pathname === "/chatgpt/authorize") {
+      try {
+        const plan = env.CHATGPT_PLAN.getByName(new URL(request.url).hostname);
+        return Response.json(await plan.authorizePlan(await request.json()));
+      } catch (error) {
+        return Response.json({ error: String(error) }, { status: 400 });
+      }
+    }
     const object = env.CALENDAR_FEED.getByName(new URL(request.url).hostname);
     return await object.fetch(request);
   },
@@ -18,3 +26,4 @@ export default {
 export { DatabaseFreshnessDurableObject } from "~/server/database-freshness/durable-object";
 export { PurchaseImportDurableObject } from "~/server/purchase-import/durable-object";
 export { AiResponseCacheDurableObject } from "~/server/ai/response-cache-durable-object";
+export { ChatGptPlanDurableObject } from "~/server/ai/chatgpt/durable-object";

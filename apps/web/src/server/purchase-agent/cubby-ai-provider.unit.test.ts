@@ -1,7 +1,10 @@
+import { createModels } from "@earendil-works/pi-ai/models";
 import { describe, expect, it, vi } from "vitest";
 
+import { createContextRecorder } from "./context-breakdown";
 import {
   createCubbyGatewayFetch,
+  cubbyAgentProviders,
   withSequentialToolCalls,
 } from "./cubby-ai-provider";
 import type { AgentGateway } from "./environment";
@@ -9,6 +12,44 @@ import type { AgentGateway } from "./environment";
 const runId = "f47ac10b-58cc-4372-a567-0e02b2c3d479";
 
 describe("createCubbyGatewayFetch", () => {
+  // Subscription responses must not acquire API prices in the persisted pi
+  // transcript, and a subsequent paid response must retain its API price.
+  it("normalizes subscription costs before forwarding terminal events", async () => {
+    const response = () =>
+      new Response(
+        `data: ${JSON.stringify({
+          type: "response.completed",
+          response: {
+            id: "example-response",
+            status: "completed",
+            output: [],
+            usage: { input_tokens: 100, output_tokens: 10, total_tokens: 110 },
+          },
+        })}\n\n`,
+        { headers: { "content-type": "text/event-stream" } },
+      );
+    let subscribed = true;
+    const models = createModels();
+    for (const provider of cubbyAgentProviders({
+      gateway: () => ({ id: "cubby", run: async () => response() }),
+      runId: () => undefined,
+      recorder: createContextRecorder(),
+      subscription: async () => (subscribed ? response() : null),
+    }))
+      models.setProvider(provider);
+    const model = models.getModel("openai", "gpt-6-sol");
+    if (!model) throw new Error("Missing test model");
+    const stream = models.stream(model, { messages: [] });
+    let terminalCost: number | undefined;
+    for await (const event of stream) {
+      if (event.type === "done") terminalCost = event.message.usage.cost.total;
+    }
+    expect(terminalCost).toBe(0);
+    expect((await stream.result()).usage.cost.total).toBe(0);
+    subscribed = false;
+    const paid = await models.complete(model, { messages: [] });
+    expect(paid.usage.cost.total).toBeGreaterThan(0);
+  });
   it("attributes a coordinator request to its import run", async () => {
     const run = vi.fn(
       async (

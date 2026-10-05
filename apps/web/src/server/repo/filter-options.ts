@@ -276,9 +276,10 @@ async function loadEntityRows(
 ): Promise<EntityOptionRow[]> {
   const entity: ShortcodeEntity = input.entity;
   const table: ShortcodeTable = SHORTCODE_TABLE[entity];
-  const label = DISPLAY_NAME_COLUMN[entity];
-  if (!label)
+  const labelColumn = DISPLAY_NAME_COLUMN[entity];
+  if (!labelColumn)
     throw new Error(`Entity filter options require a label for ${entity}`);
+  const label = sql<string>`coalesce(${labelColumn}, ${table.shortcode})`;
   const count = input.include.includes("count") ? optionCountFor(entity) : null;
   const withLogo = input.include.includes("logo");
   const kindColumn = input.include.includes("kind")

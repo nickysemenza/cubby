@@ -1633,13 +1633,7 @@ async function main(): Promise<void> {
   assertSimulatorAdminUrl(adminURL);
   const admin = new Pool({ connectionString: adminURL });
   let created = false;
-  let harness:
-    | Awaited<
-        ReturnType<
-          (typeof import("./local-workerd-harness"))["createLocalWorkerdHarness"]
-        >
-      >
-    | undefined;
+  let harness: import("./workerd-harness").WorkerdHarness | undefined;
   let objectStorage:
     | Awaited<
         ReturnType<
@@ -1654,7 +1648,6 @@ async function main(): Promise<void> {
         >
       >
     | undefined;
-  let restoreEnvironment = () => {};
   let productId = "";
   let disposableSimulatorID: string | undefined;
   let inputDriverSessionArgs: string[] | undefined;
@@ -1726,7 +1719,6 @@ async function main(): Promise<void> {
         errors.push(error instanceof Error ? error : new Error(String(error)));
       }
     }
-    restoreEnvironment();
     if (created) {
       try {
         await admin.query(`DROP DATABASE "${simName}" WITH (FORCE)`);
@@ -1812,13 +1804,17 @@ async function main(): Promise<void> {
       durationMs: Math.round(performance.now() - databaseStarted),
     });
     const workerStarted = performance.now();
-    const { writeLocalWorkerdConfig } = await import("./e2e-worker-config");
-    writeLocalWorkerdConfig(webRoot);
-    const runtime = await import("./local-workerd-harness");
+    const { startWorkerdHarness } = await import("./workerd-harness");
     const { createE2EObjectStorage } = await import("./local-object-storage");
-    restoreEnvironment = runtime.installDatabaseEnvironment(databaseURL);
     objectStorage = await createE2EObjectStorage();
-    harness = runtime.createLocalWorkerdHarness(databaseURL, objectStorage.url);
+    harness = await startWorkerdHarness({
+      profile: "offline",
+      databaseUrl: databaseURL,
+      objectStorage: {
+        endpoint: objectStorage.url,
+        publicUrl: objectStorage.url,
+      },
+    });
     const { url } = await harness.listen();
     if (testerArmy) process.env.TESTER_ARMY_ORIGIN = url.origin;
     const context = await request.newContext({

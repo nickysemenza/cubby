@@ -311,6 +311,12 @@ interface ListSpec<Row, Out> {
   where?: SQL | undefined;
   resolveSort?: NonNullable<OrderByOpts>["resolve"];
   tieBreaker?: SQL;
+  /**
+   * Pre-built ordering that replaces the declared sort roster: a run's
+   * capture order, a group order ahead of the requested sort, or a picker's
+   * own roster. Defaults to `orderBy(sorts, { resolveSort, tieBreaker })`.
+   */
+  orderBy?: SQL[];
   /** For a row query whose `where` is bound to a relational-query alias. */
   count?: () => Promise<number>;
 }
@@ -442,11 +448,13 @@ export function listScaffold<
       const { take, skip } = buildTakeSkip(request.pagination);
       const page: ListPage = {
         where,
-        orderBy: scaffold.orderBy(
-          request.sorts,
-          { resolve: spec.resolveSort, tieBreaker: spec.tieBreaker },
-          request.filters,
-        ),
+        orderBy:
+          spec.orderBy ??
+          scaffold.orderBy(
+            request.sorts,
+            { resolve: spec.resolveSort, tieBreaker: spec.tieBreaker },
+            request.filters,
+          ),
         limit: take,
         offset: skip,
       };

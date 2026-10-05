@@ -12,6 +12,25 @@ export default defineConfig({
   root: fileURLToPath(new URL(".", import.meta.url)),
   plugins: [
     cloudflareTest({
+      miniflare: {
+        outboundService: async (request) => {
+          if (
+            request.url === "https://auth.openai.com/api/accounts/oauth/token"
+          ) {
+            return new Response("synthetic token rejection", { status: 400 });
+          }
+          // Miniflare's Request is not Node's native Request class.
+          return fetch(request.url, {
+            method: request.method,
+            headers: [...request.headers],
+            redirect: request.redirect,
+            body:
+              request.method === "GET" || request.method === "HEAD"
+                ? undefined
+                : await request.arrayBuffer(),
+          });
+        },
+      },
       wrangler: {
         configPath: fileURLToPath(
           new URL("../web/wrangler.calendar-test.jsonc", import.meta.url),

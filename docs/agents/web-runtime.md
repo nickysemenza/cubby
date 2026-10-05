@@ -27,7 +27,15 @@ that must stay a string (numeric-looking ids) uses `urlStringParam`. A child
 route under a no-`<Outlet/>` detail route renders the parent invisibly — use the
 trailing-underscore segment (`$shortcode_.export`) to un-nest. Client chunking
 is Rolldown `codeSplitting.groups` in `vite.config.ts`; never group `@base-ui`
-or do a naive vendor split — it drags lazy-route code into first paint.
+or do a naive vendor split — it drags lazy-route code into first paint. Detail
+and list slot fills stay `lazy` in their registries (`detail-slots.tsx`,
+`list-slots.ts`): every generic list route shares one closure, so one static
+slot import ships to every list.
+Keep list page factories (`list-page.tsx`) separate from detail factories
+(`detail-page.tsx`) so lists do not import generic detail sections. Bind each
+factory result to a module-level constant referenced by a splittable property
+in the route's literal options object; loader-time helpers stay React-free in
+`detail-loader.ts`.
 
 Lists, filtering, sorting, totals, and pagination belong on the server. A saved
 view is visible manifest-backed URL state; `scopeFilters` is only a visible

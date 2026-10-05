@@ -520,11 +520,7 @@ async function cleanupResources(input: {
     | Awaited<ReturnType<typeof createMacBrowserScenario>>
     | undefined;
   retailer: Awaited<ReturnType<typeof createMacRetailerFixture>> | undefined;
-  harness:
-    | ReturnType<
-        (typeof import("./local-workerd-harness"))["createLocalWorkerdHarness"]
-      >
-    | undefined;
+  harness: import("./workerd-harness").WorkerdHarness | undefined;
   storage:
     | Awaited<
         ReturnType<
@@ -699,11 +695,7 @@ async function main(): Promise<void> {
     | Awaited<ReturnType<typeof createMacComposedScenario>>
     | undefined;
   let restoreEnvironment = () => {};
-  let harness:
-    | ReturnType<
-        (typeof import("./local-workerd-harness"))["createLocalWorkerdHarness"]
-      >
-    | undefined;
+  let harness: import("./workerd-harness").WorkerdHarness | undefined;
   let storage:
     | Awaited<
         ReturnType<
@@ -785,19 +777,15 @@ async function main(): Promise<void> {
       await pool.end();
     }
     phase = "worker-startup";
-    const { writeLocalWorkerdConfig } = await import("./e2e-worker-config");
-    writeLocalWorkerdConfig(webRoot);
-    const runtime = await import("./local-workerd-harness");
-    restoreEnvironment = runtime.installDatabaseEnvironment(databaseURL);
+    const { startWorkerdHarness } = await import("./workerd-harness");
     const { createE2EObjectStorage } = await import("./local-object-storage");
     storage = await createE2EObjectStorage();
-    const restoreScenarioEnvironment = installScenarioEnvironment(storage.url);
-    const restoreDatabaseEnvironment = restoreEnvironment;
-    restoreEnvironment = () => {
-      restoreScenarioEnvironment();
-      restoreDatabaseEnvironment();
-    };
-    harness = runtime.createLocalWorkerdHarness(databaseURL, storage.url, true);
+    restoreEnvironment = installScenarioEnvironment(storage.url);
+    harness = await startWorkerdHarness({
+      profile: "native-import",
+      databaseUrl: databaseURL,
+      objectStorage: { endpoint: storage.url, publicUrl: storage.url },
+    });
     const { url } = await harness.listen();
     const context = await request.newContext({
       baseURL: url.origin,

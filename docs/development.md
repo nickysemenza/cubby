@@ -33,10 +33,15 @@ JSONL routes    →  cancellable workflow streams
   `2 cups → $5.00 → 333g`.
 - USDA data comes from the `usda-api` Worker through the ts-rest contract
   `@cubby/usda/contract`. Its client is `apps/web/src/server/clients/usda.ts`.
-- Purchase imports run across the web Worker, the `purchase-agent` Worker and a
-  Mac browser bridge. The map of queue events, service-binding methods and
-  owning files is
+- Purchase imports run in the web Worker, which binds both the purchase
+  agent's and the browser bridge's Durable Objects, and in a Mac browser. The
+  map of queue events, Run services and owning files is
   [`apps/web/src/server/purchase-import/README.md`](../apps/web/src/server/purchase-import/README.md).
+- OpenAI Responses calls use the household's ChatGPT plan when connected in
+  Settings, retaining the declared Luna/Sol choices. `CHATGPT_PLAN` owns OAuth
+  credentials and serializes rotating refreshes. Other providers and embeddings
+  use the existing AI Gateway. [ChatGPT setup](runbooks/chatgpt-plan.md) explains
+  local authorization, the read-only account model catalog, and limitations.
 
 ## Commands
 

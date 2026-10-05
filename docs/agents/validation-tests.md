@@ -33,13 +33,64 @@ spawns pass straight through. `test:e2e:watch` (`--ui`) skips the lock, since
 its idle session would otherwise hold it indefinitely. A spec's `test.use` of a
 worker-scoped option (`video`, `trace`, `screenshot`, browser launch options),
 even to its default, moves its tests into extra workers that each boot another
-browser, database, and Worker harness; only `gmailJourney` and `purchaseAgent`
-may split workers (`tooling/e2e-worker-pool.unit.test.ts`). Record video for a
+browser, database, and Worker harness; only `workerdProfile` may split
+workers (`tooling/e2e-worker-pool.unit.test.ts`). Record video for a
 run with `CUBBY_E2E_VIDEO=1`. RTable's placeholder transition can eat clicks;
 cell-edit tests retry opening and filling as one action.
 
+### Workerd test runtime and profiles
+
+Browser workers, Tester Army, the purchase-agent Vitest scenarios and the
+live evals start the built Worker through `openWorkerdRuntime`
+(`apps/web/tooling/workerd-runtime.ts`); a caller that runs work after
+startup uses `withWorkerdRuntime`, which closes the runtime even when that
+work throws. The runtime acquires the database (a lease it releases, or a
+borrowed Vitest database it never closes), object storage it starts itself,
+the profile's peers, and the harness. `close()` releases them newest first
+and runs every release even when one fails; a start that fails at any step
+releases everything acquired before it. The native runners (`sim-e2e.ts`,
+`mac-import-e2e.ts`) are the exception until wave 3: they own their database
+and object storage and call `startWorkerdHarness`
+(`apps/web/tooling/workerd-harness.ts`) directly. The runtime cannot yet
+borrow object storage a caller already started.
+
+A profile (`WORKERD_PROFILES` in `workerd-harness.ts`) routes each production
+queue consumer to one of:
+
+- `real`: the built Worker's own consumer, with production settings except
+  `max_batch_timeout: 0`.
+- `dropped`: `local-offline-peers` acknowledges and discards each message.
+- `unconsumed`: no consumer; messages stay queued.
+- `native-continuation`: the Mac continuation peer records native Sync
+  retries.
+
+| Profile          | Used by                                   | `cubby-background` | `cubby-telemetry` | `cubby-purchase-agent` | Extra peers                    | Harness lock |
+| ---------------- | ----------------------------------------- | ------------------ | ----------------- | ---------------------- | ------------------------------ | ------------ |
+| `offline`        | browser default, simulator, Tester Army   | dropped            | dropped           | unconsumed             | none                           | no           |
+| `gmail`          | `test.use({ workerdProfile: "gmail" })`   | real               | dropped           | unconsumed             | local Google provider          | no           |
+| `native-import`  | Mac import lane                           | dropped            | dropped           | native-continuation    | continuation peer              | no           |
+| `purchase-agent` | agent scenarios, live evals, browser spec | unconsumed         | real              | real                   | queue producer, model, gateway | yes          |
+| `coupled`        | coupled Tester Army journeys              | real               | real              | real                   | queue producer, model, gateway | yes          |
+
+Every profile includes `local-offline-peers` for the USDA binding. Durable
+Objects live in the built Worker and are real in every profile. Starting a
+profile throws when its routes and the compiled Worker's queue consumer names
+differ in either direction. That check covers consumer queue names only, not
+producers, Durable Objects, Hyperdrive, or service bindings, so it is not
+exhaustive binding coverage; `tooling/workerd-runtime.integration.test.ts`
+probes each profile's queues in a running harness.
+
+The harness lock is the one machine-wide lock above; only the profiles marked
+"yes" take it (and rebuild a stale Worker). A Playwright run already holds it
+from global setup and its workers pass through; other `offline`, `gmail`,
+and `native-import` callers run without it. Run one runtime per process at a time: it
+snapshots and restores `E2E_DATABASE_URL` and the Hyperdrive variables
+process-wide, and the lock is reentrant within a process, so two concurrent
+runtimes would restore each other's environment.
+
 The `Purchase import agent` Playwright project
-(`tests/e2e/purchase-import-run.spec.ts`, `test.use({ purchaseAgent: true })`)
+(`tests/e2e/purchase-import-run.spec.ts`,
+`test.use({ workerdProfile: "purchase-agent" })`)
 runs the browser against the purchase-agent workerd harness with a scripted
 model and gateway; `e2eRuntime.purchaseAgent` loads each test's script. It is
 excluded from the required desktop shards and runs in CI as an optional job

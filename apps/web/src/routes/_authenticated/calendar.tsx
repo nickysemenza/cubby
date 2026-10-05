@@ -13,11 +13,11 @@ import {
   calendarSearchSchema,
 } from "~/app/calendar/calendar-search";
 import { UnifiedCalendar } from "~/app/calendar/unified-calendar";
-import { listChromePage } from "~/entity/routing/entity-routes";
+import { listChromePage } from "~/entity/routing/list-page";
 import { pageTitle } from "~/lib/page-title";
 
 // Bound to a const, not inlined into the options object below: see
-// `entity-routes.tsx`'s doc comment on why the splitter needs a literal
+// `list-page.tsx`'s doc comment on why the splitter needs a literal
 // identifier here, not an inline factory call.
 const CalendarRoute = listChromePage({
   title: "Calendar",

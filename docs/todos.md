@@ -116,6 +116,19 @@ See also the image operational passes at the end of this file.
 
 ### Import and resume orders reliably
 
+- 🤔 **High priority: bound Gmail discovery memory and resume progress.**
+  `purchase-import/gmail/sync.ts` retains every message and attachment before
+  `hourly.ts` persists results and advances the cursor; a page-size limit does
+  not bound the whole sync. A synthetic 32-message scan with 4 MiB attachments
+  retains 170.7 MiB of encoded payloads, beyond a Worker's 128 MB memory limit.
+  Persist bounded batches and attachment references so an interrupted scan
+  resumes without downloading the whole backlog again. Evaluate Cloudflare
+  Workflows with the [durable-background-work proposal](#infra--deploy):
+  durable steps and retry waits can help, but each step still needs bounded
+  memory and small results (store attachment bytes in R2). Prove interruption,
+  duplicate delivery, expired Gmail history, and cursor correctness before
+  replacing the current path.
+
 - ⏳ **Conditional purchase-import browser extension.** Promote only if the
   Apple-event browser bridge repeatedly fails to background its window, cannot
   avoid Chrome's JavaScript-from-Apple-Events setting, or cannot provide
@@ -241,23 +254,13 @@ See also the image operational passes at the end of this file.
 
 ## Native app
 
-- 🟢 **Move the hand-rolled native page/search owners onto
-  `EntityListPageSource`.** `GenericEntityListModel` takes an injected page
-  source and swaps scope with `setSource(_:)` (contract on
-  `EntityListPageSource`); these still keep their own page, busy, error and
-  generation state. Delete each one's machinery when it moves, keeping
-  eligibility, ranking and lane exclusion in its source:
-  - `App/Shared/Photo/Library/PhotoEntityChooserModel.swift` (date and recent
-    lanes become two models; the recents same-day skip stays above them) and
-    `PhotoEntityChooser.swift`, with `PhotoRecordSearch.swift` kept as a
-    source adapter. Lane 2E.
-  - `App/Shared/Photo/Library/PhotoRelatedDestinationChooser.swift`
-    (`load`/`mergeRows`; the relationship cursor maps page to offset).
-    Lane 2E.
-  - `App/Shared/Browse/WardrobeView.swift` (`WardrobeModel`; collection rows,
-    `enrichesRows` off). Lane 2E.
-  - `App/Shared/Editors/EntityPickerSheet.swift` (`reload` builds a fresh
-    model per term; scope becomes the source `id`) and its consumers. Lane 3C.
+- 🟢 **Move the editor picker onto `EntityListPageSource`.**
+  `GenericEntityListModel` takes an injected page source and swaps scope with
+  `setSource(_:)` (contract on `EntityListPageSource`; the photo chooser lanes,
+  related destination chooser and wardrobe already use it).
+  `App/Shared/Editors/EntityPickerSheet.swift` still keeps its own state:
+  `reload` builds a fresh model per term. Make the scope the source `id`,
+  delete that machinery, and move its consumers with it. Lane 3C.
 
 - 🤔 **Keep a focused structured-editor input clear of the keyboard.**
   `StructuredValueControl` draws a whole array row (an external ID's source,
@@ -438,9 +441,11 @@ See also the image operational passes at the end of this file.
   `findMany` (root aliased) with an unaliased `$count`, so a predicate
   referencing the outer row compiles on one leg and fails on the other — six
   shipped occurrences (#456, #462, #481, #762, #785, CUBBY-11R), guarded by
-  `server/entity-kernel/list-smoke.integration.test.ts`. Decide: plain-select
-  rows with explicit joins, one shared `alias(table, name)`, or Drizzle
-  relations v2.
+  `server/entity-kernel/list-smoke.integration.test.ts`. The count leg is
+  `listScaffold.list`'s default `countWhere` (`server/repo/list.ts`); Image
+  already reads both legs through one `aliasedTable` and overrides `count`;
+  Inventory overrides both legs with explicit joins. Decide: plain-select rows with
+  explicit joins, one shared `alias(table, name)`, or Drizzle relations v2.
 
 - 🤔 **Declarative "many, clamped to one" cardinality.** Image provenance
   chose a many-row `ImageSighting` child plus derived `one` Image fields over
@@ -616,8 +621,10 @@ spanner"` → `adjustable wrench` (product); `"wet dry vac"` → `shop vacuum`
   the Queues pause-delivery API from the toggle or retry with long delays.
 
 - 🤔 **Evaluate Cloudflare Workflows across durable background work.** Start
-  with vendor Gmail discovery: one instance per Run, bounded pages, a
-  persisted cursor, and timed waits on AI Gateway 429s. Define how a Run
+  with the high-priority Gmail discovery memory repair above and vendor mail
+  search: decide instance identity for mailbox discovery; one instance per Run
+  for vendor search, bounded pages, a persisted cursor, and timed waits on AI
+  Gateway 429s. Define how a Run
   exposes instance, step, retry time, attempts, and failure chain through the
   generic detail view. Test version changes, cancellation, duplicate delivery,
   and exhaustion before migrating; keep the queue path until a Workflow can
@@ -666,8 +673,7 @@ historical records and stay readable.
   because stored `settlement_ref` values derive from it.
 - 🟢 **Collapse internal shims.** Ingredient/product `resolveNames` shims for
   MCP (`repo/ingredient/crud.ts`, `repo/product/resolve-names.ts`) →
-  `resolveEntity`; the `legacyCount` overload of `executeListQueryWithCount`
-  (`database-helpers/query.ts`); the legacy `touchDataQualityTargets` hook
+  `resolveEntity`; the legacy `touchDataQualityTargets` hook
   (`repo/data-quality/touch.ts`); the legacy list field-override consumption in
   `entity/entity-display.tsx`; optional-column fixture shapes in
   `database-helpers/transform.ts` (fix the fixtures); terracotta and shadow

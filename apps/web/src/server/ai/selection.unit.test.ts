@@ -7,6 +7,7 @@ import { FIELD_SUGGESTION_FEATURE } from "./features";
 import { JEV_MAX_CANDIDATES, type JevPort } from "./jev";
 import {
   type AiSelectionSpec,
+  type AiSelectionPort,
   type AiSelectionUsage,
   runAiSelection,
 } from "./selection";
@@ -161,6 +162,26 @@ describe("runAiSelection overflow", () => {
   }));
   const bigSpec = { ...spec, maxCandidates: 400 };
 
+  it("shows candidate identities when a positional choice renderer overflows", async () => {
+    const select = vi.fn<AiSelectionPort["select"]>(async () => ({
+      selectedId: "b",
+      confidence: "high" as const,
+      reasoning: "matching candidate",
+    }));
+    const candidates = widgets.slice(0, 2);
+    const outcome = await runAiSelection(
+      { ...spec, renderLine: (widget) => widget.label },
+      {
+        subject: "界".repeat(11_000),
+        candidates,
+        usage,
+        ai: { select },
+      },
+    );
+    expect(select.mock.calls[0]?.[0].shortlist).toBe("a: red\nb: blue");
+    expect(outcome.selected).toEqual(candidates[1]);
+  });
+
   it("sends the shared frame, the rules, and the full rendered shortlist to the overflow model", async () => {
     const jev: JevPort = vi.fn();
     const select = vi.fn(async () => ({
@@ -181,7 +202,7 @@ describe("runAiSelection overflow", () => {
     expect(select).toHaveBeenCalledWith({
       rules: spec.rules,
       subject: "find the seventh",
-      shortlist: roster.map((w) => `${w.id}: ${w.label}`).join("\n"),
+      shortlist: roster.map((w) => `${w.id}: ${spec.renderLine(w)}`).join("\n"),
       usage,
     });
     // Case/whitespace-insensitive: the model is copying an id out of prose.
@@ -195,6 +216,49 @@ describe("runAiSelection overflow", () => {
       evaluated: true,
     });
   });
+
+  it.each([
+    { subject: "界".repeat(11_000), rules: spec.rules, label: "blue" },
+    { subject: "find blue", rules: "界".repeat(11_000), label: "blue" },
+    { subject: "find blue", rules: spec.rules, label: "界".repeat(11_000) },
+  ])(
+    "overflows a byte-heavy subject, rules, or candidate without dropping candidates",
+    async ({ subject, rules, label }) => {
+      const candidates = [
+        { id: "a", label: "red" },
+        { id: "b", label },
+      ];
+      const jev: JevPort = vi.fn();
+      const select = vi.fn(async () => ({
+        selectedId: "b",
+        confidence: "high" as const,
+        reasoning: "matching candidate",
+      }));
+
+      const outcome = await runAiSelection(
+        { ...spec, rules },
+        {
+          subject,
+          candidates,
+          usage,
+          jev,
+          ai: { select },
+        },
+      );
+
+      expect(outcome.selected).toEqual(candidates[1]);
+      expect(outcome.probability).toBeNull();
+      expect(jev).not.toHaveBeenCalled();
+      expect(select).toHaveBeenCalledWith({
+        subject,
+        rules,
+        shortlist: candidates
+          .map((candidate) => `${candidate.id}: ${spec.renderLine(candidate)}`)
+          .join("\n"),
+        usage,
+      });
+    },
+  );
 
   it("resolves an invented id to null while keeping the model's reasoning", async () => {
     const outcome = await runAiSelection(bigSpec, {

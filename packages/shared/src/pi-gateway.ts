@@ -4,7 +4,10 @@ import {
   type Model,
   type Provider,
   type ProviderStreams,
+  type AssistantMessage,
+  type AssistantMessageEventStream,
 } from "@earendil-works/pi-ai";
+import { createAssistantMessageEventStream } from "@earendil-works/pi-ai/utils/event-stream";
 import { anthropicMessagesApi } from "@earendil-works/pi-ai/api/anthropic-messages.lazy";
 import { openAIResponsesApi } from "@earendil-works/pi-ai/api/openai-responses.lazy";
 import { anthropicProvider } from "@earendil-works/pi-ai/providers/anthropic";
@@ -23,7 +26,10 @@ import { gatewayBaseURL } from "./ai-gateway-request";
  * are the unroutable placeholders only those shims resolve.
  */
 export type GatewayRoute = "openai" | "anthropic";
-export type GatewayFetchFor = (route: GatewayRoute) => typeof fetch;
+export type GatewayFetchFor = (
+  route: GatewayRoute,
+  onUnbilledResponse?: () => void,
+) => typeof fetch;
 
 export const OPENAI_MODELS = ["gpt-6-sol", "gpt-6-luna"] as const;
 export const ANTHROPIC_MODELS = [
@@ -46,13 +52,54 @@ function gatewayAuth(route: GatewayRoute) {
 
 function throughFetch(
   streams: ProviderStreams,
-  fetchFn: typeof fetch,
+  fetchForCall: (onUnbilledResponse: () => void) => typeof fetch,
 ): ProviderStreams {
+  const run = (
+    start: (fetchFn: typeof fetch) => AssistantMessageEventStream,
+  ) => {
+    let unbilled = false;
+    const source = start(
+      fetchForCall(() => {
+        unbilled = true;
+      }),
+    );
+    const output = createAssistantMessageEventStream();
+    const normalize = (message: AssistantMessage) => {
+      if (unbilled)
+        message.usage.cost = {
+          input: 0,
+          output: 0,
+          cacheRead: 0,
+          cacheWrite: 0,
+          total: 0,
+        };
+    };
+    // pi-ai's event stream resolves generation failures as terminal error
+    // events; its iterator and result promise do not reject.
+    void (async () => {
+      for await (const event of source) {
+        const message =
+          event.type === "done"
+            ? event.message
+            : event.type === "error"
+              ? event.error
+              : event.partial;
+        normalize(message);
+        output.push(event);
+      }
+      const result = await source.result();
+      normalize(result);
+      output.end(result);
+    })();
+    return output;
+  };
   return {
     stream: (model, context, options) =>
-      streams.stream(model, context, { ...options, fetch: fetchFn }),
+      run((fetch) => streams.stream(model, context, { ...options, fetch })),
     streamSimple: (model, context, options) =>
-      streams.streamSimple(model, context, { ...options, fetch: fetchFn }),
+      run((fetch) =>
+        streams.streamSimple(model, context, { ...options, fetch }),
+      ),
   };
 }
 
@@ -130,9 +177,8 @@ export function cubbyPiProviders(fetchFor: GatewayFetchFor): Provider[] {
         OPENAI_MODELS,
         gatewayBaseURL("openai"),
       ),
-      api: throughFetch(
-        openAIResponsesApi(),
-        withPdfInputFiles(fetchFor("openai")),
+      api: throughFetch(openAIResponsesApi(), (onUnbilledResponse) =>
+        withPdfInputFiles(fetchFor("openai", onUnbilledResponse)),
       ),
     }),
     createProvider({
@@ -144,7 +190,9 @@ export function cubbyPiProviders(fetchFor: GatewayFetchFor): Provider[] {
         ANTHROPIC_MODELS,
         gatewayBaseURL("anthropic"),
       ),
-      api: throughFetch(anthropicMessagesApi(), fetchFor("anthropic")),
+      api: throughFetch(anthropicMessagesApi(), (onUnbilledResponse) =>
+        fetchFor("anthropic", onUnbilledResponse),
+      ),
     }),
   ];
 }

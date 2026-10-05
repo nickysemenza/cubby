@@ -24,8 +24,8 @@ const builtInWorkerOptions = new Set([
   "trace",
   "video",
 ]);
-// These select a different Worker harness, so their worker split is real.
-const harnessWorkerOptions = new Set(["gmailJourney", "purchaseAgent"]);
+// This selects a different Worker harness, so its worker split is real.
+const harnessWorkerOptions = new Set(["workerdProfile"]);
 
 describe("E2E worker pool", () => {
   it("lets only harness options split a spec into its own workers", () => {
