@@ -343,7 +343,7 @@ async function recoverPurchaseAudit(
 async function requestAuditRecovery(
   fetchThroughGateway: typeof fetch,
   request: ReturnType<typeof purchaseAuditPrompt>,
-  outputSchema: Omit<ReturnType<typeof z.toJSONSchema>, "$schema">,
+  outputSchema: Omit<z.core.JSONSchema.BaseSchema, "$schema">,
 ) {
   const response = await fetchThroughGateway(
     `${gatewayBaseURL("anthropic")}/v1/messages`,
