@@ -99,8 +99,7 @@ export const AUDIT_RECOVERY_MODEL =
  * is not a {@link SupportedChatModel} and takes no chat adapter.
  */
 export const DECISION_MODEL = "typesafe/jev" satisfies SupportedDecisionModel;
-export const CLEF_MODEL =
-  "@cf/cloudflare/clef" satisfies SupportedDecisionModel;
+const CLEF_MODEL = "@cf/cloudflare/clef" satisfies SupportedDecisionModel;
 /** Set to 0 to return all decisions to Jev, or 1 to send all to Clef. */
 const CLEF_TRAFFIC_SHARE = 0.5;
 
