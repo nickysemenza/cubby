@@ -25,9 +25,11 @@ final class PhotoEntityChooserModel {
     let currentGregorianDay: Date
     private let dateLane: GenericEntityListModel
     private let recentLane: GenericEntityListModel
-    private var isDrainingRecents = false
+    /// The one owner of recent next-page requests; see `drainRecents`.
+    private var drainTask: Task<Void, Never>?
+    private var drainGeneration = 0
     private var recentTarget = 0
-    private var recentDrainRequested = false
+    private var isDrainingRecents: Bool { drainTask != nil }
     /// Bumped by every `setScope`; a continuation from an older scope stops at its next await.
     private var scopeGeneration = 0
 
@@ -91,13 +93,26 @@ final class PhotoEntityChooserModel {
     func loadInitial() async {
         await dateLane.loadInitial()
         await recentLane.loadInitial()
-        await drainRecents(toVisible: 1)
+        await drainRecents(toVisible: 1, .join)
     }
 
+    /// A refresh supersedes the lane's in-flight page, so it also replaces the drain: the old
+    /// owner may still be suspended on that obsolete page and must not hold recents hostage.
     func refresh() async {
+        stopPaging()
         await dateLane.refresh()
         await recentLane.refresh()
-        await drainRecents(toVisible: 1)
+        await drainRecents(toVisible: 1, .restart)
+    }
+
+    /// Stops recent draining (the chooser was dismissed). A page already in flight still
+    /// completes inside the list model, whose request task does not observe this cancellation;
+    /// its rows land in a model nobody is reading, and no further page is requested.
+    func stopPaging() {
+        drainTask?.cancel()
+        drainTask = nil
+        drainGeneration += 1
+        recentTarget = 0
     }
 
     /// Re-scopes to a changed photo selection. The capture date and the date lane's source change
@@ -114,7 +129,7 @@ final class PhotoEntityChooserModel {
                 descriptor: descriptor, key: semanticDateKey, captureDate: newDate,
                 calendar: calendar, loader: loader))
         guard generation == scopeGeneration else { return }
-        await drainRecents(toVisible: 1, resettingTarget: true)
+        await drainRecents(toVisible: 1, .retarget)
     }
 
     func setSearchQuery(_ query: String) {
@@ -127,34 +142,62 @@ final class PhotoEntityChooserModel {
     }
 
     func loadMoreRecents() async {
-        await drainRecents(toVisible: recentRows.count + 1)
+        await drainRecents(toVisible: recentRows.count + 1, .join)
+    }
+
+    private enum DrainStart {
+        /// Raise a running drain's target and wait for it (load more, first load).
+        case join
+        /// Replace a running drain's target and return; its in-flight page is still wanted
+        /// because recents are unscoped (scope change). Starts a drain when none runs.
+        case retarget
+        /// Cancel any running drain and start a new one (refresh).
+        case restart
     }
 
     /// Pages recents until `target` rows are visible, advancing over pages that add nothing
     /// visible (capture-day-only pages); the server's total stays authoritative, so records
-    /// beyond a photo's capture day remain reachable. One drain owns every recent next-page
-    /// request: a caller arriving while it runs only updates the target and flags a re-check,
-    /// which the owner reads after its in-flight page lands. A scope change resets the target to
-    /// the new scope's need (one visible row), so a page fetched under the old scope keeps
-    /// draining under the new one.
-    private func drainRecents(toVisible target: Int, resettingTarget: Bool = false) async {
-        recentTarget = resettingTarget ? target : max(recentTarget, target)
-        recentDrainRequested = true
-        guard !isDrainingRecents else { return }
-        isDrainingRecents = true
-        defer {
-            isDrainingRecents = false
-            recentTarget = 0
-        }
-        while recentDrainRequested {
-            recentDrainRequested = false
-            while recentRows.count < recentTarget, recentLane.hasMore {
-                let page = recentLane.page
-                await recentLane.loadNextPage()
-                // A failed, superseded or blocked page does not advance: stop, never spin. Its
-                // error, or a request that arrived meanwhile, decides whether to go on.
-                guard recentLane.page > page else { break }
+    /// beyond a photo's capture day remain reachable. Exactly one `drainTask` issues recent
+    /// next-page requests. A waiting caller's cancellation (a dismissed view's `.task`) cancels
+    /// the drain.
+    private func drainRecents(toVisible target: Int, _ start: DrainStart) async {
+        if let running = drainTask, start != .restart {
+            recentTarget = start == .retarget ? target : max(recentTarget, target)
+            if start == .retarget { return }
+            await withTaskCancellationHandler {
+                await running.value
+            } onCancel: {
+                running.cancel()
             }
+            return
+        }
+        drainTask?.cancel()
+        drainGeneration += 1
+        let generation = drainGeneration
+        recentTarget = target
+        let task = Task { await self.drain(generation: generation) }
+        drainTask = task
+        await withTaskCancellationHandler {
+            await task.value
+        } onCancel: {
+            task.cancel()
+        }
+    }
+
+    private func drain(generation: Int) async {
+        defer {
+            // A replaced or stopped drain finishing late leaves the current owner's state alone.
+            if generation == drainGeneration {
+                drainTask = nil
+                recentTarget = 0
+            }
+        }
+        while !Task.isCancelled, recentRows.count < recentTarget, recentLane.hasMore {
+            let page = recentLane.page
+            await recentLane.loadNextPage()
+            // Cancelled, replaced, failed or blocked: stop, never spin. A failure's error (with
+            // its retry) or the replacing drain takes over.
+            guard !Task.isCancelled, generation == drainGeneration, recentLane.page > page else { return }
         }
     }
 

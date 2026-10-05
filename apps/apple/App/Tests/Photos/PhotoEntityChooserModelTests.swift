@@ -162,6 +162,83 @@ struct PhotoEntityChooserModelTests {
         #expect(!model.isLoading)
     }
 
+    /// A drain stuck on a recent page whose loader ignores cancellation must not hold a refresh
+    /// hostage: the refresh replaces it, drains past an empty first page, and finishes while
+    /// the obsolete page is still outstanding; that page's late rows never appear.
+    @Test func refreshReplacesADrainStuckOnAnObsoletePage() async throws {
+        let calls = Mutex<[Int]>([])
+        let stuck = Gate()
+        let model = PhotoEntityChooserModel(
+            descriptor: EntityCatalog[.meal], client: try makeClient(),
+            captureDates: [Self.day("2026-09-10")],
+            calendar: Self.utcCalendar,
+            now: Self.day("2026-09-17"),
+            loader: { filters, _, page, _ in
+                if let day = filters["from"]?.strings.first {
+                    return Self.page([Self.row("MEA-\(day)", date: day)], page: page, total: 1)
+                }
+                let call = calls.withLock { calls in
+                    calls.append(page)
+                    return calls.filter { $0 == page }.count
+                }
+                if page == 2, call == 1 { await stuck.wait() }
+                let row: EntityRow =
+                    switch (page, call) {
+                    case (1, 1): Self.row("MEA-recent-first", date: "2026-09-01")
+                    case (1, _): Self.row("MEA-capture-day", date: "2026-09-10")
+                    case (2, 1): Self.row("MEA-obsolete", date: "2026-09-04")
+                    case (2, _): Self.row("MEA-recent-2", date: "2026-09-05")
+                    default: Self.row("MEA-recent-3", date: "2026-09-03")
+                    }
+                return Self.page([row], page: page, total: 3)
+            })
+
+        await model.loadInitial()
+        #expect(model.recentRows.map(\.id) == ["MEA-recent-first"])
+        let loadMore = Task { await model.loadMoreRecents() }
+        #expect(await waitUntil { calls.withLock { $0 } == [1, 2] })
+
+        await model.refresh()
+        #expect(model.recentRows.map(\.id) == ["MEA-recent-2"])
+        #expect(!model.isLoading)
+        #expect(calls.withLock { $0 } == [1, 2, 1, 2])
+
+        stuck.open()
+        await loadMore.value
+        #expect(model.recentRows.map(\.id) == ["MEA-recent-2"])
+        #expect(!model.isLoading)
+    }
+
+    /// Cancelling the task waiting on a drain (a dismissed chooser's `.task`) stops it: the page
+    /// in flight completes, and no later page is requested.
+    @Test func cancellingTheWaitingTaskStopsTheDrain() async throws {
+        let calls = Mutex<[Int]>([])
+        let pageTwo = Gate()
+        let model = PhotoEntityChooserModel(
+            descriptor: EntityCatalog[.meal], client: try makeClient(),
+            captureDates: [Self.day("2026-09-10")],
+            calendar: Self.utcCalendar,
+            now: Self.day("2026-09-17"),
+            loader: { filters, _, page, _ in
+                if filters["from"] != nil { return Self.page([], page: page, total: 0) }
+                calls.withLock { $0.append(page) }
+                if page == 2 { await pageTwo.wait() }
+                // Every recent is on the capture day, so the drain would page to the end.
+                return Self.page([Self.row("MEA-same-\(page)", date: "2026-09-10")], page: page, total: 4)
+            })
+
+        let initial = Task { await model.loadInitial() }
+        #expect(await waitUntil { calls.withLock { $0 } == [1, 2] })
+        initial.cancel()
+        pageTwo.open()
+        await initial.value
+        try await Task.sleep(nanoseconds: 20_000_000)
+
+        #expect(calls.withLock { $0 } == [1, 2])
+        #expect(model.hasMoreRecents)
+        #expect(!model.isLoading)
+    }
+
     @Test func noCaptureDateLoadsOnlyRecentLane() async throws {
         let descriptor = EntityCatalog[.product]
         let model = PhotoEntityChooserModel(

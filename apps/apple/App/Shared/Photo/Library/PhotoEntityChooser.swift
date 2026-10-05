@@ -103,6 +103,9 @@ struct PhotoEntityChooser: View {
             }
             await model?.loadInitial()
         }
+        // A load-more started from a button isn't tied to this view's tasks; stop it on dismissal.
+        // Coming back re-runs the `.task` above, which resumes draining.
+        .onDisappear { model?.stopPaging() }
         // The capture dates are the lanes' scope: a changed selection re-scopes them in place.
         .task(id: captureDates) { await model?.setScope(captureDates: captureDates) }
         .task(id: rankingInputID) {
