@@ -1,5 +1,6 @@
 import { tmpdir } from "node:os";
 import { createTestHarness } from "wrangler";
+import { retryStaleKeepAlive } from "../stale-keep-alive";
 import { devSessionSchema as sessionSchema } from "./state";
 import assert from "node:assert/strict";
 import { spawn, type ChildProcess } from "node:child_process";
@@ -380,6 +381,7 @@ try {
     args: ["--enable-features=CorsNonWildcardRequestHeadersSupport"],
   });
   const context = await browser.newContext({ baseURL: first.profile.origin });
+  retryStaleKeepAlive(context.request);
   tracedContext = context;
   await context.tracing.start({
     screenshots: false,
