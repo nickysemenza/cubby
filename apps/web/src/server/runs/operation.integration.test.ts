@@ -1,6 +1,7 @@
 import {
   commitProductEnrichmentInput,
   commitPurchaseImportInput,
+  validatePurchaseImportInput,
   type BrowserBridgeRequest,
   type BrowserBridgeResult,
 } from "@cubby/schemas/purchase-import";
@@ -15,6 +16,7 @@ import {
   run as runTable,
   runApproval,
   runOperation,
+  runTarget,
 } from "~/server/db/schema";
 import { McpOperationContext } from "~/server/mcp/operation-context";
 import {
@@ -26,6 +28,7 @@ import {
   commitProductEnrichment,
   commitPurchaseImport,
   preparePurchaseImport,
+  validatePurchaseImport,
 } from "~/server/purchase-import/import-orders";
 import {
   controlRun,
@@ -34,6 +37,7 @@ import {
   startOrResumeRun,
   startTargetedRun,
 } from "~/server/purchase-import/run-service";
+import { applyValidationCorrections } from "~/server/purchase-import/validation-corrections";
 import { getDb } from "~/server/repo/database-helpers";
 import {
   createProductFixture,
@@ -706,5 +710,151 @@ describe("RunOperation rows written by earlier code", () => {
       .from(runTable)
       .where(eq(runTable.id, run.id));
     expect(after?.status).toBe("needs_review");
+  });
+
+  it("replays validation and correction rows by their own fingerprints without writing", async () => {
+    const { party } = await startRun();
+    const vendor = await insertWithShortcode(ctx.db, "vendor", {
+      name: `Synthetic validation vendor ${crypto.randomUUID()}`,
+      website: "https://shop.example.test",
+      browserDomains: ["shop.example.test"],
+    });
+    const target = await insertWithShortcode(ctx.db, "purchase", {
+      vendorId: vendor.id,
+      orderId: "ORDER-LEDGER-1",
+      date: "2026-09-20",
+      statedTotal: 10,
+    });
+    const started = await startTargetedRun(ctx.db, {
+      ledgerPartyId: party.id,
+      purpose: "purchase_validation",
+      vendorId: vendor.id,
+      vendorAccountId: null,
+      trigger: "manual",
+      targets: [
+        {
+          kind: "purchase",
+          purchaseId: target.id,
+          sourceKind: "browser_order",
+          sourceExternalKey: "validation:ORDER-LEDGER-1",
+          targetFingerprint: "c".repeat(64),
+          evidenceFingerprint: "a".repeat(64),
+        },
+      ],
+    });
+    if (!started.created) throw new Error("Expected validation admission");
+    const setStatus = (status: "running" | "needs_review") =>
+      getDb(ctx.db)
+        .update(runTable)
+        .set({ status })
+        .where(eq(runTable.id, started.run.id));
+    const targetRow = () =>
+      getDb(ctx.db)
+        .select({
+          state: runTarget.state,
+          outcome: runTarget.outcome,
+          diff: runTarget.diff,
+        })
+        .from(runTarget)
+        .where(eq(runTarget.runId, started.run.id));
+    const targetBefore = await targetRow();
+
+    // Validation fingerprints its whole parsed input, envelope first.
+    await setStatus("running");
+    const validationResult = {
+      runId: started.run.publicId,
+      operationId: "validate:1",
+      status: "completed",
+      targets: [{ stableOrderId: "order-1", outcome: "replayed", diff: null }],
+    };
+    await seed({
+      runId: started.run.id,
+      operationId: "validate:1",
+      kind: "validate_purchase_import",
+      inputFingerprint: await sha256Hex(
+        JSON.stringify({
+          _runExecution: { runId: started.run.id, operationId: "validate:1" },
+          prepareOperationId: "prepare:1",
+          resolutions: [],
+        }),
+      ),
+      state: "completed",
+      result: validationResult,
+      completedAt: new Date(),
+    });
+    const validate = (prepareOperationId: string) =>
+      validatePurchaseImport(
+        ctx.db,
+        validatePurchaseImportInput.parse({
+          _runExecution: { runId: started.run.id, operationId: "validate:1" },
+          prepareOperationId,
+          resolutions: [],
+        }),
+        ctx.actor,
+      );
+    await expect(validate("prepare:1")).resolves.toEqual(validationResult);
+    await expect(validate("prepare:2")).rejects.toThrow(
+      "Operation id was replayed with different input",
+    );
+
+    // Corrections fingerprint the input with its selection deduplicated and
+    // sorted in place, so a reordered selection is the same operation.
+    await setStatus("needs_review");
+    const correctionResult = {
+      status: "applied",
+      runId: started.run.publicId,
+      purchaseId: target.shortcode,
+      operationId: "apply:1",
+      applied: ["expense:add:a", "purchase:statedTotal"],
+      outcome: "replayed",
+      remainingCorrections: 0,
+    };
+    await seed({
+      runId: started.run.id,
+      operationId: "apply:1",
+      kind: "apply_validation_corrections",
+      inputFingerprint: await sha256Hex(
+        JSON.stringify({
+          runId: started.run.publicId,
+          purchaseId: target.shortcode,
+          operationId: "apply:1",
+          correctionIds: ["expense:add:a", "purchase:statedTotal"],
+        }),
+      ),
+      state: "completed",
+      result: correctionResult,
+      completedAt: new Date(),
+    });
+    const apply = (correctionIds: string[]) =>
+      applyValidationCorrections(
+        ctx.db,
+        {
+          runId: started.run.publicId,
+          purchaseId: target.shortcode,
+          operationId: "apply:1",
+          correctionIds,
+        },
+        ctx.actor,
+      );
+    await expect(
+      apply(["purchase:statedTotal", "expense:add:a", "purchase:statedTotal"]),
+    ).resolves.toEqual({
+      result: correctionResult,
+      priceAffectedProductIds: [],
+    });
+    await expect(apply(["purchase:statedTotal"])).rejects.toThrow(
+      "Operation id was replayed with different input",
+    );
+
+    // Neither replay touched the target or added a ledger row.
+    expect(await targetRow()).toEqual(targetBefore);
+    const rows = await getDb(ctx.db)
+      .select({ operationId: runOperation.operationId })
+      .from(runOperation)
+      .where(eq(runOperation.runId, started.run.id));
+    expect(rows.map((row) => row.operationId).sort()).toEqual([
+      "apply:1",
+      "validate:1",
+    ]);
   });
 });
