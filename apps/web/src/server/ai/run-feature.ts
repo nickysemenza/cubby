@@ -80,9 +80,8 @@ export interface AiImagePart {
 }
 /** A document (e.g. a PDF receipt). Resolved the same way as an image — see
  * {@link resolveImageContent} — since pi-ai's `Message` has no document
- * content type; this is the one caller (the vision-batch/Gemini receipt
- * tier) that sends one, and Gemini accepts inline PDF bytes the same way it
- * accepts an inline image. */
+ * content type; the shared OpenAI provider (`@cubby/shared/pi-gateway`)
+ * rewrites the resulting PDF image block into the Responses `input_file`. */
 interface AiDocumentPart {
   type: "document";
   source: { type: "url"; value: string; mimeType: string };

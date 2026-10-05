@@ -10,6 +10,8 @@ import { openAIResponsesApi } from "@earendil-works/pi-ai/api/openai-responses.l
 import { anthropicProvider } from "@earendil-works/pi-ai/providers/anthropic";
 import { openaiProvider } from "@earendil-works/pi-ai/providers/openai";
 
+import { z } from "zod";
+
 import { gatewayBaseURL } from "./ai-gateway-request";
 
 /**
@@ -54,6 +56,57 @@ function throughFetch(
   };
 }
 
+const PDF_DATA_URL = "data:application/pdf;base64,";
+
+const responsesContentPart = z.looseObject({
+  type: z.string(),
+  image_url: z.string().optional(),
+});
+/** The part of a Responses request this rewrite touches; the rest passes through. */
+const responsesRequest = z.looseObject({
+  input: z.array(
+    z.looseObject({
+      content: z.union([z.string(), z.array(responsesContentPart)]).optional(),
+    }),
+  ),
+});
+type ResponsesContentPart = z.infer<typeof responsesContentPart>;
+
+/**
+ * pi-ai's only binary content type is an image, so a PDF (a receipt) leaves
+ * it as an `input_image` carrying a PDF data URL, which the Responses API
+ * rejects. A PDF must be an `input_file`.
+ */
+function pdfAsInputFile(part: ResponsesContentPart) {
+  return part.type === "input_image" && part.image_url?.startsWith(PDF_DATA_URL)
+    ? {
+        type: "input_file",
+        filename: "evidence.pdf",
+        file_data: part.image_url,
+      }
+    : part;
+}
+
+function withPdfInputFiles(fetchFn: typeof fetch): typeof fetch {
+  return (input, init) => {
+    const body = init?.body;
+    if (!body || !String(body).includes(PDF_DATA_URL))
+      return fetchFn(input, init);
+    const request = responsesRequest.parse(JSON.parse(String(body)));
+    return fetchFn(input, {
+      ...init,
+      body: JSON.stringify({
+        ...request,
+        input: request.input.map((item) =>
+          Array.isArray(item.content)
+            ? { ...item, content: item.content.map(pdfAsInputFile) }
+            : item,
+        ),
+      }),
+    });
+  };
+}
+
 function catalogModels<TApi extends Api>(
   provider: Provider<TApi>,
   ids: readonly string[],
@@ -77,7 +130,10 @@ export function cubbyPiProviders(fetchFor: GatewayFetchFor): Provider[] {
         OPENAI_MODELS,
         gatewayBaseURL("openai"),
       ),
-      api: throughFetch(openAIResponsesApi(), fetchFor("openai")),
+      api: throughFetch(
+        openAIResponsesApi(),
+        withPdfInputFiles(fetchFor("openai")),
+      ),
     }),
     createProvider({
       id: "anthropic",
