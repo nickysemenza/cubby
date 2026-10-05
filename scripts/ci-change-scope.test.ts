@@ -89,6 +89,9 @@ test("routes purchase-import surfaces to the import browser lane", () => {
     "apps/web/tooling/purchase-agent-workerd-harness.ts",
     "apps/web/tests/e2e/harness-services/purchase-agent-test-model.ts",
     "apps/web/tests/e2e/purchase-import-run.spec.ts",
+    "apps/web/tests/e2e/e2e-worker-runtime.ts",
+    "apps/web/tests/e2e/fixtures-mail.ts",
+    "apps/web/playwright.config.ts",
   ])
     assert.deepEqual(active([file]), ["validation", "web", "importE2e"], file);
   assert.deepEqual(active(["apps/web/src/app/products/page.tsx"]), [

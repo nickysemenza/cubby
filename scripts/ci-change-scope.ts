@@ -64,6 +64,11 @@ const importE2eInputs = [
   "apps/web/tooling/purchase-agent-",
   "apps/web/tests/e2e/harness-services/purchase-",
   "apps/web/tests/e2e/purchase-import-run.spec.ts",
+  "apps/web/tests/e2e/e2e-test.ts",
+  "apps/web/tests/e2e/e2e-worker-runtime.ts",
+  "apps/web/tests/e2e/fixtures-core.ts",
+  "apps/web/tests/e2e/fixtures-mail.ts",
+  "apps/web/playwright.config.ts",
   ".claude/skills/purchase-import/",
   ".claude/skills/product-enrichment/",
 ];

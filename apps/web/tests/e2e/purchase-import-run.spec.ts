@@ -204,8 +204,16 @@ test("imports saved order mail from the vendor page and follows the live Run to 
   const graph = await vendorPurchases(seed.vendor.id);
   expect(graph.purchases).toMatchObject([{ orderId: "SYN-CONFIRM-1" }]);
   expect(graph.expenses).toMatchObject([{ cost: 5, lineKind: "principal" }]);
-  expect(graph.expenses[0]?.productId).not.toBeNull();
   expect(graph.claims).toHaveLength(1);
+  // Importing a purchase never receives stock.
+  const productId = graph.expenses[0]?.productId;
+  if (!productId) throw new Error("The imported line has no Product");
+  expect(
+    await db
+      .select({ id: schema.inventoryEntry.id })
+      .from(schema.inventoryEntry)
+      .where(eq(schema.inventoryEntry.productId, productId)),
+  ).toEqual([]);
   // The replayed commit is one completed operation, not a second write.
   expect(
     await db
