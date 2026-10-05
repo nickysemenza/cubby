@@ -225,6 +225,138 @@ struct GenericEntityListModelTests {
         #expect(model.hasMore == false)
     }
 
+    /// A filter change while a query's request is in flight replays the query against the new
+    /// scope; the older scope's late response must never become the visible result.
+    @Test func filterChangeWhileQueryIsPendingReplaysItInTheNewScope() async throws {
+        defer { ListStub.handler.withLock { $0 = nil } }
+        let search = try #require(EntityCatalog[.product].primarySearch)
+        let staleStarted = Mutex(false)
+        let base = try productPage(id: "PRD-2345", name: "Base", page: 1, total: 1)
+        let stale = try productPage(id: "PRD-3456", name: "Unscoped", page: 1, total: 1)
+        let scoped = try productPage(id: "PRD-4567", name: "Scoped", page: 1, total: 1)
+        ListStub.handler.withLock { handler in
+            handler = { request in
+                let items =
+                    URLComponents(url: request.url!, resolvingAgainstBaseURL: false)?.queryItems ?? []
+                guard items.contains(where: { $0.name == search.key && $0.value == "sample" }) else {
+                    return (200, base)
+                }
+                if items.contains(where: { $0.name == "upcFilter" }) { return (200, scoped) }
+                staleStarted.withLock { $0 = true }
+                Thread.sleep(forTimeInterval: 0.08)
+                return (200, stale)
+            }
+        }
+        let model = GenericEntityListModel(
+            descriptor: EntityCatalog[.product], client: try makeClient(), progressive: false)
+        await model.loadInitial()
+        let searchModel = try #require(model.searchModel)
+
+        model.setSearchQuery("sample")
+        #expect(await waitUntil { staleStarted.withLock { $0 } })
+        await model.apply(filters: EntityFilterState(["upcFilter": .single("000000000000")]))
+        #expect(await waitUntil { searchModel.phase == .loaded })
+        try await Task.sleep(nanoseconds: 120_000_000)
+
+        #expect(searchModel.query == "sample")
+        #expect(searchModel.rows.map(\.id) == ["PRD-4567"])
+        #expect(model.rows.map(\.id) == ["PRD-2345"])
+    }
+
+    /// The picker/photo-lane shape: a scoped source replaced while its query is in flight. The new
+    /// scope's base page and replayed query win; the old scope's rows never stay visible.
+    @Test func sourceChangeWhileQueryIsPendingReplaysItInTheNewScope() async throws {
+        let oldSearchStarted = Mutex(false)
+        func source(_ scope: String) -> EntityListPageSource {
+            EntityListPageSource(
+                id: scope,
+                loadPage: { page in Self.page([Self.row("\(scope)-base")], page: page, total: 1) },
+                searchPage: { query, page in
+                    if scope == "old" {
+                        oldSearchStarted.withLock { $0 = true }
+                        try? await Task.sleep(nanoseconds: 80_000_000)
+                    }
+                    return Self.page([Self.row("\(scope)-\(query)")], page: page, total: 1)
+                })
+        }
+        let model = GenericEntityListModel(
+            descriptor: EntityCatalog[.product], client: try makeClient(), source: source("old"),
+            searchDebounceNanoseconds: 1)
+        await model.loadInitial()
+        #expect(model.rows.map(\.title) == ["old-base"])
+        let searchModel = try #require(model.searchModel)
+
+        model.setSearchQuery("sample")
+        #expect(await waitUntil { oldSearchStarted.withLock { $0 } })
+        await model.setSource(source("new"))
+        #expect(model.rows.map(\.title) == ["new-base"])
+        #expect(await waitUntil { searchModel.phase == .loaded })
+        try await Task.sleep(nanoseconds: 120_000_000)
+
+        #expect(model.searchModel === searchModel)
+        #expect(searchModel.query == "sample")
+        #expect(searchModel.rows.map(\.title) == ["new-sample"])
+    }
+
+    /// Injected rows are presented as the source built them (no descriptor re-projection), and a
+    /// duplicate-only page still advances paging so the next page stays reachable.
+    @Test func injectedSourcePagesThroughADuplicateOnlyPage() async throws {
+        let calls = Mutex<[Int]>([])
+        let source = EntityListPageSource(id: "shelf") { page in
+            calls.withLock { $0.append(page) }
+            let title = page == 3 ? "third" : "first"
+            let raw: [String: JSONValue] = ["id": .string("PRD-\(title)"), "name": .string("Declared")]
+            return Self.page([Self.row(title, raw: raw)], page: page, total: 3)
+        }
+        let model = GenericEntityListModel(
+            descriptor: EntityCatalog[.product], client: try makeClient(), source: source)
+
+        await model.loadInitial()
+        #expect(model.searchModel == nil)
+        await model.loadNextPage()
+        #expect(model.rows.map(\.title) == ["first"])
+        #expect(model.page == 2)
+        #expect(model.hasMore)
+        await model.loadNextPage()
+
+        #expect(model.rows.map(\.title) == ["first", "third"])
+        #expect(model.rows.map(\.id) == ["PRD-first", "PRD-third"])
+        #expect(model.hasMore == false)
+        #expect(calls.withLock { $0 } == [1, 2, 3])
+    }
+
+    /// Re-setting the same source identity is a no-op (SwiftUI re-runs tasks); a new identity
+    /// supersedes an in-flight next page of the old source.
+    @Test func sourceIdentityGatesReloadsAndSupersedesALateNextPage() async throws {
+        let calls = Mutex<[String]>([])
+        let pageTwoStarted = Mutex(false)
+        func source(_ scope: String) -> EntityListPageSource {
+            EntityListPageSource(id: scope) { page in
+                calls.withLock { $0.append("\(scope):\(page)") }
+                if page == 2 {
+                    pageTwoStarted.withLock { $0 = true }
+                    try? await Task.sleep(nanoseconds: 80_000_000)
+                }
+                return Self.page([Self.row("\(scope)-\(page)")], page: page, total: 2)
+            }
+        }
+        let model = GenericEntityListModel(
+            descriptor: EntityCatalog[.product], client: try makeClient(), source: source("old"))
+        await model.loadInitial()
+        await model.setSource(source("old"))
+        #expect(calls.withLock { $0 } == ["old:1"])
+
+        let loadMore = Task { await model.loadNextPage() }
+        #expect(await waitUntil { pageTwoStarted.withLock { $0 } })
+        await model.setSource(source("new"))
+        await loadMore.value
+
+        #expect(model.rows.map(\.title) == ["new-1"])
+        #expect(model.page == 1)
+        #expect(model.hasMore)
+        #expect(model.activity == .idle)
+    }
+
     @Test func detailRefreshFailureRetainsTheRow() async throws {
         defer { ListStub.handler.withLock { $0 = nil } }
         let calls = Mutex(0)
@@ -249,6 +381,26 @@ struct GenericEntityListModelTests {
         #expect(model.row?.id == "PRD-2345")
         #expect(model.refreshError?.contains("Still offline") == true)
         #expect(calls.withLock { $0 } == 2)
+    }
+
+    private func waitUntil(_ condition: @MainActor () -> Bool) async -> Bool {
+        for _ in 0..<2_000 {
+            if condition() { return true }
+            try? await Task.sleep(nanoseconds: 1_000_000)
+        }
+        return condition()
+    }
+
+    nonisolated private static func row(_ title: String, raw: [String: JSONValue]? = nil) -> EntityRow {
+        EntityRow(
+            id: "PRD-\(title)", title: title, subtitle: nil, imageURL: nil,
+            raw: .object(raw ?? ["id": .string("PRD-\(title)"), "name": .string(title)]))
+    }
+
+    nonisolated private static func page(_ items: [EntityRow], page: Int, total: Int)
+        -> ListPage<EntityRow>
+    {
+        ListPage(items: items, meta: ListPageMeta(pageIndex: page, pageSize: 1, totalCount: total))
     }
 
     nonisolated private static func page(in request: URLRequest) -> Int {

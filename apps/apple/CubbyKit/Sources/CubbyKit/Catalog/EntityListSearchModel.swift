@@ -117,14 +117,16 @@ public final class EntityListSearchModel {
     }
 
     /// Rebinds the request to a changed relationship/date/status scope. The active query is
-    /// replayed against the new scope; an idle search stays idle until the next query.
-    public func setLoader(_ loader: @escaping PageLoader) {
+    /// replayed against the new scope; an idle search stays idle until the next query. A filtered
+    /// Browse list keeps the previous rows visible while replaying; a chooser whose candidate set
+    /// changed passes `discardingRows` so no row from the old scope stays tappable.
+    public func setLoader(_ loader: @escaping PageLoader, discardingRows: Bool = false) {
         self.loader = loader
         meta = nil
         guard !query.isEmpty else { return }
         requestTask?.cancel()
         requestGeneration += 1
-        coreRows = rows
+        coreRows = discardingRows ? [] : rows
         enrichment?.invalidate()
         refreshError = nil
         nextPageError = nil
