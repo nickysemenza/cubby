@@ -37,6 +37,8 @@ contract.
 
 Opus at medium implements whatever the main session delegates, including long
 mechanical bodies; Sonnet and Terra are no longer routine implementation lanes.
+The full-repository audit (`.claude/skills/repo-audit`) is the one exception:
+its workflow declares its own measured audit lanes.
 A Codex main session reaches the Opus lane through T3 `delegate_task`.
 
 Every PR gets one Sol review before merge: a different model family from the
@@ -51,8 +53,8 @@ change (CI, deploy, the Worker topology, the test harness, or auth). Broad
 scope alone does not require Astra.
 
 Fable is a tie-breaker, not a reviewer: use fable / high only when the
-implementation and a review disagree on something material, or when the user
-asks. Give it both positions and the evidence, and follow its ruling.
+implementation and a review disagree on something material. Give it both
+positions and the evidence, and follow its ruling.
 
 Search and extraction lanes run at low effort; diagnosis and review lanes start
 at their table effort. Escalate when evidence conflicts or a diagnosis has a
@@ -73,8 +75,10 @@ effort; do not inherit a model by default. A plan with no subagents says "main
 agent" once. A plan that delegates names each lane's owner, host assignments,
 owned files, dependencies, and validation owner. Lanes use disjoint edits or an
 explicit shared-file handoff. Keep architecture, migrations, final integration,
-and the one root final check with the main agent. A verifier re-reads only what
-the main agent has not already read.
+and the one root final check with the main agent. A verification lane re-reads
+only what the main agent has not already read; an independent reviewer reads
+whatever it needs, but reuses the implementer's validation results instead of
+rerunning them.
 
 ## Compact context
 
