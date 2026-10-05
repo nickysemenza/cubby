@@ -74,7 +74,8 @@ struct EntityTimelineView: View {
 
     /// The day span every lifecycle bar is scaled against: the server's `extent`, else the rows'.
     static func extent(of timeline: EntityTimelineOut) -> ClosedRange<Date> {
-        if let extent = timeline.extent, let from = extent.from.date(), let to = extent.to.date(), from <= to {
+        if let extent = timeline.extent, let from = extent.from.date(), let to = extent.to.date(), from <= to
+        {
             return from...to
         }
         let days = (timeline.rows ?? []).flatMap { row in
