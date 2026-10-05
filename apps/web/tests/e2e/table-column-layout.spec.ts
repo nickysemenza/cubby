@@ -197,6 +197,31 @@ test("column layout changes by pointer and keyboard, keeps locked edges, and res
   );
   await expect.poll(() => headerIds(page)).toEqual(expected);
 
+  // Regression: a downward drag within one zone landed one slot above where
+  // the sortable preview showed it (here: back in its own slot).
+  await pointerDrag(
+    page,
+    dragHandle("Evidence expectation"),
+    row("evidenceExpectation"),
+    row("notes"),
+  );
+  expected = placedAfter(expected, "evidenceExpectation", "notes");
+  await expect.poll(() => headerIds(page)).toEqual(expected);
+
+  // Regression: "Pin to end" appended past the row-actions column.
+  const pinNotesEnd = dialog.getByRole("button", {
+    name: "Pin Notes to end",
+    exact: true,
+  });
+  await pinNotesEnd.focus();
+  await page.keyboard.press("Enter");
+  expected = [
+    ...expected.filter((id) => id !== "notes" && id !== "actions"),
+    "notes",
+    "actions",
+  ];
+  await expect.poll(() => headerIds(page)).toEqual(expected);
+
   const moveEarlier = dialog.getByRole("button", {
     name: "Move Purchase count earlier",
     exact: true,

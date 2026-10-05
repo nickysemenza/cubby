@@ -128,7 +128,9 @@ existing block. Extend the generic path when it almost fits. See
 - Pickers: `EntityPicker` / `EntityReferencePicker`, `referenceEntitySearch`;
   no direct `ui/combobox` use outside picker builders.
 - Tables: `RTable` and the generic relation table; raw `<table>` only for
-  matrices, cross-tabs, and debug views.
+  matrices, cross-tabs, and debug views. Column-layout changes go through
+  `moveColumn` / `applyColumnLayout` (`ui/data-table/column-layout.ts`), never
+  direct `setColumnOrder` / `setColumnPinning` / `column.pin` calls.
 - Formatting: `lib/utils` formatters (`formatCurrency`, `formatCount`,
   `formatPercent`, `roundTo`, compact variants) and the WASM amount formatter.
   Currency, bare numbers, amounts, and the compact nutrition cell are one Rust
