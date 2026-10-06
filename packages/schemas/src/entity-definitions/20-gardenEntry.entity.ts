@@ -456,9 +456,8 @@ export default defineEntity({
   ],
   // `displayName` is a non-null projected title (kind · date · location), so
   // Cmd-K / `/search` can index garden entries like every other named entity.
-  search: { enabled: true },
+  search: "semantic",
   capabilities: {
-    auditable: true,
     timeline: "default",
     images: {
       storage: "gallery",
@@ -483,13 +482,9 @@ export default defineEntity({
         abstention: { minimumScore: 0.72, minimumMargin: 0.12 },
       },
     },
-    countable: true,
-    softDelete: true,
     delete: { mode: "soft", bulk: true },
     bulkUpdate: null,
     merge: false,
-    operationOwners: { delete: "kernel", merge: null },
-    mcp: ["get", "list", "create", "update", "delete"],
     dataQuality: {
       checks: [
         {

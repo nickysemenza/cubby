@@ -92,7 +92,12 @@ const FIELD_ACRONYMS = new Set([
   "USDA",
 ]);
 
+/** A `<field>Presence` filter field reads as "<Field> present". */
+const PRESENCE_SUFFIX = /Presence$/u;
+
 const inferredFieldLabel = (key: string, isReference: boolean): string => {
+  if (PRESENCE_SUFFIX.test(key))
+    return `${inferredFieldLabel(key.replace(PRESENCE_SUFFIX, ""), false)} present`;
   const source = isReference ? key.replace(/Id$/u, "") : key;
   const words = source
     .replace(/([a-z0-9])([A-Z])/gu, "$1 $2")
@@ -486,10 +491,6 @@ const compileFieldModel = (
           `${fieldContext}.control.options must label exactly ${expected.join(", ")}.`,
         );
     }
-    if (field.control !== null && !field.control.section.trim())
-      throw new EntityDeclarationError(
-        `${fieldContext}.control.section must be nonempty.`,
-      );
     if (field.display.columnId !== null && !field.display.columnId.trim())
       throw new EntityDeclarationError(
         `${fieldContext}.display.columnId must not be blank.`,
@@ -551,8 +552,7 @@ const compileFieldModel = (
         format: field.display.format ?? null,
         renderer: field.display.renderer ?? null,
         mobile: field.display.mobile ?? null,
-        detailOrder:
-          field.display.detailOrder ?? (key === titleField ? 0 : index + 1),
+        detailOrder: key === titleField ? 0 : index + 1,
         listOrder:
           field.display.listOrder ?? (key === titleField ? 0 : index + 1),
         list: field.display.list,
@@ -667,8 +667,8 @@ const compileFieldModel = (
       );
     return {
       key,
-      column: field.column ?? key,
-      kind: field.kind ?? declared.kind,
+      column: key,
+      kind: declared.kind,
       nullable: field.nullable ?? declared.nullable,
       default: defaultKind,
       defaultValue,
@@ -1123,23 +1123,73 @@ const validateDeclarationCapabilities = (
       );
     }
   }
-  const mcpActions = capabilities.mcp;
-  const supportedMcpActions = [
-    "get",
-    "list",
-    "search",
-    "create",
-    "update",
-    "delete",
-    "bulkUpdate",
-    "merge",
-  ];
-  for (const [index, name] of mcpActions.entries()) {
-    if (!supportedMcpActions.includes(name))
+  for (const [index, name] of (capabilities.mcp ?? []).entries()) {
+    if (!SUPPORTED_MCP_ACTIONS.has(name))
       throw new EntityDeclarationError(
         `${context}.capabilities.mcp[${index}] is unsupported.`,
       );
   }
+  for (const name of Object.keys(capabilities.mcpExclude)) {
+    if (!SUPPORTED_MCP_ACTIONS.has(name))
+      throw new EntityDeclarationError(
+        `${context}.capabilities.mcpExclude.${name} is not an MCP action.`,
+      );
+  }
+};
+
+const SUPPORTED_MCP_ACTIONS = new Set([
+  "get",
+  "list",
+  "search",
+  "create",
+  "update",
+  "delete",
+  "bulkUpdate",
+  "merge",
+]);
+
+/**
+ * MCP exposes what the kernel serves — the same reads and writes
+ * `kernelActionsFor` binds — less any declared exclusion. Only an entity with
+ * no kernel repository (USDA, served by its own workflow) lists its tools.
+ */
+const compileMcpActions = (
+  declaration: EntityDeclarationMetadata,
+  context: string,
+): readonly string[] => {
+  const capabilities = declaration.capabilities;
+  const kernel =
+    declaration.extensions.ports.repository !== null ||
+    declaration.key === "image";
+  if (!kernel) {
+    if (capabilities.mcp === undefined)
+      throw new EntityDeclarationError(
+        `${context}.capabilities.mcp is required without a kernel repository.`,
+      );
+    return capabilities.mcp;
+  }
+  if (capabilities.mcp !== undefined)
+    throw new EntityDeclarationError(
+      `${context}.capabilities.mcp is derived from the kernel; declare mcpExclude instead.`,
+    );
+  const reads = [
+    "get",
+    "list",
+    ...(declaration.search.enabled ? ["search"] : []),
+  ];
+  const writes =
+    capabilities.lifecycle === "readOnly"
+      ? []
+      : [
+          ...(declaration.fields?.create ? ["create"] : []),
+          ...(declaration.fields?.update ? ["update"] : []),
+          ...(capabilities.bulkUpdate === null ? [] : ["bulkUpdate"]),
+          ...(capabilities.delete === null ? [] : ["delete"]),
+          ...(capabilities.merge ? ["merge"] : []),
+        ];
+  return [...reads, ...writes].filter(
+    (action) => !(action in capabilities.mcpExclude),
+  );
 };
 
 const opaqueRelationProvenance = (
@@ -1286,8 +1336,7 @@ const declarationDescriptor = (
   descriptor.images = declaration.capabilities.images;
   descriptor.displayImages = true;
   descriptor.searchable = declaration.search.enabled;
-  descriptor.embeddable =
-    declaration.search.enabled && (declaration.search.embedding ?? true);
+  descriptor.embeddable = declaration.search.embedding;
   descriptor.countable = declaration.capabilities.countable;
   descriptor.relationships = serializedDeclarationRelations(
     declaration.relations,
@@ -1297,13 +1346,7 @@ const declarationDescriptor = (
     delete: declaration.capabilities.delete,
     merge: declaration.capabilities.merge,
   };
-  descriptor.mcp = declaration.capabilities.mcp;
-  if (extensions.countFilter !== null && extensions.countFilter !== undefined) {
-    descriptor.countFilter = extensions.countFilter;
-  }
-  if (extensions.mcpNames !== null && extensions.mcpNames !== undefined) {
-    descriptor.mcpNames = extensions.mcpNames;
-  }
+  descriptor.mcp = [...compileMcpActions(declaration, context)];
   if (
     extensions.relatednessSignals !== null &&
     extensions.relatednessSignals !== undefined
@@ -1371,7 +1414,7 @@ const validateTitleField = (
 };
 
 /**
- * Entities whose detail route stays hand-written (`route.detailOverride: null`).
+ * Entities whose detail route stays hand-written (`route.detail: null`).
  * Every other entity's page is the generic detail. `recipe` still renders
  * `GenericEntityDetail`; its route is hand-written only for the workflow
  * slot's URL search keys. `usda-food` is the external USDA catalog, keyed by
@@ -1434,7 +1477,7 @@ const validateLifecycleAndResolve = (
  * generic renderers, which read the kernel's list/detail projections: the
  * detail roster is every entity with create and update contracts, the list
  * roster its browser-routed members. An entity outside the detail roster
- * declares `detailOverride: { query }` instead (image); one outside the list roster
+ * declares `detail: { query }` instead (image); one outside the list roster
  * hand-writes its index route.
  */
 const validateRouteRosters = (
@@ -1451,24 +1494,24 @@ const validateRouteRosters = (
   if (route === null) return;
   if (route.detail === null && !HAND_WRITTEN_DETAIL_ROUTES.has(key))
     throw new EntityDeclarationError(
-      `${context}.route.detail is null; every entity gets the generic detail page. Omit detailOverride, or declare detailOverride: { query } outside the kernel detail roster, and put specialized UI in a detail slot.`,
+      `${context}.route.detail is null; every entity gets the generic detail page. Omit route.detail, or declare detail: { query } outside the kernel detail roster, and put specialized UI in a detail slot.`,
     );
   const inDetailRoster =
     contract !== null && contract.create !== null && contract.update !== null;
   if (route.detail === true && !inDetailRoster)
     throw new EntityDeclarationError(
-      `${context}.route.detail is true but the entity has no create+update contract; declare detailOverride: { query } or null.`,
+      `${context}.route.detail is true but the entity has no create+update contract; declare route.detail: { query } or null.`,
     );
   if (route.detail !== null && route.detail !== true && inDetailRoster)
     throw new EntityDeclarationError(
-      `${context}.route.detail.query is for entities outside the kernel detail roster; omit detailOverride.`,
+      `${context}.route.detail.query is for entities outside the kernel detail roster; omit route.detail.`,
     );
   // A generated index route needs rows to list: the kernel list read for a
   // roster entity, or (outside the roster) a client-paged override module in
   // `apps/web/src/entity/list-columns` over the entity's own projection.
   if (route.list === true && contract === null)
     throw new EntityDeclarationError(
-      `${context}.route.list is true but the entity has no contract (nothing to list); declare listOverride: null.`,
+      `${context}.route.list is true but the entity has no contract (nothing to list); declare route.list: null.`,
     );
 };
 
@@ -1921,7 +1964,7 @@ export const compileEntity = (
       readOnly: declaration.capabilities.lifecycle === "readOnly",
     },
     resolve: declaration.capabilities.resolve,
-    mcpActions: declaration.capabilities.mcp,
+    mcpActions: compileMcpActions(declaration, context),
     operationOwners,
     fieldModel,
     table,

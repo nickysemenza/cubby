@@ -156,7 +156,7 @@ describe("data-quality coverage projection", () => {
       {
         action: "update",
         entity: "cookbook",
-        item: { id: "CBK-2ABC", book: "Synthetic book" },
+        item: { id: "CBK-2ABC", name: "Synthetic book" },
       },
     );
 

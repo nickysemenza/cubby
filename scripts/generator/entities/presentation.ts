@@ -1,5 +1,6 @@
 import { listViewId } from "../../../packages/schemas/src/entity-definitions/definition.ts";
 import type {
+  CompiledEditSection,
   EntityDeclarationMetadata,
   EntityPresentation,
 } from "../../../packages/schemas/src/entity-definitions/definition.ts";
@@ -185,6 +186,27 @@ const checkSections = (
   return timelineSection;
 };
 
+/**
+ * The generic list verbs an entity's capabilities imply. Workflow-owned
+ * deletes and merges and read-only kernels get none: their verbs live with the
+ * workflow that owns them.
+ */
+const derivedListActions = (
+  capabilities: EntityDeclarationMetadata["capabilities"],
+): string[] => {
+  if (capabilities.lifecycle === "readOnly") return [];
+  return [
+    ...(capabilities.bulkUpdate !== null ? ["bulkEdit"] : []),
+    ...(capabilities.merge && capabilities.operationOwners.merge === "kernel"
+      ? ["merge"]
+      : []),
+    ...(capabilities.delete !== null &&
+    capabilities.operationOwners.delete === "kernel"
+      ? ["delete"]
+      : []),
+  ];
+};
+
 const checkList = (
   list: EntityPresentation["list"],
   capabilities: EntityDeclarationMetadata["capabilities"],
@@ -269,48 +291,73 @@ const IMAGE_BLOCK_FIELD_KEYS = new Set([
 ]);
 
 /**
- * Declared `edit.sections` are the whole editor: the native editor renders
- * only the fields a declared section lists (`GenericEntityEditModel.sections`
- * filters by them), so a controlled field in any create/update roster that no
- * section names would silently vanish there. Every controlled field of the
- * payload rosters and of every edit intent must be placed exactly once.
+ * The editor's sections, complete: each controlled field of the payload
+ * rosters and edit intents appears exactly once, so the web and native
+ * editors render the same groups without a fallback of their own. Fields no
+ * declared section names form the untitled `main` section, which leads unless
+ * a bare `{ id: "main" }` entry places it.
  */
-const checkEditSectionCoverage = (
-  sections: NonNullable<EntityPresentation["edit"]["sections"]>,
+const compileEditSections = (
+  sections: EntityPresentation["edit"]["sections"],
   fieldModel: EntityFieldModel,
-  context: string,
-) => {
+  lookup: FieldLookup,
+): CompiledEditSection[] => {
+  const ids = sections.map((section) => section.id);
+  const repeated = ids.find((id, index) => ids.indexOf(id) !== index);
+  if (repeated !== undefined)
+    throw new EntityDeclarationError(
+      `${lookup.context}.edit.sections declare ${repeated} twice.`,
+    );
   const placed = new Map<string, string>();
   for (const section of sections) {
+    if (section.fields === null) continue;
     for (const key of section.fields) {
+      lookup.edit(key, `edit.sections[${section.id}]`);
       const previous = placed.get(key);
       if (previous !== undefined)
         throw new EntityDeclarationError(
-          `${context}.edit.sections place ${key} twice (${previous}, ${section.id}).`,
+          `${lookup.context}.edit.sections place ${key} twice (${previous}, ${section.id}).`,
         );
       placed.set(key, section.id);
     }
   }
-  const controlled = new Set(
-    fieldModel.fields
-      .filter((field) => field.control !== null)
-      .map((field) => field.key),
-  );
   const rostered = new Set([
     ...fieldModel.create,
     ...fieldModel.update,
     ...Object.values(fieldModel.intents?.fields ?? {}).flat(),
   ]);
-  const missing = [...rostered].filter(
-    (key) =>
-      controlled.has(key) &&
-      !IMAGE_BLOCK_FIELD_KEYS.has(key) &&
-      !placed.has(key),
-  );
-  if (missing.length > 0)
-    throw new EntityDeclarationError(
-      `${context}.edit.sections leave controlled roster fields unplaced (the native editor drops them): ${missing.join(", ")}.`,
-    );
+  const main: CompiledEditSection = {
+    id: "main",
+    title: null,
+    collapsed: false,
+    fields: fieldModel.fields
+      .filter(
+        (field) =>
+          field.control !== null &&
+          rostered.has(field.key) &&
+          !IMAGE_BLOCK_FIELD_KEYS.has(field.key) &&
+          !placed.has(field.key),
+      )
+      .map((field) => field.key),
+  };
+  const declared = sections.some((section) => section.id === "main")
+    ? sections
+    : [
+        { id: "main", title: null, fields: null, collapsed: false },
+        ...sections,
+      ];
+  return declared
+    .map((section) =>
+      section.fields === null
+        ? main
+        : {
+            id: section.id,
+            title: section.title,
+            fields: section.fields,
+            collapsed: section.collapsed,
+          },
+    )
+    .filter((section) => section.fields.length > 0);
 };
 
 const checkSpans = (
@@ -347,43 +394,7 @@ const checkSpans = (
   }
 };
 
-const checkEdit = (
-  edit: EntityPresentation["edit"],
-  fieldModel: EntityFieldModel,
-  lookup: FieldLookup,
-) => {
-  const { context } = lookup;
-  for (const section of edit.sections ?? []) {
-    for (const key of section.fields)
-      lookup.edit(key, `edit.sections[${section.id}]`);
-  }
-  if (edit.sections !== null && edit.sections !== undefined)
-    checkEditSectionCoverage(edit.sections, fieldModel, context);
-  for (const key of edit.readOnlyOnUpdate)
-    lookup.edit(key, "edit.readOnlyOnUpdate");
-  for (const [index, rule] of edit.readOnlyWhen.entries()) {
-    const where = `edit.readOnlyWhen[${index}]`;
-    const field = lookup.read(rule.field, where);
-    const options = field.control?.options ?? null;
-    if (rule.equals === true || rule.equals === false) {
-      if (field.kind !== "boolean")
-        throw new EntityDeclarationError(
-          `${context}.${where} compares ${rule.field} to a boolean but it is ${field.kind}.`,
-        );
-    } else if (
-      options !== null &&
-      !options.some((option) => option.value === rule.equals)
-    ) {
-      throw new EntityDeclarationError(
-        `${context}.${where} equals ${rule.equals}, which is not one of ${rule.field}'s control options.`,
-      );
-    } else if (options === null && field.kind !== "enum") {
-      throw new EntityDeclarationError(
-        `${context}.${where} compares ${rule.field}, which is neither an enum nor a boolean field.`,
-      );
-    }
-    for (const key of rule.fields) lookup.edit(key, where);
-  }
+const checkEdit = (edit: EntityPresentation["edit"], lookup: FieldLookup) => {
   for (const [index, rule] of edit.hiddenWhen.entries()) {
     const where = `edit.hiddenWhen[${index}]`;
     lookup.read(rule.field, where);
@@ -398,7 +409,7 @@ const checkEdit = (
  * the target) are checked by `validateRelationSections` once every entity is
  * compiled.
  */
-function recordEmojiEdit(
+function checkRecordEmoji(
   presentation: EntityPresentation,
   facts: PresentationFacts,
   context: string,
@@ -418,27 +429,6 @@ function recordEmojiEdit(
       );
     lookup.read(emojiField, "recordEmojiField");
   }
-  const editSections = presentation.edit.sections;
-  return emojiField &&
-    editSections &&
-    editSections.length > 0 &&
-    !editSections.some((section) => section.fields.includes(emojiField))
-    ? {
-        ...presentation.edit,
-        sections: editSections.map((section, index) =>
-          index === 0
-            ? {
-                ...section,
-                fields: [
-                  ...section.fields.slice(0, 1),
-                  emojiField,
-                  ...section.fields.slice(1),
-                ],
-              }
-            : section,
-        ),
-      }
-    : presentation.edit;
 }
 
 export const compilePresentation = (
@@ -450,7 +440,15 @@ export const compilePresentation = (
   const lookup = fieldLookup(fieldModel, context);
   const { detail, list, spans } = presentation;
   const emojiField = presentation.recordEmojiField;
-  const edit = recordEmojiEdit(presentation, facts, context);
+  checkRecordEmoji(presentation, facts, context);
+  const edit = {
+    ...presentation.edit,
+    sections: compileEditSections(
+      presentation.edit.sections,
+      fieldModel,
+      lookup,
+    ),
+  };
   const detailFields = fieldModel.fields
     .filter((field) => field.display.detail)
     .map((field) => field.key);
@@ -520,7 +518,7 @@ export const compilePresentation = (
     throw new EntityDeclarationError(
       `${context}.capabilities.timeline "custom" and extensions.ports.timeline must be declared together.`,
     );
-  checkEdit(edit, fieldModel, lookup);
+  checkEdit(presentation.edit, lookup);
   checkSpans(spans, detailFields, lookup);
   const mobileSubtitle = fieldModel.fields
     .filter(
@@ -541,8 +539,8 @@ export const compilePresentation = (
       variant: detail.variant,
       hero: {
         ...detail.hero,
-        images: detail.hero.images ?? capabilities.images.storage === "gallery",
-        actions: detail.hero.actions ?? (facts.hasUpdate ? ["edit"] : []),
+        images: capabilities.images.storage === "gallery",
+        actions: [...(facts.hasUpdate ? ["edit"] : []), ...detail.hero.actions],
       },
       sections: sections.map((section) => ({
         ...section,
@@ -553,7 +551,6 @@ export const compilePresentation = (
       omitRelations: detail.omitRelations,
       additionalSections: detail.additionalSections,
       relationFilterOverrides: detail.relationFilterOverrides,
-      emptyOverrides: detail.emptyOverrides,
     },
     list: {
       // Cards are a universal alternate renderer. Stored images improve the
@@ -574,7 +571,7 @@ export const compilePresentation = (
       savedViews: list.savedViews,
       primarySearch: list.primarySearch,
       tree: list.tree,
-      actions: list.actions ?? (capabilities.delete !== null ? ["delete"] : []),
+      actions: [...list.actions, ...derivedListActions(capabilities)],
       links: list.links,
       timeline:
         list.timeline === null

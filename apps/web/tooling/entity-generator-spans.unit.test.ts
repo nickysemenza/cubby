@@ -44,7 +44,7 @@ const declarationWithSpans = (
   fields: null,
   filters: { descriptors: [] },
   relations: [],
-  search: { enabled: false },
+  search: false as const,
   capabilities: {
     auditable: false,
     images: { storage: false as const },
@@ -57,9 +57,7 @@ const declarationWithSpans = (
     mcp: [],
   },
   extensions: {
-    countFilter: null,
     relatednessSignals: null,
-    mcpNames: null,
     ports: {
       repository: null,
       references: { label: null, resolver: null },

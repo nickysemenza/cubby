@@ -433,19 +433,15 @@ export default defineEntity({
       },
     },
   ],
-  search: { enabled: false },
+  search: false,
   capabilities: {
-    auditable: true,
     images: {
       storage: false,
     },
     countable: false,
-    softDelete: true,
     delete: { mode: "soft", bulk: true },
     bulkUpdate: null,
     merge: false,
-    operationOwners: { delete: "kernel", merge: null },
-    mcp: ["get", "list", "create", "update", "delete"],
     dataQuality: {
       checks: [
         {

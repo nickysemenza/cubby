@@ -5,13 +5,13 @@ import { filterClientRows } from "./useClientEntityList";
 describe("client list primary search", () => {
   it("filters the complete projection before the caller takes a page", () => {
     const rows = [
-      { id: "CKB-1", book: "Apple Cakes", author: ["A. Baker"] },
-      { id: "CKB-2", book: "Bread Basics", author: ["B. Cook"] },
-      { id: "CKB-3", book: "Garden Preserves", author: ["C. Baker"] },
+      { id: "CKB-1", name: "Apple Cakes", author: ["A. Baker"] },
+      { id: "CKB-2", name: "Bread Basics", author: ["B. Cook"] },
+      { id: "CKB-3", name: "Garden Preserves", author: ["C. Baker"] },
     ];
 
     const filtered = filterClientRows(rows, "BAKER", (row, query) =>
-      [row.book, ...row.author].some((value) =>
+      [row.name, ...row.author].some((value) =>
         value.toLowerCase().includes(query.trim().toLowerCase()),
       ),
     );

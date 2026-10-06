@@ -254,7 +254,6 @@ const projectionItemSchema = z
   .object({
     id: z.string(),
     name: z.string().nullish(),
-    book: z.string().nullish(),
     displayName: z.string().nullish(),
     fromPartyName: z.string().nullish(),
     description: z.string().nullish(),

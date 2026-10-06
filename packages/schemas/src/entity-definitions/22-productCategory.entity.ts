@@ -22,7 +22,7 @@ export default defineEntity({
     recordEmojiField: "emoji",
     titleField: "name",
     detail: {
-      additionalSectionOverrides: [
+      additionalSections: [
         {
           kind: "slot",
           id: "spending-classification",
@@ -67,10 +67,7 @@ export default defineEntity({
         quality: ["dataQuality"],
         dependencies: { derived: ["relations"] },
       },
-      viewOverrides: [
-        "table",
-        { kind: "slot", id: "hierarchy", label: "Hierarchy" },
-      ],
+      views: ["table", { kind: "slot", id: "hierarchy", label: "Hierarchy" }],
       tree: { parentField: "parentId" },
     },
   },
@@ -687,9 +684,8 @@ export default defineEntity({
       },
     },
   ],
-  search: { enabled: false },
+  search: false,
   capabilities: {
-    auditable: true,
     images: {
       storage: false,
       displaySourceOverrides: [
@@ -702,12 +698,9 @@ export default defineEntity({
       ],
     },
     countable: false,
-    softDelete: true,
     delete: { mode: "soft", bulk: true },
     bulkUpdate: null,
     merge: false,
-    operationOwners: { delete: "kernel", merge: null },
-    mcp: ["get", "list", "create", "update", "delete"],
     // A Product's effective feature (`productCategory.effective-feature`)
     // decides which identity fields it may carry. A write whose evidence a
     // feature refuses files the Product under the one feature that admits it;

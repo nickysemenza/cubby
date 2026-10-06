@@ -366,7 +366,7 @@ describe("cookbook repository", () => {
       .where(eq(cookbook.id, legacy.entityId));
     const summaries = await listCookbooks(ctx.db);
     expect(
-      summaries.find((s) => s.book === "Legacy Book")?.needsReextract,
+      summaries.find((s) => s.name === "Legacy Book")?.needsReextract,
     ).toBe(true);
     await expect(
       getCookbookSource(ctx.db, legacy.entityId),

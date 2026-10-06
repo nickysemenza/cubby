@@ -66,11 +66,11 @@ function wrapper({ children }: { children: ReactNode }) {
 
 describe("useListBulkActions", () => {
   it("offers Copy codes on a shortcode entity with no other actions", () => {
-    // `ledgerParty` has a shortcode but declares no entity actions, so it
-    // isolates the generic half. Product is covered below, where the registry
-    // contributes.
+    // `ledgerTransfer` has a shortcode but no bulk-capable actions (no merge
+    // or bulk update), so it isolates the generic half. Product is covered
+    // below, where the registry contributes.
     const { result } = renderHook(
-      () => useListBulkActions<TestRow>({ entity: "ledgerParty" }),
+      () => useListBulkActions<TestRow>({ entity: "ledgerTransfer" }),
       { wrapper },
     );
 

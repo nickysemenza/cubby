@@ -247,6 +247,12 @@ See also the image operational passes at the end of this file.
 
 ## Native app
 
+- 🤔 **Browse Runs natively.** The native app calls nine Run RPCs from
+  specialist flows but has no generic Run list or detail, so a Run linked from
+  a product or import can't be opened on the phone. Give Run the generic
+  native browse path its manifest already describes (read-only kernel, custom
+  detail query). Owner: `apps/apple/App/Shared/Browse`.
+
 - 🤔 **Keep a focused structured-editor input clear of the keyboard.**
   `StructuredValueControl` draws a whole array row (an external ID's source,
   kind, id, URL) inside one Form row, so keyboard avoidance scrolls that tall
@@ -426,6 +432,13 @@ See also the image operational passes at the end of this file.
 ---
 
 ## Entity platform & data model
+
+- 🤔 **Route detail pages by the read contract.** The detail roster is
+  every entity with create and update contracts, so Image and Run declare
+  `route.detail: { query }` over hand-written queries even though the kernel
+  serves their `get`. Widening the roster to "has a read contract" adds kernel
+  GET endpoints to HTTP/OpenAPI/native and retires those query modules; check
+  that each custom query's extra data has a kernel equivalent first.
 
 - 🟢 **Classification-declared field policies: remaining classifications.**
   A classification decides whether a field or link is expected, and whether

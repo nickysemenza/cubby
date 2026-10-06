@@ -70,8 +70,6 @@ struct EntityManifestTests {
         try check(
             ListView.slot(id: "synthetic.view", label: "Shelf", searchKeys: ["query"]),
             #"{"slot":{"id":"synthetic.view","label":"Shelf","searchKeys":["query"]}}"#)
-        try check(ReadOnlyMatch.string("locked"), #"{"string":{"_0":"locked"}}"#)
-        try check(ReadOnlyMatch.bool(false), #"{"bool":{"_0":false}}"#)
         try check(ValueSchema(node: .boolean), #"{"nullable":false,"node":{"boolean":{}}}"#)
         try check(ValueSchema(node: .text(format: nil)), #"{"nullable":false,"node":{"text":{}}}"#)
         try check(

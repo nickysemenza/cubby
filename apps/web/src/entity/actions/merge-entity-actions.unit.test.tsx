@@ -70,7 +70,7 @@ function PurchaseAvailabilityHarness() {
     definition.entities.some((entity) => entity === "purchase"),
   );
   if (!purchaseAction) throw new Error("Purchase merge must be declared.");
-  const availability = purchaseAction.use().availability;
+  const availability = purchaseAction.use("purchase").availability;
   if (!availability)
     throw new Error("Purchase merge must declare availability.");
   const result = availability({

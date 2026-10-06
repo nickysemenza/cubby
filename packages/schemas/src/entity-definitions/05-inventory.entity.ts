@@ -76,7 +76,7 @@ export default defineEntity({
         media: ["displayImages"],
         quality: ["dataQuality"],
       },
-      totalOverrides: [
+      totals: [
         {
           id: "valuation",
           label: "Valuation",
@@ -84,7 +84,7 @@ export default defineEntity({
           format: "currency",
         },
       ],
-      actionOverrides: ["moveTo", "delete"],
+      extraActions: ["moveTo"],
       links: [{ label: "Suggestions", path: "/meals/suggestions" }],
     },
   },
@@ -717,9 +717,8 @@ export default defineEntity({
       },
     },
   ],
-  search: { enabled: true },
+  search: "semantic",
   capabilities: {
-    auditable: true,
     images: {
       storage: false,
       ingress: [
@@ -752,13 +751,9 @@ export default defineEntity({
         abstention: { minimumScore: 0.8, minimumMargin: 0.16 },
       },
     },
-    countable: true,
-    softDelete: true,
     delete: { mode: "soft", bulk: true },
     bulkUpdate: null,
     merge: false,
-    operationOwners: { delete: "kernel", merge: null },
-    mcp: ["get", "list", "search", "create", "update", "delete"],
     dataQuality: {
       checks: [
         {
@@ -783,11 +778,6 @@ export default defineEntity({
     },
   },
   extensions: {
-    mcpNames: {
-      singular: "inventory_entry",
-      plural: "inventory_entries",
-      overrides: { list: "list_inventory" },
-    },
     ports: {
       repository: {
         module: "~/server/repo/inventory/repository",

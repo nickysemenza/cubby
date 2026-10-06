@@ -266,7 +266,7 @@ describe("problems — missing embeddings", () => {
 
   // Expense is searchable (lexical search must still find it) but not
   // embeddable (`entity-manifest.ts` `embeddableEntities` — see
-  // `16-expense.entity.ts` `search: { enabled: true, embedding: false }`),
+  // `16-expense.entity.ts` `search: "lexical"`),
   // so it must never appear here even though it has no `EntityEmbedding` row
   // at all. The other two financial entities (purchase,
   // financialTransaction) share the same declaration shape and the same

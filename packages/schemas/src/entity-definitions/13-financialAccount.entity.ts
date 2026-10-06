@@ -24,6 +24,15 @@ export default defineEntity({
   table: "FinancialAccount",
   identifiers: { brand: "FinancialAccountId", shortcode: "FAC-" },
   presentation: {
+    edit: {
+      sections: [
+        {
+          id: "details",
+          title: "Details",
+          fields: ["provisional", "inventoryOwnerDefaultEnabled"],
+        },
+      ],
+    },
     list: {
       read: {
         relations: [
@@ -113,7 +122,7 @@ export default defineEntity({
       {
         key: "provisional",
         kind: "boolean",
-        control: { kind: "checkbox", sectionOverride: "details" },
+        control: { kind: "checkbox" },
         display: { list: true, detail: true, width: "sm" },
         validation: {
           read: z.boolean(),
@@ -190,7 +199,7 @@ export default defineEntity({
       {
         key: "inventoryOwnerDefaultEnabled",
         kind: "boolean",
-        control: { kind: "checkbox", sectionOverride: "details" },
+        control: { kind: "checkbox" },
         display: { detail: true },
         validation: {
           read: z.boolean(),
@@ -726,19 +735,14 @@ export default defineEntity({
       },
     },
   ],
-  search: { enabled: true },
+  search: "semantic",
   capabilities: {
-    auditable: true,
     images: {
       storage: false,
     },
-    countable: true,
-    softDelete: true,
     delete: { mode: "soft", bulk: true },
     bulkUpdate: null,
     merge: false,
-    operationOwners: { delete: "kernel", merge: null },
-    mcp: ["get", "list", "search", "create", "update", "delete"],
     dataQuality: {
       checks: [
         {

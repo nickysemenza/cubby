@@ -42,13 +42,13 @@ it("catalogs every named declaration override with keyed paths and preserves opt
           { key: "image", display: { listOrderOverride: 0 } },
         ],
       },
-      route: { detailOverride: null },
+      route: { createOverride: null },
       presentation: { detail: { sectionOverrides: [{ id: "facts" }] } },
     }),
   ).toEqual([
     { path: "model.fields[name].labelOverride", value: '"Display name"' },
     { path: "model.fields[image].display.listOrderOverride", value: "0" },
-    { path: "route.detailOverride", value: "null" },
+    { path: "route.createOverride", value: "null" },
     {
       path: "presentation.detail.sectionOverrides",
       value: '[{"id":"facts"}]',
@@ -82,7 +82,7 @@ const base = {
   fields: null,
   filters: { descriptors: [] },
   relations: [],
-  search: { enabled: false },
+  search: false as const,
   capabilities: {
     auditable: false,
     images: { storage: false as const },
@@ -95,9 +95,7 @@ const base = {
     mcp: [],
   },
   extensions: {
-    countFilter: null,
     relatednessSignals: null,
-    mcpNames: null,
     ports: {
       repository: null,
       references: { label: null, resolver: null },
@@ -722,7 +720,6 @@ describe("typed entity compiler", () => {
           storage: [
             {
               key: "name",
-              columnOverride: "title",
               nullableOverride: false,
               defaultOverride: "literal",
               defaultValue: "Example",
@@ -737,7 +734,7 @@ describe("typed entity compiler", () => {
       validation: { read: null, create: null, update: null },
     });
     expect(entity.fieldModel.storage[0]).toMatchObject({
-      column: "title",
+      column: "name",
       nullable: false,
       defaultValue: "Example",
     });
@@ -1446,19 +1443,8 @@ describe("typed entity compiler", () => {
       ],
       [
         "a timeline view without the capability",
-        { list: { viewOverrides: ["table", "timeline"] } },
+        { list: { views: ["table", "timeline"] } },
         "without capabilities.timeline",
-      ],
-      [
-        "a readOnlyWhen value outside the control options",
-        {
-          edit: {
-            readOnlyWhen: [
-              { field: "status", equals: "closed", fields: ["name"] },
-            ],
-          },
-        },
-        "not one of status's control options",
       ],
     ];
     for (const [, presentation, message] of rejected)
@@ -1477,7 +1463,7 @@ describe("typed entity compiler", () => {
   // The native editor renders only the fields a declared `edit.sections`
   // lists, so a controlled roster field left out of every section would
   // silently vanish there — the compiler refuses the declaration instead.
-  it("requires declared edit sections to place every controlled roster field", () => {
+  it("compiles complete edit sections with unplaced fields in an untitled main", () => {
     const sectioned = (fields: readonly string[]) =>
       compileEntityDeclarations([
         {
@@ -1530,17 +1516,19 @@ describe("typed entity compiler", () => {
           presentation: {
             ...base.presentation,
             edit: {
-              sectionOverrides: [
+              sections: [
                 { id: "identity", title: "Identity", fields: [...fields] },
               ],
             },
           },
         },
       ]);
-    expect(() => sectioned(["name"])).toThrow(
-      "edit.sections leave controlled roster fields unplaced (the native editor drops them): notes",
-    );
-    // The image block owns `pendingImageIds`; it never needs a section.
+    // `notes` is unplaced, so it leads in the untitled `main` section; the
+    // image block owns `pendingImageIds`, which never joins a section.
+    expect(sectioned(["name"])[0]?.inspector.edit.sections).toEqual([
+      { id: "main", title: null, fields: ["notes"], collapsed: false },
+      { id: "identity", title: "Identity", fields: ["name"], collapsed: false },
+    ]);
     expect(sectioned(["name", "notes"])[0]?.inspector.edit.sections).toEqual([
       {
         id: "identity",
@@ -1549,6 +1537,24 @@ describe("typed entity compiler", () => {
         collapsed: false,
       },
     ]);
+    expect(() => sectioned(["name", "name"])).toThrow("place name twice");
+  });
+
+  it("reserves main for a bare placement entry and rejects repeated section ids", () => {
+    const withSections = (sections: readonly unknown[]) =>
+      compileEntityDeclarations([
+        {
+          ...base,
+          model,
+          presentation: { ...base.presentation, edit: { sections } },
+        },
+      ]);
+    expect(() =>
+      withSections([{ id: "main", title: "Identity", fields: ["name"] }]),
+    ).toThrow("main is reserved");
+    expect(() => withSections([{ id: "main" }, { id: "main" }])).toThrow(
+      "declare main twice",
+    );
   });
 
   it("compiles a card view for an entity without stored images and preserves captions", () => {
@@ -1563,7 +1569,7 @@ describe("typed entity compiler", () => {
         presentation: {
           ...base.presentation,
           list: {
-            viewOverrides: ["table", "shelf"],
+            views: ["table", "shelf"],
             shelfSubtitleOverride: ["name"],
           },
         },
@@ -1646,8 +1652,8 @@ describe("typed entity compiler", () => {
           basePath: "alphas",
           detailParamOverride: "id",
           createOverride: "page",
-          listOverride: null,
-          detailOverride: {
+          list: null,
+          detail: {
             query: { module: "~/entity/alpha", export: "alphaQuery" },
           },
         },
@@ -1672,8 +1678,8 @@ describe("typed entity compiler", () => {
           ...base,
           route: {
             basePath: "alphas",
-            listOverride: null,
-            detailOverride: true,
+            list: null,
+            detail: true,
           },
         },
       ]),
@@ -1685,7 +1691,7 @@ describe("typed entity compiler", () => {
       compileEntityDeclarations([
         {
           ...base,
-          route: { basePath: "alphas", detailOverride: alphaDetail },
+          route: { basePath: "alphas", detail: alphaDetail },
         },
       ]),
     ).toThrow("has no contract (nothing to list)");
@@ -1697,8 +1703,8 @@ describe("typed entity compiler", () => {
           ...base,
           route: {
             basePath: "alphas",
-            listOverride: null,
-            detailOverride: null,
+            list: null,
+            detail: null,
           },
         },
       ]),
@@ -1711,8 +1717,8 @@ describe("typed entity compiler", () => {
           route: {
             basePath: "alphas",
             createOverride: "dialog",
-            listOverride: null,
-            detailOverride: alphaDetail,
+            list: null,
+            detail: alphaDetail,
           },
         },
       ]),

@@ -26,6 +26,20 @@ export default defineEntity({
   table: "Project",
   identifiers: { brand: "ProjectId", shortcode: "PRJ-" },
   presentation: {
+    edit: {
+      sections: [
+        {
+          id: "schedule",
+          title: "Schedule",
+          fields: ["startDate", "endDate"],
+        },
+        {
+          id: "details",
+          title: "Details",
+          fields: ["notes", "googleDriveFolderUrl", "notionPageUrl"],
+        },
+      ],
+    },
     recordEmojiField: "emoji",
     titleField: "name",
     domain: "house",
@@ -55,9 +69,9 @@ export default defineEntity({
       hero: {
         chip: "status",
         stats: ["costEstimate"],
-        actionOverrides: ["edit", "setStatus"],
+        extraActions: ["setStatus"],
       },
-      additionalSectionOverrides: [
+      additionalSections: [
         { kind: "slot", id: "budget", title: "Budget" },
         { kind: "slot", id: "schedule", title: "Schedule", placement: "full" },
         {
@@ -138,7 +152,7 @@ export default defineEntity({
         media: ["displayImages"],
         quality: ["dataQuality"],
       },
-      totalOverrides: [
+      totals: [
         {
           id: "costEstimate",
           label: "Estimates",
@@ -146,7 +160,7 @@ export default defineEntity({
           format: "currency",
         },
       ],
-      viewOverrides: [
+      views: [
         "table",
         {
           kind: "slot",
@@ -163,7 +177,7 @@ export default defineEntity({
         { kind: "slot", id: "analytics", label: "Analytics" },
       ],
       viewAliases: { gallery: "shelf" },
-      actionOverrides: ["setStatus", "delete"],
+      extraActions: ["setStatus"],
       links: [{ label: "Tools", path: "/tools" }],
     },
   },
@@ -373,7 +387,7 @@ export default defineEntity({
         key: "startDate",
         kind: "date",
         nullable: true,
-        control: { kind: "date", sectionOverride: "schedule" },
+        control: { kind: "date" },
         display: {
           list: true,
           detail: true,
@@ -391,7 +405,7 @@ export default defineEntity({
         key: "endDate",
         kind: "date",
         nullable: true,
-        control: { kind: "date", sectionOverride: "schedule" },
+        control: { kind: "date" },
         display: {
           list: true,
           detail: true,
@@ -410,7 +424,7 @@ export default defineEntity({
         key: "notes",
         kind: "text",
         nullable: true,
-        control: { kind: "textarea", sectionOverride: "details" },
+        control: { kind: "textarea" },
         display: { list: true, detail: true },
         validation: {
           read: z.string().describe("Freeform markdown").nullable(),
@@ -427,7 +441,7 @@ export default defineEntity({
           kind: "relation",
           sources: [{ label: "Google Drive folder identifier" }],
         },
-        control: { kind: "text", renderer: "url", sectionOverride: "details" },
+        control: { kind: "text", renderer: "url" },
         display: {
           list: true,
           detail: true,
@@ -447,7 +461,7 @@ export default defineEntity({
           kind: "relation",
           sources: [{ label: "Notion page identifier" }],
         },
-        control: { kind: "text", renderer: "url", sectionOverride: "details" },
+        control: { kind: "text", renderer: "url" },
         display: {
           list: true,
           detail: true,
@@ -1280,9 +1294,8 @@ export default defineEntity({
       },
     },
   ],
-  search: { enabled: true },
+  search: "semantic",
   capabilities: {
-    auditable: true,
     images: {
       storage: "gallery",
       displaySourceOverrides: [
@@ -1338,13 +1351,9 @@ export default defineEntity({
         abstention: { minimumScore: 0.72, minimumMargin: 0.12 },
       },
     },
-    countable: true,
-    softDelete: true,
     delete: { mode: "soft", bulk: true },
     bulkUpdate: null,
     merge: false,
-    operationOwners: { delete: "kernel", merge: null },
-    mcp: ["get", "list", "search", "create", "update", "delete"],
     dataQuality: {
       checks: [
         {

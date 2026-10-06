@@ -104,10 +104,22 @@ type EntityTimelineLifecycle = NonNullable<EntityListTimeline["lifecycle"]>;
  * declared single key becomes a one-element array — so every consumer reads
  * one shape regardless of how the declaration spelled it.
  */
+/** One compiled editor section; the untitled `main` section has `title: null`. */
+export type CompiledEditSection = {
+  id: string;
+  title: string | null;
+  fields: readonly string[];
+  collapsed: boolean;
+};
+
 export type CompiledEntityPresentation = Omit<
   EntityPresentation,
-  "detail" | "list"
+  "detail" | "list" | "edit"
 > & {
+  edit: Omit<EntityPresentation["edit"], "sections"> & {
+    /** Every controlled roster field, each in exactly one section. */
+    sections: readonly CompiledEditSection[];
+  };
   detail: Omit<EntityPresentation["detail"], "hero" | "sections"> & {
     sections: Array<
       NonNullable<EntityPresentation["detail"]["sections"]>[number] & {
@@ -272,7 +284,6 @@ const buildMetadataSchemas = () => {
         .nullable()
         .optional()
         .default(null),
-      sectionOverride: nonEmptyString().optional().default("main"),
       /** A short field the generic editor pairs with the next consecutive
        * `"half"` field on one row (`SideBySideFields`), instead of the
        * default full-width control. */
@@ -337,7 +348,6 @@ const buildMetadataSchemas = () => {
         kind,
         renderer,
         options,
-        sectionOverride,
         width,
         placeholder,
         initial,
@@ -347,7 +357,6 @@ const buildMetadataSchemas = () => {
         kind,
         renderer,
         options,
-        section: sectionOverride,
         width,
         placeholder,
         initial,
@@ -365,13 +374,6 @@ const buildMetadataSchemas = () => {
         .default(false),
       columnIdOverride: nonEmptyString().nullable().optional().default(null),
       standard: z.enum(["name", "image"]).nullable().optional().default(null),
-      detailOrderOverride: z
-        .number()
-        .int()
-        .nonnegative()
-        .nullable()
-        .optional()
-        .default(null),
       /**
        * Orders generated list columns independently of model order (which
        * also drives form field order, so it cannot be re-sequenced). Ordered
@@ -502,7 +504,6 @@ const buildMetadataSchemas = () => {
         detail,
         columnIdOverride,
         standard,
-        detailOrderOverride,
         listOrderOverride,
         width,
         readPath,
@@ -521,7 +522,6 @@ const buildMetadataSchemas = () => {
         detail,
         columnId: columnIdOverride,
         standard,
-        detailOrder: detailOrderOverride,
         listOrder: listOrderOverride,
         width,
         readPath,
@@ -664,8 +664,6 @@ const buildMetadataSchemas = () => {
   const entityStorageMetadataSchema = z.union([
     nonEmptyString().transform((key) => ({
       key,
-      column: undefined,
-      kind: undefined,
       nullable: undefined,
       default: undefined,
       defaultValue: undefined,
@@ -675,8 +673,6 @@ const buildMetadataSchemas = () => {
     z
       .object({
         key: nonEmptyString(),
-        columnOverride: nonEmptyString().optional(),
-        kindOverride: z.enum(entityFieldKinds).optional(),
         nullableOverride: z.boolean({ error: "must be a boolean" }).optional(),
         defaultOverride: z.enum(entityStorageDefaultKinds).optional(),
         defaultValue: z
@@ -689,8 +685,6 @@ const buildMetadataSchemas = () => {
       .transform(
         ({
           key,
-          columnOverride,
-          kindOverride,
           nullableOverride,
           defaultOverride,
           defaultValue,
@@ -698,8 +692,6 @@ const buildMetadataSchemas = () => {
           specialized,
         }) => ({
           key,
-          column: columnOverride,
-          kind: kindOverride,
           nullable: nullableOverride,
           default: defaultOverride,
           defaultValue,
@@ -808,18 +800,27 @@ const buildMetadataSchemas = () => {
       detailParamOverride: nonEmptyString().optional(),
       /** Replaces the capture-dialog default; null opts out. */
       createOverride: z.enum(["dialog", "page"]).nullable().optional(),
-      /** A routed entity gets the generated list unless explicitly replaced. */
-      listOverride: z.literal(true).nullable().optional(),
+      /**
+       * Which list page renders: `true` the generated one (the default),
+       * `null` a hand-written index route.
+       */
+      list: z.literal(true).nullable().optional().default(true),
       /** Specialist columns are imported only by this route component. */
       listColumns: sourceRefMetadataSchema.optional(),
-      /** A routed entity gets the generated detail unless explicitly replaced. */
-      detailOverride: z
+      /**
+       * Which detail page renders: `true` the generic page over the kernel
+       * detail read (the default inside the create+update roster), `{ query }`
+       * the generic page over the entity's own query (required outside it),
+       * or `null` a hand-written detail route.
+       */
+      detail: z
         .union([
           z.literal(true),
           z.object({ query: sourceRefMetadataSchema }).strict(),
         ])
         .nullable()
-        .optional(),
+        .optional()
+        .default(true),
     })
     .strict()
     .transform(
@@ -827,16 +828,16 @@ const buildMetadataSchemas = () => {
         basePath,
         detailParamOverride,
         createOverride,
-        listOverride,
+        list,
         listColumns,
-        detailOverride,
+        detail,
       }) => ({
         basePath,
         detailParam: detailParamOverride,
         create: createOverride,
-        list: listOverride === undefined ? true : listOverride,
+        list,
         listColumns,
-        detail: detailOverride === undefined ? true : detailOverride,
+        detail,
       }),
     );
 
@@ -1045,30 +1046,17 @@ const buildMetadataSchemas = () => {
               stats: z.array(fieldKey).optional().default([]),
               /** A reference field rendered as the ancestry breadcrumb. */
               breadcrumb: fieldKey.nullable().optional().default(null),
-              /** Defaults to whether the entity stores a gallery. */
-              imagesOverride: z
-                .boolean({ error: "must be a boolean" })
-                .optional(),
-              /** Defaults to `["edit"]` when the entity has an update contract. */
-              actionOverrides: z.array(actionKey).optional(),
+              /** Workflow verbs after the derived `edit` (present with an update contract). */
+              extraActions: z.array(actionKey).optional().default([]),
             })
             .strict()
             .prefault({})
-            .transform(
-              ({
-                chip,
-                stats,
-                breadcrumb,
-                imagesOverride,
-                actionOverrides,
-              }) => ({
-                chip,
-                stats,
-                breadcrumb,
-                images: imagesOverride,
-                actions: actionOverrides,
-              }),
-            ),
+            .transform(({ chip, stats, breadcrumb, extraActions }) => ({
+              chip,
+              stats,
+              breadcrumb,
+              actions: extraActions,
+            })),
           /** Null includes every declared section in Overview. A whitelist keeps
            * supporting detail reachable through its existing section id. */
           overviewSections: z
@@ -1079,7 +1067,7 @@ const buildMetadataSchemas = () => {
           /** Omitted: one Overview section for all detail fields; [] opts out. */
           sectionOverrides: z.array(detailSectionSchema).optional(),
           /** Extra field groups, slots and timelines appended to inferred sections. */
-          additionalSectionOverrides: z
+          additionalSections: z
             .array(detailSectionSchema)
             .optional()
             .default([]),
@@ -1110,17 +1098,6 @@ const buildMetadataSchemas = () => {
             .record(nonEmptyString(), nonEmptyString("must give a reason"))
             .optional()
             .default({}),
-          /**
-           * Section-specific empty-state copy for a *derived* relation
-           * section, keyed by relation name — the narrow way to replace the
-           * generic "No <plural> yet." sentence without hand-declaring the
-           * whole section (filter, columns, sort). A section declared
-           * explicitly in `sectionOverrides` instead sets its own `empty`.
-           */
-          emptyOverrides: z
-            .record(nonEmptyString(), nonEmptyString())
-            .optional()
-            .default({}),
         })
         .strict()
         .prefault({})
@@ -1128,21 +1105,19 @@ const buildMetadataSchemas = () => {
           ({
             sectionOverrides,
             overviewSections,
-            additionalSectionOverrides,
+            additionalSections,
             relationFilterOverrides,
             variantOverride,
             hero,
             omitRelations,
-            emptyOverrides,
           }) => ({
             variant: variantOverride,
             hero,
             sections: sectionOverrides,
             overviewSections,
-            additionalSections: additionalSectionOverrides,
+            additionalSections,
             relationFilterOverrides,
             omitRelations,
-            emptyOverrides,
           }),
         ),
       list: z
@@ -1171,18 +1146,14 @@ const buildMetadataSchemas = () => {
               dependencies: {},
             }),
           /** The first view is the default; `table` when omitted. */
-          viewOverrides: z
-            .array(listViewSchema)
-            .min(1)
-            .optional()
-            .default(["table"]),
+          views: z.array(listViewSchema).min(1).optional().default(["table"]),
           /** URL-compatible aliases for retired view ids, mapped before rendering. */
           viewAliases: z
             .record(nonEmptyString(), nonEmptyString())
             .optional()
             .default({}),
           /** Full-filter server aggregates to present on every list client. */
-          totalOverrides: z
+          totals: z
             .array(
               z
                 .object({
@@ -1322,8 +1293,11 @@ const buildMetadataSchemas = () => {
             .nullable()
             .optional()
             .default(null),
-          /** Bulk/row verbs from `action-verbs.ts`; [] opts out of the default. */
-          actionOverrides: z.array(actionKey).optional(),
+          /**
+           * Workflow verbs from `action-verbs.ts`, ahead of the verbs derived
+           * from capabilities (`bulkEdit`, kernel `merge`, kernel `delete`).
+           */
+          extraActions: z.array(actionKey).optional().default([]),
           links: z
             .array(
               z
@@ -1364,10 +1338,10 @@ const buildMetadataSchemas = () => {
         .prefault({})
         .transform(
           ({
-            actionOverrides,
-            viewOverrides,
+            extraActions,
+            views,
             viewAliases,
-            totalOverrides,
+            totals,
             read,
             shelfSubtitleOverride,
             initialFilter,
@@ -1378,9 +1352,9 @@ const buildMetadataSchemas = () => {
             timeline,
           }) => ({
             savedViews,
-            views: viewOverrides,
+            views,
             viewAliases,
-            totals: totalOverrides,
+            totals,
             read,
             shelf:
               shelfSubtitleOverride === undefined
@@ -1389,50 +1363,61 @@ const buildMetadataSchemas = () => {
             initialFilter,
             primarySearch,
             tree,
-            actions: actionOverrides,
+            actions: extraActions,
             links,
             timeline,
           }),
         ),
       edit: z
         .object({
-          /** Editor sections; derived from `control.section` when omitted. */
-          sectionOverrides: z
+          /**
+           * Titled editor sections, in order. Every controlled field no
+           * section names joins the untitled `main` section, which leads
+           * unless a bare `{ id: "main" }` entry places it.
+           */
+          sections: z
             .array(
               z
                 .object({
                   id: sectionId,
-                  title: nonEmptyString(),
-                  fields: z.array(fieldKey).min(1),
+                  title: nonEmptyString().optional(),
+                  fields: z.array(fieldKey).min(1).optional(),
                   /** Render the section's body behind a disclosure that
                    * starts closed (a rarely-used section, e.g. Nutrition). */
                   collapsed: z.boolean().optional().default(false),
                 })
-                .strict(),
-            )
-            .nullable()
-            .optional()
-            .default(null),
-          /** Fields the update editor shows read-only, unconditionally. */
-          readOnlyOnUpdate: z.array(fieldKey).optional().default([]),
-          /** Fields locked when `field` equals `equals` on the record. */
-          readOnlyWhen: z
-            .array(
-              z
-                .object({
-                  field: fieldKey,
-                  equals: z.union([z.string(), z.boolean()]),
-                  fields: z.array(fieldKey).min(1),
+                .strict()
+                .superRefine((section, context) => {
+                  const named =
+                    section.title !== undefined || section.fields !== undefined;
+                  if (section.id === "main" && named)
+                    context.addIssue({
+                      code: "custom",
+                      message:
+                        'main is reserved for the untitled remainder; place it with a bare { id: "main" }',
+                    });
+                  if (
+                    section.id !== "main" &&
+                    (section.title === undefined ||
+                      section.fields === undefined)
+                  )
+                    context.addIssue({
+                      code: "custom",
+                      message: "needs a title and fields",
+                    });
                 })
-                .strict(),
+                .transform(({ id, title, fields, collapsed }) =>
+                  title === undefined || fields === undefined
+                    ? { id, title: null, fields: null, collapsed }
+                    : { id, title, fields, collapsed },
+                ),
             )
             .optional()
             .default([]),
           /**
            * Fields hidden from the generic editor while `field` is
-           * present/absent in the **live form** (not the record) — unlike
-           * `readOnlyWhen`, which is record-side and update-only, this is
-           * evaluated reactively in create mode too (e.g. hide `lineKind`
+           * present/absent in the **live form** (not the record), evaluated
+           * reactively in create and update mode (e.g. hide `lineKind`
            * once `productId` is picked). "Present" means a non-empty
            * trimmed string / non-null id, mirroring `control.suggest`'s
            * basis-presence rule.
@@ -1452,19 +1437,10 @@ const buildMetadataSchemas = () => {
         })
         .strict()
         .prefault({})
-        .transform(
-          ({
-            sectionOverrides,
-            readOnlyOnUpdate,
-            readOnlyWhen,
-            hiddenWhen,
-          }) => ({
-            sections: sectionOverrides,
-            readOnlyOnUpdate,
-            readOnlyWhen,
-            hiddenWhen,
-          }),
-        ),
+        .transform(({ sections, hiddenWhen }) => ({
+          sections,
+          hiddenWhen,
+        })),
     })
     .strict();
 
@@ -1798,24 +1774,50 @@ const buildMetadataSchemas = () => {
 
   const entityCapabilitiesMetadataSchema = z
     .object({
-      auditable: z.boolean({ error: "must be a boolean" }),
+      /** Writes land in the audit log; opt out with `false`. */
+      auditable: z
+        .boolean({ error: "must be a boolean" })
+        .optional()
+        .default(true),
       /**
        * Direct image storage only. Display imagery is universal and resolved
        * independently from this storage declaration.
        */
       images: imagePolicyMetadataSchema,
-      countable: z.boolean({ error: "must be a boolean" }),
-      softDelete: z.boolean({ error: "must be a boolean" }),
+      /** Contributes a live row count; opt out with `false`. */
+      countable: z
+        .boolean({ error: "must be a boolean" })
+        .optional()
+        .default(true),
+      /** Rows carry `deletedAt`; opt out with `false`. */
+      softDelete: z
+        .boolean({ error: "must be a boolean" })
+        .optional()
+        .default(true),
       delete: entityDeleteMetadataSchema.nullable(),
       bulkUpdate: entityBulkUpdateMetadataSchema.nullable(),
       merge: z.boolean({ error: "must be a boolean" }),
+      /**
+       * Who serves delete and merge. Derived as `kernel` for each declared
+       * capability; declare it only when a workflow owns one (cookbook).
+       */
       operationOwners: z
         .object({
           delete: z.enum(["kernel", "workflow"]).nullable(),
           merge: z.enum(["kernel", "workflow"]).nullable(),
         })
-        .strict(),
-      mcp: z.array(nonEmptyString()),
+        .strict()
+        .optional(),
+      /**
+       * MCP operations, only for an entity without a kernel repository (USDA).
+       * A kernel entity exposes every kernel action except `mcpExclude`.
+       */
+      mcp: z.array(nonEmptyString()).optional(),
+      /** Kernel actions kept off MCP, each with the reason. */
+      mcpExclude: z
+        .record(nonEmptyString(), nonEmptyString("must give a reason"))
+        .optional()
+        .default({}),
       /**
        * `resources.<entity>.timeline`: `default` is the audit log plus the
        * declared date fields; `custom` binds `extensions.ports.timeline`.
@@ -1851,7 +1853,14 @@ const buildMetadataSchemas = () => {
         .optional()
         .default([]),
     })
-    .strict();
+    .strict()
+    .transform(({ operationOwners, ...capabilities }) => ({
+      ...capabilities,
+      operationOwners: operationOwners ?? {
+        delete: capabilities.delete === null ? null : ("kernel" as const),
+        merge: capabilities.merge ? ("kernel" as const) : null,
+      },
+    }));
 
   const entityContractMetadataSchema = z
     .object({
@@ -2002,6 +2011,9 @@ const buildMetadataSchemas = () => {
       /** On a single-FK `one` relation: why its target gets no derived
        * `many` inverse. */
       inverseOmit: nonEmptyString("must give a reason").optional(),
+      /** Empty-state copy for this `many` relation's derived detail table,
+       * replacing the generic "No <plural> yet." sentence. */
+      empty: nonEmptyString().optional(),
       mutation: z
         .object({
           source: nonEmptyString(),
@@ -2151,7 +2163,6 @@ const buildMetadataSchemas = () => {
 
   const entityExtensionsMetadataSchema = z
     .object({
-      countFilter: nonEmptyString().nullable().optional().default(null),
       relatednessSignals: z
         .array(
           z.union([
@@ -2176,16 +2187,6 @@ const buildMetadataSchemas = () => {
               .strict(),
           ]),
         )
-        .nullable()
-        .optional()
-        .default(null),
-      mcpNames: z
-        .object({
-          singular: nonEmptyString().optional(),
-          plural: nonEmptyString().optional(),
-          overrides: z.record(nonEmptyString(), nonEmptyString()).optional(),
-        })
-        .strict()
         .nullable()
         .optional()
         .default(null),
@@ -2265,23 +2266,17 @@ const buildMetadataSchemas = () => {
         })
         .strict(),
       relations: z.array(entityRelationMetadataSchema),
+      /**
+       * `semantic`: lexical search plus an `EntityEmbedding` vector.
+       * `lexical`: search without a vector (the financial entities, whose
+       * money and settlement text carries no useful meaning to embed).
+       * `false`: not searchable.
+       */
       search: z
-        .object({
-          enabled: z.boolean({ error: "must be a boolean" }),
-          /**
-           * Whether this searchable entity also gets an `EntityEmbedding`
-           * vector. Defaults to `true` when `enabled`; the three financial
-           * entities set `false` to stay lexically searchable without a
-           * vector (see `entity-manifest.ts` `embeddableEntities`).
-           */
-          embeddingOverride: z
-            .boolean({ error: "must be a boolean" })
-            .optional(),
-        })
-        .strict()
-        .transform(({ enabled, embeddingOverride }) => ({
-          enabled,
-          embedding: embeddingOverride,
+        .union([z.enum(["semantic", "lexical"]), z.literal(false)])
+        .transform((search) => ({
+          enabled: search !== false,
+          embedding: search === "semantic",
         })),
       capabilities: entityCapabilitiesMetadataSchema,
       extensions: entityExtensionsMetadataSchema,

@@ -32,7 +32,7 @@ export function RecipeCookbookField({
             <option value="">No cookbook</option>
             {cookbooks?.map((book) => (
               <option key={book.id} value={book.id}>
-                {book.book}
+                {book.name}
               </option>
             ))}
           </NativeSelect>

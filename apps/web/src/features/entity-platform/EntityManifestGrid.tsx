@@ -123,7 +123,7 @@ const COLUMN_GROUPS: readonly ColumnGroup[] = [
               {domainWayfinding(row.domain).label}
             </span>
           ) : (
-            dash
+            <span className="text-muted-foreground">Shared</span>
           ),
       },
       {
@@ -233,12 +233,22 @@ const COLUMN_GROUPS: readonly ColumnGroup[] = [
     columns: [
       {
         id: "search",
-        label: "Srch",
-        title: "Lexical + semantic search",
-        mark: true,
-        compare: byNumber((row) => bool(row.searchable)),
-        render: (row) => <Mark value={row.searchable} />,
-        cellTitle: (row) => `search: ${row.searchable ? "yes" : "no"}`,
+        label: "Search",
+        title:
+          "semantic: lexical search plus an embedding; lexical: no embedding",
+        compare: byText((row) => row.search ?? ""),
+        render: (row) =>
+          row.search === null ? (
+            dash
+          ) : (
+            <span
+              className={
+                row.search === "lexical" ? "text-muted-foreground" : undefined
+              }
+            >
+              {row.search}
+            </span>
+          ),
       },
       {
         id: "filters",
@@ -305,7 +315,9 @@ const COLUMN_GROUPS: readonly ColumnGroup[] = [
       },
       {
         id: "native",
-        label: "Native app",
+        label: "Native calls",
+        title:
+          "HTTP actions and RPCs the native app calls — not whether it can browse the entity",
         compare: byText((row) => row.native ?? ""),
         render: (row) => (
           <span className="block max-w-[11rem] truncate text-muted-foreground">
@@ -460,6 +472,14 @@ function SchemaTable({
                     className="size-3.5 shrink-0"
                   />
                   {row.entity}
+                  {row.external && (
+                    <span
+                      title="An external catalog served by its own workflow, with no kernel repository"
+                      className="ml-auto font-sans text-2xs text-muted-foreground"
+                    >
+                      external
+                    </span>
+                  )}
                 </button>
               </TableCell>
               {COLUMNS.map((column) => (

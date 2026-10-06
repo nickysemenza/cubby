@@ -104,7 +104,7 @@ function Facts({ entity, wide }: { entity: Entity; wide?: boolean }) {
     ["Code", row.code ?? dash],
     ["Legacy code", row.legacy ?? dash],
     ["Storage table", row.table ?? dash],
-    ["Domain", row.domain ? domainWayfinding(row.domain).label : "none"],
+    ["Domain", row.domain ? domainWayfinding(row.domain).label : "Shared"],
     ["Routes", route ? `${route.list} · ${route.detail}` : "workflow owned"],
     [
       "Detail",
@@ -115,7 +115,14 @@ function Facts({ entity, wide }: { entity: Entity; wide?: boolean }) {
       `${row.tables.declared} declared · ${row.tables.derived} derived · ${row.tables.omitted} omitted`,
     ],
     ["Filters", `${row.filters} total · ${row.idFilters} ID`],
-    ["Search", row.searchable ? "lexical + semantic" : "no"],
+    [
+      "Search",
+      row.search === "semantic"
+        ? "lexical + semantic"
+        : row.search === "lexical"
+          ? "lexical only"
+          : "not searchable",
+    ],
     [
       "Delete / merge",
       `${row.deleteMode ?? "none"} · ${row.merge ? "merge" : "no merge"}`,
@@ -124,10 +131,12 @@ function Facts({ entity, wide }: { entity: Entity; wide?: boolean }) {
       "MCP",
       `${row.mcpOwner ?? "none"} · ${row.mcpOperations.join(", ") || "no operations"}`,
     ],
-    ["Native app", row.native ?? dash],
+    ["Native calls", row.native ?? dash],
     [
       "Repository port",
-      repository ? `${repository.module}#${repository.export}` : "generic",
+      repository
+        ? `${repository.module}#${repository.export}`
+        : "none (external workflow)",
     ],
     [
       "Printed labels",
@@ -154,25 +163,21 @@ function Facts({ entity, wide }: { entity: Entity; wide?: boolean }) {
   );
 }
 
+/** `invalid`: the manifest does not compile without this input. */
 function OutcomeBadge({ status }: { status: OverrideComparison["status"] }) {
-  if (status === "invalid")
-    return (
-      <Badge variant="destructive" className="text-2xs">
-        invalid default
-      </Badge>
-    );
-  if (status === "changed")
-    return (
-      <Badge variant="outline" className="text-2xs">
-        changed
-      </Badge>
-    );
-  return (
-    <Badge variant="warning" className="text-2xs">
-      unchanged
+  return status === "invalid" ? (
+    <Badge variant="secondary" className="text-2xs" title={REQUIRED_TITLE}>
+      required
+    </Badge>
+  ) : (
+    <Badge variant="outline" className="text-2xs">
+      changes default
     </Badge>
   );
 }
+
+const REQUIRED_TITLE =
+  "Removing this input fails compilation; the compiler has no valid default.";
 
 function Overrides({ entity, full }: { entity: Entity; full?: boolean }) {
   const overrides = overridesFor(entity);

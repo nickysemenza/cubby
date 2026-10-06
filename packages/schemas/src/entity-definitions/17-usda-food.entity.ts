@@ -18,8 +18,8 @@ export default defineEntity({
   route: {
     basePath: "usda",
     detailParamOverride: "id",
-    listOverride: null,
-    detailOverride: null,
+    list: null,
+    detail: null,
   },
   table: null,
   identifiers: { brand: null, shortcode: null },
@@ -328,7 +328,7 @@ export default defineEntity({
     ],
   },
   relations: [],
-  search: { enabled: false },
+  search: false,
   capabilities: {
     auditable: false,
     images: { storage: false },
@@ -337,11 +337,9 @@ export default defineEntity({
     delete: null,
     bulkUpdate: null,
     merge: false,
-    operationOwners: { delete: null, merge: null },
     mcp: ["get", "list"],
   },
   extensions: {
-    mcpNames: { overrides: { list: "search_usda_foods" } },
     ports: {
       repository: null,
       references: {

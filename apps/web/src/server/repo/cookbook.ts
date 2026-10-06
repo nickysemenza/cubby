@@ -298,7 +298,7 @@ const selectCookbookSummaryRows = (db: Database, page: ListPage) =>
     .select({
       id: cookbook.id,
       shortcode: cookbook.shortcode,
-      book: cookbook.name,
+      name: cookbook.name,
       author: cookbook.author,
       subjects: cookbook.subjects,
       recipeCount: recipeCountSql,

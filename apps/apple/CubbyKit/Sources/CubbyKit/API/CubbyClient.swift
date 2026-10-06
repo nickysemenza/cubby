@@ -996,7 +996,7 @@ public actor CubbyClient {
             guard let query = query?.trimmingCharacters(in: .whitespacesAndNewlines), !query.isEmpty else {
                 return true
             }
-            let haystack = [cookbook.id, cookbook.book] + cookbook.author + cookbook.subjects
+            let haystack = [cookbook.id, cookbook.name] + cookbook.author + cookbook.subjects
             return haystack.contains { $0.localizedCaseInsensitiveContains(query) }
         }
         let sorted = try sortedCookbooks(filtered, by: sort)
@@ -1096,7 +1096,7 @@ public actor CubbyClient {
     {
         guard let sort, !sort.isEmpty else { return values }
         let allowed = Set([
-            "id", "shortcode", "book", "name", "author", "subjects", "recipeCount",
+            "id", "shortcode", "name", "author", "subjects", "recipeCount",
             "coverUrl", "sourceRecipeCount", "needsReextract", "product",
         ])
         let terms = try sort.split(separator: ",").map { token -> (field: String, descending: Bool) in
@@ -1126,7 +1126,7 @@ public actor CubbyClient {
     ) -> ComparisonResult {
         switch field {
         case "id", "shortcode": lhs.id.localizedCaseInsensitiveCompare(rhs.id)
-        case "book", "name": lhs.book.localizedCaseInsensitiveCompare(rhs.book)
+        case "name": lhs.name.localizedCaseInsensitiveCompare(rhs.name)
         case "author":
             lhs.author.joined(separator: " ").localizedCaseInsensitiveCompare(
                 rhs.author.joined(separator: " "))
@@ -1165,7 +1165,6 @@ public actor CubbyClient {
 
     private func cookbookJSON(_ cookbook: CookbookSummary) throws -> JSONValue {
         try normalizedJSON(cookbook) { object in
-            object["name"] = .string(cookbook.book)
             object["shortcode"] = .string(cookbook.id)
         }
     }

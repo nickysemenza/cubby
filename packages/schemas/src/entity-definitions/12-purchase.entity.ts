@@ -37,6 +37,25 @@ export default defineEntity({
   children: purchaseChildren,
   identifiers: { brand: "PurchaseId", shortcode: "PUR-" },
   presentation: {
+    edit: {
+      sections: [
+        {
+          id: "details",
+          title: "Details",
+          fields: ["defaultProjectId", "defaultTrade"],
+        },
+        {
+          id: "identity",
+          title: "Identity",
+          fields: ["orderId", "vendorAccountId", "displayLabel"],
+        },
+        {
+          id: "schedule",
+          title: "Schedule",
+          fields: ["date"],
+        },
+      ],
+    },
     titleField: "displayName",
     domain: "finance",
     description: "Orders and their itemized expense lines.",
@@ -55,7 +74,7 @@ export default defineEntity({
           "The financial-settlement slot renders the allocations with their amounts.",
       },
       hero: { stats: ["statedTotal", "expenseTotal"] },
-      additionalSectionOverrides: [
+      additionalSections: [
         {
           kind: "relation",
           id: "expenses",
@@ -154,8 +173,7 @@ export default defineEntity({
         ],
         quality: ["dataQuality"],
       },
-      actionOverrides: ["merge", "delete"],
-      totalOverrides: [
+      totals: [
         {
           id: "expenseTotal",
           label: "Spend",
@@ -434,7 +452,6 @@ export default defineEntity({
         control: {
           kind: "specialized",
           renderer: "entity-select",
-          sectionOverride: "details",
           suggest: { basis: ["displayLabel", "vendorId", "notes"] },
         },
         display: { detail: true },
@@ -451,7 +468,6 @@ export default defineEntity({
         control: {
           kind: "select",
           options: selectControlOptions.trade,
-          sectionOverride: "details",
           // Purchase has no "name" field — `displayLabel` is its closest
           // equivalent (the operator-facing text for the purchase).
           suggest: { basis: ["displayLabel", "vendorId", "notes"] },
@@ -490,7 +506,6 @@ export default defineEntity({
         nullable: true,
         control: {
           kind: "text",
-          sectionOverride: "identity",
           placeholder: "Vendor order / receipt #",
         },
         display: {
@@ -513,7 +528,6 @@ export default defineEntity({
         control: {
           kind: "specialized",
           renderer: "entity-select",
-          sectionOverride: "identity",
         },
         display: { detail: true },
         validation: {
@@ -528,7 +542,6 @@ export default defineEntity({
         nullable: true,
         control: {
           kind: "text",
-          sectionOverride: "identity",
           placeholder: "e.g. pocket hole jig + bits",
         },
         display: {
@@ -548,7 +561,6 @@ export default defineEntity({
         kind: "date",
         control: {
           kind: "date",
-          sectionOverride: "schedule",
           initial: "today",
         },
         display: {
@@ -1636,9 +1648,8 @@ export default defineEntity({
       },
     },
   ],
-  search: { enabled: true, embeddingOverride: false },
+  search: "lexical",
   capabilities: {
-    auditable: true,
     dataQuality: {
       exceptions: true,
       related: ["product"],
@@ -1776,13 +1787,9 @@ export default defineEntity({
         abstention: { minimumScore: 0.76, minimumMargin: 0.14 },
       },
     },
-    countable: true,
-    softDelete: true,
     delete: { mode: "soft", bulk: true },
     bulkUpdate: null,
     merge: true,
-    operationOwners: { delete: "kernel", merge: "kernel" },
-    mcp: ["get", "list", "search", "create", "update", "delete", "merge"],
   },
   extensions: {
     ports: {

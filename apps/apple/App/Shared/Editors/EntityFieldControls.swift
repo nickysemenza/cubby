@@ -1,9 +1,7 @@
 import CubbyKit
 import SwiftUI
 
-/// One editor control for one catalog field, chosen by `controlKind` × `kind`. A locked field
-/// (`readOnlyOnUpdate`/`readOnlyWhen`) renders as a disabled `LabeledContent` and never enters
-/// the patch. Errors from the last save render as the row's footer.
+/// One editor control for one catalog field, chosen by `controlKind` × `kind`. Errors from the last save render as the row's footer.
 struct EntityFieldControl: View {
     let field: FieldDescriptor
     @Bindable var model: GenericEntityEditModel
@@ -21,20 +19,12 @@ struct EntityFieldControl: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: FieldGuideTokens.Space.xs) {
-            if model.readOnly(key) {
-                LabeledContent(field.label) {
-                    Text(lockedDisplay).foregroundStyle(.secondary)
-                }
-                .disabled(true)
-                .accessibilityHint("Read-only")
-            } else {
-                control
-            }
+            control
             if let resolved = model.resolutionForEditor(field) {
                 Text("Effective: \(EntityFieldValue.text(resolved.effectiveValue, field: field) ?? "None")")
                     .font(.caption).foregroundStyle(.secondary)
                 EntityFieldResolutionLabel(resolved: resolved)
-                if resolved.resetPayload(field: field) != nil, !model.readOnly(key) {
+                if resolved.resetPayload(field: field) != nil {
                     Button(resolved.resetLabel) { model.stageResolutionReset(key) }
                         .accessibilityIdentifier("editor.\(model.descriptor.key.rawValue).\(key).reset")
                     Text("Save commits the reset.").font(.caption).foregroundStyle(.secondary)
@@ -45,7 +35,7 @@ struct EntityFieldControl: View {
                 Text("Saved resolution is out of date for this draft. Save to refresh.")
                     .font(.caption).foregroundStyle(.secondary)
             }
-            if field.resolution?.none != nil, !model.readOnly(key) {
+            if field.resolution?.none != nil {
                 Button("Use no value") { model.stageResolutionNone(key) }
                     .accessibilityIdentifier("editor.\(model.descriptor.key.rawValue).\(key).none")
             }
@@ -75,13 +65,6 @@ struct EntityFieldControl: View {
         }
         guard let current = value.stringValue, !current.isEmpty else { return [] }
         return [(current, EntityFieldValue.enumLabel(current, field: field))]
-    }
-
-    private var lockedDisplay: String {
-        if let reference = EntityFieldValue.reference(in: model.original ?? .null, field: field) {
-            return reference.name ?? reference.id
-        }
-        return EntityFieldValue.text(value, field: field) ?? "—"
     }
 
     @ViewBuilder

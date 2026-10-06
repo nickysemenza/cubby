@@ -36,7 +36,7 @@ export default defineEntity({
     basePath: "runs",
     // No create/update contract, so outside the kernel detail roster: the
     // generic page reads the run through its own query.
-    detailOverride: {
+    detail: {
       query: {
         module: "~/entity/run-queries",
         export: "runDetailQuery",
@@ -73,7 +73,7 @@ export default defineEntity({
         stats: [],
         breadcrumb: "vendorAccountId",
       },
-      additionalSectionOverrides: [
+      additionalSections: [
         { kind: "slot", id: "live-progress", title: "Progress" },
         // Import runs (sync, validation, enrichment, file import) declare
         // their workflow as slots that each gate their own visibility. A live
@@ -157,7 +157,7 @@ export default defineEntity({
         },
         { id: "routine", value: "false" },
       ],
-      viewOverrides: [
+      views: [
         {
           kind: "slot",
           id: "history",
@@ -870,21 +870,18 @@ export default defineEntity({
       },
     },
   ],
-  search: { enabled: false },
+  search: false,
   capabilities: {
     auditable: false,
     images: {
       storage: false,
     },
-    countable: true,
     softDelete: false,
     delete: null,
     bulkUpdate: null,
     merge: false,
-    operationOwners: { delete: null, merge: null },
     // The run service and import writers own every write.
     lifecycle: "readOnly",
-    mcp: ["get", "list"],
   },
   extensions: {
     ports: {

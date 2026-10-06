@@ -27,7 +27,7 @@ const matchesCookbookSearch = (
 ): boolean => {
   const normalized = query.trim();
   if (!normalized) return true;
-  return [row.id, row.book, ...row.author, ...row.subjects].some((value) =>
+  return [row.id, row.name, ...row.author, ...row.subjects].some((value) =>
     value.toLocaleLowerCase().includes(normalized.toLocaleLowerCase()),
   );
 };

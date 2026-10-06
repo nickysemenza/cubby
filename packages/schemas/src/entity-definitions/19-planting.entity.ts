@@ -100,7 +100,7 @@ export default defineEntity({
         media: ["displayImages"],
         quality: ["dataQuality"],
       },
-      viewOverrides: [
+      views: [
         "table",
         {
           kind: "slot",
@@ -712,9 +712,8 @@ export default defineEntity({
   ],
   // `displayName` is a non-null projected title (the plant's), so
   // Cmd-K / `/search` can index plantings like every other named entity.
-  search: { enabled: true },
+  search: "semantic",
   capabilities: {
-    auditable: true,
     timeline: "custom",
     images: {
       storage: false,
@@ -782,13 +781,9 @@ export default defineEntity({
         abstention: { minimumScore: 0.76, minimumMargin: 0.14 },
       },
     },
-    countable: true,
-    softDelete: true,
     delete: { mode: "soft", bulk: true },
     bulkUpdate: { fields: ["status", "outcome", "finishedOn", "locationId"] },
     merge: false,
-    operationOwners: { delete: "kernel", merge: null },
-    mcp: ["get", "list", "create", "update", "delete", "bulkUpdate"],
     dataQuality: {
       checks: [
         {

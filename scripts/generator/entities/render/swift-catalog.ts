@@ -273,7 +273,6 @@ const referenceJSON = (
 const fieldControlJSON = (control: Field["control"]) => ({
   controlKind: control?.kind ?? null,
   controlRenderer: control?.renderer ?? null,
-  controlSection: control?.section ?? null,
   controlWidth: control?.width ?? null,
   controlOptions: options(control?.options ?? null),
 });
@@ -461,15 +460,12 @@ const presentationJSON = (
             milestones: [...list.timeline.lifecycle.milestones],
             end: list.timeline.lifecycle.end ?? null,
           },
-    editSections:
-      edit.sections === null
-        ? null
-        : edit.sections.map((section) => ({
-            id: section.id,
-            title: section.title,
-            fields: [...section.fields],
-            collapsed: section.collapsed,
-          })),
+    editSections: edit.sections.map((section) => ({
+      id: section.id,
+      title: section.title,
+      fields: [...section.fields],
+      collapsed: section.collapsed,
+    })),
     editDateRanges: presentation.spans.map(({ start, end }) => ({
       start,
       end,
@@ -492,15 +488,6 @@ const presentationJSON = (
           : { kind: view.flow.kind, label: view.flow.label },
       columnVisibility: { ...view.layout?.columnVisibility },
       problemKey: view.problem?.key ?? null,
-    })),
-    readOnlyOnUpdate: [...edit.readOnlyOnUpdate],
-    readOnlyWhen: edit.readOnlyWhen.map((rule) => ({
-      field: rule.field,
-      equals:
-        rule.equals === true || rule.equals === false
-          ? { bool: { _0: rule.equals } }
-          : { string: { _0: rule.equals } },
-      fields: [...rule.fields],
     })),
   };
 };

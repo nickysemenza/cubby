@@ -146,18 +146,10 @@ export const entityDescriptor = z.object({
   /** Whether this searchable entity also gets an `EntityEmbedding` vector. */
   embeddable: z.boolean(),
   countable: z.boolean(),
-  countFilter: z.enum(["recipeIdNull"]).optional(),
   relationships: z.array(entityRelationshipSchema).readonly(),
   relatednessSignals: z.array(relatednessSignalSchema).readonly().optional(),
   lifecycle: entityLifecycleSchema,
   mcp: z.array(mcpOp).readonly(),
-  mcpNames: z
-    .object({
-      singular: z.string().optional(),
-      plural: z.string().optional(),
-      overrides: z.partialRecord(mcpOp, z.string()).optional(),
-    })
-    .optional(),
 });
 export type EntityDescriptor = z.infer<typeof entityDescriptor>;
 
@@ -170,31 +162,6 @@ const parsedEntityManifest = z
   .parse(entityManifest);
 const descriptorFor = (entity: Entity): EntityDescriptor =>
   parsedEntityManifest[entity];
-
-const snakeCase = (entity: string) =>
-  entity
-    .replace(/-/g, "_")
-    .replace(/([a-z])([A-Z])/g, "$1_$2")
-    .toLowerCase();
-
-export const mcpEntityPlural = (entity: Entity): string => {
-  const names = descriptorFor(entity).mcpNames;
-  return names?.plural ?? `${names?.singular ?? snakeCase(entity)}s`;
-};
-
-export const mcpEntitySingular = (entity: Entity): string =>
-  descriptorFor(entity).mcpNames?.singular ?? snakeCase(entity);
-
-export const mcpToolName = (
-  entity: Entity,
-  operation: z.infer<typeof mcpOp>,
-): string => {
-  const names = descriptorFor(entity).mcpNames;
-  return (
-    names?.overrides?.[operation] ??
-    `${operation}_${operation === "get" ? mcpEntitySingular(entity) : mcpEntityPlural(entity)}`
-  );
-};
 
 export type LocalPathRelationship = EntityRelationship & {
   provenance: { kind: "local-path"; steps: readonly RelationshipPathStep[] };

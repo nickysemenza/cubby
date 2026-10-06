@@ -64,7 +64,7 @@ struct NativeListAdaptersTests {
 
         let model = GenericEntityListModel(
             descriptor: EntityCatalog[.cookbook], client: try makeClient(), pageSize: 1,
-            sort: "-book")
+            sort: "-name")
         await model.loadInitial()
         #expect(model.rows.map(\.id) == ["CKB-2"])
 
@@ -250,11 +250,11 @@ struct NativeListAdaptersTests {
 
     nonisolated private static let cookbooks = [
         CookbookSummary(
-            id: "CKB-1", book: "Alpha Cookbook", author: ["Author A"], subjects: ["Soup"],
+            id: "CKB-1", name: "Alpha Cookbook", author: ["Author A"], subjects: ["Soup"],
             recipeCount: 1, sourceRecipeCount: 1, needsReextract: false,
             dataQuality: completeDataQuality, displayImages: []),
         CookbookSummary(
-            id: "CKB-2", book: "Beta Cookbook", author: ["Author B"], subjects: ["Bread"],
+            id: "CKB-2", name: "Beta Cookbook", author: ["Author B"], subjects: ["Bread"],
             recipeCount: 2, sourceRecipeCount: 2, needsReextract: false,
             dataQuality: completeDataQuality, displayImages: []),
     ]

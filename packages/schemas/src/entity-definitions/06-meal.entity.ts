@@ -54,7 +54,7 @@ export default defineEntity({
           "The composition slot renders served recipes with their portions.",
       },
       hero: {},
-      additionalSectionOverrides: [
+      additionalSections: [
         {
           kind: "slot",
           id: "composition",
@@ -94,7 +94,7 @@ export default defineEntity({
         quality: ["dataQuality"],
         dependencies: { derived: ["relations"] },
       },
-      viewOverrides: [
+      views: [
         {
           kind: "slot",
           id: "calendar",
@@ -338,7 +338,6 @@ export default defineEntity({
       // estimate shows what is known, anything else reads as absent.
       {
         key: "cost",
-        labelOverride: "Cost",
         kind: "number",
         nullable: true,
         display: { preview: true, format: "currency" },
@@ -354,7 +353,6 @@ export default defineEntity({
       },
       {
         key: "calories",
-        labelOverride: "Calories",
         kind: "number",
         nullable: true,
         display: { preview: true },
@@ -862,9 +860,8 @@ export default defineEntity({
       },
     },
   ],
-  search: { enabled: true },
+  search: "semantic",
   capabilities: {
-    auditable: true,
     images: {
       storage: "gallery",
       displaySourceOverrides: [
@@ -893,13 +890,9 @@ export default defineEntity({
         abstention: { minimumScore: 0.74, minimumMargin: 0.14 },
       },
     },
-    countable: true,
-    softDelete: true,
     delete: { mode: "soft", bulk: true },
     bulkUpdate: null,
     merge: false,
-    operationOwners: { delete: "kernel", merge: null },
-    mcp: ["get", "list", "search", "create", "update", "delete"],
     dataQuality: {
       checks: [
         {

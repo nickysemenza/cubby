@@ -1,11 +1,13 @@
 import type { Entity } from "@cubby/schemas/entity";
-import type { CompiledEntityPresentation } from "@cubby/schemas/entity-definitions/definition";
+import type {
+  CompiledEditSection,
+  CompiledEntityPresentation,
+} from "@cubby/schemas/entity-definitions/definition";
 import { generatedEntityEditIntents } from "@cubby/schemas/entity-edit-intents";
 import { entityFieldModels } from "@cubby/schemas/entity-fields";
 import type { ControlRendererId } from "@cubby/schemas/entity-manifest";
 import { entitySummary } from "@cubby/schemas/entity-summary";
 import { resolveExpenseLineKind } from "@cubby/schemas/expense-line-kind";
-import { capitalize } from "@cubby/shared";
 import {
   type ComponentType,
   type ReactNode,
@@ -489,11 +491,19 @@ export function EntityPrimitiveFields({
   const model = entityFieldModels[entity];
   const editable: readonly string[] =
     mode === "create" ? model.create : model.update;
+  const sectionFields =
+    section === undefined
+      ? undefined
+      : new Set<string>(
+          entitySummary[entity].edit.sections.find(
+            (candidate) => candidate.id === section,
+          )?.fields,
+        );
   const eligible = model.fields.filter(
     (field) =>
       editable.includes(field.key) &&
       !exclude.includes(field.key) &&
-      (section === undefined || field.control?.section === section),
+      (section === undefined || sectionFields?.has(field.key) === true),
   );
   const fields = include
     ? include.map((key) => {
@@ -910,14 +920,10 @@ export function renderIntentField({
   );
 }
 
-export type DeclaredEditSection = NonNullable<
-  CompiledEntityPresentation["edit"]["sections"]
->[number];
+export type DeclaredEditSection = CompiledEditSection;
 
 /** One rendered bucket of `EntityIntentFields`' fields. `title: null` is the
- * flat `main` bucket — rendered with no `FormSection` wrapper so an entity
- * that declares neither `edit.sections` nor any non-`main` `control.section`
- * keeps today's output exactly (a bare list of field nodes). */
+ * untitled `main` section, rendered with no `FormSection` wrapper. */
 export type FieldGroup = Readonly<{
   id: string;
   title: string | null;
@@ -925,73 +931,41 @@ export type FieldGroup = Readonly<{
   fields: readonly PrimitiveFieldModel[];
 }>;
 
-/** `"order-confirmation"` → `"Order confirmation"`: the fallback title for a
- * `control.section` id no declared `edit.sections` entry names (DESIGN.md:
- * sentence case, not title case — the label roster stays lowercase after the
- * leading word). */
-function humanizeSectionId(id: string): string {
-  const words = id.split(/[-_]+/).filter(Boolean);
-  if (words.length === 0) return id;
-  return capitalize(words.join(" ").toLowerCase());
-}
-
 /**
- * Buckets one intent's field roster (already in model order) into the
- * section grammar: a field named by a declared `edit.sections` entry joins
- * that section, rendered in the manifest's declared order; an undeclared
- * field with a non-`main` `control.section` falls back to a humanized group,
- * keyed by that section id's first appearance among the leftover fields;
- * every other field joins one flat `main` bucket with no title. Same
- * precedence as `GenericEntityEditModel.sections`
- * (`apps/apple/CubbyKit/Sources/CubbyKit/Catalog/GenericEntityEditModel.swift:99-118`),
- * except `main` never gets its own titled wrapper here — an entity that
- * declares neither renders exactly as it did before this grammar existed.
+ * Buckets one intent's field roster into the compiled editor sections, in
+ * each section's declared order — the same order
+ * `GenericEntityEditModel.sections` renders on native. A field no section
+ * names (an intent-only roster the compiler did not see) joins `main`.
  */
 export function buildFieldGroups(
-  declaredSections: readonly DeclaredEditSection[] | null,
+  sections: readonly CompiledEditSection[],
   fields: readonly PrimitiveFieldModel[],
 ): FieldGroup[] {
-  const groups: FieldGroup[] = [];
-  const declaredIndexByFieldKey = new Map<string, number>();
-  for (const section of declaredSections ?? []) {
-    const index =
-      groups.push({
-        id: section.id,
-        title: section.title,
-        collapsed: section.collapsed,
-        fields: [],
-      }) - 1;
-    for (const key of section.fields) declaredIndexByFieldKey.set(key, index);
-  }
-  const bucketIndexByGroupKey = new Map<string, number>();
-  for (const field of fields) {
-    const declaredIndex = declaredIndexByFieldKey.get(field.key);
-    if (declaredIndex !== undefined) {
-      groups[declaredIndex] = {
-        ...groups[declaredIndex]!,
-        fields: [...groups[declaredIndex]!.fields, field],
-      };
-      continue;
-    }
-    const section = field.control?.section;
-    const groupKey = section && section !== "main" ? section : "main";
-    let index = bucketIndexByGroupKey.get(groupKey);
-    if (index === undefined) {
-      index =
-        groups.push({
-          id: groupKey,
-          title: groupKey === "main" ? null : humanizeSectionId(groupKey),
-          collapsed: false,
-          fields: [],
-        }) - 1;
-      bucketIndexByGroupKey.set(groupKey, index);
-    }
-    groups[index] = {
-      ...groups[index]!,
-      fields: [...groups[index]!.fields, field],
-    };
-  }
-  return groups.filter((group) => group.fields.length > 0);
+  const byKey = new Map<string, PrimitiveFieldModel>(
+    fields.map((field) => [field.key, field]),
+  );
+  const placed = new Set<string>(sections.flatMap((section) => section.fields));
+  const unplaced = fields.filter((field) => !placed.has(field.key));
+  const ordered: readonly CompiledEditSection[] = sections.some(
+    (section) => section.id === "main",
+  )
+    ? sections
+    : [{ id: "main", title: null, collapsed: false, fields: [] }, ...sections];
+  return ordered
+    .map((section) => ({
+      id: section.id,
+      title: section.title,
+      collapsed: section.collapsed,
+      // Declared order, as the native editor renders it.
+      fields: [
+        ...section.fields.flatMap((key) => {
+          const field = byKey.get(key);
+          return field === undefined ? [] : [field];
+        }),
+        ...(section.id === "main" ? unplaced : []),
+      ],
+    }))
+    .filter((group) => group.fields.length > 0);
 }
 
 /**
@@ -1080,10 +1054,9 @@ export function EntityIntentFields({
   )[entity];
   const intentFieldKeys: readonly string[] =
     declaredIntents?.fields[intent] ?? [];
-  // SAFETY: indexed by the broad `Entity` union, every entity's literal
-  // `hiddenWhen` narrows to the same rule shape only when read through the
-  // schema-level type — see `declaredAccess` in `definitions.ts` for the
-  // identical `readOnlyWhen` narrowing trap.
+  // `entitySummary` is compiled `as const`; indexed by the broad `Entity`
+  // union, each entity's literal `hiddenWhen` narrows only through the
+  // schema-level type, so read it through that annotation.
   const hiddenWhen: CompiledEntityPresentation["edit"]["hiddenWhen"] =
     entitySummary[entity].edit.hiddenWhen;
   const hiddenWhenFields = useMemo(
@@ -1149,8 +1122,7 @@ export function EntityIntentFields({
       ),
     [scopedFieldKeys, scopedValues],
   );
-  // SAFETY: same broad-`Entity` narrowing as `hiddenWhen` above.
-  const declaredSections: readonly DeclaredEditSection[] | null =
+  const declaredSections: readonly CompiledEditSection[] =
     entitySummary[entity].edit.sections;
   // `fields` already reflects this render's `hiddenWhen`/`projectIsAllocated`
   // state, so the grouping has to be recomputed with it every render — no

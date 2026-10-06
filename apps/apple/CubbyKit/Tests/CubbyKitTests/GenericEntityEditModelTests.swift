@@ -317,62 +317,6 @@ struct GenericEntityEditModelTests {
         #expect(model.savedID == nil)
     }
 
-    /// No entity declares `readOnlyOnUpdate` today; exercise the generic locking engine against
-    /// a synthetic descriptor so the rule doesn't silently rot: a draft value for a locked key is
-    /// dropped from the patch, and an update that changes only a locked key has nothing to send.
-    @Test func lockedKeysNeverEnterTheBody() throws {
-        let descriptor = Self.syntheticDescriptor(readOnlyOnUpdate: ["status"])
-        let original: JSONValue = ["id": "X-1", "status": "growing", "note": "x"]
-        let model = GenericEntityEditModel(
-            descriptor: descriptor, mode: .update(id: "X-1"), client: try makeClient(), original: original)
-        #expect(model.readOnly("status"))
-        #expect(!model.readOnly("note"))
-        model.draft["status"] = "finished"
-        #expect(try model.patch().isEmpty)
-        model.draft["note"] = "y"
-        #expect(try model.patch().values == ["note": "y"])
-    }
-
-    /// No entity declares `readOnlyWhen` today; exercise the generic engine against a
-    /// synthetic descriptor so the rule doesn't silently rot.
-    @Test func readOnlyWhenLocksOnTheOriginalValue() throws {
-        let rule = ReadOnlyRule(field: "kind", equals: .string("locked"), fields: ["note"])
-        let descriptor = Self.syntheticDescriptor(readOnlyWhen: [rule])
-        let client = try makeClient()
-        let locked = GenericEntityEditModel(
-            descriptor: descriptor, mode: .update(id: "X-1"), client: client,
-            original: ["id": "X-1", "kind": "locked", "note": "x"])
-        #expect(locked.readOnly("note"))
-        let unlocked = GenericEntityEditModel(
-            descriptor: descriptor, mode: .update(id: "X-2"), client: client,
-            original: ["id": "X-2", "kind": "open", "note": "x"])
-        #expect(!unlocked.readOnly("note"))
-        let free = GenericEntityEditModel(
-            descriptor: descriptor, mode: .create(prefill: [:]), client: client)
-        #expect(!free.readOnly("note"))
-    }
-
-    /// A minimal `EntityDescriptor` for exercising `GenericEntityEditModel`'s field-independent
-    /// engine (locking, patch diffing) without depending on any real catalog entity's shape.
-    private static func syntheticDescriptor(
-        readOnlyOnUpdate: [String] = [], readOnlyWhen: [ReadOnlyRule] = []
-    ) -> EntityDescriptor {
-        EntityDescriptor(
-            key: .gardenEntry, singular: "record", plural: "records", basePath: "records",
-            shortcodePrefix: nil, titleField: "id", domain: nil, sfSymbol: "circle", emoji: "📓",
-            recordEmojiField: nil,
-            searchable: false,
-            primarySearch: nil,
-            timeline: nil, fields: [], filters: [], relations: [],
-            presentation: EntityPresentation(
-                detailVariant: .standard, heroChip: nil, heroStats: [], heroBreadcrumb: nil,
-                heroImages: false, heroActions: [], detailSections: [], connectedViews: [],
-                listViews: [], listTotals: [], shelfSubtitle: [],
-                listActions: [], timelineFields: [], lifecycle: nil, editSections: nil,
-                readOnlyOnUpdate: readOnlyOnUpdate, readOnlyWhen: readOnlyWhen,
-                editDateRanges: [], savedViews: []))
-    }
-
     @Test func imageOrderTravelsOnlyWhenReordered() async throws {
         defer { EditStub.handler.withLock { $0 = nil } }
         let seen = capture { _ in (200, Self.productUpdated) }
@@ -393,7 +337,7 @@ struct GenericEntityEditModelTests {
         #expect(body?["pendingImageIds"] == ["IMG-5678"])
     }
 
-    @Test func sectionsFallBackToControlSectionGrouping() throws {
+    @Test func compiledSectionsPlaceEveryVisibleField() throws {
         let model = GenericEntityEditModel(
             descriptor: EntityCatalog[.product], mode: .create(prefill: [:]), client: try makeClient())
         let sections = model.sections
