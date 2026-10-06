@@ -1101,6 +1101,38 @@ isPrimary)` holds every identifier an outside system gave an entity, and
   `page` (Notion) and `folder` (Drive). A live `(source, kind, externalId)`
   names one entity; rows soft-delete with their entity.
 
+## Classification field policies
+
+A classification decides, per field of the record it classifies, whether a
+value is expected and whether it is allowed at all, in one vocabulary
+(`fieldPolicyValues`: `required` gaps a missing value, `not_expected` and
+`unknown` raise no gap, `not_allowed` also refuses a value). A fixed
+classification declares it in the manifest under
+`capabilities.classificationPolicies`: the classifier enum, the classified
+entity and its reference field, and per target field a `byValue` map keyed by
+classifier value plus an `otherwise` policy. The generator checks every name
+and value and requires a field refused by default to have exactly one
+admitting value, then emits `classification-field-policies.gen.ts`. A
+household-editable classification keeps its policy per row instead
+(SpendingCategory `productExpectation`), and `@cubby/schemas/classification-field-policy`
+registers both shapes behind one evaluator (`isFieldAllowed`,
+`classificationValuesWhere`, `impliedClassification`).
+
+ProductCategory `feature` is the first declared instance, resolved through the
+Product's category and its nearest bound ancestor. An ingredient or USDA link
+is allowed only under Food and an ISBN only under Books; a write carrying one
+files the Product under the admitting feature (`impliedProductFeature`), and
+field order is precedence, so food evidence outranks an ISBN. Tools,
+Electronics, Storage, and Household require a model. Consumers read the
+evaluator, never a feature literal: the `product_model` gap
+(`classificationPolicySql`), category admission on create, update, merge, and
+reviewed reassignment, and Jev targets — `suggestFields` skips a field the
+record's recorded classification refuses (`classificationRefusesField`; an
+unclassified record is not refused, since the write classifies it), and
+post-import auto-fill re-checks under its row lock. Each declared
+classification supplies its effective-value resolver in that server module's
+typed `classificationSources` map.
+
 ## Product classification and photos
 
 `ProductCategory` is an editable, at-most-three-level tree. `Product.categoryId`

@@ -30,7 +30,7 @@ import type {
   ProductPickerItemOut,
 } from "@cubby/schemas/product";
 import {
-  hasFoodIndicators,
+  impliedProductFeature,
   type ProductCreateInput,
   type ProductTopLevelOut,
   type ProductUpdateInput,
@@ -1893,11 +1893,11 @@ export const createProduct = async (
       const categoryId = await resolveProductCategory(
         tx,
         data.categoryId ?? null,
-        hasFoodIndicators({ ...data, ingredientId })
-          ? "food"
-          : externalIdsContainIsbn(desiredExternalIds)
-            ? "books"
-            : null,
+        impliedProductFeature({
+          fdc_id: data.fdc_id,
+          ingredientId,
+          hasIsbn: externalIdsContainIsbn(desiredExternalIds),
+        }),
       );
       await assertExternalIdsAvailable(tx, desiredExternalIds);
       const newProduct = await insertWithShortcode(tx, "product", {
@@ -2100,32 +2100,24 @@ export const updateProduct = async (
               ),
               { source: GTIN_SOURCE, externalId: incomingGtin },
             ]);
-    if (
-      hasFoodIndicators({
-        fdc_id:
-          updateData.fdc_id === undefined
-            ? beforeProduct.fdc_id
-            : updateData.fdc_id,
-        ingredientId:
-          updateData.ingredientId === undefined
-            ? beforeProduct.ingredientId
-            : updateData.ingredientId,
-      })
-    ) {
+    const impliedFeature = impliedProductFeature({
+      fdc_id:
+        updateData.fdc_id === undefined
+          ? beforeProduct.fdc_id
+          : updateData.fdc_id,
+      ingredientId:
+        updateData.ingredientId === undefined
+          ? beforeProduct.ingredientId
+          : updateData.ingredientId,
+      hasIsbn: externalIdsContainIsbn(resultingExternalIds),
+    });
+    if (impliedFeature !== null) {
       updateData.categoryId = await resolveProductCategory(
         tx,
         updateData.categoryId === undefined
           ? beforeProduct.categoryId
           : updateData.categoryId,
-        "food",
-      );
-    } else if (externalIdsContainIsbn(resultingExternalIds)) {
-      updateData.categoryId = await resolveProductCategory(
-        tx,
-        updateData.categoryId === undefined
-          ? beforeProduct.categoryId
-          : updateData.categoryId,
-        "books",
+        impliedFeature,
       );
     }
     return { desiredExternalIds, incomingGtin, updateData };
@@ -2569,14 +2561,15 @@ export const quickCreateProduct = async (
   const categoryId = await resolveProductCategory(
     db,
     data.categoryId ?? null,
-    hasFoodIndicators(data)
-      ? "food"
-      : incomingGtin != null &&
-          externalIdsContainIsbn([
-            { source: GTIN_SOURCE, externalId: incomingGtin },
-          ])
-        ? "books"
-        : null,
+    impliedProductFeature({
+      fdc_id: data.fdc_id,
+      ingredientId: data.ingredientId,
+      hasIsbn:
+        incomingGtin != null &&
+        externalIdsContainIsbn([
+          { source: GTIN_SOURCE, externalId: incomingGtin },
+        ]),
+    }),
   );
 
   const values = {

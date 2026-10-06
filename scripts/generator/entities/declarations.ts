@@ -412,6 +412,8 @@ export type CompiledEntity = Readonly<{
     exceptions: boolean;
     related: readonly string[];
   }> | null;
+  /** `capabilities.classificationPolicies`; validated cross-entity. */
+  classificationPolicies: EntityDeclarationMetadata["capabilities"]["classificationPolicies"];
 }>;
 
 export type EntityArtifacts = Readonly<{

@@ -26,6 +26,7 @@ import {
   validateDataQualityDeclarations,
 } from "./data-quality.ts";
 import { compileEntityTable, validateEntityTables } from "./table-storage.ts";
+import { validateClassificationPolicies } from "./classification-policies.ts";
 import {
   deriveImageDisplaySources,
   deriveInverseRelations,
@@ -1926,6 +1927,7 @@ export const compileEntity = (
     table,
     children: declaration.children,
     dataQuality,
+    classificationPolicies: declaration.capabilities.classificationPolicies,
   };
 };
 
@@ -2555,5 +2557,6 @@ export const compileEntityDeclarations = (
   validatePhotoCategoryLabels(photoCategories);
   validateImagePolicies(entities);
   validateRelationSections(entities);
+  validateClassificationPolicies(entities);
   return entities;
 };

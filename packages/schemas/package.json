@@ -163,6 +163,7 @@
     "./spending-classification": "./src/spending-classification.ts",
     "./spending-classification-review": "./src/spending-classification-review.ts",
     "./purchase-evidence-policy": "./src/purchase-evidence-policy.ts",
+    "./classification-field-policy": "./src/classification-field-policy.ts",
     "./emoji": "./src/emoji.ts"
   },
   "scripts": {

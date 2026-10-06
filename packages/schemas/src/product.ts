@@ -1,6 +1,10 @@
 import { listLabel } from "./entity-definitions/label-field";
 import { tradeSchema } from "./task-fields";
-import { productCategoryFeature } from "./product-category-fields";
+import { impliedClassification } from "./classification-field-policy";
+import {
+  productCategoryFeature,
+  type ProductCategoryFeature,
+} from "./product-category-fields";
 import { productCategoryShortcode } from "./identifier-fields";
 import { productTopLevelOut } from "./product-output-fields";
 import { inventoryPlacementValues } from "@cubby/shared";
@@ -75,20 +79,31 @@ export type ProductCategory = ProductCategorySummary;
 
 /**
  * The explicit USDA food link: a positive `fdc_id`. One definition shared by
- * {@link hasFoodIndicators} and the problems repo's food-category detector, so
- * "what counts as an fdc link" can't drift between them.
+ * {@link impliedProductFeature} and the problems repo's food-category
+ * detector, so "what counts as an fdc link" can't drift between them.
  */
 export const hasFdcLink = (fdc_id: number | null | undefined): boolean =>
   fdc_id != null && fdc_id > 0;
 
-export const hasFoodIndicators = (product: {
+/**
+ * The category feature a Product's identity evidence implies, read from the
+ * declared `productCategory.feature` field policy: an ingredient or USDA link
+ * implies Food, an ISBN Books, food evidence first. Callers decide `hasIsbn`
+ * from the external ids they hold.
+ */
+export const impliedProductFeature = (evidence: {
   fdc_id?: number | null;
-  // This presence-only predicate is shared by the public shortcode form and
-  // the private UUID repo boundary, so it deliberately accepts either shape.
+  // Presence only: shared by the public shortcode form and the private UUID
+  // repo boundary, so it deliberately accepts either shape.
   ingredientId?: string | null;
-}): boolean =>
-  hasFdcLink(product.fdc_id) ||
-  (product.ingredientId != null && product.ingredientId.length > 0);
+  hasIsbn?: boolean;
+}): ProductCategoryFeature | null => {
+  const present = new Set<"ingredientId" | "fdc_id" | "isbn">();
+  if (evidence.ingredientId) present.add("ingredientId");
+  if (hasFdcLink(evidence.fdc_id)) present.add("fdc_id");
+  if (evidence.hasIsbn) present.add("isbn");
+  return impliedClassification("productCategory.feature", present);
+};
 
 export const productBulkStockTrackedInput = z.object({
   ids: z.array(productShortcode).min(1),

@@ -1,7 +1,7 @@
 import { createHash } from "node:crypto";
 
 import { parseShortcodeFor } from "@cubby/schemas/identifiers";
-import { hasFoodIndicators } from "@cubby/schemas/product";
+import { impliedProductFeature } from "@cubby/schemas/product";
 import {
   spendingClassificationReviewApplyInput,
   spendingClassificationReviewInput,
@@ -91,11 +91,11 @@ async function draftFor(
             notDeleted(entityExternalId),
           ),
         );
-      const requiredFeature = hasFoodIndicators(current)
-        ? "food"
-        : externalIdsContainIsbn(externalIds)
-          ? "books"
-          : null;
+      const requiredFeature = impliedProductFeature({
+        fdc_id: current.fdc_id,
+        ingredientId: current.ingredientId,
+        hasIsbn: externalIdsContainIsbn(externalIds),
+      });
       if (
         (await resolveProductCategory(db, categoryId, requiredFeature)) !==
         categoryId

@@ -1,5 +1,5 @@
 import type { ProductCategoryId, ProductId } from "@cubby/schemas/identifiers";
-import { hasFoodIndicators } from "@cubby/schemas/product";
+import { impliedProductFeature } from "@cubby/schemas/product";
 import {
   isProjectResourceFeature,
   projectResourceFeatureLabels,
@@ -44,18 +44,14 @@ export async function assertProductCategoryChange(
       notDeleted(entityExternalId),
     ),
   });
-  const requiredFeature = hasFoodIndicators({
-    fdc_id: current.fdc_id,
-    ingredientId: current.ingredientId,
-  })
-    ? "food"
-    : externalIdsContainIsbn(externalIds)
-      ? "books"
-      : null;
   const categoryId = await resolveProductCategory(
     tx,
     requestedCategoryId,
-    requiredFeature,
+    impliedProductFeature({
+      fdc_id: current.fdc_id,
+      ingredientId: current.ingredientId,
+      hasIsbn: externalIdsContainIsbn(externalIds),
+    }),
   );
   const feature = await getCategoryFeature(tx, categoryId);
   const projectUsage = await tx.query.entityLink.findFirst({

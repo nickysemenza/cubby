@@ -3,6 +3,7 @@ import {
   dataQualityCheckKind,
   dataQualityFacetName,
 } from "../data-quality-facets";
+import { fieldPolicyValue } from "../field-policy-fields";
 import { photoCategoryKeys } from "../photo-categories";
 import { childTableMetadataSchema } from "./child-definition";
 
@@ -1766,6 +1767,35 @@ const buildMetadataSchemas = () => {
     })
     .strict();
 
+  const classificationFieldPolicyMetadataSchema = z
+    .object({
+      /** A field of the classified (target) entity. */
+      field: nonEmptyString(),
+      /** The policy where the effective classifier value is a listed key. */
+      byValue: z.record(z.string().min(1), fieldPolicyValue),
+      /** The policy for every other value, and for no value at all. */
+      otherwise: fieldPolicyValue,
+    })
+    .strict();
+
+  /**
+   * A fixed classification (an enum field on this entity) declares, per field
+   * of the entity it classifies, whether a value is expected and whether it is
+   * allowed. `fields` order is precedence: when evidence in two fields implies
+   * different classifications, the earlier field wins.
+   */
+  const classificationPolicyMetadataSchema = z
+    .object({
+      /** This entity's enum field whose (effective) value classifies. */
+      classifier: nonEmptyString(),
+      /** The classified entity and its reference field to this entity. */
+      target: z
+        .object({ entity: nonEmptyString(), reference: nonEmptyString() })
+        .strict(),
+      fields: z.array(classificationFieldPolicyMetadataSchema).min(1),
+    })
+    .strict();
+
   const entityCapabilitiesMetadataSchema = z
     .object({
       auditable: z.boolean({ error: "must be a boolean" }),
@@ -1811,6 +1841,15 @@ const buildMetadataSchemas = () => {
         .nullable()
         .optional()
         .default(null),
+      /**
+       * Field policies keyed by this entity's classifier values; compiled to
+       * `classification-field-policies.gen.ts` and read by one evaluator
+       * (`@cubby/schemas/classification-field-policy`).
+       */
+      classificationPolicies: z
+        .array(classificationPolicyMetadataSchema)
+        .optional()
+        .default([]),
     })
     .strict();
 
