@@ -51,14 +51,20 @@ export class USDAClient {
   // Request-scoped memo of batch-resolved foods, keyed by canonical lookup. The
   // client is built per-request in ctx (see buildCrudServices), so it only
   // stops the same product being re-POSTed when several queries in one request
-  // enrich overlapping products; cross-request reuse is the edge cache in
-  // `findUncachedBatch`.
+  // enrich overlapping products. Holds only answers usda-api gave this
+  // request; edge-cached answers live in `cachedBatchMemo`.
   //
   // Stores the in-flight *promise*, not the resolved value, so concurrent
   // callers (e.g. the two coverage detectors on the Problems page, which run
   // under one Promise.all) coalesce onto a single POST instead of each firing
   // their own before the other has settled.
   private readonly batchMemo = new Map<string, Promise<FoodSummary | null>>();
+  // Answers a display read accepted from the edge cache; a fresh read never
+  // consults this, so a cached answer cannot reach a persisted computation.
+  private readonly cachedBatchMemo = new Map<
+    string,
+    Promise<FoodSummary | null>
+  >();
 
   constructor(
     private baseUrl: string,
@@ -254,61 +260,86 @@ export class USDAClient {
     return `fdc:${lookup.fdc_id}`;
   }
 
+  /**
+   * Resolve each lookup, deduped against this request's earlier lookups. A
+   * read whose result is only displayed passes `allowCached` to accept an
+   * edge-cached answer; a read that persists what it derives (recompute,
+   * autofill, coverage) omits it and always asks usda-api, refreshing the
+   * cached answer for later display reads.
+   */
   async findFoodsBatch(
     lookups: FoodLookupParam[],
+    options: { allowCached?: boolean } = {},
   ): Promise<(FoodSummary | null)[]> {
     if (lookups.length === 0) return [];
+    const allowCached = options.allowCached === true;
+    const known = (key: string) =>
+      this.batchMemo.get(key) ??
+      (allowCached ? this.cachedBatchMemo.get(key) : undefined);
 
     const keys = lookups.map((l) => USDAClient.lookupKey(l));
     // Fetch only lookups not already in-flight or resolved earlier in this
     // request, deduped. A memo'd null is a known miss — don't re-POST it either.
     const missing = new Map<string, FoodLookupParam>();
     keys.forEach((key, i) => {
-      if (!this.batchMemo.has(key)) missing.set(key, lookups[i]!);
+      if (!known(key)) missing.set(key, lookups[i]!);
     });
 
     if (missing.size > 0) {
       const missKeys = [...missing.keys()];
-      const batch = this.findUncachedBatch(missKeys, [...missing.values()]);
+      const batch = this.findBatch(
+        missKeys,
+        [...missing.values()],
+        allowCached,
+      );
+      const memo = allowCached ? this.cachedBatchMemo : this.batchMemo;
       // Register each key's slice of the shared POST in the memo *before*
       // awaiting, so a concurrent caller requesting an overlapping key awaits
       // this same batch instead of issuing a second POST.
       missKeys.forEach((key, i) => {
-        this.batchMemo.set(
+        memo.set(
           key,
           batch.then((results) => results[i] ?? null),
         );
       });
     }
 
-    return Promise.all(
-      keys.map((key) => this.batchMemo.get(key) ?? Promise.resolve(null)),
-    );
+    return Promise.all(keys.map((key) => known(key) ?? Promise.resolve(null)));
   }
 
   /**
-   * Resolve `lookups` (aligned with `keys`) from the edge cache, POSTing only
-   * the keys it lacks and caching their answers. A miss is cached for less
-   * time than a hit so a newly loaded USDA food appears within hours.
+   * Resolve `lookups` (aligned with `keys`), from the edge cache when
+   * `readCache`, POSTing the rest and caching every POSTed answer. A miss is
+   * cached for less time than a hit so a newly loaded USDA food appears
+   * within hours. An unreadable cache entry counts as uncached.
    */
-  private async findUncachedBatch(
+  private async findBatch(
     keys: string[],
     lookups: FoodLookupParam[],
+    readCache: boolean,
   ): Promise<(FoodSummary | null)[]> {
     const cache = this.cache;
     const cacheKey = (key: string) =>
       new URL(`api/foods/lookup-cache/${encodeURIComponent(key)}`, this.baseUrl)
         .href;
-    const cached = cache
-      ? await Promise.all(
-          keys.map(async (key) => {
-            const response = await cache.match(cacheKey(key));
-            return response
-              ? cachedLookupSchema.parse(await response.json())
-              : undefined;
-          }),
-        )
-      : keys.map(() => undefined);
+    const cached =
+      cache && readCache
+        ? await Promise.all(
+            keys.map(async (key) => {
+              try {
+                const response = await cache.match(cacheKey(key));
+                return response
+                  ? cachedLookupSchema.parse(await response.json())
+                  : undefined;
+              } catch (error) {
+                // SILENT: the edge cache is best-effort; an unreadable entry
+                // is asked of usda-api like any uncached lookup.
+                log.warn(`Cache read failed for ${key}`, { error });
+                return undefined;
+              }
+            }),
+          )
+        : keys.map(() => undefined);
     const uncached = keys.flatMap((key, i) =>
       cached[i] === undefined ? [{ key, lookup: lookups[i]! }] : [],
     );

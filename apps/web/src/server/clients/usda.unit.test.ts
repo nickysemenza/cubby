@@ -240,12 +240,13 @@ describe("USDAClient.findFoodsBatch edge cache", () => {
   };
   const hit = { kind: "upc", gtin_upc: "012345678905" } as const;
   const miss = { kind: "ndb", ndb_number: 999 } as const;
+  const display = { allowCached: true } as const;
   const sentLookups = (call: Parameters<typeof fetch> | undefined) =>
     z
       .object({ lookups: z.array(z.json()) })
       .parse(JSON.parse(z.string().parse(call?.[1]?.body))).lookups;
 
-  it("reuses hits for a day and misses for six hours across requests", async () => {
+  it("reuses hits for a day and misses for six hours across display reads", async () => {
     const { cache, responses } = memoryCache();
     const fetcher = vi
       .fn<typeof fetch>()
@@ -253,7 +254,7 @@ describe("USDAClient.findFoodsBatch edge cache", () => {
     const request = () =>
       new USDAClient("http://localhost:8787", fetcher, {
         cache,
-      }).findFoodsBatch([hit, miss]);
+      }).findFoodsBatch([hit, miss], display);
 
     expect(await request()).toEqual([{ fdc_id: 1 }, null]);
     expect(await request()).toEqual([{ fdc_id: 1 }, null]);
@@ -273,12 +274,62 @@ describe("USDAClient.findFoodsBatch edge cache", () => {
       .mockResolvedValueOnce(batchBody([{ fdc_id: 1 }]));
     await new USDAClient("http://localhost:8787", fetcher, {
       cache,
-    }).findFoodsBatch([miss]);
+    }).findFoodsBatch([miss], display);
 
     expect(
       await new USDAClient("http://localhost:8787", fetcher, {
         cache,
-      }).findFoodsBatch([hit, miss]),
+      }).findFoodsBatch([hit, miss], display),
+    ).toEqual([{ fdc_id: 1 }, null]);
+    expect(sentLookups(fetcher.mock.calls[1])).toEqual([hit]);
+  });
+
+  it("answers a persisting read fresh, even after a cached read in the same request", async () => {
+    // Recompute and autofill persist what they read; a cached miss stamped
+    // into recipe totals would outlive the cache entry.
+    const { cache } = memoryCache();
+    const fetcher = vi
+      .fn<typeof fetch>()
+      .mockResolvedValueOnce(batchBody([null]))
+      .mockResolvedValueOnce(batchBody([{ fdc_id: 9 }]))
+      .mockResolvedValueOnce(batchBody([{ fdc_id: 9 }]));
+    await new USDAClient("http://localhost:8787", fetcher, {
+      cache,
+    }).findFoodsBatch([miss], display);
+    const client = new USDAClient("http://localhost:8787", fetcher, { cache });
+
+    expect(await client.findFoodsBatch([miss], display)).toEqual([null]);
+    expect(await client.findFoodsBatch([miss])).toEqual([{ fdc_id: 9 }]);
+    // The fresh answer replaces the cached miss for later display reads.
+    expect(
+      await new USDAClient("http://localhost:8787", fetcher, {
+        cache,
+      }).findFoodsBatch([miss], display),
+    ).toEqual([{ fdc_id: 9 }]);
+    expect(fetcher).toHaveBeenCalledTimes(2);
+  });
+
+  it("treats an unreadable cache entry as uncached", async () => {
+    const { cache } = memoryCache();
+    const fetcher = vi
+      .fn<typeof fetch>()
+      .mockResolvedValueOnce(batchBody([null]))
+      .mockResolvedValueOnce(batchBody([{ fdc_id: 1 }]));
+    await new USDAClient("http://localhost:8787", fetcher, {
+      cache,
+    }).findFoodsBatch([miss], display);
+    const failing = {
+      ...cache,
+      match: async (key: RequestInfo | URL) => {
+        if (String(key).includes("upc")) throw new Error("cache unavailable");
+        return cache.match(key);
+      },
+    };
+
+    expect(
+      await new USDAClient("http://localhost:8787", fetcher, {
+        cache: failing,
+      }).findFoodsBatch([hit, miss], display),
     ).toEqual([{ fdc_id: 1 }, null]);
     expect(sentLookups(fetcher.mock.calls[1])).toEqual([hit]);
   });
@@ -292,7 +343,7 @@ describe("USDAClient.findFoodsBatch edge cache", () => {
     const request = () =>
       new USDAClient("http://localhost:8787", fetcher, {
         cache,
-      }).findFoodsBatch([hit]);
+      }).findFoodsBatch([hit], display);
 
     // oxlint-disable-next-line vitest/require-to-throw-message -- The rejection itself is contractual; the exact message is intentionally not.
     await expect(request()).rejects.toThrow();

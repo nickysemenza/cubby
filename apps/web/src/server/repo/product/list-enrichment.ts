@@ -34,7 +34,7 @@ export function prefetchProductFoods(
     (product) => foodLookupParamFromProduct(product) ?? [],
   );
   if (usdaClient && lookups.length > 0)
-    usdaClient.findFoodsBatch(lookups).catch(() => {
+    usdaClient.findFoodsBatch(lookups, { allowCached: true }).catch(() => {
       // SILENT: the memoized batch rejects again for enrichProductListItems,
       // which surfaces it; this handle only prevents an unhandled rejection.
     });
@@ -53,6 +53,8 @@ export async function enrichProductListItems<
         products,
         foodLookupParamFromProduct,
         usdaClient,
+        // Display-only: these rows are rendered, never persisted.
+        { allowCached: true },
       )
     : products.map((product) => ({ ...product, food: null }));
 
