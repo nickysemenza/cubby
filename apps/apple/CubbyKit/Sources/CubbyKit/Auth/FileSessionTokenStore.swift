@@ -20,24 +20,31 @@ public final class FileSessionTokenStore: SessionTokenStore, Sendable {
     }
 
     public func loadState(for host: String) throws -> CubbyAuthState? {
-        try read()[host]
+        try read()?[host]
     }
 
     public func saveState(_ state: CubbyAuthState, for host: String) throws {
-        var all = try read()
+        var all = try read() ?? [:]
         all[host] = state
         try write(all)
     }
 
     public func clear(for host: String) throws {
-        var all = try read()
+        guard var all = try read() else {
+            try FileManager.default.removeItem(at: fileURL)
+            return
+        }
         all.removeValue(forKey: host)
         try write(all)
     }
 
-    private func read() throws -> [String: CubbyAuthState] {
+    /// `nil` when the file exists but does not decode (e.g. the retired `[host: CubbyCredential]`
+    /// shape): it reads as signed out, `saveState` overwrites it, and `clear` deletes it, so a
+    /// stale file costs one sign-in rather than making every load, save, and clear throw.
+    private func read() throws -> [String: CubbyAuthState]? {
         guard FileManager.default.fileExists(atPath: fileURL.path(percentEncoded: false)) else { return [:] }
-        return try JSONDecoder().decode([String: CubbyAuthState].self, from: Data(contentsOf: fileURL))
+        let data = try Data(contentsOf: fileURL)
+        return try? JSONDecoder().decode([String: CubbyAuthState].self, from: data)
     }
 
     private func write(_ all: [String: CubbyAuthState]) throws {

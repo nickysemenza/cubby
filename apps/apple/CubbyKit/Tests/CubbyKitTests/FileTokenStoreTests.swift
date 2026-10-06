@@ -29,4 +29,38 @@ struct FileTokenStoreTests {
         #expect(try store.load(for: "b.example") == .apiKey("cubby_b"))
         try? FileManager.default.removeItem(at: store.fileURL.deletingLastPathComponent())
     }
+
+    /// A file in the retired `[host: CubbyCredential]` shape (no longer decoded) must cost one
+    /// sign-in, not a dead end where load, save, and clear all throw.
+    private func storeWithUndecodableFile() throws -> FileSessionTokenStore {
+        let store = temporaryStore()
+        try FileManager.default.createDirectory(
+            at: store.fileURL.deletingLastPathComponent(), withIntermediateDirectories: true)
+        try Data(#"{"old.example":{"bearer":{"_0":"old-token"}}}"#.utf8).write(to: store.fileURL)
+        return store
+    }
+
+    @Test func anUndecodableFileReadsAsSignedOut() throws {
+        let store = try storeWithUndecodableFile()
+        #expect(try store.loadState(for: "old.example") == nil)
+        try? FileManager.default.removeItem(at: store.fileURL.deletingLastPathComponent())
+    }
+
+    @Test func savingOverAnUndecodableFileReplacesItWithTheCurrentFormat() throws {
+        let store = try storeWithUndecodableFile()
+        try store.save(.bearer("tok.new"), for: "a.example")
+        #expect(try store.load(for: "a.example") == .bearer("tok.new"))
+        let states = try JSONDecoder().decode(
+            [String: CubbyAuthState].self, from: Data(contentsOf: store.fileURL))
+        #expect(Array(states.keys) == ["a.example"])
+        try? FileManager.default.removeItem(at: store.fileURL.deletingLastPathComponent())
+    }
+
+    @Test func clearingAnUndecodableFileRemovesIt() throws {
+        let store = try storeWithUndecodableFile()
+        try store.clear(for: "old.example")
+        #expect(!FileManager.default.fileExists(atPath: store.fileURL.path(percentEncoded: false)))
+        #expect(try store.loadState(for: "old.example") == nil)
+        try? FileManager.default.removeItem(at: store.fileURL.deletingLastPathComponent())
+    }
 }
