@@ -9,7 +9,6 @@
         "scripts/apple.ts!",
         "scripts/chatgpt-connect.ts!",
         "scripts/test-services.ts!",
-        "scripts/check-security-audit.ts!",
         "scripts/ensure-apple-ffi.ts!",
         "scripts/ensure-wasm.ts!",
         "scripts/typecheck-web.ts!",
