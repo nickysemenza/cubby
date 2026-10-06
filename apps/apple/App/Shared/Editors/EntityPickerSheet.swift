@@ -238,9 +238,7 @@ struct EntityPickerSheet: View {
                             items: page == 1 ? rows : [],
                             meta: ListPageMeta(pageIndex: page, pageSize: 25, totalCount: rows.count))
                     } catch {
-                        if !(error is CancellationError) {
-                            await MainActor.run { Diagnostics.report(error, context: "picker.search") }
-                        }
+                        await MainActor.run { Diagnostics.report(error, context: "picker.search") }
                         throw error
                     }
                 }

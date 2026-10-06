@@ -191,6 +191,7 @@ existing block. Extend the generic path when it almost fits. See
 ## Swift
 
 - `Error.userMessage`, `CubbyClient` list-all helper, `Double.usd`.
+  `Diagnostics.report` owns native cancellation filtering; callers pass errors unchanged.
 - Native loading and failures: `LoadingIndicator`, `LoadFailureView` for an unloaded body,
   `InlineLoadFailure` beside loaded content, and `ActionFailureNotice` for refused writes
   preserve raw diagnostics and caller-owned mutation retry eligibility (`ScreenStyle.swift`).
