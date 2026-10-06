@@ -123,27 +123,16 @@ export async function waitForAppHydration(page: Page) {
   );
   const signIn = page.getByRole("link", { name: "Sign In", exact: true });
 
-  // Only the LAST attempt's outcome matters for the message: which branch was
-  // observed drives which of the two messages is thrown below. The `get-session`
-  // fetch is diagnostic-only and must not run on every retry — it is real
-  // network I/O, and adding it to the hot retry path would itself slow down
-  // hydration under load instead of just explaining a failure that already
-  // happened.
-  let sawSignIn = false;
-  let rateLimited = false;
   try {
-    await expect(async () => {
-      sawSignIn = await signIn.isVisible().catch(() => false);
-      if (sawSignIn) {
-        rateLimited = await page
-          .getByText("Too Many Requests", { exact: true })
-          .isVisible()
-          .catch(() => false);
-        throw new Error("SSR rendered the unauthenticated shell");
-      }
-      await expect(shell).toBeAttached({ timeout: 3000 });
-    }).toPass({ timeout: 15000 });
+    await shell.waitFor({ state: "attached", timeout: 15000 });
   } catch {
+    const sawSignIn = await signIn.isVisible().catch(() => false);
+    const rateLimited =
+      sawSignIn &&
+      (await page
+        .getByText("Too Many Requests", { exact: true })
+        .isVisible()
+        .catch(() => false));
     const sessionStatus = await observedSessionStatus(page);
     const detail = `at ${page.url()} (get-session: ${sessionStatus})`;
     throw new Error(

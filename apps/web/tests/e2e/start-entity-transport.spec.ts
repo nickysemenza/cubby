@@ -38,7 +38,8 @@ test("core entity list, detail, and mutation ride named browser operations", asy
   const starts: BrowserOperationRequest[] = [];
   const requestIds: string[] = [];
   const requestIdReads: Promise<void>[] = [];
-  const canaryRequestId = `e2e-ray-${Date.now()}`;
+  // Production accepts only Cloudflare-shaped rays; keep this fixture hex.
+  const canaryRequestId = "0a1b2c3d4e5f6071-SJC";
   await page.setExtraHTTPHeaders({ "cf-ray": canaryRequestId });
   page.on("request", (request) => {
     const url = request.url();
