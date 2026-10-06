@@ -241,14 +241,6 @@ See also the image operational passes at the end of this file.
 
 ## Native app
 
-- 🟢 **Move the editor picker onto `EntityListPageSource`.**
-  `GenericEntityListModel` takes an injected page source and swaps scope with
-  `setSource(_:)` (contract on `EntityListPageSource`; the photo chooser lanes,
-  related destination chooser and wardrobe already use it).
-  `App/Shared/Editors/EntityPickerSheet.swift` still keeps its own state:
-  `reload` builds a fresh model per term. Make the scope the source `id`,
-  delete that machinery, and move its consumers with it. Lane 3C.
-
 - 🤔 **Keep a focused structured-editor input clear of the keyboard.**
   `StructuredValueControl` draws a whole array row (an external ID's source,
   kind, id, URL) inside one Form row, so keyboard avoidance scrolls that tall

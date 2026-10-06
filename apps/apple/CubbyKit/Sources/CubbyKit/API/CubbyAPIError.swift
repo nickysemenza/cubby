@@ -177,10 +177,15 @@ public struct CubbyAPIError: Error, LocalizedError, Sendable {
     /// OpenAPIRuntime wraps everything thrown inside the transport or a middleware in a
     /// `ClientError`, which would hide the `isUnauthorized`/`isStaleInventory` a caller switches
     /// on. This unwraps ours; a transport failure that still carried a status becomes a bodyless
-    /// `CubbyAPIError`, and anything else is returned untouched.
+    /// `CubbyAPIError`. Cancellations keep their identity for shared diagnostic filtering;
+    /// other transport failures retain their wrapper.
     public static func unwrapping(_ error: any Error) -> any Error {
         guard let client = error as? ClientError else { return error }
         if let api = client.underlyingError as? CubbyAPIError { return api }
+        if client.underlyingError is CancellationError { return client.underlyingError }
+        if let urlError = client.underlyingError as? URLError, urlError.code == .cancelled {
+            return urlError
+        }
         guard let status = client.response?.status.code, status >= 400 else { return error }
         return CubbyAPIError(status: status, operationID: client.operationID, detail: nil)
     }

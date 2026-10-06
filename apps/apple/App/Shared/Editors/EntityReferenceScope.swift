@@ -3,7 +3,7 @@ import CubbyKit
 /// A reference picker scope emitted by the entity manifest. `ready == false`
 /// means a declared dependent field is empty; callers must keep the picker
 /// closed rather than widening the candidate query.
-struct EntityPickerScope: Hashable {
+nonisolated struct EntityPickerScope: Hashable, Sendable {
     let filters: EntityFilterState
     let ready: Bool
 }

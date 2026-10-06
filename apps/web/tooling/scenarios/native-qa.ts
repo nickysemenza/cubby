@@ -130,10 +130,12 @@ export async function seedNativeQa(
   const split = await seedSplitSettlement(pool, userId);
   const approvalRun = await seedPendingApprovalRun(pool, userId);
   const photoRun = await seedProposedPhotoRun(pool, userId);
+  const garden = await seedScopedPlantingPicker(pool, context);
   return {
     ...split,
     ...approvalRun,
     ...photoRun,
+    ...garden,
     LOCATION_ID: kitchen.id,
     SHELF_ID: shelf.id,
     INGREDIENT_ID: ingredient.id,
@@ -147,6 +149,66 @@ export async function seedNativeQa(
     PROJECT_ID: project.id,
     TASK_ID: task.id,
     ACCOUNT_ID: account.id,
+  };
+}
+
+/**
+ * A Garden Entry on the north bed whose planting picker is scoped by its location and date. The
+ * south bed holds more active plantings than one picker page (25), so the journey must page to
+ * reach `PAGE_TWO_PLANTING`. The seed reads the list's default order (newest first, then the
+ * shortcode tiebreak) instead of assuming which planting lands on which page.
+ */
+async function seedScopedPlantingPicker(
+  pool: Pool,
+  context: ReturnType<typeof buildKernelContext>,
+): Promise<Record<string, string>> {
+  const north = await createEntity(context, "location", {
+    name: "Synthetic Bed North",
+  });
+  const south = await createEntity(context, "location", {
+    name: "Synthetic Bed South",
+  });
+  const plant = async (name: string, locationId: string) => {
+    const created = await createEntity(context, "plant", { name });
+    return createEntity(context, "planting", {
+      plantId: created.id,
+      locationId,
+      status: "growing",
+      sowedOn: "2026-05-01",
+    });
+  };
+  const northPlanting = await plant("Synthetic Pea", north.id);
+  for (let index = 1; index <= 26; index += 1)
+    await plant(`Synthetic Bean ${String(index).padStart(2, "0")}`, south.id);
+  const entry = await createEntity(context, "gardenEntry", {
+    locationId: north.id,
+    observedOn: "2026-06-01",
+    kind: "note",
+    notes: "Synthetic picker check",
+    plantingIds: [],
+  });
+  const southBeans = await pool.query<{ shortcode: string; name: string }>(
+    `SELECT p.shortcode, pl.name FROM "Planting" p
+     JOIN "Plant" pl ON pl.id = p."plantId"
+     JOIN "Location" l ON l.id = p."locationId"
+     WHERE l.shortcode = $1 AND p."deletedAt" IS NULL AND pl.name LIKE 'Synthetic Bean %'
+     ORDER BY p."createdAt" DESC, p.shortcode`,
+    [south.id],
+  );
+  const first = southBeans.rows[0];
+  const last = southBeans.rows.at(-1);
+  if (!first || !last || southBeans.rows.length !== 26)
+    throw new Error(
+      `Expected 26 south plantings, found ${southBeans.rows.length}`,
+    );
+  return {
+    GARDEN_ENTRY_ID: entry.id,
+    NORTH_PLANTING_ID: northPlanting.id,
+    SOUTH_BED_ID: south.id,
+    PAGE_ONE_PLANTING: first.name,
+    PAGE_ONE_PLANTING_ID: first.shortcode,
+    PAGE_TWO_PLANTING: last.name,
+    PAGE_TWO_PLANTING_ID: last.shortcode,
   };
 }
 

@@ -164,6 +164,25 @@ struct ErrorDecodingTests {
         #expect(apiError.detail == nil)
     }
 
+    // Superseded picker requests must reach Diagnostics as cancellations, while unrelated
+    // transport failures must retain their generated-client diagnostics.
+    @Test func unwrappingPreservesCancellationIdentity() {
+        let cancellations: [any Error] = [CancellationError(), URLError(.cancelled)]
+        for inner in cancellations {
+            let wrapped = ClientError(
+                operationID: "search.find", operationInput: (),
+                causeDescription: "transport failure", underlyingError: inner)
+            let unwrapped = CubbyAPIError.unwrapping(wrapped)
+            #expect(
+                unwrapped is CancellationError
+                    || (unwrapped as? URLError)?.code == .cancelled)
+        }
+        let timeout = ClientError(
+            operationID: "search.find", operationInput: (),
+            causeDescription: "transport failure", underlyingError: URLError(.timedOut))
+        #expect(CubbyAPIError.unwrapping(timeout) is ClientError)
+    }
+
     @Test func unwrappingLeavesAnUnrelatedErrorUntouched() {
         let error = URLError(.notConnectedToInternet)
         let unwrapped = CubbyAPIError.unwrapping(error)
