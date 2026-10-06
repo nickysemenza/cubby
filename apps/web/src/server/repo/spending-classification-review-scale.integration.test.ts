@@ -4,8 +4,11 @@ import {
   parseEntityId,
   parseShortcodeFor,
   type ProductCategoryId,
+  type ProductId,
+  type ProjectId,
   type PurchaseId,
   type SpendingCategoryId,
+  type VendorId,
 } from "@cubby/schemas/identifiers";
 import { sql } from "drizzle-orm";
 import { withTestDb } from "tooling/test-setup";
@@ -30,7 +33,8 @@ type SeededEntity =
   | "product"
   | "vendor"
   | "purchase"
-  | "expense";
+  | "expense"
+  | "project";
 const PREFIX = {
   spendingCategory: "SPC-",
   productCategory: "CAT-",
@@ -38,6 +42,7 @@ const PREFIX = {
   vendor: "VEN-",
   purchase: "PUR-",
   expense: "EXP-",
+  project: "PRJ-",
 } as const satisfies Record<SeededEntity, string>;
 const CHARS = "23456789ABCDEFGHJKMNPQRSTUVWXYZ";
 
@@ -91,6 +96,12 @@ async function insertRows(db: Database, table: string, rows: object[]) {
 }
 
 type Random = ReturnType<typeof random>;
+
+const at = <T>(values: readonly T[], index: number): T => {
+  const value = values[index];
+  if (value === undefined) throw new Error(`Missing seeded row ${index}`);
+  return value;
+};
 
 async function seedTaxonomy(db: Database, { next, pick }: Random) {
   const spend = Array.from({ length: 60 }, (_, index) => ({
@@ -149,6 +160,105 @@ async function seedTaxonomy(db: Database, { next, pick }: Random) {
   return { spend, categories, leaves, nonFoodLeaves, groups };
 }
 
+type Line = {
+  purchaseId: PurchaseId | null;
+  productId: ProductId | null;
+  cost: number | null;
+  lineKind: string;
+  spendingCategoryId: SpendingCategoryId | null;
+  projectId: ProjectId | null;
+};
+
+/**
+ * Allocation cases every scale keeps, all at the heavy Vendor 0 so its review
+ * reaches them: refund-only baskets, negative adjustments beside mixed-sign
+ * principals, explicit multi-Project splits, and adjustment-only Purchases
+ * falling back to their default Project. Overrides use merged category 3.
+ */
+async function seedEdgeBaskets(
+  db: Database,
+  { pick }: Random,
+  {
+    spend,
+    products,
+    vendors,
+    firstPurchase,
+    expense,
+  }: {
+    spend: readonly { id: SpendingCategoryId }[];
+    products: readonly { id: ProductId }[];
+    vendors: readonly { id: VendorId }[];
+    firstPurchase: number;
+    expense: (line: Partial<Line>) => void;
+  },
+) {
+  const projects = Array.from({ length: 4 }, (_, index) => ({
+    ...identity("project", index),
+    name: `Synthetic project ${index}`,
+  }));
+  await insertRows(db, "Project", projects);
+  const project = (index: number) => at(projects, index % projects.length).id;
+  const merged = at(spend, 3).id;
+  const basketKinds = [
+    "refund",
+    "split",
+    "negative",
+    "adjustmentOnly",
+  ] as const;
+  const baskets = Array.from(
+    { length: basketKinds.length * 6 },
+    (_, index) => ({
+      ...identity("purchase", firstPurchase + index),
+      kind: at(basketKinds, Math.floor(index / 6)),
+      vendorId: at(vendors, 0).id,
+      date: "2026-01-01",
+      spendingCategoryId: index % 3 === 0 ? pick(spend).id : null,
+      spendingCategoryOrigin: index % 3 === 0 ? "manual" : "legacy",
+      defaultProjectId: project(index),
+    }),
+  );
+  await insertRows(
+    db,
+    "Purchase",
+    baskets.map(({ kind: _kind, ...row }) => row),
+  );
+  baskets.forEach(({ id: purchaseId, kind }, index) => {
+    const principal = (cost: number, line: Partial<Line> = {}) =>
+      expense({ purchaseId, productId: pick(products).id, cost, ...line });
+    const adjustment = (lineKind: string, cost: number) =>
+      expense({
+        purchaseId,
+        lineKind,
+        cost,
+        spendingCategoryId: index % 4 === 0 ? merged : null,
+      });
+    if (kind === "refund") {
+      principal(-12.34, { spendingCategoryId: merged });
+      principal(-5.01);
+      adjustment("tax", -1.43);
+      adjustment("shipping", 3.99);
+    } else if (kind === "split") {
+      principal(20.01, { projectId: project(index) });
+      principal(7.33, {
+        projectId: project(index + 1),
+        spendingCategoryId: merged,
+      });
+      principal(3.5, { projectId: project(index + 2) });
+      adjustment("tax", 2.47);
+      adjustment("discount", -4.01);
+    } else if (kind === "negative") {
+      principal(15.55);
+      principal(-6.2, { projectId: project(index) });
+      adjustment("discount", -2.05);
+      adjustment("other_adjustment", -0.99);
+      adjustment("fee", 1.25);
+    } else {
+      adjustment("tax", 0.87);
+      adjustment("discount", -3.1);
+    }
+  });
+}
+
 /** Scale 1 matches the measured household: ~12.5k Expenses over ~3.6k Purchases. */
 async function seedSyntheticHousehold(db: Database, scale: number) {
   const generator = random(20261006);
@@ -191,13 +301,6 @@ async function seedSyntheticHousehold(db: Database, scale: number) {
     };
   });
   await insertRows(db, "Purchase", purchases);
-  type Line = {
-    purchaseId: PurchaseId | null;
-    productId: string | null;
-    cost: number | null;
-    lineKind: string;
-    spendingCategoryId: SpendingCategoryId | null;
-  };
   const expenses: (ReturnType<typeof identity<"expense">> &
     Line & { name: string; date: string; costType: string; trade: string })[] =
     [];
@@ -213,6 +316,7 @@ async function seedSyntheticHousehold(db: Database, scale: number) {
       cost: null,
       lineKind: "principal",
       spendingCategoryId: null,
+      projectId: null,
       ...line,
     });
   for (const purchase of purchases)
@@ -242,6 +346,13 @@ async function seedSyntheticHousehold(db: Database, scale: number) {
       cost: cents(10000),
       spendingCategoryId: next() < 0.3 ? pick(spend).id : null,
     });
+  await seedEdgeBaskets(db, generator, {
+    spend,
+    products,
+    vendors,
+    firstPurchase: purchases.length,
+    expense,
+  });
   await insertRows(db, "Expense", expenses);
   // Production tables carry planner statistics; bulk-inserted ones do not yet.
   await unwrapDb(db).execute(sql`ANALYZE`);
@@ -343,12 +454,6 @@ async function referencePreview(
   };
 }
 
-const at = <T>(values: readonly T[], index: number): T => {
-  const value = values[index];
-  if (value === undefined) throw new Error(`Missing seeded row ${index}`);
-  return value;
-};
-
 describe("spending classification preview at household scale", () => {
   const ctx = withTestDb();
 
@@ -361,6 +466,33 @@ describe("spending classification preview at household scale", () => {
     { timeout: 300_000 },
     async () => {
       const seeded = await seedSyntheticHousehold(ctx.db, 0.2);
+      // The money cases the equivalence must hold over are really present.
+      const allocations = await loadExpenseJointAllocations(ctx.db);
+      const adjustments = allocations.filter(
+        (row) => row.basis !== "principal",
+      );
+      const projectsByPurchase = new Map<string | null, Set<string>>();
+      for (const row of allocations)
+        if (row.basis === "principal" && row.projectId)
+          projectsByPurchase.set(
+            row.purchaseId,
+            (projectsByPurchase.get(row.purchaseId) ?? new Set()).add(
+              row.projectId,
+            ),
+          );
+      expect({
+        bases: [...new Set(adjustments.map((row) => row.basis))].sort(),
+        negativeAdjustments: adjustments.some(
+          (row) => (row.sourceCents ?? 0n) < 0n,
+        ),
+        multiProjectPurchases: [...projectsByPurchase.values()].some(
+          (projects) => projects.size > 1,
+        ),
+      }).toEqual({
+        bases: ["default", "positive", "refund"],
+        negativeAdjustments: true,
+        multiProjectPurchases: true,
+      });
       const spend = (index: number) => at(seeded.spend, index);
       const vendor = at(seeded.vendors, 0);
       const group = seeded.categories.find(
