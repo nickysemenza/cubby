@@ -21,6 +21,11 @@ Declarations may import shared primitives and cycle-safe field modules. They
 must not import canonical schemas, generated artifacts, server implementations,
 or browser modules. Implementation references remain `{ module, export }` data.
 Browser metadata is generated separately and contains no executable schemas.
+Existing specialist list columns declare `route.listColumns: { module, export }`;
+the generated index route passes that synchronous override to `listPage`. Its
+component split owns the import, so other entities do not load that specialist
+code. The test-only override roster preserves hook-stability coverage and the
+shrink-only boundary; new columns still belong in the generic declaration.
 
 Generated detail and list type maps derive from their schema maps, preserving
 the entity key's input/output correlation. These schema-contract artifacts remain

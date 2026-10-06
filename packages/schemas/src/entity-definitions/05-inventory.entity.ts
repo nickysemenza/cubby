@@ -19,7 +19,13 @@ import { z } from "zod";
 export default defineEntity({
   key: "inventory",
   names: { singular: "Inventory Item", plural: "Inventory" },
-  route: { basePath: "inventory" },
+  route: {
+    listColumns: {
+      module: "~/entity/list-columns/inventory",
+      export: "inventoryListOverride",
+    },
+    basePath: "inventory",
+  },
   table: "InventoryEntry",
   identifiers: { brand: "InventoryId", shortcode: "INV-" },
   // Inventory has no name field; `displayName` ("<product> · <location>")

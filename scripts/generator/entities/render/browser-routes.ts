@@ -58,6 +58,7 @@ const renderIndexRoute = (entity: RoutedEntity, listed: boolean): string => {
         ]
       : []),
     'import { listPage } from "~/entity/routing/list-page";',
+    ...(entity.route.listColumns ? [importLine(entity.route.listColumns)] : []),
     ...(entity.route.create === "page"
       ? ['import { Button } from "~/ui/primitives/button";']
       : []),
@@ -76,6 +77,9 @@ const renderIndexRoute = (entity: RoutedEntity, listed: boolean): string => {
     splitterNote +
     `const ${page} = listPage({\n` +
     `  entity: ${JSON.stringify(entity.key)},\n` +
+    (entity.route.listColumns
+      ? `  override: ${entity.route.listColumns.export},\n`
+      : "") +
     (createAction === null ? "" : `  actions: () => ${createAction},\n`) +
     "});\n\n" +
     `export const Route = createFileRoute(${JSON.stringify(`/_authenticated/${basePath}/`)})({\n` +

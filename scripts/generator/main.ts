@@ -135,7 +135,7 @@ const main = async () => {
   const missingSources = missingListSources(entities);
   if (missingSources.length > 0) {
     throw new EntityDeclarationError(
-      `route.list is true, but these entities have no kernel list read (no create+update contract) and no list override in apps/web/src/entity/list-columns/index.ts to supply rows. Add one with a \`source\`, or declare list: null:\n${missingSources.map((key) => `- ${key}`).join("\n")}`,
+      `route.list is true, but these entities have no kernel list read (no create+update contract) and no route.listColumns source to supply rows. Declare its source reference, or declare listOverride: null:\n${missingSources.map((key) => `- ${key}`).join("\n")}`,
     );
   }
 

@@ -9,7 +9,13 @@ import { z } from "zod";
 export default defineEntity({
   key: "wish",
   names: { singular: "Wish", plural: "Wishlist" },
-  route: { basePath: "wishes" },
+  route: {
+    listColumns: {
+      module: "~/entity/list-columns/wish",
+      export: "wishListOverride",
+    },
+    basePath: "wishes",
+  },
   table: "Wish",
   identifiers: { brand: "WishId", shortcode: "WSH-" },
   presentation: {

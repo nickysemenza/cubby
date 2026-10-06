@@ -18,6 +18,7 @@ import type { ListOverrideRegistry } from "./types";
 import { wishListOverride } from "./wish";
 
 /**
+ * Test-only coverage roster; production routes import their own declaration-bound module.
  * The hand-written half of each entity's list. An entity absent here renders
  * its declared columns generically (`createEntityDisplayColumns`) with the
  * contract's delete and no runtime picklists.

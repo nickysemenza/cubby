@@ -35,7 +35,13 @@ import { selectControlOptions } from "./select-control-options";
 export default defineEntity({
   key: "product",
   names: { singular: "Product", plural: "Products" },
-  route: { basePath: "products" },
+  route: {
+    listColumns: {
+      module: "~/entity/list-columns/product",
+      export: "productListOverride",
+    },
+    basePath: "products",
+  },
   table: "Product",
   children: productChildren,
   identifiers: { brand: "ProductId", shortcode: "PRD-" },

@@ -78,6 +78,7 @@ interface EntityListPageOptions {
   actions?: () => ReactNode;
   /** Test seam, forwarded to the generic list. */
   operations?: GenericEntityListProps["operations"];
+  override?: GenericEntityListProps["override"];
 }
 
 const VIEW_ICONS = {
@@ -182,12 +183,19 @@ export function listPage({
   entity,
   actions,
   operations,
+  override,
 }: EntityListPageOptions) {
   const { singular, plural, list } = entitySummary[entity];
   return listChromePage({
     entity,
     title: plural ?? singular,
-    page: () => <GenericEntityList entity={entity} operations={operations} />,
+    page: () => (
+      <GenericEntityList
+        entity={entity}
+        operations={operations}
+        override={override}
+      />
+    ),
     workbenchControls: () => <ListViewSwitcher entity={entity} />,
     bodyGutter: function useBodyGutter() {
       return useListBodyGutter(entity);

@@ -18,7 +18,13 @@ import { z } from "zod";
 export default defineEntity({
   key: "meal",
   names: { singular: "Meal", plural: "Meals" },
-  route: { basePath: "meals" },
+  route: {
+    listColumns: {
+      module: "~/entity/list-columns/meal",
+      export: "mealListOverride",
+    },
+    basePath: "meals",
+  },
   table: "Meal",
   children: mealChildren,
   identifiers: { brand: "MealId", shortcode: "MEL-" },

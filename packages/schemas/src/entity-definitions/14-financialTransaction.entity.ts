@@ -41,6 +41,10 @@ export default defineEntity({
   key: "financialTransaction",
   names: { singular: "Financial Transaction", plural: "Transactions" },
   route: {
+    listColumns: {
+      module: "~/entity/list-columns/finance",
+      export: "financialTransactionListOverride",
+    },
     basePath: "financial-transactions",
   },
   table: "FinancialTransaction",

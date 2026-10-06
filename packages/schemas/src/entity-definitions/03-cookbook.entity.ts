@@ -7,6 +7,10 @@ export default defineEntity({
   key: "cookbook",
   names: { singular: "Cookbook", plural: "Cookbooks" },
   route: {
+    listColumns: {
+      module: "~/entity/list-columns/cookbook",
+      export: "cookbookListOverride",
+    },
     basePath: "cookbooks",
     // No kernel `get`: the detail reads the cookbook summary query.
     detailOverride: {

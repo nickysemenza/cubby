@@ -17,7 +17,13 @@ import { z } from "zod";
 export default defineEntity({
   key: "location",
   names: { singular: "Location", plural: "Locations" },
-  route: { basePath: "locations" },
+  route: {
+    listColumns: {
+      module: "~/entity/list-columns/location",
+      export: "locationListOverride",
+    },
+    basePath: "locations",
+  },
   table: "Location",
   identifiers: { brand: "LocationId", shortcode: "LOC-" },
   presentation: {

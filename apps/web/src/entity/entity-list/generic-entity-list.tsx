@@ -6,6 +6,7 @@ import { entitySummary } from "@cubby/schemas/entity-summary";
 import { useNavigate, useSearch } from "@tanstack/react-router";
 import {
   createContext,
+  lazy,
   useCallback,
   useContext,
   useEffect,
@@ -33,7 +34,6 @@ import {
   type TimelineEntity,
   timelineEntities,
 } from "~/entity/generated/entity-timelines.gen";
-import { listOverrides } from "~/entity/list-columns";
 import {
   assertSpecialistColumnProvenance,
   type AnyEntityListOverride,
@@ -41,7 +41,6 @@ import {
   type ListOverrideContext,
   type ListOverrideWorkbenchProps,
 } from "~/entity/list-columns/types";
-import { EntityTimeline } from "~/entity/timeline/entity-timeline";
 import { getAppErrorDetails } from "~/lib/error-utils";
 import {
   createImageColumn,
@@ -82,6 +81,12 @@ import {
 import { listSlotFor } from "./list-slots";
 import { manifestTree } from "./manifest-tree";
 import { resolveListView } from "./resolve-list-view";
+
+const EntityTimeline = lazy(() =>
+  import("~/entity/timeline/entity-timeline").then((module) => ({
+    default: module.EntityTimeline,
+  })),
+);
 
 type CardDensity = "cards" | "compact";
 const CardDensityContext = createContext<{
@@ -237,21 +242,22 @@ export interface GenericEntityListProps {
   entity: BrowserRoutedEntity;
   /** Test seam: replaces the entity's generic list read. */
   operations?: { list?: ListQueryOptionsFn<object, BaseListRow> };
+  override?: AnyEntityListOverride;
 }
 
 /**
  * The one list page: rendered from `entitySummary[entity].list` over
  * `useEntityList` + `ListWorkbench`, with the entity's hand-written half
  * (`entities/list-columns/<entity>`) and slot views (`listSlots`) plugged
- * in by registry. The view switcher and header live in `listPage`.
+ * in by its route component. The view switcher and header live in `listPage`.
  */
 export function GenericEntityList({
   entity,
   operations,
+  override = NO_OVERRIDE,
 }: GenericEntityListProps) {
   const { search, navigate } = useListSearch();
   const { view } = resolveListView(entity, search);
-  const override = listOverrides[entity] ?? NO_OVERRIDE;
 
   if (isSlotListView(view)) {
     const Slot = listSlotFor(entity, view.id);

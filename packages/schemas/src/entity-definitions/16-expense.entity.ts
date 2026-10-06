@@ -38,7 +38,13 @@ import {
 export default defineEntity({
   key: "expense",
   names: { singular: "Expense", plural: "Expenses" },
-  route: { basePath: "expenses" },
+  route: {
+    listColumns: {
+      module: "~/entity/list-columns/expense",
+      export: "expenseListOverride",
+    },
+    basePath: "expenses",
+  },
   table: "Expense",
   children: expenseChildren,
   identifiers: { brand: "ExpenseId", shortcode: "EXP-" },

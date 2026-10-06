@@ -31,6 +31,13 @@ or do a naive vendor split — it drags lazy-route code into first paint. Detail
 and list slot fills stay `lazy` in their registries (`detail-slots.tsx`,
 `list-slots.ts`): every generic list route shares one closure, so one static
 slot import ships to every list.
+Specialist list columns are declared as `route.listColumns` source references.
+The generated route component imports only its own override and passes it to
+`listPage`; the generic list must never import an all-entity column registry.
+Shared cells live with their generic feature (for example, the unit-mappings
+column lives in `features/units`), so generic hooks do not import a specialist
+list module merely to reuse one renderer.
+Timeline rendering loads only when its view is selected.
 Keep list page factories (`list-page.tsx`) separate from detail factories
 (`detail-page.tsx`) so lists do not import generic detail sections. Bind each
 factory result to a module-level constant referenced by a splittable property
