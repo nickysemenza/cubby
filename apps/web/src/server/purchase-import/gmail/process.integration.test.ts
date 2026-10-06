@@ -66,6 +66,7 @@ import {
 } from "./attachment-storage";
 import { type OrderMailPorts, processOrderMails } from "./process";
 import { decideOrderMailCandidate, listVendorOrderMail } from "./review";
+import { createVendorFromOrderMail } from "./vendor-bootstrap";
 
 const classifications = new Map<string, OrderMailMessageClassification>();
 const uploadedKeys: string[] = [];
@@ -334,6 +335,235 @@ describe("Gmail order mail processing", () => {
       .from(orderMail)
       .where(eq(orderMail.messageId, "spoofed-display"));
     expect(mail?.vendorId).toBeNull();
+  });
+
+  // A first order from a new website creates its Vendor. Failure modes: a
+  // shared mailbox domain (free mail, a storefront platform) becomes one
+  // Vendor for every merchant on it; a display name impersonating another
+  // address names the Vendor; every newsletter is sent to the classifier; a
+  // second mail from the new domain in the same batch mints a twin; a name
+  // already taken by another Vendor is reused for a different website.
+  describe("a confirmation from an unknown sender", () => {
+    const newVendors = () =>
+      getDb(ctx.db)
+        .select({ id: vendor.id, name: vendor.name, website: vendor.website })
+        .from(vendor)
+        .where(eq(vendor.website, "https://seedco.example"));
+    const openSenderFindings = () =>
+      getDb(ctx.db)
+        .select({ summary: runFinding.summary })
+        .from(runFinding)
+        .where(
+          and(
+            eq(runFinding.kind, "unclassified_vendor"),
+            eq(runFinding.status, "open"),
+          ),
+        );
+
+    async function receiveUnknown(
+      seed: Seed,
+      messageIds: string[],
+      sender: string,
+      subject = "Your order is confirmed",
+    ) {
+      for (const messageId of messageIds)
+        await getDb(ctx.db)
+          .insert(orderMail)
+          .values({
+            ledgerPartyId: seed.party.id,
+            messageId,
+            sender,
+            subject,
+            receivedAt: new Date("2026-09-20T12:00:00Z"),
+            rawChecksum: `raw-${messageId}`,
+          });
+      return processOrderMails(ctx.db, messageIds, ports);
+    }
+
+    it("creates the Vendor and a mail-only account, then processes the order under it", async () => {
+      const seed = await seedForgeWear();
+      classifications.set("seedco-1", {
+        events: [placed("SC-1001", 12, "2026-09-20T12:00:00Z")],
+      });
+      classifications.set("seedco-2", {
+        events: [placed("SC-1002", 8, "2026-09-20T13:00:00Z")],
+      });
+      await receiveUnknown(
+        seed,
+        ["seedco-1", "seedco-2"],
+        "Example Seed Co <orders@mail.seedco.example>",
+      );
+      const created = await newVendors();
+      expect(created).toEqual([
+        expect.objectContaining({ name: "Example Seed Co" }),
+      ]);
+      const vendorId = created[0]!.id;
+      const mails = await getDb(ctx.db)
+        .select({ vendorId: orderMail.vendorId })
+        .from(orderMail)
+        .where(eq(orderMail.ledgerPartyId, seed.party.id));
+      expect(mails.filter((mail) => mail.vendorId === vendorId)).toHaveLength(
+        2,
+      );
+      expect(
+        await getDb(ctx.db)
+          .select({ status: vendorAccount.status })
+          .from(vendorAccount)
+          .where(eq(vendorAccount.vendorId, vendorId)),
+      ).toEqual([{ status: "disabled" }]);
+      expect(
+        await getDb(ctx.db)
+          .select({ orderId: orderMailEvent.orderId })
+          .from(orderMailEvent)
+          .innerJoin(orderMail, eq(orderMail.id, orderMailEvent.orderMailId))
+          .where(eq(orderMail.vendorId, vendorId)),
+      ).toHaveLength(2);
+      expect(await openSenderFindings()).toEqual([]);
+    });
+
+    it("leaves shared domains, impersonating names, non-orders, and taken names as findings", async () => {
+      const seed = await seedForgeWear();
+      classifications.set("free-mail", {
+        events: [placed("FM-1", 5, "2026-09-20T12:00:00Z")],
+      });
+      await receiveUnknown(seed, ["free-mail"], "A Seller <seller@gmail.com>");
+      classifications.set("impersonating", {
+        events: [placed("IM-1", 5, "2026-09-20T12:00:00Z")],
+      });
+      await receiveUnknown(
+        seed,
+        ["impersonating"],
+        "orders@forgewear.example <billing@seedco.example>",
+      );
+      classifications.set("shipped-only", {
+        events: [
+          {
+            event: "shipped",
+            orderId: "SH-1",
+            amount: null,
+            currency: null,
+            occurredAt: null,
+          },
+        ],
+      });
+      await receiveUnknown(
+        seed,
+        ["shipped-only"],
+        "Seed Co <ship@seedco.example>",
+      );
+      // No classification is registered: a newsletter must not reach the model.
+      await receiveUnknown(
+        seed,
+        ["newsletter"],
+        "Seed Co <news@seedco.example>",
+        "Spring planting tips",
+      );
+      // Account and promotional mail that mentions orders never reaches the
+      // model: none of these has a registered classification.
+      for (const [index, subject] of [
+        "Confirm your email address",
+        "Thanks for subscribing to order updates",
+        "Invoice software: 20% off",
+      ].entries())
+        await receiveUnknown(
+          seed,
+          [`promo-${index}`],
+          "Seed Co <news@seedco.example>",
+          subject,
+        );
+      // Email relays rewrite many merchants onto one domain.
+      classifications.set("relay", {
+        events: [placed("RL-1", 5, "2026-09-20T12:00:00Z")],
+      });
+      await receiveUnknown(
+        seed,
+        ["relay"],
+        "Example Seeds <example.seeds@mailchimpapp.com>",
+      );
+      await insertWithShortcode(ctx.db, "vendor", {
+        name: "Seedco",
+        website: "https://other-seedco.example",
+      });
+      classifications.set("taken-name", {
+        events: [placed("TN-1", 5, "2026-09-20T12:00:00Z")],
+      });
+      await receiveUnknown(
+        seed,
+        ["taken-name"],
+        "Seedco <orders@seedco.example>",
+      );
+      expect(await newVendors()).toEqual([]);
+      expect(
+        await getDb(ctx.db)
+          .select({ id: vendor.id })
+          .from(vendor)
+          .where(eq(vendor.website, "https://gmail.com")),
+      ).toEqual([]);
+      expect((await openSenderFindings()).length).toBeGreaterThan(0);
+    });
+
+    it("names a Vendor from its own domain when the display name claims another merchant", async () => {
+      const seed = await seedForgeWear();
+      classifications.set("claims-other", {
+        events: [placed("CO-1", 5, "2026-09-20T12:00:00Z")],
+      });
+      await receiveUnknown(
+        seed,
+        ["claims-other"],
+        "Example Outfitters <billing@seedco.example>",
+      );
+      expect(await newVendors()).toEqual([
+        expect.objectContaining({ name: "Seedco" }),
+      ]);
+    });
+
+    it("treats a subscription order as an order", async () => {
+      const seed = await seedForgeWear();
+      classifications.set("subscription-order", {
+        events: [placed("SO-1", 12, "2026-09-20T12:00:00Z")],
+      });
+      await receiveUnknown(
+        seed,
+        ["subscription-order"],
+        "Seed Co <orders@seedco.example>",
+        "Your subscription order is confirmed",
+      );
+      expect(await newVendors()).toHaveLength(1);
+    });
+
+    it("refuses, without failing the batch, a name another domain takes at the same moment", async () => {
+      const outcomes = await Promise.all(
+        ["seedco.example", "seedco.test"].map((domain) =>
+          createVendorFromOrderMail(
+            ctx.db,
+            // Differently cased, so the case-sensitive unique index alone
+            // would admit both.
+            { name: domain.endsWith(".test") ? "SEEDCO" : "Seedco", domain },
+            `orders@${domain}`,
+          ),
+        ),
+      );
+      expect(outcomes.filter(Boolean)).toHaveLength(1);
+      expect(outcomes.filter((outcome) => outcome === null)).toHaveLength(1);
+    });
+
+    it("creates one Vendor when two passes bootstrap the same domain at once", async () => {
+      const created = await Promise.all([
+        createVendorFromOrderMail(
+          ctx.db,
+          { name: "Seed Co", domain: "seedco.example" },
+          "orders@seedco.example",
+        ),
+        createVendorFromOrderMail(
+          ctx.db,
+          { name: "Seedco", domain: "seedco.example" },
+          "billing@seedco.example",
+        ),
+      ]);
+      expect(created[0]?.id).toBeDefined();
+      expect(created[1]?.id).toBe(created[0]?.id);
+      expect(await newVendors()).toHaveLength(1);
+    });
   });
 
   it("matches a website-domain sender when no receipt address was configured", async () => {

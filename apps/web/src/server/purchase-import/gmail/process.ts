@@ -62,6 +62,10 @@ import { linkExactOrderMail } from "./exact-link";
 import { ensureMailVendorAccount } from "./mail-account";
 import { orderAmountsInHuntWindow, uniqueOrderSubsetIds } from "./match";
 import {
+  createVendorFromOrderMail,
+  senderVendorCandidate,
+} from "./vendor-bootstrap";
+import {
   matchesConfiguredVendorSender,
   matchesVendorSender,
 } from "./vendor-identity";
@@ -244,7 +248,57 @@ export async function processOrderMails(
             orderEmailSenders: candidate.senders,
           }),
         );
-    if (matchedVendors.length !== 1) {
+    let classification: Awaited<ReturnType<typeof ports.classify>> | undefined;
+    const classify = async () => {
+      try {
+        return await ports.classify({
+          db,
+          runId,
+          messageId: mail.messageId,
+          sender: mail.sender,
+          subject: mail.subject,
+          receivedAt: mail.receivedAt.toISOString(),
+          content: mail.content,
+        });
+      } catch (error) {
+        if (error instanceof AiGatewayRequestError) throw error;
+        throw new Error("Order email classification failed", { cause: error });
+      }
+    };
+    let matchedVendor = matchedVendors.length === 1 ? matchedVendors[0] : null;
+    // A first order from a new website creates its Vendor; anything short of
+    // a placed order with an id stays a finding below.
+    const candidate =
+      matchedVendors.length === 0
+        ? senderVendorCandidate(mail.sender, mail.subject)
+        : null;
+    if (candidate) {
+      classification = await classify();
+      if (
+        classification.events.some(
+          (event) => event.event === "placed" && event.orderId,
+        )
+      ) {
+        const created = await createVendorFromOrderMail(
+          db,
+          candidate,
+          mail.sender,
+        );
+        if (created) {
+          const row = {
+            id: created.id,
+            name: created.name,
+            senders: created.orderEmailSenders,
+            website: created.website,
+            returnWindowDays: created.returnWindowDays,
+          };
+          // Later mail in this batch from the same domain matches it.
+          vendors.push(row);
+          matchedVendor = row;
+        }
+      }
+    }
+    if (!matchedVendor) {
       const fingerprint = await sha256Hex(
         `unknown-sender:${mail.sender.toLowerCase()}`,
       );
@@ -314,28 +368,12 @@ export async function processOrderMails(
       processed += 1;
       continue;
     }
-    const matchedVendor = matchedVendors[0];
-    if (!matchedVendor) continue;
     await database
       .update(orderMail)
       .set({ vendorId: matchedVendor.id, updatedAt: new Date() })
       .where(eq(orderMail.id, mail.id));
 
-    let classification: Awaited<ReturnType<typeof ports.classify>>;
-    try {
-      classification = await ports.classify({
-        db,
-        runId,
-        messageId: mail.messageId,
-        sender: mail.sender,
-        subject: mail.subject,
-        receivedAt: mail.receivedAt.toISOString(),
-        content: mail.content,
-      });
-    } catch (error) {
-      if (error instanceof AiGatewayRequestError) throw error;
-      throw new Error("Order email classification failed", { cause: error });
-    }
+    classification ??= await classify();
     const classifiedEvents = [...classification.events].sort((left, right) =>
       JSON.stringify(left).localeCompare(JSON.stringify(right)),
     );
