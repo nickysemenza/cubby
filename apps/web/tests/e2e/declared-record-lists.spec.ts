@@ -105,7 +105,7 @@ test("combined records retain server sorting, pagination, and filters after relo
     .getByRole("button", { name: "Sort by Quality", exact: true })
     .click();
   await expect(page).toHaveURL(/orderBy=quality/);
-  await expect(qualityCell()).toHaveText(/^\d+\/100$/);
+  await expect(qualityCell()).toHaveText("Not assessed");
   await page.getByRole("button", { name: /^Clear \d+$/ }).click();
   await expect(
     page.getByRole("textbox", { name: "Name or shortcode" }),
