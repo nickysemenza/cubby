@@ -114,6 +114,7 @@ describe("MCP catalog", () => {
       product_enrichment: write(),
       upc: write(),
       photo_run: write(),
+      run: write({ openWorld: true }),
       meal_recipe: write(),
       recipe_import: write({ openWorld: true }),
       image: write(),

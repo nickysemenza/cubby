@@ -22,6 +22,18 @@ deterministic idempotency key. Multiple attachments to one Product are
 dependent count changes; prefer independent target batches and retry only
 failed items after a fresh read.
 
+## Runs
+
+`run.start` and `run.start_charge_run` start runs the coordinator executes;
+page reads go through the Mac app's signed-in browser, so a run may wait for a
+connected Mac. `imports_read.run_launch_preview` and
+`imports_read.charge_hunts` show what a start would use. Status is the Run
+entity: poll `entity_read.get` with `resultDetail: "full"`. A start never
+queues behind a busy Vendor account: `run.start` answers `blockingRun`, and
+`run.start_charge_run` refuses. No run purpose holds the `start_run`
+capability (`server/purchase-import/capabilities.ts`), so a coordinator never
+starts another run.
+
 ## Failures and timeouts
 
 A tool failure comes back as an `isError` result whose text names the cause
@@ -72,4 +84,7 @@ reason on the member itself — there is no contract-level default — and add a
   closed reasons agents do without it.
 
 Exposing an operation means adding its action and deleting its `mcp`
-declaration (and its todo line when deferred).
+declaration (and its todo line when deferred). A member input publishes as an
+object, an optional object, a union of objects, or no input; a tool's
+actions are all queries or all mutations, so an operation's reads and writes
+land in different tools.

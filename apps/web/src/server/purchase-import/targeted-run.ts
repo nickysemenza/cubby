@@ -4,7 +4,11 @@ import type {
   PurchaseId,
   VendorId,
 } from "@cubby/schemas/identifiers";
-import { runShortcode, vendorAccountId } from "@cubby/schemas/identifiers";
+import {
+  runShortcode,
+  vendorAccountId,
+  vendorAccountShortcode,
+} from "@cubby/schemas/identifiers";
 import { agentImportRunPurpose } from "@cubby/schemas/import-run-agent";
 import type { PurchaseAgentEvent } from "@cubby/schemas/purchase-import";
 import { sha256Hex } from "@cubby/shared/sha256";
@@ -48,7 +52,7 @@ type SourceClaim = {
   externalKey: string;
   checksum: string;
   outputFingerprint: string;
-  vendorAccountId: string | null;
+  vendorAccountShortcode: string | null;
   vendorAccountLabel: string | null;
   vendorId: VendorId;
   vendorShortcode: string;
@@ -62,6 +66,8 @@ type TargetFingerprintInput =
     }
   /** A Product that was not found; a live one uses `productEnrichmentTarget`. */
   | { product: undefined };
+
+const accountShortcode = vendorAccountShortcode.nullable();
 
 const fingerprint = (value: TargetFingerprintInput) =>
   sha256Hex(JSON.stringify(value));
@@ -160,7 +166,7 @@ async function claimsForPurchase(
       externalKey: importSourceClaim.externalKey,
       checksum: importSourceClaim.checksum,
       outputFingerprint: importSourceClaim.outputFingerprint,
-      vendorAccountId: importSourceClaim.vendorAccountId,
+      vendorAccountShortcode: vendorAccount.shortcode,
       vendorAccountLabel: vendorAccount.label,
       vendorId: vendor.id,
       vendorShortcode: vendor.shortcode,
@@ -265,7 +271,7 @@ export async function loadTargetedImportLaunch(
           label: claimLabel(claim),
           kind: claim.kind,
           fingerprint: claim.checksum,
-          vendorAccountId: claim.vendorAccountId,
+          vendorAccountId: accountShortcode.parse(claim.vendorAccountShortcode),
           vendorAccountLabel: claim.vendorAccountLabel,
           usable: true,
           reason: null,
@@ -289,7 +295,7 @@ export async function loadTargetedImportLaunch(
       id: importSourceClaim.id,
       kind: importSourceClaim.kind,
       externalKey: importSourceClaim.externalKey,
-      vendorAccountId: importSourceClaim.vendorAccountId,
+      vendorAccountShortcode: vendorAccount.shortcode,
       vendorAccountLabel: vendorAccount.label,
     })
     .from(expense)
@@ -324,7 +330,9 @@ export async function loadTargetedImportLaunch(
         selected: Boolean(claim),
         sourceId: claim?.id ?? null,
         sourceLabel: claim ? claimLabel(claim) : null,
-        vendorAccountId: claim?.vendorAccountId ?? null,
+        vendorAccountId: accountShortcode.parse(
+          claim?.vendorAccountShortcode ?? null,
+        ),
         vendorAccountLabel: claim?.vendorAccountLabel ?? null,
         needsAccountChoice: false,
         accountChoices: [],

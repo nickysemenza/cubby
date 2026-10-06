@@ -7,6 +7,7 @@ import {
   productShortcode,
   purchaseShortcode,
   runShortcode,
+  vendorAccountShortcode,
 } from "./identifiers";
 import {
   createPaginatedResponseSchema,
@@ -68,7 +69,7 @@ export const targetedImportStartInput = z
             z.object({
               productId: productShortcode,
               sourceId: z.string().min(1).nullable(),
-              vendorAccountId: z.string().min(1).nullable(),
+              vendorAccountId: vendorAccountShortcode.nullable(),
             }),
           )
           .min(1),

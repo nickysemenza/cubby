@@ -62,6 +62,7 @@ import {
   suggestionsContract,
 } from "~/contracts/recipe.contract";
 import { recommendationsContract } from "~/contracts/recommendations.contract";
+import { runContract } from "~/contracts/run.contract";
 import { searchContract } from "~/contracts/search.contract";
 import { spendingClassificationContract } from "~/contracts/spending-classification.contract";
 import { statementRowContract } from "~/contracts/statement-row.contract";
@@ -73,7 +74,7 @@ import {
 import { vendorContract } from "~/contracts/vendor.contract";
 
 /**
- * The Cubby MCP surface: 21 tools, each a group of actions called as
+ * The Cubby MCP surface: 24 tools, each a group of actions called as
  * `{ action, ...input }`. Read-only tools hold only queries, so an MCP client
  * can auto-approve them; `pnpm generate` refuses a tool that mixes kinds.
  * Action descriptions name other actions as `tool.action`.
@@ -499,7 +500,7 @@ export const MCP_TOOLS = defineMcpTools({
 
   imports_read: {
     description:
-      "Import-run and enrichment reads: purchase-import operation status, vendor coverage, photo-run context and proposals, image processing, external-id collisions, and barcode lookup.",
+      "Import-run and enrichment reads: purchase-import operation status, vendor coverage, what a targeted or charge-search run would use, photo-run context and proposals, image processing, external-id collisions, and barcode lookup.",
     actions: {
       purchase_status: mcpAction({
         op: purchaseImportContract.ops.operationStatus,
@@ -510,6 +511,16 @@ export const MCP_TOOLS = defineMcpTools({
         op: vendorContract.ops.coverage,
         description:
           "Vendor identity, its latest live purchase date overall, and sorted unique non-null order IDs from an inclusive date range.",
+      }),
+      run_launch_preview: mcpAction({
+        op: runContract.ops.targetedLaunch,
+        description:
+          'What run.start would use for one target, without starting anything. `purpose: "product_enrichment"` with a Product shortcode returns `products[0]`: its `sourceId` (the newest import source claim of a Purchase that bought it) and `reason` when none exists — a Product with no import source cannot be enriched by a run. `purpose: "purchase_validation"` with a Purchase shortcode returns its replayable `sources`; the `default` one is the usual choice, and none means the run searches Gmail, then an owned browser account.',
+      }),
+      charge_hunts: mcpAction({
+        op: vendorContract.ops.chargeHunts,
+        description:
+          "One Vendor account's open, unallocated statement charges that a browser run can search for — the candidates for run.start_charge_run. A charge is selectable when `reason` is null; otherwise `reason` says why not, and `runId` names the unfinished run that already holds it.",
       }),
       photo_context: mcpAction({
         op: photoImportContract.ops.runContext,
@@ -732,6 +743,27 @@ export const MCP_TOOLS = defineMcpTools({
         op: photoImportContract.ops.commitGroup,
         description:
           'The bounded writer approval runs. Prefer photo_run.propose_groups and let the user approve on the run page; call this only when the user explicitly asks to skip review. Turns one group of already-staged images into one Product (an existing Product by id, or a genuinely new one) with each image attached under an `item` or `label` purpose, and optionally one Inventory entry. Idempotent per (runId, groupKey): the exact same call replays the prior result; a changed payload under the same groupKey is refused unless the earlier attempt failed. When a `create` name or alias exactly (case-insensitively) matches a live Product, nothing is written and the call returns `outcome: "conflict"` with the colliding Product ids — never a speculative new Product. Every listed image must be a `pending` target of the run and appear in exactly one of `images` (attach) or `skip` (with a reason); a skip-only group touches no Product. Marks the run `completed` once no `pending` target remains.',
+      }),
+    },
+  },
+
+  run: {
+    description:
+      'Start a Cubby run. The run\'s coordinator does the work and reads pages through the signed-in browser of the household\'s Mac app, so a run may wait for a connected Mac before it progresses. Each start returns a RUN- shortcode: poll entity_read.get with entity "run" and resultDetail "full" on it until `status` is terminal (completed, failed, needs_review, or dispatch_failed); paused_* statuses are waiting (paused_offline: for the Mac), not finished.',
+    actions: {
+      start: mcpAction({
+        op: runContract.ops.startTargeted,
+        // The run browses the Vendor's site through the Mac's browser.
+        openWorld: true,
+        description:
+          'Start a targeted run. `purpose: "product_enrichment"` with `targets` (each a Product shortcode, the `sourceId` from imports_read.run_launch_preview, and `vendorAccountId: null`; the run browses with the Vendor\'s browsing account) verifies identity facts and images from the Vendor\'s pages; targets are grouped into one run per Vendor account. `purpose: "purchase_validation"` with a `purchaseId` and an optional `sourceId` re-reads one Purchase\'s order against its source. Returns one entry per run: `created: true` with `run` (id, status) for a new run, or `created: false` with `blockingRun` when that Vendor account already has an active run — nothing is queued then; poll or wait for the blocking run and start again. Repeating a start while its run is active returns that run as `blockingRun`.',
+      }),
+      start_charge_run: mcpAction({
+        op: vendorContract.ops.startChargeRun,
+        // The run searches the Vendor's site through the Mac's browser.
+        openWorld: true,
+        description:
+          "Start one browser run that searches a Vendor account's order history for up to 50 selected statement charges (FTX- ids from imports_read.charge_hunts with a null `reason`). The account must have browser sync enabled. All or nothing: a selected charge that is settled, not searchable, or already on another unfinished run, or an account that already has an active run, refuses the whole call and starts nothing. Returns `runId`.",
       }),
     },
   },

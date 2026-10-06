@@ -134,8 +134,8 @@ and never moves the incremental cursor. `defer_order_for_review` leaves one
 ambiguous order for review while the others continue; the run then ends in
 review rather than reporting a complete import, and a restart retries it.
 A member can also select statement charges for one run
-(`vendor.startChargeRun`, from the Vendor account's Statement charges
-section): the run's work is exactly those charge hunts, each claimed as a
+(the Vendor account's Statement charges section, or MCP
+`run.start_charge_run` with charges from `imports_read.charge_hunts`): the run's work is exactly those charge hunts, each claimed as a
 `hunt` item with its `id`, and it never walks order history or joins another
 hunt. Find the charge's order on the vendor account and import it normally;
 the server settles the hunt only when the charge is uniquely and conservatively

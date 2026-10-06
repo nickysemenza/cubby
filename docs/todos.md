@@ -597,8 +597,7 @@ consume the declarations.
   - Order mail: `vendor.orderMail`, `vendor.searchOrderMail`,
     `vendor.orderMailSearchStatus`, `vendor.importOrderMail`,
     `vendor.importSelectedOrderMail`.
-  - Targeted runs and their evidence: `run.targetedLaunch`,
-    `run.startTargeted`, `vendor.chargeHunts`, `vendor.startChargeRun`,
+  - Targeted runs and their evidence:
     `purchaseImport.initiateRunEvidenceUpload`.
   - Inventory receiving: `inventory.receiveExpense`,
     `inventory.receivingContext`, `problems.resolveArrivedFindings`.

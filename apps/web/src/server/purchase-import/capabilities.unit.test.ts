@@ -1,3 +1,4 @@
+import { runPurpose } from "@cubby/schemas/purchase-import";
 import { describe, expect, it } from "vitest";
 
 import { MCP_TOOLS } from "~/contracts/mcp-tools";
@@ -32,6 +33,18 @@ describe("targeted import capabilities", () => {
     expect(() =>
       assertRunCapability("account_sync", "audit_repair"),
     ).not.toThrow();
+  });
+
+  // A coordinator that could start runs could chain them without a member.
+  it("lets no run purpose start another run", () => {
+    for (const action of ["run.start", "run.start_charge_run"] as const)
+      for (const purpose of runPurpose.options)
+        expect(() =>
+          assertRunCapability(
+            purpose,
+            capabilityForPurchaseAgentAction(action),
+          ),
+        ).toThrow("forbids start_run");
   });
 
   it("keys capability on the tool action, so one action never authorizes another", () => {
