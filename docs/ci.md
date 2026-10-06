@@ -175,7 +175,7 @@ USDA API build alongside the existing `unit`,
 `mcp-contract`, `worker-safety`, and `ui` Vitest projects together in one job,
 preserving each project's environment and isolation. One dependency setup and
 MCP App build serve all four web projects; there is no fast-test job matrix.
-Sharing their job with auxiliary checks removes another runner slot and
+When both tiers are selected, sharing their job removes one runner slot and
 repeated setup. Web-only changes retain the filtered install; auxiliary changes
 install the full workspace. Each tier keeps its own scope condition.
 Node projects run first,
