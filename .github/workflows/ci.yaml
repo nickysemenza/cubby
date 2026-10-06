@@ -126,20 +126,34 @@ jobs:
             './**/*.md'
             './**/*.mdx'
 
+  # Fast web and auxiliary checks share setup and a required status.
   test-aux:
     name: Auxiliary tests and builds
     needs: scope
-    if: needs.scope.outputs.auxiliary == 'true'
+    if: needs.scope.outputs.auxiliary == 'true' || needs.scope.outputs.web == 'true'
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 20
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
       - uses: ./.github/actions/setup-node-with-deps
         with:
-          wasm: "false"
+          wasm: ${{ needs.scope.outputs.web == 'true' && 'restore' || 'false' }}
+          workspace-filter: ${{ needs.scope.outputs.auxiliary != 'true' && '@cubby/web...' || '' }}
+      # The mcp-contract project imports the built MCP App HTML; build:cf used
+      # to produce it here before the Worker build moved to build-worker.
+      - name: Build MCP App assets
+        if: needs.scope.outputs.web == 'true'
+        run: pnpm --filter @cubby/mcp-apps run build
+      - name: Run fast tests
+        if: needs.scope.outputs.web == 'true'
+        run: pnpm --dir apps/web exec vitest run --project unit --project mcp-contract --project worker-safety --project ui
+
       - name: Run auxiliary package tests
+        if: needs.scope.outputs.auxiliary == 'true'
         run: pnpm -r --no-sort --workspace-concurrency=2 --no-bail --filter '!@cubby/web' --if-present run test --maxWorkers=1
-      - run: pnpm --filter @cubby/usda-api run build
+      - name: Build USDA API
+        if: needs.scope.outputs.auxiliary == 'true'
+        run: pnpm --filter @cubby/usda-api run build
 
   test-rust:
     name: Rust - recipebridge and cubby-ffi
@@ -191,28 +205,6 @@ jobs:
             packages/wasm
           if-no-files-found: error
           retention-days: 1
-
-  test-web:
-    name: Tests - web
-    needs: scope
-    if: needs.scope.outputs.web == 'true'
-    runs-on: ubuntu-latest
-    timeout-minutes: 20
-    permissions:
-      contents: read
-      actions: read
-    steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
-      - uses: ./.github/actions/setup-node-with-deps
-        with:
-          wasm: "restore"
-          workspace-filter: "@cubby/web..."
-      # The mcp-contract project imports the built MCP App HTML; build:cf used
-      # to produce it here before the Worker build moved to build-worker.
-      - name: Build MCP App assets
-        run: pnpm --filter @cubby/mcp-apps run build
-      - name: Run fast tests
-        run: pnpm --dir apps/web exec vitest run --project unit --project mcp-contract --project worker-safety --project ui
 
   # One four-worker job avoids repeating database and dependency setup.
   # These files never start workerd, so they start after Scope, not Build
@@ -416,7 +408,7 @@ jobs:
       [
         scope,
         build-worker,
-        test-web,
+        test-aux,
         test-postgres,
         test-postgres-workerd,
         db-check,
@@ -431,7 +423,7 @@ jobs:
           SCOPE_RESULT: ${{ needs.scope.result }}
           WEB: ${{ needs.scope.outputs.web }}
           BUILD_RESULT: ${{ needs.build-worker.result }}
-          WEB_RESULT: ${{ needs.test-web.result }}
+          WEB_RESULT: ${{ needs.test-aux.result }}
           POSTGRES_RESULT: ${{ needs.test-postgres.result }}
           POSTGRES_WORKERD_RESULT: ${{ needs.test-postgres-workerd.result }}
           DB_CHECK_RESULT: ${{ needs.db-check.result }}

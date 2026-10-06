@@ -170,11 +170,15 @@ whenever web validation is selected. Its shell-only status check uses the
 standard `ubuntu-slim` container runner; it needs no checkout, dependencies,
 services, or privileged operations. This keeps the same runner-slot count and
 five-minute timeout. Queue and startup time remain part of measured gate latency.
-`Tests - web` runs the existing `unit`,
+`Auxiliary tests and builds` runs the selected auxiliary package tests and
+USDA API build alongside the existing `unit`,
 `mcp-contract`, `worker-safety`, and `ui` Vitest projects together in one job,
 preserving each project's environment and isolation. One dependency setup and
-MCP App build serve all four projects; there is no fast-test job matrix. This
-uses one fewer Linux runner slot per selected PR. Node projects run first,
+MCP App build serve all four web projects; there is no fast-test job matrix.
+Sharing their job with auxiliary checks removes another runner slot and
+repeated setup. Web-only changes retain the filtered install; auxiliary changes
+install the full workspace. Each tier keeps its own scope condition.
+Node projects run first,
 then UI uses Vitest's standard project group ordering, keeping each phase's
 worker environment together. `Build Workers` builds the
 web Cloudflare bundle (which hosts the purchase agent) and uploads it

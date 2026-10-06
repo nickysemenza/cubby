@@ -249,7 +249,7 @@ instead of growing the page, a headline that must not wrap). It is opt-in
 shared jsdom graph; select it with `--project=preview`, `--project preview`,
 `test:preview`, or a direct `.preview.test.tsx` file argument. It is not
 wired into CI yet — doing so would need a Playwright browser install step in
-the `Tests - web (ui)` lane, which every push would pay for; wire it into that
+the combined `Auxiliary tests and builds` lane, which every push would pay for; wire it into that
 existing workflow once more than one component family needs it. Preview specs
 need Tailwind's real
 CSS output (`tooling/preview-test-setup.ts` imports `~/styles.css`) since a
