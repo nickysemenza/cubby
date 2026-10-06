@@ -141,7 +141,6 @@ function assistantMessage(
       outputTokens: message.usage.output,
       cacheReadTokens: message.usage.cacheRead,
       cacheWriteTokens: message.usage.cacheWrite,
-      costUsd: message.usage.cost.total,
     },
   };
   if (breakdown) metadata.contextBreakdown = breakdown;

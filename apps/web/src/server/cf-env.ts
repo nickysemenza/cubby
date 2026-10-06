@@ -7,7 +7,7 @@
 
 import { AsyncLocalStorage } from "node:async_hooks";
 
-import { CUBBY_AI_GATEWAY_ID } from "@cubby/shared/ai-gateway-metadata";
+import { CUBBY_AI_GATEWAY_ID } from "@cubby/shared/ai/gateway-metadata";
 
 import type { BackgroundQueueProducer } from "./background-queue-types";
 import type { PurchaseAgentQueueProducer } from "./purchase-agent-queue-types";
@@ -110,13 +110,9 @@ export const getPurchaseImportRunAgentNamespace = () =>
 /** Connected native image workers share this transport; job authority stays in Postgres. */
 export const getImageProcessingNamespace = () => cfEnv?.IMAGE_PROCESSING;
 
-// Cubby's Cloudflare account: the gateway-REST and Workers AI REST base URLs
-// built in `~/server/clients/ai-gateway`.
-export const CF_ACCOUNT_ID = "9f10f078d35d86c78dedece2300a6b88";
-
 /**
  * The optional Workers AI binding (`env.AI`) from the Worker environment. The
- * transport shim in `~/server/clients/ai-gateway` runs Workers AI models on it
+ * transport shim in `~/server/ai/gateway` runs Workers AI models on it
  * directly and reaches every other provider through `getAiGateway`.
  */
 export const getAi = () => cfEnv?.AI;

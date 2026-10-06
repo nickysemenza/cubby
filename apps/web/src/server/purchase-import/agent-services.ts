@@ -312,17 +312,15 @@ export function runServicesFor(
       const event = agentUsageEvent.parse(input);
       return withDatabase(async (db) => {
         const [{ recordAiUsage }, { runEntityId }] = await Promise.all([
-          import("~/server/ai-usage"),
+          import("~/server/ai/usage"),
           import("@cubby/schemas/identifiers"),
         ]);
         await recordAiUsage(db, {
           ...event,
           eventId: await sha256Uuid(`purchase-agent:${runId}:${event.eventId}`),
           runId: runEntityId.parse(runId),
-          cacheStatus:
-            event.cacheReadTokens > 0 || event.cacheWriteTokens > 0
-              ? "hit"
-              : "none",
+          // Prompt-cache traffic is token evidence, not a caller cache.
+          cacheStatus: "none",
         });
       });
     },

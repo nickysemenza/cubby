@@ -4,6 +4,19 @@ import path from "node:path";
 
 import { sleep } from "@cubby/shared/retry";
 import { and, eq, gte, inArray, sql } from "drizzle-orm";
+import {
+  type ObservedDecision,
+  scoreDecision,
+  summarizeDecisions,
+} from "tooling/ai/decision-score";
+import {
+  type EvalCandidate,
+  evalCandidates,
+  evalCostUsd,
+  evalUsageReport,
+  evalWebRoot,
+  liveEvalModelWorker,
+} from "tooling/ai/eval-support";
 import { withTestDb } from "tooling/test-setup";
 import { withWorkerdRuntime } from "tooling/workerd-runtime";
 import { describe, expect, it } from "vitest";
@@ -27,14 +40,6 @@ import {
 } from "~/server/repo/repo.fixtures";
 import { insertWithShortcode } from "~/server/repo/shortcode-utils";
 
-import {
-  type EvalCandidate,
-  evalCandidates,
-  evalCostUsd,
-  evalUsageReport,
-  evalWebRoot,
-  liveEvalModelWorker,
-} from "./agent-eval-live-support";
 import { learnPurchaseProductExternalId } from "./external-id-learning";
 import { startOrderMailImport } from "./gmail/import";
 import { authorizePurchaseAgent } from "./purchase-agent-workerd.fixtures";
@@ -45,11 +50,6 @@ import {
   decisionMailBody,
   purchaseDecisionCases,
 } from "./purchase-decision-eval.fixtures";
-import {
-  type ObservedDecision,
-  scoreDecision,
-  summarizeDecisions,
-} from "./purchase-decision-eval.score";
 
 /**
  * Live purchase-coordinator decision eval. Opt-in and billed: the real
@@ -366,7 +366,7 @@ describe("purchase coordinator decision eval", () => {
               effort: choice.effort,
               wallMs,
               usage,
-              costUsd: evalCostUsd(choice.model, usage),
+              costUsd: await evalCostUsd(choice.model, usage),
               observed,
               findings,
               ...scoreDecision(decision.expected, observed),

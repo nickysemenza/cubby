@@ -8,13 +8,22 @@ import {
   normalizeImportExtractionModelOutput,
 } from "@cubby/schemas/purchase-import";
 import type { AiUsageTransport } from "@cubby/schemas/telemetry";
+import {
+  gatewayBaseURL,
+  type GatewayResponseInfo,
+} from "@cubby/shared/ai/gateway-request";
+import {
+  AUDIT_RECOVERY_MODEL,
+  getChatModelConfig,
+  providerFor,
+} from "@cubby/shared/ai/models";
 import { and, eq } from "drizzle-orm";
 import { z } from "zod";
 
 import { env } from "~/env";
 import { localGoogleProviderOrigin } from "~/lib/e2e-google-provider";
 import type { UnparsedError } from "~/lib/error-utils";
-import { recordAiUsage } from "~/server/ai-usage";
+import { cachedCall } from "~/server/ai/adapters";
 import {
   PURCHASE_IMPORT_AUDIT_FEATURE,
   PURCHASE_IMPORT_EXTRACTION_FEATURE,
@@ -22,13 +31,9 @@ import {
   PURCHASE_IMPORT_MAIL_FEATURE,
   PURCHASE_IMPORT_REPAIR_FEATURE,
 } from "~/server/ai/features";
-import {
-  AUDIT_RECOVERY_MODEL,
-  estimateAiUsageCostUsd,
-} from "~/server/ai/models";
+import { gatewayFetch } from "~/server/ai/gateway";
 import { type AiMessage, runStructuredFeature } from "~/server/ai/run-feature";
-import { cachedCall } from "~/server/clients/ai-adapters";
-import { gatewayBaseURL, gatewayFetch } from "~/server/clients/ai-gateway";
+import { recordAiUsage } from "~/server/ai/usage";
 import type { Database } from "~/server/db";
 import { image, type orderMail } from "~/server/db/schema";
 import { getDb, notDeleted } from "~/server/repo/database-helpers";
@@ -258,7 +263,12 @@ export function purchaseRepairRequest(
 /** Loaded lazily by the purchase-import service to keep its bootstrap small. */
 const auditRecoveryResponse = z.object({
   content: z.array(z.object({ type: z.string(), text: z.string().optional() })),
-  usage: z.object({ input_tokens: z.number(), output_tokens: z.number() }),
+  usage: z.object({
+    input_tokens: z.number(),
+    output_tokens: z.number(),
+    cache_read_input_tokens: z.number().nullish(),
+    cache_creation_input_tokens: z.number().nullish(),
+  }),
 });
 
 export interface PurchaseAuditPorts {
@@ -287,23 +297,28 @@ async function recoverPurchaseAudit(
   // Anthropic accepts the same portable object as OpenAI once the generated
   // dialect marker is removed. No union or numeric bounds reach the provider.
   const { $schema: _dialect, ...outputSchema } = schema;
+  const operation = "purchaseImport.audit.recovery";
   let transport: AiUsageTransport = "unknown";
-  const fetchThroughGateway = ports.gateway("anthropic", {
-    ...cachedCall({
-      metadata: {
-        feature: "purchase-import-audit",
-        operation: "purchaseImport.audit.recovery",
+  let gateway: GatewayResponseInfo | undefined;
+  const fetchThroughGateway = ports.gateway(
+    getChatModelConfig(AUDIT_RECOVERY_MODEL).gatewayProvider,
+    {
+      ...cachedCall({
+        metadata: { feature: PURCHASE_IMPORT_AUDIT_FEATURE.feature, operation },
+      }),
+      onTransport: (selected) => {
+        transport = selected;
       },
-    }),
-    onTransport: (selected) => {
-      transport = selected;
+      onResponse: (info) => {
+        gateway = info;
+      },
     },
-  });
+  );
   const usage = {
-    provider: "anthropic",
+    provider: providerFor(AUDIT_RECOVERY_MODEL),
     model: AUDIT_RECOVERY_MODEL,
     feature: PURCHASE_IMPORT_AUDIT_FEATURE.feature,
-    operation: "purchaseImport.audit.recovery",
+    operation,
     runId: runEntityId.parse(args.runId),
   };
   const body = await requestAuditRecovery(
@@ -317,19 +332,23 @@ async function recoverPurchaseAudit(
       transport,
       status: "failed",
       durationMs: Date.now() - started,
+      gatewayLogId: gateway?.gatewayLogId,
+      gatewayCacheStatus: gateway?.gatewayCacheStatus,
     });
     throw error;
   });
+  // Unpriced here: the telemetry consumer prices every token class from the
+  // catalog, and the usage writer zeroes a gateway cache hit or plan answer.
   await ports.usage(args.db, {
     ...usage,
     transport,
     inputTokens: body.usage.input_tokens,
     outputTokens: body.usage.output_tokens,
-    estimatedCost: estimateAiUsageCostUsd("anthropic", AUDIT_RECOVERY_MODEL, {
-      inputTokens: body.usage.input_tokens,
-      outputTokens: body.usage.output_tokens,
-    }),
+    cacheReadTokens: body.usage.cache_read_input_tokens ?? null,
+    cacheWriteTokens: body.usage.cache_creation_input_tokens ?? null,
     durationMs: Date.now() - started,
+    gatewayLogId: gateway?.gatewayLogId,
+    gatewayCacheStatus: gateway?.gatewayCacheStatus,
   });
   const text = body.content
     .filter((part) => part.type === "text")

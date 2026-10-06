@@ -12,7 +12,7 @@ import {
   describeErrorCauses,
   scrubErrorMessage,
 } from "~/lib/error-diagnostics";
-import { isAiGatewayRateLimit } from "~/server/clients/ai-gateway-error";
+import { isAiGatewayRateLimit } from "~/server/ai/gateway-error";
 import type { Database } from "~/server/db";
 import { run as runTable, runProgress, vendor } from "~/server/db/schema";
 import { reportServerError } from "~/server/errors/report-error";

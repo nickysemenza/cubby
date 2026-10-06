@@ -4,9 +4,9 @@ import {
   imageProcessingCommand,
 } from "@cubby/schemas/image-processing";
 import type { ImageProcessingCommand } from "@cubby/schemas/image-processing";
+import { providerFor } from "@cubby/shared/ai/models";
 
 import { IMAGE_DESCRIPTION_FEATURE } from "~/server/ai/features";
-import { providerFor } from "~/server/ai/models";
 import { getImageProcessingNamespace } from "~/server/cf-env";
 import type { Database } from "~/server/db";
 import { reserveImageAnalysisInput } from "~/server/repo/activity-input";

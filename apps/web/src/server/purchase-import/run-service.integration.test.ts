@@ -133,8 +133,6 @@ describe("purchase import run admission", () => {
       runPublicId: run.publicId,
       action: "retry",
     });
-    expect(successor.successorCoordinatorModel).toBe("gpt-6-sol");
-    expect(successor.dispatchCoordinatorModel).toBe("gpt-6-sol");
     const [storedSuccessor] = await getDb(ctx.db)
       .select({ coordinatorModel: runTable.coordinatorModel })
       .from(runTable)

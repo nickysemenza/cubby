@@ -2,10 +2,10 @@ import {
   IMAGE_CLOUD_DESCRIPTION_PROMPT_REVISION,
   IMAGE_CLOUD_DESCRIPTION_RESULT_SCHEMA_REVISION,
 } from "@cubby/schemas/image-processing";
+import { providerFor } from "@cubby/shared/ai/models";
 import { z } from "zod";
 
 import { IMAGE_DESCRIPTION_FEATURE } from "~/server/ai/features";
-import { providerFor } from "~/server/ai/models";
 
 /** Changing this requires a fresh cloud-description job and analysis cache key. */
 export const IMAGE_ANALYSIS_NORMALIZATION_REVISION = 1;

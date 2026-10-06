@@ -1,3 +1,4 @@
+import type { OpenAiChatModel } from "@cubby/shared/ai/models";
 import { z } from "zod";
 
 import type {
@@ -124,7 +125,7 @@ const toolsOf = <const Actions extends readonly CubbyMcpToolAction[]>(
 
 export type ImportRunAgentConfig = {
   /** OpenAI model id the coordinator runs on. */
-  model: "gpt-6-luna" | "gpt-6-sol";
+  model: OpenAiChatModel;
   effort: "low" | "medium" | "high";
   agentTools: readonly ImportRunAgentToolName[];
   /**
@@ -180,3 +181,15 @@ export const importRunAgentManifest = {
   purchase_validation: purchaseAgent,
   product_enrichment: enrichmentAgent,
 } as const satisfies Record<AgentImportRunPurpose, ImportRunAgentConfig>;
+
+/**
+ * The model a run row records as its coordinator. Any other purpose records
+ * the account-sync coordinator, matching the column default.
+ */
+export function coordinatorModelFor(
+  purpose: string,
+): ImportRunAgentConfig["model"] {
+  const parsed = agentImportRunPurpose.safeParse(purpose);
+  return importRunAgentManifest[parsed.success ? parsed.data : "account_sync"]
+    .model;
+}

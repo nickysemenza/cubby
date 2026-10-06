@@ -4,7 +4,10 @@ import {
   type LedgerPartyId,
   type VendorId,
 } from "@cubby/schemas/identifiers";
-import { importRunAgentIdentity } from "@cubby/schemas/import-run-agent";
+import {
+  coordinatorModelFor,
+  importRunAgentIdentity,
+} from "@cubby/schemas/import-run-agent";
 import {
   orderMailImportInput,
   orderMailImportOut,
@@ -184,7 +187,7 @@ function runIdentity(row: PlacementRow, actor: ActorContext) {
     actorLedgerPartyShortcode: row.partyShortcode,
     actorLedgerPartyName: row.partyName,
     actorLedgerPartyKind: row.partyKind,
-    coordinatorModel: "gpt-6-sol",
+    coordinatorModel: coordinatorModelFor("account_sync"),
     dispatchEventId: crypto.randomUUID(),
   };
 }

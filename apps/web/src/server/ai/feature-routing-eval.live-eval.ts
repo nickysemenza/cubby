@@ -7,15 +7,15 @@ import {
   normalizeImportAuditModelOutput,
   normalizeImportExtractionModelOutput,
 } from "@cubby/schemas/purchase-import";
-import { describe, expect, it } from "vitest";
-
 import {
   type EvalCandidate,
   evalCandidates,
   evalCostUsd,
   type EvalUsage,
   evalWebRoot,
-} from "~/server/purchase-import/agent-eval-live-support";
+  meanEvalCostUsd,
+} from "tooling/ai/eval-support";
+import { describe, expect, it } from "vitest";
 
 import { localSecret } from "../../../tooling/local-secret";
 import {
@@ -70,7 +70,7 @@ const [
   import("~/server/agents/purchase-import/extract"),
   import("~/server/agents/purchase-import/prompts"),
   import("~/server/clients/ai"),
-  import("~/server/clients/ai-adapters"),
+  import("~/server/ai/adapters"),
   import("~/server/services/recipe-flow/recipe-flow.service"),
   import("./features"),
   import("./run-feature"),
@@ -261,7 +261,7 @@ describe("structured feature routing eval", () => {
       effort: EvalCandidate["effort"];
       wallMs: number;
       usage: EvalUsage;
-      costUsd: number;
+      costUsd: number | null;
       verdict: FeatureVerdict;
       reasons: string[];
     }> = [];
@@ -294,7 +294,7 @@ describe("structured feature routing eval", () => {
               effort: choice.effort,
               wallMs: Date.now() - started,
               usage,
-              costUsd: evalCostUsd(choice.model, usage),
+              costUsd: await evalCostUsd(choice.model, usage),
               ...score,
             });
             writeFileSync(
@@ -326,7 +326,7 @@ describe("structured feature routing eval", () => {
         meanWallSeconds: mean(rows.map((row) => row.wallMs)) / 1_000,
         meanInputTokens: mean(rows.map((row) => row.usage.inputTokens)),
         meanOutputTokens: mean(rows.map((row) => row.usage.outputTokens)),
-        meanCostUsd: mean(rows.map((row) => row.costUsd)),
+        meanCostUsd: meanEvalCostUsd(rows.map((row) => row.costUsd)),
       };
     });
     const replay = [

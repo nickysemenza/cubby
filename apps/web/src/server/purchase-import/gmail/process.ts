@@ -20,7 +20,7 @@ import {
 } from "drizzle-orm";
 
 import { classifyOrderMail } from "~/server/agents/purchase-import/extract";
-import { AiGatewayRequestError } from "~/server/clients/ai-gateway-error";
+import { AiGatewayRequestError } from "~/server/ai/gateway-error";
 import type { Database } from "~/server/db";
 import {
   financialTransaction,

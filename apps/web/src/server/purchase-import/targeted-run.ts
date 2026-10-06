@@ -71,7 +71,6 @@ export async function dispatchStartedRun(
     id: string;
     eventId: string;
     purpose: string;
-    coordinatorModel?: "gpt-6-sol";
   },
 ): Promise<"running" | "dispatch_failed"> {
   const queue = getPurchaseAgentQueue();
@@ -91,7 +90,6 @@ export async function dispatchStartedRun(
       eventId: run.eventId,
       type: "start_or_resume",
     };
-    if (run.coordinatorModel) event.coordinatorModel = run.coordinatorModel;
     await dispatchRunEvent(db, queue, event);
     return "running";
   } catch {

@@ -7,8 +7,6 @@
   "types": "./src/index.ts",
   "exports": {
     ".": "./src/index.ts",
-    "./ai-gateway-metadata": "./src/ai-gateway-metadata.ts",
-    "./ai-gateway-request": "./src/ai-gateway-request.ts",
     "./base64": "./src/base64.ts",
     "./client-constants": "./src/client-constants.ts",
     "./collection-tag": "./src/collection-tag.ts",
@@ -22,7 +20,11 @@
     "./sha256": "./src/sha256.ts",
     "./text-case": "./src/text-case.ts",
     "./upc": "./src/upc.ts",
-    "./pi-gateway": "./src/pi-gateway.ts"
+    "./ai/models": "./src/ai/models.ts",
+    "./ai/pricing": "./src/ai/pricing.ts",
+    "./ai/gateway-request": "./src/ai/gateway-request.ts",
+    "./ai/gateway-metadata": "./src/ai/gateway-metadata.ts",
+    "./ai/pi-providers": "./src/ai/pi-providers.ts"
   },
   "scripts": {
     "typecheck": "node ../../scripts/generator/ensure.ts && tsc --noEmit",
@@ -31,6 +33,7 @@
   },
   "dependencies": {
     "@earendil-works/pi-ai": "1.0.2",
+    "@opencode-ai/models": "0.0.95",
     "ipaddr.js": "^2.4.0",
     "nanoid": "^6.0.0",
     "zod": "^4.6.5"

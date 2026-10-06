@@ -1,9 +1,10 @@
+import { gatewayBaseURL } from "@cubby/shared/ai/gateway-request";
 import { fromPartial } from "@total-typescript/shoehorn";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { type getAiGateway, setCfEnv } from "~/server/cf-env";
 
-import { gatewayBaseURL, gatewayFetch } from "./ai-gateway";
+import { gatewayFetch } from "./gateway";
 
 type AiGatewayBinding = NonNullable<ReturnType<typeof getAiGateway>>;
 type GatewayRun = Parameters<AiGatewayBinding["run"]>;
@@ -29,7 +30,7 @@ afterEach(() => {
 async function devGatewayFetch(token: string) {
   vi.stubEnv("AI_GATEWAY_API_KEY", token);
   vi.resetModules();
-  return (await import("./ai-gateway")).gatewayFetch;
+  return (await import("./gateway")).gatewayFetch;
 }
 
 /** Stand in for `env.AI.gateway("cubby")`, keeping what `run()` was handed. */
@@ -352,7 +353,7 @@ describe("gatewayFetch metadata contract", () => {
         },
       }),
     );
-    const { gatewayFetch: send } = await import("./ai-gateway");
+    const { gatewayFetch: send } = await import("./gateway");
     await send("openai", { metadata })(
       `${gatewayBaseURL("openai")}/responses`,
       {
@@ -510,5 +511,79 @@ describe("gatewayFetch Workers AI", () => {
       model: "typesafe/jev",
       input: jevInput,
     });
+  });
+});
+
+// Accounting reads the gateway's log id and cache verdict from every response
+// a transport received, without taking the body the provider SDK parses.
+describe("gatewayFetch response observation", () => {
+  const cachedAnswer = () =>
+    new Response("synthetic answer", {
+      headers: { "cf-aig-log-id": "example-log", "cf-aig-cache-status": "HIT" },
+    });
+
+  it("reports the binding response's log id and cache verdict", async () => {
+    fakeBinding(cachedAnswer());
+    const observed: unknown[] = [];
+    const response = await gatewayFetch("anthropic", {
+      metadata,
+      onResponse: (info) => observed.push(info),
+    })(`${gatewayBaseURL("anthropic")}/v1/messages`, {
+      method: "POST",
+      body: "{}",
+    });
+
+    expect(observed).toEqual([
+      { gatewayLogId: "example-log", gatewayCacheStatus: "hit" },
+    ]);
+    expect(await response.text()).toBe("synthetic answer");
+  });
+
+  it("reports the test peer's response first, before any binding", async () => {
+    const universal = vi.fn();
+    setCfEnv(
+      fromPartial<Env & { CUBBY_TEST_AI_GATEWAY: { fetch: typeof fetch } }>({
+        AI: {
+          gateway: () => fromPartial<AiGatewayBinding>({ run: universal }),
+        },
+        CUBBY_TEST_AI_GATEWAY: { fetch: async () => cachedAnswer() },
+      }),
+    );
+    const observed: unknown[] = [];
+    const failures: unknown[] = [];
+    await gatewayFetch("openai", {
+      metadata,
+      onResponse: (info) => observed.push(info),
+      onErrorResponse: (failure) => failures.push(failure),
+    })(`${gatewayBaseURL("openai")}/responses`, { method: "POST", body: "{}" });
+
+    expect(universal).not.toHaveBeenCalled();
+    expect(observed).toEqual([
+      { gatewayLogId: "example-log", gatewayCacheStatus: "hit" },
+    ]);
+    expect(failures).toEqual([]);
+  });
+
+  it("reports a failed response to both observers", async () => {
+    fakeBinding(
+      new Response("synthetic failure", {
+        status: 500,
+        headers: { "cf-aig-log-id": "example-log" },
+      }),
+    );
+    const observed: unknown[] = [];
+    const failures: unknown[] = [];
+    await gatewayFetch("openai", {
+      metadata,
+      onResponse: (info) => observed.push(info),
+      onErrorResponse: (failure) => failures.push(failure),
+    })(`${gatewayBaseURL("openai")}/responses`, { method: "POST", body: "{}" });
+
+    expect(observed).toEqual([
+      { gatewayLogId: "example-log", gatewayCacheStatus: null },
+    ]);
+    expect(failures).toEqual([
+      expect.objectContaining({ status: 500, body: "synthetic failure" }),
+    ]);
   });
 });

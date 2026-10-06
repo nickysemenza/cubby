@@ -4,15 +4,22 @@
  */
 import type { Confidence } from "@cubby/schemas/ai";
 import type { AiUsageTransport } from "@cubby/schemas/telemetry";
-import { retryWithBackoff } from "@cubby/shared/retry";
-import { z } from "zod";
-
-import type { AiDecisionFeature } from "~/server/ai/features";
+import {
+  gatewayBaseURL,
+  type GatewayResponseInfo,
+} from "@cubby/shared/ai/gateway-request";
 import {
   getDecisionModelConfig,
   providerFor,
   selectDecisionModel,
-} from "~/server/ai/models";
+} from "@cubby/shared/ai/models";
+import { retryWithBackoff } from "@cubby/shared/retry";
+import { z } from "zod";
+
+import { cachedCall } from "~/server/ai/adapters";
+import type { AiDecisionFeature } from "~/server/ai/features";
+import { type GatewayMetadata, gatewayFetch } from "~/server/ai/gateway";
+import { wrapAiGatewayError } from "~/server/ai/gateway-error";
 import {
   type ApplicationCacheStatus,
   withAiResponseCache,
@@ -22,13 +29,6 @@ import {
   recordApplicationCacheHit,
   recordFeatureUsage,
 } from "~/server/ai/run-feature";
-import { cachedCall } from "~/server/clients/ai-adapters";
-import {
-  type GatewayMetadata,
-  gatewayBaseURL,
-  gatewayFetch,
-} from "~/server/clients/ai-gateway";
-import { wrapAiGatewayError } from "~/server/clients/ai-gateway-error";
 
 /** Common trial bounds: Jev's 32k context, conservatively measured in bytes. */
 const JEV_CONTEXT_BYTE_LIMIT = 32_000;
@@ -174,12 +174,17 @@ async function requestJev(
   };
   if (ctx.entity) metadata.entityKind = ctx.entity.entityKind;
   let transport: AiUsageTransport = "unknown";
+  // The last attempt's response; a throttled retry replaces the earlier one.
+  let gateway: GatewayResponseInfo | undefined;
   const fetch = gatewayFetch("workers-ai", {
     ...(feature.cache
       ? cachedCall({ metadata, force: ctx.force })
-      : { metadata }),
+      : { metadata, skipCache: true }),
     onTransport: (selected) => {
       transport = selected;
+    },
+    onResponse: (info) => {
+      gateway = info;
     },
   });
 
@@ -196,7 +201,6 @@ async function requestJev(
   }, JEV_DEADLINE_MS);
   let parsed: JevChoiceResponse | undefined;
   let attempt = 0;
-  let gatewayLogId: string | null = null;
   try {
     const { response, body } = await retryWithBackoff(
       async () => {
@@ -211,7 +215,6 @@ async function requestJev(
             signal: controller.signal,
           },
         );
-        gatewayLogId = attemptResponse.headers.get("cf-aig-log-id");
         return {
           response: attemptResponse,
           body: attemptResponse.ok
@@ -246,7 +249,7 @@ async function requestJev(
       route: "workers-ai",
       feature: feature.feature,
       operation: ctx.operation,
-      gatewayLogId,
+      gatewayLogId: gateway?.gatewayLogId,
     });
   } finally {
     clearTimeout(deadline);
@@ -258,7 +261,8 @@ async function requestJev(
       applicationCacheStatus,
       attempt,
       status: parsed ? "succeeded" : "failed",
-      gatewayLogId,
+      gatewayLogId: gateway?.gatewayLogId,
+      gatewayCacheStatus: gateway?.gatewayCacheStatus,
     });
   }
 }

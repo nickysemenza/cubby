@@ -23,11 +23,11 @@ import type {
   settleChargeHuntInput,
   stopForReviewInput,
 } from "@cubby/schemas/purchase-agent-services";
+import type { AiGatewayEnvironment } from "@cubby/shared/ai/gateway-metadata";
 import type {
-  AiGatewayEnvironment,
-  AiGatewayMetadata,
-} from "@cubby/shared/ai-gateway-metadata";
-import type { gatewayQuery } from "@cubby/shared/ai-gateway-request";
+  ChatGptInference,
+  UniversalGateway,
+} from "@cubby/shared/ai/gateway-request";
 import type { JSONType, z } from "zod";
 
 import type { AgentSignal } from "./signals";
@@ -111,37 +111,11 @@ export interface RunServices {
 }
 
 /** Cubby's AI Gateway as the model providers call it (`AiGateway.run`). */
-export interface AgentGateway {
+export interface AgentGateway extends UniversalGateway {
   readonly id: string;
   /** The runtime's `environment` label for every call's metadata. */
   readonly environment: AiGatewayEnvironment;
-  run(
-    request: {
-      provider: string;
-      endpoint: string;
-      headers: Record<string, string>;
-      query: unknown;
-    },
-    options: {
-      gateway: { id: string; metadata: AiGatewayMetadata };
-      signal?: AbortSignal;
-    },
-  ): Promise<Response>;
 }
-
-/**
- * The household's ChatGPT plan: null only when no plan is connected. A
- * connected plan calls `onSelected` before inference and throws on failure,
- * so the call is never retried through the paid gateway.
- */
-export type ChatGptInference = (
-  body: Awaited<ReturnType<typeof gatewayQuery>>,
-  options?: {
-    signal?: AbortSignal;
-    requestTimeoutMs?: number;
-    onSelected?: () => void;
-  },
-) => Promise<Response | null>;
 
 /**
  * The narrowed environment of one coordinator Durable Object. Its services

@@ -17,8 +17,8 @@ import {
 } from "@cubby/schemas/identifiers";
 import {
   agentImportRunPurpose,
+  coordinatorModelFor,
   importRunAgentIdentity,
-  importRunAgentManifest,
 } from "@cubby/schemas/import-run-agent";
 import {
   type AgentProgressEvent,
@@ -155,13 +155,6 @@ import { attachPendingOrderMailEvidence } from "./gmail/process";
 import { classifyOrderCapture } from "./order-list";
 import { loadReceiptEvidenceForRun } from "./receipt-evidence";
 import { importVendorOrder } from "./writer";
-
-/** The coordinator model for a run purpose; purchase-agent reads the same manifest. */
-function coordinatorModelFor(purpose: string) {
-  const parsed = agentImportRunPurpose.safeParse(purpose);
-  return importRunAgentManifest[parsed.success ? parsed.data : "account_sync"]
-    .model;
-}
 
 /**
  * The target rows "Start new run with same inputs" copies, with the public
@@ -1033,7 +1026,6 @@ export async function resumeAuthorizedRuns(
         id: runTable.id,
         publicId: runTable.shortcode,
         purpose: runTable.purpose,
-        coordinatorModel: runTable.coordinatorModel,
         eventId: runTable.dispatchEventId,
       });
     const interrupted = await tx
@@ -1041,7 +1033,6 @@ export async function resumeAuthorizedRuns(
         id: runTable.id,
         publicId: runTable.shortcode,
         purpose: runTable.purpose,
-        coordinatorModel: runTable.coordinatorModel,
         eventId: runTable.dispatchEventId,
       })
       .from(runTable)
@@ -4139,12 +4130,10 @@ export async function controlRun(
           successorRunId: successorId,
           successorRunPublicId: successor.shortcode,
           successorStatus: successor.status,
-          successorCoordinatorModel: coordinatorModelFor(locked.purpose),
           created: true,
           dispatchRunId: successorId,
           dispatchPublicId: successor.shortcode,
           dispatchPurpose: locked.purpose,
-          dispatchCoordinatorModel: coordinatorModelFor(locked.purpose),
           dispatchEventId,
         };
       }
@@ -4194,7 +4183,6 @@ export async function controlRun(
           dispatchRunId: scope.public.runId,
           dispatchPublicId: input.runPublicId,
           dispatchPurpose: locked.purpose,
-          dispatchCoordinatorModel: coordinatorModelFor(locked.purpose),
           dispatchEventId,
         };
       }
@@ -4287,11 +4275,9 @@ export async function controlRun(
           successorRunId: successorId,
           successorRunPublicId: successor.shortcode,
           successorStatus: successor.status,
-          successorCoordinatorModel: coordinatorModelFor(locked.purpose),
           dispatchRunId: null,
           dispatchPublicId: successor.shortcode,
           dispatchPurpose: "purchase_validation" as const,
-          dispatchCoordinatorModel: coordinatorModelFor(locked.purpose),
           dispatchEventId,
           created: true,
         };
@@ -4325,7 +4311,6 @@ export async function controlRun(
             successorRunId: existingSuccessor.id,
             successorRunPublicId: existingSuccessor.publicId,
             successorStatus: existingSuccessor.status,
-            successorCoordinatorModel: coordinatorModelFor(locked.purpose),
             created: false,
           };
         }
@@ -4414,12 +4399,10 @@ export async function controlRun(
           successorRunId: successorId,
           successorRunPublicId: successor.shortcode,
           successorStatus: successor.status,
-          successorCoordinatorModel: coordinatorModelFor(locked.purpose),
           created: true,
           dispatchRunId: successorId,
           dispatchPublicId: successor.shortcode,
           dispatchPurpose: locked.purpose,
-          dispatchCoordinatorModel: coordinatorModelFor(locked.purpose),
           dispatchEventId,
         };
       }
@@ -4521,7 +4504,6 @@ export async function controlRun(
           dispatchRunId: scope.public.runId,
           dispatchPublicId: input.runPublicId,
           dispatchPurpose: locked.purpose,
-          dispatchCoordinatorModel: coordinatorModelFor(locked.purpose),
           dispatchEventId,
         };
       }

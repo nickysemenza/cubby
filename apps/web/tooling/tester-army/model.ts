@@ -1,23 +1,35 @@
 import {
+  CF_ACCOUNT_ID,
   CUBBY_AI_GATEWAY_ID,
   testAiGatewayEnvironment,
-} from "@cubby/shared/ai-gateway-metadata";
-import { CF_ACCOUNT_ID } from "../../src/server/cf-env";
+} from "@cubby/shared/ai/gateway-metadata";
+import { FAST_MODEL } from "@cubby/shared/ai/models";
 import { localSecret } from "../local-secret";
 import { createOpenAI } from "@ai-sdk/openai";
 import { generateText, tool } from "ai";
 import { z } from "zod";
 
-const configuration = z.object({
-  TESTER_ARMY_CF_API_TOKEN: z.string().min(1),
-  TESTER_ARMY_CF_ACCOUNT_ID: z
-    .string()
-    .regex(/^[a-f0-9]{32}$/)
-    .default(CF_ACCOUNT_ID),
-  TESTER_ARMY_MODEL: z
+/** A workflow forwards an unset repository variable as "": treat it as omitted. */
+const optionalSetting = <Schema extends z.ZodType>(schema: Schema) =>
+  z.preprocess((value) => (value === "" ? undefined : value), schema);
+
+/** The driver model when `TESTER_ARMY_MODEL` is omitted. */
+export const testerArmyModelSetting = optionalSetting(
+  z
     .string()
     .regex(/^openai\/gpt-[a-z0-9.-]+$/)
-    .default("openai/gpt-6-luna"),
+    .default(`openai/${FAST_MODEL}`),
+);
+
+const configuration = z.object({
+  TESTER_ARMY_CF_API_TOKEN: z.string().min(1),
+  TESTER_ARMY_CF_ACCOUNT_ID: optionalSetting(
+    z
+      .string()
+      .regex(/^[a-f0-9]{32}$/)
+      .default(CF_ACCOUNT_ID),
+  ),
+  TESTER_ARMY_MODEL: testerArmyModelSetting,
 });
 
 export function modelConfiguration() {

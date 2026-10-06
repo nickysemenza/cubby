@@ -35,8 +35,14 @@ export type RecordAiUsageInput = {
   attempt?: number;
   status?: "succeeded" | "failed";
   gatewayLogId?: string | null;
+  /**
+   * The gateway's own response-cache verdict. Not persisted: a `hit` was not
+   * billed, so it only zeroes the cost; `cacheStatus` stays the caller's.
+   */
+  gatewayCacheStatus?: "hit" | "miss" | null;
   eventId?: string;
   durationMs: number;
+  /** The *caller's* own cache (AiAnalysis, a flow artifact), never the gateway's. */
   cacheStatus?: "hit" | "miss" | "none" | null;
   applicationCacheStatus?: "hit" | "miss" | "none" | null;
   /** What carried the call; `unknown` only when the caller has no evidence. */
@@ -44,7 +50,26 @@ export type RecordAiUsageInput = {
   entity?: { entityKind: string; entityId: string } | null;
 };
 
-/** Best-effort AI usage telemetry; never changes the owning AI operation. */
+/**
+ * Best-effort AI usage telemetry; never changes the owning AI operation.
+ *
+ * Every row passes through here, so the accounting rules live here: a `cache`
+ * replay made no model call (zero attempts, no cost), and neither ChatGPT plan
+ * usage nor a gateway response-cache hit is API spend — both keep their
+ * attempts, transport, and token evidence.
+ */
+function usageBilling(input: RecordAiUsageInput) {
+  const replayed = input.transport === "cache";
+  const unbilled =
+    replayed ||
+    input.transport === "chatgpt" ||
+    input.gatewayCacheStatus === "hit";
+  return {
+    attempt: replayed ? 0 : (input.attempt ?? 1),
+    estimatedCost: unbilled ? 0 : (input.estimatedCost ?? null),
+  };
+}
+
 export async function recordAiUsage(
   db: Database,
   input: RecordAiUsageInput,
@@ -69,7 +94,6 @@ export async function recordAiUsage(
       outputTokens: input.outputTokens ?? null,
       cacheReadTokens: input.cacheReadTokens ?? null,
       cacheWriteTokens: input.cacheWriteTokens ?? null,
-      attempt: input.attempt ?? 1,
       status: input.status ?? "succeeded",
       gatewayLogId: input.gatewayLogId ?? null,
       durationMs: input.durationMs,
@@ -78,7 +102,7 @@ export async function recordAiUsage(
       transport: input.transport,
       entityKind: input.entity?.entityKind ?? null,
       entityId: input.entity?.entityId ?? null,
-      estimatedCost: input.estimatedCost ?? null,
+      ...usageBilling(input),
     });
   } catch (error) {
     log.error("failed to record usage", {

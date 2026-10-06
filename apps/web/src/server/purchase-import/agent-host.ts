@@ -1,5 +1,5 @@
 import { importRunIdFromAgentIdentity } from "@cubby/schemas/import-run-agent";
-import { CUBBY_AI_GATEWAY_ID } from "@cubby/shared/ai-gateway-metadata";
+import { CUBBY_AI_GATEWAY_ID } from "@cubby/shared/ai/gateway-metadata";
 /**
  * The purchase agent's host: the exported Durable Object and the narrowed
  * environment that is the agent's only view of this Worker.
@@ -26,7 +26,7 @@ import type {
 import { withInvocationTrace } from "~/server/tracing";
 
 import { connectedChatGptInference } from "../ai/chatgpt/client";
-import { gatewayEnvironment } from "../clients/ai-gateway";
+import { gatewayEnvironment } from "../ai/gateway";
 import { workerSentryOptions } from "../worker-sentry";
 import { purchaseAgentMcpTools, runServicesFor } from "./agent-services";
 

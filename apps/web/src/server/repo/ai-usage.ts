@@ -1,16 +1,29 @@
 import type {
   AiUsageRecentFilters,
   AiUsageRecentInput,
+  AiUsageTransport,
 } from "@cubby/schemas/ai";
 import type { RunId } from "@cubby/schemas/identifiers";
+import type { AiTokenUsage } from "@cubby/shared/ai/pricing";
 import { encodeBase64Url, decodeBase64UrlText } from "@cubby/shared/base64";
 import { and, desc, eq, ilike, lt, or, sql } from "drizzle-orm";
 import { z } from "zod";
 
-import { estimateAiUsageCostUsd } from "~/server/ai/models";
+import { estimateAiUsageCostUsd } from "~/server/ai/pricing";
 import type { Database } from "~/server/db";
 import { aiUsage } from "~/server/db/schema";
 import { getDb, notDeleted } from "~/server/repo/database-helpers";
+
+/**
+ * A `cache` replay made no model call and ChatGPT plan usage is not API
+ * spend: neither is ever priced from its tokens, including rows recorded
+ * before the writer stored their zero cost.
+ */
+export function isUnbilledAiTransport(transport: AiUsageTransport): boolean {
+  return transport === "cache" || transport === "chatgpt";
+}
+
+const unbilledTransportSql = sql`${aiUsage.transport} in ('cache', 'chatgpt')`;
 
 function recentFilterConditions(filters: AiUsageRecentFilters = {}) {
   // LIKE metacharacters in a search are literal text.
@@ -89,17 +102,20 @@ export async function listRecentAiUsage(
     .orderBy(desc(aiUsage.createdAt), desc(aiUsage.id))
     .limit(input.limit);
 
-  return rows.map((row) => ({
-    ...row,
-    estimatedCost:
-      row.estimatedCost ??
-      estimateAiUsageCostUsd(row.provider, row.model, {
-        inputTokens: row.inputTokens,
-        outputTokens: row.outputTokens,
-        cacheReadTokens: row.cacheReadTokens,
-        cacheWriteTokens: row.cacheWriteTokens,
-      }),
-  }));
+  return Promise.all(
+    rows.map(async (row) => ({
+      ...row,
+      estimatedCost: isUnbilledAiTransport(row.transport)
+        ? (row.estimatedCost ?? 0)
+        : (row.estimatedCost ??
+          (await estimateAiUsageCostUsd(row.provider, row.model, {
+            inputTokens: row.inputTokens,
+            outputTokens: row.outputTokens,
+            cacheReadTokens: row.cacheReadTokens,
+            cacheWriteTokens: row.cacheWriteTokens,
+          }))),
+    })),
+  );
 }
 
 export async function summarizeAiUsage(db: Database, days: number) {
@@ -127,10 +143,10 @@ export async function summarizeAiUsage(db: Database, days: number) {
       cacheReadTokens: sql<string>`coalesce(sum(${aiUsage.cacheReadTokens}), 0)::bigint`,
       cacheWriteTokens: sql<string>`coalesce(sum(${aiUsage.cacheWriteTokens}), 0)::bigint`,
       estimatedCost: sql<number | null>`sum(${aiUsage.estimatedCost})`,
-      unpricedInputTokens: sql<string>`coalesce(sum(case when ${aiUsage.estimatedCost} is null then ${aiUsage.inputTokens} else 0 end), 0)::bigint`,
-      unpricedOutputTokens: sql<string>`coalesce(sum(case when ${aiUsage.estimatedCost} is null then ${aiUsage.outputTokens} else 0 end), 0)::bigint`,
-      unpricedCacheReadTokens: sql<string>`coalesce(sum(case when ${aiUsage.estimatedCost} is null then ${aiUsage.cacheReadTokens} else 0 end), 0)::bigint`,
-      unpricedCacheWriteTokens: sql<string>`coalesce(sum(case when ${aiUsage.estimatedCost} is null then ${aiUsage.cacheWriteTokens} else 0 end), 0)::bigint`,
+      unpricedCalls: sql<AiTokenUsage[]>`coalesce(jsonb_agg(jsonb_build_object(
+        'inputTokens', ${aiUsage.inputTokens}, 'outputTokens', ${aiUsage.outputTokens},
+        'cacheReadTokens', ${aiUsage.cacheReadTokens}, 'cacheWriteTokens', ${aiUsage.cacheWriteTokens}
+      )) filter (where ${aiUsage.estimatedCost} is null), '[]'::jsonb)`,
       durationMs: sql<string>`coalesce(sum(${aiUsage.durationMs}), 0)::bigint`,
     })
     .from(aiUsage)
@@ -151,42 +167,44 @@ export async function summarizeAiUsage(db: Database, days: number) {
     )
     .orderBy(sql`${usageDayGroup} DESC`, aiUsage.feature, aiUsage.model);
 
-  return rows.map(
-    ({
-      unpricedInputTokens,
-      unpricedOutputTokens,
-      unpricedCacheReadTokens,
-      unpricedCacheWriteTokens,
-      inputTokens,
-      outputTokens,
-      cacheReadTokens,
-      cacheWriteTokens,
-      durationMs,
-      ...row
-    }) => {
-      const computedUnstoredCost = estimateAiUsageCostUsd(
-        row.provider,
-        row.model,
-        {
-          inputTokens: Number(unpricedInputTokens),
-          outputTokens: Number(unpricedOutputTokens),
-          cacheReadTokens: Number(unpricedCacheReadTokens),
-          cacheWriteTokens: Number(unpricedCacheWriteTokens),
-        },
-      );
-      return {
-        ...row,
-        inputTokens: Number(inputTokens),
-        outputTokens: Number(outputTokens),
-        cacheReadTokens: Number(cacheReadTokens),
-        cacheWriteTokens: Number(cacheWriteTokens),
-        durationMs: Number(durationMs),
-        estimatedCost:
-          row.estimatedCost == null
-            ? computedUnstoredCost
-            : row.estimatedCost + (computedUnstoredCost ?? 0),
-      };
-    },
+  // Every group shares one transport, so an unbilled group is free whole.
+  return Promise.all(
+    rows.map(
+      async ({
+        unpricedCalls,
+        inputTokens,
+        outputTokens,
+        cacheReadTokens,
+        cacheWriteTokens,
+        durationMs,
+        ...row
+      }) => {
+        // Context tiers apply to each prompt, never the group's combined tokens.
+        const callCosts = isUnbilledAiTransport(row.transport)
+          ? []
+          : await Promise.all(
+              unpricedCalls.map((usage) =>
+                estimateAiUsageCostUsd(row.provider, row.model, usage),
+              ),
+            );
+        const computedUnstoredCost = callCosts.some((cost) => cost === null)
+          ? null
+          : callCosts.reduce<number>((sum, cost) => sum + (cost ?? 0), 0);
+        return {
+          ...row,
+          inputTokens: Number(inputTokens),
+          outputTokens: Number(outputTokens),
+          cacheReadTokens: Number(cacheReadTokens),
+          cacheWriteTokens: Number(cacheWriteTokens),
+          durationMs: Number(durationMs),
+          estimatedCost: isUnbilledAiTransport(row.transport)
+            ? 0
+            : computedUnstoredCost === null
+              ? null
+              : (row.estimatedCost ?? 0) + computedUnstoredCost,
+        };
+      },
+    ),
   );
 }
 
@@ -222,7 +240,7 @@ export async function listAiUsageForRun(
     database
       .select({
         pricedSubtotal: sql<number>`coalesce(sum(${aiUsage.estimatedCost}) filter (where ${aiUsage.estimatedCost} is not null), 0)`,
-        unpricedCount: sql<number>`(count(*) filter (where ${aiUsage.estimatedCost} is null and ${aiUsage.status} = 'succeeded'))::int`,
+        unpricedCount: sql<number>`(count(*) filter (where ${aiUsage.estimatedCost} is null and ${aiUsage.status} = 'succeeded' and not ${unbilledTransportSql}))::int`,
       })
       .from(aiUsage)
       .where(and(eq(aiUsage.runId, runId), notDeleted(aiUsage))),
@@ -266,7 +284,11 @@ export async function listAiUsageForRun(
       .orderBy(desc(aiUsage.createdAt), desc(aiUsage.id))
       .limit(limit + 1),
   ]);
-  const records = rows.slice(0, limit);
+  const records = rows.slice(0, limit).map((row) => ({
+    ...row,
+    estimatedCost:
+      row.estimatedCost ?? (isUnbilledAiTransport(row.transport) ? 0 : null),
+  }));
   const last = records.at(-1);
   return {
     pricedSubtotal: totals[0]?.pricedSubtotal ?? 0,

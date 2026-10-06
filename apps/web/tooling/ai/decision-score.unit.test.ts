@@ -5,7 +5,7 @@ import {
   type ObservedDecision,
   scoreDecision,
   summarizeDecisions,
-} from "./purchase-decision-eval.score";
+} from "./decision-score";
 
 // Failure modes the scorer must separate: reusing the wrong Product (a
 // sibling variant sharing a style number), duplicating an exact existing
@@ -216,6 +216,23 @@ describe("scoreDecision", () => {
 });
 
 describe("summarizeDecisions", () => {
+  // A missing live catalog price is unknown, not a zero-cost evaluation.
+  it("keeps the mean unknown when a candidate run is unpriced", () => {
+    const usage = {
+      requests: 1,
+      failedRequests: 0,
+      inputTokens: 100,
+      cachedInputTokens: 0,
+      outputTokens: 10,
+      reasoningTokens: 0,
+      modelMs: 10,
+    };
+    const results = [
+      { verdict: "correct" as const, wallMs: 20, usage, costUsd: null },
+      { verdict: "correct" as const, wallMs: 20, usage, costUsd: 0.02 },
+    ];
+    expect(summarizeDecisions(results).meanCostUsd).toBeNull();
+  });
   it("totals verdicts, latency, tokens, and cost per candidate", () => {
     const usage = {
       requests: 3,

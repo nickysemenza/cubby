@@ -5,12 +5,12 @@ import {
   IMAGE_CLOUD_DESCRIPTION_RESULT_SCHEMA_REVISION,
   IMAGE_DESCRIPTION_RESULT_SCHEMA_REVISION,
 } from "@cubby/schemas/image-processing";
+import { providerFor } from "@cubby/shared/ai/models";
 import { and, eq, sql } from "drizzle-orm";
 import { withTestDb } from "tooling/test-setup";
 import { beforeEach, describe, expect, it } from "vitest";
 
 import { IMAGE_DESCRIPTION_FEATURE } from "~/server/ai/features";
-import { providerFor } from "~/server/ai/models";
 import {
   aiAnalysis,
   entityAttachment,

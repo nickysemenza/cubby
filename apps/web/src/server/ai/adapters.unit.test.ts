@@ -1,13 +1,12 @@
+import { FAST_MODEL } from "@cubby/shared/ai/models";
 import { afterEach, describe, expect, it, vi } from "vitest";
-
-import { FAST_MODEL } from "~/server/ai/models";
 
 import {
   AI_CACHE_TTL_SECONDS,
   cachedCall,
   chatCompletionOptionsFor,
   piCallTarget,
-} from "./ai-adapters";
+} from "./adapters";
 
 // Constructing a call target must never need a gateway: the shim resolves
 // the binding per request, and dev has none.
@@ -17,7 +16,7 @@ afterEach(() => {
 
 const opts = { metadata: { feature: "test", operation: "adapter.routing" } };
 
-describe("piCallTarget resolves the registry's wire model and route", () => {
+describe("piCallTarget resolves the declared model and gateway provider", () => {
   it("sends the fast tier to OpenAI's Responses API", () => {
     const target = piCallTarget(FAST_MODEL, opts);
     expect(target.model.provider).toBe("openai");

@@ -169,6 +169,24 @@ describe("runJevChoice", () => {
     );
   });
 
+  // An uncacheable decision must say so: omitting the flag leaves the
+  // gateway's own cache policy free to replay a stale choice.
+  it("asks the gateway to skip its cache for an uncacheable decision", async () => {
+    vi.stubEnv("AI_GATEWAY_API_KEY", "dev-token");
+    vi.resetModules();
+    const { runJevChoice: request } = await import("./jev");
+    const fetch = vi.fn(
+      async (_url: string, _init?: RequestInit) =>
+        new Response(
+          JSON.stringify({ result: answerFor("c0", { c0: 0.9, none: 0.1 }) }),
+        ),
+    );
+    vi.stubGlobal("fetch", fetch);
+    await request({ ...base, choices: ["one"] });
+    const headers = new Headers(fetch.mock.calls[0]?.[1]?.headers);
+    expect(headers.get("cf-aig-skip-cache")).toBe("true");
+  });
+
   it("surfaces an unfinished run's state and errors instead of a generic parse failure", async () => {
     vi.stubEnv("AI_GATEWAY_API_KEY", "dev-token");
     vi.resetModules();

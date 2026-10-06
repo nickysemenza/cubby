@@ -35,6 +35,7 @@ import {
   importRecipeSignature,
   recipeOutSignature,
 } from "~/lib/recipe-signature";
+import { forwardGatewayRequest } from "~/server/ai/gateway-forward";
 import { appErrorFromUnknown, createAppError } from "~/server/errors/app-error";
 import {
   projectCookbookImportEvent,
@@ -94,7 +95,6 @@ import {
 } from "~/server/services/mutation-side-effects";
 import { findOrCreateByUPC } from "~/server/services/product-orchestration.service";
 import type { AuthenticatedStartOperationContext } from "~/server/start-operation.server";
-import { forwardGatewayRequest } from "~/server/utils/gateway-forward";
 import {
   lintImportRecipe,
   notionPageToImportRecipe,

@@ -529,9 +529,9 @@ spanner"` → `adjustable wrench` (product); `"wet dry vac"` → `shop vacuum`
 
 - ⏳ **Trace the web Worker's AI calls into Sentry's Agents view.** Sentry
   wraps only `env.AI.run()`, not the `env.AI.gateway("cubby").run()` transport,
-  and TanStack AI adapters bypass provider integrations. Add a `@tanstack/ai`
-  `ChatMiddleware` next to `ai-gateway-usage.ts` opening a `gen_ai.chat` span
-  when a web AI feature needs per-call debugging the Gateway cannot answer.
+  and pi-ai calls use Cubby's shared gateway transport. Add `gen_ai.chat`
+  spans at that transport when a web AI feature needs per-call debugging
+  the Gateway cannot answer.
 
 - 🔭 **Standing household agents.** A registrar for records, quartermaster for
   consumable shortfalls, and foreman for stale or blocked projects, approving

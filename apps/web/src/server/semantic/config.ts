@@ -2,7 +2,7 @@ import {
   DEFAULT_EMBEDDING_MODEL,
   getEmbeddingModelConfig,
   type SupportedEmbeddingModel,
-} from "~/server/ai/models";
+} from "@cubby/shared/ai/models";
 
 export interface SemanticEmbeddingConfig {
   provider: "openai";

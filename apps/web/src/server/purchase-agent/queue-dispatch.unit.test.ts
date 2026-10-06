@@ -10,6 +10,7 @@ describe("purchase-agent queue dispatch", () => {
     const event = parsePurchaseAgentEvent({
       type: "browser_connected",
       runId,
+      // A historical body: the field must not reach the member-visible transcript.
       coordinatorModel: "gpt-6-sol",
       eventId: "connection-9",
       connectionId: "mac-bridge-9",
@@ -25,7 +26,6 @@ describe("purchase-agent queue dispatch", () => {
         attributes: { eventId: "connection-9" },
         body: JSON.stringify({
           version: 1,
-          coordinatorModel: "gpt-6-sol",
           eventId: "connection-9",
           type: "browser_connected",
           connectionId: "mac-bridge-9",

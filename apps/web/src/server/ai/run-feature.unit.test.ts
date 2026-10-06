@@ -12,8 +12,8 @@ import {
 } from "@earendil-works/pi-ai";
 import { describe, expect, it } from "vitest";
 
-import { AI_CACHE_TTL_SECONDS } from "~/server/clients/ai-adapters";
-import type { GatewayCallOptions } from "~/server/clients/ai-gateway";
+import { AI_CACHE_TTL_SECONDS } from "~/server/ai/adapters";
+import type { GatewayCallOptions } from "~/server/ai/gateway";
 import { Database } from "~/server/db";
 
 import {

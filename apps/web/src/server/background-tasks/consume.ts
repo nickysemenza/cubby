@@ -5,7 +5,7 @@ import type { SearchableEntityRef } from "@cubby/schemas/search";
 import { createLogger } from "@cubby/worker-tracing";
 
 import type { UnparsedError } from "~/lib/error-utils";
-import { isAiGatewayRateLimit } from "~/server/clients/ai-gateway-error";
+import { isAiGatewayRateLimit } from "~/server/ai/gateway-error";
 import type { Database } from "~/server/db";
 import { TraceNames, withTrace } from "~/server/tracing";
 

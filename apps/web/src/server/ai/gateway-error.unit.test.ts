@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { isAiGatewayRateLimit, wrapAiGatewayError } from "./ai-gateway-error";
+import { isAiGatewayRateLimit, wrapAiGatewayError } from "./gateway-error";
 
 describe("AI Gateway error context", () => {
   it("shows the HTTP failure when the provider adapter only reports a generic message", () => {

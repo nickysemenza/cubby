@@ -2,11 +2,13 @@ import {
   type AiGatewayEnvironment,
   CUBBY_AI_GATEWAY_ID,
   proxiedAiGatewayMetadata,
-} from "@cubby/shared/ai-gateway-metadata";
+} from "@cubby/shared/ai/gateway-metadata";
 import {
+  gatewayProviderUrl,
+  strippedHeaders,
   workersAiModel,
   workersAiRunRequest,
-} from "@cubby/shared/ai-gateway-request";
+} from "@cubby/shared/ai/gateway-request";
 import { z } from "zod";
 import { modelSwapSchema, swapResponsesModel } from "../responses-model-swap";
 
@@ -53,13 +55,6 @@ function wireModel(body: ArrayBuffer) {
   }
 }
 
-const DROPPED_HEADERS = [
-  "authorization",
-  "x-api-key",
-  "content-length",
-  "host",
-];
-
 /** Labels a request whose caller sent none (or an unreadable header). */
 const PROXY_CALL = { feature: "tester-army", operation: "coupled.proxy" };
 
@@ -91,13 +86,19 @@ function forward(
     }
     return fetch(run.url, run.init);
   }
-  const headers = new Headers(request.headers);
-  for (const name of DROPPED_HEADERS) headers.delete(name);
+  const headers = strippedHeaders({ headers: request.headers });
+  // The placeholder host must not follow the request to the gateway.
+  headers.delete("host");
   headers.set("cf-aig-authorization", `Bearer ${env.GATEWAY_TOKEN}`);
   headers.set("cf-aig-skip-cache", "true");
   headers.set("cf-aig-metadata", JSON.stringify(metadata));
   return fetch(
-    `https://gateway.ai.cloudflare.com/v1/${env.ACCOUNT_ID}/${CUBBY_AI_GATEWAY_ID}${url.pathname}${url.search}`,
+    gatewayProviderUrl({
+      accountId: env.ACCOUNT_ID,
+      gatewayId: CUBBY_AI_GATEWAY_ID,
+      provider: route,
+      endpoint: `${url.pathname.slice(`/${route}/`.length)}${url.search}`,
+    }),
     { method: request.method, headers, body },
   );
 }

@@ -3,17 +3,18 @@ import {
   gatewayForwardInput,
   gatewayForwardOut,
 } from "@cubby/schemas/import-recipe";
+import {
+  gatewayBaseURL,
+  type GatewayResponseInfo,
+  gatewayResponseInfo,
+} from "@cubby/shared/ai/gateway-request";
+import { gatewayProviderSchema } from "@cubby/shared/ai/models";
 import { z } from "zod";
 
 import { getErrorMessage, type UnparsedError } from "~/lib/error-utils";
 import { wasm } from "~/lib/wasm";
-import { recordAiUsage } from "~/server/ai-usage";
-import {
-  gatewayBaseURL,
-  gatewayFetch,
-  gatewayProviderSchema,
-  type GatewayTransport,
-} from "~/server/clients/ai-gateway";
+import { gatewayFetch, type GatewayTransport } from "~/server/ai/gateway";
+import { recordAiUsage } from "~/server/ai/usage";
 import type { Database } from "~/server/db";
 
 const REQUEST_TIMEOUT_MS = 120_000;
@@ -32,15 +33,12 @@ const STRIPPED_REQUEST_HEADERS = new Set([
   "x-api-key",
 ]);
 
-/** The gateway's cache verdict; `HIT` means the answer was not billed. */
-const GATEWAY_CACHE_STATUS = "cf-aig-cache-status";
-
 /**
  * Response headers worth returning: request ids, rate-limit hints, and the
  * cache verdict (the crate books a gateway hit as a free, cached call).
  */
 const RETURNED_RESPONSE_HEADERS = new Set([
-  GATEWAY_CACHE_STATUS,
+  "cf-aig-cache-status",
   "cf-aig-log-id",
   "cf-ray",
   "content-type",
@@ -72,7 +70,7 @@ const gatewayMetadataKeys = z.object({
   purpose: z.string().optional(),
 });
 
-/** What a call cost, as the crate prices it. */
+/** Provider token counts extracted by the crate; pricing is owned by accounting. */
 const gatewayCallUsageSchema = z.object({
   provider: z.string().min(1),
   usage: z.object({
@@ -81,7 +79,6 @@ const gatewayCallUsageSchema = z.object({
     cache_read_input_tokens: z.number().int().nonnegative().default(0),
     cache_creation_input_tokens: z.number().int().nonnegative().default(0),
   }),
-  cost_usd: z.number().nonnegative().nullable().default(null),
 });
 type GatewayCallUsage = z.output<typeof gatewayCallUsageSchema>;
 
@@ -91,7 +88,7 @@ type AiUsageRecord = Parameters<typeof recordAiUsage>[1];
 export interface GatewayForwardPort {
   /** The shared AI Gateway transport: binding in prod, REST in dev. */
   transport: typeof gatewayFetch;
-  /** Usage and cost from a raw provider body, or `null` when unknown. */
+  /** Usage from a raw provider body, or `null` when unknown. */
   callUsage: (model: string, body: string) => GatewayCallUsage | null;
   recordUsage: (db: Database, input: AiUsageRecord) => Promise<void>;
 }
@@ -174,9 +171,11 @@ async function sendWithTimeout(
 }
 
 /**
- * One AiUsage row for a successful call, priced by the crate. An answer the
- * gateway served from its own cache repeats the provider's usage figures but
- * cost nothing, as does a ChatGPT plan answer (plan usage, not API spend).
+ * One AiUsage row for a successful call, priced by the telemetry consumer. The usage
+ * writer zeroes a gateway cache hit (the provider's usage figures repeat but
+ * were not billed) and a ChatGPT plan answer (plan usage, not API spend).
+ * Prompt-cache traffic is token evidence; the forwarder has no cache of its
+ * own, so `cacheStatus` is `none`.
  */
 function usageRecord(
   feature: string,
@@ -184,17 +183,10 @@ function usageRecord(
   purpose: string | undefined,
   usage: GatewayCallUsage,
   durationMs: number,
-  gatewayHit: boolean,
+  gateway: GatewayResponseInfo,
   transport: GatewayTransport | "unknown",
   runId: RunId,
 ): AiUsageRecord {
-  const cacheStatus = gatewayHit
-    ? "hit"
-    : usage.usage.cache_read_input_tokens > 0
-      ? "hit"
-      : usage.usage.cache_creation_input_tokens > 0
-        ? "miss"
-        : "none";
   return {
     feature,
     provider: usage.provider,
@@ -203,10 +195,12 @@ function usageRecord(
     runId,
     inputTokens: usage.usage.input_tokens,
     outputTokens: usage.usage.output_tokens,
-    estimatedCost: gatewayHit || transport === "chatgpt" ? 0 : usage.cost_usd,
+    cacheReadTokens: usage.usage.cache_read_input_tokens,
+    cacheWriteTokens: usage.usage.cache_creation_input_tokens,
     durationMs,
-    cacheStatus,
+    cacheStatus: "none",
     transport,
+    ...gateway,
   };
 }
 
@@ -231,7 +225,7 @@ export async function forwardGatewayRequest(
   const { provider, endpoint } = splitProviderRoute(request.path);
   const startedAt = performance.now();
   let transport: GatewayTransport | "unknown" = "unknown";
-  const recordFailure = async () => {
+  const recordFailure = async (failed?: Response) => {
     if (!opts.db || !opts.runId || !model) return;
     await port.recordUsage(opts.db, {
       feature: opts.feature,
@@ -242,7 +236,7 @@ export async function forwardGatewayRequest(
       durationMs: Math.max(0, Math.round(performance.now() - startedAt)),
       status: "failed",
       transport,
-      estimatedCost: transport === "chatgpt" ? 0 : null,
+      ...(failed && gatewayResponseInfo(failed)),
     });
   };
   // Non-2xx responses are still returned for the ladder; only the usage row
@@ -262,19 +256,17 @@ export async function forwardGatewayRequest(
     await recordFailure();
     throw error;
   });
-  if (!response.ok) await recordFailure();
+  if (!response.ok) await recordFailure(response);
   const body = await response.text().catch(async (error: UnparsedError) => {
     // A non-2xx response already has its failed row; a broken success stream
     // has not reported usage yet.
-    if (response.ok) await recordFailure();
+    if (response.ok) await recordFailure(response);
     throw error;
   });
   const durationMs = Math.max(0, Math.round(performance.now() - startedAt));
 
   const usage =
     opts.db && response.ok && model ? port.callUsage(model, body) : null;
-  const gatewayHit =
-    response.headers.get(GATEWAY_CACHE_STATUS)?.toUpperCase() === "HIT";
   if (opts.db && opts.runId && model && usage) {
     await port.recordUsage(
       opts.db,
@@ -284,7 +276,7 @@ export async function forwardGatewayRequest(
         purpose,
         usage,
         durationMs,
-        gatewayHit,
+        gatewayResponseInfo(response),
         transport,
         opts.runId,
       ),
