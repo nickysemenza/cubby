@@ -39,7 +39,7 @@ CubbyAPI plugin's OpenAPI inputs) → `xcodegen generate --spec apps/apple/proje
   change when a schema changes (reach an anonymous value by property and let
   inference carry the type). The generator's output is its own SPM
   target, `CubbyAPI` (`CubbyKit/Sources/CubbyAPI/`), so editing hand-written CubbyKit code
-  does not recompile ~58k generated lines; `import CubbyAPI` appears only inside CubbyKit
+  does not recompile the generated client; `import CubbyAPI` appears only inside CubbyKit
   (`API/*.swift`, `Generated/*.swift`, and the model files that extend a generated type), never
   in the App or the CLI. There is no hand-written mapping layer: a screen reads the generated
   type, and the few derived values it needs (`stableKey`, `manufacturerOrNil`, `MacroSummary`,

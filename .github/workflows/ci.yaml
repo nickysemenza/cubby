@@ -461,7 +461,10 @@ jobs:
       - uses: ./.github/actions/setup-apple-ffi
         with:
           targets: mac
-      - uses: ./.github/actions/download-apple-inputs
+      - uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131 # v7
+        with:
+          name: apple-generated
+          path: apps/apple
       # The whole SwiftPM build directory is cached, not just the checkouts:
       # 367 tests run in ~3s, the other 2.5-4 minutes was a cold build.
       # stamp-source-mtimes.ts gives each tracked source an mtime derived
@@ -512,7 +515,10 @@ jobs:
     timeout-minutes: 40
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
-      - uses: ./.github/actions/download-apple-inputs
+      - uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131 # v7
+        with:
+          name: apple-generated
+          path: apps/apple
       - uses: ./.github/actions/setup-apple-ffi
         with:
           targets: sim

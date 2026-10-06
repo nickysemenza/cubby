@@ -117,7 +117,10 @@ jobs:
           targets: ${{ steps.platform.outputs.ffi-target }}
           profile: dist
 
-      - uses: ./.github/actions/download-apple-inputs
+      - uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131 # v7
+        with:
+          name: apple-generated
+          path: apps/apple
 
       - uses: ./.github/actions/setup-apple-tools
         id: apple-tools

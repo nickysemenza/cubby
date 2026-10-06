@@ -54,6 +54,10 @@ unsupported capabilities. Generated files are never committed:
 `pnpm check:clean` proves a generate run leaves the tree unchanged. Typecheck
 verifies declaration types and referenced exports.
 
+Progressive list enrichment reuses one exported error schema across entities,
+so OpenAPI and Swift emit one shared error type while each entity retains its
+own successful enrichment shape.
+
 ## One declaration, several consumers
 
 Each declaration co-locates schemas and field policy:

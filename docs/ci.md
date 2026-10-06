@@ -118,7 +118,8 @@ changes select Apple. These inputs affect generated Swift or its binding tests;
 an Apple README or unrelated web page alone does not select Apple. The macOS jobs install no
 Node dependencies: the Linux `Apple generated inputs` job runs `pnpm generate`
 and uploads the generated Swift inputs as the `apple-generated` artifact
-(`.github/actions/generate-apple-inputs`), which each downloads before building,
+(`.github/actions/generate-apple-inputs`), which each restores directly with
+`actions/download-artifact` before building,
 and `scripts/stamp-source-mtimes.ts` gives those files content-derived mtimes
 like tracked sources so the restored build caches still apply. A skipped job still
 satisfies its required status check. The host job runs `swift test --package-path
