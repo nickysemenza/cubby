@@ -33,7 +33,9 @@ it live in the [validation policy](agents/validation.md) and
 - Most selected targets replay from Nx cache on a small change, so an unaffected
   native or PostgreSQL gate costs a cache lookup, not a rebuild. E2E is
   explicitly uncached and always runs its browser tests; its `build-cf`
-  prerequisite may reuse a cache entry.
+  prerequisite may reuse a cache entry for the same source revision. Its key
+  includes root configuration, bundled docs and agent skills, Git commit/branch, and explicit
+  source overrides, matching the bundle metadata and provenance check.
 - The textual order of the `run-many -t` list is not an execution-order
   contract; Nx dependencies provide the ordering (WASM before its consumers,
   web build before E2E). `verify:local:full` sets `NX_SKIP_NX_CACHE=true` so
