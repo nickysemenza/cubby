@@ -16,7 +16,7 @@ import {
 } from "~/entity/entity-media/entity-display-images";
 import { fieldEnumOptions } from "~/entity/enum-field-display";
 import { task } from "~/integrations/tanstack-query/generated/catalog.gen";
-import { formatDateSpan } from "~/lib/date-span";
+import { CalendarDate } from "~/ui/common/calendar-date";
 import { renderOptionCell } from "~/ui/data-table/columnHelpers";
 import { ErrorDisplay } from "~/ui/feedback/error-display";
 import { SimpleLoading } from "~/ui/feedback/loading-skeletons";
@@ -166,7 +166,9 @@ function TaskRows({
                 <span className="text-muted-foreground">—</span>
               )}
             </TableCell>
-            <TableCell>{formatDateSpan(t.dueDate, t.dueEndDate)}</TableCell>
+            <TableCell>
+              <CalendarDate start={t.dueDate} end={t.dueEndDate} />
+            </TableCell>
           </TableRow>
         ))}
       </TableBody>

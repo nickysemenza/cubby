@@ -20,11 +20,14 @@ import { formatPlainDate, parsePlainDate } from "~/lib/plain-date";
  * rather than a `kind` switch, which covers meals and expenses (the repo always
  * writes `date + 1`) and 1-day tasks with one predicate.
  */
-export function itemSpanLabel(item: CalendarItem): string | null {
+export function itemSpanLabel(
+  item: CalendarItem,
+  today?: string,
+): string | null {
   const start = parsePlainDate(item.startDate);
   // `endDateExclusive` is exclusive, so the inclusive end is one day back —
   // the same shift `persistMove` applies when it writes a task's `dueEndDate`.
   const endInclusive = addDays(parsePlainDate(item.endDateExclusive), -1);
   if (endInclusive.getTime() <= start.getTime()) return null;
-  return formatDateSpan(item.startDate, formatPlainDate(endInclusive));
+  return formatDateSpan(item.startDate, formatPlainDate(endInclusive), today);
 }

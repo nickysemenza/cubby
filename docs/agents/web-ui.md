@@ -7,7 +7,11 @@ days, in about a week, in a few weeks, in about a month, in a few months,
 in about a year, then approximate years). Ranges covering today say ongoing;
 past dates stay absolute. Compare household calendar days, never elapsed hours
 or UTC dates. Generic scalar dates, declared spans, and task due-date summaries
-share this formatter. Date columns reserve 256px and declared spans 320px so
+share this formatter through `CalendarDate`. Mounted labels subscribe to
+`useHouseholdToday`, whose shared clock refreshes at household midnight, on
+focus, and on visibility changes; cached records must not need a query refetch
+to update relative context. Calendar metadata passes the same reactive day to
+the pure formatter. Date columns reserve 256px and declared spans 320px so
 relative context stays visible by default; full labels remain available in the
 title when a column is resized narrower. Task summaries pass the optional end
 so an ongoing window cannot collapse to a past start day. Browser checks verify

@@ -12,11 +12,11 @@ import { EntityRefLink } from "~/entity/components/entity-ref-link";
 import { EntityQualityFact } from "~/entity/data-quality-value";
 import { entities, entityDetailParams } from "~/entity/entities";
 import { useEntityDisplayImage } from "~/entity/entity-media/entity-display-images";
-import { formatDateSpan } from "~/lib/date-span";
 import { householdLocalDate } from "~/lib/household-date";
 import { statusTone } from "~/lib/status-tone";
 import { effectiveTaskDueDate } from "~/lib/task-dates";
 import { cn } from "~/lib/utils";
+import { CalendarDate } from "~/ui/common/calendar-date";
 import { Row, Stack } from "~/ui/layout";
 import { Badge } from "~/ui/primitives/badge";
 import { Button } from "~/ui/primitives/button";
@@ -266,7 +266,7 @@ export function TaskCard({
                 overdue && "text-destructive",
               )}
             >
-              {formatDateSpan(task.dueDate, task.dueEndDate)}
+              <CalendarDate start={task.dueDate} end={task.dueEndDate} />
             </span>
           )}
           {showStatus && (

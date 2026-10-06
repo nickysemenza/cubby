@@ -13,8 +13,8 @@ import {
   useEntityDisplayImage,
 } from "~/entity/entity-media/entity-display-images";
 import { task } from "~/integrations/tanstack-query/generated/catalog.gen";
-import { formatDateSpan } from "~/lib/date-span";
 import { getErrorMessage } from "~/lib/error-utils";
+import { CalendarDate } from "~/ui/common/calendar-date";
 import { Button } from "~/ui/primitives/button";
 import { Skeleton } from "~/ui/primitives/skeleton";
 
@@ -96,7 +96,7 @@ function TodayTaskRow({ task: item }: { task: TaskTodayBriefingItemOut }) {
         truncate
       />
       <span className="font-mono text-2xs text-muted-foreground tabular-nums">
-        {formatDateSpan(item.dueDate, item.dueEndDate)}
+        <CalendarDate start={item.dueDate} end={item.dueEndDate} />
       </span>
       {item.projectId && item.projectName ? (
         <EntityRefLink

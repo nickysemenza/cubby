@@ -4,6 +4,7 @@ import { capitalize } from "@cubby/shared";
 import { EntityCover } from "~/entity/components/entity-cover";
 import { estimateStatusText, formatEstimate } from "~/lib/nutrition-format";
 import { cn, formatCurrency } from "~/lib/utils";
+import { useHouseholdToday } from "~/ui/hooks/use-household-today";
 import { Badge } from "~/ui/primitives/badge";
 
 import { calendarItemPresentation } from "./calendar-kind-registry";
@@ -55,9 +56,10 @@ function CalendarItemPresentation({
 }
 
 function CalendarItemCompact({ item }: { item: CalendarItem }) {
-  const presentation = calendarItemPresentation(item);
+  const today = useHouseholdToday();
+  const presentation = calendarItemPresentation(item, today);
   const Icon = presentation.icon;
-  const span = itemSpanLabel(item);
+  const span = itemSpanLabel(item, today);
   return (
     <>
       <Icon className="size-3 shrink-0" aria-hidden />
@@ -100,7 +102,8 @@ function CalendarItemRich({
   /** Fortnight density: a thumbnail one line of body text tall, tighter gap. */
   compact?: boolean;
 }) {
-  const presentation = calendarItemPresentation(item);
+  const today = useHouseholdToday();
+  const presentation = calendarItemPresentation(item, today);
   const Icon = presentation.icon;
   const { cover, metadata } = presentation;
   const cost = calendarItemCost(item);
