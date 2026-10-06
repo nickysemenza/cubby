@@ -6,7 +6,9 @@ import { describe, expect, it } from "vitest";
 import {
   ledgerParty,
   orderMail,
+  importSourceClaim,
   orderMailEvent,
+  product,
   purchase,
   expense,
   inventoryEntry as inventory,
@@ -28,6 +30,7 @@ import {
   finishRun,
   loadRunDetail,
 } from "../run-service";
+import { startTargetedImport } from "../targeted-run";
 import {
   loadOrderMailImportEvidence,
   startOrderMailImport,
@@ -535,6 +538,41 @@ describe("saved confirmation imports", () => {
         .from(runTarget)
         .where(eq(runTarget.runId, children[0]!.id));
       expect(targets).toHaveLength(1);
+    });
+
+    // A member enriching a mail-imported Product from its Purchase: the
+    // source claim's key is a Gmail message id, never a page to open.
+    it("starts manual enrichment of a mail-imported Product at a web page", async () => {
+      const { run } = await importNewLine(false);
+      const [claim] = await getDb(ctx.db)
+        .select({
+          id: importSourceClaim.id,
+          purchaseId: importSourceClaim.purchaseId,
+        })
+        .from(importSourceClaim)
+        .where(eq(importSourceClaim.lastRunId, run.id));
+      const [line] = await getDb(ctx.db)
+        .select({ productId: product.shortcode })
+        .from(expense)
+        .innerJoin(product, eq(product.id, expense.productId))
+        .where(eq(expense.purchaseId, claim!.purchaseId!));
+      await startTargetedImport(ctx.db, run.ledgerPartyId!, {
+        purpose: "product_enrichment",
+        targets: [
+          {
+            productId: line!.productId,
+            sourceId: claim!.id,
+            vendorAccountId: null,
+          },
+        ],
+      });
+      const targets = await getDb(ctx.db)
+        .select({ startUrl: runTarget.sourceExternalKey })
+        .from(runTarget)
+        .innerJoin(runTable, eq(runTable.id, runTarget.runId))
+        .where(eq(runTable.purpose, "product_enrichment"));
+      // No SKU, so no learned product URL: the Vendor's own site.
+      expect(targets).toEqual([{ startUrl: "https://seed.example.test" }]);
     });
 
     it("starts nothing for a mail-only account", async () => {

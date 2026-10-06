@@ -1,5 +1,6 @@
 import type {
   LedgerPartyId,
+  ProductId,
   PurchaseId,
   VendorId,
 } from "@cubby/schemas/identifiers";
@@ -7,7 +8,7 @@ import { runShortcode, vendorAccountId } from "@cubby/schemas/identifiers";
 import { agentImportRunPurpose } from "@cubby/schemas/import-run-agent";
 import type { PurchaseAgentEvent } from "@cubby/schemas/purchase-import";
 import { sha256Hex } from "@cubby/shared/sha256";
-import { and, desc, eq } from "drizzle-orm";
+import { and, desc, eq, isNotNull } from "drizzle-orm";
 import { z } from "zod";
 
 import {
@@ -20,6 +21,7 @@ import {
 import { getPurchaseAgentQueue } from "~/server/cf-env";
 import type { Database } from "~/server/db";
 import {
+  entityExternalId,
   expense,
   importSourceClaim,
   product,
@@ -381,6 +383,39 @@ async function startPurchaseValidation(
   return { runs: [await startedOutcome(db, started)] };
 }
 
+/**
+ * The page an enrichment run opens first. A browser-captured source's key is
+ * its order page; any other source (a Gmail message, a receipt photo) names
+ * no page, so the run starts at the Product's own learned page, else the
+ * Vendor's website, where the agent searches for the Product by name.
+ */
+async function enrichmentStartUrl(
+  db: Database,
+  productId: ProductId,
+  claim: { kind: string; externalKey: string; vendorId: VendorId },
+) {
+  if (/^https?:\/\//u.test(claim.externalKey)) return claim.externalKey;
+  const [page] = await getDb(db)
+    .select({ url: entityExternalId.url })
+    .from(entityExternalId)
+    .where(
+      and(
+        eq(entityExternalId.entityId, productId),
+        isNotNull(entityExternalId.url),
+        notDeleted(entityExternalId),
+      ),
+    )
+    .orderBy(desc(entityExternalId.isPrimary))
+    .limit(1);
+  if (page?.url) return page.url;
+  const [owner] = await getDb(db)
+    .select({ website: vendor.website })
+    .from(vendor)
+    .where(eq(vendor.id, claim.vendorId))
+    .limit(1);
+  return owner?.website ?? claim.externalKey;
+}
+
 async function startProductEnrichment(
   db: Database,
   ledgerPartyId: LedgerPartyId,
@@ -413,6 +448,7 @@ async function startProductEnrichment(
       return {
         productId,
         claim,
+        startUrl: await enrichmentStartUrl(db, productId, claim),
         targetFingerprint:
           productState?.fingerprint ??
           (await fingerprint({ product: undefined })),
@@ -442,7 +478,8 @@ async function startProductEnrichment(
             ? vendorAccountId.parse(row.claim.vendorAccountId)
             : null,
           sourceKind: row.claim.kind,
-          sourceExternalKey: row.claim.externalKey,
+          // The enrichment agent opens this; a mail claim's key is no page.
+          sourceExternalKey: row.startUrl,
           targetFingerprint: row.targetFingerprint,
           evidenceFingerprint: row.claim.checksum,
         })),
