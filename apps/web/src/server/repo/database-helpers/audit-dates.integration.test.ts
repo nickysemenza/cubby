@@ -51,5 +51,20 @@ describe("audit date filters", () => {
       "household evening",
       "household morning",
     ]);
+
+    // The last four-digit day has no next day to bound by; it is unbounded.
+    const open = await getDb(ctx.db)
+      .select({ name: location.name })
+      .from(location)
+      .where(
+        and(
+          inArray(location.id, ids),
+          ...auditDateWhereConditions(location, {
+            createdFrom: "2026-09-02",
+            createdTo: "9999-12-31",
+          }),
+        ),
+      );
+    expect(open.map((row) => row.name)).toEqual(["after household day"]);
   });
 });

@@ -73,6 +73,8 @@ export const householdDaySqlText = (timestamp: string): string =>
 export const householdDaySql = (column: AnyColumn | SQL): SQL =>
   sql`((${column} AT TIME ZONE 'UTC') AT TIME ZONE ${sql.raw(`'${HOUSEHOLD_TIMEZONE}'`)})::date`;
 
+const LAST_PLAIN_DATE = "9999-12-31";
+
 /**
  * Bounds a timestamp column to whole household days `from` through `to`
  * (either optional): `[household midnight of from, household midnight after
@@ -88,7 +90,8 @@ export function householdDayRangeConditions(
     from
       ? sql`${column} >= ${householdDateTime(from).toISOString()}::timestamp`
       : undefined,
-    to
+    // The last four-digit day has no representable next day; it is open-ended.
+    to && to < LAST_PLAIN_DATE
       ? sql`${column} < ${householdDateTime(shiftPlainDate(to, 1)).toISOString()}::timestamp`
       : undefined,
   ];
