@@ -29,8 +29,10 @@ actions; label nutrition, external ids, financial-account source aliases,
 transaction source refs, source-claim description (identity preserved), recipe
 line and product tag/collection editing; purchase validation; expense split
 (cents conserved, unknown cost refused); attach expenses (move confirmation) and
-products; task board lanes and moving a card; and a Run console journey (live
-progress, resolving a finding). The Run console debug log is not cursor-paged in
+products; task board lanes and moving a card; turning a mail-only vendor
+account into a browser-synced one (its Vendor becomes an online account);
+reading a finished mail import's Restart inputs (Vendor and order id); and a
+Run console journey (live progress, resolving a finding). The Run console debug log is not cursor-paged in
 the app (it caps at 2,000 events), so paging is not asserted. Three coupled
 import journeys follow (see below).
 
@@ -191,8 +193,14 @@ the same `cubby` gateway and token. The forwarding peers preserve application
 feature/operation metadata and bypass gateway caching. `tooling/scenarios/tester-army-coupled.ts`
 seeds the sources:
 
-- `import-order-mail`: a saved itemized confirmation the member imports from
-  the vendor page.
+- `import-order-mail`: a saved itemized confirmation (an HTML product link on
+  the Vendor's site) and its shipping notice; the member imports the order from
+  the vendor page. Without a click, both emails link to the Purchase as
+  `cubby-system` decisions, the Purchase is dated by placement and belongs to
+  the member's mail-only account, and the new Product keeps the email's
+  product link.
+- `import-order-mail-enrich`: the same on a browser-synced account; the
+  commit also starts one `post_import_enrichment` run at the product page.
 - `import-photo-inventory`: two synthetic photos uploaded over the native HTTP
   API (create run, stage, PUT, finalize). The journey waits for their cloud
   descriptions, starts grouping, waits for the agent's proposals, and

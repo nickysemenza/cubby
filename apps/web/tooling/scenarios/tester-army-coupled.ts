@@ -7,6 +7,7 @@ import {
 } from "@cubby/schemas/identifiers";
 import type { photoImportCreateRunInput } from "@cubby/schemas/photo-import-run";
 import type { BrowserBridgeResult } from "@cubby/schemas/purchase-import";
+import { parseEntityId } from "@cubby/schemas/identifiers";
 import { testUserId } from "@cubby/schemas/testing";
 import { and, eq, isNull } from "drizzle-orm";
 import type { Pool } from "pg";
@@ -79,40 +80,17 @@ export async function seedCoupledJourneys(
 
   const seed: JourneySeed = {};
 
-  // One saved, itemized confirmation the member imports from the vendor page.
-  const { mail } = LIVE_IMPORT;
-  const mailVendor = await insertWithShortcode(db, "vendor", {
-    name: mail.vendor,
+  // A saved, itemized confirmation the member imports from the vendor page,
+  // plus its later shipping notice; once mail-only, once on a synced account.
+  seed["import-order-mail"] = await seedSavedConfirmation(db, member.id, {
+    ...LIVE_IMPORT.mail,
+    synced: false,
   });
-  const [saved] = await getDb(db)
-    .insert(orderMail)
-    .values({
-      ledgerPartyId: member.id,
-      vendorId: mailVendor.id,
-      messageId: `synthetic-live-confirmation-${crypto.randomUUID()}`,
-      sender: "orders@example.test",
-      subject: "Synthetic itemized confirmation",
-      receivedAt: new Date("2026-09-10T15:00:00Z"),
-      rawChecksum: "b".repeat(64),
-      content: {
-        snippet: null,
-        bodyHtml: null,
-        bodyText: `Order ${mail.orderId}. ${mail.item}, SKU HERB-1, qty 1, $5.00. Grand total $5.00 USD.`,
-      },
-    })
-    .returning();
-  if (!saved) throw new Error("Synthetic confirmation was not saved");
-  await getDb(db)
-    .insert(orderMailEvent)
-    .values({
-      orderMailId: saved.id,
-      event: "placed",
-      orderId: mail.orderId,
-      amount: mail.cents / 100,
-      currency: "USD",
-      sourceKey: `synthetic:${saved.id}`,
-    });
-  seed["import-order-mail"] = { vendor: mailVendor.shortcode };
+  seed["import-order-mail-enrich"] = await seedSavedConfirmation(
+    db,
+    member.id,
+    { ...LIVE_IMPORT.enrich, synced: true },
+  );
 
   // A fresh database starts with image processing paused; finalize would
   // schedule descriptions that no wakeup ever claims.
@@ -316,4 +294,71 @@ async function seedAccountSync(
     },
   });
   return { run: prior.publicId, vendor: vendor.shortcode };
+}
+
+/**
+ * One Vendor with a saved itemized confirmation (a product link on the
+ * Vendor's own site in its HTML) and a shipping notice for the same order.
+ * `synced` gives the member a browser-synced account, so the import's new
+ * Product starts follow-up enrichment; otherwise the import creates the
+ * member's mail-only account itself.
+ */
+async function seedSavedConfirmation(
+  db: ReturnType<typeof buildScenarioDatabase>,
+  memberId: string,
+  source: (typeof LIVE_IMPORT)["mail" | "enrich"] & { synced: boolean },
+) {
+  const party = parseEntityId("ledgerParty", memberId);
+  const vendor = await insertWithShortcode(db, "vendor", {
+    name: source.vendor,
+    website: `https://${source.host}`,
+    browserDomains: [source.host],
+  });
+  if (source.synced)
+    await insertWithShortcode(db, "vendorAccount", {
+      label: source.vendor,
+      vendorId: vendor.id,
+      ledgerPartyId: party,
+    });
+  const save = async (
+    event: "placed" | "shipped",
+    receivedAt: string,
+    content: { bodyHtml: string | null; bodyText: string },
+  ) => {
+    const [saved] = await getDb(db)
+      .insert(orderMail)
+      .values({
+        ledgerPartyId: party,
+        vendorId: vendor.id,
+        messageId: `synthetic-live-${event}-${crypto.randomUUID()}`,
+        sender: `orders@${source.host}`,
+        subject: `Synthetic order ${event}`,
+        receivedAt: new Date(receivedAt),
+        rawChecksum: createHash("sha256")
+          .update(`${source.orderId}:${event}`)
+          .digest("hex"),
+        content: { snippet: null, ...content },
+      })
+      .returning();
+    if (!saved) throw new Error(`Synthetic ${event} mail was not saved`);
+    await getDb(db)
+      .insert(orderMailEvent)
+      .values({
+        orderMailId: saved.id,
+        event,
+        orderId: source.orderId,
+        amount: event === "placed" ? source.cents / 100 : null,
+        currency: "USD",
+        sourceKey: `synthetic:${saved.id}`,
+      });
+  };
+  await save("placed", "2026-09-10T15:00:00Z", {
+    bodyHtml: `<p>Order ${source.orderId}</p><table><tr><td><a href="${source.productUrl}">${source.item}</a></td><td>SKU HERB-1</td><td>1</td><td>$5.00</td></tr></table><p>Grand total $5.00 USD</p>`,
+    bodyText: `Order ${source.orderId}. ${source.item} (${source.productUrl}), SKU HERB-1, qty 1, $5.00. Grand total $5.00 USD.`,
+  });
+  await save("shipped", "2026-09-11T15:00:00Z", {
+    bodyHtml: null,
+    bodyText: `Your order ${source.orderId} has shipped.`,
+  });
+  return { vendor: vendor.shortcode };
 }
