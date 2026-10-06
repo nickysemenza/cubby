@@ -69,7 +69,7 @@ import {
   withTransactionDatabase,
 } from "~/server/repo/database-helpers";
 import { validateExpenseInheritance } from "~/server/repo/expense-inheritance";
-import { deleteImages } from "~/server/repo/image";
+import { reapUnreferencedImages } from "~/server/repo/image";
 import { validateLiveInheritedPolicies } from "~/server/repo/inheritance-validation";
 import { upsertAgentProductMatch } from "~/server/repo/product-match-candidate";
 import { assertProductCategoryChange } from "~/server/repo/product/classification";
@@ -1362,14 +1362,20 @@ async function commitEnrichmentIdentifier(
  * A commit may fill only a target its run still works. Completed, skipped,
  * unresolved and the other settled states are closed for writes.
  */
-/** Remove an image this commit attempt imported and did not keep. */
+/**
+ * Remove an image this commit attempt imported and did not keep. Creating the
+ * row does not make it this attempt's alone: an identical commit that reused
+ * it may have attached it and won, so only an unreferenced image is deleted.
+ */
 async function discardCreatedImage(
   db: Database,
   imageId: Awaited<ReturnType<typeof resolveOrThrow>> | null,
   created: boolean,
 ) {
   if (!imageId || !created) return;
-  const removed = await deleteImages(db, [imageId]);
+  const removed = await withTransaction(db, (tx) =>
+    reapUnreferencedImages(tx, [imageId]),
+  );
   await deleteStoredObjects(removed.deletedKeys);
 }
 
