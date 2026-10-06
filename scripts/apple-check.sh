@@ -6,10 +6,10 @@
 #
 #   full  local default: swift test (CubbyKit package) + a generic-simulator build
 #   app   local, skips swift test: a generic-simulator build only
-#   ci    hosted `Apple checks` job: a generic-simulator build only, using the
+#   ci    hosted `Apple simulator build` job: a generic-simulator build only, using the
 #         CI-cached SPM clone directory (-clonedSourcePackagesDirPath).
-#         CubbyKit's package tests run first on the macOS host in the same
-#         hosted `Apple checks` job (`swift test`) — running them on
+#         CubbyKit's package tests run in parallel in `Apple host tests`
+#         (`swift test`) — running them on
 #         the iOS Simulator inside this build job cost about 6 minutes to
 #         boot plus ~10 minutes of CPU starvation on a hosted runner
 #         (measured 2026-09-21), so CI tests them on the host.
@@ -67,11 +67,10 @@ swift format lint --strict --configuration apps/apple/.swift-format --recursive 
 # --force-resolved-versions: a bare `swift test` re-resolves and rewrites
 # CubbyKit/Package.resolved (only the originHash), leaving the tree dirty
 # after every run. Pins change only via a deliberate `swift package update`.
-# `ci` mode skips this: the hosted job already ran CubbyKit's package tests
-# on the host before installing the simulator FFI slice.
+# `ci` mode skips this: the separate host job owns CubbyKit's package tests.
 if [ "$mode" = "full" ]; then
   swift test --package-path apps/apple/CubbyKit --force-resolved-versions --disable-index-store
-  # Hosted CI runs this in its host-test phase instead.
+  # Hosted CI runs this in the separate host-test job.
   apps/apple/scripts/check-openapi-warnings.sh
 fi
 
