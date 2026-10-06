@@ -12,9 +12,16 @@ export function CalendarDate({
 }) {
   const today = useHouseholdToday();
   const label = formatDateSpan(start, end, today);
+  const parts = /^(.*) (\([^()]+\))$/.exec(label);
   return (
     <span className={className} title={label}>
-      {label}
+      {parts ? (
+        <>
+          {parts[1]} <span className="text-muted-foreground">{parts[2]}</span>
+        </>
+      ) : (
+        label
+      )}
     </span>
   );
 }

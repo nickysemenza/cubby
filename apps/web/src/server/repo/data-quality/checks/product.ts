@@ -20,13 +20,8 @@ const MODEL_REQUIRED_CATEGORIES = [
   "household",
 ] as const;
 
-const hasExpenses = (t: Product) => sql`EXISTS (
-  SELECT 1 FROM "Expense" dq_e
-  WHERE dq_e."productId" = ${t.id} AND dq_e."deletedAt" IS NULL
-)`;
-
-// includes-installed: a fixture is in-scope for quality checks (price,
-// model, image) the same as any other stocked product.
+// includes-installed: a fixture is in scope for the image and purchase checks
+// the same as any other stocked product.
 const hasInventory = (t: Product) => sql`EXISTS (
   SELECT 1 FROM "InventoryEntry" dq_inventory
   WHERE dq_inventory."productId" = ${t.id}
@@ -39,9 +34,6 @@ const hasStock = (t: Product) => sql`EXISTS (
     AND dq_stock."deletedAt" IS NULL
     AND dq_stock."placement" = 'stock'
 )`;
-
-/** Everything except the image and price checks is in scope on spend OR stock. */
-const inScope = (t: Product) => sql`(${hasExpenses(t)} OR ${hasInventory(t)})`;
 
 // The shared definition (live attachment, live Image, not a `label`, not a PDF
 // manual) also drives the image presence filter, the backfill selections and
@@ -111,34 +103,39 @@ export const productChecks = defineEntityChecks({
   table: product,
   checks: {
     product_orphaned: { missing: orphanedProductCondition },
+    // Identity applies to every Product, spend or stock or neither: a
+    // catalog-only entry still earns its name, maker, and category.
+    product_name: {
+      missing: (t) => sql`trim(${t.name}) = ''`,
+      fingerprint: (t) => [sql`${t.name}`],
+    },
     product_manufacturer: {
-      expected: inScope,
       missing: (t) =>
         sql`(trim(${t.manufacturer}) = '' OR lower(trim(${t.manufacturer})) = lower(${UNSPECIFIED_MANUFACTURER}))`,
       fingerprint: (t) => [sql`${t.manufacturer}`],
     },
     product_external_id: {
-      expected: inScope,
       missing: (t) => sql`NOT ${hasExternalId(t)}`,
       fingerprint: (t) => [hasExternalId(t)],
     },
     product_category: {
-      expected: inScope,
       missing: (t) => sql`NOT ${hasLiveCategory(t)}`,
       fingerprint: (t) => [sql`${t.categoryId}`],
     },
     product_model: {
       // Only categories whose things carry a maker's model number.
-      expected: (t) => sql`${inScope(t)} AND ${modelRequired(t)}`,
+      expected: modelRequired,
       missing: (t) => sql`(${t.model} IS NULL OR trim(${t.model}) = '')`,
       fingerprint: (t) => [sql`${t.categoryId}`, sql`${t.model}`],
     },
     product_price: {
       // A `misc:` bucket is a heterogeneous pile and is *expected* to be
       // unpriced (the per-location summary makes the same split); a stocked
-      // product otherwise carries no value into its location's total.
+      // product otherwise carries no value into its location's total. An
+      // unstocked Product earns credit for a known price (zero included) but
+      // is never charged a gap: its historical price may be unknowable.
       expected: (t) =>
-        sql`${hasStock(t)} AND lower(${t.name}) NOT LIKE 'misc:%'`,
+        sql`(${hasStock(t)} OR ${t.price} IS NOT NULL OR ${derivedPrice(t)} IS NOT NULL) AND lower(${t.name}) NOT LIKE 'misc:%'`,
       missing: (t) => sql`(${t.price} IS NULL AND ${derivedPrice(t)} IS NULL)`,
       fingerprint: (t) => [sql`${t.price}`, derivedPrice(t)],
     },
@@ -153,7 +150,7 @@ export const productChecks = defineEntityChecks({
       fingerprint: (t) => [hasInventory(t), hasDisplayableImage(t)],
     },
     amazon_asin: {
-      expected: (t) => sql`${inScope(t)} AND ${hasAmazonPurchase(t)}`,
+      expected: hasAmazonPurchase,
       missing: (t) => sql`NOT ${hasAmazonId(t)}`,
       fingerprint: (t) => [hasAmazonPurchase(t), hasAmazonId(t)],
     },

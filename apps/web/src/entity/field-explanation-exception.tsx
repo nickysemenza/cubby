@@ -51,8 +51,8 @@ export function ExceptionControls({
 
   if (check.exception) {
     return (
-      <div className="grid gap-2 text-xs text-muted-foreground">
-        <span className="leading-5">
+      <div className="flex basis-full flex-wrap items-baseline gap-x-2 gap-y-1 text-xs text-muted-foreground">
+        <span className="min-w-0 flex-1 leading-5">
           {check.exception.state === "stale"
             ? "Evidence changed since this exception was recorded: "
             : "Recorded as "}
@@ -75,16 +75,14 @@ export function ExceptionControls({
   }
   if (!accepting) {
     return (
-      <div>
-        <Button size="xs" variant="outline" onClick={() => setAccepting(true)}>
-          Accept as…
-        </Button>
-      </div>
+      <Button size="xs" variant="ghost" onClick={() => setAccepting(true)}>
+        Accept as…
+      </Button>
     );
   }
   return (
     <form
-      className="grid gap-2 border-t border-border pt-2"
+      className="grid w-full basis-full gap-2 border-t border-border pt-2"
       onSubmit={(event) => {
         event.preventDefault();
         set.mutate({

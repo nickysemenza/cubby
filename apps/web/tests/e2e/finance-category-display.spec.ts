@@ -128,7 +128,10 @@ test("linked Expense categories display their readable label and transaction exp
     .getByRole("button", { name: "How expense categories is determined" })
     .click();
   const popover = page.locator('[data-slot="popover-content"]');
-  await expect(popover).toContainText("What this means");
+  await expect(popover).toContainText("Single category");
+  await expect(popover).toContainText(
+    "28 of 28 linked expense lines are classified",
+  );
   await expect(popover).toContainText("Technical details");
   await expect(popover).toContainText("28 of 28 linked expense lines");
   await expect(popover).toContainText(
