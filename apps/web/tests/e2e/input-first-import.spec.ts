@@ -462,8 +462,12 @@ for (const statementFirst of [true, false]) {
       "href",
       `/purchases/${purchaseCode}`,
     );
+    const documentOrigin = await page.evaluate(() => performance.timeOrigin);
     await purchaseLink.click();
     await expect(page).toHaveURL(new RegExp(`/purchases/${purchaseCode}$`));
+    expect(await page.evaluate(() => performance.timeOrigin)).toBe(
+      documentOrigin,
+    );
     await expect(
       page.getByRole("link", { name: "Open Gmail conversation", exact: true }),
     ).toBeVisible();

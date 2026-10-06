@@ -83,7 +83,7 @@ export async function createConvergenceHarness(
   }
   if (!member) throw new Error("Authenticated reviewer member binding missing");
   const names = convergenceNames(token);
-  const { productName, orderId, host } = names;
+  const { productName, orderId } = names;
   const { vendor, account, card, location, category, productCategory } =
     await createConvergenceFixtures(
       (entity, overrides) => createEntityFixture(page, entity, overrides),
@@ -137,25 +137,9 @@ export async function createConvergenceHarness(
   const gmail = () => ingestGmailEvidence(db, member!.id, names);
 
   async function retailer() {
-    const url = `https://${host}/orders/${orderId}`;
+    // Source-order permutations enter at the importer; input-first journeys
+    // cover the browser capture and extraction boundary.
     const html = names.retailerHtml;
-    const retailerPage = await page.context().newPage();
-    try {
-      await retailerPage.route(url, (route) =>
-        route.fulfill({ contentType: "text/html", body: html }),
-      );
-      await retailerPage.goto(url);
-      const extracted = await retailerPage
-        .locator("[data-item]")
-        .getAttribute("data-item");
-      const printed = await retailerPage
-        .locator("[data-total]")
-        .getAttribute("data-total");
-      expect(extracted).toBe(productName);
-      expect(printed).toBe("42.50");
-    } finally {
-      await retailerPage.close();
-    }
     const run = await startOrResumeRun(db, {
       ledgerPartyId: member!.id,
       vendorAccountId: accountId,

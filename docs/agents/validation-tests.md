@@ -68,7 +68,9 @@ page routes. Assert image decoding as well as visibility. Retired-route HTTP sta
 contracts use `request.get`; browser scenarios own visible not-found behavior.
 When a journey already exposes the destination link, follow that link to exercise
 client navigation. Keep document loads and reloads that own direct-link, SSR, or
-persistence regressions.
+persistence regressions. A link transition expected to stay within the app can
+assert that `performance.timeOrigin` is unchanged, so a plain anchor cannot
+silently turn it into another document load.
 
 ### Workerd test runtime and profiles
 
