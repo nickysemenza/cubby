@@ -166,8 +166,8 @@ into synthetic accounting assertions.
 
 ## Affected-only E2E for local iteration
 
-`pnpm --dir apps/web test:e2e:affected` first runs the cached Nx `build-cf`
-target, then Playwright's `--only-changed=origin/main`. Playwright selects
+`pnpm --dir apps/web test:e2e:affected` first ensures the fingerprint-checked
+web build is current, then runs Playwright's `--only-changed=origin/main`. Playwright selects
 changed spec files and specs that import changed files; append `--list` to
 preview that selection. This is a local heuristic, not a merge gate: browser
 routes and components need not be imported by a spec, so an app-only change

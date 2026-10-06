@@ -169,8 +169,9 @@ pnpm --dir apps/web test:e2e:watch
 ```
 
 `warm` services are a macOS option; see [test tiers](agents/validation-tests.md)
-for external services on Linux. `test:e2e:affected` runs the cached Nx
-`build-cf`, then Playwright's `--only-changed=origin/main`, which selects spec
+for external services on Linux. `test:e2e:affected` reuses the current
+fingerprint-checked web build or rebuilds it, then runs Playwright's
+`--only-changed=origin/main`, which selects spec
 files that changed or import a changed file. It is a local heuristic: specs
 can reach app code through the browser without importing it, so an app-only
 change can select nothing. Name the spec that covers the route, or run the full `test:e2e`; CI
