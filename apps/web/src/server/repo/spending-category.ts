@@ -1,7 +1,10 @@
 import type { ActorContext } from "@cubby/schemas/context";
 import type { OperationDisposition } from "@cubby/schemas/entity-integrity";
 import type { EntityId, ShortcodeFor } from "@cubby/schemas/identifiers";
-import { parseShortcodeFor } from "@cubby/schemas/identifiers";
+import {
+  ENTITY_NOT_FOUND_REASON,
+  parseShortcodeFor,
+} from "@cubby/schemas/identifiers";
 import type { PaginationParams, SortParams } from "@cubby/schemas/pagination";
 import {
   spendingCategoryOut,
@@ -9,7 +12,7 @@ import {
   type SpendingCategoryUpdateData,
   type SpendingCategoryFilters,
 } from "@cubby/schemas/spending-category";
-import { and, eq, sql } from "drizzle-orm";
+import { and, eq, inArray, sql } from "drizzle-orm";
 import { uniq } from "es-toolkit";
 import { z } from "zod";
 
@@ -277,6 +280,31 @@ async function mergeSpendingCategories(
     ...input,
   });
   return withTransaction(db, async (tx) => {
+    // Everything below reads after these locks, so nothing slips in between
+    // the history check and the repoint. Expense writers wait for the merge
+    // (an Expense can reach a loser through a Purchase, Vendor, or Product
+    // mapping without referencing it), and FOR UPDATE conflicts with the FK
+    // KEY SHARE of any write that references the keeper or a loser, and with
+    // their deletion.
+    await unwrapDb(tx).execute(
+      sql`LOCK TABLE "Expense" IN SHARE ROW EXCLUSIVE MODE`,
+    );
+    const live = await unwrapDb(tx)
+      .select({ id: spendingCategory.id })
+      .from(spendingCategory)
+      .where(
+        and(
+          inArray(spendingCategory.id, [keepId, ...loserIds]),
+          notDeleted(spendingCategory),
+        ),
+      )
+      .orderBy(spendingCategory.id)
+      .for("update");
+    if (live.length !== loserIds.length + 1)
+      throw createAppError(
+        ENTITY_NOT_FOUND_REASON.spendingCategory,
+        "A spending category in this merge was deleted; reload and choose live categories.",
+      );
     // A loser above the keeper would reparent the keeper's own chain under it.
     const lineage = await selfAndAncestors(tx, keepId);
     if (loserIds.some((id) => lineage.has(id))) throw ownAncestor();

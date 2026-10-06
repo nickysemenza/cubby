@@ -2,10 +2,11 @@ import {
   parseShortcodeFor,
   type SpendingCategoryId,
 } from "@cubby/schemas/identifiers";
-import { and, eq, inArray } from "drizzle-orm";
+import { and, eq, inArray, sql } from "drizzle-orm";
 import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 
+import type { DrizzleTransaction } from "~/server/db";
 import {
   auditLog,
   expense,
@@ -21,7 +22,7 @@ import {
 } from "~/server/entity-kernel";
 import { createTestRequestContext } from "~/server/testing/request-context";
 
-import { unwrapDb } from "./database-helpers";
+import { unwrapDb, withTransaction } from "./database-helpers";
 import { insertWithShortcode } from "./shortcode-utils";
 import {
   applySpendingClassificationReview,
@@ -62,6 +63,45 @@ describe("spending category merge", () => {
       entity: "spendingCategory",
       data: { keepId, mergeIds },
     });
+
+  /**
+   * Holds `write` uncommitted while `run` starts, then commits it once `run`
+   * either waits on a lock or settles. A merge that checks before locking
+   * finishes inside the window and misses the concurrent write. Resolves to
+   * the run's refusal message, or null when it committed.
+   */
+  async function interleave(
+    write: (tx: DrizzleTransaction) => Promise<void>,
+    run: () => Promise<void>,
+  ): Promise<string | null> {
+    let release = () => {};
+    const released = new Promise<void>((resolve) => (release = resolve));
+    let written = () => {};
+    const holding = new Promise<void>((resolve) => (written = resolve));
+    const holder = withTransaction(ctx.db, async (tx) => {
+      await write(tx);
+      written();
+      await released;
+    });
+    await holding;
+    const outcome = run().then(
+      () => null,
+      (error: Error) => error.message,
+    );
+    const state = { settled: false };
+    void outcome.then(() => (state.settled = true));
+    for (let attempt = 0; attempt < 100; attempt++) {
+      if (state.settled) break;
+      const waiting = await unwrapDb(ctx.db).execute(
+        sql`SELECT 1 FROM pg_locks WHERE NOT granted LIMIT 1`,
+      );
+      if (waiting.rows.length) break;
+      await new Promise((resolve) => setTimeout(resolve, 20));
+    }
+    release();
+    await holder;
+    return outcome;
+  }
 
   async function referencesTo(loserId: SpendingCategoryId) {
     const owner = await insertWithShortcode(ctx.db, "ledgerParty", {
@@ -218,6 +258,63 @@ describe("spending category merge", () => {
       .from(spendingCategory)
       .where(eq(spendingCategory.id, child.id));
     expect(row?.parentId).toBe(pets.id);
+  });
+
+  // Regression: the history check ran before any lock, so an Expense committed
+  // into an unused loser during the merge moved without a review.
+  it("rechecks history after a concurrent Expense lands in the loser", async () => {
+    const pets = await category("Synthetic pets");
+    const pet = await category("Synthetic pet");
+    const refusal = await interleave(
+      async (tx) => {
+        await insertWithShortcode(tx, "expense", {
+          name: "Synthetic treats",
+          cost: 7,
+          date: "2026-09-04",
+          costType: "materials",
+          trade: "other",
+          spendingCategoryId: pet.id,
+        });
+      },
+      async () => {
+        await merge(pets.shortcode, [pet.shortcode]);
+      },
+    );
+    expect(refusal).toMatch(/reviewed spending classification/i);
+  });
+
+  // Regression: targets resolved before the transaction, so a keeper deleted
+  // meanwhile received the children and the loser's redirect.
+  it("refuses a merge into a keeper deleted during the merge", async () => {
+    const keeper = await category("Synthetic household");
+    const loser = await category("Synthetic home");
+    const child = await category("Synthetic cleaning", { parentId: loser.id });
+    const refusal = await interleave(
+      async (tx) => {
+        await tx
+          .update(spendingCategory)
+          .set({ deletedAt: new Date() })
+          .where(eq(spendingCategory.id, keeper.id));
+      },
+      async () => {
+        await merge(keeper.shortcode, [loser.shortcode]);
+      },
+    );
+    expect(refusal).toMatch(/deleted/i);
+    const rows = await unwrapDb(ctx.db)
+      .select({
+        id: spendingCategory.id,
+        parentId: spendingCategory.parentId,
+        deletedAt: spendingCategory.deletedAt,
+      })
+      .from(spendingCategory)
+      .where(inArray(spendingCategory.id, [loser.id, child.id]));
+    expect(rows).toEqual(
+      expect.arrayContaining([
+        { id: loser.id, parentId: null, deletedAt: null },
+        { id: child.id, parentId: loser.id, deletedAt: null },
+      ]),
+    );
   });
 
   it("refuses a merge that would make the keeper its own ancestor", async () => {

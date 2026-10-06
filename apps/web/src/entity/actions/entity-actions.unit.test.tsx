@@ -122,6 +122,18 @@ describe("production entity action catalog", () => {
       deleteActions.find((action) => action.entities.includes("image")),
     ).toMatchObject({ arity: "single", surfaces: ["inspector", "detail"] });
   });
+
+  // Regression: a single-record entry left the ranked merge dialog with no
+  // category to merge in and a permanently disabled Merge button.
+  it("offers spending category merge only for a multi-selection", () => {
+    expect(
+      entityActionCatalogDescriptors.find(
+        (action) =>
+          action.verb === "merge" &&
+          action.entities.includes("spendingCategory"),
+      ),
+    ).toMatchObject({ arity: "multi", surfaces: ["selection"] });
+  });
 });
 
 /**

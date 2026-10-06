@@ -262,7 +262,9 @@ export const mergeEntityActionDefinitions = [
   defineEntityAction({
     verb: "merge",
     entities: ["spendingCategory"],
-    arity: "both",
+    // The ranked dialog needs a second category to merge in.
+    arity: "multi",
+    surfaces: ["selection"],
     minSelection: 2,
     group: "organize",
     priority: 100,
