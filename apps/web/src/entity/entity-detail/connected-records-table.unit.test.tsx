@@ -61,16 +61,45 @@ describe("record connection evidence", () => {
       />,
       { wrapper: harness.wrapper },
     );
-    expect(screen.getByText(/^2 hops/u)).toBeVisible();
     expect(
       screen.getAllByRole("link", { name: "Example seeds" })[0],
     ).toHaveAttribute("href", "/products/PRD-SEED");
     expect(screen.queryByText("Example order")).not.toBeInTheDocument();
-    expect(screen.getAllByText("Product").length).toBeGreaterThan(0);
-    fireEvent.click(screen.getByText("1 other path"));
+    fireEvent.click(screen.getByRole("button", { name: "+1 path" }));
     expect(
       screen.getByRole("link", { name: "Example expense" }),
     ).toHaveAttribute("href", "/expenses/EXP-TEST");
+  });
+
+  it("names a repeated label by its kind instead of repeating it", () => {
+    render(
+      <RecordPaths
+        paths={[
+          [
+            { entityKind: "vendor", entityId: "VEN-TEST", label: "Example" },
+            {
+              entityKind: "product",
+              entityId: "PRD-TEST",
+              label: "Example long product name",
+            },
+            {
+              entityKind: "expense",
+              entityId: "EXP-TEST",
+              label: "Example long product name",
+            },
+            { entityKind: "purchase", entityId: "PUR-TEST", label: "Order" },
+          ],
+        ]}
+      />,
+      { wrapper: harness.wrapper },
+    );
+    expect(
+      screen.getByRole("link", { name: "Example long product name" }),
+    ).toHaveAttribute("href", "/products/PRD-TEST");
+    expect(screen.getByRole("link", { name: "Expense" })).toHaveAttribute(
+      "href",
+      "/expenses/EXP-TEST",
+    );
   });
 
   it("shows a range when a table has routes of different record lengths", () => {

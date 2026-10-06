@@ -159,10 +159,12 @@ test("purchase product roles survive deduplication, Open all, and inverse naviga
   );
   await openAll.click();
   await expect(page).toHaveURL(/\/connections\?/);
+  // Direct rows only: each row's path chips are nested list items.
   await expect(
-    page.getByRole("columnheader", { name: "Movement", exact: true }),
-  ).toBeVisible();
-  await expect(page.getByRole("row")).toHaveCount(6);
+    page
+      .getByRole("list", { name: "Products list", exact: true })
+      .locator(":scope > li"),
+  ).toHaveCount(5);
   await expect(
     recordRows(page)
       .filter({ hasText: `${name} unknown` })

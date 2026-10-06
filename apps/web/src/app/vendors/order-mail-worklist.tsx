@@ -31,6 +31,9 @@ type MailSelection = Map<
   { evidenceChecksum: string; ledgerPartyId: string }
 >;
 
+export const gmailThreadUrl = (threadId: string) =>
+  `https://mail.google.com/mail/u/0/#all/${encodeURIComponent(threadId)}`;
+
 const matchEvidence = (candidate: MailCandidate) => {
   switch (candidate.reason) {
     case "exact_order_id":
@@ -88,140 +91,126 @@ function OrderMailEvent({
     success: "Order email match reviewed",
   });
   return (
-    <div className="border-t border-border pt-2 text-sm">
-      <Row align="center" justify="between" gap="sm" className="flex-wrap">
-        <span className="font-medium">
-          {event.event === "other" ? "Other update" : event.event} ·{" "}
-          {event.orderId ?? "Order unknown"}
-        </span>
-        {event.amount !== null ? (
-          <span className="font-mono tabular-nums">
-            {formatCurrency(event.amount)}
-          </span>
-        ) : null}
-      </Row>
-      {canImport ? (
-        <Stack gap="sm" className="mt-2">
-          {importOrder.data ? null : (
-            <div className="flex items-center gap-2 text-muted-foreground">
-              <Checkbox
-                id={`select-${event.id}`}
-                checked={selection.has(event.id)}
-                // One run covers one member's mail.
-                disabled={[...selection.values()].some(
-                  (picked) => picked.ledgerPartyId !== ledgerPartyId,
-                )}
-                onCheckedChange={(checked) => onSelect(checked === true)}
-              />
-              <label htmlFor={`select-${event.id}`}>
-                Select order {event.orderId} to import with others
-              </label>
-            </div>
-          )}
-          {importOrder.data ? (
-            <Link
-              to="/runs/$shortcode"
-              params={{ shortcode: importOrder.data.runId }}
-              className="text-primary underline underline-offset-4"
-            >
-              View import
-            </Link>
-          ) : (
-            <div>
-              <Button
-                size="sm"
-                variant="outline"
-                disabled={importOrder.isPending}
-                onClick={() =>
-                  importOrder.mutate({
-                    eventId: event.id,
-                    evidenceChecksum: event.evidenceChecksum,
-                  })
-                }
-              >
-                {importOrder.isPending ? "Starting import…" : "Import order"}
-              </Button>
-              <p className="mt-1 text-muted-foreground">
-                The agent reads the saved confirmation and imports its itemized
-                order.
-              </p>
-            </div>
-          )}
-          {importOrder.error ? (
-            <TechnicalError error={getErrorMessage(importOrder.error)} />
-          ) : null}
-        </Stack>
+    <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-sm">
+      <span className="font-medium">
+        {event.event === "other" ? "Other update" : event.event} ·{" "}
+        <span className="font-mono">{event.orderId ?? "Order unknown"}</span>
+      </span>
+      {canImport && !importOrder.data ? (
+        <div className="flex items-center gap-1.5">
+          <Checkbox
+            aria-label={`Select order ${event.orderId} to import with others`}
+            checked={selection.has(event.id)}
+            // One run covers one member's mail.
+            disabled={[...selection.values()].some(
+              (picked) => picked.ledgerPartyId !== ledgerPartyId,
+            )}
+            onCheckedChange={(checked) => onSelect(checked === true)}
+          />
+          <Button
+            size="xs"
+            variant="outline"
+            disabled={importOrder.isPending}
+            title="The agent reads the saved confirmation and imports its itemized order."
+            onClick={() =>
+              importOrder.mutate({
+                eventId: event.id,
+                evidenceChecksum: event.evidenceChecksum,
+              })
+            }
+          >
+            {importOrder.isPending ? "Starting import…" : "Import order"}
+          </Button>
+        </div>
+      ) : null}
+      {canImport && importOrder.data ? (
+        <Link
+          to="/runs/$shortcode"
+          params={{ shortcode: importOrder.data.runId }}
+          className="text-xs text-primary underline underline-offset-4"
+        >
+          View import
+        </Link>
       ) : null}
       {event.candidates.length === 0 ? (
-        <p className="mt-1 text-muted-foreground">No likely Purchase yet.</p>
+        <span className="text-xs text-muted-foreground">
+          No likely Purchase yet.
+        </span>
       ) : (
-        <div className="mt-2 grid gap-2">
-          {event.candidates.map((candidate) => {
-            const evidence = matchEvidence(candidate);
-            return (
-              <Row
-                key={candidate.purchaseId}
-                align="center"
-                justify="between"
-                gap="sm"
-                className="flex-wrap rounded-md bg-muted/50 px-2 py-1"
-              >
-                <div className="flex min-w-0 items-center gap-2">
-                  <a
-                    className="font-medium text-primary hover:underline"
-                    href={`/purchases/${candidate.purchaseId}`}
+        event.candidates.map((candidate) => {
+          const evidence = matchEvidence(candidate);
+          return (
+            <Row
+              key={candidate.purchaseId}
+              align="center"
+              gap="xs"
+              className="rounded-md bg-muted/50 py-0.5 ps-2 pe-0.5"
+            >
+              <div className="flex min-w-0 items-center gap-1.5">
+                <a
+                  className="font-medium text-primary hover:underline"
+                  href={`/purchases/${candidate.purchaseId}`}
+                >
+                  {candidate.orderId ?? candidate.purchaseId}
+                </a>
+                <Badge variant={evidence.tone}>{evidence.label}</Badge>
+                <span className="text-xs text-muted-foreground">
+                  {evidence.explanation}
+                </span>
+                {candidate.decision ? (
+                  <Badge variant="secondary">{candidate.decision}</Badge>
+                ) : null}
+              </div>
+              <div className="flex">
+                {candidate.decision !== "linked" ? (
+                  <Button
+                    size="xs"
+                    variant="ghost"
+                    disabled={decide.isPending}
+                    onClick={() =>
+                      decide.mutate({
+                        eventId: event.id,
+                        purchaseId: candidate.purchaseId,
+                        decision: "linked",
+                        evidenceChecksum: event.evidenceChecksum,
+                      })
+                    }
                   >
-                    {candidate.orderId ?? candidate.purchaseId}
-                  </a>
-                  <Badge variant={evidence.tone}>{evidence.label}</Badge>
-                  <span className="text-xs text-muted-foreground">
-                    {evidence.explanation}
-                  </span>
-                  {candidate.decision ? (
-                    <Badge variant="secondary">{candidate.decision}</Badge>
-                  ) : null}
-                </div>
-                <div className="flex gap-2">
-                  {candidate.decision !== "linked" ? (
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      disabled={decide.isPending}
-                      onClick={() =>
-                        decide.mutate({
-                          eventId: event.id,
-                          purchaseId: candidate.purchaseId,
-                          decision: "linked",
-                          evidenceChecksum: event.evidenceChecksum,
-                        })
-                      }
-                    >
-                      Link
-                    </Button>
-                  ) : null}
-                  {candidate.decision !== "dismissed" ? (
-                    <Button
-                      size="sm"
-                      variant="ghost"
-                      disabled={decide.isPending}
-                      onClick={() =>
-                        decide.mutate({
-                          eventId: event.id,
-                          purchaseId: candidate.purchaseId,
-                          decision: "dismissed",
-                          evidenceChecksum: event.evidenceChecksum,
-                        })
-                      }
-                    >
-                      Dismiss
-                    </Button>
-                  ) : null}
-                </div>
-              </Row>
-            );
-          })}
-        </div>
+                    Link
+                  </Button>
+                ) : null}
+                {candidate.decision !== "dismissed" ? (
+                  <Button
+                    size="xs"
+                    variant="ghost"
+                    disabled={decide.isPending}
+                    onClick={() =>
+                      decide.mutate({
+                        eventId: event.id,
+                        purchaseId: candidate.purchaseId,
+                        decision: "dismissed",
+                        evidenceChecksum: event.evidenceChecksum,
+                      })
+                    }
+                  >
+                    Dismiss
+                  </Button>
+                ) : null}
+              </div>
+            </Row>
+          );
+        })
       )}
+      {event.amount !== null ? (
+        <span className="ml-auto font-mono tabular-nums">
+          {formatCurrency(event.amount)}
+        </span>
+      ) : null}
+      {importOrder.error ? (
+        <div className="basis-full">
+          <TechnicalError error={getErrorMessage(importOrder.error)} />
+        </div>
+      ) : null}
     </div>
   );
 }
@@ -473,58 +462,67 @@ function OrderMailWorklist({
             : "No order email has been matched to this Vendor."}
         </StatusText>
       ) : (
-        worklist.data.items.map((mail) => (
-          <article
-            key={mail.messageId}
-            className="rounded-lg border border-border bg-card p-3"
-          >
-            <Row align="start" justify="between" gap="sm" className="flex-wrap">
-              <div>
-                <div className="font-medium">{mail.subject}</div>
-                <div className="text-xs text-muted-foreground">
-                  {mail.sender} · {formatInstant(mail.receivedAt, "dateTime")}
-                </div>
-              </div>
-              {mail.threadId ? (
-                <a
-                  className="text-xs font-medium text-primary hover:underline"
-                  href={`https://mail.google.com/mail/u/0/#all/${encodeURIComponent(mail.threadId)}`}
-                  target="_blank"
-                  rel="noreferrer"
+        <div className="divide-y divide-border rounded-lg border border-border bg-card">
+          {worklist.data.items.map((mail) => (
+            <article key={mail.messageId} className="px-3 py-2">
+              <div className="flex min-w-0 items-baseline gap-2 text-xs text-muted-foreground">
+                {mail.threadId ? (
+                  <a
+                    className="min-w-0 truncate text-sm font-medium text-foreground hover:underline"
+                    href={gmailThreadUrl(mail.threadId)}
+                    target="_blank"
+                    rel="noreferrer"
+                    title="Open Gmail conversation"
+                  >
+                    {mail.subject}
+                  </a>
+                ) : (
+                  <span className="min-w-0 truncate text-sm font-medium text-foreground">
+                    {mail.subject}
+                  </span>
+                )}
+                <span className="min-w-0 shrink-[2] truncate">
+                  {mail.sender}
+                </span>
+                <span
+                  className="ml-auto shrink-0 font-mono tabular-nums"
+                  title={formatInstant(mail.receivedAt, "dateTime")}
                 >
-                  Open Gmail conversation
-                </a>
-              ) : null}
-            </Row>
-            <div className="mt-2 grid gap-2">
-              {mail.events.map((event) => (
-                <OrderMailEvent
-                  key={event.id}
-                  event={event}
-                  ledgerPartyId={mail.ledgerPartyId}
-                  selection={selection}
-                  onSelect={(checked) =>
-                    setSelection((current) => {
-                      const next = new Map(current);
-                      if (checked)
-                        next.set(event.id, {
-                          evidenceChecksum: event.evidenceChecksum,
-                          ledgerPartyId: mail.ledgerPartyId,
-                        });
-                      else next.delete(event.id);
-                      return next;
-                    })
-                  }
-                />
-              ))}
-            </div>
-            <details className="mt-2 text-xs text-muted-foreground">
-              <summary>Technical details</summary>
-              <div>Message ID: {mail.messageId}</div>
-              {mail.threadId ? <div>Thread ID: {mail.threadId}</div> : null}
-            </details>
-          </article>
-        ))
+                  {formatInstant(mail.receivedAt, "dateShort")}
+                </span>
+                <details className="shrink-0">
+                  <summary className="cursor-pointer">IDs</summary>
+                  <div className="font-mono">Message ID: {mail.messageId}</div>
+                  {mail.threadId ? (
+                    <div className="font-mono">Thread ID: {mail.threadId}</div>
+                  ) : null}
+                </details>
+              </div>
+              <div className="mt-1 grid gap-1">
+                {mail.events.map((event) => (
+                  <OrderMailEvent
+                    key={event.id}
+                    event={event}
+                    ledgerPartyId={mail.ledgerPartyId}
+                    selection={selection}
+                    onSelect={(checked) =>
+                      setSelection((current) => {
+                        const next = new Map(current);
+                        if (checked)
+                          next.set(event.id, {
+                            evidenceChecksum: event.evidenceChecksum,
+                            ledgerPartyId: mail.ledgerPartyId,
+                          });
+                        else next.delete(event.id);
+                        return next;
+                      })
+                    }
+                  />
+                ))}
+              </div>
+            </article>
+          ))}
+        </div>
       )}
     </Stack>
   );

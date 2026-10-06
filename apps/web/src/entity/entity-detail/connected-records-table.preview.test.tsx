@@ -48,6 +48,23 @@ it("contains long connection evidence inside a narrow relation column", async ()
               label: "Example item",
             },
           ],
+          [
+            {
+              entityKind: "vendor",
+              entityId: "VEN-TEST",
+              label: "Example vendor",
+            },
+            {
+              entityKind: "product",
+              entityId: "PRD-OTHER",
+              label: "Another synthetic product",
+            },
+            {
+              entityKind: "inventory",
+              entityId: "INV-TEST",
+              label: "Example item",
+            },
+          ],
         ]}
       />
     </div>,
@@ -63,4 +80,13 @@ it("contains long connection evidence inside a narrow relation column", async ()
   );
   expect(truncated.scrollWidth).toBeGreaterThan(truncated.clientWidth);
   expect(getComputedStyle(truncated).textOverflow).toBe("ellipsis");
+  // A second path is a toggle on the trail's own line, not a line below it.
+  const toggle = cell.querySelector("button");
+  if (!(toggle instanceof HTMLElement)) throw new Error("missing path toggle");
+  expect(toggle.getBoundingClientRect().top).toBeLessThan(
+    path.getBoundingClientRect().bottom,
+  );
+  expect(toggle.getBoundingClientRect().right).toBeLessThanOrEqual(
+    cell.getBoundingClientRect().right + 1,
+  );
 });

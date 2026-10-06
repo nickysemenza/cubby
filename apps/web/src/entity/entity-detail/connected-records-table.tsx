@@ -2,19 +2,16 @@ import type {
   ConnectedPathNode,
   ConnectedRecordsOutput,
 } from "@cubby/schemas/connected-records";
-import type { Entity } from "@cubby/schemas/entity";
+import type { Entity, EntityRef } from "@cubby/schemas/entity";
 import { useQuery } from "@tanstack/react-query";
-import { Link } from "@tanstack/react-router";
 import { useState } from "react";
 
-import {
-  entityDetailParams,
-  entities,
-  isBrowserRoutedEntity,
-} from "~/entity/entities";
+import { EntityRefLink } from "~/entity/components/entity-ref-link";
+import { entities, isBrowserRoutedEntity } from "~/entity/entities";
+import { EntityDisplayImagesProvider } from "~/entity/entity-media/entity-display-images";
 import { entityGraph } from "~/integrations/tanstack-query/generated/catalog.gen";
+import { cn } from "~/lib/utils";
 import { Button } from "~/ui/primitives/button";
-import { StaticTable } from "~/ui/primitives/static-table";
 
 import {
   useSectionCount,
@@ -29,21 +26,50 @@ import {
 
 const PAGE_SIZE = 20;
 
-// Roomier than the primitive defaults, and wrapping: a path evidence cell is a
-// multi-line list, not a single truncated value.
-const HEAD_CLASS = "h-auto p-3 text-sm";
-const CELL_CLASS = "p-3 align-top whitespace-normal";
+type ConnectedItem = ConnectedRecordsOutput["items"][number];
 
-function RecordPathLink({ node }: { node: ConnectedPathNode }) {
-  if (!isBrowserRoutedEntity(node.entityKind)) return <span>{node.label}</span>;
+/**
+ * The records a page of paths passes through, for one batched cover request.
+ * Targets are left to the owner: a relation table already batches its rows.
+ */
+export function connectionRefs(items: readonly ConnectedItem[]): EntityRef[] {
+  return items.flatMap((item) =>
+    item.paths.flatMap((path) => path.slice(1, -1)),
+  );
+}
+
+const kindLabel = (kind: Entity) =>
+  isBrowserRoutedEntity(kind) ? entities[kind].label : kind;
+
+/**
+ * One record as a cover-or-icon chip. A path often repeats a name (an Expense
+ * is named after its Product), so a `repeated` node — the same label as the
+ * node before it, or as the target it leads to — shows its kind instead of
+ * the same long label twice; the full name stays in the title.
+ */
+function RecordChip({
+  node,
+  repeated = false,
+}: {
+  node: ConnectedPathNode;
+  repeated?: boolean;
+}) {
+  if (!isBrowserRoutedEntity(node.entityKind))
+    return (
+      <span className="min-w-0 truncate" title={node.label}>
+        {node.label}
+      </span>
+    );
   return (
-    <Link
-      to={entities[node.entityKind].routes.detail}
-      params={entityDetailParams(node.entityId)}
-      className="text-link hover:underline"
-    >
-      {node.label}
-    </Link>
+    <EntityRefLink
+      variant="chip"
+      entity={node.entityKind}
+      id={node.entityId}
+      name={repeated ? entities[node.entityKind].label : node.label}
+      // The batched provider supplies covers; a per-chip emoji lookup would
+      // spend one request per path node.
+      emoji={null}
+    />
   );
 }
 
@@ -56,98 +82,98 @@ export function HopRange({ range }: { range: { min: number; max: number } }) {
   );
 }
 
+function PathTrail({
+  path,
+  compact,
+}: {
+  path: ConnectedPathNode[];
+  compact: boolean;
+}) {
+  const middle = path.slice(1, -1);
+  if (middle.length === 0)
+    return <span className="text-muted-foreground">Direct</span>;
+  return (
+    <ol
+      className={cn(
+        "flex min-w-0 items-center gap-1",
+        compact ? "flex-nowrap overflow-hidden" : "flex-wrap",
+      )}
+    >
+      {middle.map((node, index) => (
+        <li
+          key={path
+            .slice(0, index + 2)
+            .map((part) => `${part.entityKind}:${part.entityId}`)
+            .join("|")}
+          className={cn(
+            "flex min-w-0 items-center gap-1",
+            compact ? "shrink" : "max-w-64",
+          )}
+          title={`${kindLabel(node.entityKind)}: ${node.label}`}
+        >
+          {index > 0 ? (
+            <span aria-hidden="true" className="shrink-0 text-muted-foreground">
+              →
+            </span>
+          ) : null}
+          <RecordChip
+            node={node}
+            repeated={
+              path[index]?.label === node.label ||
+              (index === middle.length - 1 && path.at(-1)?.label === node.label)
+            }
+          />
+        </li>
+      ))}
+    </ol>
+  );
+}
+
+/**
+ * The records between a source and a target, as one line of chips. `compact`
+ * holds a table cell to a single line; otherwise the trail wraps inline.
+ */
 export function RecordPaths({
   paths,
   compact = false,
 }: {
-  paths: ConnectedRecordsOutput["items"][number]["paths"];
+  paths: ConnectedItem["paths"];
   compact?: boolean;
 }) {
+  const [showOthers, setShowOthers] = useState(false);
   const [first, ...other] = paths;
   if (!first) return null;
-  const renderPath = (path: ConnectedPathNode[]) => {
-    const middle = path.slice(1, -1);
-    if (middle.length === 0)
-      return <span className="text-muted-foreground">Direct connection</span>;
-    if (compact)
-      return (
-        <ol className="min-w-0 space-y-0.5">
-          {middle.map((node, index) => (
-            <li
-              key={path
-                .slice(0, index + 2)
-                .map((part) => `${part.entityKind}:${part.entityId}`)
-                .join("|")}
-              className="flex max-w-full min-w-0 items-baseline gap-1 overflow-hidden whitespace-nowrap"
-              title={`${node.entityKind}: ${node.label}`}
-            >
-              <span className="shrink-0 text-xs text-muted-foreground">
-                {isBrowserRoutedEntity(node.entityKind)
-                  ? entities[node.entityKind].label
-                  : node.entityKind}
-              </span>
-              <span className="min-w-0 truncate">
-                <RecordPathLink node={node} />
-              </span>
-            </li>
-          ))}
-        </ol>
-      );
-    return (
-      <ol className="inline-flex max-w-full flex-wrap items-center gap-x-1.5 gap-y-1 align-middle">
-        {middle.map((node, index) => (
-          <li
-            key={path
-              .slice(0, index + 2)
-              .map((part) => `${part.entityKind}:${part.entityId}`)
-              .join("|")}
-            className="inline-flex max-w-full min-w-0 items-center gap-1.5"
-          >
-            {index > 0 ? (
-              <span aria-hidden="true" className="text-muted-foreground">
-                →
-              </span>
-            ) : null}
-            <span className="max-w-full min-w-0 rounded border border-border bg-muted/30 px-1.5 py-0.5">
-              <span className="me-1 text-xs text-muted-foreground">
-                {isBrowserRoutedEntity(node.entityKind)
-                  ? entities[node.entityKind].label
-                  : node.entityKind}
-              </span>
-              <RecordPathLink node={node} />
-            </span>
-          </li>
-        ))}
-      </ol>
-    );
-  };
   return (
-    <div className="max-w-full min-w-0 text-sm">
-      <div
-        className={compact ? "min-w-0" : "flex flex-wrap items-center gap-2"}
-      >
-        <span className="shrink-0 font-mono text-xs text-muted-foreground">
-          {first.length - 1} {first.length === 2 ? "hop" : "hops"}
-        </span>
-        {renderPath(first)}
+    <div className="flex max-w-full min-w-0 flex-wrap items-center gap-x-1.5 gap-y-1 text-sm">
+      {compact ? null : (
+        <span className="text-xs text-muted-foreground">via</span>
+      )}
+      {/* A compact trail's zero basis keeps the toggle on its line. */}
+      <div className={cn("min-w-0", compact && "flex-1")}>
+        <PathTrail path={first} compact={compact} />
       </div>
       {other.length > 0 ? (
-        <details className="mt-1">
-          <summary className="cursor-pointer text-xs text-muted-foreground">
-            {other.length} other {other.length === 1 ? "path" : "paths"}
-          </summary>
-          <ul className="mt-1 space-y-1 pl-3">
-            {other.map((path) => (
-              <li
-                key={path
-                  .map((node) => `${node.entityKind}:${node.entityId}`)
-                  .join("|")}
-              >
-                {renderPath(path)}
-              </li>
-            ))}
-          </ul>
-        </details>
+        <button
+          type="button"
+          aria-expanded={showOthers}
+          className="shrink-0 cursor-pointer text-xs text-muted-foreground hover:text-foreground"
+          onClick={() => setShowOthers(!showOthers)}
+        >
+          +{other.length} {other.length === 1 ? "path" : "paths"}
+        </button>
+      ) : null}
+      {showOthers ? (
+        <ul className="basis-full space-y-1 pl-3">
+          {other.map((path) => (
+            <li
+              key={path
+                .map((node) => `${node.entityKind}:${node.entityId}`)
+                .join("|")}
+            >
+              <PathTrail path={path} compact={compact} />
+            </li>
+          ))}
+        </ul>
       ) : null}
     </div>
   );
@@ -253,49 +279,41 @@ export function ConnectedRecordsTable({
       recordId={sourceId}
       operations={{}}
     >
-      <div className="space-y-3">
+      <EntityDisplayImagesProvider
+        refs={[...items.map((item) => item.target), ...connectionRefs(items)]}
+      >
+        <ul
+          // Named like the mobile card lists so record rows read the same.
+          aria-label={`${isBrowserRoutedEntity(target) ? entities[target].pluralLabel : "Records"} list`}
+          className="divide-y divide-border rounded-md border border-border"
+        >
+          {items.map((item) => (
+            <li
+              key={item.target.entityId}
+              className="flex flex-wrap items-center gap-x-3 gap-y-1 px-3 py-1.5 text-sm"
+            >
+              <span className="max-w-full min-w-0 font-medium sm:max-w-80">
+                <RecordChip node={item.target} />
+              </span>
+              {movementSource !== null ? (
+                <RelationshipMovementBadges id={item.target.entityId} />
+              ) : null}
+              <RecordPaths paths={item.paths} />
+            </li>
+          ))}
+        </ul>
+      </EntityDisplayImagesProvider>
+      <div className="mt-1.5 flex flex-wrap items-center gap-x-3 gap-y-1">
         <HopRange range={routeHopRange} />
-        <StaticTable
-          rows={items}
-          rowKey={(item) => item.target.entityId}
-          containerClassName="rounded-md border border-border"
-          className="table-auto text-sm"
-          headClassName={HEAD_CLASS}
-          cellClassName={CELL_CLASS}
-          columns={[
-            {
-              id: "record",
-              header: isBrowserRoutedEntity(target)
-                ? entities[target].label
-                : "Record",
-              cellClassName: "font-medium",
-              cell: (item) => <RecordPathLink node={item.target} />,
-            },
-            ...(movementSource !== null
-              ? [
-                  {
-                    id: "movement",
-                    header: "Movement",
-                    cell: (item: (typeof items)[number]) => (
-                      <RelationshipMovementBadges id={item.target.entityId} />
-                    ),
-                  },
-                ]
-              : []),
-            {
-              id: "through",
-              header: "Connected through",
-              cell: (item) => <RecordPaths paths={item.paths} />,
-            },
-          ]}
-        />
-        <ConnectionPager
-          openAll={openAll}
-          page={page}
-          totalCount={totalCount}
-          setOpenAll={setOpenAll}
-          setPage={setPage}
-        />
+        {totalCount > PAGE_SIZE ? (
+          <ConnectionPager
+            openAll={openAll}
+            page={page}
+            totalCount={totalCount}
+            setOpenAll={setOpenAll}
+            setPage={setPage}
+          />
+        ) : null}
       </div>
     </RelationshipMovementProvider>
   );
