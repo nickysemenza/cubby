@@ -229,10 +229,10 @@ export const statementRowInput = z.strictObject({
    * Providers disagree — Monarch signs charges negative, Copilot signs them
    * positive, Mint leaves them unsigned with the sign in a separate column, and
    * Apple Card signs them positive — so the client must normalize before
-   * submitting. This is load-bearing rather than cosmetic: the legacy identity
-   * hash is computed over this value, so submitting an un-normalized export
-   * does not merely flip a sign, it mints a SECOND identity for a charge
-   * already recorded and the row can never match.
+   * submitting. This is load-bearing rather than cosmetic: the frozen content
+   * hash that matches a row to earlier exports covers this value, so an
+   * un-normalized export does not merely flip a sign, it records a SECOND row
+   * for every charge an earlier export already recorded.
    */
   providerAmount: z.number().finite(),
   merchant: z.string().nullable().default(null),
@@ -273,7 +273,12 @@ export const recordStatementRowsOut = z.object({
   dryRun: z.boolean(),
   inserted: z.number().int(),
   unchanged: z.number().int(),
+  /** Rows this file (same source and fingerprint) already recorded. */
   alreadyInThisBatch: z.number().int(),
+  /**
+   * Rows an earlier, overlapping export already recorded, matched per frozen
+   * content hash occurrence by occurrence (`resolveStatementOccurrences`).
+   */
   alreadyInAnotherBatch: z.number().int(),
   rowsOmitted: z.number().int().nullable(),
   rowCountStored: z.number().int(),

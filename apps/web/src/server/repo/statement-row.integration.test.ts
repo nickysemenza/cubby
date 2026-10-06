@@ -182,6 +182,80 @@ describe("statement row ledger", () => {
     ).toMatchObject({ transactions: 0, attached: 1 });
   });
 
+  // Regression: two cumulative exports both recorded the same charge as open
+  // rows, both previews offered it as ready_to_create, and settling both
+  // minted duplicate transactions.
+  it("settles each charge once across overlapping cumulative exports", async () => {
+    await createRepoEntity(ctx, "financialAccount", {
+      name: "Overlap card",
+      identity: { kind: "credit_card", issuer: null, network: "visa" },
+      sourceAliases: [
+        { source: "monarch", alias: "Overlap Visa", externalAccountId: null },
+      ],
+    });
+    const header =
+      "Date,Merchant,Category,Account,Original Statement,Notes,Amount";
+    const line = (date: string, statement: string, amount: string) =>
+      `${date},Synthetic Shop,Home,Overlap Visa,${statement},,${amount}`;
+    const first = [
+      line("2026-07-01", "SHOP ONE", "-11.00"),
+      line("2026-07-02", "SHOP TWO", "-22.00"),
+    ];
+    const exportA = {
+      fileName: "export-a.csv",
+      text: [header, ...first].join("\n"),
+    };
+    const exportB = {
+      fileName: "export-b.csv",
+      text: [header, ...first, line("2026-07-03", "SHOP THREE", "-33.00")].join(
+        "\n",
+      ),
+    };
+
+    // Evidence only from A; nothing is settled yet.
+    expect(
+      await commitStatementCsv(ctx.db, ctx.actor, { ...exportA, selected: [] }),
+    ).toMatchObject({ transactions: 0, evidence: 2 });
+    const previewA = await previewStatementCsv(ctx.db, ctx.actor, exportA);
+    const previewB = await previewStatementCsv(ctx.db, ctx.actor, exportB);
+    // Both files name the same stored occurrences for the shared charges.
+    expect(
+      previewB.preview?.rows.slice(0, 2).map((row) => row.proposed.sourceRef),
+    ).toEqual(previewA.preview?.rows.map((row) => row.proposed.sourceRef));
+
+    const all = ["1", "2", "3"].map((key) => ({
+      key,
+      kind: "purchase" as const,
+    }));
+    expect(
+      await commitStatementCsv(ctx.db, ctx.actor, {
+        ...exportB,
+        selected: all,
+      }),
+    ).toMatchObject({ transactions: 3, evidence: 1, alreadyPresent: 2 });
+    expect(
+      (await previewStatementCsv(ctx.db, ctx.actor, exportA)).preview?.rows.map(
+        (row) => row.status,
+      ),
+    ).toEqual(["already_recorded", "already_recorded"]);
+    // Settling A afterwards attaches nothing new and creates nothing.
+    expect(
+      await commitStatementCsv(ctx.db, ctx.actor, {
+        ...exportA,
+        selected: all.slice(0, 2),
+      }),
+    ).toMatchObject({ transactions: 0, evidence: 0 });
+    const counts = await getDb(ctx.db).execute(sql`
+      SELECT
+        (SELECT count(*)::int FROM "FinancialTransaction" WHERE "deletedAt" IS NULL) AS transactions,
+        (SELECT count(*)::int FROM "StatementRow" WHERE "deletedAt" IS NULL) AS rows
+    `);
+    expect(counts.rows[0]).toEqual({ transactions: 3, rows: 3 });
+    expect(
+      (await listStatementRows(ctx.db, { matchState: "unmatched" })).count,
+    ).toBe(0);
+  });
+
   it("reviews no-ID pending-to-posted amount drift and preserves the canonical charge", async () => {
     const { output: account } = await createRepoEntity(
       ctx,
@@ -416,6 +490,85 @@ describe("statement row ledger", () => {
         rows: [rowInput()],
       }).success,
     ).toBe(false);
+  });
+
+  // Each Monarch export is the full history, so every file is a superset of
+  // the last; occurrence-aware frozen-hash matching keeps that from minting a
+  // second row per charge.
+  it("skips rows another export already recorded, occurrence by occurrence", async () => {
+    const r1 = rowInput({ statementDate: "2026-06-01", rawDescription: "R1" });
+    const r2 = rowInput({ statementDate: "2026-06-02", rawDescription: "R2" });
+    const r3 = rowInput({ statementDate: "2026-06-03", rawDescription: "R3" });
+    expect(
+      await record(ctx.db, ctx.actor, [r1, r2], { fingerprint: "fp-a" }),
+    ).toMatchObject({ inserted: 2, alreadyInAnotherBatch: 0 });
+
+    const superset = await record(ctx.db, ctx.actor, [r1, r2, r3], {
+      fingerprint: "fp-b",
+    });
+    expect(superset).toMatchObject({
+      inserted: 1,
+      unchanged: 2,
+      alreadyInThisBatch: 0,
+      alreadyInAnotherBatch: 2,
+    });
+    const rows = (await listStatementRows(ctx.db, {})).data;
+    expect(rows.map((row) => row.rawDescription).sort()).toEqual([
+      "R1",
+      "R2",
+      "R3",
+    ]);
+  });
+
+  it("records identical same-day charges once each, then skips both in a superset", async () => {
+    const coffee = rowInput({
+      statementDate: "2026-06-10",
+      providerAmount: -4.5,
+      rawDescription: "SYNTHETIC CAFE",
+    });
+    const lunch = rowInput({
+      statementDate: "2026-06-11",
+      providerAmount: -12,
+      rawDescription: "SYNTHETIC DELI",
+    });
+    expect(
+      await record(ctx.db, ctx.actor, [coffee, coffee], {
+        fingerprint: "fp-twins",
+      }),
+    ).toMatchObject({ inserted: 2, alreadyInAnotherBatch: 0 });
+
+    const superset = await record(ctx.db, ctx.actor, [coffee, coffee, lunch], {
+      fingerprint: "fp-twins-superset",
+    });
+    expect(superset).toMatchObject({ inserted: 1, alreadyInAnotherBatch: 2 });
+
+    const replay = await record(ctx.db, ctx.actor, [coffee, coffee, lunch], {
+      fingerprint: "fp-twins-superset",
+    });
+    expect(replay).toMatchObject({
+      inserted: 0,
+      unchanged: 3,
+      alreadyInThisBatch: 1,
+      alreadyInAnotherBatch: 2,
+    });
+    expect((await listStatementRows(ctx.db, {})).count).toBe(3);
+  });
+
+  it("counts rows recorded before positions by their frozen v1 externalId", async () => {
+    const r1 = rowInput({ statementDate: "2026-06-20", rawDescription: "OLD" });
+    await record(ctx.db, ctx.actor, [r1], { fingerprint: "fp-pre-position" });
+    // Shape of a row recorded before positions existed: the v1 hash is its
+    // externalId and legacyExternalId was never written.
+    await getDb(ctx.db).execute(sql`
+      UPDATE "StatementRow"
+      SET "externalId" = "legacyExternalId", "legacyExternalId" = NULL,
+        "rowPosition" = NULL
+    `);
+    expect(
+      await record(ctx.db, ctx.actor, [r1], {
+        fingerprint: "fp-post-position",
+      }),
+    ).toMatchObject({ inserted: 0, alreadyInAnotherBatch: 1 });
   });
 
   it("reports what a dryRun would insert and writes nothing", async () => {

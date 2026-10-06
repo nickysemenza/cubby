@@ -28,7 +28,7 @@ export const statementRowHandlers = implementOperationDomain(
         context.db,
         input.filters ?? {},
         input.pagination,
-        Array.isArray(input.sort) ? input.sort[0] : input.sort,
+        input.sort[0],
       ),
     summary: (context, input) =>
       getStatementRowSummary(context.db, input.filters ?? {}),

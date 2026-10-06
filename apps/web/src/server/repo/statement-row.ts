@@ -54,6 +54,7 @@ import { logAuditEntry } from "./audit-log";
 import { lockFinancialEvidenceKeys } from "./financial-evidence";
 import { previewFinancialStatementImport } from "./financial-statement-preview";
 import { resolveOrThrow } from "./shortcode-resolver";
+import { resolveStatementOccurrences } from "./statement-row-occurrence";
 
 /**
  * Every live settlement reference with its transaction's shortcode — the
@@ -442,12 +443,15 @@ export async function recordStatementRows(
     rows.length >= 20 && positive / rows.length > 0.9
       ? `${positive} of ${rows.length} rows have a positive providerAmount. ` +
         "Charges must be submitted negative — if this export signs them " +
-        "positive (Copilot, Apple Card), the rows just recorded carry " +
-        "identities that can never match a transaction. Legitimate if this " +
-        "batch really is income or refunds."
+        "positive (Copilot, Apple Card), its content hashes miss every " +
+        "charge an earlier export recorded, so overlapping charges were " +
+        "recorded twice. Legitimate if this batch really is income or refunds."
       : null;
 
   return withTransaction(db, async (tx) => {
+    // Overlap resolution reads other exports' rows before inserting, so two
+    // concurrent imports of one provider must not both see a charge as new.
+    await lockFinancialEvidenceKeys(tx, "statement-source", [source]);
     const [existingBatch] = await unwrapDb(tx)
       .select({ id: statementImport.id })
       .from(statementImport)
@@ -460,10 +464,20 @@ export async function recordStatementRows(
       )
       .limit(1);
 
-    // Which of these identities the ledger already holds, and under whose
-    // batch. `ON CONFLICT DO NOTHING` answers neither question — it reports a
-    // count of rows that landed, and the three ways a row can fail to land
-    // have three different remedies.
+    // Which rows this file or an earlier export already records.
+    // `ON CONFLICT DO NOTHING` answers neither question — it reports a count
+    // of rows that landed, and each way a row can fail to land has its own
+    // remedy.
+    const resolved = await resolveStatementOccurrences(
+      databaseForTransaction(tx),
+      rows.map((row) => ({
+        source,
+        fingerprint: input.import.fingerprint,
+        rowPosition: row.rowPosition,
+        statementDate: row.statementDate,
+        legacyExternalId: row.legacyExternalId,
+      })),
+    );
     // Unique: the input schema refuses a repeated position within a batch.
     const distinctIds = rows.map((row) => row.externalId);
     const stored = await unwrapDb(tx)
@@ -492,11 +506,16 @@ export async function recordStatementRows(
       const incoming = rows.find((row) => row.externalId === saved.externalId);
       if (incoming) assertImmutableStatementOccurrence(saved, incoming);
     }
-    const alreadyInThisBatch = stored.filter(
-      (row) => row.batchId === existingBatch?.id,
+    const alreadyInThisBatch = resolved.filter(
+      (row) => row.recordedBy === "this-file",
     ).length;
-    const alreadyInAnotherBatch = stored.length - alreadyInThisBatch;
-    const novel = distinctIds.length - stored.length;
+    const alreadyInAnotherBatch = resolved.filter(
+      (row) => row.recordedBy === "another-export",
+    ).length;
+    const novelRows = rows.filter(
+      (_, index) => resolved[index]!.recordedBy === null,
+    );
+    const novel = novelRows.length;
 
     if (input.dryRun) {
       return {
@@ -540,17 +559,19 @@ export async function recordStatementRows(
       );
 
     const before = await storedRowCount(tx, batchId);
-    const inserted = await unwrapDb(tx)
-      .insert(statementRow)
-      .values(rows.map((row) => ({ ...row, batchId })))
-      // The partial unique index is the idempotency mechanism: a re-submitted
-      // export is a no-op rather than a conflict, and a row already recorded
-      // under a different batch keeps its original batch.
-      .onConflictDoNothing({
-        target: [statementRow.source, statementRow.externalId],
-        where: sql`"StatementRow"."deletedAt" IS NULL`,
-      })
-      .returning({ id: statementRow.id });
+    const inserted = novelRows.length
+      ? await unwrapDb(tx)
+          .insert(statementRow)
+          .values(novelRows.map((row) => ({ ...row, batchId })))
+          // The partial unique index is the idempotency mechanism: a re-submitted
+          // export is a no-op rather than a conflict, and a row already recorded
+          // under a different batch keeps its original batch.
+          .onConflictDoNothing({
+            target: [statementRow.source, statementRow.externalId],
+            where: sql`"StatementRow"."deletedAt" IS NULL`,
+          })
+          .returning({ id: statementRow.id })
+      : [];
 
     return {
       batchId,

@@ -29,10 +29,8 @@ import {
   normalizeMerchant,
 } from "~/server/repo/merchant-vendor-inference";
 import { cents } from "~/server/repo/money";
-import {
-  statementRowExternalId,
-  statementRowOccurrenceId,
-} from "~/server/repo/statement-row-identity";
+import { statementRowExternalId } from "~/server/repo/statement-row-identity";
+import { resolveStatementOccurrences } from "~/server/repo/statement-row-occurrence";
 
 /**
  * Deliberately *not* the identity module's canonicalizer, despite being the
@@ -99,16 +97,30 @@ export async function previewFinancialStatementImport(
   const legacyIds = await Promise.all(
     input.rows.map((row) => statementRowExternalId(row)),
   );
-  const sourceRefIds = await Promise.all(
-    input.rows.map((row, index) =>
-      row.importFingerprint && row.rowPosition !== undefined
-        ? statementRowOccurrenceId(
-            row.source,
-            row.importFingerprint,
-            row.rowPosition,
-          )
-        : legacyIds[index]!,
-    ),
+  // A file row resolves to the stored occurrence that records it — possibly
+  // one from an earlier, overlapping export — so its settlement reference is
+  // the one that export's transaction already carries. Pasted rows without a
+  // file position keep the frozen v1 reference.
+  const positioned = input.rows.flatMap((row, index) =>
+    row.importFingerprint && row.rowPosition !== undefined
+      ? [
+          {
+            index,
+            source: row.source,
+            fingerprint: row.importFingerprint,
+            rowPosition: row.rowPosition,
+            statementDate: row.date,
+            legacyExternalId: legacyIds[index]!,
+          },
+        ]
+      : [],
+  );
+  const resolved = await resolveStatementOccurrences(db, positioned);
+  const resolvedByIndex = new Map(
+    positioned.map((row, at) => [row.index, resolved[at]!.externalId]),
+  );
+  const sourceRefIds = input.rows.map(
+    (_, index) => resolvedByIndex.get(index) ?? legacyIds[index]!,
   );
   const dates = uniq(
     input.rows.flatMap((row) =>

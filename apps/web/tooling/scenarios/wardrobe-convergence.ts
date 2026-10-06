@@ -11,7 +11,7 @@ import { proposeProductMatchOut } from "@cubby/schemas/recommendations";
 import { recordStatementRowsInput } from "@cubby/schemas/statement-row";
 import { testUserId } from "@cubby/schemas/testing";
 import { chromium, expect, request } from "@playwright/test";
-import { and, eq } from "drizzle-orm";
+import { and, eq, sql } from "drizzle-orm";
 import { createHash } from "node:crypto";
 import { readFileSync } from "node:fs";
 import { Pool } from "pg";
@@ -27,7 +27,7 @@ import { superJsonResultSchema } from "~/lib/superjson-wire";
 import { unparsedStartOperationResultSchema } from "~/server/start-operation.contract";
 import { callMcpTool } from "~/server/mcp/mcp-test-utils";
 import { createMcpServer } from "~/server/mcp/server";
-import { financialAccount } from "~/server/db/schema";
+import { financialTransaction } from "~/server/db/schema";
 import {
   startOrResumeRun,
   startTargetedRun,
@@ -36,9 +36,11 @@ import { classifyOrderCapture } from "~/server/purchase-import/order-list";
 import { parseEntityId } from "@cubby/schemas/identifiers";
 import { productEnrichmentTarget } from "~/server/purchase-import/product-enrichment-target";
 import { getDb, notDeleted } from "~/server/repo/database-helpers";
-import { replaceSettlementRefs } from "~/server/repo/entity-external-ids";
 import { recordStatementRows } from "~/server/repo/statement-row";
-import { statementRowExternalId } from "~/server/repo/statement-row-identity";
+import {
+  commitStatementCsv,
+  previewStatementCsv,
+} from "~/server/statement-csv-import";
 import { insertWithShortcode } from "~/server/repo/shortcode-utils";
 
 import {
@@ -969,9 +971,9 @@ async function reimportInNewRunAndAssertNoOp(
 /**
  * Trap 1 + 2: an overlapping statement CSV whose rows were already imported,
  * alongside a decoy charge sharing the purchase's exact amount on a different
- * day/merchant. Each row of the new file is its own occurrence (identity is
- * file fingerprint + position), and replaying that file records nothing; the
- * overlap must still not mint a second Purchase or Expense. Returns the decoy
+ * day/merchant. Only the decoy row may be recorded; the overlap must not
+ * mint a second StatementRow under a new batch, and previewing then settling
+ * the overlapping export must create only the decoy's transaction. Returns the decoy
  * FinancialTransaction so the duplicate-order-history trap can confirm it
  * stays unmatched.
  */
@@ -1021,49 +1023,71 @@ async function recordOverlappingStatementCsvAndDecoy(
   const recorded = await recordStatementRows(db, followup, actor);
   const replayed = await recordStatementRows(db, followup, actor);
   if (
-    recorded.inserted !== overlapAndDecoyRows.length ||
-    replayed.inserted !== 0 ||
-    replayed.alreadyInThisBatch !== overlapAndDecoyRows.length
+    recorded.inserted !== 1 ||
+    recorded.alreadyInAnotherBatch !== 2 ||
+    recorded.alreadyInThisBatch !== 0 ||
+    replayed.inserted !== 0
   )
     throw new Error(
-      `Overlapping statement CSV did not record once per occurrence: ${JSON.stringify({ recorded, replayed })}`,
+      `Overlapping statement CSV did not dedupe against already-imported rows: ${JSON.stringify({ recorded, replayed })}`,
     );
 
-  const fixtureVisa = await getDb(db)
-    .select({ id: financialAccount.id })
-    .from(financialAccount)
+  // The same overlap as an export a person previews and settles: the shared
+  // charges resolve to the rows the first export recorded, so settling every
+  // offered row creates the decoy's transaction and nothing else.
+  const overlapCsv = {
+    fileName: "synthetic-monarch-wardrobe-followup.csv",
+    text: [
+      readFileSync(
+        new URL(
+          "../../tests/e2e/fixtures/synthetic-monarch-wardrobe.csv",
+          import.meta.url,
+        ),
+        "utf8",
+      ).trimEnd(),
+      "2026-08-05,Synthetic Deceptive Retail,Clothing,Fixture Visa (...4242),SYNTHETIC DECEPTIVE RETAIL CHARGE 1,,-29.99,,Fixture Member,1,synthetic-statement-3",
+    ].join("\n"),
+  };
+  const preview = await previewStatementCsv(db, actor, overlapCsv);
+  const statuses = preview.preview?.rows.map((row) => row.status);
+  if (
+    JSON.stringify(statuses) !==
+    JSON.stringify(["already_recorded", "ready_to_create", "ready_to_create"])
+  )
+    throw new Error(
+      `Overlapping statement preview misread recorded charges: ${JSON.stringify(statuses)}`,
+    );
+  const settled = await commitStatementCsv(db, actor, {
+    ...overlapCsv,
+    selected: [{ key: "3", kind: "purchase" }],
+  });
+  if (settled.transactions !== 1 || settled.evidence !== 0)
+    throw new Error(
+      `Settling the overlapping export did not create only the decoy: ${JSON.stringify(settled)}`,
+    );
+  const perCharge = await getDb(db).execute<{ count: number }>(sql`
+    SELECT count(*)::int AS count FROM "StatementRow"
+    WHERE source = 'monarch' AND "deletedAt" IS NULL
+    GROUP BY "rawDescription"
+  `);
+  if (perCharge.rows.some((row) => row.count !== 1))
+    throw new Error(
+      `Overlapping exports recorded a charge twice: ${JSON.stringify(perCharge.rows)}`,
+    );
+  const [created] = await getDb(db)
+    .select({ id: financialTransaction.id })
+    .from(financialTransaction)
     .where(
       and(
-        eq(financialAccount.name, "Fixture Visa"),
-        notDeleted(financialAccount),
+        eq(
+          financialTransaction.rawDescription,
+          "SYNTHETIC DECEPTIVE RETAIL CHARGE 1",
+        ),
+        notDeleted(financialTransaction),
       ),
     );
-  const fixtureVisaId = fixtureVisa[0]?.id;
-  if (fixtureVisa.length !== 1 || !fixtureVisaId)
-    throw new Error("Fixture Visa account is unavailable for the decoy charge");
-  const decoyExternalId = await statementRowExternalId({
-    source: "monarch",
-    account: "Fixture Visa (...4242)",
-    date: "2026-08-05",
-    amount: -29.99,
-    originalStatement: "SYNTHETIC DECEPTIVE RETAIL CHARGE 1",
-  });
-  const created = await insertWithShortcode(db, "financialTransaction", {
-    accountId: parseEntityId("financialAccount", fixtureVisaId),
-    kind: "purchase",
-    status: "posted",
-    amount: 29.99,
-    transactionDate: null,
-    postedDate: "2026-08-05",
-    merchant: "Synthetic Deceptive Retail",
-    rawDescription: "SYNTHETIC DECEPTIVE RETAIL CHARGE 1",
-    sourceCategory: "Clothing",
-  });
-  await getDb(db).transaction((tx) =>
-    replaceSettlementRefs(tx, created.id, [
-      { source: "monarch", externalId: decoyExternalId },
-    ]),
-  );
+  if (!created)
+    throw new Error("The decoy charge's transaction was not created");
   return created;
 }
 
@@ -1233,7 +1257,7 @@ async function runForgeWearTraps(
       `ForgeWear traps left inconsistent state: ${JSON.stringify({ facts, duplicateFinding: duplicateFinding.rows, decoyAllocations: decoyAllocations.rows })}`,
     );
   console.log(
-    "[headless-wardrobe-e2e] ForgeWear traps held: overlapping statement rows replayed as a no-op, the decoy charge stayed unmatched, and the duplicate order-history capture filed a conflict instead of a duplicate",
+    "[headless-wardrobe-e2e] ForgeWear traps held: overlapping statement rows deduped and settled once, the decoy charge stayed unmatched, and the duplicate order-history capture filed a conflict instead of a duplicate",
   );
 }
 

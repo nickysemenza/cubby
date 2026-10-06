@@ -150,12 +150,14 @@ above is only for transactions created without one. Include refs in the initial
 create when available; a create-plus-backfill sequence adds an unnecessary write
 and briefly leaves the transaction indistinguishable from a reference-less import.
 
-The ref is a **content hash of the statement row** (account, date, amount,
-original statement), so it is only stable for a row that has settled. Do not
-attach one to a `pending` credit: pending rows can post on a later date, the
-hash changes with the date, and the row then fails to match its own statement
-line on the next import — the exact duplicate this field exists to prevent.
-Attach it when the row posts. The pending row and the row that replaces it are
+The ref is the **stored row's `externalId`**: an occurrence id for rows recorded
+with file positions, or the frozen content hash (account, date, amount, original
+statement) for rows recorded before positions existed. Take it from the row or
+the preview's `proposed.sourceRef`, never by hashing yourself. Do not attach one
+to a `pending` credit: pending rows can post on a later date with a different
+content hash, so the posted line is a different row and the pending ref no
+longer matches it on the next import — the exact duplicate this field exists to
+prevent. Attach it when the row posts. The pending row and the row that replaces it are
 two distinct `StatementRow`s, linked with `supersededByExternalId` — written by
 an agent, never inferred — which drops the predecessor off the worklist without
 discarding the evidence that it existed.
@@ -167,7 +169,9 @@ query rather than a pipeline rebuilt each session. It is not an importer: it
 resolves no account, links no Purchase, creates no transaction, and makes no
 match. Every row carries `rowPosition`, its 1-based position in the export;
 identity is (source, file fingerprint, position), so replaying a file is a
-no-op while two identical charges in one file stay two rows.
+no-op while two identical charges in one file stay two rows. Overlap with
+earlier exports is matched by content hash, occurrence by occurrence (see
+"Re-importing a newer provider export").
 
 `finance_read.statement_rows({matchState:"unmatched"})` is the worklist — a provider row
 with no live transaction carrying its source ref. To close one, append that ref
@@ -182,15 +186,16 @@ Three reconciliation traps:
 - **Submit `providerAmount` charges-negative, always.** Monarch signs charges
   negative, but Copilot signs them positive, Mint leaves them unsigned with the
   sign in a `Transaction Type` column, and Apple Card signs them positive. The
-  identity hash is computed over `providerAmount`, so submitting an
-  un-normalized export does not merely flip a sign — it mints a second identity
-  for a charge already recorded.
+  frozen content hash that matches a row to earlier exports and older
+  settlement refs covers `providerAmount`, so an un-normalized export does not
+  merely flip a sign — every overlapping charge misses its earlier occurrence
+  and is recorded a second time.
 - **Account aliases resolve per source.** A `copilot` row will not resolve
   against an account carrying only a `monarch` alias. Add the provider's aliases
   before ingesting it, or every row lands unresolved.
 - **Never bulk-load rows through a model.** Transcribing evidence corrupts it:
   visually similar Unicode characters can differ while retaining the same byte
-  length, changing the identity hash and fabricating a second statement row. MCP
+  length, changing the content hash and fabricating a second statement row. MCP
   is the write path for ordinary imports, where a few hundred rows is
   unremarkable; a backfill big enough that a model cannot carry it is a one-off
   migration script, not a reason to fork the write path permanently. Reconcile
@@ -315,16 +320,21 @@ transaction for it.
 
 ## Re-importing a newer provider export
 
-- It is a **delta-only** job. Dedup is on `(source, externalId)` globally, so
-  declare `rowCountDeclared` = the delta count (or `finance_read.imports`
-  reports an unfinished chunked ingest). Compute `statementRowExternalId` with
-  `apps/web/src/server/repo/statement-row-identity.ts` — import it, never
-  reimplement — and ask the DB which ids exist; a column-wise CSV diff does not
-  work across export vintages. `StatementImport.fingerprint` is the sha256 of
-  the file. Exclude `$0.00` placeholder rows (they re-present as new forever);
-  the import counts them as `zeroValueRows` instead of saving them.
-  Verify afterwards: any stored row whose hash is absent from the source file is
-  fabricated.
+- **Submit the whole export.** Provider exports are cumulative (each Monarch CSV
+  is the full history), and `statement_rows.record` dedupes the overlap itself:
+  per frozen v1 content hash (`legacyExternalId`, from
+  `statementRowExternalId` in `apps/web/src/server/repo/statement-row-identity.ts`),
+  the k-th row in the file is already recorded when at least k live rows from
+  other exports carry that hash. Those rows count as `alreadyInAnotherBatch`;
+  the rest are recorded under their positional `externalId`, so two identical
+  same-day charges stay two rows. Do not diff the file against stored ids
+  yourself: stored `externalId` values are occurrence ids of (source, file
+  fingerprint, `rowPosition`), not content hashes. Number `rowPosition` from 1
+  in file order, set `rowCountDeclared` to the full file's row count, and use
+  the sha256 of the file as `StatementImport.fingerprint`; replaying a file is a
+  no-op. Exclude `$0.00` placeholder rows; the CSV import counts them as
+  `zeroValueRows` instead of saving them. `dryRun: true` reports the split
+  before writing.
 - **The descriptor firm-up mints a second identity.** A pending row re-observed
   with a fuller descriptor after posting (`THE HOME DEPOT #NNNN` →
   `THE HOME DEPOT #NNNN 800-… CA`, `AMAZON MKTPLACE PMTS` → `AMAZON MKTPL*…`)
