@@ -1,7 +1,9 @@
 import { describe, expect, it } from "vitest";
 import {
   canonicalExternalIdUrl,
+  externalIdInput,
   externalIdInputs,
+  externalIdOut,
   externalIdSource,
   storedExternalIdUrl,
 } from "./external-id";
@@ -38,5 +40,19 @@ describe("external identifiers", () => {
     expect(canonicalExternalIdUrl(asin)).toBe(
       "https://www.amazon.com/dp/B07NJSDBQ3",
     );
+  });
+
+  it("reads a legacy_unspecified row but refuses to write one", () => {
+    const value = { source: "vendor-a", externalId: "SKU-1" };
+    expect(
+      externalIdInput.safeParse({ ...value, kind: "legacy_unspecified" })
+        .success,
+    ).toBe(false);
+    expect(
+      externalIdInput.safeParse({ ...value, kind: "retailer_sku" }).success,
+    ).toBe(true);
+    expect(
+      externalIdOut.shape.kind.safeParse("legacy_unspecified").success,
+    ).toBe(true);
   });
 });

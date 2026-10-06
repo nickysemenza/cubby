@@ -1,7 +1,11 @@
 import { tradeSchema } from "./task-fields";
 import { z } from "zod";
 import { productCategoryShortcode } from "./identifier-fields";
-import { externalIdKind, externalIdSource } from "./external-id";
+import {
+  externalIdKind,
+  externalIdSource,
+  writableExternalIdKind,
+} from "./external-id";
 import { agentImportRunPurpose } from "./import-run-agent";
 
 import { money } from "./money";
@@ -1130,7 +1134,7 @@ export const commitProductEnrichmentInput = z.object({
           z.object({
             evidenceId: z.uuid(),
             source: externalIdSource,
-            kind: externalIdKind,
+            kind: writableExternalIdKind,
             externalId: z.string().trim().min(1).max(500),
             url: z.url().nullable().optional(),
           }),

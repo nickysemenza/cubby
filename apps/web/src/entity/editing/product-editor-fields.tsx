@@ -1,5 +1,6 @@
 import {
   type ExternalIdInput,
+  type ExternalIdKind,
   externalIdKind,
 } from "@cubby/schemas/external-id";
 import { imageOut, partitionEntityFiles } from "@cubby/schemas/image";
@@ -184,6 +185,12 @@ export function ProductUnitMappingsField({
  * controls pass `label=""` — the grid's own header row is the label, per the
  * `columns` contract (`array-field-manager.tsx`).
  */
+/** A freshly added row has no kind until the operator or Jev picks one; the
+ * form schema rejects the blank select on save. */
+type ExternalIdDraft = Omit<ExternalIdInput, "kind"> & {
+  kind: Exclude<ExternalIdKind, "legacy_unspecified"> | "";
+};
+
 export function ProductExternalIdsField({
   form,
   field,
@@ -193,14 +200,14 @@ export function ProductExternalIdsField({
     name: ["name", "manufacturer"],
   });
   return (
-    <ArrayFieldManager<ExternalIdInput>
+    <ArrayFieldManager<ExternalIdDraft>
       form={form}
       name={field.key}
       title="External IDs"
       addButtonText="Add external ID"
       emptyValue={{
         source: "",
-        kind: "legacy_unspecified",
+        kind: "",
         externalId: "",
         url: undefined,
       }}
@@ -223,10 +230,13 @@ export function ProductExternalIdsField({
                 form={form}
                 name={kindPath}
                 label=""
-                options={externalIdKind.options.map((kind) => ({
-                  value: kind,
-                  label: kind.replaceAll("_", " "),
-                }))}
+                placeholder="Select kind"
+                options={externalIdKind.options
+                  .filter((kind) => kind !== "legacy_unspecified")
+                  .map((kind) => ({
+                    value: kind,
+                    label: kind.replaceAll("_", " "),
+                  }))}
               />
               <ExternalIdKindSuggestion
                 form={form}

@@ -147,4 +147,57 @@ describe("useEntityEditSession", () => {
     );
     harness.dispose();
   });
+
+  // Regression: a nested path (`cardNumbers.0.last4`) used to fall through to
+  // `root.server`, which no edit surface renders, so Save failed silently.
+  it("puts a nested validation issue on its own control", async () => {
+    const harness = createBrowserTestHarness();
+    const { mutationPort, transport } = financialAccountMutationPort();
+    const { result } = renderHook(
+      () =>
+        useEntityEditSession(
+          {
+            entity: "financialAccount",
+            operation: "update",
+            intent: "full",
+            surface: "dialog",
+            record: {
+              id: "FAC-4K7M",
+              name: "Household card",
+              identity: { kind: "cash" },
+              cardNumbers: [],
+              providerVendorId: null,
+              provisional: false,
+              inventoryOwnerDefaultEnabled: false,
+              sourceAliases: [],
+              notes: null,
+            },
+          },
+          { mutationPort },
+        ),
+      { wrapper: harness.wrapper },
+    );
+
+    act(() =>
+      result.current.set("cardNumbers", [
+        {
+          last4: "12",
+          kind: "primary",
+          validFrom: null,
+          validTo: null,
+          note: null,
+        },
+      ]),
+    );
+    const outcome = await act(() => result.current.submit());
+
+    expect(outcome).toMatchObject({ ok: false });
+    expect(transport).not.toHaveBeenCalled();
+    const { errors } = result.current.form.formState;
+    expect(errors.root?.server).toBeUndefined();
+    expect(
+      result.current.form.getFieldState("cardNumbers.0.last4").error,
+    ).toBeDefined();
+    harness.dispose();
+  });
 });
