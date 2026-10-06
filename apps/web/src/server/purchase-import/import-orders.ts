@@ -69,7 +69,7 @@ import {
   withTransactionDatabase,
 } from "~/server/repo/database-helpers";
 import { validateExpenseInheritance } from "~/server/repo/expense-inheritance";
-import { deleteImages } from "~/server/repo/image";
+import { reapUnreferencedImages } from "~/server/repo/image";
 import { validateLiveInheritedPolicies } from "~/server/repo/inheritance-validation";
 import { upsertAgentProductMatch } from "~/server/repo/product-match-candidate";
 import { assertProductCategoryChange } from "~/server/repo/product/classification";
@@ -1358,6 +1358,37 @@ async function commitEnrichmentIdentifier(
   }
 }
 
+/**
+ * A commit may fill only a target its run still works. Completed, skipped,
+ * unresolved and the other settled states are closed for writes.
+ */
+/**
+ * Remove an image this commit attempt imported and did not keep. Creating the
+ * row does not make it this attempt's alone: an identical commit that reused
+ * it may have attached it and won, so only an unreferenced image is deleted.
+ */
+async function discardCreatedImage(
+  db: Database,
+  imageId: Awaited<ReturnType<typeof resolveOrThrow>> | null,
+  created: boolean,
+) {
+  if (!imageId || !created) return;
+  const removed = await withTransaction(db, (tx) =>
+    reapUnreferencedImages(tx, [imageId]),
+  );
+  await deleteStoredObjects(removed.deletedKeys);
+}
+
+const isOpenEnrichmentTarget = (state: string) =>
+  state === "pending" || state === "prepared";
+
+function assertOpenEnrichmentTarget(productCode: string, state: string) {
+  if (!isOpenEnrichmentTarget(state))
+    throw new Error(
+      `${productCode} is ${state}, not an open target of this run`,
+    );
+}
+
 /** Fill only blank Product identity fields for an explicit enrichment target. */
 export async function commitProductEnrichment(
   db: Database,
@@ -1405,7 +1436,7 @@ export async function commitProductEnrichment(
         )
         .parse(Object.keys(changes));
       const [targetRef] = await database
-        .select({ id: runTarget.id })
+        .select({ id: runTarget.id, state: runTarget.state })
         .from(runTarget)
         .where(
           and(
@@ -1416,6 +1447,18 @@ export async function commitProductEnrichment(
         .limit(1);
       if (!targetRef)
         throw new Error("Product enrichment target was not found");
+      // Checked again under the target lock; this early read only keeps a
+      // settled target from importing an image it would then discard. An
+      // identical commit may have closed it since the replay check above, so
+      // the ledger answers before the refusal.
+      if (!isOpenEnrichmentTarget(targetRef.state)) {
+        const recorded = await ledger.replay(
+          database,
+          commitProductEnrichmentOut,
+        );
+        if (recorded) return recorded;
+        assertOpenEnrichmentTarget(input.productId, targetRef.state);
+      }
       let importedImageId: Awaited<ReturnType<typeof resolveOrThrow>> | null =
         null;
       let importedImageShortcode: string | null = null;
@@ -1476,6 +1519,7 @@ export async function commitProductEnrichment(
         importedImageSourcePageUrl = metadata.data!.sourceURL ?? null;
       }
       let committed: z.output<typeof commitProductEnrichmentOut>;
+      let replayedInTransaction = false;
       try {
         committed = await withTransaction(
           db,
@@ -1487,6 +1531,17 @@ export async function commitProductEnrichment(
               .where(eq(runTable.id, scope.public.runId))
               .limit(1)
               .for("update");
+            // An identical commit that completed while this one waited for
+            // the run lock is answered from the ledger, before the target's
+            // now-settled state would refuse it.
+            const recorded = await ledger.replay(
+              tx,
+              commitProductEnrichmentOut,
+            );
+            if (recorded) {
+              replayedInTransaction = true;
+              return recorded;
+            }
             if (lockedRun?.status !== "running")
               throw new Error(
                 `Import run is fenced in status ${lockedRun?.status ?? "missing"}`,
@@ -1494,6 +1549,7 @@ export async function commitProductEnrichment(
             const [target] = await tx
               .select({
                 id: runTarget.id,
+                state: runTarget.state,
                 targetFingerprint: runTarget.targetFingerprint,
               })
               .from(runTarget)
@@ -1505,6 +1561,10 @@ export async function commitProductEnrichment(
               )
               .limit(1)
               .for("update");
+            // A skip keeps the fingerprint, so only the state says a target
+            // is settled: a late commit must not write or learn anything.
+            if (target)
+              assertOpenEnrichmentTarget(input.productId, target.state);
             if (!target || target.targetFingerprint !== input.targetFingerprint)
               throw new Error(
                 "Product enrichment target changed before commit",
@@ -1662,11 +1722,14 @@ export async function commitProductEnrichment(
           },
         );
       } catch (error) {
-        if (importedImageId && importedImageCreated) {
-          const removed = await deleteImages(db, [importedImageId]);
-          await deleteStoredObjects(removed.deletedKeys);
-        }
+        await discardCreatedImage(db, importedImageId, importedImageCreated);
         throw error;
+      }
+      // The identical commit that won kept its own image; one this attempt
+      // created is unattached, so it is removed and never processed.
+      if (replayedInTransaction) {
+        await discardCreatedImage(db, importedImageId, importedImageCreated);
+        return committed;
       }
       if (importedImageShortcode) {
         try {
