@@ -441,15 +441,20 @@ not_allowed` (Restaurants) means an Expense neither expects nor may link a
   ProductCategory `feature` slice — food-only `ingredientId`/`fdc_id`,
   books-only ISBN, required `model` — read by category admission, the
   `product_model` gap, and Jev targets ([entities](entities.md#classification-field-policies)).
-  Remaining: move `productExpectation` enforcement (`validateProductPolicy`,
-  `expenseProductForbiddenSql`) onto `classificationPolicySql`; decide whether
-  Food _expects_ an ingredient and Books an ISBN (both `unknown` today, so no
-  gap) and whether a Food Product may carry an ISBN outright rather than by
-  precedence; seed/plant `growsPlantId` (no feature or rule exists yet); the
-  project-resource capability and garden-source refusal in
+  Remaining, decided: move `productExpectation` enforcement
+  (`validateProductPolicy`, `expenseProductForbiddenSql`) onto
+  `classificationPolicySql`; the project-resource capability and
+  garden-source refusal in
   `productCategoryFeatureCapabilities`/`assertProductCategoryChange`;
   SpendingCategory `evidenceExpectation` with Vendor/Purchase overrides
   (`repo/purchase-evidence-policy.ts`); Location type; Task/Project trade.
+
+- 🤔 **Product Category feature expectations.** Decide whether Food _expects_
+  an ingredient and Books an ISBN (both `unknown` today, so no data-quality
+  gap) and whether a Food Product may carry an ISBN outright rather than only
+  by precedence; and whether seed/plant categories should expect
+  `growsPlantId` (no feature or rule exists yet). Each answer is one policy
+  value in the ProductCategory manifest declaration.
   Inherited classifications (Vendor → Purchase → Expense) resolve through
   their existing effective-value SQL before a refusal applies.
 
