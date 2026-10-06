@@ -517,7 +517,9 @@ rather than being counted as free. Estimates include cache token rates and
 context tiers per call before aggregating spend. Pricing fetches happen in
 accounting, outside inference. The ledger owns cost estimates; conversation
 messages carry token evidence without a second SDK price estimate. Failed
-calls without reported usage remain unpriced.
+calls without reported usage remain unpriced. Import-run summaries return an
+unknown total when any recorded call is unpriced; a run with no calls totals
+zero. The nullable run-history cost contract requires Apple client 2.6 or newer.
 
 The shared transport owns request controls, response headers, Universal gateway
 calls, and the choice between test peers, ChatGPT, and billed gateway calls.

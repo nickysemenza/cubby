@@ -2,11 +2,12 @@ import {
   imageId as parseImageId,
   runEntityId,
 } from "@cubby/schemas/identifiers";
+import { runSummary } from "@cubby/schemas/run";
 import { and, eq, sql } from "drizzle-orm";
 import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 
-import { auditLog, runTarget } from "~/server/db/schema";
+import { aiUsage, auditLog, runTarget } from "~/server/db/schema";
 import { runHandlers } from "~/server/operations/run.server";
 import { getDb } from "~/server/repo/database-helpers";
 import { insertWithShortcode } from "~/server/repo/shortcode-utils";
@@ -99,6 +100,52 @@ describe("purchase import run target resolution", () => {
 
     const runs = await listRuns(ctx.db, party.id, targetId!);
     expect(runs.map((row) => row.id)).toEqual([run.id]);
+  });
+});
+
+// A left join with no calls is free; actual unpriced calls make the whole
+// subtotal unknown, including when a priced call is present.
+describe("import run summary pricing", () => {
+  const ctx = withTestDb();
+  it.each([
+    { costs: [], expected: 0 },
+    { costs: [0.125, 0.25], expected: 0.375 },
+    { costs: [null], expected: null },
+    { costs: [0.125, null], expected: null },
+  ])("preserves spend for $costs", async ({ costs, expected }) => {
+    const party = await insertWithShortcode(ctx.db, "ledgerParty", {
+      name: "Synthetic pricing member",
+      kind: "member",
+      userId: ctx.actor.userId,
+    });
+    const run = await startPhotoInventoryRun(ctx.db, {
+      ledgerPartyId: party.id,
+      actorUserId: ctx.actor.userId,
+    });
+    if (costs.length)
+      await getDb(ctx.db)
+        .insert(aiUsage)
+        .values(
+          costs.map((estimatedCost) => ({
+            feature: "synthetic",
+            provider: "openai",
+            model: "gpt-6-sol",
+            operation: "synthetic.summary",
+            runId: runEntityId.parse(run.id),
+            durationMs: 1,
+            transport: "gateway",
+            estimatedCost,
+          })),
+        );
+    const [summary] = await listRuns(ctx.db, party.id);
+    expect(summary?.estimatedCost).toBe(expected);
+    expect(
+      runSummary.parse({
+        ...summary,
+        startedAt: summary!.startedAt.toISOString(),
+        endedAt: summary!.endedAt?.toISOString() ?? null,
+      }).estimatedCost,
+    ).toBe(summary!.estimatedCost);
   });
 });
 
