@@ -73,29 +73,38 @@ exercise it.
 
 ## Configuration and commands
 
-Use a Cloudflare API token authorized for inference through Unified Billing.
-Set it locally as `TESTER_ARMY_CF_API_TOKEN` or in the repository's Actions
-secrets with that name. Local commands also accept `AI_GATEWAY_API_KEY` from the
-shell or `apps/web/.env`, falling back to the primary checkout's file from a
-worktree (`apps/web/tooling/local-secret.ts`); `TESTER_ARMY_ENV_FILE` names a
-different `.env`. Only the inference token is read from that file, so app
-database and storage settings do not enter the synthetic harness. The account
-defaults to Cubby's configured Cloudflare account; `TESTER_ARMY_CF_ACCOUNT_ID`
-overrides it locally or as an Actions repository variable. All billed traffic
-uses gateway `cubby`; the tester driver and coupled application peers use the
-same gateway. Do not reuse a deployment token. Gateway metadata records
-`environment=ci` in Actions and `environment=development` for local runs,
-plus stable `feature` and `operation` dimensions. Revisions stay in the
-sanitized E2E run bundle rather than gateway metadata.
-
-The driver default is `openai/${FAST_MODEL}` from the shared model declarations,
-through the Responses API with medium reasoning and gateway caching disabled.
-The agent swap uses the same `FAST_MODEL` default. Model swaps accept only
-OpenAI chat models because the peer speaks the Responses protocol. Blank
-Actions variables use these defaults rather than becoming invalid model names. `TESTER_ARMY_MODEL` explicitly overrides the
-model locally or through an Actions repository variable. There is no fallback.
+The driver runs on the member's ChatGPT subscription by default
+(`TESTER_ARMY_PROVIDER=chatgpt`). Sign in once per machine with
+`pnpm --dir apps/web exec e2e login openai` (add `--device` for a device
+code); the login is stored for the user in `~/.config/e2e/oauth.json` and
+refreshes itself, so every checkout and worktree shares it. In Actions, store
+that file's JSON as the `E2E_OAUTH_CREDENTIALS` secret. The default driver
+model is `QUALITY_MODEL` (GPT-6 Sol); `TESTER_ARMY_MODEL` overrides it with an
+id the plan serves (`pnpm --dir apps/web exec e2e models openai` lists them).
 The preflight verifies an image plus a forced function call before builds,
-database provisioning, or simulator startup.
+database provisioning, or simulator startup, and a missing login fails it
+with `LOGIN_REQUIRED`.
+
+`TESTER_ARMY_PROVIDER=gateway` keeps the Cloudflare AI Gateway route: a
+Cloudflare API token authorized for inference through Unified Billing, set as
+`TESTER_ARMY_CF_API_TOKEN` (locally or as an Actions secret). Local commands
+also accept `AI_GATEWAY_API_KEY` from the shell or `apps/web/.env`, falling
+back to the primary checkout's file from a worktree
+(`apps/web/tooling/local-secret.ts`); `TESTER_ARMY_ENV_FILE` names a different
+`.env`. Only the inference token is read from that file, so app database and
+storage settings do not enter the synthetic harness. The account defaults to
+Cubby's configured Cloudflare account; `TESTER_ARMY_CF_ACCOUNT_ID` overrides
+it. Gateway traffic uses gateway `cubby` with `environment=ci` in Actions and
+`environment=development` locally, plus stable `feature` and `operation`
+dimensions; revisions stay in the sanitized E2E run bundle. Gateway models
+are OpenAI Responses ids (`openai/gpt-…`, default `openai/${FAST_MODEL}`).
+
+The coupled import journeys always need that token as well, whichever
+provider drives: their peers forward the application's own Workers AI (Jev
+decisions, embeddings) and Anthropic recovery calls through the gateway. The
+agent swap's OpenAI model defaults to `FAST_MODEL` and accepts only OpenAI chat
+models because the peer speaks the Responses protocol. Blank Actions
+variables use these defaults rather than becoming invalid values.
 
 ```sh
 pnpm test:e2e:agent:preflight

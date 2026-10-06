@@ -139,6 +139,20 @@ const routeUsage = z.record(
  * The live model peer for both harness seams; the agent's swaps in the
  * coordinator model under test (`live-gateway.ts`).
  */
+/**
+ * The coupled harness's peers still forward the application's own Workers AI
+ * (Jev decisions, embeddings) and Anthropic recovery calls through the
+ * Cloudflare gateway, so a coupled run needs its token even when the driver
+ * runs on the ChatGPT subscription.
+ */
+function coupledGatewayToken(config: ReturnType<typeof modelConfiguration>) {
+  if (!config.TESTER_ARMY_CF_API_TOKEN)
+    throw new Error(
+      "Coupled Tester Army journeys need TESTER_ARMY_CF_API_TOKEN (or AI_GATEWAY_API_KEY) for the application's own model calls",
+    );
+  return config.TESTER_ARMY_CF_API_TOKEN;
+}
+
 function liveGatewayWorker(swap?: typeof agentModel): WorkerdModelWorker {
   const config = modelConfiguration();
   const vars: NonNullable<WorkerdModelWorker["vars"]> = {
@@ -152,7 +166,7 @@ function liveGatewayWorker(swap?: typeof agentModel): WorkerdModelWorker {
   return {
     main: "tooling/tester-army/live-gateway.ts",
     vars,
-    secrets: { GATEWAY_TOKEN: config.TESTER_ARMY_CF_API_TOKEN },
+    secrets: { GATEWAY_TOKEN: coupledGatewayToken(config) },
   };
 }
 
