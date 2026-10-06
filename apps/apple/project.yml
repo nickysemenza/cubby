@@ -7,6 +7,8 @@
 # platform and must be hand-written files: the macOS sandbox keys are invalid on iOS, and an iOS
 # simulator app carrying them fails to spawn with no error (a hanging `simctl launch`, black screen).
 name: Cubby
+include:
+  - packages.yml
 options:
   bundleIdPrefix: com.nickysemenza
   createIntermediateGroups: true
@@ -42,16 +44,6 @@ settings:
     DEVELOPMENT_TEAM: Y9A97FXT63
     MARKETING_VERSION: "2.10"
     CURRENT_PROJECT_VERSION: "2"
-
-packages:
-  CubbyKit:
-    path: CubbyKit
-  Sentry:
-    url: https://github.com/getsentry/sentry-cocoa
-    from: "9.29.2"
-  Nuke:
-    url: https://github.com/kean/Nuke
-    from: "13.2.0"
 
 targetTemplates:
   CubbyApp:

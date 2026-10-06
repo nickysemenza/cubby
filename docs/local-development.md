@@ -213,7 +213,7 @@ need separate validation.
 
 Native E2E app builds preserve `CubbyKit/Package.resolved` as the package's
 owned lockfile. Xcode can write its app graph (including app-only dependencies
-from `apps/apple/project.yml`) into that local package file while resolving.
+from `apps/apple/packages.yml`) into that local package file while resolving.
 `withKitPackageResolution` verifies every Kit pin remains unchanged, permits
 only added package URLs declared by the app, and restores the original Kit
 serialization after success or failure. A changed Kit pin fails acceptance;

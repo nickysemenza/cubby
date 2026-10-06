@@ -26,8 +26,12 @@ test("app-only resolution leaves the Kit lockfile bytes unchanged, including aft
     mkdirSync(path.dirname(lock), { recursive: true });
     writeFileSync(lock, original);
     writeFileSync(
-      path.join(root, "apps/apple/project.yml"),
+      path.join(root, "apps/apple/packages.yml"),
       "packages:\n  SyntheticApp:\n    url: https://example.test/app\n",
+    );
+    writeFileSync(
+      path.join(root, "apps/apple/project.yml"),
+      "include:\n  - packages.yml\n",
     );
     try {
       const build = withKitPackageResolution(root, async () => {

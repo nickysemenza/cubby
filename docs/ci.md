@@ -148,7 +148,11 @@ target-specific FFI output cache (`.github/actions/setup-apple-ffi`) and the
 host phase's build cache described above. DerivedData keys explicitly exclude
 the host `.build` directory; its compiled products are not simulator source
 inputs. Host and simulator caches keep their existing toolchain and package
-graph keys.
+graph keys. Dependency declarations live in XcodeGen’s included
+`apps/apple/packages.yml`; app versions and build settings stay in the product
+key, so a version bump does not discard dependency precompiled modules. A
+package declaration, local Swift package graph, or resolved-pin change still
+invalidates those modules. The simulator build certificate includes both specs.
 
 Compiled Apple caches are published only after successful work. GitHub cache
 entries are immutable: saving an interrupted compile under the final content
