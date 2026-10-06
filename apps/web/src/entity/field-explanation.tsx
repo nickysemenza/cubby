@@ -1,5 +1,9 @@
 import { auditEntitySchema } from "@cubby/schemas/audit";
-import { scoredEntities } from "@cubby/schemas/data-quality";
+import {
+  scoredEntities,
+  dataQualityGap,
+  dataQualityException,
+} from "@cubby/schemas/data-quality";
 import type { Entity } from "@cubby/schemas/entity";
 import { entityFieldModels } from "@cubby/schemas/entity-fields";
 import {
@@ -19,10 +23,15 @@ import {
   inventory,
   fieldExplanation,
 } from "~/integrations/tanstack-query/generated/catalog.gen";
+import { dataQualityStatusLabel } from "~/lib/data-quality-options";
+import { formatInstant } from "~/lib/date-format";
 import { formatCurrency } from "~/lib/utils";
+import { CalendarDate } from "~/ui/common/calendar-date";
 import { CELL_RAIL_BUTTON_CLASS } from "~/ui/data-table/cell-frame";
+import { ExternalLinkText } from "~/ui/ExternalLink";
 import { ErrorDisplay } from "~/ui/feedback/error-display";
 import { useActionMutation } from "~/ui/hooks/useActionMutation";
+import JsonRenderer from "~/ui/json-renderer";
 import { Stack } from "~/ui/layout";
 import { Badge } from "~/ui/primitives/badge";
 import { Button } from "~/ui/primitives/button";
@@ -66,6 +75,10 @@ export function ReadableExplanationValue({
     return (
       <ExplanationEntityLink entity={reference.type} id={reference.shortcode} />
     );
+  if (textValue.success) {
+    const formatted = readableExplanationText(textValue.data);
+    if (formatted) return formatted;
+  }
   const amount = property === "amount" ? z.number().safeParse(value) : null;
   if (amount?.success)
     return (
@@ -104,6 +117,25 @@ export function ReadableExplanationValue({
     );
   }
   return <ReadableExplanationRecord value={value} depth={depth} />;
+}
+
+function readableExplanationText(value: string) {
+  if (/^https?:\/\//i.test(value) && z.url().safeParse(value).success)
+    return (
+      <ExternalLinkText
+        href={value}
+        className="max-w-full [&>span]:min-w-0 [&>span]:[overflow-wrap:anywhere]"
+      />
+    );
+  if (z.iso.datetime({ offset: true }).safeParse(value).success)
+    return (
+      <time dateTime={value} title={value}>
+        {formatInstant(value, "dateTime")}
+      </time>
+    );
+  if (z.iso.date().safeParse(value).success)
+    return <CalendarDate start={value} />;
+  return null;
 }
 
 function ReadableExplanationRecord({
@@ -168,17 +200,43 @@ const explanationSourceKey = (source: ExplanationSource): string =>
     source.entity?.entityId ?? JSON.stringify(source.value),
   ].join(":");
 
-/** The resolution row already names its source record, so a bare
- * link-only source pointing at the same record adds nothing. */
+/** Check rows already own the owner's gap and exception facts; related
+ * records remain evidence rather than owner score deductions. */
+function ownCheckFact(value: ExplanationValue, data: FieldExplanationOutput) {
+  const fact = dataQualityGap.safeParse(value);
+  const exception = fact.success ? null : dataQualityException.safeParse(value);
+  const parsed = fact.success
+    ? fact.data
+    : exception?.success
+      ? exception.data
+      : null;
+  return (
+    parsed !== null &&
+    parsed.targetId === data.subject.entityId &&
+    parsed.targetType === data.subject.entityKind &&
+    data.qualityBreakdown?.checks.some((check) => check.check === parsed.check)
+  );
+}
+
 function visibleSources(data: FieldExplanationOutput) {
   const named = data.resolution?.sourceEntity;
-  if (!named) return data.sources;
-  return data.sources.filter(
-    (source) =>
-      source.value !== null ||
-      source.entity?.entityKind !== named.entityKind ||
-      source.entity.entityId !== named.entityId,
-  );
+  return data.sources.flatMap((source) => {
+    if (
+      named &&
+      source.value === null &&
+      source.entity?.entityKind === named.entityKind &&
+      source.entity.entityId === named.entityId
+    )
+      return [];
+    if (!data.qualityBreakdown) return [source];
+    if (ownCheckFact(source.value, data)) return [];
+    const value = Array.isArray(source.value)
+      ? source.value.filter((item) => !ownCheckFact(item, data))
+      : source.value;
+    return value === null || (Array.isArray(value) && value.length === 0)
+      ? []
+      : [{ ...source, value }];
+  });
 }
 
 export function ExplanationEntityLink({
@@ -283,6 +341,50 @@ function UnassessedQualityExplanation({
   );
 }
 
+type ExplainedCheck = NonNullable<
+  FieldExplanationOutput["qualityBreakdown"]
+>["checks"][number];
+
+function QualityCheckRow({
+  check,
+  entityId,
+}: {
+  check: ExplainedCheck;
+  entityId: string;
+}) {
+  return (
+    <li
+      className="flex min-w-0 flex-wrap items-baseline gap-x-2 gap-y-1 py-2 first:pt-1"
+      title={`${humanize(check.facet)} · ${check.check}`}
+      data-quality-check={check.check}
+    >
+      <div className="flex w-full min-w-0 flex-wrap items-baseline gap-x-2 gap-y-1">
+        <span className="mr-auto text-sm font-medium">{check.label}</span>
+        <span className="text-[11px] text-muted-foreground tabular-nums">
+          {check.weightLabel}
+        </span>
+        <Badge
+          variant={
+            check.state === "gap"
+              ? check.kind === "defect"
+                ? "destructive"
+                : "warning"
+              : check.state === "excepted"
+                ? "secondary"
+                : "positive"
+          }
+        >
+          {check.stateLabel}
+        </Badge>
+      </div>
+      {check.state === "gap" ? (
+        <p className="min-w-0 flex-1 text-xs leading-5">{check.description}</p>
+      ) : null}
+      <ExceptionControls entityId={entityId} check={check} />
+    </li>
+  );
+}
+
 function QualityCalculation({
   breakdown,
   entityId,
@@ -290,48 +392,56 @@ function QualityCalculation({
   breakdown: NonNullable<FieldExplanationOutput["qualityBreakdown"]>;
   entityId: string;
 }) {
+  const satisfied = breakdown.checks.filter(
+    (check) => check.state === "satisfied" && !check.exception,
+  );
+  const attention = breakdown.checks.filter(
+    (check) => check.state !== "satisfied" || check.exception,
+  );
   return (
-    <section className="grid gap-2 border-t border-border pt-3">
-      <h3 className={sectionLabelClassName}>Score calculation</h3>
+    <section className="grid gap-2 border-t border-border pt-2">
+      <div className="flex flex-wrap items-baseline justify-between gap-2">
+        <h3 className={sectionLabelClassName}>Score calculation</h3>
+        <Badge
+          variant={
+            breakdown.status === "complete"
+              ? "positive"
+              : breakdown.status === "defect"
+                ? "destructive"
+                : breakdown.status === "needs_data"
+                  ? "warning"
+                  : "secondary"
+          }
+        >
+          {dataQualityStatusLabel(breakdown.status)}
+        </Badge>
+      </div>
       <p className="text-xs leading-5 tabular-nums">{breakdown.summary}</p>
       <ul className="grid divide-y divide-border">
-        {breakdown.checks.map((check) => (
-          <li
+        {attention.map((check) => (
+          <QualityCheckRow
             key={check.check}
-            className="grid min-w-0 gap-1.5 py-2.5 first:pt-1"
-          >
-            <div className="flex min-w-0 flex-wrap items-baseline justify-between gap-x-3 gap-y-1">
-              <span className="text-sm font-medium">{check.label}</span>
-              <Badge
-                variant={
-                  check.state === "gap"
-                    ? check.kind === "defect"
-                      ? "destructive"
-                      : "warning"
-                    : check.state === "excepted"
-                      ? "secondary"
-                      : "outline"
-                }
-              >
-                {check.stateLabel}
-              </Badge>
-            </div>
-            <div className="flex min-w-0 flex-wrap justify-between gap-x-3 gap-y-1 text-xs text-muted-foreground">
-              <span className="min-w-0 break-words">
-                {humanize(check.facet)} ·{" "}
-                <span className="font-mono text-[11px] break-all">
-                  {check.check}
-                </span>
-              </span>
-              <span className="tabular-nums">{check.weightLabel}</span>
-            </div>
-            {check.state === "gap" ? (
-              <p className="text-xs leading-5">{check.description}</p>
-            ) : null}
-            <ExceptionControls entityId={entityId} check={check} />
-          </li>
+            check={check}
+            entityId={entityId}
+          />
         ))}
       </ul>
+      {satisfied.length > 0 ? (
+        <details>
+          <summary className="cursor-pointer text-xs font-medium text-positive">
+            {satisfied.length} satisfied checks
+          </summary>
+          <ul className="mt-1 grid divide-y divide-border">
+            {satisfied.map((check) => (
+              <QualityCheckRow
+                key={check.check}
+                check={check}
+                entityId={entityId}
+              />
+            ))}
+          </ul>
+        </details>
+      ) : null}
     </section>
   );
 }
@@ -460,7 +570,6 @@ function FieldExplanationContents({
       ) : (
         <>
           <section className="grid gap-2">
-            <h3 className={sectionLabelClassName}>What this means</h3>
             {result.data.interpretation ? (
               <>
                 <ExplanationResult
@@ -472,7 +581,10 @@ function FieldExplanationContents({
                 <p className="text-sm leading-5">
                   {result.data.interpretation.summary}
                 </p>
-                {result.data.interpretation.caveats.map((caveat) => (
+                {(!result.data.qualityBreakdown
+                  ? result.data.interpretation.caveats
+                  : []
+                ).map((caveat) => (
                   <p
                     key={caveat}
                     className="text-xs leading-5 text-muted-foreground"
@@ -480,7 +592,8 @@ function FieldExplanationContents({
                     {caveat}
                   </p>
                 ))}
-                {result.data.interpretation.nextSteps.length > 0 ? (
+                {!result.data.qualityBreakdown &&
+                result.data.interpretation.nextSteps.length > 0 ? (
                   <div className="grid gap-1.5">
                     <h4 className={sectionLabelClassName}>Next steps</h4>
                     <ul className="list-disc pl-4 text-xs leading-5">
@@ -521,7 +634,8 @@ function FieldExplanationContents({
           ) : null}
           {!explanationScalar.safeParse(result.data.value).success &&
           result.data.value !== null &&
-          !result.data.resolution ? (
+          !result.data.resolution &&
+          !result.data.qualityBreakdown ? (
             <ReadableExplanationValue value={result.data.value} />
           ) : null}
           {visibleSources(result.data).length > 0 ? (
@@ -563,33 +677,7 @@ function FieldExplanationContents({
               ) : null}
             </section>
           ) : null}
-          <section className="grid gap-2 border-t border-border pt-3">
-            <h3 className={sectionLabelClassName}>Technical details</h3>
-            <p className="text-xs leading-5">{result.data.rule.description}</p>
-            <dl className="grid gap-1 text-xs text-muted-foreground">
-              <div>
-                <dt className="inline">Rule: </dt>
-                <dd className="inline font-mono break-all">
-                  {result.data.rule.id} · r{result.data.rule.revision}
-                </dd>
-              </div>
-              {z.string().safeParse(result.data.value).success &&
-              result.data.interpretation?.result !== result.data.value ? (
-                <div>
-                  <dt className="inline">Result code: </dt>
-                  <dd className="inline font-mono">
-                    {String(result.data.value)}
-                  </dd>
-                </div>
-              ) : null}
-              <div>
-                <dt className="inline">Evaluated: </dt>
-                <dd className="inline">
-                  {new Date(result.data.evaluatedAt).toLocaleString()}
-                </dd>
-              </div>
-            </dl>
-          </section>
+          <ExplanationTechnicalDetails data={result.data} />
           <ExplanationFooter
             entity={entity}
             id={id}
@@ -601,6 +689,68 @@ function FieldExplanationContents({
         </>
       )}
     </div>
+  );
+}
+
+function RawExplanationEvidence({ data }: { data: FieldExplanationOutput }) {
+  const [open, setOpen] = useState(false);
+  return (
+    <details onToggle={(event) => setOpen(event.currentTarget.open)}>
+      <summary className="cursor-pointer text-xs font-medium">
+        Raw evidence and check identifiers
+      </summary>
+      {open ? (
+        <div className="max-h-64 max-w-full overflow-auto text-xs">
+          <JsonRenderer input={data} />
+        </div>
+      ) : null}
+    </details>
+  );
+}
+
+function ExplanationTechnicalDetails({
+  data,
+}: {
+  data: FieldExplanationOutput;
+}) {
+  return (
+    <details className="grid gap-2 border-t border-border pt-2">
+      <summary className="cursor-pointer">
+        <h3 className={`${sectionLabelClassName} inline`}>Technical details</h3>
+      </summary>
+      <p className="text-xs leading-5">{data.rule.description}</p>
+      <dl className="grid gap-1 text-xs text-muted-foreground">
+        <div>
+          <dt className="inline">Rule: </dt>
+          <dd className="inline font-mono break-all">
+            {data.rule.id} · r{data.rule.revision}
+          </dd>
+        </div>
+        {z.string().safeParse(data.value).success &&
+        data.interpretation?.result !== data.value ? (
+          <div>
+            <dt className="inline">Result code: </dt>
+            <dd className="inline font-mono">{String(data.value)}</dd>
+          </div>
+        ) : null}
+        <div>
+          <dt className="inline">Evaluated: </dt>
+          <dd className="inline">
+            {formatInstant(data.evaluatedAt, "dateTime")}
+          </dd>
+        </div>
+      </dl>
+      {data.qualityBreakdown ? (
+        <>
+          {data.interpretation?.caveats.map((caveat) => (
+            <p key={caveat} className="text-xs text-muted-foreground">
+              {caveat}
+            </p>
+          ))}
+          <RawExplanationEvidence data={data} />
+        </>
+      ) : null}
+    </details>
   );
 }
 

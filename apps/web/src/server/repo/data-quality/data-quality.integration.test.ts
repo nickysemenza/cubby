@@ -6,7 +6,7 @@ import { TEST_ACTOR, withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 import { z } from "zod";
 
-import { entityExternalId, productCategory } from "~/server/db/schema";
+import { entityExternalId, product, productCategory } from "~/server/db/schema";
 import { unwrapDb } from "~/server/repo/database-helpers";
 import { ensureExternalSources } from "~/server/repo/entity-external-ids";
 import { createExpense } from "~/server/repo/expense/crud";
@@ -59,13 +59,12 @@ describe("data quality: list filters, sort and hydration agree", () => {
       makeProductInput({ name: "DQ middling", manufacturer: "Acme", price: 4 }),
       TEST_ACTOR,
     );
-    // Neither stocked nor purchased: no weighted check applies, so the
-    // unscored orphan diagnostic alone caps the score at 99; it remains
-    // visible and cannot be exempted.
-    const outOfScope = await createProductFixture(
+    // Neither stocked nor purchased: still scored on catalog identity (only
+    // its name is known), and the unscored orphan diagnostic stays visible.
+    const catalogOnly = await createProductFixture(
       ctx.db,
       makeProductInput({
-        name: "DQ out of scope",
+        name: "DQ catalog unbranded",
         manufacturer: "(unspecified)",
       }),
       TEST_ACTOR,
@@ -82,21 +81,28 @@ describe("data quality: list filters, sort and hydration agree", () => {
         TEST_ACTOR,
       );
     }
-    return { weak, middling, outOfScope };
+    return { weak, middling, catalogOnly };
   };
 
   it("filters by status and gap exactly as the hydrated object reports", async () => {
-    const { weak, middling, outOfScope } = await seedProducts();
-    const ids = [weak.entityId, middling.entityId, outOfScope.entityId];
+    const { weak, middling, catalogOnly } = await seedProducts();
+    const ids = [weak.entityId, middling.entityId, catalogOnly.entityId];
     const hydrated = await loadDataQualities(ctx.db, "product", ids);
 
     expect(hydrated.get(weak.entityId)?.status).toBe("needs_data");
     expect(hydrated.get(middling.entityId)?.status).toBe("needs_data");
-    expect(hydrated.get(outOfScope.entityId)).toMatchObject({
+    expect(hydrated.get(catalogOnly.entityId)).toMatchObject({
       status: "defect",
-      score: 99,
-      gaps: [expect.objectContaining({ check: "product_orphaned" })],
+      score: 30,
     });
+    expect(
+      hydrated.get(catalogOnly.entityId)?.gaps.map((gap) => gap.check),
+    ).toEqual([
+      "product_orphaned",
+      "product_manufacturer",
+      "product_external_id",
+      "product_category",
+    ]);
     expect(hydrated.get(weak.entityId)?.gaps.map((gap) => gap.check)).toContain(
       "product_manufacturer",
     );
@@ -114,31 +120,30 @@ describe("data quality: list filters, sort and hydration agree", () => {
     const needsData = await listed({ dataStatus: "needs_data" });
     expect(needsData.has(weak.id)).toBe(true);
     expect(needsData.has(middling.id)).toBe(true);
-    expect(needsData.has(outOfScope.id)).toBe(false);
+    expect(needsData.has(catalogOnly.id)).toBe(false);
 
     const complete = await listed({ dataStatus: "complete" });
-    expect(complete.has(outOfScope.id)).toBe(false);
+    expect(complete.has(catalogOnly.id)).toBe(false);
     expect(complete.has(weak.id)).toBe(false);
     const defects = await listed({ dataStatus: "defect" });
-    expect(defects.has(outOfScope.id)).toBe(true);
+    expect(defects.has(catalogOnly.id)).toBe(true);
 
     const noMaker = await listed({ dataGap: ["product_manufacturer"] });
     expect(noMaker.has(weak.id)).toBe(true);
     expect(noMaker.has(middling.id)).toBe(false);
-    expect(noMaker.has(outOfScope.id)).toBe(false);
+    expect(noMaker.has(catalogOnly.id)).toBe(true);
   });
 
   it("sorts by the same score the hydrated object carries", async () => {
-    const { weak, middling, outOfScope } = await seedProducts();
+    const { weak, middling, catalogOnly } = await seedProducts();
     const hydrated = await loadDataQualities(ctx.db, "product", [
       weak.entityId,
       middling.entityId,
-      outOfScope.entityId,
+      catalogOnly.entityId,
     ]);
-    const weakScore = hydrated.get(weak.entityId)!.score!;
-    const middlingScore = hydrated.get(middling.entityId)!.score!;
-    expect(weakScore).toBeLessThan(middlingScore);
-    expect(middlingScore).toBeLessThan(99);
+    const score = (row: typeof weak) => hydrated.get(row.entityId)!.score!;
+    expect(score(weak)).toBeLessThan(score(catalogOnly));
+    expect(score(catalogOnly)).toBeLessThan(score(middling));
 
     const { data } = await productList(
       ctx.db,
@@ -146,16 +151,11 @@ describe("data quality: list filters, sort and hydration agree", () => {
       [{ orderBy: "dataQuality", direction: "asc" }],
       page,
     );
-    expect(data.map((row) => row.id)).toEqual([
-      weak.id,
-      middling.id,
-      outOfScope.id,
-    ]);
-    expect(data.map((row) => row.dataQuality.score)).toEqual([
-      weakScore,
-      middlingScore,
-      99,
-    ]);
+    const ordered = [weak, catalogOnly, middling];
+    expect(data.map((row) => row.id)).toEqual(ordered.map((row) => row.id));
+    expect(data.map((row) => row.dataQuality.score)).toEqual(
+      ordered.map(score),
+    );
   });
 
   it("counts an active exception as satisfied until its evidence changes", async () => {
@@ -291,6 +291,125 @@ describe("data quality: list filters, sort and hydration agree", () => {
     expect(
       hydrated.get(bought.entityId)?.gaps.map((gap) => gap.check),
     ).not.toContain("product_unpurchased");
+  });
+
+  // Failure modes: a catalog-only Product (no spend, no stock) reading as not
+  // assessed instead of earning its name and identity; a known price earning
+  // nothing without stock; an unpriced historical Product charged a price gap
+  // it can never close; an explicit zero price read as missing; stock no
+  // longer requiring a price; a blank name passing as identity; a missing
+  // category escaping its cap.
+  it("product: scores catalog identity and any known price without stock", async () => {
+    const shelf = await createLocationFixture(
+      ctx.db,
+      makeLocationInput({ name: "DQ catalog shelf" }),
+      TEST_ACTOR,
+    );
+    const category = await createProductCategory(
+      ctx.db,
+      buildEntity("productCategory", { name: "DQ catalog category" }),
+      TEST_ACTOR,
+    );
+    const categoryId = category.output.id;
+    const make = (
+      name: string,
+      input: { categoryId?: typeof categoryId; price?: number },
+    ) =>
+      createProductFixture(
+        ctx.db,
+        makeProductInput({ name, manufacturer: "Acme", ...input }),
+        TEST_ACTOR,
+      );
+    const catalog = await make("DQ catalog only", { categoryId });
+    const priced = await make("DQ catalog priced", { price: 4 });
+    const zero = await make("DQ catalog zero", { categoryId, price: 0 });
+    const refunded = await make("DQ refunded only", { categoryId });
+    const stocked = await make("DQ stocked unpriced", { categoryId });
+    const uncategorized = await make("DQ uncategorized", { price: 4 });
+    const blank = await make("DQ blank name", { categoryId });
+    await createInventoryFixture(
+      ctx.db,
+      {
+        productId: stocked.id,
+        locationId: shelf.id,
+        amount: { value: 1, unit: "each" },
+        placement: "stock",
+      },
+      TEST_ACTOR,
+    );
+    // A refund is spend without an acquisition cost, so no price derives.
+    await createExpense(
+      ctx.db,
+      buildEntity(
+        "expense",
+        makeExpenseInput({
+          name: "DQ refund",
+          productId: refunded.id,
+          cost: -20,
+        }),
+      ),
+      TEST_ACTOR,
+    );
+    await ensureExternalSources(ctx.db, ["synthetic"]);
+    await unwrapDb(ctx.db)
+      .insert(entityExternalId)
+      .values({
+        entityId: uncategorized.entityId,
+        entityKind: "product" as const,
+        source: "synthetic",
+        kind: "retailer_sku",
+        externalId: "DQ-SKU-1",
+        isPrimary: true,
+      });
+    await unwrapDb(ctx.db)
+      .update(product)
+      .set({ name: "   " })
+      .where(sql`${product.id} = ${blank.entityId}`);
+
+    const rows = [
+      catalog,
+      priced,
+      zero,
+      refunded,
+      stocked,
+      uncategorized,
+      blank,
+    ];
+    const hydrated = await loadDataQualities(
+      ctx.db,
+      "product",
+      rows.map((row) => row.entityId),
+    );
+    const quality = (row: (typeof rows)[number]) => hydrated.get(row.entityId)!;
+    const gaps = (row: (typeof rows)[number]) =>
+      quality(row).gaps.map((gap) => gap.check);
+
+    // Weights: name 3, manufacturer 2, external id 2, category 3, price 3.
+    // Name + maker + category of name + maker + external id + category.
+    expect(quality(catalog).score).toBe(80);
+    expect(gaps(catalog)).not.toContain("product_price");
+    // Name + maker + price of those plus external id + category.
+    expect(quality(priced).score).toBe(61.54);
+    expect(quality(zero).score).toBe(84.62);
+    expect(gaps(zero)).not.toContain("product_price");
+    expect(quality(refunded).score).toBe(80);
+    expect(gaps(refunded)).not.toContain("product_price");
+    // Stock adds the price gap plus the weight-1 image and purchase checks.
+    expect(gaps(stocked)).toContain("product_price");
+    expect(quality(stocked).score).toBe(53.33);
+    // 10/13 weighted, but a missing category caps at 69.
+    expect(gaps(uncategorized)).toEqual([
+      "product_orphaned",
+      "product_category",
+    ]);
+    expect(quality(uncategorized).score).toBe(69);
+    expect(gaps(blank)).toContain("product_name");
+    expect(quality(blank).score).toBe(50);
+
+    const { data } = await productList(ctx.db, { nameFilter: "DQ " }, [], page);
+    const listed = new Map(data.map((row) => [row.id, row.dataQuality.score]));
+    for (const row of rows.filter((row) => row !== blank))
+      expect(listed.get(row.id)).toBe(quality(row).score);
   });
 
   // Failure mode: a planned (future) line, which may be unpriced by policy,

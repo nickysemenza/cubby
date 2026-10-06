@@ -262,7 +262,17 @@ test("reviews historical item classification and preserves explicit purpose", as
   await expect(
     popover.getByRole("heading", { name: "Technical details" }),
   ).toBeVisible();
-  await expect(popover.getByText("Rule:", { exact: true })).toBeVisible();
+  await expect(async () => {
+    const disclosure = popover
+      .locator("details")
+      .filter({
+        has: page.getByRole("heading", { name: "Technical details" }),
+      })
+      .first();
+    if (!(await disclosure.getAttribute("open")))
+      await disclosure.locator("summary").first().click();
+    await expect(popover.getByText("Rule:", { exact: true })).toBeVisible();
+  }).toPass();
   await page.keyboard.press("Escape");
   await page.setViewportSize({ width: 1440, height: 900 });
   await patch(expense, { spendingCategoryId: null });

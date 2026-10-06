@@ -367,8 +367,9 @@ export default defineEntity({
           id: "unpriced-stocked",
           label: "Stocked but unpriced",
           description: "On a shelf, with no price to value it by",
-          // `product_price`'s own `expected` is exactly this pairing (placement
-          // 'stock', not a `misc:` bucket) — see checks/product.ts. Unpriced stock
+          // `product_price` gaps exactly this pairing (placement 'stock', not a
+          // `misc:` bucket): an unstocked Product is scored on a price only when
+          // it already has one — see checks/product.ts. Unpriced stock
           // is invisible to the location valuation rollup: a null price yields a
           // null entry valuation and the rollup omits it.
           //
@@ -3049,7 +3050,9 @@ export default defineEntity({
     // Identity carries the weight: `dataQualityScore asc` is the enrichment
     // worklist (it replaced the bespoke `identity_strength` sort), so a
     // product with no manufacturer or external id sorts before one that
-    // only lacks a photo.
+    // only lacks a photo. Identity applies to every Product, catalog-only
+    // included, so a named catalog entry scores instead of reading as not
+    // assessed.
     dataQuality: {
       exceptions: true,
       listOrder: 7,
@@ -3065,16 +3068,24 @@ export default defineEntity({
             "No live inventory, ingredient, composition, or other retaining evidence uses this Product.",
         },
         {
-          id: "product_manufacturer",
+          id: "product_name",
           facet: "identity",
           weight: 3,
+          exceptions: "forbidden",
+          label: "Name",
+          message: "Product name is blank.",
+        },
+        {
+          id: "product_manufacturer",
+          facet: "identity",
+          weight: 2,
           label: "Manufacturer",
           message: "Manufacturer is not recorded.",
         },
         {
           id: "product_external_id",
           facet: "identity",
-          weight: 3,
+          weight: 2,
           label: "External ID",
           message:
             "No barcode, ASIN, or other external identifier is recorded.",
@@ -3097,8 +3108,8 @@ export default defineEntity({
         {
           id: "product_price",
           facet: "ledger",
-          weight: 2,
-          label: "Price (stocked)",
+          weight: 3,
+          label: "Price",
           message: "Stocked product has no price to value it by.",
         },
         {

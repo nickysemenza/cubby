@@ -136,24 +136,26 @@ describe("data-quality registry", () => {
 });
 
 describe("calculateDataQualityScore", () => {
-  const gap = (check: "product_image" | "product_manufacturer") => ({ check });
+  const gap = (
+    check: "product_image" | "product_manufacturer" | "product_name",
+  ) => ({ check });
 
   it("does not score a record with no expected checks", () => {
     expect(calculateDataQualityScore([], [])).toBeNull();
   });
 
   it("weights unresolved gaps by the check's declared weight", () => {
-    // manufacturer weighs 3, image 1: a missing image costs 25, not 50.
+    // name weighs 3, image 1: a missing image costs 25, not 50.
     expect(
       calculateDataQualityScore(
-        ["product_manufacturer", "product_image"],
+        ["product_name", "product_image"],
         [gap("product_image")],
       ),
     ).toBe(75);
     expect(
       calculateDataQualityScore(
-        ["product_manufacturer", "product_image"],
-        [gap("product_manufacturer")],
+        ["product_name", "product_image"],
+        [gap("product_name")],
       ),
     ).toBe(25);
   });
