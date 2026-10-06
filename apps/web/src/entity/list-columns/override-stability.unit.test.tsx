@@ -3,7 +3,7 @@ import { afterEach, describe, expect, it } from "vitest";
 
 import { createBrowserTestHarness } from "~/lib/test/browser-harness";
 
-import { listOverrides } from "./list-overrides.test-fixture";
+import { listOverrides } from "./list-overrides.fixtures";
 import type { ListOverrideContext } from "./types";
 
 // Regression: the product override keyed its column memos on mutation result

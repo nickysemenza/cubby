@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import { loadEntityDeclarations } from "../../../../scripts/generator/entities/declarations";
 import { editHooks } from "./editing/definitions";
-import { listOverrides } from "./list-columns/list-overrides.test-fixture";
+import { listOverrides } from "./list-columns/list-overrides.fixtures";
 
 /**
  * The hand-written halves of an entity — its list override module and its

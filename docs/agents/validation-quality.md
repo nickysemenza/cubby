@@ -19,7 +19,9 @@ locally when diagnosing dependency duplication.
 The `knip` gate also runs `pnpm knip:production`, which fails on a file or
 dependency the production graph never reaches. A script invoked only by a hook,
 CI, or package script needs a `!` entry in `knip.json`; a test seam (fixture,
-mock, harness) belongs in the negated `project` patterns.
+mock, harness) belongs in the negated `project` patterns. Name reusable test
+fixtures `*.fixtures.ts` or `*.fixtures.tsx` to match the existing exclusion;
+do not add production entry points or per-file ignores for test-only modules.
 
 `pnpm verify:local` runs the clean-tree full graph sequentially. Its target
 order is not dependency order; Nx supplies generation and build prerequisites.
