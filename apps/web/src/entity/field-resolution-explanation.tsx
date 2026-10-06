@@ -56,7 +56,7 @@ const toneBadge = {
   allocated: "secondary",
 } as const satisfies Record<ResolutionTone, BadgeVariant>;
 
-function ResolutionHeadline({
+export function ResolutionHeadline({
   entity,
   field,
   resolution,
@@ -67,8 +67,8 @@ function ResolutionHeadline({
 }) {
   const { tone, label, Icon } = resolutionState(resolution);
   return (
-    <div className="flex min-w-0 flex-wrap items-center justify-between gap-x-3 gap-y-1">
-      <span className="min-w-0 text-base font-semibold break-words">
+    <div className="flex min-w-0 flex-wrap items-center justify-between gap-x-3 gap-y-2">
+      <span className="min-w-0 text-base leading-snug font-semibold break-words">
         <ResolutionValue
           entity={entity}
           field={field}
@@ -179,7 +179,7 @@ function ResolutionLadder({
       {[...groups].map(([label, rows]) => {
         const winner = winnerIndex(rows, resolution, id);
         return (
-          <div key={label} className="grid gap-1">
+          <div key={label} className="grid gap-2">
             {groups.size > 1 ? (
               <span className="text-[11px] text-muted-foreground">{label}</span>
             ) : null}
@@ -197,14 +197,15 @@ function ResolutionLadder({
                     key={row.key}
                     data-role={role}
                     className={cn(
-                      "relative grid grid-cols-[minmax(0,1fr)_auto] items-baseline gap-x-2 rounded-sm px-1.5 py-1 text-xs",
-                      "before:absolute before:-start-[calc(0.5rem+3px)] before:top-2.5 before:size-1.5 before:rounded-full before:bg-border",
-                      role === "wins" && "bg-accent before:bg-primary",
+                      "relative grid grid-cols-[minmax(0,1fr)_minmax(0,1fr)_auto] items-baseline gap-x-2 gap-y-1 rounded-sm px-2 py-2 text-xs",
+                      "before:absolute before:-start-[calc(0.5rem+3px)] before:top-3.5 before:size-1.5 before:rounded-full before:bg-border",
+                      role === "wins" &&
+                        "bg-secondary font-medium before:bg-foreground",
                       role !== "wins" && "text-muted-foreground",
                     )}
                   >
                     <span className="flex min-w-0 items-baseline gap-1.5">
-                      <span className="min-w-0 truncate font-medium text-foreground">
+                      <span className="min-w-0 font-medium break-words text-foreground">
                         {self || !row.entity ? (
                           (row.name ?? "This record")
                         ) : (
@@ -216,36 +217,32 @@ function ResolutionLadder({
                         )}
                       </span>
                       {self ? (
-                        <span className="shrink-0 text-[10px] tracking-wide uppercase">
-                          this
-                        </span>
+                        <span className="shrink-0 text-[11px]">this</span>
                       ) : null}
                     </span>
-                    <span className="flex items-baseline gap-2 justify-self-end">
-                      <span
-                        className={cn(
-                          "max-w-32 truncate",
-                          role === "shadowed" && "line-through",
-                        )}
-                      >
-                        {row.assigned ? (
-                          <ResolutionValue
-                            entity={entity}
-                            field={field}
-                            value={row.value}
-                          />
-                        ) : (
-                          <NoneValue />
-                        )}
-                      </span>
-                      <span
-                        className={cn(
-                          "w-14 text-end text-[10px] tracking-wide uppercase",
-                          role === "wins" && "font-semibold text-primary",
-                        )}
-                      >
-                        {roleLabel[role]}
-                      </span>
+                    <span
+                      className={cn(
+                        "min-w-0 break-words",
+                        role === "shadowed" && "line-through",
+                      )}
+                    >
+                      {row.assigned ? (
+                        <ResolutionValue
+                          entity={entity}
+                          field={field}
+                          value={row.value}
+                        />
+                      ) : (
+                        <NoneValue />
+                      )}
+                    </span>
+                    <span
+                      className={cn(
+                        "text-end text-[11px]",
+                        role === "wins" && "font-semibold text-foreground",
+                      )}
+                    >
+                      {roleLabel[role]}
                     </span>
                   </li>
                 );
@@ -337,7 +334,7 @@ function resolutionStats(
 }
 
 export const sectionLabelClassName =
-  "text-[11px] font-medium tracking-wide text-muted-foreground uppercase";
+  "text-xs font-medium text-muted-foreground";
 
 /** The structured, per-field-resolution replacement for the generic
  * "Current value" block: what wins, the facts behind it, and the inheritance
@@ -349,21 +346,25 @@ export function ResolutionExplanation({
   field,
   resolution,
   evidence,
+  showHeadline = true,
 }: {
   entity: Entity;
   id?: string;
   field: string;
   resolution: FieldResolution;
   evidence?: FieldExplanationOutput["resolutionEvidence"];
+  showHeadline?: boolean;
 }) {
   const stats = resolutionStats(entity, field, resolution, evidence);
   return (
-    <div className="grid grid-cols-[minmax(0,1fr)] gap-3">
-      <ResolutionHeadline
-        entity={entity}
-        field={field}
-        resolution={resolution}
-      />
+    <div className="grid grid-cols-[minmax(0,1fr)] gap-2">
+      {showHeadline ? (
+        <ResolutionHeadline
+          entity={entity}
+          field={field}
+          resolution={resolution}
+        />
+      ) : null}
       {stats.length > 0 ? (
         <dl className="grid grid-cols-[auto_minmax(0,1fr)] gap-x-3 gap-y-1 text-xs">
           {stats.map((stat) => (
@@ -377,7 +378,7 @@ export function ResolutionExplanation({
       {/* A ladder of just the subject repeats the headline. */}
       {evidence &&
       evidence.hierarchy.some((source) => source.entity?.entityId !== id) ? (
-        <section className="grid gap-1.5">
+        <section className="grid gap-2 border-t border-border pt-3">
           <h3 className={sectionLabelClassName}>Resolution order</h3>
           <ResolutionLadder
             entity={entity}

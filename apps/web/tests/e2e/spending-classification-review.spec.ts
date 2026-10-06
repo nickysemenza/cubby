@@ -8,7 +8,7 @@ import { expect, test } from "./e2e-test";
 test("reviews historical item classification and preserves explicit purpose", async ({
   page,
   baseURL,
-}) => {
+}, testInfo) => {
   const headers = { Origin: baseURL! };
   const create = async (
     path: string,
@@ -135,8 +135,10 @@ test("reviews historical item classification and preserves explicit purpose", as
       spendingCategoryId: { mode: "explicit", storedValue: gifts },
     },
   });
+  const toolsName =
+    "Synthetic classification tools and household workshop supplies";
   const tools = await create("spending-categories", {
-    name: "Synthetic classification tools",
+    name: toolsName,
   });
   const toolsCategory = await create("product-categories", {
     name: "Synthetic classification tools parent",
@@ -291,31 +293,69 @@ test("reviews historical item classification and preserves explicit purpose", as
     `/purchases/${purchase}#expenses`,
     page.locator("#expenses"),
   );
+  const principalLink = page.locator(`a[href="/expenses/${expense}"]`);
   const tableExplanation = page
     .locator("#expenses")
+    .getByRole("row")
+    .filter({ has: principalLink })
     .getByRole("button", {
       name: "How spending category is determined",
       exact: true,
     })
     .first();
   await expect(tableExplanation).toBeVisible();
-  await tableExplanation.click();
+  await expect(async () => {
+    if (!(await page.locator('[data-slot="popover-content"]').isVisible()))
+      await tableExplanation.click();
+    await expect(
+      page.getByText("Resolution order", { exact: true }),
+    ).toBeVisible();
+  }).toPass();
+  const winningValue = page
+    .locator('[data-slot="popover-content"] [data-role="wins"]')
+    .getByRole("link", { name: toolsName, exact: true });
+  await expect(winningValue).toBeVisible();
   await expect(
-    page.getByText("Resolution order", { exact: true }),
-  ).toBeVisible();
+    page
+      .locator('[data-slot="popover-content"] section')
+      .first()
+      .getByText(tools, { exact: true }),
+  ).toHaveCount(0);
+  const winningLabel = winningValue.locator("span").last();
+  expect(
+    await winningLabel.evaluate((label) => label.scrollWidth),
+  ).toBeLessThanOrEqual(
+    await winningLabel.evaluate((label) => label.clientWidth),
+  );
+  await page.screenshot({
+    path: testInfo.outputPath("inherited-category-desktop.png"),
+  });
   await page.keyboard.press("Escape");
   await page.setViewportSize({ width: 402, height: 874 });
   const phoneExplanation = page
     .locator("#expenses")
+    .getByRole("listitem")
+    .filter({ has: principalLink })
     .getByRole("button", {
       name: "How spending category is determined",
       exact: true,
     })
     .first();
-  await phoneExplanation.click();
-  await expect(
-    page.getByText("Resolution order", { exact: true }),
-  ).toBeVisible();
+  await expect(async () => {
+    if (!(await page.locator('[data-slot="popover-content"]').isVisible()))
+      await phoneExplanation.click();
+    await expect(
+      page.getByText("Resolution order", { exact: true }),
+    ).toBeVisible();
+  }).toPass();
+  expect(
+    await winningLabel.evaluate((label) => label.scrollWidth),
+  ).toBeLessThanOrEqual(
+    await winningLabel.evaluate((label) => label.clientWidth),
+  );
+  await page.screenshot({
+    path: testInfo.outputPath("inherited-category-phone.png"),
+  });
   await page.keyboard.press("Escape");
   const blocked = await preview({
     action: "productCategory",
@@ -325,9 +365,12 @@ test("reviews historical item classification and preserves explicit purpose", as
   });
   expect((await apply(blocked)).ok()).toBeTruthy();
   await page.reload();
-  await phoneExplanation.click();
-  await expect(
-    page.getByText("Resolution order", { exact: true }),
-  ).toBeVisible();
+  await expect(async () => {
+    if (!(await page.locator('[data-slot="popover-content"]').isVisible()))
+      await phoneExplanation.click();
+    await expect(
+      page.getByText("Resolution order", { exact: true }),
+    ).toBeVisible();
+  }).toPass();
   await expect(page.getByText("Blocked", { exact: true })).toBeVisible();
 });

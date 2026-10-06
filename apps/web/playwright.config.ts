@@ -115,7 +115,7 @@ export default defineConfig({
     {
       name: "Mobile Safari",
       testMatch:
-        /(^|\/)(ai-usage|chatgpt-settings|field-guide-mobile|project-contribution|product-clarity|spending-classification-review|record-emoji-categories)\.spec\.ts$/,
+        /(^|\/)(ai-usage|chatgpt-settings|field-guide-mobile|project-contribution|product-clarity|quality-explanations|spending-classification-review|record-emoji-categories)\.spec\.ts$/,
       metadata: { authenticated: true },
       use: {
         ...devices["iPhone 17"],

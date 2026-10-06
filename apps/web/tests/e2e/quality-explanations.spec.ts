@@ -18,6 +18,10 @@ import { createEntityFixture } from "./fixtures-core";
 import { expect, test } from "./e2e-test";
 import { dispatchesOperation } from "./dispatch-wire";
 
+test.beforeEach(async ({ page }) => {
+  await page.setViewportSize({ width: 1280, height: 900 });
+});
+
 test("quality leads entity tables, explains its calculation, and restores temporary ordering", async ({
   page,
 }, testInfo) => {
@@ -73,7 +77,21 @@ test("quality leads entity tables, explains its calculation, and restores tempor
     "Only this record's applicable weighted checks",
   );
   await expect(popover).toContainText("product.data-quality");
+  const calculation = popover.getByRole("heading", {
+    name: "Score calculation",
+  });
+  const technical = popover.getByRole("heading", { name: "Technical details" });
+  expect((await calculation.boundingBox())!.y).toBeLessThan(
+    (await technical.boundingBox())!.y,
+  );
   await expect(popover.locator("pre")).toHaveCount(0);
+  const footer = popover.locator("footer");
+  await expect(footer).toBeVisible();
+  expect(
+    (await footer.boundingBox())!.y + (await footer.boundingBox())!.height,
+  ).toBeLessThanOrEqual(
+    (await popover.boundingBox())!.y + (await popover.boundingBox())!.height,
+  );
   await expectViewportBounded(page);
   await page.screenshot({ path: testInfo.outputPath("quality-desktop.png") });
   await page.keyboard.press("Escape");
@@ -333,6 +351,7 @@ test("a person accepts a data gap as an exception from the explanation and clear
   page,
 }) => {
   test.setTimeout(60_000);
+  await page.setViewportSize({ width: 402, height: 874 });
   const name = `Synthetic exception ${Date.now()}`;
   const product = await seedProductPrerequisite(page, {
     name,
@@ -348,15 +367,18 @@ test("a person accepts a data gap as an exception from the explanation and clear
     page,
     `/products?name=${encodeURIComponent(name)}&view=table`,
   );
-  const row = page.getByRole("row").filter({ hasText: name }).first();
-  await row
-    .getByRole("button", { name: /How (data )?quality is determined/ })
-    .click();
+  const row = page.getByRole("listitem").filter({ hasText: name }).first();
+  const trigger = row.getByRole("button", {
+    name: /How (data )?quality is determined/,
+  });
   const popover = page.locator('[data-slot="popover-content"]');
   const check = popover
     .getByRole("listitem")
     .filter({ hasText: "product_manufacturer" });
-  await expect(check).toContainText("Missing data");
+  await expect(async () => {
+    if (!(await popover.isVisible())) await trigger.click();
+    await expect(check).toContainText("Missing data");
+  }).toPass();
   await check.getByRole("button", { name: "Accept as…" }).click();
   await check.getByLabel("Reason").selectOption({ label: "Not applicable" });
   await check.getByLabel("Note").fill("Synthetic unbranded product.");
@@ -423,14 +445,34 @@ test("explanations load lazily, recover from errors, and expand bounded evidence
     const data = fieldExplanationOutput.parse({
       ...envelope.data,
       truncated: true,
-      sources: Array.from({ length: 25 }, (_, index) => ({
-        label: `Synthetic evidence ${index + 1}`,
-        entity: null,
-        value: {
+      sources: Array.from({ length: 25 }, (_, index) => {
+        const value = {
           amount: -159.84,
           note: "Synthetic supporting evidence with a long readable description for viewport and scrolling verification.",
-        },
-      })),
+        };
+        return {
+          label: `Synthetic evidence ${index + 1}`,
+          entity: null,
+          value:
+            index === 0
+              ? {
+                  ...value,
+                  rawImportPreview: {
+                    section: {
+                      entries: {
+                        record: {
+                          source: {
+                            description:
+                              "Synthetic deeply nested evidence remains readable within the explanation panel.",
+                          },
+                        },
+                      },
+                    },
+                  },
+                }
+              : value,
+        };
+      }),
     });
     await route.fulfill({
       contentType: "application/json",
@@ -453,6 +495,9 @@ test("explanations load lazily, recover from errors, and expand bounded evidence
   await expect(popover).toContainText("-$159.84");
   await page.setViewportSize({ width: 402, height: 874 });
   await expectViewportBounded(page);
+  expect(
+    await popover.evaluate((panel) => panel.scrollWidth),
+  ).toBeLessThanOrEqual(await popover.evaluate((panel) => panel.clientWidth));
   await expect
     .poll(async () => {
       const bounds = await popover.boundingBox();

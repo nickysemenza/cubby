@@ -246,6 +246,8 @@ export type ChipRefLinkProps = {
   entity: BrowserRoutedEntity;
   id: string;
   name: string | null;
+  /** Full labels in bounded explanation panels; dense cells keep truncation. */
+  wrap?: boolean;
   /**
    * `undefined` falls back to the nearest `EntityDisplayImagesProvider`'s
    * cover; an explicit `null` renders the entity icon.
@@ -265,6 +267,7 @@ export function ChipRefLink({
   name,
   displayImage,
   emoji,
+  wrap = false,
 }: Leaf<ChipRefLinkProps>) {
   const label = name ?? id;
   const providedImage = useEntityDisplayImage({
@@ -288,7 +291,14 @@ export function ChipRefLink({
         }
         className={tableLinkVariants({ className: "max-w-full min-w-0" })}
       >
-        <span className="min-w-0 truncate">{label}</span>
+        <span
+          className={cn(
+            "min-w-0",
+            wrap ? "break-words whitespace-normal" : "truncate",
+          )}
+        >
+          {label}
+        </span>
       </PreviewRefLink>
     );
   return (
@@ -311,7 +321,14 @@ export function ChipRefLink({
           />
         }
       />
-      <span className="min-w-0 truncate">{label}</span>
+      <span
+        className={cn(
+          "min-w-0",
+          wrap ? "break-words whitespace-normal" : "truncate",
+        )}
+      >
+        {label}
+      </span>
     </TableRefLink>
   );
 }

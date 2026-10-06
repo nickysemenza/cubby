@@ -212,7 +212,8 @@ function resolutionPhrase(resolution: FieldResolution): string {
 }
 
 /** Caption actions read as inline text links, not 24px buttons. */
-export const resolutionActionClassName = "h-auto p-0 text-xs";
+export const resolutionActionClassName =
+  "h-auto min-w-0 p-0 text-xs underline decoration-border underline-offset-4 hover:decoration-current";
 
 /** Compact provenance for values whose stored assignment differs from the
  * effective value shown in forms and tables. */
@@ -430,7 +431,7 @@ export function FieldResolutionStatus({
     <span
       data-slot="field-resolution"
       className={cn(
-        "flex min-w-0 flex-wrap items-center gap-x-1 gap-y-0.5 text-xs text-muted-foreground [&>[data-slot=button]]:ms-1",
+        "flex min-w-0 flex-wrap items-center gap-x-1.5 gap-y-1 text-xs text-muted-foreground [&>[data-slot=button]]:ms-1",
         redundant && "text-warning-ink",
       )}
       title={`Effective value from ${resolution.source}`}
