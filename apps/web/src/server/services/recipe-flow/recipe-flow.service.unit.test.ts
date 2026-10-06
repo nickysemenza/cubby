@@ -16,6 +16,7 @@ import {
 } from "@cubby/schemas/testing";
 import { beforeEach, describe, expect, it } from "vitest";
 
+import { RECIPE_FLOW_PRIMARY_FEATURE } from "~/server/ai/features";
 import { Database } from "~/server/db";
 
 import {
@@ -266,7 +267,7 @@ describe("recipe-flow service", () => {
         RUN_ID,
         memory.ports,
       ),
-    ).resolves.toMatchObject({ model: "gpt-6-luna" });
+    ).resolves.toMatchObject({ model: RECIPE_FLOW_PRIMARY_FEATURE.model });
     expect(memory.analyses).toHaveLength(1);
   });
 
@@ -288,7 +289,7 @@ describe("recipe-flow service", () => {
         RUN_ID,
         memory.ports,
       ),
-    ).resolves.toMatchObject({ model: "gpt-6-luna" });
+    ).resolves.toMatchObject({ model: RECIPE_FLOW_PRIMARY_FEATURE.model });
     expect(memory.analyses).toHaveLength(1);
   });
 
