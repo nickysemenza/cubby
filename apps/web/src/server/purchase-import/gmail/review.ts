@@ -24,6 +24,7 @@ import {
   vendor,
   vendorAccount,
 } from "~/server/db/schema";
+import { isUniqueViolation } from "~/server/errors/db-errors";
 import {
   getDb,
   notDeleted,
@@ -356,14 +357,40 @@ export async function listPurchaseOrderMail(
   };
 }
 
+type OrderMailDecisionInput = {
+  eventId: string;
+  purchaseId: string;
+  decision: "linked" | "dismissed";
+  evidenceChecksum: string;
+};
+
+/**
+ * A member's link or dismissal. An automatic exact-order link
+ * (`linkExactOrderMail`) can commit between this transaction's read and its
+ * insert and win the one-link-per-event index; the member's choice must still
+ * win, so that one conflict retries once, now seeing (and demoting) the
+ * committed automatic link.
+ */
 export async function decideOrderMailCandidate(
   db: Database,
-  input: {
-    eventId: string;
-    purchaseId: string;
-    decision: "linked" | "dismissed";
-    evidenceChecksum: string;
-  },
+  input: OrderMailDecisionInput,
+  actor: ActorContext,
+) {
+  try {
+    return await decideOrderMailCandidateOnce(db, input, actor);
+  } catch (error) {
+    if (
+      input.decision !== "linked" ||
+      !isUniqueViolation(error, "OrderMailCandidateDecision_one_link_key")
+    )
+      throw error;
+    return decideOrderMailCandidateOnce(db, input, actor);
+  }
+}
+
+async function decideOrderMailCandidateOnce(
+  db: Database,
+  input: OrderMailDecisionInput,
   actor: ActorContext,
 ) {
   const purchaseId = await resolveOrThrow(db, "purchase", input.purchaseId);

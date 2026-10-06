@@ -11,11 +11,12 @@ import { describe, expect, it } from "vitest";
 
 import {
   orderMail,
+  orderMailCandidateDecision,
   orderMailEvent,
   purchase as purchaseTable,
   vendorAccount,
 } from "~/server/db/schema";
-import { getDb } from "~/server/repo/database-helpers";
+import { getDb, withTransaction } from "~/server/repo/database-helpers";
 import { mergePurchases } from "~/server/repo/purchase";
 import { insertWithShortcode } from "~/server/repo/shortcode-utils";
 
@@ -132,6 +133,84 @@ describe("Vendor order mail review", () => {
       .where(eq(purchaseTable.id, purchase.id));
     expect(account?.browserSyncEnabled).toBe(false);
     expect(linkedPurchase?.vendorAccountId).toBeNull();
+  });
+
+  it("lets a member's link win over an automatic link committed mid-decision", async () => {
+    const party = await insertWithShortcode(ctx.db, "ledgerParty", {
+      name: "Synthetic race reviewer",
+      kind: "member",
+      userId: ctx.actor.userId,
+    });
+    const vendor = await insertWithShortcode(ctx.db, "vendor", {
+      name: "Example Race Shop",
+    });
+    const [automatic, chosen] = await Promise.all(
+      ["RACE-1", "RACE-2"].map((orderId) =>
+        insertWithShortcode(ctx.db, "purchase", {
+          vendorId: vendor.id,
+          orderId,
+          date: "2026-09-10",
+        }),
+      ),
+    );
+    const [mail] = await getDb(ctx.db)
+      .insert(orderMail)
+      .values({
+        ledgerPartyId: party.id,
+        vendorId: vendor.id,
+        messageId: "race-mail-1",
+        sender: "orders@race.example.test",
+        subject: "Order update",
+        receivedAt: new Date("2026-09-10T15:00:00.000Z"),
+        rawChecksum: "race-checksum-1",
+      })
+      .returning({ id: orderMail.id });
+    const [event] = await getDb(ctx.db)
+      .insert(orderMailEvent)
+      .values({
+        orderMailId: mail!.id,
+        event: "placed",
+        orderId: "RACE-1",
+        currency: "USD",
+        sourceKey: "classified:race-checksum-1:0",
+      })
+      .returning({ id: orderMailEvent.id });
+
+    // An automatic link sits uncommitted while the member links elsewhere.
+    let commitAutomatic = () => {};
+    const held = new Promise<void>((resolve) => {
+      commitAutomatic = resolve;
+    });
+    const automaticLink = withTransaction(ctx.db, async (tx) => {
+      await tx.insert(orderMailCandidateDecision).values({
+        eventId: event!.id,
+        purchaseId: automatic!.id,
+        decision: "linked",
+        evidenceChecksum: "race-checksum-1",
+        decidedByUserId: "cubby-system",
+      });
+      await held;
+    });
+    const memberLink = decideOrderMailCandidate(
+      ctx.db,
+      {
+        eventId: event!.id,
+        purchaseId: chosen!.shortcode,
+        decision: "linked",
+        evidenceChecksum: "race-checksum-1",
+      },
+      ctx.actor,
+    );
+    await new Promise((resolve) => setTimeout(resolve, 300));
+    commitAutomatic();
+    await automaticLink;
+    await expect(memberLink).resolves.toMatchObject({ decision: "linked" });
+
+    const links = await getDb(ctx.db)
+      .select({ purchaseId: orderMailCandidateDecision.purchaseId })
+      .from(orderMailCandidateDecision)
+      .where(eq(orderMailCandidateDecision.decision, "linked"));
+    expect(links).toEqual([{ purchaseId: chosen!.id }]);
   });
 
   it("retains an older exact order candidate beyond the newest 500 Purchases", async () => {
