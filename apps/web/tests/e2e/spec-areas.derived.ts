@@ -143,6 +143,11 @@ export const DERIVED_SPEC_GLOBS: SpecGlobMap = {
   "entity-editor-lifecycle.spec.ts": [
     "apps/web/src/routes/_authenticated/vendors.$shortcode.tsx",
   ],
+  "enum-colors-and-counts.spec.ts": [
+    "apps/web/src/routes/_authenticated/spending-categories.$shortcode.tsx",
+    "apps/web/src/routes/_authenticated/spending-categories.index.tsx",
+    "apps/web/src/routes/api/v1/$resource/$operation.ts",
+  ],
   "field-guide-mobile.spec.ts": [
     "apps/web/src/routes/_authenticated/products.$shortcode.tsx",
     "apps/web/src/routes/_authenticated/products.index.tsx",

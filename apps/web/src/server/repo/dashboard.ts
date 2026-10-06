@@ -1,9 +1,8 @@
 import {
-  type CountableEntity,
-  countableEntities,
-} from "@cubby/schemas/entity-manifest";
+  dashboardLocalCounts,
+  type DashboardLocalCounts,
+} from "@cubby/schemas/dashboard";
 import { type SQL, and, ne, sql } from "drizzle-orm";
-import { z } from "zod";
 
 import type { Database } from "~/server/db";
 import { run as runTable, plant } from "~/server/db/schema";
@@ -31,6 +30,7 @@ import { buildProjectWhere } from "~/server/repo/project/lookup";
 import { buildPurchaseWhereClause } from "~/server/repo/purchase";
 import { buildRecipeWhere } from "~/server/repo/recipe/crud";
 import { SHORTCODE_TABLE } from "~/server/repo/shortcode-utils";
+import { buildSpendingCategoryWhere } from "~/server/repo/spending-category";
 import { buildTaskWhere } from "~/server/repo/task/lookup";
 import { buildVendorWhereClause } from "~/server/repo/vendor";
 import { buildVendorAccountWhere } from "~/server/repo/vendor-account";
@@ -59,14 +59,7 @@ import { buildWishWhere } from "~/server/repo/wish";
  */
 type CountWhere = (db: Database) => SQL | undefined | Promise<SQL | undefined>;
 
-const extraCountEntities = [
-  "ledgerParty",
-  "ledgerTransfer",
-  "vendorAccount",
-  "productCategory",
-  "device",
-] as const;
-type LocalCountEntity = CountableEntity | (typeof extraCountEntities)[number];
+type LocalCountEntity = keyof DashboardLocalCounts;
 
 const COUNT_WHERE = {
   product: (db) => buildProductWhere(db, {}),
@@ -94,20 +87,18 @@ const COUNT_WHERE = {
   vendorAccount: () => buildVendorAccountWhere({}),
   productCategory: () => buildProductCategoryWhere({}),
   device: () => buildDeviceWhere({}),
+  spendingCategory: () => buildSpendingCategoryWhere({}),
 } satisfies Record<LocalCountEntity, CountWhere>;
 
 type EntityCounts = Record<LocalCountEntity, number>;
 
-const localCountEntities = [
-  ...countableEntities,
-  ...extraCountEntities,
-] as const;
-const entityCountsSchema = z.record(z.enum(localCountEntities), z.number());
+const localCountEntities = dashboardLocalCounts.keyof().options;
+const entityCountsSchema = dashboardLocalCounts;
 
 /**
  * Live row count for every local browser list, as one round-trip of cheap scalar
  * `COUNT(*)` subqueries — NO list fetch and NO USDA enrichment. Driven by the
- * manifest's homepage `countableEntities` plus five other local roster types;
+ * shared dashboard local-count schema;
  * one query (not N) because N parallel counts overran the per-request pool
  * (max 5). The homepage still reads only `countableEntities` from this result.
  * Filtered counts stay on the `*.list` procedures.

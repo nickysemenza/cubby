@@ -71,9 +71,8 @@ struct EntityHeroView<Actions: View>: View {
                 {
                     StatusChip(
                         text: text,
-                        tone: Self.tone(
-                            for: FieldResolutionPresentation.readValue(
-                                in: row.raw, field: field, surface: "detail")?.stringValue))
+                        color: FieldGuideMetrics.optionColor(
+                            EntityFieldValue.optionColor(in: row.raw, field: field, surface: "detail")))
                 }
             }
             if let subtitle = row.subtitle, !subtitle.isEmpty {
@@ -129,15 +128,6 @@ struct EntityHeroView<Actions: View>: View {
             imageID: descriptor.key == .image ? nil : row.raw["coverImageId"]?.stringValue)
     }
 
-    /// A status word's tone: the few lifecycle spellings the enums share; everything else neutral.
-    static func tone(for raw: String?) -> StatusChip.Tone {
-        switch raw {
-        case "growing", "in_progress", "done", "active", "purchased": .positive
-        case "planned", "planning", "not_started", "pending": .neutral
-        case "finished", "archived", "cancelled", "blocked": .warning
-        default: .neutral
-        }
-    }
 }
 
 #Preview("Entity hero") {
@@ -262,10 +252,17 @@ struct FieldsSectionView<Inline: View>: View {
             ?? (FieldResolutionPresentation(raw: row.raw, field: field) == nil ? nil : "None")
         {
             LabeledContent {
-                Text(value)
-                    .font(field.kind == .identifier ? .fieldGuideCode : .fieldGuideBody)
-                    .textSelection(.enabled)
-                    .multilineTextAlignment(.trailing)
+                if let color = FieldGuideMetrics.optionColor(
+                    EntityFieldValue.optionColor(in: row.raw, field: field, surface: "detail"))
+                {
+                    StatusChip(text: value, color: color)
+                        .textSelection(.enabled)
+                } else {
+                    Text(value)
+                        .font(field.kind == .identifier ? .fieldGuideCode : .fieldGuideBody)
+                        .textSelection(.enabled)
+                        .multilineTextAlignment(.trailing)
+                }
             } label: {
                 FieldExplanationLabel(
                     field: field,
@@ -1018,7 +1015,10 @@ struct EntityJournalEntryRow: View {
                     if let field = descriptor.field("kind"),
                         let kind = EntityFieldValue.text(row.raw["kind"], field: field)
                     {
-                        StatusChip(text: kind)
+                        StatusChip(
+                            text: kind,
+                            color: FieldGuideMetrics.optionColor(
+                                EntityFieldValue.optionColor(in: row.raw, field: field, surface: "detail")))
                     }
                 }
             }

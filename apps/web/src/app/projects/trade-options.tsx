@@ -20,7 +20,6 @@ import { TruckIcon } from "@phosphor-icons/react/dist/csr/Truck";
 import { WrenchIcon } from "@phosphor-icons/react/dist/csr/Wrench";
 import type { Icon } from "@phosphor-icons/react/lib";
 
-import { Badge } from "~/ui/primitives/badge";
 import type { FilterableComboboxItem } from "~/ui/primitives/combobox";
 
 import { TRADE_LABELS } from "./project-formatting";
@@ -64,17 +63,6 @@ const TRADE_ICONS = {
   auto: CarIcon,
   other: ShapesIcon,
 } satisfies Record<Trade, Icon>;
-
-/** Outline badge with the trade's leading glyph + label — the canonical trade chip. */
-export function TradeBadge({ trade }: { trade: Trade }) {
-  const Icon = TRADE_ICONS[trade];
-  return (
-    <Badge variant="outline">
-      <Icon />
-      {TRADE_LABELS[trade]}
-    </Badge>
-  );
-}
 
 /**
  * Bare trade glyph — the same icon as `TradeBadge` without the pill, for tight

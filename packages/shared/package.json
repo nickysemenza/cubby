@@ -10,6 +10,7 @@
     "./base64": "./src/base64.ts",
     "./client-constants": "./src/client-constants.ts",
     "./collection-tag": "./src/collection-tag.ts",
+    "./enum-palette": "./src/enum-palette.ts",
     "./constants": "./src/constants.ts",
     "./external-fetch": "./src/external-fetch.ts",
     "./golden-vectors/*": "./golden-vectors/*",

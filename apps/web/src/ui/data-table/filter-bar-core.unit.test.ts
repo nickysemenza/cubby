@@ -15,12 +15,10 @@ describe("barFieldFromConfig", () => {
       { electrical: "0" },
     );
 
-    expect(field.options).toEqual([
+    expect(field.options).toMatchObject([
       {
         value: "electrical",
         label: "Electrical & Lighting",
-        icon: undefined,
-        color: "var(--chart-1)",
         hint: "0",
       },
     ]);

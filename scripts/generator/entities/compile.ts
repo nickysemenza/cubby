@@ -1,3 +1,5 @@
+import { humanize } from "../../../packages/shared/src/text-case.ts";
+import { colorizeEnumOptions } from "../../../packages/shared/src/enum-palette.ts";
 import {
   FILTER_KINDS,
   parseEntityDeclarationMetadata,
@@ -412,6 +414,28 @@ const compileSort = (
   };
 };
 
+/** Read-only enums still need the same labeled palette as editable enum controls. */
+const inferredEnumOptions = (
+  field: EntityFieldModelMetadata["fields"][number],
+) => {
+  let schema: unknown =
+    field.validation.read ?? field.validation.create ?? field.validation.update;
+  while (
+    schema instanceof z.ZodOptional ||
+    schema instanceof z.ZodNullable ||
+    schema instanceof z.ZodDefault
+  )
+    schema = schema.unwrap();
+  return schema instanceof z.ZodEnum
+    ? colorizeEnumOptions(
+        schema.options.map((value) => {
+          const raw = z.string().parse(value);
+          return { value: raw, label: humanize(raw) };
+        }),
+      )
+    : null;
+};
+
 // oxlint-disable-next-line eslint/complexity -- Field compilation enforces cross-property model invariants in one pass.
 const compileFieldModel = (
   value: EntityFieldModelMetadata | undefined,
@@ -505,7 +529,15 @@ const compileFieldModel = (
             }
           : null),
       resolution: field.resolution,
-      control: field.control,
+      control:
+        field.control === null
+          ? null
+          : {
+              ...field.control,
+              options: field.control.options
+                ? colorizeEnumOptions(field.control.options)
+                : field.control.options,
+            },
       display: {
         columnId: field.display.columnId,
         standard: field.display.standard,
@@ -526,7 +558,11 @@ const compileFieldModel = (
         detail: field.display.detail,
         listHidden: field.display.listHidden ?? false,
         referencePreviewLimit: field.display.referencePreviewLimit ?? null,
-        valueOptions: field.display.valueOptions ?? null,
+        valueOptions: field.display.valueOptions
+          ? colorizeEnumOptions(field.display.valueOptions)
+          : field.kind === "enum" && field.control?.options == null
+            ? inferredEnumOptions(field)
+            : null,
         preview: field.display.preview ?? false,
       },
       validation: field.validation,

@@ -94,6 +94,13 @@ export interface SpecAreaEntry {
 
 /** Hand-written globs per spec; see the header for what belongs here. */
 export const SPEC_EXTRA_GLOBS: SpecGlobMap = {
+  "enum-colors-and-counts.spec.ts": [
+    `${WEB}/src/server/repo/dashboard.ts`,
+    `${WEB}/src/server/repo/spending-category.ts`,
+    "packages/shared/src/enum-palette.ts",
+    "packages/schemas/src/dashboard.ts",
+    "packages/schemas/src/entity-definitions/**",
+  ],
   "ai-usage.spec.ts": [
     `${WEB}/src/server/repo/ai-usage.ts`,
     `${WEB}/src/server/ai/usage.ts`,

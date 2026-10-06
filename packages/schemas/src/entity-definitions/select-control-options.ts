@@ -41,10 +41,9 @@ const labeled = <Value extends string>(
   );
 
 /**
- * Select labels shared by generated web and Apple controls, plus the web
- * swatch each value tints its pill with (a CSS custom property; the Apple
- * catalog renders value/label only). Rich browser icons can decorate these
- * values without defining another wording source.
+ * Labels and optional color overrides shared by web and Apple. The compiler
+ * completes uncolored choices through the shared enum palette; browser icons
+ * decorate these values without defining another wording or color source.
  */
 export const selectControlOptions = {
   locationType: labeled(locationTypeValues, {
@@ -63,22 +62,18 @@ export const selectControlOptions = {
     furniture: "furniture",
   }),
   mealType: labeled(mealTypeValues, MEAL_TYPE_LABELS),
-  // `cooked` is the overwhelming default, so tone is spent on the exceptions:
-  // eat-out kinds share the accent (money left the house).
   mealKind: labeled(mealKindValues, MEAL_KIND_LABELS, {
-    cooked: "var(--slate)",
-    leftovers: "var(--slate)",
-    eating_out: "var(--primary)",
-    takeout: "var(--primary)",
+    cooked: "var(--brand-domain-cook)",
+    leftovers: "var(--brand-domain-pantry)",
+    eating_out: "var(--brand-domain-finance)",
+    takeout: "var(--brand-domain-plan)",
     other: "var(--slate)",
   }),
   ledgerPartyKind: labeled(ledgerPartyKindValues, LEDGER_PARTY_KIND_LABELS, {
-    member: "var(--slate)",
-    guest: "var(--slate)",
-    household: "var(--primary)",
+    member: "var(--brand-domain-house)",
+    guest: "var(--brand-domain-plan)",
+    household: "var(--brand-domain-pantry)",
   }),
-  // Same ink the status charts use, so the cell dot, the picklist swatch and
-  // the dashboard series agree.
   projectStatus: labeled(projectStatusValues, PROJECT_STATUS_LABELS, {
     planning: "var(--chart-5)",
     not_started: "var(--chart-neutral)",
@@ -95,7 +90,7 @@ export const selectControlOptions = {
   }),
   taskStatus: labeled(taskStatusValues, TASK_STATUS_LABELS, {
     not_started: "var(--chart-neutral)",
-    later: "var(--chart-2)",
+    later: "var(--warning)",
     in_progress: "var(--chart-1)",
     blocked: "var(--chart-negative)",
     done: "var(--chart-positive)",
@@ -115,7 +110,6 @@ export const selectControlOptions = {
     item_line: "var(--slate)",
     allocation: "var(--plum)",
   }),
-  // The chip twin of the cost-type chart fills.
   costType: labeled(costTypeValues, COST_TYPE_LABELS, {
     materials: "var(--chart-1)",
     tools: "var(--chart-5)",

@@ -506,7 +506,7 @@ function SidebarFullLeaf({ item, active }: { item: NavItem; active: boolean }) {
     <Link
       {...navItemLinkProps(item, active)}
       className={cn(
-        "mb-1 flex h-9 min-w-0 items-center gap-2 rounded-lg border border-transparent px-2.5 text-xs transition-colors hover:bg-muted hover:text-foreground",
+        "group mb-1 flex h-9 min-w-0 items-center gap-2 rounded-lg border border-transparent px-2.5 text-xs transition-colors hover:bg-muted hover:text-foreground",
         !active && "text-muted-foreground",
         active &&
           "bg-primary font-medium text-primary-foreground hover:bg-primary hover:text-primary-foreground",

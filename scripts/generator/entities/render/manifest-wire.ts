@@ -93,7 +93,7 @@ export const renderManifestWire = (): string => {
   );
 };
 
-/** Swift's unknown option color is declared as wire-only metadata, never emitted as storage. */
+/** Validate the same descriptor storage that Swift decodes. */
 const wireSchema = (type: string): z.ZodType =>
   z.lazy(() => {
     if (type.endsWith("?")) return wireSchema(type.slice(0, -1)).nullish();

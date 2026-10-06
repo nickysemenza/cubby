@@ -1,33 +1,14 @@
-import type { DashboardCountsOut } from "@cubby/schemas/dashboard";
 import {
-  type BrowserRoutedEntity,
-  type CountableEntity,
-  countableEntities,
-} from "@cubby/schemas/entity-manifest";
+  dashboardLocalCounts,
+  type DashboardCountsOut,
+} from "@cubby/schemas/dashboard";
+import type { BrowserRoutedEntity } from "@cubby/schemas/entity-manifest";
 import { useQuery } from "@tanstack/react-query";
 
 import { dashboard } from "~/integrations/tanstack-query/generated/catalog.gen";
 import { formatCount } from "~/lib/utils";
 
-const additionalCountEntities = [
-  "ledgerParty",
-  "ledgerTransfer",
-  "vendorAccount",
-  "productCategory",
-  "device",
-] as const;
-type LocalCountEntity =
-  | CountableEntity
-  | (typeof additionalCountEntities)[number];
-
-function isLocalCountEntity(
-  entity: BrowserRoutedEntity,
-): entity is LocalCountEntity {
-  return (
-    countableEntities.some((candidate) => candidate === entity) ||
-    additionalCountEntities.some((candidate) => candidate === entity)
-  );
-}
+const localCountKeys = dashboardLocalCounts.keyof();
 
 export function navigationCount(
   counts: Partial<DashboardCountsOut> | undefined,
@@ -37,7 +18,8 @@ export function navigationCount(
   if (entity === "usdaFood") {
     return counts.usdaFoodsAvailable ? counts.usdaFoods : undefined;
   }
-  return isLocalCountEntity(entity) ? counts[entity] : undefined;
+  const key = localCountKeys.safeParse(entity);
+  return key.success ? counts[key.data] : undefined;
 }
 
 /** Counts label roster destinations only; an absent response field stays absent. */
@@ -53,7 +35,7 @@ export function NavigationCountBadge({
   const count = navigationCount(query.data, entity);
   if (count === undefined) return null;
   return (
-    <span className="ml-auto shrink-0 rounded-sm border border-border bg-muted/40 px-1.5 py-0.5 font-mono text-2xs text-muted-foreground tabular-nums">
+    <span className="ml-auto shrink-0 rounded-sm border border-border bg-muted/40 px-1.5 py-0.5 font-mono text-2xs text-muted-foreground tabular-nums group-aria-[current=page]:bg-background/15 group-aria-[current=page]:text-primary-foreground">
       <span aria-hidden="true">{formatCount(count)}</span>
       <span className="sr-only">{formatCount(count)} records</span>
     </span>

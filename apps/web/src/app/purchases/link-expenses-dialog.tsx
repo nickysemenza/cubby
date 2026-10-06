@@ -14,7 +14,7 @@ import type { RowSelectionState, Updater } from "@tanstack/react-table";
 import { useMemo, useState } from "react";
 import type { z } from "zod";
 
-import { TradeBadge } from "~/app/projects/trade-options";
+import { TradeBadge } from "~/app/projects/trade-badge";
 import { EntityRefLink } from "~/entity/components/entity-ref-link";
 import {
   entityDisplayImageKey,

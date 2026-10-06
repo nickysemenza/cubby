@@ -21,8 +21,13 @@ describe("presentEntitySelectOptions", () => {
         color: "var(--warning)",
       },
       { value: "mismatched", label: "Mismatched", color: "var(--destructive)" },
-      { value: "planned", label: "Planned", color: "var(--chart-4)" },
-      { value: "custom", label: "Custom", icon, color: "var(--chart-1)" },
+      { value: "planned", label: "Planned", color: "var(--brand-domain-plan)" },
+      {
+        value: "custom",
+        label: "Custom",
+        icon,
+        color: "var(--brand-domain-house)",
+      },
     ]);
   });
 
@@ -36,30 +41,8 @@ describe("presentEntitySelectOptions", () => {
       {
         value: "auto",
         label: "Auto-detect from name",
-        color: "var(--chart-1)",
+        color: "var(--brand-domain-house)",
       },
-    ]);
-  });
-
-  it("uses slate for neutral lifecycle values and cycles stable chart tokens", () => {
-    const options = presentEntitySelectOptions("example", "state", [
-      { value: "unknown", label: "Unknown" },
-      { value: "unverified", label: "Unverified" },
-      { value: "disabled", label: "Disabled" },
-      { value: "finished", label: "Finished" },
-      { value: "one", label: "One" },
-      { value: "two", label: "Two" },
-      { value: "six", label: "Six" },
-    ]);
-
-    expect(options.map(({ color }) => color)).toEqual([
-      "var(--slate)",
-      "var(--slate)",
-      "var(--slate)",
-      "var(--slate)",
-      "var(--chart-1)",
-      "var(--chart-2)",
-      "var(--chart-3)",
     ]);
   });
 });

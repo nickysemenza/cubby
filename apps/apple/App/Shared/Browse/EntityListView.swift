@@ -713,7 +713,28 @@ struct EntityRowView: View {
                     )
                     .font(.caption.weight(.medium))
                 }
-                let factLine = presentation.facts.filter({ $0.id != "dataQuality" }).map({ fact in
+                let coloredFacts = presentation.facts.filter { fact in
+                    guard let field = EntityCatalog[key].field(fact.id) else { return false }
+                    return FieldGuideMetrics.optionColor(
+                        EntityFieldValue.optionColor(in: row.raw, field: field, surface: "list")) != nil
+                }
+                ForEach(coloredFacts) { fact in
+                    if let field = EntityCatalog[key].field(fact.id) {
+                        HStack(spacing: FieldGuideTokens.Space.xs) {
+                            if let label = fact.label { Text(label).font(.caption) }
+                            StatusChip(
+                                text: fact.value,
+                                color: FieldGuideMetrics.optionColor(
+                                    EntityFieldValue.optionColor(in: row.raw, field: field, surface: "list")))
+                            if let source = fact.source {
+                                Text(source).font(.caption).foregroundStyle(.secondary)
+                            }
+                        }
+                    }
+                }
+                let factLine = presentation.facts.filter({
+                    $0.id != "dataQuality" && !coloredFacts.contains($0)
+                }).map({ fact in
                     let value = fact.source.map { "\(fact.value) (\($0))" } ?? fact.value
                     return fact.label.map { "\($0): \(value)" } ?? value
                 }).joined(separator: " · ")
