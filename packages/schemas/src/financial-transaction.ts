@@ -425,6 +425,11 @@ export const financialStatementImportRow = z.strictObject({
 export type FinancialStatementImportRow = z.infer<
   typeof financialStatementImportRow
 >;
+/** A row read from a statement file, so it carries its occurrence identity. */
+export type PositionedStatementImportRow = FinancialStatementImportRow &
+  Required<
+    Pick<FinancialStatementImportRow, "importFingerprint" | "rowPosition">
+  >;
 
 export const financialStatementImportPreviewInput = z.strictObject({
   rows: z

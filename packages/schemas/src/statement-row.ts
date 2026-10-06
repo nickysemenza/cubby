@@ -213,11 +213,12 @@ export type StatementImportInput = z.infer<typeof statementImportInput>;
 
 /**
  * A provider row as the client parsed it. `externalId` is absent by design —
- * the server derives it, so a client cannot mint an identity that disagrees
- * with the one `sourceRefs` matching depends on.
+ * the server derives it from the import fingerprint and `rowPosition`, the
+ * row's 1-based physical position in the file, so a client cannot mint an
+ * identity that disagrees with the one `sourceRefs` matching depends on.
  */
 export const statementRowInput = z.strictObject({
-  rowPosition: z.number().int().positive().optional(),
+  rowPosition: z.number().int().positive(),
   providerTransactionId: z.string().min(1).nullable().optional(),
   accountDescriptor: z.string().min(1),
   statementDate: plainDate,
@@ -248,12 +249,11 @@ export const recordStatementRowsInput = z.strictObject({
     .array(statementRowInput)
     .min(1)
     .max(STATEMENT_ROW_RECORD_MAX_ROWS)
-    .refine((rows) => {
-      const positions = rows.flatMap((row) =>
-        row.rowPosition === undefined ? [] : [row.rowPosition],
-      );
-      return new Set(positions).size === positions.length;
-    }, "Physical row positions must be unique within a batch"),
+    .refine(
+      (rows) =>
+        new Set(rows.map((row) => row.rowPosition)).size === rows.length,
+      "Physical row positions must be unique within a batch",
+    ),
   /**
    * Derive every identity and report what a real call would do, then write
    * nothing — no batch, no rows.
@@ -275,11 +275,6 @@ export const recordStatementRowsOut = z.object({
   unchanged: z.number().int(),
   alreadyInThisBatch: z.number().int(),
   alreadyInAnotherBatch: z.number().int(),
-  /**
-   * Repeated identities in a legacy payload with no physical row positions.
-   * CSV occurrences use v2 identities and preserve identical purchases.
-   */
-  indistinguishableDuplicates: z.number().int(),
   rowsOmitted: z.number().int().nullable(),
   rowCountStored: z.number().int(),
   /**

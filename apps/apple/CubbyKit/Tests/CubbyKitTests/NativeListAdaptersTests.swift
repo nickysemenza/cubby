@@ -100,7 +100,8 @@ struct NativeListAdaptersTests {
         ])
         #expect(object["filters"] == expectedFilters)
         #expect(object["pagination"] == ["pageIndex": 2, "pageSize": 7])
-        #expect(object["sort"] != nil)
+        // The server accepts only the stack form, even for one sort key.
+        #expect(object["sort"] == .array([["orderBy": "createdAt", "direction": "desc"]]))
     }
 
     @Test func usdaListKeepsNumericIdentityAndTypedFilters() async throws {

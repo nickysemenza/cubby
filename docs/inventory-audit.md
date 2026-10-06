@@ -99,12 +99,7 @@ and it is no longer installable as a PWA. The old routes return the ordinary
 | `/inventory/session` (any `parent`/`worklist`) | 404 |
 | `/locations/photo-pass` (any `parent`)         | 404 |
 
-Printed QR label URLs (`/<shortcode>`) still open the record. On first load,
-`ui/feedback/retired-fieldwork.tsx` finds unfinished browser-local
-recount/photo-pass state (`cubby:audit-session:*`, `cubby:photo-pass:*`), offers
-a JSON download or an explicit discard, and removes the keys
-(`lib/retired-fieldwork-storage.ts`). `public/sw.js` is a self-unregistering
-stub for browsers that still hold the old app-shell worker; do not delete it.
+Printed QR label URLs (`/<shortcode>`) still open the record.
 
 Still deliberately deferred: cross-device pass state, a true offline mutation
 queue, and inventory-entry-without-product photo identity (photo capture reuses

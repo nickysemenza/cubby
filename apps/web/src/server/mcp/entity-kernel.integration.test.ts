@@ -169,7 +169,7 @@ describe("MCP entity kernel boundary", () => {
         action: "list",
         entity: "recipe",
         filters: {},
-        sort: { orderBy: "bogus", direction: "asc" },
+        sort: [{ orderBy: "bogus", direction: "asc" }],
       }),
     ).rejects.toMatchObject({
       code: "BAD_REQUEST",

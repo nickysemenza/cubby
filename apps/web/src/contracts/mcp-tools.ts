@@ -102,7 +102,7 @@ export const MCP_TOOLS = defineMcpTools({
       list: mcpAction({
         op: kernelAction("list", "query"),
         description:
-          'One page of a kind, with that kind\'s own typed `filters`, `sort`, `pagination` and `groupBy`; returns { meta, items }. Every scored entity accepts sort="dataQuality" (ascending = weakest identity first) plus dataStatus/dataGap filters, the enrichment worklist.',
+          'One page of a kind, with that kind\'s own typed `filters`, `sort`, `pagination` and `groupBy`; returns { meta, items }. `sort` is a stack, primary first: sort=[{orderBy:"name",direction:"asc"}]. Every scored entity accepts orderBy "dataQuality" (ascending = weakest identity first) plus dataStatus/dataGap filters, the enrichment worklist.',
       }),
       search: mcpAction({
         op: kernelAction("search", "query"),
@@ -577,7 +577,7 @@ export const MCP_TOOLS = defineMcpTools({
       record: mcpAction({
         op: statementRowContract.ops.record,
         description:
-          "Record client-parsed provider statement rows verbatim, as the evidence Cubby is reconciled against. NOT an importer: it creates no Financial Account, no Financial Transaction and no Purchase link, and makes no match. Normalized rows only — never a CSV path, upload, or file contents. At most 500 rows per call; the batch is found-or-created by (source, fingerprint), so chunking one export across calls is expected. The server derives each row's stable identity from account/date/amount/description, so re-submitting the same export inserts nothing and returns every row as unchanged. `providerAmount` is the export's own signed figure (Monarch signs charges negative); Cubby's outflow-positive amount is derived from it. Set `dateKind` to whichever date the export carries. `dryRun: true` derives the identities and reports what a real call would insert without writing — the only way to learn whether a chunk was already recorded.",
+          "Record client-parsed provider statement rows verbatim, as the evidence Cubby is reconciled against. NOT an importer: it creates no Financial Account, no Financial Transaction and no Purchase link, and makes no match. Normalized rows only — never a CSV path, upload, or file contents. At most 500 rows per call; the batch is found-or-created by (source, fingerprint), so chunking one export across calls is expected. Every row carries `rowPosition`, its 1-based physical position in the export (unique within the batch); the server derives each row's stable identity from (source, fingerprint, rowPosition), so re-submitting the same export inserts nothing and returns every row as unchanged. `providerAmount` is the export's own signed figure (Monarch signs charges negative); Cubby's outflow-positive amount is derived from it. Set `dateKind` to whichever date the export carries. `dryRun: true` derives the identities and reports what a real call would insert without writing — the only way to learn whether a chunk was already recorded.",
       }),
       update: mcpAction({
         op: statementRowContract.ops.update,

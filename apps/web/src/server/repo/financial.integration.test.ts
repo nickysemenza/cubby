@@ -751,6 +751,7 @@ describe("financial repositories — critical invariants", () => {
         },
         rows: [
           {
+            rowPosition: 1,
             accountDescriptor: "Blocked Card",
             statementDate: "2026-05-04",
             providerAmount: -10,

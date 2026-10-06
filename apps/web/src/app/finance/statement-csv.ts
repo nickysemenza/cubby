@@ -1,8 +1,8 @@
 import {
   FINANCIAL_STATEMENT_IMPORT_MAX_ROWS,
   financialStatementImportPreviewInput,
-  type FinancialStatementImportRow,
   type FinancialStatementImportPreviewInput,
+  type PositionedStatementImportRow,
 } from "@cubby/schemas/financial-transaction";
 import {
   recordStatementRowsInput,
@@ -106,7 +106,7 @@ export type ParsedStatementCsv = {
   source: string;
   label: string;
   fingerprint: string;
-  rows: FinancialStatementImportRow[];
+  rows: PositionedStatementImportRow[];
   recordRows: StatementRowInput[];
   pending: number;
   zeroValueRows: number;

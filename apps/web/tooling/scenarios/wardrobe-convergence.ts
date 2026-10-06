@@ -969,8 +969,9 @@ async function reimportInNewRunAndAssertNoOp(
 /**
  * Trap 1 + 2: an overlapping statement CSV whose rows were already imported,
  * alongside a decoy charge sharing the purchase's exact amount on a different
- * day/merchant. Only the decoy row may be recorded; the overlap must not
- * mint a second StatementRow under a new batch. Returns the decoy
+ * day/merchant. Each row of the new file is its own occurrence (identity is
+ * file fingerprint + position), and replaying that file records nothing; the
+ * overlap must still not mint a second Purchase or Expense. Returns the decoy
  * FinancialTransaction so the duplicate-order-history trap can confirm it
  * stays unmatched.
  */
@@ -981,6 +982,7 @@ async function recordOverlappingStatementCsvAndDecoy(
   const actor = buildActorContext(testUserId(userId), "mcp");
   const overlapAndDecoyRows = [
     {
+      rowPosition: 1,
       accountDescriptor: "Fixture Visa (...4242)",
       statementDate: "2026-09-21",
       providerAmount: -29.99,
@@ -988,6 +990,7 @@ async function recordOverlappingStatementCsvAndDecoy(
       rawDescription: "SYNTHETIC OUTFITTERS ORDER 1",
     },
     {
+      rowPosition: 2,
       accountDescriptor: "Fixture Visa (...4242)",
       statementDate: "2026-09-22",
       providerAmount: 50,
@@ -995,6 +998,7 @@ async function recordOverlappingStatementCsvAndDecoy(
       rawDescription: "SYNTHETIC CARD PAYMENT",
     },
     {
+      rowPosition: 3,
       accountDescriptor: "Fixture Visa (...4242)",
       statementDate: "2026-08-05",
       providerAmount: -29.99,
@@ -1002,29 +1006,27 @@ async function recordOverlappingStatementCsvAndDecoy(
       rawDescription: "SYNTHETIC DECEPTIVE RETAIL CHARGE 1",
     },
   ] as const;
-  const recorded = await recordStatementRows(
-    db,
-    recordStatementRowsInput.parse({
-      import: {
-        source: "monarch",
-        label: "Synthetic wardrobe followup",
-        fingerprint: "synthetic-wardrobe-followup-1",
-        dateKind: "unknown",
-        rowCountDeclared: overlapAndDecoyRows.length,
-        notes: null,
-      },
-      rows: overlapAndDecoyRows,
-      dryRun: false,
-    }),
-    actor,
-  );
+  const followup = recordStatementRowsInput.parse({
+    import: {
+      source: "monarch",
+      label: "Synthetic wardrobe followup",
+      fingerprint: "synthetic-wardrobe-followup-1",
+      dateKind: "unknown",
+      rowCountDeclared: overlapAndDecoyRows.length,
+      notes: null,
+    },
+    rows: overlapAndDecoyRows,
+    dryRun: false,
+  });
+  const recorded = await recordStatementRows(db, followup, actor);
+  const replayed = await recordStatementRows(db, followup, actor);
   if (
-    recorded.inserted !== 1 ||
-    recorded.alreadyInAnotherBatch !== 2 ||
-    recorded.alreadyInThisBatch !== 0
+    recorded.inserted !== overlapAndDecoyRows.length ||
+    replayed.inserted !== 0 ||
+    replayed.alreadyInThisBatch !== overlapAndDecoyRows.length
   )
     throw new Error(
-      `Overlapping statement CSV did not dedupe against already-imported rows: ${JSON.stringify(recorded)}`,
+      `Overlapping statement CSV did not record once per occurrence: ${JSON.stringify({ recorded, replayed })}`,
     );
 
   const fixtureVisa = await getDb(db)
@@ -1231,7 +1233,7 @@ async function runForgeWearTraps(
       `ForgeWear traps left inconsistent state: ${JSON.stringify({ facts, duplicateFinding: duplicateFinding.rows, decoyAllocations: decoyAllocations.rows })}`,
     );
   console.log(
-    "[headless-wardrobe-e2e] ForgeWear traps held: overlapping statement rows deduped, the decoy charge stayed unmatched, and the duplicate order-history capture filed a conflict instead of a duplicate",
+    "[headless-wardrobe-e2e] ForgeWear traps held: overlapping statement rows replayed as a no-op, the decoy charge stayed unmatched, and the duplicate order-history capture filed a conflict instead of a duplicate",
   );
 }
 

@@ -49,7 +49,7 @@ describe("kernel browser transport", () => {
   it("maps generated list contracts onto normalized operation cache keys", () => {
     const params = {
       filters: {},
-      sort: { orderBy: "name", direction: "asc" as const },
+      sort: [{ orderBy: "name", direction: "asc" as const }],
       pagination: { pageIndex: 0, pageSize: 10 },
     };
 

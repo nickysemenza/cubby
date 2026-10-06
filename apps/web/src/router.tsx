@@ -104,13 +104,6 @@ export const getRouter = () => {
 
     // Dev-only on-demand CPU profiler: `await __jsProfile(5000)` in the console.
     if (!isProd) installJsProfiler();
-
-    // The service worker is gone (public/sw.js is the self-removing stub for
-    // browsers that re-fetch it); unregister any still installed from an
-    // earlier deploy so it stops serving stale precached assets.
-    navigator.serviceWorker
-      ?.getRegistrations()
-      .then((registrations) => registrations.forEach((r) => r.unregister()));
   }
 
   setupRouterSsrQueryIntegration({

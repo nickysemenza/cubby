@@ -165,7 +165,9 @@ discarding the evidence that it existed.
 Provider rows are recorded verbatim with `statement_rows.record`, and drift is a
 query rather than a pipeline rebuilt each session. It is not an importer: it
 resolves no account, links no Purchase, creates no transaction, and makes no
-match.
+match. Every row carries `rowPosition`, its 1-based position in the export;
+identity is (source, file fingerprint, position), so replaying a file is a
+no-op while two identical charges in one file stay two rows.
 
 `finance_read.statement_rows({matchState:"unmatched"})` is the worklist — a provider row
 with no live transaction carrying its source ref. To close one, append that ref

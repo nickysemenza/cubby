@@ -22,7 +22,10 @@ import {
   recordStatementRows,
   updateStatementRows,
 } from "./statement-row";
-import { statementRowExternalId } from "./statement-row-identity";
+import {
+  statementRowExternalId,
+  statementRowOccurrenceId,
+} from "./statement-row-identity";
 
 const importInput = (
   overrides: Partial<StatementImportInput> = {},
@@ -36,9 +39,11 @@ const importInput = (
   ...overrides,
 });
 
+type UnpositionedRow = Omit<StatementRowInput, "rowPosition">;
+
 const rowInput = (
-  overrides: Partial<StatementRowInput> = {},
-): StatementRowInput => ({
+  overrides: Partial<UnpositionedRow> = {},
+): UnpositionedRow => ({
   accountDescriptor: "Test Card (...4242)",
   statementDate: "2026-05-04",
   providerAmount: -128.5,
@@ -53,7 +58,7 @@ const rowInput = (
 const record = (
   db: Parameters<typeof recordStatementRows>[0],
   actor: Parameters<typeof recordStatementRows>[2],
-  rows: StatementRowInput[],
+  rows: UnpositionedRow[],
   importOverrides: Partial<StatementImportInput> = {},
   dryRun = false,
 ) =>
@@ -61,7 +66,7 @@ const record = (
     db,
     recordStatementRowsInput.parse({
       import: importInput(importOverrides),
-      rows,
+      rows: rows.map((row, index) => ({ ...row, rowPosition: index + 1 })),
       dryRun,
     }),
     actor,
@@ -401,7 +406,16 @@ describe("statement row ledger", () => {
       transactionId: null,
       disposition: "open",
     });
-    expect(charge?.externalId).toMatch(/^v1:[0-9a-f]{64}$/);
+    expect(charge?.externalId).toMatch(/^v2:[0-9a-f]{64}$/);
+  });
+
+  it("rejects a row without its physical file position", () => {
+    expect(
+      recordStatementRowsInput.safeParse({
+        import: importInput(),
+        rows: [rowInput()],
+      }).success,
+    ).toBe(false);
   });
 
   it("reports what a dryRun would insert and writes nothing", async () => {
@@ -652,11 +666,14 @@ describe("statement row ledger", () => {
     expect(fine.signWarning).toBeNull();
   });
 
-  it("derives externalId server-side, matching the shared identity function", async () => {
+  it("derives externalId server-side, matching the shared identity functions", async () => {
     await record(ctx.db, ctx.actor, [rowInput()], { fingerprint: "fp-hash" });
     const [row] = (await listStatementRows(ctx.db, {})).data;
-    // The stored columns reproduce the hash payload exactly, so the ledger can
-    // audit its own identity function rather than trusting an opaque token.
+    await expect(
+      statementRowOccurrenceId(row!.source, "fp-hash", 1),
+    ).resolves.toBe(row!.externalId);
+    // The stored columns reproduce the frozen v1 payload exactly; stored
+    // settlement refs still carry it, so the ledger can audit that identity.
     await expect(
       statementRowExternalId({
         source: row!.source,
@@ -665,6 +682,6 @@ describe("statement row ledger", () => {
         amount: row!.providerAmount,
         originalStatement: row!.rawDescription,
       }),
-    ).resolves.toBe(row!.externalId);
+    ).resolves.toBe(row!.legacyExternalId);
   });
 });

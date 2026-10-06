@@ -1,5 +1,5 @@
 import type { ActorContext } from "@cubby/schemas/context";
-import type { FinancialStatementImportRow } from "@cubby/schemas/financial-transaction";
+import type { PositionedStatementImportRow } from "@cubby/schemas/financial-transaction";
 import { parseShortcodeFor } from "@cubby/schemas/identifiers";
 import type { FinancialTransactionShortcode } from "@cubby/schemas/identifiers";
 import type { PaginationParams, SortParams } from "@cubby/schemas/pagination";
@@ -372,16 +372,15 @@ function assertImmutableStatementOccurrence(
   incoming: RecordStatementRowsInput["rows"][number],
 ) {
   if (
-    incoming.rowPosition !== undefined &&
-    (saved.accountDescriptor !== incoming.accountDescriptor ||
-      saved.statementDate !== incoming.statementDate ||
-      saved.providerAmount !== incoming.providerAmount ||
-      saved.rawDescription !== incoming.rawDescription ||
-      saved.providerTransactionId !== incoming.providerTransactionId ||
-      saved.providerStatus !== incoming.providerStatus ||
-      saved.merchant !== incoming.merchant ||
-      saved.sourceCategory !== incoming.sourceCategory ||
-      saved.providerNotes !== incoming.providerNotes)
+    saved.accountDescriptor !== incoming.accountDescriptor ||
+    saved.statementDate !== incoming.statementDate ||
+    saved.providerAmount !== incoming.providerAmount ||
+    saved.rawDescription !== incoming.rawDescription ||
+    saved.providerTransactionId !== incoming.providerTransactionId ||
+    saved.providerStatus !== incoming.providerStatus ||
+    saved.merchant !== incoming.merchant ||
+    saved.sourceCategory !== incoming.sourceCategory ||
+    saved.providerNotes !== incoming.providerNotes
   )
     throw createAppError(
       "CONSTRAINT_VIOLATION",
@@ -410,20 +409,12 @@ export async function recordStatementRows(
       ...row,
       providerTransactionId: row.providerTransactionId ?? null,
       source,
-      externalId:
-        row.rowPosition !== undefined
-          ? await statementRowOccurrenceId(
-              source,
-              input.import.fingerprint,
-              row.rowPosition,
-            )
-          : await statementRowExternalId({
-              source,
-              account: row.accountDescriptor,
-              date: row.statementDate,
-              amount: row.providerAmount,
-              originalStatement: row.rawDescription,
-            }),
+      externalId: await statementRowOccurrenceId(
+        source,
+        input.import.fingerprint,
+        row.rowPosition,
+      ),
+      // Frozen v1 content hash; stored settlement refs still derive from it.
       legacyExternalId: await statementRowExternalId({
         source,
         account: row.accountDescriptor,
@@ -436,12 +427,6 @@ export async function recordStatementRows(
     })),
   );
 
-  // Legacy callers without physical positions retain the frozen v1 contract.
-  // CSV positions distinguish identical purchases in the same export.
-  const idCounts = new Map<string, number>();
-  for (const row of rows)
-    idCounts.set(row.externalId, (idCounts.get(row.externalId) ?? 0) + 1);
-  const indistinguishableDuplicates = rows.length - idCounts.size;
   const rowsOmitted =
     input.import.rowCountDeclared === null
       ? null
@@ -479,7 +464,8 @@ export async function recordStatementRows(
     // batch. `ON CONFLICT DO NOTHING` answers neither question — it reports a
     // count of rows that landed, and the three ways a row can fail to land
     // have three different remedies.
-    const distinctIds = [...idCounts.keys()];
+    // Unique: the input schema refuses a repeated position within a batch.
+    const distinctIds = rows.map((row) => row.externalId);
     const stored = await unwrapDb(tx)
       .select({
         externalId: statementRow.externalId,
@@ -521,7 +507,6 @@ export async function recordStatementRows(
         unchanged: rows.length - novel,
         alreadyInThisBatch,
         alreadyInAnotherBatch,
-        indistinguishableDuplicates,
         rowsOmitted,
         rowCountStored: existingBatch
           ? await storedRowCount(tx, existingBatch.id)
@@ -575,7 +560,6 @@ export async function recordStatementRows(
       unchanged: rows.length - inserted.length,
       alreadyInThisBatch,
       alreadyInAnotherBatch,
-      indistinguishableDuplicates,
       rowsOmitted,
       rowCountStored: before + inserted.length,
       signWarning,
@@ -904,7 +888,7 @@ export async function listStatementImports(db: Database, source?: string) {
  * reference or changing canonical date, amount, or posting status. */
 export async function attachStatementObservation(
   db: Database,
-  row: FinancialStatementImportRow,
+  row: PositionedStatementImportRow,
   transactionCode: FinancialTransactionShortcode,
   actor: ActorContext,
 ) {
@@ -915,14 +899,11 @@ export async function attachStatementObservation(
       "financialTransaction",
       transactionCode,
     );
-    const externalId =
-      row.importFingerprint && row.rowPosition !== undefined
-        ? await statementRowOccurrenceId(
-            row.source,
-            row.importFingerprint,
-            row.rowPosition,
-          )
-        : await statementRowExternalId(row);
+    const externalId = await statementRowOccurrenceId(
+      row.source,
+      row.importFingerprint,
+      row.rowPosition,
+    );
     await lockFinancialEvidenceKeys(tx, "transaction-ref", [
       `${row.source}\0${externalId}`,
     ]);

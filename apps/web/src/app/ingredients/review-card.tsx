@@ -83,7 +83,7 @@ function QueueUsdaPicker({
         foodsOnly: true,
         dataTypes: ["foundation_food", "sr_legacy_food", "survey_fndds_food"],
       },
-      sort: { orderBy: "relevance", direction: "asc" },
+      sort: [{ orderBy: "relevance", direction: "asc" }],
       pagination: { pageIndex: 0, pageSize: 20 },
     }),
   );

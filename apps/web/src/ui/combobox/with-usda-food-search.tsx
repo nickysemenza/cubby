@@ -101,7 +101,7 @@ export function UsdaFoodSearchField({
         dataTypes: SCOPE_DATA_TYPES[scope],
       },
       // Rank by FTS relevance so the best name match leads (not alphabetical).
-      sort: { orderBy: "relevance", direction: "asc" },
+      sort: [{ orderBy: "relevance", direction: "asc" }],
       // Over-fetch: USDA returns many UPC-duplicate records, so we pull extra and
       // collapse them client-side to still show a full list of distinct foods.
       pagination: { pageIndex: 0, pageSize: 50 },

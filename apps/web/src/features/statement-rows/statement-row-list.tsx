@@ -362,7 +362,7 @@ export function StatementRowList() {
   const listQuery = useQuery(
     statementRow.list.queryOptions({
       filters,
-      sort,
+      sort: [sort],
       pagination: tableState.pagination,
     }),
   );

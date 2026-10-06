@@ -25,12 +25,9 @@ const inputSchema = z.object({
     .object({ pageIndex: z.number(), pageSize: z.number() })
     .optional(),
   sort: z
-    .union([
+    .array(
       z.object({ orderBy: z.string(), direction: z.enum(["asc", "desc"]) }),
-      z.array(
-        z.object({ orderBy: z.string(), direction: z.enum(["asc", "desc"]) }),
-      ),
-    ])
+    )
     .optional(),
   groupBy: z.string().optional(),
 });

@@ -8,7 +8,7 @@ import { flattenUniquePageItems } from "../../ui/hooks/infinite-page-utils";
 
 export function useAllInventoryItems() {
   const firstPageOptions = entityListFor("inventory").infiniteQueryOptions({
-    sort: { orderBy: "createdAt", direction: "desc" },
+    sort: [{ orderBy: "createdAt", direction: "desc" }],
     pagination: { pageIndex: 0, pageSize: MAX_PAGE_SIZE },
     filters: {},
   });

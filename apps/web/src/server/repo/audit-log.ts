@@ -161,7 +161,7 @@ const AUDIT_CURSOR_PREFIX = "v1.";
 
 type DecodedAuditCursor = {
   createdAt: Date;
-  id?: string;
+  id: string;
 };
 
 /** Base64-pack the timestamp and private PK into one opaque cursor field. */
@@ -176,14 +176,9 @@ export function encodeAuditCursor(entry: {
   return `${AUDIT_CURSOR_PREFIX}${encodeBase64Url(payload)}`;
 }
 
-/** Decode v1 cursors while retaining the former ISO timestamp wire format. */
 export function decodeAuditCursor(cursor: string): DecodedAuditCursor {
   if (!cursor.startsWith(AUDIT_CURSOR_PREFIX)) {
-    const createdAt = new Date(cursor);
-    if (Number.isNaN(createdAt.getTime())) {
-      throw new Error("Invalid audit log cursor");
-    }
-    return { createdAt };
+    throw new Error("Invalid audit log cursor");
   }
 
   try {
@@ -407,12 +402,11 @@ export async function getAuditLog(
     /** Device and Run uuids; the workflow resolves the public shortcodes. */
     deviceId?: DeviceId;
     runId?: RunId;
-    // Both ISO date strings, same encoding as `cursor` below — inclusive
-    // bounds on `createdAt`.
+    // Both ISO date strings — inclusive bounds on `createdAt`.
     createdAtFrom?: string;
     createdAtTo?: string;
     limit: number;
-    cursor?: string; // Opaque composite cursor; legacy ISO timestamps accepted
+    cursor?: string; // Opaque composite cursor from `encodeAuditCursor`
   },
 ): Promise<AuditLogListOut> {
   const conditions: SQL[] = [];
@@ -451,18 +445,11 @@ export async function getAuditLog(
   // and simply narrows the window further.
   if (params.cursor) {
     const cursor = decodeAuditCursor(params.cursor);
-    if (cursor.id) {
-      const cursorCondition = or(
-        lt(auditLog.createdAt, cursor.createdAt),
-        and(
-          eq(auditLog.createdAt, cursor.createdAt),
-          lt(auditLog.id, cursor.id),
-        ),
-      );
-      if (cursorCondition) conditions.push(cursorCondition);
-    } else {
-      conditions.push(lt(auditLog.createdAt, cursor.createdAt));
-    }
+    const cursorCondition = or(
+      lt(auditLog.createdAt, cursor.createdAt),
+      and(eq(auditLog.createdAt, cursor.createdAt), lt(auditLog.id, cursor.id)),
+    );
+    if (cursorCondition) conditions.push(cursorCondition);
   }
 
   const entries = await unwrapDb(db).query.auditLog.findMany({
