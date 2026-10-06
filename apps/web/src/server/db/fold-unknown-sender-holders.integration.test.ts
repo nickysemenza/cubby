@@ -94,8 +94,22 @@ describe("folding unknown-sender holder runs into their passes", () => {
         finding(worked, "b".repeat(64)),
       ]);
 
-    for (const statement of MIGRATION.split("--> statement-breakpoint"))
-      await getDb(ctx.db).execute(sql.raw(statement));
+    // Two holders for the same sender in one pass: only one finding may move.
+    const sibling = await insertRun({
+      purpose: "account_sync",
+      status: "needs_review",
+      startedAt: at(7),
+      endedAt: at(7),
+    });
+    await getDb(ctx.db)
+      .insert(runFinding)
+      .values(finding(sibling, "a".repeat(64)));
+
+    // Applying it twice is harmless (the runner never should, but a rerun
+    // after a partial manual apply must not fail).
+    for (const _pass of [1, 2])
+      for (const statement of MIGRATION.split("--> statement-breakpoint"))
+        await getDb(ctx.db).execute(sql.raw(statement));
 
     const findings = await getDb(ctx.db)
       .select({
@@ -105,9 +119,10 @@ describe("folding unknown-sender holder runs into their passes", () => {
       })
       .from(runFinding)
       .where(eq(runFinding.ledgerPartyId, party.id))
-      .orderBy(runFinding.evidenceFingerprint);
+      .orderBy(runFinding.evidenceFingerprint, runFinding.createdAt);
     expect(findings).toEqual([
       { runId: pass, entityId: pass, fingerprint: "a".repeat(64) },
+      { runId: sibling, entityId: sibling, fingerprint: "a".repeat(64) },
       { runId: worked, entityId: worked, fingerprint: "b".repeat(64) },
     ]);
     const deleted = await getDb(ctx.db)
@@ -118,6 +133,11 @@ describe("folding unknown-sender holder runs into their passes", () => {
       Object.fromEntries(
         deleted.map((row) => [row.id, row.deletedAt !== null]),
       ),
-    ).toEqual({ [pass]: false, [holder]: true, [worked]: false });
+    ).toEqual({
+      [pass]: false,
+      [holder]: true,
+      [sibling]: false,
+      [worked]: false,
+    });
   });
 });

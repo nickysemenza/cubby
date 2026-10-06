@@ -31,19 +31,30 @@ WHERE h.purpose = 'account_sync' AND h."deletedAt" IS NULL
     SELECT 1 FROM "RunFinding" f
     WHERE f."runId" = h.id AND f.kind <> 'unclassified_vendor'
   );--> statement-breakpoint
--- A finding about the holder becomes a finding about its pass. One the pass
--- already holds open for the same sender stays put, and so does its holder.
+-- A finding about the holder becomes a finding about its pass. An open
+-- finding moves only when no open finding already holds its key on that pass
+-- (RunFinding_open_evidence_key), and of several holders for one sender in
+-- one pass only the earliest moves; the rest stay, and so do their holders.
 UPDATE "RunFinding" f
-SET "runId" = m.pass, "entityId" = m.pass, "updatedAt" = now()
-FROM "UnknownSenderHolder" m
-WHERE f."runId" = m.holder AND m.pass IS NOT NULL
-  AND f."entityKind" = 'run' AND f."entityId" = m.holder
-  AND NOT (f.status = 'open' AND EXISTS (
+SET "runId" = chosen.pass, "entityId" = chosen.pass, "updatedAt" = now()
+FROM (
+  SELECT held.id, m.pass, row_number() OVER (
+    PARTITION BY m.pass, held."ledgerPartyId", held.kind,
+      held."evidenceFingerprint", held.status = 'open'
+    ORDER BY held."createdAt", held.id
+  ) AS rank
+  FROM "RunFinding" held
+  JOIN "UnknownSenderHolder" m ON held."runId" = m.holder
+  WHERE m.pass IS NOT NULL
+    AND held."entityKind" = 'run' AND held."entityId" = m.holder
+) chosen
+WHERE f.id = chosen.id
+  AND (f.status <> 'open' OR (chosen.rank = 1 AND NOT EXISTS (
     SELECT 1 FROM "RunFinding" o
     WHERE o.status = 'open' AND o."ledgerPartyId" = f."ledgerPartyId"
-      AND o."entityKind" = 'run' AND o."entityId" = m.pass
+      AND o."entityKind" = 'run' AND o."entityId" = chosen.pass
       AND o.kind = f.kind AND o."evidenceFingerprint" = f."evidenceFingerprint"
-  ));--> statement-breakpoint
+  )));--> statement-breakpoint
 UPDATE "Run" r
 SET "deletedAt" = now(), "updatedAt" = now()
 FROM "UnknownSenderHolder" m
