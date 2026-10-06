@@ -5,12 +5,14 @@ import { CaretUpIcon } from "@phosphor-icons/react/dist/csr/CaretUp";
 import { useQuery } from "@tanstack/react-query";
 import {
   type KeyboardEvent,
+  type RefObject,
+  useEffect,
+  useEffectEvent,
   type ReactNode,
   useMemo,
   useRef,
   useState,
 } from "react";
-import { z } from "zod";
 
 import { EntityIcon } from "~/entity/entities";
 import type { EntityInspectorHealth } from "~/entity/entity-inspector-health";
@@ -43,15 +45,7 @@ import {
 import { EntityOverrideTable } from "./EntityOverrideTable";
 import { EntityReferenceGraph } from "./EntityReferenceGraph";
 import { EntitySchemaPanel } from "./EntitySchemaInspector";
-
-export const schemaSheetSchema = z.enum([
-  "entities",
-  "overrides",
-  "relations",
-  "photos",
-  "graph",
-]);
-export type SchemaSheet = z.infer<typeof schemaSheetSchema>;
+import { type SchemaSheet, schemaSheetSchema } from "./schema-sheet";
 
 const dash = <span className="text-muted-foreground/40">—</span>;
 
@@ -270,7 +264,7 @@ const COLUMN_GROUPS: readonly ColumnGroup[] = [
         render: (row) => <Num value={row.sections} />,
       },
       {
-        id: "delete",
+        id: "deleteMode",
         label: "Delete",
         compare: byText((row) => row.deleteMode ?? ""),
         render: (row) => row.deleteMode ?? dash,
@@ -340,13 +334,14 @@ function SchemaTable({
   rows,
   selected,
   onSelect,
+  buttons,
 }: {
   rows: readonly SchemaRow[];
   selected: Entity | null;
   onSelect: (entity: Entity | null) => void;
+  buttons: RefObject<Map<Entity, HTMLButtonElement>>;
 }) {
   const [sort, setSort] = useState<Sort>(null);
-  const buttons = useRef(new Map<Entity, HTMLButtonElement>());
   const sorted = useMemo(() => {
     const column =
       sort && COLUMNS.find((candidate) => candidate.id === sort.id);
@@ -357,10 +352,6 @@ function SchemaTable({
   }, [rows, sort]);
 
   const onKeyDown = (event: KeyboardEvent<HTMLTableSectionElement>) => {
-    if (event.key === "Escape" && selected) {
-      onSelect(null);
-      return;
-    }
     if (event.key !== "ArrowDown" && event.key !== "ArrowUp") return;
     const focused = sorted.findIndex(
       (row) => buttons.current.get(row.entity) === document.activeElement,
@@ -704,6 +695,23 @@ export function EntityManifestGrid({
     [counts],
   );
   const totals = useMemo(schemaTotals, []);
+  // Row buttons live here so closing the panel can hand focus back to the
+  // row it described instead of dropping it with the unmounted panel.
+  const buttons = useRef(new Map<Entity, HTMLButtonElement>());
+  const closePanel = () => {
+    if (!selected) return;
+    buttons.current.get(selected)?.focus();
+    onSelect(null);
+  };
+  const onEscape = useEffectEvent(closePanel);
+  useEffect(() => {
+    if (!selected) return;
+    const onKeyDown = (event: globalThis.KeyboardEvent) => {
+      if (event.key === "Escape" && !event.defaultPrevented) onEscape();
+    };
+    document.addEventListener("keydown", onKeyDown);
+    return () => document.removeEventListener("keydown", onKeyDown);
+  }, [selected]);
   const openEntity = (entity: Entity) => {
     onSheetChange("entities");
     onSelect(entity);
@@ -746,14 +754,19 @@ export function EntityManifestGrid({
               selected && "xl:grid xl:grid-cols-[minmax(0,1fr)_24rem]",
             )}
           >
-            <SchemaTable rows={rows} selected={selected} onSelect={onSelect} />
+            <SchemaTable
+              rows={rows}
+              selected={selected}
+              onSelect={onSelect}
+              buttons={buttons}
+            />
             {selected && (
               // Docked beside the sheet at 1280px+, a right-edge drawer below.
               <aside className="z-40 overflow-y-auto border-border bg-card max-xl:fixed max-xl:inset-y-0 max-xl:right-0 max-xl:w-[min(24rem,100vw)] max-xl:border-l max-xl:shadow-xl xl:sticky xl:top-0 xl:max-h-[calc(100dvh-12rem)] xl:border-y xl:border-r">
                 <EntitySchemaPanel
                   entity={selected}
                   onSelect={onSelect}
-                  onClose={() => onSelect(null)}
+                  onClose={closePanel}
                 />
               </aside>
             )}

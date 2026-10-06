@@ -155,6 +155,33 @@ describe("EntityManifestGrid schema sheet", () => {
     expect(onSelect).toHaveBeenLastCalledWith(null);
   });
 
+  it("closes the panel with Escape from inside it and returns focus to the row", () => {
+    const { onSelect } = renderGrid({ selected: "product" });
+    const close = within(panel("product")).getByRole("button", {
+      name: "Close panel",
+    });
+    close.focus();
+
+    fireEvent.keyDown(close, { key: "Escape" });
+
+    expect(onSelect).toHaveBeenLastCalledWith(null);
+    expect(within(entityRow("product")).getByRole("button")).toHaveFocus();
+  });
+
+  it("sorts the lifecycle Delete column independently of the CRUD D column", () => {
+    renderGrid();
+    const lifecycle = within(sheet()).getByRole("button", { name: "Delete" });
+    const crud = within(sheet()).getByRole("button", { name: "D" });
+
+    fireEvent.click(lifecycle);
+
+    expect(lifecycle.closest("th")).toHaveAttribute("aria-sort", "ascending");
+    expect(crud.closest("th")).not.toHaveAttribute("aria-sort");
+    // Text sorts A→Z, so entities without a delete mode ("") lead.
+    const firstRow = within(sheet()).getAllByRole("row")[2]!;
+    expect(within(firstRow).getAllByText("—").length).toBeGreaterThan(0);
+  });
+
   it("moves the open panel with the arrow keys", () => {
     const { onSelect } = renderGrid({ selected: "product" });
     const productButton = within(entityRow("product")).getByRole("button");

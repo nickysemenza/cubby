@@ -17,11 +17,9 @@ import {
 import { EntityGraphPicker } from "~/entity/relationships/entity-graph-picker";
 import { EntityRelations } from "~/entity/relationships/entity-relations";
 import { EntityIntegrityTab } from "~/features/entity-platform/EntityIntegrityTab";
-import {
-  EntityManifestGrid,
-  schemaSheetSchema,
-} from "~/features/entity-platform/EntityManifestGrid";
+import { EntityManifestGrid } from "~/features/entity-platform/EntityManifestGrid";
 import { EntityRecordsTab } from "~/features/entity-platform/EntityRecordsTab";
+import { schemaSheetSchema } from "~/features/entity-platform/schema-sheet";
 import { CookbookSelect } from "~/features/recipes/cookbook-select";
 import type { GraphFilters } from "~/ui/visualizations/dependency-graph-model";
 const RecipeDependencyGraph = lazy(() =>
