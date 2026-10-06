@@ -107,33 +107,41 @@ function groupByOrder(items: readonly MailItem[]): OrderGroup[] {
 
 type OrderCandidate = {
   candidate: MailCandidate;
-  /** Every email in the order that names this Purchase, with its decision. */
+  /** Every email in the order, with its decision for this Purchase. */
   events: Array<{ event: MailEvent; decision: MailCandidate["decision"] }>;
   /** Shared decision; `null` when undecided or the emails disagree. */
   decision: MailCandidate["decision"];
 };
 
 function orderCandidates(steps: readonly OrderStep[]): OrderCandidate[] {
-  const byPurchase = new Map<string, OrderCandidate>();
-  for (const { event } of steps)
-    for (const candidate of event?.candidates ?? []) {
-      const entry = byPurchase.get(candidate.purchaseId) ?? {
-        candidate,
-        events: [],
-        decision: null,
-      };
-      if (matchEvidence(candidate).rank < matchEvidence(entry.candidate).rank)
-        entry.candidate = candidate;
-      if (event) entry.events.push({ event, decision: candidate.decision });
-      byPurchase.set(candidate.purchaseId, entry);
+  const events = steps.flatMap(({ event }) => (event ? [event] : []));
+  const strongest = new Map<string, MailCandidate>();
+  for (const event of events)
+    for (const candidate of event.candidates) {
+      const current = strongest.get(candidate.purchaseId);
+      if (
+        !current ||
+        matchEvidence(candidate).rank < matchEvidence(current).rank
+      )
+        strongest.set(candidate.purchaseId, candidate);
     }
-  return [...byPurchase.values()].map((entry) => {
-    const [first] = entry.events;
-    return {
-      ...entry,
+  // A decision covers every email in the order, including one whose own
+  // candidate window missed this Purchase (a late shipment notice); it counts
+  // as undecided until written.
+  return [...strongest.values()].map((candidate) => {
+    const decisions = events.map((event) => ({
+      event,
       decision:
-        first &&
-        entry.events.every(({ decision }) => decision === first.decision)
+        event.candidates.find(
+          (other) => other.purchaseId === candidate.purchaseId,
+        )?.decision ?? null,
+    }));
+    const [first] = decisions;
+    return {
+      candidate,
+      events: decisions,
+      decision:
+        first && decisions.every(({ decision }) => decision === first.decision)
           ? first.decision
           : null,
     };
@@ -173,11 +181,15 @@ function OrderMailRow({
     group.steps.find((step) => step.event?.amount != null)?.event?.amount ??
     null;
   const candidates = orderCandidates(group.steps);
-  const decideAll = (
+  // `decide.isPending` tracks only the latest call; a group decision is
+  // several, so hold every button until the whole batch settles.
+  const [deciding, setDeciding] = useState(false);
+  const decideAll = async (
     { candidate, events }: OrderCandidate,
     decision: "linked" | "dismissed",
-  ) =>
-    void Promise.allSettled(
+  ) => {
+    setDeciding(true);
+    await Promise.allSettled(
       events
         .filter((entry) => entry.decision !== decision)
         .map(({ event }) =>
@@ -189,6 +201,8 @@ function OrderMailRow({
           }),
         ),
     );
+    setDeciding(false);
+  };
   const mails = [
     ...new Map(group.steps.map(({ mail }) => [mail.messageId, mail])).values(),
   ];
@@ -315,8 +329,8 @@ function OrderMailRow({
                     <Button
                       size="xs"
                       variant="ghost"
-                      disabled={decide.isPending}
-                      onClick={() => decideAll(entry, "linked")}
+                      disabled={deciding}
+                      onClick={() => void decideAll(entry, "linked")}
                     >
                       Link
                     </Button>
@@ -325,8 +339,8 @@ function OrderMailRow({
                     <Button
                       size="xs"
                       variant="ghost"
-                      disabled={decide.isPending}
-                      onClick={() => decideAll(entry, "dismissed")}
+                      disabled={deciding}
+                      onClick={() => void decideAll(entry, "dismissed")}
                     >
                       Dismiss
                     </Button>

@@ -140,20 +140,30 @@ export function RecordPaths({
   paths: ConnectedItem["paths"];
   compact?: boolean;
 }) {
+  const [showOthers, setShowOthers] = useState(false);
   const [first, ...other] = paths;
   if (!first) return null;
-  const others =
-    other.length > 0 ? (
-      <details
-        className={cn(
-          "text-xs text-muted-foreground",
-          !compact && "[&[open]]:basis-full",
-        )}
-      >
-        <summary className="cursor-pointer">
+  return (
+    <div className="flex max-w-full min-w-0 flex-wrap items-center gap-x-1.5 gap-y-1 text-sm">
+      {compact ? null : (
+        <span className="text-xs text-muted-foreground">via</span>
+      )}
+      {/* A compact trail's zero basis keeps the toggle on its line. */}
+      <div className={cn("min-w-0", compact && "flex-1")}>
+        <PathTrail path={first} compact={compact} />
+      </div>
+      {other.length > 0 ? (
+        <button
+          type="button"
+          aria-expanded={showOthers}
+          className="shrink-0 cursor-pointer text-xs text-muted-foreground hover:text-foreground"
+          onClick={() => setShowOthers(!showOthers)}
+        >
           +{other.length} {other.length === 1 ? "path" : "paths"}
-        </summary>
-        <ul className="mt-1 space-y-1 pl-3 text-sm text-foreground">
+        </button>
+      ) : null}
+      {showOthers ? (
+        <ul className="basis-full space-y-1 pl-3">
           {other.map((path) => (
             <li
               key={path
@@ -164,20 +174,7 @@ export function RecordPaths({
             </li>
           ))}
         </ul>
-      </details>
-    ) : null;
-  if (compact)
-    return (
-      <div className="max-w-full min-w-0 text-sm">
-        <PathTrail path={first} compact />
-        {others}
-      </div>
-    );
-  return (
-    <div className="flex max-w-full min-w-0 flex-wrap items-center gap-x-1.5 gap-y-1 text-sm">
-      <span className="text-xs text-muted-foreground">via</span>
-      <PathTrail path={first} compact={false} />
-      {others}
+      ) : null}
     </div>
   );
 }
