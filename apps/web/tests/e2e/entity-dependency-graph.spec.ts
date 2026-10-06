@@ -222,21 +222,25 @@ test("graph workspace keeps its map while selecting, expanding, and opening reco
 
 test("graph thumbnails retain label space and canonical navigation", async ({
   page,
+  e2eRuntime,
 }) => {
   const name = `graph-thumbnail-${Date.now()}`;
-  const image = await seedImagePrerequisite(name);
-  await page.route(`**/e2e-${name}`, (route) =>
-    route.fulfill({
-      contentType: "image/svg+xml",
-      body: '<svg xmlns="http://www.w3.org/2000/svg" width="64" height="64"><rect width="64" height="64" fill="#16845b"/></svg>',
-    }),
-  );
+  const image = await seedImagePrerequisite(name, e2eRuntime.objectStorageUrl);
   await gotoAuthenticatedPage(page, `/graph?entity=image&root=${image.id}`);
   const card = page
     .getByLabel("Relationship graph", { exact: true })
     .locator(".graph-map-record")
     .first();
   await expect(card.locator("img")).toBeVisible({ timeout: 15000 });
+  await expect
+    .poll(() =>
+      card
+        .locator("img")
+        .evaluate(
+          (node) => node instanceof HTMLImageElement && node.naturalWidth > 0,
+        ),
+    )
+    .toBe(true);
   expect(
     await card.evaluate((node) => {
       const thumbnail = node.querySelector("img")!.getBoundingClientRect();

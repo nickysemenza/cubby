@@ -201,6 +201,7 @@ test("a bought seedling (transplantedOn only, no sowedOn) gets an inferred inter
 
 test("a planting's list row shows a thumbnail once a journal entry with a photo is logged", async ({
   page,
+  e2eRuntime,
   baseURL,
 }) => {
   const suffix = Date.now();
@@ -217,12 +218,9 @@ test("a planting's list row shows a thumbnail once a journal entry with a photo 
   // row has no gallery of its own (decision #5); it borrows the latest
   // journal entry's photo through the display-image policy, which needs an
   // actual image to resolve rather than a broken thumbnail.
-  const image = await seedImagePrerequisite(`garden-thumb-${suffix}`);
-  await page.route(`**/e2e-garden-thumb-${suffix}`, (route) =>
-    route.fulfill({
-      contentType: "image/svg+xml",
-      body: '<svg xmlns="http://www.w3.org/2000/svg" width="64" height="64"><rect width="64" height="64" fill="#16845b"/></svg>',
-    }),
+  const image = await seedImagePrerequisite(
+    `garden-thumb-${suffix}`,
+    e2eRuntime.objectStorageUrl,
   );
 
   const created = await page.request.post("/api/v1/garden-entries", {
@@ -245,4 +243,13 @@ test("a planting's list row shows a thumbnail once a journal entry with a photo 
   await expect(
     row.getByRole("img", { name: "Image", exact: true }),
   ).toBeVisible();
+  await expect
+    .poll(() =>
+      row
+        .getByRole("img", { name: "Image", exact: true })
+        .evaluate(
+          (node) => node instanceof HTMLImageElement && node.naturalWidth > 0,
+        ),
+    )
+    .toBe(true);
 });

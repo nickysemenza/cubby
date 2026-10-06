@@ -13,6 +13,7 @@ import { expect, test } from "./e2e-test";
 
 test("taxonomy edits keep product classification paths and labels separate from covers", async ({
   page,
+  e2eRuntime,
 }) => {
   const suffix = Date.now();
   const originalRoot = `Wardrobe taxonomy root ${suffix}`;
@@ -78,25 +79,13 @@ test("taxonomy edits keep product classification paths and labels separate from 
   const itemImageName = `wardrobe-item-${suffix}`;
   const labelImageName = `wardrobe-label-${suffix}`;
   const [itemImage, labelImage] = await Promise.all([
-    seedImagePrerequisite(itemImageName),
-    seedImagePrerequisite(labelImageName),
+    seedImagePrerequisite(itemImageName, e2eRuntime.objectStorageUrl),
+    seedImagePrerequisite(labelImageName, e2eRuntime.objectStorageUrl),
   ]);
   await Promise.all([
     attachProductImagePrerequisite(page, itemImage.id, productId, "item"),
     attachProductImagePrerequisite(page, labelImage.id, productId, "label"),
   ]);
-  await page.route(`**/e2e-${itemImageName}`, (route) =>
-    route.fulfill({
-      contentType: "image/svg+xml",
-      body: '<svg xmlns="http://www.w3.org/2000/svg" width="64" height="64"/>',
-    }),
-  );
-  await page.route(`**/e2e-${labelImageName}`, (route) =>
-    route.fulfill({
-      contentType: "image/svg+xml",
-      body: '<svg xmlns="http://www.w3.org/2000/svg" width="64" height="64"/>',
-    }),
-  );
   await gotoAuthenticatedPage(
     page,
     `/products/${productId}`,
@@ -105,6 +94,16 @@ test("taxonomy edits keep product classification paths and labels separate from 
   await expect(
     page.locator("#images").getByRole("img", { name: `${itemImageName}.png` }),
   ).toBeVisible();
+  await expect
+    .poll(() =>
+      page
+        .locator("#images")
+        .getByRole("img", { name: `${itemImageName}.png` })
+        .evaluate(
+          (node) => node instanceof HTMLImageElement && node.naturalWidth > 0,
+        ),
+    )
+    .toBe(true);
   await expect(
     page.locator("#images").getByRole("img", { name: `${labelImageName}.png` }),
   ).toHaveCount(0);

@@ -59,8 +59,12 @@ Do not select `.first()` or add a sleep to bypass duplicate controls.
 
 Playwright request interception disables Chromium's HTTP cache. Scope synthetic
 retailer documents to the retailer page, never the shared browser context or
-the Cubby application page. Remove transient failure interception before later
-reloads once its regression has been observed. Retired-route HTTP status
+the Cubby application page. Install transient interception immediately before
+the action that needs it, including opening UI that fetches automatically.
+Remove it once its regression has been observed,
+before later navigations or reloads. Image prerequisites upload synthetic bytes
+to the isolated worker object store; do not fulfill application image URLs with
+page routes. Assert image decoding as well as visibility. Retired-route HTTP status
 contracts use `request.get`; browser scenarios own visible not-found behavior.
 
 ### Workerd test runtime and profiles
