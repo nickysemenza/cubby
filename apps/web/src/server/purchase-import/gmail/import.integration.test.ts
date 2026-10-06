@@ -13,6 +13,7 @@ import {
   purchase,
   expense,
   inventoryEntry as inventory,
+  runFinding,
   run as runTable,
   runOrderCandidate,
   runTarget,
@@ -391,6 +392,98 @@ describe("saved confirmation imports", () => {
         .from(inventory)
         .where(eq(inventory.productId, product.id)),
     ).toHaveLength(0);
+  });
+
+  // Every order is household spending, but a delivered meal or a ticket is
+  // not inventory. Failure modes: an expense-only line mints a Product, or
+  // files an unresolved-Product finding that holds the run for review.
+  it("books an expense-only line with no Product and nothing to review", async () => {
+    const { mail, event } = await seed();
+    const result = await startOrderMailImport(
+      ctx.db,
+      { eventId: event.id, evidenceChecksum: mail.rawChecksum },
+      ctx.actor,
+      { send: async () => {} },
+    );
+    const [run] = await getDb(ctx.db)
+      .select()
+      .from(runTable)
+      .where(eq(runTable.shortcode, result.runId));
+    const evidence = await loadOrderMailImportEvidence(ctx.db, run!.id);
+    const productsBefore = await getDb(ctx.db).select().from(product);
+    await preparePurchaseImport(
+      ctx.db,
+      {
+        _runExecution: { runId: run!.id, operationId: "prepare-meal" },
+        orders: [
+          {
+            stableOrderId: "assigned-mail",
+            itemOperationId: "assigned-mail",
+            source: evidence!.source,
+            evidenceChecksum: evidence!.evidenceChecksum,
+            extractionRevision: "order-mail@1",
+            extraction: {
+              status: "ready" as const,
+              candidate: {
+                orderId: evidence!.orderId,
+                orderedAt: "2026-09-01T12:00:00Z",
+                merchant: "Example Noodle Bar",
+                currency: "USD",
+                printedGrandTotal: 5,
+                lines: [
+                  {
+                    title: "Spicy basil noodles, large",
+                    amount: 5,
+                    quantity: 1,
+                    lineKind: "principal" as const,
+                  },
+                ],
+                payments: [],
+                allShipmentsDelivered: null,
+              },
+            },
+            lineIds: ["noodles"],
+            primaryDocumentImageId: null,
+            screenshotImageId: null,
+          },
+        ],
+      },
+      ctx.actor,
+    );
+    const committed = await commitPurchaseImport(
+      ctx.db,
+      {
+        _runExecution: { runId: run!.id, operationId: "commit-meal" },
+        prepareOperationId: "prepare-meal",
+        defaultTrade: "other" as const,
+        resolutions: [
+          {
+            stableOrderId: "assigned-mail",
+            stableLineId: "noodles",
+            resolution: { kind: "expense_only" as const },
+          },
+        ],
+      },
+      ctx.actor,
+    );
+    expect(committed.items[0]?.outcome).toBe("created");
+    const lines = await getDb(ctx.db)
+      .select({ name: expense.name, productId: expense.productId })
+      .from(expense)
+      .innerJoin(purchase, eq(purchase.id, expense.purchaseId))
+      .where(eq(purchase.orderId, evidence!.orderId));
+    expect(lines).toEqual([
+      { name: "Spicy basil noodles, large", productId: null },
+    ]);
+    expect(await getDb(ctx.db).select().from(product)).toHaveLength(
+      productsBefore.length,
+    );
+    expect(
+      await getDb(ctx.db)
+        .select({ kind: runFinding.kind })
+        .from(runFinding)
+        .where(eq(runFinding.runId, run!.id)),
+    ).toEqual([]);
   });
 
   describe("enrichment after a mail import", () => {

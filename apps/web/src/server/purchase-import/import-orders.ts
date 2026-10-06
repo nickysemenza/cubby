@@ -820,6 +820,11 @@ export async function commitPurchaseImport(
                   kind: "new" as const,
                   lineIndex: line.position,
                 });
+              } else if (resolution.kind === "expense_only") {
+                productResolutions.push({
+                  kind: "expense_only" as const,
+                  lineIndex: line.position,
+                });
               } else {
                 requiresReview ||= parsedLine.lineKind === "principal";
                 productResolutions.push({
