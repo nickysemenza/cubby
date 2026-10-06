@@ -137,6 +137,12 @@ async function createUnderDomainLock(
   sender: string,
 ) {
   return withTransaction(db, async (tx) => {
+    // The name lock serializes two domains reaching for one name (the unique
+    // index is case-sensitive); the domain lock serializes two names for one
+    // domain. Always name first, then domain, so the order cannot deadlock.
+    await tx.execute(
+      sql`SELECT pg_advisory_xact_lock(hashtext(${`vendor-from-mail-name:${candidate.name.toLowerCase()}`}))`,
+    );
     await tx.execute(
       sql`SELECT pg_advisory_xact_lock(hashtext(${`vendor-from-mail:${candidate.domain}`}))`,
     );

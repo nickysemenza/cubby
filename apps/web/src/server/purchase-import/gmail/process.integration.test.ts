@@ -536,7 +536,9 @@ describe("Gmail order mail processing", () => {
         ["seedco.example", "seedco.test"].map((domain) =>
           createVendorFromOrderMail(
             ctx.db,
-            { name: "Seedco", domain },
+            // Differently cased, so the case-sensitive unique index alone
+            // would admit both.
+            { name: domain.endsWith(".test") ? "SEEDCO" : "Seedco", domain },
             `orders@${domain}`,
           ),
         ),
