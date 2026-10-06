@@ -33,7 +33,6 @@ import {
   formatSearchTerm,
   type MappableImageRecord,
   mapRelation,
-  type RowWithOptionalAliases,
 } from "~/server/repo/database-helpers";
 import type { MappableProductExternalId } from "~/server/repo/product/external-id-types";
 import {
@@ -49,7 +48,7 @@ import {
 import { computeRecipeUsages, dbRecipeToTopLevel } from "../recipe/helpers";
 
 type IngredientSelect = typeof ingredient.$inferSelect;
-type ProductSelect = RowWithOptionalAliases<typeof product.$inferSelect> & {
+type ProductSelect = typeof product.$inferSelect & {
   category: ProductCategorySummary | null;
   classificationEvidence: string;
 };

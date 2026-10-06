@@ -1359,18 +1359,9 @@ export function createEntityDisplayColumns<TRecord extends object>(
             : column,
         );
       const isIdentityField = field.readKey === titleField;
-      if (isIdentityField) {
-        // The standard-column pipeline owns the one canonical identity lane.
-        // Consume a legacy field override while list modules migrate so it
-        // cannot create a second, competing destination later in the row.
-        overrides?.visit((column) => {
-          const id =
-            column.id ??
-            ("accessorKey" in column ? String(column.accessorKey) : null);
-          if (id === columnId) usedOverrides.add(columnId);
-        });
-        continue;
-      }
+      // The standard-column pipeline owns the one canonical identity lane; an
+      // override claiming it fails below as undeclared.
+      if (isIdentityField) continue;
       // A declared span is one column in its start field's place. The start
       // keeps its inline editor; the end is edited in the edit sheet.
       if (spans.ends.has(field.key)) continue;

@@ -28,6 +28,7 @@ export {
   nextImageSortOrder,
   syncEntityImages,
   updateAndReturn,
+  touchUpdatedAt,
   updateLiveAndReturn,
 } from "./crud";
 export type { ImageJoinBinding } from "./crud";
@@ -62,11 +63,7 @@ export {
 } from "./query";
 // Relation loaders
 export { imageOrder, relations, singularAttachment } from "./relations";
-export type {
-  MappableImageRecord,
-  RowWithOptionalAliases,
-  RowWithOptionalAliasesAndTags,
-} from "./transform";
+export type { MappableImageRecord } from "./transform";
 // Transform helpers
 export {
   amountFromColumns,

@@ -7,7 +7,7 @@ import {
 } from "~/server/entity-kernel";
 import { createAppError } from "~/server/errors/app-error";
 
-import { resolveOrCreateWorkflow } from "./ingredient.server";
+import { resolveOrCreateIngredients } from "./ingredient.server";
 import { patchRecipeLine, type RecipeLinePatch } from "./recipe-line-patch";
 
 /**
@@ -69,9 +69,7 @@ export async function reparseRecipeLine(
     }));
   if (drift.modifier !== null) patch.modifier = drift.modifier;
   if (drift.name !== null) {
-    const [resolved] = await resolveOrCreateWorkflow(context.db, {
-      names: [drift.name],
-    });
+    const [resolved] = await resolveOrCreateIngredients(context, [drift.name]);
     if (resolved) patch.ingredientId = resolved.id;
   }
   const changed = [

@@ -31,14 +31,12 @@ import type {
   product,
   productUnitMappings,
 } from "~/server/db/schema";
-import type { RowWithOptionalAliasesAndTags } from "~/server/repo/database-helpers";
 import {
   isNotDeleted,
   type MappableImageRecord,
   mapImages,
   mapRelation,
   parseInventoryAmount,
-  type RowWithOptionalAliases,
 } from "~/server/repo/database-helpers";
 import { mapLocationIdentityProduct } from "~/server/repo/location/identity-product";
 import { parseLocationType } from "~/server/repo/location/parse-type";
@@ -122,10 +120,7 @@ export const splitProductImages = (
   };
 };
 
-type ProductTopLevelDB = Omit<
-  RowWithOptionalAliases<typeof product.$inferSelect>,
-  "growsPlantId"
-> & {
+type ProductTopLevelDB = Omit<typeof product.$inferSelect, "growsPlantId"> & {
   classificationEvidence: string;
   category: ProductCategorySummary | null;
   growsPlantId?: (typeof product.$inferSelect)["growsPlantId"];
@@ -211,8 +206,8 @@ export const mapDbProductToTopLevel = (
   return {
     id: parseShortcodeFor("product", productData.shortcode),
     name: productData.name,
-    aliases: productData.aliases ?? [],
-    tags: productData.tags ?? [],
+    aliases: productData.aliases,
+    tags: productData.tags,
     primaryGtin: primaryGtinOf(productData.externalIds),
     fdc_id: productData.fdc_id,
     manufacturer: productData.manufacturer,
@@ -304,7 +299,7 @@ export const dbProductToPickerItemAPI = (
 };
 
 export const mapDbProductToInventoryEmbed = (
-  productData: RowWithOptionalAliases<typeof product.$inferSelect> & {
+  productData: typeof product.$inferSelect & {
     category: ProductCategorySummary | null;
     pricing: ProductPricing;
     primaryGtin: string | null;
@@ -326,7 +321,7 @@ export const mapDbProductToInventoryEmbed = (
 });
 
 export const mapDbProductToInventoryList = (
-  productData: RowWithOptionalAliases<typeof product.$inferSelect> & {
+  productData: typeof product.$inferSelect & {
     category: ProductCategorySummary | null;
     pricing?: ProductPricing;
     primaryGtin: string | null;
@@ -358,7 +353,7 @@ export const mapDbProductIngredient = (
 });
 
 const mapDbLocationToProductListInventory = (
-  locationData: RowWithOptionalAliasesAndTags<typeof location.$inferSelect>,
+  locationData: typeof location.$inferSelect,
 ) => ({
   id: parseShortcodeFor("location", locationData.shortcode),
   name: locationData.name,
@@ -549,8 +544,8 @@ export const dbProductToAPI = (
   const result = {
     id: parseShortcodeFor("product", productData.shortcode),
     name: productData.name,
-    aliases: productData.aliases ?? [],
-    tags: productData.tags ?? [],
+    aliases: productData.aliases,
+    tags: productData.tags,
     primaryGtin: primaryGtinOf(productData.externalIds),
     fdc_id: productData.fdc_id,
     manufacturer: productData.manufacturer,

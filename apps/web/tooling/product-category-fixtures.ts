@@ -101,6 +101,7 @@ const productRowDefaults = {
   emoji: null,
   name: "Flour",
   manufacturer: "Generic",
+  aliases: [],
   tags: [],
   upc: null,
   fdc_id: null,

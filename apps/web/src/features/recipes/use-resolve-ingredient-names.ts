@@ -7,7 +7,7 @@ import type { IngredientMatch } from "./use-ingredient-matches";
 
 /**
  * Cache key for a requested ingredient name. Must match how the server keys the
- * names it was handed (`resolveOrCreateIngredients` trims, then lowercases) —
+ * names it was handed (the kernel `resolve` trims, then lowercases) —
  * a client that keyed on the raw name would miss the result for anything the
  * server normalized differently, and the miss aborts the whole import.
  */

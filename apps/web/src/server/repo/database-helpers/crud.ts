@@ -228,6 +228,34 @@ export const updateLiveAndReturn = async <
 };
 
 /**
+ * Bump `updatedAt` on the live rows of `table` among `ids`: a write to a
+ * related row (an attachment, an expense, an allocation) changes what the
+ * parent shows, so the parent reads as updated too.
+ */
+export const touchUpdatedAt = async <
+  T extends PgTable & {
+    id: AnyColumn;
+    deletedAt: AnyColumn;
+    updatedAt: AnyColumn;
+  },
+>(
+  db: Database | DrizzleTransaction,
+  table: T,
+  ids: readonly string[],
+  at = new Date(),
+): Promise<void> => {
+  const unique = [...new Set(ids)];
+  if (unique.length === 0) return;
+  // SAFETY: the constraint guarantees an `updatedAt` column; Drizzle's mapped
+  // set type cannot see that through the generic table parameter.
+  const values = { updatedAt: at } as PgUpdateSetSource<T>;
+  await unwrapDb(db)
+    .update(table)
+    .set(values)
+    .where(and(inArray(table.id, unique), notDeleted(table)));
+};
+
+/**
  * Associates pending images with an entity by creating join table records
  * and updating image statuses to UPLOADED.
  *

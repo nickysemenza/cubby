@@ -129,6 +129,7 @@ describe("entity kernel resolve", () => {
         id: null,
         matched: false,
         created: false,
+        matchValues: [],
         candidates: [],
       },
     ]);
@@ -164,6 +165,7 @@ describe("entity kernel resolve", () => {
         id: soy.id,
         matched: true,
         created: false,
+        matchValues: [soy.name, "SSS 500ml"],
         candidates: [],
       },
       {
@@ -171,6 +173,7 @@ describe("entity kernel resolve", () => {
         id: null,
         matched: false,
         created: false,
+        matchValues: [],
         candidates: [{ id: soy.id, name: soy.name }],
       },
     ]);

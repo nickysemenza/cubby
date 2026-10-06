@@ -60,6 +60,7 @@ import {
   image,
   ledgerSourceClaim,
   orderMailCandidateDecision,
+  product,
   purchase,
 } from "~/server/db/schema";
 import { createAppError } from "~/server/errors/app-error";
@@ -71,7 +72,6 @@ import {
 } from "~/server/repo/audit-log";
 import { loadDataQualities } from "~/server/repo/data-quality/hydrate";
 import { gapCondition } from "~/server/repo/data-quality/sql";
-import { touchDataQualityTargets } from "~/server/repo/data-quality/touch";
 import {
   buildPartialUpdateValues,
   correlated,
@@ -87,6 +87,7 @@ import {
   unwrapDb,
   updateLiveAndReturn,
   withTransaction,
+  touchUpdatedAt,
 } from "~/server/repo/database-helpers";
 import {
   assertQuantitySignMatchesCost,
@@ -998,10 +999,7 @@ export const reclassifyPurchaseDocument = async (
       .update(entityAttachment)
       .set({ documentKind: input.documentKind, updatedAt: new Date() })
       .where(eq(entityAttachment.id, before.id));
-    await tx
-      .update(purchase)
-      .set({ updatedAt: new Date() })
-      .where(and(eq(purchase.id, id), notDeleted(purchase)));
+    await touchUpdatedAt(tx, purchase, [id]);
     await logAuditEntry(tx, actor, {
       entityKind: "purchase",
       entityId: id,
@@ -1332,17 +1330,15 @@ export const linkExpensesToPurchase = async (
 
     await validatePurchaseItemInheritance(tx, [purchaseId]);
 
-    await touchDataQualityTargets(tx, {
-      productIds: before
-        .map((row) => row.productId)
-        .filter((value): value is ProductId => value !== null),
-      purchaseIds: [
-        purchaseId,
-        ...before
-          .map((row) => row.purchaseId)
-          .filter((value): value is PurchaseId => value !== null),
-      ],
-    });
+    await touchUpdatedAt(
+      tx,
+      product,
+      before.flatMap((row) => (row.productId ? [row.productId] : [])),
+    );
+    await touchUpdatedAt(tx, purchase, [
+      purchaseId,
+      ...before.flatMap((row) => (row.purchaseId ? [row.purchaseId] : [])),
+    ]);
 
     await logAuditEntries(
       tx,
@@ -1656,13 +1652,15 @@ export const splitExpense = async (
         audit: { into: auditEntries },
       });
 
-      await touchDataQualityTargets(tx, {
-        productIds: [
+      await touchUpdatedAt(
+        tx,
+        product,
+        [
           original.productId,
           ...preparedParts.map((part) => part.productId),
-        ].filter((value): value is ProductId => value !== null),
-        purchaseIds: [chargeId],
-      });
+        ].filter((value) => value !== null),
+      );
+      await touchUpdatedAt(tx, purchase, [chargeId]);
 
       await logAuditEntries(tx, actor, auditEntries);
 
@@ -2144,12 +2142,14 @@ export const foldChargeInto = async (
           columns: { productId: true },
         })
       : [];
-  await touchDataQualityTargets(tx, {
-    purchaseIds: [survivorId],
-    productIds: movedExpenseProducts
-      .map((row) => row.productId)
-      .filter((value): value is ProductId => value !== null),
-  });
+  await touchUpdatedAt(tx, purchase, [survivorId]);
+  await touchUpdatedAt(
+    tx,
+    product,
+    movedExpenseProducts.flatMap((row) =>
+      row.productId ? [row.productId] : [],
+    ),
+  );
 
   type PurchaseMergeSurvivorChanges = {
     foldedIn: { from: null; to: PurchaseId };

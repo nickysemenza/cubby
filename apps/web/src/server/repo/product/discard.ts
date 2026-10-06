@@ -46,12 +46,12 @@ import type { Database, DrizzleTransaction } from "~/server/db";
 import { inventoryEntry, product } from "~/server/db/schema";
 import { createAppError } from "~/server/errors/app-error";
 import { logAuditEntry } from "~/server/repo/audit-log";
-import { touchDataQualityTargets } from "~/server/repo/data-quality/touch";
 import {
   amountFromColumns,
   getDb,
   notDeleted,
   withTransaction,
+  touchUpdatedAt,
 } from "~/server/repo/database-helpers";
 import { describeDiscard } from "~/server/repo/product/discard-preview";
 import { loadProductInventoryEntries } from "~/server/repo/product/lookup";
@@ -286,7 +286,7 @@ export const discardProductUnits = async (
       actor,
     );
 
-    await touchDataQualityTargets(tx, { productIds: [input.productId] });
+    await touchUpdatedAt(tx, product, [input.productId]);
 
     // A cost-0 line cannot move a `cost > 0`-filtered aggregate, so this is
     // expected to be empty. Kept for structural parity with `createExpense`:
@@ -418,7 +418,7 @@ export const discardFromInventoryEntries = async (
       );
     }
 
-    await touchDataQualityTargets(tx, { productIds });
+    await touchUpdatedAt(tx, product, productIds);
 
     const priceAffectedProductIds = await syncChangedEffectivePrices(
       tx,

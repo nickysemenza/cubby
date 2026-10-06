@@ -8,7 +8,6 @@ import {
   useEntityDisplayImage,
 } from "~/entity/entity-media/entity-display-images";
 import { cookbook } from "~/integrations/tanstack-query/generated/catalog.gen";
-import { createNameColumn } from "~/ui/data-table/columnHelpers";
 import {
   createCubbyColumnCollection,
   createCubbyColumnHelper,
@@ -53,16 +52,6 @@ function CookbookProductLink({
 }
 
 const overrides = createCubbyColumnCollection<CookbookSummary>((add) => {
-  // The declared column is `name` (read key `book`); the name column keeps
-  // its `book` accessor under the declared id.
-  add({
-    ...createNameColumn(columnHelper, "cookbook", "book", {
-      header: "Title",
-      emptyLabel: () => "Untitled",
-      filterConfig: { placeholder: "Filter by title..." },
-    }),
-    id: "name",
-  });
   add(
     columnHelper.accessor("recipeCount", {
       id: "recipeCount",

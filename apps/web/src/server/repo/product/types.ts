@@ -11,24 +11,18 @@ import type {
   product,
   productUnitMappings,
 } from "~/server/db/schema";
-import type {
-  MappableImageRecord,
-  RowWithOptionalAliases,
-  RowWithOptionalAliasesAndTags,
-} from "~/server/repo/database-helpers";
+import type { MappableImageRecord } from "~/server/repo/database-helpers";
 import type { LocationIdentityProductRow } from "~/server/repo/location/internal-types";
 
 import type { MappableProductExternalId } from "./external-id-types";
 import type { ProductPricing } from "./pricing";
 import type { QuantityLedger } from "./quantity-ledger";
 
-type ProductSelect = RowWithOptionalAliases<typeof product.$inferSelect> & {
+type ProductSelect = typeof product.$inferSelect & {
   classificationEvidence: string;
   category: ProductCategorySummary | null;
 };
-type LocationSelect = RowWithOptionalAliasesAndTags<
-  typeof location.$inferSelect
->;
+type LocationSelect = typeof location.$inferSelect;
 
 /**
  * A breadcrumb rung on the detail read, carrying the thumbnail its link draws.

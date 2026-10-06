@@ -187,7 +187,7 @@ const resolvableEntitySchema = z.enum(generatedResolveEntityKernelEntities);
 export const entityResolveCommandSchema = z.object({
   action: z.literal("resolve"),
   entity: resolvableEntitySchema,
-  names: z.array(z.string().max(500)).min(1).max(500),
+  names: z.array(z.string().max(500)).min(1).max(1000),
   create: z.boolean().default(false),
 });
 
@@ -347,6 +347,12 @@ export const entityResolveResultSchema = z.object({
       /** An existing row matched the name or one of its declared aliases. */
       matched: z.boolean(),
       created: z.boolean(),
+      /**
+       * The resolved row's stored match values in declared order (its own
+       * name, then aliases); empty for a miss. Differs from `name` when the
+       * request matched through a casing variant or an alias.
+       */
+      matchValues: z.array(z.string()),
       /** Further exact matches, or a miss's closest contains-matches. */
       candidates: z.array(z.object({ id: z.string(), name: z.string() })),
     }),

@@ -26,7 +26,6 @@ import {
   mapImages,
   mapRelation,
   parseInventoryAmount,
-  type RowWithOptionalAliasesAndTags,
 } from "~/server/repo/database-helpers";
 import { requireLoadedProductPricing } from "~/server/repo/inventory/mappers";
 import { valuationLabel } from "~/server/repo/list-display-labels";
@@ -49,7 +48,7 @@ import type {
  * Handles shortcode branding, type parsing, and image extraction.
  */
 export const dbLocationToAPI = <Q extends DataQuality | undefined>(
-  locationData: RowWithOptionalAliasesAndTags<typeof location.$inferSelect> & {
+  locationData: typeof location.$inferSelect & {
     aiDescription?: string | null;
     product?: LocationIdentityProductRow | null;
     images?: Array<{
@@ -65,8 +64,8 @@ export const dbLocationToAPI = <Q extends DataQuality | undefined>(
     lastBulkInventory: locationData.lastBulkInventory,
     aiDescription: locationData.aiDescription ?? null,
     name: locationData.name,
-    aliases: locationData.aliases ?? [],
-    tags: locationData.tags ?? [],
+    aliases: locationData.aliases,
+    tags: locationData.tags,
     notes: locationData.notes ?? null,
     type: parseLocationType(locationData.type),
     product: mapLocationIdentityProduct(locationData),
@@ -78,7 +77,7 @@ export const dbLocationToAPI = <Q extends DataQuality | undefined>(
 };
 
 const dbLocationToListRef = (
-  locationData: RowWithOptionalAliasesAndTags<typeof location.$inferSelect>,
+  locationData: typeof location.$inferSelect,
 ): LocationListRefOut => ({
   id: parseShortcodeFor("location", locationData.shortcode),
   name: locationData.name,
@@ -159,8 +158,8 @@ export const buildLocationWithChildren = (
 
   return {
     name: x.name,
-    aliases: x.aliases ?? [],
-    tags: x.tags ?? [],
+    aliases: x.aliases,
+    tags: x.tags,
     notes: x.notes ?? null,
     id: parseShortcodeFor("location", x.shortcode),
     lastBulkInventory: x.lastBulkInventory,

@@ -72,11 +72,8 @@ export interface ResolvedName<E extends ResolvableEntity> {
 
 type ResolveOptions =
   | { create: false }
-  /**
-   * `actor` records each created row's audit entry; the legacy ingredient
-   * resolver never audited its creates and passes none.
-   */
-  | { create: true; actor?: ActorContext };
+  /** `actor` records each created row's audit entry. */
+  | { create: true; actor: ActorContext };
 
 const matchRowSchema = z.object({
   id: z.string(),
@@ -225,7 +222,7 @@ const createMiss = async <E extends ResolvableEntity>(
   db: Db,
   plan: ResolvePlan & { entity: E },
   miss: ResolveRequest<E>,
-  actor: ActorContext | undefined,
+  actor: ActorContext,
 ): Promise<ResolvedRow<E>> => {
   const where = and(
     ...liveInScope(plan),
@@ -249,7 +246,7 @@ const createMiss = async <E extends ResolvableEntity>(
       }) as never,
   });
   const id = z.object({ id: z.string() }).parse(row).id;
-  if (created && actor && isAuditableEntity(plan.entity))
+  if (created && isAuditableEntity(plan.entity))
     await logAuditEntry(db, actor, {
       entityKind: plan.entity,
       entityId: id,

@@ -48,6 +48,8 @@ const baseLocation = {
   id: LOCATION_ID,
   shortcode: "LOC-TEST",
   name: "Pantry",
+  aliases: [],
+  tags: [],
   createdAt: CREATED_AT,
   updatedAt: UPDATED_AT,
   deletedAt: DELETED_AT,

@@ -17,7 +17,7 @@ import { entityKernelContextSchema } from "~/server/entity-kernel";
 import { precomputeEnrichmentProposalsWorkflow } from "~/server/operations/ai.server";
 import {
   mergeWorkflow,
-  resolveOrCreateWorkflow,
+  resolveOrCreateIngredients,
 } from "~/server/operations/ingredient.server";
 import { getAuditLog } from "~/server/repo/audit-log";
 import { deleteRecipes } from "~/server/repo/recipe/crud";
@@ -289,16 +289,26 @@ describe("ingredient", () => {
       },
       ctx.actor,
     );
-    const rows = await resolveOrCreateWorkflow(ctx.db, {
-      names: ["Workflow seasoning", "Workflow pepper", " workflow pepper "],
-    });
+    const rows = await resolveOrCreateIngredients(
+      entityKernelContextSchema.parse(
+        createTestRequestContext(ctx.db, {
+          auth: { userId: ctx.actor.userId },
+        }),
+      ),
+      ["Workflow seasoning", "Workflow pepper", " workflow pepper "],
+    );
     expect(rows).toHaveLength(3);
     expect(rows[0]).toMatchObject({ id: existing.id, created: false });
     expect(rows[1]).toMatchObject({ created: true });
     expect(rows[2]?.id).toBe(rows[1]?.id);
-    const id = rows[1]?.entityId;
-    expect(id).toBeDefined();
-    if (!id) throw new Error("Expected newly resolved ingredient");
+    expect(rows[0]).toMatchObject({
+      canonicalName: "Workflow salt",
+      aliases: ["Workflow seasoning"],
+    });
+    const created = rows[1]?.id;
+    if (!created) throw new Error("Expected newly resolved ingredient");
+    const id = await resolveLiveShortcode(ctx.db, created, "ingredient");
+    if (!id) throw new Error("Expected a live resolved ingredient");
     expect(
       (await getIngredientByID(ctx.db, parseEntityId("ingredient", id)))
         .usuallyOnHand,

@@ -7,23 +7,19 @@ import type { InventoryItemForTree } from "@cubby/schemas/location";
 import type { ProductCategorySummary } from "@cubby/schemas/product-category-fields";
 
 import type { inventoryEntry, location, product } from "~/server/db/schema";
-import type {
-  MappableImageRecord,
-  RowWithOptionalAliases,
-  RowWithOptionalAliasesAndTags,
-} from "~/server/repo/database-helpers";
+import type { MappableImageRecord } from "~/server/repo/database-helpers";
 
 /**
  * `aiDescription` is not a column: the read that loaded the row attaches the
  * latest live `location-description` AiAnalysis text (`ai-description.ts`).
  */
-type LocationSelect = RowWithOptionalAliasesAndTags<
-  typeof location.$inferSelect
-> & { aiDescription?: string | null };
+type LocationSelect = typeof location.$inferSelect & {
+  aiDescription?: string | null;
+};
 
 import type { MappableProductExternalId } from "~/server/repo/product/external-id-types";
 
-type ProductSelect = RowWithOptionalAliases<typeof product.$inferSelect>;
+type ProductSelect = typeof product.$inferSelect;
 
 /**
  * The identity product joined onto a location — the SKU the location IS.

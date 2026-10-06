@@ -31,9 +31,11 @@ const toCandidate = (
 });
 
 /**
- * Shim over the kernel `resolve` capability (Product declares
- * `createMissing: false`, `candidates: 3`) kept for the product contract and
- * MCP tools; remove once they call `resolveEntity`. One entry per line: the
+ * The product resolve contract (web `product.resolveNames`, MCP
+ * `entity.resolve` on product), composed over the kernel `resolve`
+ * capability (Product declares `createMissing: false`, `candidates: 3`). It
+ * adds what the generic result does not carry: picker-hydrated candidates,
+ * external-id hits, and ingredient hits. One entry per line: the
  * bare `names` first (deduplicated case-insensitively), then `lines` as sent.
  * Each carries its exact name/alias matches or a miss's top lexical matches,
  * the Products holding its `(source, id)` pairs, and the Ingredients whose
