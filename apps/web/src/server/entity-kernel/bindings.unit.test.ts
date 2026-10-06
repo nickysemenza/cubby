@@ -148,6 +148,7 @@ describe("entity kernel bindings", () => {
       "plant",
       "product",
       "purchase",
+      "spendingCategory",
       "vendor",
     ]);
     for (const binding of mergeable) {

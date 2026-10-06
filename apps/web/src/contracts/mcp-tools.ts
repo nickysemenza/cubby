@@ -420,13 +420,13 @@ export const MCP_TOOLS = defineMcpTools({
 
   spending_classification_read: {
     description:
-      "Review historical spending impact before changing Product Category mappings, Vendor defaults, or explicit Expense categories.",
+      "Review historical spending impact before changing Product Category mappings, Vendor defaults, or explicit Expense categories, or merging Spending Categories.",
     actions: {
       preview: mcpAction({
         op: spendingClassificationContract.ops.preview,
         readPolicy: "strong",
         description:
-          "Nonmutating historical impact preview. Supply one complete Product Category mapping, Vendor spending policy, or selected Expense category assignment/reset. Returns signed exact-cent category totals and deltas including shared adjustments, unknown coverage, and a fingerprint. Review before applying; stored source evidence and Expense amounts remain unchanged.",
+          "Nonmutating historical impact preview. Supply one complete Product Category mapping, Vendor spending policy, selected Expense category assignment/reset, or Spending Category merge (`spendingCategoryMerge` with keepId and mergeIds; entity.merge refuses one that moves Expense history). Returns signed exact-cent category totals and deltas including shared adjustments, unknown coverage, and a fingerprint. Review before applying; stored source evidence and Expense amounts remain unchanged.",
       }),
     },
   },

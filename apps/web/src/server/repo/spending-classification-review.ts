@@ -37,7 +37,8 @@ import {
 import { validateProductPolicy } from "./inheritance-validation";
 import { getCategoryFeature, resolveProductCategory } from "./product-category";
 import { externalIdsContainIsbn } from "./product/update-helpers";
-import { resolveOrThrow } from "./shortcode-resolver";
+import { resolveAllOrThrow, resolveOrThrow } from "./shortcode-resolver";
+import { lockLiveSpendingCategories } from "./spending-category";
 import {
   assertReviewedSpendingClassification,
   withReviewedSpendingClassification,
@@ -145,6 +146,16 @@ async function draftFor(
         },
       ],
     };
+  if (request.action === "spendingCategoryMerge") {
+    const keepId = await resolveOrThrow(db, "spendingCategory", request.keepId);
+    const categoryRedirects = [];
+    for (const code of request.mergeIds)
+      categoryRedirects.push({
+        id: await resolveOrThrow(db, "spendingCategory", code),
+        keepId,
+      });
+    return { categoryRedirects };
+  }
   const spendingCategoryId = request.spendingCategoryId
     ? await resolveOrThrow(db, "spendingCategory", request.spendingCategoryId)
     : null;
@@ -360,6 +371,12 @@ export async function applyReviewedSpendingClassificationPolicy(
         defaultSpendingCategoryId: request.defaultSpendingCategoryId,
       },
     });
+  } else if (request.action === "spendingCategoryMerge") {
+    await executeEntity(ctx, {
+      action: "merge",
+      entity: "spendingCategory",
+      data: { keepId: request.keepId, mergeIds: request.mergeIds },
+    });
   } else {
     for (const id of request.expenseIds)
       await executeEntity(ctx, {
@@ -376,9 +393,19 @@ export async function applySpendingClassificationReview(
   raw: SpendingClassificationReviewApplyInput,
 ) {
   const input = spendingClassificationReviewApplyInput.parse(raw);
+  // Resolved before the transaction so the lock is its first statement.
+  const mergedCategories =
+    input.request.action === "spendingCategoryMerge"
+      ? await resolveAllOrThrow(ctx.db, "spendingCategory", [
+          input.request.keepId,
+          ...input.request.mergeIds,
+        ])
+      : [];
   return withTransactionDatabase(
     ctx.db,
     async (db) => {
+      if (mergedCategories.length)
+        await lockLiveSpendingCategories(db, mergedCategories);
       const impact = await buildPreview(db, input.request);
       if (impact.fingerprint !== input.fingerprint)
         fail(
@@ -399,7 +426,9 @@ export async function applySpendingClassificationReview(
             ? request.expenseIds.length
             : request.action === "products"
               ? request.productIds.length
-              : 1,
+              : request.action === "spendingCategoryMerge"
+                ? request.mergeIds.length
+                : 1,
         impact,
       };
     },

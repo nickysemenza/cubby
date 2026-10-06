@@ -40,6 +40,22 @@ fingerprint inside a serializable transaction before audited entity writes.
 Changes after preview require a fresh review. Web and native views use this same
 backend operation; the Swift review session supplies presentation state only.
 
+Merging Spending Categories is keeper-wins: every incoming reference (explicit
+Expense categories, Purchase defaults, Financial Transactions, merchant
+defaults, Product Category mappings) and every child category moves to the
+keeper, whose own name and expectations stay unchanged; the others soft-delete
+with an audit trail and redirect to the keeper. A merge refuses when a merged
+category is the keeper or one of its ancestors. A merge that moves any live
+Expense's effective category runs only as a reviewed `spendingCategoryMerge`
+change, and like every reviewed change it refuses when a moved Product-linked
+line lands in a `not_allowed` category. The plain `entity.merge` path applies
+only merges that move no Expense history, such as folding an unused category.
+Both merge paths first lock the keeper and merged categories and refuse one
+that is no longer live. A write racing a merge may still leave a reference to
+the merged-away category, which the Problems page's dangling-reference check
+reports for a person to fix; a concurrent Expense edit and merge may deadlock,
+in which case PostgreSQL aborts one and the person retries.
+
 Splitting an Expense preserves its category when a part omits the field, resets
 it when a part supplies null, and stores an explicit category when supplied.
 Splits preserve allocation basis and cannot fabricate Product/receipt identity.

@@ -46,6 +46,13 @@ export const spendingClassificationReviewInput = z
         spendingCategoryId: spendingCategoryShortcode.nullable().default(null),
       })
       .strict(),
+    z
+      .object({
+        action: z.literal("spendingCategoryMerge"),
+        keepId: spendingCategoryShortcode,
+        mergeIds: z.array(spendingCategoryShortcode).min(1).max(50),
+      })
+      .strict(),
   ])
   .superRefine((input, ctx) => {
     if (
@@ -78,6 +85,17 @@ export const spendingClassificationReviewInput = z
         code: "custom",
         path: ["expenseIds"],
         message: "Select each Expense only once.",
+      });
+    }
+    if (
+      input.action === "spendingCategoryMerge" &&
+      (new Set(input.mergeIds).size !== input.mergeIds.length ||
+        input.mergeIds.includes(input.keepId))
+    ) {
+      ctx.addIssue({
+        code: "custom",
+        path: ["mergeIds"],
+        message: "Name each merged category once, and never the keeper.",
       });
     }
   });

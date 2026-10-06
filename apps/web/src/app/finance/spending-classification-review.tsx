@@ -36,7 +36,8 @@ function ClassificationReview({
     useState<ComboboxItem<SpendingCategoryShortcode> | null>(() => {
       if (initialCategory !== undefined) return initialCategory;
       const id =
-        initial.action === "products"
+        initial.action === "products" ||
+        initial.action === "spendingCategoryMerge"
           ? null
           : initial.action === "vendor"
             ? initial.defaultSpendingCategoryId
@@ -59,8 +60,10 @@ function ClassificationReview({
   return (
     <div className="max-w-2xl space-y-4">
       <p className="text-sm text-muted-foreground">
-        Defaults update past and future Expenses. Explicit Expense categories
-        stay in place. Review the change before applying it.
+        {request.action === "spendingCategoryMerge"
+          ? "Every Expense, Purchase, transaction, merchant default, and Product Category mapping in the merged categories moves to the kept category, including past spending."
+          : "Defaults update past and future Expenses. Explicit Expense categories stay in place."}{" "}
+        Review the change before applying it.
       </p>
       {request.action === "productCategory" && (
         <label htmlFor={mappingId} className="block space-y-1 text-sm">
@@ -114,6 +117,7 @@ function ClassificationReview({
         </label>
       )}
       {request.action !== "products" &&
+        request.action !== "spendingCategoryMerge" &&
         (request.action !== "productCategory" ||
           request.spendingCategoryMode === "mapped") && (
           <EntityReferencePicker
@@ -230,6 +234,20 @@ export function ProductCategoryClassification({
         spendingCategoryMode: record.spendingCategoryMode,
         spendingCategoryId: record.spendingCategoryId,
       }}
+    />
+  );
+}
+/** A spending category merge moves history, so it applies only through review. */
+export function SpendingCategoryMergeReview({
+  keepId,
+  mergeIds,
+}: {
+  keepId: SpendingCategoryShortcode;
+  mergeIds: SpendingCategoryShortcode[];
+}) {
+  return (
+    <ClassificationReview
+      initial={{ action: "spendingCategoryMerge", keepId, mergeIds }}
     />
   );
 }
