@@ -282,7 +282,9 @@ describe("structured feature routing eval", () => {
     );
     for (const suite of selected) {
       const candidates = evalCandidates(
-        `gpt-6-sol:high,${suite.feature.model}:${suite.feature.effort}`,
+        // Both tiers, whichever one the feature is on: a default that named
+        // the feature's own model would compare Sol with itself.
+        `gpt-6-sol:high,gpt-6-luna:${suite.feature.effort}`,
       );
       const cases = suite.cases.filter(
         (entry) => !caseFilter || caseFilter.includes(entry.name),

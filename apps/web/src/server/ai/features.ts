@@ -228,10 +228,11 @@ export const PURCHASE_IMPORT_REVERSAL_KIND_FEATURE = defineFeature({
 }) satisfies AiDecisionFeature;
 
 // ---------------------------------------------------------------------------
-// Fast tier — GPT-6 Luna. Identification, detection, oversized selection,
-// and, at high effort, the features that left the Sol reasoning tier on
-// `eval:features` evidence: purchase-import audit, extraction repair, and
-// recipe flow.
+// Chat tiers. Quality — GPT-6 Sol: purchase evidence (extraction, receipts,
+// mail classification, audit, repair), recipe flow, and photo identity and
+// detection. Fast — GPT-6 Luna: oversized selection and bulk descriptions.
+// Production reaches OpenAI through the household's ChatGPT plan, where Sol's
+// marginal cost is about zero (`docs/infrastructure.md`).
 // ---------------------------------------------------------------------------
 
 /**
@@ -303,7 +304,8 @@ export const PURCHASE_IMPORT_MAIL_FEATURE = defineFeature({
 }) satisfies AiStructuredFeature<OrderMailMessageClassification>;
 
 /**
- * Moved from Sol after `eval:features` (2026-10-04): Luna at high effort
+ * On Sol again since 2026-10-06, when the ChatGPT plan made its cost moot.
+ * History: moved from Sol after `eval:features` (2026-10-04): Luna at high effort
  * matched Sol high 12/16 with zero unsafe answers on both, at about 1/19 of
  * the cost. Its schema still carries no array bounds: a failed call is
  * retried on the Anthropic recovery model (`extract.ts`).
@@ -319,7 +321,8 @@ export const PURCHASE_IMPORT_AUDIT_FEATURE = defineFeature({
 }) satisfies AiStructuredFeature<ImportAuditModelOutput>;
 
 /**
- * Moved from Sol after `eval:features` (2026-10-04): Luna at high effort
+ * On Sol again since 2026-10-06, when the ChatGPT plan made its cost moot.
+ * History: moved from Sol after `eval:features` (2026-10-04): Luna at high effort
  * matched Sol high 14/14 with zero unsafe repairs (no line invented, moved,
  * or scaled to balance a total), at about 1/19 of the cost. The eval's cases
  * are text-only; production also attaches the capture's screenshot, which
@@ -336,7 +339,8 @@ export const PURCHASE_IMPORT_REPAIR_FEATURE = defineFeature({
 }) satisfies AiStructuredFeature<ImportExtractionModelOutput>;
 
 /**
- * Moved from Sol low after `eval:features` (2026-10-04): Luna at high effort
+ * On Sol again since 2026-10-06, when the ChatGPT plan made its cost moot.
+ * History: moved from Sol low after `eval:features` (2026-10-04): Luna at high effort
  * matched it 10/10 with zero unsafe plans (no number a step's own evidence
  * does not state), at about 1/13 of the cost and roughly twice the latency.
  * Flows a previous model stored stay current (`recipe-flow.service.ts`).
