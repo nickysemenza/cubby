@@ -71,7 +71,7 @@ describe("hand-written per-entity registries only shrink", () => {
       .filter((entity) => entity.route?.listColumns)
       .map((entity) => entity.key);
     // Every production binding retains the hook-stability regression coverage.
-    expect(declared.toSorted()).toEqual(Object.keys(listOverrides).toSorted());
+    expect(declared.sort()).toEqual(Object.keys(listOverrides).sort());
     const added = declared.filter(
       (entity) => !LIST_OVERRIDE_BASELINE.includes(entity),
     );

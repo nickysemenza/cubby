@@ -43,7 +43,7 @@ Commit hooks, push behavior, and the merge gate are defined in the
 [validation policy](agents/validation.md); GitHub checks on the final PR head
 remain the merge gate.
 
-Node 24, pnpm 12.4.1, Rust/wasm-pack, Apple `container` on macOS (external PostgreSQL/IntegreSQL on Linux) and Playwright
+Node 24, pnpm 12.7.0, Rust/wasm-pack, Apple `container` on macOS (external PostgreSQL/IntegreSQL on Linux) and Playwright
 browsers must be available; [test tiers](agents/validation-tests.md) cover database setup.
 PostgreSQL remains the authoritative integration tier; Playwright defaults to
 one worker on hosted runners and two on local macOS (`tooling/e2e-workers.ts`),
@@ -138,6 +138,19 @@ on 2026-10-05 took 7:39 and 4:35 respectively in the Apple app job after the
 successful exact-key DerivedData restore. Swift compilation log entries fell
 from 1,380 to two. This verifies reuse for unchanged inputs; one controlled
 rerun does not establish a PR median.
+After the main cache was seeded, a [normal main Apple app job](https://github.com/nickysemenza/cubby/actions/runs/37423177521/job/112138086525)
+on 2026-10-05 restored the same exact 419 MB DerivedData entry and passed in
+3:47, with two Swift compilation log entries for generated asset symbols.
+This confirms cross-run main-cache reuse, not a new required-check median.
+A controlled [same-head SwiftPM cold build and warm rerun](https://github.com/nickysemenza/cubby/actions/runs/37423177521)
+passed the same 646 tests in both attempts: the package job fell from 8:03 to
+2:57 after restoring its exact main cache, and compilation fell from 357s to
+72s. Cache restore and generator-warning checks still contribute to the warm
+job. This controlled measurement does not establish a PR median.
+Retire obsolete cache generations and merged PRs' private cache entries with
+GitHub's cache controls after main is seeded; retain active PR and current main
+entries. The repository keeps the default 10 GB cache limit, so no paid cache
+capacity or custom cleanup scheduler is needed.
 
 ## Hosted suite
 
