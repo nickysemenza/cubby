@@ -2,7 +2,7 @@ import type { RowData, RowSelectionState } from "@tanstack/react-table";
 
 import { Checkbox } from "~/ui/primitives/checkbox";
 
-import type { CubbyColumnDef } from "./table-features";
+import type { CubbyCellContext, CubbyColumnDef } from "./table-features";
 
 /**
  * Drop selected row keys that no longer belong to the current canonical
@@ -26,6 +26,49 @@ export function reconcileRowSelection(
   return changed ? next : current;
 }
 
+function SelectColumnHeader<T extends RowData>({
+  table,
+}: Pick<CubbyCellContext<T>, "table">) {
+  return (
+    // Wrapper stops propagation since Base UI Checkbox doesn't pass onClick to the DOM element
+    <div role="presentation" onClick={(e) => e.stopPropagation()}>
+      <Checkbox
+        checked={table.getIsAllPageRowsSelected()}
+        indeterminate={
+          table.getIsSomePageRowsSelected() && !table.getIsAllPageRowsSelected()
+        }
+        onCheckedChange={(value) => table.toggleAllPageRowsSelected(!!value)}
+        aria-label="Select all"
+      />
+    </div>
+  );
+}
+
+function SelectColumnCell<T extends RowData>({
+  row,
+}: Pick<CubbyCellContext<T>, "row">) {
+  return (
+    // A row the table won't select gets no checkbox at all, rather than one
+    // that silently ignores the click. `enableRowSelection` can be a
+    // predicate (a tree whose children belong to a different entity than the
+    // bulk actions target — see `EntityListTreeConfig.rowIsEntity`).
+    !row.getCanSelect() ? null : (
+      <div role="presentation" onClick={(e) => e.stopPropagation()}>
+        <Checkbox
+          checked={row.getIsSelected()}
+          onCheckedChange={(checked, details) =>
+            row.getToggleSelectedHandler({ selectChildren: false })({
+              target: { checked },
+              nativeEvent: details.event,
+            })
+          }
+          aria-label="Select row"
+        />
+      </div>
+    )
+  );
+}
+
 /**
  * Builds the leading row-selection checkbox column shared by every entity list.
  *
@@ -36,39 +79,10 @@ export function reconcileRowSelection(
 export function buildSelectColumn<T extends RowData>(): CubbyColumnDef<T> {
   return {
     id: "select",
-    header: ({ table }) => (
-      // Wrapper stops propagation since Base UI Checkbox doesn't pass onClick to the DOM element
-      <div role="presentation" onClick={(e) => e.stopPropagation()}>
-        <Checkbox
-          checked={table.getIsAllPageRowsSelected()}
-          indeterminate={
-            table.getIsSomePageRowsSelected() &&
-            !table.getIsAllPageRowsSelected()
-          }
-          onCheckedChange={(value) => table.toggleAllPageRowsSelected(!!value)}
-          aria-label="Select all"
-        />
-      </div>
-    ),
-    cell: ({ row }) =>
-      // A row the table won't select gets no checkbox at all, rather than one
-      // that silently ignores the click. `enableRowSelection` can be a
-      // predicate (a tree whose children belong to a different entity than the
-      // bulk actions target — see `EntityListTreeConfig.rowIsEntity`).
-      !row.getCanSelect() ? null : (
-        <div role="presentation" onClick={(e) => e.stopPropagation()}>
-          <Checkbox
-            checked={row.getIsSelected()}
-            onCheckedChange={(checked, details) =>
-              row.getToggleSelectedHandler({ selectChildren: false })({
-                target: { checked },
-                nativeEvent: details.event,
-              })
-            }
-            aria-label="Select row"
-          />
-        </div>
-      ),
+    // flexRender treats these callbacks as component types. Column metadata
+    // can refresh while a checkbox holds focus; keep its type stable.
+    header: SelectColumnHeader,
+    cell: SelectColumnCell,
     enableSorting: false,
     enableHiding: false,
     enablePinning: false,
