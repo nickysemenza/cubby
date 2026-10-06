@@ -657,7 +657,8 @@ export async function processOrderMails(
       // Receiving (and its return window) is for stocked items: a line with
       // a Product, or goods the importer could not match yet (it files
       // `product_unresolved` for those). Any other productless line is one
-      // the importer booked as expense-only — a meal, a ticket, a bouquet.
+      // the importer booked as expense-only (a meal, a ticket, a bouquet) or
+      // judged not worth a Product; neither has anything to receive.
       const [stocked] =
         target && event.event === "delivered"
           ? await database

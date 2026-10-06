@@ -27,6 +27,10 @@ import {
 } from "~/server/repo/repo.fixtures";
 import { insertWithShortcode } from "~/server/repo/shortcode-utils";
 
+import {
+  aggregateReplacementApprovalFingerprint,
+  loadAggregateReplacementSnapshot,
+} from "./aggregate-replacement";
 import { resolveRunFinding } from "./findings";
 import {
   commitPurchaseImport,
@@ -738,6 +742,129 @@ describe("shared purchase-import prepare and commit", () => {
     expect(operation?.error).toContain("PRD-9999");
   });
 
+  /**
+   * A member booked an order by hand as one aggregate Expense, then an import
+   * of the same order commits its itemized line, which leaves a reviewed
+   * replacement of the aggregate for approval.
+   */
+  async function importOverManualAggregate(targetOrderless: boolean) {
+    const party = await insertWithShortcode(ctx.db, "ledgerParty", {
+      name: "Manual-then-import member",
+      kind: "member",
+      userId: ctx.actor.userId,
+    });
+    const vendor = await insertWithShortcode(ctx.db, "vendor", {
+      name: `Manual-then-import vendor ${crypto.randomUUID()}`,
+      website: "https://shop.example.test",
+      browserDomains: ["shop.example.test"],
+    });
+    const account = await insertWithShortcode(ctx.db, "vendorAccount", {
+      label: "Manual-then-import account",
+      vendorId: vendor.id,
+      ledgerPartyId: party.id,
+    });
+    // A household member recorded this order by hand before any import ran:
+    // one aggregate Expense, no Product, no source claim.
+    const manualPurchase = await insertWithShortcode(ctx.db, "purchase", {
+      vendorId: vendor.id,
+      orderId: targetOrderless ? null : "MANUAL-ORDER-1",
+      date: "2026-09-18",
+      statedTotal: 45,
+    });
+    const manualExpense = await insertWithShortcode(ctx.db, "expense", {
+      purchaseId: manualPurchase.id,
+      name: "Recorded from a paper receipt",
+      cost: 45,
+      date: "2026-09-18",
+      lineKind: "principal",
+      costType: "materials",
+      trade: "other",
+      future: false,
+      productId: null,
+      productQuantity: null,
+    });
+    const existingProduct = await createProductFixture(
+      ctx.db,
+      makeProductInput({ name: "Manual merge target product" }),
+      ctx.actor,
+    );
+    const [productRow] = await getDb(ctx.db)
+      .select({ shortcode: product.shortcode })
+      .from(product)
+      .where(eq(product.id, existingProduct.entityId));
+    if (!productRow) throw new Error("Product fixture was not created");
+
+    const run = await startOrResumeRun(ctx.db, {
+      ledgerPartyId: party.id,
+      vendorAccountId: account.id,
+      trigger: "manual",
+    });
+    const prepareInput = {
+      _runExecution: {
+        runId: run.id,
+        operationId: "prepare:manual-order-1",
+        itemOperationIds: ["prepare-item:manual-order-1"],
+      },
+      orders: [
+        {
+          stableOrderId: "manual-order-1",
+          targetPurchaseId: targetOrderless
+            ? manualPurchase.shortcode
+            : undefined,
+          itemOperationId: "prepare-item:manual-order-1",
+          source: {
+            kind: "browser_order" as const,
+            externalKey: "manual-then-import:order:1",
+            checksum: checksum("5"),
+          },
+          evidenceChecksum: checksum("6"),
+          extractionRevision: "manual-then-import@fixture-1",
+          extraction: {
+            status: "ready" as const,
+            candidate: {
+              orderId: "MANUAL-ORDER-1",
+              orderedAt: "2026-09-18T12:00:00.000Z",
+              merchant: "Example",
+              currency: "USD",
+              printedGrandTotal: 45,
+              lines: [
+                {
+                  title: "Manual merge target product",
+                  amount: 45,
+                  lineKind: "principal" as const,
+                },
+              ],
+              payments: [],
+              allShipmentsDelivered: false,
+            },
+          },
+          lineIds: ["manual-order-1:line-1"],
+          primaryDocumentImageId: null,
+          screenshotImageId: null,
+        },
+      ],
+    };
+    await preparePurchaseImport(ctx.db, prepareInput, ctx.actor);
+
+    const commitInput = commitPurchaseImportInput.parse({
+      _runExecution: { runId: run.id, operationId: "commit:manual-order-1" },
+      prepareOperationId: prepareInput._runExecution.operationId,
+      defaultTrade: "other" as const,
+      resolutions: [
+        {
+          stableOrderId: "manual-order-1",
+          stableLineId: "manual-order-1:line-1",
+          resolution: {
+            kind: "existing" as const,
+            productId: productRow.shortcode,
+          },
+        },
+      ],
+    });
+    const result = await commitPurchaseImport(ctx.db, commitInput, ctx.actor);
+    return { manualPurchase, manualExpense, existingProduct, result };
+  }
+
   it.each([
     [false, false, false],
     [true, false, false],
@@ -746,120 +873,8 @@ describe("shared purchase-import prepare and commit", () => {
   ])(
     "keeps an exact aggregate until its unchanged replacement preview is approved (edited: %s, orderless: %s, proposal changed: %s)",
     async (editAfterPreview, targetOrderless, editProposal) => {
-      const party = await insertWithShortcode(ctx.db, "ledgerParty", {
-        name: "Manual-then-import member",
-        kind: "member",
-        userId: ctx.actor.userId,
-      });
-      const vendor = await insertWithShortcode(ctx.db, "vendor", {
-        name: `Manual-then-import vendor ${crypto.randomUUID()}`,
-        website: "https://shop.example.test",
-        browserDomains: ["shop.example.test"],
-      });
-      const account = await insertWithShortcode(ctx.db, "vendorAccount", {
-        label: "Manual-then-import account",
-        vendorId: vendor.id,
-        ledgerPartyId: party.id,
-      });
-      // A household member recorded this order by hand before any import ran:
-      // one aggregate Expense, no Product, no source claim.
-      const manualPurchase = await insertWithShortcode(ctx.db, "purchase", {
-        vendorId: vendor.id,
-        orderId: targetOrderless ? null : "MANUAL-ORDER-1",
-        date: "2026-09-18",
-        statedTotal: 45,
-      });
-      const manualExpense = await insertWithShortcode(ctx.db, "expense", {
-        purchaseId: manualPurchase.id,
-        name: "Recorded from a paper receipt",
-        cost: 45,
-        date: "2026-09-18",
-        lineKind: "principal",
-        costType: "materials",
-        trade: "other",
-        future: false,
-        productId: null,
-        productQuantity: null,
-      });
-      const existingProduct = await createProductFixture(
-        ctx.db,
-        makeProductInput({ name: "Manual merge target product" }),
-        ctx.actor,
-      );
-      const [productRow] = await getDb(ctx.db)
-        .select({ shortcode: product.shortcode })
-        .from(product)
-        .where(eq(product.id, existingProduct.entityId));
-      if (!productRow) throw new Error("Product fixture was not created");
-
-      const run = await startOrResumeRun(ctx.db, {
-        ledgerPartyId: party.id,
-        vendorAccountId: account.id,
-        trigger: "manual",
-      });
-      const prepareInput = {
-        _runExecution: {
-          runId: run.id,
-          operationId: "prepare:manual-order-1",
-          itemOperationIds: ["prepare-item:manual-order-1"],
-        },
-        orders: [
-          {
-            stableOrderId: "manual-order-1",
-            targetPurchaseId: targetOrderless
-              ? manualPurchase.shortcode
-              : undefined,
-            itemOperationId: "prepare-item:manual-order-1",
-            source: {
-              kind: "browser_order" as const,
-              externalKey: "manual-then-import:order:1",
-              checksum: checksum("5"),
-            },
-            evidenceChecksum: checksum("6"),
-            extractionRevision: "manual-then-import@fixture-1",
-            extraction: {
-              status: "ready" as const,
-              candidate: {
-                orderId: "MANUAL-ORDER-1",
-                orderedAt: "2026-09-18T12:00:00.000Z",
-                merchant: "Example",
-                currency: "USD",
-                printedGrandTotal: 45,
-                lines: [
-                  {
-                    title: "Manual merge target product",
-                    amount: 45,
-                    lineKind: "principal" as const,
-                  },
-                ],
-                payments: [],
-                allShipmentsDelivered: false,
-              },
-            },
-            lineIds: ["manual-order-1:line-1"],
-            primaryDocumentImageId: null,
-            screenshotImageId: null,
-          },
-        ],
-      };
-      await preparePurchaseImport(ctx.db, prepareInput, ctx.actor);
-
-      const commitInput = commitPurchaseImportInput.parse({
-        _runExecution: { runId: run.id, operationId: "commit:manual-order-1" },
-        prepareOperationId: prepareInput._runExecution.operationId,
-        defaultTrade: "other" as const,
-        resolutions: [
-          {
-            stableOrderId: "manual-order-1",
-            stableLineId: "manual-order-1:line-1",
-            resolution: {
-              kind: "existing" as const,
-              productId: productRow.shortcode,
-            },
-          },
-        ],
-      });
-      const result = await commitPurchaseImport(ctx.db, commitInput, ctx.actor);
+      const { manualPurchase, manualExpense, existingProduct, result } =
+        await importOverManualAggregate(targetOrderless);
       // The order was already a Purchase (found by vendor + orderId), so this
       // is an update to it, never a second Purchase for the same order.
       expect(result.items[0]?.outcome).toBe("updated");
@@ -973,6 +988,67 @@ describe("shared purchase-import prepare and commit", () => {
       expect(deletedManualExpense?.deletedAt).not.toBeNull();
     },
   );
+
+  // Delivery mail asks to receive only Product lines or open unresolved
+  // goods, so goods a replacement leaves unresolved must keep that finding.
+  it("files product_unresolved for goods an applied replacement leaves unresolved", async () => {
+    const { manualPurchase, manualExpense } =
+      await importOverManualAggregate(false);
+    const [finding] = await getDb(ctx.db)
+      .select({ id: runFinding.id, proposedFix: runFinding.proposedFix })
+      .from(runFinding)
+      .where(
+        and(
+          eq(runFinding.entityId, manualPurchase.id),
+          eq(runFinding.kind, "duplicate_lines"),
+        ),
+      );
+    const fix = proposedImportFix.parse(finding?.proposedFix);
+    if (!finding || fix.kind !== "replace_aggregate_line")
+      throw new Error("Expected a replacement preview");
+    // The member reviewed the line as goods they could not match yet.
+    const identities = (fix.reviewedLineIdentities ?? []).map((identity) => ({
+      ...identity,
+      productId: null,
+      promote: false,
+      unresolvedReason: "The receipt names no model.",
+    }));
+    const { snapshot } = await withTransaction(ctx.db, (tx) =>
+      loadAggregateReplacementSnapshot(tx, manualPurchase.id, manualExpense.id),
+    );
+    const fingerprint = await aggregateReplacementApprovalFingerprint(
+      snapshot.fingerprint,
+      fix.lines,
+      identities,
+      fix.reviewedLineAttributions ?? [],
+    );
+    await getDb(ctx.db)
+      .update(runFinding)
+      .set({
+        proposedFix: {
+          ...fix,
+          reviewedLineIdentities: identities,
+          reviewSnapshot: { ...fix.reviewSnapshot!, fingerprint },
+        },
+      })
+      .where(eq(runFinding.id, finding.id));
+    await resolveRunFinding(
+      ctx.db,
+      { id: finding.id, action: "apply", reviewedFingerprint: fingerprint },
+      ctx.actor,
+    );
+    const unresolved = await getDb(ctx.db)
+      .select({ id: runFinding.id })
+      .from(runFinding)
+      .where(
+        and(
+          eq(runFinding.entityId, manualPurchase.id),
+          eq(runFinding.kind, "product_unresolved"),
+          eq(runFinding.status, "open"),
+        ),
+      );
+    expect(unresolved).toHaveLength(1);
+  });
 
   it("files a conflict finding instead of duplicating a manual Purchase whose Expense is already identified", async () => {
     const party = await insertWithShortcode(ctx.db, "ledgerParty", {
