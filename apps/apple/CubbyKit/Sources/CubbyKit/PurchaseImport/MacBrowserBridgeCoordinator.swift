@@ -40,7 +40,7 @@
         private let executorFactory: (BrowserChoice, String) throws -> MacBrowserCommandExecutor
         private let replayStoreFactory: (String) throws -> any BrowserBridgeReplayStoring
         private let capabilities: (Bool) -> BrowserBridgeCapabilities
-        private let rosterRefreshInterval: Duration
+        private let rosterRefreshTick: @Sendable () async throws -> Void
         private let observer: (MacBrowserBridgeEvent) -> Void
         private var bridges: [String: URLSessionBrowserBridge] = [:]
         private var executors: [String: MacBrowserCommandExecutor] = [:]
@@ -55,6 +55,8 @@
         private var connection: Connection?
         private var rosterRefreshLoop: Task<Void, Never>?
         private var rosterRefreshInFlight: Task<Void, any Error>?
+        private var fleetOperation: Task<Void, Never>?
+        private var teardowns = 0
 
         public init(
             baseURL: URL, credentials: CredentialProvider, deviceID: UUID,
@@ -63,7 +65,9 @@
             executorFactory: @escaping (BrowserChoice, String) throws -> MacBrowserCommandExecutor,
             replayStoreFactory: @escaping (String) throws -> any BrowserBridgeReplayStoring,
             capabilities: @escaping (Bool) -> BrowserBridgeCapabilities,
-            rosterRefreshInterval: Duration = .seconds(600),
+            rosterRefreshTick: @escaping @Sendable () async throws -> Void = {
+                try await Task.sleep(for: .seconds(600))
+            },
             observer: @escaping (MacBrowserBridgeEvent) -> Void
         ) {
             self.baseURL = baseURL
@@ -74,7 +78,7 @@
             self.executorFactory = executorFactory
             self.replayStoreFactory = replayStoreFactory
             self.capabilities = capabilities
-            self.rosterRefreshInterval = rosterRefreshInterval
+            self.rosterRefreshTick = rosterRefreshTick
             self.observer = observer
         }
 
@@ -90,7 +94,9 @@
         /// roster refresh connects an account the member enables for browser sync later.
         public func connect(browser: BrowserChoice, enhancedEvidence: Bool) async throws {
             BrowserBridgeDebugLog.emit(.connectRequested, browser: browser)
-            try await replaceConnections(browser: browser, enhancedEvidence: enhancedEvidence)
+            try await serialized {
+                try await self.replaceConnections(browser: browser, enhancedEvidence: enhancedEvidence)
+            }
         }
 
         public func syncNow(
@@ -100,7 +106,9 @@
             BrowserBridgeDebugLog.emit(.syncRequested, browser: browser)
             // Refresh the roster and browser preference first so a newly added or paused account is
             // reflected in this manual run, then enqueue one server-owned run per eligible account.
-            try await replaceConnections(browser: browser, enhancedEvidence: enhancedEvidence)
+            try await serialized {
+                try await self.replaceConnections(browser: browser, enhancedEvidence: enhancedEvidence)
+            }
             var failures: [String] = []
             var submitted: [BrowserBridgeSyncResponse] = []
             for account in accounts.values.sorted(by: { $0.id < $1.id }) {
@@ -122,13 +130,33 @@
         /// Re-lists browser-sync accounts and reconciles incrementally: a newly listed account gets
         /// a bridge, an unlisted one loses its bridge, and every other bridge keeps its socket.
         /// A no-op until `connect` or `syncNow` has configured the fleet; concurrent calls share
-        /// one listing.
+        /// one listing, and a refresh queued behind a disconnect does nothing.
         public func refreshRoster() async throws {
             if let rosterRefreshInFlight { return try await rosterRefreshInFlight.value }
-            let refresh = Task { try await reconcileRoster() }
+            let refresh = Task { try await serialized { try await self.reconcileRoster() } }
             rosterRefreshInFlight = refresh
             defer { rosterRefreshInFlight = nil }
-            try await refresh.value
+            do {
+                try await refresh.value
+            } catch is CancellationError {}
+        }
+
+        /// Full replacements and roster reconciliations run one at a time in call order: two that
+        /// overlap would each list the roster and open a bridge for the same account. An
+        /// operation still queued when the fleet is torn down is dropped, so a disconnect is
+        /// never undone by work requested before it.
+        private func serialized(
+            _ operation: @escaping @MainActor @Sendable () async throws -> Void
+        ) async throws {
+            let previous = fleetOperation
+            let teardowns = self.teardowns
+            let current = Task {
+                await previous?.value
+                guard teardowns == self.teardowns else { throw CancellationError() }
+                try await operation()
+            }
+            fleetOperation = Task { _ = try? await current.value }
+            try await current.value
         }
 
         private struct SyncFailure: LocalizedError {
@@ -149,6 +177,7 @@
         }
 
         private func tearDown(reportStatus: Bool) async {
+            teardowns += 1
             generation = UUID()
             connection = nil
             rosterRefreshLoop?.cancel()
@@ -264,10 +293,13 @@
                     self?.didCompleteRun(completion, accountID: account.id, token: token)
                 }
             }
+            // Opening is idempotent: a bridge this replaces is closed, never left running unowned.
+            let replaced = bridges[account.id]
             bridges[account.id] = bridge
             executors[account.id] = executor
             statuses[account.id] = .connecting
             bridgeTokens[account.id] = token
+            if let replaced { await replaced.disconnect() }
             BrowserBridgeDebugLog.emit(
                 .connectRequested, browser: connection.browser, accountID: account.id)
             await bridge.connect(
@@ -284,9 +316,9 @@
 
         private func startRosterRefreshLoop() {
             guard rosterRefreshLoop == nil else { return }
-            rosterRefreshLoop = Task { [weak self, rosterRefreshInterval] in
+            rosterRefreshLoop = Task { [weak self, rosterRefreshTick] in
                 while true {
-                    do { try await Task.sleep(for: rosterRefreshInterval) } catch { return }
+                    do { try await rosterRefreshTick() } catch { return }
                     guard let self else { return }
                     // A failed listing (offline, signed out) is retried on the next tick.
                     try? await self.refreshRoster()

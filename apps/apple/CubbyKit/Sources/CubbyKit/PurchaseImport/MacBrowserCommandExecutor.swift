@@ -632,7 +632,9 @@
         nonisolated static let structuredProductsScript = #"""
             () => {
               const clean = value => String(value || '').replace(/\s+/g, ' ').trim();
-              // Only schema.org Product nodes in ld+json blocks; never page text.
+              // Only schema.org Product nodes in ld+json blocks; never page text. Every cap fails
+              // closed: anything left unread marks the capture a variant group, never exact.
+              let truncated = false;
               const values = (node, keys) => {
                 const out = [];
                 for (const key of keys) {
@@ -642,58 +644,94 @@
                     if (text && !out.includes(text)) out.push(text);
                   }
                 }
+                if (out.length > 10) truncated = true;
                 return out.slice(0, 10);
               };
               const hasType = (node, name) => [].concat(node['@type'] ?? []).includes(name);
-              const gtinKeys = ['gtin', 'gtin8', 'gtin12', 'gtin13', 'gtin14'];
               const identifiers = node => ({
                 skus: values(node, ['sku']),
                 mpns: values(node, ['mpn']),
-                gtins: values(node, gtinKeys),
+                gtins: values(node, ['gtin', 'gtin8', 'gtin12', 'gtin13', 'gtin14']),
                 productIds: values(node, ['productID'])
               });
+              const fields = ['skus', 'mpns', 'gtins', 'productIds'];
               const merge = (...sets) => {
                 const out = { skus: [], mpns: [], gtins: [], productIds: [] };
                 for (const set of sets) {
-                  for (const key of Object.keys(out)) {
+                  for (const key of fields) {
                     for (const item of set[key]) if (!out[key].includes(item)) out[key].push(item);
                   }
                 }
-                for (const key of Object.keys(out)) out[key] = out[key].slice(0, 10);
+                for (const key of fields) {
+                  if (out[key].length > 10) truncated = true;
+                  out[key] = out[key].slice(0, 10);
+                }
                 return out;
               };
-              // Shopify-style `?variant=<id>`; parsed without URL so the walker runs anywhere.
+              const sameList = (left, right) =>
+                left.length === right.length && left.every(item => right.includes(item));
+              const sameSet = (left, right) => fields.every(key => sameList(left[key], right[key]));
+              const conflicts = (left, right) =>
+                left.length > 0 && right.length > 0 && !sameList(left, right);
+              // Shopify-style `?variant=<id>`, hand-parsed because JavaScriptCore has no URL: only
+              // the query component counts, names and values are decoded, and a missing,
+              // repeated or undecodable variant parameter selects nothing.
               const variantOf = url => {
-                const match = String(url || '').match(/[?&]variant=([^&#]*)/);
-                return match && match[1] ? match[1] : null;
+                const beforeFragment = String(url ?? '').split('#')[0];
+                const start = beforeFragment.indexOf('?');
+                if (start < 0) return null;
+                const found = [];
+                for (const pair of beforeFragment.slice(start + 1).split('&')) {
+                  const equals = pair.indexOf('=');
+                  const decode = text => decodeURIComponent(text.replace(/\+/g, ' '));
+                  let name;
+                  let value;
+                  try {
+                    name = decode(equals < 0 ? pair : pair.slice(0, equals));
+                    value = decode(equals < 0 ? '' : pair.slice(equals + 1));
+                  } catch { return null; }
+                  if (name === 'variant') found.push(value);
+                }
+                return found.length === 1 && found[0] ? found[0] : null;
               };
               const servedVariant = variantOf(location.href);
               const products = [];
               let variantGroup = false;
+              // Offers have their own budget so a long offer list cannot starve the graph walk.
               let visited = 0;
-              // Per-variant identifiers live in a Product's `offers` (an Offer, an array of Offers,
-              // or an AggregateOffer carrying `offers`). Never choose between variants: only the
-              // Offer whose `?variant=` is the served page's own variant may stand for the page.
-              const productIdentifiers = product => {
+              let offerBudget = 1000;
+              const collectOffers = product => {
                 const offers = [];
                 for (const offer of [].concat(product.offers ?? [])) {
                   if (!offer || typeof offer !== 'object') continue;
                   const nested = offer.offers && typeof offer.offers === 'object'
                     ? [].concat(offer.offers) : [offer];
                   for (const item of nested) {
-                    if (offers.length >= 100 || ++visited > 500) break;
-                    if (item && typeof item === 'object') offers.push(item);
+                    if (!item || typeof item !== 'object') continue;
+                    if (offers.length >= 100 || --offerBudget < 0) { truncated = true; return offers; }
+                    offers.push(item);
                   }
                 }
+                return offers;
+              };
+              // Per-variant identifiers live in a Product's `offers` (an Offer, an array of Offers,
+              // or an AggregateOffer carrying `offers`). Never choose between variants: Product and
+              // Offers merge only when they agree, and otherwise only the one Offer whose
+              // `?variant=` is the served page's own variant may stand for the page.
+              const productIdentifiers = product => {
                 const own = identifiers(product);
+                const offers = collectOffers(product);
                 if (offers.length === 0) return own;
                 const offerSets = offers.map(identifiers);
-                const signature = set => JSON.stringify([set.skus, set.mpns, set.gtins, set.productIds]);
-                if (offerSets.every(set => signature(set) === signature(offerSets[0]))) {
-                  return merge(own, offerSets[0]);
-                }
+                const offerVariants = offers.map(offer => variantOf(offer.url));
+                const agree = offerSets.every(set => sameSet(set, offerSets[0]))
+                  && !conflicts(own.skus, offerSets[0].skus)
+                  && !conflicts(own.gtins, offerSets[0].gtins)
+                  && !(servedVariant
+                    && offerVariants.some(variant => variant !== null && variant !== servedVariant));
+                if (agree) return merge(own, offerSets[0]);
                 const served = servedVariant
-                  ? offers.flatMap((offer, index) => variantOf(offer.url) === servedVariant ? [index] : [])
+                  ? offerVariants.flatMap((variant, index) => variant === servedVariant ? [index] : [])
                   : [];
                 if (served.length !== 1) {
                   variantGroup = true;
@@ -705,7 +743,8 @@
                   offerSets[served[0]]);
               };
               const walk = (value, depth) => {
-                if (!value || typeof value !== 'object' || depth > 8 || ++visited > 500) return;
+                if (!value || typeof value !== 'object') return;
+                if (depth > 8 || ++visited > 500) { truncated = true; return; }
                 if (Array.isArray(value)) { value.forEach(item => walk(item, depth + 1)); return; }
                 if (hasType(value, 'ProductGroup')) variantGroup = true;
                 if (hasType(value, 'Product')) products.push(productIdentifiers(value));
@@ -713,14 +752,17 @@
                   walk(value[key], depth + 1);
                 }
               };
-              const blocks = document.querySelectorAll('script[type="application/ld+json"]');
-              for (const script of Array.from(blocks).slice(0, 20)) {
-                try {
-                  const raw = script.textContent || '';
-                  if (raw.length <= 524288) walk(JSON.parse(raw), 0);
-                } catch {}
+              const blocks = Array.from(document.querySelectorAll('script[type="application/ld+json"]'));
+              if (blocks.length > 20) truncated = true;
+              for (const script of blocks.slice(0, 20)) {
+                const raw = script.textContent || '';
+                if (raw.length > 524288) { truncated = true; continue; }
+                let parsed;
+                try { parsed = JSON.parse(raw); } catch { continue; }
+                walk(parsed, 0);
               }
-              return { products: products.slice(0, 20), variantGroup };
+              if (products.length > 20) truncated = true;
+              return { products: products.slice(0, 20), variantGroup: variantGroup || truncated };
             }
             """#
 

@@ -331,6 +331,79 @@ struct BrowserBridgeTests {
                 blocks: [Self.shopifyTee])
             #expect(unmatched.variantGroup)
         }
+
+        private static func offer(sku: String, variant: Int) -> String {
+            """
+            {"@type":"Offer","sku":"\(sku)",
+             "url":"https://shop.forgewear.example.test/products/tee?variant=\(variant)"}
+            """
+        }
+
+        @Test("An Offer beyond the offer cap fails closed instead of reading as exact")
+        func structuredProductsOfferCap() throws {
+            let offers =
+                (0..<100).map { _ in Self.offer(sku: "FW-SAME", variant: 1) }
+                + [Self.offer(sku: "FW-OTHER", variant: 2)]
+            let block = """
+                {"@context":"https://schema.org","@type":"Product","offers":[\(offers.joined(separator: ","))]}
+                """
+            let captured = try walkStructuredProducts(
+                pageURL: "https://shop.forgewear.example.test/products/tee", blocks: [block])
+            #expect(captured.variantGroup)
+        }
+
+        @Test("Offers never starve the graph walk, and an exhausted walk fails closed")
+        func structuredProductsNodeBudget() throws {
+            let filler = Array(repeating: #"{"@type":"WebPage"}"#, count: 398)
+            let offers = (0..<100).map { _ in Self.offer(sku: "FW-SAME", variant: 1) }
+            let first = #"{"@type":"Product","offers":["# + offers.joined(separator: ",") + "]}"
+            let second = #"{"@type":"Product","sku":"FW-SECOND"}"#
+            let graph =
+                #"{"@context":"https://schema.org","@graph":["#
+                + (filler + [first, second]).joined(separator: ",") + "]}"
+            let captured = try walkStructuredProducts(
+                pageURL: "https://shop.forgewear.example.test/products/tee", blocks: [graph])
+            #expect(captured.products.count == 2)
+
+            let overflow =
+                #"{"@context":"https://schema.org","@graph":["#
+                + (Array(repeating: #"{"@type":"WebPage"}"#, count: 600)
+                + [#"{"@type":"ProductGroup"}"#, second]).joined(separator: ",") + "]}"
+            let exhausted = try walkStructuredProducts(
+                pageURL: "https://shop.forgewear.example.test/products/tee", blocks: [overflow])
+            #expect(exhausted.variantGroup)
+        }
+
+        @Test("A single Offer naming another variant never merges with the Product's default")
+        func structuredProductsSingleConflictingOffer() throws {
+            let block = """
+                {"@context":"https://schema.org","@type":"Product","sku":"FW-DEFAULT-S",
+                 "offers":\(Self.offer(sku: "FW-OTHER-M", variant: 222))}
+                """
+            let servedS = try walkStructuredProducts(
+                pageURL: "https://shop.forgewear.example.test/products/tee?variant=111", blocks: [block])
+            #expect(servedS.variantGroup)
+            let servedM = try walkStructuredProducts(
+                pageURL: "https://shop.forgewear.example.test/products/tee?variant=222", blocks: [block])
+            #expect(!servedM.variantGroup)
+            #expect(servedM.products.map(\.skus) == [["FW-OTHER-M"]])
+        }
+
+        @Test("Only the query's single decoded variant parameter selects an Offer")
+        func structuredProductsVariantParsing() throws {
+            let base = "https://shop.forgewear.example.test/products/tee"
+            let fragment = try walkStructuredProducts(
+                pageURL: base + "#?variant=41000000000222", blocks: [Self.shopifyTee])
+            #expect(fragment.variantGroup)
+            let duplicate = try walkStructuredProducts(
+                pageURL: base + "?variant=41000000000111&variant=41000000000222",
+                blocks: [Self.shopifyTee])
+            #expect(duplicate.variantGroup)
+            let encoded = try walkStructuredProducts(
+                pageURL: base + "?vari%61nt=41000000000222#reviews", blocks: [Self.shopifyTee])
+            #expect(!encoded.variantGroup)
+            #expect(encoded.products.map(\.skus) == [["FW-TEE-BLK-M"]])
+        }
     #endif
 
     @Test("Completed results replay until acknowledged")
