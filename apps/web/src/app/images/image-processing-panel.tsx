@@ -154,12 +154,6 @@ export function ImageProcessingPanel({ image }: { image: ImageWithEntity }) {
           <section className="space-y-2">
             <div className="flex items-center justify-between gap-2">
               <h4 className="text-sm font-medium">Recent jobs</h4>
-              <a
-                className="text-xs text-primary hover:underline"
-                href={`/runs?subjectId=${encodeURIComponent(id)}`}
-              >
-                View all
-              </a>
             </div>
             {(recentRuns.data?.items ?? []).map((run) => (
               <a
@@ -312,6 +306,12 @@ function ImageProcessingActions({ image }: { image: ImageWithEntity }) {
           ) : null}
         </>
       ) : null}
+      <a
+        className={buttonVariants({ variant: "outline" })}
+        href={`/runs?subjectId=${encodeURIComponent(id)}`}
+      >
+        View processing jobs
+      </a>
       <Button
         size="sm"
         variant="outline"
