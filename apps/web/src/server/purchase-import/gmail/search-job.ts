@@ -271,16 +271,23 @@ export async function scanVendorMailPage(
     counts?: { searched?: number; skipped?: number },
   ) => {
     await database.transaction(async (tx) => {
-      if (counts)
-        await tx
-          .update(runTable)
-          .set({
-            progress: patchProgress({
-              searched: job.progress.searched + (counts.searched ?? 0),
-            }),
-            skipped: job.skipped + (counts.skipped ?? 0),
-          })
-          .where(owned);
+      // The update doubles as the ownership check: a cancelled or superseded
+      // attempt writes no progress line.
+      const [stillOwned] = await tx
+        .update(runTable)
+        .set(
+          counts
+            ? {
+                progress: patchProgress({
+                  searched: job.progress.searched + (counts.searched ?? 0),
+                }),
+                skipped: job.skipped + (counts.skipped ?? 0),
+              }
+            : { updatedAt: new Date() },
+        )
+        .where(owned)
+        .returning({ id: runTable.id });
+      if (!stillOwned) return;
       await tx.insert(runProgress).values({
         runId: job.runId,
         eventId: crypto.randomUUID(),

@@ -180,6 +180,63 @@ describe("Gmail ingestion and attachment storage", () => {
     expect(fetches).toBe(1);
   });
 
+  // Rows saved before part identity carry Gmail's (unstable) attachment id.
+  it("adopts a legacy attachment row instead of storing the bytes again", async () => {
+    const party = await seedParty();
+    const { objects, storage } = memoryStorage();
+    const [mail] = await getDb(ctx.db)
+      .insert(orderMail)
+      .values({
+        ledgerPartyId: party.id,
+        messageId: "msg-legacy",
+        sender: "orders@forgewear.example",
+        subject: "Receipt",
+        receivedAt: new Date("2026-08-31T00:00:00.000Z"),
+        rawChecksum: "legacy",
+      })
+      .returning({ id: orderMail.id });
+    if (!mail) throw new Error("test setup: legacy mail");
+    const [legacy] = await getDb(ctx.db)
+      .insert(orderMailAttachment)
+      .values({
+        orderMailId: mail.id,
+        providerAttachmentId: "ANGjdJ-legacy-attachment-id",
+        filename: "invoice-1.pdf",
+        mimeType: "application/pdf",
+        checksum: "legacy",
+        pendingObjectKey: "order-mail-attachment/legacy",
+      })
+      .returning({ id: orderMailAttachment.id });
+    let fetches = 0;
+
+    await ingestGmailMessages(
+      ctx.db,
+      provider({
+        getAttachment: async () => {
+          fetches += 1;
+          return { data: PDF_BYTES.toString("base64url") };
+        },
+      }),
+      {
+        ledgerPartyId: party.id,
+        mailboxId: "me",
+        messageIds: ["msg-legacy"],
+        storage,
+      },
+    );
+
+    expect(await attachments()).toEqual([
+      {
+        id: legacy?.id,
+        key: "order-mail-attachment/legacy",
+        checksum: "legacy",
+        providerAttachmentId: "gmail:me:msg-legacy:attachment:1",
+      },
+    ]);
+    expect(fetches).toBe(0);
+    expect(objects.size).toBe(0);
+  });
+
   it("holds at most one attachment payload at a time across a large batch", async () => {
     const party = await seedParty();
     const { storage } = memoryStorage();

@@ -107,17 +107,24 @@ export async function discoverPurchases(db: Database) {
     { discoverImportHunts, dispatchImportHunts },
     { startMailDiscovery },
     { gmailOAuthConfigured },
+    { reconcileWorkflowRuns },
   ] = await Promise.all([
     import("~/server/purchase-import/hunts"),
     import("~/server/purchase-import/gmail/discovery"),
     import("~/server/purchase-import/gmail/provider"),
+    import("~/server/workflow-runs/lifecycle"),
   ]);
   const gmailConfigured = gmailOAuthConfigured();
   if (!gmailConfigured)
     log.info("Gmail discovery skipped: Google OAuth is not configured");
   const [huntResult, gmailResult] = await Promise.allSettled([
     discoverImportHunts(db),
-    gmailConfigured ? startMailDiscovery(db) : Promise.resolve(null),
+    gmailConfigured
+      ? // Fail a stranded pass first: recovery runs concurrently, and a
+        // stranded `running` Run would otherwise hold its mailbox's slot
+        // until the next trigger.
+        reconcileWorkflowRuns(db).then(() => startMailDiscovery(db))
+      : Promise.resolve(null),
   ]);
   const queue = getPurchaseAgentQueue();
   const dispatchResult = await Promise.allSettled([

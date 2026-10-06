@@ -1,5 +1,5 @@
 import { buildActorContext } from "@cubby/schemas/context";
-import { userId } from "@cubby/schemas/identifiers";
+import { runEntityId, userId } from "@cubby/schemas/identifiers";
 import {
   mailDiscoveryRunInput,
   mailDiscoveryRunProgress,
@@ -11,7 +11,11 @@ import type { Database } from "~/server/db";
 import { run as runTable, runProgress } from "~/server/db/schema";
 import { isUniqueViolation } from "~/server/errors/db-errors";
 import { reportServerError } from "~/server/errors/report-error";
-import { getDb, withTransaction } from "~/server/repo/database-helpers";
+import {
+  getDb,
+  withTransaction,
+  withTransactionDatabase,
+} from "~/server/repo/database-helpers";
 import { ensureRun } from "~/server/runs/ensure-run";
 import type { WorkflowRunParams } from "~/server/workflow-runs/contract";
 import {
@@ -262,28 +266,43 @@ export async function finishMailDiscovery(
   params: WorkflowRunParams,
   now = new Date(),
 ): Promise<{ kind: "stopped" } | { kind: "done" }> {
-  const claimed = await claimDiscovery(db, params);
-  if (!claimed) return { kind: "stopped" };
-  const { progress, row } = claimed;
-  const events = await persistGmailEvents(db, {
-    ledgerPartyId: claimed.ledgerPartyId,
-    events: progress.pendingEvents ?? [],
-  });
-  const moved = await advanceMailboxCursor(db, {
-    ledgerPartyId: claimed.ledgerPartyId,
-    from: progress.startHistoryId,
-    to: progress.targetHistoryId ?? null,
-    polledAt: now,
-  });
-  const routine = progress.saved === 0 && events.saved === 0;
-  const detail = routine
-    ? "Nothing new in Gmail"
-    : `Saved ${progress.saved} messages and ${events.saved} history changes`;
-  const cursor = moved
-    ? `cursor at ${progress.targetHistoryId ?? "the mailbox start"}`
-    : "cursor already moved by a later pass";
-  return withTransaction(db, async (tx) => {
-    const [completed] = await tx
+  // One transaction under the Run's row lock: a cancel or a retry either
+  // lands first (and this attempt records nothing) or waits for it to commit.
+  return withTransactionDatabase(db, async (tx) => {
+    const [locked] = await getDb(tx)
+      .select({ id: runTable.id })
+      .from(runTable)
+      .where(
+        and(
+          eq(runTable.id, runEntityId.parse(params.runId)),
+          eq(runTable.status, "running"),
+          attemptIs(params.attempt),
+        ),
+      )
+      .for("update")
+      .limit(1);
+    if (!locked) return { kind: "stopped" as const };
+    const claimed = await claimDiscovery(tx, params);
+    if (!claimed) return { kind: "stopped" as const };
+    const { progress, row } = claimed;
+    const events = await persistGmailEvents(tx, {
+      ledgerPartyId: claimed.ledgerPartyId,
+      events: progress.pendingEvents ?? [],
+    });
+    const moved = await advanceMailboxCursor(tx, {
+      ledgerPartyId: claimed.ledgerPartyId,
+      from: progress.startHistoryId,
+      to: progress.targetHistoryId ?? null,
+      polledAt: now,
+    });
+    const routine = progress.saved === 0 && events.saved === 0;
+    const detail = routine
+      ? "Nothing new in Gmail"
+      : `Saved ${progress.saved} messages and ${events.saved} history changes`;
+    const cursor = moved
+      ? `cursor at ${progress.targetHistoryId ?? "the mailbox start"}`
+      : "cursor already moved by a later pass";
+    await getDb(tx)
       .update(runTable)
       .set({
         status: "completed",
@@ -298,21 +317,15 @@ export async function finishMailDiscovery(
           pendingEvents: [],
         }),
       })
-      .where(
-        and(
-          eq(runTable.id, row.id),
-          eq(runTable.status, "running"),
-          attemptIs(params.attempt),
-        ),
-      )
-      .returning({ id: runTable.id });
-    if (!completed) return { kind: "stopped" as const };
-    await tx.insert(runProgress).values({
-      runId: row.id,
-      eventId: crypto.randomUUID(),
-      phase: "completed",
-      detail: `${detail}; ${cursor}`,
-    });
+      .where(eq(runTable.id, row.id));
+    await getDb(tx)
+      .insert(runProgress)
+      .values({
+        runId: row.id,
+        eventId: crypto.randomUUID(),
+        phase: "completed",
+        detail: `${detail}; ${cursor}`,
+      });
     return { kind: "done" as const };
   });
 }

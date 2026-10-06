@@ -1,6 +1,6 @@
 import { parseEntityId } from "@cubby/schemas/identifiers";
 import { sha256Hex } from "@cubby/shared/sha256";
-import { and, eq, inArray } from "drizzle-orm";
+import { and, eq, inArray, sql } from "drizzle-orm";
 
 import type { Database } from "~/server/db";
 import { account } from "~/server/db/auth.schema";
@@ -108,6 +108,42 @@ export const upsertOrderMail = async (
 };
 
 /**
+ * Rows saved before part identity are keyed by Gmail's attachment id, which
+ * changes on every fetch. Re-key the oldest such row of this message with the
+ * same filename and type to the part, keeping its id, stored bytes and image
+ * link, so a re-fetched legacy message neither duplicates the row nor stores
+ * (or later attaches) its bytes twice. True when the adopted row needs no
+ * fetch.
+ */
+const adoptLegacyAttachment = async (
+  database: ReturnType<typeof getDb>,
+  input: { orderMailId: string; attachment: GmailOrderMailAttachment },
+): Promise<boolean> => {
+  const [adopted] = await database
+    .update(orderMailAttachment)
+    .set({
+      providerAttachmentId: input.attachment.sourceKey,
+      updatedAt: new Date(),
+    })
+    .where(
+      eq(
+        orderMailAttachment.id,
+        sql`(SELECT a.id FROM "OrderMailAttachment" a
+          WHERE a."orderMailId" = ${input.orderMailId}
+            AND a."providerAttachmentId" NOT LIKE 'gmail:%'
+            AND a.filename = ${input.attachment.filename}
+            AND a."mimeType" = ${input.attachment.mimeType}
+          ORDER BY a."createdAt", a.id LIMIT 1)`,
+      ),
+    )
+    .returning({
+      pendingObjectKey: orderMailAttachment.pendingObjectKey,
+      imageId: orderMailAttachment.imageId,
+    });
+  return Boolean(adopted?.pendingObjectKey || adopted?.imageId);
+};
+
+/**
  * Store one attachment: its row, then its bytes in object storage, one
  * attachment at a time so a batch never holds more than one payload.
  *
@@ -144,6 +180,7 @@ export const storeOrderMailAttachment = async (
     )
     .limit(1);
   if (existing?.pendingObjectKey || existing?.imageId) return;
+  if (!existing && (await adoptLegacyAttachment(database, input))) return;
   const data = await input.fetchData();
   const bytes = data ? Buffer.from(data, "base64url") : null;
   const checksum = await sha256Hex(
@@ -247,6 +284,12 @@ export const advanceMailboxCursor = async (
   const provider = input.provider ?? "gmail";
   const next = maxHistoryId(input.from, input.to ?? undefined);
   return withTransaction(db, async (tx) => {
+    // The row must exist before it can be locked: two first passes would
+    // otherwise both see no row and the later upsert could rewind the other.
+    await tx
+      .insert(mailboxCursor)
+      .values({ ledgerPartyId, provider, historyId: null })
+      .onConflictDoNothing();
     const [current] = await tx
       .select({ historyId: mailboxCursor.historyId })
       .from(mailboxCursor)
@@ -260,21 +303,18 @@ export const advanceMailboxCursor = async (
       .limit(1);
     if ((current?.historyId ?? null) !== input.from) return false;
     await tx
-      .insert(mailboxCursor)
-      .values({
-        ledgerPartyId,
-        provider,
+      .update(mailboxCursor)
+      .set({
         historyId: next,
         lastPolledAt: input.polledAt,
+        updatedAt: new Date(),
       })
-      .onConflictDoUpdate({
-        target: [mailboxCursor.ledgerPartyId, mailboxCursor.provider],
-        set: {
-          historyId: next,
-          lastPolledAt: input.polledAt,
-          updatedAt: new Date(),
-        },
-      });
+      .where(
+        and(
+          eq(mailboxCursor.ledgerPartyId, ledgerPartyId),
+          eq(mailboxCursor.provider, provider),
+        ),
+      );
     return true;
   });
 };

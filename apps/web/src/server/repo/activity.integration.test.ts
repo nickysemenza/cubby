@@ -544,7 +544,7 @@ describe("unified Runs history", () => {
 
   // The Runs list hides routine passes by default; a productive or failed
   // scheduled pass and every other Run must stay.
-  it("hides routine runs only when asked, keeping image jobs and other runs", async () => {
+  it("filters routine runs either way only when asked", async () => {
     const party = await insertWithShortcode(ctx.db, "ledgerParty", {
       name: "Routine member",
       kind: "member",
@@ -574,23 +574,24 @@ describe("unified Runs history", () => {
         scheduled(false, "failed"),
       ])
       .returning({ shortcode: runTable.shortcode });
-    const shown = async (excludeRoutine?: boolean) =>
+    const shown = async (routine?: boolean) =>
       (
         await listActivity(ctx.db, null, {
           executor: "all",
           limit: 100,
           sort: "newest",
-          excludeRoutine,
+          routine,
         })
       ).items.map((row) => row.id);
 
     expect(await shown()).toEqual(
       expect.arrayContaining([quiet?.shortcode, productive?.shortcode]),
     );
-    const filtered = await shown(true);
+    const filtered = await shown(false);
     expect(filtered).not.toContain(quiet?.shortcode);
     expect(filtered).toEqual(
       expect.arrayContaining([productive?.shortcode, failed?.shortcode]),
     );
+    expect(await shown(true)).toEqual([quiet?.shortcode]);
   });
 });

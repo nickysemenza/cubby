@@ -240,7 +240,7 @@ explicitly attached). The write re-validates; a refused check sends no write.
 
 **Report commands and batching.** A `records` row may carry `statuses` (toned chips), `lines`,
 a collapsible `detail` and `commands`: each command names an existing operation and its exact
-body (`run-control`, `resolve-finding`, `retry-gmail-search`) plus `confirm` copy: native asks before sending
+body (`run-control`, `resolve-finding`, and the recipe, cookbook and meal commands) plus `confirm` copy: native asks before sending
 (approve, reject and apply carry one; dismiss and retry act on the tap), web acts on the tap as it always has.
 A report may say the record is `live` (clients poll; there is no realtime transport), carry its
 `status` (a client showing another refreshes its record) and a `nextCursor` for paging. A page that

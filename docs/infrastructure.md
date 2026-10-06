@@ -101,8 +101,8 @@ The Run row is the record; an instance is one attempt at it, named
   events on the Run, saves ten messages per step with each attachment
   streamed to R2 on its own, and moves the mailbox cursor last, only from the
   position the pass started at.
-- A completed scheduled pass that saved nothing is `routine`; the Runs list
-  hides routine Runs by default.
+- A completed scheduled pass that saved no message and recorded no history
+  event is `routine`; the Runs list hides routine Runs by default.
 
 One-time creation commands that cannot be inferred or safely rerun by deploy:
 

@@ -327,6 +327,36 @@ describe("scheduled Gmail discovery", () => {
     ).toEqual([{ detail: expect.stringMatching(/cursor already moved/u) }]);
   });
 
+  it("records no history and leaves the cursor alone once a pass is cancelled", async () => {
+    const party = await seedMember();
+    const { params, launcher } = await startOne();
+    await listMailDiscovery(ctx.db, params, ports(gmail()));
+    for (const index of [0, 1])
+      await saveMailDiscoveryBatch(ctx.db, params, index, ports(gmail()));
+    const [row] = await getDb(ctx.db)
+      .select({ shortcode: run.shortcode })
+      .from(run)
+      .where(eq(run.id, runEntityId.parse(params.runId)));
+    const { controlWorkflowRun } =
+      await import("~/server/workflow-runs/control");
+    await controlWorkflowRun(
+      ctx.db,
+      ctx.actor,
+      { runPublicId: row?.shortcode ?? "", action: "cancel" },
+      "mail_discovery",
+      launcher,
+    );
+
+    expect(await finishMailDiscovery(ctx.db, params)).toEqual({
+      kind: "stopped",
+    });
+    expect(await cursorOf(party.id)).toBeNull();
+    expect(await readRun(params.runId)).toMatchObject({
+      status: "failed",
+      failureCode: "user_cancelled",
+    });
+  });
+
   it("prunes month-old routine passes and keeps everything else", async () => {
     await seedMember();
     const quiet = await startOne();

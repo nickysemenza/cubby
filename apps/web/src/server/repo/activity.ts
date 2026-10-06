@@ -204,7 +204,8 @@ function listPredicate(input: ActivityListInput): SQL {
         sql`, `,
       )}))`,
     );
-  if (input.excludeRoutine) clauses.push(sql`NOT routine`);
+  if (input.routine !== undefined)
+    clauses.push(sql`routine = ${input.routine}`);
   if (input.vendorAccountId)
     clauses.push(sql`"vendorAccountId" = ${input.vendorAccountId}`);
   if (input.vendorId) clauses.push(sql`"vendorId" = ${input.vendorId}`);

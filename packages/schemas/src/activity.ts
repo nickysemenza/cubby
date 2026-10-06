@@ -60,8 +60,12 @@ export const activityListInput = z.object({
    * `ephemeral`). Image jobs with no parent run have no trigger and stay.
    */
   excludeTriggers: z.array(runTrigger).optional(),
-  /** Hide routine runs: scheduled passes that completed without finding anything. */
-  excludeRoutine: z.boolean().optional(),
+  /**
+   * `false` hides routine runs (scheduled passes that completed without
+   * finding anything; the list's default), `true` shows only them. Image jobs
+   * are never routine.
+   */
+  routine: z.boolean().optional(),
   vendorAccountId: z.string().optional(),
   vendorId: z.string().optional(),
   ledgerPartyId: z.string().optional(),

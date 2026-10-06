@@ -70,10 +70,12 @@ function RunHistorySlot({ search, navigate }: ListSlotProps) {
     ...parsed,
     excludeTriggers:
       hideDefault && hiddenByDefault.length ? hiddenByDefault : undefined,
-    excludeRoutine:
-      (hideDefault && routineHiddenByDefault) || parsed.routine === "false"
-        ? true
-        : undefined,
+    routine:
+      parsed.routine !== undefined
+        ? parsed.routine === "true"
+        : hideDefault && routineHiddenByDefault
+          ? false
+          : undefined,
     hasDefaultFilter,
     kind: parsed.kind ?? activityKind.safeParse(parsed.purpose).data,
     state: parsed.state ?? parsed.status,

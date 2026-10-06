@@ -31,7 +31,12 @@ export type RunProgressPatch =
   | Partial<MailSearchRunProgress>
   | Partial<MailDiscoveryRunProgress>;
 
-/** A failure's first line, its HTTP status and error code, and its Sentry event. */
+/**
+ * A failure as the Run keeps it: a one-line headline (HTTP status, error
+ * code), then every scrubbed cause in full — upstream bodies, SQL text and
+ * parameters survive; only credential-shaped values are redacted — then the
+ * Sentry event.
+ */
 export const runFailureText = (
   error: Error | string,
   sentryEventId?: string,
@@ -47,10 +52,17 @@ export const runFailureText = (
   const coded = causes.find(
     (cause) => cause.code && !labelled.includes(cause.code),
   );
-  const concise = coded
+  const headline = coded
     ? `${labelled} · ${coded.code}: ${coded.message.slice(0, 120)}`
     : labelled;
-  return sentryEventId ? `${concise}\nSentry event: ${sentryEventId}` : concise;
+  const details = causes
+    .map((cause) => cause.message)
+    .filter((message) => message && message !== summary);
+  return [
+    headline,
+    ...new Set(details),
+    ...(sentryEventId ? [`Sentry event: ${sentryEventId}`] : []),
+  ].join("\n");
 };
 
 const attemptOf = sql<number>`coalesce((${runTable.progress}->>'attempt')::int, 0)`;

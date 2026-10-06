@@ -74,7 +74,14 @@ export async function controlWorkflowRun(
       dispatchError: "Cancelled by a member",
       progress: sql`coalesce(${runTable.progress}, '{}'::jsonb) || '{"phase":"failed"}'::jsonb`,
     })
-    .where(and(eq(runTable.id, row.id), eq(runTable.status, "running")))
+    .where(
+      and(
+        eq(runTable.id, row.id),
+        eq(runTable.status, "running"),
+        // A retry that started after the read owns the Run now.
+        sql`coalesce((${runTable.progress}->>'attempt')::int, 0) = ${row.attempt}`,
+      ),
+    )
     .returning({ id: runTable.id });
   if (!cancelled) throw new Error("The Run finished before it was cancelled");
   await recordRunProgress(db, row.id, "cancelled", "Cancelled by a member");

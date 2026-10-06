@@ -46,3 +46,13 @@ retained. Retry or cancel from the Run detail page (`run.control`).
 A `mail_search` Run whose `progress` is NULL never wrote its opening state (its
 transaction failed after the Run committed); it is not a search and the code
 ignores it.
+
+## Cutover and rollback
+
+The Workflow replaced the `vendor-mail.search` queue task. A task still
+queued at deploy fails to parse and is discarded after its retries; check
+first that no `mail_search` Run is `running` (none were at the 2026-10
+cutover). Roll forward rather than back once `mail_discovery` Runs or
+`waiting` searches exist: code from before the Workflow cannot parse them.
+Reverting Worker traffic does not stop a running instance; cancel the Run
+(`run.control` `cancel`) first.
