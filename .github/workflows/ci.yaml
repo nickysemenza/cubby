@@ -422,18 +422,15 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
       - uses: ./.github/actions/generate-apple-inputs
 
-  # Host `swift test` for CubbyKit's package tests; not folded into test-apple
-  # below. Measured 2026-09-21: running these on the iOS Simulator inside the
-  # build job cost about 6 minutes to boot plus ~10 minutes of CPU starvation
-  # on a hosted macOS runner's 3 cores (a 5s script took 2.6 min, the compile
-  # doubled) — the merged job took 13 min even with warm caches. Two jobs beat
-  # one.
-  test-apple-package:
-    name: Apple package tests
+  # Run package tests on the host before the generic Simulator build; never
+  # boot a Simulator here. Sequential phases share one macOS runner without
+  # competing for its cores, and retain their separate compiled-product caches.
+  test-apple:
+    name: Apple checks
     needs: [scope, apple-generated]
     if: needs.scope.outputs.apple == 'true'
     runs-on: macos-26
-    timeout-minutes: 25
+    timeout-minutes: 40
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
       - uses: ./.github/actions/setup-apple-ffi
@@ -482,18 +479,14 @@ jobs:
           cache-hit: ${{ steps.spm-build.outputs.cache-hit }}
           matched-key: ${{ steps.spm-build.outputs.cache-matched-key }}
 
-  test-apple:
-    name: Apple checks
-    needs: [scope, apple-generated]
-    if: needs.scope.outputs.apple == 'true'
-    runs-on: macos-26
-    timeout-minutes: 40
-    steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      # Cache restore overlays directories. Remove the host-only framework
+      # before restoring the simulator slice so its source/certificate hashes
+      # are independent of whether either target's cache hit or missed.
+      - name: Replace host FFI with simulator FFI
+        run: rm -rf apps/apple/CubbyKit/Frameworks/CubbyFFI.xcframework
       - uses: ./.github/actions/setup-apple-ffi
         with:
           targets: sim
-      - uses: ./.github/actions/download-apple-inputs
       - uses: ./.github/actions/setup-apple-tools
         id: apple-tools
       # DerivedData is cached like CubbyKit's .build above: apple-check.sh's
