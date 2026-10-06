@@ -29,6 +29,14 @@ tsify-next = { version = "0.5", features = ["js"] }
 # the pinned rev CI uses.
 ingredient = { git = "https://github.com/nickysemenza/ingredient-parser", rev = "71fb65e7e4eeb0ab18a7a22085e7b6672aab82b3" }
 recipe-scraper = { git = "https://github.com/nickysemenza/ingredient-parser", rev = "71fb65e7e4eeb0ab18a7a22085e7b6672aab82b3" }
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+serde-wasm-bindgen = "0.6"
+wasm-tracing = "2.0.0"
+tracing = "0.1.41"
+console_error_panic_hook = "0.1.7"
+
+[target.'cfg(target_arch = "wasm32")'.dependencies]
 # EPUB cookbook extraction: the whole pipeline (open, chunk, model calls through
 # a JavaScript transport, validation, assembly, references) lives upstream in
 # `cookbook::wasm`; this crate only re-exports it. No native features (reqwest,
@@ -36,13 +44,6 @@ recipe-scraper = { git = "https://github.com/nickysemenza/ingredient-parser", re
 cookbook = { git = "https://github.com/nickysemenza/ingredient-parser", rev = "71fb65e7e4eeb0ab18a7a22085e7b6672aab82b3", default-features = false, features = [
   "wasm",
 ] }
-llm_models_spider = { git = "https://github.com/spider-rs/llm_models", branch = "main" }
-serde = { version = "1.0", features = ["derive"] }
-serde_json = "1.0"
-serde-wasm-bindgen = "0.6"
-wasm-tracing = "2.0.0"
-tracing = "0.1.41"
-console_error_panic_hook = "0.1.7"
 
 [dev-dependencies]
 # Native-target tests (cargo test): the costing + food-mapping modules are pure

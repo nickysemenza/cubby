@@ -506,6 +506,14 @@ See also the image operational passes at the end of this file.
 
 ## AI & search
 
+- 🤔 **One pricing source for the upstream cookbook pipeline.** Cubby usage
+  pricing uses `models.dev` through `packages/shared/src/ai/pricing.ts`, but
+  ingredient-parser's `cookbook` crate still builds its own model-price table
+  (`cookbook/src/models.rs`, `cost.rs`, `Cargo.toml`). Decide how that pipeline
+  receives catalog prices, then remove `llm_models_spider` upstream and update
+  Cubby's pin. Preserve extraction estimates and token-cost accounting,
+  including unknown prices as `null`; do not reintroduce a local fallback table.
+
 - 🤔 **Suggestion sweep primitive.** One run shape for bulk suggestion passes:
   record each suggestion (target, branch-rolled confidence, runner-up), apply
   only high-confidence changes, queue the rest for review, with progress and

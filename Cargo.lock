@@ -1217,7 +1217,6 @@ dependencies = [
  "cookbook",
  "ingredient",
  "js-sys",
- "llm_models_spider",
  "recipe-scraper",
  "rstest",
  "serde",
