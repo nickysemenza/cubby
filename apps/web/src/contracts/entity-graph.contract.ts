@@ -29,29 +29,37 @@ import {
 
 export const entityGraphContract = defineContract("entity", {
   records: query({
+    mcp: {
+      omit: "client_view",
+      note: "Agents read relations through entity_read.relations and entity_read.connections",
+    },
     input: entityRecordsInputSchema,
     output: entityRecordsOutputSchema,
     cache: { tags: [["relatedData"], ...ENTITY_ROOT_TAGS] },
   }),
   connectedRecords: query({
+    mcp: { omit: "client_view" },
     native: "Complete connection tables with record path evidence",
     input: connectedRecordsInputSchema,
     output: connectedRecordsOutputSchema,
     cache: { tags: [["relatedData"], ...ENTITY_ROOT_TAGS] },
   }),
   explore: query({
+    mcp: { omit: "client_view" },
     native: "Native relationship explorer",
     input: entityGraphExploreInputSchema,
     output: entityGraphExploreOutputSchema,
     cache: { tags: [["relatedData"], ...ENTITY_ROOT_TAGS] },
   }),
   graph: query({
+    mcp: { omit: "client_view" },
     native: "Native relationship branch paging",
     input: entityGraphInputSchema,
     output: entityGraphOutputSchema,
     cache: { tags: [["relatedData"], ...ENTITY_ROOT_TAGS] },
   }),
   graphPaths: query({
+    mcp: { omit: "client_view" },
     native: "Native relationship path evidence",
     input: entityGraphPathsInputSchema,
     output: entityGraphPathsOutputSchema,

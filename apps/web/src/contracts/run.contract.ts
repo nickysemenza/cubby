@@ -306,16 +306,27 @@ export { type TargetedImportStartInput, type TargetedImportStartOutput };
  */
 export const runContract = defineContract("run", {
   list: query({
+    mcp: {
+      omit: "kernel_alternative",
+      kernel: ["list"],
+      note: "entity_read.list on runs",
+    },
     input: runBrowserListInput,
     output: runListResponse,
     cache: { tags: [["run"]], profile: "browse" },
   }),
   detail: query({
+    mcp: {
+      omit: "kernel_alternative",
+      kernel: ["get"],
+      note: "entity_read.get on a run",
+    },
     input: z.object({ shortcode: z.string() }),
     output: runOut.nullable(),
     cache: { tags: [["run"]] },
   }),
   workSnapshot: query({
+    mcp: { omit: "client_view" },
     native: "Show durable live import progress in Apple apps",
     input: z.object({ runId: runShortcode }),
     output: z.object({
@@ -353,6 +364,7 @@ export const runContract = defineContract("run", {
     cache: { tags: [] },
   }),
   history: query({
+    mcp: { omit: "client_view" },
     native: "Native Product enrichment history",
     input: z
       .object({
@@ -366,12 +378,17 @@ export const runContract = defineContract("run", {
     cache: { tags: [["run"]] },
   }),
   work: query({
+    mcp: {
+      omit: "human_approval",
+      note: "A person reviews a validation run's targets and corrections",
+    },
     native: "Review a purchase-validation run's targets and corrections",
     input: z.object({ runId: runShortcode }),
     output: runDetail,
     cache: { tags: [["run"]] },
   }),
   commitPrepared: mutation({
+    mcp: { omit: "human_approval" },
     native:
       "Approve a prepared import batch after the per-line Product and trade decisions",
     input: commitPurchaseImportInput.omit({ _runExecution: true }).extend({
@@ -383,6 +400,7 @@ export const runContract = defineContract("run", {
     invalidates: ["runOnly", "purchase", "product"],
   }),
   control: mutation({
+    mcp: { omit: "human_approval" },
     native: "Approve, reject, stop or retry a Run from its detail sections",
     input: z.object({
       runId: runShortcode,
@@ -403,6 +421,7 @@ export const runContract = defineContract("run", {
     invalidates: ["runOnly"],
   }),
   logs: query({
+    mcp: { omit: "operator_maintenance" },
     input: z.object({ runId: runShortcode }),
     output: z.object({
       entries: z.array(runLogEntry),
@@ -411,6 +430,10 @@ export const runContract = defineContract("run", {
     cache: { tags: [["run"]] },
   }),
   targetedLaunch: query({
+    mcp: {
+      omit: "deferred_capability",
+      todo: "Deferred MCP agent capabilities",
+    },
     native: "Replayable evidence for a targeted purchase-validation launch",
     input: z.object({
       purpose: targetedImportPurpose,
@@ -420,6 +443,10 @@ export const runContract = defineContract("run", {
     cache: { tags: [] },
   }),
   startTargeted: mutation({
+    mcp: {
+      omit: "deferred_capability",
+      todo: "Deferred MCP agent capabilities",
+    },
     native: "Launch a targeted purchase-validation or product-enrichment run",
     input: targetedImportStartInput,
     output: targetedImportStartOutput,
@@ -427,26 +454,31 @@ export const runContract = defineContract("run", {
   }),
   /** The member's purchase-import agent OAuth grant. */
   agentConnection: query({
+    mcp: { omit: "auth_connection" },
     input: z.undefined(),
     output: agentConnection,
     cache: { tags: [["run"]] },
   }),
   /** Revokes the grant and pauses the runs it authorized. */
   disconnectAgent: mutation({
+    mcp: { omit: "auth_connection" },
     input: z.undefined(),
     output: agentConnection,
     invalidates: ["runOnly"],
   }),
   merchantRules: query({
+    mcp: { omit: "client_view" },
     input: z.undefined(),
     output: merchantRules,
     cache: { tags: [] },
   }),
   confirmMerchantRule: mutation({
+    mcp: { omit: "agent_twin", twin: "purchaseImport.confirmMerchantVendor" },
     input: confirmMerchantVendorRuleInput,
     output: merchantRules,
   }),
   aiUsage: query({
+    mcp: { omit: "client_view" },
     native: "Show live AI spend alongside native run timing",
     input: aiRunUsageInput,
     output: aiRunUsageOut,
@@ -458,6 +490,7 @@ export const runContract = defineContract("run", {
    * run's photos; repeating the same {run, image, state} is a no-op.
    */
   reportDeviceWork: mutation({
+    mcp: { omit: "device_protocol" },
     native: "Report on-device photo processing progress for a run target",
     input: z.object({
       run: runShortcode,

@@ -34,30 +34,70 @@ import {
 
 export const productContract = defineContract("product", {
   createWithInventory: mutation({
+    mcp: {
+      omit: "kernel_alternative",
+      kernel: ["commands"],
+      note: "entity.commands creates the Product and its Inventory; image.attach_files adds the photo",
+    },
     native:
       "Create a Product and staged photo with explicit Inventory placement atomically",
     input: productCreateWithInventoryInput,
     output: productCreateWithInventoryOut,
     invalidates: ["product", "inventory"],
   }),
-  search: query({ ...productWorkflowSchemas.search }),
+  search: query({
+    mcp: {
+      omit: "kernel_alternative",
+      kernel: ["search"],
+      note: "entity_read.search on products",
+    },
+    ...productWorkflowSchemas.search,
+  }),
   resolveNames: query({
+    mcp: {
+      omit: "kernel_alternative",
+      kernel: ["resolve"],
+      note: "entity_read.resolve with entity product, which never creates",
+    },
     ...productWorkflowSchemas.resolveNames,
     cache: { tags: [] },
   }),
   summaries: query({
+    mcp: {
+      omit: "kernel_alternative",
+      kernel: ["get", "list"],
+      note: "entity_read.get per id, or entity_read.list with an ids filter on products",
+    },
     ...productWorkflowSchemas.summaries,
     cache: { profile: "derived-summary" },
   }),
-  quantitySummaries: query({ ...productWorkflowSchemas.quantitySummaries }),
+  quantitySummaries: query({
+    mcp: { omit: "client_view" },
+    ...productWorkflowSchemas.quantitySummaries,
+  }),
   inventoryEntriesByIds: query({
+    mcp: {
+      omit: "kernel_alternative",
+      kernel: ["get", "list"],
+      note: "entity_read.get per id, or entity_read.list with an ids filter on inventory",
+    },
     ...productWorkflowSchemas.inventoryEntriesByIds,
   }),
   quickCreate: mutation({
+    mcp: {
+      omit: "kernel_alternative",
+      kernel: ["create"],
+      note: "entity.create on a product",
+    },
     ...productWorkflowSchemas.quickCreate,
     invalidates: ["product"],
   }),
   applyUpcData: mutation({
+    mcp: {
+      omit: "kernel_alternative",
+      kernel: ["update"],
+      note: "entity.update with fields read from imports_read.upc_lookup",
+    },
     ...productWorkflowSchemas.applyUpcData,
     invalidates: ["productRecipe"],
   }),
@@ -67,22 +107,42 @@ export const productContract = defineContract("product", {
     invalidates: ["productLookup"],
   }),
   findOrCreateByCode: mutation({
+    mcp: {
+      omit: "deferred_capability",
+      todo: "Deferred MCP agent capabilities",
+      note: "upc.find_or_create covers UPCs only, not ISBNs",
+    },
     native: "Search tab create from a barcode or ISBN",
     ...productWorkflowSchemas.findOrCreateByCode,
     invalidates: ["productLookup"],
   }),
   categoryDistribution: query({
+    mcp: { omit: "client_view" },
     ...productWorkflowSchemas.categoryDistribution,
   }),
   manufacturerOptions: query({
+    mcp: { omit: "client_view" },
     ...productWorkflowSchemas.manufacturerOptions,
   }),
   externalIdSourceOptions: query({
+    mcp: { omit: "client_view" },
     ...productWorkflowSchemas.externalIdSourceOptions,
   }),
-  getByShortcodes: query({ ...productWorkflowSchemas.getByShortcodes }),
+  getByShortcodes: query({
+    mcp: {
+      omit: "kernel_alternative",
+      kernel: ["get", "list"],
+      note: "entity_read.get per id, or entity_read.list with an ids filter on products",
+    },
+    ...productWorkflowSchemas.getByShortcodes,
+  }),
   /** Which field wins, and what blocks, before a two-product merge commits. */
   mergePreview: query({
+    mcp: {
+      omit: "deferred_capability",
+      todo: "Deferred MCP agent capabilities",
+      note: "Keeper and incoming field winners and blockers; entity_read.connections reports only edge dispositions",
+    },
     input: mergeProductMatchInput,
     output: productMergePreview,
     cache: { tags: [] },
@@ -97,10 +157,18 @@ export const productContract = defineContract("product", {
     },
   }),
   purchases: query({
+    mcp: {
+      omit: "client_view",
+      note: "Agents read purchase products through entity_read.relations",
+    },
     native: "Show related Purchase movement evidence for a Product",
     ...productWorkflowSchemas.purchases,
   }),
   components: query({
+    mcp: {
+      omit: "client_view",
+      note: "Agents read components through entity_read.relations",
+    },
     ...productWorkflowSchemas.components,
     cache: {
       tags: [
@@ -110,6 +178,7 @@ export const productContract = defineContract("product", {
     },
   }),
   kitComponentRows: query({
+    mcp: { omit: "client_view" },
     ...productWorkflowSchemas.kitComponentRows,
     cache: {
       tags: [
@@ -119,6 +188,7 @@ export const productContract = defineContract("product", {
     },
   }),
   kitMembership: query({
+    mcp: { omit: "client_view" },
     ...productWorkflowSchemas.kitMembership,
     cache: {
       tags: [
@@ -128,22 +198,33 @@ export const productContract = defineContract("product", {
     },
   }),
   setProjectUses: mutation({
+    mcp: {
+      omit: "kernel_alternative",
+      kernel: ["link", "unlink"],
+      note: "entity.link and entity.unlink on project resources",
+    },
     ...productWorkflowSchemas.setProjectUses,
     invalidates: ["projectResource"],
   }),
   discard: mutation({
+    mcp: {
+      omit: "deferred_capability",
+      todo: "Deferred MCP agent capabilities",
+    },
     native: "Discard product units from the hero action",
     ...productWorkflowSchemas.discard,
     invalidates: ["expense"],
   }),
   /** The proposed amount and warnings for stocking one product, before the write. */
   addToInventoryPreview: query({
+    mcp: { omit: "client_view" },
     native: "Add to inventory preview for the hero action",
     ...productWorkflowSchemas.addToInventoryPreview,
     cache: { tags: [["product"], ["inventory"]] },
   }),
   /** Which shelf a discard touches and what it will warn about, before it commits. */
   discardPreview: query({
+    mcp: { omit: "client_view" },
     native: "Discard preview for the hero action confirmation",
     ...productWorkflowSchemas.discardPreview,
     cache: { tags: [["product"], ["inventory"]] },

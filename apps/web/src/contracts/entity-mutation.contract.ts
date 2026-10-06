@@ -9,6 +9,11 @@ import type {
 
 export const entityMutationContract = defineContract("entity", {
   mutate: mutation({
+    mcp: {
+      omit: "kernel_alternative",
+      kernel: ["create", "update", "delete", "commands"],
+      note: "The browser write path; agents use the entity tool's create, update, delete, and commands actions",
+    },
     // Type-only carriers: the per-entity runtime schemas live in the entity
     // kernel and are applied by the server handler; the HTTP router
     // substitutes the real wire schema.

@@ -13,6 +13,7 @@ export const entityReportContract = defineContract("entityReport", {
    * (`reportSlots`), so web and native render one read.
    */
   get: query({
+    mcp: { omit: "client_view", note: "Detail slot reports" },
     native: "Detail slot reports",
     input: entityReportInput,
     output: entityReportOut,
@@ -42,6 +43,7 @@ export const entityReportContract = defineContract("entityReport", {
    * once per poll instead of once per slot.
    */
   getMany: query({
+    mcp: { omit: "client_view" },
     native: "Detail slot reports, batched per record",
     input: entityReportManyInput,
     output: entityReportManyOut,

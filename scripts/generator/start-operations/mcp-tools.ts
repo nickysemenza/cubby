@@ -1,13 +1,17 @@
 import { pascalCase } from "../../../packages/shared/src/text-case.ts";
+import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { pathToFileURL } from "node:url";
 import { z } from "zod";
+import { mcpOmission } from "../../../apps/web/src/contracts/define.ts";
+import { kernelActionName } from "../../../apps/web/src/contracts/mcp-define.ts";
 import { generatedHeader } from "../artifacts.ts";
 import type { EntityArtifacts } from "../entities/declarations.ts";
 import {
   assertContractPurity,
   collectStartOperationHandlers,
   loadContracts,
+  ROOT,
   SOURCE_ROOT,
 } from "./collect.ts";
 
@@ -45,7 +49,7 @@ const ACTION_NAME = /^[a-z][A-Za-z0-9_]*$/u;
 
 /** `kernelAction(verb, kind)` in `contracts/mcp-define.ts`. */
 const kernelRef = z.object({
-  kernel: z.string(),
+  kernel: kernelActionName,
   kind: z.enum(["query", "mutation"]),
 });
 
@@ -70,6 +74,91 @@ export const toolKind = (
       `MCP tool ${name} mixes query actions (${byKind("query")}) and mutation actions (${byKind("mutation")}). A read-only tool must stay auto-approvable: move the actions into a tool of their own kind.`,
     );
   return first.kind;
+};
+
+const TODOS_PATH = "docs/todos.md";
+
+/**
+ * Every query and mutation is either an MCP tool action or declares why not
+ * (`mcp` in `contracts/define.ts`), never both. An omission's reference must
+ * hold: a kernel alternative names a verb some tool exposes, an agent twin is
+ * itself an action, and a deferred capability names a docs/todos.md entry that
+ * lists the operation. Subscriptions are not tool actions and are skipped.
+ * Every violation is reported at once.
+ */
+export const assertMcpExposure = ({
+  operations,
+  exposedOperations,
+  kernelActions,
+  todos,
+}: {
+  operations: ReadonlyArray<{
+    operation: string;
+    kind: "query" | "mutation" | "subscription";
+    mcp?: unknown;
+  }>;
+  exposedOperations: ReadonlySet<string>;
+  kernelActions: ReadonlySet<string>;
+  /** The text of docs/todos.md. */
+  todos: string;
+}): void => {
+  const errors: string[] = [];
+  for (const { operation, kind, mcp } of operations) {
+    if (kind === "subscription") continue;
+    const exposed = exposedOperations.has(operation);
+    if (mcp === undefined) {
+      if (!exposed)
+        errors.push(
+          `${operation} is not an MCP tool action and declares no \`mcp: { omit }\` reason. Add it to apps/web/src/contracts/mcp-tools.ts or declare why agents do without it (\`mcpOmission\` in contracts/define.ts).`,
+        );
+      continue;
+    }
+    const parsed = mcpOmission.safeParse(mcp);
+    if (!parsed.success) {
+      errors.push(
+        `${operation} declares an invalid \`mcp\` omission: ${z.prettifyError(parsed.error)}`,
+      );
+      continue;
+    }
+    const omission = parsed.data;
+    if (exposed) {
+      errors.push(
+        `${operation} is an MCP tool action but declares \`mcp: { omit: ${omission.omit} }\`; remove one.`,
+      );
+      continue;
+    }
+    if (omission.omit === "kernel_alternative")
+      for (const verb of omission.kernel)
+        if (!kernelActions.has(verb))
+          errors.push(
+            `${operation} names kernel action ${verb}, which no MCP tool exposes.`,
+          );
+    if (omission.omit === "agent_twin" && !exposedOperations.has(omission.twin))
+      errors.push(
+        `${operation} names agent twin ${omission.twin}, which is not an MCP tool action.`,
+      );
+    if (omission.omit === "deferred_capability") {
+      const start = todos.indexOf(`**${omission.todo}.**`);
+      if (start === -1) {
+        errors.push(
+          `${operation} defers to ${TODOS_PATH} entry **${omission.todo}.**, which does not exist.`,
+        );
+        continue;
+      }
+      // The entry runs to the next top-level bullet or heading.
+      const rest = todos.slice(start);
+      const end = rest.search(/\n(?:- |#)/u);
+      const entry = end === -1 ? rest : rest.slice(0, end);
+      if (!entry.includes(`\`${operation}\``))
+        errors.push(
+          `${TODOS_PATH} does not name \`${operation}\` in its **${omission.todo}.** entry.`,
+        );
+    }
+  }
+  if (errors.length > 0)
+    throw new Error(
+      `MCP exposure declarations are incomplete:\n- ${errors.join("\n- ")}`,
+    );
 };
 
 /**
@@ -105,15 +194,18 @@ const loadMcpTools = async (): Promise<Record<string, ToolDeclaration>> => {
 const resolveMcpTools = async (): Promise<ResolvedTool[]> => {
   const tools = await loadMcpTools();
   const members = new Map<object, { operation: string; kind: string }>();
+  const declared: Parameters<
+    typeof assertMcpExposure
+  >[0]["operations"][number][] = [];
   for (const { contract } of await loadContracts())
-    for (const [member, definition] of Object.entries(contract.ops))
-      members.set(definition, {
-        operation: `${contract.domain}.${member}`,
-        kind: definition.kind,
-      });
+    for (const [member, definition] of Object.entries(contract.ops)) {
+      const operation = `${contract.domain}.${member}`;
+      members.set(definition, { operation, kind: definition.kind });
+      declared.push({ operation, kind: definition.kind, mcp: definition.mcp });
+    }
   const { operations } = await collectStartOperationHandlers();
 
-  return Object.entries(tools).map(([name, tool]) => {
+  const resolved = Object.entries(tools).map(([name, tool]) => {
     if (!IDENTIFIER.test(name))
       throw new Error(`MCP tool name ${name} must be snake_case`);
     const actions = Object.entries(tool.actions).map(
@@ -160,6 +252,20 @@ const resolveMcpTools = async (): Promise<ResolvedTool[]> => {
       openWorld: specs.some((spec) => spec.openWorld === true),
     };
   });
+  const actions = resolved.flatMap((tool) => tool.actions);
+  assertMcpExposure({
+    operations: declared,
+    exposedOperations: new Set(
+      actions.flatMap((action) =>
+        "operation" in action ? [action.operation] : [],
+      ),
+    ),
+    kernelActions: new Set(
+      actions.flatMap((action) => ("kernel" in action ? [action.kernel] : [])),
+    ),
+    todos: readFileSync(join(ROOT, TODOS_PATH), "utf8"),
+  });
+  return resolved;
 };
 
 const property = (key: string) =>

@@ -5,7 +5,10 @@
     "generate": {
       "command": "pnpm generate && redocly lint apps/web/src/lib/generated/http-openapi.gen.json --config redocly.yaml",
       "cache": true,
-      "inputs": ["repo"]
+      // `repo` excludes Markdown, and Nx applies that exclusion to every file
+      // input, so docs/todos.md (which generation checks for deferred MCP
+      // capabilities, start-operations/mcp-tools.ts) is hashed at runtime.
+      "inputs": ["repo", { "runtime": "git hash-object docs/todos.md" }]
     },
     "types": {
       "command": "pnpm typecheck",
@@ -13,6 +16,8 @@
       "dependsOn": ["wasm"],
       "inputs": [
         "repo",
+        // `pnpm typecheck` runs generation first; see `generate`.
+        { "runtime": "git hash-object docs/todos.md" },
         {
           "dependentTasksOutputFiles": "packages/wasm/**/*"
         }

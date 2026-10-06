@@ -65,26 +65,34 @@ const attachFileItem = z
 
 export const imageUploadContract = defineContract("image", {
   markUploaded: mutation({
+    mcp: { omit: "upload_transport" },
     native: "PhotoService",
     input: getImageByIdSchema,
     output: imageWithEntitySchema,
   }),
   uploadImage: mutation({
+    mcp: { omit: "upload_transport" },
     native: "PhotoService",
     input: initiateUploadWithoutEntitySchema,
     output: initiateUploadWithoutEntityResponseSchema,
   }),
   uploadDocument: mutation({
+    mcp: { omit: "upload_transport" },
     native: "Purchase import receipt evidence",
     input: initiateDocumentUploadSchema,
     output: initiateUploadWithoutEntityResponseSchema,
   }),
   importFromUrl: mutation({
+    mcp: {
+      omit: "upload_transport",
+      note: "Agents attach by URL through image.attach_files",
+    },
     input: importImageFromUrlSchema,
     output: importImageFromUrlResponseSchema,
     invalidates: ["image"],
   }),
   cullPendingImages: mutation({
+    mcp: { omit: "operator_maintenance" },
     input: cullPendingImagesSchema,
     output: cullPendingImagesResponseSchema,
     invalidates: ["imageCull"],

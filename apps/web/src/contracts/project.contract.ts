@@ -91,27 +91,39 @@ const projectBudgetOut = z.object({
 
 export const projectContract = defineContract("project", {
   dashboardSummary: query({
+    mcp: { omit: "agent_twin", twin: "project.houseStatus" },
     native: "Project analytics summary",
     input: schemas.projectDashboardFiltersSchema,
     output: schemas.projectDashboardSummaryOut,
     cache: { profile: "stable" },
   }),
   tree: query({
+    mcp: { omit: "client_view" },
     input: schemas.projectTreeInput,
     output: schemas.projectTreeOut,
   }),
   getDependencyGraph: query({
+    mcp: { omit: "client_view" },
     input: schemas.projectDependencyGraphInput,
     output: schemas.projectDependencyGraphSchema,
     cache: { tags: [["project", "dependencyGraph"]] },
   }),
   portfolioAnalytics: query({
+    mcp: {
+      omit: "client_view",
+      note: "Project analytics charts; agents read budgets through project_overview.budget and spend through project_overview.expense_analytics",
+    },
     native: "Project analytics",
     input: schemas.projectDashboardFiltersSchema,
     output: schemas.projectPortfolioAnalyticsOut,
     cache: { profile: "stable" },
   }),
   createFromTasks: mutation({
+    mcp: {
+      omit: "kernel_alternative",
+      kernel: ["create", "bulkUpdate"],
+      note: "entity.create a project, then entity.bulkUpdate its tasks",
+    },
     input: schemas.createProjectFromTasksInput,
     output: schemas.createProjectFromTasksOut,
     invalidates: ["taskProject"],
@@ -127,6 +139,7 @@ export const projectContract = defineContract("project", {
     },
   }),
   toolMatrix: query({
+    mcp: { omit: "client_view" },
     input: schemas.projectToolMatrixInput,
     output: schemas.projectToolMatrixOut,
     cache: {
@@ -137,6 +150,7 @@ export const projectContract = defineContract("project", {
     },
   }),
   toolGallery: query({
+    mcp: { omit: "client_view" },
     input: schemas.toolGalleryInput,
     output: schemas.toolGalleryOut,
     cache: {
@@ -151,6 +165,11 @@ export const projectContract = defineContract("project", {
     },
   }),
   setToolUsage: mutation({
+    mcp: {
+      omit: "kernel_alternative",
+      kernel: ["link", "unlink"],
+      note: "entity.link and entity.unlink on project resources",
+    },
     input: schemas.projectToolUsageSetInput,
     output: schemas.projectToolUsageSetOut,
     invalidates: ["projectResource"],

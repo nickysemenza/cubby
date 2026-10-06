@@ -532,6 +532,34 @@ not_allowed` (Restaurants) means an Expense neither expects nor may link a
   Cubby's pin. Preserve extraction estimates and token-cost accounting,
   including unknown prices as `null`; do not reintroduce a local fallback table.
 
+- 🤔 **Deferred MCP agent capabilities.** Real agent work no MCP tool exposes
+  yet. Each operation declares `mcp: { omit: "deferred_capability" }` and
+  `pnpm generate` requires it to be named here
+  ([MCP exposure](agents/mcp.md#exposure)). Decide per group whether and how
+  to expose it, then drop the group when it ships:
+  - Order mail: `vendor.orderMail`, `vendor.searchOrderMail`,
+    `vendor.orderMailSearchStatus`, `vendor.importOrderMail`,
+    `vendor.importSelectedOrderMail`.
+  - Targeted runs and their evidence: `run.targetedLaunch`,
+    `run.startTargeted`, `vendor.chargeHunts`, `vendor.startChargeRun`,
+    `purchaseImport.initiateRunEvidenceUpload`.
+  - Inventory receiving: `inventory.receiveExpense`,
+    `inventory.receivingContext`, `problems.resolveArrivedFindings`.
+  - Discarding units: `inventory.bulkDiscard`, `product.discard`.
+  - Finance booking and corrections: `financialTransaction.previewBooking`,
+    `financialTransaction.commitBooking`,
+    `financialTransaction.previewBookingCorrection`,
+    `financialTransaction.commitBookingCorrection`,
+    `purchase.settlementCandidates`.
+  - Statement CSV import: `statementRow.previewCsv`, `statementRow.commitCsv`.
+  - Expense pivots: `expense.analyze`.
+  - Product merge preview: `product.mergePreview`.
+  - Meals: log a food without a recipe (`meal.saveFood`, `meal.removeFood`);
+    copy plans (`meal.duplicate`, `meal.copyRange`).
+  - Collection membership: `collection.set`, `collection.create`.
+  - ISBN create: `product.findOrCreateByCode`.
+  - Derived-field explanations: `fieldExplanation.explain`.
+
 - 🤔 **Suggestion sweep primitive.** One run shape for bulk suggestion passes:
   record each suggestion (target, branch-rolled confidence, runner-up), apply
   only high-confidence changes, queue the rest for review, with progress and

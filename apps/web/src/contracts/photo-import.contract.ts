@@ -262,6 +262,10 @@ const [saveGroupsAction] = reviewPhotoGroupsAction.options;
 
 export const photoImportContract = defineContract("photoImport", {
   startGrouping: mutation({
+    mcp: {
+      omit: "device_protocol",
+      note: "The uploader starts grouping after finalize",
+    },
     native: "Start photo grouping after a finalized upload",
     input: z.object({ runId: runShortcode }),
     output: z.object({
@@ -273,12 +277,20 @@ export const photoImportContract = defineContract("photoImport", {
     invalidates: ["runOnly"],
   }),
   review: query({
+    mcp: {
+      omit: "client_view",
+      note: "Agents read proposals through imports_read.photo_proposals",
+    },
     native: "Review proposed photo groups and processing status in Apple apps",
     input: z.object({ runId: runShortcode }),
     output: photoRunReviewResponse,
     cache: { tags: [["run"]] },
   }),
   candidates: query({
+    mcp: {
+      omit: "client_view",
+      note: "Agents read candidates through imports_read.photo_candidates",
+    },
     native: "Explain possible Product matches for a proposed photo group",
     input: z.object({
       runId: runShortcode,
@@ -287,6 +299,7 @@ export const photoImportContract = defineContract("photoImport", {
     output: photoProductCandidatesResponse,
   }),
   linkableExpenses: query({
+    mcp: { omit: "client_view" },
     input: z.object({
       runId: runShortcode,
       groupKey: z.string().min(1).max(200),
@@ -311,6 +324,7 @@ export const photoImportContract = defineContract("photoImport", {
     cache: { tags: [["run"]] },
   }),
   linkExpense: mutation({
+    mcp: { omit: "human_approval" },
     input: z.object({
       runId: runShortcode,
       groupKey: z.string().min(1).max(200),
@@ -323,6 +337,7 @@ export const photoImportContract = defineContract("photoImport", {
     invalidates: ["runOnly"],
   }),
   chooseExisting: mutation({
+    mcp: { omit: "human_approval" },
     native: "Select an existing Product for a proposed photo group",
     input: z.object({
       runId: runShortcode,
@@ -332,6 +347,7 @@ export const photoImportContract = defineContract("photoImport", {
     output: reviewPhotoGroupsOutput,
   }),
   updateDraft: mutation({
+    mcp: { omit: "human_approval" },
     native: "Correct proposed product identity before approving photos",
     input: z.object({
       runId: runShortcode,
@@ -345,6 +361,7 @@ export const photoImportContract = defineContract("photoImport", {
     output: reviewPhotoGroupsOutput,
   }),
   approveGroups: mutation({
+    mcp: { omit: "human_approval" },
     native: "Approve reviewed photo groups in Apple apps",
     input: z.object({
       runId: runShortcode,
@@ -364,6 +381,7 @@ export const photoImportContract = defineContract("photoImport", {
     invalidates: ["runOnly"],
   }),
   discardGroup: mutation({
+    mcp: { omit: "human_approval" },
     native: "Discard a proposed photo group in Apple apps",
     input: z.object({
       runId: runShortcode,
@@ -373,6 +391,7 @@ export const photoImportContract = defineContract("photoImport", {
     invalidates: ["runOnly"],
   }),
   saveGroups: mutation({
+    mcp: { omit: "human_approval" },
     input: saveGroupsAction
       .omit({ action: true })
       .extend({ runId: runShortcode }),
@@ -380,26 +399,31 @@ export const photoImportContract = defineContract("photoImport", {
     invalidates: ["runOnly"],
   }),
   stage: mutation({
+    mcp: { omit: "device_protocol", note: "Native manifest import" },
     native: "Manifest photo import staging",
     input: photoImportStageInputSchema,
     output: photoImportStageOutputSchema,
   }),
   commit: mutation({
+    mcp: { omit: "device_protocol", note: "Native manifest import" },
     native: "Atomic manifest photo import commit",
     input: photoImportCommitInputSchema,
     output: photoImportCommitResultSchema,
   }),
   createRun: mutation({
+    mcp: { omit: "device_protocol" },
     native: "Start a photo-inventory import run",
     input: photoImportCreateRunInputSchema,
     output: photoImportCreateRunOutputSchema,
   }),
   finalize: mutation({
+    mcp: { omit: "device_protocol" },
     native: "Finalize bulk-uploaded photos into a photo-inventory run",
     input: photoImportFinalizeInputSchema,
     output: photoImportFinalizeOutputSchema,
   }),
   reconcile: mutation({
+    mcp: { omit: "device_protocol" },
     native: "Lock-aware photo import reconciliation",
     input: photoImportReconcileInputSchema,
     output: photoImportReconcileOutputSchema,

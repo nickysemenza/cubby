@@ -9,6 +9,7 @@ import { defineContract, query } from "~/contracts/define";
 /** Browser-only canonical media lookup for compact entity references. */
 export const entityMediaContract = defineContract("entityMedia", {
   displayImages: query({
+    mcp: { omit: "client_view" },
     http: false,
     input: entityDisplayImagesInput,
     output: entityDisplayImagesOutput,

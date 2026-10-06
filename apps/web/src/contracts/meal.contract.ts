@@ -99,6 +99,10 @@ const dailyIntakeOut = z.object({
 export const mealContract = defineContract("meal", {
   // Bounded Home summary; see expense.monthlySummary.
   getNutrition: query({
+    mcp: {
+      omit: "client_view",
+      note: "Home macro tiles for a meal or a household day; agents read nutrition.daily_intake per person and nutrition.preparations per meal",
+    },
     readPolicy: "strong",
     native: "Meal and daily macro summaries",
     input: schemas.mealNutritionInput,
@@ -114,25 +118,40 @@ export const mealContract = defineContract("meal", {
     },
   }),
   saveFood: mutation({
+    mcp: {
+      omit: "deferred_capability",
+      todo: "Deferred MCP agent capabilities",
+    },
     input: schemas.saveMealFoodInput,
     output: schemas.mealFoodMutationOut,
     invalidates: ["meal"],
   }),
   removeFood: mutation({
+    mcp: {
+      omit: "deferred_capability",
+      todo: "Deferred MCP agent capabilities",
+    },
     input: schemas.removeMealFoodInput,
     output: schemas.mealFoodMutationOut,
     invalidates: ["meal"],
   }),
   getByDateRange: query({
+    mcp: {
+      omit: "kernel_alternative",
+      kernel: ["list"],
+      note: "entity_read.list on meals filtered by mealDate",
+    },
     input: schemas.mealDateRange,
     output: schemas.mealListOut,
   }),
   upcomingSummary: query({
+    mcp: { omit: "client_view" },
     readPolicy: "strong",
     input: schemas.mealDateRange,
     output: schemas.upcomingMealSummaryOut,
   }),
   getPreparations: query({
+    mcp: { omit: "agent_twin", twin: "meal.preparationsDetail" },
     input: schemas.getMealPreparationsInput,
     output: schemas.getMealPreparationsOut,
     cache: { tags: [["meal", "getPreparations"], ["recipe"]] },
@@ -142,6 +161,7 @@ export const mealContract = defineContract("meal", {
     output: schemas.shoppingListOut,
   }),
   addRecipe: mutation({
+    mcp: { omit: "agent_twin", twin: "meal.planRecipe" },
     native: "Plan a recipe into a meal from its composition report",
     input: schemas.mealAddRecipeInput,
     output: schemas.mealOut,
@@ -161,11 +181,19 @@ export const mealContract = defineContract("meal", {
   }),
   // Copies are plans: planned portions, no images, appended to the target days.
   duplicate: mutation({
+    mcp: {
+      omit: "deferred_capability",
+      todo: "Deferred MCP agent capabilities",
+    },
     input: mealDuplicateInput,
     output: schemas.mealOut,
     invalidates: ["meal"],
   }),
   copyRange: mutation({
+    mcp: {
+      omit: "deferred_capability",
+      todo: "Deferred MCP agent capabilities",
+    },
     input: mealCopyRangeInput,
     output: mealCopyRangeOut,
     invalidates: ["meal"],

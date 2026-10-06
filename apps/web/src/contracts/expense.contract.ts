@@ -14,6 +14,7 @@ import { defineContract, mutation, query } from "~/contracts/define";
 
 export const expenseContract = defineContract("expense", {
   chartData: query({
+    mcp: { omit: "client_view" },
     input: schemas.expenseFiltersSchema,
     output: z.array(schemas.expenseOut),
   }),
@@ -24,36 +25,51 @@ export const expenseContract = defineContract("expense", {
   }),
   // Home summaries are bounded, single-round-trip reads. Asking the freshness Durable Object first adds another network hop before these short queries.
   monthlySummary: query({
+    mcp: { omit: "client_view" },
     readPolicy: "strong",
     input: schemas.expenseFiltersSchema,
     output: schemas.expenseMonthlySummaryOut,
   }),
   analyze: query({
+    mcp: {
+      omit: "deferred_capability",
+      todo: "Deferred MCP agent capabilities",
+      note: "Category grouping, arbitrary row/column pivots, and prior-period comparison; expense_analytics returns fixed aggregates",
+    },
     input: schemas.expenseAnalyzeInput,
     output: schemas.expenseAnalyzeOut,
   }),
   facetCounts: query({
+    mcp: { omit: "client_view" },
     input: schemas.expenseFacetCountsInput,
     output: schemas.expenseFacetCountsOut,
   }),
   tradeAffinity: query({
+    mcp: { omit: "client_view" },
     input: z.undefined(),
     output: z.array(schemas.expenseTradeAffinityOut),
   }),
   chargeContext: query({
+    mcp: { omit: "client_view" },
     input: expenseShortcode,
     output: schemas.expenseChargeContextOut,
   }),
   inventoryOwnershipContext: query({
+    mcp: { omit: "client_view" },
     input: expenseInventoryOwnershipContextInput,
     output: expenseInventoryOwnershipContextOut,
   }),
   /** Beneficiaries/funders last used with a vendor, for prefilling the create form. */
   vendorAttributionDefaults: query({
+    mcp: { omit: "client_view", note: "Create-form prefill" },
     input: vendorAttributionDefaultsInput,
     output: vendorAttributionDefaultsOut,
   }),
   confirmInventoryBeneficiary: mutation({
+    mcp: {
+      omit: "human_approval",
+      note: "A person confirms the inherited beneficiary",
+    },
     input: confirmInventoryExpenseBeneficiaryInput,
     output: confirmInventoryExpenseBeneficiaryOut,
     invalidates: ["expense"],

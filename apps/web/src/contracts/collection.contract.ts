@@ -19,6 +19,7 @@ import { defineContract, mutation, query } from "~/contracts/define";
 
 export const collectionContract = defineContract("collection", {
   referenceDetail: query({
+    mcp: { omit: "client_view" },
     native: "Collection by reference",
     input: smartCollectionReferenceInput,
     output: smartCollectionDetailOut,
@@ -37,6 +38,7 @@ export const collectionContract = defineContract("collection", {
     },
   }),
   smartList: query({
+    mcp: { omit: "client_view" },
     input: smartCollectionListInput,
     output: z.array(smartCollectionSummary),
     cache: {
@@ -52,6 +54,7 @@ export const collectionContract = defineContract("collection", {
     },
   }),
   smartDetail: query({
+    mcp: { omit: "client_view" },
     input: smartCollectionDetailInput,
     output: smartCollectionDetailOut,
     cache: {
@@ -67,23 +70,35 @@ export const collectionContract = defineContract("collection", {
     },
   }),
   list: query({
+    mcp: { omit: "client_view" },
     input: z.null(),
     output: z.array(collectionSummaryOut),
   }),
   detail: query({
+    mcp: { omit: "client_view" },
     input: collectionDetailInput,
     output: collectionDetailOut,
   }),
   matrix: query({
+    mcp: { omit: "client_view" },
     input: collectionMatrixInput,
     output: collectionMatrixOut,
   }),
   set: mutation({
+    mcp: {
+      omit: "deferred_capability",
+      todo: "Deferred MCP agent capabilities",
+      note: "`collection:*` tags are managed by Collections, so entity.update must not write them",
+    },
     input: collectionTagSetInput,
     output: collectionTagSetOut,
     invalidates: ["collection"],
   }),
   create: mutation({
+    mcp: {
+      omit: "deferred_capability",
+      todo: "Deferred MCP agent capabilities",
+    },
     input: collectionCreateInput,
     output: collectionSummaryOut,
     invalidates: ["collection"],

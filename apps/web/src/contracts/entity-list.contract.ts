@@ -15,12 +15,22 @@ import {
 
 export const entityListContract = defineContract("entity", {
   listBase: query({
+    mcp: {
+      omit: "kernel_alternative",
+      kernel: ["list"],
+      note: "The progressive list split for native; agents use entity_read.list",
+    },
     input: entityListInputSchema,
     output: entityListBaseOutputSchema,
     native: "Progressive standard entity lists",
     observability: { entities: listEntities },
   }),
   listEnrichment: query({
+    mcp: {
+      omit: "kernel_alternative",
+      kernel: ["list"],
+      note: "The progressive list split for native; agents use entity_read.list",
+    },
     input: entityListEnrichmentInputSchema,
     output: entityListEnrichmentOutputSchema,
     transport: "post",
@@ -28,12 +38,22 @@ export const entityListContract = defineContract("entity", {
     observability: { entities: listEntities },
   }),
   listSummary: query({
+    mcp: {
+      omit: "kernel_alternative",
+      kernel: ["list"],
+      note: "Full-filter totals; entity_read.list returns its total",
+    },
     input: entityListInputSchema,
     output: entityListSummaryOutputSchema,
     native: "Full-filter list totals",
     observability: { entities: listEntities },
   }),
   list: query({
+    mcp: {
+      omit: "kernel_alternative",
+      kernel: ["list"],
+      note: "The browser list read; agents use entity_read.list",
+    },
     // Type-only carriers: the per-entity runtime schemas live in the generated
     // list bindings and are applied by the browser `parse` policy and the
     // server handler; the HTTP router substitutes the real wire schema.
