@@ -18,7 +18,10 @@ struct EntityRowPresentationTests {
         #expect(presentation.facts.first?.value == "75/100 · Needs data")
         let category = EntityRow(
             id: "SPC-1001", title: "Synthetic tools", subtitle: nil, imageURL: nil,
-            raw: ["id": "SPC-1001", "name": "Synthetic tools"])
+            raw: [
+                "id": "SPC-1001", "name": "Synthetic tools",
+                "dataQuality": ["score": .null, "status": "not_assessed"],
+            ])
         let unassessed = EntityRowPresentation.resolve(
             descriptor: EntityCatalog[.spendingCategory], row: category)
         #expect(unassessed.facts.first?.value == "Not assessed")
