@@ -173,10 +173,18 @@ key, so a version bump does not discard dependency precompiled modules. A
 package declaration, local Swift package graph, or resolved-pin change still
 invalidates those modules. The simulator build certificate includes both specs.
 
+The simulator build uses the standard `macos-26-intel` runner while host tests
+remain on `macos-26`. Both use the existing two job slots. The simulator still
+cross-compiles the arm64 slice; no Intel app or FFI product is added. DerivedData
+keys include the host architecture because build plugins are host executables.
+The Intel runner comparison is unverified; its extra memory and CPU core do not
+establish a speedup. Standard runners remain free for public repositories
+([GitHub runner specifications](https://docs.github.com/en/actions/reference/runners/github-hosted-runners)).
+
 Compiled Apple caches are published only after successful work. GitHub cache
 entries are immutable: saving an interrupted compile under the final content
 key makes every exact hit repeat that unfinished work, and a successful build
-cannot repair the entry. The DerivedData `v6` and SwiftPM `v2` generations
+cannot repair the entry. The DerivedData `v7` and SwiftPM `v2` generations
 exclude earlier entries that could have been saved after cancellation or
 failure. A new generation pays one cold build; unchanged successful restores
 are the evidence for warm performance. Dependency clones remain advisory.
