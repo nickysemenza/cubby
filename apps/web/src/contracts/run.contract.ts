@@ -1,9 +1,11 @@
 import { aiRunUsageInput, aiRunUsageOut } from "@cubby/schemas/ai";
 import {
+  anyShortcodeSchema,
   runShortcode,
   imageShortcode,
   productShortcode,
   purchaseShortcode,
+  vendorAccountShortcode,
 } from "@cubby/schemas/identifiers";
 import { runTargetDeviceWorkState } from "@cubby/schemas/photo-import-run";
 import {
@@ -251,7 +253,7 @@ const targetedImportSource = z.object({
   label: z.string().min(1),
   kind: z.string().min(1),
   fingerprint: z.string().nullable(),
-  vendorAccountId: z.string().nullable(),
+  vendorAccountId: vendorAccountShortcode.nullable(),
   vendorAccountLabel: z.string().nullable(),
   usable: z.boolean(),
   reason: z.string().nullable(),
@@ -265,11 +267,11 @@ const targetedProductCandidate = z.object({
   selected: z.boolean(),
   sourceId: z.string().nullable(),
   sourceLabel: z.string().nullable(),
-  vendorAccountId: z.string().nullable(),
+  vendorAccountId: vendorAccountShortcode.nullable(),
   vendorAccountLabel: z.string().nullable(),
   needsAccountChoice: z.boolean(),
   accountChoices: z.array(
-    z.object({ id: z.string().min(1), label: z.string().min(1) }),
+    z.object({ id: vendorAccountShortcode, label: z.string().min(1) }),
   ),
   reason: z.string().nullable(),
 });
@@ -430,23 +432,15 @@ export const runContract = defineContract("run", {
     cache: { tags: [["run"]] },
   }),
   targetedLaunch: query({
-    mcp: {
-      omit: "deferred_capability",
-      todo: "Deferred MCP agent capabilities",
-    },
     native: "Replayable evidence for a targeted purchase-validation launch",
     input: z.object({
       purpose: targetedImportPurpose,
-      targetId: z.string().min(1),
+      targetId: anyShortcodeSchema(["purchase", "product"]),
     }),
     output: targetedImportLaunch,
     cache: { tags: [] },
   }),
   startTargeted: mutation({
-    mcp: {
-      omit: "deferred_capability",
-      todo: "Deferred MCP agent capabilities",
-    },
     native: "Launch a targeted purchase-validation or product-enrichment run",
     input: targetedImportStartInput,
     output: targetedImportStartOutput,

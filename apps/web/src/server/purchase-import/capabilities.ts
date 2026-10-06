@@ -24,7 +24,9 @@ type Capability =
   | "enrichment_commit"
   | "photo_commit"
   /** Review-queue metadata only: never changes household records. */
-  | "match_proposal";
+  | "match_proposal"
+  /** Starting another run; no purpose grants it, so a run never spawns one. */
+  | "start_run";
 
 const capabilityMatrix = {
   account_sync: new Set([
@@ -107,6 +109,8 @@ const actionCapability = {
   "upc.find_or_create": "generic_mutation",
   "photo_run.propose_groups": "photo_commit",
   "photo_run.commit_group": "photo_commit",
+  "run.start": "start_run",
+  "run.start_charge_run": "start_run",
   "meal_recipe.add": "generic_mutation",
   "meal_recipe.update": "generic_mutation",
   "meal_recipe.remove": "generic_mutation",

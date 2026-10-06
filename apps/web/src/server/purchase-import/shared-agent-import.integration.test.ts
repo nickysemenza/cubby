@@ -17,6 +17,7 @@ import {
   purchase,
   runFinding,
   runOperation,
+  run as runTable,
   runTarget,
 } from "~/server/db/schema";
 import { getDb, withTransaction } from "~/server/repo/database-helpers";
@@ -487,6 +488,12 @@ describe("shared purchase-import prepare and commit", () => {
         }),
         ctx.actor,
       );
+      // The coordinator finishes the run; while it is active, another
+      // validation of this Purchase is blocked by target.
+      await getDb(ctx.db)
+        .update(runTable)
+        .set({ status: "completed" })
+        .where(eq(runTable.id, started.run.id));
       const [target] = await getDb(ctx.db)
         .select({ warning: runTarget.warning })
         .from(runTarget)

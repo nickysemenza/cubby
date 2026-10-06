@@ -37,7 +37,7 @@ describe("TargetedImportLaunchDialog", () => {
                   label: "Browser order #fixture",
                   kind: "browser_order",
                   fingerprint: "abc",
-                  vendorAccountId: "VACCT-ABCDE12345",
+                  vendorAccountId: "VACCT-4K7M",
                   vendorAccountLabel: "Fixture account",
                   usable: true,
                   reason: null,

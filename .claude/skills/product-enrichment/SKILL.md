@@ -59,6 +59,10 @@ Imported Products enrich without a click: after an import commits, on every
 discovery pass, and when an account turns browser sync on, the server starts one
 targeted run per browsing account whose Mac is connected, for Products an import
 created that no run has committed or skipped (at most three attempts each).
+To start one yourself, read `imports_read.run_launch_preview` for the Product's
+`sourceId`, then call `run.start` with purpose `product_enrichment`; a
+`blockingRun` answer means the account is busy and nothing was queued. Poll
+`entity_read.get` on the RUN- id with `resultDetail: "full"` for its status.
 
 Read [source mechanics](references/sources.md) only for the source in hand.
 Read [write and image rules](references/writes-and-images.md) when preparing a

@@ -68,7 +68,6 @@ export const targetedImportStartInput = z
             z.object({
               productId: productShortcode,
               sourceId: z.string().min(1).nullable(),
-              vendorAccountId: z.string().min(1).nullable(),
             }),
           )
           .min(1),

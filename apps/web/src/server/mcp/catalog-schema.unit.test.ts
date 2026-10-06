@@ -499,6 +499,11 @@ describe("MCP catalog schemas", () => {
       // public Cubby entities.
       "product_enrichment.changes.identifiers[].evidenceId",
       "product_enrichment.changes.image.evidenceId",
+      // An import source claim has no shortcode; imports_read.run_launch_preview
+      // returns its opaque id, and the start re-checks it against the
+      // member's own claims.
+      "run.sourceId",
+      "run.targets[].sourceId",
     ]);
     const freeTextIds = new Set([
       "orderId",

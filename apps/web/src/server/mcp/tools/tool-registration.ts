@@ -355,10 +355,11 @@ async function prepareToolExtra(
 }
 
 /**
- * The object an action's member input is published as, and how tool
- * arguments become the member's own input: a no-input member (`z.undefined()`,
- * `z.null()`) takes no fields, and an optional object is published as the
- * object.
+ * The object (or union of objects) an action's member input is published as,
+ * and how tool arguments become the member's own input: a no-input member
+ * (`z.undefined()`, `z.null()`) takes no fields, an optional object is
+ * published as the object, and a union of objects (a discriminated input such
+ * as `run.start`'s purposes) publishes each variant beside `action`.
  */
 function memberInput(name: string, schema: z.ZodType) {
   if (schema instanceof z.ZodObject)
@@ -369,12 +370,17 @@ function memberInput(name: string, schema: z.ZodType) {
       : undefined;
   if (inner instanceof z.ZodObject)
     return { object: inner, toMember: (args: ToolArguments) => args };
+  if (
+    schema instanceof z.ZodUnion &&
+    schema.options.every((option) => option instanceof z.ZodObject)
+  )
+    return { object: schema, toMember: (args: ToolArguments) => args };
   if (schema instanceof z.ZodUndefined || schema instanceof z.ZodVoid)
     return { object: z.strictObject({}), toMember: () => undefined };
   if (schema instanceof z.ZodNull)
     return { object: z.strictObject({}), toMember: () => null };
   throw new Error(
-    `MCP action ${name}: a member input must be an object, an optional object, or no input`,
+    `MCP action ${name}: a member input must be an object, an optional object, a union of objects, or no input`,
   );
 }
 
@@ -470,7 +476,14 @@ function compileAction(
   const operation = binding.run;
   if (!operation) throw new Error(`${toolAction} has no bound handler`);
   const { object, toMember } = memberInput(toolAction, operation.input);
-  const published = spec.strict ? strictInput(toolAction, object) : object;
+  let published = object;
+  if (spec.strict) {
+    if (!(object instanceof z.ZodObject))
+      throw new Error(
+        `MCP action ${toolAction}: only an object input can be strict`,
+      );
+    published = strictInput(toolAction, object);
+  }
   const memberOutput = spec.output ?? operation.output;
   const runMember = async (input: ActionValue, extra: ToolExtra) => {
     const member = toMember(z.looseObject({}).parse(input ?? {}));
@@ -539,7 +552,8 @@ function compileAction(
     kind,
     spec,
     batch: false,
-    keepsRunExecution: "_runExecution" in published.shape,
+    keepsRunExecution:
+      published instanceof z.ZodObject && "_runExecution" in published.shape,
     input: published,
     prepareInput: (args) => args,
     output: memberOutput,

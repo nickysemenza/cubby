@@ -74,19 +74,11 @@ export const vendorContract = defineContract("vendor", {
     invalidates: ["vendor"],
   }),
   chargeHunts: query({
-    mcp: {
-      omit: "deferred_capability",
-      todo: "Deferred MCP agent capabilities",
-    },
     input: vendorChargeHuntsInput,
     output: vendorChargeHuntsOut,
     cache: { tags: [["vendor"], ["run"]] },
   }),
   startChargeRun: mutation({
-    mcp: {
-      omit: "deferred_capability",
-      todo: "Deferred MCP agent capabilities",
-    },
     native: "Start one browser run for the selected statement charges",
     input: chargeRunStartInput,
     output: chargeRunStartOut,

@@ -1,5 +1,6 @@
 import { z } from "zod";
 
+import { plainDate } from "./base-entity.js";
 import {
   financialTransactionShortcode,
   ledgerPartyShortcode,
@@ -123,7 +124,7 @@ export const vendorChargeHuntsOut = z.object({
       transactionId: financialTransactionShortcode,
       merchant: z.string().nullable(),
       amount: z.number(),
-      transactionDate: z.iso.date().nullable(),
+      transactionDate: plainDate.nullable(),
       /** The hunt's state as stored; its meaning is `reason` when not selectable. */
       state: z.string(),
       /** Why this charge cannot be selected now; null when it can. */
