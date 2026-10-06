@@ -619,7 +619,9 @@ test fails instead of choosing one silently. `control.renderer` follows the
 same contract for form controls. `display.columnId` preserves an existing computed column identity when
 it differs from the field key (for example an evidence count); active list
 column IDs must be unique. An override must match a declared list field; an
-unmatched override fails instead of silently hiding the column. Computed
+unmatched override fails instead of silently hiding the column; the
+`titleField` identity column belongs to the shared standard-column pipeline,
+so an override claiming it fails the same way. Computed
 identities and domain summaries outside the field model remain explicit columns
 alongside the compiled collection. Composite cells suppress their supporting
 fields in list metadata so IDs, names, and logos are not displayed twice.

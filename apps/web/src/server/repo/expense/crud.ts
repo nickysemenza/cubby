@@ -30,11 +30,10 @@ import { uniq } from "es-toolkit";
 
 import type { Database, DrizzleTransaction } from "~/server/db";
 import type { IncomingEdgePolicy } from "~/server/db/entity-incoming-edges";
-import { expense, purchase } from "~/server/db/schema";
+import { expense, product, purchase } from "~/server/db/schema";
 import { createAppError } from "~/server/errors/app-error";
 import { computeChanges, logAuditEntry } from "~/server/repo/audit-log";
 import { loadDataQualities } from "~/server/repo/data-quality/hydrate";
-import { touchDataQualityTargets } from "~/server/repo/data-quality/touch";
 import {
   buildPartialUpdateValues,
   getDb,
@@ -42,6 +41,7 @@ import {
   relations,
   unwrapDb,
   withTransaction,
+  touchUpdatedAt,
 } from "~/server/repo/database-helpers";
 import { bulkPatchEntities, patchEntityRows } from "~/server/repo/entity-patch";
 import { replaceExpenseAttributionRole } from "~/server/repo/expense-attribution";
@@ -773,22 +773,20 @@ export const updateExpense = async (
       const output = await expenseCrud.update(tx, state.id, update, actor);
       await auditNestedChanges(tx, state, output);
       if (qualityCanChange) {
-        await touchDataQualityTargets(tx, {
-          productIds: [
-            state.qualityBefore?.productId,
-            resolvedProductId,
-          ].filter(
-            (value): value is ProductId =>
-              value !== null && value !== undefined,
+        await touchUpdatedAt(
+          tx,
+          product,
+          [state.qualityBefore?.productId, resolvedProductId].filter(
+            (value) => value != null,
           ),
-          purchaseIds: [
-            state.qualityBefore?.purchaseId,
-            explicitPurchaseId,
-          ].filter(
-            (value): value is PurchaseId =>
-              value !== null && value !== undefined,
+        );
+        await touchUpdatedAt(
+          tx,
+          purchase,
+          [state.qualityBefore?.purchaseId, explicitPurchaseId].filter(
+            (value) => value != null,
           ),
-        });
+        );
       }
       return {
         output,
@@ -827,14 +825,20 @@ export const updateExpense = async (
     );
     const output = await expenseCrud.update(tx, state.id, update, actor);
     await auditNestedChanges(tx, state, output);
-    await touchDataQualityTargets(tx, {
-      productIds: [state.qualityBefore?.productId, resolvedProductId].filter(
-        (value): value is ProductId => value !== null && value !== undefined,
+    await touchUpdatedAt(
+      tx,
+      product,
+      [state.qualityBefore?.productId, resolvedProductId].filter(
+        (value) => value != null,
       ),
-      purchaseIds: [state.qualityBefore?.purchaseId, resolved].filter(
-        (value): value is PurchaseId => value !== null && value !== undefined,
+    );
+    await touchUpdatedAt(
+      tx,
+      purchase,
+      [state.qualityBefore?.purchaseId, resolved].filter(
+        (value) => value != null,
       ),
-    });
+    );
     return {
       output,
       entityId: state.id,
@@ -989,10 +993,8 @@ export const createExpense = async (
       entityId: created.id,
       action: "create",
     });
-    await touchDataQualityTargets(tx, {
-      productIds: productId ? [productId] : [],
-      purchaseIds: purchaseId ? [purchaseId] : [],
-    });
+    await touchUpdatedAt(tx, product, productId ? [productId] : []);
+    await touchUpdatedAt(tx, purchase, purchaseId ? [purchaseId] : []);
     return {
       id: created.id,
       priceAffectedProductIds: await syncChangedEffectivePrices(
@@ -1083,14 +1085,16 @@ export const deleteExpensesWithPurchaseEffects = async (
       actor,
     });
 
-    await touchDataQualityTargets(tx, {
-      productIds: qualityTargets
-        .map((row) => row.productId)
-        .filter((value): value is ProductId => value !== null),
-      purchaseIds: qualityTargets
-        .map((row) => row.purchaseId)
-        .filter((value): value is PurchaseId => value !== null),
-    });
+    await touchUpdatedAt(
+      tx,
+      product,
+      qualityTargets.flatMap((row) => (row.productId ? [row.productId] : [])),
+    );
+    await touchUpdatedAt(
+      tx,
+      purchase,
+      qualityTargets.flatMap((row) => (row.purchaseId ? [row.purchaseId] : [])),
+    );
 
     const purchases =
       affectedPurchaseDbIds.length === 0

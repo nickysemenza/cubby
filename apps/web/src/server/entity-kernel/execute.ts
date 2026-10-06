@@ -174,6 +174,7 @@ export const resolveEntity = async (
       id: row?.shortcode ?? null,
       matched: row !== null && !row.created,
       created: row?.created ?? false,
+      matchValues: row?.matchValues ?? [],
       candidates: candidates.map((candidate) => ({
         id: candidate.shortcode,
         name: candidate.name,

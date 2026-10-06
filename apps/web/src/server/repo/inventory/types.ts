@@ -14,20 +14,14 @@ import type {
   product,
   productUnitMappings,
 } from "~/server/db/schema";
-import type {
-  MappableImageRecord,
-  RowWithOptionalAliases,
-  RowWithOptionalAliasesAndTags,
-} from "~/server/repo/database-helpers";
+import type { MappableImageRecord } from "~/server/repo/database-helpers";
 import type { LocationIdentityProductRow } from "~/server/repo/location/internal-types";
 import type { MappableProductExternalId } from "~/server/repo/product/external-id-types";
 
-type ProductSelect = RowWithOptionalAliases<typeof product.$inferSelect> & {
+type ProductSelect = typeof product.$inferSelect & {
   category: ProductCategorySummary | null;
 };
-type LocationSelect = RowWithOptionalAliasesAndTags<
-  typeof location.$inferSelect
->;
+type LocationSelect = typeof location.$inferSelect;
 
 export type InventoryEntryDeepDB = typeof inventoryEntry.$inferSelect & {
   product: ProductSelect & {

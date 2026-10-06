@@ -94,7 +94,6 @@ import {
 import { createAppError } from "~/server/errors/app-error";
 import { logAuditEntry } from "~/server/repo/audit-log";
 import { loadDataQualities } from "~/server/repo/data-quality/hydrate";
-import { touchDataQualityTargets } from "~/server/repo/data-quality/touch";
 import {
   associatePendingImages,
   countWhere,
@@ -112,6 +111,7 @@ import {
   updateAndReturn,
   uuidArrayParam,
   withTransaction,
+  touchUpdatedAt,
 } from "~/server/repo/database-helpers";
 import { provenanceEvidenceLabel } from "~/server/repo/detail-display-labels";
 import { softDeleteEntitySearchArtifactsTx } from "~/server/repo/entity-embedding-cleanup";
@@ -125,6 +125,7 @@ import {
   resolveOrThrow,
   resolveShortcode,
 } from "~/server/repo/shortcode-resolver";
+import { SHORTCODE_TABLE } from "~/server/repo/shortcode-tables";
 import { insertWithShortcode } from "~/server/repo/shortcode-utils";
 import type {
   DeriveImageCaptureCurrent as ImageCaptureStateRow,
@@ -1962,9 +1963,11 @@ const deleteImagesTx = async (
   await softDeleteEntitySearchArtifactsTx(tx, "image", ids);
   await tx.delete(image).where(inArray(image.id, ids));
 
-  await touchDataQualityTargets(tx, {
-    purchaseIds: affectedPurchases.map((row) => row.purchaseId),
-  });
+  await touchUpdatedAt(
+    tx,
+    purchase,
+    affectedPurchases.map((row) => row.purchaseId),
+  );
 
   return {
     deletedIds: ids,
@@ -2652,38 +2655,12 @@ const lockAttachableEntity = async (
   }
 };
 
-const touchAttachableEntity = async (
+const touchAttachableEntity = (
   tx: DrizzleTransaction,
   entity: AttachableImageRef,
   updatedAt: Date,
-): Promise<void> => {
-  await match(entity)
-    .with({ entity: "product" }, ({ id }) =>
-      tx.update(product).set({ updatedAt }).where(eq(product.id, id)),
-    )
-    .with({ entity: "recipe" }, ({ id }) =>
-      tx.update(recipe).set({ updatedAt }).where(eq(recipe.id, id)),
-    )
-    .with({ entity: "location" }, ({ id }) =>
-      tx.update(location).set({ updatedAt }).where(eq(location.id, id)),
-    )
-    .with({ entity: "project" }, ({ id }) =>
-      tx.update(project).set({ updatedAt }).where(eq(project.id, id)),
-    )
-    .with({ entity: "purchase" }, ({ id }) =>
-      tx.update(purchase).set({ updatedAt }).where(eq(purchase.id, id)),
-    )
-    .with({ entity: "gardenEntry" }, ({ id }) =>
-      tx.update(gardenEntry).set({ updatedAt }).where(eq(gardenEntry.id, id)),
-    )
-    .with({ entity: "meal" }, ({ id }) =>
-      tx.update(meal).set({ updatedAt }).where(eq(meal.id, id)),
-    )
-    .with({ entity: "task" }, ({ id }) =>
-      tx.update(task).set({ updatedAt }).where(eq(task.id, id)),
-    )
-    .exhaustive();
-};
+): Promise<void> =>
+  touchUpdatedAt(tx, SHORTCODE_TABLE[entity.entity], [entity.id], updatedAt);
 
 const countAttachmentPreconditionImages = async (
   tx: DrizzleTransaction,

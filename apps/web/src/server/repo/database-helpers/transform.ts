@@ -13,27 +13,6 @@ import { getR2PublicUrl } from "~/server/utils/r2-public-url";
 
 import { isNotDeleted } from "./query";
 
-/**
- * A Drizzle `$inferSelect` row with `aliases` widened to optional — the shape a
- * relation-loaded row takes when `aliases` may be omitted by the query. Replaces
- * the hand-written `Omit<typeof X.$inferSelect, "aliases"> & { aliases?: string[] }`
- * repeated across the product/location/ingredient/inventory repos.
- */
-export type RowWithOptionalAliases<T extends { aliases: string[] }> = Omit<
-  T,
-  "aliases"
-> & {
-  aliases?: string[];
-};
-
-/** Location-row compatibility shape while legacy fixtures omit the new tags column. */
-export type RowWithOptionalAliasesAndTags<
-  T extends { aliases: string[]; tags: string[] },
-> = Omit<T, "aliases" | "tags"> & {
-  aliases?: string[];
-  tags?: string[];
-};
-
 export type MappableImageRecord = {
   /** The public `IMG-` code. `id` (the uuid) is deliberately NOT projected. */
   shortcode: string;

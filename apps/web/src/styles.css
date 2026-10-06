@@ -149,22 +149,11 @@
   /* The Field Guide palette itself lives in @cubby/design-tokens
      (imported above) — shared with apps/mcp-apps. Only cubby-web-specific
      derivations stay here. */
-  /* Retained terracotta refs (legacy consumers fade out as primitives reskin;
-     point them at ink so nothing strands on the old spot color). */
-  --brand-terracotta: var(--brand-ultramarine);
-  --brand-terra-light: var(--brand-ultramarine);
   --brand-sage: oklch(0.94 0.025 145);
 
   /* Ordinary surfaces use tone and hairlines. Elevation is reserved for
-     floating overlays, with legacy shadow names retained as compatibility
-     aliases for callers outside apps/web. */
+     floating overlays. */
   --shadow-overlay: var(--brand-elevation-popover);
-  --shadow-chunky-sm: none;
-  --shadow-chunky: var(--shadow-overlay);
-  --shadow-chunky-lg: var(--shadow-overlay);
-  --shadow-chunky-destructive: var(--shadow-overlay);
-  --shadow-chunky-destructive-hover: var(--shadow-overlay);
-  --shadow-inset-gloss: none;
   /* Logical sticky-column boundary shadows shared by header, body, and footer. */
   --shadow-pin-start: 3px 0 4px -3px rgb(15 23 42 / 0.35);
   --shadow-pin-end: -3px 0 4px -3px rgb(15 23 42 / 0.35);
@@ -451,7 +440,7 @@
   /* Sonner injects its own border/shadow, hence the overrides. */
   .cn-toast {
     border-color: var(--border) !important;
-    box-shadow: var(--shadow-chunky-lg) !important;
+    box-shadow: var(--shadow-overlay) !important;
   }
 
   /* Static skeletons avoid ambient animation in read-heavy views. */

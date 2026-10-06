@@ -31,12 +31,12 @@ import type { IncomingEdgePolicy } from "~/server/db/entity-incoming-edges";
 import {
   financialTransaction,
   financialTransactionAllocation,
+  purchase,
 } from "~/server/db/schema";
 import { createAppError } from "~/server/errors/app-error";
 import { computeChanges, logAuditEntry } from "~/server/repo/audit-log";
 import { loadDataQualities } from "~/server/repo/data-quality/hydrate";
 import { gapCondition } from "~/server/repo/data-quality/sql";
-import { touchDataQualityTargets } from "~/server/repo/data-quality/touch";
 import {
   buildPartialUpdateValues,
   correlated,
@@ -46,6 +46,7 @@ import {
   notDeleted,
   unwrapDb,
   withTransaction,
+  touchUpdatedAt,
 } from "~/server/repo/database-helpers";
 import { sourceRefsLabel } from "~/server/repo/detail-display-labels";
 import {
@@ -991,9 +992,11 @@ const touchAllocatedPurchases = async (
     .select({ purchaseId: financialTransactionAllocation.purchaseId })
     .from(financialTransactionAllocation)
     .where(inArray(financialTransactionAllocation.transactionId, ids));
-  await touchDataQualityTargets(tx, {
-    purchaseIds: uniq(allocations.map((row) => row.purchaseId)),
-  });
+  await touchUpdatedAt(
+    tx,
+    purchase,
+    allocations.map((row) => row.purchaseId),
+  );
 };
 
 /**

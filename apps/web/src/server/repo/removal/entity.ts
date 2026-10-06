@@ -28,7 +28,7 @@
  *    by `applyDispositions` (`./dispositions.ts`) before this runs.
  *  - **Rich return values and in-transaction side effects.**
  *    `deleteExpensesWithPurchaseEffects` computes newly-empty purchases from
- *    post-delete queries; several sites call `touchDataQualityTargets` or
+ *    post-delete queries; several sites call `touchUpdatedAt` or
  *    `syncChangedEffectivePrices`. Those run in the caller's own transaction,
  *    which `withTransactionOn` guarantees this call joins.
  *  - **Staleness dispatch.** Zero of the removal paths do it here; it is the

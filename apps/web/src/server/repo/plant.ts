@@ -37,7 +37,6 @@ import {
   unwrapDb,
   withTransaction,
 } from "~/server/repo/database-helpers";
-import { resolveOrCreateIngredients } from "~/server/repo/ingredient/crud";
 import { listScaffold } from "~/server/repo/list";
 import {
   hydrateListRead,
@@ -320,8 +319,14 @@ export async function resolveOrCreatePlants(
         values: async () => ({
           gardenGuideKey: wanted.gardenGuideKey ?? null,
           ingredientId: wanted.ingredientName
-            ? (await resolveOrCreateIngredients(tx, [wanted.ingredientName]))[0]
-                ?.entityId
+            ? ((
+                await resolveNames(
+                  tx,
+                  "ingredient",
+                  [{ name: wanted.ingredientName }],
+                  { create: true, actor },
+                )
+              )[0]?.row?.id ?? null)
             : null,
         }),
       })),

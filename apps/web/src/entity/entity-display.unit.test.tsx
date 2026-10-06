@@ -441,52 +441,41 @@ describe("declared entity displays", () => {
     ).rejects.toThrow("Paste a location cell here");
   });
 
-  it.each([undefined, "Old local label"])(
-    "keeps titleField out of declared facts for renderer header %s",
-    (header) => {
-      type Party = { name: string; kind: string; notes: string | null };
-      const helper = createCubbyColumnHelper<Party>();
-      const cell = () => <strong>Linked identity</strong>;
-      const columns = createEntityDisplayColumns(
+  it("keeps titleField out of declared facts and rejects an override claiming it", () => {
+    type Party = { name: string; kind: string; notes: string | null };
+    const helper = createCubbyColumnHelper<Party>();
+    const columns = createEntityDisplayColumns("ledgerParty", helper);
+    const row: Party = {
+      name: "Guest",
+      kind: "guest",
+      notes: "Review these notes",
+    };
+    const details = columns.visit((column) => ({
+      id: column.id ?? ("accessorKey" in column ? column.accessorKey : null),
+      header: z.string().parse(column.header),
+      copied: column.meta?.cellData?.getCopyPayload(row),
+    }));
+    expect(details.map(({ id, header }) => ({ id, header }))).toEqual([
+      { id: "dataQuality", header: "Quality" },
+      { id: "kind", header: "Kind" },
+      { id: "notes", header: "Notes" },
+      { id: "dataGaps", header: "Data gaps" },
+    ]);
+    expect(details[2]?.copied).toEqual({
+      text: "Review these notes",
+      json: "Review these notes",
+    });
+    // The identity lane belongs to the standard-column pipeline alone.
+    expect(() =>
+      createEntityDisplayColumns(
         "ledgerParty",
         helper,
         createCubbyColumnCollection<Party>((add) =>
-          add(
-            helper.accessor("name", {
-              header,
-              cell,
-              meta: { mobile: { slot: "title", priority: 0 } },
-            }),
-          ),
+          add(helper.accessor("name", { cell: () => "Linked identity" })),
         ),
-      );
-      const row: Party = {
-        name: "Guest",
-        kind: "guest",
-        notes: "Review these notes",
-      };
-      const details = columns.visit((column) => ({
-        id: column.id ?? ("accessorKey" in column ? column.accessorKey : null),
-        header: z.string().parse(column.header),
-        cellIsOverride: column.cell === cell,
-        mobile: column.meta?.mobile,
-        copied: column.meta?.cellData?.getCopyPayload(row),
-      }));
-      expect(details.map(({ id, header }) => ({ id, header }))).toEqual([
-        { id: "dataQuality", header: "Quality" },
-        { id: "kind", header: "Kind" },
-        { id: "notes", header: "Notes" },
-        { id: "dataGaps", header: "Data gaps" },
-      ]);
-      expect(details[1]).toMatchObject({
-        cellIsOverride: false,
-      });
-      expect(details[2]?.copied).toEqual({
-        text: "Review these notes",
-        json: "Review these notes",
-      });
-    },
-  );
+      ),
+    ).toThrow("Undeclared display renderer for ledgerParty.name");
+  });
 
   it("places a Purchase's own identity before embedded relation facts", () => {
     type PurchaseRow = {

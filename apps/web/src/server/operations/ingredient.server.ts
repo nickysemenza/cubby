@@ -1,5 +1,4 @@
 import {
-  parseEntityId,
   parseShortcodeFor,
   type ProductShortcode,
 } from "@cubby/schemas/identifiers";
@@ -18,11 +17,10 @@ import {
   type EntityKernelContext,
   executeEntity,
   executeEntityAs,
+  resolveEntity,
 } from "~/server/entity-kernel";
 import { createAppError } from "~/server/errors/app-error";
 import { implementOperationDomain } from "~/server/operation-domain.server";
-import { withTransaction } from "~/server/repo/database-helpers";
-import { resolveOrCreateIngredients } from "~/server/repo/ingredient/crud";
 import { findUnlinkedProductCandidates } from "~/server/repo/ingredient/crud";
 import {
   getIngredientMatches,
@@ -34,11 +32,6 @@ import {
   getIngredientByName,
   getIngredientsByIDs,
 } from "~/server/services/ingredient.service";
-import {
-  mutationEvents,
-  runMutationSideEffectsForEntities,
-} from "~/server/services/mutation-side-effects";
-import { bindWorkflow, workflow } from "~/server/workflow-runtime";
 
 const ingredients = bindShortcodeResolver("ingredient");
 const recipes = bindShortcodeResolver("recipe");
@@ -52,30 +45,38 @@ export async function recipeUsagesWorkflow(
 }
 
 type ResolveInput = z.input<typeof ingredientResolvableNamesInput>;
-export const resolveOrCreateWorkflow = bindWorkflow(
-  workflow<Database, ResolveInput>("ingredient.resolveOrCreate")
-    .commit("ingredients", async ({ context }, { input }) =>
-      withTransaction(context, (tx) =>
-        resolveOrCreateIngredients(tx, input.names),
-      ),
-    )
-    .effect("effects", async ({ context }, { ingredients }) =>
-      runMutationSideEffectsForEntities(
-        context,
-        mutationEvents(
-          "ingredient",
-          "created",
-          ingredients
-            .filter((ingredient) => ingredient.created)
-            .map((ingredient) =>
-              parseEntityId("ingredient", ingredient.entityId),
-            ),
-          "ingredient.resolveOrCreate",
-        ),
-      ),
-    )
-    .output(({ ingredients }) => ingredients),
-);
+
+/**
+ * Name → ingredient through the kernel `resolve`, creating the misses (an
+ * ingredient is just a name). One entry per non-blank name in order; casing
+ * variants share one row, and a name matching another ingredient's alias
+ * resolves to it. `canonicalName`/`aliases` are the row's own.
+ */
+export async function resolveOrCreateIngredients(
+  context: EntityKernelContext,
+  names: readonly string[],
+) {
+  if (names.length === 0) return [];
+  const { items } = await resolveEntity(context, {
+    action: "resolve",
+    entity: "ingredient",
+    names: [...names],
+    create: true,
+  });
+  return items.map(({ id, name, matched, created, matchValues }) => {
+    if (id === null)
+      throw new Error("A creating resolve returned no ingredient");
+    const [canonicalName = name, ...aliases] = matchValues;
+    return {
+      name,
+      id: parseShortcodeFor("ingredient", id),
+      canonicalName,
+      aliases,
+      matched,
+      created,
+    };
+  });
+}
 
 /**
  * The agent-facing `entity.resolve` for ingredients: the plain resolve plus,
@@ -95,9 +96,7 @@ export async function resolveWithProductCandidatesWorkflow(
       "CONSTRAINT_VIOLATION",
       `linkProductId links one Product to one ingredient: pass exactly one non-blank name (got ${nameCount}).`,
     );
-  const resolved = await resolveOrCreateWorkflow(context.db, {
-    names: input.names,
-  });
+  const resolved = await resolveOrCreateIngredients(context, input.names);
   const [only] = resolved;
   let linkedProduct: { id: ProductShortcode } | undefined;
   if (input.linkProductId !== undefined && only) {
@@ -149,7 +148,7 @@ export const ingredientHandlers = implementOperationDomain(ingredientContract, {
     ),
   recipeUsages: (context, input) => recipeUsagesWorkflow(context.db, input),
   resolveOrCreate: (context, input) =>
-    resolveOrCreateWorkflow(context.db, input),
+    resolveOrCreateIngredients(context, input.names),
   enrichmentWorkbench: async (context, input) =>
     enrichmentWorkbench(context.db, context.usdaClient, {
       recipeId: input?.recipeId

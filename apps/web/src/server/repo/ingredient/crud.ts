@@ -21,7 +21,6 @@ import { z } from "zod";
 
 import type { Database, DrizzleTransaction } from "~/server/db";
 import { ingredient, product } from "~/server/db/schema";
-import { resolveNames } from "~/server/entity-kernel/resolve";
 import { logAuditEntry } from "~/server/repo/audit-log";
 import {
   notDeleted,
@@ -203,50 +202,6 @@ export const findOrCreateIngredient = async (
     },
     and(eq(ingredient.id, entry.id), notDeleted(ingredient)),
   );
-};
-
-type ResolvedIngredient = {
-  name: string;
-  id: IngredientShortcode;
-  entityId: IngredientId;
-  /** The row's own name/aliases — not the requested name, which may be a
-   * casing variant or an alias of it. */
-  canonicalName: string;
-  aliases: string[];
-  matched: boolean;
-  created: boolean;
-};
-
-/**
- * Shim over the kernel `resolve` capability (`resolveNames`) kept for the MCP
- * tools; remove once they call `resolveEntity`. One entry per non-blank input
- * name in order; casing variants share one row, and a name matching another
- * ingredient's alias resolves to it.
- */
-export const resolveOrCreateIngredients = async (
-  db: Database | DrizzleTransaction,
-  names: string[],
-): Promise<ResolvedIngredient[]> => {
-  const requested = names.filter((name) => name.trim().length > 0);
-  const resolved = await resolveNames(
-    db,
-    "ingredient",
-    requested.map((name) => ({ name })),
-    { create: true },
-  );
-  return resolved.map(({ row }, index) => {
-    if (!row) throw new Error("A creating resolve returned no ingredient");
-    const [canonicalName = row.name, ...aliases] = row.matchValues;
-    return {
-      name: requested[index] ?? row.name,
-      id: parseShortcodeFor("ingredient", row.shortcode),
-      entityId: row.id,
-      canonicalName,
-      aliases,
-      matched: !row.created,
-      created: row.created,
-    };
-  });
 };
 
 export interface UnlinkedProductCandidate {
