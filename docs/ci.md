@@ -203,15 +203,21 @@ install and pnpm-store restore. Jobs that need generation or application code
 still install their dependencies. Generated output is never
 committed; every job that installs dependencies generates it (`postinstall`), and
 `Validation`'s `generate` gate checks that it generates cleanly and that the OpenAPI
-document lints. Guides under `docs/` are lazy static Markdown assets, so prose
-edits select formatting and links without application tests. `docs/todos.md`
-also runs the existing generator and OpenAPI lint because it declares deferred
-MCP capabilities; its filtered dependency install skips WASM. Markdown bundled
-as Worker agent instructions still selects the web lanes, as does
-`docs/README.md`, the fixed `/docs/` landing page. Mixed documentation
-and code changes retain all checks selected by the code. Runner startup and
-tool downloads and any required generation still contribute to
-documentation-only latency.
+document lints. On PRs, Markdown changes select checks according to their runtime role:
+
+| Changed Markdown                                                           | Selected work                                                                                 |
+| -------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------- |
+| Ordinary guides and agent documentation                                    | Oxfmt, documented repository paths, offline relative links                                    |
+| `docs/todos.md`                                                            | Documentation checks plus generation and OpenAPI lint, with filtered dependencies and no WASM |
+| `docs/README.md`                                                           | Documentation and full web lanes: the fixed `/docs/` landing page is a runtime route input    |
+| `.claude/skills/purchase-import/` and `.claude/skills/product-enrichment/` | Documentation, full web lanes, and the optional purchase-import browser lane                  |
+| `.claude/skills/photo-inventory-import/`                                   | Documentation and full web lanes                                                              |
+
+The three skill directories are bundled into Worker agent instructions. Every
+web-affecting push to `main` also runs the optional purchase-import browser lane. Mixed
+Markdown and code changes retain all checks selected by the code. Runner
+startup, tool downloads, and any required generation still contribute to
+measured documentation-only latency.
 Native, auxiliary, Rust, web, and PostgreSQL/E2E lanes run only when their inputs
 can affect them. A manual run selects all lanes. `Web checks` is the stable
 required aggregate: it checks the web, PostgreSQL, and browser matrix results
