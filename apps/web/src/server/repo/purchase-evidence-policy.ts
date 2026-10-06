@@ -128,7 +128,7 @@ export const purchaseEvidenceFingerprintSql = (
       AND ep_changed_line."deletedAt" IS NULL AND ep_changed_line."economicRole" = 'vendor')
 )`;
 
-const expenseProductExpectationSql = (alias: string): SQL => sql`(CASE
+export const expenseProductExpectationSql = (alias: string): SQL => sql`(CASE
   WHEN ${column(alias, "economicRole")} <> 'vendor'
     OR ${column(alias, "lineKind")} <> 'principal'
     OR ${column(alias, "lineBasis")} <> 'item_line' THEN 'not_expected'

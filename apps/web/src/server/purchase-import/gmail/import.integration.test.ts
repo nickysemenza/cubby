@@ -449,7 +449,7 @@ describe("saved confirmation imports", () => {
                   },
                 ],
                 payments: [],
-                allShipmentsDelivered: null,
+                allShipmentsDelivered: true,
               },
             },
             lineIds: ["jar", "noodles"],
@@ -494,6 +494,91 @@ describe("saved confirmation imports", () => {
     // Only the jar became a Product.
     expect(await getDb(ctx.db).select().from(product)).toHaveLength(
       productsBefore.length + 1,
+    );
+    // The jar is a stocked item, so the delivered order has something to
+    // receive; nothing else asks for review.
+    expect(
+      await getDb(ctx.db)
+        .select({ kind: runFinding.kind })
+        .from(runFinding)
+        .where(eq(runFinding.runId, run!.id)),
+    ).toEqual([{ kind: "arrived" }]);
+  });
+
+  it("files no receiving finding for a delivered order with nothing stocked", async () => {
+    const { mail, event } = await seed();
+    const result = await startOrderMailImport(
+      ctx.db,
+      { eventId: event.id, evidenceChecksum: mail.rawChecksum },
+      ctx.actor,
+      { send: async () => {} },
+    );
+    const [run] = await getDb(ctx.db)
+      .select()
+      .from(runTable)
+      .where(eq(runTable.shortcode, result.runId));
+    const evidence = await loadOrderMailImportEvidence(ctx.db, run!.id);
+    const productsBefore = await getDb(ctx.db).select().from(product);
+    await preparePurchaseImport(
+      ctx.db,
+      {
+        _runExecution: { runId: run!.id, operationId: "prepare-meal-only" },
+        orders: [
+          {
+            stableOrderId: "assigned-mail",
+            itemOperationId: "assigned-mail",
+            source: evidence!.source,
+            evidenceChecksum: evidence!.evidenceChecksum,
+            extractionRevision: "order-mail@1",
+            extraction: {
+              status: "ready" as const,
+              candidate: {
+                orderId: evidence!.orderId,
+                orderedAt: "2026-09-01T12:00:00Z",
+                merchant: "Example Noodle Bar",
+                currency: "USD",
+                printedGrandTotal: 5,
+                lines: [
+                  {
+                    title: "Spicy basil noodles, large",
+                    amount: 5,
+                    quantity: 1,
+                    sku: "MENU-7",
+                    lineKind: "principal" as const,
+                  },
+                ],
+                payments: [],
+                allShipmentsDelivered: true,
+              },
+            },
+            lineIds: ["noodles"],
+            primaryDocumentImageId: null,
+            screenshotImageId: null,
+          },
+        ],
+      },
+      ctx.actor,
+    );
+    const committed = await commitPurchaseImport(
+      ctx.db,
+      {
+        _runExecution: { runId: run!.id, operationId: "commit-meal-only" },
+        prepareOperationId: "prepare-meal-only",
+        defaultTrade: "other" as const,
+        resolutions: [
+          {
+            stableOrderId: "assigned-mail",
+            stableLineId: "noodles",
+            resolution: { kind: "expense_only" as const },
+          },
+        ],
+      },
+      ctx.actor,
+    );
+    expect(committed.items[0]?.outcome).toBe("created");
+    // Nothing stocked arrived, so nothing asks to be received or reviewed.
+    expect(await getDb(ctx.db).select().from(product)).toHaveLength(
+      productsBefore.length,
     );
     expect(
       await getDb(ctx.db)

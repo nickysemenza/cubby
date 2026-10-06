@@ -566,6 +566,86 @@ describe("Gmail order mail processing", () => {
     });
   });
 
+  // Receiving is for stocked items: a delivered order of meals or tickets
+  // (no line carries a Product) asks for nothing; one with a stocked line
+  // still asks to be received.
+  it("asks to receive a delivered order unless its category forbids Products", async () => {
+    const seed = await seedForgeWear();
+    const restaurants = await insertWithShortcode(ctx.db, "spendingCategory", {
+      name: `Example restaurants ${crypto.randomUUID()}`,
+      productExpectation: "not_allowed",
+    });
+    const order = async (
+      orderId: string,
+      line: "stocked" | "unresolved" | "expense_only",
+    ) => {
+      const stocked = line === "stocked";
+      const row = await insertWithShortcode(ctx.db, "purchase", {
+        vendorId: seed.vendor.id,
+        vendorAccountId: seed.account.id,
+        orderId,
+        date: "2026-09-20",
+        spendingCategoryId: line === "expense_only" ? restaurants.id : null,
+        spendingCategoryOrigin: "manual",
+      });
+      const item = stocked
+        ? await insertWithShortcode(ctx.db, "product", {
+            name: `ForgeWear stocked item ${orderId}`,
+            manufacturer: "",
+          })
+        : null;
+      await insertWithShortcode(ctx.db, "expense", {
+        purchaseId: row.id,
+        name: line === "expense_only" ? "Delivered lunch" : "Work gloves",
+        cost: 20,
+        date: "2026-09-20",
+        costType: "materials",
+        trade: "other",
+        lineKind: "principal",
+        lineBasis: "item_line",
+        productId: item?.id ?? null,
+      });
+      return row;
+    };
+    const meal = await order("FW-MEAL-1", "expense_only");
+    const gloves = await order("FW-GLOVE-1", "stocked");
+    // Goods whose Product is not resolved yet are still goods.
+    const pending = await order("FW-PEND-1", "unresolved");
+    const delivered = (orderId: string): OrderMailClassification => ({
+      event: "delivered",
+      orderId,
+      amount: null,
+      currency: null,
+      occurredAt: "2026-09-21T12:00:00Z",
+    });
+    await receiveMail(
+      seed,
+      "delivered-meal",
+      "2026-09-21T12:00:00Z",
+      delivered("FW-MEAL-1"),
+    );
+    await receiveMail(
+      seed,
+      "delivered-pending",
+      "2026-09-21T12:00:00Z",
+      delivered("FW-PEND-1"),
+    );
+    await receiveMail(
+      seed,
+      "delivered-gloves",
+      "2026-09-21T12:00:00Z",
+      delivered("FW-GLOVE-1"),
+    );
+    const arrived = await getDb(ctx.db)
+      .select({ entityId: runFinding.entityId })
+      .from(runFinding)
+      .where(eq(runFinding.kind, "arrived"));
+    expect(arrived.map((row) => row.entityId).sort()).toEqual(
+      [gloves.id, pending.id].sort(),
+    );
+    expect(arrived.map((row) => row.entityId)).not.toContain(meal.id);
+  });
+
   it("matches a website-domain sender when no receipt address was configured", async () => {
     const seed = await seedForgeWear();
     await getDb(ctx.db)

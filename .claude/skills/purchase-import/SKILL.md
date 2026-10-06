@@ -103,10 +103,14 @@ same outcome without prescribing an agent runtime.
    inconclusive, and never claim a descriptive-only candidate directly.
    Every order is household spending, but not every line is a stocked item:
    choose `expense_only` for prepared food and drinks from a restaurant or
-   delivery order, event or travel tickets, rides, memberships,
-   subscriptions, digital access, donations, and services. The line books an
-   expense with no Product and nothing to review. Seeds, plants, ingredients,
-   tools, and supplies are stocked items, never `expense_only`.
+   delivery order, event or travel tickets, rides, donations, and paid labor
+   or delivery. The line books an expense with no Product and nothing to
+   review; a spending category with `productExpectation: not_allowed` (a
+   restaurant) refuses a Product outright. Seeds, plants, ingredients,
+   groceries, tools, and supplies are stocked items, never `expense_only`,
+   and so is software and any subscription the household tracks or that
+   ships goods (a software license, a seed club, pet-food autoship): resolve
+   those to their Product.
 5. Call `purchase_import.commit` with the preparation revision and every line
    resolution. Do not use generic entity creation for imported Products or
    Expenses.

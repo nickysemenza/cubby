@@ -43,6 +43,7 @@ import {
 import { logAuditEntries } from "~/server/repo/audit-log";
 import { notDeleted, withTransaction } from "~/server/repo/database-helpers";
 import { validateExpenseInheritance } from "~/server/repo/expense-inheritance";
+import { validateProductPolicy } from "~/server/repo/inheritance-validation";
 import { cents } from "~/server/repo/money";
 import { cascadeRemoval } from "~/server/repo/removal/core";
 import { insertWithShortcode } from "~/server/repo/shortcode-utils";
@@ -391,6 +392,7 @@ async function applyAggregateReplacement(
       changes: { supersedesExpense: { from: aggregate.id, to: row.id } },
     });
   }
+  await validateProductPolicy(tx, { purchaseId });
   await tx
     .update(expense)
     .set({ deletedAt: new Date() })

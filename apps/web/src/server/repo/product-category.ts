@@ -478,9 +478,9 @@ const assertAffectedProductsRemainAdmissible = async (
       );
     }
   }
-  const { validateLiveEffectiveTrades } =
+  const { validateLiveInheritedPolicies } =
     await import("./inheritance-validation");
-  await validateLiveEffectiveTrades(tx);
+  await validateLiveInheritedPolicies(tx);
 };
 
 export async function createProductCategory(

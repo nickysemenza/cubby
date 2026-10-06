@@ -380,6 +380,8 @@ export const runFindingStatus = z.enum(["open", "applied", "dismissed"]);
 export const replacementLineIdentity = z.object({
   productId: z.uuid().nullable(),
   promote: z.boolean(),
+  /** An explicit expense-only decision: the line is not a stocked item. */
+  expenseOnly: z.boolean().default(false),
   variantDoubt: z.boolean(),
   unresolvedReason: z.string().nullable(),
   probability: z.number(),

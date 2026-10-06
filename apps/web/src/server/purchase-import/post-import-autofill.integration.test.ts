@@ -9,7 +9,12 @@ import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 
 import type { Database } from "~/server/db";
-import { auditLog, product, productCategory } from "~/server/db/schema";
+import {
+  auditLog,
+  product,
+  productCategory,
+  purchase as purchaseTable,
+} from "~/server/db/schema";
 import { logAuditEntry } from "~/server/repo/audit-log";
 import {
   getDb,
@@ -415,6 +420,45 @@ describe("auto-fill after an import", () => {
     await writeDone;
     await new Promise((resolve) => setTimeout(resolve, 200));
     expect((await fieldsOf(seeded.created.id))?.categoryId).toBeNull();
+  });
+
+  // A meal order classified as a restaurant is what tells data quality and
+  // receiving it holds no stock. Failure modes: an empty Purchase category is
+  // left for a person when Jev is near-certain; a category that forbids
+  // Products is forced onto an order that already links one.
+  it("fills an empty Purchase category unless the category forbids its Products", async () => {
+    const seeded = await seed();
+    const restaurants = await insertWithShortcode(ctx.db, "spendingCategory", {
+      name: `Example restaurants ${crypto.randomUUID()}`,
+      productExpectation: "not_allowed",
+    });
+    const dining = await insertWithShortcode(ctx.db, "spendingCategory", {
+      name: `Example dining ${crypto.randomUUID()}`,
+    });
+    const categoryOf = async () =>
+      (
+        await getDb(ctx.db)
+          .select({ id: purchaseTable.spendingCategoryId })
+          .from(purchaseTable)
+          .where(eq(purchaseTable.id, seeded.purchase.id))
+      )[0]?.id;
+    const run = (category: { shortcode: string }) =>
+      autoFillCreatedProducts(
+        ctx.db,
+        { runId: seeded.runId, purchaseIds: [seeded.purchase.id] },
+        {
+          suggest: async (_db, _runId, input) =>
+            input.entity === "purchase"
+              ? pick("spendingCategoryId", category.shortcode, 0.99)
+              : pick(input.targets[0]!, "CAT-ZZZZ", 0.1),
+          recomputeForIngredients: async () => 0,
+        },
+      );
+    // This order links Products, so a Product-forbidding category is refused.
+    await run(restaurants);
+    expect(await categoryOf()).toBeNull();
+    await run(dining);
+    expect(await categoryOf()).toBe(dining.id);
   });
 
   it("returns at its budget when a suggestion stalls", async () => {

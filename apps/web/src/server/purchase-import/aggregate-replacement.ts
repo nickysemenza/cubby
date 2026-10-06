@@ -109,7 +109,14 @@ export async function aggregateReplacementApprovalFingerprint(
     JSON.stringify({
       originalFingerprint,
       lines: z.array(extractedPurchaseLine).parse(lines),
-      identities: z.array(replacementLineIdentity).parse(identities),
+      // `expenseOnly: false` hashes as absent, so an approval prepared before
+      // the field existed keeps its fingerprint.
+      identities: z
+        .array(replacementLineIdentity)
+        .parse(identities)
+        .map(({ expenseOnly, ...identity }) =>
+          expenseOnly ? { ...identity, expenseOnly } : identity,
+        ),
       attributions: z.array(replacementLineAttribution).parse(attributions),
     }),
   );

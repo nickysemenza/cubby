@@ -4,6 +4,7 @@ import {
   type ActorContext,
 } from "@cubby/schemas/context";
 import {
+  parseShortcodeFor,
   userId,
   type IngredientId,
   type ProductId,
@@ -23,7 +24,9 @@ import {
   expense,
   product,
   productCategory,
+  purchase,
   run as runTable,
+  vendor,
 } from "~/server/db/schema";
 import {
   databaseForTransaction,
@@ -33,6 +36,7 @@ import {
 } from "~/server/repo/database-helpers";
 import { getCategoryFeature } from "~/server/repo/product-category";
 import { updateProduct } from "~/server/repo/product/crud";
+import { updatePurchase } from "~/server/repo/purchase";
 import { resolveOrThrow } from "~/server/repo/shortcode-resolver";
 import {
   mutationEvents,
@@ -143,7 +147,6 @@ async function fillAll(
         notDeleted(product),
       ),
     );
-  if (created.length === 0) return;
   const [run] = await database
     .select({ actorUserId: runTable.actorUserId })
     .from(runTable)
@@ -155,6 +158,21 @@ async function fillAll(
     buildActorContext(userId.parse(run.actorUserId), "system"),
     input.runId,
   );
+  // The Purchase's spending category first: a meal order classified as a
+  // restaurant is what tells data quality and receiving it holds no stock.
+  for (const purchaseId of input.purchaseIds) {
+    if (Date.now() >= deadline) return;
+    try {
+      await fillPurchaseCategory(
+        db,
+        { runId: input.runId, actor, deadline },
+        purchaseId,
+        ports,
+      );
+    } catch (error) {
+      log.warn("Purchase category auto-fill skipped", { purchaseId, error });
+    }
+  }
   await Promise.all(
     created.map(async ({ id }) => {
       for (const target of AUTO_FILL_TARGETS) {
@@ -179,6 +197,79 @@ async function fillAll(
       }
     }),
   );
+}
+
+/**
+ * Fill an empty Purchase spending category when Jev is near-certain. The write
+ * goes through the ordinary Purchase update, so the inherited-policy checks
+ * apply: a category that forbids a Product the order already links is
+ * refused, and the Purchase is left for a person to classify.
+ */
+async function fillPurchaseCategory(
+  db: Database,
+  {
+    runId,
+    actor,
+    deadline,
+  }: { runId: RunId; actor: ActorContext; deadline: number },
+  purchaseId: PurchaseId,
+  ports: AutoFillPorts,
+) {
+  const [row] = await getDb(db)
+    .select({
+      shortcode: purchase.shortcode,
+      spendingCategoryId: purchase.spendingCategoryId,
+      displayLabel: purchase.displayLabel,
+      notes: purchase.notes,
+      vendorShortcode: vendor.shortcode,
+    })
+    .from(purchase)
+    .leftJoin(vendor, eq(vendor.id, purchase.vendorId))
+    .where(and(eq(purchase.id, purchaseId), notDeleted(purchase)))
+    .limit(1);
+  if (!row || row.spendingCategoryId !== null || Date.now() >= deadline) return;
+  const out = await ports.suggest(db, runId, {
+    entity: "purchase",
+    entityId: row.shortcode,
+    basisMode: "suggested",
+    targets: ["spendingCategoryId"],
+    basis: {
+      displayLabel: row.displayLabel,
+      vendorId: row.vendorShortcode,
+      notes: row.notes,
+    },
+  });
+  const outcome = out.outcomes?.spendingCategoryId;
+  const value = out.suggestions.spendingCategoryId?.value;
+  if (
+    outcome?.kind !== "evaluated" ||
+    outcome.answer !== "pick" ||
+    (outcome.probability ?? 0) < AUTO_FILL_PROBABILITY ||
+    !value
+  )
+    return;
+  try {
+    await withTransaction(db, async (tx) => {
+      const [locked] = await tx
+        .select({ spendingCategoryId: purchase.spendingCategoryId })
+        .from(purchase)
+        .where(and(eq(purchase.id, purchaseId), notDeleted(purchase)))
+        .for("update")
+        .limit(1);
+      // A member who classified it while Jev decided keeps their category.
+      if (!locked || locked.spendingCategoryId !== null) return;
+      if (Date.now() >= deadline) return;
+      await updatePurchase(
+        databaseForTransaction(tx),
+        parseShortcodeFor("purchase", row.shortcode),
+        { spendingCategoryId: parseShortcodeFor("spendingCategory", value) },
+        actor,
+      );
+      if (Date.now() >= deadline) throw new AutoFillBudgetElapsed();
+    });
+  } catch (error) {
+    if (!(error instanceof AutoFillBudgetElapsed)) throw error;
+  }
 }
 
 async function fillTarget(

@@ -34,6 +34,7 @@ import {
   loadExpenseJointAllocations,
   type ExpenseJointAllocationRow,
 } from "./expense-project-allocation";
+import { validateProductPolicy } from "./inheritance-validation";
 import { getCategoryFeature, resolveProductCategory } from "./product-category";
 import { externalIdsContainIsbn } from "./product/update-helpers";
 import { resolveOrThrow } from "./shortcode-resolver";
@@ -388,6 +389,9 @@ export async function applySpendingClassificationReview(
       await withReviewedSpendingClassification(db, () =>
         applyReviewedSpendingClassificationPolicy(context, request),
       );
+      // A new Vendor, mapping, or Expense category can put a Product where
+      // its effective spending category forbids one.
+      await validateProductPolicy(db);
       return {
         applied: true as const,
         updatedRecords:

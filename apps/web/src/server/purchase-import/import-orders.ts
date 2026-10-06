@@ -67,7 +67,7 @@ import {
 } from "~/server/repo/database-helpers";
 import { validateExpenseInheritance } from "~/server/repo/expense-inheritance";
 import { deleteImages } from "~/server/repo/image";
-import { validateLiveEffectiveTrades } from "~/server/repo/inheritance-validation";
+import { validateLiveInheritedPolicies } from "~/server/repo/inheritance-validation";
 import { upsertAgentProductMatch } from "~/server/repo/product-match-candidate";
 import { assertProductCategoryChange } from "~/server/repo/product/classification";
 import {
@@ -1546,7 +1546,7 @@ export async function commitProductEnrichment(
               })
               .where(eq(product.id, productId));
             if (changes.categoryId !== undefined)
-              await validateLiveEffectiveTrades(tx);
+              await validateLiveInheritedPolicies(tx);
             let learnedIdentifier = false;
             const skippedIdentifiers: SkippedEnrichmentIdentifier[] = [];
             for (const identifier of changes.identifiers ?? []) {
@@ -1773,7 +1773,7 @@ export async function overwriteProductEnrichment(
               .returning({ id: product.id });
     if (!updated) throw new Error("Product changed while applying approval");
     if (input.change.field === "categoryId")
-      await validateLiveEffectiveTrades(database);
+      await validateLiveInheritedPolicies(database);
     await database
       .update(runTarget)
       .set({

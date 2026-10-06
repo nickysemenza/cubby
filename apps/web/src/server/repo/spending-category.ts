@@ -23,6 +23,7 @@ import {
   unwrapDb,
   withTransaction,
 } from "./database-helpers";
+import { validateProductPolicy } from "./inheritance-validation";
 import { listScaffold } from "./list";
 import { hydrateListRead, type ListProjection } from "./list-projection";
 import { completeListReader } from "./list-read-adapters";
@@ -167,15 +168,17 @@ const update = async (
 ) =>
   withTransaction(db, async (tx) => {
     const id = await resolveOrThrow(tx, "spendingCategory", code);
-    return {
-      output: await crud.update(
-        tx,
-        id,
-        { ...data, parentId: await resolveParent(tx, data.parentId, id) },
-        actor,
-      ),
-      entityId: id,
-    };
+    const output = await crud.update(
+      tx,
+      id,
+      { ...data, parentId: await resolveParent(tx, data.parentId, id) },
+      actor,
+    );
+    // Moving a category to `not_allowed` is refused while any Expense in it
+    // still links a Product; the error lists them.
+    if (data.productExpectation === "not_allowed")
+      await validateProductPolicy(tx);
+    return { output, entityId: id };
   });
 export const spendingCategoryRepository = defineRepository("spendingCategory", {
   lifecycle: {

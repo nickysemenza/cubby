@@ -30,7 +30,7 @@ import {
   updateLiveAndReturn,
   withTransaction,
 } from "~/server/repo/database-helpers";
-import { validateLiveEffectiveTrades } from "~/server/repo/inheritance-validation";
+import { validateLiveInheritedPolicies } from "~/server/repo/inheritance-validation";
 /**
  * Project CRUD operations.
  *
@@ -225,7 +225,7 @@ export const createProject = async (
       googleDriveFolderUrl: data.googleDriveFolderUrl,
       notionPageUrl: data.notionPageUrl,
     });
-    await validateLiveEffectiveTrades(tx);
+    await validateLiveInheritedPolicies(tx);
     await logAuditEntry(tx, actor, {
       entityKind: "project",
       entityId: created.id,
@@ -359,7 +359,7 @@ export const updateProject = async (
       notionPageUrl: data.notionPageUrl,
     });
     const [updated] = await withProjectExternalUrls(tx, [updatedRow]);
-    await validateLiveEffectiveTrades(tx);
+    await validateLiveInheritedPolicies(tx);
 
     // Full-replacement set: clear this project's blocked-by edges and insert
     // the new ones, all inside the same transaction as the column update.

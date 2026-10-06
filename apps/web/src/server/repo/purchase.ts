@@ -162,7 +162,10 @@ import {
   validateExpenseInheritance,
 } from "./expense-inheritance";
 import { hydrateExpenseProjectAllocations } from "./expense-project-allocation";
-import { validateLiveEffectiveTrades } from "./inheritance-validation";
+import {
+  validateProductPolicy,
+  validateLiveInheritedPolicies,
+} from "./inheritance-validation";
 import {
   purchaseCoverageSql,
   purchaseEvidenceFieldResolutionsSql,
@@ -1256,7 +1259,7 @@ export const updatePurchase = async (
     );
 
     await validatePurchaseItemInheritance(tx, [id]);
-    await validateLiveEffectiveTrades(tx);
+    await validateLiveInheritedPolicies(tx);
 
     const changes = computeChanges(before, after, [
       ...entityFieldModels.purchase.audit,
@@ -1625,6 +1628,7 @@ export const splitExpense = async (
         });
         inserted.push(row.id);
       }
+      await validateProductPolicy(tx, { expenseIds: inserted });
 
       if (attributionPolicy === "inherit" && originalAttributions.length > 0) {
         await tx.insert(expenseAttribution).values(

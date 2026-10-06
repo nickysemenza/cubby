@@ -24,6 +24,17 @@ After an import commits, Jev fills the empty category, ingredient, and grown
 Plant of each Product that import created when its calibrated probability is
 at least 0.95, choosing only existing records; the write is audited under the
 import run (`purchase-import/post-import-autofill.ts`).
+The same pass fills an empty Purchase spending category at that bar. Every
+order is household spending, but not every line is a stocked item: the import
+resolves prepared food, tickets, rides, donations, and paid labor or delivery
+as `expense_only` (no Product); software and subscriptions the household
+tracks or that ship goods keep their Product. A spending category with
+`productExpectation: not_allowed` (Restaurants) neither expects nor accepts a
+Product: every write that would leave a Product on such an Expense is refused
+(`repo/inheritance-validation.ts`), and a line-level category override is the
+way out. `not_expected` (Groceries) only drops the missing-Product gap. A
+delivered order asks to be received unless its principal lines are all
+expense-only or in a `not_allowed` category.
 
 ```mermaid
 flowchart LR
