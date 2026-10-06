@@ -94,6 +94,8 @@ export const extractPurchaseOrderMail = async (
     db: Database;
     runId: string;
     orderId: string;
+    /** The Vendor's website and browser domains; a product link must be on one. */
+    productHosts: readonly string[];
     mail: Pick<
       typeof orderMail.$inferSelect,
       "sender" | "subject" | "receivedAt" | "content"
@@ -133,8 +135,54 @@ export const extractPurchaseOrderMail = async (
   // left `orderedAt` null and the writer dated the Purchase on import day.
   if (extraction.candidate && extraction.candidate.orderedAt === null)
     extraction.candidate.orderedAt = args.mail.receivedAt.toISOString();
+  if (extraction.candidate)
+    extraction.candidate.lines = extraction.candidate.lines.map((line) =>
+      retainLiteralLineLinks(line, args.mail.content, args.productHosts),
+    );
   return extraction;
 };
+
+/**
+ * Keep a line's product link and image only when the saved email literally
+ * contains them: the model may copy a URL, never compose one. A product link
+ * must also be on the Vendor's own site, so a mail-platform click-tracking
+ * redirect never becomes the Product's identity URL.
+ */
+export function retainLiteralLineLinks<
+  T extends { productUrl?: string; imageUrl?: string },
+>(
+  line: T,
+  content: { bodyHtml: string | null; bodyText: string | null },
+  productHosts: readonly string[],
+): T {
+  // HTML attribute values escape `&`; compare against the decoded markup.
+  const literal = `${content.bodyHtml?.replaceAll("&amp;", "&") ?? ""}\n${content.bodyText ?? ""}`;
+  const kept = { ...line };
+  if (
+    kept.productUrl &&
+    !(
+      literal.includes(kept.productUrl) &&
+      onHost(kept.productUrl, productHosts)
+    )
+  )
+    delete kept.productUrl;
+  if (kept.imageUrl && !literal.includes(kept.imageUrl)) delete kept.imageUrl;
+  return kept;
+}
+
+function onHost(url: string, hosts: readonly string[]) {
+  let hostname: string;
+  try {
+    hostname = new URL(url).hostname.toLowerCase();
+  } catch {
+    // SILENT: an unparseable link is simply not a product URL.
+    return false;
+  }
+  return hosts.some((host) => {
+    const domain = host.toLowerCase().replace(/^www\./u, "");
+    return hostname === domain || hostname.endsWith(`.${domain}`);
+  });
+}
 
 const extractPurchaseText = async (
   args: {

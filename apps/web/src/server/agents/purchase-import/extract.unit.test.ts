@@ -227,6 +227,7 @@ describe("order confirmation email extraction", () => {
         db,
         runId: "00000000-0000-4000-8000-000000000001",
         orderId: "1001",
+        productHosts: [],
         mail,
       },
       fromPartial<MailPorts>({ runStructured: async () => modelOutput(null) }),
@@ -240,6 +241,7 @@ describe("order confirmation email extraction", () => {
         db,
         runId: "00000000-0000-4000-8000-000000000001",
         orderId: "1001",
+        productHosts: [],
         mail,
       },
       fromPartial<MailPorts>({
@@ -247,5 +249,91 @@ describe("order confirmation email extraction", () => {
       }),
     );
     expect(extraction.candidate?.orderedAt).toBe("2026-09-20T12:00:00.000Z");
+  });
+});
+
+describe("order confirmation line links", () => {
+  const db = new Database(() => {
+    throw new Error("Mail extraction unit test never resolves a database");
+  });
+  const html =
+    '<a href="https://seeds.example.test/products/tomato?variant=7">Tomato seeds</a>' +
+    '<img src="https://cdn.example.test/tomato_small.jpg" alt="Tomato seeds">' +
+    '<a href="https://click.mail.example.test/r/abc">Pepper seeds</a>';
+  const line = (
+    title: string,
+    productUrl: string | null,
+    imageUrl: string | null,
+  ) => ({
+    title,
+    amount: 2,
+    lineKind: "principal" as const,
+    quantity: 1,
+    productUrl,
+    imageUrl,
+    sku: null,
+    seller: null,
+  });
+  const extract = (lines: ReturnType<typeof line>[]) =>
+    extractPurchaseOrderMail(
+      {
+        db,
+        runId: "00000000-0000-4000-8000-000000000001",
+        orderId: "1001",
+        productHosts: ["seeds.example.test"],
+        mail: {
+          sender: "orders@seeds.example.test",
+          subject: "Order 1001 confirmed",
+          receivedAt: new Date("2026-09-22T06:23:46.000Z"),
+          content: { snippet: null, bodyText: null, bodyHtml: html },
+        },
+      },
+      fromPartial<MailPorts>({
+        runStructured: async () => ({
+          status: "ready" as const,
+          candidate: {
+            orderId: "1001",
+            orderedAt: null,
+            merchant: "Example Seeds",
+            currency: "USD",
+            printedGrandTotal: 4,
+            lines,
+            payments: [],
+            allShipmentsDelivered: null,
+          },
+          reason: null,
+          detail: null,
+        }),
+      }),
+    );
+
+  it("keeps a product link and image the email literally shows", async () => {
+    const extraction = await extract([
+      line(
+        "Tomato seeds",
+        "https://seeds.example.test/products/tomato?variant=7",
+        "https://cdn.example.test/tomato_small.jpg",
+      ),
+      line("Pepper seeds", null, null),
+    ]);
+    expect(extraction.candidate?.lines[0]).toMatchObject({
+      productUrl: "https://seeds.example.test/products/tomato?variant=7",
+      imageUrl: "https://cdn.example.test/tomato_small.jpg",
+    });
+  });
+
+  it("drops an invented URL and a tracking redirect off the Vendor's site", async () => {
+    const extraction = await extract([
+      line(
+        "Tomato seeds",
+        "https://seeds.example.test/products/made-up",
+        "https://cdn.example.test/invented.jpg",
+      ),
+      line("Pepper seeds", "https://click.mail.example.test/r/abc", null),
+    ]);
+    const [tomato, pepper] = extraction.candidate?.lines ?? [];
+    expect(tomato?.productUrl).toBeUndefined();
+    expect(tomato?.imageUrl).toBeUndefined();
+    expect(pepper?.productUrl).toBeUndefined();
   });
 });
