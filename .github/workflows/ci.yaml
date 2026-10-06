@@ -430,7 +430,7 @@ jobs:
   web-checks:
     name: Web checks
     needs: [scope, build-worker, test-aux, test-postgres, db-check, test-e2e]
-    if: always() && (github.event_name == 'pull_request' || github.event_name == 'push' || (!inputs.simulator_e2e && inputs.tester_army == 'none'))
+    if: ${{ !cancelled() && (github.event_name == 'pull_request' || github.event_name == 'push' || (!inputs.simulator_e2e && inputs.tester_army == 'none')) }}
     runs-on: ubuntu-slim
     timeout-minutes: 5
     steps:
@@ -563,7 +563,7 @@ jobs:
   test-apple:
     name: Apple checks
     needs: [scope, test-apple-host, test-apple-simulator]
-    if: always() && needs.scope.result == 'success' && needs.scope.outputs.apple == 'true'
+    if: ${{ !cancelled() && needs.scope.result == 'success' && needs.scope.outputs.apple == 'true' }}
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:

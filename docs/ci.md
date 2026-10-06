@@ -138,7 +138,9 @@ framework and runs `sh scripts/apple-check.sh ci`, a generic-simulator
 `xcodebuild build` with no tests or simulator boot. The lightweight Linux
 `Apple checks` job preserves the required status context and succeeds only when
 both selected macOS jobs succeed; failures, cancellations, or unexpected skips
-fail that gate. Release FFI warming waits for this gate on main.
+fail that gate. Aggregate checks use `!cancelled()` so whole-workflow
+cancellation can stop them while ordinary failed dependencies still reach their
+result checks. Release FFI warming waits for this gate on main.
 
 Each SDK keeps its own compiled-product cache. Parallel jobs use two macOS
 runner slots to avoid adding the host and simulator compile times after a
