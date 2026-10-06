@@ -15,7 +15,7 @@ import { leaseNamedDatabase } from "./test-database-lease";
 const adminUrl = "postgresql://postgres:password@localhost:55432/postgres";
 
 // The guard admits only this endpoint. CI publishes it from
-// .github/actions/start-test-services; locally it is the dev database service,
+// native PostgreSQL service containers; locally it is the dev database service,
 // which this suite starts the same way the native runners do before leasing.
 beforeAll(() => {
   if (process.env.CI || process.env.CUBBY_SIM_DB_EXTERNAL === "1") return;
