@@ -336,6 +336,146 @@ describe("Gmail order mail processing", () => {
     expect(mail?.vendorId).toBeNull();
   });
 
+  // A first order from a new website creates its Vendor. Failure modes: a
+  // shared mailbox domain (free mail, a storefront platform) becomes one
+  // Vendor for every merchant on it; a display name impersonating another
+  // address names the Vendor; every newsletter is sent to the classifier; a
+  // second mail from the new domain in the same batch mints a twin; a name
+  // already taken by another Vendor is reused for a different website.
+  describe("a confirmation from an unknown sender", () => {
+    const newVendors = () =>
+      getDb(ctx.db)
+        .select({ id: vendor.id, name: vendor.name, website: vendor.website })
+        .from(vendor)
+        .where(eq(vendor.website, "https://seedco.example"));
+    const openSenderFindings = () =>
+      getDb(ctx.db)
+        .select({ summary: runFinding.summary })
+        .from(runFinding)
+        .where(
+          and(
+            eq(runFinding.kind, "unclassified_vendor"),
+            eq(runFinding.status, "open"),
+          ),
+        );
+
+    async function receiveUnknown(
+      seed: Seed,
+      messageIds: string[],
+      sender: string,
+      subject = "Your order is confirmed",
+    ) {
+      for (const messageId of messageIds)
+        await getDb(ctx.db)
+          .insert(orderMail)
+          .values({
+            ledgerPartyId: seed.party.id,
+            messageId,
+            sender,
+            subject,
+            receivedAt: new Date("2026-09-20T12:00:00Z"),
+            rawChecksum: `raw-${messageId}`,
+          });
+      return processOrderMails(ctx.db, messageIds, ports);
+    }
+
+    it("creates the Vendor and a mail-only account, then processes the order under it", async () => {
+      const seed = await seedForgeWear();
+      classifications.set("seedco-1", {
+        events: [placed("SC-1001", 12, "2026-09-20T12:00:00Z")],
+      });
+      classifications.set("seedco-2", {
+        events: [placed("SC-1002", 8, "2026-09-20T13:00:00Z")],
+      });
+      await receiveUnknown(
+        seed,
+        ["seedco-1", "seedco-2"],
+        "Example Seed Co <orders@mail.seedco.example>",
+      );
+      const created = await newVendors();
+      expect(created).toEqual([
+        expect.objectContaining({ name: "Example Seed Co" }),
+      ]);
+      const vendorId = created[0]!.id;
+      const mails = await getDb(ctx.db)
+        .select({ vendorId: orderMail.vendorId })
+        .from(orderMail)
+        .where(eq(orderMail.ledgerPartyId, seed.party.id));
+      expect(mails.filter((mail) => mail.vendorId === vendorId)).toHaveLength(
+        2,
+      );
+      expect(
+        await getDb(ctx.db)
+          .select({ status: vendorAccount.status })
+          .from(vendorAccount)
+          .where(eq(vendorAccount.vendorId, vendorId)),
+      ).toEqual([{ status: "disabled" }]);
+      expect(
+        await getDb(ctx.db)
+          .select({ orderId: orderMailEvent.orderId })
+          .from(orderMailEvent)
+          .innerJoin(orderMail, eq(orderMail.id, orderMailEvent.orderMailId))
+          .where(eq(orderMail.vendorId, vendorId)),
+      ).toHaveLength(2);
+      expect(await openSenderFindings()).toEqual([]);
+    });
+
+    it("leaves shared domains, impersonating names, non-orders, and taken names as findings", async () => {
+      const seed = await seedForgeWear();
+      classifications.set("free-mail", {
+        events: [placed("FM-1", 5, "2026-09-20T12:00:00Z")],
+      });
+      await receiveUnknown(seed, ["free-mail"], "A Seller <seller@gmail.com>");
+      classifications.set("impersonating", {
+        events: [placed("IM-1", 5, "2026-09-20T12:00:00Z")],
+      });
+      await receiveUnknown(
+        seed,
+        ["impersonating"],
+        "orders@forgewear.example <billing@seedco.example>",
+      );
+      classifications.set("shipped-only", {
+        events: [
+          {
+            event: "shipped",
+            orderId: "SH-1",
+            amount: null,
+            currency: null,
+            occurredAt: null,
+          },
+        ],
+      });
+      await receiveUnknown(
+        seed,
+        ["shipped-only"],
+        "Seed Co <ship@seedco.example>",
+      );
+      // No classification is registered: a newsletter must not reach the model.
+      await receiveUnknown(
+        seed,
+        ["newsletter"],
+        "Seed Co <news@seedco.example>",
+        "Spring planting tips",
+      );
+      classifications.set("taken-name", {
+        events: [placed("TN-1", 5, "2026-09-20T12:00:00Z")],
+      });
+      await receiveUnknown(
+        seed,
+        ["taken-name"],
+        "ForgeWear <orders@seedco.example>",
+      );
+      expect(await newVendors()).toEqual([]);
+      expect(
+        await getDb(ctx.db)
+          .select({ id: vendor.id })
+          .from(vendor)
+          .where(eq(vendor.website, "https://gmail.com")),
+      ).toEqual([]);
+      expect((await openSenderFindings()).length).toBeGreaterThan(0);
+    });
+  });
+
   it("matches a website-domain sender when no receipt address was configured", async () => {
     const seed = await seedForgeWear();
     await getDb(ctx.db)

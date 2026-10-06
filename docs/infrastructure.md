@@ -106,7 +106,9 @@ The Run row is the record; an instance is one attempt at it, named
   position the pass started at. Each batch step also starts an order import
   (`trigger: discovery`) for every new confirmation it saved: a known Vendor,
   no Purchase or member decision for the order, no live run owning it, at most
-  five per Vendor per pass (`gmail/auto-import.ts`). A replayed step reuses
+  five per Vendor per pass (`gmail/auto-import.ts`). An order-like message
+  from an unknown, non-shared sender domain is classified, and a placed order
+  creates its Vendor first (`gmail/vendor-bootstrap.ts`). A replayed step reuses
   the runs it started.
 - A completed scheduled pass that saved no message and recorded no history
   event is `routine`; the Runs list hides routine Runs by default.
