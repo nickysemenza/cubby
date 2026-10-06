@@ -81,9 +81,21 @@ const PURCHASE_EXTERNAL_ID_KIND = "retailer_sku" as const;
 export const PRODUCT_IDENTITY_RULES =
   "Choose an existing product only when the title, model, size, count, and variant identify the same sellable item. Choose none for a distinct or uncertain variant.";
 
-/** The household-local day an order was placed; `orderedAt` is an instant. */
-export const purchaseDateOf = (orderedAt: string | null): string =>
-  householdLocalDate(orderedAt ? new Date(orderedAt) : undefined);
+/**
+ * The household-local day an order was placed (`orderedAt` is an instant).
+ * Evidence without a date keeps an existing Purchase's own date; a new
+ * Purchase is refused rather than dated on import day.
+ */
+export const purchaseDateFor = (
+  orderedAt: string | null,
+  existingDate: string | null,
+): string => {
+  if (orderedAt) return householdLocalDate(new Date(orderedAt));
+  if (existingDate) return existingDate;
+  throw new Error(
+    "The evidence states no order date. Record when the order was placed, or choose its existing Purchase, before importing.",
+  );
+};
 
 /**
  * Deterministic semantic projection shared by the writer and validation.
@@ -963,6 +975,10 @@ export async function importVendorOrder(
       );
     let target = chosen ?? ordered;
     const created = target == null;
+    const orderDate = purchaseDateFor(
+      candidate.orderedAt,
+      target?.date ?? null,
+    );
     if (!target) {
       target = await insertWithShortcode(tx, "purchase", {
         vendorId,
@@ -974,7 +990,7 @@ export async function importVendorOrder(
         runId: input.runId,
         orderId: candidate.orderId,
         displayLabel: candidate.merchant,
-        date: purchaseDateOf(candidate.orderedAt),
+        date: orderDate,
         statedTotal: candidate.printedGrandTotal,
       });
     } else if (!isSourceRefresh) {
@@ -1031,7 +1047,7 @@ export async function importVendorOrder(
             purchaseId,
             name: candidate.merchant ?? "Imported order",
             cost: candidate.printedGrandTotal,
-            date: purchaseDateOf(candidate.orderedAt),
+            date: orderDate,
             lineKind: "principal",
             lineBasis: "allocation",
             costType: "materials",
@@ -1130,7 +1146,7 @@ export async function importVendorOrder(
             name: line.title,
             notes: line.seller ? `Seller: ${line.seller}` : null,
             cost: line.amount,
-            date: purchaseDateOf(candidate.orderedAt),
+            date: orderDate,
             lineKind: identity.lineKind,
             lineBasis: "item_line",
             costType: "materials",
