@@ -197,7 +197,7 @@ install and pnpm-store restore. Jobs that need generation or application code
 still install their dependencies. Generated output is never
 committed; every job that installs dependencies generates it (`postinstall`), and
 `Validation`'s `generate` gate checks that it generates cleanly and that the OpenAPI
-document lints. Markdown changes select checks according to their runtime role:
+document lints. On PRs, Markdown changes select checks according to their runtime role:
 
 | Changed Markdown                                                           | Selected work                                                                                 |
 | -------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------- |
@@ -207,7 +207,8 @@ document lints. Markdown changes select checks according to their runtime role:
 | `.claude/skills/purchase-import/` and `.claude/skills/product-enrichment/` | Documentation, full web lanes, and the optional purchase-import browser lane                  |
 | `.claude/skills/photo-inventory-import/`                                   | Documentation and full web lanes                                                              |
 
-The three skill directories are bundled into Worker agent instructions. Mixed
+The three skill directories are bundled into Worker agent instructions. Every
+web-affecting push to `main` also runs the optional purchase-import browser lane. Mixed
 Markdown and code changes retain all checks selected by the code. Runner
 startup, tool downloads, and any required generation still contribute to
 measured documentation-only latency.
