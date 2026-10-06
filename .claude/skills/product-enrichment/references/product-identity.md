@@ -70,7 +70,9 @@ the candidate pair with `product_enrichment.propose_match`
 (`{productIds: [photoProductId, vendorProductId], evidence, sourceUrls?}`)
 for a human to review side by side in the web recommendations workbench.
 The purchase import does not claim a descriptive-only match directly, and a
-later merge requires human confirmation.
+later merge requires human confirmation. A Product whose name or alias is the
+order line's exact title, with no recorded field contradicting it, is not
+descriptive-only: resolve the line to it.
 
 **Purchase first, photos later** — when photo-inventory-import runs after a
 purchase already exists, check for the existing purchase Product before
