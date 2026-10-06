@@ -33,6 +33,8 @@ Browser dispatch can batch concurrent queries. A mock that parses a single
 operation envelope uses `unbatchFor` before its per-operation handler. Keep
 lazy-fetch assertions sensitive to every envelope; after refusing a batch,
 count individual operation attempts separately from transport fallback.
+Compare related layout bounds in one browser evaluation so their rectangles
+come from the same render state.
 
 Playwright E2E and the coupled Workers harness share a machine-wide lock
 (`/tmp/cubby-harness.lock`, `scripts/lib/harness-lock.ts`): a second suite on

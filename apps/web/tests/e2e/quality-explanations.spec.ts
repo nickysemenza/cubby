@@ -91,11 +91,16 @@ test("quality leads entity tables, explains its calculation, and restores tempor
   await expect(popover.locator("pre")).toHaveCount(0);
   const footer = popover.locator("footer");
   await expect(footer).toBeVisible();
-  expect(
-    (await footer.boundingBox())!.y + (await footer.boundingBox())!.height,
-  ).toBeLessThanOrEqual(
-    (await popover.boundingBox())!.y + (await popover.boundingBox())!.height,
-  );
+  // Read both bounds in one browser turn while the popover can reposition.
+  const footerOverflow = await popover.evaluate((element) => {
+    const footerElement = element.querySelector("footer");
+    if (!footerElement) throw new Error("Explanation footer is missing");
+    return (
+      footerElement.getBoundingClientRect().bottom -
+      element.getBoundingClientRect().bottom
+    );
+  });
+  expect(footerOverflow).toBeLessThanOrEqual(0);
   await expectViewportBounded(page);
   await page.screenshot({ path: testInfo.outputPath("quality-desktop.png") });
   await page.keyboard.press("Escape");
