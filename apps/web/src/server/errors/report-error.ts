@@ -89,8 +89,8 @@ function captureError<TError>(
  *
  * This rules out only the deterministic drops. Dedupe of an identical
  * consecutive error and transport rate limiting still drop an event after
- * its id is returned; the id is then a best-effort reference (the deduped
- * twin's issue, or nothing during a rate-limit window).
+ * its id is returned, so the id is best-effort: a deduped error's id finds
+ * nothing, though its identical predecessor's event is in Sentry.
  */
 function sentrySends<TError>(error: TError): boolean {
   const options = Sentry.getClient()?.getOptions();
