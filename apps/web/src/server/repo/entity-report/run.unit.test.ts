@@ -807,6 +807,32 @@ describe("liveProgressBlocks", () => {
         : [],
     );
 
+  // Report composition must select the right Workflow and preserve retry attempts;
+  // the browser cannot verify Cloudflare destinations without dashboard authentication.
+  it.each([
+    ["mail_search", "cubby-vendor-mail-search"],
+    ["mail_discovery", "cubby-mail-discovery"],
+  ] as const)(
+    "deep-links %s to its current Workflow attempt",
+    (purpose, name) => {
+      const blocks = liveProgressBlocks(RUN_ID, {
+        ...progress,
+        workflow: { ...progress.workflow, purpose },
+      });
+      expect(recordsOf(blocks, "Workflow").rows[0]).toMatchObject({
+        externalLink: {
+          label: "Open in Cloudflare",
+          url: `https://dash.cloudflare.com/9f10f078d35d86c78dedece2300a6b88/workers/workflows/${name}/instance/${RUN_ID}-2`,
+        },
+      });
+      expect(
+        liveProgressBlocks(RUN_ID, { ...progress, workflow: null }).some(
+          (block) => block.kind === "records" && block.title === "Workflow",
+        ),
+      ).toBe(false);
+    },
+  );
+
   it("names the Workflow attempt and offers cancel while it runs, retry once failed", () => {
     const running = liveProgressBlocks(RUN_ID, progress);
     expect(notes(running)[0]).toBe("AI Gateway rate limited; waiting to retry");

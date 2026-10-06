@@ -471,6 +471,8 @@ const reportRecordRow = z.object({
     .optional(),
   /** Raw material kept out of the way (an operation's arguments). */
   detail: z.object({ label: z.string(), text: z.string() }).optional(),
+  /** An external diagnostic or reference page, opened by each client as a link. */
+  externalLink: z.object({ label: z.string(), url: z.httpUrl() }).optional(),
   /** Commands on this row: each runs an existing operation after its declared confirmation. */
   commands: z.array(reportCommand).optional(),
   /** A decision the person makes on this row; see `reportForm` for what it unlocks. */

@@ -88,7 +88,10 @@ The Run row is the record; an instance is one attempt at it, named
   terminates the instance.
 - Instance retention is set per instance (7 days after success, 30 after an
   error) and only bounds diagnostics: the Run detail shows the attempt and the
-  instance state Cloudflare reports while it is retained.
+  instance state Cloudflare reports while it is retained. Its “Open in Cloudflare”
+  link opens the current attempt under the corresponding Workflow in the
+  Cloudflare dashboard on web and native; dashboard access requires a Cloudflare
+  sign-in, and the link may outlive instance retention.
 - An AI Gateway 429 makes a search page step return its `Retry-After`; the
   Workflow sleeps that long under a new step name instead of spending a retry,
   up to twelve times per page.
