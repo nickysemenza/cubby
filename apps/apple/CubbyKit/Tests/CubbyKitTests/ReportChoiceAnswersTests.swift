@@ -93,7 +93,7 @@ struct ReportChoiceAnswersTests {
         #expect(form.choices.map(\.id) == ["trade"])
         let choice = try #require(batch.rows.first?.choice)
         #expect(choice.required)
-        #expect(choice.options.map(\.id) == ["existing", "new", "unresolved"])
+        #expect(choice.options.map(\.id) == ["existing", "new", "unresolved", "expense_only"])
         #expect(choice.options[0].pick?.entity == "product")
         #expect(choice.options[2].text == "Reason for leaving Item A unresolved")
         #expect(choice.suggestions.first?.badges == ["Exact identifier"])
