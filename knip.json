@@ -19,7 +19,6 @@
         // (production mode does not read those): .husky/commit-msg,
         // ci.yaml, and the Nx targets.
         "scripts/check-outward-text.ts!",
-        "scripts/check-doc-paths.ts!",
         "scripts/ci-flakes.ts!",
         "scripts/dev-db.ts!",
         "scripts/stamp-source-mtimes.ts!",

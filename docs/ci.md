@@ -196,8 +196,9 @@ one main run active and at most one pending; a newer push replaces the pending
 run. This does not add parallel main runs or jobs. The newest main CI result may
 wait for the active run; deployment remains independent. `Scope` and
 `Validation` retain stable required names. A documentation-only
-change runs Oxfmt, documented repository-path checks, and offline relative-link
-validation. Formatting-only validation sets up Node and invokes the exact Oxfmt
+change runs Oxfmt and offline relative-link validation through the pinned Lychee action.
+Paths written as inline code are informational; link a repository file when its
+existence should be checked. Formatting-only validation sets up Node and invokes the exact Oxfmt
 version pinned in `package.json` with `npm exec`; it skips the workspace dependency
 install and pnpm-store restore. Jobs that need generation or application code
 still install their dependencies. Generated output is never
@@ -207,7 +208,7 @@ document lints. On PRs, Markdown changes select checks according to their runtim
 
 | Changed Markdown                                                           | Selected work                                                                                 |
 | -------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------- |
-| Ordinary guides and agent documentation                                    | Oxfmt, documented repository paths, offline relative links                                    |
+| Ordinary guides and agent documentation                                    | Oxfmt and offline relative links                                                              |
 | `docs/todos.md`                                                            | Documentation checks plus generation and OpenAPI lint, with filtered dependencies and no WASM |
 | `docs/README.md`                                                           | Documentation and full web lanes: the fixed `/docs/` landing page is a runtime route input    |
 | `.claude/skills/purchase-import/` and `.claude/skills/product-enrichment/` | Documentation, full web lanes, and the optional purchase-import browser lane                  |
@@ -247,6 +248,12 @@ additional Worker builds. The browser lanes retain the discovery and no-skip gua
 desktop Chromium runs as two Playwright shards (two workers each). Phone-web and
 WebKit browser coverage was removed from PR CI and the Playwright suite; native
 checks remain separate. There is no coverage mode.
+The disposable PostgreSQL container uses `fsync=off`, `synchronous_commit=off`,
+and `full_page_writes=off`, matching the local test-service settings. These
+[standard non-durable settings](https://www.postgresql.org/docs/17/non-durability.html)
+remove disk durability work from synthetic test data; CI does not test database-server
+crash recovery. SQL constraints, transactions, and the full reset still run.
+
 Desktop CI passes Playwright's `--trace=off`: recording every test for
 `retain-on-failure` adds work, and raw traces are excluded from hosted artifacts.
 Local runs retain failure traces; CI preserves failure annotations, sanitized

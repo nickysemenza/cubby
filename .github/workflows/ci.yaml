@@ -132,9 +132,6 @@ jobs:
         run: |
           formatter_version=$(node -p "require('./package.json').devDependencies.oxfmt")
           npm exec --yes --package="oxfmt@$formatter_version" -- oxfmt --check .
-      - name: Check documented repository paths
-        if: needs.scope.outputs.docs == 'true' && needs.scope.outputs.validation != 'true'
-        run: node scripts/check-doc-paths.ts
       - name: Check relative Markdown links
         if: needs.scope.outputs.docs == 'true'
         uses: lycheeverse/lychee-action@e7477775783ea5526144ba13e8db5eec57747ce8 # v2.9.0
