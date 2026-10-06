@@ -116,10 +116,10 @@ struct EntityEditorSheet: View {
         .task(id: editorIdentity) { await setup() }
     }
 
-    /// The update editor's read failed: there is no loaded record to edit or save.
+    /// The update read failed. A supplied detail projection may still seed the form, but it is
+    /// not an edit baseline, so the sheet offers a read retry instead of the form.
     private func loadFailure(_ model: GenericEntityEditModel) -> String? {
-        guard !model.isCreate, model.original == nil, !model.isLoading else { return nil }
-        return model.bannerError
+        model.isLoading ? nil : model.loadError
     }
 
     private var title: String {
@@ -154,7 +154,7 @@ struct EntityEditorSheet: View {
                     .foregroundStyle(.secondary)
                 }
             }
-            if let banner = model.bannerError, loadFailure(model) == nil {
+            if let banner = model.bannerError {
                 Section {
                     ActionFailureNotice(message: banner, canRetry: model.canSave && !isSaving) {
                         startSave()
