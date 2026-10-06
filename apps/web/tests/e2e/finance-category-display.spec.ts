@@ -399,6 +399,8 @@ test("expense category pills agree with quality for direct, allocated, and missi
   });
   const principal = await create("expenses", {
     name: `${tag} principal`,
+    costType: "services",
+    trade: "other",
     purchaseId,
     cost: 20,
     date: "2026-09-10",
@@ -412,6 +414,8 @@ test("expense category pills agree with quality for direct, allocated, and missi
   });
   await create("expenses", {
     name: `${tag} second principal`,
+    costType: "services",
+    trade: "other",
     purchaseId,
     cost: 10,
     date: "2026-09-10",
@@ -419,6 +423,7 @@ test("expense category pills agree with quality for direct, allocated, and missi
   });
   const adjustment = await create("expenses", {
     name: `${tag} shipping`,
+    costType: "services",
     purchaseId,
     lineKind: "shipping",
     cost: 3,
@@ -426,6 +431,8 @@ test("expense category pills agree with quality for direct, allocated, and missi
   });
   const missing = await create("expenses", {
     name: `${tag} unclassified`,
+    costType: "services",
+    trade: "other",
     cost: 10,
     date: "2026-09-10",
   });

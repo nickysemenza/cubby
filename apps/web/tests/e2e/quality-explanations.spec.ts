@@ -117,6 +117,8 @@ test("quality leads entity tables, explains its calculation, and restores tempor
   const plannedName = `${name} planned`;
   await createEntityFixture(page, "expense", {
     name: plannedName,
+    costType: "services",
+    trade: "other",
     future: true,
     cost: null,
     date: null,
@@ -507,7 +509,7 @@ test("specialist board and gallery cards retain the shared quality explanation",
   const locationCard = page
     .locator(`[data-location-id="${location.id}"]`)
     .first();
-  await expect(locationCard).toContainText("/100");
+  await expect(locationCard).toContainText("Not assessed");
   await locationCard
     .getByRole("button", { name: /How (data )?quality is determined/ })
     .click();
