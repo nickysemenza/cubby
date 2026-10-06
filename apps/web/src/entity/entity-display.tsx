@@ -20,13 +20,13 @@ import { ReferencePreview } from "~/entity/components/reference-preview";
 import { EntityDisplayImagesProvider } from "~/entity/entity-media/entity-display-images";
 import { RecordFieldSuggestion } from "~/features/ai/record-suggestions";
 import { tryFormatAmount } from "~/features/inventory/format-amount";
-import { formatDateSpan } from "~/lib/date-span";
 import { formatCurrency } from "~/lib/utils";
 import {
   isReferencePickerEntity,
   referenceEntitySearch,
 } from "~/ui/combobox/reference-entity-search";
 import { BasicInfo, type BasicInfoField } from "~/ui/common/basic-info";
+import { CalendarDate } from "~/ui/common/calendar-date";
 import {
   renderScalarValue,
   type ScalarDisplayValue,
@@ -765,13 +765,10 @@ const renderSpanValue = <TRecord extends object>(
 ): ReactNode => {
   const start = spanDateOf(entity, record, span.start);
   const end = spanDateOf(entity, record, span.end);
-  const label = formatDateSpan(start, end);
   return start === null && end === null ? (
     <NoneValue />
   ) : (
-    <span className="tabular-nums" title={label}>
-      {label}
-    </span>
+    <CalendarDate start={start} end={end} className="tabular-nums" />
   );
 };
 

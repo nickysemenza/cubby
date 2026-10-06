@@ -31,6 +31,7 @@ import { formatPlainDate, parsePlainDate } from "~/lib/plain-date";
 import { formatCurrency } from "~/lib/utils";
 import { showErrorToast } from "~/ui/feedback/error-details";
 import { ErrorDisplay } from "~/ui/feedback/error-display";
+import { useHouseholdToday } from "~/ui/hooks/use-household-today";
 import { Row, Stack } from "~/ui/layout";
 import { Button } from "~/ui/primitives/button";
 import { Description } from "~/ui/primitives/description";
@@ -283,6 +284,7 @@ export function UnifiedCalendar({
   periodActions,
 }: UnifiedCalendarProps) {
   const today = householdLocalDate();
+  useHouseholdToday(today);
   const anchorDate = date ?? today;
   const anchor = useMemo(() => householdCalendarDate(anchorDate), [anchorDate]);
   const periodRange = useMemo(

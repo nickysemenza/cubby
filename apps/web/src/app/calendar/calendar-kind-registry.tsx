@@ -75,7 +75,7 @@ type CalendarKindSpec<K extends CalendarItemKind> = {
   cover: (
     item: ItemOf<K>,
   ) => { entity: Entity; fit: "contain" | "cover"; url: string } | undefined;
-  metadata: (item: ItemOf<K>) => string;
+  metadata: (item: ItemOf<K>, today?: string) => string;
   compactBadge?: (item: ItemOf<K>) => CalendarBadge | undefined;
   richBadge?: (item: ItemOf<K>) => CalendarBadge | undefined;
   edit: (item: ItemOf<K>) => CalendarEditDescriptor;
@@ -239,11 +239,11 @@ const calendarKindRegistry = {
     create: (date) => projectCaptureRequest({ date }),
     icon: (_item) => KIND_ICONS.project,
     cover: (_item) => undefined,
-    metadata: (item) =>
+    metadata: (item, today) =>
       [
         PROJECT_STATUS_LABELS[item.status],
         item.projectKind ? capitalize(item.projectKind) : null,
-        itemSpanLabel(item),
+        itemSpanLabel(item, today),
       ]
         .filter(Boolean)
         .join(" · "),
@@ -300,7 +300,7 @@ function calendarItemPresentationFor<K extends CalendarItemKind>(
     entity: item.kind,
     icon: spec.icon(item),
     cover: spec.cover(item),
-    metadata: spec.metadata(item),
+    metadata: spec.metadata(item, today || undefined),
     compactBadge: spec.compactBadge?.(item),
     richBadge: spec.richBadge?.(item),
     event: spec.event(item, today),
