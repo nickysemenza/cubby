@@ -48,7 +48,7 @@ remain the merge gate.
 Node 24, pnpm 12.7.0, Rust/wasm-pack, Apple `container` on macOS (external PostgreSQL/IntegreSQL on Linux) and Playwright
 browsers must be available; [test tiers](agents/validation-tests.md) cover database setup.
 PostgreSQL remains the authoritative integration tier; Playwright defaults to
-one worker on hosted runners and two on local macOS (`tooling/e2e-workers.ts`),
+one worker on hosted runners and two on local macOS in `playwright.config.ts`,
 the CI workflow passes `--workers=2` for each shard, and there are no retries. Both tiers reject an empty selection or an
 unexpected skipped test without freezing the suite to a hand-maintained count;
 a Vitest `-t` run accepts tests the pattern left out but still fails when the

@@ -1,5 +1,4 @@
 import { defineConfig, devices } from "@playwright/test";
-import { resolveE2EWorkers } from "./tooling/e2e-workers";
 
 // The spec files import server modules (`~/server/db`, repositories) whose
 // `~/env` schema validates at import and whose module scope reads values like
@@ -48,10 +47,10 @@ export default defineConfig({
   forbidOnly: !!process.env.CI,
   /* Browser canaries are deterministic contracts; retries hide flakes. */
   retries: 0,
-  /* Each worker owns an isolated database and harness. The CI workflow can
-     override this default through --workers; local macOS may override its
-     measured cap. See tooling/e2e-workers.ts. */
-  workers: resolveE2EWorkers(),
+  /* Each worker owns an isolated database and harness. Two local macOS
+     workers preserve the measured WebKit budget; other hosts default to one.
+     Use Playwright's --workers override, including CI's explicit two. */
+  workers: !isCI && process.platform === "darwin" ? 2 : 1,
   /* Backstop for a dead worker harness, which fails every remaining test
      identically. Kept loose enough that a genuine multi-test regression still
      reports most of its failures in one go. */

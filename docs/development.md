@@ -107,7 +107,8 @@ them.
     service, override `INTEGRESQL_URL`, `INTEGRESQL_DATABASE_HOST` and
     `INTEGRESQL_DATABASE_PORT` together.
   - After a SIGKILL, find leftovers with `container list --all`.
-- Parallelism overrides: `VITEST_MAX_WORKERS` and `CUBBY_E2E_WORKERS`.
+- Parallelism overrides: `VITEST_MAX_WORKERS` for Vitest and Playwright's
+  `--workers` flag (for example, `pnpm test:e2e --workers=2`).
 - In dev, `await __jsProfile(5000)` in the browser console summarizes the
   hottest main-thread frames.
 
