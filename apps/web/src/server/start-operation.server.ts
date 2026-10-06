@@ -112,12 +112,33 @@ const isValidationPathPrimitive = (
 ): part is string | number =>
   typeof part === "string" || typeof part === "number";
 
+const validationIssues = (error: z.ZodError) =>
+  error.issues.map((issue) => ({
+    code: issue.code,
+    path: issue.path.map((part) =>
+      isValidationPathPrimitive(part) ? part : String(part),
+    ),
+    message: issue.message,
+  }));
+
 function normalizePublicError<TError>(
   error: TError,
   stage: OperationStage,
   requestId?: string,
 ): NormalizedStartOperationError {
   const failure = parseObservedFailure(error);
+  if (stage === "output" && failure instanceof z.ZodError) {
+    // A handler's result drifted from its declared output: name the path so
+    // the caller (often an MCP agent) can report the exact field.
+    const publicError: PublicStartOperationError = {
+      code: "INTERNAL_SERVER_ERROR",
+      reason: "INVALID_OUTPUT",
+      message: `Output does not match its schema: ${validationMessage(failure)}`,
+      validationIssues: validationIssues(failure),
+    };
+    if (requestId) publicError.requestId = requestId;
+    return { publicError, observedError: failure };
+  }
   if (stage === "input" && failure instanceof SyntaxError) {
     const publicError: PublicStartOperationError = {
       code: "BAD_REQUEST",
@@ -132,13 +153,7 @@ function normalizePublicError<TError>(
       code: "BAD_REQUEST",
       reason: "INVALID_INPUT",
       message: validationMessage(failure),
-      validationIssues: failure.issues.map((issue) => ({
-        code: issue.code,
-        path: issue.path.map((part) =>
-          isValidationPathPrimitive(part) ? part : String(part),
-        ),
-        message: issue.message,
-      })),
+      validationIssues: validationIssues(failure),
     };
     if (requestId) publicError.requestId = requestId;
     return {

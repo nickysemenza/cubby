@@ -76,7 +76,7 @@ export function registerTestTool<
     input: Input;
     output: Output;
     run: (
-      context: McpRequestContext,
+      context: McpRequestContext & { signal: AbortSignal },
       input: z.output<Input>,
     ) => Promise<z.input<Output>>;
     spec?: Partial<Omit<McpActionSpec, "op">>;
