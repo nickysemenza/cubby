@@ -14,6 +14,7 @@ import { toast } from "sonner";
 
 import { entityDetailLink } from "~/entity/entities";
 import { entityDetailFor } from "~/entity/entity-detail";
+import { DetailAction } from "~/entity/entity-detail/detail-action-bar";
 import type { DetailSlotComponent } from "~/entity/entity-detail/detail-slots";
 import type { EntityDetailByEntity } from "~/entity/generated/entity-details.gen";
 import { meal as mealOperations } from "~/integrations/tanstack-query/generated/catalog.gen";
@@ -61,10 +62,6 @@ export const MealComposition: DetailSlotComponent<"meal"> = ({
   const mealId = meal.id;
   const invalidate = useInvalidateMeals();
   const mealKey = entityDetailFor("meal").queryKey(mealId);
-  const [addFoodOpen, setAddFoodOpen] = useState(false);
-  const [recipeFoodId, setRecipeFoodId] = useState<RecipeShortcode | null>(
-    null,
-  );
   const preparation = useMealPreparationController({
     mealId,
     mealDate: meal.date,
@@ -73,12 +70,9 @@ export const MealComposition: DetailSlotComponent<"meal"> = ({
   const preparationView = preparation.view;
   return (
     <Stack gap="md">
-      <Row justify="end">
-        <Button type="button" size="sm" onClick={() => setAddFoodOpen(true)}>
-          <PlusIcon className="size-4" />
-          Add food
-        </Button>
-      </Row>
+      <DetailAction>
+        <MealActions record={meal} />
+      </DetailAction>
       <Stack gap="sm">
         {meal.recipes.length === 0 ? (
           <Description>
@@ -116,22 +110,6 @@ export const MealComposition: DetailSlotComponent<"meal"> = ({
       <MealPreparationOverlays
         preparation={preparation}
         currentMealId={mealId}
-      />
-      <AddFoodDialog
-        mealId={mealId}
-        date={meal.date}
-        open={addFoodOpen}
-        onOpenChange={setAddFoodOpen}
-        onRecipe={(recipeId) => {
-          setAddFoodOpen(false);
-          setRecipeFoodId(recipeId);
-        }}
-      />
-      <RecipeFoodDialog
-        mealId={mealId}
-        date={meal.date}
-        recipeId={recipeFoodId}
-        onClose={() => setRecipeFoodId(null)}
       />
     </Stack>
   );
@@ -377,3 +355,39 @@ function RecipeRow({
     </div>
   );
 }
+
+export const MealActions: DetailSlotComponent<"meal"> = ({ record: meal }) => {
+  const mealId = meal.id;
+  const [addFoodOpen, setAddFoodOpen] = useState(false);
+  const [recipeFoodId, setRecipeFoodId] = useState<RecipeShortcode | null>(
+    null,
+  );
+  return (
+    <>
+      <DetailAction>
+        <Row justify="end">
+          <Button type="button" size="sm" onClick={() => setAddFoodOpen(true)}>
+            <PlusIcon className="size-4" />
+            Add food
+          </Button>
+        </Row>
+      </DetailAction>
+      <AddFoodDialog
+        mealId={mealId}
+        date={meal.date}
+        open={addFoodOpen}
+        onOpenChange={setAddFoodOpen}
+        onRecipe={(recipeId) => {
+          setAddFoodOpen(false);
+          setRecipeFoodId(recipeId);
+        }}
+      />
+      <RecipeFoodDialog
+        mealId={mealId}
+        date={meal.date}
+        recipeId={recipeFoodId}
+        onClose={() => setRecipeFoodId(null)}
+      />
+    </>
+  );
+};

@@ -1,21 +1,25 @@
 import type { NutritionBasis } from "@cubby/schemas/nutrition";
-import { useNavigate, useSearch } from "@tanstack/react-router";
+import { PrinterIcon } from "@phosphor-icons/react/dist/csr/Printer";
+import { Link, useNavigate, useSearch } from "@tanstack/react-router";
 
 import { AddToMeal } from "~/app/meals/add-to-meal";
+import { DetailAction } from "~/entity/entity-detail/detail-action-bar";
 import type { DetailSlotComponent } from "~/entity/entity-detail/detail-slots";
 import { EntityReportSlot } from "~/entity/entity-detail/report-slot";
 import { CopyRecipeParseButton } from "~/features/recipes/copy-corpus-button";
 import RecipeDetail, {
   type RecipeViewMode,
 } from "~/features/recipes/RecipeDetail";
+import { RecipeFlowAction } from "~/features/recipes/RecipeFlowView";
 import type { RecipeFlowLayoutMode } from "~/features/recipes/RecipeFlowView";
 import { Row, Stack } from "~/ui/layout";
+import { Button } from "~/ui/primitives/button";
 
 /**
  * The cooking workflow: view switcher, scaling, nutrition basis, costing
  * coverage and the flow layout, all URL state on the recipe route (which
  * keeps `route.detail: null` for exactly those keys). Availability and the
- * add-to-meal / copy-parse actions ride along as the workflow's own toolbar.
+ * record-level actions use the persistent detail header.
  */
 export const RecipeWorkflow: DetailSlotComponent<"recipe"> = ({
   record: recipe,
@@ -67,10 +71,9 @@ export const RecipeWorkflow: DetailSlotComponent<"recipe"> = ({
   };
   return (
     <Stack gap="md">
-      <Row gap="sm" wrap justify="end">
-        <AddToMeal recipeId={recipe.id} recipeName={recipe.name} />
-        <CopyRecipeParseButton recipe={recipe} />
-      </Row>
+      <DetailAction>
+        <RecipeActions record={recipe} />
+      </DetailAction>
       <EntityReportSlot slot="recipe.availability" id={recipe.id} />
       <RecipeDetail
         recipe={recipe}
@@ -86,5 +89,42 @@ export const RecipeWorkflow: DetailSlotComponent<"recipe"> = ({
         onFlowLayoutChange={setFlowLayout}
       />
     </Stack>
+  );
+};
+
+export const RecipeActions: DetailSlotComponent<"recipe"> = ({
+  record: recipe,
+}) => {
+  const { view, scale, nutritionBasis } = useSearch({
+    from: "/_authenticated/recipes/$shortcode",
+  });
+  return (
+    <Row gap="sm" wrap>
+      <AddToMeal recipeId={recipe.id} recipeName={recipe.name} />
+      <CopyRecipeParseButton recipe={recipe} />
+      <RecipeFlowAction recipeId={recipe.id} />
+      <Button
+        variant="outline"
+        render={
+          <Link
+            to="/recipes/$shortcode/export"
+            params={{ shortcode: recipe.id }}
+            search={{
+              format:
+                view === "spec"
+                  ? "nested"
+                  : view === "flow"
+                    ? "flow"
+                    : undefined,
+              scale,
+              nutritionBasis,
+            }}
+          />
+        }
+      >
+        <PrinterIcon />
+        Print / export
+      </Button>
+    </Row>
   );
 };

@@ -95,6 +95,24 @@ test("finds settlement beyond 200 newer nonmatches and allocates only after revi
     `/purchases/${seed.first.shortcode}`,
     page.getByRole("button", { name: "Match statement activity" }),
   );
+  const actions = page.getByRole("group", {
+    name: "Entity actions",
+    exact: true,
+  });
+  await expect(
+    actions.getByRole("button", {
+      name: "Match statement activity",
+      exact: true,
+    }),
+  ).toBeVisible();
+  await page.getByRole("tab", { name: "Relations", exact: true }).click();
+  await expect(
+    actions.getByRole("button", {
+      name: "Match statement activity",
+      exact: true,
+    }),
+  ).toBeVisible();
+  await page.getByRole("tab", { name: "Overview", exact: true }).click();
   const advisoryResponse = page.waitForResponse((response) => {
     return dispatchesOperation(
       response.request(),

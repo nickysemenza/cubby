@@ -197,6 +197,32 @@ names where a value replaces a compiler default; the generated manifest uses
 the resolved names. `detail.hero` names the chip (an enum/boolean field), stat
 fields, and a breadcrumb reference field. `imagesOverride` replaces gallery
 visibility and `actionOverrides` replaces the default edit action.
+Web record-level slot actions render once in the detail header through
+`DetailActionTarget` (`apps/web/src/entity/entity-detail/detail-action-bar.tsx`).
+Collection verbs derive from the declared sections and `reportSlotActions`;
+the typed header hook registry supplies specialist controls (meal food capture,
+cookbook source import/reprocess, inventory expense capture, Run diagnostics,
+recipe meal-planning/parse-copy/export actions, walkthrough generation, product
+enrichment, wardrobe navigation, photo grouping, image processing, vendor mail
+search, and section-scoped finance verbs). Registry declarations preserve each
+entity's record type; generic JSX dispatch erases both the component and its
+record at one documented boundary, matching the existing detail-slot renderer.
+The header owns component lifetime, so switching Overview, Relations, or a
+dedicated tab does not remove controls or abandon an open dialog. Section consumers use `DetailAction` to retain local
+controls only when rendered outside the full detail page. Report header reads
+reuse the section cache and the existing Run batch poll; they do not add a
+separate Run query. Agent controls reuse their existing cached work read;
+walkthrough controls and automatic/guided generation share one mutation gate
+per recipe and observe the latest generation outcome, so another surface cannot
+launch competing generation or leave a stale failure after a successful retry. `reportDetailActions` explicitly identifies record-level
+report commands and diagnostic rows, leaving approvals, selections, recipe
+scales, per-row imports, guided regeneration, ownership confirmations, and other contextual work
+beside its evidence. Finance verbs with `scope: "section"` use the header;
+`scope: "selection"` verbs stay with the checked rows and their disabled reasons.
+Vendor search and product indexing controls observe the same cached job/readiness
+state as their worklists. Stored URLs, source mail links, map coordinates, and
+linked entity/identifier values remain facts rather than header actions.
+
 `detail.sectionOverrides` replaces the inferred Overview section with an ordered list of
 `fields` (a named subset of the `display.detail` fields — every such field is
 placed exactly once), `relation` (the target entity's list filtered by an

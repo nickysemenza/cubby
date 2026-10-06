@@ -34,8 +34,12 @@ import {
   type AgentConversationObservationSnapshot,
 } from "~/app/runs/agent-observation";
 import { usePhotoRunReview } from "~/app/runs/photo-group-review";
-import { PhotoImportRunView } from "~/app/runs/photo-run-detail";
+import {
+  PhotoImportRunView,
+  PhotoRunGroupingAction,
+} from "~/app/runs/photo-run-detail";
 import type { RunDetail } from "~/contracts/run.contract";
+import { DetailAction } from "~/entity/entity-detail/detail-action-bar";
 import { EntityReportSlot } from "~/entity/entity-detail/report-slot";
 import { ripple } from "~/integrations/tanstack-query/cache-tags";
 import {
@@ -235,17 +239,21 @@ function RunControls({ run }: { run: RunDetail }) {
           }
         />
       ) : null}
-      <RunActionButtons runId={run.publicId} actions={runActions(run)}>
-        {run.purpose === "photo_inventory" &&
-        TERMINAL_RUN_STATUSES.has(run.status) ? (
-          <p className="max-w-md text-right text-xs text-muted-foreground">
-            Reuses these uploaded photos and their existing image analysis. The
-            agent groups them again in a separate run.
-          </p>
-        ) : null}
-      </RunActionButtons>
+      <DetailAction>
+        <RunActionButtons runId={run.publicId} actions={runActions(run)}>
+          {run.purpose === "photo_inventory" &&
+          TERMINAL_RUN_STATUSES.has(run.status) ? (
+            <p className="max-w-md text-right text-xs text-muted-foreground">
+              Reuses these uploaded photos and their existing image analysis.
+              The agent groups them again in a separate run.
+            </p>
+          ) : null}
+        </RunActionButtons>
+      </DetailAction>
       <RunLineageAndInputs run={run} />
-      <ManualEvidenceUpload run={run} />
+      <DetailAction>
+        <ManualEvidenceUpload run={run} />
+      </DetailAction>
     </Stack>
   );
 }
@@ -1314,4 +1322,26 @@ function RunLink({ label, publicId }: { label: string; publicId: string }) {
       </a>
     </Row>
   );
+}
+
+/** The same cached work read supplies agent controls on every detail tab. */
+export function RunAgentActions({ record }: { record: RunOut }) {
+  return agentImportRunPurpose.safeParse(record.purpose).success ? (
+    <RunAgentActionRead record={record} />
+  ) : null;
+}
+function RunAgentActionRead({ record }: { record: RunOut }) {
+  const query = useSyncedRun(record, true);
+  return query.data ? (
+    <>
+      {query.data.purpose === "photo_inventory" ? (
+        <PhotoRunGroupingAction run={query.data} />
+      ) : null}
+      <ManualEvidenceUpload run={query.data} />
+      <RunActionButtons
+        runId={query.data.publicId}
+        actions={runActions(query.data)}
+      />
+    </>
+  ) : null;
 }

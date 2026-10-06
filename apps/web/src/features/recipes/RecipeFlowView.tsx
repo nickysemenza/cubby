@@ -9,14 +9,23 @@ import { GitBranchIcon } from "@phosphor-icons/react/dist/csr/GitBranch";
 import { SparkleIcon } from "@phosphor-icons/react/dist/csr/Sparkle";
 import { TableIcon } from "@phosphor-icons/react/dist/csr/Table";
 import { WarningIcon } from "@phosphor-icons/react/dist/csr/Warning";
-import { useMutation, useQuery } from "@tanstack/react-query";
+import {
+  useIsMutating,
+  useMutationState,
+  useMutation,
+  useQuery,
+  useQueryClient,
+} from "@tanstack/react-query";
 import { type FormEvent, useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
+import { z } from "zod";
 
 import { VerbButton } from "~/entity/actions/action-verb-ui";
+import { DetailAction } from "~/entity/entity-detail/detail-action-bar";
 import { recipe as recipeOperations } from "~/integrations/tanstack-query/generated/catalog.gen";
 import { formatInstant } from "~/lib/date-format";
 import { getErrorMessage } from "~/lib/error-utils";
+import { showErrorToast } from "~/ui/feedback/error-details";
 import { Row, Stack } from "~/ui/layout";
 import { MarkdownText } from "~/ui/markdown";
 import { Alert, AlertDescription, AlertTitle } from "~/ui/primitives/alert";
@@ -101,17 +110,19 @@ function FlowAvailability({
       <AlertTitle>Could not generate recipe flow</AlertTitle>
       <AlertDescription>
         {generationError ?? "No valid flow is available for this recipe."}
-        <Button
-          type="button"
-          variant="outline"
-          size="xs"
-          className="mt-2"
-          onClick={onRetry}
-          disabled={isGenerating}
-        >
-          <ArrowClockwiseIcon />
-          Retry
-        </Button>
+        <DetailAction>
+          <Button
+            type="button"
+            variant="outline"
+            size="xs"
+            className="mt-2"
+            onClick={onRetry}
+            disabled={isGenerating}
+          >
+            <ArrowClockwiseIcon />
+            Retry
+          </Button>
+        </DetailAction>
       </AlertDescription>
     </Alert>
   );
@@ -342,14 +353,16 @@ function FlowPlan({
                 ingredients beside the original instructions and explanations
                 along the way.
               </p>
-              <Button
-                type="button"
-                onClick={onRegenerate}
-                disabled={generating}
-              >
-                <BookOpenIcon />
-                Generate walkthrough
-              </Button>
+              <DetailAction>
+                <Button
+                  type="button"
+                  onClick={onRegenerate}
+                  disabled={generating}
+                >
+                  <BookOpenIcon />
+                  Generate walkthrough
+                </Button>
+              </DetailAction>
             </div>
           )
         ) : layout === "map" ? (
@@ -471,7 +484,6 @@ export function RecipeFlowView({
   );
   const [guidance, setGuidance] = useState("");
   const [guidanceSource, setGuidanceSource] = useState<string | null>(null);
-  const [generationError, setGenerationError] = useState<string | null>(null);
   const autoStartedFingerprint = useRef<string | null>(null);
 
   const flowQuery = useQuery(
@@ -483,19 +495,10 @@ export function RecipeFlowView({
       ? flowState.artifact
       : null;
 
-  // Raw useMutation is intentional: automatic generation failures are rendered
-  // inline in this view instead of being reduced to the shared toast-only path.
-  const generation = useMutation(
-    recipeOperations.generateFlow.mutationOptions({
-      onSuccess: (_data, variables) => {
-        setGenerationError(null);
-        if (variables.force) toast.success("Recipe flow regenerated");
-      },
-      onError: (error) => {
-        setGenerationError(getErrorMessage(error));
-      },
-    }),
-  );
+  const generation = useRecipeFlowGeneration(recipe.id);
+  const generationError = generation.error
+    ? getErrorMessage(generation.error)
+    : null;
 
   useEffect(() => {
     if (
@@ -571,5 +574,77 @@ export function RecipeFlowView({
         onSelectOperation={setSelectedOperationId}
       />
     </div>
+  );
+}
+
+/** Automatic, guided, and header generation share availability by recipe and operation. */
+function useRecipeFlowGeneration(
+  recipeId: RecipeOut["id"],
+  notifyError = false,
+) {
+  const client = useQueryClient();
+  const options = recipeOperations.generateFlow.mutationOptions();
+  const filters = {
+    mutationKey: options.mutationKey,
+    predicate: (mutation: import("@tanstack/react-query").Mutation) => {
+      const variables = z
+        .object({ id: z.string() })
+        .safeParse(mutation.state.variables);
+      return variables.success && variables.data.id === recipeId;
+    },
+  };
+  const pending = useIsMutating(filters) > 0;
+  const outcomes = useMutationState({
+    filters,
+    select: (mutation) => ({
+      submittedAt: mutation.state.submittedAt,
+      error: mutation.state.error,
+    }),
+  });
+  const latest = outcomes.reduce<(typeof outcomes)[number] | undefined>(
+    (last, current) =>
+      !last || current.submittedAt >= last.submittedAt ? current : last,
+    undefined,
+  );
+  const mutation = useMutation({
+    ...options,
+    onError: (error) => {
+      if (notifyError) showErrorToast(error);
+    },
+    onSuccess: (_data, variables) => {
+      if (variables.force) toast.success("Recipe flow regenerated");
+    },
+  });
+  return {
+    ...mutation,
+    error: latest?.error ?? null,
+    isPending: pending,
+    mutate: (input: Parameters<typeof mutation.mutate>[0]) => {
+      if (client.isMutating(filters) === 0) mutation.mutate(input);
+    },
+  };
+}
+
+export function RecipeFlowAction({ recipeId }: { recipeId: RecipeOut["id"] }) {
+  const flow = useQuery(
+    recipeOperations.getFlow.queryOptions({ id: recipeId }),
+  );
+  const generation = useRecipeFlowGeneration(recipeId, true);
+  const current = flow.data?.status === "current";
+  return (
+    <Button
+      type="button"
+      variant="outline"
+      disabled={flow.isPending || generation.isPending}
+      onClick={() => generation.mutate({ id: recipeId, force: current })}
+      title={generation.error ? getErrorMessage(generation.error) : undefined}
+    >
+      <SparkleIcon />
+      {generation.isPending
+        ? "Generating walkthrough…"
+        : current
+          ? "Regenerate walkthrough"
+          : "Generate walkthrough"}
+    </Button>
   );
 }

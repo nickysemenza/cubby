@@ -10,8 +10,10 @@ import { FilterRefLink } from "~/entity/components/ref-link/leaf";
 import { entities } from "~/entity/entities";
 import { formatInstant } from "~/lib/date-format";
 import { cn } from "~/lib/utils";
+import { CloudflareIcon } from "~/ui/icons/cloudflare";
 import { Row, Stack } from "~/ui/layout";
 import { Badge } from "~/ui/primitives/badge";
+import { buttonVariants } from "~/ui/primitives/button";
 import { Checkbox } from "~/ui/primitives/checkbox";
 import { Description } from "~/ui/primitives/description";
 import { Eyebrow } from "~/ui/primitives/eyebrow";
@@ -20,6 +22,10 @@ import { Skeleton } from "~/ui/primitives/skeleton";
 import { ShortcodeProse } from "~/ui/shortcode-prose";
 
 import { collectionActions } from "./collection-actions";
+import {
+  DetailAction,
+  type ReportDetailActionPlacement,
+} from "./detail-action-bar";
 import {
   type ChoiceAnswerState,
   ChoiceControl,
@@ -116,7 +122,9 @@ const STATUS_VARIANT = {
 function RowExtras({
   row,
   commands,
+  inDetailBar = false,
 }: {
+  inDetailBar?: boolean;
   row: ReportRecordRow;
   commands: ReportCommands;
 }) {
@@ -155,29 +163,44 @@ function RowExtras({
           </pre>
         </details>
       ) : null}
-      {row.externalLink ? (
-        <a
-          href={row.externalLink.url}
-          target="_blank"
-          rel="noreferrer"
-          className="inline-flex min-h-11 items-center text-sm text-primary underline underline-offset-4"
-        >
-          {row.externalLink.label}
-        </a>
-      ) : null}
-      {(row.commands ?? []).length > 0 ? (
-        <Row wrap gap="sm">
-          {(row.commands ?? []).map((command) => (
-            <CommandButton
-              key={command.id}
-              command={command}
-              commands={commands}
-            />
-          ))}
-        </Row>
-      ) : null}
+      <RowActionPlacement inDetailBar={inDetailBar}>
+        {row.externalLink ? (
+          <a
+            href={row.externalLink.url}
+            target="_blank"
+            rel="noreferrer"
+            className={buttonVariants({ variant: "outline" })}
+          >
+            {row.externalLink.label === "Open in Cloudflare" ? (
+              <CloudflareIcon />
+            ) : null}
+            {row.externalLink.label}
+          </a>
+        ) : null}
+        {(row.commands ?? []).length > 0 ? (
+          <Row wrap gap="sm">
+            {(row.commands ?? []).map((command) => (
+              <CommandButton
+                key={command.id}
+                command={command}
+                commands={commands}
+              />
+            ))}
+          </Row>
+        ) : null}
+      </RowActionPlacement>
     </>
   );
+}
+
+function RowActionPlacement({
+  inDetailBar,
+  children,
+}: {
+  inDetailBar: boolean;
+  children: ReactNode;
+}) {
+  return inDetailBar ? <DetailAction>{children}</DetailAction> : children;
 }
 
 /** The decision a row asks for, answered in place; the block's form says what it unlocks. */
@@ -204,6 +227,7 @@ function RowChoice({
 
 function RecordRow({
   row,
+  inDetailBar,
   record,
   large,
   selectable,
@@ -213,6 +237,7 @@ function RecordRow({
   choices,
   choicesLocked,
 }: {
+  inDetailBar: boolean;
   commands: ReportCommands;
   /** The answers to the block's choices, when the block has a form. */
   choices: ChoiceAnswerState | null;
@@ -263,7 +288,7 @@ function RecordRow({
               <ShortcodeProse>{row.subtitle}</ShortcodeProse>
             </span>
           ) : null}
-          <RowExtras row={row} commands={commands} />
+          <RowExtras row={row} commands={commands} inDetailBar={inDetailBar} />
           <RowChoice row={row} choices={choices} locked={choicesLocked} />
           {(row.badges ?? []).length > 0 ? (
             <Row gap="xs" className="flex-wrap">
@@ -318,10 +343,12 @@ function RecordRow({
  */
 export function RecordsBlockView({
   block,
+  detailActions,
   record,
   entity,
   list,
 }: {
+  detailActions?: ReportDetailActionPlacement;
   block: RecordsBlock;
   record?: object;
   /** The record's entity, for the finance verbs the block offers (`block.verbs`). */
@@ -363,6 +390,10 @@ export function RecordsBlockView({
                 choices={form ? choices : null}
                 choicesLocked={choicesLocked}
                 row={row}
+                inDetailBar={
+                  row.key !== undefined &&
+                  (detailActions?.rows?.includes(row.key) ?? false)
+                }
                 record={record}
                 large={block.thumbnail === "large"}
                 selectable={selectable}
@@ -403,17 +434,19 @@ export function RecordsBlockView({
           }
         />
       ) : null}
-      {(block.commands ?? []).length > 0 ? (
-        <Row wrap gap="sm">
-          {(block.commands ?? []).map((command) => (
-            <CommandButton
-              key={command.id}
-              command={command}
-              commands={commands}
-            />
-          ))}
-        </Row>
-      ) : null}
+      <RowActionPlacement inDetailBar={detailActions?.commands ?? false}>
+        {(block.commands ?? []).length > 0 ? (
+          <Row wrap gap="sm">
+            {(block.commands ?? []).map((command) => (
+              <CommandButton
+                key={command.id}
+                command={command}
+                commands={commands}
+              />
+            ))}
+          </Row>
+        ) : null}
+      </RowActionPlacement>
       {verbs.length > 0 ? (
         <Row gap="sm" wrap align="center" aria-live="polite">
           {verbs.map((verb) => {
@@ -423,12 +456,18 @@ export function RecordsBlockView({
                 key={verb.id}
                 fallback={<Skeleton className="h-8 w-24" />}
               >
-                <Verb
-                  record={erasedRecord}
-                  action={verb}
-                  selection={[...selection]}
-                  clearSelection={clearSelection}
-                />
+                <RowActionPlacement
+                  inDetailBar={
+                    verb.scope === "section" && (detailActions?.verbs ?? false)
+                  }
+                >
+                  <Verb
+                    record={erasedRecord}
+                    action={verb}
+                    selection={[...selection]}
+                    clearSelection={clearSelection}
+                  />
+                </RowActionPlacement>
               </Suspense>
             ) : null;
           })}
@@ -442,5 +481,66 @@ export function RecordsBlockView({
         ) : null,
       )}
     </Stack>
+  );
+}
+
+export function RecordsDetailActions({
+  block,
+  detailActions,
+  entity,
+  record,
+}: {
+  block: RecordsBlock;
+  detailActions?: ReportDetailActionPlacement;
+  entity?: string;
+  record?: object;
+}) {
+  const commands = useReportCommands();
+  const available = entity === undefined ? {} : sectionActionsFor(entity);
+  // SAFETY: the action registry correlates this entity with its loaded record.
+  const erasedRecord = record as never;
+  return (
+    <>
+      {block.rows
+        .filter(
+          (row) =>
+            row.key !== undefined && detailActions?.rows?.includes(row.key),
+        )
+        .map((row) => (
+          <RowExtras
+            key={row.key}
+            row={{ ...row, statuses: [], lines: [], detail: undefined }}
+            commands={commands}
+          />
+        ))}
+      {detailActions?.verbs && record
+        ? (block.verbs ?? [])
+            .filter((verb) => verb.scope === "section")
+            .map((verb) => {
+              const Verb = available[verb.id];
+              return Verb ? (
+                <Suspense key={verb.id} fallback={null}>
+                  <span title={verb.disabledReason ?? undefined}>
+                    <Verb
+                      record={erasedRecord}
+                      action={verb}
+                      selection={[]}
+                      clearSelection={() => {}}
+                    />
+                  </span>
+                </Suspense>
+              ) : null;
+            })
+        : null}
+      {detailActions?.commands
+        ? (block.commands ?? []).map((command) => (
+            <CommandButton
+              key={command.id}
+              command={command}
+              commands={commands}
+            />
+          ))
+        : null}
+    </>
   );
 }

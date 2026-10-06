@@ -9,7 +9,8 @@ import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { overrideStartDispatch } from "~/integrations/tanstack-query/start-transport";
 import { createBrowserTestHarness } from "~/lib/test/browser-harness";
 
-import { EntityReportSlot } from "./report-slot";
+import { DetailActionProvider } from "./detail-action-bar";
+import { EntityReportSlot, ReportDetailActions } from "./report-slot";
 
 const RUN_ID = runShortcode.parse("RUN-4K7M");
 
@@ -107,6 +108,62 @@ describe("EntityReportSlot records", () => {
     expect(
       calls.every((call) => call.operation.startsWith("entityReport.get")),
     ).toBe(true);
+  });
+
+  // Header promotion must not duplicate a diagnostic link or move operation-row commands.
+  it("moves workflow controls to the detail action bar and removes them on unmount", async () => {
+    answer = () => ({
+      blocks: [
+        {
+          kind: "records",
+          empty: "",
+          rows: [
+            {
+              ...row("workflow", "Attempt 2"),
+              externalLink: {
+                label: "Open in Cloudflare",
+                url: "https://example.test/workflows/fixture",
+              },
+            },
+            row("operation", "Review operation"),
+          ],
+        },
+      ],
+    });
+    const view = render(
+      <>
+        <nav aria-label="Entity actions">
+          <ReportDetailActions
+            slot="run.live-progress"
+            id={RUN_ID}
+            status="completed"
+          />
+        </nav>
+        <DetailActionProvider>
+          <section aria-label="Progress">
+            <EntityReportSlot slot="run.live-progress" id={RUN_ID} />
+          </section>
+        </DetailActionProvider>
+      </>,
+      { wrapper: harness.wrapper },
+    );
+    const link = await screen.findByRole("link", {
+      name: "Open in Cloudflare",
+    });
+    expect(
+      screen.getByRole("navigation", { name: "Entity actions" }),
+    ).toContainElement(link);
+    expect(
+      screen.getByRole("region", { name: "Progress" }),
+    ).not.toContainElement(link);
+    expect(link.querySelector("svg")).not.toBeNull();
+    expect(
+      screen.getAllByRole("link", { name: "Open in Cloudflare" }),
+    ).toHaveLength(1);
+    view.unmount();
+    expect(
+      screen.queryByRole("link", { name: "Open in Cloudflare" }),
+    ).toBeNull();
   });
 
   it("links shortcodes in server text", async () => {

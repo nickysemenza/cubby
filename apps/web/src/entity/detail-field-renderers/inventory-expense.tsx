@@ -3,9 +3,11 @@ import {
   inventoryShortcode,
   productShortcode,
 } from "@cubby/schemas/identifiers";
+import { ReceiptIcon } from "@phosphor-icons/react/dist/csr/Receipt";
 import { useQuery } from "@tanstack/react-query";
 import { useState } from "react";
 
+import { DetailAction } from "~/entity/entity-detail/detail-action-bar";
 import type { DetailRecordOf } from "~/entity/entity-detail/detail-record";
 import { entityListFor } from "~/entity/entity-list";
 import { expense } from "~/integrations/tanstack-query/generated/catalog.gen";
@@ -21,7 +23,6 @@ export function InventoryExpenseActions({
 }: {
   record: DetailRecordOf<"inventory">;
 }) {
-  const [open, setOpen] = useState(false);
   const [selected, setSelected] = useState("");
   const inventoryEntryId = inventoryShortcode.parse(record.id);
   const productId = productShortcode.parse(record.product.id);
@@ -50,22 +51,9 @@ export function InventoryExpenseActions({
           Suggested beneficiary: {owner.name}. This does not assign a funder.
         </p>
       ) : null}
-      <Button
-        variant="outline"
-        size="sm"
-        disabled={!context.data}
-        onClick={() => setOpen(true)}
-      >
-        Record expense
-      </Button>
-      <EntityEditDialog
-        open={open}
-        onOpenChange={setOpen}
-        request={expenseCaptureRequest({
-          productId,
-          beneficiaries: context.data?.suggestedBeneficiaries ?? [],
-        })}
-      />
+      <DetailAction>
+        <InventoryRecordExpenseAction record={record} />
+      </DetailAction>
       {owner && expenses.data?.items.length ? (
         <div className="flex flex-wrap items-center gap-2">
           <select
@@ -107,5 +95,38 @@ export function InventoryExpenseActions({
         />
       ) : null}
     </div>
+  );
+}
+
+export function InventoryRecordExpenseAction({
+  record,
+}: {
+  record: DetailRecordOf<"inventory">;
+}) {
+  const [open, setOpen] = useState(false);
+  const inventoryEntryId = inventoryShortcode.parse(record.id);
+  const productId = productShortcode.parse(record.product.id);
+  const context = useQuery(
+    expense.inventoryOwnershipContext.queryOptions({ inventoryEntryId }),
+  );
+  return (
+    <>
+      <Button
+        variant="outline"
+        disabled={!context.data}
+        onClick={() => setOpen(true)}
+      >
+        <ReceiptIcon />
+        Record expense
+      </Button>
+      <EntityEditDialog
+        open={open}
+        onOpenChange={setOpen}
+        request={expenseCaptureRequest({
+          productId,
+          beneficiaries: context.data?.suggestedBeneficiaries ?? [],
+        })}
+      />
+    </>
   );
 }

@@ -1,4 +1,5 @@
-import { savedSentryEventId, sentryEventUrl } from "~/lib/error-diagnostics";
+import { DetailAction } from "~/entity/entity-detail/detail-action-bar";
+import { RunSentryAction } from "~/entity/entity-detail/report-slot";
 import { NoneValue } from "~/ui/primitives/none-value";
 
 import type { EntityDetailFieldRenderers } from "./index";
@@ -8,7 +9,6 @@ export const runDetailFields = {
     const error = run.dispatchError;
     if (!error) return { value: <NoneValue /> };
     const [summary] = error.split("\n", 1);
-    const sentryEventId = savedSentryEventId(error);
     return {
       value: (
         <div className="w-full min-w-0 text-sm">
@@ -18,16 +18,9 @@ export const runDetailFields = {
           >
             {summary}
           </p>
-          {sentryEventId ? (
-            <a
-              className="mt-1 inline-block text-primary hover:underline"
-              href={sentryEventUrl(sentryEventId)}
-              target="_blank"
-              rel="noreferrer"
-            >
-              View in Sentry
-            </a>
-          ) : null}
+          <DetailAction>
+            <RunSentryAction error={error} />
+          </DetailAction>
         </div>
       ),
     };

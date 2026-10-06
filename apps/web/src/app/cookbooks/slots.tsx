@@ -6,6 +6,7 @@ import { useQueryClient } from "@tanstack/react-query";
 import { Link, useNavigate } from "@tanstack/react-router";
 import { useState } from "react";
 
+import { DetailAction } from "~/entity/entity-detail/detail-action-bar";
 import type { DetailSlotComponent } from "~/entity/entity-detail/detail-slots";
 import { EntityReportSlot } from "~/entity/entity-detail/report-slot";
 import { IngredientUsagePanel } from "~/features/ingredients/ingredient-usage-panel";
@@ -80,7 +81,7 @@ export const CookbookContents: DetailSlotComponent<"cookbook"> = ({
  * Re-derive recipes from the stored extraction (no AI) and selectively
  * import the ones the source holds that the book does not yet.
  */
-export const CookbookImportProgress: DetailSlotComponent<"cookbook"> = ({
+export const CookbookActions: DetailSlotComponent<"cookbook"> = ({
   record: cookbook,
 }) => {
   const navigate = useNavigate();
@@ -112,44 +113,56 @@ export const CookbookImportProgress: DetailSlotComponent<"cookbook"> = ({
     );
   return (
     <Stack gap="sm">
-      {cookbook.needsReextract && <ReextractNotice />}
-      <Row gap="sm" wrap>
-        {notImported > 0 && (
+      <DetailAction>
+        <Row gap="sm" wrap>
+          {notImported > 0 && (
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() =>
+                navigate({
+                  to: "/recipes/import",
+                  search: { from: cookbook.id },
+                })
+              }
+              title="Selectively import recipes from this cookbook's source (no AI)"
+            >
+              <PlusIcon />
+              Add from source ({notImported})
+            </Button>
+          )}
           <Button
             variant="outline"
             size="sm"
-            onClick={() =>
-              navigate({
-                to: "/recipes/import",
-                search: { from: cookbook.id },
-              })
-            }
-            title="Selectively import recipes from this cookbook's source (no AI)"
+            onClick={() => void runReprocess(cookbook.id)}
+            disabled={reprocess.running}
+            title="Re-derive recipes from the stored extraction (no AI)"
           >
-            <PlusIcon />
-            Add from source ({notImported})
+            <ArrowClockwiseIcon
+              className={reprocess.running ? "animate-spin" : ""}
+            />
+            Reprocess
           </Button>
-        )}
-        <Button
-          variant="outline"
-          size="sm"
-          onClick={() => void runReprocess(cookbook.id)}
-          disabled={reprocess.running}
-          title="Re-derive recipes from the stored extraction (no AI)"
-        >
-          <ArrowClockwiseIcon
-            className={reprocess.running ? "animate-spin" : ""}
-          />
-          Reprocess
-        </Button>
-      </Row>
+        </Row>
+      </DetailAction>
       {reprocess.running && (
         <BulkProgressBar verb="Reprocessing" progress={reprocess.progress} />
       )}
-      <Description size="xs">
-        {cookbook.recipeCount} of {cookbook.sourceRecipeCount} source recipes
-        imported.
-      </Description>
     </Stack>
   );
 };
+
+export const CookbookImportProgress: DetailSlotComponent<"cookbook"> = ({
+  record: cookbook,
+}) => (
+  <Stack gap="sm">
+    {cookbook.needsReextract && <ReextractNotice />}
+    <DetailAction>
+      <CookbookActions record={cookbook} />
+    </DetailAction>
+    <Description size="xs">
+      {cookbook.recipeCount} of {cookbook.sourceRecipeCount} source recipes
+      imported.
+    </Description>
+  </Stack>
+);

@@ -5,8 +5,10 @@ import { useQuery } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
 
 import type { RunSummary } from "~/contracts/run.contract";
+import { DetailAction } from "~/entity/entity-detail/detail-action-bar";
 import type { DetailSlotComponent } from "~/entity/entity-detail/detail-slots";
 import { entityListFor } from "~/entity/entity-list";
+import { ProductRelatednessActions } from "~/entity/relatedness/relatedness-rail";
 import { run as runOperations } from "~/integrations/tanstack-query/generated/catalog.gen";
 import { formatInstant } from "~/lib/date-format";
 import { purchaseLabel } from "~/lib/purchase-label";
@@ -122,7 +124,7 @@ export const ProductOwnershipEvidence: DetailSlotComponent<"product"> = ({
   );
 };
 
-/** Targeted enrichment stays in its dedicated section even when a run made no writes. */
+/** Enrichment history remains visible even when a run made no writes. */
 export const ProductRuns: DetailSlotComponent<"product"> = ({
   record: product,
 }) => {
@@ -132,11 +134,9 @@ export const ProductRuns: DetailSlotComponent<"product"> = ({
   });
   return (
     <Stack gap="sm">
-      <TargetedImportLaunchButton
-        targetId={product.id}
-        targetLabel={product.name}
-        purpose="product_enrichment"
-      />
+      <DetailAction>
+        <ProductEnrichmentAction record={product} />
+      </DetailAction>
       {runs.isPending ? (
         <StatusText>Loading enrichment history…</StatusText>
       ) : null}
@@ -187,3 +187,24 @@ function ProductRunSummary({ run }: { run: RunSummary }) {
     </div>
   );
 }
+
+export const ProductEnrichmentAction: DetailSlotComponent<"product"> = ({
+  record: product,
+}) => (
+  <TargetedImportLaunchButton
+    targetId={product.id}
+    targetLabel={product.name}
+    purpose="product_enrichment"
+  />
+);
+
+export const ProductDetailActions: DetailSlotComponent<"product"> = ({
+  record,
+}) => (
+  <>
+    <ProductEnrichmentAction record={record} />
+    <ProductRelatednessActions
+      productId={parseShortcodeFor("product", record.id)}
+    />
+  </>
+);

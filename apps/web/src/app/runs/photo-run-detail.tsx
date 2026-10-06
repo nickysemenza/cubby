@@ -3,6 +3,7 @@ import { useMutation } from "@tanstack/react-query";
 import { useEffect, useRef, type ReactNode } from "react";
 
 import type { RunDetail } from "~/contracts/run.contract";
+import { DetailAction } from "~/entity/entity-detail/detail-action-bar";
 import { photoImport } from "~/integrations/tanstack-query/generated/catalog.gen";
 import { Stack } from "~/ui/layout";
 import { Button } from "~/ui/primitives/button";
@@ -132,6 +133,48 @@ function groupingHint(pending: number, analyzing: boolean) {
  * agent transcript. */
 export function PhotoImportRunView({ run }: { run: RunDetail }) {
   const review = usePhotoRunReview(run.publicId, run.status, runHasAgent(run));
+  const pending = run.targets.filter(
+    (target) => target.targetType === "image" && target.state === "pending",
+  ).length;
+  const hasProposals = Boolean(review.data?.review.proposals.length);
+  const analyzing = descriptionsInFlight(review.data);
+  return (
+    <Stack gap="lg">
+      <PhotoRunProgress run={run} review={review.data}>
+        {run.status === "running" && !run.dispatch?.eventId && !hasProposals ? (
+          <div className="flex flex-wrap items-center gap-3 border-t border-border pt-3">
+            <DetailAction>
+              <PhotoRunGroupingAction run={run} />
+            </DetailAction>
+            <p className="text-sm text-muted-foreground">
+              {groupingHint(pending, analyzing)}
+            </p>
+          </div>
+        ) : null}
+        {run.status === "running" && run.dispatch?.eventId ? (
+          <StatusText tone="muted">
+            {run.latestProgress?.awaitingApproval ? (
+              "Review each proposed item below. Products and Inventory are created when you approve a group."
+            ) : (
+              <ShortcodeProse>
+                {run.latestProgress?.detail ??
+                  "The agent is reading the uploaded photos and preparing item groups."}
+              </ShortcodeProse>
+            )}
+          </StatusText>
+        ) : null}
+      </PhotoRunProgress>
+      <PhotoGroupReview
+        runId={run.publicId}
+        runStatus={run.status}
+        hasAgent={runHasAgent(run)}
+      />
+    </Stack>
+  );
+}
+
+export function PhotoRunGroupingAction({ run }: { run: RunDetail }) {
+  const review = usePhotoRunReview(run.publicId, run.status, runHasAgent(run));
   const autoStartAttempted = useRef(false);
   const start = useMutation(photoImport.startGrouping.mutationOptions());
   const pending = run.targets.filter(
@@ -164,52 +207,28 @@ export function PhotoImportRunView({ run }: { run: RunDetail }) {
     hasProposals,
     start,
   ]);
+  if (run.status !== "running" || run.dispatch?.eventId || hasProposals)
+    return null;
   return (
-    <Stack gap="lg">
-      <PhotoRunProgress run={run} review={review.data}>
-        {run.status === "running" && !run.dispatch?.eventId && !hasProposals ? (
-          <div className="flex flex-wrap items-center gap-3 border-t border-border pt-3">
-            <Button
-              type="button"
-              disabled={!pending || analyzing || start.isPending}
-              onClick={() => start.mutate({ runId: run.publicId })}
-              className="min-h-11"
-            >
-              {start.isPending ? "Starting agent…" : "Start grouping"}
-            </Button>
-            <p className="text-sm text-muted-foreground">
-              {groupingHint(pending, analyzing)}
-            </p>
-            {start.isError ? (
-              <StatusText tone="destructive">
-                {start.error.message}{" "}
-                {start.error.message.includes("Connect the Cubby agent") ? (
-                  <a href="/api/import/agent/oauth/start" className="underline">
-                    Connect agent
-                  </a>
-                ) : null}
-              </StatusText>
-            ) : null}
-          </div>
-        ) : null}
-        {run.status === "running" && run.dispatch?.eventId ? (
-          <StatusText tone="muted">
-            {run.latestProgress?.awaitingApproval ? (
-              "Review each proposed item below. Products and Inventory are created when you approve a group."
-            ) : (
-              <ShortcodeProse>
-                {run.latestProgress?.detail ??
-                  "The agent is reading the uploaded photos and preparing item groups."}
-              </ShortcodeProse>
-            )}
-          </StatusText>
-        ) : null}
-      </PhotoRunProgress>
-      <PhotoGroupReview
-        runId={run.publicId}
-        runStatus={run.status}
-        hasAgent={runHasAgent(run)}
-      />
-    </Stack>
+    <>
+      <Button
+        type="button"
+        disabled={!pending || analyzing || start.isPending}
+        onClick={() => start.mutate({ runId: run.publicId })}
+        className="min-h-11"
+      >
+        {start.isPending ? "Starting agent…" : "Start grouping"}
+      </Button>
+      {start.isError ? (
+        <StatusText tone="destructive">
+          {start.error.message}{" "}
+          {start.error.message.includes("Connect the Cubby agent") ? (
+            <a href="/api/import/agent/oauth/start" className="underline">
+              Connect agent
+            </a>
+          ) : null}
+        </StatusText>
+      ) : null}
+    </>
   );
 }

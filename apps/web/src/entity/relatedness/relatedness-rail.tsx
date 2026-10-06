@@ -1,16 +1,18 @@
 import type { EntityRecommendationGroup } from "@cubby/schemas/entity-recommendations";
 import type { ProductShortcode } from "@cubby/schemas/identifiers";
 import { SparkleIcon } from "@phosphor-icons/react/dist/csr/Sparkle";
-import { useMutation, useQuery } from "@tanstack/react-query";
+import { useMutation, useMutationState, useQuery } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { z } from "zod";
 
+import { DetailAction } from "~/entity/entity-detail/detail-action-bar";
 import {
   recommendations,
   search,
 } from "~/integrations/tanstack-query/generated/catalog.gen";
 import { Row, Stack } from "~/ui/layout";
-import { Button } from "~/ui/primitives/button";
+import { Button, buttonVariants } from "~/ui/primitives/button";
 
 import {
   type EntityDisplayImageMap,
@@ -62,16 +64,18 @@ function RelatednessIndexPrompt({
           ? "Similarity index is stale."
           : "Similarity index has not been computed."}
       </span>
-      <Button
-        type="button"
-        size="sm"
-        variant="outline"
-        disabled={refreshing || indexing}
-        onClick={onRefresh}
-      >
-        <SparkleIcon className="size-3" />
-        {indexing ? "Indexing…" : "Index now"}
-      </Button>
+      <DetailAction>
+        <Button
+          type="button"
+          size="sm"
+          variant="outline"
+          disabled={refreshing || indexing}
+          onClick={onRefresh}
+        >
+          <SparkleIcon className="size-3" />
+          {indexing ? "Indexing…" : "Index now"}
+        </Button>
+      </DetailAction>
     </Row>
   );
 }
@@ -100,14 +104,14 @@ function ReadyRelatednessLinks({ productId }: { productId: ProductShortcode }) {
       <Link
         to="/recommendations/workbench"
         search={{ kind: "product-related", source: productId }}
-        className="text-xs underline underline-offset-2"
+        className={buttonVariants({ variant: "outline" })}
       >
         Review recommendations
       </Link>
       <Link
         to="/recommendations/workbench"
         search={{ kind: "tag-propagation", source: productId }}
-        className="text-xs underline underline-offset-2"
+        className={buttonVariants({ variant: "outline" })}
       >
         Review tag proposals
       </Link>
@@ -134,38 +138,8 @@ export function RelatednessRail({
   useEffect(() => {
     setVisibleCount(12);
   }, [product.id]);
-  const poll = useEmbeddingReadinessPoll(product.id);
-  const { refetchInterval, notifyStatus } = poll;
-
-  const relatednessQuery = useQuery({
-    ...operations.recommendations.queryOptions({
-      entityKind: "product",
-      entityId: product.id,
-    }),
-    refetchInterval,
-  });
-  const refresh = useMutation(
-    operations.requestEmbeddingRefresh.mutationOptions({
-      onSuccess: () => poll.start(),
-    }),
-  );
-
-  const group = relatednessQuery.data?.groups.find(
-    (candidate): candidate is ProductRecommendationGroup =>
-      candidate.kind === "product-related",
-  );
-  const status = group?.status;
-  // Terminal readiness updates the visible "Indexing…" state the instant this
-  // render sees it, rather than waiting a render behind for the effect below
-  // to flip the poll's own phase — that effect governs the interval/timeout,
-  // not the display.
-  const indexing =
-    poll.isPolling && status !== "ready" && status !== "unavailable";
-
-  useEffect(() => {
-    notifyStatus(status);
-  }, [status, notifyStatus]);
-
+  const { poll, relatednessQuery, refresh, group, status, indexing } =
+    useRelatednessActions(product.id, operations);
   const items = group?.proposals ?? EMPTY_RELATED_PRODUCTS;
   const visibleItems = useMemo(
     () => items.slice(0, visibleCount),
@@ -188,9 +162,11 @@ export function RelatednessRail({
       />
 
       {poll.timedOut && (
-        <StillIndexingNotice
-          onCheckAgain={() => poll.checkAgain(relatednessQuery.refetch)}
-        />
+        <DetailAction>
+          <StillIndexingNotice
+            onCheckAgain={() => poll.checkAgain(relatednessQuery.refetch)}
+          />
+        </DetailAction>
       )}
 
       {status === "unavailable" && (
@@ -229,7 +205,11 @@ export function RelatednessRail({
         </p>
       )}
 
-      {status === "ready" && <ReadyRelatednessLinks productId={product.id} />}
+      {status === "ready" && (
+        <DetailAction>
+          <ReadyRelatednessLinks productId={product.id} />
+        </DetailAction>
+      )}
     </Stack>
   );
 }
@@ -261,5 +241,112 @@ function RelatedProductRowWithCanonicalImage({
         </span>
       }
     />
+  );
+}
+
+function useRelatednessActions(
+  productId: ProductShortcode,
+  operations: RelatednessRailOperations,
+) {
+  const poll = useEmbeddingReadinessPoll(productId);
+  const { refetchInterval, notifyStatus } = poll;
+
+  const relatednessQuery = useQuery({
+    ...operations.recommendations.queryOptions({
+      entityKind: "product",
+      entityId: productId,
+    }),
+    refetchInterval,
+  });
+  const refreshOptions = operations.requestEmbeddingRefresh.mutationOptions();
+  const outcomes = useMutationState({
+    filters: {
+      mutationKey: refreshOptions.mutationKey,
+      predicate: (mutation) => {
+        const input = z
+          .object({ entityId: z.string() })
+          .safeParse(mutation.state.variables);
+        return input.success && input.data.entityId === productId;
+      },
+    },
+    select: (mutation) => ({
+      status: mutation.state.status,
+      submittedAt: mutation.state.submittedAt,
+    }),
+  });
+  const latest = outcomes.reduce<(typeof outcomes)[number] | undefined>(
+    (last, current) =>
+      !last || current.submittedAt >= last.submittedAt ? current : last,
+    undefined,
+  );
+  const startPoll = poll.start;
+  const observedMutation = useRef(0);
+  const refresh = useMutation(
+    operations.requestEmbeddingRefresh.mutationOptions({
+      onSuccess: () => poll.start(),
+    }),
+  );
+
+  const group = relatednessQuery.data?.groups.find(
+    (candidate): candidate is ProductRecommendationGroup =>
+      candidate.kind === "product-related",
+  );
+  const status = group?.status;
+  useEffect(() => {
+    if (
+      latest?.status !== "success" ||
+      latest.submittedAt <= observedMutation.current
+    )
+      return;
+    observedMutation.current = latest.submittedAt;
+    if (status !== "ready" && status !== "unavailable") startPoll();
+  }, [latest?.status, latest?.submittedAt, status, startPoll]);
+  // Terminal readiness updates the visible "Indexing…" state the instant this
+  // render sees it, rather than waiting a render behind for the effect below
+  // to flip the poll's own phase — that effect governs the interval/timeout,
+  // not the display.
+  const indexing =
+    poll.isPolling && status !== "ready" && status !== "unavailable";
+
+  useEffect(() => {
+    notifyStatus(status);
+  }, [status, notifyStatus, poll.isPolling]);
+
+  return { poll, relatednessQuery, refresh, group, status, indexing };
+}
+export function ProductRelatednessActions({
+  productId,
+}: {
+  productId: ProductShortcode;
+}) {
+  const { poll, relatednessQuery, refresh, status, indexing } =
+    useRelatednessActions(productId, productionOperations);
+  return (
+    <>
+      {status === "uncomputed" || status === "stale" ? (
+        <Button
+          variant="outline"
+          disabled={refresh.isPending || indexing}
+          onClick={() =>
+            refresh.mutate({ entityKind: "product", entityId: productId })
+          }
+        >
+          <SparkleIcon />
+          {indexing ? "Indexing…" : "Index now"}
+        </Button>
+      ) : null}
+      {poll.timedOut ? (
+        <Button
+          variant="outline"
+          onClick={() => poll.checkAgain(relatednessQuery.refetch)}
+          title="Still indexing — this can take a minute."
+        >
+          Check index again
+        </Button>
+      ) : null}
+      {status === "ready" ? (
+        <ReadyRelatednessLinks productId={productId} />
+      ) : null}
+    </>
   );
 }
