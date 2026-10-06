@@ -3,6 +3,7 @@ import { getDomain } from "tldts";
 
 import type { Database } from "~/server/db";
 import { vendor } from "~/server/db/schema";
+import { isUniqueViolation } from "~/server/errors/db-errors";
 import { notDeleted, withTransaction } from "~/server/repo/database-helpers";
 import { insertWithShortcode } from "~/server/repo/shortcode-utils";
 
@@ -62,7 +63,7 @@ const GENERIC_DISPLAY_NAME =
 const ORDER_SUBJECT = /\b(?:order|receipt|purchase|invoice)\b/iu;
 /** Account, list, and promotional mail that mentions orders without being one. */
 const NOT_ORDER_SUBJECT =
-  /%\s*off|\b(?:sale|deals?|newsletter|subscri\w*|verify|password|sign[- ]?in|log[- ]?in)\b|confirm your (?:email|account)/iu;
+  /%\s*off|\b(?:sale|deals?|newsletter|verify|password|sign[- ]?in|log[- ]?in|subscribing|subscribed|unsubscribe[ds]?)\b|confirm your (?:email|account|subscription)|(?:manage|update) your subscription/iu;
 
 /** Lowercase letters and digits only, to compare a name with a domain label. */
 const squash = (value: string) =>
@@ -116,6 +117,21 @@ export function senderVendorCandidate(
  * reconcile, not to merge.
  */
 export async function createVendorFromOrderMail(
+  db: Database,
+  candidate: SenderVendorCandidate,
+  sender: string,
+) {
+  try {
+    return await createUnderDomainLock(db, candidate, sender);
+  } catch (error) {
+    // Another domain's first order took this name concurrently: the same
+    // refusal as a name already held, never a failed mail batch.
+    if (isUniqueViolation(error, "Vendor_name_key")) return null;
+    throw error;
+  }
+}
+
+async function createUnderDomainLock(
   db: Database,
   candidate: SenderVendorCandidate,
   sender: string,

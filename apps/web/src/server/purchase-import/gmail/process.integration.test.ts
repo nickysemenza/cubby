@@ -517,6 +517,34 @@ describe("Gmail order mail processing", () => {
       ]);
     });
 
+    it("treats a subscription order as an order", async () => {
+      const seed = await seedForgeWear();
+      classifications.set("subscription-order", {
+        events: [placed("SO-1", 12, "2026-09-20T12:00:00Z")],
+      });
+      await receiveUnknown(
+        seed,
+        ["subscription-order"],
+        "Seed Co <orders@seedco.example>",
+        "Your subscription order is confirmed",
+      );
+      expect(await newVendors()).toHaveLength(1);
+    });
+
+    it("refuses, without failing the batch, a name another domain takes at the same moment", async () => {
+      const outcomes = await Promise.all(
+        ["seedco.example", "seedco.test"].map((domain) =>
+          createVendorFromOrderMail(
+            ctx.db,
+            { name: "Seedco", domain },
+            `orders@${domain}`,
+          ),
+        ),
+      );
+      expect(outcomes.filter(Boolean)).toHaveLength(1);
+      expect(outcomes.filter((outcome) => outcome === null)).toHaveLength(1);
+    });
+
     it("creates one Vendor when two passes bootstrap the same domain at once", async () => {
       const created = await Promise.all([
         createVendorFromOrderMail(
