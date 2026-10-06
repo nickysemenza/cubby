@@ -537,7 +537,9 @@ describe("saved confirmation imports", () => {
                 orderedAt: "2026-09-01T12:00:00Z",
                 merchant: "Example Noodle Bar",
                 currency: "USD",
-                printedGrandTotal: 5,
+                printedGrandTotal: 4,
+                // A discount is never a reversal of a stocked item, so it
+                // files no reversal finding either.
                 lines: [
                   {
                     title: "Spicy basil noodles, large",
@@ -546,12 +548,17 @@ describe("saved confirmation imports", () => {
                     sku: "MENU-7",
                     lineKind: "principal" as const,
                   },
+                  {
+                    title: "Welcome discount",
+                    amount: -1,
+                    lineKind: "discount" as const,
+                  },
                 ],
                 payments: [],
                 allShipmentsDelivered: true,
               },
             },
-            lineIds: ["noodles"],
+            lineIds: ["noodles", "discount"],
             primaryDocumentImageId: null,
             screenshotImageId: null,
           },

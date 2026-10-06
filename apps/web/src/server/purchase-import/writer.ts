@@ -1231,7 +1231,10 @@ export async function importVendorOrder(
               ),
             );
           }
+          // Only a principal line reverses a stocked item; a negative
+          // discount, tax, or shipping line is an ordinary adjustment.
           if (
+            identity.lineKind === "principal" &&
             line.amount < 0 &&
             identity.reversalKind !== "return" &&
             identity.reversalKind !== "concession"
