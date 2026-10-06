@@ -171,10 +171,10 @@ jobs:
       - run: cargo clippy --workspace --all-targets -- -D warnings
       - run: cargo test --workspace
 
-  # Shares the Worker bundle with workerd PostgreSQL and the optional purchase
-  # lane. Desktop shards build during their own setup to avoid this dependency.
+  # Builds and tests the workerd bundle, then shares it with the optional
+  # purchase lane. Desktop shards build independently after Scope.
   build-worker:
-    name: Build Workers
+    name: Build Workers and runtime tests
     needs: scope
     if: needs.scope.outputs.web == 'true'
     runs-on: ubuntu-latest
@@ -205,10 +205,17 @@ jobs:
             packages/wasm
           if-no-files-found: error
           retention-days: 1
+      # The workerd project consumes this job's fresh bundle, avoiding another
+      # checkout, dependency setup and artifact download.
+      - uses: ./.github/actions/start-test-services
+      - name: Run workerd PostgreSQL integration tests
+        run: |
+          git restore -- packages/wasm/package.json
+          pnpm --dir apps/web exec vitest run --project integration-workerd
 
   # One four-worker job avoids repeating database and dependency setup.
   # These files never start workerd, so they start after Scope, not Build
-  # Workers; the files that do run in test-postgres-workerd.
+  # Workers; the files that do run in build-worker.
   test-postgres:
     name: PostgreSQL integration tests
     needs: scope
@@ -224,31 +231,6 @@ jobs:
           workspace-filter: "@cubby/web..."
       - name: Run PostgreSQL integration tests
         run: pnpm --dir apps/web exec vitest run --project integration --maxWorkers=4
-
-  # The PostgreSQL files that start the built Worker in workerd
-  # (`workerdIntegrationTests` in apps/web/vitest.config.ts).
-  test-postgres-workerd:
-    name: PostgreSQL workerd integration tests
-    needs: [scope, build-worker]
-    if: needs.scope.outputs.web == 'true'
-    runs-on: ubuntu-latest
-    timeout-minutes: 20
-    steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
-      - uses: ./.github/actions/start-test-services
-      - uses: ./.github/actions/setup-node-with-deps
-        with:
-          wasm: "false"
-          workspace-filter: "@cubby/web..."
-      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
-        with:
-          name: worker-build
-          path: .
-      - name: Run workerd PostgreSQL integration tests
-        run: |
-          # The downloaded WASM package may carry regenerated metadata.
-          git restore -- packages/wasm/package.json
-          pnpm --dir apps/web exec vitest run --project integration-workerd
 
   # Committed migrations are the only schema path: prove they carry every
   # schema.ts change and build the same catalog as schema.ts itself.
@@ -404,16 +386,7 @@ jobs:
   # required check verifies their combined result whenever they run.
   web-checks:
     name: Web checks
-    needs:
-      [
-        scope,
-        build-worker,
-        test-aux,
-        test-postgres,
-        test-postgres-workerd,
-        db-check,
-        test-e2e,
-      ]
+    needs: [scope, build-worker, test-aux, test-postgres, db-check, test-e2e]
     if: always() && (github.event_name == 'pull_request' || github.event_name == 'push' || (!inputs.simulator_e2e && inputs.tester_army == 'none'))
     runs-on: ubuntu-slim
     timeout-minutes: 5
@@ -425,7 +398,6 @@ jobs:
           BUILD_RESULT: ${{ needs.build-worker.result }}
           WEB_RESULT: ${{ needs.test-aux.result }}
           POSTGRES_RESULT: ${{ needs.test-postgres.result }}
-          POSTGRES_WORKERD_RESULT: ${{ needs.test-postgres-workerd.result }}
           DB_CHECK_RESULT: ${{ needs.db-check.result }}
           E2E_RESULT: ${{ needs.test-e2e.result }}
         run: |
@@ -434,7 +406,6 @@ jobs:
             test "$BUILD_RESULT" = success || exit 1
             test "$WEB_RESULT" = success || exit 1
             test "$POSTGRES_RESULT" = success || exit 1
-            test "$POSTGRES_WORKERD_RESULT" = success || exit 1
             test "$DB_CHECK_RESULT" = success || exit 1
             test "$E2E_RESULT" = success || exit 1
           fi

@@ -23,7 +23,7 @@ runs:
             # The producer certifies the artifact; unrelated test lanes need not
             # finish before an optional native run can verify and consume it.
             producer=$(gh api "repos/$GITHUB_REPOSITORY/actions/runs/$run_id/jobs?per_page=100" \
-              --jq '.jobs[] | select(.name == "Build Workers" and .status == "completed" and .conclusion == "success") | .id')
+              --jq '.jobs[] | select(.name == "Build Workers and runtime tests" and .status == "completed" and .conclusion == "success") | .id')
             if [[ -z "$producer" ]]; then
               continue
             fi

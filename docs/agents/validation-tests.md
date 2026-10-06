@@ -93,8 +93,9 @@ without repeating unrelated HTTP create requests.
 
 A PostgreSQL test file that starts workerd belongs in
 `workerdIntegrationTests` (`apps/web/vitest.config.ts`), which forms the
-`integration-workerd` project; CI runs only that project against the
-`worker-build` artifact, and an unlisted consumer fails in the ordinary integration job.
+`integration-workerd` project; CI runs it in the Worker build job against
+that job's fresh bundle. An unlisted consumer fails in the ordinary integration
+job.
 The socket-lifecycle regression lives in that workerd integration project: it
 exercises HTTP reads and freshness writes against the real Worker and observes
 PostgreSQL socket expiry, without a browser. Preserve its twelve-second quiet
