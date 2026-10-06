@@ -50,7 +50,11 @@ after deployment starts, so post-merge CI does not replace this gate.
 
 `deploy.yaml` deploys every `main` push and never applies schema. A PR that adds
 a migration under `apps/web/drizzle/` is opened without auto-merge and merges
-only after that migration has run in production and been read back.
+only after that migration has run in production and been read back. A contract
+migration (`DROP COLUMN`, or a constraint the deployed code would violate) is
+the exception: ship the code that stops reading or writing the old shape first,
+then apply the migration right after that deploy and read it back
+([domain rules](domain-rules.md)).
 
 ## Explicit local diagnostics
 

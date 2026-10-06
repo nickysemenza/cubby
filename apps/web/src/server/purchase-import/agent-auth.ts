@@ -80,8 +80,6 @@ export async function ensurePurchaseAgentOAuthClient(database: Database) {
         tokenEndpointAuthMethod: "none",
         grantTypes: ["authorization_code", "refresh_token"],
         responseTypes: ["code"],
-        public: true,
-        type: "web",
         requirePKCE: true,
         referenceId: PURCHASE_AGENT_OAUTH_SOFTWARE_ID,
       })
@@ -95,7 +93,6 @@ export async function ensurePurchaseAgentOAuthClient(database: Database) {
           tokenEndpointAuthMethod: "none",
           grantTypes: ["authorization_code", "refresh_token"],
           responseTypes: ["code"],
-          public: true,
           requirePKCE: true,
           updatedAt: now,
         },
