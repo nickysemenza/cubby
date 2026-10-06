@@ -231,10 +231,6 @@ Runs list and `imports_read.run_status` read one shared projection
   outdated app (HTTP 426 from the client gate) as "update required" rather
   than a generic upload failure.
 
-- 🟢 **Enrichment completion notification.** Summarize per-Product outcomes
-  (enriched, skipped and why) in the Mac notification instead of the
-  purchase-import "orders changed" copy.
-
 - 🟢 **Control runs over MCP.** `imports_read.run_status` reads a Run; add
   stop, restart, and approve so an MCP client can follow work end to end.
 
