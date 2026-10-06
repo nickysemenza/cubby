@@ -141,6 +141,13 @@
       "when": 1791253178990,
       "tag": "0019_compat_backfill_fallbacks",
       "breakpoints": true
+    },
+    {
+      "idx": 20,
+      "version": "7",
+      "when": 1791298270910,
+      "tag": "0020_parallel_ezekiel",
+      "breakpoints": true
     }
   ]
 }

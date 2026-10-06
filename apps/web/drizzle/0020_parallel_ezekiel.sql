@@ -1,0 +1,2 @@
+ALTER TABLE "SpendingCategory" DROP CONSTRAINT "SpendingCategory_productExpectation_check";--> statement-breakpoint
+ALTER TABLE "SpendingCategory" ADD CONSTRAINT "SpendingCategory_productExpectation_check" CHECK ("SpendingCategory"."productExpectation" IN ('unknown', 'required', 'not_expected', 'not_allowed'));

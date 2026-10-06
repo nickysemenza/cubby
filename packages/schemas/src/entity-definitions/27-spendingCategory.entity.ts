@@ -5,6 +5,17 @@ import { spendingCategoryShortcode as code } from "../identifier-fields";
 import { defineEntity } from "./definition";
 
 const expectation = z.enum(["unknown", "required", "not_expected"]);
+/**
+ * `not_allowed` is stronger than `not_expected`: an Expense in the category
+ * neither expects nor may link a Product (a restaurant meal). `not_expected`
+ * only stops the missing-Product gap (groceries still link Products).
+ */
+const productExpectation = z.enum([
+  "unknown",
+  "required",
+  "not_expected",
+  "not_allowed",
+]);
 export default defineEntity({
   key: "spendingCategory",
   names: { singular: "Spending Category", plural: "Spending Categories" },
@@ -141,13 +152,14 @@ export default defineEntity({
             { value: "unknown", label: "Unclassified" },
             { value: "required", label: "Expected" },
             { value: "not_expected", label: "Not expected" },
+            { value: "not_allowed", label: "Not allowed" },
           ],
         },
         display: { list: true, detail: true },
         validation: {
-          read: expectation,
-          create: expectation.default("unknown"),
-          update: expectation.optional(),
+          read: productExpectation,
+          create: productExpectation.default("unknown"),
+          update: productExpectation.optional(),
         },
       },
       {

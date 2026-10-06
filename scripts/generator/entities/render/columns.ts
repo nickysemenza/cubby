@@ -68,7 +68,7 @@ const enumColumnExpression = (
     "vendor.evidenceExpectation": `text(${column},{enum:["unknown", "required", "not_expected"]})`,
     "purchase.evidenceExpectation": `text(${column},{enum:["unknown", "required", "not_expected"]})`,
     "financialTransaction.evidenceExpectation": `text(${column},{enum:["unknown", "required", "not_expected"]})`,
-    "spendingCategory.productExpectation": `text(${column},{enum:["unknown", "required", "not_expected"]})`,
+    "spendingCategory.productExpectation": `text(${column},{enum:["unknown", "required", "not_expected", "not_allowed"]})`,
 
     "expense.costType": `text(${column},{enum:costTypeValues})`,
     "expense.lineBasis": `text(${column},{enum:expenseLineBasisValues})`,
