@@ -316,34 +316,36 @@ async function lexicalProductCandidates(
   );
 }
 
-interface IngredientCandidate {
+interface LinkedEntityCandidate {
   id: string;
   title: string;
   subtitle: string | null;
 }
 
 /** Lexical prefix search ANDs every term (`buildPrefixTsQuery`), so a full
- * product name rarely matches a short ingredient; semantic neighbours of the
- * name carry the roster, and lexical hits on the name are added when present. */
-async function ingredientCandidatesForProduct(
+ * product name rarely matches a short ingredient or plant; semantic
+ * neighbours of the name carry the roster, and lexical hits on the name are
+ * added when present. */
+async function linkedCandidatesForProduct(
   db: Database,
   name: string | null,
-): Promise<readonly IngredientCandidate[]> {
+  entityKind: "ingredient" | "plant",
+): Promise<readonly LinkedEntityCandidate[]> {
   const trimmed = name?.trim() ?? "";
   if (trimmed.length < MIN_SEARCH_TEXT_LENGTH) return [];
   const [semantic, lexical] = await Promise.all([
-    semanticEntityCandidates(db, trimmed, INGREDIENT_ROSTER_CAP, "ingredient"),
+    semanticEntityCandidates(db, trimmed, INGREDIENT_ROSTER_CAP, entityKind),
     findLexicalSearchCandidates(
       db,
       {
         query: trimmed,
-        entityKinds: ["ingredient"],
+        entityKinds: [entityKind],
         limit: INGREDIENT_ROSTER_CAP,
       },
       INGREDIENT_ROSTER_CAP,
     ),
   ]);
-  const byId = new Map<string, IngredientCandidate>();
+  const byId = new Map<string, LinkedEntityCandidate>();
   for (const candidate of [...semantic.map(({ item }) => item), ...lexical]) {
     if (!byId.has(candidate.id))
       byId.set(candidate.id, {
@@ -600,14 +602,29 @@ export const FIELD_SUGGEST_REGISTRY = {
       "You link a stocked product to the generic cooking ingredient it is a package of (for example a branded 2 lb bag of jasmine rice → jasmine rice). Choose the ONE listed ingredient a recipe line would name for this product. Choose none for non-food products (tools, supplies, clothing, household goods) and when no listed ingredient is the same food; never pick a merely related food or invent one.",
     maxCandidates: INGREDIENT_ROSTER_CAP,
     roster: (db, basis) =>
-      ingredientCandidatesForProduct(db, basis.name ?? null),
+      linkedCandidatesForProduct(db, basis.name ?? null, "ingredient"),
     idOf: (c) => c.id,
     labelOf: (c) => c.title,
     detailOf: (c) => c.subtitle,
     renderLine: (c) =>
       `${c.id} | ${c.title}${c.subtitle ? ` — ${c.subtitle}` : ""}`,
     subject: (basis) => renderSubject("product", basis),
-  } satisfies ReferenceSuggestSpec<IngredientCandidate>,
+  } satisfies ReferenceSuggestSpec<LinkedEntityCandidate>,
+  "product.growsPlantId": {
+    kind: "reference",
+    entity: "plant",
+    rules:
+      "You link a seed packet, plant start, bulb, tuber, or cutting to the ONE listed Plant it grows. A Plant is a cultivar, or a species when it names no cultivar. Choose the same cultivar when the product names one; choose a species-level Plant only when the product names no cultivar. Choose none for anything that is not grown (tools, soil, food, supplies), when the listed Plant is a different cultivar, or when no listed Plant is the same crop; never pick a merely related plant.",
+    maxCandidates: INGREDIENT_ROSTER_CAP,
+    roster: (db, basis) =>
+      linkedCandidatesForProduct(db, basis.name ?? null, "plant"),
+    idOf: (c) => c.id,
+    labelOf: (c) => c.title,
+    detailOf: (c) => c.subtitle,
+    renderLine: (c) =>
+      `${c.id} | ${c.title}${c.subtitle ? ` — ${c.subtitle}` : ""}`,
+    subject: (basis) => renderSubject("product", basis),
+  } satisfies ReferenceSuggestSpec<LinkedEntityCandidate>,
   "product.tags": {
     kind: "prune",
     rules: TAG_PRUNE_RULES,

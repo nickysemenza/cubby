@@ -942,7 +942,13 @@ export default defineEntity({
         kind: "identifier",
         nullable: true,
         reference: { entity: "plant" },
-        control: { kind: "specialized", renderer: "entity-select" },
+        control: {
+          kind: "specialized",
+          renderer: "entity-select",
+          suggest: {
+            basis: ["name", "manufacturer", "categoryId", "notes"],
+          },
+        },
         display: { detail: true },
         validation: {
           read: plantShortcode.nullable(),
