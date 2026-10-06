@@ -1,3 +1,4 @@
+import { USDA_PICKER } from "@cubby/mcp-apps/metadata";
 import { mcpToolName } from "@cubby/schemas/entity-manifest";
 import { ingredientWithFoodOut } from "@cubby/schemas/ingredient";
 import { mealOut, mealRecipeOut } from "@cubby/schemas/meal";
@@ -15,20 +16,24 @@ import { recipeTopLevel } from "@cubby/schemas/recipe-shared";
 import { foodSummary } from "@cubby/usda";
 import {
   Client,
+  type ClientOptions,
   StreamableHTTPClientTransport,
 } from "@modelcontextprotocol/client";
 import { McpServer } from "@modelcontextprotocol/server";
-import { describe, expect, it, vi } from "vitest";
+import { fromPartial } from "@total-typescript/shoehorn";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { z } from "zod";
 
 import { projectEntityResult } from "~/contracts/mcp-projections";
 import { MCP_TOOLS } from "~/contracts/mcp-tools";
 import { mock } from "~/lib/test/mock-schema";
+import { setCfEnv } from "~/server/cf-env";
 import {
   ENTITY_KERNEL_ENTITIES,
   entityMcpReadCommandSchema,
 } from "~/server/entity-kernel/contracts";
 
+import { resetMcpAppAssetCacheForTests } from "./apps";
 import type { McpEntityExecutor } from "./kernel-actions";
 import { bindingsWithKernelExecutor, callMcpTool } from "./mcp-test-utils";
 import {
@@ -62,90 +67,131 @@ function kernelServer(
   return server;
 }
 
-describe("MCP protocol smoke", () => {
-  // ChatGPT's modern catalog refresh failed before dispatch; the purchase agent still uses
-  // the legacy handshake. Exercise the actual HTTP client for both eras.
-  it.each(["2026-07-28", "2025-11-25"] as const)(
-    "serves catalog, tool calls, and authenticated telemetry over MCP %s HTTP",
-    async (version) => {
-      const emit = vi.fn(async () => undefined);
-      const responseTypes: Array<string | null> = [];
-      const client = new Client(
-        { name: "test", version: "1.0.0" },
-        {
-          versionNegotiation: {
-            mode: version === "2026-07-28" ? { pin: version } : "legacy",
-          },
-          jsonSchemaValidator: createMcpClientValidator(),
-        },
-      );
-      const transport = new StreamableHTTPClientTransport(
-        new URL("https://cubby.test/api/mcp"),
-        {
-          fetch: async (input, init) => {
-            const request = new Request(input, init);
-            const response = await handleMcpRequest(request, {
-              token: "",
-              clientId: "test",
-              scopes: [],
-              extra: {
-                requestContext: { db: null, actorContext: null },
-                telemetry: {
-                  identity: {
-                    userId: "user_1",
-                    clientId: "test",
-                    surface: "external_mcp",
-                  },
-                  emit,
-                },
+const emit = vi.fn(async () => undefined);
+
+/** A real HTTP MCP client against the production handler. */
+function httpClient(
+  versionNegotiation: NonNullable<ClientOptions["versionNegotiation"]>,
+  responseTypes: Array<string | null> = [],
+) {
+  const client = new Client(
+    { name: "test", version: "1.0.0" },
+    { versionNegotiation, jsonSchemaValidator: createMcpClientValidator() },
+  );
+  const transport = new StreamableHTTPClientTransport(
+    new URL("https://cubby.test/api/mcp"),
+    {
+      fetch: async (input, init) => {
+        const response = await handleMcpRequest(new Request(input, init), {
+          token: "",
+          clientId: "test",
+          scopes: [],
+          extra: {
+            requestContext: { db: null, actorContext: null },
+            telemetry: {
+              identity: {
+                userId: "user_1",
+                clientId: "test",
+                surface: "external_mcp",
               },
-            });
-            // POST dispatch must finish before the Worker binding closes its
-            // database client. The client's GET notification stream is separate.
-            if (request.method === "POST" && response.status === 200) {
-              responseTypes.push(response.headers.get("content-type"));
-            }
-            return response;
+              emit,
+            },
           },
-        },
-      );
-      try {
-        await client.connect(transport);
-        const { tools } = await client.listTools();
-        expect(tools.map((tool) => tool.name)).toEqual(
-          expect.arrayContaining([
-            "search",
-            "entity_read",
-            "purchase_import",
-            "product_enrichment",
-          ]),
-        );
-        // Unsupported problem types return before any database read.
-        const result = await client.callTool({
-          name: "activity",
-          arguments: { action: "problems", type: "notAProblemType" },
         });
-        expect(result.isError).not.toBe(true);
-        expect(result.structuredContent).toBeDefined();
-        expect(responseTypes.length).toBeGreaterThan(0);
-        expect(responseTypes).toEqual(
-          responseTypes.map(() => expect.stringContaining("application/json")),
-        );
-        expect(emit).toHaveBeenCalledWith(
-          expect.objectContaining({
-            userId: "user_1",
-            clientId: "test",
-            surface: "external_mcp",
-            toolName: "activity",
-            outcome: "success",
-            registeredAtCall: true,
-          }),
-        );
-      } finally {
-        await client.close();
-      }
+        // Dispatch must finish before the private Worker binding closes its
+        // database client, so no response may stream.
+        if (response.status === 200) {
+          responseTypes.push(response.headers.get("content-type"));
+        }
+        return response;
+      },
     },
   );
+  return { client, connect: () => client.connect(transport) };
+}
+
+describe("MCP protocol smoke", () => {
+  afterEach(() => {
+    resetMcpAppAssetCacheForTests();
+    setCfEnv(undefined);
+  });
+
+  it("serves catalog, tool calls, and authenticated telemetry over modern MCP HTTP", async () => {
+    const responseTypes: Array<string | null> = [];
+    const { client, connect } = httpClient(
+      { mode: { pin: "2026-07-28" } },
+      responseTypes,
+    );
+    try {
+      await connect();
+      const { tools } = await client.listTools();
+      expect(tools.map((tool) => tool.name)).toEqual(
+        expect.arrayContaining([
+          "search",
+          "entity_read",
+          "purchase_import",
+          "product_enrichment",
+        ]),
+      );
+      // Unsupported problem types return before any database read.
+      const result = await client.callTool({
+        name: "activity",
+        arguments: { action: "problems", type: "notAProblemType" },
+      });
+      expect(result.isError).not.toBe(true);
+      expect(result.structuredContent).toBeDefined();
+      expect(responseTypes.length).toBeGreaterThan(0);
+      expect(responseTypes).toEqual(
+        responseTypes.map(() => expect.stringContaining("application/json")),
+      );
+      expect(emit).toHaveBeenCalledWith(
+        expect.objectContaining({
+          userId: "user_1",
+          clientId: "test",
+          surface: "external_mcp",
+          toolName: "activity",
+          outcome: "success",
+          registeredAtCall: true,
+        }),
+      );
+    } finally {
+      await client.close();
+    }
+  });
+
+  it("serves MCP App resources over modern MCP HTTP", async () => {
+    setCfEnv(
+      fromPartial<Env>({
+        ASSETS: {
+          fetch: async () => new Response("<!doctype html><p>picker</p>"),
+        },
+      }),
+    );
+    const { client, connect } = httpClient({ mode: { pin: "2026-07-28" } });
+    try {
+      await connect();
+      const { resources } = await client.listResources();
+      expect(resources.map((resource) => resource.uri)).toContain(
+        USDA_PICKER.uri,
+      );
+      const { contents } = await client.readResource({ uri: USDA_PICKER.uri });
+      expect(contents[0]).toMatchObject({
+        mimeType: "text/html;profile=mcp-app",
+        text: expect.stringContaining("<p>picker</p>"),
+      });
+    } finally {
+      await client.close();
+    }
+  });
+
+  it("rejects a 2025-era initialize handshake naming the supported revision", async () => {
+    const { client, connect } = httpClient({ mode: "legacy" });
+    try {
+      await expect(connect()).rejects.toThrow(/2026-07-28/u);
+    } finally {
+      await client.close();
+    }
+  });
 
   it("publishes command and read-only entity capabilities with a discoverable catalog", async () => {
     const [{ tools }, { resources }] = await Promise.all([

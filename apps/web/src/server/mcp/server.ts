@@ -5,8 +5,6 @@ import {
   type AuthInfo,
   McpServer,
   createMcpHandler,
-  isLegacyRequest,
-  WebStandardStreamableHTTPServerTransport,
 } from "@modelcontextprotocol/server";
 import { z } from "zod";
 
@@ -194,28 +192,18 @@ export async function listMcpResourceCatalog() {
 }
 
 const httpHandler = createMcpHandler(createMcpServer, {
+  // Modern (2026-07-28+) protocol only: a 2025-era `initialize` handshake
+  // gets the unsupported-protocol-version error naming the served revisions.
   legacy: "reject",
+  // The private Worker binding closes its database client when fetch
+  // returns, so a response must not stream past dispatch.
+  responseMode: "json",
 });
 
-/** Both protocol eras get a fresh server with the authenticated caller context. */
-export async function handleMcpRequest(
+/** Each request gets a fresh server with the authenticated caller context. */
+export function handleMcpRequest(
   request: Request,
   authInfo: AuthInfo,
 ): Promise<Response> {
-  if (!(await isLegacyRequest(request))) {
-    return httpHandler.fetch(request, { authInfo });
-  }
-  // The private Worker binding closes its database client when fetch returns.
-  // Keep legacy responses buffered until dispatch finishes, as in SDK v1.
-  const server = createMcpServer();
-  const transport = new WebStandardStreamableHTTPServerTransport({
-    sessionIdGenerator: undefined,
-    enableJsonResponse: true,
-  });
-  try {
-    await server.connect(transport);
-    return await transport.handleRequest(request, { authInfo });
-  } finally {
-    await server.close();
-  }
+  return httpHandler.fetch(request, { authInfo });
 }
