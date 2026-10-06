@@ -202,14 +202,17 @@ Web record-level slot actions render once in the detail header through
 Collection verbs derive from the declared sections and `reportSlotActions`;
 the typed header hook registry supplies specialist controls (meal food capture,
 cookbook source import/reprocess, inventory expense capture, Run diagnostics,
-recipe meal-planning/parse-copy actions, and walkthrough generation). The header owns their component lifetime,
+recipe meal-planning/parse-copy/export actions, walkthrough generation, product
+enrichment, wardrobe navigation, photo grouping, and image processing). The
+header owns their component lifetime,
 so switching Overview, Relations, or a dedicated tab does not remove controls
 or abandon an open dialog. Section consumers use `DetailAction` to retain local
 controls only when rendered outside the full detail page. Report header reads
 reuse the section cache and the existing Run batch poll; they do not add a
 separate Run query. Agent controls reuse their existing cached work read;
 walkthrough controls and automatic/guided generation share one mutation gate
-per recipe, so another surface cannot launch competing generation. `reportDetailActions` explicitly identifies record-level
+per recipe and observe the latest generation outcome, so another surface cannot
+launch competing generation or leave a stale failure after a successful retry. `reportDetailActions` explicitly identifies record-level
 report commands and diagnostic rows, leaving approvals, selections, recipe
 scales, per-row imports, guided regeneration, ownership confirmations, and other contextual work
 beside its evidence. Stored URLs, source mail links, map coordinates, and

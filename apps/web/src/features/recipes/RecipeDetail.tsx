@@ -12,6 +12,7 @@ import { Link } from "@tanstack/react-router";
 import type React from "react";
 import { lazy, Suspense, useMemo, useState } from "react";
 
+import { DetailAction } from "~/entity/entity-detail/detail-action-bar";
 import { scaleNutrition } from "~/lib/nutrition-estimates";
 import { formatEstimate } from "~/lib/nutrition-format";
 import { PerfProfiler } from "~/lib/perf/PerfProfiler";
@@ -500,21 +501,23 @@ function RecipeWorkflowControls({
           value={viewMode}
           onValueChange={setViewMode}
         />
-        <Link
-          to="/recipes/$shortcode/export"
-          params={{ shortcode: recipe.id }}
-          search={{
-            format: exportFormat,
-            scale: factor === 1 ? undefined : factor,
-            nutritionBasis:
-              nutritionBasis === "whole" ? undefined : nutritionBasis,
-          }}
-          className="inline-flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground"
-          title="Open the print / export sheet"
-        >
-          <PrinterIcon className="size-3" />
-          Print / export
-        </Link>
+        <DetailAction>
+          <Link
+            to="/recipes/$shortcode/export"
+            params={{ shortcode: recipe.id }}
+            search={{
+              format: exportFormat,
+              scale: factor === 1 ? undefined : factor,
+              nutritionBasis:
+                nutritionBasis === "whole" ? undefined : nutritionBasis,
+            }}
+            className="inline-flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground"
+            title="Open the print / export sheet"
+          >
+            <PrinterIcon className="size-3" />
+            Print / export
+          </Link>
+        </DetailAction>
       </Row>
     </Row>
   );

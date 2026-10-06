@@ -72,9 +72,18 @@ test("reviews, approves, and discards proposed photo groups on the photo-invento
   await expect(
     page.getByText("Waiting for an agent to propose groups."),
   ).toBeVisible();
+  const actions = page.getByRole("group", {
+    name: "Entity actions",
+    exact: true,
+  });
   await expect(
-    page.getByRole("button", { name: "Start grouping" }),
+    actions.getByRole("button", { name: "Start grouping" }),
   ).toBeVisible();
+  await page.getByRole("tab", { name: "Relations", exact: true }).click();
+  await expect(
+    actions.getByRole("button", { name: "Start grouping" }),
+  ).toBeVisible();
+  await page.getByRole("tab", { name: "Overview", exact: true }).click();
   if (recordingVideo) await page.waitForTimeout(1_500);
   const proposed = await page.request.post("/api/v1/photoImport/saveGroups", {
     data: { runId: seed.runId, groups: seed.groups },

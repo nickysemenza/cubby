@@ -34,7 +34,10 @@ import {
   type AgentConversationObservationSnapshot,
 } from "~/app/runs/agent-observation";
 import { usePhotoRunReview } from "~/app/runs/photo-group-review";
-import { PhotoImportRunView } from "~/app/runs/photo-run-detail";
+import {
+  PhotoImportRunView,
+  PhotoRunGroupingAction,
+} from "~/app/runs/photo-run-detail";
 import type { RunDetail } from "~/contracts/run.contract";
 import { DetailAction } from "~/entity/entity-detail/detail-action-bar";
 import { EntityReportSlot } from "~/entity/entity-detail/report-slot";
@@ -1328,9 +1331,14 @@ export function RunAgentActions({ record }: { record: RunOut }) {
 function RunAgentActionRead({ record }: { record: RunOut }) {
   const query = useSyncedRun(record, true);
   return query.data ? (
-    <RunActionButtons
-      runId={query.data.publicId}
-      actions={runActions(query.data)}
-    />
+    <>
+      {query.data.purpose === "photo_inventory" ? (
+        <PhotoRunGroupingAction run={query.data} />
+      ) : null}
+      <RunActionButtons
+        runId={query.data.publicId}
+        actions={runActions(query.data)}
+      />
+    </>
   ) : null;
 }

@@ -1,9 +1,10 @@
 import { Link } from "@tanstack/react-router";
 
+import { DetailAction } from "~/entity/entity-detail/detail-action-bar";
 import type { DetailRecordOf } from "~/entity/entity-detail/detail-record";
 import { Button } from "~/ui/primitives/button";
 
-export function WardrobeLink({
+export function WardrobeAction({
   record,
 }: {
   record: DetailRecordOf<"ledgerParty">;
@@ -17,5 +18,17 @@ export function WardrobeLink({
     >
       Open wardrobe
     </Button>
+  );
+}
+
+export function WardrobeLink({
+  record,
+}: {
+  record: DetailRecordOf<"ledgerParty">;
+}) {
+  return (
+    <DetailAction>
+      <WardrobeAction record={record} />
+    </DetailAction>
   );
 }

@@ -1,5 +1,6 @@
 import type { NutritionBasis } from "@cubby/schemas/nutrition";
-import { useNavigate, useSearch } from "@tanstack/react-router";
+import { PrinterIcon } from "@phosphor-icons/react/dist/csr/Printer";
+import { Link, useNavigate, useSearch } from "@tanstack/react-router";
 
 import { AddToMeal } from "~/app/meals/add-to-meal";
 import { DetailAction } from "~/entity/entity-detail/detail-action-bar";
@@ -12,6 +13,7 @@ import RecipeDetail, {
 import { RecipeFlowAction } from "~/features/recipes/RecipeFlowView";
 import type { RecipeFlowLayoutMode } from "~/features/recipes/RecipeFlowView";
 import { Row, Stack } from "~/ui/layout";
+import { Button } from "~/ui/primitives/button";
 
 /**
  * The cooking workflow: view switcher, scaling, nutrition basis, costing
@@ -92,10 +94,37 @@ export const RecipeWorkflow: DetailSlotComponent<"recipe"> = ({
 
 export const RecipeActions: DetailSlotComponent<"recipe"> = ({
   record: recipe,
-}) => (
-  <Row gap="sm" wrap>
-    <AddToMeal recipeId={recipe.id} recipeName={recipe.name} />
-    <CopyRecipeParseButton recipe={recipe} />
-    <RecipeFlowAction recipeId={recipe.id} />
-  </Row>
-);
+}) => {
+  const { view, scale, nutritionBasis } = useSearch({
+    from: "/_authenticated/recipes/$shortcode",
+  });
+  return (
+    <Row gap="sm" wrap>
+      <AddToMeal recipeId={recipe.id} recipeName={recipe.name} />
+      <CopyRecipeParseButton recipe={recipe} />
+      <RecipeFlowAction recipeId={recipe.id} />
+      <Button
+        variant="outline"
+        render={
+          <Link
+            to="/recipes/$shortcode/export"
+            params={{ shortcode: recipe.id }}
+            search={{
+              format:
+                view === "spec"
+                  ? "nested"
+                  : view === "flow"
+                    ? "flow"
+                    : undefined,
+              scale,
+              nutritionBasis,
+            }}
+          />
+        }
+      >
+        <PrinterIcon />
+        Print / export
+      </Button>
+    </Row>
+  );
+};

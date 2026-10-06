@@ -11,6 +11,7 @@ import { TableIcon } from "@phosphor-icons/react/dist/csr/Table";
 import { WarningIcon } from "@phosphor-icons/react/dist/csr/Warning";
 import {
   useIsMutating,
+  useMutationState,
   useMutation,
   useQuery,
   useQueryClient,
@@ -593,6 +594,18 @@ function useRecipeFlowGeneration(
     },
   };
   const pending = useIsMutating(filters) > 0;
+  const outcomes = useMutationState({
+    filters,
+    select: (mutation) => ({
+      submittedAt: mutation.state.submittedAt,
+      error: mutation.state.error,
+    }),
+  });
+  const latest = outcomes.reduce<(typeof outcomes)[number] | undefined>(
+    (last, current) =>
+      !last || current.submittedAt >= last.submittedAt ? current : last,
+    undefined,
+  );
   const mutation = useMutation({
     ...options,
     onError: (error) => {
@@ -604,6 +617,7 @@ function useRecipeFlowGeneration(
   });
   return {
     ...mutation,
+    error: latest?.error ?? null,
     isPending: pending,
     mutate: (input: Parameters<typeof mutation.mutate>[0]) => {
       if (client.isMutating(filters) === 0) mutation.mutate(input);

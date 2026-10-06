@@ -5,6 +5,8 @@ import { useInfiniteQuery, useQuery } from "@tanstack/react-query";
 import { useState } from "react";
 import { z } from "zod";
 
+import { DetailAction } from "~/entity/entity-detail/detail-action-bar";
+import type { DetailSlotComponent } from "~/entity/entity-detail/detail-slots";
 import { cursorQueryOptions } from "~/integrations/tanstack-query/cursor-query-options";
 import {
   image as imageOperations,
@@ -13,7 +15,7 @@ import {
 } from "~/integrations/tanstack-query/generated/catalog.gen";
 import { ErrorDisplay } from "~/ui/feedback/error-display";
 import { useActionMutation } from "~/ui/hooks/useActionMutation";
-import { Button } from "~/ui/primitives/button";
+import { Button, buttonVariants } from "~/ui/primitives/button";
 import {
   Dialog,
   DialogContent,
@@ -115,16 +117,7 @@ function DescriptionSummary({
 
 export function ImageProcessingPanel({ image }: { image: ImageWithEntity }) {
   const id = imageShortcode.parse(image.id);
-  const status = useQuery({
-    ...imageProcessing.status.queryOptions({ id }),
-    refetchInterval: (query) =>
-      Object.values(query.state.data?.status ?? {}).some((value) =>
-        ["pending", "leased", "waiting_for_device"].includes(value ?? ""),
-      )
-        ? 15_000
-        : false,
-    refetchIntervalInBackground: false,
-  });
+  const status = useImageProcessingStatus(id);
   const recentRuns = useQuery({
     ...activity.list.queryOptions({ subjectId: id, limit: 10 }),
     refetchInterval: (query) =>
@@ -132,36 +125,9 @@ export function ImageProcessingPanel({ image }: { image: ImageWithEntity }) {
     refetchIntervalInBackground: false,
   });
   const [correction, setCorrection] = useState("");
-  const [compareOpen, setCompareOpen] = useState(false);
   const save = useActionMutation({
     mutationFn: imageProcessing.correctDescription.mutationOptions,
     success: "Description correction saved",
-  });
-  const schedule = useActionMutation({
-    mutationFn: imageProcessing.schedule.mutationOptions,
-    success: (result) =>
-      result.submissionId ? (
-        <a
-          className="underline"
-          href={`/runs?submissionId=${encodeURIComponent(result.submissionId)}`}
-        >
-          Image processing queued — view submission
-        </a>
-      ) : (
-        "Image processing queued"
-      ),
-  });
-  const evaluate = useActionMutation({
-    mutationFn: imageProcessing.evaluateAppleDescription.mutationOptions,
-    success: "Apple description evaluation queued",
-  });
-  const retry = useActionMutation({
-    mutationFn: imageProcessing.retry.mutationOptions,
-    success: "Failed image processing retried",
-  });
-  const update = useActionMutation({
-    mutationFn: imageOperations.update.mutationOptions,
-    success: "Image preference saved",
   });
   if (image.status !== "UPLOADED") return null;
   return (
@@ -169,72 +135,19 @@ export function ImageProcessingPanel({ image }: { image: ImageWithEntity }) {
       <h3 className="text-sm font-medium">
         Image representations and descriptions
       </h3>
-      <div className="flex flex-wrap gap-2 text-sm">
-        <a
-          className="underline"
-          href={image.url}
-          target="_blank"
-          rel="noreferrer"
-        >
-          View original
-        </a>
-        {status.data?.representations.transparent ? (
-          <a
-            className="underline"
-            href={status.data.representations.transparent}
-            target="_blank"
-            rel="noreferrer"
-          >
-            View transparent PNG
-          </a>
-        ) : (
-          <span className="text-muted-foreground">
-            Transparent image unavailable
-          </span>
-        )}
-        {status.data?.representations.transparent ? (
-          <Button
-            type="button"
-            size="sm"
-            variant="outline"
-            onClick={() => setCompareOpen(true)}
-          >
-            Compare original and result
-          </Button>
-        ) : null}
-        <Button
-          size="sm"
-          variant="outline"
-          disabled={update.isPending}
-          onClick={() =>
-            update.mutate({
-              id,
-              data: {
-                filename: image.filename,
-                useOriginal: !image.useOriginal,
-              },
-            })
-          }
-        >
-          {image.useOriginal ? "Prefer transparent image" : "Use original"}
-        </Button>
-      </div>
+      <DetailAction>
+        <ImageProcessingActions image={image} />
+      </DetailAction>
       {status.data ? (
         <>
           <p className="text-xs text-muted-foreground">
             Description: {status.data.status.description ?? "Not processed"} ·
             Background removal: {status.data.status.cutout ?? "Not processed"}
           </p>
-          {status.data.status.description === "failed" ||
-          status.data.status.cutout === "failed" ? (
-            <Button
-              size="sm"
-              variant="outline"
-              disabled={retry.isPending}
-              onClick={() => retry.mutate({ id })}
-            >
-              Retry failed processing
-            </Button>
+          {!status.data.representations.transparent ? (
+            <p className="text-muted-foreground">
+              Transparent image unavailable
+            </p>
           ) : null}
           <DescriptionSummary status={status.data} />
           <ImageAnalysisHistory id={id} />
@@ -283,25 +196,140 @@ export function ImageProcessingPanel({ image }: { image: ImageWithEntity }) {
         >
           Save correction
         </Button>
+      </div>
+    </section>
+  );
+}
+
+function useImageProcessingStatus(id: ReturnType<typeof imageShortcode.parse>) {
+  return useQuery({
+    ...imageProcessing.status.queryOptions({ id }),
+    refetchInterval: (query) =>
+      Object.values(query.state.data?.status ?? {}).some((value) =>
+        ["pending", "leased", "waiting_for_device"].includes(value ?? ""),
+      )
+        ? 15_000
+        : false,
+    refetchIntervalInBackground: false,
+  });
+}
+
+export const ImageDetailActions: DetailSlotComponent<"image"> = ({
+  record,
+}) => <ImageProcessingActions image={record} />;
+
+function ImageProcessingActions({ image }: { image: ImageWithEntity }) {
+  const id = imageShortcode.parse(image.id);
+  const status = useImageProcessingStatus(id);
+  const [compareOpen, setCompareOpen] = useState(false);
+  const schedule = useActionMutation({
+    mutationFn: imageProcessing.schedule.mutationOptions,
+    success: (result) =>
+      result.submissionId ? (
+        <a
+          className="underline"
+          href={`/runs?submissionId=${encodeURIComponent(result.submissionId)}`}
+        >
+          Image processing queued — view submission
+        </a>
+      ) : (
+        "Image processing queued"
+      ),
+  });
+  const evaluate = useActionMutation({
+    mutationFn: imageProcessing.evaluateAppleDescription.mutationOptions,
+    success: "Apple description evaluation queued",
+  });
+  const retry = useActionMutation({
+    mutationFn: imageProcessing.retry.mutationOptions,
+    success: "Failed image processing retried",
+  });
+  const update = useActionMutation({
+    mutationFn: imageOperations.update.mutationOptions,
+    success: "Image preference saved",
+  });
+  if (image.status !== "UPLOADED") return null;
+  return (
+    <>
+      <div className="flex flex-wrap gap-2 text-sm">
+        <a
+          className={buttonVariants({ variant: "outline" })}
+          href={image.url}
+          target="_blank"
+          rel="noreferrer"
+        >
+          View original
+        </a>
+        {status.data?.representations.transparent ? (
+          <a
+            className={buttonVariants({ variant: "outline" })}
+            href={status.data.representations.transparent}
+            target="_blank"
+            rel="noreferrer"
+          >
+            View transparent PNG
+          </a>
+        ) : null}
+        {status.data?.representations.transparent ? (
+          <Button
+            type="button"
+            size="sm"
+            variant="outline"
+            onClick={() => setCompareOpen(true)}
+          >
+            Compare original and result
+          </Button>
+        ) : null}
         <Button
           size="sm"
           variant="outline"
-          disabled={schedule.isPending}
+          disabled={update.isPending}
           onClick={() =>
-            schedule.mutate({ id, kinds: ["describe_image", "subject_lift"] })
+            update.mutate({
+              id,
+              data: {
+                filename: image.filename,
+                useOriginal: !image.useOriginal,
+              },
+            })
           }
         >
-          Queue missing processing
-        </Button>
-        <Button
-          size="sm"
-          variant="outline"
-          disabled={evaluate.isPending}
-          onClick={() => evaluate.mutate({ id })}
-        >
-          Evaluate this image on Apple
+          {image.useOriginal ? "Prefer transparent image" : "Use original"}
         </Button>
       </div>
+      {status.data ? (
+        <>
+          {status.data.status.description === "failed" ||
+          status.data.status.cutout === "failed" ? (
+            <Button
+              size="sm"
+              variant="outline"
+              disabled={retry.isPending}
+              onClick={() => retry.mutate({ id })}
+            >
+              Retry failed processing
+            </Button>
+          ) : null}
+        </>
+      ) : null}
+      <Button
+        size="sm"
+        variant="outline"
+        disabled={schedule.isPending}
+        onClick={() =>
+          schedule.mutate({ id, kinds: ["describe_image", "subject_lift"] })
+        }
+      >
+        Queue missing processing
+      </Button>
+      <Button
+        size="sm"
+        variant="outline"
+        disabled={evaluate.isPending}
+        onClick={() => evaluate.mutate({ id })}
+      >
+        Evaluate this image on Apple
+      </Button>
       <Dialog open={compareOpen} onOpenChange={setCompareOpen}>
         <DialogContent size="xl">
           <DialogHeader>
@@ -341,6 +369,6 @@ export function ImageProcessingPanel({ image }: { image: ImageWithEntity }) {
           </div>
         </DialogContent>
       </Dialog>
-    </section>
+    </>
   );
 }
