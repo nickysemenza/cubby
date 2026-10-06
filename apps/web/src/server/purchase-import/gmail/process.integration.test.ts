@@ -898,6 +898,21 @@ describe("Gmail order mail processing", () => {
       state: "pending_browser",
       matchedOrderIds: ["FW-SYN-5003"],
     });
+
+    // Both paths date an order by when it occurred, not when the mail
+    // arrived: placed the evening of 09-17, delivered early on 09-18.
+    const lateDelivery = await statementRow(seed, 8.5, "2026-09-10");
+    await expect(discoverImportHunts(ctx.db)).resolves.toBe(1);
+    await receiveMail(
+      seed,
+      "msg-late-delivery",
+      "2026-09-18T08:00:00.000Z",
+      placed("FW-SYN-5004", 8.5, eveningAfterLastDay),
+    );
+    expect(await huntFor(lateDelivery.id)).toMatchObject({
+      state: "pending_browser",
+      matchedOrderIds: ["FW-SYN-5004"],
+    });
   });
 
   it("never matches earlier refund mail to a new charge hunt", async () => {

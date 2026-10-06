@@ -15,7 +15,7 @@ export { HOUSEHOLD_TIMEZONE };
  *
  * Workers run in UTC, so `toISOString().slice(0, 10)` and server-side local
  * getters both yield UTC days — wrong from about 5pm Pacific. The
- * `cubby/no-ad-hoc-calendar-day` lint rule flags those shapes. Timestamp
+ * `cubby/no-ad-hoc-calendar-day` lint rule flags the ISO-slice shape. Timestamp
  * columns are `timestamp without time zone` holding UTC wall time, so SQL
  * `::date` and `date_trunc('day', …)` on them are UTC days too.
  */

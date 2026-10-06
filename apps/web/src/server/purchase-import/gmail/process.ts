@@ -434,7 +434,11 @@ export async function processOrderMails(
         throw new Error("Classified order mail event was not persisted");
 
       if (event.orderId) {
-        const date = householdLocalDate(mail.receivedAt);
+        // The day the order event occurred, as `matchProcessedOrderMail`
+        // reads it, so mail-first and charge-first arrivals agree.
+        const date = householdLocalDate(
+          event.occurredAt ? new Date(event.occurredAt) : mail.receivedAt,
+        );
         const candidates = await database
           .select({
             id: importHunt.id,

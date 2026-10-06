@@ -14,7 +14,12 @@ import {
   sql,
 } from "drizzle-orm";
 
-import { householdDaysAgo, householdDaysFromNow } from "~/lib/household-date";
+import {
+  householdDaysAgo,
+  householdDaysFromNow,
+  householdLocalDate,
+  plainDateDaysBetween,
+} from "~/lib/household-date";
 import type { Database } from "~/server/db";
 import {
   ledgerParty,
@@ -48,9 +53,11 @@ const candidateReason = (
   const withinWindow =
     candidate.date !== null &&
     Math.abs(
-      event.receivedAt.getTime() - Date.parse(`${candidate.date}T12:00:00Z`),
-    ) <=
-      45 * 86_400_000;
+      plainDateDaysBetween(
+        candidate.date,
+        householdLocalDate(event.receivedAt),
+      ),
+    ) <= 45;
   if (!withinWindow) return null;
   if (
     event.amount !== null &&
