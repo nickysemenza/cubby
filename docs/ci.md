@@ -248,6 +248,12 @@ additional Worker builds. The browser lanes retain the discovery and no-skip gua
 desktop Chromium runs as two Playwright shards (two workers each). Phone-web and
 WebKit browser coverage was removed from PR CI and the Playwright suite; native
 checks remain separate. There is no coverage mode.
+The disposable PostgreSQL container uses `fsync=off`, `synchronous_commit=off`,
+and `full_page_writes=off`, matching the local test-service settings. These
+[standard non-durable settings](https://www.postgresql.org/docs/17/non-durability.html)
+remove disk durability work from synthetic test data; CI does not test database-server
+crash recovery. SQL constraints, transactions, and the full reset still run.
+
 Desktop CI passes Playwright's `--trace=off`: recording every test for
 `retain-on-failure` adds work, and raw traces are excluded from hosted artifacts.
 Local runs retain failure traces; CI preserves failure annotations, sanitized
