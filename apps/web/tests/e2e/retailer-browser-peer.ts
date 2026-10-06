@@ -46,7 +46,9 @@ export async function connectRetailerBrowserPeer(input: {
       route.fulfill({ contentType: "text/html", body: html }),
     );
   }
-  await peer.goto(input.baseURL);
+  // The socket needs a same-origin document and session cookies; this peer
+  // captures no app DOM. The separate retailer page owns the real capture.
+  await peer.goto(new URL("/api/auth/get-session", input.baseURL).href);
   await peer.exposeFunction("syntheticBrowserCommand", async (raw: unknown) => {
     const message = browserBridgeServerMessage.parse(raw);
     if (message.type !== "command") return null;
