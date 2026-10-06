@@ -41,23 +41,22 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 5
     outputs:
-      validation: ${{ steps.classify.outputs.validation }}
-      generation: ${{ steps.classify.outputs.generation }}
-      web: ${{ steps.classify.outputs.web }}
-      auxiliary: ${{ steps.classify.outputs.auxiliary }}
-      rust: ${{ steps.classify.outputs.rust }}
-      apple: ${{ steps.classify.outputs.apple }}
-      docs: ${{ steps.classify.outputs.docs }}
-      format: ${{ steps.classify.outputs.format }}
-      importE2e: ${{ steps.classify.outputs.importE2e }}
+      validation: ${{ steps.paths.outputs.full != 'false' || steps.paths.outputs.validation == 'true' }}
+      generation: ${{ steps.paths.outputs.full != 'false' || steps.paths.outputs.generation == 'true' }}
+      web: ${{ steps.paths.outputs.full != 'false' || steps.paths.outputs.web == 'true' || steps.paths.outputs.webMarkdown == 'true' }}
+      auxiliary: ${{ steps.paths.outputs.full != 'false' || steps.paths.outputs.auxiliary == 'true' }}
+      rust: ${{ steps.paths.outputs.full != 'false' || steps.paths.outputs.rust == 'true' }}
+      apple: ${{ steps.paths.outputs.full != 'false' || steps.paths.outputs.apple == 'true' }}
+      docs: ${{ steps.paths.outputs.full != 'false' || steps.paths.outputs.docs == 'true' }}
+      format: ${{ steps.paths.outputs.full != 'false' || steps.paths.outputs.format == 'true' }}
+      importE2e: ${{ steps.paths.outputs.full != 'false' || steps.paths.outputs.importE2e == 'true' }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
-          fetch-depth: 0
           sparse-checkout: |
             .nvmrc
             scripts/check-outward-text.ts
-            scripts/ci-change-scope.ts
+            .github/ci-paths.yaml
             packages/shared/src/shortcode-alphabet.ts
             packages/schemas/src/entity-definitions
           sparse-checkout-cone-mode: false
@@ -75,13 +74,13 @@ jobs:
           gh pr view "$PR" --repo "$GITHUB_REPOSITORY" --json title,body \
             --jq '.title + "\n" + .body' | node scripts/check-outward-text.ts --stdin
       - name: Classify affected checks
-        id: classify
-        env:
-          # Keep paths out of the process environment: large renamed diffs can
-          # exceed Linux's per-value limit before even bash starts.
-          CUBBY_BASE_SHA: ${{ github.event.pull_request.base.sha || github.event.before || '' }}
-          CUBBY_HEAD_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
-        run: node scripts/ci-change-scope.ts
+        if: github.event_name == 'pull_request' || github.event_name == 'push'
+        id: paths
+        uses: dorny/paths-filter@ceb8a2b8f2d89434be7ff52d3de7ec3738c5cc9d # v4
+        with:
+          base: main
+          filters: .github/ci-paths.yaml
+          predicate-quantifier: some-with-excludes
 
   validation:
     name: Validation

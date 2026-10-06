@@ -7,10 +7,16 @@ documentation-only change; deployment never waits for post-merge CI.
 
 ## Local verification
 
-`scripts/ci-change-scope.ts` classifies hosted changes for the `Scope` job (a
-`cubby-ffi/` change selects both `apple` and the `Rust - recipebridge` job, which
-runs fmt, clippy, and tests for `recipebridge` and `cubby-ffi`);
-unknown paths and manual runs select every lane. Local affected-ness and
+The `Scope` job uses SHA-pinned [dorny/paths-filter v4](https://github.com/dorny/paths-filter)
+with declarative rules in `.github/ci-paths.yaml`. PR file lists come from
+GitHub's API; `main` pushes compare with the commit before the push. The action
+owns pagination, rename detection, and Git fetching; Scope no longer checks
+out full history or runs a repository-written diff parser. Unknown
+non-documentation paths and manual verification select every lane. A failed
+file lookup fails Scope instead of silently falling back to all checks; an
+empty diff selects no affected lane. PR file lists inherit GitHub's 3,000-file
+limit. A `cubby-ffi/` change selects both Apple and Rust checks (fmt, clippy,
+and tests for `recipebridge` and `cubby-ffi`). Local affected-ness and
 scoping remain Nx's job: every gate is a target on the project whose files it
 covers (`apps/web/project.json` — `postgres`, `build-cf`, `e2e`,
 `workers-tests`; `recipebridge/project.json` and `cubby-ffi/project.json` —
@@ -244,7 +250,7 @@ model and gateway, driven through the browser) on the same `worker-build`
 artifact. It is informative only: it is not in `Web checks` or the ruleset,
 and it runs on pushes to `main` and on PRs that touch the agent, purchase
 import, the Run, Purchase and vendor order-mail UI, its harness, or the
-bundled skills (`importE2e` in `scripts/ci-change-scope.ts`). It saves the
+bundled skills (`importE2e` in `.github/ci-paths.yaml`). It saves the
 same run bundle as the desktop shards.
 PostgreSQL integration tests use two runners. The `integration` Vitest
 project runs all its files in one job with four fork workers, waits only on
