@@ -164,7 +164,11 @@ app, so edits there select the web lanes.
 Native, auxiliary, Rust, web, and PostgreSQL/E2E lanes run only when their inputs
 can affect them. A manual run selects all lanes. `Web checks` is the stable
 required aggregate: it checks the web, PostgreSQL, and browser matrix results
-whenever web validation is selected. `Build Workers` builds the
+whenever web validation is selected. `Tests - web` runs the existing `unit`,
+`mcp-contract`, `worker-safety`, and `ui` Vitest projects together in one job,
+preserving each project's environment and isolation. One dependency setup and
+MCP App build serve all four projects; there is no fast-test job matrix. This
+uses one fewer Linux runner slot per selected PR. `Build Workers` builds the
 web Cloudflare bundle (which hosts the purchase agent) and uploads it
 with the MCP App assets and the WASM package as the `worker-build` artifact; the
 workerd PostgreSQL and optional purchase browser lanes download that exact bundle.
@@ -327,6 +331,14 @@ database contracts; it does not establish a five-minute full suite.
   concurrently; the PostgreSQL split preserves its three total runner slots.
   Phone and WebKit browser projects were removed
   from PR CI; device-dependent phone behavior still needs device acceptance.
+- The fast projects share one job to reduce runner demand. Ten completed PR
+  runs sampled on 2026-10-06 (six successful, four failed) had Node jobs of
+  1:47–2:06 and UI jobs of 1:21–1:43, while the slowest desktop shard took
+  7:51–8:58. Representative
+  [successful](https://github.com/nickysemenza/cubby/actions/runs/37426186409)
+  and [failed](https://github.com/nickysemenza/cubby/actions/runs/37426021174)
+  runs support testing that consolidation outside the browser critical path;
+  they do not establish the combined job's hosted runtime or a new PR median.
 - Test page loads spend much of their time waiting for hydration and queued
   JavaScript chunks under the harness's HTTP/1.1 connection limit. A measured
   HTTPS/HTTP/2 proxy added runner time without a useful end-to-end gain.

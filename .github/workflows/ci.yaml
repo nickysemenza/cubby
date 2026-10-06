@@ -193,7 +193,7 @@ jobs:
           retention-days: 1
 
   test-web:
-    name: Tests - web (${{ matrix.tier }})
+    name: Tests - web
     needs: scope
     if: needs.scope.outputs.web == 'true'
     runs-on: ubuntu-latest
@@ -201,14 +201,6 @@ jobs:
     permissions:
       contents: read
       actions: read
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-          - tier: node
-            args: --project unit --project mcp-contract --project worker-safety
-          - tier: ui
-            args: --project ui
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
       - uses: ./.github/actions/setup-node-with-deps
@@ -218,10 +210,9 @@ jobs:
       # The mcp-contract project imports the built MCP App HTML; build:cf used
       # to produce it here before the Worker build moved to build-worker.
       - name: Build MCP App assets
-        if: matrix.tier == 'node'
         run: pnpm --filter @cubby/mcp-apps run build
-      - name: Run ${{ matrix.tier }} tests
-        run: pnpm --dir apps/web exec vitest run ${{ matrix.args }}
+      - name: Run fast tests
+        run: pnpm --dir apps/web exec vitest run --project unit --project mcp-contract --project worker-safety --project ui
 
   # Sharded with Vitest's file-level --shard. `Web checks` aggregates the
   # matrix, so the shard count can change without touching branch protection.
