@@ -708,6 +708,43 @@ export default defineEntity({
     merge: false,
     operationOwners: { delete: "kernel", merge: null },
     mcp: ["get", "list", "create", "update", "delete"],
+    // A Product's effective feature (`productCategory.effective-feature`)
+    // decides which identity fields it may carry. A write whose evidence a
+    // feature refuses files the Product under the one feature that admits it;
+    // food evidence outranks an ISBN, so the field order here is precedence.
+    classificationPolicies: [
+      {
+        classifier: "feature",
+        target: { entity: "product", reference: "categoryId" },
+        fields: [
+          {
+            field: "ingredientId",
+            byValue: { food: "unknown" },
+            otherwise: "not_allowed",
+          },
+          {
+            field: "fdc_id",
+            byValue: { food: "unknown" },
+            otherwise: "not_allowed",
+          },
+          {
+            field: "isbn",
+            byValue: { books: "unknown" },
+            otherwise: "not_allowed",
+          },
+          {
+            field: "model",
+            byValue: {
+              tools: "required",
+              electronics: "required",
+              storage: "required",
+              household: "required",
+            },
+            otherwise: "unknown",
+          },
+        ],
+      },
+    ],
     dataQuality: {
       checks: [
         {

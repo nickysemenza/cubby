@@ -22,7 +22,7 @@ import type { LedgerPartyId } from "@cubby/schemas/identifiers";
 import type { InventoryPlacement } from "@cubby/schemas/inventory";
 import type { InventoryOwnershipMode } from "@cubby/schemas/inventory-ownership";
 import {
-  hasFoodIndicators,
+  impliedProductFeature,
   type MergeProductsInput,
 } from "@cubby/schemas/product";
 import {
@@ -1153,15 +1153,14 @@ const admitMergedProductCategory = async (
   const fdc_id = plan.keeper.fdc_id ?? plan.carried.fdc_id ?? null;
   const ingredientId =
     plan.keeper.ingredientId ?? plan.carried.ingredientId ?? null;
-  const requiredFeature = hasFoodIndicators({ fdc_id, ingredientId })
-    ? "food"
-    : distinctIsbns(plan.externalIds.rows).length > 0
-      ? "books"
-      : null;
   const categoryId = await resolveProductCategory(
     tx,
     plan.keeper.categoryId ?? plan.carried.categoryId ?? null,
-    requiredFeature,
+    impliedProductFeature({
+      fdc_id,
+      ingredientId,
+      hasIsbn: distinctIsbns(plan.externalIds.rows).length > 0,
+    }),
   );
   const feature = await getCategoryFeature(tx, categoryId);
   const keeperGardenSource = await tx.query.planting.findFirst({

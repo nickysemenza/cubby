@@ -1,7 +1,11 @@
 import { scoredEntities } from "@cubby/schemas/data-quality";
-import { parseShortcodeFor } from "@cubby/schemas/identifiers";
+import {
+  parseShortcodeFor,
+  type ProductCategoryShortcode,
+} from "@cubby/schemas/identifiers";
 import { type SQL, sql } from "drizzle-orm";
 import { buildEntity } from "tooling/factories/build";
+import { taxonomyShortcode } from "tooling/product-category-fixtures";
 import { TEST_ACTOR, withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 import { z } from "zod";
@@ -410,6 +414,41 @@ describe("data quality: list filters, sort and hydration agree", () => {
     const listed = new Map(data.map((row) => [row.id, row.dataQuality.score]));
     for (const row of rows.filter((row) => row !== blank))
       expect(listed.get(row.id)).toBe(quality(row).score);
+  });
+
+  // Failure modes: the model gap stops following the declared feature policy
+  // (a feature inherited from an ancestor no longer expects a model, or a
+  // feature that never carries one starts to).
+  it("product: expects a model where the category feature's policy requires one", async () => {
+    const drills = await createProductCategory(
+      ctx.db,
+      buildEntity("productCategory", {
+        name: "DQ example drills",
+        parentId: taxonomyShortcode("tools"),
+      }),
+      TEST_ACTOR,
+    );
+    const make = (name: string, categoryId: ProductCategoryShortcode) =>
+      createProductFixture(
+        ctx.db,
+        makeProductInput({
+          name,
+          manufacturer: "Acme",
+          categoryId,
+          model: null,
+        }),
+        TEST_ACTOR,
+      );
+    const drill = await make("DQ model drill", drills.output.id);
+    const novel = await make("DQ model novel", taxonomyShortcode("books"));
+    const hydrated = await loadDataQualities(ctx.db, "product", [
+      drill.entityId,
+      novel.entityId,
+    ]);
+    const gaps = (row: typeof drill) =>
+      hydrated.get(row.entityId)!.gaps.map((gap) => gap.check);
+    expect(gaps(drill)).toContain("product_model");
+    expect(gaps(novel)).not.toContain("product_model");
   });
 
   // Failure mode: a planned (future) line, which may be unpriced by policy,

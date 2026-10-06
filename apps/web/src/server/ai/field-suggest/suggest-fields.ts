@@ -54,6 +54,7 @@ import {
 } from "~/server/ai/selection";
 import type { Database } from "~/server/db";
 import { createAppError } from "~/server/errors/app-error";
+import { classificationRefusesField } from "~/server/repo/classification-field-policy";
 import { resolveDraftExpenseFields } from "~/server/repo/expense-inheritance";
 import {
   isFinanceCategoryEntity,
@@ -943,6 +944,19 @@ export async function suggestFields(
       if (!hasSignal || linkedContext?.truncated) {
         suggestions[target] = null;
         outcomes[target] = { kind: "skipped", reason: "no_signal" };
+        resolvedRawByTarget.set(target, null);
+        return;
+      }
+      // Never suggest a field the record's classification refuses (an
+      // ingredient for a Product filed under Tools): nothing is admissible.
+      if (
+        await classificationRefusesField(db, input.entity, target, {
+          ...Object.fromEntries(clientBasis),
+          ...rawBasis,
+        })
+      ) {
+        suggestions[target] = null;
+        outcomes[target] = { kind: "skipped", reason: "no_candidates" };
         resolvedRawByTarget.set(target, null);
         return;
       }

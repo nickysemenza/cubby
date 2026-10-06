@@ -24,6 +24,11 @@ existing block. Extend the generic path when it almost fits. See
 - Edit forms: generated intents plus the typed `editHooks` map in
   `apps/web/src/entity/editing/`.
 - Saved views: `presentation.list.views` on the declaration.
+- Field expected/allowed by a classification: declare
+  `capabilities.classificationPolicies` (or a per-row policy column) and read
+  `@cubby/schemas/classification-field-policy` plus
+  `server/repo/classification-field-policy.ts` — never a feature literal at a
+  call site. See [entities](../entities.md#classification-field-policies).
 - Detail pages: generic detail with declared slots (`app/*/slots.tsx`).
 - Slot reports: a slot that is figures, series, a table or dated rows reads
   `entityReport.get` (`server/repo/entity-report/`; block kinds `stats`,

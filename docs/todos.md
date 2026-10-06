@@ -427,26 +427,31 @@ See also the image operational passes at the end of this file.
 
 ## Entity platform & data model
 
-- 🟢 **Classification-declared field policies.** A classification decides
-  whether a field or link is expected, and whether it is allowed at all: a
-  SpendingCategory with `productExpectation: not_allowed` (Restaurants)
-  means an Expense neither expects nor may link a Product (strict refusal on
-  every write path; #1685 and #1682 are the first instance). Generalize it so a
-  classification declares, per field, `required | not_expected | unknown` and
-  whether a value is allowed, read by one generic evaluator for data-quality
-  gaps, write validation, Jev targets (never suggest a disallowed field), and
-  receiving/evidence gates, instead of per-entity `CASE` SQL and hand rules.
-  Candidates: ProductCategory `feature` (food expects `ingredientId`/`fdc_id`,
-  non-food refuses them; books expect an ISBN — today `hasFoodIndicators` and
-  `externalIdsContainIsbn` in `repo/product/crud.ts`; seed and plant categories
-  expect `growsPlantId`, others refuse it), SpendingCategory `evidenceExpectation`
-  and Vendor/Purchase overrides (`repo/purchase-evidence-policy.ts`), Location
-  type (which kinds carry a Product or plantings), and Task/Project trade.
-  Decided shape: fixed classifications (ProductCategory `feature`, Location
-  type) declare policies in the entity manifest; household-editable ones
-  (SpendingCategory) keep per-row columns; one registry and evaluator reads
-  both. First slice: ProductCategory `feature`. Inherited classifications
-  resolve through their existing effective-value SQL before a refusal applies.
+- 🟢 **Classification-declared field policies: remaining classifications.**
+  A classification decides whether a field or link is expected, and whether
+  it is allowed at all: a SpendingCategory with `productExpectation:
+not_allowed` (Restaurants) means an Expense neither expects nor may link a
+  Product (strict refusal on every write path; #1685 and #1682). Decided
+  shape: fixed classifications declare policies in the entity manifest
+  (`capabilities.classificationPolicies`, keyed by classifier value);
+  household-editable ones keep per-row columns; one registry and evaluator
+  (`@cubby/schemas/classification-field-policy`) reads both, in one vocabulary
+  (`required | not_expected | unknown | not_allowed`). Shipped: that registry,
+  with SpendingCategory `productExpectation` registered, and the
+  ProductCategory `feature` slice — food-only `ingredientId`/`fdc_id`,
+  books-only ISBN, required `model` — read by category admission, the
+  `product_model` gap, and Jev targets ([entities](entities.md#classification-field-policies)).
+  Remaining: move `productExpectation` enforcement (`validateProductPolicy`,
+  `expenseProductForbiddenSql`) onto `classificationPolicySql`; decide whether
+  Food _expects_ an ingredient and Books an ISBN (both `unknown` today, so no
+  gap) and whether a Food Product may carry an ISBN outright rather than by
+  precedence; seed/plant `growsPlantId` (no feature or rule exists yet); the
+  project-resource capability and garden-source refusal in
+  `productCategoryFeatureCapabilities`/`assertProductCategoryChange`;
+  SpendingCategory `evidenceExpectation` with Vendor/Purchase overrides
+  (`repo/purchase-evidence-policy.ts`); Location type; Task/Project trade.
+  Inherited classifications (Vendor → Purchase → Expense) resolve through
+  their existing effective-value SQL before a refusal applies.
 
 - 🤔 **One FROM context per entity list.** Each list repo pairs a relational
   `findMany` (root aliased) with an unaliased `$count`, so a predicate

@@ -28,13 +28,13 @@ import {
   run as runTable,
   vendor,
 } from "~/server/db/schema";
+import { classificationRefusesField } from "~/server/repo/classification-field-policy";
 import {
   databaseForTransaction,
   getDb,
   notDeleted,
   withTransaction,
 } from "~/server/repo/database-helpers";
-import { getCategoryFeature } from "~/server/repo/product-category";
 import { updateProduct } from "~/server/repo/product/crud";
 import { updatePurchase } from "~/server/repo/purchase";
 import { resolveOrThrow } from "~/server/repo/shortcode-resolver";
@@ -334,13 +334,14 @@ async function fillTarget(
         locked.categoryId !== row.categoryId
       )
         return false;
-      // An ingredient link files the Product under food; it never replaces a
-      // category that is not food, counting a feature inherited from an
-      // ancestor ("Rice" under a food root).
+      // An ingredient link files the Product under food; a pick never
+      // replaces a recorded category whose feature policy refuses the field,
+      // counting a feature inherited from an ancestor ("Rice" under a food
+      // root). The category is unchanged, so the basis shortcode still names it.
       if (
-        target === "ingredientId" &&
-        locked.categoryId !== null &&
-        (await getCategoryFeature(tx, locked.categoryId)) !== "food"
+        await classificationRefusesField(tx, "product", target, {
+          categoryId: row.categoryShortcode,
+        })
       )
         return false;
       await (ports.writeProduct ?? updateProduct)(

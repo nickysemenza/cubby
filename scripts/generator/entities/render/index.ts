@@ -30,6 +30,7 @@ import { renderStructuredValueSchemas } from "./structured-value-schemas.ts";
 import { renderSwiftEntityCatalog } from "./swift-catalog.ts";
 import { renderSwiftSharedConstants } from "./swift-shared-constants.ts";
 import { renderDataQualityArtifacts } from "./data-quality.ts";
+import { renderClassificationPolicyArtifacts } from "../classification-policies.ts";
 import { renderImagePolicyArtifacts } from "./image-policy.ts";
 import { renderCoverageTotalsArtifacts } from "./coverage-totals.ts";
 import { renderSchemaWrapperArtifacts } from "./schema-wrappers.ts";
@@ -1074,6 +1075,7 @@ export const entityListSummaryOutputSchema = z.object({entity:z.enum(listEntitie
     .join("\n");
   return [
     ...renderDataQualityArtifacts(entities),
+    ...renderClassificationPolicyArtifacts(entities),
     ...renderSchemaWrapperArtifacts(entities),
     ...renderCoverageTotalsArtifacts(entities),
     ...renderImagePolicyArtifacts(entities),

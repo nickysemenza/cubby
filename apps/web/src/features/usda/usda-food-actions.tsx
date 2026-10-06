@@ -23,7 +23,7 @@ import type { ComboboxItem } from "../../ui/combobox/combobox-types";
 /**
  * USDA-food-derived prefill shared by both actions below: manufacturer/UPC/
  * fdc_id only. `category` is deliberately not prefilled — it self-corrects
- * server-side via `hasFoodIndicators` once `fdc_id` is set.
+ * server-side via `impliedProductFeature` once `fdc_id` is set.
  */
 function foodProductPrefill(food: FoodSummaryWithLinkedProducts) {
   return {

@@ -2,9 +2,9 @@ import { UNSPECIFIED_MANUFACTURER } from "@cubby/shared";
 import { sql } from "drizzle-orm";
 
 import { product } from "~/server/db/schema";
+import { classificationPolicySql } from "~/server/repo/classification-field-policy";
 import { expenseAcquisitionSql } from "~/server/repo/expense-aggregate-sql";
 import { productHasDisplayableImageSql } from "~/server/repo/image-displayability";
-import { categoryFeatureSql } from "~/server/repo/product-category-sql";
 import { orphanedProductCondition } from "~/server/repo/product/orphan-condition";
 import { derivedPriceFilterSql } from "~/server/repo/product/pricing";
 
@@ -13,12 +13,6 @@ import { defineEntityChecks } from "../registry";
 type Product = typeof product;
 
 const AMAZON_SOURCE = "amazon";
-const MODEL_REQUIRED_CATEGORIES = [
-  "tools",
-  "electronics",
-  "storage",
-  "household",
-] as const;
 
 // includes-installed: a fixture is in scope for the image and purchase checks
 // the same as any other stocked product.
@@ -89,12 +83,12 @@ const hasLiveCategory = (t: Product) => sql`EXISTS (
 )`;
 
 const modelRequired = (t: Product) =>
-  sql`(${sql.join(
-    MODEL_REQUIRED_CATEGORIES.map((feature) =>
-      categoryFeatureSql(sql`${t.categoryId}`, feature),
-    ),
-    sql` OR `,
-  )})`;
+  classificationPolicySql(
+    "productCategory.feature",
+    "model",
+    "required",
+    sql`${t.categoryId}`,
+  );
 
 const derivedPrice = (t: Product) => derivedPriceFilterSql(t.id);
 
@@ -123,7 +117,7 @@ export const productChecks = defineEntityChecks({
       fingerprint: (t) => [sql`${t.categoryId}`],
     },
     product_model: {
-      // Only categories whose things carry a maker's model number.
+      // The category feature's declared field policy requires a model.
       expected: modelRequired,
       missing: (t) => sql`(${t.model} IS NULL OR trim(${t.model}) = '')`,
       fingerprint: (t) => [sql`${t.categoryId}`, sql`${t.model}`],
