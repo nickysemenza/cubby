@@ -73,6 +73,13 @@ test("quality leads entity tables, explains its calculation, and restores tempor
     "Only this record's applicable weighted checks",
   );
   await expect(popover).toContainText("product.data-quality");
+  const calculation = popover.getByRole("heading", {
+    name: "Score calculation",
+  });
+  const technical = popover.getByRole("heading", { name: "Technical details" });
+  expect((await calculation.boundingBox())!.y).toBeLessThan(
+    (await technical.boundingBox())!.y,
+  );
   await expect(popover.locator("pre")).toHaveCount(0);
   await expectViewportBounded(page);
   await page.screenshot({ path: testInfo.outputPath("quality-desktop.png") });

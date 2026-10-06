@@ -8,7 +8,7 @@ import { expect, test } from "./e2e-test";
 test("reviews historical item classification and preserves explicit purpose", async ({
   page,
   baseURL,
-}) => {
+}, testInfo) => {
   const headers = { Origin: baseURL! };
   const create = async (
     path: string,
@@ -135,8 +135,10 @@ test("reviews historical item classification and preserves explicit purpose", as
       spendingCategoryId: { mode: "explicit", storedValue: gifts },
     },
   });
+  const toolsName =
+    "Synthetic classification tools and household workshop supplies";
   const tools = await create("spending-categories", {
-    name: "Synthetic classification tools",
+    name: toolsName,
   });
   const toolsCategory = await create("product-categories", {
     name: "Synthetic classification tools parent",
@@ -303,6 +305,19 @@ test("reviews historical item classification and preserves explicit purpose", as
   await expect(
     page.getByText("Resolution order", { exact: true }),
   ).toBeVisible();
+  const winningValue = page
+    .locator('[data-slot="popover-content"] [data-role="wins"]')
+    .getByRole("link", { name: toolsName, exact: true });
+  await expect(winningValue).toBeVisible();
+  const winningLabel = winningValue.locator("span").last();
+  expect(
+    await winningLabel.evaluate((label) => label.scrollWidth),
+  ).toBeLessThanOrEqual(
+    await winningLabel.evaluate((label) => label.clientWidth),
+  );
+  await page.screenshot({
+    path: testInfo.outputPath("inherited-category-desktop.png"),
+  });
   await page.keyboard.press("Escape");
   await page.setViewportSize({ width: 402, height: 874 });
   const phoneExplanation = page
@@ -316,6 +331,14 @@ test("reviews historical item classification and preserves explicit purpose", as
   await expect(
     page.getByText("Resolution order", { exact: true }),
   ).toBeVisible();
+  expect(
+    await winningLabel.evaluate((label) => label.scrollWidth),
+  ).toBeLessThanOrEqual(
+    await winningLabel.evaluate((label) => label.clientWidth),
+  );
+  await page.screenshot({
+    path: testInfo.outputPath("inherited-category-phone.png"),
+  });
   await page.keyboard.press("Escape");
   const blocked = await preview({
     action: "productCategory",

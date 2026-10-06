@@ -51,8 +51,8 @@ export function ExceptionControls({
 
   if (check.exception) {
     return (
-      <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-muted-foreground">
-        <span>
+      <div className="grid gap-2 text-xs text-muted-foreground">
+        <span className="leading-5">
           {check.exception.state === "stale"
             ? "Evidence changed since this exception was recorded: "
             : "Recorded as "}
@@ -84,7 +84,7 @@ export function ExceptionControls({
   }
   return (
     <form
-      className="grid gap-2 rounded-md border border-border p-2"
+      className="grid gap-2 border-t border-border pt-2"
       onSubmit={(event) => {
         event.preventDefault();
         set.mutate({
@@ -124,7 +124,7 @@ export function ExceptionControls({
           onChange={(event) => setNote(event.target.value)}
         />
       </div>
-      <div className="flex gap-2">
+      <div className="flex flex-wrap gap-2">
         <Button size="xs" type="submit" disabled={set.isPending}>
           Accept exception
         </Button>

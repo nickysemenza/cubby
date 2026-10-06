@@ -52,6 +52,7 @@ export type ByIdRefLinkProps = {
   name?: string | null;
   /** Compact mode: truncates long names with max-width */
   compact?: boolean;
+  wrap?: boolean;
 };
 
 /**
@@ -64,6 +65,7 @@ export function ByIdRefLink({
   entityId,
   name,
   compact,
+  wrap,
 }: Omit<ByIdRefLinkProps, "variant"> & { variant?: "byId" }) {
   // Resolve the name via the shared entity-detail mapping for every named
   // entity; everything else (inventory, cookbook, or an out-of-union runtime
@@ -100,7 +102,9 @@ export function ByIdRefLink({
   }
 
   if (name && isNamedEntity(entityKind)) {
-    return <ChipRefLink entity={entityKind} id={entityId} name={name} />;
+    return (
+      <ChipRefLink entity={entityKind} id={entityId} name={name} wrap={wrap} />
+    );
   }
 
   if (!isFetchableEntity(entityKind) && isNamedEntity(entityKind)) {
@@ -111,6 +115,7 @@ export function ByIdRefLink({
       <ChipRefLink
         entity={entityKind}
         id={entityId}
+        wrap={wrap}
         name={
           record.success
             ? z
@@ -144,7 +149,8 @@ export function ByIdRefLink({
         // SAFETY: the preview query options and this discriminant are selected
         // by the same fetchable entity guard above.
         data={data as never}
-        compact={compact}
+        compact={wrap ? false : compact}
+        className={wrap ? "max-w-full min-w-0 [&>span]:break-words" : undefined}
       />
     );
   }

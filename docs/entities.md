@@ -1113,6 +1113,15 @@ by the spending-only workflow; identity normalization cannot substitute a target
 different from the reviewed one. Lazy field explanations return bounded hierarchy
 and fallback-source evidence so clients do not reconstruct these rules.
 
+Web field explanations keep one compact hierarchy across quality, derived values,
+and inheritance: the result and interpretation lead, followed by applicable checks
+and source evidence, then technical metadata. Check rows distinguish missing data,
+defects, and accepted exceptions with labeled semantic badges; weights and rule
+identifiers remain secondary but visible. Inheritance ladders align source, value,
+and precedence, allow long values to wrap, and emphasize the winning source.
+Reset and navigation actions remain in the popover footer, while exception actions
+stay with their check. Tables retain their compact rows and lazy explanations.
+
 An Image has provenance (`own`, `catalog`, `unknown`, or `screenshot`, plus
 optional supplying source name/page/asset URLs). Its Product attachment has
 nullable purpose (`item` or `label`). Unset legacy purposes keep their

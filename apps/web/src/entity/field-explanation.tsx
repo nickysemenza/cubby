@@ -24,6 +24,7 @@ import { CELL_RAIL_BUTTON_CLASS } from "~/ui/data-table/cell-frame";
 import { ErrorDisplay } from "~/ui/feedback/error-display";
 import { useActionMutation } from "~/ui/hooks/useActionMutation";
 import { Stack } from "~/ui/layout";
+import { Badge } from "~/ui/primitives/badge";
 import { Button } from "~/ui/primitives/button";
 import { NoneValue } from "~/ui/primitives/none-value";
 import {
@@ -87,7 +88,7 @@ export function ReadableExplanationValue({
     if (value.length === 0) return <NoneValue />;
     const occurrences = new Map<string, number>();
     return (
-      <ul className="grid gap-1 pl-4 text-xs">
+      <ul className="grid gap-2 pl-4 text-xs">
         {value.map((item) => {
           const contentKey = JSON.stringify(item);
           const occurrence = occurrences.get(contentKey) ?? 0;
@@ -138,7 +139,7 @@ function ReadableExplanationRecord({
     );
   }
   return (
-    <dl className="grid gap-x-3 gap-y-1 text-xs sm:grid-cols-[auto_1fr]">
+    <dl className="grid grid-cols-[minmax(5rem,0.35fr)_minmax(0,1fr)] gap-x-3 gap-y-1 text-xs">
       {Object.entries(record.data).map(([key, item]) => (
         <div key={key} className="contents">
           <dt className="text-muted-foreground">{humanize(key)}</dt>
@@ -191,6 +192,7 @@ export function ExplanationEntityLink({
       entityKind={auditable.data}
       entityId={id}
       name={name}
+      wrap
     />
   ) : (
     <span className="font-mono text-xs">{id}</span>
@@ -201,8 +203,10 @@ function ExplanationSourceRow({ source }: { source: ExplanationSource }) {
   const record = explanationRecord.safeParse(source.value);
   const name = record.success ? z.string().safeParse(record.data.name) : null;
   return (
-    <div className="grid gap-1">
-      <dt className="text-sm text-muted-foreground">{source.label}</dt>
+    <div className="grid items-baseline gap-x-3 gap-y-1 border-b border-border py-2 last:border-0 sm:grid-cols-[minmax(5rem,0.35fr)_minmax(0,1fr)]">
+      <dt className="text-xs font-medium text-muted-foreground">
+        {source.label}
+      </dt>
       <dd className="grid min-w-0 gap-1.5">
         {source.entity ? (
           <ExplanationEntityLink
@@ -240,12 +244,12 @@ function UnassessedQualityExplanation({
   )?.explanation;
 
   return (
-    <div className="grid gap-4">
+    <div className="grid min-w-0 gap-3 p-3 text-sm">
       <PopoverTitle className="text-base font-semibold">
         Data quality
       </PopoverTitle>
       <section className="grid gap-2">
-        <h3 className="font-medium">What this means</h3>
+        <h3 className={sectionLabelClassName}>What this means</h3>
         <p className="text-lg font-semibold">Not assessed</p>
         <p className="text-sm leading-relaxed">
           No quality checks are defined for this entity. Review its fields and
@@ -255,8 +259,8 @@ function UnassessedQualityExplanation({
           <ExplanationEntityLink entity={entity} id={id} name="Open record" />
         ) : null}
       </section>
-      <section className="grid gap-2 border-t border-border pt-4">
-        <h3 className="font-medium">Technical details</h3>
+      <section className="grid gap-2 border-t border-border pt-3">
+        <h3 className={sectionLabelClassName}>Technical details</h3>
         <p className="text-sm leading-relaxed">
           There is no score, calculation, or check evaluation for this entity.
           Not assessed is not a score of zero or a guarantee of completeness.
@@ -282,28 +286,48 @@ function QualityCalculation({
   entityId: string;
 }) {
   return (
-    <div className="grid gap-3">
-      <h4 className="font-medium">Score calculation</h4>
-      <p className="text-sm tabular-nums">{breakdown.summary}</p>
-      <ul className="grid gap-3">
+    <section className="grid gap-2 border-t border-border pt-3">
+      <h3 className={sectionLabelClassName}>Score calculation</h3>
+      <p className="text-xs leading-5 tabular-nums">{breakdown.summary}</p>
+      <ul className="grid divide-y divide-border">
         {breakdown.checks.map((check) => (
-          <li key={check.check} className="grid gap-1 text-sm">
-            <div className="flex flex-wrap justify-between gap-2">
-              <span className="font-medium">{check.label}</span>
-              <span className="text-muted-foreground">
-                {check.stateLabel} · {check.weightLabel}
-              </span>
+          <li
+            key={check.check}
+            className="grid min-w-0 gap-1.5 py-2.5 first:pt-1"
+          >
+            <div className="flex min-w-0 flex-wrap items-baseline justify-between gap-x-3 gap-y-1">
+              <span className="text-sm font-medium">{check.label}</span>
+              <Badge
+                variant={
+                  check.state === "gap"
+                    ? check.kind === "defect"
+                      ? "destructive"
+                      : "warning"
+                    : check.state === "excepted"
+                      ? "secondary"
+                      : "outline"
+                }
+              >
+                {check.stateLabel}
+              </Badge>
             </div>
-            {check.state === "gap" ? <p>{check.description}</p> : null}
+            <div className="flex min-w-0 flex-wrap justify-between gap-x-3 gap-y-1 text-xs text-muted-foreground">
+              <span className="min-w-0 break-words">
+                {humanize(check.facet)} ·{" "}
+                <span className="font-mono text-[11px] break-all">
+                  {check.check}
+                </span>
+              </span>
+              <span className="tabular-nums">{check.weightLabel}</span>
+            </div>
+            {check.state === "gap" ? (
+              <p className="text-xs leading-5">{check.description}</p>
+            ) : null}
             <ExceptionControls entityId={entityId} check={check} />
-            <p className="text-xs text-muted-foreground">
-              {humanize(check.facet)} ·{" "}
-              <span className="font-mono break-all">{check.check}</span>
-            </p>
           </li>
         ))}
       </ul>
-    </div>
+    </section>
   );
 }
 
@@ -350,7 +374,7 @@ export function FieldExplanation({
           <InfoIcon className={surface === "list" ? "size-3" : "size-3.5"} />
         )}
       </PopoverTrigger>
-      <PopoverContent className="max-h-[min(42rem,85dvh,var(--available-height))] w-[min(34rem,calc(100vw-2rem))] overflow-y-auto">
+      <PopoverContent className="max-h-[min(42rem,85dvh,var(--available-height))] w-[min(34rem,calc(100vw-2rem))] overflow-y-auto overscroll-contain p-0">
         {open &&
         field === "dataQuality" &&
         !z.enum(scoredEntities).safeParse(entity).success ? (
@@ -391,7 +415,7 @@ function FieldExplanationContents({
     target.entityKind === entity && target.entityId === id;
   // Long rule identifiers must wrap inside the viewport-bounded popover.
   return (
-    <div className="grid grid-cols-[minmax(0,1fr)] gap-3">
+    <div className="grid grid-cols-[minmax(0,1fr)] gap-3 p-3">
       <PopoverTitle className="text-base font-semibold">
         <span className="sr-only">How </span>
         {label}
@@ -413,25 +437,28 @@ function FieldExplanationContents({
         </Stack>
       ) : (
         <>
-          <section className="grid gap-3">
-            <h3 className="font-medium">What this means</h3>
+          <section className="grid gap-2">
+            <h3 className={sectionLabelClassName}>What this means</h3>
             {result.data.interpretation ? (
               <>
-                <p className="text-lg font-semibold break-words">
+                <p className="text-lg leading-snug font-semibold break-words">
                   {result.data.interpretation.result}
                 </p>
-                <p className="text-sm leading-relaxed">
+                <p className="text-sm leading-5">
                   {result.data.interpretation.summary}
                 </p>
                 {result.data.interpretation.caveats.map((caveat) => (
-                  <p key={caveat} className="text-sm text-muted-foreground">
+                  <p
+                    key={caveat}
+                    className="text-xs leading-5 text-muted-foreground"
+                  >
                     {caveat}
                   </p>
                 ))}
                 {result.data.interpretation.nextSteps.length > 0 ? (
                   <div className="grid gap-1.5">
-                    <h4 className="font-medium">Next steps</h4>
-                    <ul className="list-disc pl-4 text-sm">
+                    <h4 className={sectionLabelClassName}>Next steps</h4>
+                    <ul className="list-disc pl-4 text-xs leading-5">
                       {result.data.interpretation.nextSteps.map((step) => (
                         <li key={step}>{step}</li>
                       ))}
@@ -460,11 +487,59 @@ function FieldExplanationContents({
               </div>
             ) : null}
           </section>
-          <section className="grid gap-3 border-t border-border pt-4">
-            <h3 className="font-medium">Technical details</h3>
-            <p className="text-sm leading-relaxed">
-              {result.data.rule.description}
-            </p>
+          {result.data.qualityBreakdown ? (
+            <QualityCalculation
+              breakdown={result.data.qualityBreakdown}
+              entityId={id}
+            />
+          ) : null}
+          {!explanationScalar.safeParse(result.data.value).success &&
+          result.data.value !== null &&
+          !result.data.resolution ? (
+            <ReadableExplanationValue value={result.data.value} />
+          ) : null}
+          {visibleSources(result.data).length > 0 ? (
+            <section className="grid gap-2 border-t border-border pt-3">
+              <h3 className={sectionLabelClassName}>Evidence</h3>
+              <dl className="grid">
+                {visibleSources(result.data)
+                  .slice(0, 6)
+                  .map((source) => (
+                    <ExplanationSourceRow
+                      key={explanationSourceKey(source)}
+                      source={source}
+                    />
+                  ))}
+              </dl>
+              {visibleSources(result.data).length > 6 ? (
+                <details className="grid gap-2">
+                  <summary className="cursor-pointer text-sm font-medium">
+                    Show {visibleSources(result.data).length - 6} more evidence
+                    entries
+                  </summary>
+                  <dl className="grid pt-2">
+                    {visibleSources(result.data)
+                      .slice(6)
+                      .map((source) => (
+                        <ExplanationSourceRow
+                          key={explanationSourceKey(source)}
+                          source={source}
+                        />
+                      ))}
+                  </dl>
+                </details>
+              ) : null}
+              {result.data.truncated ? (
+                <p className="text-xs leading-5 text-muted-foreground">
+                  Evidence is bounded; the displayed sources are not an
+                  exhaustive list.
+                </p>
+              ) : null}
+            </section>
+          ) : null}
+          <section className="grid gap-2 border-t border-border pt-3">
+            <h3 className={sectionLabelClassName}>Technical details</h3>
+            <p className="text-xs leading-5">{result.data.rule.description}</p>
             <dl className="grid gap-1 text-xs text-muted-foreground">
               <div>
                 <dt className="inline">Rule: </dt>
@@ -488,56 +563,6 @@ function FieldExplanationContents({
                 </dd>
               </div>
             </dl>
-            {result.data.qualityBreakdown ? (
-              <QualityCalculation
-                breakdown={result.data.qualityBreakdown}
-                entityId={id}
-              />
-            ) : null}
-            {!explanationScalar.safeParse(result.data.value).success &&
-            result.data.value !== null &&
-            !result.data.resolution ? (
-              <ReadableExplanationValue value={result.data.value} />
-            ) : null}
-            {visibleSources(result.data).length > 0 ? (
-              <section className="grid gap-1.5">
-                <h3 className={sectionLabelClassName}>Evidence</h3>
-                <dl className="grid gap-2">
-                  {visibleSources(result.data)
-                    .slice(0, 6)
-                    .map((source) => (
-                      <ExplanationSourceRow
-                        key={explanationSourceKey(source)}
-                        source={source}
-                      />
-                    ))}
-                </dl>
-                {visibleSources(result.data).length > 6 ? (
-                  <details className="grid gap-2">
-                    <summary className="cursor-pointer text-sm font-medium">
-                      Show {visibleSources(result.data).length - 6} more
-                      evidence entries
-                    </summary>
-                    <dl className="grid gap-3 pt-3">
-                      {visibleSources(result.data)
-                        .slice(6)
-                        .map((source) => (
-                          <ExplanationSourceRow
-                            key={explanationSourceKey(source)}
-                            source={source}
-                          />
-                        ))}
-                    </dl>
-                  </details>
-                ) : null}
-                {result.data.truncated ? (
-                  <p className="text-muted-foreground">
-                    Evidence is bounded; the displayed sources are not an
-                    exhaustive list.
-                  </p>
-                ) : null}
-              </section>
-            ) : null}
           </section>
           <ExplanationFooter
             entity={entity}
@@ -650,7 +675,7 @@ function ExplanationFooter({
   ) : null;
   if (actions.length === 0 && !resolution?.canReset) return null;
   return (
-    <footer className="grid grid-cols-[minmax(0,1fr)] gap-2 border-t border-border pt-2">
+    <footer className="sticky -bottom-3 z-10 -mx-3 -mb-3 grid grid-cols-[minmax(0,1fr)] gap-2 border-t border-border bg-popover px-3 py-2 text-xs">
       {actions.length > 0 || resolution?.canReset ? (
         <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5">
           {resets}
