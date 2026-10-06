@@ -304,6 +304,7 @@ const foldSupersededCharge = async (
     current.lineCount <= 1
   ) {
     await foldChargeInto(tx, current.purchaseId, target, actor);
+    await validateProductPolicy(tx, { purchaseId: target });
   }
 };
 

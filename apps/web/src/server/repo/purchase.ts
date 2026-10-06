@@ -2051,7 +2051,11 @@ const moveChargeImages = async (
     );
 };
 
-/** Fold charge contents with audited expense re-pointing; callers own index ordering. */
+/**
+ * Fold charge contents with audited expense re-pointing; callers own index
+ * ordering and validate the Product policy once the whole write lands (a
+ * Vendor merge folds before repointing to the keeper, whose context decides).
+ */
 export const foldChargeInto = async (
   tx: DrizzleTransaction,
   deadId: PurchaseId,
@@ -2101,7 +2105,6 @@ export const foldChargeInto = async (
           to: survivorId,
           liveOnly: true,
         });
-        await validateProductPolicy(tx, { expenseIds: moved });
         await logAuditEntries(
           tx,
           actor,
@@ -2293,6 +2296,8 @@ export const mergePurchases = async (
     for (const loser of losers) {
       await foldChargeInto(tx, loser, keepId, actor);
     }
+    // Carried metadata (a category) can reclassify the keeper's own lines.
+    await validateProductPolicy(tx, { purchaseId: keepId });
     mergedCount = losers.length;
 
     const adopted = orderIdBearers[0];

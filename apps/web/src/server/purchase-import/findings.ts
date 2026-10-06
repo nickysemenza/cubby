@@ -228,6 +228,7 @@ async function applyFix(
       )
       .returning({ id: expense.id });
     if (!updated) throw new Error("The proposed Expense no longer exists.");
+    await validateProductPolicy(tx, { expenseIds: [expenseId] });
     await logAuditEntries(tx, actor, [
       {
         entityKind: "expense",

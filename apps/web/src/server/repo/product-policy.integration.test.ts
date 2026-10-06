@@ -3,9 +3,10 @@ import { createRepoEntity } from "tooling/factories/repo";
 import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 
-import { productCategory } from "~/server/db/schema";
+import { productCategory, runFinding } from "~/server/db/schema";
+import { resolveRunFinding } from "~/server/purchase-import/findings";
 import { getDb } from "~/server/repo/database-helpers";
-import { linkExpensesToPurchase } from "~/server/repo/purchase";
+import { linkExpensesToPurchase, mergePurchases } from "~/server/repo/purchase";
 import { insertWithShortcode } from "~/server/repo/shortcode-utils";
 import { withReviewedSpendingClassification } from "~/server/repo/spending-classification-review-authorization";
 import { mergeVendors } from "~/server/repo/vendor";
@@ -18,7 +19,9 @@ import { updateThroughKernel } from "~/server/testing/entity-kernel";
 // category; a category is moved to not_allowed while Expenses in it still
 // link Products; a write that reclassifies existing lines without touching
 // them (attaching a line to another Purchase, a Vendor becoming a
-// restaurant, merging into a restaurant Vendor) commits a forbidden link.
+// restaurant, merging into a restaurant Vendor, a merge carrying a category
+// onto the keeper's own lines, an import finding relinking a Product)
+// commits a forbidden link.
 describe("not_allowed product expectation", () => {
   const ctx = withTestDb();
 
@@ -176,6 +179,74 @@ describe("not_allowed product expectation", () => {
         { keepId: keeper.shortcode, mergeIds: [grocer.shortcode] },
         ctx.actor,
       ),
+    ).rejects.toThrow(/does not allow/i);
+  });
+
+  it("refuses a Purchase merge that carries a restaurant category onto the keeper's Product line", async () => {
+    const { restaurants, product } = await seed();
+    const vendor = await insertWithShortcode(ctx.db, "vendor", {
+      name: `Example cafe ${crypto.randomUUID()}`,
+    });
+    const keeper = await insertWithShortcode(ctx.db, "purchase", {
+      vendorId: vendor.id,
+      date: "2026-09-21",
+      defaultTrade: "other",
+    });
+    await line(keeper.shortcode, product.shortcode);
+    const meal = await insertWithShortcode(ctx.db, "purchase", {
+      vendorId: vendor.id,
+      date: "2026-09-21",
+      spendingCategoryId: restaurants.id,
+      spendingCategoryOrigin: "manual",
+      defaultTrade: "other",
+    });
+    await line(meal.shortcode, null);
+    await expect(
+      mergePurchases(
+        ctx.db,
+        { keepId: keeper.shortcode, mergeIds: [meal.shortcode] },
+        ctx.actor,
+      ),
+    ).rejects.toThrow(/does not allow/i);
+  });
+
+  it("refuses applying an import finding that relinks a Product onto a restaurant meal", async () => {
+    const { restaurants, purchaseIn, product } = await seed();
+    const meal = await purchaseIn(restaurants);
+    const lunch = await insertWithShortcode(ctx.db, "expense", {
+      purchaseId: meal.id,
+      name: "Lunch",
+      cost: 12,
+      date: "2026-09-21",
+      costType: "materials",
+      trade: "other",
+      lineKind: "principal",
+      lineBasis: "item_line",
+    });
+    const party = await insertWithShortcode(ctx.db, "ledgerParty", {
+      name: `Example member ${crypto.randomUUID()}`,
+      kind: "member",
+      userId: ctx.actor.userId,
+    });
+    const [finding] = await getDb(ctx.db)
+      .insert(runFinding)
+      .values({
+        ledgerPartyId: party.id,
+        entityKind: "expense",
+        entityId: lunch.id,
+        kind: "wrong_product",
+        summary: "The line names a pantry Product.",
+        proposedFix: {
+          kind: "relink_product",
+          expenseId: lunch.id,
+          productId: product.id,
+        },
+        evidenceFingerprint: crypto.randomUUID(),
+      })
+      .returning({ id: runFinding.id });
+    if (!finding) throw new Error("test setup: finding not inserted");
+    await expect(
+      resolveRunFinding(ctx.db, { id: finding.id, action: "apply" }, ctx.actor),
     ).rejects.toThrow(/does not allow/i);
   });
 });
