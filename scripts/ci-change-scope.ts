@@ -3,6 +3,7 @@ import { appendFileSync } from "node:fs";
 
 export interface CiChangeScope {
   validation: boolean;
+  generation: boolean;
   web: boolean;
   auxiliary: boolean;
   rust: boolean;
@@ -15,6 +16,7 @@ export interface CiChangeScope {
 
 const emptyScope = (): CiChangeScope => ({
   validation: false,
+  generation: false,
   web: false,
   auxiliary: false,
   rust: false,
@@ -26,6 +28,7 @@ const emptyScope = (): CiChangeScope => ({
 
 const fullScope = (): CiChangeScope => ({
   validation: true,
+  generation: true,
   web: true,
   auxiliary: true,
   rust: true,
@@ -55,6 +58,11 @@ const workerSkills = [
   ".claude/skills/product-enrichment/",
   ".claude/skills/photo-inventory-import/",
 ];
+// /docs/ redirects to this fixed filename; moving it is a route change.
+const runtimeMarkdown = (path: string) =>
+  path === "docs/README.md" ||
+  workerSkills.some((prefix) => path.startsWith(prefix));
+
 // What the purchase-import browser spec drives: the agent and its server,
 // the vendor import start, the Run and Purchase pages, and its harness.
 const importE2eInputs = [
@@ -104,10 +112,8 @@ const affectedByPath = (path: string): Partial<CiChangeScope> | null => {
     return {
       docs: true,
       format: true,
-      ...((path.startsWith("docs/") ||
-        workerSkills.some((prefix) => path.startsWith(prefix))) && {
-        web: true,
-      }),
+      ...(path === "docs/todos.md" && { generation: true }),
+      ...(runtimeMarkdown(path) && { web: true }),
     };
   if (
     path.startsWith(".github/") ||
