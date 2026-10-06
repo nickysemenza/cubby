@@ -64,10 +64,6 @@ test("edits compound emoji, clears it, and browses inherited category membership
     page.getByRole("link", { name: /Synthetic emoji groceries/ }).first(),
   ).toBeVisible();
   await gotoAuthenticatedPage(page, `/product-categories/${root}`);
-  await page
-    .getByRole("button", { name: "Edit Product Category", exact: true })
-    .click();
-  const dialog = page.getByRole("dialog", { name: "Edit Product Category" });
   await page.route("**/api/browser/dispatch", async (route) => {
     if (await unbatchFor(route, ["ai.suggestFields"])) return;
     if (!dispatchesOperation(route.request(), "ai.suggestFields"))
@@ -94,6 +90,10 @@ test("edits compound emoji, clears it, and browses inherited category membership
       ),
     });
   });
+  await page
+    .getByRole("button", { name: "Edit Product Category", exact: true })
+    .click();
+  const dialog = page.getByRole("dialog", { name: "Edit Product Category" });
   await dialog
     .getByRole("button", { name: "Suggest emoji", exact: true })
     .click();
