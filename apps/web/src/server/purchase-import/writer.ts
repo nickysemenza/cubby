@@ -69,6 +69,7 @@ import {
   learnPurchaseProductExternalId,
   PurchaseProductExternalIdCollisionError,
 } from "./external-id-learning";
+import { linkExactOrderMail } from "./gmail/exact-link";
 import { manufacturerPartRequests } from "./manufacturer-identity";
 import {
   lockPartySettlement,
@@ -1012,6 +1013,9 @@ export async function importVendorOrder(
         .where(eq(purchase.id, target.id));
     }
     const purchaseId = parseEntityId("purchase", target.id);
+    // Mail saved before this Purchase existed links now, without a click.
+    if (candidate.orderId)
+      await linkExactOrderMail(tx, { vendorId, orderId: candidate.orderId });
     const findingIds: string[] = [];
     let replacementExpenseId: string | null = null;
     const rowMutations: Array<{

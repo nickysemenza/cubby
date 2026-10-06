@@ -30,7 +30,8 @@ import {
   withTransaction,
 } from "~/server/repo/database-helpers";
 import { resolveOrThrow } from "~/server/repo/shortcode-resolver";
-import { findOrCreateWithShortcode } from "~/server/repo/shortcode-utils";
+
+import { ensureMailVendorAccount } from "./mail-account";
 
 const candidateReason = (
   event: { orderId: string | null; amount: number | null; receivedAt: Date },
@@ -418,19 +419,9 @@ export async function decideOrderMailCandidate(
     )
       throw new Error("Order mail and Purchase belong to different members");
     if (input.decision === "linked") {
-      await findOrCreateWithShortcode(tx, "vendorAccount", {
-        where: and(
-          eq(vendorAccount.vendorId, vendorId),
-          eq(vendorAccount.ledgerPartyId, scope.ledgerPartyId),
-          notDeleted(vendorAccount),
-        ),
-        values: () => ({
-          label: `${scope.vendorName} mail`,
-          vendorId,
-          ledgerPartyId: scope.ledgerPartyId,
-          status: "disabled",
-          browserSyncEnabled: false,
-        }),
+      await ensureMailVendorAccount(tx, {
+        vendorId,
+        ledgerPartyId: scope.ledgerPartyId,
       });
       await tx
         .update(orderMailCandidateDecision)

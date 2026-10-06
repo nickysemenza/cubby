@@ -12,6 +12,7 @@ import {
   inventoryEntry as inventory,
   run as runTable,
   runOrderCandidate,
+  vendorAccount,
 } from "~/server/db/schema";
 import { getDb } from "~/server/repo/database-helpers";
 import { getRunLiveProgress } from "~/server/repo/run-progress";
@@ -326,6 +327,23 @@ describe("saved confirmation imports", () => {
     expect(purchases).toHaveLength(1);
     expect(purchases[0]?.statedTotal).toBe(5);
     if (!purchases[0]) throw new Error("Missing imported Purchase");
+    // The Purchase belongs to the member's mail-only account, which stays
+    // mail-only; the run itself never becomes an account (browser) run.
+    const [account] = await getDb(ctx.db)
+      .select()
+      .from(vendorAccount)
+      .where(eq(vendorAccount.id, purchases[0].vendorAccountId!));
+    expect(account).toMatchObject({
+      vendorId: run.vendorId,
+      ledgerPartyId: run.ledgerPartyId,
+      browserSyncEnabled: false,
+      status: "disabled",
+    });
+    const [after] = await getDb(ctx.db)
+      .select({ vendorAccountId: runTable.vendorAccountId })
+      .from(runTable)
+      .where(eq(runTable.id, run.id));
+    expect(after?.vendorAccountId).toBeNull();
     // Committed mail must still expose its Purchase for settlement checks,
     // including a new run whose source was already imported by its predecessor.
     const verification = {

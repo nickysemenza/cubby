@@ -92,6 +92,7 @@ import {
   loadOrderMailImportEvidence,
   markOrderMailCandidateImported,
 } from "./gmail/import";
+import { ensureMailVendorAccount } from "./gmail/mail-account";
 import {
   attachPendingOrderMailEvidence,
   type OrderMailEvidencePorts,
@@ -686,9 +687,24 @@ export async function commitPurchaseImport(
             scope.public.runId,
             input.prepareOperationId,
           );
-          await loadOrderMailImportEvidence(transactionDb, scope.public.runId, {
-            allowComplete: true,
-          });
+          const assignedMail = await loadOrderMailImportEvidence(
+            transactionDb,
+            scope.public.runId,
+            { allowComplete: true },
+          );
+          // A mail import's Purchase belongs to the member's (mail-only)
+          // account; the run itself stays account-less so it never walks
+          // order history or competes with that account's browser runs.
+          const purchaseVendorAccountId =
+            scope.public.vendorAccountId ??
+            (assignedMail && scope.vendorId
+              ? (
+                  await ensureMailVendorAccount(transactionDb, {
+                    vendorId: scope.vendorId,
+                    ledgerPartyId: assignedMail.mail.ledgerPartyId,
+                  })
+                ).id
+              : null);
           const defaultProjectId = input.defaultProjectId
             ? await resolveOrThrow(
                 transactionDb,
@@ -809,7 +825,7 @@ export async function commitPurchaseImport(
                 runId: scope.public.runId,
                 ledgerPartyId: scope.ledgerPartyId,
                 vendorId,
-                vendorAccountId: scope.public.vendorAccountId,
+                vendorAccountId: purchaseVendorAccountId,
                 source: {
                   kind: importSourceKind.parse(order.sourceKind),
                   externalKey: order.sourceExternalKey,
