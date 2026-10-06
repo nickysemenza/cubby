@@ -97,7 +97,7 @@ describe("ensureEntityListSsr", () => {
   it("allows incomplete filters while a conditional finite query is disabled", () => {
     expect(() =>
       entityListFor("inventory").queryOptions({
-        sort: { orderBy: "createdAt", direction: "desc" },
+        sort: [{ orderBy: "createdAt", direction: "desc" }],
         pagination: { pageIndex: 0, pageSize: 100 },
         filters: { locationIdFilter: "" },
       }),

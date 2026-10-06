@@ -33,7 +33,7 @@ describe("kernel list restricted to ids", () => {
       action: "list",
       entity: "ingredient",
       filters: { ids },
-      sort: { orderBy: "name", direction: "asc" },
+      sort: [{ orderBy: "name", direction: "asc" }],
       pagination: { pageIndex, pageSize: 1 },
     });
 
@@ -85,7 +85,7 @@ describe("kernel list restricted to ids", () => {
         action: "list",
         entity: "product",
         filters: { ids: wanted.map((row) => row.id.toLowerCase()) },
-        sort: { orderBy: "name", direction: "asc" },
+        sort: [{ orderBy: "name", direction: "asc" }],
         pagination: { pageIndex, pageSize: 1 },
       });
       if (result.action !== "list") throw new Error("expected list");
@@ -127,7 +127,7 @@ describe("kernel list restricted to ids", () => {
           ids: entries.slice(0, 2).map((row) => row.id.toLowerCase()),
           productId: [item.id],
         },
-        sort: { orderBy: "amount", direction: "asc" },
+        sort: [{ orderBy: "amount", direction: "asc" }],
         pagination: { pageIndex, pageSize: 1 },
       });
       if (result.action !== "list") throw new Error("expected list");

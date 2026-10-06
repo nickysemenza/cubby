@@ -65,7 +65,7 @@ const sort = z.object({
 
 const listFields = {
   filters: z.record(z.string(), z.unknown()).default({}),
-  sort: z.union([sort, z.array(sort).min(1).max(MAX_SORTS)]).optional(),
+  sort: z.array(sort).min(1).max(MAX_SORTS).optional(),
   pagination: z
     .object({
       pageIndex: z.number().int().min(0).default(0),

@@ -1,4 +1,4 @@
-import { normalizeSorts } from "@cubby/schemas/pagination";
+import { normalizeSorts, type SortParams } from "@cubby/schemas/pagination";
 import { z } from "zod";
 
 import { createAppError } from "~/server/errors/app-error";
@@ -16,10 +16,7 @@ export const parseSorts = <
   S extends EntityBindingSchemas,
 >(
   binding: EntityKernelCoreBinding<E, S>,
-  value:
-    | { orderBy: string; direction: "asc" | "desc" }
-    | { orderBy: string; direction: "asc" | "desc" }[]
-    | undefined,
+  value: SortParams[] | undefined,
   allowEmpty = false,
 ) => {
   const field = z.enum(binding.sort.fields);
@@ -28,10 +25,9 @@ export const parseSorts = <
   // when the transport omitted one — otherwise relevance is unreachable.
   if (allowEmpty && value === undefined) return [];
   const normalized = normalizeSorts(
-    value ?? {
-      orderBy: binding.sort.default,
-      direction: binding.sort.direction,
-    },
+    value ?? [
+      { orderBy: binding.sort.default, direction: binding.sort.direction },
+    ],
   );
   for (const sort of normalized) {
     const result = field.safeParse(sort.orderBy);

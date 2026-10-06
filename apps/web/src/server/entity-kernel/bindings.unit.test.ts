@@ -339,6 +339,18 @@ describe("entity kernel bindings", () => {
         filters: { ids: ["PRD-ABCD"] },
       }).success,
     ).toBe(false);
+    // `sort` is a stack only; a bare `{orderBy, direction}` is refused.
+    for (const sort of [
+      { orderBy: "name", direction: "asc" },
+      [{ orderBy: "name", direction: "asc" }],
+    ])
+      expect(
+        entityMcpReadCommandSchema.safeParse({
+          action: "list",
+          entity: "product",
+          sort,
+        }).success,
+      ).toBe(Array.isArray(sort));
   });
 
   it("uses one public relation command shape with relation-specific items", () => {

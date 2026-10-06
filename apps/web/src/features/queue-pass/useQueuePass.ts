@@ -38,7 +38,7 @@ export interface StoredQueuePass<TExtra> {
 }
 
 export interface QueuePassPersistence<TExtra> {
-  /** Full localStorage key for a scope, e.g. `cubby:audit-session:LOC-4K7M`. */
+  /** Full localStorage key for a scope, e.g. `cubby:shelf-triage:LOC-4K7M`. */
   storageKey: (scopeKey: string) => string;
   version: number;
   /** Parses the flow-owned payload before persisted state reaches the caller. */

@@ -94,7 +94,7 @@ export function useProductViewSnapshot({
           parseEntityListInput("product", {
             entity: "product",
             filters,
-            sort: sort ?? { orderBy: "createdAt", direction: "desc" },
+            sort: sort ?? [{ orderBy: "createdAt", direction: "desc" }],
             pagination: { pageIndex, pageSize: MAX_PAGE_SIZE },
           }),
         );
