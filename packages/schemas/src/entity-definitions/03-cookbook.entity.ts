@@ -11,6 +11,8 @@ export default defineEntity({
       module: "~/entity/list-columns/cookbook",
       export: "cookbookListOverride",
     },
+    // The browse index filters every cookbook client-side over its own read.
+    listRows: "custom",
     basePath: "cookbooks",
   },
   table: "Cookbook",

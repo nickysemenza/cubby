@@ -20,6 +20,7 @@ import {
   validatePhotoCategoryLabels,
 } from "../../../scripts/generator/entities/compile";
 import { loadEntityDeclarations } from "../../../scripts/generator/entities/declarations";
+import { hasGenericListOperation } from "../../../scripts/generator/entities/list-capabilities";
 import { deriveImageDisplaySources } from "../../../scripts/generator/entities/derive";
 import { renderEntityArtifacts } from "../../../scripts/generator/entities/render/index";
 import { renderImagePolicyArtifacts } from "../../../scripts/generator/entities/render/image-policy";
@@ -1744,6 +1745,31 @@ describe("typed entity compiler", () => {
       "entity-literal-alpha.gen.ts",
       "notes.gen.ts",
     ]);
+  });
+
+  it("moves a read-only entity off the kernel list only for declared custom rows", async () => {
+    const run = (await loadEntityDeclarations()).find(
+      (entity) => entity.key === "run",
+    );
+    if (!run?.route) throw new Error("run must be routed");
+    const columns = {
+      module: "~/entity/list-columns/run",
+      export: "runColumns",
+    };
+    expect(hasGenericListOperation(run)).toBe(true);
+    // Specialist columns alone never change where rows come from.
+    expect(
+      hasGenericListOperation({
+        ...run,
+        route: { ...run.route, listColumns: columns },
+      }),
+    ).toBe(true);
+    expect(
+      hasGenericListOperation({
+        ...run,
+        route: { ...run.route, listColumns: columns, listRows: "custom" },
+      }),
+    ).toBe(false);
   });
 
   it("keeps generated artifacts on their side of the schema and server boundaries", async () => {
