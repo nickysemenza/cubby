@@ -2,6 +2,10 @@ import { sql } from "drizzle-orm";
 import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 
+import {
+  entitySummaryFields,
+  projectEntityResult,
+} from "~/contracts/mcp-projections";
 import { listEntities } from "~/entity/generated/entity-lists.gen";
 import { executeEntity } from "~/server/entity-kernel";
 import { ENTITY_LIST_READ_OPERATIONS } from "~/server/generated/entity-list-read-bindings.gen";
@@ -104,6 +108,17 @@ describe("standard progressive list composition", () => {
       expect([...patches.values()]).toEqual(full.items);
       const summary = await operation.summary(context, input);
       expect(summary.sums).toEqual(full.meta.sums ?? {});
+      // MCP summary detail reads only the fields it publishes.
+      expect(
+        projectEntityResult(
+          { action: "list" },
+          await operation.listFields(
+            context,
+            input,
+            entitySummaryFields(entity),
+          ),
+        ),
+      ).toEqual(projectEntityResult({ action: "list" }, full));
       // Counts and totals use the entire ID-restricted population, across pages.
       const selectedId = base.data[0]?.id;
       if (!selectedId) continue;

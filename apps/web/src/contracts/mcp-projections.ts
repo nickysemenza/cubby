@@ -310,6 +310,14 @@ function coverageFor(entity: keyof typeof entitySummary, item: ProjectionItem) {
   };
 }
 
+/** The list fields a read summary publishes beside `id`: the title, and a product's external ids. */
+export const entitySummaryFields = (
+  entity: keyof typeof entitySummary,
+): string[] => [
+  entitySummary[entity].titleField,
+  ...(entity === "product" ? ["externalIds"] : []),
+];
+
 function summarizeEntityItem(
   entity: keyof typeof entitySummary,
   item: unknown,

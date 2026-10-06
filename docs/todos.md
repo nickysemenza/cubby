@@ -664,6 +664,38 @@ spanner"` → `adjustable wrench` (product); `"wet dry vac"` → `shop vacuum`
   operation id to a request hook (checked 2026-09-16: not yet).
   <https://tanstack.com/start/latest/docs/framework/react/guide/observability>
 
+- 🟢 **Cache USDA batch lookups across requests.** `USDAClient.findFoodsBatch`
+  memoizes only per request; the edge cache covers GETs. A product list whose
+  barcodes miss still pays the full `usda-api` hop (~350 ms observed). Key
+  hits and misses by canonical lookup key; give misses a bounded TTL so newly
+  imported USDA foods still appear (`server/clients/usda.ts`).
+
+- 🟢 **Resolve relation-filter shortcodes inside the list query.** A filter
+  such as `growsPlantId` awaits a shortcode→id lookup before the page, count,
+  and sums start (`repo/shortcode-resolver.ts`, `buildProductWhere`). Use a
+  live-row subquery instead, keeping unknown and deleted codes matching
+  nothing. The first query on a request also absorbs connection setup, so
+  measure the gain rather than assuming the lookup's full duration.
+
+- 🤔 **Share product kit and category work across list queries.** One product
+  page walks the kit graph four times (cost, valuation, sums, quality) and the
+  category ancestors per row. Collapse those only where EXPLAIN on production
+  data shows a win; keep unrounded valuation and signed expense sums, and do
+  not merge everything into one relational query (its memory cost is
+  documented in `repo/product/crud.ts`).
+
+- 🤔 **Faster `usda-api` reads.** A lookup ran its version check and index
+  lookup as sequential D1 calls (~60 ms each) plus ~150 ms outside the
+  handler. Try D1 read replication with request-scoped Sessions and a warmer
+  version cache (`apps/usda-api/src/data/`); benchmark against the current
+  placement before adopting it.
+
+- 🤔 **Summary `entity_read.get` without the detail read.** A summary get
+  still runs the complete detail read (USDA, quality, ledger, breadcrumbs)
+  before projecting to identity. Route it through `listFields` with an `ids`
+  filter only after confirming each kind's list visibility matches `get`
+  (default filters can hide rows a `get` returns).
+
 - ⏳ **Production query-cost repair.** Promote the specific offender a fresh
   production trace confirms; remeasure before restructuring counters.
 

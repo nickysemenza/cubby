@@ -60,8 +60,14 @@ import {
 import { enrichProductRowsWithInventoryValuations } from "~/server/repo/inventory/valuation";
 import { markProductConversionCoverageInputStale } from "~/server/repo/product/conversion-coverage";
 import { getProductCoverImageUrlsByProductIds } from "~/server/repo/product/crud";
-import { enrichProductListItems } from "~/server/repo/product/list-enrichment";
-import { dbProductToListAPI } from "~/server/repo/product/mappers";
+import {
+  enrichProductListItems,
+  prefetchProductFoods,
+} from "~/server/repo/product/list-enrichment";
+import {
+  dbProductToListAPI,
+  primaryGtinOf,
+} from "~/server/repo/product/mappers";
 // `findMergeComponentCycle` is the SAME question `mergeProducts` already
 // answers — "does identifying/adding these edges make a product reach
 // itself" — reused here rather than reimplemented. Called with `loserIds: []`
@@ -174,18 +180,33 @@ export async function listKitComponentRows(
     ...relations.product.list,
   });
 
-  const qualities = await loadDataQualities(
-    db,
-    "product",
-    rows.map((row) => row.id),
+  prefetchProductFoods(
+    rows.map((row) => ({
+      primaryGtin: primaryGtinOf(row.externalIds),
+      fdc_id: row.fdc_id,
+    })),
+    usdaClient,
   );
-  const valued = await enrichProductRowsWithInventoryValuations(db, rows);
-  const priced = await enrichProductRowsWithPricing(db, valued);
-  const ledgered = await enrichProductRowsWithQuantityLedger(db, priced);
+  // Each loader reads only the base row, so they run concurrently.
+  const [qualities, valued, priced, ledgered] = await Promise.all([
+    loadDataQualities(
+      db,
+      "product",
+      rows.map((row) => row.id),
+    ),
+    enrichProductRowsWithInventoryValuations(db, rows),
+    enrichProductRowsWithPricing(db, rows),
+    enrichProductRowsWithQuantityLedger(db, rows),
+  ]);
+  const enriched = valued.map((row, index) => ({
+    ...row,
+    pricing: priced[index]!.pricing,
+    quantityLedger: ledgered[index]!.quantityLedger,
+  }));
   const projectedItems = await withDisplayImages(
     db,
     "product",
-    ledgered,
+    enriched,
     (row, displayImages) =>
       dbProductToListAPI(
         { ...row, dataQuality: qualities.get(row.id)! },
@@ -194,7 +215,7 @@ export async function listKitComponentRows(
   );
   const items = await enrichProductListItems(projectedItems, usdaClient);
   // Keyed by the private uuid the edges carry, not the item's public shortcode.
-  const byId = new Map(ledgered.map((row, index) => [row.id, items[index]!]));
+  const byId = new Map(enriched.map((row, index) => [row.id, items[index]!]));
 
   return edges.flatMap((edge) => {
     const item = byId.get(edge.componentProductId);
