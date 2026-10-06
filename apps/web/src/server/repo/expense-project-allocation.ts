@@ -297,6 +297,20 @@ export async function loadExpenseProjectAllocations(
   }));
 }
 
+export type ExpenseJointAllocationRawRow =
+  RawAllocationRow<ExpenseJointAllocationRow>;
+
+/** Rows of `expenseJointAllocationSql`, as selected or as `to_jsonb` of one. */
+export const parseExpenseJointAllocationRows = (
+  rows: readonly ExpenseJointAllocationRawRow[],
+): ExpenseJointAllocationRow[] =>
+  rows.map((row) => ({
+    ...row,
+    sourceCents: row.sourceCents === null ? null : BigInt(row.sourceCents),
+    attributedCents:
+      row.attributedCents === null ? null : BigInt(row.attributedCents),
+  }));
+
 export async function loadExpenseJointAllocations(
   db: Database | DrizzleTransaction,
   expenseIds?: readonly ExpenseId[],
@@ -305,12 +319,7 @@ export async function loadExpenseJointAllocations(
   const result = await unwrapDb(db).execute<
     RawAllocationRow<ExpenseJointAllocationRow>
   >(expenseJointAllocationSql(expenseIds, draft));
-  return result.rows.map((row) => ({
-    ...row,
-    sourceCents: row.sourceCents === null ? null : BigInt(row.sourceCents),
-    attributedCents:
-      row.attributedCents === null ? null : BigInt(row.attributedCents),
-  }));
+  return parseExpenseJointAllocationRows(result.rows);
 }
 
 export async function hydrateExpenseProjectAllocations<

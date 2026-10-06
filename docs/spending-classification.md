@@ -37,7 +37,13 @@ Product Category mappings and merchant policies affecting existing Expenses use
 `spendingClassification.preview` and `spendingClassification.apply`. The preview
 reports classification counts and signed category deltas; apply rechecks its
 fingerprint inside a serializable transaction before audited entity writes.
-Changes after preview require a fresh review. Web and native views use this same
+The fingerprint covers classification policy and every Expense the change can
+reach: those reading a changed override, Product, Product Category subtree,
+merchant, or merged category, plus the other lines of their Purchases. A change
+to policy or to one of those Expenses, including one that newly comes into
+reach, requires a fresh review; an edit to any other Expense does not. Only
+those Expenses are resolved before and after; household totals come from one
+aggregated allocation pass. Web and native views use this same
 backend operation; the Swift review session supplies presentation state only.
 
 Merging Spending Categories is keeper-wins: every incoming reference (explicit

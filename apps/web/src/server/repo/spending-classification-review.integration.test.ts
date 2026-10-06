@@ -273,6 +273,107 @@ describe("reviewed spending classification", () => {
     },
   );
 
+  // The fingerprint covers only Expenses the draft can affect: one that joins
+  // the scope after preview stales it, an unaffected edit does not.
+  it("stales a Vendor review only when an affected Expense changes", async () => {
+    const category = await insertWithShortcode(ctx.db, "spendingCategory", {
+      name: "Fixture dining",
+    });
+    const reviewed = await insertWithShortcode(ctx.db, "vendor", {
+      name: "Fixture cafe",
+    });
+    const other = await insertWithShortcode(ctx.db, "vendor", {
+      name: "Fixture hardware store",
+    });
+    const line = async (vendorId: typeof reviewed.id) => {
+      const purchase = await insertWithShortcode(ctx.db, "purchase", {
+        date: "2026-09-01",
+        vendorId,
+      });
+      return insertWithShortcode(ctx.db, "expense", {
+        name: "Fixture line",
+        date: "2026-09-01",
+        cost: 8.5,
+        costType: "materials",
+        trade: "other",
+        purchaseId: purchase.id,
+      });
+    };
+    await line(reviewed.id);
+    const unrelated = await line(other.id);
+    const joining = await line(other.id);
+    const request = {
+      action: "vendor" as const,
+      vendorId: parseShortcodeFor("vendor", reviewed.shortcode),
+      spendingProfile: "restaurant" as const,
+      defaultSpendingCategoryId: parseShortcodeFor(
+        "spendingCategory",
+        category.shortcode,
+      ),
+    };
+    const preview = await previewSpendingClassificationReview(ctx.db, request);
+    expect(preview.changedExpenseCount).toBe(1);
+    await unwrapDb(ctx.db).execute(
+      sql`UPDATE "Expense" SET cost=9 WHERE id=${unrelated.id}`,
+    );
+    const stillCurrent = await previewSpendingClassificationReview(
+      ctx.db,
+      request,
+    );
+    expect(stillCurrent.fingerprint).toBe(preview.fingerprint);
+    await unwrapDb(ctx.db).execute(
+      sql`UPDATE "Purchase" SET "vendorId"=${reviewed.id} WHERE id=${joining.purchaseId}`,
+    );
+    await expect(
+      applySpendingClassificationReview(context(), {
+        request,
+        fingerprint: preview.fingerprint,
+      }),
+    ).rejects.toThrow(/changed/i);
+  });
+
+  // The tax line's allocation already follows its principal into the same
+  // category, so only its resolved category shows the cleared override.
+  it("counts a cleared adjustment override whose allocation is unchanged", async () => {
+    const category = await insertWithShortcode(ctx.db, "spendingCategory", {
+      name: "Fixture supplies",
+    });
+    const vendor = await insertWithShortcode(ctx.db, "vendor", {
+      name: "Fixture supply shop",
+    });
+    const purchase = await insertWithShortcode(ctx.db, "purchase", {
+      date: "2026-09-01",
+      vendorId: vendor.id,
+    });
+    const line = {
+      date: "2026-09-01",
+      costType: "materials" as const,
+      trade: "other" as const,
+      purchaseId: purchase.id,
+      spendingCategoryId: category.id,
+    };
+    await insertWithShortcode(ctx.db, "expense", {
+      ...line,
+      name: "Fixture supplies",
+      cost: 20,
+    });
+    const tax = await insertWithShortcode(ctx.db, "expense", {
+      ...line,
+      name: "Fixture tax",
+      cost: 1.6,
+      lineKind: "tax",
+    });
+    const preview = await previewSpendingClassificationReview(ctx.db, {
+      action: "expenses",
+      expenseIds: [parseShortcodeFor("expense", tax.shortcode)],
+      spendingCategoryId: null,
+    });
+    expect(preview.changedExpenseCount).toBe(1);
+    expect(
+      preview.categoryDeltas.every((delta) => delta.deltaCents === "0"),
+    ).toBe(true);
+  });
+
   it("previews exact money without writes and rejects changed history before apply", async () => {
     const category = await insertWithShortcode(ctx.db, "spendingCategory", {
       name: "Fixture gifts",
