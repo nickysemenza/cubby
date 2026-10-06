@@ -20,6 +20,11 @@ containers, workerd, browsers, and database connections. Other workspace
 packages need `pnpm -r --filter '!@cubby/web' run test` after changing
 `packages/*`.
 
+Before a focused browser replay, run `pnpm --filter @cubby/web run build:cf
+--ensure` after changing the recorded source revision. The prebuilt provenance
+gate can reject a run after workflow or documentation edits too; a
+`source-changed` startup failure executed no scenarios and is not a test result.
+
 Target a browser spec as `pnpm test:e2e <spec>` without an extra `--`. E2E
 serves `dist/`, so build it before a standalone run; `verify:local` does. The
 coupled Workers harness rebuilds a stale web Worker itself. A
@@ -70,7 +75,10 @@ When a journey already exposes the destination link, follow that link to exercis
 client navigation. Keep document loads and reloads that own direct-link, SSR, or
 persistence regressions. A link transition expected to stay within the app can
 assert that `performance.timeOrigin` is unchanged, so a plain anchor cannot
-silently turn it into another document load.
+silently turn it into another document load. When comparing card geometry across
+enrichment, await the card and ancestor animations after switching list views
+before recording the baseline; a visible loading field can precede the settled
+view gutter. Preserve the exact before/after size assertions.
 
 Keep the complete browser regression suite on PRs. Consolidate duplicated
 journeys and seed unrelated prerequisites rather than moving coverage after

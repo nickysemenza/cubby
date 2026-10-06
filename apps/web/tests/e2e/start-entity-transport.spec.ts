@@ -324,6 +324,17 @@ test("base list keeps row identity, selection and phone cards while enrichment f
       .locator("[data-entity-card]")
       .filter({ has: page.getByRole("link", { name, exact: true }) });
     await expect(card.getByLabel("Loading media").first()).toBeVisible();
+    await card.evaluate(async (element) => {
+      const animations: Animation[] = [];
+      for (
+        let ancestor: Element | null = element;
+        ancestor;
+        ancestor = ancestor.parentElement
+      ) {
+        animations.push(...ancestor.getAnimations());
+      }
+      await Promise.all(animations.map((animation) => animation.finished));
+    });
     const before = await card.boundingBox();
     release();
     await expect(
