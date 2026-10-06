@@ -177,7 +177,7 @@ async function seedScopedPlantingPicker(
       sowedOn: "2026-05-01",
     });
   };
-  await plant("Synthetic Pea", north.id);
+  const northPlanting = await plant("Synthetic Pea", north.id);
   for (let index = 1; index <= 26; index += 1)
     await plant(`Synthetic Bean ${String(index).padStart(2, "0")}`, south.id);
   const entry = await createEntity(context, "gardenEntry", {
@@ -203,6 +203,7 @@ async function seedScopedPlantingPicker(
     );
   return {
     GARDEN_ENTRY_ID: entry.id,
+    NORTH_PLANTING_ID: northPlanting.id,
     SOUTH_BED_ID: south.id,
     PAGE_ONE_PLANTING: first.name,
     PAGE_ONE_PLANTING_ID: first.shortcode,

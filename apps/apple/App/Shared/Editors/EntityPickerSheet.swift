@@ -22,8 +22,8 @@ private extension EntityRow {
 }
 
 /// A searchable picker over one entity, for `id`/`idMulti` filters and `entity-select` controls.
-/// The search term drives the target's first text filter; a target without one (planting) goes
-/// through `search.find` when it is indexed, else the picker lists the target unfiltered.
+/// Search uses the declared primary search key without replacing dependent scope filters.
+/// An unscoped indexed target without a list search key uses `search.find`.
 struct EntityPickerSheet: View {
     let target: EntityKey
     let multiple: Bool
@@ -51,9 +51,17 @@ struct EntityPickerSheet: View {
     }
 
     private var descriptor: EntityDescriptor { EntityCatalog[target] }
-    private var textFilter: FilterDescriptor? { descriptor.filters.first { $0.kind == .text } }
+    private var searchKey: String? {
+        if let primarySearch = descriptor.primarySearch { return primarySearch.key }
+        if let textFilter = descriptor.filters.first(where: { $0.kind == .text }),
+            case .param(let name) = textFilter.wire
+        {
+            return name
+        }
+        return nil
+    }
     private var usesSearchRPC: Bool {
-        textFilter == nil && descriptor.searchable && scope == nil
+        searchKey == nil && descriptor.searchable && scope == nil
     }
 
     var body: some View {
@@ -208,12 +216,7 @@ struct EntityPickerSheet: View {
         let filters = scope?.filters ?? EntityFilterState()
         let ready = scope?.ready ?? true
         let searchRPC = usesSearchRPC
-        let searchKey: String? =
-            if let textFilter, case .param(let name) = textFilter.wire {
-                name
-            } else {
-                descriptor.primarySearch?.key
-            }
+        let searchKey = searchKey
         let emptyPage: @Sendable (Int) -> ListPage<EntityRow> = { page in
             ListPage(items: [], meta: ListPageMeta(pageIndex: page, pageSize: 25, totalCount: 0))
         }
