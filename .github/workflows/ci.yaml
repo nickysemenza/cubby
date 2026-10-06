@@ -214,20 +214,15 @@ jobs:
       - name: Run fast tests
         run: pnpm --dir apps/web exec vitest run --project unit --project mcp-contract --project worker-safety --project ui
 
-  # Sharded with Vitest's file-level --shard. `Web checks` aggregates the
-  # matrix, so the shard count can change without touching branch protection.
+  # One four-worker job avoids repeating database and dependency setup.
   # These files never start workerd, so they start after Scope, not Build
   # Workers; the files that do run in test-postgres-workerd.
   test-postgres:
-    name: PostgreSQL integration tests (${{ matrix.shard }})
+    name: PostgreSQL integration tests
     needs: scope
     if: needs.scope.outputs.web == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 20
-    strategy:
-      fail-fast: false
-      matrix:
-        shard: ["1/2", "2/2"]
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
       - uses: ./.github/actions/start-test-services
@@ -236,7 +231,7 @@ jobs:
           wasm: "restore"
           workspace-filter: "@cubby/web..."
       - name: Run PostgreSQL integration tests
-        run: pnpm --dir apps/web exec vitest run --project integration --shard=${{ matrix.shard }}
+        run: pnpm --dir apps/web exec vitest run --project integration --maxWorkers=4
 
   # The PostgreSQL files that start the built Worker in workerd
   # (`workerdIntegrationTests` in apps/web/vitest.config.ts).
