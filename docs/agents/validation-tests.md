@@ -148,6 +148,10 @@ written by another checkout, so confirm generated output is current. Generated
 API changes require the owning generated-surface workflow and affected native
 checks.
 
+Mapped database fixtures annotate the callback return with the table
+`$inferInsert` type so enum literals retain their insert contract; passing a
+runtime test does not verify TypeScript inference.
+
 Pricing integration tests stub the catalog socket for every test and keep it
 separate from inference socket overrides. The runtime catalog client reads
 `fetch` when requesting; a hoisted stub alone stops protecting later tests once

@@ -126,7 +126,7 @@ describe("import run summary pricing", () => {
       await getDb(ctx.db)
         .insert(aiUsage)
         .values(
-          costs.map((estimatedCost) => ({
+          costs.map((estimatedCost): typeof aiUsage.$inferInsert => ({
             feature: "synthetic",
             provider: "openai",
             model: "gpt-6-sol",
