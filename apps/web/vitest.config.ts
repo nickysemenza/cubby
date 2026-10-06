@@ -70,9 +70,9 @@ function isPluginLoadHook(load: Plugin["load"]): load is PluginLoadHook {
 }
 
 /** Keep IntegreSQL opt-in while supporting both direct and full-suite commands. */
-function wantsIntegrationTier(): boolean {
+function wantsIntegrationTier(name: string): boolean {
   if (process.env.CUBBY_TEST_INTEGRATION === "1") return true;
-  return explicitlySelectsProject("integration");
+  return explicitlySelectsProject(name);
 }
 
 /**
@@ -108,6 +108,44 @@ const mcpContractTests = [
   "src/server/mcp/tools/tool-json-schema.unit.test.ts",
 ];
 const workerSafetyTests = ["src/server/mcp/worker-validation.unit.test.ts"];
+// PostgreSQL files that start the built Worker (`tooling/workerd-harness.ts`,
+// directly or through `workerd-runtime.ts`). CI runs them in the one job that
+// downloads the `worker-build` artifact. A consumer missing from this list
+// runs in an ordinary shard and fails there: in CI `ensureWorkerBuilds`
+// refuses to rebuild a missing or stale bundle.
+const workerdIntegrationTests = [
+  "src/server/purchase-import/purchase-agent-scenarios.integration.test.ts",
+  "tooling/workerd-runtime.integration.test.ts",
+];
+const integrationTests = [
+  "src/**/*.integration.test.ts",
+  "tooling/**/*.integration.test.ts",
+];
+const integrationProject = {
+  globalSetup: ["./tooling/test-setup.ts"],
+  // File-scoped `afterAll` that returns this file's database to
+  // IntegreSQL. Must be a setupFile, not something `withTestDb()`
+  // registers — see `closeTestDb` in tooling/test-setup.ts.
+  setupFiles: ["./tooling/integration-teardown.ts"],
+  pool: "forks" as const,
+  // The former per-file family resolver made 8 lumpy import-index
+  // files carry 76 real contract files with an isolated fork each.
+  // `isolate: false` shares one fork's module graph across a whole
+  // worker's share of those 76 files instead: `db.ts`'s
+  // `moduleRuntime` pool, `cf-env.ts`, `clients/ai.ts`,
+  // `ai/models.ts`, `semantic/embeddings.ts`, and
+  // `clients/notion.ts`'s LRU caches are the per-worker module
+  // singletons this exposes — none bind to a per-file database, so a
+  // test asserting a cold cache/pool would be the first casualty.
+  // `withTestDb()`/`resetTestDb()` still gives every TEST a pristine
+  // database; this only changes whether the JS module registry is
+  // fresh per file (it no longer is, per worker).
+  isolate: false,
+  testTimeout: 10000,
+  // First-test database provisioning is the long tail; resets use the
+  // full safe TRUNCATE path documented in tooling/test-setup.ts.
+  hookTimeout: 30000,
+};
 const sharedIsolationSeed = Number.parseInt(
   process.env.CUBBY_TEST_SHUFFLE_SEED ?? "20260831",
   10,
@@ -309,42 +347,27 @@ export default defineConfig({
           },
         },
         {
-          // won't inherit any options from this config
-          // this is the default behaviour
           extends: true,
           test: {
-            globalSetup: ["./tooling/test-setup.ts"],
-            // File-scoped `afterAll` that returns this file's database to
-            // IntegreSQL. Must be a setupFile, not something `withTestDb()`
-            // registers — see `closeTestDb` in tooling/test-setup.ts.
-            setupFiles: ["./tooling/integration-teardown.ts"],
+            ...integrationProject,
             name: "integration",
-            include: [
-              "src/**/*.integration.test.ts",
-              "tooling/**/*.integration.test.ts",
-            ],
-            pool: "forks",
-            // The former per-file family resolver made 8 lumpy import-index
-            // files carry 76 real contract files with an isolated fork each.
-            // `isolate: false` shares one fork's module graph across a whole
-            // worker's share of those 76 files instead: `db.ts`'s
-            // `moduleRuntime` pool, `cf-env.ts`, `clients/ai.ts`,
-            // `ai/models.ts`, `semantic/embeddings.ts`, and
-            // `clients/notion.ts`'s LRU caches are the per-worker module
-            // singletons this exposes — none bind to a per-file database, so a
-            // test asserting a cold cache/pool would be the first casualty.
-            // `withTestDb()`/`resetTestDb()` still gives every TEST a pristine
-            // database; this only changes whether the JS module registry is
-            // fresh per file (it no longer is, per worker).
-            isolate: false,
-            testTimeout: 10000,
-            // First-test database provisioning is the long tail; resets use the
-            // full safe TRUNCATE path documented in tooling/test-setup.ts.
-            hookTimeout: 30000,
+            include: integrationTests,
+            exclude: ["**/node_modules/**", ...workerdIntegrationTests],
             // Larger IntegreSQL pools do not reduce CREATE latency; sequencing
             // stays a distinct serial group so its shared-worker singletons
             // above never interleave with the unit/UI/mcp-contract group.
             sequence: { groupOrder: 3 },
+          },
+        },
+        {
+          // Same database harness as `integration`; a later group so a local
+          // full run never starts workerd beside the PostgreSQL forks.
+          extends: true,
+          test: {
+            ...integrationProject,
+            name: "integration-workerd",
+            include: workerdIntegrationTests,
+            sequence: { groupOrder: 4 },
           },
         },
         {
@@ -363,7 +386,11 @@ export default defineConfig({
         },
       ] satisfies TestProjectConfiguration[]
     ).filter((project) => {
-      if (project.test.name === "integration") return wantsIntegrationTier();
+      if (
+        project.test.name === "integration" ||
+        project.test.name === "integration-workerd"
+      )
+        return wantsIntegrationTier(project.test.name);
       if (project.test.name === "preview") return wantsPreviewTier();
       if (project.test.name === "live-eval")
         return explicitlySelectsProject("live-eval");

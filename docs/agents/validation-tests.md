@@ -9,7 +9,8 @@ the behavior; use the UI or preview tier for distinct rendering or layout
 failures. Keep pure logic imported by node tests in alias-free `.ts` files.
 
 `pnpm test` runs fast unit, UI, contract, and auxiliary tests; `pnpm
-test:postgres` runs contract tests; `pnpm test:e2e` runs PostgreSQL-backed
+test:postgres` runs the `integration` and `integration-workerd` contract
+projects; `pnpm test:e2e` runs PostgreSQL-backed
 browser tests; `pnpm test:all` runs fast, PostgreSQL, then Playwright
 sequentially. Do not overlap PostgreSQL and E2E locally: they contend for
 containers, workerd, browsers, and database connections. Other workspace
@@ -48,6 +49,10 @@ Do not select `.first()` or add a sleep to bypass duplicate controls.
 
 ### Workerd test runtime and profiles
 
+A PostgreSQL test file that starts workerd belongs in
+`workerdIntegrationTests` (`apps/web/vitest.config.ts`), which forms the
+`integration-workerd` project; CI runs only that project against the
+`worker-build` artifact, and an unlisted consumer fails in an ordinary shard.
 Browser workers, Tester Army, native runners, the purchase-agent Vitest scenarios and the
 live evals start the built Worker through `openWorkerdRuntime`
 (`apps/web/tooling/workerd-runtime.ts`); a caller that runs work after
@@ -161,19 +166,15 @@ into synthetic accounting assertions.
 
 ## Affected-only E2E for local iteration
 
-`pnpm --dir apps/web test:e2e:affected` runs only the specs the current diff
-plausibly touches, for a faster local loop than the full suite —
-`apps/web/tests/e2e/spec-areas.ts` maps each spec to the routes, feature
-dirs, and shared contract files it exercises, and `apps/web/scripts/e2e-affected.ts`
-matches changed files (committed since `origin/main` plus the working tree)
-against it. The routes and feature dirs a spec visits are generated into
-`spec-areas.derived.ts` (`node scripts/generate-spec-areas.ts` from `apps/web`;
-`e2e-affected.unit.test.ts` fails when it drifts); server, contract, and shared
-component globs stay hand-written in `SPEC_EXTRA_GLOBS`. A change to a shared seam (the entity kernel, the app shell,
-`e2e-helpers.ts`, etc.) or anything the manifest can't place selects every
-spec instead of guessing narrow. `--list` prints the selection without
-running it. This is local-only: CI keeps running the full suite, and this is
-not a merge gate.
+`pnpm --dir apps/web test:e2e:affected` first ensures the fingerprint-checked
+web build is current, then runs Playwright's `--only-changed=origin/main`. Playwright selects
+changed spec files and specs that import changed files; append `--list` to
+preview that selection. This is a local heuristic, not a merge gate: browser
+routes and components need not be imported by a spec, so an app-only change
+can select nothing. Name the affected spec explicitly or run the full
+`test:e2e` for those changes. CI keeps running the full suite. Set
+`CUBBY_TEST_SERVICES=warm` to reuse local macOS services, as with direct
+Playwright runs.
 
 ## Preview tests (real-browser layout invariants)
 

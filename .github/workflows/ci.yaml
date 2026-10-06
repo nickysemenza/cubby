@@ -157,7 +157,7 @@ jobs:
       - run: cargo clippy --workspace --all-targets -- -D warnings
       - run: cargo test --workspace
 
-  # Builds the Worker bundle once. Postgres integration and E2E download
+  # Builds the Worker bundle once. The workerd PostgreSQL job and E2E download
   # the result instead of rebuilding (and instead of polling for an artifact
   # another job happens to publish).
   build-worker:
@@ -226,16 +226,36 @@ jobs:
 
   # Sharded with Vitest's file-level --shard. `Web checks` aggregates the
   # matrix, so the shard count can change without touching branch protection.
+  # These files never start workerd, so they start after Scope, not Build
+  # Workers; the files that do run in test-postgres-workerd.
   test-postgres:
     name: PostgreSQL integration tests (${{ matrix.shard }})
-    needs: [scope, build-worker]
+    needs: scope
     if: needs.scope.outputs.web == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 20
     strategy:
       fail-fast: false
       matrix:
-        shard: ["1/3", "2/3", "3/3"]
+        shard: ["1/2", "2/2"]
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - uses: ./.github/actions/start-test-services
+      - uses: ./.github/actions/setup-node-with-deps
+        with:
+          wasm: "restore"
+          workspace-filter: "@cubby/web..."
+      - name: Run PostgreSQL integration tests
+        run: pnpm --dir apps/web exec vitest run --project integration --shard=${{ matrix.shard }}
+
+  # The PostgreSQL files that start the built Worker in workerd
+  # (`workerdIntegrationTests` in apps/web/vitest.config.ts).
+  test-postgres-workerd:
+    name: PostgreSQL workerd integration tests
+    needs: [scope, build-worker]
+    if: needs.scope.outputs.web == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
       - uses: ./.github/actions/start-test-services
@@ -247,13 +267,11 @@ jobs:
         with:
           name: worker-build
           path: .
-      - name: Run PostgreSQL integration tests
-        env:
-          CUBBY_TEST_INTEGRATION: "1"
+      - name: Run workerd PostgreSQL integration tests
         run: |
           # The downloaded WASM package may carry regenerated metadata.
           git restore -- packages/wasm/package.json
-          pnpm --dir apps/web exec vitest run --project integration --shard=${{ matrix.shard }}
+          pnpm --dir apps/web exec vitest run --project integration-workerd
 
   # Committed migrations are the only schema path: prove they carry every
   # schema.ts change and build the same catalog as schema.ts itself.
@@ -407,7 +425,16 @@ jobs:
   # required check verifies their combined result whenever they run.
   web-checks:
     name: Web checks
-    needs: [scope, build-worker, test-web, test-postgres, db-check, test-e2e]
+    needs:
+      [
+        scope,
+        build-worker,
+        test-web,
+        test-postgres,
+        test-postgres-workerd,
+        db-check,
+        test-e2e,
+      ]
     if: always() && (github.event_name == 'pull_request' || github.event_name == 'push' || (!inputs.simulator_e2e && inputs.tester_army == 'none'))
     runs-on: ubuntu-latest
     timeout-minutes: 5
@@ -419,6 +446,7 @@ jobs:
           BUILD_RESULT: ${{ needs.build-worker.result }}
           WEB_RESULT: ${{ needs.test-web.result }}
           POSTGRES_RESULT: ${{ needs.test-postgres.result }}
+          POSTGRES_WORKERD_RESULT: ${{ needs.test-postgres-workerd.result }}
           DB_CHECK_RESULT: ${{ needs.db-check.result }}
           E2E_RESULT: ${{ needs.test-e2e.result }}
         run: |
@@ -427,6 +455,7 @@ jobs:
             test "$BUILD_RESULT" = success || exit 1
             test "$WEB_RESULT" = success || exit 1
             test "$POSTGRES_RESULT" = success || exit 1
+            test "$POSTGRES_WORKERD_RESULT" = success || exit 1
             test "$DB_CHECK_RESULT" = success || exit 1
             test "$E2E_RESULT" = success || exit 1
           fi

@@ -6,7 +6,7 @@ import { findDeadPaths } from "./check-doc-paths.ts";
 // `:line`/`#anchor` suffix or a placeholder reads as a dead path, and a
 // relative link resolves against the repo root instead of the doc's folder.
 const known = new Set([
-  "apps/web/scripts/e2e-affected.ts",
+  "apps/web/scripts/example-check.ts",
   "docs/agents/validation.md",
   "docs/local-development.md",
 ]);
@@ -17,13 +17,13 @@ test("reports a moved repo path with its doc line", () => {
     [
       {
         path: "docs/agents/validation-tests.md",
-        text: "intro\nsee `scripts/e2e-affected.ts` for matching\n",
+        text: "intro\nsee `scripts/example-check.ts` for matching\n",
       },
     ],
     isKnown,
   );
   assert.deepEqual(dead, [
-    "docs/agents/validation-tests.md:2 -> scripts/e2e-affected.ts",
+    "docs/agents/validation-tests.md:2 -> scripts/example-check.ts",
   ]);
 });
 
@@ -33,7 +33,7 @@ test("accepts suffixes and skips placeholders, globs, and external links", () =>
       {
         path: "AGENTS.md",
         text: [
-          "`apps/web/scripts/e2e-affected.ts:12` and `docs/agents/validation.md#gate`",
+          "`apps/web/scripts/example-check.ts:12` and `docs/agents/validation.md#gate`",
           "`apps/web/src/**/*.ts`, `artifacts/<lane>/run.json`, `docs/${name}.md`",
           "[site](https://example.com/docs/missing.md) [here](#gate)",
         ].join("\n"),
