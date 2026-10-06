@@ -296,9 +296,11 @@ from that list runs in the ordinary integration job and fails there, because
 in CI the harness refuses to rebuild a missing or stale Worker. `Web checks` requires
 both jobs to succeed, so the required-check name stays stable. Jobs that need
 the databases (`test-postgres`, `build-worker`,
-`test-e2e`, `db-check`) declare native GitHub Actions service containers.
-YAML anchors reuse the pgvector PostgreSQL and pinned IntegreSQL definitions;
-the migration job selects PostgreSQL alone. GitHub owns the network, container
+`test-e2e`) declare native GitHub Actions service containers. The PostgreSQL
+integration job first runs `pnpm --dir apps/web db:check` against disposable
+scratch databases, reusing its PostgreSQL and dependency setup. A migration
+check failure fails that job and the required Web gate. YAML anchors reuse the
+pgvector PostgreSQL and pinned IntegreSQL definitions. GitHub owns the network, container
 startup, PostgreSQL health wait, logs, and cleanup. PostgreSQL also maps port
 55432 for guarded named-database tests. `POSTGRES_INITDB_ARGS` sets the disposable
 settings in the fresh PostgreSQL 17 configuration. IntegreSQL retries its

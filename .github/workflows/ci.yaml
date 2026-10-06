@@ -198,7 +198,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 20
     services: &test-databases
-      postgres: &postgres-service
+      postgres:
         image: pgvector/pgvector:pg17
         env:
           POSTGRES_USER: postgres
@@ -273,26 +273,12 @@ jobs:
         with:
           wasm: "restore"
           workspace-filter: "@cubby/web..."
+      # Compare committed migrations with schema.ts in disposable databases
+      # before the suite, reusing this job's PostgreSQL and dependency setup.
+      - name: Check database migrations
+        run: pnpm --dir apps/web db:check
       - name: Run PostgreSQL integration tests
         run: pnpm --dir apps/web exec vitest run --project integration --maxWorkers=4
-
-  # Committed migrations are the only schema path: prove they carry every
-  # schema.ts change and build the same catalog as schema.ts itself.
-  db-check:
-    name: Database migrations
-    needs: scope
-    if: needs.scope.outputs.web == 'true'
-    runs-on: ubuntu-latest
-    timeout-minutes: 10
-    services:
-      postgres: *postgres-service
-    steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
-      - uses: ./.github/actions/setup-node-with-deps
-        with:
-          wasm: "false"
-          workspace-filter: "@cubby/web..."
-      - run: pnpm --dir apps/web db:check
 
   test-e2e:
     name: E2E tests (${{ matrix.lane }})
@@ -429,7 +415,7 @@ jobs:
   # required check verifies their combined result whenever they run.
   web-checks:
     name: Web checks
-    needs: [scope, build-worker, test-aux, test-postgres, db-check, test-e2e]
+    needs: [scope, build-worker, test-aux, test-postgres, test-e2e]
     if: ${{ !cancelled() && (github.event_name == 'pull_request' || github.event_name == 'push' || (!inputs.simulator_e2e && inputs.tester_army == 'none')) }}
     runs-on: ubuntu-slim
     timeout-minutes: 5
@@ -441,7 +427,6 @@ jobs:
           BUILD_RESULT: ${{ needs.build-worker.result }}
           WEB_RESULT: ${{ needs.test-aux.result }}
           POSTGRES_RESULT: ${{ needs.test-postgres.result }}
-          DB_CHECK_RESULT: ${{ needs.db-check.result }}
           E2E_RESULT: ${{ needs.test-e2e.result }}
         run: |
           test "$SCOPE_RESULT" = success || exit 1
@@ -449,7 +434,6 @@ jobs:
             test "$BUILD_RESULT" = success || exit 1
             test "$WEB_RESULT" = success || exit 1
             test "$POSTGRES_RESULT" = success || exit 1
-            test "$DB_CHECK_RESULT" = success || exit 1
             test "$E2E_RESULT" = success || exit 1
           fi
 

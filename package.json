@@ -20,7 +20,7 @@
     "postinstall": "node scripts/generator/ensure.ts --postinstall",
     "dedupe:check": "pnpm dedupe --check",
     "check:clean": "sh -c 'if ! git diff --quiet HEAD || test -n \"$(git ls-files --others --exclude-standard)\"; then echo \"Working tree must be clean before and after verification. Commit or remove staged, unstaged, and untracked files:\" >&2; git status --short >&2; exit 1; fi'",
-    "audit:security": "node scripts/check-security-audit.ts",
+    "audit:security": "pnpm audit --prod --audit-level high",
     "lint": "NX_DAEMON=false nx run cubby-checks:lint --outputStyle=stream",
     "lint:fix": "oxlint --fix .",
     "format:check": "NX_DAEMON=false nx run cubby-checks:format --outputStyle=stream",

@@ -1,7 +1,8 @@
 # Dependency exceptions
 
-Cubby's dependency gates reject unallowlisted high and critical advisories. The
-small set of non-security exceptions below exists because upstream peer metadata
+`pnpm audit:security` uses pnpm's native production-only audit and rejects high
+and critical advisories. There are no security advisory exemptions. The small
+set of non-security exceptions below exists because upstream peer metadata
 or transitive deprecations currently lags versions that Cubby verifies directly.
 Review these by **2026-10-10** (90 days from the cleanup), and remove an exception
 as soon as the upstream range is corrected.
