@@ -1615,35 +1615,41 @@ async function runQaJourneys(
         }
       }
     }
-    // The stop guard's two phases share one open screen, so only the first relaunches; a
-    // retry seeds a fresh running Run.
-    const { runNativeRunStopJourney } =
-      await import("./scenarios/native-run-stop");
-    const stopPool = new Pool({ connectionString: databaseURL });
-    try {
-      for (let attempt = 1; ; attempt += 1) {
-        await relaunch();
-        try {
-          scenarioEvidence.push(
-            await runNativeRunStopJourney({
-              pool: stopPool,
-              userId: qaUserId,
-              artifacts,
-              replay: (journey, variables) =>
-                replay(journey, attempt, variables),
-            }),
-          );
-          break;
-        } catch (error) {
-          flaky.push("run-stop");
-          if (attempt >= 2 || interrupted) throw error;
-          console.log(`[${lane}] run-stop attempt ${attempt} failed; retrying`);
+    // The scripted scenarios belong to the full lane; `--journey` replays only
+    // the named qa scripts.
+    if (selectedJourneys.length === 0) {
+      // The stop guard's two phases share one open screen, so only the first relaunches; a
+      // retry seeds a fresh running Run.
+      const { runNativeRunStopJourney } =
+        await import("./scenarios/native-run-stop");
+      const stopPool = new Pool({ connectionString: databaseURL });
+      try {
+        for (let attempt = 1; ; attempt += 1) {
+          await relaunch();
+          try {
+            scenarioEvidence.push(
+              await runNativeRunStopJourney({
+                pool: stopPool,
+                userId: qaUserId,
+                artifacts,
+                replay: (journey, variables) =>
+                  replay(journey, attempt, variables),
+              }),
+            );
+            break;
+          } catch (error) {
+            flaky.push("run-stop");
+            if (attempt >= 2 || interrupted) throw error;
+            console.log(
+              `[${lane}] run-stop attempt ${attempt} failed; retrying`,
+            );
+          }
         }
+      } finally {
+        await stopPool.end();
       }
-    } finally {
-      await stopPool.end();
+      await completePhotoRun();
     }
-    await completePhotoRun();
   } finally {
     await stopRecording?.();
     if (flaky.length > 0)

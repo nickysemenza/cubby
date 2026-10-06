@@ -1,26 +1,11 @@
-import type { ImageWithEntity } from "@cubby/schemas/image";
-import type { CookbookSummary } from "@cubby/schemas/recipe";
-import type { RunOut } from "@cubby/schemas/run";
-
 import type {
   DetailEntity,
   EntityDetailByEntity,
 } from "~/entity/generated/entity-details.gen";
 
-/**
- * The entities the generic detail page renders: every kernel detail entity
- * plus those whose detail route reads its own query (`route.detail:
- * { query }`) — image and cookbook have no kernel `get`, and a read-only
- * Run has no create/update contract.
- */
-export type GenericDetailEntity = DetailEntity | "image" | "cookbook" | "run";
+/** The entities the generic detail page renders: every kernel detail entity. */
+export type GenericDetailEntity = DetailEntity;
 
 /** The loaded record a generic detail page (and its slots) receives. */
 export type DetailRecordOf<E extends GenericDetailEntity> =
-  E extends DetailEntity
-    ? EntityDetailByEntity[E]
-    : E extends "image"
-      ? ImageWithEntity
-      : E extends "run"
-        ? RunOut
-        : CookbookSummary;
+  EntityDetailByEntity[E];

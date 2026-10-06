@@ -74,9 +74,9 @@ CubbyAPI plugin's OpenAPI inputs) → `xcodegen generate --spec apps/apple/proje
   (`pnpm generate`). Look routes up
   by operation id; entity reads go through `CubbyClient.list`/`row`, never a path. Every
   `resources.<entity>.{list,get,create,update,delete,timeline}` operation the OpenAPI document
-  exposes is generated (not every entity has every verb: `image` has only `update`/`delete`;
-  `cookbook` and `usda-food` have no resource verbs, per `Generated/EntityOperations.swift`'s
-  `httpActions`). `delete` is destructive: only `HeroActionRunner` calls it, after an explicit
+  exposes is generated (not every entity has every verb: `image` and `cookbook` read through
+  `get` but list through their own RPCs; `usda-food` has no resource verbs, per
+  `Generated/EntityOperations.swift`'s `httpActions`). `delete` is destructive: only `HeroActionRunner` calls it, after an explicit
   confirmation behind the connection-impact preview. The RPC operation ids CubbyKit calls are flagged
   `native: "<why>"` on their contract member (`apps/web/src/contracts/*.contract.ts`) — flagging
   an automatic resource id is rejected.
