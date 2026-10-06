@@ -148,12 +148,13 @@ function OrderMailEvent({
               className="rounded-md bg-muted/50 py-0.5 ps-2 pe-0.5"
             >
               <div className="flex min-w-0 items-center gap-1.5">
-                <a
+                <Link
                   className="font-medium text-primary hover:underline"
-                  href={`/purchases/${candidate.purchaseId}`}
+                  to="/purchases/$shortcode"
+                  params={{ shortcode: candidate.purchaseId }}
                 >
                   {candidate.orderId ?? candidate.purchaseId}
-                </a>
+                </Link>
                 <Badge variant={evidence.tone}>{evidence.label}</Badge>
                 <span className="text-xs text-muted-foreground">
                   {evidence.explanation}

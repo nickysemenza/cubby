@@ -13,6 +13,7 @@ import { dispatchesOperation } from "./dispatch-wire";
 
 // A stale screen must not book changed bank evidence. Retries must preserve the
 // approved decision, and negative income must expose reimbursement review.
+// Optional paperwork must stay absent from both transaction UI and Purchase gaps.
 test("reviews spending and reimbursement in the browser with stale and replay guards", async ({
   page,
   baseURL,
@@ -128,6 +129,9 @@ test("reviews spending and reimbursement in the browser with stale and replay gu
       json: z.object({ ok: z.literal(true), data: financialBookingResult }),
     })
     .parse(await committed.json()).json.data;
+  await expect(
+    page.getByText("Not expected", { exact: true }).first(),
+  ).toBeVisible();
   const replay = await page.request.post(
     "/api/v1/financialTransaction/commitBooking",
     { headers, data: review },
@@ -192,11 +196,20 @@ test("reviews spending and reimbursement in the browser with stale and replay gu
   const netResponse = await page.request.get(
     `/api/v1/purchases/${result.purchaseId}`,
   );
-  expect(
-    z
-      .object({ expenseTotal: z.number(), statedTotal: z.null() })
-      .parse(await netResponse.json()),
-  ).toEqual({ expenseTotal: 85, statedTotal: null });
+  const netPurchase = z
+    .object({
+      expenseTotal: z.number(),
+      statedTotal: z.null(),
+      dataQuality: z.object({ gaps: z.array(z.object({ check: z.string() })) }),
+    })
+    .parse(await netResponse.json());
+  expect(netPurchase).toMatchObject({ expenseTotal: 85, statedTotal: null });
+  expect(netPurchase.dataQuality.gaps.map((gap) => gap.check)).not.toContain(
+    "primary_document",
+  );
+  expect(netPurchase.dataQuality.gaps.map((gap) => gap.check)).not.toContain(
+    "order_id",
+  );
   const reviewed = await page.request.get(
     `/api/v1/financial-transactions/${creditId}`,
   );

@@ -73,7 +73,7 @@ for (const order of BROWSER_SOURCE_ORDERS) {
     testInfo.annotations.push({
       type: "exercised-boundaries",
       description:
-        "Gmail MIME+persist+classifier seam; retailer DOM+prepare/commit; photo HTTP stage/PUT/finalize+processing claim/completion supplied model response+browser approval; CSV browser shared writer+source-arrival booking review; targeted receipt aggregate replacement Problems approval",
+        "Gmail MIME+persist+classifier seam; retailer prepare/commit; photo HTTP stage/PUT/finalize+processing claim/completion supplied model response+browser approval; CSV browser shared writer+source-arrival booking review; targeted receipt aggregate replacement Problems approval",
     });
   });
 }

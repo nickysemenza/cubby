@@ -66,6 +66,11 @@ before later navigations or reloads. Image prerequisites upload synthetic bytes
 to the isolated worker object store; do not fulfill application image URLs with
 page routes. Assert image decoding as well as visibility. Retired-route HTTP status
 contracts use `request.get`; browser scenarios own visible not-found behavior.
+When a journey already exposes the destination link, follow that link to exercise
+client navigation. Keep document loads and reloads that own direct-link, SSR, or
+persistence regressions. A link transition expected to stay within the app can
+assert that `performance.timeOrigin` is unchanged, so a plain anchor cannot
+silently turn it into another document load.
 
 ### Workerd test runtime and profiles
 
@@ -247,6 +252,11 @@ entity kernel. A factory never defaults a relation id; pass it. E2E specs call
 `createEntityFixture(page, entity, overrides)` from `tests/e2e/fixtures-core.ts`
 and keep domain seeders in `tests/e2e/fixtures-*.ts`. `seedBaseWorld` seeds Home
 and the taxonomy roots for every lane.
+
+Instruction-only Recipe fixture sections omit the optional `ingredients` input;
+when present, that input requires at least one ingredient. A cached Recipe Flow
+fingerprint still includes `ingredients: []`, matching the persisted section
+projection rather than the create input.
 
 Faker fills only fields nothing asserts on, from a per-test seed (E2E title
 path, Vitest test name via `testFaker()`, dev seed 1). A name a locator or
