@@ -42,6 +42,7 @@ jobs:
     timeout-minutes: 5
     outputs:
       validation: ${{ steps.classify.outputs.validation }}
+      generation: ${{ steps.classify.outputs.generation }}
       web: ${{ steps.classify.outputs.web }}
       auxiliary: ${{ steps.classify.outputs.auxiliary }}
       rust: ${{ steps.classify.outputs.rust }}
@@ -100,7 +101,7 @@ jobs:
         if: needs.scope.outputs.validation != 'true' && needs.scope.outputs.format == 'true'
         with:
           wasm: "false"
-          workspace-filter: "."
+          workspace-filter: ${{ needs.scope.outputs.generation == 'true' && '@cubby/web...' || '.' }}
       # The Nx `wasm` target's runtime input (ensure-wasm.ts --fingerprint)
       # runs `wasm-pack --version`, which a restored package does not provide.
       - name: Install wasm-pack for validation
@@ -112,8 +113,18 @@ jobs:
         run: pnpm check:all
       - if: needs.scope.outputs.validation == 'true'
         run: pnpm dedupe:check
+      # todos.md owns deferred MCP references; use the existing generator,
+      # without compiling WASM or running unrelated application tests.
+      - name: Check documentation generation inputs
+        if: needs.scope.outputs.generation == 'true' && needs.scope.outputs.validation != 'true'
+        run: |
+          pnpm generate:if-stale
+          pnpm exec redocly lint apps/web/src/lib/generated/http-openapi.gen.json --config redocly.yaml
       - if: needs.scope.outputs.format == 'true' && needs.scope.outputs.validation != 'true'
         run: pnpm exec oxfmt --check .
+      - name: Check documented repository paths
+        if: needs.scope.outputs.docs == 'true' && needs.scope.outputs.validation != 'true'
+        run: node scripts/check-doc-paths.ts
       - name: Check relative Markdown links
         if: needs.scope.outputs.docs == 'true'
         uses: lycheeverse/lychee-action@e7477775783ea5526144ba13e8db5eec57747ce8 # v2.9.0

@@ -26,13 +26,20 @@ test("routes docs and native changes without code tests", () => {
   assert.deepEqual(active(["apps/apple/project.yml"]), ["apple", "format"]);
 });
 
-test("routes the docs tree to the web app", () => {
-  assert.deepEqual(active(["docs/inventory-audit.md"]), [
-    "web",
-    "docs",
-    "format",
-  ]);
-  assert.deepEqual(active(["docs/adr/0001-entity-relationship-authority.md"]), [
+// Static guide text changes cannot break unrelated browser or SQL journeys.
+// The todo file also owns deferred MCP declaration references.
+test("keeps Markdown changes on focused documentation checks", () => {
+  for (const file of [
+    "docs/inventory-audit.md",
+    "docs/adr/0001-entity-relationship-authority.md",
+    "docs/agents/validation.md",
+  ])
+    assert.deepEqual(active([file]), ["docs", "format"], file);
+  assert.deepEqual(active(["docs/README.md"]), ["web", "docs", "format"]);
+  assert.deepEqual(active(["docs/todos.md"]), ["generation", "docs", "format"]);
+  assert.deepEqual(active(["docs/todos.md", "apps/web/src/page.tsx"]), [
+    "validation",
+    "generation",
     "web",
     "docs",
     "format",
