@@ -45,7 +45,26 @@ export type ExpenseSpendingCategoryResolutionDraft = {
     id: ExpenseId;
     spendingCategoryId: SpendingCategoryId | null;
   }[];
+  /** A previewed merge: every stored reference to `id` reads as `keepId`. */
+  categoryRedirects?: readonly {
+    id: SpendingCategoryId;
+    keepId: SpendingCategoryId;
+  }[];
 };
+
+/** Applied to every stored category reference the resolution reads. */
+function redirectedCategory(
+  value: SQL,
+  draft?: ExpenseSpendingCategoryResolutionDraft,
+): SQL {
+  if (!draft?.categoryRedirects?.length) return value;
+  return sql`CASE ${value} ${sql.join(
+    draft.categoryRedirects.map(
+      (row) => sql`WHEN ${row.id}::uuid THEN ${row.keepId}::uuid`,
+    ),
+    sql` `,
+  )} ELSE ${value} END`;
+}
 
 /** Same nearest-ancestor mapping policy for expense classification and category navigation. */
 export function productCategorySpendingAncestorsSql(
@@ -62,10 +81,9 @@ export function productCategorySpendingAncestorsSql(
     "spendingCategoryMode",
     draft?.productCategories,
   );
-  const categoryTarget = projectedValue(
-    "c",
-    "spendingCategoryId",
-    draft?.productCategories,
+  const categoryTarget = redirectedCategory(
+    projectedValue("c", "spendingCategoryId", draft?.productCategories),
+    draft,
   );
   return sql`      SELECT c.id,${categoryParent} AS "parentId",c.feature,c.name,c.shortcode,${categoryMode} AS "spendingCategoryMode",${categoryTarget} AS "spendingCategoryId",0 AS depth,ARRAY[c.id] AS visited
       FROM "ProductCategory" c WHERE c.id=${categoryId} AND c."deletedAt" IS NULL
@@ -99,7 +117,11 @@ function projectedValue<T extends { id: string }>(
 export const storedExpenseSpendingCategorySql = (
   alias: string,
   draft?: ExpenseSpendingCategoryResolutionDraft,
-): SQL => projectedValue(alias, "spendingCategoryId", draft?.expenses);
+): SQL =>
+  redirectedCategory(
+    projectedValue(alias, "spendingCategoryId", draft?.expenses),
+    draft,
+  );
 
 /** Stored Purchase defaults are inputs; derived Purchase summaries never are. */
 export function expenseSpendingCategoryResolutionSql(
@@ -115,11 +137,11 @@ export function expenseSpendingCategoryResolutionSql(
   const categoryCatalog = spendingCategoryCatalogSql(draft);
   const principal = sql`${column(alias, "lineKind")} = 'principal'`;
   const vendorProfile = projectedValue("v", "spendingProfile", draft?.vendors);
-  const vendorTarget = projectedValue(
-    "v",
-    "defaultSpendingCategoryId",
-    draft?.vendors,
+  const vendorTarget = redirectedCategory(
+    projectedValue("v", "defaultSpendingCategoryId", draft?.vendors),
+    draft,
   );
+  const purchaseTarget = redirectedCategory(sql`p."spendingCategoryId"`, draft);
   const food = sql`COALESCE((SELECT a.feature = 'food' FROM ancestors a WHERE a.feature IS NOT NULL ORDER BY a.depth LIMIT 1),FALSE)`;
   return sql`(
     WITH RECURSIVE ancestors AS (
@@ -141,7 +163,7 @@ export function expenseSpendingCategoryResolutionSql(
       LEFT JOIN "Vendor" v ON v.id=p."vendorId" AND v."deletedAt" IS NULL
       LEFT JOIN mapping m ON TRUE
       LEFT JOIN ${categoryCatalog} override_category ON override_category.id=${storedId} AND override_category."deletedAt" IS NULL
-      LEFT JOIN ${categoryCatalog} purchase_category ON purchase_category.id=p."spendingCategoryId" AND p."spendingCategoryOrigin" <> 'source' AND purchase_category."deletedAt" IS NULL
+      LEFT JOIN ${categoryCatalog} purchase_category ON purchase_category.id=${purchaseTarget} AND p."spendingCategoryOrigin" <> 'source' AND purchase_category."deletedAt" IS NULL
       LEFT JOIN ${categoryCatalog} mapped_category ON mapped_category.id=m."spendingCategoryId" AND mapped_category."deletedAt" IS NULL
       LEFT JOIN ${categoryCatalog} vendor_category ON vendor_category.id=${vendorTarget} AND vendor_category."deletedAt" IS NULL
     ), candidates AS (

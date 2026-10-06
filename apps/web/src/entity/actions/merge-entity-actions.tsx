@@ -1,3 +1,8 @@
+import {
+  parseShortcodeFor,
+  type SpendingCategoryShortcode,
+} from "@cubby/schemas/identifiers";
+import { lazy, Suspense, useState } from "react";
 import { z } from "zod";
 
 import {
@@ -9,6 +14,13 @@ import {
   vendor,
 } from "~/integrations/tanstack-query/generated/catalog.gen";
 import { savedWithBackgroundWork } from "~/lib/recompute-summary";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from "~/ui/primitives/dialog";
 
 import { useActionMutation } from "../../ui/hooks/useActionMutation";
 import { EntityMergeDialog } from "../merge/entity-merge-dialog";
@@ -17,7 +29,18 @@ import { defineEntityAction } from "./entity-action-definition";
 import type { EntityActionHandles, EntityActionRow } from "./entity-actions";
 import { useStagedDialogAction } from "./use-staged-dialog-action";
 
-type MergeEntity = "ingredient" | "product" | "purchase" | "vendor";
+const SpendingCategoryMergeReview = lazy(() =>
+  import("~/app/finance/spending-classification-review").then((m) => ({
+    default: m.SpendingCategoryMergeReview,
+  })),
+);
+
+type MergeEntity =
+  | "ingredient"
+  | "product"
+  | "purchase"
+  | "spendingCategory"
+  | "vendor";
 type MergeRow = EntityActionRow & { name: string };
 export type MergeMutation<TOutput> = {
   mutateAsync: (input: {
@@ -121,6 +144,56 @@ export const kernelMerge = <TOutput,>(
   };
 };
 
+/**
+ * A category merge reclassifies historical spending, so confirming the keeper
+ * opens the reviewed preview; only its apply step runs the merge.
+ */
+function useMergeSpendingCategoriesEntityAction(): EntityActionHandles {
+  const [review, setReview] = useState<{
+    keepId: SpendingCategoryShortcode;
+    mergeIds: SpendingCategoryShortcode[];
+  } | null>(null);
+  const action = useStagedMerge("spendingCategory", {
+    isPending: false,
+    mutateAsync: async ({ keepId, mergeIds }) => {
+      setReview({
+        keepId: parseShortcodeFor("spendingCategory", keepId),
+        mergeIds: mergeIds.map((id) =>
+          parseShortcodeFor("spendingCategory", id),
+        ),
+      });
+    },
+  });
+  return {
+    ...action,
+    dialog: (
+      <>
+        {action.dialog}
+        {review && (
+          <Dialog
+            open
+            onOpenChange={(open) => {
+              if (!open) setReview(null);
+            }}
+          >
+            <DialogContent>
+              <DialogHeader>
+                <DialogTitle>Review spending category merge</DialogTitle>
+                <DialogDescription>
+                  Preview how past spending moves before applying the merge.
+                </DialogDescription>
+              </DialogHeader>
+              <Suspense fallback={null}>
+                <SpendingCategoryMergeReview {...review} />
+              </Suspense>
+            </DialogContent>
+          </Dialog>
+        )}
+      </>
+    ),
+  };
+}
+
 function useMergeProductsEntityAction(): EntityActionHandles {
   const mutation = useActionMutation({
     mutationFn: entityMergeMutationOptions("product"),
@@ -185,6 +258,15 @@ export const mergeEntityActionDefinitions = [
     group: "organize",
     priority: 100,
     use: useMergeVendorsEntityAction,
+  }),
+  defineEntityAction({
+    verb: "merge",
+    entities: ["spendingCategory"],
+    arity: "both",
+    minSelection: 2,
+    group: "organize",
+    priority: 100,
+    use: useMergeSpendingCategoriesEntityAction,
   }),
   defineEntityAction({
     verb: "merge",

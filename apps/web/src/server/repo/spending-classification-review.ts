@@ -145,6 +145,16 @@ async function draftFor(
         },
       ],
     };
+  if (request.action === "spendingCategoryMerge") {
+    const keepId = await resolveOrThrow(db, "spendingCategory", request.keepId);
+    const categoryRedirects = [];
+    for (const code of request.mergeIds)
+      categoryRedirects.push({
+        id: await resolveOrThrow(db, "spendingCategory", code),
+        keepId,
+      });
+    return { categoryRedirects };
+  }
   const spendingCategoryId = request.spendingCategoryId
     ? await resolveOrThrow(db, "spendingCategory", request.spendingCategoryId)
     : null;
@@ -360,6 +370,12 @@ export async function applyReviewedSpendingClassificationPolicy(
         defaultSpendingCategoryId: request.defaultSpendingCategoryId,
       },
     });
+  } else if (request.action === "spendingCategoryMerge") {
+    await executeEntity(ctx, {
+      action: "merge",
+      entity: "spendingCategory",
+      data: { keepId: request.keepId, mergeIds: request.mergeIds },
+    });
   } else {
     for (const id of request.expenseIds)
       await executeEntity(ctx, {
@@ -399,7 +415,9 @@ export async function applySpendingClassificationReview(
             ? request.expenseIds.length
             : request.action === "products"
               ? request.productIds.length
-              : 1,
+              : request.action === "spendingCategoryMerge"
+                ? request.mergeIds.length
+                : 1,
         impact,
       };
     },

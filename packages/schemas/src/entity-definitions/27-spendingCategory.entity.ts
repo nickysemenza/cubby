@@ -375,9 +375,9 @@ export default defineEntity({
     softDelete: true,
     delete: { mode: "soft", bulk: true },
     bulkUpdate: null,
-    merge: false,
-    operationOwners: { delete: "kernel", merge: null },
-    mcp: ["get", "list", "create", "update", "delete"],
+    merge: true,
+    operationOwners: { delete: "kernel", merge: "kernel" },
+    mcp: ["get", "list", "create", "update", "delete", "merge"],
     dataQuality: {
       checks: [
         {

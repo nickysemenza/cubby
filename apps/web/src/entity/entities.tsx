@@ -51,7 +51,7 @@ import {
   type MergeDisplayRow,
 } from "./types";
 
-interface IngredientMergeRow extends MergeDisplayRow {
+interface NamedMergeRow extends MergeDisplayRow {
   name: string;
 }
 
@@ -80,9 +80,8 @@ interface PurchaseMergeRow extends MergeDisplayRow {
   vendorName: string | null;
 }
 
-const isIngredientMergeRow = (
-  row: MergeDisplayRow,
-): row is IngredientMergeRow => "name" in row && typeof row.name === "string";
+const isNamedMergeRow = (row: MergeDisplayRow): row is NamedMergeRow =>
+  "name" in row && typeof row.name === "string";
 
 const isProductMergeRow = (row: MergeDisplayRow): row is ProductMergeRow =>
   productShortcode.safeParse(row.id).success &&
@@ -248,6 +247,18 @@ const entityDefinitions = withEntityNames({
   spendingCategory: {
     ...generatedBrowserRoutes.spendingCategory,
     color: INK.slate,
+    // The selected categories in list order; the first starts as keeper.
+    // Confirming opens the historical spending review that applies the merge.
+    mergeable: defineMergeableConfig({
+      keeperMode: "ranked",
+      isRow: isNamedMergeRow,
+      rowLabel: (row) => <span className="truncate">{row.name}</span>,
+      copy: {
+        title: "Merge spending categories?",
+        description:
+          "References and child categories move to the kept category, and the others leave the roster. Review the historical spending impact next.",
+      },
+    }),
   },
   ingredient: {
     ...generatedBrowserRoutes.ingredient,
@@ -268,7 +279,7 @@ const entityDefinitions = withEntityNames({
     // first ingredient starts as keeper, with a deliberate picker override.
     mergeable: defineMergeableConfig({
       keeperMode: "ranked",
-      isRow: isIngredientMergeRow,
+      isRow: isNamedMergeRow,
       rowLabel: (row) => <span className="truncate">{row.name}</span>,
       copy: {
         title: "Merge ingredients?",
