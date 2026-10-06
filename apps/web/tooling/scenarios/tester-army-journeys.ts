@@ -387,6 +387,11 @@ export async function seedJourneyWorld(
       subject: "Synthetic restart confirmation",
       receivedAt: new Date("2026-09-12T15:00:00Z"),
       rawChecksum: "c".repeat(64),
+      content: {
+        snippet: null,
+        bodyHtml: null,
+        bodyText: `Order ${JOURNEY_NAMES.restartOrderId}. Synthetic seed packet, qty 1, $7.00. Grand total $7.00 USD.`,
+      },
     })
     .returning();
   if (!restartMail) throw new Error("Synthetic restart mail was not saved");
