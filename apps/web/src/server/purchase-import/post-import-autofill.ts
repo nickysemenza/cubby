@@ -5,6 +5,7 @@ import {
 } from "@cubby/schemas/context";
 import {
   userId,
+  type IngredientId,
   type ProductId,
   type PurchaseId,
   type RunId,
@@ -12,7 +13,10 @@ import {
 import { createLogger } from "@cubby/worker-tracing";
 import { and, eq, inArray } from "drizzle-orm";
 
+import { env } from "~/env";
 import { suggestFields } from "~/server/ai/field-suggest/suggest-fields";
+import { getBindingFetcher } from "~/server/cf-env";
+import { USDAClient } from "~/server/clients/usda";
 import type { Database } from "~/server/db";
 import {
   auditLog,
@@ -33,6 +37,7 @@ import {
   mutationEvents,
   runMutationSideEffectsForEntities,
 } from "~/server/services/mutation-side-effects";
+import { RecipeCostingService } from "~/server/services/recipe-costing.service";
 
 const log = createLogger("post-import-autofill");
 
@@ -57,7 +62,23 @@ const AUTO_FILL_TARGETS = [
 ] as const;
 
 type AutoFillTarget = (typeof AUTO_FILL_TARGETS)[number];
-type AutoFillPorts = { suggest: typeof suggestFields; budgetMs?: number };
+type AutoFillPorts = {
+  suggest: typeof suggestFields;
+  /** Recipes costed through a newly linked ingredient go stale. */
+  recomputeForIngredients?: (
+    db: Database,
+    ingredientIds: IngredientId[],
+  ) => Promise<number>;
+  budgetMs?: number;
+};
+
+const productionRecompute: NonNullable<
+  AutoFillPorts["recomputeForIngredients"]
+> = (db, ingredientIds) =>
+  new RecipeCostingService(
+    db,
+    new USDAClient(env.USDA_API_URL, getBindingFetcher("USDA_API")),
+  ).recomputeForIngredients(ingredientIds, { source: "product.autofill" });
 
 /**
  * After an import commits, fill the empty category, ingredient, and plant of
@@ -130,19 +151,25 @@ async function fillAll(
   );
   await Promise.all(
     created.map(async ({ id }) => {
-      try {
-        for (const target of AUTO_FILL_TARGETS) {
-          if (Date.now() >= deadline) return;
+      for (const target of AUTO_FILL_TARGETS) {
+        if (Date.now() >= deadline) return;
+        // One refused field (a domain rule, a failed suggestion) never
+        // skips the Product's other fields.
+        try {
           await fillTarget(
             db,
-            { runId: input.runId, actor },
+            { runId: input.runId, actor, deadline },
             id,
             target,
             ports,
           );
+        } catch (error) {
+          log.warn("Product auto-fill skipped", {
+            productId: id,
+            field: target,
+            error,
+          });
         }
-      } catch (error) {
-        log.warn("Product auto-fill skipped", { productId: id, error });
       }
     }),
   );
@@ -150,7 +177,11 @@ async function fillAll(
 
 async function fillTarget(
   db: Database,
-  { runId, actor }: { runId: RunId; actor: ActorContext },
+  {
+    runId,
+    actor,
+    deadline,
+  }: { runId: RunId; actor: ActorContext; deadline: number },
   productId: ProductId,
   target: AutoFillTarget,
   ports: AutoFillPorts,
@@ -181,27 +212,49 @@ async function fillTarget(
     return;
   const patch = await patchFor(db, target, value);
   const written = await withTransaction(db, async (tx) => {
-    // Re-read under the row lock: a member who filled the field while Jev
-    // was deciding keeps their value.
+    // Past the budget the commit already returned and enrichment may have
+    // fingerprinted the Product, so a late answer writes nothing.
+    if (Date.now() >= deadline) return false;
+    // Re-read under the row lock: a member who filled the field, or changed
+    // the category the pick was based on, while Jev decided keeps their value.
     const [locked] = await tx
       .select({
         categoryId: product.categoryId,
         ingredientId: product.ingredientId,
         growsPlantId: product.growsPlantId,
+        categoryFeature: productCategory.feature,
       })
       .from(product)
+      .leftJoin(productCategory, eq(productCategory.id, product.categoryId))
       .where(and(eq(product.id, productId), notDeleted(product)))
-      .for("update")
+      .for("update", { of: product })
       .limit(1);
-    if (!locked || locked[target] !== null) return false;
+    if (
+      !locked ||
+      locked[target] !== null ||
+      locked.categoryId !== row.categoryId
+    )
+      return false;
+    // An ingredient link files the Product under food; it never replaces a
+    // category that is not food.
+    if (
+      target === "ingredientId" &&
+      locked.categoryId !== null &&
+      locked.categoryFeature !== "food"
+    )
+      return false;
     await updateProduct(databaseForTransaction(tx), productId, patch, actor);
     return true;
   });
-  if (written)
-    await runMutationSideEffectsForEntities(
-      db,
-      mutationEvents("product", "updated", [productId], "product.autofill"),
-    );
+  if (!written) return;
+  await runMutationSideEffectsForEntities(
+    db,
+    mutationEvents("product", "updated", [productId], "product.autofill"),
+  );
+  if ("ingredientId" in patch && patch.ingredientId)
+    await (ports.recomputeForIngredients ?? productionRecompute)(db, [
+      patch.ingredientId,
+    ]);
 }
 
 async function patchFor(db: Database, target: AutoFillTarget, value: string) {

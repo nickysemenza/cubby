@@ -230,15 +230,87 @@ describe("auto-fill after an import", () => {
         return pick(target, ingredient.shortcode, 0.99);
       return pick(target!, seeded.category.shortcode, 0.5);
     };
+    const recomputed: string[][] = [];
     await autoFillCreatedProducts(
       ctx.db,
       { runId: seeded.runId, purchaseIds: [seeded.purchase.id] },
-      { suggest },
+      {
+        suggest,
+        recomputeForIngredients: async (_db, ids) => {
+          recomputed.push(ids);
+          return 0;
+        },
+      },
     );
+    // Recipes costed through the newly linked ingredient go stale.
+    expect(recomputed).toEqual([[ingredient.id]]);
     expect(await fieldsOf(seeded.created.id)).toMatchObject({
       ingredientId: ingredient.id,
       categoryId: food?.id,
     });
+  });
+
+  it("never replaces a non-food category the member sets while Jev links an ingredient", async () => {
+    const seeded = await seed();
+    const ingredient = await insertWithShortcode(ctx.db, "ingredient", {
+      name: `example tomato ${crypto.randomUUID()}`,
+    });
+    const suggest: Suggest = async (_db, _runId, input) => {
+      const [target] = input.targets;
+      if (target === "ingredientId") {
+        await getDb(ctx.db)
+          .update(product)
+          .set({ categoryId: seeded.otherCategory.id })
+          .where(eq(product.id, seeded.created.id));
+        return pick(target, ingredient.shortcode, 0.99);
+      }
+      return pick(target!, seeded.category.shortcode, 0.5);
+    };
+    await autoFillCreatedProducts(
+      ctx.db,
+      { runId: seeded.runId, purchaseIds: [seeded.purchase.id] },
+      { suggest, recomputeForIngredients: async () => 0 },
+    );
+    expect(await fieldsOf(seeded.created.id)).toMatchObject({
+      categoryId: seeded.otherCategory.id,
+      ingredientId: null,
+    });
+  });
+
+  it("keeps filling a Product's other fields after one is refused", async () => {
+    const seeded = await seed();
+    const suggest: Suggest = async (_db, _runId, input) => {
+      const [target] = input.targets;
+      if (target === "growsPlantId")
+        return pick(target, seeded.plant.shortcode, 0.99);
+      // A category that no longer exists refuses that one write.
+      return pick(target!, "CAT-ZZZZ", 0.99);
+    };
+    await autoFillCreatedProducts(
+      ctx.db,
+      { runId: seeded.runId, purchaseIds: [seeded.purchase.id] },
+      { suggest, recomputeForIngredients: async () => 0 },
+    );
+    expect(await fieldsOf(seeded.created.id)).toMatchObject({
+      categoryId: null,
+      growsPlantId: seeded.plant.id,
+    });
+  });
+
+  it("writes nothing from an answer that arrives after the budget", async () => {
+    const seeded = await seed();
+    const suggest: Suggest = async (_db, _runId, input) => {
+      await new Promise((resolve) => setTimeout(resolve, 300));
+      return pick(input.targets[0]!, seeded.category.shortcode, 0.99);
+    };
+    await autoFillCreatedProducts(
+      ctx.db,
+      { runId: seeded.runId, purchaseIds: [seeded.purchase.id] },
+      { suggest, budgetMs: 100 },
+    );
+    // Let the late answer land, then confirm it wrote nothing.
+    await new Promise((resolve) => setTimeout(resolve, 600));
+    expect((await fieldsOf(seeded.created.id))?.categoryId).toBeNull();
   });
 
   it("returns at its budget when a suggestion stalls", async () => {
