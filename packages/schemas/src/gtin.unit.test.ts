@@ -57,6 +57,5 @@ describe("barcode canonicalization", () => {
   it("recognizes only the canonical barcode kind", () => {
     expect(isGtinKind("gtin_14")).toBe(true);
     expect(isGtinKind("asin")).toBe(false);
-    expect(isGtinKind("legacy_unspecified")).toBe(false);
   });
 });

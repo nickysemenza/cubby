@@ -319,14 +319,14 @@ describe("entity display image resolver", () => {
       expect(rows[0]?.displayImages).toEqual([]);
     });
 
-    it("hides label attachments from direct and borrowed covers while retaining legacy null items", async () => {
+    it("hides label attachments from direct and borrowed covers while keeping items", async () => {
       const labelledProduct = await createProductFixture(
         ctx.db,
         makeProductInput({ name: "Labelled product" }),
         ctx.actor,
       );
       const label = await makeImage();
-      const legacyItem = await makeImage();
+      const item = await makeImage();
       await insertEntityAttachments(ctx.db, [
         {
           entityId: labelledProduct.entityId,
@@ -336,7 +336,7 @@ describe("entity display image resolver", () => {
         },
         {
           entityId: labelledProduct.entityId,
-          imageId: legacyItem.id,
+          imageId: item.id,
           sortOrder: 1,
         },
       ]);
@@ -346,9 +346,7 @@ describe("entity display image resolver", () => {
         [{ id: labelledProduct.entityId }],
         (row) => ({ id: row.id }),
       );
-      expect(direct[0]?.displayImages).toEqual([
-        expectedDisplayImage(legacyItem),
-      ]);
+      expect(direct[0]?.displayImages).toEqual([expectedDisplayImage(item)]);
 
       const context = entityKernelContextSchema.parse(
         createTestRequestContext(ctx.db, {
@@ -364,7 +362,7 @@ describe("entity display image resolver", () => {
       if (detail.action !== "get" || !detail.item)
         throw new Error("Expected Product detail");
       expect(detail.item.images).toMatchObject([
-        { id: legacyItem.shortcode, purpose: null },
+        { id: item.shortcode, purpose: "item" },
       ]);
       expect(detail.item.labelImages).toMatchObject([
         { id: label.shortcode, purpose: "label" },
@@ -386,9 +384,7 @@ describe("entity display image resolver", () => {
         [{ id: ingredient.entityId }],
         (row) => ({ id: row.id }),
       );
-      expect(borrowed[0]?.displayImages).toEqual([
-        expectedDisplayImage(legacyItem),
-      ]);
+      expect(borrowed[0]?.displayImages).toEqual([expectedDisplayImage(item)]);
     });
   });
 

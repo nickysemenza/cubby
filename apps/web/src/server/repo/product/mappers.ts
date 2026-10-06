@@ -162,9 +162,7 @@ export const mapProductExternalIds = (
   (externalIds ?? [])
     .filter((externalId) => externalId.deletedAt === null)
     .map((externalId) => {
-      const kind = externalIdKind.parse(
-        externalId.kind ?? "legacy_unspecified",
-      );
+      const kind = externalIdKind.parse(externalId.kind);
       return {
         id: externalId.id,
         source: externalId.source,

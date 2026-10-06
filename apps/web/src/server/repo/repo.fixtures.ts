@@ -651,7 +651,10 @@ export const insertEntityAttachments = async (
         const entityKind = kindById.get(row.entityId);
         if (!entityKind)
           throw new Error(`No Entity row for attachment ${row.entityId}`);
-        return { ...row, entityKind };
+        // Every Product attachment names its purpose (a CHECK enforces it).
+        return entityKind === "product"
+          ? { purpose: "item" as const, ...row, entityKind }
+          : { ...row, entityKind };
       }),
     )
     .returning();

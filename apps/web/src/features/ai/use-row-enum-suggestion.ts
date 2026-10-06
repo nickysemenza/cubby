@@ -123,7 +123,7 @@ export function useRowEnumSuggestion<
   const formState = useFormState({ control: form.control, name: path });
   const fieldState = form.getFieldState(path, formState);
   // Touched, not dirty: a row appended through `useFieldArray` is born dirty
-  // (its default `legacy_unspecified` differs from the record's empty array),
+  // (its blank default row differs from the record's empty array),
   // so a dirty gate would block auto-apply on exactly the rows it exists for.
   // Touched means the operator focused the cell themselves.
   const isDirty = fieldState.isTouched;

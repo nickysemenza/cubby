@@ -486,37 +486,6 @@ describe("mergeProducts", () => {
     expect(liveImages).toEqual([{ imageId: keeperImage.id }]);
   });
 
-  it("adopts an explicit duplicate image role only when the keeper is legacy-null", async () => {
-    const keeper = await seedProduct("Legacy image role keeper");
-    const loser = await seedProduct("Label image role loser");
-    const image = await createUploadedImageRecord(ctx.db, {
-      key: `images/${crypto.randomUUID()}-shared.jpg`,
-      filename: "shared.jpg",
-      contentType: "image/jpeg",
-      size: 100,
-    });
-    await insertEntityAttachments(ctx.db, [
-      { entityId: keeper.id, imageId: image.id, purpose: null },
-      { entityId: loser.id, imageId: image.id, purpose: "label" },
-    ]);
-
-    await mergeProducts(
-      ctx.db,
-      { keepId: keeper.shortcode, mergeIds: [loser.shortcode] },
-      TEST_ACTOR,
-    );
-
-    const [surviving] = await getDb(ctx.db).query.entityAttachment.findMany({
-      where: and(
-        eq(entityAttachment.entityId, keeper.id),
-        eq(entityAttachment.imageId, image.id),
-        notDeleted(entityAttachment),
-      ),
-      columns: { purpose: true },
-    });
-    expect(surviving?.purpose).toBe("label");
-  });
-
   it("demotes rather than destroys a colliding external-id slot", async () => {
     const keeper = await seedProduct("Keeper Grinder", {
       model: "GRINDER-1",

@@ -150,14 +150,13 @@ const rootLiveCondition = (entity: Entity, alias: string): SQL =>
     ? sql`${sql.raw(`${alias}."deletedAt"`)} IS NULL`
     : sql`TRUE`;
 
-const optionalColumn = (alias: string, column: string): SQL =>
+const aliasColumn = (alias: string, column: string): SQL =>
   sql.raw(`${alias}."${column}"`);
 
-/** Nutrition/package labels are evidence on a Product, never its cover.
- * Legacy joins have a null purpose and retain their historical item behavior. */
+/** Nutrition/package labels are evidence on a Product, never its cover. */
 const displayAttachmentCondition = (target: Entity, alias: string): SQL =>
   target === "product"
-    ? sql`COALESCE(${optionalColumn(alias, "purpose")}, 'item') <> 'label'`
+    ? sql`${aliasColumn(alias, "purpose")} <> 'label'`
     : sql`TRUE`;
 
 /**
@@ -180,11 +179,11 @@ const directStorageBranch = (entity: Entity): SQL | null => {
     throw new Error(`Gallery ${entity} has no image attachment hop`);
   }
   const sortOrder = gallery
-    ? optionalColumn(attachmentHop!.alias, "sortOrder")
+    ? aliasColumn(attachmentHop!.alias, "sortOrder")
     : sql`0`;
   const createdAt = gallery
-    ? optionalColumn(attachmentHop!.alias, "createdAt")
-    : optionalColumn("s", "createdAt");
+    ? aliasColumn(attachmentHop!.alias, "createdAt")
+    : aliasColumn("s", "createdAt");
   return sql`
         SELECT i.key, i.shortcode, 0 AS priority,
                NULL::timestamptz AS "groupCreatedAt", NULL::uuid AS "groupId",
@@ -231,19 +230,19 @@ const displaySourceBranch = (
   }
   const groupCreatedAt =
     source.ordering === "newest"
-      ? sql`to_timestamp(-EXTRACT(EPOCH FROM ${optionalColumn(groupAlias, "createdAt")}))`
-      : optionalColumn(groupAlias, "createdAt");
+      ? sql`to_timestamp(-EXTRACT(EPOCH FROM ${aliasColumn(groupAlias, "createdAt")}))`
+      : aliasColumn(groupAlias, "createdAt");
   const sortOrder = targetGallery
-    ? optionalColumn(attachmentHop!.alias, "sortOrder")
+    ? aliasColumn(attachmentHop!.alias, "sortOrder")
     : sql`0`;
   const createdAt = targetGallery
-    ? optionalColumn(attachmentHop!.alias, "createdAt")
-    : optionalColumn(groupAlias, "createdAt");
+    ? aliasColumn(attachmentHop!.alias, "createdAt")
+    : aliasColumn(groupAlias, "createdAt");
   return {
     usesExpenseProjectRelation: traversal.usesExpenseProjectRelation,
     branch: sql`
         SELECT i.key, i.shortcode, ${source.priority} AS priority,
-               ${groupCreatedAt} AS "groupCreatedAt", ${optionalColumn(groupAlias, "id")} AS "groupId",
+               ${groupCreatedAt} AS "groupCreatedAt", ${aliasColumn(groupAlias, "id")} AS "groupId",
                ${sortOrder} AS "sortOrder", ${createdAt} AS "createdAt", i.id AS "imageId"
         FROM ${sql.raw(`"${traversal.rootTable}"`)} s
         ${traversal.joins}

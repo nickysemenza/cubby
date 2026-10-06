@@ -691,7 +691,6 @@ type ProductAssociationRow = {
 type ProductImageAssociationRow = ProductAssociationRow & {
   imageId: string;
   sha256: string | null;
-  purpose: "item" | "label" | null;
   sortOrder: number;
   createdAt: Date;
 };
@@ -903,7 +902,6 @@ async function buildProductMergePlan(
         id: true,
         entityId: true,
         imageId: true,
-        purpose: true,
         sortOrder: true,
         createdAt: true,
       },
@@ -1470,8 +1468,8 @@ export const mergeProducts = async (
           //
           // Images are the exception, and it is about ORDER rather than data. The
           // cover is whichever row sorts first under
-          // `asc(sortOrder), asc(createdAt)`, `sortOrder` defaults to 0 on every
-          // legacy row, and `foldAssociation` re-points without touching it — so a
+          // `asc(sortOrder), asc(createdAt)`, many rows tie at `sortOrder` 0,
+          // and `foldAssociation` re-points without touching it — so a
           // merged-in image that happened to be created earlier silently became the
           // survivor's cover. (A barcode scan hijacked a product's cover exactly this
           // way.) Read the survivor's own rows in their current order first, then
@@ -1479,18 +1477,6 @@ export const mergeProducts = async (
           const survivorImagesBefore = plan.survivorImageIds.map((id) => ({
             id,
           }));
-          // A direct keeper choice is authoritative.  Legacy null has no choice,
-          // so retain a surviving loser's explicit role when deduplicating the
-          // same image across Products.
-          for (const { into, rows } of plan.images.collision.absorb) {
-            if (into.purpose !== null) continue;
-            const purpose = rows.find((row) => row.purpose !== null)?.purpose;
-            if (purpose)
-              await tx
-                .update(entityAttachment)
-                .set({ purpose })
-                .where(eq(entityAttachment.id, into.id));
-          }
           summary.imagesMoved = await foldAssociation(tx, {
             column: "productId",
             table: entityAttachment,

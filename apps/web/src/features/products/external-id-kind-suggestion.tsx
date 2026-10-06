@@ -7,11 +7,9 @@ import { useFieldSuggestionContext } from "~/features/ai/field-suggestion-provid
 import { useRowEnumSuggestion } from "~/features/ai/use-row-enum-suggestion";
 import { ai } from "~/integrations/tanstack-query/generated/catalog.gen";
 
-/** Row values that mean "no kind picked yet" — the array's default
- * (`legacy_unspecified`, `ProductExternalIds`'s `emptyValue`) and a blank
- * select both count, so this fires on a freshly-added row, not just an
- * edited one. */
-const UNSET_KIND_VALUES = ["", "legacy_unspecified"];
+/** A blank select — `ProductExternalIdsField`'s `emptyValue` — means "no kind
+ * picked yet", so this fires on a freshly-added row, not just an edited one. */
+const UNSET_KIND_VALUES = [""];
 /** A source/identifier shorter than this carries no shape signal —
  * `externalIdKindSuggestionInput.identifier` itself requires 2. */
 const MIN_IDENTIFIER_LENGTH = 2;

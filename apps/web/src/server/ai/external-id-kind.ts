@@ -28,13 +28,6 @@ import {
   EXTERNAL_ID_KIND_RULES,
 } from "~/server/ai/vocabularies";
 
-/** Every kind Jev may choose between — `legacy_unspecified` is a migration
- * artifact a model should never propose. */
-const JEV_KINDS = externalIdKind.options.filter(
-  (kind): kind is Exclude<ExternalIdKind, "legacy_unspecified"> =>
-    kind !== "legacy_unspecified",
-);
-
 /** Home Depot's non-barcode SKU: distinct from the barcode it also carries. */
 const HOME_DEPOT_INTERNET_NUMBER_LENGTH = 9;
 
@@ -91,7 +84,7 @@ export async function suggestExternalIdKind(
     feature: FIELD_SUGGESTION_FEATURE,
     subject: subjectFor(input),
     rules: EXTERNAL_ID_KIND_RULES,
-    values: JEV_KINDS,
+    values: externalIdKind.options,
     describe: (value) => EXTERNAL_ID_KIND_DESCRIPTIONS[value],
     usage: { ...usage, operation: "suggestExternalIdKind" },
     port: ports?.jev,
