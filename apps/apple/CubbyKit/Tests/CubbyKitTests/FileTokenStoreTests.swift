@@ -56,6 +56,25 @@ struct FileTokenStoreTests {
         try? FileManager.default.removeItem(at: store.fileURL.deletingLastPathComponent())
     }
 
+    /// One malformed host in a current-format file must not sign out, or drop, the other hosts.
+    @Test func aMalformedHostEntryDropsOnlyThatHost() throws {
+        let store = temporaryStore()
+        try FileManager.default.createDirectory(
+            at: store.fileURL.deletingLastPathComponent(), withIntermediateDirectories: true)
+        let good = String(
+            decoding: try JSONEncoder().encode(CubbyAuthState(credential: .bearer("tok.good"))), as: UTF8.self
+        )
+        let bad = #"{"version":1,"credential":{"bearer":{"_0":"tok.bad"}},"sessionDataCookies":"oops"}"#
+        try Data(#"{"good.example":\#(good),"bad.example":\#(bad)}"#.utf8).write(to: store.fileURL)
+
+        #expect(try store.load(for: "good.example") == .bearer("tok.good"))
+        #expect(try store.loadState(for: "bad.example") == nil)
+        try store.save(.bearer("tok.new"), for: "new.example")
+        #expect(try store.load(for: "good.example") == .bearer("tok.good"))
+        #expect(try store.load(for: "new.example") == .bearer("tok.new"))
+        try? FileManager.default.removeItem(at: store.fileURL.deletingLastPathComponent())
+    }
+
     @Test func clearingAnUndecodableFileRemovesIt() throws {
         let store = try storeWithUndecodableFile()
         try store.clear(for: "old.example")
