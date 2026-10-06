@@ -304,7 +304,6 @@ const foldSupersededCharge = async (
     current.lineCount <= 1
   ) {
     await foldChargeInto(tx, current.purchaseId, target, actor);
-    await validateProductPolicy(tx, { purchaseId: target });
   }
 };
 
@@ -830,8 +829,14 @@ export const updateExpense = async (
     );
     const output = await expenseCrud.update(tx, state.id, update, actor);
     // A Product or category change can put a Product where its spending
-    // category forbids one.
-    await validateProductPolicy(tx, { expenseIds: [state.id] });
+    // category forbids one; a folded superseded charge can reclassify the
+    // target Purchase's other lines, so check it whole once this line lands.
+    await validateProductPolicy(
+      tx,
+      resolved === undefined
+        ? { expenseIds: [state.id] }
+        : { purchaseId: resolved },
+    );
     await auditNestedChanges(tx, state, output);
     await touchUpdatedAt(
       tx,

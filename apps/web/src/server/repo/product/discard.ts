@@ -53,6 +53,7 @@ import {
   withTransaction,
   touchUpdatedAt,
 } from "~/server/repo/database-helpers";
+import { validateProductPolicy } from "~/server/repo/inheritance-validation";
 import { describeDiscard } from "~/server/repo/product/discard-preview";
 import { loadProductInventoryEntries } from "~/server/repo/product/lookup";
 import {
@@ -142,6 +143,9 @@ const writeDiscardLine = async (
     productQuantity: storedQuantity,
     purchaseId: null,
   });
+  // A Product mapped to a category that forbids one cannot be discarded
+  // through a line it may not hang off.
+  await validateProductPolicy(tx, { expenseIds: [created.id] });
   await logAuditEntry(tx, actor, {
     entityKind: "expense",
     entityId: created.id,

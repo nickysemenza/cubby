@@ -3,9 +3,15 @@ import { createRepoEntity } from "tooling/factories/repo";
 import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 
-import { productCategory, runFinding } from "~/server/db/schema";
+import {
+  expense,
+  productCategory,
+  purchase,
+  runFinding,
+} from "~/server/db/schema";
 import { resolveRunFinding } from "~/server/purchase-import/findings";
 import { getDb } from "~/server/repo/database-helpers";
+import { discardProductUnits } from "~/server/repo/product/discard";
 import { linkExpensesToPurchase, mergePurchases } from "~/server/repo/purchase";
 import { insertWithShortcode } from "~/server/repo/shortcode-utils";
 import { withReviewedSpendingClassification } from "~/server/repo/spending-classification-review-authorization";
@@ -20,8 +26,9 @@ import { updateThroughKernel } from "~/server/testing/entity-kernel";
 // link Products; a write that reclassifies existing lines without touching
 // them (attaching a line to another Purchase, a Vendor becoming a
 // restaurant, merging into a restaurant Vendor, a merge carrying a category
-// onto the keeper's own lines, an import finding relinking a Product)
-// commits a forbidden link.
+// onto the keeper's own lines, an import finding relinking a Product, a
+// discard line) commits a forbidden link; or a valid Vendor correction with
+// its own category override is refused mid-write.
 describe("not_allowed product expectation", () => {
   const ctx = withTestDb();
 
@@ -150,8 +157,8 @@ describe("not_allowed product expectation", () => {
       date: "2026-09-21",
       defaultTrade: "other",
     });
-    await line(order.shortcode, product.shortcode);
-    return { restaurants, grocer };
+    const { output } = await line(order.shortcode, product.shortcode);
+    return { restaurants, grocer, expenseCode: output.id };
   }
 
   it("refuses turning a Vendor with food lines into a restaurant that forbids Products", async () => {
@@ -247,6 +254,60 @@ describe("not_allowed product expectation", () => {
     if (!finding) throw new Error("test setup: finding not inserted");
     await expect(
       resolveRunFinding(ctx.db, { id: finding.id, action: "apply" }, ctx.actor),
+    ).rejects.toThrow(/does not allow/i);
+  });
+
+  it("accepts moving a food line to a restaurant Vendor with its own category override", async () => {
+    const { restaurants, grocer, expenseCode } = await foodLineAt(
+      "Example corner store",
+    );
+    const groceries = await insertWithShortcode(ctx.db, "spendingCategory", {
+      name: `Example groceries ${crypto.randomUUID()}`,
+      productExpectation: "not_expected",
+    });
+    const diner = await insertWithShortcode(ctx.db, "vendor", {
+      name: `Example diner ${crypto.randomUUID()}`,
+      spendingProfile: "restaurant",
+      defaultSpendingCategoryId: restaurants.id,
+    });
+    expect(grocer.id).not.toBe(diner.id);
+    await updateThroughKernel(ctx.db, ctx.actor, "expense", expenseCode, {
+      vendor: diner.name,
+      spendingCategoryId: groceries.shortcode,
+    });
+    const [moved] = await getDb(ctx.db)
+      .select({ vendorId: purchase.vendorId })
+      .from(expense)
+      .innerJoin(purchase, eq(purchase.id, expense.purchaseId))
+      .where(eq(expense.shortcode, expenseCode));
+    expect(moved?.vendorId).toBe(diner.id);
+  });
+
+  it("refuses discarding a Product whose category maps to spending that forbids one", async () => {
+    const { restaurants } = await seed();
+    const prepared = await insertWithShortcode(ctx.db, "productCategory", {
+      name: `Example prepared meals ${crypto.randomUUID()}`,
+      spendingCategoryMode: "mapped",
+      spendingCategoryId: restaurants.id,
+    });
+    const meal = await insertWithShortcode(ctx.db, "product", {
+      name: `Example meal kit ${crypto.randomUUID()}`,
+      manufacturer: "",
+      categoryId: prepared.id,
+    });
+    await expect(
+      discardProductUnits(
+        ctx.db,
+        {
+          productId: meal.id,
+          quantity: 1,
+          date: "2026-09-22",
+          trade: "other",
+          reason: null,
+          inventoryEntryId: null,
+        },
+        ctx.actor,
+      ),
     ).rejects.toThrow(/does not allow/i);
   });
 });
