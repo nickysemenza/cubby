@@ -52,10 +52,11 @@ let package = Package(
             // ~58k generated lines is what makes LLDB stall on launch (see apps/apple/AGENTS.md's
             // "Debugging on device"). `unsafeFlags` is safe because CubbyKit is only ever
             // consumed as a local path dependency, never as a versioned remote package.
+            // Forward to the frontend so the driver's later default -g cannot override this.
             // -suppress-warnings: the generator spells `package import struct Foundation.URL`
             // for every file, and the compiler warns that no package-level declaration needs
             // it; generated code is regenerated, never fixed by hand, so its warnings are noise.
-            swiftSettings: [.unsafeFlags(["-gline-tables-only", "-suppress-warnings"])],
+            swiftSettings: [.unsafeFlags(["-Xfrontend", "-gline-tables-only", "-suppress-warnings"])],
             plugins: [.plugin(name: "OpenAPIGenerator", package: "swift-openapi-generator")]
         ),
         .target(

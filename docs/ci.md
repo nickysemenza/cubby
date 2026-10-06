@@ -107,20 +107,21 @@ defines a `.requiresVisionHardware` trait that skips Vision-dependent
 contracts (`SubjectLift`, `FeaturePrintIndex`) when running on the Simulator,
 for whichever caller — local or hosted — ends up running that scheme there.
 
-One hosted macOS job, `Apple checks`, covers the Apple surface, gated on the
+Two hosted macOS jobs, `Apple host tests` and `Apple simulator build`, run in
+parallel, gated on the
 `scope` job's `apple` output. The scope job reads the PR file list or the files in a
 `main` push. Native source, FFI, Rust bridge, shared API schemas and the shared
 package (native constants, generator helpers, and Swift test vectors), the web
 contracts and HTTP API layer, preview fixture inputs, the Worker media-origin
 configuration (`wrangler.jsonc` and `wrangler-public-config.ts`), and CI policy
 changes select Apple. These inputs affect generated Swift or its binding tests;
-an Apple README or unrelated web page alone does not select Apple. The macOS job installs no
+an Apple README or unrelated web page alone does not select Apple. The macOS jobs install no
 Node dependencies: the Linux `Apple generated inputs` job runs `pnpm generate`
 and uploads the generated Swift inputs as the `apple-generated` artifact
-(`.github/actions/generate-apple-inputs`), which it downloads once before building,
+(`.github/actions/generate-apple-inputs`), which each downloads before building,
 and `scripts/stamp-source-mtimes.ts` gives those files content-derived mtimes
 like tracked sources so the restored build caches still apply. A skipped job still
-satisfies its required status check. The host phase runs `swift test --package-path
+satisfies its required status check. The host job runs `swift test --package-path
 apps/apple/CubbyKit --force-resolved-versions` on the macOS host — no
 simulator — restoring/saving an exact-key cache of
 `apps/apple/CubbyKit/.build`, including compiled products and dependency
@@ -132,26 +133,31 @@ silently drop). A successful warning check records its content key inside
 the cached `.build` directory; unchanged document, config, generator pin,
 toolchain, and check script reuse that pass without rebuilding or regenerating.
 Changed inputs run the full check, and warnings or generator failures never
-record a pass. After host tests and the warning gate succeed, the job attempts
-its advisory cache save, then replaces the macOS-only FFI framework with the
-simulator-only framework. Restore
-would otherwise overlay the existing directory, leaving host slices in the
-simulator source hash. The app phase then runs `sh scripts/apple-check.sh ci`,
-a generic-simulator `xcodebuild build` with no tests or simulator boot. Either
-phase failing fails the required `Apple checks` context.
+record a pass. The simulator job independently restores its simulator-only FFI
+framework and runs `sh scripts/apple-check.sh ci`, a generic-simulator
+`xcodebuild build` with no tests or simulator boot. The lightweight Linux
+`Apple checks` job preserves the required status context and succeeds only when
+both selected macOS jobs succeed; failures, cancellations, or unexpected skips
+fail that gate. Release FFI warming waits for this gate on main.
 
-The earlier combined job ran `xcodebuild test` on a concrete simulator:
+Each SDK keeps its own compiled-product cache. Parallel jobs use two macOS
+runner slots to avoid adding the host and simulator compile times after a
+cache miss or source change. A generated-schema change still recompiles the
+client for each SDK; neither cache reuse nor a five-minute ceiling is guaranteed.
+The generated `CubbyAPI` target forwards `-gline-tables-only` directly to the
+Swift frontend, so the driver's default `-g` does not restore full debug type
+information. Handwritten Swift targets retain their normal debug information.
+
+The earlier simulator-test job ran `xcodebuild test` on a concrete simulator:
 first boot cost about 6 minutes plus roughly 10 minutes of CPU starvation
-(a 5s script took 2.6 minutes, and compilation doubled). The current combined
-job retains host `swift test` and sequential compilation, so that simulator
-work remains excluded. Combining saves one macOS runner slot and a duplicated
-checkout/generated-input download; hosted measurements determine its latency.
+(a 5s script took 2.6 minutes, and compilation doubled). Host tests and the
+generic-simulator app build keep that simulator work excluded.
 `.github/actions/setup-apple-tools` installs XcodeGen and restores
 `apps/apple/SourcePackages`, the `xcodebuild`-resolved SPM clones for Sentry,
 GRDB, Nuke and swift-openapi-generator (previously an uncached "Resolve Package
-Graph" on every run), used only by `Apple checks`. It is separate from the
+Graph" on every run), used by `Apple simulator build`. It is separate from the
 target-specific FFI output cache (`.github/actions/setup-apple-ffi`) and the
-host phase's build cache described above. DerivedData keys explicitly exclude
+host job's build cache described above. DerivedData keys explicitly exclude
 the host `.build` directory; its compiled products are not simulator source
 inputs. Host and simulator caches keep their existing toolchain and package
 graph keys. Dependency declarations live in XcodeGen’s included
