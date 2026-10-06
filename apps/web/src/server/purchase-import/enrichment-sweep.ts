@@ -96,56 +96,17 @@ export async function sweepPendingEnrichment(
     db,
     candidates.map((row) => row.vendorId),
   );
-  const byAccount = new Map<
-    VendorAccountId,
-    {
-      account: (typeof accounts)[number];
-      rows: { productId: ProductId; startUrl: string }[];
-    }
-  >();
-  const chosen = new Set<string>();
-  // Candidates arrive oldest Product first, each Product's product page
-  // first: a Product goes to the first of its lines whose Vendor browses and
-  // that yields a page on that Vendor's browser domains.
-  for (const row of candidates) {
-    if (chosen.has(row.productId)) continue;
-    const account = browsingAccountFor(accounts, row);
-    if (!account) continue;
-    if (
-      options.vendorAccountIds &&
-      !options.vendorAccountIds.includes(account.id)
-    )
-      continue;
-    const startUrl = await enrichmentStartPage(db, {
-      productId: row.productId,
-      vendorId: account.vendorId,
-      pages: [row.url],
-    });
-    // No page the bridge may open: try the Product's next line. A Product
-    // with none waits for a domain or website on its Vendor.
-    if (!startUrl) continue;
-    chosen.add(row.productId);
-    const group = byAccount.get(account.id) ?? { account, rows: [] };
-    group.rows.push({ productId: row.productId, startUrl });
-    byAccount.set(account.id, group);
-  }
-  for (const { account, rows } of byAccount.values()) {
+  const byAccount = groupByAccount(
+    candidates,
+    accounts,
+    options.vendorAccountIds,
+  );
+  for (const { account, products } of byAccount.values()) {
     if (options.bridge && !(await options.bridge.connected(account.id))) {
       result.waiting.push({ vendorAccountId: account.id, reason: "offline" });
       continue;
     }
-    const targets = [];
-    for (const row of rows.slice(0, TARGETS_PER_RUN)) {
-      const live = await productEnrichmentTarget(getDb(db), row.productId);
-      if (!live) continue;
-      targets.push({
-        kind: "product" as const,
-        productId: row.productId,
-        vendorAccountId: account.id,
-        sourceExternalKey: row.startUrl,
-        targetFingerprint: live.fingerprint,
-      });
-    }
+    const targets = await selectTargets(db, account, products);
     if (targets.length === 0) continue;
     const started = await startTargetedRun(
       db,
@@ -177,6 +138,75 @@ export async function sweepPendingEnrichment(
     result.started.push({ runId: started.run.id, vendorAccountId: account.id });
   }
   return result;
+}
+
+type Candidate = Awaited<ReturnType<typeof pendingCandidates>>[number];
+type Account = Awaited<ReturnType<typeof browsingAccounts>>[number];
+
+/**
+ * In memory only: a Product goes to the account of its first line whose
+ * Vendor browses, keeping that account's lines (product page first) for the
+ * start page, which is resolved only once the account can run.
+ */
+function groupByAccount(
+  candidates: readonly Candidate[],
+  accounts: readonly Account[],
+  only: readonly VendorAccountId[] | undefined,
+) {
+  const byAccount = new Map<
+    VendorAccountId,
+    { account: Account; products: Map<ProductId, (string | null)[]> }
+  >();
+  const owner = new Map<ProductId, VendorAccountId>();
+  for (const row of candidates) {
+    const account = browsingAccountFor(accounts, row);
+    if (!account || (only && !only.includes(account.id))) continue;
+    const assigned = owner.get(row.productId);
+    if (assigned && assigned !== account.id) continue;
+    owner.set(row.productId, account.id);
+    const group = byAccount.get(account.id) ?? {
+      account,
+      products: new Map(),
+    };
+    group.products.set(row.productId, [
+      ...(group.products.get(row.productId) ?? []),
+      row.url,
+    ]);
+    byAccount.set(account.id, group);
+  }
+  return byAccount;
+}
+
+/**
+ * Up to `TARGETS_PER_RUN` targets, resolving start pages one Product at a
+ * time: the first line page on the Vendor's browser domains, else a learned
+ * page or the Vendor's website. A Product with none waits for a domain or
+ * website on its Vendor.
+ */
+async function selectTargets(
+  db: Database,
+  account: Account,
+  products: ReadonlyMap<ProductId, (string | null)[]>,
+) {
+  const targets = [];
+  for (const [id, pages] of products) {
+    if (targets.length === TARGETS_PER_RUN) break;
+    const startUrl = await enrichmentStartPage(db, {
+      productId: id,
+      vendorId: account.vendorId,
+      pages,
+    });
+    const live = startUrl ? await productEnrichmentTarget(getDb(db), id) : null;
+    if (!startUrl || !live) continue;
+    targets.push({
+      kind: "product" as const,
+      productId: id,
+      vendorAccountId: account.id,
+      sourceExternalKey: startUrl,
+      targetFingerprint: live.fingerprint,
+    });
+  }
+  return targets;
 }
 
 /**
@@ -301,8 +331,8 @@ const importRunTouched = (
  *
  * A Product is import-created when its `create` audit row names an import
  * Run, or, for imports from before the writer recorded the Products it
- * created, when it was created in the window and bought on a Purchase an
- * import Run wrote.
+ * created (no `create` row at all), when it was created in the window and
+ * bought on a Purchase an import Run wrote.
  */
 async function pendingCandidates(db: Database, since: Date) {
   const rows = await getDb(db)
@@ -329,7 +359,18 @@ async function pendingCandidates(db: Database, since: Date) {
         gte(product.createdAt, since),
         or(
           importRunTouched("product", product.id),
-          importRunTouched("purchase", purchase.id),
+          // Only a Product with no create row at all (an import before the
+          // writer recorded them) falls back to its Purchase's import Run; a
+          // Product created by hand or from photos keeps that provenance.
+          and(
+            sql`NOT EXISTS (
+              SELECT 1 FROM ${auditLog}
+              WHERE ${auditLog.entityKind} = 'product'
+                AND ${auditLog.entityId} = ${product.id}
+                AND ${auditLog.action} = 'create'
+            )`,
+            importRunTouched("purchase", purchase.id),
+          ),
         ),
       ),
     );

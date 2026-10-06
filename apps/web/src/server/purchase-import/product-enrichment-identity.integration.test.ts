@@ -32,6 +32,7 @@ import {
 import { productEnrichmentTarget } from "./product-enrichment-target";
 import {
   claimNextImportWork,
+  controlRun,
   finishRun,
   importBrowserOrderEvidence,
   issueBrowserCommand,
@@ -599,6 +600,64 @@ describe("product enrichment worklist", () => {
       ],
     });
     expect(second).toEqual({ created: false, blockingRun: null });
+  });
+
+  // Restarting or re-dispatching an enrichment run brings its Products back
+  // to life; a Product another run took meanwhile must not be enriched twice.
+  it("refuses to restart or re-dispatch a run whose Product another active run holds", async () => {
+    const { runId, party, products } = await worklist();
+    const [run] = await getDb(ctx.db)
+      .select({ shortcode: runTable.shortcode })
+      .from(runTable)
+      .where(eq(runTable.id, runId));
+    const otherVendor = await insertWithShortcode(ctx.db, "vendor", {
+      name: `Example Other Shop ${crypto.randomUUID()}`,
+      website: "https://other.example.test",
+      browserDomains: ["other.example.test"],
+    });
+    const otherAccount = await insertWithShortcode(ctx.db, "vendorAccount", {
+      label: "Synthetic other account",
+      vendorId: otherVendor.id,
+      ledgerPartyId: party.id,
+      status: "active",
+      browserSyncEnabled: true,
+    });
+    await getDb(ctx.db)
+      .update(runTable)
+      .set({ status: "dispatch_failed", coordinatorStartedAt: null })
+      .where(eq(runTable.id, runId));
+    const holder = await startTargetedRun(ctx.db, {
+      ledgerPartyId: party.id,
+      purpose: "product_enrichment",
+      vendorId: otherVendor.id,
+      vendorAccountId: otherAccount.id,
+      trigger: "manual",
+      targets: [
+        {
+          kind: "product",
+          productId: products[0]!.entityId,
+          sourceExternalKey: "https://other.example.test/",
+          targetFingerprint: "f".repeat(64),
+        },
+      ],
+    });
+    expect(holder.created).toBe(true);
+    await expect(
+      controlRun(ctx.db, ctx.actor, {
+        runPublicId: run!.shortcode,
+        action: "retry_dispatch",
+      }),
+    ).rejects.toThrow(/already being enriched/u);
+    await getDb(ctx.db)
+      .update(runTable)
+      .set({ status: "failed", endedAt: new Date() })
+      .where(eq(runTable.id, runId));
+    await expect(
+      controlRun(ctx.db, ctx.actor, {
+        runPublicId: run!.shortcode,
+        action: "restart",
+      }),
+    ).rejects.toThrow(/already being enriched/u);
   });
 
   it("returns the recorded result to a concurrent replay of one skip", async () => {

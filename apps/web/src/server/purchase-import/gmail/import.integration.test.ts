@@ -978,6 +978,25 @@ describe("saved confirmation imports", () => {
         ]);
       });
 
+      // A Product someone created outside an import (by hand, or from photos)
+      // and later bought on an imported Purchase keeps its own provenance.
+      it("leaves a Product created outside an import to its creator", async () => {
+        const { accountId, line } = await mailOnlyImport();
+        await enableBrowserSync(accountId);
+        await getDb(ctx.db)
+          .update(auditLog)
+          .set({ runId: null })
+          .where(
+            and(
+              eq(auditLog.entityId, line.productId!),
+              eq(auditLog.action, "create"),
+            ),
+          );
+        expect(
+          (await sweepPendingEnrichment(ctx.db, { bridge: online })).started,
+        ).toEqual([]);
+      });
+
       it("finds the vendor's browsing account for a Purchase with no account link", async () => {
         const { accountId, line } = await mailOnlyImport();
         await enableBrowserSync(accountId);
