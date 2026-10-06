@@ -47,12 +47,23 @@ locators before waiting for hydration-disabled controls to become enabled;
 the assertion preserves uniqueness while the responsive branches settle.
 Do not select `.first()` or add a sleep to bypass duplicate controls.
 
+Playwright request interception disables Chromium's HTTP cache. Scope synthetic
+retailer documents to the retailer page, never the shared browser context or
+the Cubby application page. Remove transient failure interception before later
+reloads once its regression has been observed. Retired-route HTTP status
+contracts use `request.get`; browser scenarios own visible not-found behavior.
+
 ### Workerd test runtime and profiles
 
 A PostgreSQL test file that starts workerd belongs in
 `workerdIntegrationTests` (`apps/web/vitest.config.ts`), which forms the
 `integration-workerd` project; CI runs only that project against the
 `worker-build` artifact, and an unlisted consumer fails in an ordinary shard.
+The socket-lifecycle regression lives in that workerd integration project: it
+exercises HTTP reads and freshness writes against the real Worker and observes
+PostgreSQL socket expiry, without a browser. Preserve its twelve-second quiet
+windows and repeated-load assertions when changing its scheduling.
+
 Browser workers, Tester Army, native runners, the purchase-agent Vitest scenarios and the
 live evals start the built Worker through `openWorkerdRuntime`
 (`apps/web/tooling/workerd-runtime.ts`); a caller that runs work after

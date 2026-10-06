@@ -57,7 +57,10 @@ interface IngredientMergeRow extends MergeDisplayRow {
 
 const productMergeRowSchema = z.union([
   duplicateProductIdentitySchema.shape.products.element,
-  productListItemOut.pick({ id: true, name: true, primaryGtin: true }),
+  // List actions can run before the relations enrichment supplies the barcode.
+  productListItemOut
+    .pick({ id: true, name: true, primaryGtin: true })
+    .partial({ primaryGtin: true }),
 ]);
 type ProductMergeRow = z.output<typeof productMergeRowSchema>;
 

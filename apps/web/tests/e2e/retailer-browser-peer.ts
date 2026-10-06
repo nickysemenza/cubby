@@ -35,9 +35,17 @@ export async function connectRetailerBrowserPeer(input: {
   accountCode: string;
   accountId: string;
   runId: string;
+  retailerPages: Readonly<Record<string, string>>;
 }) {
   const peer = await input.page.context().newPage();
   const retailer = await input.page.context().newPage();
+  // Context interception disables HTTP caching for unrelated Cubby pages.
+  // Keep synthetic external documents on the retailer page alone.
+  for (const [url, html] of Object.entries(input.retailerPages)) {
+    await retailer.route(url, (route) =>
+      route.fulfill({ contentType: "text/html", body: html }),
+    );
+  }
   await peer.goto(input.baseURL);
   await peer.exposeFunction("syntheticBrowserCommand", async (raw: unknown) => {
     const message = browserBridgeServerMessage.parse(raw);

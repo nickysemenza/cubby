@@ -361,17 +361,6 @@ for (const statementFirst of [true, false]) {
       const url = `https://${names.host}/orders/${names.orderId}`;
       const productUrl = `https://www.amazon.com/dp/${asin}`;
       const html = `<title>Synthetic order detail</title><main><h1>${names.orderId}</h1><p>Ordered September 10, 2026. Delivered.</p><p>USD 42.50</p><p>${names.productName} SKU ${sku} quantity 1</p><a href="${productUrl}">Product page</a></main>`;
-      await page
-        .context()
-        .route(url, (route) =>
-          route.fulfill({ contentType: "text/html", body: html }),
-        );
-      await page.context().route(productUrl, (route) =>
-        route.fulfill({
-          contentType: "text/html",
-          body: `<title>${names.productName}</title><main>${names.productName} SKU ${sku} ASIN ${asin} USD 42.50</main>`,
-        }),
-      );
       const allowed = await page.request.patch(
         `/api/v1/vendors/${prerequisites.vendor.id}`,
         {
@@ -393,6 +382,10 @@ for (const statementFirst of [true, false]) {
         url,
         productUrl,
         expectedProductText: asin,
+        retailerPages: {
+          [url]: html,
+          [productUrl]: `<title>${names.productName}</title><main>${names.productName} SKU ${sku} ASIN ${asin} USD 42.50</main>`,
+        },
       });
       await gotoAuthenticatedPage(page, `/runs/${run.publicId}`);
       const approve = page.getByRole("button", {

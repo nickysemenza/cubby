@@ -142,18 +142,6 @@ test("reviews CSV charge groups and refunds against captured retailer orders", a
     const asin = `B0${sha256Hex(orderToken).slice(0, 8).toUpperCase()}`;
     const productUrl = `https://www.amazon.com/dp/${asin}`;
     const sku = `SYN-SKU-${orderToken}`;
-    await page.context().route(url, (route) =>
-      route.fulfill({
-        contentType: "text/html",
-        body: `<title>Synthetic order detail</title><main><h1>${orderNames.orderId}</h1><p>Ordered September 10, 2026. Delivered. USD 42.50</p><p>${orderNames.productName} SKU ${sku} quantity1</p><a href="${productUrl}">Product page</a></main>`,
-      }),
-    );
-    await page.context().route(productUrl, (route) =>
-      route.fulfill({
-        contentType: "text/html",
-        body: `<main>${orderNames.productName} SKU ${sku} ASIN ${asin} USD42.50</main>`,
-      }),
-    );
     provider.configure({
       email,
       message: {
@@ -206,6 +194,10 @@ test("reviews CSV charge groups and refunds against captured retailer orders", a
       url,
       productUrl,
       expectedProductText: asin,
+      retailerPages: {
+        [url]: `<title>Synthetic order detail</title><main><h1>${orderNames.orderId}</h1><p>Ordered September 10, 2026. Delivered. USD 42.50</p><p>${orderNames.productName} SKU ${sku} quantity1</p><a href="${productUrl}">Product page</a></main>`,
+        [productUrl]: `<main>${orderNames.productName} SKU ${sku} ASIN ${asin} USD42.50</main>`,
+      },
     });
     await gotoAuthenticatedPage(page, `/runs/${run.publicId}`);
     const approve = page.getByRole("button", {
