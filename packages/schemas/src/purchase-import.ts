@@ -380,6 +380,8 @@ export const runFindingStatus = z.enum(["open", "applied", "dismissed"]);
 export const replacementLineIdentity = z.object({
   productId: z.uuid().nullable(),
   promote: z.boolean(),
+  /** An explicit expense-only decision: the line is not a stocked item. */
+  expenseOnly: z.boolean().default(false),
   variantDoubt: z.boolean(),
   unresolvedReason: z.string().nullable(),
   probability: z.number(),
@@ -813,6 +815,10 @@ export const importWriterInput = z.object({
           lineIndex: z.number().int().nonnegative(),
           reason: z.string().trim().min(1).max(1_000),
         }),
+        z.object({
+          kind: z.literal("expense_only"),
+          lineIndex: z.number().int().nonnegative(),
+        }),
       ]),
     )
     .optional(),
@@ -933,6 +939,12 @@ export const preparedProductResolution = z.discriminatedUnion("kind", [
     kind: z.literal("unresolved"),
     reason: z.string().trim().min(1).max(1_000),
   }),
+  /**
+   * Household spending that is not a stocked item: prepared food, tickets,
+   * rides, memberships, subscriptions, digital access, donations, services.
+   * The line books an expense with no Product and nothing to review.
+   */
+  z.object({ kind: z.literal("expense_only") }),
 ]);
 
 export const commitPurchaseImportInput = z.object({
@@ -993,8 +1005,8 @@ export const validatePurchaseImportOut = z.object({
 
 /**
  * One line of the evidence plan as validation compares it. `productId` is a
- * Product shortcode, `new`/`unresolved` (a resolution with no Product yet), or
- * null for a non-principal line.
+ * Product shortcode, `new`/`unresolved` (a resolution with no Product yet),
+ * or null for a non-principal or expense-only line.
  */
 export const validationPlanLine = z.object({
   title: z.string(),

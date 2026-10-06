@@ -162,7 +162,10 @@ import {
   validateExpenseInheritance,
 } from "./expense-inheritance";
 import { hydrateExpenseProjectAllocations } from "./expense-project-allocation";
-import { validateLiveEffectiveTrades } from "./inheritance-validation";
+import {
+  validateProductPolicy,
+  validateLiveInheritedPolicies,
+} from "./inheritance-validation";
 import {
   purchaseCoverageSql,
   purchaseEvidenceFieldResolutionsSql,
@@ -1256,7 +1259,7 @@ export const updatePurchase = async (
     );
 
     await validatePurchaseItemInheritance(tx, [id]);
-    await validateLiveEffectiveTrades(tx);
+    await validateLiveInheritedPolicies(tx);
 
     const changes = computeChanges(before, after, [
       ...entityFieldModels.purchase.audit,
@@ -1337,6 +1340,9 @@ export const linkExpensesToPurchase = async (
       .where(and(inArray(expense.id, expenseIds), notDeleted(expense)));
 
     await validatePurchaseItemInheritance(tx, [purchaseId]);
+    await validateProductPolicy(tx, {
+      expenseIds: before.map((row) => row.id),
+    });
 
     await touchUpdatedAt(
       tx,
@@ -1625,6 +1631,7 @@ export const splitExpense = async (
         });
         inserted.push(row.id);
       }
+      await validateProductPolicy(tx, { expenseIds: inserted });
 
       if (attributionPolicy === "inherit" && originalAttributions.length > 0) {
         await tx.insert(expenseAttribution).values(
@@ -2044,7 +2051,11 @@ const moveChargeImages = async (
     );
 };
 
-/** Fold charge contents with audited expense re-pointing; callers own index ordering. */
+/**
+ * Fold charge contents with audited expense re-pointing; callers own index
+ * ordering and validate the Product policy once the whole write lands (a
+ * Vendor merge folds before repointing to the keeper, whose context decides).
+ */
 export const foldChargeInto = async (
   tx: DrizzleTransaction,
   deadId: PurchaseId,
@@ -2285,6 +2296,8 @@ export const mergePurchases = async (
     for (const loser of losers) {
       await foldChargeInto(tx, loser, keepId, actor);
     }
+    // Carried metadata (a category) can reclassify the keeper's own lines.
+    await validateProductPolicy(tx, { purchaseId: keepId });
     mergedCount = losers.length;
 
     const adopted = orderIdBearers[0];

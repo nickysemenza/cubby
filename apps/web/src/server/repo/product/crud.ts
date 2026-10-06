@@ -158,7 +158,7 @@ import { insertWithShortcode } from "~/server/repo/shortcode-utils";
 import { effectiveTaskSubjectProductSql } from "~/server/repo/task-project-inheritance";
 
 import { hydrateImageReadProjection } from "../image-read-projection";
-import { validateLiveEffectiveTrades } from "../inheritance-validation";
+import { validateLiveInheritedPolicies } from "../inheritance-validation";
 import { assertProductCategoryChange } from "./classification";
 import { getProductClassificationEvidence } from "./classification-evidence";
 import {
@@ -2199,7 +2199,7 @@ export const updateProduct = async (
         : beforeProduct;
 
       if (updated.categoryId !== beforeProduct.categoryId)
-        await validateLiveEffectiveTrades(tx);
+        await validateLiveInheritedPolicies(tx);
 
       // Conversion coverage and inventory valuation are invalidated only after
       // mappings land; both are projections of the resulting conversion graph.

@@ -597,6 +597,7 @@ describe("prepared orders", () => {
       "existing",
       "new",
       "unresolved",
+      "expense_only",
     ]);
     expect(choice?.options[0]?.pick).toEqual({
       entity: "product",

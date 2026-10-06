@@ -83,7 +83,7 @@ import { unitMappingSides } from "~/server/repo/product/unit-mappings";
 import { cascadeRemoval } from "~/server/repo/removal/core";
 import { applyMergePolicy } from "~/server/repo/removal/dispositions";
 
-import { validateLiveEffectiveTrades } from "../inheritance-validation";
+import { validateLiveInheritedPolicies } from "../inheritance-validation";
 import { markProductConversionCoverageInputStale } from "./conversion-coverage";
 import { ensureSlotPrimaries } from "./update-helpers";
 
@@ -1754,7 +1754,7 @@ export const mergeProducts = async (
       survivorChanges,
     });
     summary.merged = removed;
-    await validateLiveEffectiveTrades(tx);
+    await validateLiveInheritedPolicies(tx);
 
     // Moved mappings, adopted food identity and kit composition all change the
     // survivor's effective conversion graph. Absorbed rows are no longer live;

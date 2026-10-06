@@ -53,6 +53,7 @@ import {
   withTransaction,
 } from "~/server/repo/database-helpers";
 import { validateExpenseInheritance } from "~/server/repo/expense-inheritance";
+import { validateProductPolicy } from "~/server/repo/inheritance-validation";
 import { upsertAgentProductMatch } from "~/server/repo/product-match-candidate";
 import {
   externalIdKey,
@@ -363,6 +364,12 @@ export const lineExternalIdentity = (
 export type LineIdentityDecision = {
   productId: string | null;
   promote: boolean;
+  /**
+   * The resolution affirmatively said this line is not a stocked item
+   * (`expense_only`); distinct from a line left without a Product for lack of
+   * identity.
+   */
+  expenseOnly?: boolean;
   variantDoubt: boolean;
   unresolvedReason: string | null;
   probability: number;
@@ -655,6 +662,7 @@ export async function explicitLineDecisions(
     decisions.push({
       productId: resolution.kind === "existing" ? resolution.productId : null,
       promote: resolution.kind === "new",
+      expenseOnly: resolution.kind === "expense_only",
       variantDoubt: false,
       unresolvedReason:
         resolution.kind === "unresolved" ? resolution.reason : null,
@@ -686,6 +694,10 @@ export async function resolveLineProduct(
   productsByExternalIdentity: Map<string, string>,
   onCreated?: (productId: ProductId) => void,
 ) {
+  // A line decided to carry no Product (expense-only, or coarse-only) keeps
+  // none, even when an earlier line with the same SKU resolved one.
+  if (!decision.productId && !decision.promote && !decision.unresolvedReason)
+    return null;
   const source = externalSource(line.productUrl, vendorId);
   const externalIdentity = lineExternalIdentity(line, vendorId);
   const resolvedEarlier = externalIdentity
@@ -1244,8 +1256,35 @@ export async function importVendorOrder(
     });
     for (const line of classifiedLines)
       await validateExpenseInheritance(tx, line);
+    // A line's Product must be allowed by its effective spending category.
+    await validateProductPolicy(tx, { purchaseId });
 
-    if (candidate.allShipmentsDelivered === true) {
+    // Receiving is for stocked items: an import whose every principal line is
+    // expense-only (meals, tickets) has nothing to receive. Goods with an
+    // unresolved Product still count, as does a Product line already on the
+    // Purchase (an aggregate awaiting replacement has none).
+    const stocksItems = identityDecisions.some(
+      (decision) =>
+        decision.lineKind === "principal" && decision.expenseOnly !== true,
+    );
+    const [stockedLine] = stocksItems
+      ? []
+      : await tx
+          .select({ id: expense.id })
+          .from(expense)
+          .where(
+            and(
+              eq(expense.purchaseId, purchaseId),
+              eq(expense.lineKind, "principal"),
+              isNotNull(expense.productId),
+              notDeleted(expense),
+            ),
+          )
+          .limit(1);
+    if (
+      candidate.allShipmentsDelivered === true &&
+      (stocksItems || stockedLine)
+    ) {
       findingIds.push(
         await fileFinding(
           tx,
@@ -1306,6 +1345,10 @@ export async function importVendorOrder(
       }),
     });
     if (replacementExpenseId) {
+      const reviewedIdentities = identityDecisions.map((decision) => ({
+        ...decision,
+        expenseOnly: decision.expenseOnly ?? false,
+      }));
       const preview = await loadAggregateReplacementSnapshot(
         tx,
         purchaseId,
@@ -1333,11 +1376,11 @@ export async function importVendorOrder(
               fingerprint: await aggregateReplacementApprovalFingerprint(
                 preview.snapshot.fingerprint,
                 lines,
-                identityDecisions,
+                reviewedIdentities,
                 reviewedLineAttributions,
               ),
             },
-            reviewedLineIdentities: identityDecisions,
+            reviewedLineIdentities: reviewedIdentities,
             reviewedLineAttributions,
           },
         ),

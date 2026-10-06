@@ -67,7 +67,7 @@ import {
 } from "~/server/repo/database-helpers";
 import { validateExpenseInheritance } from "~/server/repo/expense-inheritance";
 import { deleteImages } from "~/server/repo/image";
-import { validateLiveEffectiveTrades } from "~/server/repo/inheritance-validation";
+import { validateLiveInheritedPolicies } from "~/server/repo/inheritance-validation";
 import { upsertAgentProductMatch } from "~/server/repo/product-match-candidate";
 import { assertProductCategoryChange } from "~/server/repo/product/classification";
 import {
@@ -820,6 +820,11 @@ export async function commitPurchaseImport(
                   kind: "new" as const,
                   lineIndex: line.position,
                 });
+              } else if (resolution.kind === "expense_only") {
+                productResolutions.push({
+                  kind: "expense_only" as const,
+                  lineIndex: line.position,
+                });
               } else {
                 requiresReview ||= parsedLine.lineKind === "principal";
                 productResolutions.push({
@@ -1088,13 +1093,16 @@ export async function validatePurchaseImport(
                 throw new Error(
                   `Missing product resolution for ${order.stableOrderId}/${line.stableLineId}`,
                 );
+              // An expense-only line has no Product and no unit count, the
+              // same as the expense the writer saved for it.
+              const expenseOnly = resolution?.kind === "expense_only";
               return {
                 title: parsed.title,
                 amount: parsed.amount,
                 lineKind: parsed.lineKind,
-                quantity: parsed.quantity ?? null,
+                quantity: expenseOnly ? null : (parsed.quantity ?? null),
                 productId:
-                  parsed.lineKind !== "principal"
+                  parsed.lineKind !== "principal" || expenseOnly
                     ? null
                     : resolution?.kind === "existing"
                       ? resolution.productId
@@ -1538,7 +1546,7 @@ export async function commitProductEnrichment(
               })
               .where(eq(product.id, productId));
             if (changes.categoryId !== undefined)
-              await validateLiveEffectiveTrades(tx);
+              await validateLiveInheritedPolicies(tx);
             let learnedIdentifier = false;
             const skippedIdentifiers: SkippedEnrichmentIdentifier[] = [];
             for (const identifier of changes.identifiers ?? []) {
@@ -1765,7 +1773,7 @@ export async function overwriteProductEnrichment(
               .returning({ id: product.id });
     if (!updated) throw new Error("Product changed while applying approval");
     if (input.change.field === "categoryId")
-      await validateLiveEffectiveTrades(database);
+      await validateLiveInheritedPolicies(database);
     await database
       .update(runTarget)
       .set({

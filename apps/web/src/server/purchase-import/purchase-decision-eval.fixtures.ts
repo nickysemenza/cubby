@@ -530,6 +530,66 @@ export const purchaseDecisionCases: DecisionCase[] = [
     ]),
   },
   {
+    // Household spending, not inventory: a delivered meal is booked as an
+    // expense with no Product (`expense_only`).
+    name: "line-roles-prepared-food",
+    focus: "line_roles",
+    orderId: "DEC20010",
+    orderedAt: "2026-09-23",
+    extraction: { status: "ready" },
+    printsTotal: true,
+    lines: [
+      line("noodles", "Spicy basil noodles, large", 16.5),
+      line("dumplings", "Pork dumplings (6)", 9),
+      line("delivery", "Delivery fee", 2.99, "fee"),
+      line("tip", "Courier tip", 4, "tip"),
+    ],
+    catalog: [],
+    expected: written("2026-09-23", [
+      [line("noodles", "Spicy basil noodles, large", 16.5), none],
+      [line("dumplings", "Pork dumplings (6)", 9), none],
+      [line("delivery", "Delivery fee", 2.99, "fee"), none],
+      [line("tip", "Courier tip", 4, "tip"), none],
+    ]),
+  },
+  {
+    name: "line-roles-event-tickets",
+    focus: "line_roles",
+    orderId: "DEC20011",
+    orderedAt: "2026-09-23",
+    extraction: { status: "ready" },
+    printsTotal: true,
+    lines: [
+      line("tickets", "General admission, Fall Garden Show, 2 tickets", 30),
+      line("service", "Service fee", 3.5, "fee"),
+    ],
+    catalog: [],
+    expected: written("2026-09-23", [
+      [
+        line("tickets", "General admission, Fall Garden Show, 2 tickets", 30),
+        none,
+      ],
+      [line("service", "Service fee", 3.5, "fee"), none],
+    ]),
+  },
+  {
+    // A subscription that ships seeds is still a stocked item.
+    name: "line-roles-seed-subscription",
+    focus: "line_roles",
+    orderId: "DEC20012",
+    orderedAt: "2026-09-23",
+    extraction: { status: "ready" },
+    printsTotal: true,
+    lines: [line("seeds", "Monthly seed club: Example Sun Tomato packet", 12)],
+    catalog: [],
+    expected: written("2026-09-23", [
+      [
+        line("seeds", "Monthly seed club: Example Sun Tomato packet", 12),
+        { kind: "new" },
+      ],
+    ]),
+  },
+  {
     name: "line-roles-fee-and-tip",
     focus: "line_roles",
     orderId: "DEC20002",

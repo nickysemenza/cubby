@@ -75,6 +75,7 @@ import {
 } from "../expense-inheritance";
 import { loadExpenseProjectAllocations } from "../expense-project-allocation";
 import { loadExpenseSpendingAllocations } from "../expense-spending-allocation";
+import { validateProductPolicy } from "../inheritance-validation";
 import {
   assertQuantitySignMatchesCost,
   dbExpenseToAPI,
@@ -771,6 +772,9 @@ export const updateExpense = async (
           : explicitPurchaseId,
       );
       const output = await expenseCrud.update(tx, state.id, update, actor);
+      // A Product or category change can put a Product where its spending
+      // category forbids one.
+      await validateProductPolicy(tx, { expenseIds: [state.id] });
       await auditNestedChanges(tx, state, output);
       if (qualityCanChange) {
         await touchUpdatedAt(
@@ -824,6 +828,13 @@ export const updateExpense = async (
         : resolved,
     );
     const output = await expenseCrud.update(tx, state.id, update, actor);
+    // A Product or category change can put a Product where its spending
+    // category forbids one; a folded superseded charge can reclassify the
+    // target Purchase's other lines, so check it whole once this line lands.
+    await validateProductPolicy(
+      tx,
+      resolved ? { purchaseId: resolved } : { expenseIds: [state.id] },
+    );
     await auditNestedChanges(tx, state, output);
     await touchUpdatedAt(
       tx,
@@ -993,6 +1004,7 @@ export const createExpense = async (
       entityId: created.id,
       action: "create",
     });
+    await validateProductPolicy(tx, { expenseIds: [created.id] });
     await touchUpdatedAt(tx, product, productId ? [productId] : []);
     await touchUpdatedAt(tx, purchase, purchaseId ? [purchaseId] : []);
     return {

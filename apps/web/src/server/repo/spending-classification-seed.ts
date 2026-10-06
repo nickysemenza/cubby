@@ -30,6 +30,7 @@ import {
   type ExpenseSpendingCategoryResolutionDraft,
 } from "./expense-category-resolution";
 import { loadExpenseJointAllocations } from "./expense-project-allocation";
+import { validateProductPolicy } from "./inheritance-validation";
 import { applyReviewedSpendingClassificationPolicy } from "./spending-classification-review";
 import { withReviewedSpendingClassification } from "./spending-classification-review-authorization";
 
@@ -421,6 +422,7 @@ export async function applySpendingClassificationSeed(
           updatedMappings++;
         }
       });
+      await validateProductPolicy(db);
       return {
         createdCategories,
         updatedCategories,

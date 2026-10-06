@@ -23,7 +23,8 @@ private func choiceJSON(_ id: String, title: String) -> String {
         "pick": {"entity": "product", "label": "Product for \#(title)"}},
        {"id": "new", "label": "Create a new Product", "hint": "A new Product will use this line."},
        {"id": "unresolved", "label": "Leave Product unresolved",
-        "text": {"label": "Reason for leaving \#(title) unresolved"}}],
+        "text": {"label": "Reason for leaving \#(title) unresolved"}},
+       {"id": "expense_only", "label": "Record as an expense only"}],
      "suggestions": [
        {"optionId": "existing", "entity": "product", "id": "PRD-4K7M", "name": "Exact thing",
         "label": "Use Exact thing", "subtitle": "Fixture maker", "badges": ["Exact identifier"]}]}
@@ -92,7 +93,7 @@ struct ReportChoiceAnswersTests {
         #expect(form.choices.map(\.id) == ["trade"])
         let choice = try #require(batch.rows.first?.choice)
         #expect(choice.required)
-        #expect(choice.options.map(\.id) == ["existing", "new", "unresolved"])
+        #expect(choice.options.map(\.id) == ["existing", "new", "unresolved", "expense_only"])
         #expect(choice.options[0].pick?.entity == "product")
         #expect(choice.options[2].text == "Reason for leaving Item A unresolved")
         #expect(choice.suggestions.first?.badges == ["Exact identifier"])
@@ -156,6 +157,21 @@ struct ReportChoiceAnswersTests {
         #expect(kinds == ["existing", "unresolved"])
         #expect(lines[0]["resolution"]?.object?["productId"]?.string == "PRD-4K7M")
         #expect(lines[1]["resolution"]?.object?["reason"]?.string == "Cannot tell which")
+    }
+
+    @Test("An expense-only decision is sent as its own kind, with no Product or reason")
+    func expenseOnlyBody() throws {
+        let batch = try recordsBlock(try preparedReport())
+        let form = try #require(batch.form)
+        var answers = ReportChoiceAnswers()
+        answers.choose(batch.rowChoices[0], optionID: "expense_only")
+        answers.choose(batch.rowChoices[1], optionID: "new")
+        answers.choose(form.choices[0], optionID: "plumbing")
+        let input = try #require(answers.commitInput(for: form))
+        let sent = try JSONEncoder.cubby().encode(input.resolutions)
+        let lines = try JSONDecoder().decode([[String: AnyDecodable]].self, from: sent)
+        #expect(lines[0]["resolution"]?.object?.keys.sorted() == ["kind"])
+        #expect(lines[0]["resolution"]?.object?["kind"]?.string == "expense_only")
     }
 
     @Test("Every answer change makes a new operation id; reading the same answers does not")

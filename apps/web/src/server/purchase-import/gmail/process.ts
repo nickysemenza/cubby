@@ -17,6 +17,7 @@ import {
   lte,
   notInArray,
   or,
+  sql,
 } from "drizzle-orm";
 
 import { formatInstant } from "~/lib/date-format";
@@ -45,6 +46,7 @@ import {
   withTransaction,
 } from "~/server/repo/database-helpers";
 import { cents } from "~/server/repo/money";
+import { expenseProductForbiddenSql } from "~/server/repo/purchase-evidence-policy";
 import { resolveOrThrow } from "~/server/repo/shortcode-resolver";
 import { insertWithShortcode } from "~/server/repo/shortcode-utils";
 import { attachFileToEntity } from "~/server/services/image-storage.service";
@@ -653,9 +655,28 @@ export async function processOrderMails(
         );
       }
 
+      // Receiving (and its return window) is for stocked items: an order
+      // whose principal lines all sit in a spending category that forbids a
+      // Product (a restaurant meal) asks for nothing. Goods with an
+      // unresolved Product still count.
+      const [stocked] =
+        target && event.event === "delivered"
+          ? await database
+              .select({ id: expense.id })
+              .from(expense)
+              .where(
+                and(
+                  eq(expense.purchaseId, target.id),
+                  eq(expense.lineKind, "principal"),
+                  notDeleted(expense),
+                  sql`(${expense.productId} IS NOT NULL OR NOT ${expenseProductForbiddenSql("Expense")})`,
+                ),
+              )
+              .limit(1)
+          : [];
       if (
         target &&
-        (event.event === "delivered" || event.event === "refunded")
+        ((event.event === "delivered" && stocked) || event.event === "refunded")
       ) {
         let possibleDuplicateRefund = false;
         if (event.event === "refunded" && event.amount !== null) {
