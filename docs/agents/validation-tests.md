@@ -78,7 +78,11 @@ assert that `performance.timeOrigin` is unchanged, so a plain anchor cannot
 silently turn it into another document load. When comparing card geometry across
 enrichment, await the card and ancestor animations after switching list views
 before recording the baseline; a visible loading field can precede the settled
-view gutter. Preserve the exact before/after size assertions.
+view gutter. Preserve the exact before/after size assertions. After a column
+customizer action removes its focused row, dialog focus restoration can consume
+the next keyboard activation. An action retry must require the complete order
+to remain unchanged and stop once the exact expected order is visible; never
+repeat a relative move after it has applied or weaken the ordering assertion.
 
 Keep the complete browser regression suite on PRs. Consolidate duplicated
 journeys and seed unrelated prerequisites rather than moving coverage after
