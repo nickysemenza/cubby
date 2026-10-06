@@ -569,12 +569,13 @@ describe("Gmail order mail processing", () => {
   // Receiving is for stocked items. A delivered order whose lines carry no
   // Product and no unresolved-goods finding was booked expense-only (a
   // bouquet from a new florist, uncategorized) and asks for nothing; a
-  // stocked line or goods still awaiting a Product match ask to be received.
+  // stocked line, goods still awaiting a Product match, or a replacement
+  // awaiting approval ask to be received.
   it("asks to receive a delivered order only for stocked or unresolved goods", async () => {
     const seed = await seedForgeWear();
     const order = async (
       orderId: string,
-      line: "stocked" | "unresolved" | "expense_only",
+      line: "stocked" | "unresolved" | "expense_only" | "replacement",
     ) => {
       const row = await insertWithShortcode(ctx.db, "purchase", {
         vendorId: seed.vendor.id,
@@ -600,6 +601,25 @@ describe("Gmail order mail processing", () => {
         lineBasis: "item_line",
         productId: item?.id ?? null,
       });
+      // A hand-booked total whose itemized replacement awaits approval.
+      if (line === "replacement")
+        await getDb(ctx.db)
+          .insert(runFinding)
+          .values({
+            ledgerPartyId: seed.party.id,
+            entityKind: "purchase",
+            entityId: row.id,
+            kind: "duplicate_lines",
+            summary: "Replace the booked total with the receipt's lines.",
+            proposedFix: {
+              kind: "replace_aggregate_line",
+              purchaseId: row.id,
+              lines: [
+                { title: "Work gloves", amount: 20, lineKind: "principal" },
+              ],
+            },
+            evidenceFingerprint: `replacement-${orderId}`,
+          });
       if (line === "unresolved")
         await getDb(ctx.db)
           .insert(runFinding)
@@ -616,6 +636,7 @@ describe("Gmail order mail processing", () => {
     const bouquet = await order("FW-FLOWER-1", "expense_only");
     const gloves = await order("FW-GLOVE-1", "stocked");
     const pending = await order("FW-PEND-1", "unresolved");
+    const awaiting = await order("FW-AGG-1", "replacement");
     const delivered = (orderId: string): OrderMailClassification => ({
       event: "delivered",
       orderId,
@@ -623,7 +644,12 @@ describe("Gmail order mail processing", () => {
       currency: null,
       occurredAt: "2026-09-21T12:00:00Z",
     });
-    for (const orderId of ["FW-FLOWER-1", "FW-GLOVE-1", "FW-PEND-1"])
+    for (const orderId of [
+      "FW-FLOWER-1",
+      "FW-GLOVE-1",
+      "FW-PEND-1",
+      "FW-AGG-1",
+    ])
       await receiveMail(
         seed,
         `delivered-${orderId}`,
@@ -635,7 +661,7 @@ describe("Gmail order mail processing", () => {
       .from(runFinding)
       .where(eq(runFinding.kind, "arrived"));
     expect(arrived.map((row) => row.entityId).sort()).toEqual(
-      [gloves.id, pending.id].sort(),
+      [gloves.id, pending.id, awaiting.id].sort(),
     );
     expect(arrived.map((row) => row.entityId)).not.toContain(bouquet.id);
   });
