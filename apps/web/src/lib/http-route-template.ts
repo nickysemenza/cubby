@@ -154,6 +154,10 @@ const DYNAMIC_TRACE_ROUTES: ReadonlyArray<{
   { pattern: /^\/account\/[^/]+$/u, template: "/account/:accountView" },
   { pattern: /^\/docs\/[^/]+$/u, template: "/docs/:section" },
   {
+    pattern: /^\/entities\/schema\/[^/]+$/u,
+    template: "/entities/schema/:entity",
+  },
+  {
     pattern: /^\/collections\/[^/]+$/u,
     template: "/collections/:collection",
   },
