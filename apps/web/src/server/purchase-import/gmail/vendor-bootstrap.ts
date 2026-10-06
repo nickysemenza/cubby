@@ -69,6 +69,10 @@ const NOT_ORDER_SUBJECT =
 const squash = (value: string) =>
   value.toLowerCase().replace(/[^a-z0-9]/gu, "");
 
+/** Advisory-lock namespaces for mail-created Vendors: names, then domains. */
+const NAME_LOCK_SPACE = 7_301;
+const DOMAIN_LOCK_SPACE = 7_302;
+
 export type SenderVendorCandidate = { name: string; domain: string };
 
 /**
@@ -140,11 +144,13 @@ async function createUnderDomainLock(
     // The name lock serializes two domains reaching for one name (the unique
     // index is case-sensitive); the domain lock serializes two names for one
     // domain. Always name first, then domain, so the order cannot deadlock.
+    // Separate namespaces (the two-key lock), so a name hash can never
+    // collide with a domain hash and invert the lock order.
     await tx.execute(
-      sql`SELECT pg_advisory_xact_lock(hashtext(${`vendor-from-mail-name:${candidate.name.toLowerCase()}`}))`,
+      sql`SELECT pg_advisory_xact_lock(${NAME_LOCK_SPACE}, hashtext(${candidate.name.toLowerCase()}))`,
     );
     await tx.execute(
-      sql`SELECT pg_advisory_xact_lock(hashtext(${`vendor-from-mail:${candidate.domain}`}))`,
+      sql`SELECT pg_advisory_xact_lock(${DOMAIN_LOCK_SPACE}, hashtext(${candidate.domain}))`,
     );
     const sameDomain = await tx
       .select()
