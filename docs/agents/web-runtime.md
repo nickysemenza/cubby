@@ -37,6 +37,10 @@ factory result to a module-level constant referenced by a splittable property
 in the route's literal options object; loader-time helpers stay React-free in
 `detail-loader.ts`.
 
+List actions must accept the base row before progressive enrichment arrives.
+Merge row guards validate the owner identifier and required display fields;
+optional statistics such as a Product barcode cannot gate opening the dialog.
+
 Lists, filtering, sorting, totals, and pagination belong on the server. A saved
 view is visible manifest-backed URL state; `scopeFilters` is only a visible
 contextual scope. Missing filters never widen a query; renderer omissions are

@@ -31,6 +31,9 @@ export async function prepareCapturedRetailerOrder(input: {
   url: string;
   productUrl: string;
   expectedProductText: string;
+  retailerPages: Parameters<
+    typeof connectRetailerBrowserPeer
+  >[0]["retailerPages"];
 }) {
   const { page, db, actor, runtime, token, url, productUrl } = input;
   const providerURL = runtime.googleProvider?.url;
@@ -50,6 +53,7 @@ export async function prepareCapturedRetailerOrder(input: {
     accountCode: input.accountCode,
     accountId: input.vendorAccountId,
     runId: run.id,
+    retailerPages: input.retailerPages,
   });
   const ids = syntheticOrderIds(token);
   try {

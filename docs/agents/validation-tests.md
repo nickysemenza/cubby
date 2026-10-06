@@ -47,6 +47,12 @@ locators before waiting for hydration-disabled controls to become enabled;
 the assertion preserves uniqueness while the responsive branches settle.
 Do not select `.first()` or add a sleep to bypass duplicate controls.
 
+Playwright request interception disables Chromium's HTTP cache. Scope synthetic
+retailer documents to the retailer page, never the shared browser context or
+the Cubby application page. Remove transient failure interception before later
+reloads once its regression has been observed. Retired-route HTTP status
+contracts use `request.get`; browser scenarios own visible not-found behavior.
+
 ### Workerd test runtime and profiles
 
 A PostgreSQL test file that starts workerd belongs in

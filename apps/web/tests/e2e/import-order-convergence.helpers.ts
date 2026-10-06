@@ -139,18 +139,23 @@ export async function createConvergenceHarness(
   async function retailer() {
     const url = `https://${host}/orders/${orderId}`;
     const html = names.retailerHtml;
-    await page.route(url, (route) =>
-      route.fulfill({ contentType: "text/html", body: html }),
-    );
-    await page.goto(url);
-    const extracted = await page
-      .locator("[data-item]")
-      .getAttribute("data-item");
-    const printed = await page
-      .locator("[data-total]")
-      .getAttribute("data-total");
-    expect(extracted).toBe(productName);
-    expect(printed).toBe("42.50");
+    const retailerPage = await page.context().newPage();
+    try {
+      await retailerPage.route(url, (route) =>
+        route.fulfill({ contentType: "text/html", body: html }),
+      );
+      await retailerPage.goto(url);
+      const extracted = await retailerPage
+        .locator("[data-item]")
+        .getAttribute("data-item");
+      const printed = await retailerPage
+        .locator("[data-total]")
+        .getAttribute("data-total");
+      expect(extracted).toBe(productName);
+      expect(printed).toBe("42.50");
+    } finally {
+      await retailerPage.close();
+    }
     const run = await startOrResumeRun(db, {
       ledgerPartyId: member!.id,
       vendorAccountId: accountId,
