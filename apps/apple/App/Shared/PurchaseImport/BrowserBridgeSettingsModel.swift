@@ -16,7 +16,7 @@ protocol BrowserBridgeControlling: AnyObject {
 @MainActor
 struct BrowserBridgeAccountState: Identifiable, Equatable {
     let id: String
-    let label: String
+    var label: String
     var connection: BrowserBridgeConnectionStatus
     var error: String?
     var needsAuthentication: Bool
@@ -68,12 +68,19 @@ final class BrowserBridgeSettingsModel {
         accountCount = total
     }
 
+    /// A roster refresh republishes the list while existing bridges stay connected, so an
+    /// account that is still listed keeps its connection, error and sign-in state.
     func setAccounts(_ accounts: [BrowserBridgeVendorAccount]) {
+        let existing = Dictionary(uniqueKeysWithValues: accountStates.map { ($0.id, $0) })
         accountStates = accounts.sorted { $0.label.localizedStandardCompare($1.label) == .orderedAscending }
-            .map {
-                BrowserBridgeAccountState(
-                    id: $0.id, label: $0.label, connection: .connecting, error: nil,
-                    needsAuthentication: false, lastCompletedRunID: nil)
+            .map { account in
+                var state =
+                    existing[account.id]
+                    ?? BrowserBridgeAccountState(
+                        id: account.id, label: account.label, connection: .connecting, error: nil,
+                        needsAuthentication: false, lastCompletedRunID: nil)
+                state.label = account.label
+                return state
             }
     }
 

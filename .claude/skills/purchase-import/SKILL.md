@@ -191,7 +191,9 @@ stays for review. Recognized order mail with an explicit order id creates a mail
 for that member when one does not exist. This records a vendor relationship,
 not proof of a browser login. Turn on browser sync (set the account's
 `browserSyncEnabled` and status `active`) only after confirming that member's
-online account; use Sync now while the Mac app and chosen browser are open.
+online account. The Mac app picks up a newly synced account when it becomes
+active or within about ten minutes; Sync now runs it immediately while the Mac
+app and chosen browser are open.
 Mail that names the exact order id of the one live Purchase for its Vendor links
 itself (a `cubby-system` decision), whichever arrived first; a member's
 dismissal is never overridden. Review the remaining candidate links (amount and

@@ -55,7 +55,12 @@ final class MacBrowserBridgeController: BrowserBridgeControlling {
     }
 
     func connect(browser: BrowserChoice, enhancedEvidence: Bool) async throws {
-        try await coordinator.connect(browser: browser, enhancedEvidence: enhancedEvidence)
+        do {
+            try await coordinator.connect(browser: browser, enhancedEvidence: enhancedEvidence)
+        } catch MacBrowserBridgeCoordinator.Failure.noActiveAccounts {
+            // Not an error: Settings shows the empty roster and the coordinator's periodic refresh
+            // connects an account once the member enables browser sync for it.
+        }
     }
 
     func syncNow(
@@ -81,12 +86,20 @@ final class MacBrowserBridgeController: BrowserBridgeControlling {
         for (accountID, status) in statuses where status == .connected {
             Task { [notifier] in await notifier.notifyDelayedOfflineIfNeeded(accountID: accountID) }
         }
+        Task { [coordinator] in
+            do {
+                try await coordinator.refreshRoster()
+            } catch {
+                Diagnostics.report(error, context: "purchaseImport.browser.refreshRoster")
+            }
+        }
     }
 
     private func project(_ event: MacBrowserBridgeEvent) {
         switch event {
         case .accounts(let accounts):
-            statuses = [:]
+            let listed = Set(accounts.map(\.id))
+            statuses = statuses.filter { listed.contains($0.key) }
             settings?.setAccounts(accounts)
         case .fleetStatus(let status, let connected, let total):
             settings?.setAccountCounts(connected: connected, total: total)

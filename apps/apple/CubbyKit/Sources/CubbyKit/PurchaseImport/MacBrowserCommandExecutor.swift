@@ -13,9 +13,10 @@
             let evidence: BrowserLocalEvidence
             let image: CGImage
         }
-        /// Bumped when the fixed capture script's output shape changes. Version 2 adds
-        /// schema.org Product identifiers (`structuredProducts`).
-        static let captureVersion = 2
+        /// Bumped when the fixed capture script's output changes. Version 2 adds schema.org
+        /// Product identifiers (`structuredProducts`); version 3 reads them from a Product's
+        /// `offers`, selecting only the served `?variant=` Offer.
+        static let captureVersion = 3
 
         struct FixedCapturePayload: Decodable {
             struct Link: Decodable { let url: String; let label: String? }
@@ -626,6 +627,145 @@
             return components[index - 1].lowercased() == "gp"
         }
 
+        /// The ld+json Product walker the capture script calls, kept as its own expression so the
+        /// tests evaluate the exact production source in JavaScriptCore.
+        nonisolated static let structuredProductsScript = #"""
+            () => {
+              const clean = value => String(value || '').replace(/\s+/g, ' ').trim();
+              // Only schema.org Product nodes in ld+json blocks; never page text. Every cap fails
+              // closed: anything left unread marks the capture a variant group, never exact.
+              let truncated = false;
+              const values = (node, keys) => {
+                const out = [];
+                for (const key of keys) {
+                  for (const item of [].concat(node[key] ?? [])) {
+                    if (typeof item !== 'string' && typeof item !== 'number') continue;
+                    const text = clean(item).slice(0, 100);
+                    if (text && !out.includes(text)) out.push(text);
+                  }
+                }
+                if (out.length > 10) truncated = true;
+                return out.slice(0, 10);
+              };
+              const hasType = (node, name) => [].concat(node['@type'] ?? []).includes(name);
+              const identifiers = node => ({
+                skus: values(node, ['sku']),
+                mpns: values(node, ['mpn']),
+                gtins: values(node, ['gtin', 'gtin8', 'gtin12', 'gtin13', 'gtin14']),
+                productIds: values(node, ['productID'])
+              });
+              const fields = ['skus', 'mpns', 'gtins', 'productIds'];
+              const merge = (...sets) => {
+                const out = { skus: [], mpns: [], gtins: [], productIds: [] };
+                for (const set of sets) {
+                  for (const key of fields) {
+                    for (const item of set[key]) if (!out[key].includes(item)) out[key].push(item);
+                  }
+                }
+                for (const key of fields) {
+                  if (out[key].length > 10) truncated = true;
+                  out[key] = out[key].slice(0, 10);
+                }
+                return out;
+              };
+              const sameList = (left, right) =>
+                left.length === right.length && left.every(item => right.includes(item));
+              const sameSet = (left, right) => fields.every(key => sameList(left[key], right[key]));
+              const conflicts = (left, right) =>
+                left.length > 0 && right.length > 0 && !sameList(left, right);
+              // Shopify-style `?variant=<id>`, hand-parsed because JavaScriptCore has no URL: only
+              // the query component counts, names and values are decoded, and a missing,
+              // repeated or undecodable variant parameter selects nothing.
+              const variantOf = url => {
+                const beforeFragment = String(url ?? '').split('#')[0];
+                const start = beforeFragment.indexOf('?');
+                if (start < 0) return null;
+                const found = [];
+                for (const pair of beforeFragment.slice(start + 1).split('&')) {
+                  const equals = pair.indexOf('=');
+                  const decode = text => decodeURIComponent(text.replace(/\+/g, ' '));
+                  let name;
+                  let value;
+                  try {
+                    name = decode(equals < 0 ? pair : pair.slice(0, equals));
+                    value = decode(equals < 0 ? '' : pair.slice(equals + 1));
+                  } catch { return null; }
+                  if (name === 'variant') found.push(value);
+                }
+                return found.length === 1 && found[0] ? found[0] : null;
+              };
+              const servedVariant = variantOf(location.href);
+              const products = [];
+              let variantGroup = false;
+              // Offers have their own budget so a long offer list cannot starve the graph walk.
+              let visited = 0;
+              let offerBudget = 1000;
+              const collectOffers = product => {
+                const offers = [];
+                for (const offer of [].concat(product.offers ?? [])) {
+                  if (!offer || typeof offer !== 'object') continue;
+                  const nested = offer.offers && typeof offer.offers === 'object'
+                    ? [].concat(offer.offers) : [offer];
+                  for (const item of nested) {
+                    if (!item || typeof item !== 'object') continue;
+                    if (offers.length >= 100 || --offerBudget < 0) { truncated = true; return offers; }
+                    offers.push(item);
+                  }
+                }
+                return offers;
+              };
+              // Per-variant identifiers live in a Product's `offers` (an Offer, an array of Offers,
+              // or an AggregateOffer carrying `offers`). Never choose between variants: Product and
+              // Offers merge only when they agree, and otherwise only the one Offer whose
+              // `?variant=` is the served page's own variant may stand for the page.
+              const productIdentifiers = product => {
+                const own = identifiers(product);
+                const offers = collectOffers(product);
+                if (offers.length === 0) return own;
+                const offerSets = offers.map(identifiers);
+                const offerVariants = offers.map(offer => variantOf(offer.url));
+                const agree = offerSets.every(set => sameSet(set, offerSets[0]))
+                  && !conflicts(own.skus, offerSets[0].skus)
+                  && !conflicts(own.gtins, offerSets[0].gtins)
+                  && !(servedVariant
+                    && offerVariants.some(variant => variant !== null && variant !== servedVariant));
+                if (agree) return merge(own, offerSets[0]);
+                const served = servedVariant
+                  ? offerVariants.flatMap((variant, index) => variant === servedVariant ? [index] : [])
+                  : [];
+                if (served.length !== 1) {
+                  variantGroup = true;
+                  return own;
+                }
+                // Product-level sku/gtin describe the default variant, not the served one.
+                return merge(
+                  { skus: [], mpns: own.mpns, gtins: [], productIds: own.productIds },
+                  offerSets[served[0]]);
+              };
+              const walk = (value, depth) => {
+                if (!value || typeof value !== 'object') return;
+                if (depth > 8 || ++visited > 500) { truncated = true; return; }
+                if (Array.isArray(value)) { value.forEach(item => walk(item, depth + 1)); return; }
+                if (hasType(value, 'ProductGroup')) variantGroup = true;
+                if (hasType(value, 'Product')) products.push(productIdentifiers(value));
+                for (const key of ['@graph', 'hasVariant', 'mainEntity', 'itemListElement', 'item']) {
+                  walk(value[key], depth + 1);
+                }
+              };
+              const blocks = Array.from(document.querySelectorAll('script[type="application/ld+json"]'));
+              if (blocks.length > 20) truncated = true;
+              for (const script of blocks.slice(0, 20)) {
+                const raw = script.textContent || '';
+                if (raw.length > 524288) { truncated = true; continue; }
+                let parsed;
+                try { parsed = JSON.parse(raw); } catch { continue; }
+                walk(parsed, 0);
+              }
+              if (products.length > 20) truncated = true;
+              return { products: products.slice(0, 20), variantGroup: variantGroup || truncated };
+            }
+            """#
+
         /// Fixed and versioned. Page text is treated only as data; it cannot introduce a selector,
         /// script, navigation, click, or form action into the browser executor.
         private static let captureScript = #"""
@@ -644,48 +784,7 @@
                 variantMarkers: Array.from(document.querySelectorAll(
                   '#variation_color_name .selection, #variation_size_name .selection, [data-asin][aria-checked="true"], select[name*="variation"] option:checked'
                 )).map(node => clean(node.getAttribute('data-asin') || node.textContent)).filter(Boolean).slice(0, 50),
-                structuredProducts: (() => {
-                  // Only schema.org Product nodes in ld+json blocks; never page text.
-                  const values = (node, keys) => {
-                    const out = [];
-                    for (const key of keys) {
-                      for (const item of [].concat(node[key] ?? [])) {
-                        if (typeof item !== 'string' && typeof item !== 'number') continue;
-                        const text = clean(item).slice(0, 100);
-                        if (text && !out.includes(text)) out.push(text);
-                      }
-                    }
-                    return out.slice(0, 10);
-                  };
-                  const hasType = (node, name) => [].concat(node['@type'] ?? []).includes(name);
-                  const products = [];
-                  let variantGroup = false;
-                  let visited = 0;
-                  const walk = (value, depth) => {
-                    if (!value || typeof value !== 'object' || depth > 8 || ++visited > 500) return;
-                    if (Array.isArray(value)) { value.forEach(item => walk(item, depth + 1)); return; }
-                    if (hasType(value, 'ProductGroup')) variantGroup = true;
-                    if (hasType(value, 'Product')) {
-                      products.push({
-                        skus: values(value, ['sku']),
-                        mpns: values(value, ['mpn']),
-                        gtins: values(value, ['gtin', 'gtin8', 'gtin12', 'gtin13', 'gtin14']),
-                        productIds: values(value, ['productID'])
-                      });
-                    }
-                    for (const key of ['@graph', 'hasVariant', 'mainEntity', 'itemListElement', 'item']) {
-                      walk(value[key], depth + 1);
-                    }
-                  };
-                  const blocks = document.querySelectorAll('script[type="application/ld+json"]');
-                  for (const script of Array.from(blocks).slice(0, 20)) {
-                    try {
-                      const raw = script.textContent || '';
-                      if (raw.length <= 524288) walk(JSON.parse(raw), 0);
-                    } catch {}
-                  }
-                  return { products: products.slice(0, 20), variantGroup };
-                })(),
+                structuredProducts: (\#(structuredProductsScript))(),
                 title: clean(document.title).slice(0, 500),
                 text: clean(document.body?.innerText).slice(0, 24576),
                 links: Array.from(document.querySelectorAll('a[href]')).slice(0, 200).map(a => ({
