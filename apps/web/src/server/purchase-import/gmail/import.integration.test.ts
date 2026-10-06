@@ -773,7 +773,6 @@ describe("saved confirmation imports", () => {
           {
             productId: line!.productId,
             sourceId: claim!.id,
-            vendorAccountId: null,
           },
         ],
       });
@@ -810,7 +809,6 @@ describe("saved confirmation imports", () => {
             {
               productId: line!.productId,
               sourceId: claim!.id,
-              vendorAccountId: null,
             },
           ],
         });
@@ -949,7 +947,6 @@ describe("saved confirmation imports", () => {
             {
               productId: code!.shortcode,
               sourceId: claim!.id,
-              vendorAccountId: null,
             },
           ],
         });

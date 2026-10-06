@@ -6,7 +6,12 @@ import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { z } from "zod";
 
 import { setCfEnv } from "~/server/cf-env";
-import { expense, product, run as runTable } from "~/server/db/schema";
+import {
+  expense,
+  product,
+  purchase,
+  run as runTable,
+} from "~/server/db/schema";
 import { entityKernelContextSchema } from "~/server/entity-kernel";
 import { createMcpServer } from "~/server/mcp/server";
 import {
@@ -101,11 +106,11 @@ describe("run start through MCP", () => {
       .from(expense)
       .innerJoin(product, eq(product.id, expense.productId))
       .where(eq(expense.purchaseId, order!.id));
-    return line!.productId;
+    return { productId: line!.productId, order: order! };
   };
 
   it("starts a product_enrichment run, reads it back, and names it when started again", async () => {
-    const productId = await importProduct();
+    const { productId } = await importProduct();
 
     const preview = z
       .object({
@@ -131,9 +136,7 @@ describe("run start through MCP", () => {
       call("run", {
         action: "start",
         purpose: "product_enrichment",
-        targets: [
-          { productId, sourceId: target!.sourceId, vendorAccountId: null },
-        ],
+        targets: [{ productId, sourceId: target!.sourceId }],
       });
 
     const first = await start();
@@ -170,6 +173,44 @@ describe("run start through MCP", () => {
           created: false,
           run: null,
           blockingRun: { id: runId, status: "running" },
+        },
+      ],
+    });
+    expect(sent).toHaveLength(1);
+  });
+
+  // With no account there is no account lock to block on, so a retried start
+  // (say, after a lost MCP response) must find the active run by its target.
+  it("names the active run when an accountless purchase_validation start is repeated", async () => {
+    const { order } = await importProduct();
+    await getDb(ctx.db)
+      .update(purchase)
+      .set({ vendorAccountId: null })
+      .where(eq(purchase.id, order.id));
+    const start = () =>
+      call("run", {
+        action: "start",
+        purpose: "purchase_validation",
+        purchaseId: order.shortcode,
+        sourceId: null,
+      });
+
+    const first = z
+      .object({
+        runs: z.tuple([
+          z.object({
+            created: z.literal(true),
+            run: z.object({ id: z.string() }),
+          }),
+        ]),
+      })
+      .parse(await start());
+    expect(await start()).toEqual({
+      runs: [
+        {
+          created: false,
+          run: null,
+          blockingRun: { id: first.runs[0].run.id, status: "running" },
         },
       ],
     });

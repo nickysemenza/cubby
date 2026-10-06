@@ -444,30 +444,51 @@ export async function startTargetedRun(
   const trigger = runTrigger.parse(input.trigger);
   if (input.targets.length === 0)
     throw new Error("A targeted import run requires at least one target");
-  const targetKeys = input.targets.map((target) =>
-    target.kind === "purchase"
-      ? `purchase:${z.uuid().parse(target.purchaseId)}`
-      : `product:${z.uuid().parse(target.productId)}`,
+  const targetIds = input.targets.map((target) =>
+    z
+      .uuid()
+      .parse(target.kind === "purchase" ? target.purchaseId : target.productId),
+  );
+  const targetKeys = input.targets.map(
+    (target, index) => `${target.kind}:${targetIds[index]}`,
   );
   if (new Set(targetKeys).size !== targetKeys.length)
     throw new Error("A targeted import run cannot contain duplicate targets");
 
   return withTransaction(db, async (tx) => {
+    const blocking = tx
+      .select({
+        id: runTable.id,
+        publicId: runTable.shortcode,
+        status: runTable.status,
+      })
+      .from(runTable);
     if (input.vendorAccountId) {
       await tx.execute(
         sql`SELECT pg_advisory_xact_lock(hashtext(${input.vendorAccountId}))`,
       );
-      const [blockingRun] = await tx
-        .select({
-          id: runTable.id,
-          publicId: runTable.shortcode,
-          status: runTable.status,
-        })
-        .from(runTable)
+      const [blockingRun] = await blocking
         .where(
           and(
             eq(runTable.vendorAccountId, input.vendorAccountId),
             inArray(runTable.status, [...ACTIVE_RUN_STATUSES]),
+          ),
+        )
+        .limit(1);
+      if (blockingRun) return { created: false as const, blockingRun };
+    } else {
+      // No account lock serializes an accountless start, so a retried start
+      // (a lost response) would dispatch a second run: an active run of this
+      // purpose already holding one of these targets blocks it instead.
+      for (const key of [...targetKeys].sort())
+        await tx.execute(sql`SELECT pg_advisory_xact_lock(hashtext(${key}))`);
+      const [blockingRun] = await blocking
+        .innerJoin(runTarget, eq(runTarget.runId, runTable.id))
+        .where(
+          and(
+            eq(runTable.purpose, purpose),
+            inArray(runTable.status, [...ACTIVE_RUN_STATUSES]),
+            inArray(runTarget.entityId, targetIds),
           ),
         )
         .limit(1);

@@ -114,7 +114,6 @@ export function TargetedProductBulkEnrichmentDialog({
         targets: selected.map((target) => ({
           productId: target.productId,
           sourceId: target.sourceId,
-          vendorAccountId: target.vendorAccountId,
         })),
       }),
     onSuccess: (result) => {
@@ -204,7 +203,6 @@ export function TargetedImportLaunchDialog({
           .map((target) => ({
             productId: target.productId,
             sourceId: target.sourceId,
-            vendorAccountId: target.vendorAccountId,
           })),
       });
     },
