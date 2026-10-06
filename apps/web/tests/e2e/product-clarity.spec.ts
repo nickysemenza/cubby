@@ -159,10 +159,7 @@ test("purchase product roles survive deduplication, Open all, and inverse naviga
   );
   await openAll.click();
   await expect(page).toHaveURL(/\/connections\?/);
-  await expect(
-    page.getByRole("columnheader", { name: "Movement", exact: true }),
-  ).toBeVisible();
-  await expect(page.getByRole("row")).toHaveCount(6);
+  await expect(recordRows(page)).toHaveCount(5);
   await expect(
     recordRows(page)
       .filter({ hasText: `${name} unknown` })

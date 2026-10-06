@@ -282,7 +282,11 @@ export function ConnectedRecordsTable({
       <EntityDisplayImagesProvider
         refs={[...items.map((item) => item.target), ...connectionRefs(items)]}
       >
-        <ul className="divide-y divide-border rounded-md border border-border">
+        <ul
+          // Named like the mobile card lists so record rows read the same.
+          aria-label={`${isBrowserRoutedEntity(target) ? entities[target].pluralLabel : "Records"} list`}
+          className="divide-y divide-border rounded-md border border-border"
+        >
           {items.map((item) => (
             <li
               key={item.target.entityId}
