@@ -46,7 +46,6 @@ import {
   withTransaction,
 } from "~/server/repo/database-helpers";
 import { cents } from "~/server/repo/money";
-import { expenseProductForbiddenSql } from "~/server/repo/purchase-evidence-policy";
 import { resolveOrThrow } from "~/server/repo/shortcode-resolver";
 import { insertWithShortcode } from "~/server/repo/shortcode-utils";
 import { attachFileToEntity } from "~/server/services/image-storage.service";
@@ -655,10 +654,10 @@ export async function processOrderMails(
         );
       }
 
-      // Receiving (and its return window) is for stocked items: an order
-      // whose principal lines all sit in a spending category that forbids a
-      // Product (a restaurant meal) asks for nothing. Goods with an
-      // unresolved Product still count.
+      // Receiving (and its return window) is for stocked items: a line with
+      // a Product, or goods the importer could not match yet (it files
+      // `product_unresolved` for those). Any other productless line is one
+      // the importer booked as expense-only — a meal, a ticket, a bouquet.
       const [stocked] =
         target && event.event === "delivered"
           ? await database
@@ -669,7 +668,12 @@ export async function processOrderMails(
                   eq(expense.purchaseId, target.id),
                   eq(expense.lineKind, "principal"),
                   notDeleted(expense),
-                  sql`(${expense.productId} IS NOT NULL OR NOT ${expenseProductForbiddenSql("Expense")})`,
+                  sql`(${expense.productId} IS NOT NULL OR EXISTS (
+                    SELECT 1 FROM ${runFinding}
+                    WHERE ${runFinding.entityKind} = 'purchase'
+                      AND ${runFinding.entityId} = ${target.id}
+                      AND ${runFinding.kind} = 'product_unresolved'
+                      AND ${runFinding.status} = 'open'))`,
                 ),
               )
               .limit(1)

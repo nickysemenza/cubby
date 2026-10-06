@@ -566,53 +566,55 @@ describe("Gmail order mail processing", () => {
     });
   });
 
-  // Receiving is for stocked items: a delivered order of meals or tickets
-  // (no line carries a Product) asks for nothing; one with a stocked line
-  // still asks to be received.
-  it("asks to receive a delivered order unless its category forbids Products", async () => {
+  // Receiving is for stocked items. A delivered order whose lines carry no
+  // Product and no unresolved-goods finding was booked expense-only (a
+  // bouquet from a new florist, uncategorized) and asks for nothing; a
+  // stocked line or goods still awaiting a Product match ask to be received.
+  it("asks to receive a delivered order only for stocked or unresolved goods", async () => {
     const seed = await seedForgeWear();
-    const restaurants = await insertWithShortcode(ctx.db, "spendingCategory", {
-      name: `Example restaurants ${crypto.randomUUID()}`,
-      productExpectation: "not_allowed",
-    });
     const order = async (
       orderId: string,
-      line: "stocked" | "unresolved" | "expense_only" | "aggregate",
+      line: "stocked" | "unresolved" | "expense_only",
     ) => {
-      const stocked = line === "stocked";
-      const dining = line === "expense_only" || line === "aggregate";
       const row = await insertWithShortcode(ctx.db, "purchase", {
         vendorId: seed.vendor.id,
         vendorAccountId: seed.account.id,
         orderId,
         date: "2026-09-20",
-        spendingCategoryId: dining ? restaurants.id : null,
-        spendingCategoryOrigin: "manual",
       });
-      const item = stocked
-        ? await insertWithShortcode(ctx.db, "product", {
-            name: `ForgeWear stocked item ${orderId}`,
-            manufacturer: "",
-          })
-        : null;
+      const item =
+        line === "stocked"
+          ? await insertWithShortcode(ctx.db, "product", {
+              name: `ForgeWear stocked item ${orderId}`,
+              manufacturer: "",
+            })
+          : null;
       await insertWithShortcode(ctx.db, "expense", {
         purchaseId: row.id,
-        name: dining ? "Delivered lunch" : "Work gloves",
+        name: line === "expense_only" ? "Seasonal bouquet" : "Work gloves",
         cost: 20,
         date: "2026-09-20",
         costType: "materials",
         trade: "other",
         lineKind: "principal",
-        lineBasis: line === "aggregate" ? "allocation" : "item_line",
+        lineBasis: "item_line",
         productId: item?.id ?? null,
       });
+      if (line === "unresolved")
+        await getDb(ctx.db)
+          .insert(runFinding)
+          .values({
+            ledgerPartyId: seed.party.id,
+            entityKind: "purchase",
+            entityId: row.id,
+            kind: "product_unresolved",
+            summary: "Product resolution is required for “Work gloves”.",
+            evidenceFingerprint: `unresolved-${orderId}`,
+          });
       return row;
     };
-    const meal = await order("FW-MEAL-1", "expense_only");
-    // An unitemized total awaiting its meal lines asks for nothing either.
-    const tab = await order("FW-TAB-1", "aggregate");
+    const bouquet = await order("FW-FLOWER-1", "expense_only");
     const gloves = await order("FW-GLOVE-1", "stocked");
-    // Goods whose Product is not resolved yet are still goods.
     const pending = await order("FW-PEND-1", "unresolved");
     const delivered = (orderId: string): OrderMailClassification => ({
       event: "delivered",
@@ -621,30 +623,13 @@ describe("Gmail order mail processing", () => {
       currency: null,
       occurredAt: "2026-09-21T12:00:00Z",
     });
-    await receiveMail(
-      seed,
-      "delivered-meal",
-      "2026-09-21T12:00:00Z",
-      delivered("FW-MEAL-1"),
-    );
-    await receiveMail(
-      seed,
-      "delivered-tab",
-      "2026-09-21T12:00:00Z",
-      delivered("FW-TAB-1"),
-    );
-    await receiveMail(
-      seed,
-      "delivered-pending",
-      "2026-09-21T12:00:00Z",
-      delivered("FW-PEND-1"),
-    );
-    await receiveMail(
-      seed,
-      "delivered-gloves",
-      "2026-09-21T12:00:00Z",
-      delivered("FW-GLOVE-1"),
-    );
+    for (const orderId of ["FW-FLOWER-1", "FW-GLOVE-1", "FW-PEND-1"])
+      await receiveMail(
+        seed,
+        `delivered-${orderId}`,
+        "2026-09-21T12:00:00Z",
+        delivered(orderId),
+      );
     const arrived = await getDb(ctx.db)
       .select({ entityId: runFinding.entityId })
       .from(runFinding)
@@ -652,8 +637,7 @@ describe("Gmail order mail processing", () => {
     expect(arrived.map((row) => row.entityId).sort()).toEqual(
       [gloves.id, pending.id].sort(),
     );
-    expect(arrived.map((row) => row.entityId)).not.toContain(meal.id);
-    expect(arrived.map((row) => row.entityId)).not.toContain(tab.id);
+    expect(arrived.map((row) => row.entityId)).not.toContain(bouquet.id);
   });
 
   it("matches a website-domain sender when no receipt address was configured", async () => {
