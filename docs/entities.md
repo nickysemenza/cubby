@@ -203,10 +203,12 @@ Collection verbs derive from the declared sections and `reportSlotActions`;
 the typed header hook registry supplies specialist controls (meal food capture,
 cookbook source import/reprocess, inventory expense capture, Run diagnostics,
 recipe meal-planning/parse-copy/export actions, walkthrough generation, product
-enrichment, wardrobe navigation, photo grouping, image processing, vendor mail search, and section-scoped finance verbs). The
-header owns their component lifetime,
-so switching Overview, Relations, or a dedicated tab does not remove controls
-or abandon an open dialog. Section consumers use `DetailAction` to retain local
+enrichment, wardrobe navigation, photo grouping, image processing, vendor mail
+search, and section-scoped finance verbs). Registry declarations preserve each
+entity's record type; generic JSX dispatch erases both the component and its
+record at one documented boundary, matching the existing detail-slot renderer.
+The header owns component lifetime, so switching Overview, Relations, or a
+dedicated tab does not remove controls or abandon an open dialog. Section consumers use `DetailAction` to retain local
 controls only when rendered outside the full detail page. Report header reads
 reuse the section cache and the existing Run batch poll; they do not add a
 separate Run query. Agent controls reuse their existing cached work read;

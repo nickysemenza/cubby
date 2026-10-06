@@ -92,7 +92,11 @@ export function DetailActionTarget<E extends GenericDetailEntity>({
   entity: E;
   record: DetailRecordOf<E>;
 }) {
-  const Custom = headerActions[entity];
+  // SAFETY: declarations pair each component with its entity; this render passes the
+  // record loaded for that same entity, matching the detail-slot registry boundary.
+  const Custom = headerActions[entity] as
+    | LazyExoticComponent<DetailSlotComponent<never>>
+    | undefined;
   // SAFETY: the typed registry correlates each component with this entity's detail record.
   const customRecord = record as never;
   return (
