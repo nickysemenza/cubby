@@ -110,7 +110,10 @@ export const purchaseHasItemizationSql = (alias: string): SQL => sql`(
 )`;
 
 /** An accepted missing-evidence gap reopens when new documents or ledger lines
- * arrive, even when the new material still needs extraction or review. */
+ * arrive, even when the new material still needs extraction or review. The
+ * line hash is the whole Expense row, so a column added later (here
+ * `productNotExpected`) is subtracted: otherwise its migration alone would
+ * change every stored fingerprint and reopen every accepted gap. */
 export const purchaseEvidenceFingerprintSql = (
   alias: string,
 ): SQL => sql`jsonb_build_object(
@@ -120,7 +123,7 @@ export const purchaseEvidenceFingerprintSql = (
   'documents', (SELECT jsonb_agg(jsonb_build_array(ep_changed_document.id, ep_changed_document."imageId", ep_changed_document."documentKind") ORDER BY ep_changed_document.id)
     FROM "EntityAttachment" ep_changed_document
     WHERE ep_changed_document."entityId" = ${column(alias, "id")} AND ep_changed_document."deletedAt" IS NULL),
-  'lines', (SELECT jsonb_agg(to_jsonb(ep_changed_line) ORDER BY ep_changed_line.id)
+  'lines', (SELECT jsonb_agg(to_jsonb(ep_changed_line) - 'productNotExpected' ORDER BY ep_changed_line.id)
     FROM "Expense" ep_changed_line WHERE ep_changed_line."purchaseId" = ${column(alias, "id")}
       AND ep_changed_line."deletedAt" IS NULL AND ep_changed_line."economicRole" = 'vendor')
 )`;

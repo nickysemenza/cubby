@@ -335,6 +335,50 @@ describe("purchase evidence policy", () => {
     },
   );
 
+  // Regression: the line fingerprint hashes the whole Expense row, so adding
+  // the productNotExpected column reopened every accepted itemization gap.
+  it("keeps an accepted itemization gap accepted when Expense gains productNotExpected", async () => {
+    const { purchase } = await fixture();
+    await unwrapDb(ctx.db).execute(
+      sql`UPDATE "Purchase" SET "evidenceExpectation" = 'required' WHERE id = ${purchase.id}`,
+    );
+    await insertWithShortcode(ctx.db, "expense", {
+      purchaseId: purchase.id,
+      name: "Historical reviewed aggregate",
+      cost: 25,
+      date: "2026-09-01",
+      costType: "materials",
+      trade: "other",
+      lineBasis: "allocation",
+    });
+    await unwrapDb(ctx.db).execute(
+      sql`ALTER TABLE "Expense" DROP COLUMN IF EXISTS "productNotExpected"`,
+    );
+    await setDataException(
+      ctx.db,
+      {
+        entityId: purchase.shortcode,
+        check: "purchase_itemization",
+        reason: "unavailable",
+        note: "Synthetic historical vendor details are unavailable.",
+      },
+      ctx.actor,
+    );
+    // The migration adds the column with its default to every row.
+    await unwrapDb(ctx.db).execute(
+      sql`ALTER TABLE "Expense" ADD COLUMN "productNotExpected" boolean DEFAULT false NOT NULL`,
+    );
+    const after = (
+      await loadDataQualities(ctx.db, "purchase", [purchase.id])
+    ).get(purchase.id);
+    expect(after?.exceptions).toContainEqual(
+      expect.objectContaining({
+        check: "purchase_itemization",
+        state: "active",
+      }),
+    );
+  });
+
   it.each(["unavailable", "history_expired"] as const)(
     "accepts %s itemization history and reopens it when new receipt evidence arrives",
     async (reason) => {
