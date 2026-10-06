@@ -541,6 +541,9 @@ See also the image operational passes at the end of this file.
     `financialTransaction.previewBookingCorrection`,
     `financialTransaction.commitBookingCorrection`,
     `purchase.settlementCandidates`.
+  - Statement CSV import: `statementRow.previewCsv`, `statementRow.commitCsv`.
+  - Expense pivots: `expense.analyze`.
+  - Product merge preview: `product.mergePreview`.
   - Meals: log a food without a recipe (`meal.saveFood`, `meal.removeFood`);
     copy plans (`meal.duplicate`, `meal.copyRange`).
   - Collection membership: `collection.set`, `collection.create`.

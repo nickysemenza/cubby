@@ -139,9 +139,9 @@ export const productContract = defineContract("product", {
   /** Which field wins, and what blocks, before a two-product merge commits. */
   mergePreview: query({
     mcp: {
-      omit: "agent_twin",
-      twin: "entity.connections",
-      note: "entity_read.connections with operation merge previews the dispositions; the field-winner preview is the merge dialog's",
+      omit: "deferred_capability",
+      todo: "Deferred MCP agent capabilities",
+      note: "Keeper and incoming field winners and blockers; entity_read.connections reports only edge dispositions",
     },
     input: mergeProductMatchInput,
     output: productMergePreview,

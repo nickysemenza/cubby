@@ -37,12 +37,20 @@ export const searchContract = defineContract("search", {
     output: searchResultGroupsOut,
   }),
   related: query({
-    mcp: { omit: "agent_twin", twin: "search.similar" },
+    mcp: {
+      omit: "agent_twin",
+      twin: "search.global",
+      note: "includeRelated: true runs the same free-text related search",
+    },
     input: searchQueryInputSchema,
     output: relatedSearchOutSchema,
   }),
   relatedGrouped: query({
-    mcp: { omit: "agent_twin", twin: "search.similar" },
+    mcp: {
+      omit: "agent_twin",
+      twin: "search.global",
+      note: "includeRelated: true runs the same free-text related search",
+    },
     input: searchQueryInputSchema,
     output: relatedSearchGroupsOutSchema,
   }),

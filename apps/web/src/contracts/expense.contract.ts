@@ -32,9 +32,9 @@ export const expenseContract = defineContract("expense", {
   }),
   analyze: query({
     mcp: {
-      omit: "agent_twin",
-      twin: "expense.analytics",
-      note: "The aggregate explorer's pivot; project_overview.expense_analytics serves agent aggregates",
+      omit: "deferred_capability",
+      todo: "Deferred MCP agent capabilities",
+      note: "Category grouping, arbitrary row/column pivots, and prior-period comparison; expense_analytics returns fixed aggregates",
     },
     input: schemas.expenseAnalyzeInput,
     output: schemas.expenseAnalyzeOut,

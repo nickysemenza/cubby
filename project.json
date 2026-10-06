@@ -5,7 +5,9 @@
     "generate": {
       "command": "pnpm generate && redocly lint apps/web/src/lib/generated/http-openapi.gen.json --config redocly.yaml",
       "cache": true,
-      "inputs": ["repo"]
+      // `repo` excludes Markdown, but generation checks that every deferred
+      // MCP capability is listed in docs/todos.md (start-operations/mcp-tools.ts).
+      "inputs": ["repo", "{workspaceRoot}/docs/todos.md"]
     },
     "types": {
       "command": "pnpm typecheck",
@@ -13,6 +15,8 @@
       "dependsOn": ["wasm"],
       "inputs": [
         "repo",
+        // `pnpm typecheck` runs generation first; see `generate`.
+        "{workspaceRoot}/docs/todos.md",
         {
           "dependentTasksOutputFiles": "packages/wasm/**/*"
         }

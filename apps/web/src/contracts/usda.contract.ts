@@ -35,7 +35,10 @@ export const usdaProductSuggestionsOut = z.object({
 
 export const usdaFoodContract = defineContract("usda-food", {
   list: query({
-    mcp: { omit: "agent_twin", twin: "usda-food.search" },
+    mcp: {
+      omit: "client_view",
+      note: "Native browse with linked-product filters; agents search with usda_food.search",
+    },
     readPolicy: "strong",
     native: "Native USDA food browse",
     input: usdaListInput,
@@ -52,7 +55,11 @@ export const usdaFoodContract = defineContract("usda-food", {
   }),
   // AI and externally hydrated food reads own authoritative database helpers.
   alternateId: query({
-    mcp: { omit: "agent_twin", twin: "usda-food.find" },
+    mcp: {
+      omit: "agent_twin",
+      twin: "usda-food.find",
+      note: "UPC and NDB lookups; an FDC id goes through usda_food.get",
+    },
     readPolicy: "strong",
     input: usdaFoodLookupInput,
     output: foodSummaryWithLinkedProducts.nullable(),

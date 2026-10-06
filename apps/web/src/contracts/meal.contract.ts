@@ -99,7 +99,10 @@ const dailyIntakeOut = z.object({
 export const mealContract = defineContract("meal", {
   // Bounded Home summary; see expense.monthlySummary.
   getNutrition: query({
-    mcp: { omit: "agent_twin", twin: "meal.dailyIntake" },
+    mcp: {
+      omit: "client_view",
+      note: "Home macro tiles for a meal or a household day; agents read nutrition.daily_intake per person and nutrition.preparations per meal",
+    },
     readPolicy: "strong",
     native: "Meal and daily macro summaries",
     input: schemas.mealNutritionInput,

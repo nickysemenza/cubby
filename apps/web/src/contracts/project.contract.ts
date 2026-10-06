@@ -109,7 +109,10 @@ export const projectContract = defineContract("project", {
     cache: { tags: [["project", "dependencyGraph"]] },
   }),
   portfolioAnalytics: query({
-    mcp: { omit: "agent_twin", twin: "project.budget" },
+    mcp: {
+      omit: "client_view",
+      note: "Project analytics charts; agents read budgets through project_overview.budget and spend through project_overview.expense_analytics",
+    },
     native: "Project analytics",
     input: schemas.projectDashboardFiltersSchema,
     output: schemas.projectPortfolioAnalyticsOut,

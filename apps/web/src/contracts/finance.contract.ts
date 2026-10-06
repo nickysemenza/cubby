@@ -126,9 +126,8 @@ export const financialTransactionContract = defineContract(
     }),
     vendorInference: query({
       mcp: {
-        omit: "agent_twin",
-        twin: "financialTransaction.previewStatementImport",
-        note: "The preview carries the same merchant-vendor inference",
+        omit: "client_view",
+        note: "The booking form's vendor prefill for one merchant string; statement import previews carry the inference for real rows",
       },
       input: merchantVendorInferenceInput,
       output: merchantVendorInference,
