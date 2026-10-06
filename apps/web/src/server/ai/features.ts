@@ -48,6 +48,7 @@ import {
   DEFAULT_EMBEDDING_MODEL,
   FAST_MODEL,
   type OpenAiEffort,
+  QUALITY_MODEL,
   type SupportedChatModel,
   type SupportedDecisionModel,
   type SupportedEmbeddingModel,
@@ -55,7 +56,7 @@ import {
 import type { z } from "zod";
 
 /** Embeddings share the catalog, while retaining their vector runner. */
-type AiTier = "fast" | "decision" | "embedding";
+type AiTier = "fast" | "quality" | "decision" | "embedding";
 
 /**
  * The single place a tier's model is written down. `models.ts` owns the
@@ -63,6 +64,7 @@ type AiTier = "fast" | "decision" | "embedding";
  */
 const MODEL_FOR_TIER = {
   fast: FAST_MODEL,
+  quality: QUALITY_MODEL,
   decision: DECISION_MODEL,
   embedding: DEFAULT_EMBEDDING_MODEL,
 } as const satisfies Record<AiTier, AiModel | SupportedEmbeddingModel>;
@@ -81,7 +83,10 @@ interface AiFeatureShared {
 }
 
 /** A chat tier and its reasoning dial. */
-type AiChatFeatureTier = { tier: "fast"; effort: OpenAiEffort } & {
+type AiChatFeatureTier = {
+  tier: "fast" | "quality";
+  effort: OpenAiEffort;
+} & {
   /** Output cap. Reasoning/thinking tokens count against it on every tier. */
   maxTokens: number;
 };
@@ -247,7 +252,7 @@ export const SELECTION_OVERFLOW_FEATURE = defineFeature({
 
 export const PRODUCT_IDENTIFICATION_FEATURE = defineFeature({
   feature: "product-identification",
-  tier: "fast",
+  tier: "quality",
   maxTokens: 500,
   effort: "low",
   cache: true,
@@ -257,7 +262,7 @@ export const PRODUCT_IDENTIFICATION_FEATURE = defineFeature({
 
 export const LOCATION_INVENTORY_DETECTION_FEATURE = defineFeature({
   feature: "location-inventory-detection",
-  tier: "fast",
+  tier: "quality",
   maxTokens: 2000,
   effort: "low",
   cache: true,
@@ -269,7 +274,7 @@ export const LOCATION_INVENTORY_DETECTION_FEATURE = defineFeature({
 
 export const PURCHASE_IMPORT_EXTRACTION_FEATURE = defineFeature({
   feature: "purchase-import-extraction",
-  tier: "fast",
+  tier: "quality",
   maxTokens: 4_000,
   effort: "low",
   cache: false,
@@ -279,7 +284,7 @@ export const PURCHASE_IMPORT_EXTRACTION_FEATURE = defineFeature({
 
 export const PURCHASE_IMPORT_RECEIPT_FEATURE = defineFeature({
   feature: "purchase-import-receipt-extraction",
-  tier: "fast",
+  tier: "quality",
   maxTokens: 4_000,
   effort: "low",
   cache: false,
@@ -289,7 +294,7 @@ export const PURCHASE_IMPORT_RECEIPT_FEATURE = defineFeature({
 
 export const PURCHASE_IMPORT_MAIL_FEATURE = defineFeature({
   feature: "purchase-import-mail-classification",
-  tier: "fast",
+  tier: "quality",
   maxTokens: 1_000,
   effort: "low",
   cache: true,
@@ -305,7 +310,7 @@ export const PURCHASE_IMPORT_MAIL_FEATURE = defineFeature({
  */
 export const PURCHASE_IMPORT_AUDIT_FEATURE = defineFeature({
   feature: "purchase-import-audit",
-  tier: "fast",
+  tier: "quality",
   maxTokens: 8_000,
   effort: "high",
   cache: true,
@@ -322,7 +327,7 @@ export const PURCHASE_IMPORT_AUDIT_FEATURE = defineFeature({
  */
 export const PURCHASE_IMPORT_REPAIR_FEATURE = defineFeature({
   feature: "purchase-import-repair",
-  tier: "fast",
+  tier: "quality",
   maxTokens: 4_000,
   effort: "high",
   cache: false,
@@ -338,7 +343,7 @@ export const PURCHASE_IMPORT_REPAIR_FEATURE = defineFeature({
  */
 export const RECIPE_FLOW_PRIMARY_FEATURE = defineFeature({
   feature: "recipe-flow",
-  tier: "fast",
+  tier: "quality",
   maxTokens: 16000,
   effort: "high",
   cache: true,

@@ -84,6 +84,29 @@ describe("the AI feature table", () => {
     expect(new Set(labels).size).toBe(labels.length);
   });
 
+  it("routes accuracy-critical features to Sol and keeps interactive and bulk ones on Luna", () => {
+    const modelOf = Object.fromEntries(
+      AI_FEATURES.map((feature) => [feature.feature, feature.model]),
+    );
+    for (const feature of [
+      "purchase-import-extraction",
+      "purchase-import-receipt-extraction",
+      "purchase-import-mail-classification",
+      "purchase-import-audit",
+      "purchase-import-repair",
+      "recipe-flow",
+      "product-identification",
+      "location-inventory-detection",
+    ])
+      expect(modelOf[feature]).toBe("gpt-6-sol");
+    for (const feature of [
+      "selection-overflow",
+      "image-description",
+      "location-description",
+    ])
+      expect(modelOf[feature]).toBe("gpt-6-luna");
+  });
+
   it("caps every chat feature's output", () => {
     for (const feature of AI_FEATURES) {
       if (feature.tier === "decision" || feature.tier === "embedding") continue;

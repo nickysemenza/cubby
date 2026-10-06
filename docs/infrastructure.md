@@ -555,7 +555,13 @@ still use the chat overflow tier.
 
 Each feature's tier is declared once in `apps/web/src/server/ai/features.ts`.
 Chat and embedding models derive from that tier; decision calls sample the
-trial model as described above. Retier a feature only on live-eval
+trial model as described above. Chat features use two tiers: `quality`
+(`gpt-6-sol`) for calls whose accuracy outweighs latency — purchase evidence
+extraction, receipt extraction, mail classification, audit and repair, recipe
+flow, and photo identity — and `fast` (`gpt-6-luna`) for interactive and bulk
+background calls. Production reaches OpenAI through the household's ChatGPT
+plan, so Sol's marginal cost there is about zero; quality is the default for
+an accuracy-sensitive feature, and moving one to `fast` needs live-eval
 evidence: `pnpm --dir apps/web eval:features` (opt-in, billed) places the
 production purchase-import audit, extraction-repair, and recipe-flow prompts
 through the Gateway as each candidate, with the production schema, validator,
