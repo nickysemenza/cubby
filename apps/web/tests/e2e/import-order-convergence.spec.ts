@@ -2,6 +2,11 @@ import {
   BROWSER_SOURCE_ORDERS,
   createConvergenceHarness,
 } from "./import-order-convergence.helpers";
+import { eq, and } from "drizzle-orm";
+import * as schema from "~/server/db/schema";
+import { getDb } from "~/server/repo/database-helpers";
+import { createEvidenceHarnessContext } from "./fixtures-core";
+import { sha256Hex } from "../../tooling/convergence-harness";
 import { gotoAuthenticatedPage, uniqueName } from "./e2e-helpers";
 import { expect, test } from "./e2e-test";
 
@@ -19,15 +24,41 @@ for (const order of BROWSER_SOURCE_ORDERS) {
     if (order.join(",") === "csv,photo,retailer,gmail") {
       // The Problems overview samples twelve findings. A Run must retain its
       // reviewed action after earlier receipt arrivals fill that sample.
-      for (let index = 0; index < 13; index++) {
-        const earlier = await createConvergenceHarness(
-          page,
-          baseURL!,
-          `${token}-earlier-${index}`,
-        );
-        await earlier.sources.retailer();
-        expect(await earlier.openFindingCount()).toBeGreaterThanOrEqual(1);
-      }
+      const earlier = await createConvergenceHarness(
+        page,
+        baseURL!,
+        `${token}-earlier`,
+      );
+      await earlier.sources.retailer();
+      const { db } = await createEvidenceHarnessContext(page);
+      const database = getDb(db);
+      const purchase = await database.query.purchase.findFirst({
+        where: eq(schema.purchase.orderId, earlier.orderId),
+      });
+      if (!purchase) throw new Error("Background import created no Purchase");
+      const finding = await database.query.runFinding.findFirst({
+        where: and(
+          eq(schema.runFinding.entityId, purchase.id),
+          eq(schema.runFinding.status, "open"),
+        ),
+      });
+      if (!finding)
+        throw new Error("Background import created no open finding");
+      // Only the sample's population matters; the foreground imports own the
+      // writer coverage. Seed additional valid findings from the real writer.
+      await database.insert(schema.runFinding).values(
+        Array.from({ length: 12 }, (_, index) => ({
+          runId: finding.runId,
+          ledgerPartyId: finding.ledgerPartyId,
+          entityId: finding.entityId,
+          entityKind: finding.entityKind,
+          kind: finding.kind,
+          summary: finding.summary,
+          proposedFix: finding.proposedFix,
+          evidenceFingerprint: sha256Hex(`${token}-background-${index}`),
+        })),
+      );
+      expect(await earlier.openFindingCount()).toBeGreaterThanOrEqual(13);
     }
     for (const source of order)
       await test.step(`${source} source arrival`, () =>

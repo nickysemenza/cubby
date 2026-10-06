@@ -72,6 +72,13 @@ persistence regressions. A link transition expected to stay within the app can
 assert that `performance.timeOrigin` is unchanged, so a plain anchor cannot
 silently turn it into another document load.
 
+Keep the complete browser regression suite on PRs. Consolidate duplicated
+journeys and seed unrelated prerequisites rather than moving coverage after
+merge. The convergence sample-limit regression creates one background import
+through the writer, then seeds additional open findings from that valid row;
+all four foreground source orders still exercise their real import boundaries,
+browser approval, and persisted projections.
+
 ### Workerd test runtime and profiles
 
 A PostgreSQL test file that starts workerd belongs in
