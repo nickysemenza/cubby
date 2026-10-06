@@ -692,12 +692,6 @@ spanner"` → `adjustable wrench` (product); `"wet dry vac"` → `shop vacuum`
   operation id to a request hook (checked 2026-09-16: not yet).
   <https://tanstack.com/start/latest/docs/framework/react/guide/observability>
 
-- 🟢 **Cache USDA batch lookups across requests.** `USDAClient.findFoodsBatch`
-  memoizes only per request; the edge cache covers GETs. A product list whose
-  barcodes miss still pays the full `usda-api` hop (~350 ms observed). Key
-  hits and misses by canonical lookup key; give misses a bounded TTL so newly
-  imported USDA foods still appear (`server/clients/usda.ts`).
-
 - 🟢 **Resolve relation-filter shortcodes inside the list query.** A filter
   such as `growsPlantId` awaits a shortcode→id lookup before the page, count,
   and sums start (`repo/shortcode-resolver.ts`, `buildProductWhere`). Use a
