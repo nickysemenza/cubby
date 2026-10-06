@@ -50,8 +50,9 @@ one import ships all of it to every list. Read names, titles, resolved
 `shortcodePrefix`/`searchable` from `entityManifest`; and filter
 `field`/`columnId`/`kind`/URL key/`referenceEntity` from `getEntityFilters`
 with `filterUrlKey` (a runtime spec omits `urlKey` when it equals
-`columnId`). The server and the lazily loaded `EntityManifestGrid` keep the
-full inspector.
+`columnId`). The server and the lazily loaded schema surfaces
+(`features/entity-platform`: the Entities schema sheet and the
+`/entities/schema/$entity` page) keep the full inspector.
 Keep list page factories (`list-page.tsx`) separate from detail factories
 (`detail-page.tsx`) so lists do not import generic detail sections. Bind each
 factory result to a module-level constant referenced by a splittable property

@@ -780,7 +780,7 @@ declaration module must not export `filterSchemas`.
 Generated artifacts provide the exhaustive entity keys and traits, public
 shortcode contracts (the inbound-only `P-`/`L-` label aliases live only in
 `packages/shared/src/shortcode.ts`, never in the manifest), schema bindings,
-inspector metadata (server and `EntityManifestGrid` only), browser route roster, the typed list search
+inspector metadata (server and the `features/entity-platform` schema surfaces only), browser route roster, the typed list search
 schema per entity (`entity/generated/entity-search.gen.ts`: manifest filter
 keys, table keys and `create`, with `defaults` naming every key for
 `stripSearchParams`), kernel and MCP action capabilities, relation-specific
