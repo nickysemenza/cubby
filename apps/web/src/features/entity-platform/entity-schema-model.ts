@@ -49,12 +49,12 @@ export function overridesFor(entity: Entity): readonly OverrideComparison[] {
   return entityOverrideComparisons[entity];
 }
 
-export function emittedCode(entity: Entity): string | null {
+function emittedCode(entity: Entity): string | null {
   const prefix = metadataFor(entity).shortcodePrefix;
   return prefix ? `${prefix}XXXX` : null;
 }
 
-export function legacyCode(entity: Entity): string | null {
+function legacyCode(entity: Entity): string | null {
   const prefix = Object.entries(LEGACY_SHORTCODE_PREFIX).find(
     ([, target]) => target === entity,
   )?.[0];
@@ -62,7 +62,7 @@ export function legacyCode(entity: Entity): string | null {
 }
 
 /** `list · get · update` plus a `+N rpc` suffix; null when the app never touches it. */
-export function nativeCoverageLabel(entity: Entity): string | null {
+function nativeCoverageLabel(entity: Entity): string | null {
   const coverage = ENTITY_NATIVE_COVERAGE[entity];
   const actions = coverage.httpActions.join(" · ");
   const rpc = coverage.rpcIds.length ? `+${coverage.rpcIds.length} rpc` : "";
@@ -87,7 +87,7 @@ const CRUD_KNOWN_ACTIONS = new Set<KernelAction>(
   CRUD_SLOTS.flatMap((slot) => slot.needs),
 );
 
-export type CrudSlot = (typeof CRUD_SLOTS)[number]["key"];
+type CrudSlot = (typeof CRUD_SLOTS)[number]["key"];
 
 function kernelSlots(entity: Entity) {
   const actions = metadataFor(entity).kernelActions;
