@@ -104,6 +104,7 @@ import {
   modelStyleTokens,
   sharesModelWithinManufacturer,
 } from "./manufacturer-identity";
+import { startPostImportEnrichment } from "./post-import-enrichment";
 import { productEnrichmentTarget } from "./product-enrichment-target";
 import { recordRunWrites } from "./run-audit";
 import { auditAllImportBatches, loadRunScope } from "./run-service";
@@ -939,8 +940,14 @@ export async function commitPurchaseImport(
       ),
   );
   // Network fetches stay outside the import transaction; each is best-effort.
-  for (const work of transactionResult.thumbnailWork ?? [])
+  for (const work of transactionResult.thumbnailWork ?? []) {
     await attachOrderLineThumbnails(db, work);
+    await startPostImportEnrichment(db, {
+      parentRunId: scope.public.runId,
+      purchaseId: work.purchaseId,
+      lines: work.lines,
+    });
+  }
   if (transactionResult.requiresReview) {
     await finalizeReviewRun(
       db,

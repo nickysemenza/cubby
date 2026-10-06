@@ -12,6 +12,8 @@ import {
   inventoryEntry as inventory,
   run as runTable,
   runOrderCandidate,
+  runTarget,
+  vendor,
   vendorAccount,
 } from "~/server/db/schema";
 import { getDb } from "~/server/repo/database-helpers";
@@ -384,6 +386,126 @@ describe("saved confirmation imports", () => {
         .from(inventory)
         .where(eq(inventory.productId, product.id)),
     ).toHaveLength(0);
+  });
+
+  describe("enrichment after a mail import", () => {
+    // A new Product from a confirmation should be enriched without a click
+    // when the member can browse that Vendor. Failure modes: no follow-up at
+    // all; a follow-up on a mail-only account (no browser to use); a child
+    // that starts from the Gmail source key instead of the product page.
+    const importNewLine = async (synced: boolean) => {
+      const { mail, event } = await seed();
+      const productUrl = "https://seed.example.test/products/herb";
+      await getDb(ctx.db)
+        .update(vendor)
+        .set({
+          website: "https://seed.example.test",
+          browserDomains: ["seed.example.test"],
+        })
+        .where(eq(vendor.id, mail.vendorId!));
+      const account = await insertWithShortcode(ctx.db, "vendorAccount", {
+        label: "Synthetic seed account",
+        vendorId: mail.vendorId!,
+        ledgerPartyId: mail.ledgerPartyId,
+        status: synced ? "active" : "disabled",
+        browserSyncEnabled: synced,
+      });
+      const started = await startOrderMailImport(
+        ctx.db,
+        { eventId: event.id, evidenceChecksum: mail.rawChecksum },
+        ctx.actor,
+        { send: async () => {} },
+      );
+      const [run] = await getDb(ctx.db)
+        .select()
+        .from(runTable)
+        .where(eq(runTable.shortcode, started.runId));
+      if (!run) throw new Error("Missing confirmation run");
+      const evidence = await loadOrderMailImportEvidence(ctx.db, run.id);
+      if (!evidence) throw new Error("Missing assigned mail");
+      await preparePurchaseImport(
+        ctx.db,
+        {
+          _runExecution: { runId: run.id, operationId: "prepare-new" },
+          orders: [
+            {
+              stableOrderId: "assigned-mail",
+              itemOperationId: "assigned-mail",
+              source: evidence.source,
+              evidenceChecksum: evidence.evidenceChecksum,
+              extractionRevision: "order-mail@1",
+              extraction: {
+                status: "ready" as const,
+                candidate: {
+                  orderId: evidence.orderId,
+                  orderedAt: "2026-09-01T12:00:00Z",
+                  merchant: "Example Seed Shop",
+                  currency: "USD",
+                  printedGrandTotal: 5,
+                  lines: [
+                    {
+                      title: "Synthetic herb packet",
+                      amount: 5,
+                      quantity: 1,
+                      productUrl,
+                      lineKind: "principal" as const,
+                    },
+                  ],
+                  payments: [],
+                  allShipmentsDelivered: null,
+                },
+              },
+              lineIds: ["herb"],
+              primaryDocumentImageId: null,
+              screenshotImageId: null,
+            },
+          ],
+        },
+        ctx.actor,
+      );
+      await commitPurchaseImport(
+        ctx.db,
+        {
+          _runExecution: { runId: run.id, operationId: "commit-new" },
+          prepareOperationId: "prepare-new",
+          defaultTrade: "other" as const,
+          resolutions: [
+            {
+              stableOrderId: "assigned-mail",
+              stableLineId: "herb",
+              resolution: { kind: "new" as const },
+            },
+          ],
+        },
+        ctx.actor,
+      );
+      const children = await getDb(ctx.db)
+        .select()
+        .from(runTable)
+        .where(eq(runTable.purpose, "product_enrichment"));
+      return { run, account, productUrl, children };
+    };
+
+    it("starts one enrichment run at the new Product's page when the account browses", async () => {
+      const { run, account, productUrl, children } = await importNewLine(true);
+      expect(children).toHaveLength(1);
+      const [child] = children;
+      expect(child).toMatchObject({
+        vendorAccountId: account.id,
+        trigger: "discovery",
+        input: { kind: "post_import_enrichment", parentRunId: run.id },
+      });
+      const targets = await getDb(ctx.db)
+        .select({ startUrl: runTarget.sourceExternalKey })
+        .from(runTarget)
+        .where(eq(runTarget.runId, child!.id));
+      expect(targets).toEqual([{ startUrl: productUrl }]);
+    });
+
+    it("starts nothing for a mail-only account", async () => {
+      const { children } = await importNewLine(false);
+      expect(children).toEqual([]);
+    });
   });
 
   it("copies the frozen confirmation when retrying a review run", async () => {

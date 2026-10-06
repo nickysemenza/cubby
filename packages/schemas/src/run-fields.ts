@@ -274,7 +274,21 @@ export const chargeHuntOutcomeOf = (
       return "deferred";
   }
 };
+/**
+ * `Run.input` for a `product_enrichment` run started automatically after a
+ * mail import committed new Products. `parentRunId` is that import run; it is
+ * not `predecessorRunId`, which means restart/correction lineage.
+ */
+export const postImportEnrichmentRunInput = z.object({
+  kind: z.literal("post_import_enrichment"),
+  parentRunId: z.uuid(),
+});
+export type PostImportEnrichmentRunInput = z.infer<
+  typeof postImportEnrichmentRunInput
+>;
+
 export type RunInput =
+  | PostImportEnrichmentRunInput
   | MailSearchRunInput
   | MailDiscoveryRunInput
   | z.infer<typeof orderMailImportRunInput>

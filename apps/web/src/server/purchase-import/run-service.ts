@@ -51,6 +51,7 @@ import {
   orderBackfillRunInput,
   orderMailImportRunInput,
   orderMailImportRunOrders,
+  type RunInput,
   type RunRestartInput,
 } from "@cubby/schemas/run-fields";
 import type { Trade } from "@cubby/schemas/task-fields";
@@ -249,6 +250,7 @@ export type StartTargetedRunInput = {
   vendorAccountId?: VendorAccountId | null;
   trigger: RunTrigger;
   predecessorRunId?: string;
+  input?: RunInput;
   targets: TargetedRunTarget[];
 };
 
@@ -516,6 +518,7 @@ export async function startTargetedRun(
         : null,
       purpose,
       trigger,
+      input: input.input ?? null,
       dispatchEventId: eventId,
       coordinatorModel: coordinatorModelFor(purpose),
       agentSessionId: importRunAgentIdentity(

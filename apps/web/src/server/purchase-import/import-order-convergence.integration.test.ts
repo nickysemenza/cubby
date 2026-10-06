@@ -53,7 +53,7 @@ import { commitStatementCsv } from "~/server/statement-csv-import";
 import { captureBackgroundQueue } from "~/server/testing/background-queue";
 
 import { resolveRunFinding } from "./findings";
-import { decideOrderMailCandidate, listVendorOrderMail } from "./gmail/review";
+import { listVendorOrderMail } from "./gmail/review";
 import {
   finalizePhotoRun,
   loadRunDetail,
@@ -375,30 +375,17 @@ async function createConvergenceHarness(
         ),
       );
     if (!purchase) throw new Error("Imported settlement evidence missing");
-    // The vendor page's order-mail "Link" for the exact-order candidate.
+    // Exact-order mail links itself to the Purchase without a member click,
+    // whichever of the mail and the Purchase arrived first.
     const worklist = await listVendorOrderMail(db, { vendorId: vendor.id });
     const event = worklist.items
       .flatMap((item) => item.events)
       .find((row) => row.orderId === orderId);
     if (!event) throw new Error("Order mail event missing from worklist");
-    const candidate = event.candidates.find(
-      (row) => row.purchaseId === purchase.shortcode,
-    );
-    expect(candidate?.decision).not.toBe("linked");
-    const decision = await decideOrderMailCandidate(
-      db,
-      {
-        eventId: event.id,
-        purchaseId: purchase.shortcode,
-        decision: "linked",
-        evidenceChecksum: event.evidenceChecksum,
-      },
-      actor,
-    );
-    expect(decision).toMatchObject({
-      purchaseId: purchase.shortcode,
-      decision: "linked",
-    });
+    expect(
+      event.candidates.find((row) => row.purchaseId === purchase.shortcode)
+        ?.decision,
+    ).toBe("linked");
     expect(purchase.shortcode).toBe(bookedPurchaseCode);
     return { purchase, productCode };
   }
