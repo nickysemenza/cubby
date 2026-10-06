@@ -1,4 +1,5 @@
 import { InMemoryTransport, McpServer } from "@modelcontextprotocol/server";
+import * as Sentry from "@sentry/tanstackstart-react";
 import { fromAny } from "@total-typescript/shoehorn";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { z } from "zod";
@@ -79,6 +80,31 @@ describe("MCP tool deadline", () => {
     });
     expect(signal?.aborted).toBe(true);
     expect(capture).toHaveBeenCalledOnce();
+  });
+
+  it("drops a forged ray id from a timeout answer", async () => {
+    const server = new McpServer({ name: "test", version: "1.0.0" });
+    registerTestTool(
+      server,
+      {
+        name: "slow_forged_ray",
+        kind: "query",
+        input: z.object({}),
+        output: z.object({ ok: z.boolean() }),
+        run: () => new Promise<{ ok: boolean }>(() => {}),
+      },
+      { markCalendarDirty: vi.fn(), toolDeadlineMs: deadlines },
+    );
+
+    const result = await withErrorReporting(
+      () => callMcpTool(server, "slow_forged_ray", { action: "run" }),
+      new Headers({ "cf-ray": "token=fixture-ray-secret" }),
+      vi.fn(() => "sentry-event-5"),
+    );
+
+    expect(errorText(result)).toContain("slow_forged_ray.run did not finish");
+    expect(JSON.stringify(result)).not.toContain("fixture-ray-secret");
+    expect(errorText(result)).not.toContain("Cubby request");
   });
 
   it("tells the caller a timed-out write may have committed", async () => {
@@ -347,7 +373,10 @@ describe("MCP HTTP handler", () => {
     error: z.object({
       code: z.number(),
       message: z.string(),
-      data: z.looseObject({ requestId: z.string(), elapsedMs: z.number() }),
+      data: z.looseObject({
+        requestId: z.string().optional(),
+        elapsedMs: z.number(),
+      }),
     }),
   });
   /** Authenticates, reads the body, then fails with `error`. */
@@ -398,15 +427,90 @@ describe("MCP HTTP handler", () => {
     });
   });
 
-  it("omits the Sentry reference when nothing was captured", async () => {
+  describe("with the real Sentry SDK", () => {
+    afterEach(() => {
+      Sentry.getCurrentScope().setClient(undefined);
+    });
+
+    /** Installs a client whose transport records envelopes instead of sending. */
+    function installSentryClient() {
+      const sent: string[] = [];
+      const client = new Sentry.NodeClient({
+        dsn: "https://public@o0.ingest.sentry.io/0",
+        stackParser: Sentry.defaultStackParser,
+        integrations: [Sentry.eventFiltersIntegration()],
+        ignoreErrors: ["The client has disconnected"],
+        transport: () =>
+          Sentry.createTransport(
+            { recordDroppedEvent: () => undefined },
+            async (request) => {
+              sent.push(String(request.body));
+              return { statusCode: 200 };
+            },
+          ),
+      });
+      Sentry.setCurrentClient(client);
+      client.init();
+      return { client, sent };
+    }
+
+    it("omits the Sentry reference when no client is installed", async () => {
+      expect(Sentry.getClient()).toBeUndefined();
+      const response = await handleMcpHttpRequest(
+        post(toolCall({ action: "create" })),
+        failAfterBody(new Error("dispatch failed")),
+      );
+
+      const body = rpcError.parse(await response.json());
+      expect(body.error.message).not.toContain("Sentry");
+      expect(body.error.data).not.toHaveProperty("diagnostics.sentryEventId");
+    });
+
+    it("omits the Sentry reference for an error the client ignores", async () => {
+      const { client, sent } = installSentryClient();
+      const response = await handleMcpHttpRequest(
+        post(toolCall({ action: "create" })),
+        failAfterBody(new Error("The client has disconnected")),
+      );
+      await client.flush(1000);
+
+      const body = rpcError.parse(await response.json());
+      expect(body.error.message).not.toContain("Sentry");
+      expect(body.error.data).not.toHaveProperty("diagnostics.sentryEventId");
+      expect(sent).toHaveLength(0);
+    });
+
+    it("names the event a client actually sends", async () => {
+      const { client, sent } = installSentryClient();
+      const response = await handleMcpHttpRequest(
+        post(toolCall({ action: "create" })),
+        failAfterBody(new Error("dispatch failed")),
+      );
+      await client.flush(1000);
+
+      const body = rpcError.parse(await response.json());
+      const eventId = z
+        .object({ diagnostics: z.object({ sentryEventId: z.string() }) })
+        .parse(body.error.data).diagnostics.sentryEventId;
+      expect(body.error.message).toContain(`; Sentry ${eventId})`);
+      expect(sent).toHaveLength(1);
+      expect(sent[0]).toContain(eventId);
+    });
+  });
+
+  it("drops a forged ray id from the message and data", async () => {
     const response = await handle(
-      post(toolCall({ action: "create" })),
+      post(toolCall({ action: "create" }), {
+        "cf-ray": "token=fixture-ray-secret",
+      }),
       failAfterBody(new Error("dispatch failed")),
     );
 
-    const body = rpcError.parse(await response.json());
-    expect(body.error.message).not.toContain("Sentry");
-    expect(body.error.data).not.toHaveProperty("diagnostics.sentryEventId");
+    const text = await response.text();
+    expect(text).not.toContain("fixture-ray-secret");
+    const body = rpcError.parse(JSON.parse(text));
+    expect(body.error.message).not.toContain("Cubby request");
+    expect(body.error.message).toMatch(/after \d+ ms\)\./u);
   });
 
   it("keeps the request id when the tool arguments are malformed", async () => {

@@ -61,7 +61,8 @@ function captureError<TError>(
 ): string | undefined {
   // Telemetry must never replace the original failure.
   try {
-    return (reports.getStore()?.capture ?? Sentry.captureException)(error, {
+    const capture = reports.getStore()?.capture ?? Sentry.captureException;
+    const eventId = capture(error, {
       tags: {
         request_id:
           context.requestId ?? reports.getStore()?.headers?.get("cf-ray"),
@@ -70,9 +71,33 @@ function captureError<TError>(
       },
       extra: { batchIndex: context.batchIndex },
     });
+    // An injected capture (tests) reports its own id; the SDK's needs proof.
+    return capture !== Sentry.captureException || sentrySends(error)
+      ? eventId
+      : undefined;
   } catch {
     return undefined;
   }
+}
+
+/**
+ * Whether the installed Sentry client sends this error. `captureException`
+ * returns an id with no client, when disabled, and before `ignoreErrors`
+ * drops the event; a reference nobody can search is worse than none.
+ * `beforeSend` (`scrubSentryEvent`) never drops, and error sampling is
+ * unknowable per event, so a client sampling errors gives no id.
+ */
+function sentrySends<TError>(error: TError): boolean {
+  const options = Sentry.getClient()?.getOptions();
+  if (!options?.dsn || options.enabled === false) return false;
+  if (options.sampleRate !== undefined && options.sampleRate < 1) return false;
+  const message =
+    error instanceof Error ? `${error.name}: ${error.message}` : String(error);
+  return !(options.ignoreErrors ?? []).some((pattern) =>
+    pattern instanceof RegExp
+      ? pattern.test(message)
+      : message.includes(pattern),
+  );
 }
 
 export const errorReportingHeaders = (): Headers | undefined =>
