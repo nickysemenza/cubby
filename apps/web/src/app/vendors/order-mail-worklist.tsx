@@ -2,7 +2,10 @@ import {
   ledgerPartyShortcode,
   vendorShortcode,
 } from "@cubby/schemas/identifiers";
-import type { VendorOrderMailOut } from "@cubby/schemas/order-mail-review";
+import type {
+  VendorOrderMailOut,
+  VendorSearchMailOut,
+} from "@cubby/schemas/order-mail-review";
 import { useQuery } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
@@ -243,6 +246,7 @@ function OrderMailWorklist({
   const { refetch: refetchWorklist } = worklist;
   const jobStatus = useVendorMailJob(vendorId, canSearch);
   const currentJob = jobStatus.data;
+  const { jobActive, resumablePage } = mailSearchState(currentJob);
   useEffect(() => {
     if (jobStatus.data?.status === "completed") void refetchWorklist();
   }, [jobStatus.data?.createdAt, jobStatus.data?.status, refetchWorklist]);
@@ -502,15 +506,8 @@ function VendorMailSearchActions({
     },
   });
   const currentJob = jobStatus.data;
-  const jobActive =
-    currentJob?.status === "queued" ||
-    currentJob?.status === "running" ||
-    currentJob?.status === "waiting";
-  const completedPage = currentJob?.status === "completed" ? currentJob : null;
-  const resumablePage =
-    currentJob?.status === "failed" && currentJob.nextPageToken
-      ? currentJob
-      : null;
+  const { jobActive, resumablePage, completedPage } =
+    mailSearchState(currentJob);
   return (
     <>
       <Button
@@ -565,4 +562,17 @@ function VendorMailSearchActions({
       </Button>
     </>
   );
+}
+
+function mailSearchState(currentJob: VendorSearchMailOut | null | undefined) {
+  const jobActive =
+    currentJob?.status === "queued" ||
+    currentJob?.status === "running" ||
+    currentJob?.status === "waiting";
+  const completedPage = currentJob?.status === "completed" ? currentJob : null;
+  const resumablePage =
+    currentJob?.status === "failed" && currentJob.nextPageToken
+      ? currentJob
+      : null;
+  return { jobActive, resumablePage, completedPage };
 }

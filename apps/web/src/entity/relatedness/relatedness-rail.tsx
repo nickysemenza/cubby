@@ -3,7 +3,7 @@ import type { ProductShortcode } from "@cubby/schemas/identifiers";
 import { SparkleIcon } from "@phosphor-icons/react/dist/csr/Sparkle";
 import { useMutation, useMutationState, useQuery } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { z } from "zod";
 
 import { DetailAction } from "~/entity/entity-detail/detail-action-bar";
@@ -162,9 +162,11 @@ export function RelatednessRail({
       />
 
       {poll.timedOut && (
-        <StillIndexingNotice
-          onCheckAgain={() => poll.checkAgain(relatednessQuery.refetch)}
-        />
+        <DetailAction>
+          <StillIndexingNotice
+            onCheckAgain={() => poll.checkAgain(relatednessQuery.refetch)}
+          />
+        </DetailAction>
       )}
 
       {status === "unavailable" && (
@@ -278,9 +280,7 @@ function useRelatednessActions(
     undefined,
   );
   const startPoll = poll.start;
-  useEffect(() => {
-    if (latest?.status === "success") startPoll();
-  }, [latest?.status, latest?.submittedAt, startPoll]);
+  const observedMutation = useRef(0);
   const refresh = useMutation(
     operations.requestEmbeddingRefresh.mutationOptions({
       onSuccess: () => poll.start(),
@@ -292,6 +292,15 @@ function useRelatednessActions(
       candidate.kind === "product-related",
   );
   const status = group?.status;
+  useEffect(() => {
+    if (
+      latest?.status !== "success" ||
+      latest.submittedAt <= observedMutation.current
+    )
+      return;
+    observedMutation.current = latest.submittedAt;
+    if (status !== "ready" && status !== "unavailable") startPoll();
+  }, [latest?.status, latest?.submittedAt, status, startPoll]);
   // Terminal readiness updates the visible "Indexing…" state the instant this
   // render sees it, rather than waiting a render behind for the effect below
   // to flip the poll's own phase — that effect governs the interval/timeout,
@@ -301,7 +310,7 @@ function useRelatednessActions(
 
   useEffect(() => {
     notifyStatus(status);
-  }, [status, notifyStatus]);
+  }, [status, notifyStatus, poll.isPolling]);
 
   return { poll, relatednessQuery, refresh, group, status, indexing };
 }
@@ -330,6 +339,7 @@ export function ProductRelatednessActions({
         <Button
           variant="outline"
           onClick={() => poll.checkAgain(relatednessQuery.refetch)}
+          title="Still indexing — this can take a minute."
         >
           Check index again
         </Button>
