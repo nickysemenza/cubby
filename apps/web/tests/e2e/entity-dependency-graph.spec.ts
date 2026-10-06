@@ -3,13 +3,9 @@ import {
   seedTaskPrerequisite,
 } from "./fixtures-catalog";
 import { seedImagePrerequisite } from "./fixtures-photos";
-import {
-  SHORTCODE,
-  waitForAppHydration,
-  waitForFormHydration,
-  gotoAuthenticatedPage,
-} from "./e2e-helpers";
+import { waitForAppHydration, gotoAuthenticatedPage } from "./e2e-helpers";
 import { expect, test } from "./e2e-test";
+import { createEntityFixture } from "./fixtures-core";
 
 test("work graph renders through Viz, restores filters, and opens a graph node", async ({
   page,
@@ -80,16 +76,14 @@ test("work graph renders through Viz, restores filters, and opens a graph node",
 test("legacy recipe graph URL still opens its graph controls", async ({
   page,
 }) => {
-  await page.goto("/recipes/new");
-  await waitForFormHydration(page);
-  await page
-    .getByPlaceholder("Enter recipe name")
-    .fill(`E2E graph recipe ${Date.now()}`);
-  await page.getByRole("button", { name: /Add Instruction/i }).click();
-  await page.getByRole("textbox", { name: "Step" }).fill("Stir until smooth.");
-  await page.getByRole("button", { name: /^Create$/i }).click();
-  await expect(page).toHaveURL(new RegExp(`/recipes/RCP-${SHORTCODE}$`), {
-    timeout: 15000,
+  await createEntityFixture(page, "recipe", {
+    name: `E2E graph recipe ${Date.now()}`,
+    meta: null,
+    sections: [
+      {
+        instructions: [{ instruction: "Stir until smooth." }],
+      },
+    ],
   });
   await gotoAuthenticatedPage(page, "/entities?tab=recipes&hide=false");
 

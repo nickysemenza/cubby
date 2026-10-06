@@ -253,6 +253,11 @@ entity kernel. A factory never defaults a relation id; pass it. E2E specs call
 and keep domain seeders in `tests/e2e/fixtures-*.ts`. `seedBaseWorld` seeds Home
 and the taxonomy roots for every lane.
 
+Instruction-only Recipe fixture sections omit the optional `ingredients` input;
+when present, that input requires at least one ingredient. A cached Recipe Flow
+fingerprint still includes `ingredients: []`, matching the persisted section
+projection rather than the create input.
+
 Faker fills only fields nothing asserts on, from a per-test seed (E2E title
 path, Vitest test name via `testFaker()`, dev seed 1). A name a locator or
 assertion uses is an override shaped `${label} ${deterministicToken(...)}`
