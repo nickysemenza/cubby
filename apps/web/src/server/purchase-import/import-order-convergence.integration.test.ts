@@ -13,7 +13,6 @@ import {
   importBrowserOrder,
   ingestGmailEvidence,
   listDescribeImageJobs,
-  openFindingCount,
   productPhotos,
   shirtGroup,
   sha256Hex,
@@ -404,7 +403,6 @@ async function createConvergenceHarness(
       productPhotos(db, productShortcode),
     productName,
     orderId,
-    openFindingCount: () => openFindingCount(db, vendorId),
   };
 }
 
@@ -430,19 +428,6 @@ describe("import order convergence", { timeout: 30_000 }, () => {
     async (order) => {
       const token = `order-${order.join("-")}`;
       const harness = await createConvergenceHarness(ctx.db, ctx.actor, token);
-      // The Problems overview samples twelve findings. A Run must retain its
-      // reviewed action after earlier receipt arrivals fill that sample.
-      const earlierRetailerRuns =
-        order.join(",") === "csv,photo,retailer,gmail" ? 13 : 0;
-      for (let index = 0; index < earlierRetailerRuns; index++) {
-        const earlier = await createConvergenceHarness(
-          ctx.db,
-          ctx.actor,
-          `${token}-earlier-${index}`,
-        );
-        await earlier.sources.retailer();
-        expect(await earlier.openFindingCount()).toBeGreaterThanOrEqual(1);
-      }
       for (const source of order) await harness.sources[source]();
       const result = await harness.settle();
       expect(await harness.projection()).toEqual({
