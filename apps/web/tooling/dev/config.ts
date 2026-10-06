@@ -88,6 +88,16 @@ export async function writeLocalDevConfig(
         name: `${name}-search-index-repair`,
         class_name: "SearchIndexRepairWorkflow",
       },
+      {
+        binding: "VENDOR_MAIL_SEARCH",
+        name: `${name}-vendor-mail-search`,
+        class_name: "VendorMailSearchWorkflow",
+      },
+      {
+        binding: "MAIL_DISCOVERY",
+        name: `${name}-mail-discovery`,
+        class_name: "MailDiscoveryWorkflow",
+      },
     ],
   });
   if (profile.integration) {

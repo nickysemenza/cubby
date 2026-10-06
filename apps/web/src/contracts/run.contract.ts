@@ -5,7 +5,6 @@ import {
   productShortcode,
   purchaseShortcode,
 } from "@cubby/schemas/identifiers";
-import { vendorSearchMailOut } from "@cubby/schemas/order-mail-review";
 import { runTargetDeviceWorkState } from "@cubby/schemas/photo-import-run";
 import {
   proposedImportFix,
@@ -312,11 +311,6 @@ export const runContract = defineContract("run", {
     input: z.object({ shortcode: z.string() }),
     output: runOut.nullable(),
     cache: { tags: [["run"]] },
-  }),
-  retryGmailSearch: mutation({
-    native: "Resend a stalled Gmail search from the Run's progress section",
-    input: z.object({ shortcode: runShortcode }),
-    output: vendorSearchMailOut,
   }),
   workSnapshot: query({
     native: "Show durable live import progress in Apple apps",

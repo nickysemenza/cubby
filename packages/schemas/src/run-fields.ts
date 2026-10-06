@@ -9,6 +9,9 @@ export const runTrigger = z.enum([
   "discovery",
   "manual",
   "backfill",
+  // Scheduled work nobody started: the daily cron and app-open catch-up. A
+  // completed one that found nothing is `routine` and hidden by default.
+  "scheduled",
   // A short-lived run that only groups AI work: created already `completed`,
   // and never blocks ledger-party delete/merge.
   "ephemeral",
@@ -38,6 +41,7 @@ export const runControlAction = z.enum([
   "upload_evidence",
   "no_evidence_available",
 ]);
+export type RunControlAction = z.infer<typeof runControlAction>;
 export const runPurpose = z.enum([
   "account_sync",
   "purchase_validation",
@@ -49,14 +53,17 @@ export const runPurpose = z.enum([
   "background",
   "file_import",
   "mail_search",
+  "mail_discovery",
 ]);
 export type RunPurpose = z.infer<typeof runPurpose>;
 
 /**
  * `Run.input` / `Run.progress` for a `mail_search` run: the Gmail search a
- * member asked for and where its page-by-page walk stands. `phase` is the
- * claim state a worker CAS-es on (`queued` between pages, `running` while one
- * is scanned); the Run's own `status` stays `running` until the last page.
+ * member asked for and where its page-by-page walk stands. A Cloudflare
+ * Workflow instance (`<runShortcode>-<attempt>`) executes it; the Run row is
+ * the durable record, so a retry starts a fresh instance that resumes from
+ * `pagesScanned`/`nextPageToken`. `queued` and `running` predate the Workflow
+ * and still parse on historical rows.
  */
 export const mailSearchRunInput = z.object({
   after: z.string(),
@@ -66,6 +73,7 @@ export type MailSearchRunInput = z.infer<typeof mailSearchRunInput>;
 export const mailSearchPhase = z.enum([
   "queued",
   "running",
+  "waiting",
   "completed",
   "failed",
 ]);
@@ -79,8 +87,69 @@ export const mailSearchRunProgress = z.object({
   reviewable: z.number().int().nonnegative(),
   /** A transient cause kept while a rate-limited page waits to be retried. */
   error: z.string().nullable().optional(),
+  /** The Workflow attempt that owns the Run; absent on pre-Workflow rows. */
+  attempt: z.number().int().nonnegative().optional(),
+  /** When a rate-limited page is retried. */
+  retryAt: z.iso.datetime().nullable().optional(),
 });
 export type MailSearchRunProgress = z.infer<typeof mailSearchRunProgress>;
+
+/** `Run.input` for a `mail_discovery` run: the mailbox and bootstrap senders. */
+export const mailDiscoveryRunInput = z.object({
+  mailboxId: z.string().min(1),
+  /** Searched on a first sync or after Gmail expires the history cursor. */
+  knownSenders: z.array(z.string()),
+});
+export type MailDiscoveryRunInput = z.infer<typeof mailDiscoveryRunInput>;
+/** How a `mail_discovery` run listed its mailbox changes. */
+export const mailDiscoveryMode = z.enum([
+  "bootstrap",
+  "full_resync",
+  "incremental",
+]);
+/** One Gmail history change a `mail_discovery` pass persists after its batches. */
+export const mailDiscoveryEvent = z.object({
+  sourceKey: z.string(),
+  mailboxId: z.string(),
+  historyId: z.string(),
+  messageId: z.string(),
+  threadId: z.string().nullable(),
+  kind: z.enum([
+    "message_added",
+    "message_deleted",
+    "labels_added",
+    "labels_removed",
+  ]),
+  labelIds: z.array(z.string()),
+});
+/**
+ * `Run.progress` for a `mail_discovery` run: one scheduled pass over a
+ * member's Gmail mailbox, executed by a Workflow instance
+ * (`<runShortcode>-<attempt>`). The `list` step freezes the work here — the
+ * batches and history events — so a replayed or retried attempt processes the
+ * same messages, and the cursor moves only after every batch from
+ * `startHistoryId` to `targetHistoryId`.
+ */
+export const mailDiscoveryRunProgress = z.object({
+  attempt: z.number().int().nonnegative(),
+  phase: z.enum(["listing", "fetching", "completed", "failed"]),
+  /** The mailbox cursor this pass started from; null on a first sync. */
+  startHistoryId: z.string().nullable(),
+  /** Frozen by `list`: the cursor the pass advances to when it finishes. */
+  targetHistoryId: z.string().nullable().optional(),
+  mode: mailDiscoveryMode.optional(),
+  /** Frozen by `list`: message ids, chunked once so replay cannot regroup them. */
+  batches: z.array(z.array(z.string())).optional(),
+  /** Frozen by `list`: history changes, saved once every batch is in. */
+  pendingEvents: z.array(mailDiscoveryEvent).optional(),
+  batchesDone: z.number().int().nonnegative().default(0),
+  /** Messages saved; deleted between listing and fetching; events dropped. */
+  saved: z.number().int().nonnegative().default(0),
+  deleted: z.number().int().nonnegative().default(0),
+  events: z.number().int().nonnegative().default(0),
+  droppedEvents: z.number().int().nonnegative().default(0),
+});
+export type MailDiscoveryRunProgress = z.infer<typeof mailDiscoveryRunProgress>;
 /** A listed or selected order's terminal outcome on one Run. */
 export const runOrderCandidateState = z.enum([
   "pending",
@@ -177,7 +246,8 @@ export const chargeHuntOutcomeOf = (
 };
 export type RunInput =
   | MailSearchRunInput
+  | MailDiscoveryRunInput
   | z.infer<typeof orderMailImportRunInput>
   | OrderBackfillRunInput
   | z.infer<typeof chargeHuntRunInput>;
-export type RunProgress = MailSearchRunProgress;
+export type RunProgress = MailSearchRunProgress | MailDiscoveryRunProgress;

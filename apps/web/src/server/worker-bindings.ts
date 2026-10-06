@@ -14,6 +14,7 @@ import type { DatabaseFreshnessRpc } from "./database-freshness/rpc";
 import type { ImageProcessingCompanionRpc } from "./image-processing/contracts";
 import type { PurchaseImportRunAgentRpc } from "./purchase-agent/environment";
 import type { PurchaseImportDurableObjectRpc } from "./purchase-import/rpc";
+import type { WorkflowRunParams } from "./workflow-runs/contract";
 
 // Its implementation imports nothing from the app.
 export type { AiResponseCacheDurableObject } from "./ai/response-cache-durable-object";
@@ -41,4 +42,20 @@ export interface SearchIndexRepairWorkflow {
     event: Readonly<WorkflowEvent<SearchIndexRepairWorkflowParams>>,
     step: WorkflowStep,
   ): Promise<SearchIndexRepairCounters>;
+}
+
+/** The `VENDOR_MAIL_SEARCH` binding: one `mail_search` Run attempt. */
+export interface VendorMailSearchWorkflow {
+  run(
+    event: Readonly<WorkflowEvent<WorkflowRunParams>>,
+    step: WorkflowStep,
+  ): Promise<{ runId: string }>;
+}
+
+/** The `MAIL_DISCOVERY` binding: one scheduled `mail_discovery` Run attempt. */
+export interface MailDiscoveryWorkflow {
+  run(
+    event: Readonly<WorkflowEvent<WorkflowRunParams>>,
+    step: WorkflowStep,
+  ): Promise<{ runId: string }>;
 }

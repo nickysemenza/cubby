@@ -55,6 +55,15 @@ export const getSearchIndexRepairWorkflow = ():
   | Env["SEARCH_INDEX_REPAIR"]
   | undefined => cfEnv?.SEARCH_INDEX_REPAIR;
 
+/** The Workflow that walks a `mail_search` Run's Gmail pages. */
+export const getVendorMailSearchWorkflow = ():
+  | Env["VENDOR_MAIL_SEARCH"]
+  | undefined => cfEnv?.VENDOR_MAIL_SEARCH;
+
+/** The Workflow that runs one scheduled `mail_discovery` pass. */
+export const getMailDiscoveryWorkflow = (): Env["MAIL_DISCOVERY"] | undefined =>
+  cfEnv?.MAIL_DISCOVERY;
+
 /**
  * The background queue producer (`env.BACKGROUND_QUEUE`) on local or deployed
  * Workers, or undefined outside the Worker adapter. The binding

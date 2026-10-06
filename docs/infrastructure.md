@@ -52,18 +52,57 @@ Account ID: `9f10f078d35d86c78dedece2300a6b88`.
   `CalendarFeedDurableObject`, `PurchaseImportDurableObject`,
   `ImageProcessingDurableObject`, `AiResponseCacheDurableObject`, and the
   purchase agent's `PurchaseImportRunAgent` (below).
-- Workflow `cubby-search-index-repair`.
+- Workflows `cubby-search-index-repair`, `cubby-vendor-mail-search`, and
+  `cubby-mail-discovery`. The two Gmail Workflows each execute one Run
+  attempt (see [Workflow-backed Runs](#workflow-backed-runs)).
 - Queues `cubby-background`, `cubby-telemetry`, and `cubby-purchase-agent`,
   each produced and consumed by this Worker, with settings in the Wrangler
   file.
 - One daily cron trigger at 12:00 UTC; authenticated app openings enqueue
-  catch-up work with a household-wide one-hour cooldown.
+  catch-up work with a household-wide one-hour cooldown. Catch-up starts a
+  `mail_discovery` Workflow per Google-connected member, fails Workflow Runs
+  whose instance ended without finishing them, and prunes routine Runs older
+  than 30 days.
 - Workers AI binding `AI` and AI Gateway `cubby`.
 - Vectorize binding `VECTORIZE` ->
   `cubby-openai-text-embedding-3-small-1536`, dimensions `1536`, cosine metric,
   with string metadata index `entityType` (the property name predates the
   `entityKind` rename and stays: the index is provider-side state).
 - Version metadata and the two Hyperdrive bindings below.
+
+### Workflow-backed Runs
+
+A vendor Gmail search (`mail_search`) and a scheduled mailbox pass
+(`mail_discovery`) are Runs a Cloudflare Workflow executes
+(`server/gmail-workflows.ts`, bodies in `server/purchase-import/gmail/`).
+The Run row is the record; an instance is one attempt at it, named
+`<runShortcode>-<attempt>` (`server/workflow-runs/`):
+
+- Each step re-reads the Run and acts only while it is `running` under its
+  own attempt, so a cancel or a retry stops an older attempt mid-walk.
+- Progress lives in `Run.progress`, written under a compare-and-set, so a
+  step that replays after its write committed changes nothing. A retry
+  (`run.control` `retry`) starts a new instance that resumes from it; nothing
+  relies on Cloudflare still retaining an older instance.
+- Cancel (`run.control` `cancel`) fails the Run with `user_cancelled`, then
+  terminates the instance.
+- Instance retention is set per instance (7 days after success, 30 after an
+  error) and only bounds diagnostics: the Run detail shows the attempt and the
+  instance state Cloudflare reports while it is retained.
+- An AI Gateway 429 makes a search page step return its `Retry-After`; the
+  Workflow sleeps that long under a new step name instead of spending a retry,
+  up to twelve times per page.
+- `reconcileWorkflowRuns` in catch-up fails a Run whose instance ended
+  without its failure step, and one saved but never launched. The purchase
+  agent's stale-run expiry skips these purposes.
+- At most one `mail_discovery` Run per member is `running`
+  (`Run_one_active_mail_discovery`), so an overlapping cron and app-open
+  trigger start one pass. A pass freezes its message batches and history
+  events on the Run, saves ten messages per step with each attachment
+  streamed to R2 on its own, and moves the mailbox cursor last, only from the
+  position the pass started at.
+- A completed scheduled pass that saved no message and recorded no history
+  event is `routine`; the Runs list hides routine Runs by default.
 
 One-time creation commands that cannot be inferred or safely rerun by deploy:
 

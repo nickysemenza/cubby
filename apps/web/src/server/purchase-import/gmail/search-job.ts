@@ -1,37 +1,43 @@
 import { buildActorContext, type ActorContext } from "@cubby/schemas/context";
-import { runEntityId, runShortcode } from "@cubby/schemas/identifiers";
 import {
   type MailSearchRunProgress,
   mailSearchRunInput,
   mailSearchRunProgress,
 } from "@cubby/schemas/run-fields";
-import { createLogger } from "@cubby/worker-tracing";
-import { and, desc, eq, inArray, isNotNull, lt, sql } from "drizzle-orm";
+import { and, desc, eq, inArray, isNotNull, sql } from "drizzle-orm";
 
-import {
-  describeErrorCauses,
-  scrubErrorMessage,
-} from "~/lib/error-diagnostics";
-import { isAiGatewayRateLimit } from "~/server/clients/ai-gateway-error";
+import { aiGatewayRateLimitDelayMs } from "~/server/clients/ai-gateway-error";
 import type { Database } from "~/server/db";
 import { run as runTable, runProgress, vendor } from "~/server/db/schema";
 import { reportServerError } from "~/server/errors/report-error";
 import { getDb } from "~/server/repo/database-helpers";
 import { ensureRun } from "~/server/runs/ensure-run";
+import type { WorkflowRunParams } from "~/server/workflow-runs/contract";
+import {
+  productionWorkflowLauncher,
+  type WorkflowLauncher,
+} from "~/server/workflow-runs/launcher";
+import {
+  claimWorkflowRun,
+  failWorkflowRun,
+  launchWorkflowRun,
+  recordRunProgress,
+  runFailureText,
+} from "~/server/workflow-runs/lifecycle";
 
 import { resolveVendorMailSearchTarget } from "./targets";
 import { vendorSearchTerms } from "./vendor-identity";
 
-const log = createLogger("vendor-mail.search");
-
 /*
- * A Gmail search is one `mail_search` Run. `Run.input` is what was asked
- * (`after`, `searchTerms`); `Run.progress` is where the page-by-page walk
- * stands. `progress.phase` is the claim state a page's worker CAS-es on:
- * `queued` between pages, `running` while one is scanned. The Run's own
- * `status` stays `running` until the last page or a terminal failure.
+ * A Gmail search is one `mail_search` Run that the `VendorMailSearchWorkflow`
+ * walks page by page. `Run.input` is what was asked (`after`,
+ * `searchTerms`); `Run.progress` is where the walk stands, written by each
+ * page step under a compare-and-set on `pagesScanned` and the attempt, so a
+ * replayed step never counts a page twice and a superseded attempt never
+ * writes. `phase` is display state: `queued` between pages, `running` while
+ * one is scanned, `waiting` through an AI Gateway rate limit.
  */
-const activePhases = ["queued", "running"];
+const activePhases = ["queued", "running", "waiting"];
 
 // A Run whose `input`/`progress` were never written (its opening transaction
 // failed after `ensureRun` committed it) is not a search and stays invisible.
@@ -39,12 +45,12 @@ const mailSearchRun = and(
   eq(runTable.purpose, "mail_search"),
   isNotNull(runTable.progress),
 );
-const phaseIs = (phase: string) =>
-  sql`${runTable.progress}->>'phase' = ${phase}`;
 const phaseIn = (phases: readonly string[]) =>
   inArray(sql<string>`${runTable.progress}->>'phase'`, [...phases]);
 const pagesScannedIs = (pages: number) =>
   sql`(${runTable.progress}->>'pagesScanned')::int = ${pages}`;
+const attemptIs = (attempt: number) =>
+  sql`coalesce((${runTable.progress}->>'attempt')::int, 0) = ${attempt}`;
 /** Merge into `progress` in SQL so a concurrent writer's other keys survive. */
 const patchProgress = (patch: Partial<MailSearchRunProgress>) =>
   sql`coalesce(${runTable.progress}, '{}'::jsonb) || ${JSON.stringify(patch)}::jsonb`;
@@ -84,24 +90,6 @@ const readJob = (row: JobRow) => ({
 });
 type SearchJob = ReturnType<typeof readJob>;
 
-const jobErrorText = (error: Error | string, sentryEventId?: string) => {
-  const causes = describeErrorCauses(error).causes;
-  const status = causes.find((cause) => cause.status)?.status;
-  const first = causes[0]?.message ?? scrubErrorMessage(String(error));
-  const summary = first.split("\n", 1)[0]?.slice(0, 600) ?? "Operation failed";
-  const labelled =
-    status && !summary.includes(`HTTP ${status}`)
-      ? `HTTP ${status}: ${summary}`
-      : summary;
-  const coded = causes.find(
-    (cause) => cause.code && !labelled.includes(cause.code),
-  );
-  const concise = coded
-    ? `${labelled} · ${coded.code}: ${coded.message.slice(0, 120)}`
-    : labelled;
-  return sentryEventId ? `${concise}\nSentry event: ${sentryEventId}` : concise;
-};
-
 const displayJob = (job: SearchJob) => ({
   runShortcode: job.runShortcode,
   status: job.progress.phase,
@@ -136,100 +124,11 @@ export async function latestVendorMailSearchJob(
   return record ? displayJob(readJob(record)) : null;
 }
 
-/** Resend a saved page when queue delivery has not reached its worker. */
-export async function retryStalledVendorMailSearchJob(
-  db: Database,
-  runCode: string,
-  actor: ActorContext,
-  options: {
-    publish?: typeof import("~/server/background-tasks/publish").publishBackgroundTasks;
-  } = {},
-) {
-  const database = getDb(db);
-  const [row] = await database
-    .select(jobColumns)
-    .from(runTable)
-    .where(
-      and(
-        mailSearchRun,
-        eq(runTable.shortcode, runShortcode.parse(runCode)),
-        eq(runTable.actorUserId, actor.userId),
-      ),
-    )
-    .limit(1);
-  if (!row) throw new Error("No Gmail search job exists for this Run.");
-  const record = readJob(row);
-  // Re-stating `queued` bumps `updatedAt`, which is what fences a second
-  // resend inside the three-minute window.
-  const [claimedRow] = await database
-    .update(runTable)
-    .set({ progress: patchProgress({ phase: "queued" }) })
-    .where(
-      and(
-        eq(runTable.id, record.runId),
-        phaseIs("queued"),
-        lt(runTable.updatedAt, new Date(Date.now() - 3 * 60_000)),
-      ),
-    )
-    .returning(jobColumns);
-  if (!claimedRow)
-    throw new Error(
-      "Gmail search is still waiting for its worker or has already started. Retry is available after three minutes without a worker.",
-    );
-  const claimed = readJob(claimedRow);
-  const publish =
-    options.publish ??
-    (await import("~/server/background-tasks/publish")).publishBackgroundTasks;
-  try {
-    await publish(
-      db,
-      [
-        {
-          kind: "vendor-mail.search",
-          jobId: claimed.runId,
-          page: claimed.progress.pagesScanned,
-          requestedAt: new Date().toISOString(),
-        },
-      ],
-      { source: "vendor-mail.retry" },
-    );
-  } catch (error) {
-    await database
-      .update(runTable)
-      .set({ updatedAt: record.updatedAt })
-      .where(
-        and(
-          eq(runTable.id, claimed.runId),
-          phaseIs("queued"),
-          eq(runTable.updatedAt, claimed.updatedAt),
-        ),
-      );
-    await database.insert(runProgress).values({
-      runId: claimed.runId,
-      eventId: crypto.randomUUID(),
-      phase: "retry_failed",
-      detail: jobErrorText(
-        error instanceof Error ? error : String(error),
-      ).split("\n", 1)[0],
-    });
-    throw error;
-  }
-  await database.insert(runProgress).values({
-    runId: claimed.runId,
-    eventId: crypto.randomUUID(),
-    phase: "requeued",
-    detail: `Resent Gmail page ${claimed.progress.pagesScanned + 1} to the background queue`,
-  });
-  return displayJob(claimed);
-}
-
 export async function startVendorMailSearchJob(
   db: Database,
   input: { vendorId: string; after?: string; pageToken?: string },
   actor: ActorContext,
-  options: {
-    publish?: typeof import("~/server/background-tasks/publish").publishBackgroundTasks;
-  } = {},
+  options: { launcher?: WorkflowLauncher } = {},
 ) {
   const target = await resolveVendorMailSearchTarget(db, input.vendorId, actor);
   const searchTerms = vendorSearchTerms(target.identity);
@@ -247,6 +146,7 @@ export async function startVendorMailSearchJob(
         eq(runTable.vendorId, target.vendorId),
         eq(runTable.ledgerPartyId, target.memberId),
         eq(runTable.actorUserId, actor.userId),
+        eq(runTable.status, "running"),
         phaseIn(activePhases),
       ),
     )
@@ -264,8 +164,8 @@ export async function startVendorMailSearchJob(
     { ...actor, runId: null },
     { purpose: "mail_search", trigger: "manual", notes: "Vendor Gmail search" },
   );
-  const created = await database.transaction(async (tx) => {
-    const [row] = await tx
+  await database.transaction(async (tx) => {
+    await tx
       .update(runTable)
       .set({
         vendorId: target.vendorId,
@@ -277,98 +177,92 @@ export async function startVendorMailSearchJob(
           pagesScanned: 0,
           searched: 0,
           reviewable: 0,
+          attempt: 0,
         },
       })
-      .where(eq(runTable.id, runId))
-      .returning(jobColumns);
+      .where(eq(runTable.id, runId));
     await tx.insert(runProgress).values({
       runId,
       eventId: crypto.randomUUID(),
       phase: "queued",
       detail: "Waiting to search Gmail",
     });
-    return row;
   });
-  if (!created) throw new Error("Gmail search Run was not created");
-  const job = readJob(created);
-  try {
-    const publish =
-      options.publish ??
-      (await import("~/server/background-tasks/publish"))
-        .publishBackgroundTasks;
-    await publish(
-      db,
-      [
-        {
-          kind: "vendor-mail.search",
-          jobId: job.runId,
-          page: 0,
-          requestedAt: new Date().toISOString(),
-        },
-      ],
-      { source: "vendor-mail.search" },
-    );
-  } catch (error) {
-    const message = jobErrorText(
-      error instanceof Error ? error : String(error),
-    );
-    const finishedAt = new Date();
-    await database.transaction(async (tx) => {
-      await tx
-        .update(runTable)
-        .set({
-          progress: patchProgress({ phase: "failed" }),
-          status: "failed",
-          endedAt: finishedAt,
-          failureCode: "vendor_mail_publish_failed",
-          dispatchError: message,
-        })
-        .where(eq(runTable.id, job.runId));
-      await tx.insert(runProgress).values({
-        runId: job.runId,
-        eventId: crypto.randomUUID(),
-        phase: "failed",
-        detail: message.split("\n", 1)[0],
-      });
-    });
-    throw error;
-  }
+  await launchWorkflowRun(
+    db,
+    { runId, purpose: "mail_search" },
+    options.launcher ?? productionWorkflowLauncher,
+  );
   const [current] = await database
     .select(jobColumns)
     .from(runTable)
-    .where(eq(runTable.id, job.runId))
+    .where(eq(runTable.id, runId))
     .limit(1);
-  return displayJob(current ? readJob(current) : job);
+  if (!current) throw new Error("Gmail search Run was not created");
+  return displayJob(readJob(current));
 }
 
-// eslint-disable-next-line complexity -- A page's checkpoint, rate-limit retry, terminal failure, and next-page handoff share this claim boundary.
-export async function runVendorMailSearchJob(
+/** Where this attempt resumes: the first page no attempt has saved. */
+export async function beginVendorMailSearchAttempt(
   db: Database,
-  jobId: string,
+  params: WorkflowRunParams,
+): Promise<{ kind: "stopped" } | { kind: "page"; page: number }> {
+  const row = await claimWorkflowRun(db, params);
+  if (!row) return { kind: "stopped" };
+  return {
+    kind: "page",
+    page: mailSearchRunProgress.parse(row.progress).pagesScanned,
+  };
+}
+
+export type VendorMailPageResult =
+  | { kind: "stopped" }
+  | { kind: "more"; nextPage: number }
+  | { kind: "done" }
+  | { kind: "rate_limited"; retryAfterMs: number };
+
+/**
+ * Scan one Gmail page for the Workflow step `page.<n>.scan.<try>`. A page
+ * another delivery of this step already saved is not scanned again. A rate
+ * limit returns the wait instead of throwing, so the Workflow sleeps without
+ * spending a retry; any other failure is reported and kept on the Run for
+ * the failure step, then thrown for the step to retry.
+ */
+// eslint-disable-next-line complexity -- One page's claim, replay check, rate-limit wait, failure record and saved checkpoint share this boundary.
+export async function scanVendorMailPage(
+  db: Database,
+  params: WorkflowRunParams,
+  page: number,
   options: {
-    page?: number;
     search?: typeof import("./search").searchVendorOrderMail;
-    publish?: typeof import("~/server/background-tasks/publish").publishBackgroundTasks;
     reportError?: typeof reportServerError;
+    now?: () => Date;
   } = {},
-) {
+): Promise<VendorMailPageResult> {
+  const row = await claimWorkflowRun(db, params);
+  if (!row) return { kind: "stopped" };
+  const job = readJob({ ...row, runId: row.id, runShortcode: row.shortcode });
+  if (job.progress.pagesScanned > page)
+    return job.progress.nextPageToken === null
+      ? { kind: "done" }
+      : { kind: "more", nextPage: page + 1 };
+  if (job.progress.pagesScanned < page)
+    throw new Error(
+      `Gmail search Run is at page ${job.progress.pagesScanned + 1}, not ${page + 1}`,
+    );
   const database = getDb(db);
-  const [row] = await database
-    .select(jobColumns)
-    .from(runTable)
-    .where(and(mailSearchRun, eq(runTable.id, runEntityId.parse(jobId))))
-    .limit(1);
-  if (!row) return "skipped" as const;
-  const job = readJob(row);
-  const page = options.page ?? 0;
-  const [claimed] = await database
+  const owned = and(
+    eq(runTable.id, job.runId),
+    eq(runTable.status, "running"),
+    attemptIs(params.attempt),
+    pagesScannedIs(page),
+  );
+  await database
     .update(runTable)
-    .set({ progress: patchProgress({ phase: "running", error: null }) })
-    .where(
-      and(eq(runTable.id, job.runId), phaseIs("queued"), pagesScannedIs(page)),
-    )
-    .returning({ runId: runTable.id });
-  if (!claimed) return "skipped" as const;
+    .set({
+      progress: patchProgress({ phase: "running", error: null, retryAt: null }),
+    })
+    .where(owned);
   const cursor =
     page === 0 ? job.progress.pageToken : job.progress.nextPageToken;
   const recordProgress = async (
@@ -377,16 +271,23 @@ export async function runVendorMailSearchJob(
     counts?: { searched?: number; skipped?: number },
   ) => {
     await database.transaction(async (tx) => {
-      if (counts)
-        await tx
-          .update(runTable)
-          .set({
-            progress: patchProgress({
-              searched: job.progress.searched + (counts.searched ?? 0),
-            }),
-            skipped: job.skipped + (counts.skipped ?? 0),
-          })
-          .where(eq(runTable.id, job.runId));
+      // The update doubles as the ownership check: a cancelled or superseded
+      // attempt writes no progress line.
+      const [stillOwned] = await tx
+        .update(runTable)
+        .set(
+          counts
+            ? {
+                progress: patchProgress({
+                  searched: job.progress.searched + (counts.searched ?? 0),
+                }),
+                skipped: job.skipped + (counts.skipped ?? 0),
+              }
+            : { updatedAt: new Date() },
+        )
+        .where(owned)
+        .returning({ id: runTable.id });
+      if (!stillOwned) return;
       await tx.insert(runProgress).values({
         runId: job.runId,
         eventId: crypto.randomUUID(),
@@ -396,6 +297,9 @@ export async function runVendorMailSearchJob(
     });
   };
   await recordProgress("running", `Searching Gmail page ${page + 1}`);
+  let result: Awaited<
+    ReturnType<typeof import("./search").searchVendorOrderMail>
+  >;
   try {
     const search =
       options.search ?? (await import("./search")).searchVendorOrderMail;
@@ -409,7 +313,7 @@ export async function runVendorMailSearchJob(
       .limit(1);
     if (!vendorRecord)
       throw new Error("Vendor for Gmail search no longer exists");
-    const result = await search(
+    result = await search(
       db,
       {
         vendorId: vendorRecord.shortcode,
@@ -417,201 +321,107 @@ export async function runVendorMailSearchJob(
         pageToken: cursor ?? undefined,
         searchTerms: job.input.searchTerms,
       },
-      buildActorContext(job.actorUserId, "system", {
-        runId: job.runId,
-      }),
+      buildActorContext(job.actorUserId, "system", { runId: job.runId }),
       recordProgress,
     );
     if (result.nextPageToken && result.nextPageToken === cursor)
       throw new Error("Gmail returned the same page cursor twice");
-    const hasNextPage = result.nextPageToken !== null;
-    const pagesScanned = page + 1;
-    const searched = job.progress.searched + result.searched;
-    const skipped = job.skipped + result.skipped;
-    const reviewable = job.progress.reviewable + result.reviewable;
-    const finishedAt = hasNextPage ? null : new Date();
-    await database.transaction(async (tx) => {
-      await tx
-        .update(runTable)
-        .set({
-          progress: patchProgress({
-            phase: hasNextPage ? "queued" : "completed",
-            searched,
-            reviewable,
-            pagesScanned,
-            nextPageToken: result.nextPageToken,
-          }),
-          skipped,
-          // Undefined leaves a column alone: only the last page closes the Run.
-          status: finishedAt ? "completed" : undefined,
-          endedAt: finishedAt ?? undefined,
-        })
-        .where(eq(runTable.id, job.runId));
-      await tx.insert(runProgress).values({
-        runId: job.runId,
-        eventId: crypto.randomUUID(),
-        phase: hasNextPage ? "page_completed" : "completed",
-        detail: `Checked ${searched} messages across ${pagesScanned} pages; ${skipped} already saved; ${reviewable} order emails to review${hasNextPage ? "; continuing" : ""}`,
-      });
-    });
-    if (hasNextPage) {
-      const publish =
-        options.publish ??
-        (await import("~/server/background-tasks/publish"))
-          .publishBackgroundTasks;
-      await publish(
-        db,
-        [
-          {
-            kind: "vendor-mail.search",
-            jobId: job.runId,
-            page: pagesScanned,
-            requestedAt: new Date().toISOString(),
-          },
-        ],
-        { source: "vendor-mail.search" },
-      );
-    }
-    return "succeeded" as const;
   } catch (error) {
-    const message = jobErrorText(
+    const now = (options.now ?? (() => new Date()))();
+    const delay = aiGatewayRateLimitDelayMs(
       error instanceof Error ? error : String(error),
+      now.getTime(),
     );
-    const [current] = await database
-      .select({ progress: runTable.progress })
-      .from(runTable)
-      .where(eq(runTable.id, job.runId))
-      .limit(1);
-    const savedPages = current?.progress
-      ? mailSearchRunProgress.parse(current.progress).pagesScanned
-      : page;
-    const checkpointSaved = savedPages > page;
-    if (isAiGatewayRateLimit(error) && !checkpointSaved) {
-      await database.transaction(async (tx) => {
-        await tx
-          .update(runTable)
-          .set({
-            progress: patchProgress({
-              phase: "queued",
-              error: message,
-              searched: job.progress.searched,
-            }),
-            skipped: job.skipped,
+    const message = runFailureText(
+      error instanceof Error ? error : String(error),
+      delay === null
+        ? (options.reportError ?? reportServerError)(error, {
+            operation: "vendor-mail.search",
+            stage: "page",
           })
-          .where(eq(runTable.id, job.runId));
-        await tx.insert(runProgress).values({
-          runId: job.runId,
-          eventId: crypto.randomUUID(),
-          phase: "rate_limited",
-          detail:
-            "AI Gateway rate limited this page. Retrying in about two minutes.",
-        });
-      });
-      throw error;
-    }
-    const eventId = (options.reportError ?? reportServerError)(error, {
-      operation: "vendor-mail.search",
-      stage: "run",
-    });
-    const failureMessage = jobErrorText(
-      error instanceof Error ? error : String(error),
-      eventId,
+        : undefined,
     );
-    const finishedAt = new Date();
-    await database.transaction(async (tx) => {
-      await tx
-        .update(runTable)
-        .set({
-          // A failed page after a saved checkpoint keeps that page's totals.
-          progress: patchProgress(
-            checkpointSaved
-              ? { phase: "failed", error: null }
-              : {
-                  phase: "failed",
-                  error: null,
-                  searched: job.progress.searched,
-                },
-          ),
-          skipped: checkpointSaved ? undefined : job.skipped,
-          status: "failed",
-          endedAt: finishedAt,
-          failureCode: checkpointSaved
-            ? "vendor_mail_publish_failed"
-            : "vendor_mail_search_failed",
-          dispatchError: failureMessage,
-        })
-        .where(eq(runTable.id, job.runId));
-      await tx.insert(runProgress).values({
-        runId: job.runId,
-        eventId: crypto.randomUUID(),
-        phase: "failed",
-        detail: failureMessage.split("\n", 1)[0],
-      });
-    });
-    // The Gmail client has already made its bounded retry attempts. Ack this
-    // delivery so a manual retry cannot race a delayed queue replay.
-    log.error("search failed", { error });
-    return "succeeded" as const;
-  }
-}
-
-/** Repair a worker interruption or a lost handoff after a saved page. */
-export async function recoverStaleVendorMailSearchJobs(
-  db: Database,
-  options: {
-    publish?: typeof import("~/server/background-tasks/publish").publishBackgroundTasks;
-  } = {},
-) {
-  const database = getDb(db);
-  const cutoff = new Date(Date.now() - 15 * 60_000);
-  const stale = await database
-    .select({
-      runId: runTable.id,
-      page: sql<number>`(${runTable.progress}->>'pagesScanned')::int`,
-      updatedAt: runTable.updatedAt,
-    })
-    .from(runTable)
-    .where(
-      and(mailSearchRun, phaseIn(activePhases), lt(runTable.updatedAt, cutoff)),
-    )
-    .orderBy(runTable.updatedAt)
-    .limit(50);
-  const publish =
-    options.publish ??
-    (await import("~/server/background-tasks/publish")).publishBackgroundTasks;
-  let republished = 0;
-  for (const job of stale) {
-    const [claimed] = await database
+    // The page's partial counts are undone; a retry scans it from the start.
+    await database
       .update(runTable)
-      .set({ progress: patchProgress({ phase: "queued" }) })
-      .where(
-        and(
-          eq(runTable.id, job.runId),
-          eq(runTable.updatedAt, job.updatedAt),
-          phaseIn(activePhases),
-        ),
-      )
-      .returning({ runId: runTable.id });
-    if (!claimed) continue;
-    await database.insert(runProgress).values({
+      .set({
+        progress: patchProgress({
+          phase: delay === null ? "running" : "waiting",
+          error: message,
+          searched: job.progress.searched,
+          retryAt:
+            delay === null
+              ? null
+              : new Date(now.getTime() + delay).toISOString(),
+        }),
+        skipped: job.skipped,
+      })
+      .where(owned);
+    if (delay === null) throw error;
+    await recordRunProgress(
+      db,
+      job.runId,
+      "rate_limited",
+      `AI Gateway rate limited page ${page + 1}; retrying in ${Math.ceil(delay / 1000)}s`,
+    );
+    return { kind: "rate_limited", retryAfterMs: delay };
+  }
+  const hasNextPage = result.nextPageToken !== null;
+  const pagesScanned = page + 1;
+  const searched = job.progress.searched + result.searched;
+  const skipped = job.skipped + result.skipped;
+  const reviewable = job.progress.reviewable + result.reviewable;
+  const finishedAt = hasNextPage ? null : new Date();
+  const saved = await database.transaction(async (tx) => {
+    const [checkpoint] = await tx
+      .update(runTable)
+      .set({
+        progress: patchProgress({
+          phase: hasNextPage ? "queued" : "completed",
+          searched,
+          reviewable,
+          pagesScanned,
+          nextPageToken: result.nextPageToken,
+          error: null,
+          retryAt: null,
+        }),
+        skipped,
+        // Undefined leaves a column alone: only the last page closes the Run.
+        status: finishedAt ? "completed" : undefined,
+        endedAt: finishedAt ?? undefined,
+      })
+      .where(owned)
+      .returning({ id: runTable.id });
+    if (!checkpoint) return false;
+    await tx.insert(runProgress).values({
       runId: job.runId,
       eventId: crypto.randomUUID(),
-      phase: "resumed",
-      detail: `Resuming Gmail page ${job.page + 1} after an interrupted handoff`,
+      phase: hasNextPage ? "page_completed" : "completed",
+      detail: `Checked ${searched} messages across ${pagesScanned} pages; ${skipped} already saved; ${reviewable} order emails to review${hasNextPage ? "; continuing" : ""}`,
     });
-    await publish(
-      db,
-      [
-        {
-          kind: "vendor-mail.search",
-          jobId: job.runId,
-          page: job.page,
-          requestedAt: new Date().toISOString(),
-        },
-      ],
-      { source: "vendor-mail.recover" },
-    );
-    republished += 1;
-  }
-  return republished;
+    return true;
+  });
+  if (!saved) return { kind: "stopped" };
+  return hasNextPage
+    ? { kind: "more", nextPage: pagesScanned }
+    : { kind: "done" };
+}
+
+/**
+ * The Workflow's failure step: fail this attempt's Run with the diagnostic
+ * the failed page saved (its full cause chain and Sentry event), or with the
+ * step error Cloudflare rethrew when no page saved one.
+ */
+export async function failVendorMailSearch(
+  db: Database,
+  params: WorkflowRunParams,
+  stepError: string,
+): Promise<void> {
+  const row = await claimWorkflowRun(db, params);
+  if (!row) return;
+  const saved = mailSearchRunProgress.safeParse(row.progress);
+  await failWorkflowRun(db, params, {
+    failureCode: "vendor_mail_search_failed",
+    message: (saved.success ? saved.data.error : null) ?? stepError,
+  });
 }

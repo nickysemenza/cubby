@@ -37,7 +37,11 @@ import {
   vendorAccount,
   user,
 } from "~/server/db/schema";
-import { getDb, notDeleted } from "~/server/repo/database-helpers";
+import {
+  getDb,
+  notDeleted,
+  withTransaction,
+} from "~/server/repo/database-helpers";
 import { cents } from "~/server/repo/money";
 import { resolveOrThrow } from "~/server/repo/shortcode-resolver";
 import {
@@ -56,7 +60,6 @@ import {
   type OrderMailAttachmentStorage,
 } from "./attachment-storage";
 import { orderAmountsInHuntWindow, uniqueOrderSubsetIds } from "./match";
-import type { GmailOrderMailAttachment } from "./types";
 import {
   matchesConfiguredVendorSender,
   matchesVendorSender,
@@ -203,7 +206,6 @@ export async function attachPendingOrderMailEvidence(
 export async function processOrderMails(
   db: Database,
   messageIds: readonly string[],
-  _attachments: readonly GmailOrderMailAttachment[] = [],
   ports: OrderMailPorts = productionOrderMailPorts,
   runId?: RunId,
 ): Promise<number> {
@@ -276,31 +278,36 @@ export async function processOrderMails(
             ),
           )
           .limit(1);
-        if (!actorSnapshot?.actorUserId)
+        const actorUserId = actorSnapshot?.actorUserId;
+        if (!actorSnapshot || !actorUserId)
           throw new Error("Order mail party has no controlling member");
         const runId = runEntityId.parse(crypto.randomUUID());
-        await insertWithShortcode(db, "run", {
-          id: runId,
-          ledgerPartyId: mail.ledgerPartyId,
-          actorUserId: actorSnapshot.actorUserId,
-          actorName: actorSnapshot.actorName,
-          actorEmail: actorSnapshot.actorEmail,
-          actorLedgerPartyShortcode: actorSnapshot.actorLedgerPartyShortcode,
-          actorLedgerPartyName: actorSnapshot.actorLedgerPartyName,
-          actorLedgerPartyKind: actorSnapshot.actorLedgerPartyKind,
-          trigger: "discovery",
-          status: "needs_review",
-          agentSessionId: importRunAgentIdentity(runId, "account_sync"),
-          endedAt: new Date(),
-        });
-        await database.insert(runFinding).values({
-          runId: runId,
-          ledgerPartyId: mail.ledgerPartyId,
-          entityKind: "run",
-          entityId: runId,
-          kind: "unclassified_vendor",
-          summary: `Purchase mail from ${mail.sender} does not match a known vendor. Create or update the vendor's order-email sender list.`,
-          evidenceFingerprint: fingerprint,
+        // One unit: a replay after the Run committed without its finding
+        // would find no open finding and mint a second Run.
+        await withTransaction(db, async (tx) => {
+          await insertWithShortcode(tx, "run", {
+            id: runId,
+            ledgerPartyId: mail.ledgerPartyId,
+            actorUserId,
+            actorName: actorSnapshot.actorName,
+            actorEmail: actorSnapshot.actorEmail,
+            actorLedgerPartyShortcode: actorSnapshot.actorLedgerPartyShortcode,
+            actorLedgerPartyName: actorSnapshot.actorLedgerPartyName,
+            actorLedgerPartyKind: actorSnapshot.actorLedgerPartyKind,
+            trigger: "discovery",
+            status: "needs_review",
+            agentSessionId: importRunAgentIdentity(runId, "account_sync"),
+            endedAt: new Date(),
+          });
+          await tx.insert(runFinding).values({
+            runId: runId,
+            ledgerPartyId: mail.ledgerPartyId,
+            entityKind: "run",
+            entityId: runId,
+            kind: "unclassified_vendor",
+            summary: `Purchase mail from ${mail.sender} does not match a known vendor. Create or update the vendor's order-email sender list.`,
+            evidenceFingerprint: fingerprint,
+          });
         });
       }
       processed += 1;

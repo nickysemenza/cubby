@@ -5,7 +5,6 @@ import type { SearchableEntityRef } from "@cubby/schemas/search";
 import { createLogger } from "@cubby/worker-tracing";
 
 import type { UnparsedError } from "~/lib/error-utils";
-import { isAiGatewayRateLimit } from "~/server/clients/ai-gateway-error";
 import type { Database } from "~/server/db";
 import { TraceNames, withTrace } from "~/server/tracing";
 
@@ -114,11 +113,7 @@ async function runBackgroundTask(
       { error },
     );
     ports.captureException(error);
-    message.retry(
-      task.kind === "vendor-mail.search" && isAiGatewayRateLimit(error)
-        ? { delaySeconds: 120 }
-        : undefined,
-    );
+    message.retry();
     return "failed";
   }
 }

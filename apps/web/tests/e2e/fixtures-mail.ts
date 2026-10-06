@@ -5,14 +5,26 @@ import * as schema from "~/server/db/schema";
 import { getDb } from "~/server/repo/database-helpers";
 import { insertWithShortcode } from "~/server/repo/shortcode-utils";
 import {
-  runVendorMailSearchJob,
+  failVendorMailSearch,
+  scanVendorMailPage,
   startVendorMailSearchJob,
 } from "~/server/purchase-import/gmail/search-job";
+import type { WorkflowLauncher } from "~/server/workflow-runs/launcher";
 import {
   getFixtureDb,
   fixtureUserId,
   ensureMemberParty,
 } from "./fixtures-core";
+
+/**
+ * Seeded Runs start no Workflow: the fixture drives the step bodies itself,
+ * as the Workflow would, with Gmail replaced at its external seam.
+ */
+const seededLauncher: WorkflowLauncher = {
+  create: async () => undefined,
+  terminate: async () => undefined,
+  status: async () => ({ state: "running", error: null }),
+};
 
 /** A synthetic recognized email with one exact Purchase candidate. */
 export async function seedVendorMailReviewPrerequisite(
@@ -78,7 +90,7 @@ export async function seedFailedVendorMailSearchRun(page: Page, name: string) {
     db,
     { vendorId: vendor.shortcode },
     buildActorContext(userId),
-    { publish: async () => ({ transport: "queue", count: 1 }) },
+    { launcher: seededLauncher },
   );
   const [savedRun] = await getDb(db)
     .select({ id: schema.run.id })
@@ -86,7 +98,8 @@ export async function seedFailedVendorMailSearchRun(page: Page, name: string) {
     .where(eq(schema.run.shortcode, started.runShortcode))
     .limit(1);
   if (!savedRun) throw new Error("Synthetic Gmail search Run was not saved");
-  await runVendorMailSearchJob(db, savedRun.id, {
+  const params = { runId: savedRun.id, attempt: 1 };
+  await scanVendorMailPage(db, params, 0, {
     reportError: () => "ffffffffffffffffffffffffffffffff",
     search: async () => {
       const provider = Object.assign(new Error("Synthetic upstream failure"), {
@@ -99,7 +112,8 @@ export async function seedFailedVendorMailSearchRun(page: Page, name: string) {
         { cause: provider },
       );
     },
-  });
+  }).catch(() => undefined);
+  await failVendorMailSearch(db, params, "Synthetic step failure");
   return { vendor, runShortcode: started.runShortcode };
 }
 
@@ -116,7 +130,7 @@ export async function seedLiveVendorMailSearchRun(page: Page, name: string) {
     db,
     { vendorId: vendor.shortcode },
     buildActorContext(userId),
-    { publish: async () => ({ transport: "queue", count: 1 }) },
+    { launcher: seededLauncher },
   );
   const [saved] = await getDb(db)
     .select({ id: schema.run.id })
@@ -125,17 +139,6 @@ export async function seedLiveVendorMailSearchRun(page: Page, name: string) {
   if (!saved) throw new Error("Synthetic Run was not saved");
   return {
     runShortcode: started.runShortcode,
-    async ageQueue() {
-      const old = new Date(Date.now() - 4 * 60_000);
-      await getDb(db)
-        .update(schema.run)
-        .set({ updatedAt: old })
-        .where(eq(schema.run.id, saved.id));
-      await getDb(db)
-        .update(schema.runProgress)
-        .set({ createdAt: old })
-        .where(eq(schema.runProgress.runId, saved.id));
-    },
     async advance() {
       await getDb(db).transaction(async (tx) => {
         await tx
@@ -148,6 +151,7 @@ export async function seedLiveVendorMailSearchRun(page: Page, name: string) {
               pagesScanned: 0,
               searched: 6,
               reviewable: 0,
+              attempt: 1,
             },
             skipped: 2,
           })
@@ -173,6 +177,7 @@ export async function seedLiveVendorMailSearchRun(page: Page, name: string) {
               pagesScanned: 1,
               searched: 6,
               reviewable: 1,
+              attempt: 1,
             },
             skipped: 2,
           })
@@ -198,23 +203,22 @@ export async function seedPagedVendorMailSearchRun(page: Page, name: string) {
     name,
     website: "https://example.test",
   });
-  const publish = async () => ({ transport: "queue" as const, count: 1 });
   const started = await startVendorMailSearchJob(
     db,
     { vendorId: vendor.shortcode },
     buildActorContext(userId),
-    { publish },
+    { launcher: seededLauncher },
   );
   const [saved] = await getDb(db)
     .select({ id: schema.run.id })
     .from(schema.run)
     .where(eq(schema.run.shortcode, started.runShortcode));
   if (!saved) throw new Error("Synthetic Run was not saved");
+  const params = { runId: saved.id, attempt: 1 };
   return {
     runShortcode: started.runShortcode,
     firstPage: () =>
-      runVendorMailSearchJob(db, saved.id, {
-        publish,
+      scanVendorMailPage(db, params, 0, {
         search: async () => ({
           searched: 10,
           skipped: 6,
@@ -224,9 +228,7 @@ export async function seedPagedVendorMailSearchRun(page: Page, name: string) {
         }),
       }),
     lastPage: () =>
-      runVendorMailSearchJob(db, saved.id, {
-        page: 1,
-        publish,
+      scanVendorMailPage(db, params, 1, {
         search: async (_db, input) => {
           if (input.pageToken !== "synthetic-next-page")
             throw new Error("The Gmail checkpoint was not used");

@@ -729,6 +729,7 @@ extension ActivityKind {
         case .background: "Background work"
         case .fileImport: "File import"
         case .mailSearch: "Mail search"
+        case .mailDiscovery: "Mail discovery"
         }
     }
 
@@ -743,6 +744,7 @@ extension ActivityKind {
         case .background: "arrow.triangle.2.circlepath"
         case .fileImport: "square.and.arrow.down"
         case .mailSearch: "envelope.badge"
+        case .mailDiscovery: "envelope.arrow.triangle.branch"
         }
     }
 }

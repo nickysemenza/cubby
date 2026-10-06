@@ -116,19 +116,6 @@ See also the image operational passes at the end of this file.
 
 ### Import and resume orders reliably
 
-- 🤔 **High priority: bound Gmail discovery memory and resume progress.**
-  `purchase-import/gmail/sync.ts` retains every message and attachment before
-  `hourly.ts` persists results and advances the cursor; a page-size limit does
-  not bound the whole sync. A synthetic 32-message scan with 4 MiB attachments
-  retains 170.7 MiB of encoded payloads, beyond a Worker's 128 MB memory limit.
-  Persist bounded batches and attachment references so an interrupted scan
-  resumes without downloading the whole backlog again. Evaluate Cloudflare
-  Workflows with the [durable-background-work proposal](#infra--deploy):
-  durable steps and retry waits can help, but each step still needs bounded
-  memory and small results (store attachment bytes in R2). Prove interruption,
-  duplicate delivery, expired Gmail history, and cursor correctness before
-  replacing the current path.
-
 - ⏳ **Conditional purchase-import browser extension.** Promote only if the
   Apple-event browser bridge repeatedly fails to background its window, cannot
   avoid Chrome's JavaScript-from-Apple-Events setting, or cannot provide
@@ -614,25 +601,27 @@ spanner"` → `adjustable wrench` (product); `"wet dry vac"` → `shop vacuum`
   paused by hand. Wanted: status in a Durable Object checked per request (503
   page except a new health route and the switch), by every queue consumer
   (`background-tasks/consume.ts`, `telemetry-queue.ts`, the purchase-agent
-  consumer), and by the agent's purchase-import run before each tool call (via a
+  consumer) and each Workflow-backed Run step (`server/workflow-runs/`), and by the agent's purchase-import run before each tool call (via a
   Run service); toggle from Settings and MCP. Decide first how
   consumers hold messages: a normally returning handler acks them, and
   `retry()` spends `max_retries: 3` with no dead-letter queue, so either call
   the Queues pause-delivery API from the toggle or retry with long delays.
 
-- 🤔 **Evaluate Cloudflare Workflows across durable background work.** Start
-  with the high-priority Gmail discovery memory repair above and vendor mail
-  search: decide instance identity for mailbox discovery; one instance per Run
-  for vendor search, bounded pages, a persisted cursor, and timed waits on AI
-  Gateway 429s. Define how a Run
-  exposes instance, step, retry time, attempts, and failure chain through the
-  generic detail view. Test version changes, cancellation, duplicate delivery,
-  and exhaustion before migrating; keep the queue path until a Workflow can
-  recover a paused Run. Then compare image processing, purchase import,
-  validation/enrichment, and backfills (search-index repair is the reference).
+- 🤔 **Move backfills onto Workflow-backed Runs.** Vendor mail search and
+  scheduled Gmail discovery run as Workflow-backed Runs (see
+  `docs/infrastructure.md#workflow-backed-runs`); search-index repair is the
+  other Workflow. Long, page-oriented backfills are the next fit: give each a
+  Run whose progress is the cursor and reuse `server/workflow-runs/`. Evaluated
+  and kept as they are: `cubby-background` tasks (single, freshness-gated and
+  idempotent, so a queue fits), image processing (a device-companion
+  WebSocket Durable Object with leases), the purchase agent (Agents SDK
+  Durable Object with pi-durable state), and telemetry (a batched queue).
   Device-local work (library scan, classification sweep, sighting backfill)
-  can post into `runProjection` as a transport addition. See
-  `docs/infrastructure.md`.
+  can post into `runProjection` as a transport addition.
+
+- ⏳ **Failed Runs on the Problems page.** Routine scheduled Runs are hidden
+  by default, so a failed scheduled pass is visible only in the Runs list.
+  Promote if one goes unnoticed.
 
 - ⏳ **TanStack Start observability.** Remove Cubby's wrapper when Start
   supplies named request/result/error events and exposes the dispatched

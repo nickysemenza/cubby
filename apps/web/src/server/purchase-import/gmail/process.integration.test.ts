@@ -260,7 +260,7 @@ describe("Gmail order mail processing", () => {
         ? classification
         : { events: [classification] },
     );
-    return processOrderMails(ctx.db, [messageId], [], ports);
+    return processOrderMails(ctx.db, [messageId], ports);
   }
 
   const huntFor = async (financialTransactionId: string) => {
@@ -462,8 +462,8 @@ describe("Gmail order mail processing", () => {
       events: [placed("FW-SYN-3001", 25, "2026-09-10T15:00:00.000Z")],
     });
 
-    await processOrderMails(ctx.db, ["mail-first-order"], [], ports);
-    await processOrderMails(ctx.db, ["mail-first-order"], [], ports);
+    await processOrderMails(ctx.db, ["mail-first-order"], ports);
+    await processOrderMails(ctx.db, ["mail-first-order"], ports);
 
     const accounts = await getDb(ctx.db)
       .select({
@@ -518,7 +518,7 @@ describe("Gmail order mail processing", () => {
     if (!mail) throw new Error("test setup: mail missing");
     await insertPendingPdf(mail.id, "att-dismissed", "pdf-dismissed");
 
-    await processOrderMails(ctx.db, ["msg-dismissed-pdf"], [], ports);
+    await processOrderMails(ctx.db, ["msg-dismissed-pdf"], ports);
 
     const [attachment] = await getDb(ctx.db)
       .select({ imageId: orderMailAttachment.imageId })
@@ -542,7 +542,7 @@ describe("Gmail order mail processing", () => {
       events: [placed("FW-SYN-5002", 42, "2026-09-10T15:00:00.000Z")],
     });
 
-    await processOrderMails(ctx.db, ["msg-revised"], [], ports);
+    await processOrderMails(ctx.db, ["msg-revised"], ports);
 
     const events = await getDb(ctx.db)
       .select({
@@ -964,7 +964,7 @@ describe("Gmail order mail processing", () => {
     ]);
 
     // Replaying the first refund mail is still a no-op.
-    await processOrderMails(ctx.db, ["msg-refund-1"], [], ports);
+    await processOrderMails(ctx.db, ["msg-refund-1"], ports);
     expect(await refundFindings()).toHaveLength(2);
   });
 
@@ -1112,7 +1112,6 @@ describe("Gmail order mail processing", () => {
     await processOrderMails(
       ctx.db,
       ["msg-mail-first", "msg-history-first"],
-      [],
       ports,
     );
     expect(await attachmentsOn(mailFirst[0]!.id)).toHaveLength(1);

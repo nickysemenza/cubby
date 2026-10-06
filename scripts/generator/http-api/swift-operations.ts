@@ -962,7 +962,6 @@ const CLIENT_PASSTHROUGH_METHODS = {
   "run.workSnapshot": { method: "runWorkSnapshot", doc: null },
   "run.control": { method: "controlRun", doc: null },
   "run.commitPrepared": { method: "commitPreparedImport", doc: null },
-  "run.retryGmailSearch": { method: "retryGmailSearch", doc: null },
   "statementRow.commitCsv": { method: "commitStatementCsv", doc: null },
   "statementRow.previewCsv": { method: "previewStatementCsv", doc: null },
   "task.todayBriefing": {

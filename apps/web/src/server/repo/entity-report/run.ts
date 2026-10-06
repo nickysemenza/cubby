@@ -69,9 +69,6 @@ const IMPORT_PURPOSES: ReadonlySet<string> = new Set(IMPORT_WORKFLOW_PURPOSES);
 export const isLiveRunStatus = (status: string): boolean =>
   LIVE_STATUSES.has(status);
 
-/** A queued task that has not started after this long may be resent to the queue. */
-const QUEUE_RETRY_AFTER_SECONDS = 180;
-
 const toneForState = (state: string): Tone | undefined => {
   if (state === "completed") return "positive";
   if (state === "failed" || state === "cancelled" || state === "aborted")
@@ -701,59 +698,126 @@ type GmailProgress = NonNullable<RunLiveProgress["gmail"]>;
 function progressHeadline(progress: RunLiveProgress): string {
   const active = progress.status === "running";
   const last = progress.progress.at(-1);
-  if (active && progress.gmail?.status === "queued")
-    return last?.phase === "rate_limited"
-      ? "AI Gateway rate limited; waiting to retry"
-      : "Waiting for background worker";
+  if (active && progress.gmail?.status === "waiting")
+    return progress.gmail.retryAt
+      ? `AI Gateway rate limited; retrying at ${dateTimeLabel(progress.gmail.retryAt)}`
+      : "AI Gateway rate limited; waiting to retry";
   if (active) return last?.detail ?? "Working…";
-  if (progress.status === "completed") return "Run completed";
+  if (progress.status === "completed")
+    return progress.discovery?.routine ? "Nothing new" : "Run completed";
   if (progress.status === "failed") return "Run failed";
   return phaseLabel(progress.status);
 }
 
-/** How long the run has waited or gone quiet, while it is live. */
+/** How long the run has gone quiet, while it is live. */
 function progressAge(progress: RunLiveProgress): string | null {
   if (progress.status !== "running") return null;
   const last = progress.progress.at(-1);
-  if (progress.gmail?.status === "queued")
-    return `Waiting for ${minutesSeconds(last?.ageSeconds ?? 0)}`;
   return last && last.ageSeconds > 10
     ? `Last update ${minutesSeconds(last.ageSeconds)} ago`
     : "Updating live";
 }
 
-/** A queued Gmail task that has sat unstarted this long may be resent to the queue. */
-function queueRetryBlocks(
+/**
+ * The Workflow behind a Gmail Run: its current attempt as Cloudflare reports
+ * it, with cancel while it runs and retry once it failed. A retry starts a
+ * new attempt that resumes from the Run's saved progress.
+ */
+function workflowBlocks(
   runId: RunDetail["publicId"],
   progress: RunLiveProgress,
 ): ReportBlock[] {
-  const waiting =
-    progress.status === "running" && progress.gmail?.status === "queued";
-  if (
-    !waiting ||
-    (progress.progress.at(-1)?.ageSeconds ?? 0) < QUEUE_RETRY_AFTER_SECONDS
-  )
-    return [];
+  const workflow = progress.workflow;
+  if (!workflow) return [];
+  const instance = workflow.instance
+    ? workflow.instance.state === "missing"
+      ? "no longer retained by Cloudflare"
+      : phaseLabel(workflow.instance.state).toLowerCase()
+    : "status unavailable";
+  const actions: ReportCommand[] =
+    progress.status === "running"
+      ? [
+          {
+            id: "cancel",
+            label: "Cancel run",
+            prominent: false,
+            confirm: "Cancel this Run? Work already saved stays saved.",
+            request: {
+              kind: "run-control",
+              runId,
+              action: "cancel",
+              operationId: null,
+              approvalId: null,
+            },
+          },
+        ]
+      : progress.status === "failed"
+        ? [
+            {
+              id: "retry",
+              label: "Retry run",
+              prominent: true,
+              confirm: null,
+              request: {
+                kind: "run-control",
+                runId,
+                action: "retry",
+                operationId: null,
+                approvalId: null,
+              },
+            },
+          ]
+        : [];
   return [
     records(
       [
-        row("queue", {
-          title:
-            "The saved task has not started. Resend it to the background queue.",
-          actions: [
-            {
-              id: "retry-gmail-search",
-              label: "Retry queue delivery",
-              prominent: false,
-              confirm: null,
-              request: { kind: "retry-gmail-search", runId },
-            },
-          ],
+        row("workflow", {
+          title: `Attempt ${workflow.attempt} · ${workflow.instanceId}`,
+          body: `Workflow instance ${instance}${workflow.instance?.error ? `: ${workflow.instance.error}` : ""}`,
+          actions,
         }),
       ],
-      { title: "Background queue" },
+      { title: "Workflow" },
     ),
   ];
+}
+
+type DiscoveryProgress = NonNullable<RunLiveProgress["discovery"]>;
+
+function discoveryCountsBlock(
+  discovery: DiscoveryProgress,
+  active: boolean,
+): ReportBlock {
+  const sentence = (id: string, text: string) => row(id, { title: text });
+  return records([
+    ...(discovery.mode
+      ? [sentence("mode", `Mailbox ${discovery.mode.replaceAll("_", " ")}`)]
+      : []),
+    ...(active && discovery.batches !== null
+      ? [
+          sentence(
+            "batches",
+            `${discovery.batchesDone} of ${discovery.batches} batches saved`,
+          ),
+        ]
+      : []),
+    sentence(
+      "saved",
+      `${discovery.saved} ${discovery.saved === 1 ? "message" : "messages"} saved`,
+    ),
+    sentence("events", `${discovery.events} history changes recorded`),
+    ...(discovery.deleted
+      ? [sentence("deleted", `${discovery.deleted} deleted before fetching`)]
+      : []),
+    ...(discovery.droppedEvents
+      ? [
+          sentence(
+            "dropped",
+            `${discovery.droppedEvents} changes about mail Cubby never saved`,
+          ),
+        ]
+      : []),
+  ]);
 }
 
 function gmailCountsBlock(
@@ -856,8 +920,11 @@ export function liveProgressBlocks(
     ...(gmail?.hasMorePages && active
       ? [note("Continuing to older messages")]
       : []),
-    ...queueRetryBlocks(runId, progress),
+    ...workflowBlocks(runId, progress),
     ...(gmail ? [gmailCountsBlock(gmail, progress.status)] : []),
+    ...(progress.discovery
+      ? [discoveryCountsBlock(progress.discovery, active)]
+      : []),
     ...selectionBlocks(progress),
     ...(gmail ? [searchInputsBlock(gmail)] : []),
     ...(gmail?.error

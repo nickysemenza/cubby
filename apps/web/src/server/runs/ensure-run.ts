@@ -6,7 +6,12 @@ import {
   userId,
 } from "@cubby/schemas/identifiers";
 import type { RunTrigger } from "@cubby/schemas/purchase-import";
-import { type RunPurpose, runStatus } from "@cubby/schemas/run-fields";
+import {
+  type RunInput,
+  type RunProgress,
+  type RunPurpose,
+  runStatus,
+} from "@cubby/schemas/run-fields";
 import { and, eq } from "drizzle-orm";
 
 import type { Database } from "~/server/db";
@@ -40,6 +45,9 @@ export type EnsureRunInput = {
    */
   status?: "running" | "completed";
   notes?: string;
+  /** Saved with the row, so a Run is never visible without its work. */
+  input?: RunInput;
+  progress?: RunProgress;
 };
 
 /**
@@ -96,6 +104,8 @@ export async function ensureRun(
     deviceId: actor.deviceId,
     clientKey: input.clientKey ?? null,
     notes: input.notes ?? null,
+    input: input.input ?? null,
+    progress: input.progress ?? null,
   };
   if (!input.clientKey) {
     return (await insertWithShortcode(db, "run", values, generator)).id;

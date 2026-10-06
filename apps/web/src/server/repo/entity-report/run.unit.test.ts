@@ -778,7 +778,7 @@ describe("liveProgressBlocks", () => {
     status: "running" as const,
     progress: events([300, 200]),
     gmail: {
-      status: "queued" as const,
+      status: "waiting" as const,
       searched: 40,
       skipped: 10,
       reviewable: 3,
@@ -787,10 +787,18 @@ describe("liveProgressBlocks", () => {
       searchTerms: ["orders@fixture.test"],
       startedFromOlderPage: false,
       hasMorePages: true,
+      retryAt: null,
       error: null,
     },
+    discovery: null,
     orders: [{ orderId: "fixture-order", state: "pending" as const }],
     charges: [],
+    workflow: {
+      purpose: "mail_search" as const,
+      attempt: 2,
+      instanceId: `${RUN_ID}-2`,
+      instance: { state: "waiting" as const, error: null },
+    },
   };
   const actionsOf = (blocks: ReportBlock[]) =>
     blocks.flatMap((block) =>
@@ -799,21 +807,40 @@ describe("liveProgressBlocks", () => {
         : [],
     );
 
-  it("offers a queue retry only after a queued Gmail task has waited three minutes", () => {
-    const waiting = liveProgressBlocks(RUN_ID, progress);
-    expect(notes(waiting)[0]).toBe("AI Gateway rate limited; waiting to retry");
-    expect(actionsOf(waiting).map((action) => action.request)).toEqual([
-      { kind: "retry-gmail-search", runId: RUN_ID },
+  it("names the Workflow attempt and offers cancel while it runs, retry once failed", () => {
+    const running = liveProgressBlocks(RUN_ID, progress);
+    expect(notes(running)[0]).toBe("AI Gateway rate limited; waiting to retry");
+    expect(recordsOf(running, "Workflow").rows[0]).toMatchObject({
+      title: `Attempt 2 · ${RUN_ID}-2`,
+      subtitle: "Workflow instance waiting",
+    });
+    expect(actionsOf(running).map((action) => action.request)).toEqual([
+      {
+        kind: "run-control",
+        runId: RUN_ID,
+        action: "cancel",
+        operationId: null,
+        approvalId: null,
+      },
     ]);
-    // The retry block is titled so it never shares a key with the untitled progress rows.
-    expect(
-      waiting.find(
-        (block) => block.kind === "records" && block.rows[0]?.key === "queue",
-      ),
-    ).toMatchObject({ title: "Background queue" });
     expect(
       actionsOf(
-        liveProgressBlocks(RUN_ID, { ...progress, progress: events([20, 10]) }),
+        liveProgressBlocks(RUN_ID, {
+          ...progress,
+          status: "failed",
+          workflow: {
+            ...progress.workflow,
+            instance: { state: "missing", error: null },
+          },
+        }),
+      ).map(
+        (action) =>
+          action.request.kind === "run-control" && action.request.action,
+      ),
+    ).toEqual(["retry"]);
+    expect(
+      actionsOf(
+        liveProgressBlocks(RUN_ID, { ...progress, status: "completed" }),
       ),
     ).toEqual([]);
   });
