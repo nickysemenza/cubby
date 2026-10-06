@@ -47,9 +47,10 @@ export default defineConfig({
   forbidOnly: !!process.env.CI,
   /* Browser canaries are deterministic contracts; retries hide flakes. */
   retries: 0,
-  /* Each worker owns an isolated database and harness. Two local macOS
-     workers preserve the measured WebKit budget; other hosts default to one.
-     Use Playwright's --workers override, including CI's explicit two. */
+  /* Each worker owns an isolated database and harness. Three local macOS
+     workers made iPhone WebKit flake across four unrelated specs under host
+     contention, so macOS defaults to two and other hosts to one. Use
+     Playwright's --workers override, including CI's explicit two. */
   workers: !isCI && process.platform === "darwin" ? 2 : 1,
   /* Backstop for a dead worker harness, which fails every remaining test
      identically. Kept loose enough that a genuine multi-test regression still
