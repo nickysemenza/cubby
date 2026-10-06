@@ -430,7 +430,7 @@ jobs:
   web-checks:
     name: Web checks
     needs: [scope, build-worker, test-aux, test-postgres, db-check, test-e2e]
-    if: always() && (github.event_name == 'pull_request' || github.event_name == 'push' || (!inputs.simulator_e2e && inputs.tester_army == 'none'))
+    if: ${{ !cancelled() && (github.event_name == 'pull_request' || github.event_name == 'push' || (!inputs.simulator_e2e && inputs.tester_army == 'none')) }}
     runs-on: ubuntu-slim
     timeout-minutes: 5
     steps:
@@ -465,11 +465,9 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
       - uses: ./.github/actions/generate-apple-inputs
 
-  # Run package tests on the host before the generic Simulator build; never
-  # boot a Simulator here. Sequential phases share one macOS runner without
-  # competing for its cores, and retain their separate compiled-product caches.
-  test-apple:
-    name: Apple checks
+  # Separate SDK builds run in parallel; neither job boots a Simulator.
+  test-apple-host:
+    name: Apple host tests
     needs: [scope, apple-generated]
     if: needs.scope.outputs.apple == 'true'
     runs-on: macos-26
@@ -522,11 +520,15 @@ jobs:
           cache-hit: ${{ steps.spm-build.outputs.cache-hit }}
           matched-key: ${{ steps.spm-build.outputs.cache-matched-key }}
 
-      # Cache restore overlays directories. Remove the host-only framework
-      # before restoring the simulator slice so its source/certificate hashes
-      # are independent of whether either target's cache hit or missed.
-      - name: Replace host FFI with simulator FFI
-        run: rm -rf apps/apple/CubbyKit/Frameworks/CubbyFFI.xcframework
+  test-apple-simulator:
+    name: Apple simulator build
+    needs: [scope, apple-generated]
+    if: needs.scope.outputs.apple == 'true'
+    runs-on: macos-26
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - uses: ./.github/actions/download-apple-inputs
       - uses: ./.github/actions/setup-apple-ffi
         with:
           targets: sim
@@ -555,6 +557,25 @@ jobs:
           key: ${{ steps.apple-tools.outputs.spm-clones-cache-key }}
           cache-hit: ${{ steps.apple-tools.outputs.spm-clones-cache-hit }}
           matched-key: ${{ steps.apple-tools.outputs.spm-clones-cache-matched-key }}
+
+  # Keep the required context stable and fail if either selected build fails,
+  # is canceled, or is unexpectedly skipped.
+  test-apple:
+    name: Apple checks
+    needs: [scope, test-apple-host, test-apple-simulator]
+    if: ${{ !cancelled() && needs.scope.result == 'success' && needs.scope.outputs.apple == 'true' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Require both Apple jobs
+        env:
+          HOST_RESULT: ${{ needs.test-apple-host.result }}
+          SIMULATOR_RESULT: ${{ needs.test-apple-simulator.result }}
+        run: |
+          if [[ "$HOST_RESULT" != success || "$SIMULATOR_RESULT" != success ]]; then
+            echo "::error::Apple host tests: $HOST_RESULT; Apple simulator build: $SIMULATOR_RESULT"
+            exit 1
+          fi
 
   # Release-only FFI caches use dist, while the required Apple checks use
   # release. Warm both dist targets sequentially after the required native
