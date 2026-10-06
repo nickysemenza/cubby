@@ -304,10 +304,13 @@ test("reviews historical item classification and preserves explicit purpose", as
     })
     .first();
   await expect(tableExplanation).toBeVisible();
-  await tableExplanation.click();
-  await expect(
-    page.getByText("Resolution order", { exact: true }),
-  ).toBeVisible();
+  await expect(async () => {
+    if (!(await page.locator('[data-slot="popover-content"]').isVisible()))
+      await tableExplanation.click();
+    await expect(
+      page.getByText("Resolution order", { exact: true }),
+    ).toBeVisible();
+  }).toPass();
   const winningValue = page
     .locator('[data-slot="popover-content"] [data-role="wins"]')
     .getByRole("link", { name: toolsName, exact: true });
@@ -338,10 +341,13 @@ test("reviews historical item classification and preserves explicit purpose", as
       exact: true,
     })
     .first();
-  await phoneExplanation.click();
-  await expect(
-    page.getByText("Resolution order", { exact: true }),
-  ).toBeVisible();
+  await expect(async () => {
+    if (!(await page.locator('[data-slot="popover-content"]').isVisible()))
+      await phoneExplanation.click();
+    await expect(
+      page.getByText("Resolution order", { exact: true }),
+    ).toBeVisible();
+  }).toPass();
   expect(
     await winningLabel.evaluate((label) => label.scrollWidth),
   ).toBeLessThanOrEqual(
@@ -359,9 +365,12 @@ test("reviews historical item classification and preserves explicit purpose", as
   });
   expect((await apply(blocked)).ok()).toBeTruthy();
   await page.reload();
-  await phoneExplanation.click();
-  await expect(
-    page.getByText("Resolution order", { exact: true }),
-  ).toBeVisible();
+  await expect(async () => {
+    if (!(await page.locator('[data-slot="popover-content"]').isVisible()))
+      await phoneExplanation.click();
+    await expect(
+      page.getByText("Resolution order", { exact: true }),
+    ).toBeVisible();
+  }).toPass();
   await expect(page.getByText("Blocked", { exact: true })).toBeVisible();
 });

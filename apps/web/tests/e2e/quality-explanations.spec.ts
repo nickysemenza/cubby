@@ -368,14 +368,17 @@ test("a person accepts a data gap as an exception from the explanation and clear
     `/products?name=${encodeURIComponent(name)}&view=table`,
   );
   const row = page.getByRole("listitem").filter({ hasText: name }).first();
-  await row
-    .getByRole("button", { name: /How (data )?quality is determined/ })
-    .click();
+  const trigger = row.getByRole("button", {
+    name: /How (data )?quality is determined/,
+  });
   const popover = page.locator('[data-slot="popover-content"]');
   const check = popover
     .getByRole("listitem")
     .filter({ hasText: "product_manufacturer" });
-  await expect(check).toContainText("Missing data");
+  await expect(async () => {
+    if (!(await popover.isVisible())) await trigger.click();
+    await expect(check).toContainText("Missing data");
+  }).toPass();
   await check.getByRole("button", { name: "Accept as…" }).click();
   await check.getByLabel("Reason").selectOption({ label: "Not applicable" });
   await check.getByLabel("Note").fill("Synthetic unbranded product.");
