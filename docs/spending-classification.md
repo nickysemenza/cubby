@@ -50,9 +50,12 @@ Expense's effective category runs only as a reviewed `spendingCategoryMerge`
 change, and like every reviewed change it refuses when a moved Product-linked
 line lands in a `not_allowed` category. The plain `entity.merge` path applies
 only merges that move no Expense history, such as folding an unused category.
-A merge locks Expense writes and the keeper and merged rows before it checks
-liveness and history, so a concurrent Expense or deletion either lands first
-and is seen, or waits for the merge.
+Both merge paths first lock the keeper and merged categories and refuse one
+that is no longer live, so writes referencing them wait for the merge. A writer
+that resolved a merged category earlier can still commit its reference
+afterward; this race is accepted, the referential-liveness problem reports the
+dangling reference, and `problems.repointMergedReferences` moves it to the
+survivor.
 
 Splitting an Expense preserves its category when a part omits the field, resets
 it when a part supplies null, and stores an explicit category when supplied.

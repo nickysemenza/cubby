@@ -68,7 +68,7 @@ import type { Database } from "~/server/db";
 import { ENTITY_EDGE_SEMANTICS } from "~/server/db/entity-edge-semantics";
 import { INCOMING_EDGES } from "~/server/db/entity-incoming-edges";
 import { entityLink } from "~/server/db/schema";
-import { getDb } from "~/server/repo/database-helpers";
+import { getDb, withTransaction } from "~/server/repo/database-helpers";
 import { findDirectedDependencyCycles } from "~/server/repo/database-helpers/dependency-graph";
 import { liveLinks } from "~/server/repo/entity-links";
 import { lookupShortcodes } from "~/server/repo/shortcode-resolver";
@@ -340,6 +340,36 @@ export const findReferentialLivenessViolations = async (
     };
   });
 };
+
+/**
+ * The one unambiguous repair for a dangling reference: its target was merged
+ * away, so the reference moves to the live survivor its `Entity` row redirects
+ * to (`mergedIntoId` is path-compressed, so one hop). A reference to a plain
+ * deletion has no survivor and stays reported. Link edges are skipped because
+ * their merge collisions follow their own declaration.
+ */
+export const repointMergedReferences = async (
+  db: Database,
+): Promise<{ repointed: number }> =>
+  withTransaction(db, async (tx) => {
+    let repointed = 0;
+    for (const spec of buildEdgeAuditSpecs()) {
+      if (spec.scope) continue;
+      const column = sql.identifier(spec.sourceColumnName);
+      const target = sql.identifier(spec.targetTableName);
+      const result = await tx.execute(sql`
+        UPDATE ${sql.identifier(spec.sourceTableName)} s
+        SET ${column} = e."mergedIntoId"
+        FROM ${target} t
+        JOIN "Entity" e ON e.id = t.id AND e."mergedIntoId" IS NOT NULL
+        JOIN ${target} k ON k.id = e."mergedIntoId" AND k."deletedAt" IS NULL
+        WHERE t.id = s.${column} AND t."deletedAt" IS NOT NULL
+        ${spec.sourceSoftDeletable ? sql`AND s."deletedAt" IS NULL` : sql``}
+      `);
+      repointed += result.rowCount ?? 0;
+    }
+    return { repointed };
+  });
 
 type DependencyCycle = ProblemsFast["dependencyCycles"][number];
 

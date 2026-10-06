@@ -84,6 +84,7 @@ import {
   DuplicateTransactionRefFix,
   DuplicateVendorMergeFix,
   OrphanedDeleteFix,
+  RepointMergedReferencesButton,
 } from "./tier2-fixes";
 import {
   buildUnitCoverageItems,
@@ -1391,6 +1392,7 @@ const DECLARED_SECTIONS = [
     // Regression guard: healthy is the overwhelming common case, so don't
     // spend a permanent card on "nothing found".
     hideWhenEmpty: true,
+    headerAction: <RepointMergedReferencesButton />,
     groupBy: (items) =>
       groupBy(
         [...items].sort((a, b) =>

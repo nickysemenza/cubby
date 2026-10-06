@@ -37,7 +37,8 @@ import {
 import { validateProductPolicy } from "./inheritance-validation";
 import { getCategoryFeature, resolveProductCategory } from "./product-category";
 import { externalIdsContainIsbn } from "./product/update-helpers";
-import { resolveOrThrow } from "./shortcode-resolver";
+import { resolveAllOrThrow, resolveOrThrow } from "./shortcode-resolver";
+import { lockLiveSpendingCategories } from "./spending-category";
 import {
   assertReviewedSpendingClassification,
   withReviewedSpendingClassification,
@@ -392,9 +393,19 @@ export async function applySpendingClassificationReview(
   raw: SpendingClassificationReviewApplyInput,
 ) {
   const input = spendingClassificationReviewApplyInput.parse(raw);
+  // Resolved before the transaction so the lock is its first statement.
+  const mergedCategories =
+    input.request.action === "spendingCategoryMerge"
+      ? await resolveAllOrThrow(ctx.db, "spendingCategory", [
+          input.request.keepId,
+          ...input.request.mergeIds,
+        ])
+      : [];
   return withTransactionDatabase(
     ctx.db,
     async (db) => {
+      if (mergedCategories.length)
+        await lockLiveSpendingCategories(db, mergedCategories);
       const impact = await buildPreview(db, input.request);
       if (impact.fingerprint !== input.fingerprint)
         fail(

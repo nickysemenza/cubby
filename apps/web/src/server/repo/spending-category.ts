@@ -270,6 +270,33 @@ async function reclassifiesExpenses(
   return rows.rows.length > 0;
 }
 
+/**
+ * Locks the merge's categories and refuses one that is no longer live. Run it
+ * as a merge transaction's first statement: FK writes that reference a locked
+ * category wait for the merge. A writer that resolved a loser earlier can still
+ * commit a reference after the merge; the referential-liveness detector reports
+ * it and `repointMergedReferences` moves it to the survivor.
+ */
+export async function lockLiveSpendingCategories(
+  db: Database | DrizzleTransaction,
+  ids: readonly EntityId<"spendingCategory">[],
+): Promise<void> {
+  const unique = uniq(ids);
+  const live = await unwrapDb(db)
+    .select({ id: spendingCategory.id })
+    .from(spendingCategory)
+    .where(
+      and(inArray(spendingCategory.id, unique), notDeleted(spendingCategory)),
+    )
+    .orderBy(spendingCategory.id)
+    .for("update");
+  if (live.length !== unique.length)
+    throw createAppError(
+      ENTITY_NOT_FOUND_REASON.spendingCategory,
+      "A spending category in this merge was deleted; reload and choose live categories.",
+    );
+}
+
 async function mergeSpendingCategories(
   db: Database,
   input: z.infer<typeof mergeInput>,
@@ -280,31 +307,7 @@ async function mergeSpendingCategories(
     ...input,
   });
   return withTransaction(db, async (tx) => {
-    // Everything below reads after these locks, so nothing slips in between
-    // the history check and the repoint. Expense writers wait for the merge
-    // (an Expense can reach a loser through a Purchase, Vendor, or Product
-    // mapping without referencing it), and FOR UPDATE conflicts with the FK
-    // KEY SHARE of any write that references the keeper or a loser, and with
-    // their deletion.
-    await unwrapDb(tx).execute(
-      sql`LOCK TABLE "Expense" IN SHARE ROW EXCLUSIVE MODE`,
-    );
-    const live = await unwrapDb(tx)
-      .select({ id: spendingCategory.id })
-      .from(spendingCategory)
-      .where(
-        and(
-          inArray(spendingCategory.id, [keepId, ...loserIds]),
-          notDeleted(spendingCategory),
-        ),
-      )
-      .orderBy(spendingCategory.id)
-      .for("update");
-    if (live.length !== loserIds.length + 1)
-      throw createAppError(
-        ENTITY_NOT_FOUND_REASON.spendingCategory,
-        "A spending category in this merge was deleted; reload and choose live categories.",
-      );
+    await lockLiveSpendingCategories(tx, [keepId, ...loserIds]);
     // A loser above the keeper would reparent the keeper's own chain under it.
     const lineage = await selfAndAncestors(tx, keepId);
     if (loserIds.some((id) => lineage.has(id))) throw ownAncestor();

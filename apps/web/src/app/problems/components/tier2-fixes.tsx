@@ -11,7 +11,10 @@ import {
   entityMergeMutationOptions,
 } from "~/entity/entity-mutation";
 import { EntityMergeDialog } from "~/entity/merge/entity-merge-dialog";
-import { vendor } from "~/integrations/tanstack-query/generated/catalog.gen";
+import {
+  problems,
+  vendor,
+} from "~/integrations/tanstack-query/generated/catalog.gen";
 import { formatCurrency } from "~/lib/utils";
 import {
   useActionMutation,
@@ -29,6 +32,28 @@ const deleteProduct = entityMutationOptionsFactory("product", "delete");
  * delete — no rich editor needed. Each owns its own mutation hook (mounted only
  * while the card is expanded) and clears its problem on success.
  */
+
+/**
+ * Moves every dangling reference whose target was merged away onto the merge
+ * survivor. References to plain deletions have no survivor and stay listed.
+ */
+export function RepointMergedReferencesButton() {
+  const repoint = useActionMutation({
+    mutationFn: problems.repointMergedReferences.mutationOptions,
+    success: (data) =>
+      `Moved ${data.repointed} reference${data.repointed === 1 ? "" : "s"} to merge survivors`,
+  });
+  return (
+    <Button
+      size="sm"
+      variant="outline"
+      disabled={repoint.isPending}
+      onClick={() => repoint.mutate(undefined)}
+    >
+      Repoint to merge survivors
+    </Button>
+  );
+}
 
 /**
  * Delete an orphaned product. findOrphanedProducts and deleteProducts' safety

@@ -758,9 +758,12 @@ export const problemDetectors = {
   // A dangling reference is unambiguously wrong and converges to zero — it can
   // only appear when a removal path forgets to detach, re-point, or cascade.
   // Production sat at zero when this detector landed, so any row is a real
-  // regression rather than a backlog to work through. No auto-fix is offered:
-  // clearing the FK and deleting the source row are both plausible and not
-  // interchangeable, and picking wrong destroys data with no restore path.
+  // regression rather than a backlog to work through. The one offered repair
+  // (`problems.repointMergedReferences`) moves a reference whose target was
+  // merged away onto the survivor; a merge does not lock out writers that
+  // resolved a loser earlier, so that late reference is an accepted race. For
+  // a plain deletion, clearing the FK and deleting the source row are both
+  // plausible and not interchangeable, so no auto-fix is offered.
   referentialLivenessViolations: detector(
     "fast",
     "defect",

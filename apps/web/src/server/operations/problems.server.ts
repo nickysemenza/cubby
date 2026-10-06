@@ -65,6 +65,10 @@ export const problemsHandlers = implementOperationDomain(problemsContract, {
       input,
       context.actorContext,
     ),
+  repointMergedReferences: async (context) =>
+    (
+      await import("~/server/repo/problems/detectors-integrity")
+    ).repointMergedReferences(context.db),
   resolveArrivedFindings: async (context, input) =>
     (
       await import("~/server/purchase-import/findings")
