@@ -45,7 +45,7 @@ describe("purchase agent Cubby MCP client", () => {
     const services = fromPartial<RunServices>({
       mcpFetch: (request: Request) => {
         requests.push(request.clone());
-        return handleMcpRequest(request, {
+        return handleMcpRequest(request, undefined, {
           token: "",
           clientId: "purchase-agent",
           scopes: [],

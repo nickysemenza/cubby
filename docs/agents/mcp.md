@@ -30,19 +30,28 @@ and whose `_meta["cubby/error"]` carries `code`, `reason`, `requestId`, and
 that fails its own schema is `INVALID_OUTPUT` and names each failing path.
 
 Every call has a wall-clock budget (`MCP_TOOL_DEADLINE_MS` in
-`apps/web/src/server/mcp/tools/tool-registration.ts`): 18 s for reads, 230 s
-for writes. Past it the call answers `MCP_TOOL_DEADLINE_EXCEEDED` with the
-elapsed time and request id, logs a warning, and reports to Sentry. The
-deadline aborts the call's `signal`, which stops AI and upstream fetches but
-not Postgres queries or kernel verbs. Narrow a timed-out read. A timed-out
+`apps/web/src/server/mcp/tools/tool-registration.ts`): 18 s for reads, 45 s
+for reads that declare `modelBacked` (Jev's 30 s retry budget plus database
+work), and 230 s for writes. An action that can wait on Jev or another model
+declares `modelBacked: true` in `apps/web/src/contracts/mcp-tools.ts`; today
+that is `entity_read.preview`. Past its budget the call answers
+`MCP_TOOL_DEADLINE_EXCEEDED` with the elapsed time and request id, logs a
+warning, and reports to Sentry. The deadline aborts the call's `signal`, which
+stops AI and upstream fetches but not Postgres queries or kernel verbs. Work
+that settles after the answer is dropped. Narrow a timed-out read. A timed-out
 write may still have committed: re-read the affected records before retrying.
 
-A throw that escapes the SDK (`apps/web/src/server/mcp/http-handler.ts`)
-answers a JSON-RPC `-32603` error naming the tool and action, with the request
-id in the message and the diagnostics in `error.data`. A Worker killed by a
-platform limit (a synchronous CPU loop, memory) still sends no body; the
-connector shows that only as "Invalid content from server". Find it in
-Cloudflare observability by time, then narrow or speed up the call.
+The HTTP ingress (`apps/web/src/server/mcp/http-handler.ts`) authenticates from
+headers before it reads any body, then reads the body once under the SDK's
+4 MiB limit; a larger body is refused with JSON-RPC `-32600` (HTTP 413) without
+being buffered. A throw that escapes the SDK, including a failed body read,
+answers a JSON-RPC `-32603` error that echoes the request id and names the tool
+and action, the cause, the elapsed time, and the Cubby request id, with
+write-retry guidance for writes. The message and `error.data` are scrubbed of
+credential-shaped values. A Worker killed by a platform limit (a synchronous
+CPU loop, memory) still sends no body; the connector shows that only as
+"Invalid content from server". Find it in Cloudflare observability by time,
+then narrow or speed up the call.
 
 ## Exposure
 

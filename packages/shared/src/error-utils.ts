@@ -211,6 +211,9 @@ export const AppErrors = {
   // it finished. A 5xx so every occurrence reaches Sentry with the tool name;
   // a write may still have committed (see `MCP_TOOL_DEADLINE_MS`).
   MCP_TOOL_DEADLINE_EXCEEDED: "INTERNAL_SERVER_ERROR",
+  // An authenticated MCP request body over the SDK's read limit; refused
+  // before it is buffered.
+  MCP_REQUEST_TOO_LARGE: "BAD_REQUEST",
 
   // Image operations
   IMAGE_UPLOAD_FAILED: "INTERNAL_SERVER_ERROR",

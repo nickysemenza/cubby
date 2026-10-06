@@ -14,6 +14,7 @@ import { type JSONType, z } from "zod";
 import type { McpActionSpec } from "~/contracts/mcp-define";
 import { roundTo } from "~/lib/round-to";
 import type { StartOperationId } from "~/lib/start-operation-observability";
+import { JEV_DEADLINE_MS } from "~/server/ai/jev";
 import { scheduleCalendarFeedDirty } from "~/server/calendar/client";
 import { recordDatabaseWrite } from "~/server/database-freshness/client";
 import { run as runTable } from "~/server/db/schema";
@@ -105,7 +106,7 @@ export type McpToolBindings = Readonly<
 >;
 
 /**
- * Wall-clock budget for one MCP tool call, by action kind. A call that dies at
+ * Wall-clock budget for one MCP tool call, by declared action budget. A call that dies at
  * the platform (an empty 503 from a Worker resource limit) reaches the MCP
  * client as no JSON-RPC response at all, which the connector proxy reports as
  * a bare "Invalid content from server"; answering first keeps the tool name,
@@ -113,6 +114,9 @@ export type McpToolBindings = Readonly<
  *
  * - Reads, 18 s: the motivating read's HTTP twin died with an empty 503 after
  *   ~22 s. Abandoning a read loses nothing, and the caller can narrow it.
+ * - Model-backed reads (`modelBacked` on the action), Jev's 30 s retry budget
+ *   plus 15 s for the database work around it: a Retry-After inside Jev's
+ *   budget must not turn into an MCP timeout.
  * - Writes, 230 s: the Postgres work is not cancelled, so an early answer only
  *   turns a likely success into an unknown one. AI-backed imports legitimately
  *   run for minutes: the connector held tool calls open for up to ~208 s that
@@ -122,15 +126,25 @@ export type McpToolBindings = Readonly<
  * CPU loop or an out-of-memory kill still ends the request without an answer.
  */
 const MCP_TOOL_DEADLINE_MS = {
-  query: 18_000,
-  mutation: 230_000,
-} as const satisfies Record<"query" | "mutation", number>;
+  read: 18_000,
+  modelRead: JEV_DEADLINE_MS + 15_000,
+  write: 230_000,
+} as const satisfies Record<ToolBudget, number>;
+
+type ToolBudget = "read" | "modelRead" | "write";
+
+const budgetOf = (action: CompiledAction | undefined): ToolBudget =>
+  action?.kind === "mutation"
+    ? "write"
+    : action?.spec.modelBacked
+      ? "modelRead"
+      : "read";
 
 export interface McpToolRegistrationRuntime {
   markCalendarDirty(reason: string): void;
   recordDatabaseWrite?(source: string): Promise<void>;
   /** Overrides {@link MCP_TOOL_DEADLINE_MS}; tests shorten it. */
-  toolDeadlineMs?: Record<"query" | "mutation", number>;
+  toolDeadlineMs?: Record<ToolBudget, number>;
 }
 
 const productionMcpToolRegistrationRuntime: McpToolRegistrationRuntime = {
@@ -729,8 +743,8 @@ function registerCompiledTool(
       let mutation = false;
       let enteredHandler = false;
       let operationName = tool.name;
-      const kind = actionOf(params)?.kind ?? "query";
-      const budgetMs = (runtime.toolDeadlineMs ?? MCP_TOOL_DEADLINE_MS)[kind];
+      const budget = budgetOf(actionOf(params));
+      const budgetMs = (runtime.toolDeadlineMs ?? MCP_TOOL_DEADLINE_MS)[budget];
       // The deadline aborts the same signal a client cancel does. Only work
       // that reads it stops (AI and upstream fetches); kernel verbs and
       // Postgres queries run on until they finish or the request ends.
@@ -876,12 +890,7 @@ function registerCompiledTool(
           elapsedMs,
         });
         return failure(
-          deadlineError(
-            operationName,
-            kind === "mutation",
-            budgetMs,
-            elapsedMs,
-          ),
+          deadlineError(operationName, budget === "write", budgetMs, elapsedMs),
         );
       } finally {
         clearTimeout(timer);
