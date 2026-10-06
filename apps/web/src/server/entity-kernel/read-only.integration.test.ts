@@ -46,7 +46,7 @@ describe("kernel read-only boundaries", () => {
       action: "list",
       entity: "cookbook",
       filters: {},
-      sort: { orderBy: "name", direction: "asc" },
+      sort: [{ orderBy: "name", direction: "asc" }],
     });
     if (list.action !== "list") throw new Error("expected list");
     expect(list.items.map((row) => row.book)).toEqual([

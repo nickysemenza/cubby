@@ -102,7 +102,7 @@ export const MCP_TOOLS = defineMcpTools({
       list: mcpAction({
         op: kernelAction("list", "query"),
         description:
-          'One page of a kind, with that kind\'s own typed `filters`, `sort`, `pagination` and `groupBy`; returns { meta, items }. Every scored entity accepts sort="dataQuality" (ascending = weakest identity first) plus dataStatus/dataGap filters, the enrichment worklist.',
+          'One page of a kind, with that kind\'s own typed `filters`, `sort`, `pagination` and `groupBy`; returns { meta, items }. `sort` is a stack, primary first: sort=[{orderBy:"name",direction:"asc"}]. Every scored entity accepts orderBy "dataQuality" (ascending = weakest identity first) plus dataStatus/dataGap filters, the enrichment worklist.',
       }),
       search: mcpAction({
         op: kernelAction("search", "query"),

@@ -5,6 +5,7 @@ import {
   buildPaginatedResponse,
   createPaginatedResponseSchema,
   createPaginatedResponseSchemaWithContext,
+  createSortPaginationFields,
   entityFilter,
   entityFilterList,
   MAX_SORTS,
@@ -87,10 +88,9 @@ describe("MCP pagination", () => {
 });
 
 describe("normalizeSorts", () => {
-  it("keeps a single sort and a stack in order", () => {
+  it("keeps a stack in order", () => {
     const first = { orderBy: "location", direction: "asc" as const };
     const second = { orderBy: "price", direction: "desc" as const };
-    expect(normalizeSorts(first)).toEqual([first]);
     expect(normalizeSorts([first, second])).toEqual([first, second]);
   });
 
@@ -107,11 +107,18 @@ describe("normalizeSorts", () => {
     ]);
   });
 
-  it("schema accepts both the legacy single object (MCP shape) and an array", () => {
-    const single = sortPaginationCombo.parse({
-      sort: { orderBy: "name", direction: "asc" },
-    });
-    expect(single.sort).toEqual({ orderBy: "name", direction: "asc" });
+  it("schema accepts only the stack form", () => {
+    expect(
+      sortPaginationCombo.safeParse({
+        sort: { orderBy: "name", direction: "asc" },
+      }).success,
+    ).toBe(false);
+    expect(
+      createSortPaginationFields({
+        sortableFields: ["name", "createdAt"],
+        defaultSort: "name",
+      }).sort.safeParse({ orderBy: "name", direction: "asc" }).success,
+    ).toBe(false);
 
     const stacked = sortPaginationCombo.parse({
       sort: [
@@ -119,7 +126,10 @@ describe("normalizeSorts", () => {
         { orderBy: "createdAt", direction: "desc" },
       ],
     });
-    expect(Array.isArray(stacked.sort)).toBe(true);
+    expect(stacked.sort).toHaveLength(2);
+    expect(sortPaginationCombo.parse({}).sort).toEqual([
+      { orderBy: "createdAt", direction: "desc" },
+    ]);
   });
 
   it("caps the stack at MAX_SORTS", () => {

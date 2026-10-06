@@ -48,7 +48,7 @@ export type ListQueryOptionsFn<
   TFilters,
   TData extends { id: string } = { id: string },
 > = (params: {
-  /** Sort stack (multi-sort); the schema also accepts the legacy single object. */
+  /** Sort stack, primary first. */
   sort?: Array<{ orderBy: string; direction: "asc" | "desc" }>;
   pagination: { pageIndex: number; pageSize: number };
   filters: TFilters;

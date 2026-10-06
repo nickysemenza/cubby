@@ -1159,8 +1159,8 @@ public actor CubbyClient {
                 "direction": .string(descending ? "desc" : "asc"),
             ])
         }
-        let raw: JSONValue = values.count == 1 ? values[0] : .array(values)
-        return try JSONDecoder.cubby().decode(Sort.self, from: JSONEncoder.cubby().encode(raw))
+        return try JSONDecoder.cubby().decode(
+            Sort.self, from: JSONEncoder.cubby().encode(JSONValue.array(values)))
     }
 
     private func cookbookJSON(_ cookbook: CookbookSummary) throws -> JSONValue {

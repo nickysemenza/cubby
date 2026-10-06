@@ -62,9 +62,7 @@ import { parseSchema, parseSorts, parseGroupBy } from "./list-input";
 
 type EntityListInput<TFilters = unknown> = {
   filters: TFilters;
-  sort?:
-    | { orderBy: string; direction: "asc" | "desc" }
-    | { orderBy: string; direction: "asc" | "desc" }[];
+  sort?: { orderBy: string; direction: "asc" | "desc" }[];
   pagination?: PaginationParams;
   groupBy?: string;
 };

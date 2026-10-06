@@ -13,8 +13,3 @@
 
 /*.wasm
   Cache-Control: public, max-age=31536000, immutable
-
-# Browsers that registered the retired app-shell worker re-fetch this URL to
-# update it; the replacement unregisters itself, so it must never be cached.
-/sw.js
-  Cache-Control: no-cache

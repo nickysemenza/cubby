@@ -18,15 +18,12 @@ describe("audit cursor", () => {
     });
   });
 
-  it("continues accepting the legacy ISO timestamp cursor", () => {
-    const iso = "2026-08-01T12:34:56.789Z";
-    expect(decodeAuditCursor(iso)).toEqual({ createdAt: new Date(iso) });
-  });
-
-  it("rejects malformed cursors", () => {
-    expect(() => decodeAuditCursor("v1.not-base64-json")).toThrow(
-      "Invalid audit log cursor",
-    );
+  it("rejects malformed cursors and the former ISO timestamp form", () => {
+    for (const cursor of ["v1.not-base64-json", "2026-08-01T12:34:56.789Z"]) {
+      expect(() => decodeAuditCursor(cursor)).toThrow(
+        "Invalid audit log cursor",
+      );
+    }
   });
 });
 

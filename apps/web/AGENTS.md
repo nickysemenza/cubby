@@ -34,6 +34,5 @@ Native owns fieldwork: barcode/QR scanning, recount, sweep, and the location
 photo pass live in `apps/apple`, and the web app is not an installable PWA. Do
 not add camera scanning, a recount/sweep/photo-pass screen, a manifest, or
 install prompts here; the old `/scan`, `/inventory/session`, and
-`/locations/photo-pass` URLs are deliberately 404. Keep the self-unregistering
-`public/sw.js`, the unfinished-pass cleanup dialog, and the scan/reconcile
+`/locations/photo-pass` URLs are deliberately 404. Keep the scan/reconcile
 server operations the app calls ([inventory audit](../../docs/inventory-audit.md)).

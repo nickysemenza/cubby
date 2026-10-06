@@ -17,15 +17,10 @@ const sortParams = z.object({
 export const MAX_SORTS = 3;
 
 /**
- * List `sort` input: a single `{orderBy, direction}` (the historical shape —
- * MCP tools and old clients keep sending it) or a shift-click stack of them.
- * Server code never consumes this union directly — `normalizeSorts` collapses
- * it once at the transport boundary.
+ * List `sort` input: a shift-click stack of `{orderBy, direction}`, primary
+ * first. `normalizeSorts` dedupes and caps it once at the transport boundary.
  */
-const sortInput = z.union([
-  sortParams,
-  z.array(sortParams).min(1).max(MAX_SORTS),
-]);
+const sortInput = z.array(sortParams).min(1).max(MAX_SORTS);
 
 /**
  * Deliberately as wide as the schema's OUTPUT, not its `.min(1)` constraint —
@@ -39,13 +34,12 @@ const sortInput = z.union([
  * schema itself, which changes the JSON Schema MCP advertises from a plain
  * array to `prefixItems` — a worse trade than a test.
  */
-export type SortInput = SortParams | SortParams[];
+export type SortInput = SortParams[];
 
 export const normalizeSorts = (sort: SortInput): SortParams[] => {
-  const arr = Array.isArray(sort) ? sort : [sort];
   const seen = new Set<string>();
   const out: SortParams[] = [];
-  for (const s of arr) {
+  for (const s of sort) {
     if (seen.has(s.orderBy)) continue;
     seen.add(s.orderBy);
     out.push(s);
@@ -67,7 +61,7 @@ export const createSortParamsSchema = <
     orderBy: z.enum(fields).default(defaultOrderBy),
     direction: z.enum(["asc", "desc"]).default("asc"),
   });
-  return z.union([single, z.array(single).min(1).max(MAX_SORTS)]);
+  return z.array(single).min(1).max(MAX_SORTS);
 };
 
 export const presenceFilter = z.enum(["has", "none"]).optional();
@@ -185,7 +179,7 @@ export function mcpListInputFields(
 export const sortPaginationFields = {
   sort: sortInput
     .optional()
-    .default({ orderBy: "createdAt", direction: "desc" }),
+    .default([{ orderBy: "createdAt", direction: "desc" }]),
   pagination: paginationParams
     .optional()
     .default({ pageIndex: 0, pageSize: DEFAULT_PAGE_SIZE }),
@@ -202,7 +196,7 @@ export const createSortPaginationFields = <
 }) => ({
   sort: createSortParamsSchema(opts.sortableFields, opts.defaultSort)
     .optional()
-    .default({ orderBy: opts.defaultSort, direction: "desc" }),
+    .default([{ orderBy: opts.defaultSort, direction: "desc" }]),
   pagination: paginationParams
     .optional()
     .default({ pageIndex: 0, pageSize: DEFAULT_PAGE_SIZE }),

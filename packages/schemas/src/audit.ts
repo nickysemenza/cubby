@@ -51,8 +51,7 @@ export const auditLogListInput = z.object({
   deviceId: deviceShortcode.optional(),
   /** Everything one Run wrote, e.g. an import or an agent session. */
   runId: runShortcode.optional(),
-  // Date bounds stay ISO strings over the wire. `cursor` below is opaque (and
-  // the repo continues accepting the former ISO cursor for compatibility).
+  // Date bounds stay ISO strings over the wire. `cursor` below is opaque.
   createdAtFrom: z
     .string()
     .optional()

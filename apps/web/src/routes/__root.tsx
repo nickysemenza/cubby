@@ -26,7 +26,6 @@ import { buildMetadataQueryOptions } from "~/lib/build-metadata";
 import { FLAGS } from "~/lib/flags";
 import { PerfProfiler } from "~/lib/perf/PerfProfiler";
 import { ErrorDetailsDialogHost } from "~/ui/feedback/error-details-dialog";
-import { RetiredFieldwork } from "~/ui/feedback/retired-fieldwork";
 import { AppFooter } from "~/ui/footer";
 import { useDebug } from "~/ui/hooks/useDebug";
 import { useNavAuthed } from "~/ui/hooks/useNavAuthed";
@@ -237,7 +236,6 @@ function RootComponent() {
           </React.Suspense>
         )}
         <Toaster />
-        {authed && isWorkspaceRoute && <RetiredFieldwork />}
         <ErrorDetailsDialogHost />
         <PerfOverlayMount />
         <DevtoolsWrapper />

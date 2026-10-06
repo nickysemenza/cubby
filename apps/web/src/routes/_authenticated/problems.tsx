@@ -1,16 +1,9 @@
 import { GitMergeIcon } from "@phosphor-icons/react/dist/csr/GitMerge";
-import {
-  createFileRoute,
-  Link,
-  redirect,
-  stripSearchParams,
-} from "@tanstack/react-router";
+import { createFileRoute, Link } from "@tanstack/react-router";
 import { lazy, Suspense } from "react";
-import { z } from "zod";
 
 import { problems } from "~/integrations/tanstack-query/generated/catalog.gen";
 import { pageTitle } from "~/lib/page-title";
-import { urlStringParam } from "~/lib/search-params";
 import { SimpleLoading } from "~/ui/feedback/loading-skeletons";
 import { Stack } from "~/ui/layout";
 import { Page } from "~/ui/page/Page";
@@ -26,29 +19,7 @@ const ProblemsOverview = lazy(async () => {
   const module = await import("~/app/problems/problems-overview");
   return { default: module.ProblemsOverview };
 });
-const searchSchema = z.object({
-  /**
-   * Legacy deep link into the retired location-validate card. The sweep on a
-   * location's own page now covers the whole job — it reads the same child QR
-   * labels, and its "what's missing?" pass is the reconciliation this card
-   * used to run — so the param only survives to forward old links.
-   */
-  validateParent: urlStringParam,
-});
-
-const searchDefaults = { validateParent: undefined } as const;
-
 export const Route = createFileRoute("/_authenticated/problems")({
-  validateSearch: searchSchema,
-  search: { middlewares: [stripSearchParams(searchDefaults)] },
-  beforeLoad: ({ search }) => {
-    if (search.validateParent) {
-      throw redirect({
-        to: "/locations/$shortcode",
-        params: { shortcode: search.validateParent },
-      });
-    }
-  },
   // Best-effort warm of the cheap DB-only group only — NON-blocking (void), like
   // every other loader here: awaiting would add the detector to the critical
   // SSR path. useProblemsData fetches all hot groups independently (each in its
