@@ -343,6 +343,15 @@ database contracts; it does not establish a five-minute full suite.
   did not improve the required-check critical path enough to justify their
   setup and contention costs. Keep the two browser shards when several PRs run
   concurrently; the PostgreSQL split preserves its three total runner slots.
+  A three-worker re-benchmark on the larger suite passed all 160 cases, but a
+  same-head replay of its slower 80-case shard reduced Playwright execution
+  only from 391 to 375 seconds while cumulative case time rose from 665 to
+  911 seconds and navigation time from 270 to 377 seconds. Keep two workers
+  per runner: the repeated latency increase did not justify the small,
+  variable critical-path benefit. The
+  [bounded trial](https://github.com/nickysemenza/cubby/actions/runs/37499250416)
+  and [two-worker baseline](https://github.com/nickysemenza/cubby/actions/runs/37497540250)
+  do not establish a new median or isolate runner variability.
   Phone and WebKit browser projects were removed
   from PR CI; device-dependent phone behavior still needs device acceptance.
 - The fast projects share one job to reduce runner demand. Ten completed PR
