@@ -18,6 +18,9 @@
  *     Genuinely used on the server; forwards to the Cloudflare SDK, which
  *     shares `@sentry/core`'s scope with the `withSentry` init.
  *   - `captureMessage` — catch-up.service.ts warnings. Same forwarding.
+ *   - `getClient` — report-error.ts returns a Sentry event id only when the
+ *     installed client will send it; on the worker that is the
+ *     `@sentry/cloudflare` client `withSentry` installs.
  *   - `init`, `tanstackRouterBrowserTracingIntegration` — router.tsx. Both sit
  *     behind `if (!router.isServer)`, so they are never called during SSR;
  *     these exist only so the module shape matches.
@@ -31,7 +34,11 @@
  * here too. vite.config.ts fails the SSR build on IMPORT_IS_UNDEFINED so a
  * missing export can't ship as `undefined is not a function` on the error path.
  */
-export { captureException, captureMessage } from "@sentry/cloudflare";
+export {
+  captureException,
+  captureMessage,
+  getClient,
+} from "@sentry/cloudflare";
 
 type SentryBrowserApi = typeof import("@sentry/tanstackstart-react");
 type SentryInitOptions = Parameters<SentryBrowserApi["init"]>[0];
