@@ -27,7 +27,10 @@ on:
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}-${{ github.event_name }}-${{ inputs.simulator_e2e }}-${{ inputs.simulator_journey }}-${{ inputs.tester_army }}
-  cancel-in-progress: true
+  # PR updates supersede old results. Main must finish publishing reusable
+  # caches, even when the next merge does not select the same native lanes.
+  # The default single pending slot retains only the newest waiting run.
+  cancel-in-progress: ${{ github.event_name != 'push' }}
 
 permissions:
   contents: read
@@ -98,10 +101,15 @@ jobs:
         with:
           wasm: ${{ needs.scope.outputs.validation == 'true' && 'restore' || 'false' }}
       - uses: ./.github/actions/setup-node-with-deps
-        if: needs.scope.outputs.validation != 'true' && needs.scope.outputs.format == 'true'
+        if: needs.scope.outputs.validation != 'true' && needs.scope.outputs.generation == 'true'
         with:
           wasm: "false"
-          workspace-filter: ${{ needs.scope.outputs.generation == 'true' && '@cubby/web...' || '.' }}
+          workspace-filter: "@cubby/web..."
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7
+        if: needs.scope.outputs.validation != 'true' && needs.scope.outputs.generation != 'true' && needs.scope.outputs.format == 'true'
+        with:
+          node-version-file: .nvmrc
+          package-manager-cache: false
       # The Nx `wasm` target's runtime input (ensure-wasm.ts --fingerprint)
       # runs `wasm-pack --version`, which a restored package does not provide.
       - name: Install wasm-pack for validation
@@ -120,8 +128,11 @@ jobs:
         run: |
           pnpm generate:if-stale
           pnpm exec redocly lint apps/web/src/lib/generated/http-openapi.gen.json --config redocly.yaml
-      - if: needs.scope.outputs.format == 'true' && needs.scope.outputs.validation != 'true'
-        run: pnpm exec oxfmt --check .
+      - name: Check documentation formatting
+        if: needs.scope.outputs.format == 'true' && needs.scope.outputs.validation != 'true'
+        run: |
+          formatter_version=$(node -p "require('./package.json').devDependencies.oxfmt")
+          npm exec --yes --package="oxfmt@$formatter_version" -- oxfmt --check .
       - name: Check documented repository paths
         if: needs.scope.outputs.docs == 'true' && needs.scope.outputs.validation != 'true'
         run: node scripts/check-doc-paths.ts
