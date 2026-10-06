@@ -170,19 +170,24 @@ whenever web validation is selected. Its shell-only status check uses the
 standard `ubuntu-slim` container runner; it needs no checkout, dependencies,
 services, or privileged operations. This keeps the same runner-slot count and
 five-minute timeout. Queue and startup time remain part of measured gate latency.
-`Tests - web` runs the existing `unit`,
+`Auxiliary tests and builds` runs the selected auxiliary package tests and
+USDA API build alongside the existing `unit`,
 `mcp-contract`, `worker-safety`, and `ui` Vitest projects together in one job,
 preserving each project's environment and isolation. One dependency setup and
-MCP App build serve all four projects; there is no fast-test job matrix. This
-uses one fewer Linux runner slot per selected PR. Node projects run first,
+MCP App build serve all four web projects; there is no fast-test job matrix.
+When both tiers are selected, sharing their job removes one runner slot and
+repeated setup. Web-only changes retain the filtered install; auxiliary changes
+install the full workspace. Each tier keeps its own scope condition.
+Node projects run first,
 then UI uses Vitest's standard project group ordering, keeping each phase's
-worker environment together. `Build Workers` builds the
+worker environment together. `Build Workers and runtime tests` builds the
 web Cloudflare bundle (which hosts the purchase agent) and uploads it
 with the MCP App assets and the WASM package as the `worker-build` artifact; the
-workerd PostgreSQL and optional purchase browser lanes download that exact bundle.
+workerd PostgreSQL project runs against that fresh bundle in the same job;
+only the optional purchase browser lane downloads it after the job succeeds.
 Desktop browser shards depend only on `Scope` and build the Worker during their
 own setup, with the same source commit and branch provenance. This overlaps
-setup with `Build Workers` without adding runner slots, at the cost of two
+setup with `Build Workers and runtime tests` without adding runner slots, at the cost of two
 additional Worker builds. The browser lanes retain the discovery and no-skip guard;
 desktop Chromium runs as two Playwright shards (two workers each). Phone-web and
 WebKit browser coverage was removed from PR CI and the Playwright suite; native
@@ -213,12 +218,14 @@ project runs all its files in one job with four fork workers, waits only on
 `Scope`, and restores the WASM package itself. This removes one runner slot
 and one repeated database/dependency setup compared with two shards. The
 `integration-workerd` project (the files that start the built Worker, listed in
-`workerdIntegrationTests` in `apps/web/vitest.config.ts`) runs in one job that
-needs `Build Workers` and downloads `worker-build`. A workerd consumer missing
+`workerdIntegrationTests` in `apps/web/vitest.config.ts`) runs after the build
+in `Build Workers and runtime tests`. This removes its separate job, repeated
+dependency setup and artifact download. The build result includes those tests;
+ordinary integration files still start independently after `Scope`. A workerd consumer missing
 from that list runs in the ordinary integration job and fails there, because
 in CI the harness refuses to rebuild a missing or stale Worker. `Web checks` requires
 both jobs to succeed, so the required-check name stays stable. Jobs that need
-the databases (`test-postgres`, `test-postgres-workerd`,
+the databases (`test-postgres`, `build-worker`,
 `test-e2e`, `db-check`) start them with the `start-test-services` composite
 action, which runs the pgvector PostgreSQL and IntegreSQL images on ports 5432
 and 5000; a composite action cannot declare `services:`, so it uses `docker
@@ -344,7 +351,7 @@ database contracts; it does not establish a five-minute full suite.
   did not improve the required-check critical path enough to justify their
   setup and contention costs. Keep the two browser shards when several PRs run
   concurrently. Ordinary PostgreSQL files share one four-worker job; workerd
-  integration retains its own job and built-Worker dependency.
+  integration runs in the Worker build job against its fresh bundle.
   A three-worker re-benchmark on the larger suite passed all 160 cases, but a
   same-head replay of its slower 80-case shard reduced Playwright execution
   only from 391 to 375 seconds while cumulative case time rose from 665 to

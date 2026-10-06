@@ -85,14 +85,17 @@ journeys and seed unrelated prerequisites rather than moving coverage after
 merge. The convergence sample-limit regression creates one background import
 through the writer, then seeds additional open findings from that valid row;
 all four foreground source orders still exercise their real import boundaries,
-browser approval, and persisted projections.
+browser approval, and persisted projections. Finance category display fixtures
+use the shared entity-kernel factory, preserving all 28 linked expense lines
+without repeating unrelated HTTP create requests.
 
 ### Workerd test runtime and profiles
 
 A PostgreSQL test file that starts workerd belongs in
 `workerdIntegrationTests` (`apps/web/vitest.config.ts`), which forms the
-`integration-workerd` project; CI runs only that project against the
-`worker-build` artifact, and an unlisted consumer fails in the ordinary integration job.
+`integration-workerd` project; CI runs it in the Worker build job against
+that job's fresh bundle. An unlisted consumer fails in the ordinary integration
+job.
 The socket-lifecycle regression lives in that workerd integration project: it
 exercises HTTP reads and freshness writes against the real Worker and observes
 PostgreSQL socket expiry, without a browser. Preserve its twelve-second quiet
@@ -247,7 +250,7 @@ instead of growing the page, a headline that must not wrap). It is opt-in
 shared jsdom graph; select it with `--project=preview`, `--project preview`,
 `test:preview`, or a direct `.preview.test.tsx` file argument. It is not
 wired into CI yet — doing so would need a Playwright browser install step in
-the `Tests - web (ui)` lane, which every push would pay for; wire it into that
+the combined `Auxiliary tests and builds` lane, which every push would pay for; wire it into that
 existing workflow once more than one component family needs it. Preview specs
 need Tailwind's real
 CSS output (`tooling/preview-test-setup.ts` imports `~/styles.css`) since a

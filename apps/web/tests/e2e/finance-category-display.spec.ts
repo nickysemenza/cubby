@@ -3,6 +3,7 @@ import { spendingCategorySummarySchema } from "@cubby/schemas/spending-classific
 import { fieldResolutionSchema } from "@cubby/schemas/field-resolution";
 import { gotoAuthenticatedPage, selectComboboxItem } from "./e2e-helpers";
 import { expect, test } from "./e2e-test";
+import { createEntityFixture } from "./fixtures-core";
 import { dispatchesOperation, unbatchFor } from "./dispatch-wire";
 
 test("linked Expense categories display their readable label and transaction expectation", async ({
@@ -12,37 +13,37 @@ test("linked Expense categories display their readable label and transaction exp
   test.setTimeout(60_000);
   const tag = `Synthetic category display ${Date.now()}`;
   const categoryName = `${tag} dining`;
-  const create = async (path: string, data: unknown) => {
-    const response = await page.request.post(`/api/v1/${path}`, {
-      headers: { Origin: baseURL! },
-      data: z.json().parse(data),
-    });
-    expect(response.status(), await response.text()).toBe(201);
-    return z
-      .object({ item: z.object({ id: z.string() }) })
-      .parse(await response.json()).item.id;
-  };
-  const categoryId = await create("spending-categories", {
-    name: categoryName,
-    evidenceExpectation: "not_expected",
-    productExpectation: "not_expected",
-  });
-  const accountId = await create("financial-accounts", {
+  const { id: categoryId } = await createEntityFixture(
+    page,
+    "spendingCategory",
+    {
+      name: categoryName,
+      evidenceExpectation: "not_expected",
+      productExpectation: "not_expected",
+    },
+  );
+  const { id: accountId } = await createEntityFixture(
+    page,
+    "financialAccount",
+    {
+      name: tag,
+      identity: { kind: "credit_card", issuer: null, network: "visa" },
+    },
+  );
+  const { id: vendorId } = await createEntityFixture(page, "vendor", {
     name: tag,
-    identity: { kind: "credit_card", issuer: null, network: "visa" },
   });
-  const vendorId = await create("vendors", { name: tag });
-  const purchaseId = await create("purchases", {
+  const { id: purchaseId } = await createEntityFixture(page, "purchase", {
     vendorId,
     date: "2026-09-10",
     evidenceExpectation: "not_expected",
   });
-  const productId = await create("products", {
+  const { id: productId } = await createEntityFixture(page, "product", {
     name: `${tag} item`,
     manufacturer: "Synthetic",
   });
   for (let index = 0; index < 28; index += 1) {
-    await create("expenses", {
+    await createEntityFixture(page, "expense", {
       name: `${tag} meal`,
       purchaseId,
       cost: -2,
@@ -54,15 +55,19 @@ test("linked Expense categories display their readable label and transaction exp
       spendingCategoryId: categoryId,
     });
   }
-  const transactionId = await create("financial-transactions", {
-    accountId,
-    amount: -56,
-    merchant: tag,
-    kind: "refund",
-    status: "posted",
-    postedDate: "2026-09-10",
-    purchaseId,
-  });
+  const { id: transactionId } = await createEntityFixture(
+    page,
+    "financialTransaction",
+    {
+      accountId,
+      amount: -56,
+      merchant: tag,
+      kind: "refund",
+      status: "posted",
+      postedDate: "2026-09-10",
+      purchaseId,
+    },
+  );
   const saved = await page.request.get(
     `/api/v1/financial-transactions/${transactionId}`,
   );
@@ -239,32 +244,31 @@ test("linked Expense categories display their readable label and transaction exp
 
 test("draft category edits hide obsolete policy provenance while the replacement request is pending", async ({
   page,
-  baseURL,
 }) => {
   const tag = `Synthetic policy draft ${Date.now()}`;
-  const create = async (path: string, data: unknown) => {
-    const response = await page.request.post(`/api/v1/${path}`, {
-      headers: { Origin: baseURL! },
-      data: z.json().parse(data),
-    });
-    expect(response.status(), await response.text()).toBe(201);
-    return z
-      .object({ item: z.object({ id: z.string() }) })
-      .parse(await response.json()).item.id;
-  };
-  const oldCategory = await create("spending-categories", {
-    name: `${tag} original`,
-    evidenceExpectation: "required",
-    productExpectation: "not_expected",
-  });
+  const { id: oldCategory } = await createEntityFixture(
+    page,
+    "spendingCategory",
+    {
+      name: `${tag} original`,
+      evidenceExpectation: "required",
+      productExpectation: "not_expected",
+    },
+  );
   const newCategoryName = `${tag} replacement`;
-  const newCategory = await create("spending-categories", {
-    name: newCategoryName,
-    evidenceExpectation: "not_expected",
-    productExpectation: "not_expected",
+  const { id: newCategory } = await createEntityFixture(
+    page,
+    "spendingCategory",
+    {
+      name: newCategoryName,
+      evidenceExpectation: "not_expected",
+      productExpectation: "not_expected",
+    },
+  );
+  const { id: vendorId } = await createEntityFixture(page, "vendor", {
+    name: tag,
   });
-  const vendorId = await create("vendors", { name: tag });
-  const purchaseId = await create("purchases", {
+  const { id: purchaseId } = await createEntityFixture(page, "purchase", {
     vendorId,
     date: "2026-09-10",
     spendingCategoryId: oldCategory,
@@ -375,32 +379,27 @@ test("draft category edits hide obsolete policy provenance while the replacement
 // the same effective classification that quality checks evaluate.
 test("expense category pills agree with quality for direct, allocated, and missing categories", async ({
   page,
-  baseURL,
 }) => {
   const tag = `Synthetic strict quality ${Date.now()}`;
-  const create = async (path: string, data: unknown) => {
-    const response = await page.request.post(`/api/v1/${path}`, {
-      headers: { Origin: baseURL! },
-      data: z.json().parse(data),
-    });
-    expect(response.status(), await response.text()).toBe(201);
-    return z
-      .object({ item: z.object({ id: z.string() }) })
-      .parse(await response.json()).item.id;
-  };
   const categoryName = `${tag} supplies`;
-  const categoryId = await create("spending-categories", {
-    name: categoryName,
-    evidenceExpectation: "not_expected",
-    productExpectation: "not_expected",
+  const { id: categoryId } = await createEntityFixture(
+    page,
+    "spendingCategory",
+    {
+      name: categoryName,
+      evidenceExpectation: "not_expected",
+      productExpectation: "not_expected",
+    },
+  );
+  const { id: vendorId } = await createEntityFixture(page, "vendor", {
+    name: tag,
   });
-  const vendorId = await create("vendors", { name: tag });
-  const purchaseId = await create("purchases", {
+  const { id: purchaseId } = await createEntityFixture(page, "purchase", {
     vendorId,
     date: "2026-09-10",
     evidenceExpectation: "not_expected",
   });
-  const principal = await create("expenses", {
+  const { id: principal } = await createEntityFixture(page, "expense", {
     name: `${tag} principal`,
     costType: "services",
     trade: "other",
@@ -410,12 +409,16 @@ test("expense category pills agree with quality for direct, allocated, and missi
     spendingCategoryId: categoryId,
   });
   const secondCategoryName = `${tag} services`;
-  const secondCategoryId = await create("spending-categories", {
-    name: secondCategoryName,
-    evidenceExpectation: "not_expected",
-    productExpectation: "not_expected",
-  });
-  await create("expenses", {
+  const { id: secondCategoryId } = await createEntityFixture(
+    page,
+    "spendingCategory",
+    {
+      name: secondCategoryName,
+      evidenceExpectation: "not_expected",
+      productExpectation: "not_expected",
+    },
+  );
+  await createEntityFixture(page, "expense", {
     name: `${tag} second principal`,
     costType: "services",
     trade: "other",
@@ -424,7 +427,7 @@ test("expense category pills agree with quality for direct, allocated, and missi
     date: "2026-09-10",
     spendingCategoryId: secondCategoryId,
   });
-  const adjustment = await create("expenses", {
+  const { id: adjustment } = await createEntityFixture(page, "expense", {
     name: `${tag} shipping`,
     costType: "services",
     purchaseId,
@@ -432,7 +435,7 @@ test("expense category pills agree with quality for direct, allocated, and missi
     cost: 3,
     date: "2026-09-10",
   });
-  const missing = await create("expenses", {
+  const { id: missing } = await createEntityFixture(page, "expense", {
     name: `${tag} unclassified`,
     costType: "services",
     trade: "other",
