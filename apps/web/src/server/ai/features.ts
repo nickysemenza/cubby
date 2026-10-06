@@ -304,7 +304,8 @@ export const PURCHASE_IMPORT_MAIL_FEATURE = defineFeature({
 }) satisfies AiStructuredFeature<OrderMailMessageClassification>;
 
 /**
- * On Sol again since 2026-10-06, when the ChatGPT plan made its cost moot.
+ * On Sol again since 2026-10-06: judged the better model, and the ChatGPT plan
+ * made its cost moot.
  * History: moved from Sol after `eval:features` (2026-10-04): Luna at high effort
  * matched Sol high 12/16 with zero unsafe answers on both, at about 1/19 of
  * the cost. Its schema still carries no array bounds: a failed call is
@@ -321,7 +322,8 @@ export const PURCHASE_IMPORT_AUDIT_FEATURE = defineFeature({
 }) satisfies AiStructuredFeature<ImportAuditModelOutput>;
 
 /**
- * On Sol again since 2026-10-06, when the ChatGPT plan made its cost moot.
+ * On Sol again since 2026-10-06: judged the better model, and the ChatGPT plan
+ * made its cost moot.
  * History: moved from Sol after `eval:features` (2026-10-04): Luna at high effort
  * matched Sol high 14/14 with zero unsafe repairs (no line invented, moved,
  * or scaled to balance a total), at about 1/19 of the cost. The eval's cases
@@ -339,7 +341,8 @@ export const PURCHASE_IMPORT_REPAIR_FEATURE = defineFeature({
 }) satisfies AiStructuredFeature<ImportExtractionModelOutput>;
 
 /**
- * On Sol again since 2026-10-06, when the ChatGPT plan made its cost moot.
+ * On Sol again since 2026-10-06: judged the better model, and the ChatGPT plan
+ * made its cost moot.
  * History: moved from Sol low after `eval:features` (2026-10-04): Luna at high effort
  * matched it 10/10 with zero unsafe plans (no number a step's own evidence
  * does not state), at about 1/13 of the cost and roughly twice the latency.

@@ -561,11 +561,12 @@ extraction, receipt extraction, mail classification, audit and repair, recipe
 flow, and photo identity — and `fast` (`gpt-6-luna`) for interactive and bulk
 background calls. Retier a feature in either direction only on live-eval
 evidence. One recorded exception: on 2026-10-06 the household member moved
-these eight features to `quality` without a new eval, because production
-reaches OpenAI through the household's ChatGPT plan, where Sol's marginal cost
-is about zero; the 2026-10-04 eval had found Luna at high effort matching Sol
-on audit, repair, and recipe flow, so that move buys no measured accuracy
-there. The eval is `pnpm --dir apps/web eval:features` (opt-in, billed): it places the
+these eight features to `quality` without a new eval, judging Sol the better
+model for them; production reaches OpenAI through the household's ChatGPT
+plan, where Sol's marginal cost is about zero, which removed the cost reason
+for Luna. The 2026-10-04 suites (audit, repair, recipe flow) scored the two
+models equal, but they are small and largely at ceiling, so they cannot
+resolve the difference. The eval is `pnpm --dir apps/web eval:features` (opt-in, billed): it places the
 production purchase-import audit, extraction-repair, and recipe-flow prompts
 through the Gateway as each candidate, with the production schema, validator,
 and repair turn, and scores synthetic cases correct, unsafe, or reviewable
