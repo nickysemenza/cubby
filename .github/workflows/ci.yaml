@@ -197,6 +197,33 @@ jobs:
     if: needs.scope.outputs.web == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 20
+    services: &test-databases
+      postgres: &postgres-service
+        image: pgvector/pgvector:pg17
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_DB: cubby
+          POSTGRES_HOST_AUTH_METHOD: trust
+          POSTGRES_INITDB_ARGS: >-
+            --set=jit=off --set=fsync=off
+            --set=synchronous_commit=off --set=full_page_writes=off
+        ports:
+          - 5432:5432
+          - 55432:5432
+        options: >-
+          --health-cmd "pg_isready -h 127.0.0.1 -U postgres"
+          --health-interval 2s --health-timeout 5s
+          --health-retries 10 --health-start-period 3s
+      # The pinned distroless image has no /bin/sh for Docker shell health
+      # checks; its server retries PostgreSQL startup before serving requests.
+      integresql:
+        image: ghcr.io/allaboutapps/integresql@sha256:66b7433399f1907bad9e4b7cc7bd528ed4ebfccddecb8fd65da4af4d06a68c5a
+        env:
+          PGHOST: postgres
+          PGUSER: postgres
+          PGPASSWORD: password
+        ports:
+          - 5000:5000
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
       - uses: ./.github/actions/setup-node-with-deps
@@ -225,7 +252,6 @@ jobs:
           retention-days: 1
       # The workerd project consumes this job's fresh bundle, avoiding another
       # checkout, dependency setup and artifact download.
-      - uses: ./.github/actions/start-test-services
       - name: Run workerd PostgreSQL integration tests
         run: |
           git restore -- packages/wasm/package.json
@@ -240,9 +266,9 @@ jobs:
     if: needs.scope.outputs.web == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 20
+    services: *test-databases
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
-      - uses: ./.github/actions/start-test-services
       - uses: ./.github/actions/setup-node-with-deps
         with:
           wasm: "restore"
@@ -258,11 +284,10 @@ jobs:
     if: needs.scope.outputs.web == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 10
+    services:
+      postgres: *postgres-service
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
-      - uses: ./.github/actions/start-test-services
-        with:
-          integresql: "false"
       - uses: ./.github/actions/setup-node-with-deps
         with:
           wasm: "false"
@@ -297,9 +322,9 @@ jobs:
       E2E_TEST_USER_EMAIL: nicky@test.com
       E2E_TEST_USER_PASSWORD: password1234
       BETTER_AUTH_SECRET: ci-secret-TbGFDRAbhlR8e3RaXsfHR9CQ7r4nIc9
+    services: *test-databases
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
-      - uses: ./.github/actions/start-test-services
       - uses: ./.github/actions/setup-node-with-deps
         with:
           wasm: "restore"
@@ -358,9 +383,9 @@ jobs:
     timeout-minutes: 15
     env:
       NODE_OPTIONS: "--max-old-space-size=4096"
+    services: *test-databases
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
-      - uses: ./.github/actions/start-test-services
       - uses: ./.github/actions/setup-node-with-deps
         with:
           wasm: "false"
@@ -676,6 +701,7 @@ jobs:
       # cannot be written back for the next (docs/tester-army.md).
       TESTER_ARMY_PROVIDER: ${{ vars.TESTER_ARMY_PROVIDER || 'gateway' }}
       E2E_TELEMETRY_DISABLED: "1"
+    services: *test-databases
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
       - uses: ./.github/actions/setup-node-with-deps
@@ -683,7 +709,6 @@ jobs:
           wasm: restore
       - run: pnpm test:e2e:agent:preflight
       - uses: ./.github/actions/reuse-worker-build
-      - uses: ./.github/actions/start-test-services
       - run: pnpm --filter @cubby/web run test:e2e:install-browser chromium --with-deps
       - run: pnpm test:e2e:agent:web -- --harness standard
       - name: Save sanitized web run bundle
@@ -715,6 +740,7 @@ jobs:
       TESTER_ARMY_AGENT_MODEL: ${{ vars.TESTER_ARMY_AGENT_MODEL }}
       TESTER_ARMY_AGENT_EFFORT: ${{ vars.TESTER_ARMY_AGENT_EFFORT }}
       E2E_TELEMETRY_DISABLED: "1"
+    services: *test-databases
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
       - uses: ./.github/actions/setup-node-with-deps
@@ -722,7 +748,6 @@ jobs:
           wasm: restore
       - run: pnpm test:e2e:agent:preflight
       - uses: ./.github/actions/reuse-worker-build
-      - uses: ./.github/actions/start-test-services
       - run: pnpm --filter @cubby/web run test:e2e:install-browser chromium --with-deps
       - run: pnpm test:e2e:agent:web -- --harness coupled
       - name: Save sanitized import run bundle
