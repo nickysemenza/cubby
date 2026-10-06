@@ -3,21 +3,36 @@ import {
   buildActorContext,
   type ActorContext,
 } from "@cubby/schemas/context";
-import { parseEntityId, userId, type RunId } from "@cubby/schemas/identifiers";
+import {
+  userId,
+  type ProductId,
+  type PurchaseId,
+  type RunId,
+} from "@cubby/schemas/identifiers";
 import { createLogger } from "@cubby/worker-tracing";
-import { and, eq } from "drizzle-orm";
+import { and, eq, inArray } from "drizzle-orm";
 
 import { suggestFields } from "~/server/ai/field-suggest/suggest-fields";
 import type { Database } from "~/server/db";
 import {
   auditLog,
+  expense,
   product,
   productCategory,
   run as runTable,
 } from "~/server/db/schema";
-import { getDb, notDeleted } from "~/server/repo/database-helpers";
-import { patchEntityRows } from "~/server/repo/entity-patch";
+import {
+  databaseForTransaction,
+  getDb,
+  notDeleted,
+  withTransaction,
+} from "~/server/repo/database-helpers";
+import { updateProduct } from "~/server/repo/product/crud";
 import { resolveOrThrow } from "~/server/repo/shortcode-resolver";
+import {
+  mutationEvents,
+  runMutationSideEffectsForEntities,
+} from "~/server/services/mutation-side-effects";
 
 const log = createLogger("post-import-autofill");
 
@@ -25,43 +40,84 @@ const log = createLogger("post-import-autofill");
 export const AUTO_FILL_PROBABILITY = 0.95;
 
 /**
+ * The commit tool call waits for auto-fill, so it gets a fixed budget: no new
+ * suggestion starts after it, and the call returns when it elapses.
+ */
+const AUTO_FILL_BUDGET_MS = 20_000;
+
+/**
  * Filled in this order: the category is part of the ingredient and plant
  * bases, so they are asked after it lands. Each picks from existing records
  * only; auto-fill never creates an Ingredient or a Plant.
  */
 const AUTO_FILL_TARGETS = [
-  { field: "categoryId", entity: "productCategory" },
-  { field: "ingredientId", entity: "ingredient" },
-  { field: "growsPlantId", entity: "plant" },
+  "categoryId",
+  "ingredientId",
+  "growsPlantId",
 ] as const;
 
-type AutoFillPorts = { suggest: typeof suggestFields };
+type AutoFillTarget = (typeof AUTO_FILL_TARGETS)[number];
+type AutoFillPorts = { suggest: typeof suggestFields; budgetMs?: number };
 
 /**
  * After an import commits, fill the empty category, ingredient, and plant of
- * each Product that import created when Jev is at least
- * {@link AUTO_FILL_PROBABILITY} sure. A Product the import only linked, and
- * any field already set, are left alone. Writes are audited under the import
- * run, so the Product's history names where the value came from. Best-effort
- * per Product: a failed suggestion is logged and never fails the import.
+ * each Product this run created on these Purchases when Jev is at least
+ * {@link AUTO_FILL_PROBABILITY} sure. A Product the import only linked, a
+ * field already set, and a field a member sets while Jev decides are left
+ * alone. The write goes through the ordinary Product update (its category
+ * rules and audit), as the import's actor scoped to its run. Best-effort and
+ * bounded: any failure is logged and never fails the committed import.
  */
 export async function autoFillCreatedProducts(
   db: Database,
-  input: { runId: RunId },
+  input: { runId: RunId; purchaseIds: readonly PurchaseId[] },
   ports: AutoFillPorts = { suggest: suggestFields },
 ) {
-  const created = await getDb(db)
-    .selectDistinct({ id: auditLog.entityId })
-    .from(auditLog)
-    .where(
+  const budgetMs = ports.budgetMs ?? AUTO_FILL_BUDGET_MS;
+  const deadline = Date.now() + budgetMs;
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  const elapsed = new Promise<void>((resolve) => {
+    timer = setTimeout(resolve, budgetMs);
+  });
+  try {
+    await Promise.race([fillAll(db, input, ports, deadline), elapsed]);
+  } catch (error) {
+    log.warn("Product auto-fill skipped", { runId: input.runId, error });
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+async function fillAll(
+  db: Database,
+  input: { runId: RunId; purchaseIds: readonly PurchaseId[] },
+  ports: AutoFillPorts,
+  deadline: number,
+) {
+  if (input.purchaseIds.length === 0) return;
+  const database = getDb(db);
+  const created = await database
+    .selectDistinct({ id: product.id })
+    .from(expense)
+    .innerJoin(product, eq(product.id, expense.productId))
+    .innerJoin(
+      auditLog,
       and(
-        eq(auditLog.runId, input.runId),
+        eq(auditLog.entityId, product.id),
         eq(auditLog.entityKind, "product"),
         eq(auditLog.action, "create"),
+        eq(auditLog.runId, input.runId),
+      ),
+    )
+    .where(
+      and(
+        inArray(expense.purchaseId, [...input.purchaseIds]),
+        notDeleted(expense),
+        notDeleted(product),
       ),
     );
   if (created.length === 0) return;
-  const [run] = await getDb(db)
+  const [run] = await database
     .select({ actorUserId: runTable.actorUserId })
     .from(runTable)
     .where(eq(runTable.id, input.runId))
@@ -75,7 +131,16 @@ export async function autoFillCreatedProducts(
   await Promise.all(
     created.map(async ({ id }) => {
       try {
-        await autoFillProduct(db, { runId: input.runId, actor }, id, ports);
+        for (const target of AUTO_FILL_TARGETS) {
+          if (Date.now() >= deadline) return;
+          await fillTarget(
+            db,
+            { runId: input.runId, actor },
+            id,
+            target,
+            ports,
+          );
+        }
       } catch (error) {
         log.warn("Product auto-fill skipped", { productId: id, error });
       }
@@ -83,53 +148,74 @@ export async function autoFillCreatedProducts(
   );
 }
 
-async function autoFillProduct(
+async function fillTarget(
   db: Database,
   { runId, actor }: { runId: RunId; actor: ActorContext },
-  productId: string,
+  productId: ProductId,
+  target: AutoFillTarget,
   ports: AutoFillPorts,
 ) {
-  for (const target of AUTO_FILL_TARGETS) {
-    const row = await loadBasis(db, productId);
-    if (!row || row[target.field] !== null) continue;
-    const out = await ports.suggest(db, runId, {
-      entity: "product",
-      entityId: row.shortcode,
-      basisMode: "suggested",
-      targets: [target.field],
-      basis: {
-        name: row.name,
-        manufacturer: row.manufacturer || null,
-        model: row.model,
-        notes: row.notes,
-        categoryId: row.categoryShortcode,
-      },
-    });
-    const outcome = out.outcomes?.[target.field];
-    const value = out.suggestions[target.field]?.value;
-    if (
-      outcome?.kind !== "evaluated" ||
-      outcome.answer !== "pick" ||
-      (outcome.probability ?? 0) < AUTO_FILL_PROBABILITY ||
-      !value
-    )
-      continue;
-    const resolved = await resolveOrThrow(db, target.entity, value);
-    await patchEntityRows(
+  const row = await loadBasis(db, productId);
+  if (!row || row[target] !== null) return;
+  const out = await ports.suggest(db, runId, {
+    entity: "product",
+    entityId: row.shortcode,
+    basisMode: "suggested",
+    targets: [target],
+    basis: {
+      name: row.name,
+      manufacturer: row.manufacturer || null,
+      model: row.model,
+      notes: row.notes,
+      categoryId: row.categoryShortcode,
+    },
+  });
+  const outcome = out.outcomes?.[target];
+  const value = out.suggestions[target]?.value;
+  if (
+    outcome?.kind !== "evaluated" ||
+    outcome.answer !== "pick" ||
+    (outcome.probability ?? 0) < AUTO_FILL_PROBABILITY ||
+    !value
+  )
+    return;
+  const patch = await patchFor(db, target, value);
+  const written = await withTransaction(db, async (tx) => {
+    // Re-read under the row lock: a member who filled the field while Jev
+    // was deciding keeps their value.
+    const [locked] = await tx
+      .select({
+        categoryId: product.categoryId,
+        ingredientId: product.ingredientId,
+        growsPlantId: product.growsPlantId,
+      })
+      .from(product)
+      .where(and(eq(product.id, productId), notDeleted(product)))
+      .for("update")
+      .limit(1);
+    if (!locked || locked[target] !== null) return false;
+    await updateProduct(databaseForTransaction(tx), productId, patch, actor);
+    return true;
+  });
+  if (written)
+    await runMutationSideEffectsForEntities(
       db,
-      actor,
-      {
-        entity: "product",
-        table: product,
-        fields: AUTO_FILL_TARGETS.map((target) => target.field),
-      },
-      [productId],
-      { [target.field]: resolved },
+      mutationEvents("product", "updated", [productId], "product.autofill"),
     );
+}
+
+async function patchFor(db: Database, target: AutoFillTarget, value: string) {
+  switch (target) {
+    case "categoryId":
+      return { categoryId: await resolveOrThrow(db, "productCategory", value) };
+    case "ingredientId":
+      return { ingredientId: await resolveOrThrow(db, "ingredient", value) };
+    case "growsPlantId":
+      return { growsPlantId: await resolveOrThrow(db, "plant", value) };
   }
 }
 
-async function loadBasis(db: Database, productId: string) {
+async function loadBasis(db: Database, productId: ProductId) {
   const [row] = await getDb(db)
     .select({
       shortcode: product.shortcode,
@@ -144,12 +230,7 @@ async function loadBasis(db: Database, productId: string) {
     })
     .from(product)
     .leftJoin(productCategory, eq(productCategory.id, product.categoryId))
-    .where(
-      and(
-        eq(product.id, parseEntityId("product", productId)),
-        notDeleted(product),
-      ),
-    )
+    .where(and(eq(product.id, productId), notDeleted(product)))
     .limit(1);
   return row ?? null;
 }

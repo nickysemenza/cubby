@@ -406,7 +406,7 @@ export async function chooseLineStage(
       feature: PURCHASE_IMPORT_PRODUCT_PROMOTION_FEATURE,
       choices: ["promote", "coarse_only"] as const,
       rules:
-        "Choose promote only when the line identifies a durable sellable product worth creating or linking: something the household keeps, stores, plants, or restocks. Choose coarse_only for prepared food and drinks from a restaurant or delivery order, event or travel tickets, rides, memberships, subscriptions, digital access, donations, services, vague bundles, fees, warranties, or insufficient identity.",
+        "Choose promote only when the line identifies a durable sellable product worth creating or linking. Choose coarse_only for services, vague bundles, fees, warranties, or insufficient identity.",
     },
     reversal: {
       feature: PURCHASE_IMPORT_REVERSAL_KIND_FEATURE,

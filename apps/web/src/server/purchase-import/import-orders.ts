@@ -5,6 +5,7 @@ import {
   parseEntityId,
   type ProductId,
   productShortcode,
+  type PurchaseId,
   type VendorId,
   runEntityId,
 } from "@cubby/schemas/identifiers";
@@ -781,6 +782,8 @@ export async function commitPurchaseImport(
           const thumbnailWork: Parameters<
             typeof attachOrderLineThumbnails
           >[1][] = [];
+          // Purchases this commit wrote, whose new Products auto-fill reads.
+          const committedPurchaseIds: PurchaseId[] = [];
           let requiresReview = false;
           // Adjustment lines (tax/shipping/discount/etc.) never carry a
           // Product, so the caller's resolution roster is keyed to principal
@@ -883,6 +886,13 @@ export async function commitPurchaseImport(
               : [];
             if (
               result.purchaseId &&
+              (result.outcome === "created" || result.outcome === "updated")
+            )
+              committedPurchaseIds.push(
+                parseEntityId("purchase", result.purchaseId),
+              );
+            if (
+              result.purchaseId &&
               assignedMail &&
               order.sourceKind === "mail_message" &&
               (result.outcome === "created" || result.outcome === "updated")
@@ -939,13 +949,21 @@ export async function commitPurchaseImport(
               updatedAt: new Date(),
             })
             .where(eq(runTable.id, scope.public.runId));
-          return { result: publicResult, requiresReview, thumbnailWork };
+          return {
+            result: publicResult,
+            requiresReview,
+            thumbnailWork,
+            committedPurchaseIds,
+          };
         },
       ),
   );
   // Network work stays outside the import transaction; each is best-effort.
   // Auto-fill runs first so enrichment fingerprints the filled Products.
-  await autoFillCreatedProducts(db, { runId: scope.public.runId });
+  await autoFillCreatedProducts(db, {
+    runId: scope.public.runId,
+    purchaseIds: transactionResult.committedPurchaseIds ?? [],
+  });
   for (const work of transactionResult.thumbnailWork ?? []) {
     await attachOrderLineThumbnails(db, work);
     // The import already committed: a follow-up failure is logged, never

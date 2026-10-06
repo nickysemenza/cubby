@@ -3,128 +3,166 @@ import type {
   FieldSuggestionsOut,
 } from "@cubby/schemas/ai";
 import { actorInRun } from "@cubby/schemas/context";
-import type { RunId } from "@cubby/schemas/identifiers";
+import type { ProductId, RunId } from "@cubby/schemas/identifiers";
 import { and, eq } from "drizzle-orm";
 import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 
 import type { Database } from "~/server/db";
-import { auditLog, product } from "~/server/db/schema";
+import { auditLog, product, productCategory } from "~/server/db/schema";
 import { logAuditEntry } from "~/server/repo/audit-log";
-import { getDb } from "~/server/repo/database-helpers";
+import { getDb, notDeleted } from "~/server/repo/database-helpers";
 import { insertWithShortcode } from "~/server/repo/shortcode-utils";
 import { ensureRun } from "~/server/runs/ensure-run";
 
 import { autoFillCreatedProducts } from "./post-import-autofill";
 
+type Suggest = (
+  db: Database,
+  runId: RunId,
+  input: FieldSuggestionsInput,
+) => Promise<FieldSuggestionsOut>;
+
+const pick = (
+  target: string,
+  value: string,
+  probability: number,
+): FieldSuggestionsOut => ({
+  suggestions: {
+    [target]: {
+      value,
+      label: value,
+      detail: null,
+      confidence: "high",
+      probability,
+      reasoning: "synthetic",
+      alternatives: [],
+      operation: "set",
+      removals: [],
+    },
+  },
+  outcomes: {
+    [target]: {
+      kind: "evaluated",
+      answer: "pick",
+      confidence: "high",
+      probability,
+      alternatives: [],
+    },
+  },
+});
+
 // A Product an import just created gets the fields Jev is nearly certain of.
-// Failure modes: a sub-0.95 guess is written; a field the member (or an
-// earlier step) already set is overwritten; a Product the import only linked
-// is touched; the plant/ingredient pick ignores the category just applied;
-// the write leaves no audit trail back to the import run.
+// Failure modes: a sub-0.95 guess is written; a field the member already set,
+// or sets while Jev decides, is overwritten; a Product the import only linked
+// is touched; a later target ignores the category just applied; an
+// ingredient link skips the Product's food-category rule; a stalled
+// suggestion holds the committed import's tool call open; the write leaves
+// no audit trail back to the import run.
 describe("auto-fill after an import", () => {
   const ctx = withTestDb();
 
   async function seed() {
-    const runId = await ensureRun(ctx.db, ctx.actor, {
-      // Any run id works: auto-fill keys on the audit trail, not the purpose.
-      purpose: "ai_suggest",
+    // Any run id works: auto-fill keys on the audit trail, not the purpose.
+    const runId = await ensureRun(ctx.db, ctx.actor, { purpose: "ai_suggest" });
+    const vendor = await insertWithShortcode(ctx.db, "vendor", {
+      name: `Autofill Seeds ${crypto.randomUUID()}`,
+    });
+    const purchase = await insertWithShortcode(ctx.db, "purchase", {
+      vendorId: vendor.id,
+      orderId: "AF-1",
+      date: "2026-09-21",
+      // Principal lines need a trade before any category change validates.
+      defaultTrade: "other",
     });
     const category = await insertWithShortcode(ctx.db, "productCategory", {
       name: `Vegetable seeds ${crypto.randomUUID()}`,
     });
+    const otherCategory = await insertWithShortcode(ctx.db, "productCategory", {
+      name: `Herb seeds ${crypto.randomUUID()}`,
+    });
     const plant = await insertWithShortcode(ctx.db, "plant", {
       name: "Example Sun Tomato",
     });
-    const created = await insertWithShortcode(ctx.db, "product", {
-      name: "Example Sun Tomato seed packet",
-      manufacturer: "",
-    });
-    const preset = await insertWithShortcode(ctx.db, "product", {
-      name: "Example basil seed packet",
-      manufacturer: "",
-    });
-    const linked = await insertWithShortcode(ctx.db, "product", {
-      name: "Example trowel",
-      manufacturer: "",
-    });
+    const newProduct = (name: string) =>
+      insertWithShortcode(ctx.db, "product", { name, manufacturer: "" });
+    const created = await newProduct("Example Sun Tomato seed packet");
+    const preset = await newProduct("Example basil seed packet");
+    const linked = await newProduct("Example trowel");
+    for (const row of [created, preset, linked])
+      await insertWithShortcode(ctx.db, "expense", {
+        name: row.name,
+        purchaseId: purchase.id,
+        productId: row.id,
+        cost: 3,
+        date: "2026-09-21",
+        lineKind: "principal",
+        costType: "materials",
+      });
     for (const row of [created, preset])
       await logAuditEntry(ctx.db, actorInRun(ctx.actor, runId), {
         entityKind: "product",
         entityId: row.id,
         action: "create",
       });
-    const otherCategory = await insertWithShortcode(ctx.db, "productCategory", {
-      name: `Herb seeds ${crypto.randomUUID()}`,
-    });
     await getDb(ctx.db)
       .update(product)
       .set({ categoryId: otherCategory.id })
       .where(eq(product.id, preset.id));
-    return { runId, category, plant, created, preset, linked, otherCategory };
+    return {
+      runId,
+      purchase,
+      category,
+      otherCategory,
+      plant,
+      created,
+      preset,
+      linked,
+    };
   }
+
+  const fieldsOf = async (id: ProductId) =>
+    (
+      await getDb(ctx.db)
+        .select({
+          categoryId: product.categoryId,
+          growsPlantId: product.growsPlantId,
+          ingredientId: product.ingredientId,
+        })
+        .from(product)
+        .where(eq(product.id, id))
+    )[0];
 
   it("writes only near-certain picks into empty fields of Products the import created", async () => {
     const seeded = await seed();
     const calls: FieldSuggestionsInput[] = [];
-    const suggest = async (
-      _db: Database,
-      _runId: RunId,
-      input: FieldSuggestionsInput,
-    ): Promise<FieldSuggestionsOut> => {
+    const suggest: Suggest = async (_db, _runId, input) => {
       calls.push(input);
       const [target] = input.targets;
-      const pick = (value: string, probability: number) => ({
-        suggestions: {
-          [target!]: {
-            value,
-            label: value,
-            detail: null,
-            confidence: "high" as const,
-            probability,
-            reasoning: "synthetic",
-            alternatives: [],
-            operation: "set" as const,
-            removals: [],
-          },
-        },
-        outcomes: {
-          [target!]: {
-            kind: "evaluated" as const,
-            answer: "pick" as const,
-            confidence: "high" as const,
-            probability,
-            alternatives: [],
-          },
-        },
-      });
-      if (target === "categoryId") return pick(seeded.category.shortcode, 0.97);
-      if (target === "growsPlantId") return pick(seeded.plant.shortcode, 0.99);
-      return pick("ING-ZZZZ", 0.9);
+      if (target === "categoryId")
+        return pick(target, seeded.category.shortcode, 0.97);
+      if (target === "growsPlantId")
+        return pick(target, seeded.plant.shortcode, 0.99);
+      return pick(target!, "ING-ZZZZ", 0.9);
     };
 
-    await autoFillCreatedProducts(ctx.db, { runId: seeded.runId }, { suggest });
+    await autoFillCreatedProducts(
+      ctx.db,
+      { runId: seeded.runId, purchaseIds: [seeded.purchase.id] },
+      { suggest },
+    );
 
-    const rows = await getDb(ctx.db)
-      .select({
-        id: product.id,
-        categoryId: product.categoryId,
-        growsPlantId: product.growsPlantId,
-        ingredientId: product.ingredientId,
-      })
-      .from(product);
-    const byId = new Map(rows.map((row) => [row.id, row]));
-    expect(byId.get(seeded.created.id)).toMatchObject({
+    expect(await fieldsOf(seeded.created.id)).toMatchObject({
       categoryId: seeded.category.id,
       growsPlantId: seeded.plant.id,
       // 0.90 is below the bar.
       ingredientId: null,
     });
     // The member's category stays; the linked Product is untouched.
-    expect(byId.get(seeded.preset.id)?.categoryId).toBe(
+    expect((await fieldsOf(seeded.preset.id))?.categoryId).toBe(
       seeded.otherCategory.id,
     );
-    expect(byId.get(seeded.linked.id)).toMatchObject({
+    expect(await fieldsOf(seeded.linked.id)).toMatchObject({
       categoryId: null,
       growsPlantId: null,
     });
@@ -150,5 +188,69 @@ describe("auto-fill after an import", () => {
       );
     expect(audits.length).toBeGreaterThan(0);
     expect(audits.every((audit) => audit.runId === seeded.runId)).toBe(true);
+  });
+
+  it("keeps a value the member sets while Jev is deciding", async () => {
+    const seeded = await seed();
+    const suggest: Suggest = async (_db, _runId, input) => {
+      const [target] = input.targets;
+      if (target === "categoryId")
+        await getDb(ctx.db)
+          .update(product)
+          .set({ categoryId: seeded.otherCategory.id })
+          .where(eq(product.id, seeded.created.id));
+      return pick(target!, seeded.category.shortcode, 0.99);
+    };
+    await autoFillCreatedProducts(
+      ctx.db,
+      { runId: seeded.runId, purchaseIds: [seeded.purchase.id] },
+      { suggest },
+    );
+    expect((await fieldsOf(seeded.created.id))?.categoryId).toBe(
+      seeded.otherCategory.id,
+    );
+  });
+
+  it("applies the Product food rule when it links an ingredient", async () => {
+    const seeded = await seed();
+    // The live `food` root the Product food rule resolves to.
+    const [food] = await getDb(ctx.db)
+      .select({ id: productCategory.id })
+      .from(productCategory)
+      .where(
+        and(eq(productCategory.feature, "food"), notDeleted(productCategory)),
+      )
+      .limit(1);
+    const ingredient = await insertWithShortcode(ctx.db, "ingredient", {
+      name: `example tomato ${crypto.randomUUID()}`,
+    });
+    const suggest: Suggest = async (_db, _runId, input) => {
+      const [target] = input.targets;
+      if (target === "ingredientId")
+        return pick(target, ingredient.shortcode, 0.99);
+      return pick(target!, seeded.category.shortcode, 0.5);
+    };
+    await autoFillCreatedProducts(
+      ctx.db,
+      { runId: seeded.runId, purchaseIds: [seeded.purchase.id] },
+      { suggest },
+    );
+    expect(await fieldsOf(seeded.created.id)).toMatchObject({
+      ingredientId: ingredient.id,
+      categoryId: food?.id,
+    });
+  });
+
+  it("returns at its budget when a suggestion stalls", async () => {
+    const seeded = await seed();
+    const suggest: Suggest = () => new Promise(() => undefined);
+    const started = Date.now();
+    await autoFillCreatedProducts(
+      ctx.db,
+      { runId: seeded.runId, purchaseIds: [seeded.purchase.id] },
+      { suggest, budgetMs: 200 },
+    );
+    expect(Date.now() - started).toBeLessThan(5_000);
+    expect((await fieldsOf(seeded.created.id))?.categoryId).toBeNull();
   });
 });

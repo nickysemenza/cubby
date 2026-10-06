@@ -23,9 +23,7 @@ ambiguous choices. Neither agent substitutes for source evidence or approval.
 After an import commits, Jev fills the empty category, ingredient, and grown
 Plant of each Product that import created when its calibrated probability is
 at least 0.95, choosing only existing records; the write is audited under the
-import run (`purchase-import/post-import-autofill.ts`). A line for prepared
-food, tickets, rides, subscriptions, or donations books an expense with no
-Product.
+import run (`purchase-import/post-import-autofill.ts`).
 
 ```mermaid
 flowchart LR
