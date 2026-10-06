@@ -274,8 +274,8 @@ async function reclassifiesExpenses(
  * Locks the merge's categories and refuses one that is no longer live. Run it
  * as a merge transaction's first statement: FK writes that reference a locked
  * category wait for the merge. A writer that resolved a loser earlier can still
- * commit a reference after the merge; the referential-liveness detector reports
- * it and `repointMergedReferences` moves it to the survivor.
+ * commit a reference after the merge; that accepted race is reported by the
+ * referential-liveness problem and fixed by hand.
  */
 export async function lockLiveSpendingCategories(
   db: Database | DrizzleTransaction,

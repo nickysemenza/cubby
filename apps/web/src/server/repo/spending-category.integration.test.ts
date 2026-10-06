@@ -22,10 +22,7 @@ import {
 import { createTestRequestContext } from "~/server/testing/request-context";
 
 import { unwrapDb } from "./database-helpers";
-import {
-  findReferentialLivenessViolations,
-  repointMergedReferences,
-} from "./problems/detectors-integrity";
+import { findReferentialLivenessViolations } from "./problems/detectors-integrity";
 import { insertWithShortcode } from "./shortcode-utils";
 import {
   applySpendingClassificationReview,
@@ -264,44 +261,31 @@ describe("spending category merge", () => {
   });
 
   // The accepted residual race: a writer that resolved a loser before the
-  // merge commits its reference afterward. The integrity detector reports it
-  // and the repair follows the merge redirect to the survivor.
-  it("reports and repairs a reference committed to a merged loser", async () => {
+  // merge commits its reference afterward. The dangling-reference problem
+  // reports every such edge so a person can fix it by hand.
+  it("reports a reference committed to a merged-away category", async () => {
     const pets = await category("Synthetic pets");
     const pet = await category("Synthetic pet");
-    const retired = await category("Synthetic retired");
+    const child = await category("Synthetic pet toys");
     await merge(pets.shortcode, [pet.shortcode]);
+    const late = await referencesTo(pet.id);
     await unwrapDb(ctx.db)
       .update(spendingCategory)
-      .set({ deletedAt: new Date() })
-      .where(eq(spendingCategory.id, retired.id));
-    const late = await referencesTo(pet.id);
-    const orphan = await category("Synthetic orphan child", {
-      parentId: retired.id,
-    });
-    const dangling = async () =>
-      (await findReferentialLivenessViolations(ctx.db)).filter(
-        (row) => row.targetEntity === "spendingCategory",
-      );
-    expect((await dangling()).map((row) => row.sourceId)).toEqual(
-      expect.arrayContaining([late.line.id, late.order.id, orphan.id]),
+      .set({ parentId: pet.id })
+      .where(eq(spendingCategory.id, child.id));
+    const reported = (await findReferentialLivenessViolations(ctx.db))
+      .filter((row) => row.targetId === pet.id)
+      .map((row) => [row.edgeKey, row.sourceId]);
+    expect(reported).toEqual(
+      expect.arrayContaining([
+        ["Expense.spendingCategoryId", late.line.id],
+        ["Purchase.spendingCategoryId", late.order.id],
+        ["FinancialTransaction.spendingCategoryId", late.transaction.id],
+        ["Vendor.defaultSpendingCategoryId", late.shop.id],
+        ["ProductCategory.spendingCategoryId", late.mapping.id],
+        ["SpendingCategory.parentId", child.id],
+      ]),
     );
-
-    expect((await repointMergedReferences(ctx.db)).repointed).toBe(5);
-
-    const db = unwrapDb(ctx.db);
-    const [line] = await db
-      .select({ id: expense.spendingCategoryId })
-      .from(expense)
-      .where(eq(expense.id, late.line.id));
-    expect(line).toEqual({ id: pets.id });
-    const [shop] = await db
-      .select({ id: vendor.defaultSpendingCategoryId })
-      .from(vendor)
-      .where(eq(vendor.id, late.shop.id));
-    expect(shop).toEqual({ id: pets.id });
-    // A plain deletion has no survivor, so its reference stays reported.
-    expect((await dangling()).map((row) => row.sourceId)).toEqual([orphan.id]);
   });
 
   it("refuses a merge that would make the keeper its own ancestor", async () => {

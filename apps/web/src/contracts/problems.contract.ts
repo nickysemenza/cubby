@@ -107,12 +107,6 @@ export const problemsContract = defineContract("problems", {
       "financialTransaction",
     ],
   }),
-  /** Moves dangling references to a merged-away target onto its survivor. */
-  repointMergedReferences: mutation({
-    input: noInput,
-    output: z.object({ repointed: z.number().int().nonnegative() }),
-    invalidates: ["problems"],
-  }),
   resolveArrivedFindings: mutation({
     input: resolveArrivedFindingsInput,
     output: resolveArrivedFindingsOut,
