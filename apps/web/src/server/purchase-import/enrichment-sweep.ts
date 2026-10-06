@@ -3,9 +3,9 @@ import type {
   RunId,
   VendorAccountId,
 } from "@cubby/schemas/identifiers";
-import { and, asc, eq, gte, inArray, isNotNull } from "drizzle-orm";
+import { and, eq, gte, inArray, isNotNull, sql } from "drizzle-orm";
 
-import type { Database } from "~/server/db";
+import type { Database, DrizzleTransaction } from "~/server/db";
 import {
   auditLog,
   expense,
@@ -14,7 +14,7 @@ import {
   run as runTable,
   runTarget,
 } from "~/server/db/schema";
-import { getDb, notDeleted } from "~/server/repo/database-helpers";
+import { getDb, notDeleted, unwrapDb } from "~/server/repo/database-helpers";
 
 import { browsingAccountFor, browsingAccounts } from "./browsing-account";
 import { productEnrichmentTarget } from "./product-enrichment-target";
@@ -22,6 +22,7 @@ import {
   ACTIVE_RUN_STATUSES,
   type PurchaseImportNamespace,
   startTargetedRun,
+  type TargetedRunTarget,
 } from "./run-service";
 import { dispatchStartedRun, enrichmentStartPage } from "./targeted-run";
 
@@ -77,19 +78,23 @@ export async function sweepPendingEnrichment(
   } = {},
 ): Promise<EnrichmentSweepResult> {
   const result: EnrichmentSweepResult = { started: [], waiting: [] };
-  const pending = await pendingProducts(
+  const candidates = await pendingCandidates(
     db,
     new Date((options.now ?? new Date()).getTime() - SWEEP_WINDOW_MS),
   );
   const accounts = await browsingAccounts(
     db,
-    pending.map((row) => row.vendorId),
+    candidates.map((row) => row.vendorId),
   );
   const byAccount = new Map<
     VendorAccountId,
-    { account: (typeof accounts)[number]; rows: typeof pending }
+    { account: (typeof accounts)[number]; rows: typeof candidates }
   >();
-  for (const row of pending) {
+  const chosen = new Set<string>();
+  // Candidates arrive oldest Product first, each Product's product page
+  // first: a Product goes to the first of its Purchases whose Vendor browses.
+  for (const row of candidates) {
+    if (chosen.has(row.productId)) continue;
     const account = browsingAccountFor(accounts, row);
     if (!account) continue;
     if (
@@ -97,6 +102,7 @@ export async function sweepPendingEnrichment(
       !options.vendorAccountIds.includes(account.id)
     )
       continue;
+    chosen.add(row.productId);
     const group = byAccount.get(account.id) ?? { account, rows: [] };
     group.rows.push(row);
     byAccount.set(account.id, group);
@@ -127,16 +133,25 @@ export async function sweepPendingEnrichment(
       });
     }
     if (targets.length === 0) continue;
-    const started = await startTargetedRun(db, {
-      ledgerPartyId: account.ledgerPartyId,
-      purpose: "product_enrichment",
-      vendorId: account.vendorId,
-      vendorAccountId: account.id,
-      trigger: "discovery",
-      targets,
-    });
+    const started = await startTargetedRun(
+      db,
+      {
+        ledgerPartyId: account.ledgerPartyId,
+        purpose: "product_enrichment",
+        vendorId: account.vendorId,
+        vendorAccountId: account.id,
+        trigger: "discovery",
+        targets,
+      },
+      { admit: admitOpenProducts },
+    );
     if (!started.created) {
-      result.waiting.push({ vendorAccountId: account.id, reason: "occupied" });
+      // No blocking run: a racing pass already took every Product.
+      if (started.blockingRun)
+        result.waiting.push({
+          vendorAccountId: account.id,
+          reason: "occupied",
+        });
       continue;
     }
     if (started.run.dispatchEventId)
@@ -184,17 +199,87 @@ export async function sweepImportedPurchases(
 }
 
 /**
- * Live Products a purchase import created within the window, each with one
- * Purchase that bought it (its line's product page first), oldest first,
- * minus the ones an enrichment run finished, is working, or gave up on.
+ * Recheck the sweep's earlier read inside the admission transaction: two
+ * passes (cron and app open) or a member's manual start on another account
+ * may have admitted a Product since. Product locks are taken in one order so
+ * concurrent admissions over overlapping Products cannot deadlock.
  */
-async function pendingProducts(db: Database, since: Date) {
-  const database = getDb(db);
-  const rows = await database
-    .selectDistinctOn([product.id], {
+async function admitOpenProducts(
+  tx: DrizzleTransaction,
+  targets: TargetedRunTarget[],
+): Promise<TargetedRunTarget[]> {
+  const productIds = targets.flatMap((target) =>
+    target.kind === "product" ? [target.productId] : [],
+  );
+  for (const id of [...productIds].sort())
+    await tx.execute(
+      sql`SELECT pg_advisory_xact_lock(hashtext(${`product-enrichment:${id}`}))`,
+    );
+  const open = await openProducts(tx, productIds);
+  return targets.filter(
+    (target) => target.kind === "product" && open.has(target.productId),
+  );
+}
+
+/**
+ * Of these Products, the ones no enrichment run has committed or skipped,
+ * none is working now, and fewer than `MAX_ENRICHMENT_ATTEMPTS` runs ended
+ * without either.
+ */
+async function openProducts(
+  db: Database | DrizzleTransaction,
+  productIds: readonly string[],
+) {
+  if (productIds.length === 0) return new Set<string>();
+  const attempts = await unwrapDb(db)
+    .select({
+      productId: runTarget.entityId,
+      state: runTarget.state,
+      status: runTable.status,
+    })
+    .from(runTarget)
+    .innerJoin(runTable, eq(runTable.id, runTarget.runId))
+    .where(
+      and(
+        eq(runTable.purpose, "product_enrichment"),
+        eq(runTarget.entityKind, "product"),
+        inArray(runTarget.entityId, [...productIds]),
+      ),
+    );
+  // A dispatch_failed run is not retried by itself, so it is a spent
+  // attempt rather than one still working the Product.
+  const holding = new Set<string>(ACTIVE_RUN_STATUSES);
+  const settled = new Set<string>();
+  const tries = new Map<string, number>();
+  for (const attempt of attempts) {
+    if (
+      attempt.state === "completed" ||
+      attempt.state === "skipped" ||
+      holding.has(attempt.status)
+    )
+      settled.add(attempt.productId);
+    tries.set(attempt.productId, (tries.get(attempt.productId) ?? 0) + 1);
+  }
+  return new Set(
+    productIds.filter(
+      (id) =>
+        !settled.has(id) && (tries.get(id) ?? 0) < MAX_ENRICHMENT_ATTEMPTS,
+    ),
+  );
+}
+
+/**
+ * Every Purchase line of each open Product a purchase import created within
+ * the window: oldest Product first, and within one Product the lines with a
+ * product page first, then by page and Purchase so the choice is stable.
+ */
+async function pendingCandidates(db: Database, since: Date) {
+  const rows = await getDb(db)
+    .selectDistinct({
       productId: product.id,
       createdAt: product.createdAt,
       url: expense.url,
+      purchaseId: purchase.id,
       vendorId: purchase.vendorId,
       vendorAccountId: purchase.vendorAccountId,
     })
@@ -224,50 +309,23 @@ async function pendingProducts(db: Database, since: Date) {
       purchase,
       and(eq(purchase.id, expense.purchaseId), notDeleted(purchase)),
     )
-    .where(notDeleted(product))
-    .orderBy(product.id, asc(expense.url));
-  if (rows.length === 0) return [];
-  const attempts = await database
-    .select({
-      productId: runTarget.entityId,
-      state: runTarget.state,
-      status: runTable.status,
-    })
-    .from(runTarget)
-    .innerJoin(runTable, eq(runTable.id, runTarget.runId))
-    .where(
-      and(
-        eq(runTable.purpose, "product_enrichment"),
-        eq(runTarget.entityKind, "product"),
-        inArray(
-          runTarget.entityId,
-          rows.map((row) => row.productId),
-        ),
-      ),
-    );
-  // A dispatch_failed run is not retried by itself, so it is a spent
-  // attempt rather than one still working the Product.
-  const holding = new Set<string>(ACTIVE_RUN_STATUSES);
-  const settled = new Set<string>();
-  const tries = new Map<string, number>();
-  for (const attempt of attempts) {
-    if (
-      attempt.state === "completed" ||
-      attempt.state === "skipped" ||
-      holding.has(attempt.status)
-    )
-      settled.add(attempt.productId);
-    tries.set(attempt.productId, (tries.get(attempt.productId) ?? 0) + 1);
-  }
+    .where(notDeleted(product));
+  const open = await openProducts(
+    db,
+    rows.map((row) => row.productId),
+  );
+  const order = (left: string | null, right: string | null) =>
+    (left ?? "").localeCompare(right ?? "");
   return rows
     .flatMap(({ vendorId, ...row }) =>
-      vendorId &&
-      !settled.has(row.productId) &&
-      (tries.get(row.productId) ?? 0) < MAX_ENRICHMENT_ATTEMPTS
-        ? [{ ...row, vendorId }]
-        : [],
+      vendorId && open.has(row.productId) ? [{ ...row, vendorId }] : [],
     )
     .sort(
-      (left, right) => left.createdAt.getTime() - right.createdAt.getTime(),
+      (left, right) =>
+        left.createdAt.getTime() - right.createdAt.getTime() ||
+        order(left.productId, right.productId) ||
+        Number(left.url === null) - Number(right.url === null) ||
+        order(left.url, right.url) ||
+        order(left.purchaseId, right.purchaseId),
     );
 }

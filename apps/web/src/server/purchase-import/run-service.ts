@@ -234,7 +234,7 @@ async function assertNoHoldingChargeRun(
   if (held) throw new ActiveChargeRunError(held.shortcode);
 }
 
-type TargetedRunTarget =
+export type TargetedRunTarget =
   | {
       kind: "purchase";
       purchaseId: string;
@@ -437,6 +437,17 @@ export async function startOrResumeRun(
 export async function startTargetedRun(
   db: Database,
   input: StartTargetedRunInput,
+  options: {
+    /**
+     * Narrow the targets inside the admission transaction, after the account
+     * lock: a caller that chose them from an earlier read rechecks them here.
+     * No target left admits nothing.
+     */
+    admit?: (
+      tx: DrizzleTransaction,
+      targets: TargetedRunTarget[],
+    ) => Promise<TargetedRunTarget[]>;
+  } = {},
 ) {
   const purpose = runPurpose.parse(input.purpose);
   if (purpose === "account_sync")
@@ -473,6 +484,11 @@ export async function startTargetedRun(
         .limit(1);
       if (blockingRun) return { created: false as const, blockingRun };
     }
+    const targets = options.admit
+      ? await options.admit(tx, input.targets)
+      : input.targets;
+    if (targets.length === 0)
+      return { created: false as const, blockingRun: null };
 
     const [actor] = await tx
       .select({
@@ -538,7 +554,7 @@ export async function startTargetedRun(
       ),
     });
     await tx.insert(runTarget).values(
-      input.targets.map((target) => ({
+      targets.map((target) => ({
         runId: id,
         entityKind: target.kind,
         entityId:
@@ -2214,7 +2230,14 @@ export async function importBrowserOrderEvidence(
           "Browser evidence captured; awaiting the purpose-specific comparison or bounded enrichment commit.",
         updatedAt: new Date(),
       })
-      .where(eq(runTarget.id, target.id));
+      // A capture answered after its target was committed or skipped keeps
+      // its evidence but must not reopen the target.
+      .where(
+        and(
+          eq(runTarget.id, target.id),
+          inArray(runTarget.state, ["pending", "prepared", "needs_evidence"]),
+        ),
+      );
     return {
       kind: "targeted_evidence" as const,
       targetId: target.id,

@@ -1029,6 +1029,58 @@ describe("saved confirmation imports", () => {
         ).toEqual([]);
       });
 
+      // Eligibility is decided per Purchase: a Product another Vendor also
+      // sold must not be dropped because that Vendor does not browse.
+      it("enriches through the Purchase whose Vendor browses when another Vendor also sold the Product", async () => {
+        const { accountId, line } = await mailOnlyImport();
+        await enableBrowserSync(accountId);
+        const otherVendor = await insertWithShortcode(ctx.db, "vendor", {
+          name: `Synthetic other shop ${crypto.randomUUID()}`,
+        });
+        const otherPurchase = await insertWithShortcode(ctx.db, "purchase", {
+          vendorId: otherVendor.id,
+          orderId: "OTHER-1",
+          date: "2026-09-02",
+        });
+        await insertWithShortcode(ctx.db, "expense", {
+          purchaseId: otherPurchase.id,
+          name: "Synthetic herb packet",
+          cost: 4,
+          date: "2026-09-02",
+          lineKind: "principal",
+          costType: "materials",
+          // Sorts ahead of the browsing Vendor's product page.
+          url: "https://aaa.other.example.test/herb",
+          productId: line.productId,
+          productQuantity: 1,
+        });
+        expect(
+          (await sweepPendingEnrichment(ctx.db, { bridge: online })).started,
+        ).toEqual([{ runId: expect.any(String), vendorAccountId: accountId }]);
+      });
+
+      // Two passes racing (cron and app open) must not spend a fourth
+      // attempt or start the same Product twice.
+      it("admits a Product once when two sweeps race", async () => {
+        const { accountId } = await mailOnlyImport();
+        await enableBrowserSync(accountId);
+        for (let attempt = 0; attempt < 2; attempt++) {
+          const { started } = await sweepPendingEnrichment(ctx.db, {
+            bridge: online,
+          });
+          await getDb(ctx.db)
+            .update(runTable)
+            .set({ status: "failed", failureCode: "offline_expired" })
+            .where(eq(runTable.id, started[0]!.runId));
+        }
+        const raced = await Promise.all([
+          sweepPendingEnrichment(ctx.db, { bridge: online }),
+          sweepPendingEnrichment(ctx.db, { bridge: online }),
+        ]);
+        expect(raced.flatMap((result) => result.started)).toHaveLength(1);
+        expect(await enrichmentTargets()).toHaveLength(3);
+      });
+
       it("never re-sweeps a Product a run skipped", async () => {
         const second = await mailOnlyImport();
         await enableBrowserSync(second.accountId);

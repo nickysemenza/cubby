@@ -132,7 +132,10 @@ async function startedOutcome(
   db: Database,
   started: Awaited<ReturnType<typeof startTargetedRun>>,
 ): Promise<TargetedImportStartOutput["runs"][number]> {
-  if (!started.created)
+  if (!started.created) {
+    // Only an `admit` narrowing leaves no blocking run; manual starts pass none.
+    if (!started.blockingRun)
+      throw new Error("Targeted import run admitted no targets");
     return {
       created: false,
       run: null,
@@ -141,6 +144,7 @@ async function startedOutcome(
         status: started.blockingRun.status,
       },
     };
+  }
   return {
     created: true,
     run: await queueStartedRun(db, started.run),
