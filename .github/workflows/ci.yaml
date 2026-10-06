@@ -292,9 +292,9 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          # Benchmark two workers per standard runner after browser caching and
-          # reduced motion improved the former one-worker suite. Keep Playwright's
-          # built-in sharding; the stable aggregate owns the required status.
+          # Public-repository runners have four vCPU. Benchmark three isolated
+          # workers within each existing runner; retain two shards and Playwright's
+          # built-in sharding. The stable aggregate owns the required status.
           - lane: "desktop 1/2"
             slug: desktop-1
             browser: chromium
@@ -346,7 +346,7 @@ jobs:
           pnpm --filter @cubby/web run build:cf
       - name: Run Playwright tests
         run: |
-          pnpm --filter @cubby/web run ${{ matrix.test-script }} --shard=${{ matrix.shard }} --workers=2 --trace=off
+          pnpm --filter @cubby/web run ${{ matrix.test-script }} --shard=${{ matrix.shard }} --workers=3 --trace=off
       - name: Save Playwright run bundle
         if: always()
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7

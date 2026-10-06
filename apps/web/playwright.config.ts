@@ -33,7 +33,7 @@ export default defineConfig({
   testDir: "./tests/e2e",
   /* Public-repository ubuntu-latest CI runners have 4 vCPU, shared by the
      browser, Worker, and database. CI shards desktop tests across two runners;
-     its workflow currently benchmarks two workers per runner via --workers.
+     its workflow currently benchmarks three workers per runner via --workers.
      Preserve the local fast-failure budget while giving CI scenarios more
      wall-clock room. */
   timeout: isCI ? 120_000 : 30_000,
@@ -50,7 +50,7 @@ export default defineConfig({
   /* Each worker owns an isolated database and harness. Three local macOS
      workers made iPhone WebKit flake across four unrelated specs under host
      contention, so macOS defaults to two and other hosts to one. Use
-     Playwright's --workers override, including CI's explicit two. */
+     Playwright's --workers override, including CI's explicit three. */
   workers: !isCI && process.platform === "darwin" ? 2 : 1,
   /* Backstop for a dead worker harness, which fails every remaining test
      identically. Kept loose enough that a genuine multi-test regression still
