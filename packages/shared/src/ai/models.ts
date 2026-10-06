@@ -214,8 +214,15 @@ type AnthropicChatModel = z.infer<typeof anthropicChatModelSchema>;
 /** Every model a feature record can name. */
 export type AiModel = SupportedChatModel | SupportedDecisionModel;
 
-/** The two measured chat tiers every chat feature is assigned to. */
+/** The fast chat tier: interactive and bulk background calls. */
 export const FAST_MODEL = "gpt-6-luna" satisfies OpenAiChatModel;
+/**
+ * The quality chat tier: calls whose accuracy outweighs latency (purchase
+ * evidence, recipe flow, photo identity). Production reaches OpenAI through
+ * the household's ChatGPT plan, so Sol's marginal cost there is ~$0; the
+ * routing eval (`feature-routing-eval.live-eval.ts`) compares tiers.
+ */
+export const QUALITY_MODEL = "gpt-6-sol" satisfies OpenAiChatModel;
 export const AUDIT_RECOVERY_MODEL =
   "claude-opus-5-5" satisfies AnthropicChatModel;
 /**

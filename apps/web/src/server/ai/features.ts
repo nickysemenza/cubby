@@ -48,6 +48,7 @@ import {
   DEFAULT_EMBEDDING_MODEL,
   FAST_MODEL,
   type OpenAiEffort,
+  QUALITY_MODEL,
   type SupportedChatModel,
   type SupportedDecisionModel,
   type SupportedEmbeddingModel,
@@ -55,7 +56,7 @@ import {
 import type { z } from "zod";
 
 /** Embeddings share the catalog, while retaining their vector runner. */
-type AiTier = "fast" | "decision" | "embedding";
+type AiTier = "fast" | "quality" | "decision" | "embedding";
 
 /**
  * The single place a tier's model is written down. `models.ts` owns the
@@ -63,6 +64,7 @@ type AiTier = "fast" | "decision" | "embedding";
  */
 const MODEL_FOR_TIER = {
   fast: FAST_MODEL,
+  quality: QUALITY_MODEL,
   decision: DECISION_MODEL,
   embedding: DEFAULT_EMBEDDING_MODEL,
 } as const satisfies Record<AiTier, AiModel | SupportedEmbeddingModel>;
@@ -81,7 +83,10 @@ interface AiFeatureShared {
 }
 
 /** A chat tier and its reasoning dial. */
-type AiChatFeatureTier = { tier: "fast"; effort: OpenAiEffort } & {
+type AiChatFeatureTier = {
+  tier: "fast" | "quality";
+  effort: OpenAiEffort;
+} & {
   /** Output cap. Reasoning/thinking tokens count against it on every tier. */
   maxTokens: number;
 };
@@ -223,10 +228,11 @@ export const PURCHASE_IMPORT_REVERSAL_KIND_FEATURE = defineFeature({
 }) satisfies AiDecisionFeature;
 
 // ---------------------------------------------------------------------------
-// Fast tier — GPT-6 Luna. Identification, detection, oversized selection,
-// and, at high effort, the features that left the Sol reasoning tier on
-// `eval:features` evidence: purchase-import audit, extraction repair, and
-// recipe flow.
+// Chat tiers. Quality — GPT-6 Sol: purchase evidence (extraction, receipts,
+// mail classification, audit, repair), recipe flow, and photo identity and
+// detection. Fast — GPT-6 Luna: oversized selection and bulk descriptions.
+// Production reaches OpenAI through the household's ChatGPT plan, where Sol's
+// marginal cost is about zero (`docs/infrastructure.md`).
 // ---------------------------------------------------------------------------
 
 /**
@@ -247,7 +253,7 @@ export const SELECTION_OVERFLOW_FEATURE = defineFeature({
 
 export const PRODUCT_IDENTIFICATION_FEATURE = defineFeature({
   feature: "product-identification",
-  tier: "fast",
+  tier: "quality",
   maxTokens: 500,
   effort: "low",
   cache: true,
@@ -257,7 +263,7 @@ export const PRODUCT_IDENTIFICATION_FEATURE = defineFeature({
 
 export const LOCATION_INVENTORY_DETECTION_FEATURE = defineFeature({
   feature: "location-inventory-detection",
-  tier: "fast",
+  tier: "quality",
   maxTokens: 2000,
   effort: "low",
   cache: true,
@@ -269,7 +275,7 @@ export const LOCATION_INVENTORY_DETECTION_FEATURE = defineFeature({
 
 export const PURCHASE_IMPORT_EXTRACTION_FEATURE = defineFeature({
   feature: "purchase-import-extraction",
-  tier: "fast",
+  tier: "quality",
   maxTokens: 4_000,
   effort: "low",
   cache: false,
@@ -279,7 +285,7 @@ export const PURCHASE_IMPORT_EXTRACTION_FEATURE = defineFeature({
 
 export const PURCHASE_IMPORT_RECEIPT_FEATURE = defineFeature({
   feature: "purchase-import-receipt-extraction",
-  tier: "fast",
+  tier: "quality",
   maxTokens: 4_000,
   effort: "low",
   cache: false,
@@ -289,7 +295,7 @@ export const PURCHASE_IMPORT_RECEIPT_FEATURE = defineFeature({
 
 export const PURCHASE_IMPORT_MAIL_FEATURE = defineFeature({
   feature: "purchase-import-mail-classification",
-  tier: "fast",
+  tier: "quality",
   maxTokens: 1_000,
   effort: "low",
   cache: true,
@@ -298,14 +304,16 @@ export const PURCHASE_IMPORT_MAIL_FEATURE = defineFeature({
 }) satisfies AiStructuredFeature<OrderMailMessageClassification>;
 
 /**
- * Moved from Sol after `eval:features` (2026-10-04): Luna at high effort
+ * On Sol again since 2026-10-06: judged the better model, and the ChatGPT plan
+ * made its cost moot.
+ * History: moved from Sol after `eval:features` (2026-10-04): Luna at high effort
  * matched Sol high 12/16 with zero unsafe answers on both, at about 1/19 of
  * the cost. Its schema still carries no array bounds: a failed call is
  * retried on the Anthropic recovery model (`extract.ts`).
  */
 export const PURCHASE_IMPORT_AUDIT_FEATURE = defineFeature({
   feature: "purchase-import-audit",
-  tier: "fast",
+  tier: "quality",
   maxTokens: 8_000,
   effort: "high",
   cache: true,
@@ -314,7 +322,9 @@ export const PURCHASE_IMPORT_AUDIT_FEATURE = defineFeature({
 }) satisfies AiStructuredFeature<ImportAuditModelOutput>;
 
 /**
- * Moved from Sol after `eval:features` (2026-10-04): Luna at high effort
+ * On Sol again since 2026-10-06: judged the better model, and the ChatGPT plan
+ * made its cost moot.
+ * History: moved from Sol after `eval:features` (2026-10-04): Luna at high effort
  * matched Sol high 14/14 with zero unsafe repairs (no line invented, moved,
  * or scaled to balance a total), at about 1/19 of the cost. The eval's cases
  * are text-only; production also attaches the capture's screenshot, which
@@ -322,7 +332,7 @@ export const PURCHASE_IMPORT_AUDIT_FEATURE = defineFeature({
  */
 export const PURCHASE_IMPORT_REPAIR_FEATURE = defineFeature({
   feature: "purchase-import-repair",
-  tier: "fast",
+  tier: "quality",
   maxTokens: 4_000,
   effort: "high",
   cache: false,
@@ -331,14 +341,16 @@ export const PURCHASE_IMPORT_REPAIR_FEATURE = defineFeature({
 }) satisfies AiStructuredFeature<ImportExtractionModelOutput>;
 
 /**
- * Moved from Sol low after `eval:features` (2026-10-04): Luna at high effort
+ * On Sol again since 2026-10-06: judged the better model, and the ChatGPT plan
+ * made its cost moot.
+ * History: moved from Sol low after `eval:features` (2026-10-04): Luna at high effort
  * matched it 10/10 with zero unsafe plans (no number a step's own evidence
  * does not state), at about 1/13 of the cost and roughly twice the latency.
  * Flows a previous model stored stay current (`recipe-flow.service.ts`).
  */
 export const RECIPE_FLOW_PRIMARY_FEATURE = defineFeature({
   feature: "recipe-flow",
-  tier: "fast",
+  tier: "quality",
   maxTokens: 16000,
   effort: "high",
   cache: true,
