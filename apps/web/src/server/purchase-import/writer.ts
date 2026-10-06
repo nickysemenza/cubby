@@ -1259,13 +1259,18 @@ export async function importVendorOrder(
     // A line's Product must be allowed by its effective spending category.
     await validateProductPolicy(tx, { purchaseId });
 
-    // Receiving is for stocked items: an import whose every principal line is
-    // expense-only (meals, tickets) has nothing to receive. Goods with an
-    // unresolved Product still count, as does a Product line already on the
-    // Purchase (an aggregate awaiting replacement has none).
+    // Receiving is for stocked items: a line that carries or will carry a
+    // Product, or goods still unresolved. Expense-only lines (meals, tickets)
+    // and lines Jev judged not worth a Product have nothing to receive — the
+    // same rule delivery mail applies later (gmail/process.ts). A Product line
+    // already on the Purchase counts too (an aggregate awaiting replacement
+    // has none).
     const stocksItems = identityDecisions.some(
       (decision) =>
-        decision.lineKind === "principal" && decision.expenseOnly !== true,
+        decision.lineKind === "principal" &&
+        Boolean(
+          decision.productId || decision.promote || decision.unresolvedReason,
+        ),
     );
     const [stockedLine] = stocksItems
       ? []
