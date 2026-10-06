@@ -11,7 +11,11 @@ import { describe, expect, it } from "vitest";
 import type { Database } from "~/server/db";
 import { auditLog, product, productCategory } from "~/server/db/schema";
 import { logAuditEntry } from "~/server/repo/audit-log";
-import { getDb, notDeleted } from "~/server/repo/database-helpers";
+import {
+  getDb,
+  notDeleted,
+  withTransaction,
+} from "~/server/repo/database-helpers";
 import { insertWithShortcode } from "~/server/repo/shortcode-utils";
 import { ensureRun } from "~/server/runs/ensure-run";
 
@@ -310,6 +314,77 @@ describe("auto-fill after an import", () => {
     );
     // Let the late answer land, then confirm it wrote nothing.
     await new Promise((resolve) => setTimeout(resolve, 600));
+    expect((await fieldsOf(seeded.created.id))?.categoryId).toBeNull();
+  });
+
+  it("links an ingredient under a food subcategory that inherits food", async () => {
+    const seeded = await seed();
+    const [food] = await getDb(ctx.db)
+      .select({ id: productCategory.id })
+      .from(productCategory)
+      .where(
+        and(eq(productCategory.feature, "food"), notDeleted(productCategory)),
+      )
+      .limit(1);
+    const rice = await insertWithShortcode(ctx.db, "productCategory", {
+      name: `Example rice ${crypto.randomUUID()}`,
+      parentId: food!.id,
+    });
+    const ingredient = await insertWithShortcode(ctx.db, "ingredient", {
+      name: `example jasmine rice ${crypto.randomUUID()}`,
+    });
+    const suggest: Suggest = async (_db, _runId, input) => {
+      const [target] = input.targets;
+      if (target === "categoryId") return pick(target, rice.shortcode, 0.99);
+      if (target === "ingredientId")
+        return pick(target, ingredient.shortcode, 0.99);
+      return pick(target!, seeded.plant.shortcode, 0.5);
+    };
+    await autoFillCreatedProducts(
+      ctx.db,
+      { runId: seeded.runId, purchaseIds: [seeded.purchase.id] },
+      { suggest, recomputeForIngredients: async () => 0 },
+    );
+    expect(await fieldsOf(seeded.created.id)).toMatchObject({
+      categoryId: rice.id,
+      ingredientId: ingredient.id,
+    });
+  });
+
+  it("writes nothing after waiting on the row lock past the budget", async () => {
+    const seeded = await seed();
+    let release!: () => void;
+    const held = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    let locked!: () => void;
+    const lockTaken = new Promise<void>((resolve) => {
+      locked = resolve;
+    });
+    // A member's edit holds the Product row without changing the category.
+    const holder = withTransaction(ctx.db, async (tx) => {
+      await tx
+        .select({ id: product.id })
+        .from(product)
+        .where(eq(product.id, seeded.created.id))
+        .for("update");
+      locked();
+      await held;
+    });
+    await lockTaken;
+    const suggest: Suggest = async (_db, _runId, input) =>
+      pick(input.targets[0]!, seeded.category.shortcode, 0.99);
+    const fill = autoFillCreatedProducts(
+      ctx.db,
+      { runId: seeded.runId, purchaseIds: [seeded.purchase.id] },
+      { suggest, budgetMs: 200 },
+    );
+    await fill;
+    await new Promise((resolve) => setTimeout(resolve, 300));
+    release();
+    await holder;
+    // Give the waiting write its turn, then confirm it wrote nothing.
+    await new Promise((resolve) => setTimeout(resolve, 300));
     expect((await fieldsOf(seeded.created.id))?.categoryId).toBeNull();
   });
 

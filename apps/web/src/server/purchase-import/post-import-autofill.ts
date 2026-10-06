@@ -31,6 +31,7 @@ import {
   notDeleted,
   withTransaction,
 } from "~/server/repo/database-helpers";
+import { getCategoryFeature } from "~/server/repo/product-category";
 import { updateProduct } from "~/server/repo/product/crud";
 import { resolveOrThrow } from "~/server/repo/shortcode-resolver";
 import {
@@ -212,9 +213,6 @@ async function fillTarget(
     return;
   const patch = await patchFor(db, target, value);
   const written = await withTransaction(db, async (tx) => {
-    // Past the budget the commit already returned and enrichment may have
-    // fingerprinted the Product, so a late answer writes nothing.
-    if (Date.now() >= deadline) return false;
     // Re-read under the row lock: a member who filled the field, or changed
     // the category the pick was based on, while Jev decided keeps their value.
     const [locked] = await tx
@@ -222,13 +220,15 @@ async function fillTarget(
         categoryId: product.categoryId,
         ingredientId: product.ingredientId,
         growsPlantId: product.growsPlantId,
-        categoryFeature: productCategory.feature,
       })
       .from(product)
-      .leftJoin(productCategory, eq(productCategory.id, product.categoryId))
       .where(and(eq(product.id, productId), notDeleted(product)))
-      .for("update", { of: product })
+      .for("update")
       .limit(1);
+    // Checked once the lock is held: past the budget the commit already
+    // returned and enrichment may have fingerprinted the Product, so a late
+    // answer, or one that waited on the lock, writes nothing.
+    if (Date.now() >= deadline) return false;
     if (
       !locked ||
       locked[target] !== null ||
@@ -236,11 +236,12 @@ async function fillTarget(
     )
       return false;
     // An ingredient link files the Product under food; it never replaces a
-    // category that is not food.
+    // category that is not food, counting a feature inherited from an
+    // ancestor ("Rice" under a food root).
     if (
       target === "ingredientId" &&
       locked.categoryId !== null &&
-      locked.categoryFeature !== "food"
+      (await getCategoryFeature(tx, locked.categoryId)) !== "food"
     )
       return false;
     await updateProduct(databaseForTransaction(tx), productId, patch, actor);
