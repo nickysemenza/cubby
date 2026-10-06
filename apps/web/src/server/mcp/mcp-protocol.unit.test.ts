@@ -78,22 +78,26 @@ function httpClient(
     new URL("https://cubby.test/api/mcp"),
     {
       fetch: async (input, init) => {
-        const response = await handleMcpRequest(new Request(input, init), {
-          token: "",
-          clientId: "test",
-          scopes: [],
-          extra: {
-            requestContext: { db: null, actorContext: null },
-            telemetry: {
-              identity: {
-                userId: "user_1",
-                clientId: "test",
-                surface: "external_mcp",
+        const response = await handleMcpRequest(
+          new Request(input, init),
+          undefined,
+          {
+            token: "",
+            clientId: "test",
+            scopes: [],
+            extra: {
+              requestContext: { db: null, actorContext: null },
+              telemetry: {
+                identity: {
+                  userId: "user_1",
+                  clientId: "test",
+                  surface: "external_mcp",
+                },
+                emit,
               },
-              emit,
             },
           },
-        });
+        );
         // Dispatch must finish before the private Worker binding closes its
         // database client, so no response may stream.
         if (response.status === 200) {

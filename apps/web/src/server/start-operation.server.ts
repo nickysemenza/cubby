@@ -47,7 +47,7 @@ import type {
   PublicStartOperationError,
   StartOperationResult,
 } from "~/server/start-operation.contract";
-import { type AppSpan, getRequestId } from "~/server/tracing";
+import { type AppSpan, cloudflareRayId, getRequestId } from "~/server/tracing";
 import type { Workload } from "~/server/workload";
 
 const log = createLogger("start-operation");
@@ -229,7 +229,7 @@ export function normalizeStartOperationError<TError>(
     requestId,
     batchIndex: context.batchIndex,
   });
-  const cfRayId = context.headers?.get("cf-ray") ?? undefined;
+  const cfRayId = cloudflareRayId(context.headers);
   const chain = context.authenticated
     ? describeErrorCauses(error)
     : { causes: [] };
@@ -489,7 +489,7 @@ export function createStartOperationRunner(runtime: StartOperationRuntime) {
                 operation: options.operation,
                 stage,
                 requestId,
-                cfRayId: options.request.headers.get("cf-ray") ?? undefined,
+                cfRayId: cloudflareRayId(options.request.headers),
                 error: normalized.observedError,
               });
             }

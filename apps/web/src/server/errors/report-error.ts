@@ -61,7 +61,8 @@ function captureError<TError>(
 ): string | undefined {
   // Telemetry must never replace the original failure.
   try {
-    return (reports.getStore()?.capture ?? Sentry.captureException)(error, {
+    const capture = reports.getStore()?.capture ?? Sentry.captureException;
+    const eventId = capture(error, {
       tags: {
         request_id:
           context.requestId ?? reports.getStore()?.headers?.get("cf-ray"),
@@ -70,9 +71,43 @@ function captureError<TError>(
       },
       extra: { batchIndex: context.batchIndex },
     });
+    // An injected capture (tests) reports its own id; the SDK's needs proof.
+    return capture !== Sentry.captureException || sentrySends(error)
+      ? eventId
+      : undefined;
   } catch {
     return undefined;
   }
+}
+
+/**
+ * Whether the installed Sentry client sends this error. `captureException`
+ * returns an id with no client, when disabled, and before `ignoreErrors`
+ * drops the event; a reference nobody can search is worse than none.
+ * `beforeSend` (`scrubSentryEvent`) never drops, and error sampling is
+ * unknowable per event, so a client sampling errors gives no id.
+ *
+ * This rules out only the deterministic drops. Dedupe of an identical
+ * consecutive error and transport rate limiting still drop an event after
+ * its id is returned, so the id is best-effort: a deduped error's id finds
+ * nothing, though its identical predecessor's event is in Sentry.
+ */
+function sentrySends<TError>(error: TError): boolean {
+  const options = Sentry.getClient()?.getOptions();
+  if (!options?.dsn || options.enabled === false) return false;
+  if (options.sampleRate !== undefined && options.sampleRate < 1) return false;
+  // EventFilters matches both the bare message and `Name: message`.
+  const messages =
+    error instanceof Error
+      ? [error.message, `${error.name}: ${error.message}`]
+      : [String(error)];
+  return !(options.ignoreErrors ?? []).some((pattern) =>
+    messages.some((message) =>
+      pattern instanceof RegExp
+        ? pattern.test(message)
+        : message.includes(pattern),
+    ),
+  );
 }
 
 export const errorReportingHeaders = (): Headers | undefined =>

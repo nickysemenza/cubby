@@ -76,7 +76,7 @@ describe("MCP batch actions", () => {
           },
           {},
         ),
-      new Headers({ "cf-ray": "batch-test-ray" }),
+      new Headers({ "cf-ray": "0a1b2c3d4e5f6071-SJC" }),
       capture,
     );
     const result = z
@@ -105,7 +105,7 @@ describe("MCP batch actions", () => {
     ).toBe(2);
     expect(
       result.results.every(
-        (item) => item.error.diagnostics.cfRayId === "batch-test-ray",
+        (item) => item.error.diagnostics.cfRayId === "0a1b2c3d4e5f6071-SJC",
       ),
     ).toBe(true);
     expect(capture).toHaveBeenCalledTimes(2);

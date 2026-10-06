@@ -152,8 +152,11 @@ export function kernelRequestContext(
   return kernel as McpTestRequestContext;
 }
 
-/** Run one client request through the production transport with a test-supplied context. */
-async function withTestClient<T>(
+/**
+ * Run client requests through the production transport with a test-supplied
+ * context; the transports stay open until `request` settles.
+ */
+export async function withTestClient<T>(
   server: McpServer,
   requestContext: McpTestRequestContext,
   extra: ToolCallExtra,

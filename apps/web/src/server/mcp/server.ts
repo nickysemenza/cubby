@@ -6,7 +6,7 @@ import {
   McpServer,
   createMcpHandler,
 } from "@modelcontextprotocol/server";
-import { z } from "zod";
+import { type JSONType, z } from "zod";
 
 import { MCP_TOOLS } from "~/contracts/mcp-tools";
 import { ENTITY_KERNEL_ENTITIES } from "~/server/entity-kernel/contracts";
@@ -200,10 +200,16 @@ const httpHandler = createMcpHandler(createMcpServer, {
   responseMode: "json",
 });
 
-/** Each request gets a fresh server with the authenticated caller context. */
+/**
+ * Each request gets a fresh server with the authenticated caller context.
+ * `parsedBody` is the JSON-RPC message the ingress already read under the
+ * SDK's size limit, so the SDK does not read the body again.
+ */
 export function handleMcpRequest(
   request: Request,
+  parsedBody: JSONType | undefined,
   authInfo: AuthInfo,
 ): Promise<Response> {
-  return httpHandler.fetch(request, { authInfo });
+  // An undefined `parsedBody` makes the SDK read the body itself.
+  return httpHandler.fetch(request, { authInfo, parsedBody });
 }

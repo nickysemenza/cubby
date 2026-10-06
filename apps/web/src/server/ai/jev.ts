@@ -37,7 +37,8 @@ const JEV_MAX_CHOICES = 255;
 export const JEV_MAX_CANDIDATES = JEV_MAX_CHOICES - 1;
 const NONE_KEY = "none";
 const JEV_MAX_ATTEMPTS = 3;
-const JEV_DEADLINE_MS = 30_000;
+/** Jev's whole budget for one choice, retries included; MCP model reads outlast it. */
+export const JEV_DEADLINE_MS = 30_000;
 
 function retryDelay(
   response: Response,

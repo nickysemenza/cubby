@@ -195,10 +195,26 @@ export const traceAllBounded = async <
   };
 };
 
+// A Cloudflare ray id: hex, then an optional "-COLO" data-center suffix.
+const CLOUDFLARE_RAY_ID = /^[\da-f]{8,32}(?:-[a-z]{3,4})?$/iu;
+
+/**
+ * The request's Cloudflare ray id, or undefined when the header is absent or
+ * not ray-shaped. The private Worker binding forwards caller-supplied headers
+ * without Cloudflare rewriting them, so a forged `cf-ray` must never reach an
+ * error message or diagnostic.
+ */
+export const cloudflareRayId = (
+  headers?: Pick<Headers, "get">,
+): string | undefined => {
+  const ray = headers?.get("cf-ray");
+  return ray && CLOUDFLARE_RAY_ID.test(ray) ? ray : undefined;
+};
+
 /** Request correlation uses the Cloudflare ray recorded on the request span. */
 export const getRequestId = (
   headers?: Pick<Headers, "get">,
-): string | undefined => headers?.get("cf-ray") ?? undefined;
+): string | undefined => cloudflareRayId(headers);
 
 /** Annotate the native active span when the caller has no span reference. */
 export const annotateActiveSpan = (

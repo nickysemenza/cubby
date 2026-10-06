@@ -112,6 +112,8 @@ export const MCP_TOOLS = defineMcpTools({
       preview: mcpAction({
         op: kernelAction("preview", "query"),
         readPolicy: "strong",
+        // A create preview asks Jev for manifest-declared field suggestions.
+        modelBacked: true,
         description:
           'Preview without writing. `{entity, data, context?}` previews one create: contextual seeds merge first, explicit data wins, and manifest-declared Jev suggestions come back with confidence and provenance. `{items: [...]}` previews up to 50 creates independently. `{operation: {action: "attach"|"detach", entity, relation, id, items}}` dry-runs a link change, returning `blockers`, `changes` and `sideEffects` with per-target breakdowns and `canProceed`; it is advisory, since the mutation re-validates in its own transaction.',
       }),

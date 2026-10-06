@@ -101,6 +101,12 @@ export interface McpActionSpec<
   readonly readPolicy?:
     | "strong"
     | ((input: MemberInput<Op>) => "strong" | "context");
+  /**
+   * A read that may wait on a model (Jev or another AI call). Its MCP deadline
+   * outlasts the model's retry budget instead of using the plain read budget.
+   * Writes already have the longer write budget.
+   */
+  readonly modelBacked?: true;
   readonly batch?: McpBatchSpec<Projected>;
   /**
    * The entity a call acted on, for `McpToolCall.entityKind` (a batch passes
