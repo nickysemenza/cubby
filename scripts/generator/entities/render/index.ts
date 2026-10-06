@@ -1339,22 +1339,6 @@ export const entityListSummaryOutputSchema = z.object({entity:z.enum(listEntitie
         }),
     },
     {
-      relativePath: "apps/web/src/entity/generated/entity-overrides.gen.ts",
-      source:
-        generatedHeader +
-        'import type { Entity } from "@cubby/schemas/entity";\n\n' +
-        renderRecord({
-          name: "entityDeclarationOverrides",
-          entries: Object.fromEntries(
-            entities.map(({ key, overrides }) => [key, overrides]),
-          ),
-          satisfies:
-            "Record<Entity, readonly { path: string; value: string }[]>",
-          comment:
-            "// Explicit inputs are kept separate from shared inspector metadata.",
-        }),
-    },
-    {
       relativePath: "apps/web/src/entity/generated/entity-details.gen.ts",
       source:
         generatedHeader +

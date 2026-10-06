@@ -17,7 +17,10 @@ import {
 import { EntityGraphPicker } from "~/entity/relationships/entity-graph-picker";
 import { EntityRelations } from "~/entity/relationships/entity-relations";
 import { EntityIntegrityTab } from "~/features/entity-platform/EntityIntegrityTab";
-import { EntityManifestGrid } from "~/features/entity-platform/EntityManifestGrid";
+import {
+  EntityManifestGrid,
+  schemaSheetSchema,
+} from "~/features/entity-platform/EntityManifestGrid";
 import { EntityRecordsTab } from "~/features/entity-platform/EntityRecordsTab";
 import { CookbookSelect } from "~/features/recipes/cookbook-select";
 import type { GraphFilters } from "~/ui/visualizations/dependency-graph-model";
@@ -80,6 +83,8 @@ const searchSchema = z.object({
   q: z.string().optional().catch(undefined),
   reduce: z.boolean().optional().catch(undefined),
   entity: entitySchema.optional().catch(undefined),
+  // Schema tab sub-sheet; the entities sheet is the default and stays off the URL.
+  sheet: schemaSheetSchema.optional().catch(undefined),
   root: z.string().optional().catch(undefined),
   view: z.enum(["list", "graph"]).optional().catch(undefined),
   layout: z.enum(["neighborhood", "flow"]).optional().catch(undefined),
@@ -115,7 +120,7 @@ export const Route = createFileRoute("/_authenticated/entities")({
 });
 
 function EntitiesRoute() {
-  const { tab, entity } = Route.useSearch();
+  const { tab, entity, sheet } = Route.useSearch();
   const navigate = useNavigate();
   const rawSearch = Route.useSearch();
   const recordsSearch = entityRecordsInputSchema.parse({
@@ -178,11 +183,22 @@ function EntitiesRoute() {
         <TabsContent value="schema">
           <EntityManifestGrid
             selected={entity ?? null}
+            sheet={sheet}
             active={tabs.value === "schema"}
             onSelect={(selected) =>
               navigate({
                 to: ".",
+                replace: true,
                 search: (prev) => ({ ...prev, entity: selected ?? undefined }),
+              })
+            }
+            onSheetChange={(next) =>
+              navigate({
+                to: ".",
+                search: (prev) => ({
+                  ...prev,
+                  sheet: next === "entities" ? undefined : next,
+                }),
               })
             }
           />

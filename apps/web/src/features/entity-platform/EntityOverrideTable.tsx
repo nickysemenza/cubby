@@ -2,8 +2,9 @@ import { type Entity, entitySchema } from "@cubby/schemas/entity";
 import { allEntities } from "@cubby/schemas/entity-manifest";
 import { useMemo, useState } from "react";
 
-import { entityOverrideComparisons } from "~/entity/generated/entity-override-comparisons.gen";
+import { cn } from "~/lib/utils";
 import { Input } from "~/ui/primitives/input";
+import { NativeSelect } from "~/ui/primitives/native-select";
 import {
   Table,
   TableBody,
@@ -13,32 +14,34 @@ import {
   TableRow,
 } from "~/ui/primitives/table";
 
-const pageSize = 25;
+import { overridesFor } from "./entity-schema-model";
+
 const rows = allEntities.flatMap((entity) =>
-  entityOverrideComparisons[entity].map((comparison) => ({
-    entity,
-    ...comparison,
-  })),
+  overridesFor(entity).map((comparison) => ({ entity, ...comparison })),
 );
 
-function Value({ value }: { value: string | null }) {
-  if (value === null)
-    return <span className="text-muted-foreground">No valid value</span>;
-  return (
-    <code
-      className="block max-w-full truncate font-mono text-2xs"
-      title={value}
-    >
-      {value}
-    </code>
-  );
-}
+const gridCell =
+  "h-7 max-w-0 border-r border-b border-border/70 bg-card px-2 truncate group-hover/row:bg-muted";
+const gridHead =
+  "sticky top-0 z-10 h-7 border-r border-b border-border bg-muted px-2 text-left text-2xs font-medium text-muted-foreground";
 
-export function EntityOverrideTable() {
+const OUTCOME_LABEL = {
+  invalid: "Invalid default",
+  changed: "Changed",
+  unchanged: "Unchanged",
+} as const;
+
+/** Every declaration override across the manifest, one row each. Values are
+ * truncated to one line with the full text in the title; the entity panel
+ * and schema page carry the unabridged comparison. */
+export function EntityOverrideTable({
+  onSelectEntity,
+}: {
+  onSelectEntity: (entity: Entity) => void;
+}) {
   const [query, setQuery] = useState("");
   const [entity, setEntity] = useState<Entity | "">("");
-  const [outcome, setOutcome] = useState<"" | "changed" | "invalid">("");
-  const [page, setPage] = useState(0);
+  const [outcome, setOutcome] = useState<"" | keyof typeof OUTCOME_LABEL>("");
   const filtered = useMemo(() => {
     const term = query.trim().toLowerCase();
     return rows.filter(
@@ -51,169 +54,122 @@ export function EntityOverrideTable() {
           )),
     );
   }, [query, entity, outcome]);
-  const pageCount = Math.max(1, Math.ceil(filtered.length / pageSize));
-  const currentPage = Math.min(page, pageCount - 1);
-  const visible = filtered.slice(
-    currentPage * pageSize,
-    (currentPage + 1) * pageSize,
-  );
 
   return (
-    <section className="space-y-3 border-t border-border/70 pt-4">
-      <div>
-        <h3 className="font-mono text-xs tracking-wider text-muted-foreground uppercase">
-          Declaration overrides
-        </h3>
-        <p className="text-xs text-muted-foreground">
-          {rows.length} explicit inputs. Each comparison compiles the manifest
-          with that input removed.
-        </p>
-      </div>
-      <div className="flex flex-wrap gap-2">
-        <label
-          htmlFor="entity-override-search"
-          className="min-w-48 flex-1 text-xs"
+    <div className="space-y-2">
+      <div className="flex flex-wrap items-center gap-2">
+        <Input
+          aria-label="Search entity, path, or value"
+          placeholder="Search entity, path, or value"
+          value={query}
+          onChange={(event) => setQuery(event.target.value)}
+          className="h-8 max-w-sm min-w-48 flex-1"
+        />
+        <NativeSelect
+          aria-label="Entity"
+          value={entity}
+          onChange={(event) =>
+            setEntity(
+              event.target.value === ""
+                ? ""
+                : entitySchema.parse(event.target.value),
+            )
+          }
         >
-          Search entity, path, or value
-          <Input
-            id="entity-override-search"
-            value={query}
-            onChange={(event) => {
-              setQuery(event.target.value);
-              setPage(0);
-            }}
-            className="mt-1 h-8"
-          />
-        </label>
-        <label className="text-xs">
-          Entity
-          <select
-            aria-label="Entity"
-            value={entity}
-            onChange={(event) => {
-              setEntity(
-                event.target.value === ""
-                  ? ""
-                  : entitySchema.parse(event.target.value),
-              );
-              setPage(0);
-            }}
-            className="mt-1 block h-8 rounded-sm border border-border bg-card px-2"
-          >
-            <option value="">All entities</option>
-            {allEntities.map((item) => (
-              <option key={item} value={item}>
-                {item}
-              </option>
-            ))}
-          </select>
-        </label>
-        <label className="text-xs">
-          Outcome
-          <select
-            aria-label="Outcome"
-            value={outcome}
-            onChange={(event) => {
-              const value = event.target.value;
-              setOutcome(
-                value === "changed" || value === "invalid" ? value : "",
-              );
-              setPage(0);
-            }}
-            className="mt-1 block h-8 rounded-sm border border-border bg-card px-2"
-          >
-            <option value="">All outcomes</option>
-            <option value="changed">Changed</option>
-            <option value="invalid">Invalid default</option>
-          </select>
-        </label>
+          <option value="">All entities</option>
+          {allEntities.map((item) => (
+            <option key={item} value={item}>
+              {item}
+            </option>
+          ))}
+        </NativeSelect>
+        <NativeSelect
+          aria-label="Outcome"
+          value={outcome}
+          onChange={(event) => {
+            const value = event.target.value;
+            setOutcome(
+              value === "changed" ||
+                value === "invalid" ||
+                value === "unchanged"
+                ? value
+                : "",
+            );
+          }}
+        >
+          <option value="">All outcomes</option>
+          <option value="changed">Changed</option>
+          <option value="invalid">Invalid default</option>
+          <option value="unchanged">Unchanged</option>
+        </NativeSelect>
+        <span className="font-mono text-2xs text-muted-foreground tabular-nums">
+          {filtered.length} of {rows.length}
+        </span>
       </div>
       <Table
-        containerClassName="border-y"
-        className="w-full min-w-[42rem] table-fixed text-xs"
+        containerClassName="max-h-[calc(100dvh-14rem)] overflow-auto border-t border-l border-border"
+        aria-label="Declaration overrides"
+        className="w-full min-w-[56rem] table-fixed border-separate border-spacing-0 text-xs"
       >
         <TableHeader>
           <TableRow>
-            <TableHead className="w-[12%] px-2 py-1">Entity</TableHead>
-            <TableHead className="w-[28%] px-2 py-1">Override path</TableHead>
-            <TableHead className="w-[25%] px-2 py-1">Declared</TableHead>
-            <TableHead className="w-[25%] px-2 py-1">
-              Without override
+            <TableHead className={cn(gridHead, "w-[9rem]")}>Entity</TableHead>
+            <TableHead className={cn(gridHead, "w-[24%]")}>
+              Override path
             </TableHead>
-            <TableHead className="w-[10%] px-2 py-1">Outcome</TableHead>
+            <TableHead className={gridHead}>Declared</TableHead>
+            <TableHead className={gridHead}>Without override</TableHead>
+            <TableHead className={cn(gridHead, "w-[7.5rem]")}>
+              Outcome
+            </TableHead>
           </TableRow>
         </TableHeader>
         <TableBody>
-          {visible.map((row) => (
-            <TableRow key={`${row.entity}.${row.path}`}>
-              <TableCell className="px-2 py-1 font-mono">
-                {row.entity}
+          {filtered.map((row) => (
+            <TableRow key={`${row.entity}.${row.path}`} className="group/row">
+              <TableCell className={cn(gridCell, "p-0")}>
+                <button
+                  type="button"
+                  onClick={() => onSelectEntity(row.entity)}
+                  className="size-full truncate px-2 text-left font-mono hover:underline focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-ring"
+                >
+                  {row.entity}
+                </button>
               </TableCell>
-              <TableCell className="px-2 py-1">
-                <details>
-                  <summary className="cursor-pointer font-mono text-2xs break-all focus-visible:outline-2 focus-visible:outline-ring">
-                    {row.path}
-                  </summary>
-                  <div className="mt-2 space-y-2 text-2xs">
-                    <div>
-                      <strong>Declared</strong>
-                      <pre className="overflow-auto break-all whitespace-pre-wrap">
-                        {row.declared}
-                      </pre>
-                    </div>
-                    <div>
-                      <strong>Without override</strong>
-                      <pre className="overflow-auto break-all whitespace-pre-wrap">
-                        {row.without ?? "No valid value"}
-                      </pre>
-                    </div>
-                    {row.reason && (
-                      <div>
-                        <strong>Reason</strong>
-                        <p className="whitespace-pre-wrap">{row.reason}</p>
-                      </div>
-                    )}
-                  </div>
-                </details>
+              <TableCell
+                className={cn(gridCell, "font-mono text-2xs")}
+                title={row.path}
+              >
+                {row.path}
               </TableCell>
-              <TableCell className="px-2 py-1">
-                <Value value={row.declared} />
+              <TableCell
+                className={cn(gridCell, "font-mono text-2xs")}
+                title={row.declared}
+              >
+                {row.declared}
               </TableCell>
-              <TableCell className="px-2 py-1">
-                <Value value={row.without} />
+              <TableCell
+                className={cn(
+                  gridCell,
+                  "font-mono text-2xs",
+                  row.without === null && "font-sans text-muted-foreground",
+                )}
+                title={row.without ?? row.reason ?? undefined}
+              >
+                {row.without ?? row.reason ?? "No valid value"}
               </TableCell>
-              <TableCell className="px-2 py-1">
-                {row.status === "invalid"
-                  ? "Invalid"
-                  : row.status === "changed"
-                    ? "Changed"
-                    : "Same"}
+              <TableCell
+                className={cn(
+                  gridCell,
+                  row.status === "invalid" && "text-destructive",
+                )}
+              >
+                {OUTCOME_LABEL[row.status]}
               </TableCell>
             </TableRow>
           ))}
         </TableBody>
       </Table>
-      <div className="flex items-center gap-2 text-xs">
-        <button
-          type="button"
-          disabled={currentPage === 0}
-          onClick={() => setPage(currentPage - 1)}
-          className="rounded-sm border px-2 py-1 disabled:opacity-40"
-        >
-          Previous
-        </button>
-        <span>
-          {filtered.length} matches · page {currentPage + 1} of {pageCount}
-        </span>
-        <button
-          type="button"
-          disabled={currentPage + 1 >= pageCount}
-          onClick={() => setPage(currentPage + 1)}
-          className="rounded-sm border px-2 py-1 disabled:opacity-40"
-        >
-          Next
-        </button>
-      </div>
-    </section>
+    </div>
   );
 }

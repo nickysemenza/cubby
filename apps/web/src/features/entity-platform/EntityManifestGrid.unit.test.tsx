@@ -1,40 +1,51 @@
-import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { allEntities } from "@cubby/schemas/entity-manifest";
 import { fireEvent, render, screen, within } from "@testing-library/react";
-import type { ReactNode } from "react";
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-import { EntityManifestGrid, SavedViewChips } from "./EntityManifestGrid";
+import { createBrowserTestHarness } from "~/lib/test/browser-harness";
 
-// jsdom has no ResizeObserver; the bottom "Reference graph" section
-// (`EntityReferenceGraph` → `useContainerDimensions`) needs one to mount.
-class TestResizeObserver {
-  observe() {
-    // no-op: the reference graph falls back to its initial dimensions.
-  }
-  unobserve() {
-    // no-op
-  }
-  disconnect() {
-    // no-op
-  }
+import { overridesFor } from "./entity-schema-model";
+import { EntityManifestGrid } from "./EntityManifestGrid";
+import { SavedViewChips } from "./EntitySchemaInspector";
+
+// The grid reads live row counts and the panel renders router links; render
+// with `active={false}` inside a memory router so no query ever fires.
+let harness: ReturnType<typeof createBrowserTestHarness>;
+beforeEach(() => {
+  harness = createBrowserTestHarness();
+});
+afterEach(() => {
+  harness.dispose();
+});
+
+function renderGrid(
+  props: Partial<Parameters<typeof EntityManifestGrid>[0]> = {},
+) {
+  const all = {
+    selected: null,
+    onSelect: vi.fn(),
+    onSheetChange: vi.fn(),
+    ...props,
+  };
+  const view = render(<EntityManifestGrid {...all} active={false} />, {
+    wrapper: harness.wrapper,
+  });
+  return { ...view, ...all };
 }
-global.ResizeObserver ??= TestResizeObserver;
 
-/** `EntityManifestGrid` reads the live-row-count query via `useQuery`; these
- * tests render with `active={false}` so it never fires, but the hook still
- * needs a `QueryClient` in context to mount at all. */
-function renderGrid(props: Parameters<typeof EntityManifestGrid>[0]) {
-  const client = new QueryClient({
-    defaultOptions: { queries: { retry: false, gcTime: Infinity } },
-  });
-  function Wrapper({ children }: { children: ReactNode }) {
-    return (
-      <QueryClientProvider client={client}>{children}</QueryClientProvider>
-    );
-  }
-  return render(<EntityManifestGrid {...props} active={false} />, {
-    wrapper: Wrapper,
-  });
+function sheet() {
+  return screen.getByRole("table", { name: "Entity schema" });
+}
+
+function entityRow(entity: string) {
+  const button = within(sheet()).getByRole("button", { name: entity });
+  const row = button.closest("tr");
+  if (!row) throw new Error(`row missing for ${entity}`);
+  return row;
+}
+
+function panel(entity: string) {
+  return screen.getByRole("region", { name: `${entity} schema` });
 }
 
 describe("SavedViewChips", () => {
@@ -47,8 +58,6 @@ describe("SavedViewChips", () => {
     expect(firstBadge.compareDocumentPosition(problemBadge)).toBe(
       Node.DOCUMENT_POSITION_FOLLOWING,
     );
-    expect(firstBadge).toBeInTheDocument();
-    expect(problemBadge).toBeInTheDocument();
   });
 
   it("renders a dash when an entity declares no saved views", () => {
@@ -58,81 +67,133 @@ describe("SavedViewChips", () => {
   });
 });
 
-function noop() {
-  // EntityManifestGrid's onSelect fires on row click; these tests only read
-  // the rendered mega table, so the callback itself is never asserted on.
-}
+describe("EntityManifestGrid schema sheet", () => {
+  it("renders one row per declared entity", () => {
+    renderGrid();
 
-/**
- * The mobile `EntityIndex` nav (hidden at `md:` breakpoint via CSS, which
- * jsdom doesn't evaluate) renders every entity name as a `<button>` too, so a
- * bare `getByText(entity)` is ambiguous. The mega table's own entity cell is
- * the first `<td>`-descendant match in document order — the sub-row (if the
- * entity is selected) can repeat the same word in a `target` column, but it
- * renders after the entity's own row.
- */
-function findEntityRow(entityName: string) {
-  const cell = screen
-    .getAllByText(entityName)
-    .find((el) => el.closest("td") !== null);
-  if (!cell) throw new Error(`entity row cell not found for ${entityName}`);
-  const row = cell.closest("tr");
-  if (!row) throw new Error(`entity row not found for ${entityName}`);
-  return row;
-}
-
-describe("EntityManifestGrid mega table: kernel action condensation", () => {
-  it("renders the full CRUD word (muted) for an entity with get/list/create/update/delete", () => {
-    // `recipe` declares get, list, search, create, update, delete —
-    // all four CRUD slots present, so it condenses to the bare word.
-    renderGrid({ selected: "recipe", onSelect: noop });
-
-    const row = findEntityRow("recipe");
-    expect(within(row).getByText("CRUD")).toBeInTheDocument();
-    // `search` isn't one of the four CRUD slots, so it renders as an extra.
-    expect(within(row).getByText("+search")).toBeInTheDocument();
+    // Header rows plus one row per entity.
+    expect(within(sheet()).getAllByRole("row")).toHaveLength(
+      allEntities.length + 2,
+    );
   });
 
-  it("renders a fixed-position letter mask for an entity missing some CRUD actions", () => {
-    // `run` declares only get and list — read-only, no create/update/delete.
-    renderGrid({ selected: "run", onSelect: noop });
+  it.each([
+    ["recipe", { create: "yes", read: "yes", update: "yes", delete: "yes" }],
+    ["run", { create: "no", read: "yes", update: "no", delete: "no" }],
+    ["image", { create: "no", read: "yes", update: "yes", delete: "yes" }],
+  ] as const)("splits %s kernel actions into CRUD cells", (entity, slots) => {
+    renderGrid();
 
-    const row = findEntityRow("run");
-    expect(within(row).getByText("·R··")).toBeInTheDocument();
+    const row = entityRow(entity);
+    for (const [slot, value] of Object.entries(slots))
+      expect(within(row).getByTitle(`${slot}: ${value}`)).toBeInTheDocument();
   });
 
-  it("keeps the mask fixed-position for an entity missing only create", () => {
-    // `image` declares get, list, search, update, delete — no create.
-    renderGrid({ selected: "image", onSelect: noop });
+  it("sorts numeric columns largest first, then smallest, then back to declaration order", () => {
+    renderGrid();
+    const header = within(sheet()).getByRole("button", { name: "Ovr" });
+    const firstEntity = () =>
+      within(within(sheet()).getAllByRole("row")[2]!).getAllByRole("button")[0]!
+        .textContent;
+    const byOverrides = [...allEntities].sort(
+      (left, right) => overridesFor(left).length - overridesFor(right).length,
+    );
 
-    const row = findEntityRow("image");
-    expect(within(row).getByText("·RUD")).toBeInTheDocument();
+    fireEvent.click(header);
+    expect(header.closest("th")).toHaveAttribute("aria-sort", "descending");
+    expect(firstEntity()).toBe(byOverrides.at(-1));
+
+    fireEvent.click(header);
+    expect(header.closest("th")).toHaveAttribute("aria-sort", "ascending");
+    expect(firstEntity()).toBe(byOverrides[0]);
+
+    fireEvent.click(header);
+    expect(header.closest("th")).not.toHaveAttribute("aria-sort");
+    expect(firstEntity()).toBe(allEntities[0]);
+  });
+
+  it("selects a row into the side panel instead of expanding it inline", () => {
+    const onSelect = vi.fn();
+    const { rerender } = renderGrid({ onSelect });
+
+    expect(screen.queryByRole("region", { name: /schema$/ })).toBeNull();
+    fireEvent.click(within(entityRow("product")).getByRole("button"));
+    expect(onSelect).toHaveBeenLastCalledWith("product");
+
+    rerender(
+      <EntityManifestGrid
+        selected="product"
+        onSelect={onSelect}
+        onSheetChange={vi.fn()}
+        active={false}
+      />,
+    );
+    const productPanel = panel("product");
+    expect(within(productPanel).getByText("Storage table")).toBeInTheDocument();
+    expect(
+      within(productPanel).getAllByText(
+        "presentation.detail.relationFilterOverrides",
+      )[0],
+    ).toBeInTheDocument();
+    expect(
+      within(productPanel).getByRole("link", { name: "Open schema page" }),
+    ).toHaveAttribute("href", "/entities/schema/product");
+    expect(entityRow("product")).toHaveAttribute("aria-current", "true");
+
+    // Clicking the selected row again, the close button, or Escape clears it.
+    fireEvent.click(within(entityRow("product")).getByRole("button"));
+    expect(onSelect).toHaveBeenLastCalledWith(null);
+    onSelect.mockClear();
+    fireEvent.click(
+      within(productPanel).getByRole("button", { name: "Close panel" }),
+    );
+    expect(onSelect).toHaveBeenLastCalledWith(null);
+    onSelect.mockClear();
+    fireEvent.keyDown(within(entityRow("recipe")).getByRole("button"), {
+      key: "Escape",
+    });
+    expect(onSelect).toHaveBeenLastCalledWith(null);
+  });
+
+  it("moves the open panel with the arrow keys", () => {
+    const { onSelect } = renderGrid({ selected: "product" });
+    const productButton = within(entityRow("product")).getByRole("button");
+    productButton.focus();
+
+    fireEvent.keyDown(productButton, { key: "ArrowDown" });
+
+    const next = allEntities[allEntities.indexOf("product") + 1]!;
+    expect(onSelect).toHaveBeenLastCalledWith(next);
+    expect(within(entityRow(next)).getByRole("button")).toHaveFocus();
+  });
+
+  it("navigates the panel to a relation target", () => {
+    const { onSelect } = renderGrid({ selected: "wish" });
+
+    const row = within(panel("wish")).getByText("candidates").closest("tr")!;
+    const target = within(row).getByRole("button");
+    fireEvent.click(target);
+
+    expect(onSelect).toHaveBeenLastCalledWith(target.textContent);
   });
 });
 
-describe("EntityManifestGrid mega table: relations sub-row", () => {
-  it("exposes wish's omitted `candidates` relation and its reason", () => {
-    renderGrid({ selected: "wish", onSelect: noop });
+describe("EntityManifestGrid panel relations", () => {
+  it("marks wish's `candidates` relation omitted with its reason", () => {
+    renderGrid({ selected: "wish" });
 
-    // The selected row's relations sub-table is always expanded inline.
-    expect(screen.getByText("candidates")).toBeInTheDocument();
-    const reasonCell = screen.getByText(
+    const row = within(panel("wish")).getByText("candidates").closest("tr")!;
+    expect(within(row).getByText("omitted")).toHaveAttribute(
+      "title",
       "The Candidate alternatives section edits candidates in place with its own renderer.",
     );
-    expect(reasonCell).toBeInTheDocument();
   });
 
-  it("marks task's compiler-derived `plantings` relation as derived, not declared", () => {
-    renderGrid({ selected: "task", onSelect: noop });
+  it("marks task's compiler-derived `plantings` relation as derived", () => {
+    renderGrid({ selected: "task" });
 
-    const plantingsRow = screen.getByText("plantings").closest("tr");
-    if (plantingsRow === null)
-      throw new Error("plantings relation row not found");
-    // Both the relationship-level origin and the detail-table status read
-    // "derived" for this row (the compiler generated the section).
-    expect(within(plantingsRow).getAllByText("derived").length).toBeGreaterThan(
-      0,
-    );
+    const row = within(panel("task")).getByText("plantings").closest("tr")!;
+    expect(within(row).getByText("derived")).toBeInTheDocument();
   });
 
   it.each([
@@ -141,16 +202,12 @@ describe("EntityManifestGrid mega table: relations sub-row", () => {
   ] as const)(
     "shows %s.%s as a custom list when %s has a separate list source",
     (entity, relation, target) => {
-      renderGrid({ selected: entity, onSelect: noop });
+      renderGrid({ selected: entity });
 
-      const row = screen
-        .getAllByRole("row")
-        .find((candidate) =>
-          within(candidate).queryByText(relation, { exact: true }),
-        );
-      if (row === undefined)
-        throw new Error(`${entity}.${relation} row missing`);
-      expect(within(row).getByText(target)).toBeInTheDocument();
+      const row = within(panel(entity))
+        .getByText(relation, { exact: true })
+        .closest("tr")!;
+      expect(within(row).getByRole("button", { name: target })).toBeVisible();
       expect(within(row).getByText("custom list")).toHaveAttribute(
         "title",
         `${target} has a list page, but its list cannot be used as an inline relation table.`,
@@ -159,51 +216,14 @@ describe("EntityManifestGrid mega table: relations sub-row", () => {
   );
 });
 
-describe("EntityManifestGrid mega table: baseline rendering", () => {
-  it("renders one row per declared entity plus the relations matrix", () => {
-    renderGrid({ selected: "product", onSelect: noop });
+describe("EntityManifestGrid sheets", () => {
+  it("opens an entity from the relations matrix on the entities sheet", () => {
+    const { onSelect, onSheetChange } = renderGrid({ sheet: "relations" });
 
-    expect(screen.getByText("Relations matrix")).toBeInTheDocument();
-    // Spot-check a handful of entities across the roster render as rows.
-    for (const entity of ["product", "recipe", "vendor", "financialAccount"]) {
-      expect(screen.getAllByText(entity).length).toBeGreaterThan(0);
-    }
-  });
+    expect(screen.getByText("explicitly omitted")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "PRD" }));
 
-  it("starts collapsed and lets the selected entity close or another entity open", () => {
-    const onSelect = vi.fn();
-    const { rerender } = renderGrid({ selected: null, onSelect });
-    const product = within(findEntityRow("product")).getByRole("button");
-    const recipe = within(findEntityRow("recipe")).getByRole("button");
-
-    expect(product).toHaveAttribute("aria-expanded", "false");
-    expect(screen.queryByText("Effective behavior")).not.toBeInTheDocument();
-    fireEvent.click(product);
+    expect(onSheetChange).toHaveBeenLastCalledWith("entities");
     expect(onSelect).toHaveBeenLastCalledWith("product");
-
-    rerender(
-      <EntityManifestGrid
-        selected="product"
-        onSelect={onSelect}
-        active={false}
-      />,
-    );
-    expect(product).toHaveAttribute("aria-expanded", "true");
-    expect(screen.getAllByText("Declaration overrides").length).toBeGreaterThan(
-      0,
-    );
-    expect(screen.getByText("Effective behavior")).toBeInTheDocument();
-    expect(screen.getByText("Storage table")).toBeInTheDocument();
-    expect(
-      screen.getAllByText("presentation.detail.relationFilterOverrides")[0],
-    ).toBeInTheDocument();
-    fireEvent.click(product);
-    expect(onSelect).toHaveBeenLastCalledWith(null);
-
-    rerender(
-      <EntityManifestGrid selected={null} onSelect={onSelect} active={false} />,
-    );
-    fireEvent.click(recipe);
-    expect(onSelect).toHaveBeenLastCalledWith("recipe");
   });
 });

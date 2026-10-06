@@ -1,30 +1,35 @@
 import { fireEvent, render, screen, within } from "@testing-library/react";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 
 import { EntityOverrideTable } from "./EntityOverrideTable";
 
 describe("EntityOverrideTable", () => {
-  it("filters comparisons and opens each row independently", () => {
-    render(<EntityOverrideTable />);
+  it("filters comparisons and opens the owning entity", () => {
+    const onSelectEntity = vi.fn();
+    render(<EntityOverrideTable onSelectEntity={onSelectEntity} />);
+    const table = screen.getByRole("table", { name: "Declaration overrides" });
+    const allRows = within(table).getAllByRole("row").length;
+
     fireEvent.change(screen.getByLabelText("Search entity, path, or value"), {
       target: { value: "relationFilterOverrides" },
     });
-    const summaries = screen.getAllByText(
-      "presentation.detail.relationFilterOverrides",
-    );
-    expect(summaries.length).toBeGreaterThan(1);
-    const first = summaries[0]!.closest("details");
-    const second = summaries[1]!.closest("details");
-    expect(first).not.toHaveAttribute("open");
-    expect(second).not.toHaveAttribute("open");
-    fireEvent.click(
-      within(first!).getByText("presentation.detail.relationFilterOverrides"),
-    );
-    expect(first).toHaveAttribute("open");
-    expect(second).not.toHaveAttribute("open");
-    fireEvent.click(
-      within(first!).getByText("presentation.detail.relationFilterOverrides"),
-    );
-    expect(first).not.toHaveAttribute("open");
+    const rows = within(table).getAllByRole("row").slice(1);
+    expect(rows.length).toBeGreaterThan(1);
+    expect(rows.length).toBeLessThan(allRows - 1);
+    for (const row of rows)
+      expect(
+        within(row).getByText("presentation.detail.relationFilterOverrides"),
+      ).toBeInTheDocument();
+
+    fireEvent.change(screen.getByLabelText("Outcome"), {
+      target: { value: "invalid" },
+    });
+    const invalid = within(table).getAllByRole("row").slice(1);
+    for (const row of invalid)
+      expect(within(row).getByText("Invalid default")).toBeInTheDocument();
+
+    const firstEntity = within(invalid[0]!).getAllByRole("button")[0]!;
+    fireEvent.click(firstEntity);
+    expect(onSelectEntity).toHaveBeenCalledWith(firstEntity.textContent);
   });
 });
