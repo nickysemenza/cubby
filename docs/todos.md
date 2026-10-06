@@ -574,9 +574,7 @@ spanner"` → `adjustable wrench` (product); `"wet dry vac"` → `shop vacuum`
 
 - 🤔 **Narrow the `e2e` Nx target's inputs, then cache it.** `nx affected`
   treats all of `apps/web/src/**` as e2e input and the target is uncached.
-  `tests/e2e/spec-areas.ts` maps specs to what they exercise for
-  `test:e2e:affected`; decide whether a cache hit on an unchanged tree is
-  acceptable evidence and whether to reuse that manifest.
+  Decide whether a cache hit on an unchanged tree is acceptable evidence.
 
 - 🤔 **Capture exact runtime error shapes before broadening suppression.**
   Client-disconnected cancellation, missing update-result, opaque database

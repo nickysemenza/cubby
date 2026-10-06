@@ -139,7 +139,7 @@ can affect them. A manual run selects all lanes. `Web checks` is the stable
 required aggregate: it checks the web, PostgreSQL, and browser matrix results
 whenever web validation is selected. A single `Build Workers` job builds the
 web Cloudflare bundle (which hosts the purchase agent) once and uploads it
-with the MCP App assets and the WASM package as the `worker-build` artifact; the PostgreSQL integration and browser
+with the MCP App assets and the WASM package as the `worker-build` artifact; the workerd PostgreSQL and browser
 lanes `need` it and download that exact bundle. The browser lanes retain the discovery and no-skip guard;
 desktop Chromium runs as two Playwright shards (two workers each). Phone-web and
 WebKit browser coverage was removed from PR CI and the Playwright suite; native
@@ -159,9 +159,16 @@ and it runs on pushes to `main` and on PRs that touch the agent, purchase
 import, the Run, Purchase and vendor order-mail UI, its harness, or the
 bundled skills (`importE2e` in `scripts/ci-change-scope.ts`). It saves the
 same run bundle as the desktop shards.
-PostgreSQL integration tests run as three Vitest `--shard` jobs (one
-aggregate result through `Web checks`, so required-check names do not change
-with the shard count). Jobs that need the databases (`test-postgres`,
+PostgreSQL integration tests use three runners. The `integration` Vitest
+project never starts workerd, so its two `--shard` jobs wait only on `Scope`
+and restore the WASM package themselves. The
+`integration-workerd` project (the files that start the built Worker, listed in
+`workerdIntegrationTests` in `apps/web/vitest.config.ts`) runs in one job that
+needs `Build Workers` and downloads `worker-build`. A workerd consumer missing
+from that list runs in an ordinary shard and fails there, because in CI the
+harness refuses to rebuild a missing or stale Worker. `Web checks` requires
+both jobs to succeed, so required-check names do not change with the shard
+count. Jobs that need the databases (`test-postgres`, `test-postgres-workerd`,
 `test-e2e`, `db-check`) start them with the `start-test-services` composite
 action, which runs the pgvector PostgreSQL and IntegreSQL images on ports 5432
 and 5000; a composite action cannot declare `services:`, so it uses `docker
@@ -262,9 +269,8 @@ Record ten exact-head public PR runs before changing topology: queue time,
 required-check p50/p95, per-lane duration, cache behavior, cancellations, and
 merge-to-deploy duration. The target is a 4–7 minute warm critical path and no
 more than 10 minutes cold. Optimize only a measured bottleneck; prior evidence
-already rejects node_modules caching and extra E2E sharding. The current
-two-runner effort targets a typical warm PR near three minutes; track queue and
-cold native builds separately.
+already rejects node_modules caching and extra E2E sharding. Track queue and
+cold native builds separately; the target is not a measured runtime guarantee.
 
 ### Measured decisions
 
@@ -275,9 +281,20 @@ median, and compare queue time, required-check p50/p95, cache misses,
 cancellations, job-minutes, and merge-to-deploy time. Do not infer a speedup
 from a single warm run or a different host load.
 
+Before the PostgreSQL/runtime split, ten successful PR runs sampled on
+2026-10-05 had a slowest desktop E2E job of 7:35–8:44, with job-ready-to-start
+waits no longer than 57 seconds. Representative
+[web](https://github.com/nickysemenza/cubby/actions/runs/37407377916) and
+[cross-client](https://github.com/nickysemenza/cubby/actions/runs/37406566591)
+runs show that browser execution and native compilation remain the full-PR
+bottlenecks. The split removes an unnecessary prerequisite for ordinary
+database contracts; it does not establish a five-minute full suite.
+
 - Desktop Chromium uses two shards. More workers per runner and three shards
   did not improve the required-check critical path enough to justify their
-  setup and contention costs. Phone and WebKit browser projects were removed
+  setup and contention costs. Keep the two browser shards when several PRs run
+  concurrently; the PostgreSQL split preserves its three total runner slots.
+  Phone and WebKit browser projects were removed
   from PR CI; device-dependent phone behavior still needs device acceptance.
 - Test page loads spend much of their time waiting for hydration and queued
   JavaScript chunks under the harness's HTTP/1.1 connection limit. A measured

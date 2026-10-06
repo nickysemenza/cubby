@@ -164,16 +164,18 @@ focused file or the last failed selection:
 pnpm --dir apps/web build:cf
 CUBBY_TEST_SERVICES=warm pnpm --dir apps/web test:e2e tests/e2e/http-api.spec.ts --workers=2
 CUBBY_TEST_SERVICES=warm pnpm --dir apps/web test:e2e --last-failed
-pnpm --dir apps/web test:e2e:affected --json
-pnpm --dir apps/web test:e2e:affected
+CUBBY_TEST_SERVICES=warm pnpm --dir apps/web test:e2e:affected
 pnpm --dir apps/web test:e2e:watch
 ```
 
 `warm` services are a macOS option; see [test tiers](agents/validation-tests.md)
-for external services on Linux. The affected selector's JSON lists specs and
-selection reasons without starting services. Execution ensures a fingerprint-
-checked build first. Direct runs reject stale prebuilt output before database
-setup, so rebuild after editing source. The retained watch command prepares an
+for external services on Linux. `test:e2e:affected` runs the cached Nx
+`build-cf`, then Playwright's `--only-changed=origin/main`, which selects spec
+files that changed or import a changed file. It is a local heuristic: specs
+can reach app code through the browser without importing it, so an app-only
+change can select nothing. Name the spec that covers the route, or run the full `test:e2e`; CI
+runs every spec. Append `--list` to preview the selection. Direct runs reject
+stale prebuilt output before database setup, so rebuild after editing source. The retained watch command prepares an
 initial build and keeps the built Worker and Playwright UI available for
 iteration. HMR and watch results serve different validation boundaries.
 
