@@ -1,5 +1,6 @@
 import type {
   LedgerPartyId,
+  ProductId,
   PurchaseId,
   VendorId,
 } from "@cubby/schemas/identifiers";
@@ -7,7 +8,7 @@ import { runShortcode, vendorAccountId } from "@cubby/schemas/identifiers";
 import { agentImportRunPurpose } from "@cubby/schemas/import-run-agent";
 import type { PurchaseAgentEvent } from "@cubby/schemas/purchase-import";
 import { sha256Hex } from "@cubby/shared/sha256";
-import { and, desc, eq } from "drizzle-orm";
+import { and, desc, eq, isNotNull } from "drizzle-orm";
 import { z } from "zod";
 
 import {
@@ -20,6 +21,7 @@ import {
 import { getPurchaseAgentQueue } from "~/server/cf-env";
 import type { Database } from "~/server/db";
 import {
+  entityExternalId,
   expense,
   importSourceClaim,
   product,
@@ -381,6 +383,69 @@ async function startPurchaseValidation(
   return { runs: [await startedOutcome(db, started)] };
 }
 
+/**
+ * The page an enrichment run opens first: the first HTTP(S) candidate on the
+ * Vendor's browser domains, because the browser bridge refuses any other
+ * navigation. Candidates in order: a browser-captured claim's own page (an
+ * order page), the Product's learned pages (primary first), the Vendor's
+ * website. A Gmail or receipt claim's key names no page and is never used.
+ */
+async function enrichmentStartUrl(
+  db: Database,
+  productId: ProductId,
+  claim: Pick<
+    NonNullable<Awaited<ReturnType<typeof claimForActor>>>,
+    "externalKey" | "vendorId"
+  >,
+) {
+  const [owner] = await getDb(db)
+    .select({
+      name: vendor.name,
+      website: vendor.website,
+      browserDomains: vendor.browserDomains,
+    })
+    .from(vendor)
+    .where(eq(vendor.id, claim.vendorId))
+    .limit(1);
+  const allowed = new Set(
+    owner?.browserDomains.map((host) => host.toLowerCase()),
+  );
+  const pages = await getDb(db)
+    .select({ url: entityExternalId.url })
+    .from(entityExternalId)
+    .where(
+      and(
+        eq(entityExternalId.entityId, productId),
+        isNotNull(entityExternalId.url),
+        notDeleted(entityExternalId),
+      ),
+    )
+    .orderBy(desc(entityExternalId.isPrimary));
+  const candidates = [
+    claim.externalKey,
+    ...pages.map((page) => page.url),
+    owner?.website,
+  ];
+  for (const candidate of candidates) {
+    if (!candidate) continue;
+    let url: URL;
+    try {
+      url = new URL(candidate);
+    } catch {
+      // SILENT: a claim key or malformed website is not a page; try the next.
+      continue;
+    }
+    if (
+      (url.protocol === "https:" || url.protocol === "http:") &&
+      allowed.has(url.hostname.toLowerCase())
+    )
+      return url.href;
+  }
+  throw new Error(
+    `No page to start enriching this Product is on ${owner?.name ?? "its Vendor"}'s browser domains (${[...allowed].join(", ") || "none"}). Add the site's host to the Vendor's browser domains or a website on one of them.`,
+  );
+}
+
 async function startProductEnrichment(
   db: Database,
   ledgerPartyId: LedgerPartyId,
@@ -413,6 +478,7 @@ async function startProductEnrichment(
       return {
         productId,
         claim,
+        startUrl: await enrichmentStartUrl(db, productId, claim),
         targetFingerprint:
           productState?.fingerprint ??
           (await fingerprint({ product: undefined })),
@@ -442,7 +508,8 @@ async function startProductEnrichment(
             ? vendorAccountId.parse(row.claim.vendorAccountId)
             : null,
           sourceKind: row.claim.kind,
-          sourceExternalKey: row.claim.externalKey,
+          // The enrichment agent opens this; a mail claim's key is no page.
+          sourceExternalKey: row.startUrl,
           targetFingerprint: row.targetFingerprint,
           evidenceFingerprint: row.claim.checksum,
         })),
