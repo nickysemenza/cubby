@@ -9,6 +9,7 @@ import { describe, expect, it } from "vitest";
 
 import {
   auditLog,
+  entityExternalId,
   ledgerParty,
   orderMail,
   orderMailCandidateDecision,
@@ -26,6 +27,11 @@ import {
   vendorAccount,
 } from "~/server/db/schema";
 import { getDb } from "~/server/repo/database-helpers";
+import { ensureExternalSources } from "~/server/repo/entity-external-ids";
+import {
+  createImageFixture,
+  insertEntityAttachments,
+} from "~/server/repo/repo.fixtures";
 import { getRunByShortcode } from "~/server/repo/run";
 import { getRunLiveProgress } from "~/server/repo/run-progress";
 import { insertWithShortcode } from "~/server/repo/shortcode-utils";
@@ -1208,6 +1214,40 @@ describe("saved confirmation imports", () => {
         ]);
         expect(raced.flatMap((result) => result.started)).toHaveLength(1);
         expect(await enrichmentTargets()).toHaveLength(3);
+      });
+
+      // A Product the household already finished (maker, category, an
+      // identifier, a cover) has nothing a page could fill; opening a browser
+      // for it only proves that again, minutes of Chrome per Product.
+      it("leaves an already complete Product out of the sweep", async () => {
+        const { accountId, line } = await mailOnlyImport();
+        const productId = line.productId!;
+        const category = await insertWithShortcode(ctx.db, "productCategory", {
+          name: `Complete seeds ${crypto.randomUUID()}`,
+        });
+        await getDb(ctx.db)
+          .update(product)
+          .set({ categoryId: category.id })
+          .where(eq(product.id, productId));
+        await ensureExternalSources(ctx.db, ["example-seeds"]);
+        await getDb(ctx.db).insert(entityExternalId).values({
+          entityId: productId,
+          entityKind: "product",
+          source: "example-seeds",
+          kind: "retailer_sku",
+          externalId: "SEED-COMPLETE-1",
+          isPrimary: false,
+        });
+        const cover = await createImageFixture(ctx.db, "complete-cover");
+        await insertEntityAttachments(ctx.db, {
+          entityId: productId,
+          imageId: cover.id,
+          sortOrder: 0,
+        });
+        await enableBrowserSync(accountId);
+        expect(
+          (await sweepPendingEnrichment(ctx.db, { bridge: online })).started,
+        ).toEqual([]);
       });
 
       it("never re-sweeps a Product a run skipped", async () => {

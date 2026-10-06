@@ -25,6 +25,7 @@ import {
   runTarget,
 } from "~/server/db/schema";
 import { getDb, notDeleted, unwrapDb } from "~/server/repo/database-helpers";
+import { entityDisplayImagePresenceSql } from "~/server/repo/entity-display-image";
 
 import { browsingAccountFor, browsingAccounts } from "./browsing-account";
 import { productEnrichmentTarget } from "./product-enrichment-target";
@@ -312,6 +313,21 @@ async function openProducts(
   );
 }
 
+/**
+ * Nothing a product page could still fill: a category, an identifier, and a
+ * cover. Such a Product (often finished by hand or an earlier pass) would only
+ * cost a browser page load to be skipped again.
+ */
+const productComplete = sql`(
+  ${product.categoryId} IS NOT NULL
+  AND EXISTS (
+    SELECT 1 FROM "EntityExternalId" x
+    WHERE x."entityKind" = 'product' AND x."entityId" = ${product.id}
+      AND x."deletedAt" IS NULL
+  )
+  AND ${entityDisplayImagePresenceSql("product", sql`${product.id}`)}
+)`;
+
 /** An audit row this entity got from a purchase-import (account_sync) Run. */
 const importRunTouched = (
   entityKind: "product" | "purchase",
@@ -359,6 +375,7 @@ async function pendingCandidates(db: Database, since: Date) {
       and(
         notDeleted(product),
         gte(product.createdAt, since),
+        sql`NOT ${productComplete}`,
         or(
           importRunTouched("product", product.id),
           // Only a Product with no create row at all (an import before the
