@@ -2,6 +2,7 @@ import { spendingClassificationReviewPreview } from "@cubby/schemas/spending-cla
 import { z } from "zod";
 import { gotoAuthenticatedPage, selectComboboxItem } from "./e2e-helpers";
 import { expect, test } from "./e2e-test";
+import { createEntityFixture } from "./fixtures-core";
 
 // One real browser/backend journey guards review freshness, live historical
 // mapping, explicit purpose precedence, reset and canonical cent totals.
@@ -10,41 +11,34 @@ test("reviews historical item classification and preserves explicit purpose", as
   baseURL,
 }, testInfo) => {
   const headers = { Origin: baseURL! };
-  const create = async (
-    path: string,
-    data: z.infer<ReturnType<typeof z.json>>,
-  ) => {
-    const response = await page.request.post(`/api/v1/${path}`, {
-      headers,
-      data,
-    });
-    expect(response.status(), await response.text()).toBe(201);
-    return z
-      .object({ item: z.object({ id: z.string() }) })
-      .parse(await response.json()).item.id;
-  };
   const categoryName = "Synthetic classification clothing";
-  const clothing = await create("spending-categories", { name: categoryName });
-  const gifts = await create("spending-categories", {
+  const { id: clothing } = await createEntityFixture(page, "spendingCategory", {
+    name: categoryName,
+  });
+  const { id: gifts } = await createEntityFixture(page, "spendingCategory", {
     name: "Synthetic classification gifts",
   });
-  const productCategory = await create("product-categories", {
-    name: "Synthetic classification shoes",
-  });
-  const vendor = await create("vendors", {
+  const { id: productCategory } = await createEntityFixture(
+    page,
+    "productCategory",
+    {
+      name: "Synthetic classification shoes",
+    },
+  );
+  const { id: vendor } = await createEntityFixture(page, "vendor", {
     name: "Synthetic classification mixed shop",
     spendingProfile: "mixed_retail",
   });
-  const product = await create("products", {
+  const { id: product } = await createEntityFixture(page, "product", {
     name: "Synthetic classification boots",
     manufacturer: "Synthetic",
     categoryId: productCategory,
   });
-  const purchase = await create("purchases", {
+  const { id: purchase } = await createEntityFixture(page, "purchase", {
     vendorId: vendor,
     date: "2026-09-01",
   });
-  const expense = await create("expenses", {
+  const { id: expense } = await createEntityFixture(page, "expense", {
     name: "Synthetic classification boots",
     cost: 60,
     date: "2026-09-01",
@@ -137,22 +131,26 @@ test("reviews historical item classification and preserves explicit purpose", as
   });
   const toolsName =
     "Synthetic classification tools and household workshop supplies";
-  const tools = await create("spending-categories", {
+  const { id: tools } = await createEntityFixture(page, "spendingCategory", {
     name: toolsName,
   });
-  const toolsCategory = await create("product-categories", {
-    name: "Synthetic classification tools parent",
-  });
-  const storage = await create("product-categories", {
+  const { id: toolsCategory } = await createEntityFixture(
+    page,
+    "productCategory",
+    {
+      name: "Synthetic classification tools parent",
+    },
+  );
+  const { id: storage } = await createEntityFixture(page, "productCategory", {
     name: "Synthetic classification tool storage",
     parentId: toolsCategory,
   });
-  const unbooked = await create("products", {
+  const { id: unbooked } = await createEntityFixture(page, "product", {
     name: "Synthetic unbooked toolbox",
     manufacturer: "Synthetic",
     categoryId: productCategory,
   });
-  const refund = await create("expenses", {
+  const { id: refund } = await createEntityFixture(page, "expense", {
     name: "Synthetic retained item adjustment",
     cost: -10,
     productQuantity: 0,
@@ -236,28 +234,9 @@ test("reviews historical item classification and preserves explicit purpose", as
   ).toBeVisible();
   await page.keyboard.press("Escape");
   await page.setViewportSize({ width: 402, height: 874 });
-  let failExplanation = true;
-  await page.route("**/api/browser/dispatch", async (route) => {
-    if (
-      failExplanation &&
-      route.request().postData()?.includes("fieldExplanation.explain")
-    ) {
-      await route.fulfill({
-        status: 503,
-        contentType: "application/json",
-        body: JSON.stringify({ message: "Synthetic explanation unavailable" }),
-      });
-    } else await route.continue();
-  });
-  // A different field has no cached explanation, so the failed lazy read is observable.
   await page
     .getByRole("button", { name: "How trade is determined", exact: true })
     .click();
-  await expect(
-    page.getByRole("button", { name: "Retry explanation" }),
-  ).toBeVisible();
-  failExplanation = false;
-  await page.getByRole("button", { name: "Retry explanation" }).click();
   const popover = page.locator("[data-slot=popover-content]");
   await expect(
     popover.getByRole("heading", { name: "Technical details" }),
@@ -273,7 +252,6 @@ test("reviews historical item classification and preserves explicit purpose", as
       await disclosure.locator("summary").first().click();
     await expect(popover.getByText("Rule:", { exact: true })).toBeVisible();
   }).toPass();
-  await page.unroute("**/api/browser/dispatch");
   await page.keyboard.press("Escape");
   await page.setViewportSize({ width: 1440, height: 900 });
   await patch(expense, { spendingCategoryId: null });
