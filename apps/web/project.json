@@ -93,7 +93,15 @@
         "{workspaceRoot}/apps/mcp-apps/**",
         "{workspaceRoot}/scripts/**",
         "{workspaceRoot}/packages/**",
-        "{workspaceRoot}/package.json",
+        "{workspaceRoot}/*.{json,jsonc,yaml,yml,toml,lock}",
+        "{workspaceRoot}/.npmrc",
+        "{workspaceRoot}/docs/**/*.md",
+        "{workspaceRoot}/.claude/skills/{purchase-import,photo-inventory-import,product-enrichment}/**/*.md",
+        // The bundle embeds source identity, and its provenance requires HEAD.
+        { "runtime": "git rev-parse HEAD" },
+        { "runtime": "git rev-parse --abbrev-ref HEAD" },
+        { "env": "CUBBY_SOURCE_COMMIT" },
+        { "env": "CUBBY_SOURCE_BRANCH" },
         { "env": "CUBBY_DEV_PREVIEW_BUILD" },
         {
           "dependentTasksOutputFiles": "packages/wasm/**/*"

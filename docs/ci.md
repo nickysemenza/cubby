@@ -33,7 +33,9 @@ it live in the [validation policy](agents/validation.md) and
 - Most selected targets replay from Nx cache on a small change, so an unaffected
   native or PostgreSQL gate costs a cache lookup, not a rebuild. E2E is
   explicitly uncached and always runs its browser tests; its `build-cf`
-  prerequisite may reuse a cache entry.
+  prerequisite may reuse a cache entry for the same source revision. Its key
+  includes root configuration, bundled docs and agent skills, Git commit/branch, and explicit
+  source overrides, matching the bundle metadata and provenance check.
 - The textual order of the `run-many -t` list is not an execution-order
   contract; Nx dependencies provide the ordering (WASM before its consumers,
   web build before E2E). `verify:local:full` sets `NX_SKIP_NX_CACHE=true` so
@@ -164,7 +166,13 @@ app, so edits there select the web lanes.
 Native, auxiliary, Rust, web, and PostgreSQL/E2E lanes run only when their inputs
 can affect them. A manual run selects all lanes. `Web checks` is the stable
 required aggregate: it checks the web, PostgreSQL, and browser matrix results
-whenever web validation is selected. `Build Workers` builds the
+whenever web validation is selected. `Tests - web` runs the existing `unit`,
+`mcp-contract`, `worker-safety`, and `ui` Vitest projects together in one job,
+preserving each project's environment and isolation. One dependency setup and
+MCP App build serve all four projects; there is no fast-test job matrix. This
+uses one fewer Linux runner slot per selected PR. Node projects run first,
+then UI uses Vitest's standard project group ordering, keeping each phase's
+worker environment together. `Build Workers` builds the
 web Cloudflare bundle (which hosts the purchase agent) and uploads it
 with the MCP App assets and the WASM package as the `worker-build` artifact; the
 workerd PostgreSQL and optional purchase browser lanes download that exact bundle.
@@ -175,6 +183,12 @@ additional Worker builds. The browser lanes retain the discovery and no-skip gua
 desktop Chromium runs as two Playwright shards (two workers each). Phone-web and
 WebKit browser coverage was removed from PR CI and the Playwright suite; native
 checks remain separate. There is no coverage mode.
+Desktop CI passes Playwright's `--trace=off`: recording every test for
+`retain-on-failure` adds work, and raw traces are excluded from hosted artifacts.
+Local runs retain failure traces; CI preserves failure annotations, sanitized
+case results, provenance, checksums, and structured Worker diagnostics.
+For a local debugging replay, replace the manifest's `--trace=off` argument
+with `--trace=retain-on-failure`.
 Browser shards save sanitized case results, a run manifest, and SHA-256
 checksums on success and failure for seven days. The manifest records the tested
 commit, build fingerprint, and replay arguments; a dirty local run or unmatched
@@ -327,6 +341,14 @@ database contracts; it does not establish a five-minute full suite.
   concurrently; the PostgreSQL split preserves its three total runner slots.
   Phone and WebKit browser projects were removed
   from PR CI; device-dependent phone behavior still needs device acceptance.
+- The fast projects share one job to reduce runner demand. Ten completed PR
+  runs sampled on 2026-10-06 (six successful, four failed) had Node jobs of
+  1:47–2:06 and UI jobs of 1:21–1:43, while the slowest desktop shard took
+  7:51–8:58. Representative
+  [successful](https://github.com/nickysemenza/cubby/actions/runs/37426186409)
+  and [failed](https://github.com/nickysemenza/cubby/actions/runs/37426021174)
+  runs support testing that consolidation outside the browser critical path;
+  they do not establish the combined job's hosted runtime or a new PR median.
 - Test page loads spend much of their time waiting for hydration and queued
   JavaScript chunks under the harness's HTTP/1.1 connection limit. A measured
   HTTPS/HTTP/2 proxy added runner time without a useful end-to-end gain.

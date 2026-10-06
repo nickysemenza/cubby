@@ -29,6 +29,13 @@ while Playwright reuses it, so the E2E fixtures retry an idempotent
 `page.request`/`request` call once on `ECONNRESET` ("socket hang up"); a POST
 or PATCH is never replayed.
 
+Browser dispatch can batch concurrent queries. A mock that parses a single
+operation envelope uses `unbatchFor` before its per-operation handler. Keep
+lazy-fetch assertions sensitive to every envelope; after refusing a batch,
+count individual operation attempts separately from transport fallback.
+Compare related layout bounds in one browser evaluation so their rectangles
+come from the same render state.
+
 Playwright E2E and the coupled Workers harness share a machine-wide lock
 (`/tmp/cubby-harness.lock`, `scripts/lib/harness-lock.ts`): a second suite on
 the same machine queues and logs who holds the lock instead of starving both
@@ -153,6 +160,9 @@ Raw HTML reports, traces, screenshots, and database dumps stay local because
 they can contain household data or credentials. Run `shasum -a 256 -c
 SHA256SUMS` from the downloaded bundle directory to verify its contents, then
 replay the `command` array in `run-manifest.json` against the recorded commit.
+Desktop CI disables trace recording because raw traces are never uploaded.
+For a local debugging replay, replace its `--trace=off` argument with
+`--trace=retain-on-failure`; local runs otherwise retain traces on failure.
 
 A failed E2E test attaches the Worker harness's structured workerd logs
 (`harness.getLogs()`, credential-shaped values scrubbed) to the Playwright

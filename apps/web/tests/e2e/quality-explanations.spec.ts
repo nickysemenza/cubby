@@ -16,7 +16,11 @@ import {
 } from "./fixtures-catalog";
 import { createEntityFixture } from "./fixtures-core";
 import { expect, test } from "./e2e-test";
-import { dispatchesOperation } from "./dispatch-wire";
+import {
+  dispatchesOperation,
+  dispatchOperations,
+  unbatchFor,
+} from "./dispatch-wire";
 
 test.beforeEach(async ({ page }) => {
   await page.setViewportSize({ width: 1280, height: 900 });
@@ -87,11 +91,16 @@ test("quality leads entity tables, explains its calculation, and restores tempor
   await expect(popover.locator("pre")).toHaveCount(0);
   const footer = popover.locator("footer");
   await expect(footer).toBeVisible();
-  expect(
-    (await footer.boundingBox())!.y + (await footer.boundingBox())!.height,
-  ).toBeLessThanOrEqual(
-    (await popover.boundingBox())!.y + (await popover.boundingBox())!.height,
-  );
+  // Read both bounds in one browser turn while the popover can reposition.
+  const footerOverflow = await popover.evaluate((element) => {
+    const footerElement = element.querySelector("footer");
+    if (!footerElement) throw new Error("Explanation footer is missing");
+    return (
+      footerElement.getBoundingClientRect().bottom -
+      element.getBoundingClientRect().bottom
+    );
+  });
+  expect(footerOverflow).toBeLessThanOrEqual(0);
   await expectViewportBounded(page);
   await page.screenshot({ path: testInfo.outputPath("quality-desktop.png") });
   await page.keyboard.press("Escape");
@@ -397,9 +406,10 @@ test("explanations load lazily, recover from errors, and expand bounded evidence
 }, testInfo) => {
   const name = `Synthetic explanation recovery ${Date.now()}`;
   const product = await seedProductPrerequisite(page, { name });
-  let requests = 0;
+  const requests: string[][] = [];
   page.on("request", (request) => {
-    if (dispatchesOperation(request, "fieldExplanation.explain")) requests += 1;
+    if (dispatchesOperation(request, "fieldExplanation.explain"))
+      requests.push(dispatchOperations(request).map((item) => item.operation));
   });
   await page.setViewportSize({ width: 402, height: 874 });
   await gotoAuthenticatedPage(
@@ -411,12 +421,13 @@ test("explanations load lazily, recover from errors, and expand bounded evidence
     name: /How (data )?quality is determined/,
   });
   await expect(trigger).toBeVisible();
-  expect(requests).toBe(0);
+  expect(requests).toHaveLength(0);
   let release = () => {};
   const gate = new Promise<void>((resolve) => {
     release = resolve;
   });
   await page.route("**/api/browser/dispatch", async (route) => {
+    if (await unbatchFor(route, ["fieldExplanation.explain"])) return;
     if (!dispatchesOperation(route.request(), "fieldExplanation.explain"))
       return route.continue();
     await gate;
@@ -435,6 +446,7 @@ test("explanations load lazily, recover from errors, and expand bounded evidence
   ).toBeVisible();
   await page.unroute("**/api/browser/dispatch");
   await page.route("**/api/browser/dispatch", async (route) => {
+    if (await unbatchFor(route, ["fieldExplanation.explain"])) return;
     if (!dispatchesOperation(route.request(), "fieldExplanation.explain"))
       return route.continue();
     const response = await route.fetch();
@@ -516,7 +528,11 @@ test("explanations load lazily, recover from errors, and expand bounded evidence
   await page.keyboard.press("Escape");
   await expect(popover).not.toBeVisible();
   await expect(trigger).toBeFocused();
-  expect(requests).toBe(2);
+  // A refused batch is a transport envelope, not another explanation attempt.
+  // Count the failed single-operation request and the explicit Retry request.
+  expect(requests.filter((operations) => operations.length === 1)).toHaveLength(
+    2,
+  );
   expect(product.id).toBeTruthy();
 });
 
