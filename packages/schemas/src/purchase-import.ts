@@ -739,13 +739,10 @@ export const browserBridgeServerMessage = z.discriminatedUnion("type", [
   }),
 ]);
 
-export const importCoordinatorModel = z.literal("gpt-6-sol");
-
 const agentEventBase = z.object({
   version: z.literal(1),
   runId: z.uuid(),
   purpose: agentImportRunPurpose.optional(),
-  coordinatorModel: importCoordinatorModel.optional(),
   eventId: z.string().trim().min(1).max(256),
 });
 const agentEventId = z.string().trim().min(1).max(256);

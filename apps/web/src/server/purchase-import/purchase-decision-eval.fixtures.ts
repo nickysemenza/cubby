@@ -1,11 +1,10 @@
 import type { ExpenseLineKind } from "@cubby/schemas/expense-line-kind";
-
-import { formatCount, formatCurrency } from "~/lib/number-format";
-
 import type {
   ExpectedDecision,
   ProductDecision,
-} from "./purchase-decision-eval.score";
+} from "tooling/ai/decision-score";
+
+import { formatCount, formatCurrency } from "~/lib/number-format";
 
 /**
  * Synthetic purchase-decision cases for the live coordinator model eval

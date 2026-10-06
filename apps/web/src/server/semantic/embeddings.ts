@@ -1,17 +1,19 @@
 import type { RunId } from "@cubby/schemas/identifiers";
+import { gatewayBaseURL } from "@cubby/shared/ai/gateway-request";
 import { LRUCache } from "lru-cache";
 import { z } from "zod";
 
+import { cachedCall } from "~/server/ai/adapters";
 import { SEMANTIC_QUERY_FEATURE } from "~/server/ai/features";
-import { runEmbeddingFeature } from "~/server/ai/run-feature";
-import { cachedCall } from "~/server/clients/ai-adapters";
 import {
-  gatewayBaseURL,
   gatewayConfigured,
   gatewayFetch,
   type GatewayMetadata,
-  type GatewayTransport,
-} from "~/server/clients/ai-gateway";
+} from "~/server/ai/gateway";
+import {
+  type EmbeddingObservers,
+  runEmbeddingFeature,
+} from "~/server/ai/run-feature";
 import type { Database } from "~/server/db";
 import { ensureRun, systemActor } from "~/server/runs/ensure-run";
 import { TraceNames, withTrace } from "~/server/tracing";
@@ -40,7 +42,7 @@ export interface EmbeddingPorts {
    */
   readonly fetchFor: (
     metadata: GatewayMetadata,
-    onTransport: (transport: GatewayTransport) => void,
+    observers: EmbeddingObservers,
   ) => typeof fetch;
   /** Provider reachability only; `embedTexts` guards on this alone. */
   readonly configured: () => boolean;
@@ -53,8 +55,8 @@ const productionEmbeddingPorts: EmbeddingPorts = {
   // misses; caching only ever short-circuits an identical (model, input)
   // pair, which is deterministic. Repeat search queries were paying the full
   // provider round-trip (p50 ~940ms) without this.
-  fetchFor: (metadata, onTransport) =>
-    gatewayFetch("openai", { ...cachedCall({ metadata }), onTransport }),
+  fetchFor: (metadata, observers) =>
+    gatewayFetch("openai", { ...cachedCall({ metadata }), ...observers }),
   configured: gatewayConfigured,
   vectorStore: productionVectorStore,
   config: getSemanticEmbeddingConfig,
@@ -130,8 +132,8 @@ export async function embedTexts(
     const result = await runEmbeddingFeature(
       { feature, model: config.model },
       {
-        embed: async (onTransport) => {
-          const fetchThroughGateway = ports.fetchFor(metadata, onTransport);
+        embed: async (observers) => {
+          const fetchThroughGateway = ports.fetchFor(metadata, observers);
           const response = await fetchThroughGateway(
             `${gatewayBaseURL("openai")}/embeddings`,
             {

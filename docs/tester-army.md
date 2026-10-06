@@ -88,8 +88,11 @@ same gateway. Do not reuse a deployment token. Gateway metadata records
 plus stable `feature` and `operation` dimensions. Revisions stay in the
 sanitized E2E run bundle rather than gateway metadata.
 
-The default is `openai/gpt-6-luna` through the Responses API, medium reasoning,
-with gateway caching disabled. `TESTER_ARMY_MODEL` explicitly overrides the
+The driver default is `openai/${FAST_MODEL}` from the shared model declarations,
+through the Responses API with medium reasoning and gateway caching disabled.
+The agent swap uses the same `FAST_MODEL` default. Model swaps accept only
+OpenAI chat models because the peer speaks the Responses protocol. Blank
+Actions variables use these defaults rather than becoming invalid model names. `TESTER_ARMY_MODEL` explicitly overrides the
 model locally or through an Actions repository variable. There is no fallback.
 The preflight verifies an image plus a forced function call before builds,
 database provisioning, or simulator startup.

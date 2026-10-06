@@ -13,6 +13,8 @@ import {
   importRunAgentManifest,
 } from "@cubby/schemas/import-run-agent";
 import type { AiUsageTransport } from "@cubby/schemas/telemetry";
+import type { GatewayResponseInfo } from "@cubby/shared/ai/gateway-request";
+import { piTokenUsage } from "@cubby/shared/ai/pi-providers";
 import { createLogger } from "@cubby/worker-tracing";
 import { BACKGROUND_CONTEXT } from "@earendil-works/chord/context";
 import type { AssistantMessage } from "@earendil-works/pi-ai";
@@ -110,6 +112,8 @@ export class PurchaseImportRunAgent
   private requestStartedAt = 0;
   /** What carried the current model request; the coordinator runs one at a time. */
   private requestTransport: AiUsageTransport = "unknown";
+  /** The current request's last gateway response, for its usage row. */
+  private requestGateway: GatewayResponseInfo | undefined;
 
   readonly harness = new PiHarness({
     harness: (input) => this.openPi(input),
@@ -193,6 +197,9 @@ export class PurchaseImportRunAgent
       onTransport: (transport) => {
         this.requestTransport = transport;
       },
+      onResponse: (info) => {
+        this.requestGateway = info;
+      },
     }))
       models.setProvider(provider);
     // A cold start reinstalls the run's tools before pi resumes any task, so
@@ -233,6 +240,7 @@ export class PurchaseImportRunAgent
             beforeRequest: () => {
               this.requestStartedAt = Date.now();
               this.requestTransport = "unknown";
+              this.requestGateway = undefined;
               return undefined;
             },
             afterResponse: (message) => this.afterResponse(message),
@@ -285,14 +293,13 @@ export class PurchaseImportRunAgent
         feature: "purchase_import_agent",
         operation: "agent.generation",
         attempt: 1,
-        inputTokens: message.usage.input,
-        outputTokens: message.usage.output,
-        cacheReadTokens: message.usage.cacheRead,
-        cacheWriteTokens: message.usage.cacheWrite,
+        ...piTokenUsage(message),
         durationMs: Math.max(0, Date.now() - this.requestStartedAt),
         status: message.stopReason === "error" ? "failed" : "succeeded",
         transport: this.requestTransport,
-        estimatedCost: message.usage.cost.total,
+        gatewayLogId: this.requestGateway?.gatewayLogId ?? undefined,
+        gatewayCacheStatus:
+          this.requestGateway?.gatewayCacheStatus ?? undefined,
       });
     } catch (error) {
       // Usage accounting never fails the coordinator's turn.

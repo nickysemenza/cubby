@@ -18,7 +18,7 @@ import { eq } from "drizzle-orm";
 import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it, vi } from "vitest";
 
-import { wrapAiGatewayError } from "~/server/clients/ai-gateway-error";
+import { wrapAiGatewayError } from "~/server/ai/gateway-error";
 import { run, runProgress } from "~/server/db/schema";
 import { getDb } from "~/server/repo/database-helpers";
 import { getRunLiveProgress } from "~/server/repo/run-progress";

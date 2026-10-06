@@ -1,10 +1,9 @@
 import { runEntityId } from "@cubby/schemas/identifiers";
+import type { GatewayProvider } from "@cubby/shared/ai/models";
 import { describe, expect, it } from "vitest";
 
-import type {
-  GatewayCallOptions,
-  GatewayProvider,
-} from "~/server/clients/ai-gateway";
+import type { GatewayCallOptions } from "~/server/ai/gateway";
+import { type AiUsagePort, recordAiUsage } from "~/server/ai/usage";
 import type { Database } from "~/server/db";
 
 import {
@@ -35,11 +34,12 @@ const request = {
 };
 
 // A faithful stand-in for the forwarder's surroundings: it keeps what the
-// transport shim was asked for and what was recorded, so the test reads them
-// back typed.
+// transport shim was asked for and the event the real usage writer emitted,
+// so the writer's accounting rules apply and the test reads them back typed.
 function fakePort(
   respond: () => Response,
   selected: "gateway" | "chatgpt" = "gateway",
+  promptCache = { read: 0, write: 0 },
 ) {
   const sent: {
     provider: GatewayProvider;
@@ -47,7 +47,7 @@ function fakePort(
     url: string;
     init: RequestInit;
   }[] = [];
-  const recorded: Parameters<GatewayForwardPort["recordUsage"]>[1][] = [];
+  const recorded: Parameters<AiUsagePort["emit"]>[1][] = [];
   const port: GatewayForwardPort = {
     transport: (provider, opts) => (input, init) => {
       opts.onTransport?.(selected);
@@ -61,16 +61,18 @@ function fakePort(
             usage: {
               input_tokens: 10,
               output_tokens: 5,
-              cache_read_input_tokens: 0,
-              cache_creation_input_tokens: 0,
+              cache_read_input_tokens: promptCache.read,
+              cache_creation_input_tokens: promptCache.write,
             },
-            cost_usd: 0.000035,
           }
         : null,
-    recordUsage: (_db, input) => {
-      recorded.push(input);
-      return Promise.resolve();
-    },
+    recordUsage: (database, input) =>
+      recordAiUsage(database, input, {
+        emit: (_db, event) => {
+          recorded.push(event);
+          return Promise.resolve();
+        },
+      }),
   };
   return { port, sent, recorded };
 }
@@ -82,7 +84,7 @@ const db = {} as Database;
 const runId = runEntityId.parse("00000000-0000-4000-8000-000000000001");
 
 describe("forwardGatewayRequest", () => {
-  it("forwards the built request with the server's token and feature, and records priced usage", async () => {
+  it("forwards the built request with the server's token and feature, and leaves pricing to the catalog consumer", async () => {
     const { port, sent, recorded } = fakePort(
       () =>
         new Response('{"usage":{"input_tokens":10,"output_tokens":5}}', {
@@ -127,9 +129,38 @@ describe("forwardGatewayRequest", () => {
         operation: "cookbook.extract",
         inputTokens: 10,
         outputTokens: 5,
-        estimatedCost: 0.000035,
+        cacheReadTokens: 0,
+        cacheWriteTokens: 0,
+        estimatedCost: null,
         cacheStatus: "none",
+        gatewayLogId: "log-1",
         transport: "gateway",
+      }),
+    ]);
+  });
+
+  // Prompt-cache traffic is token evidence, not the caller's cache state:
+  // `cacheStatus` once read "hit" for any cache-read token.
+  it("records prompt-cache tokens without reporting a caller cache hit", async () => {
+    const { port, recorded } = fakePort(
+      () =>
+        new Response('{"usage":{"input_tokens":10,"output_tokens":5}}', {
+          status: 200,
+        }),
+      "gateway",
+      { read: 40, write: 7 },
+    );
+    await forwardGatewayRequest(
+      request,
+      { db, runId, feature: "cookbook-epub-parsing" },
+      port,
+    );
+    expect(recorded).toEqual([
+      expect.objectContaining({
+        cacheReadTokens: 40,
+        cacheWriteTokens: 7,
+        cacheStatus: "none",
+        estimatedCost: null,
       }),
     ]);
   });
@@ -164,7 +195,10 @@ describe("forwardGatewayRequest", () => {
       () =>
         new Response('{"usage":{"input_tokens":10,"output_tokens":5}}', {
           status: 200,
-          headers: { "cf-aig-cache-status": "HIT" },
+          headers: {
+            "cf-aig-cache-status": "HIT",
+            "cf-aig-log-id": "log-hit",
+          },
         }),
     );
     const out = await forwardGatewayRequest(
@@ -178,7 +212,9 @@ describe("forwardGatewayRequest", () => {
         inputTokens: 10,
         outputTokens: 5,
         estimatedCost: 0,
-        cacheStatus: "hit",
+        // The gateway's verdict never overwrites the caller's cache state.
+        cacheStatus: "none",
+        gatewayLogId: "log-hit",
         // A Gateway response-cache hit still went through the Gateway;
         // `cache` is only an app-side replay with no upstream call.
         transport: "gateway",

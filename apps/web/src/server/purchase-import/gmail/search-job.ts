@@ -6,7 +6,7 @@ import {
 } from "@cubby/schemas/run-fields";
 import { and, desc, eq, inArray, isNotNull, sql } from "drizzle-orm";
 
-import { aiGatewayRateLimitDelayMs } from "~/server/clients/ai-gateway-error";
+import { aiGatewayRateLimitDelayMs } from "~/server/ai/gateway-error";
 import type { Database } from "~/server/db";
 import { run as runTable, runProgress, vendor } from "~/server/db/schema";
 import { reportServerError } from "~/server/errors/report-error";

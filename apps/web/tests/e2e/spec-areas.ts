@@ -96,7 +96,7 @@ export interface SpecAreaEntry {
 export const SPEC_EXTRA_GLOBS: SpecGlobMap = {
   "ai-usage.spec.ts": [
     `${WEB}/src/server/repo/ai-usage.ts`,
-    `${WEB}/src/server/ai-usage.ts`,
+    `${WEB}/src/server/ai/usage.ts`,
     `${WEB}/src/server/operations/ai.server.ts`,
     `${WEB}/src/contracts/ai.contract.ts`,
     `${WEB}/src/features/ai/**`,

@@ -1,3 +1,4 @@
+import { providerFor } from "@cubby/shared/ai/models";
 /**
  * One model call records exactly one `AiUsage` row.
  *
@@ -15,14 +16,13 @@ import {
   type ModelsApiStreamOptions,
 } from "@earendil-works/pi-ai";
 import { withTestDb } from "tooling/test-setup";
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import {
   ENTITY_EMBEDDING_FEATURE,
   LOCATION_DESCRIPTION_FEATURE,
   FIELD_SUGGESTION_FEATURE,
 } from "~/server/ai/features";
-import { providerFor } from "~/server/ai/models";
 import {
   RESPOND_TOOL_NAME,
   recordApplicationCacheHit,
@@ -37,7 +37,34 @@ import {
   makeLocationInput,
 } from "~/server/repo/repo.fixtures";
 import { resolveOrThrow } from "~/server/repo/shortcode-resolver";
+import { persistTelemetryMessages } from "~/server/repo/telemetry";
 import { ensureRun } from "~/server/runs/ensure-run";
+
+// The SDK reads global fetch at request time. Route the catalog separately
+// on every test, including when an inference socket is overridden.
+const realFetch = vi.hoisted(() => {
+  vi.resetModules();
+  return globalThis.fetch;
+});
+function stubInferenceFetch(inference: typeof fetch) {
+  const decisionCost = { input: 1, output: 2 };
+  vi.stubGlobal(
+    "fetch",
+    async (input: RequestInfo | URL, init?: RequestInit) =>
+      String(input).includes("models.dev")
+        ? Response.json({
+            openai: { models: { "gpt-6-sol": { cost: decisionCost } } },
+            "cloudflare-ai-gateway": {
+              models: { "typesafe/jev": { cost: decisionCost } },
+            },
+            "cloudflare-workers-ai": {
+              models: { "@cf/cloudflare/clef": { cost: decisionCost } },
+            },
+          })
+        : inference(input, init),
+  );
+}
+beforeEach(() => stubInferenceFetch(realFetch));
 
 afterEach(() => {
   vi.restoreAllMocks();
@@ -62,7 +89,7 @@ describe("AiUsage accounting", () => {
       vi.stubEnv("AI_GATEWAY_API_KEY", "test-gateway-key");
       vi.spyOn(Math, "random").mockReturnValue(random);
       vi.resetModules();
-      vi.stubGlobal("fetch", async () => {
+      stubInferenceFetch(async () => {
         const answer = {
           answers: {
             selection: {
@@ -76,6 +103,7 @@ describe("AiUsage accounting", () => {
         };
         return Response.json(
           provider === "cloudflare" ? answer : { result: answer },
+          { headers: { "cf-aig-log-id": "log-decision" } },
         );
       });
       const { runJevChoice } = await import("./jev");
@@ -98,14 +126,66 @@ describe("AiUsage accounting", () => {
         outputTokens: 0,
         status: "succeeded",
         attempt: 1,
+        gatewayLogId: "log-decision",
+        cacheStatus: "none",
       });
     },
   );
 
+  // A Gateway response-cache HIT repeats the provider's usage but is not
+  // billed; it still crossed the gateway, so it is no `cache` replay.
+  it("books a decision the gateway served from its cache as a free gateway call", async () => {
+    vi.stubEnv("AI_GATEWAY_API_KEY", "test-gateway-key");
+    vi.spyOn(Math, "random").mockReturnValue(0.25);
+    vi.resetModules();
+    stubInferenceFetch(async () =>
+      Response.json(
+        {
+          result: {
+            answers: {
+              selection: {
+                type: "choice",
+                choice: "c0",
+                confidence: 0.9,
+                probabilities: { c0: 0.9, none: 0.1 },
+              },
+            },
+            usage: { input_tokens: 100, output_tokens: 0 },
+          },
+        },
+        {
+          headers: {
+            "cf-aig-log-id": "log-decision-hit",
+            "cf-aig-cache-status": "HIT",
+          },
+        },
+      ),
+    );
+    const { runJevChoice } = await import("./jev");
+    const runId = await ensureRun(ctx.db, ctx.actor, { purpose: "ai_suggest" });
+    await runJevChoice({
+      feature: { ...FIELD_SUGGESTION_FEATURE, cache: false },
+      subject: "synthetic decision",
+      rules: "Choose one.",
+      choices: ["one"],
+      usage: { db: ctx.db, runId, operation: "decision-model-trial" },
+    });
+    const rows = await usageRows();
+    expect(rows).toHaveLength(1);
+    expect(rows[0]).toMatchObject({
+      transport: "gateway",
+      gatewayLogId: "log-decision-hit",
+      cacheStatus: "none",
+      attempt: 1,
+      inputTokens: 100,
+      estimatedCost: 0,
+    });
+  });
+
   it("records one row for one embeddings call", async () => {
     vi.stubEnv("AI_GATEWAY_API_KEY", "test-gateway-key");
     vi.resetModules();
-    vi.stubGlobal("fetch", () =>
+    stubInferenceFetch(() =>
       Promise.resolve(
         new Response(
           JSON.stringify({
@@ -118,7 +198,13 @@ describe("AiUsage accounting", () => {
             })),
             usage: { prompt_tokens: 4, total_tokens: 4 },
           }),
-          { status: 200, headers: { "content-type": "application/json" } },
+          {
+            status: 200,
+            headers: {
+              "content-type": "application/json",
+              "cf-aig-log-id": "log-embedding",
+            },
+          },
         ),
       ),
     );
@@ -142,6 +228,7 @@ describe("AiUsage accounting", () => {
       runId,
       inputTokens: 4,
       cacheStatus: "none",
+      gatewayLogId: "log-embedding",
       transport: "gateway",
     });
   });
@@ -241,8 +328,84 @@ describe("AiUsage accounting", () => {
       entityKind: "location",
       entityId: locationId,
       transport: "cache",
+      // Regression: replays defaulted to one attempt and an unset cost.
+      attempt: 0,
+      estimatedCost: 0,
     });
   });
+
+  // Regression: the chat runner dropped prompt-cache token classes and the
+  // gateway's log id, and billed a gateway response-cache HIT in full.
+  it.each(["hit", "miss"] as const)(
+    "records a chat call's prompt-cache tokens and gateway %s verdict once",
+    async (gatewayCacheStatus) => {
+      // A catalog that cannot price this model must stay unknown; pi's own
+      // estimate must not bypass the single accounting pricing source.
+      stubInferenceFetch(async () => Response.json({}));
+      const runId = await ensureRun(ctx.db, ctx.actor, {
+        purpose: "ai_suggest",
+      });
+      const answer = fauxAssistantMessage(
+        fauxToolCall(RESPOND_TOOL_NAME, {
+          description: "Synthetic shelf of bins.",
+          confidence: "high",
+        }),
+        { stopReason: "toolUse" },
+      );
+      const ports: StructuredRunPorts = {
+        callTarget: (_model, call) => ({
+          model: fauxProvider().getModel(),
+          complete: async () => {
+            call.onTransport?.("gateway");
+            call.onResponse?.({
+              gatewayLogId: "log-chat-hit",
+              gatewayCacheStatus,
+            });
+            return {
+              ...answer,
+              usage: {
+                input: 120,
+                output: 30,
+                cacheRead: 400,
+                cacheWrite: 50,
+                totalTokens: 600,
+                cost: {
+                  input: 0.1,
+                  output: 0.1,
+                  cacheRead: 0.1,
+                  cacheWrite: 0.1,
+                  total: 0.4,
+                },
+              },
+            };
+          },
+        }),
+      };
+
+      await runStructuredFeature(
+        LOCATION_DESCRIPTION_FEATURE,
+        {
+          systemPrompts: ["frame"],
+          messages: [{ role: "user", content: "x" }],
+        },
+        { db: ctx.db, runId, operation: "locationDescription" },
+        ports,
+      );
+
+      const rows = await usageRows();
+      expect(rows).toHaveLength(1);
+      expect(rows[0]).toMatchObject({
+        transport: "gateway",
+        gatewayLogId: "log-chat-hit",
+        cacheStatus: "none",
+        inputTokens: 120,
+        outputTokens: 30,
+        cacheReadTokens: 400,
+        cacheWriteTokens: 50,
+        estimatedCost: gatewayCacheStatus === "hit" ? 0 : null,
+      });
+    },
+  );
 
   it("records one zero-cost row for a decision served from the response cache", async () => {
     const runId = await ensureRun(ctx.db, ctx.actor, { purpose: "ai_suggest" });
@@ -364,7 +527,7 @@ describe("AiUsage accounting", () => {
   // tokens a ChatGPT response reports.
   it("never prices a ChatGPT plan call from its tokens", async () => {
     const runId = await ensureRun(ctx.db, ctx.actor, { purpose: "ai_suggest" });
-    const { recordAiUsage } = await import("~/server/ai-usage");
+    const { recordAiUsage } = await import("~/server/ai/usage");
     await recordAiUsage(ctx.db, {
       provider: "openai",
       model: "gpt-6-sol",
@@ -379,6 +542,43 @@ describe("AiUsage accounting", () => {
 
     const rows = await usageRows();
     expect(rows[0]).toMatchObject({ transport: "chatgpt", estimatedCost: 0 });
+  });
+
+  // A message queued by the preceding deployment carries no cost; the
+  // consumer prices it from tokens unless no model call was billed.
+  it("never prices a queued cache replay from its tokens", async () => {
+    const runId = await ensureRun(ctx.db, ctx.actor, { purpose: "ai_suggest" });
+    const queued = (transport: "cache" | "gateway") => ({
+      version: 1 as const,
+      queueType: "telemetry" as const,
+      eventId: crypto.randomUUID(),
+      occurredAt: new Date().toISOString(),
+      release: "synthetic",
+      type: "ai_usage" as const,
+      feature: "location-description",
+      provider: "openai",
+      model: "gpt-6-sol",
+      operation: "locationDescription",
+      runId,
+      inputTokens: 1_000,
+      outputTokens: 1_000,
+      durationMs: 1,
+      cacheStatus: "hit" as const,
+      transport,
+      entityKind: null,
+      entityId: null,
+    });
+    await persistTelemetryMessages(ctx.db, [
+      queued("cache"),
+      queued("gateway"),
+    ]);
+
+    const rows = await usageRows();
+    const cost = Object.fromEntries(
+      rows.map((row) => [row.transport, row.estimatedCost]),
+    );
+    expect(cost.cache).toBe(0);
+    expect(cost.gateway).toBe(0.003);
   });
 
   it("records unknown when a failed call never selected a transport", async () => {

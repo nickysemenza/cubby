@@ -15,6 +15,20 @@ const gateway = (run: AgentGateway["run"]): AgentGateway => ({
   run,
 });
 
+const completedResponse = (headers: Record<string, string> = {}) =>
+  new Response(
+    `data: ${JSON.stringify({
+      type: "response.completed",
+      response: {
+        id: "example-response",
+        status: "completed",
+        output: [],
+        usage: { input_tokens: 100, output_tokens: 10, total_tokens: 110 },
+      },
+    })}\n\n`,
+    { headers: { "content-type": "text/event-stream", ...headers } },
+  );
+
 describe("createCubbyGatewayFetch", () => {
   // Subscription responses must not acquire API prices in the persisted pi
   // transcript, and a subsequent paid response must retain its API price.
@@ -57,18 +71,47 @@ describe("createCubbyGatewayFetch", () => {
     const paid = await models.complete(model, { messages: [] });
     expect(paid.usage.cost.total).toBeGreaterThan(0);
   });
+  // A gateway cache HIT is not billed, but it still rode the gateway and its
+  // log id is the usage row's correlation handle.
+  it("zeroes a cached generation's cost, keeps gateway transport, and reports the log id", async () => {
+    const transports: string[] = [];
+    const observed: unknown[] = [];
+    const models = createModels();
+    for (const provider of cubbyAgentProviders({
+      gateway: () =>
+        gateway(async () =>
+          completedResponse({
+            "cf-aig-log-id": "example-log",
+            "cf-aig-cache-status": "HIT",
+          }),
+        ),
+      recorder: createContextRecorder(),
+      onTransport: (transport) => transports.push(transport),
+      onResponse: (info) => observed.push(info),
+    }))
+      models.setProvider(provider);
+    const model = models.getModel("openai", "gpt-6-sol");
+    if (!model) throw new Error("Missing test model");
+    const message = await models.complete(model, { messages: [] });
+    expect(message.usage.cost.total).toBe(0);
+    expect(message.usage.input).toBe(100);
+    expect(transports).toEqual(["gateway"]);
+    expect(observed).toEqual([
+      { gatewayLogId: "example-log", gatewayCacheStatus: "hit" },
+    ]);
+  });
+
   it("keeps a connected plan's failure on chatgpt without a gateway retry", async () => {
     const run = vi.fn(async () => new Response("stream"));
     const transports: string[] = [];
-    const gatewayFetch = createCubbyGatewayFetch(
-      "openai",
-      () => gateway(run),
-      async (_body, options) => {
+    const gatewayFetch = createCubbyGatewayFetch("openai", {
+      gateway: () => gateway(run),
+      subscription: async (_body, options) => {
         options?.onSelected?.();
         throw new Error("ChatGPT plan connection reset");
       },
-      (transport) => transports.push(transport),
-    );
+      onTransport: (transport) => transports.push(transport),
+    });
     await expect(
       gatewayFetch("https://ai-gateway.invalid/openai/responses", {
         method: "POST",
@@ -82,12 +125,11 @@ describe("createCubbyGatewayFetch", () => {
   it("reports gateway when the household has no plan connection", async () => {
     const run = vi.fn(async () => new Response("stream"));
     const transports: string[] = [];
-    const gatewayFetch = createCubbyGatewayFetch(
-      "openai",
-      () => gateway(run),
-      async () => null,
-      (transport) => transports.push(transport),
-    );
+    const gatewayFetch = createCubbyGatewayFetch("openai", {
+      gateway: () => gateway(run),
+      subscription: async () => null,
+      onTransport: (transport) => transports.push(transport),
+    });
     await gatewayFetch("https://ai-gateway.invalid/openai/responses", {
       method: "POST",
       body: JSON.stringify({ model: "gpt-6-sol" }),
@@ -112,9 +154,9 @@ describe("createCubbyGatewayFetch", () => {
   ])("routes $route through the Cubby Universal Gateway", async (test) => {
     const expected = new Response("stream", { status: 200 });
     const run = vi.fn(async () => expected);
-    const gatewayFetch = createCubbyGatewayFetch(test.route, () =>
-      gateway(run),
-    );
+    const gatewayFetch = createCubbyGatewayFetch(test.route, {
+      gateway: () => gateway(run),
+    });
 
     const response = await gatewayFetch(test.url, {
       method: "POST",

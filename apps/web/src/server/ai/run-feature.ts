@@ -1,5 +1,17 @@
 import type { RunId } from "@cubby/schemas/identifiers";
 import type { AiUsageTransport } from "@cubby/schemas/telemetry";
+import type {
+  GatewayResponseFailure,
+  GatewayResponseInfo,
+} from "@cubby/shared/ai/gateway-request";
+import type { OpenAiEffort } from "@cubby/shared/ai/models";
+import {
+  getChatModelConfig,
+  providerFor,
+  type SupportedChatModel,
+  type SupportedEmbeddingModel,
+} from "@cubby/shared/ai/models";
+import { piTokenUsage } from "@cubby/shared/ai/pi-providers";
 import {
   fetchExternalResponse,
   readResponseWithLimit,
@@ -36,38 +48,27 @@ import { parse as parseContentType } from "content-type";
 import { z } from "zod";
 
 import type { UnparsedError } from "~/lib/error-utils";
-import { recordAiUsage } from "~/server/ai-usage";
-import type {
-  AiChatFeature,
-  AiFeature,
-  AiStructuredFeature,
-} from "~/server/ai/features";
-import {
-  getChatModelConfig,
-  providerFor,
-  type SupportedChatModel,
-  type SupportedEmbeddingModel,
-} from "~/server/ai/models";
-import {
-  type AiResponseCacheKeyInput,
-  type ApplicationCacheStatus,
-  withAiResponseCache,
-} from "~/server/ai/response-cache";
 import {
   chatCompletionOptionsFor,
   cachedCall,
   piCallTarget,
   type AnthropicEffort,
-  type OpenAiEffort,
   type PiCallTarget,
   type SharedEffort,
-} from "~/server/clients/ai-adapters";
+} from "~/server/ai/adapters";
 import type {
-  GatewayCallOptions,
-  GatewayMetadata,
-  GatewayResponseFailure,
-} from "~/server/clients/ai-gateway";
-import { wrapAiGatewayError } from "~/server/clients/ai-gateway-error";
+  AiChatFeature,
+  AiFeature,
+  AiStructuredFeature,
+} from "~/server/ai/features";
+import type { GatewayCallOptions, GatewayMetadata } from "~/server/ai/gateway";
+import { wrapAiGatewayError } from "~/server/ai/gateway-error";
+import {
+  type AiResponseCacheKeyInput,
+  type ApplicationCacheStatus,
+  withAiResponseCache,
+} from "~/server/ai/response-cache";
+import { recordAiUsage } from "~/server/ai/usage";
 import type { Database } from "~/server/db";
 
 /** One part of a user message's content: text, or an image/document fetched by URL. */
@@ -81,7 +82,7 @@ export interface AiImagePart {
 }
 /** A document (e.g. a PDF receipt). Resolved the same way as an image — see
  * {@link resolveImageContent} — since pi-ai's `Message` has no document
- * content type; the shared OpenAI provider (`@cubby/shared/pi-gateway`)
+ * content type; the shared OpenAI provider (`@cubby/shared/ai/pi-providers`)
  * rewrites the resulting PDF image block into the Responses `input_file`. */
 interface AiDocumentPart {
   type: "document";
@@ -153,22 +154,25 @@ export interface FeatureUsageOutcome {
   durationMs: number;
   inputTokens?: number | null;
   outputTokens?: number | null;
+  cacheReadTokens?: number | null;
+  cacheWriteTokens?: number | null;
   estimatedCost?: number | null;
   attempt?: number;
   status?: "succeeded" | "failed";
   gatewayLogId?: string | null;
+  gatewayCacheStatus?: GatewayResponseInfo["gatewayCacheStatus"];
   /** Overrides the context's caller-cache status for this row. */
   cacheStatus?: "hit" | "miss" | "none";
   applicationCacheStatus?: ApplicationCacheStatus;
 }
 
 /**
- * The one writer of `AiUsage` rows. Every model call — chat-tier (from the
+ * The usage row for a declared feature's call: chat-tier (from the
  * `AssistantMessage` pi-ai returns), Jev's raw gateway fetch, embeddings, and
- * an answer replayed from the caller's own cache (`AiAnalysis`) — goes
- * through this function or `recordApplicationCacheHit`, never
- * `recordAiUsage` directly: a second writer double-counts spend. Provider
- * comes from the model registry.
+ * an answer replayed from the caller's own cache (`AiAnalysis`). Provider
+ * comes from the model declaration. Calls outside a feature declaration (the
+ * cookbook forwarder, audit recovery, the import agent) call `recordAiUsage`
+ * directly; each call is still recorded by exactly one of them.
  */
 export async function recordFeatureUsage(
   spec: Pick<AiFeature, "feature" | "model">,
@@ -187,10 +191,13 @@ export async function recordFeatureUsage(
     entity: ctx.entity ?? null,
     inputTokens: outcome.inputTokens ?? null,
     outputTokens: outcome.outputTokens ?? null,
+    cacheReadTokens: outcome.cacheReadTokens ?? null,
+    cacheWriteTokens: outcome.cacheWriteTokens ?? null,
     estimatedCost: outcome.estimatedCost ?? null,
     attempt: outcome.attempt,
     status: outcome.status,
     gatewayLogId: outcome.gatewayLogId ?? null,
+    gatewayCacheStatus: outcome.gatewayCacheStatus ?? null,
     durationMs: outcome.durationMs,
     cacheStatus: outcome.cacheStatus ?? ctx.cacheStatus ?? "none",
     applicationCacheStatus: outcome.applicationCacheStatus,
@@ -213,8 +220,6 @@ export function recordApplicationCacheHit(
     durationMs,
     inputTokens: 0,
     outputTokens: 0,
-    estimatedCost: 0,
-    attempt: 0,
     applicationCacheStatus: "hit",
   });
 }
@@ -628,6 +633,18 @@ async function placeStructuredCall<T>(args: {
   return { value: args.schema.parse(stripped), message };
 }
 
+/** A response's token classes and gateway verdict, as one usage outcome. */
+function messageUsage(
+  message: AssistantMessage,
+  gateway: GatewayResponseInfo | undefined,
+) {
+  return {
+    ...piTokenUsage(message),
+    gatewayLogId: gateway?.gatewayLogId,
+    gatewayCacheStatus: gateway?.gatewayCacheStatus,
+  } satisfies Partial<FeatureUsageOutcome>;
+}
+
 /**
  * Place one structured call for `spec`, record its usage row from the
  * `AssistantMessage`'s own usage, and parse the forced tool call's
@@ -654,10 +671,15 @@ export async function runStructuredFeature<T>(
     // Unknown until the transport selects itself before the request leaves.
     let transport: AiUsageTransport = "unknown";
     let response: AssistantMessage | undefined;
+    // pi-ai may retry inside one call; the last response is the answer's.
+    let gateway: GatewayResponseInfo | undefined;
     const call: GatewayCallOptions = {
       ...plan.call,
       onErrorResponse: (failure) => {
         responseFailure = failure;
+      },
+      onResponse: (info) => {
+        gateway = info;
       },
       onTransport: (selected) => {
         transport = selected;
@@ -679,11 +701,9 @@ export async function runStructuredFeature<T>(
       });
       if (callCtx.db) {
         await recordFeatureUsage(spec, callCtx, {
+          ...messageUsage(message, gateway),
           transport,
           durationMs: Math.round(performance.now() - startedAt),
-          inputTokens: message.usage.input,
-          outputTokens: message.usage.output,
-          estimatedCost: message.usage.cost.total,
           applicationCacheStatus: callCtx.applicationCacheStatus,
         });
       }
@@ -697,9 +717,12 @@ export async function runStructuredFeature<T>(
         transport,
         durationMs: Math.round(performance.now() - startedAt),
         status: "failed",
-        inputTokens: response?.usage.input ?? null,
-        outputTokens: response?.usage.output ?? null,
-        estimatedCost: response?.usage.cost.total ?? null,
+        ...(response
+          ? messageUsage(response, gateway)
+          : {
+              gatewayLogId: gateway?.gatewayLogId,
+              gatewayCacheStatus: gateway?.gatewayCacheStatus,
+            }),
         applicationCacheStatus: callCtx.applicationCacheStatus,
       });
       const model = getChatModelConfig(plan.model);
@@ -708,9 +731,10 @@ export async function runStructuredFeature<T>(
         {
           model: plan.model,
           provider: model.provider,
-          route: model.route,
+          route: model.gatewayProvider,
           feature: spec.feature,
           operation: ctx.operation,
+          gatewayLogId: gateway?.gatewayLogId,
         },
         responseFailure,
       );
@@ -773,6 +797,11 @@ export async function runStructuredFeature<T>(
   });
 }
 
+/** What an embedding call reports while its request is in flight. */
+export type EmbeddingObservers = Required<
+  Pick<GatewayCallOptions, "onTransport" | "onResponse">
+>;
+
 /**
  * Place one embedding call and record its usage row. The feature is a plain
  * `{feature, model}` because embedding callers name their own label (search
@@ -781,8 +810,8 @@ export async function runStructuredFeature<T>(
 export async function runEmbeddingFeature(
   spec: { feature: string; model: SupportedEmbeddingModel },
   args: {
-    /** Reports what carries the request before it leaves. */
-    embed: (onTransport: (transport: AiUsageTransport) => void) => Promise<{
+    /** Reports what carries the request and what the gateway answered. */
+    embed: (observers: EmbeddingObservers) => Promise<{
       embeddings: { index: number; vector: number[] }[];
       usage?: { promptTokens?: number | null; totalTokens?: number | null };
     }>;
@@ -791,10 +820,16 @@ export async function runEmbeddingFeature(
 ) {
   const startedAt = performance.now();
   let transport: AiUsageTransport = "unknown";
+  let gateway: GatewayResponseInfo | undefined;
   const usageCtx = ctx.runId ? { ...ctx, runId: ctx.runId } : null;
   const result = await args
-    .embed((selected) => {
-      transport = selected;
+    .embed({
+      onTransport: (selected) => {
+        transport = selected;
+      },
+      onResponse: (info) => {
+        gateway = info;
+      },
     })
     .catch(async (error: UnparsedError) => {
       if (usageCtx)
@@ -803,6 +838,8 @@ export async function runEmbeddingFeature(
           durationMs: Math.round(performance.now() - startedAt),
           status: "failed",
           cacheStatus: "none",
+          gatewayLogId: gateway?.gatewayLogId,
+          gatewayCacheStatus: gateway?.gatewayCacheStatus,
         });
       throw wrapAiGatewayError(error, {
         model: spec.model,
@@ -810,6 +847,7 @@ export async function runEmbeddingFeature(
         route: "openai",
         feature: spec.feature,
         operation: ctx.operation,
+        gatewayLogId: gateway?.gatewayLogId,
       });
     });
   if (usageCtx) {
@@ -819,6 +857,8 @@ export async function runEmbeddingFeature(
         result.usage?.promptTokens ?? result.usage?.totalTokens ?? null,
       durationMs: Math.round(performance.now() - startedAt),
       cacheStatus: "none",
+      gatewayLogId: gateway?.gatewayLogId,
+      gatewayCacheStatus: gateway?.gatewayCacheStatus,
     });
   }
   return result;

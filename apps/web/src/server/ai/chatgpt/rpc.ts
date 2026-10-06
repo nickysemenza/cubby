@@ -3,7 +3,7 @@ import type {
   ChatGptModel,
   ChatGptStatus,
 } from "@cubby/schemas/chatgpt";
-import type { gatewayQuery } from "@cubby/shared/ai-gateway-request";
+import type { GatewayQuery } from "@cubby/shared/ai/gateway-request";
 import { z } from "zod";
 
 const MAX_INFERENCE_MS = 5 * 60_000;
@@ -78,7 +78,7 @@ export function chatGptResponseLifetime(
 }
 
 type Inference = (
-  body: Awaited<ReturnType<typeof gatewayQuery>>,
+  body: GatewayQuery,
   model: string,
   signal: AbortSignal,
 ) => Promise<Response>;
@@ -117,7 +117,7 @@ export class ChatGptInferenceRequests {
   }
 
   async infer(
-    body: Awaited<ReturnType<typeof gatewayQuery>>,
+    body: GatewayQuery,
     model: string,
     raw: ChatGptInferenceOptions,
   ): Promise<Response> {
@@ -150,7 +150,7 @@ export interface ChatGptPlanRpc {
   models(): Promise<ChatGptModel[]>;
   disconnect(): Promise<void>;
   infer(
-    body: Awaited<ReturnType<typeof gatewayQuery>>,
+    body: GatewayQuery,
     model: string,
     options: ChatGptInferenceOptions,
   ): Promise<Response>;

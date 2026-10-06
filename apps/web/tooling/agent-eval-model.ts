@@ -1,7 +1,13 @@
+import type { EvalUsage } from "./ai/eval-support";
 import {
   type AiGatewayEnvironment,
+  CUBBY_AI_GATEWAY_ID,
   proxiedAiGatewayMetadata,
-} from "@cubby/shared/ai-gateway-metadata";
+} from "@cubby/shared/ai/gateway-metadata";
+import {
+  gatewayProviderUrl,
+  strippedHeaders,
+} from "@cubby/shared/ai/gateway-request";
 import { z } from "zod";
 import {
   type ModelSwap,
@@ -18,7 +24,7 @@ import {
  * environment, so a paid eval is never attributed to production.
  */
 type Env = {
-  GATEWAY_OPENAI_URL: string;
+  ACCOUNT_ID: string;
   AI_GATEWAY_API_KEY: string;
   GATEWAY_ENVIRONMENT: AiGatewayEnvironment;
 };
@@ -40,7 +46,7 @@ const completedEvent = z.object({
   response: z.object({ usage: responseUsage }),
 });
 
-const emptyUsage = () => ({
+const emptyUsage = (): EvalUsage => ({
   requests: 0,
   failedRequests: 0,
   inputTokens: 0,
@@ -48,6 +54,7 @@ const emptyUsage = () => ({
   outputTokens: 0,
   reasoningTokens: 0,
   modelMs: 0,
+  calls: [],
 });
 
 let candidate: ModelSwap | undefined;
@@ -55,6 +62,11 @@ let usage = emptyUsage();
 
 function tally(event: z.infer<typeof completedEvent>) {
   const reported = event.response.usage;
+  usage.calls.push({
+    inputTokens: reported.input_tokens,
+    cachedInputTokens: reported.input_tokens_details?.cached_tokens ?? 0,
+    outputTokens: reported.output_tokens,
+  });
   usage.inputTokens += reported.input_tokens;
   usage.cachedInputTokens += reported.input_tokens_details?.cached_tokens ?? 0;
   usage.outputTokens += reported.output_tokens;
@@ -106,9 +118,7 @@ export default {
     // The agent's provider addresses `https://ai-gateway.invalid/openai/<endpoint>`.
     const endpoint = url.pathname.replace(/^\/openai\//u, "");
     const body = swapResponsesModel(await request.json(), candidate);
-    const headers = new Headers(request.headers);
-    for (const name of ["authorization", "x-api-key", "content-length"])
-      headers.delete(name);
+    const headers = strippedHeaders({ headers: request.headers });
     headers.set("content-type", "application/json");
     headers.set("cf-aig-authorization", `Bearer ${env.AI_GATEWAY_API_KEY}`);
     headers.set(
@@ -122,11 +132,18 @@ export default {
       ),
     );
     const started = Date.now();
+    usage.requests += 1;
+    usage.failedRequests += 1;
     const upstream = await fetch(
-      `${env.GATEWAY_OPENAI_URL}/${endpoint}${url.search}`,
+      gatewayProviderUrl({
+        accountId: env.ACCOUNT_ID,
+        gatewayId: CUBBY_AI_GATEWAY_ID,
+        provider: "openai",
+        endpoint: `${endpoint}${url.search}`,
+      }),
       { method: "POST", headers, body: JSON.stringify(body) },
     );
-    usage.requests += 1;
+    usage.failedRequests -= 1;
     if (!upstream.ok || !upstream.body) {
       usage.failedRequests += 1;
       return upstream;

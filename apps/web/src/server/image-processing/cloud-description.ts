@@ -3,9 +3,9 @@ import {
   IMAGE_CLOUD_DESCRIPTION_PROMPT_REVISION,
   IMAGE_CLOUD_DESCRIPTION_RESULT_SCHEMA_REVISION,
 } from "@cubby/schemas/image-processing";
+import { providerFor } from "@cubby/shared/ai/models";
 
 import { IMAGE_DESCRIPTION_FEATURE } from "~/server/ai/features";
-import { providerFor } from "~/server/ai/models";
 import type { Database } from "~/server/db";
 import {
   completeImageProcessingJob,

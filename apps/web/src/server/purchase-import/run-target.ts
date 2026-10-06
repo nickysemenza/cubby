@@ -63,7 +63,10 @@ function runSummaryQuery(
       updated: runTable.updated,
       skipped: runTable.skipped,
       failureCode: runTable.failureCode,
-      estimatedCost: sql<number>`coalesce(sum(${aiUsage.estimatedCost}), 0)`,
+      estimatedCost: sql<number | null>`case
+        when count(${aiUsage.id}) filter (where ${aiUsage.estimatedCost} is null) > 0 then null
+        else coalesce(sum(${aiUsage.estimatedCost}), 0)
+      end`,
     })
     .from(runTable)
     .leftJoin(

@@ -5,28 +5,26 @@ import {
   type AiGatewayMetadata,
   aiGatewayEnvironment,
   aiGatewayMetadataSchema,
+  CF_ACCOUNT_ID,
   CUBBY_AI_GATEWAY_ID,
-} from "@cubby/shared/ai-gateway-metadata";
+} from "@cubby/shared/ai/gateway-metadata";
 import {
-  endpointFor,
-  gatewayBaseURL,
-  gatewayQuery,
-  requestUrl,
-  strippedHeaders,
+  type GatewayControls,
+  type GatewayFetchRequest,
+  gatewayControlHeaders,
+  gatewayFetchThrough,
+  gatewayProviderUrl,
+  type GatewayResponseObservers,
+  runUniversalGateway,
   type WorkersAiRunGateway,
   workersAiModel,
   workersAiRunRequest,
-} from "@cubby/shared/ai-gateway-request";
-import { z } from "zod";
+} from "@cubby/shared/ai/gateway-request";
+import type { GatewayProvider } from "@cubby/shared/ai/models";
 
 import { env } from "~/env";
 import { chatGptInference } from "~/server/ai/chatgpt/client";
-import {
-  CF_ACCOUNT_ID,
-  getAi,
-  getAiGateway,
-  getTestAiGateway,
-} from "~/server/cf-env";
+import { getAi, getAiGateway, getTestAiGateway } from "~/server/cf-env";
 
 /**
  * A call's gateway labels (`feature`, `operation`, optional `entityKind`);
@@ -34,32 +32,6 @@ import {
  * https://developers.cloudflare.com/ai-gateway/observability/custom-metadata/
  */
 export type GatewayMetadata = AiGatewayCallMetadata;
-
-export interface GatewayResponseFailure {
-  status: number;
-  statusText: string;
-  body: string;
-  retryAfter: string | null;
-}
-
-export { gatewayBaseURL };
-
-const GATEWAY_REST_BASE = "https://gateway.ai.cloudflare.com/v1";
-
-/**
- * The gateway's provider segment — the first path element of a provider route
- * (`/anthropic/v1/messages`, `/openai/responses`, `/compat/chat/completions`).
- * `compat` is not a provider at all but the gateway's unified OpenAI-shaped
- * route, which is how Google AI Studio and Workers AI models are reached.
- */
-export const gatewayProviderSchema = z.enum([
-  "anthropic",
-  "openai",
-  "compat",
-  "google-ai-studio",
-  "workers-ai",
-]);
-export type GatewayProvider = z.infer<typeof gatewayProviderSchema>;
 
 /**
  * The gateway's own bounds on a cache TTL, in seconds: 60 s (below that it
@@ -70,7 +42,7 @@ const GATEWAY_MIN_CACHE_TTL_SECONDS = 60;
 const GATEWAY_MAX_CACHE_TTL_SECONDS = 30 * 24 * 60 * 60;
 
 /** Per-call gateway controls; `metadata` is what the dashboard filters on. */
-export interface GatewayCallOptions {
+export interface GatewayCallOptions extends GatewayResponseObservers {
   metadata: GatewayMetadata;
   skipCache?: boolean;
   /**
@@ -86,8 +58,6 @@ export interface GatewayCallOptions {
    */
   cacheTtlSeconds?: number;
   requestTimeoutMs?: number;
-  /** Preserve a failed HTTP response even if the provider SDK replaces it. */
-  onErrorResponse?: (failure: GatewayResponseFailure) => void;
   /**
    * Called before the request leaves with what will carry it: `chatgpt` once
    * the connected plan is selected (its failures never fall back to the
@@ -97,39 +67,6 @@ export interface GatewayCallOptions {
 }
 
 export type GatewayTransport = Extract<AiUsageTransport, "gateway" | "chatgpt">;
-
-async function captureFailure(response: Response, opts: GatewayCallOptions) {
-  if (response.ok || !opts.onErrorResponse) return response;
-  const reader = response.clone().body?.getReader();
-  const decoder = new TextDecoder();
-  let body = "";
-  let remaining = 4_096;
-  if (reader) {
-    try {
-      while (remaining > 0) {
-        const part = await reader.read();
-        if (part.done) break;
-        const bytes = part.value.subarray(0, remaining);
-        body += decoder.decode(bytes, { stream: true });
-        remaining -= bytes.length;
-      }
-      body += decoder.decode();
-    } catch (error) {
-      body += `[Gateway error body read failed: ${String(error)}]`;
-    } finally {
-      void reader.cancel().catch(() => {
-        // SILENT: clone cleanup must not replace the original HTTP failure.
-      });
-    }
-  }
-  opts.onErrorResponse({
-    status: response.status,
-    statusText: response.statusText,
-    body,
-    retryAfter: response.headers.get("retry-after"),
-  });
-  return response;
-}
 
 function validatedCacheTtlSeconds(ttl: number | undefined): number | undefined {
   if (ttl === undefined) return undefined;
@@ -185,13 +122,12 @@ function requiredApiKey(): string {
  * second time (see `workersAiRunRequest`).
  */
 async function workersAiFetch(
-  endpoint: string,
-  body: BodyInit | null | undefined,
+  request: GatewayFetchRequest,
   gateway: WorkersAiRunGateway,
-  signal: AbortSignal | undefined,
 ): Promise<Response> {
-  const model = workersAiModel(endpoint);
-  const input = await gatewayQuery(body);
+  const { signal } = request;
+  const model = workersAiModel(request.endpoint);
+  const input = await request.query();
   const ai = getAi();
   if (!ai) {
     const run = workersAiRunRequest({
@@ -233,94 +169,66 @@ export function gatewayFetch(
   provider: GatewayProvider,
   opts: GatewayCallOptions,
 ): typeof fetch {
-  const metadata = outboundMetadata(opts.metadata);
-  const cacheTtlSeconds = validatedCacheTtlSeconds(opts.cacheTtlSeconds);
-  return async (input, init) => {
-    const endpoint = endpointFor(provider, requestUrl(input));
-    const headers = strippedHeaders(init);
-    const signal = init?.signal ?? undefined;
-
-    const testGateway = getTestAiGateway();
-    if (testGateway) {
-      // The test binding stands in for the gateway.
-      opts.onTransport?.("gateway");
-      headers.set("cf-aig-metadata", JSON.stringify(metadata));
+  const controls: GatewayControls = {
+    skipCache: opts.skipCache,
+    cacheTtl: validatedCacheTtlSeconds(opts.cacheTtlSeconds),
+    metadata: outboundMetadata(opts.metadata),
+    requestTimeoutMs: opts.requestTimeoutMs,
+  };
+  return gatewayFetchThrough({
+    provider,
+    onResponse: opts.onResponse,
+    onErrorResponse: opts.onErrorResponse,
+    onTransport: opts.onTransport,
+    requestTimeoutMs: opts.requestTimeoutMs,
+    chatGpt: chatGptInference,
+    testPeer: () => {
+      const testGateway = getTestAiGateway();
+      if (!testGateway) return undefined;
       // Only the wire fields cross the test service binding: a provider SDK's
       // init carries extra properties (and its own AbortSignal) that a
       // binding cannot clone.
-      return captureFailure(
-        await testGateway.fetch(
-          `https://ai-gateway.test/${provider}/${endpoint}`,
-          { method: init?.method ?? "POST", headers, body: init?.body },
-        ),
-        opts,
-      );
-    }
-
-    if (provider === "openai" && endpoint === "responses") {
-      const subscription = await chatGptInference(
-        await gatewayQuery(init?.body),
-        {
-          signal,
-          requestTimeoutMs: opts.requestTimeoutMs,
-          onSelected: () => opts.onTransport?.("chatgpt"),
-        },
-      );
-      if (subscription) return captureFailure(subscription, opts);
-    }
-    opts.onTransport?.("gateway");
-    const gatewayOptions = {
-      skipCache: opts.skipCache,
-      cacheTtl: cacheTtlSeconds,
-      metadata,
-      requestTimeoutMs: opts.requestTimeoutMs,
-    };
-
-    if (provider === "workers-ai") {
-      return captureFailure(
-        await workersAiFetch(
-          endpoint,
-          init?.body,
-          { id: CUBBY_AI_GATEWAY_ID, ...gatewayOptions },
-          signal,
-        ),
-        opts,
-      );
-    }
-
-    const gateway = getAiGateway();
-    if (gateway) {
-      return captureFailure(
-        await gateway.run(
+      return (request) => {
+        request.headers.set(
+          "cf-aig-metadata",
+          JSON.stringify(controls.metadata),
+        );
+        return testGateway.fetch(
+          `https://ai-gateway.test/${provider}/${request.endpoint}`,
           {
-            provider,
-            endpoint,
-            headers: Object.fromEntries(headers.entries()),
-            query: await gatewayQuery(init?.body),
+            method: request.init?.method ?? "POST",
+            headers: request.headers,
+            body: request.init?.body,
           },
-          { gateway: gatewayOptions, signal },
-        ),
-        opts,
+        );
+      };
+    },
+    gateway: async (request) => {
+      if (provider === "workers-ai")
+        return workersAiFetch(request, {
+          id: CUBBY_AI_GATEWAY_ID,
+          ...controls,
+        });
+      const gateway = getAiGateway();
+      if (gateway)
+        return runUniversalGateway(gateway, provider, request, controls);
+      const headers = request.headers;
+      headers.set("cf-aig-authorization", `Bearer ${requiredApiKey()}`);
+      for (const [name, value] of Object.entries(
+        gatewayControlHeaders(controls),
+      ))
+        headers.set(name, value);
+      return fetch(
+        gatewayProviderUrl({
+          accountId: CF_ACCOUNT_ID,
+          gatewayId: CUBBY_AI_GATEWAY_ID,
+          provider,
+          endpoint: request.endpoint,
+        }),
+        { ...request.init, headers, signal: request.signal },
       );
-    }
-
-    headers.set("cf-aig-authorization", `Bearer ${requiredApiKey()}`);
-    headers.set("cf-aig-metadata", JSON.stringify(metadata));
-    if (opts.skipCache) headers.set("cf-aig-skip-cache", "true");
-    if (cacheTtlSeconds !== undefined) {
-      headers.set("cf-aig-cache-ttl", String(cacheTtlSeconds));
-    }
-    if (opts.requestTimeoutMs !== undefined) {
-      headers.set("cf-aig-request-timeout", String(opts.requestTimeoutMs));
-    }
-    return captureFailure(
-      await fetch(
-        `${GATEWAY_REST_BASE}/${CF_ACCOUNT_ID}/${CUBBY_AI_GATEWAY_ID}/${provider}/${endpoint}`,
-        { ...init, headers, signal },
-      ),
-      opts,
-    );
-  };
+    },
+  });
 }
 
 /**

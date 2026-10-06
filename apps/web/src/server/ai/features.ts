@@ -1,7 +1,7 @@
 /**
  * The one table of AI features.
  *
- * Every model call Cubby makes is declared here once — tier (which
+ * Every feature-runner call is declared here once — tier (which
  * decides the model), token cap, reasoning effort, whether the gateway may
  * cache it, the prompt version the AiAnalysis store keys on, and the schema
  * the model must return. `run-feature.ts` (or `jev.ts`) alone reads a
@@ -42,18 +42,17 @@ import {
   type RecipeFlowArtifact,
   recipeFlowArtifactSchema,
 } from "@cubby/schemas/recipe-flow";
-import type { z } from "zod";
-
 import {
   type AiModel,
-  type SupportedEmbeddingModel,
-  type SupportedDecisionModel,
-  DEFAULT_EMBEDDING_MODEL,
   DECISION_MODEL,
+  DEFAULT_EMBEDDING_MODEL,
   FAST_MODEL,
+  type OpenAiEffort,
   type SupportedChatModel,
-} from "~/server/ai/models";
-import type { OpenAiEffort } from "~/server/clients/ai-adapters";
+  type SupportedDecisionModel,
+  type SupportedEmbeddingModel,
+} from "@cubby/shared/ai/models";
+import type { z } from "zod";
 
 /** Embeddings share the catalog, while retaining their vector runner. */
 type AiTier = "fast" | "decision" | "embedding";
@@ -74,10 +73,9 @@ interface AiFeatureShared {
   /** Bumped when the prompt changes, to invalidate stored AiAnalysis rows. */
   promptVersion: string;
   /**
-   * Whether the gateway may serve this call from its response cache. True for
-   * every structured feature (they are deterministic on their request body);
-   * the runner turns a caller's `force` into a skip. False only for the
-   * streaming, tool-calling agent.
+   * Whether the gateway may serve this call from its response cache (and the
+   * application response cache may replay it). False sends an explicit skip;
+   * a caller's `force` skips a cacheable call once.
    */
   cache: boolean;
 }

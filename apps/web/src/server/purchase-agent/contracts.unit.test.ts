@@ -12,16 +12,29 @@ import {
 const runId = "f47ac10b-58cc-4372-a567-0e02b2c3d479";
 
 describe("PurchaseAgentEvent", () => {
-  it("switches a queued historical coordinator to the current model", () => {
-    expect(
-      parsePurchaseAgentEvent({
+  it("drains a historical queue body that still names a coordinator model", () => {
+    // Messages queued before the field was removed carry it and may omit the
+    // version; they must parse, drop the field, and keep their idempotency key.
+    const event = parsePurchaseAgentEvent(
+      JSON.stringify({
         type: "retry",
         runId,
         eventId: "historical-retry",
         coordinatorModel: "retired-model",
         retryOf: "operation-4",
-      }).coordinatorModel,
-    ).toBe("gpt-6-sol");
+      }),
+    );
+
+    expect(event).toEqual({
+      version: 1,
+      type: "retry",
+      runId,
+      eventId: "historical-retry",
+      retryOf: "operation-4",
+    });
+    expect(purchaseAgentEventIdempotencyKey(event)).toBe(
+      `purchase-agent:${runId}:retry:historical-retry`,
+    );
   });
 
   it("accepts only the four continuation events", () => {

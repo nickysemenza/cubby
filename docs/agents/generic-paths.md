@@ -124,6 +124,20 @@ existing block. Extend the generic path when it almost fits. See
   restate a tool input in TypeBox.
 - GTIN and barcodes: recipebridge `scan_code_gtin14` and `@cubby/shared/upc`.
 
+## AI
+
+- Model IDs, provider identities, capabilities, role schemas and defaults:
+  `packages/shared/src/ai/models.ts`. Derive model lists from those declarations.
+- Live pricing: `packages/shared/src/ai/pricing.ts`, through the runtime
+  `@opencode-ai/models` client; missing prices stay unknown. Application usage
+  estimates live in `server/ai/pricing.ts`.
+- Gateway controls, URLs, response observers and transport selection:
+  `packages/shared/src/ai/gateway-request.ts`; gateway metadata in
+  `ai-gateway-metadata.ts`. Extend these helpers for application and tooling
+  callers rather than constructing another gateway path.
+- pi-ai provider adapters: `packages/shared/src/ai/pi-providers.ts`.
+- Live evaluation support: `apps/web/tooling/ai/eval-support.ts`.
+
 ## Web UI
 
 - Dialogs: `WorkflowDialog`, `ResponsiveDialog` + `DialogFormActions`,

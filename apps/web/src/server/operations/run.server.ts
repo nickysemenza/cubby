@@ -161,7 +161,6 @@ export const runHandlers = implementOperationDomain(runContract, {
         id: control.dispatchRunId,
         eventId: control.dispatchEventId,
         purpose: control.dispatchPurpose,
-        coordinatorModel: "gpt-6-sol",
       });
     }
     return {

@@ -15,7 +15,12 @@ import { openaiProvider } from "@earendil-works/pi-ai/providers/openai";
 
 import { z } from "zod";
 
-import { gatewayBaseURL } from "./ai-gateway-request";
+import { gatewayBaseURL, gatewayResponseInfo } from "./gateway-request";
+import {
+  anthropicChatModelSchema,
+  type ChatGatewayProvider,
+  openAiChatModelSchema,
+} from "./models";
 
 /**
  * Cubby's chat models as pi-ai providers, one per AI Gateway route. Both the
@@ -25,20 +30,14 @@ import { gatewayBaseURL } from "./ai-gateway-request";
  * its `gatewayFetch`. Every request therefore rides the Gateway; the base URLs
  * are the unroutable placeholders only those shims resolve.
  */
-export type GatewayRoute = "openai" | "anthropic";
 export type GatewayFetchFor = (
-  route: GatewayRoute,
+  provider: ChatGatewayProvider,
+  /** Marks the call unbilled: a ChatGPT plan response pi-ai must not price. */
   onUnbilledResponse?: () => void,
 ) => typeof fetch;
 
-export const OPENAI_MODELS = ["gpt-6-sol", "gpt-6-luna"] as const;
-export const ANTHROPIC_MODELS = [
-  "claude-sonnet-5",
-  "claude-opus-5-5",
-  "claude-haiku-4-5",
-] as const;
 /** Providers SDKs refuse to run without some key; the shims strip it. */
-function gatewayAuth(route: GatewayRoute) {
+function gatewayAuth(route: ChatGatewayProvider) {
   return {
     apiKey: {
       name: `Cubby ${route} Gateway transport`,
@@ -58,11 +57,18 @@ function throughFetch(
     start: (fetchFn: typeof fetch) => AssistantMessageEventStream,
   ) => {
     let unbilled = false;
-    const source = start(
-      fetchForCall(() => {
-        unbilled = true;
-      }),
-    );
+    const markUnbilled = () => {
+      unbilled = true;
+    };
+    const fetchFn = fetchForCall(markUnbilled);
+    // A gateway cache HIT replays a stored answer the gateway does not bill;
+    // its tokens stay as evidence and its transport stays `gateway`.
+    const source = start(async (input, init) => {
+      const response = await fetchFn(input, init);
+      if (gatewayResponseInfo(response).gatewayCacheStatus === "hit")
+        markUnbilled();
+      return response;
+    });
     const output = createAssistantMessageEventStream();
     const normalize = (message: AssistantMessage) => {
       if (unbilled)
@@ -174,7 +180,7 @@ export function cubbyPiProviders(fetchFor: GatewayFetchFor): Provider[] {
       auth: gatewayAuth("openai"),
       models: catalogModels(
         openaiProvider(),
-        OPENAI_MODELS,
+        openAiChatModelSchema.options,
         gatewayBaseURL("openai"),
       ),
       api: throughFetch(openAIResponsesApi(), (onUnbilledResponse) =>
@@ -187,7 +193,7 @@ export function cubbyPiProviders(fetchFor: GatewayFetchFor): Provider[] {
       auth: gatewayAuth("anthropic"),
       models: catalogModels(
         anthropicProvider(),
-        ANTHROPIC_MODELS,
+        anthropicChatModelSchema.options,
         gatewayBaseURL("anthropic"),
       ),
       api: throughFetch(anthropicMessagesApi(), (onUnbilledResponse) =>
@@ -195,4 +201,25 @@ export function cubbyPiProviders(fetchFor: GatewayFetchFor): Provider[] {
       ),
     }),
   ];
+}
+
+/** pi initializes zero counters before a provider responds. Preserve an
+ * upstream failure without usage as unknown; a failed validation with
+ * reported tokens remains billable. */
+export function piTokenUsage(message: {
+  stopReason: AssistantMessage["stopReason"];
+  usage: Pick<
+    AssistantMessage["usage"],
+    "input" | "output" | "cacheRead" | "cacheWrite" | "totalTokens"
+  >;
+}) {
+  const unknown =
+    (message.stopReason === "error" || message.stopReason === "aborted") &&
+    message.usage.totalTokens === 0;
+  return {
+    inputTokens: unknown ? null : message.usage.input,
+    outputTokens: unknown ? null : message.usage.output,
+    cacheReadTokens: unknown ? null : message.usage.cacheRead,
+    cacheWriteTokens: unknown ? null : message.usage.cacheWrite,
+  };
 }

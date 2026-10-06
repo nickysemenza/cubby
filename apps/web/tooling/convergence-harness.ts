@@ -12,7 +12,7 @@ import {
 import { and, eq, inArray, sql } from "drizzle-orm";
 
 import { IMAGE_DESCRIPTION_FEATURE } from "~/server/ai/features";
-import { providerFor } from "~/server/ai/models";
+import { providerFor } from "@cubby/shared/ai/models";
 import type { Database } from "~/server/db";
 import * as schema from "~/server/db/schema";
 import { ingestGmailMessages } from "~/server/purchase-import/gmail/ingest";

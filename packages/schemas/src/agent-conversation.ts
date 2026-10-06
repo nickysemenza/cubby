@@ -20,7 +20,6 @@ const usageSchema = z.object({
   outputTokens: z.number().int().nonnegative(),
   cacheReadTokens: z.number().int().nonnegative(),
   cacheWriteTokens: z.number().int().nonnegative(),
-  costUsd: z.number().nonnegative(),
 });
 
 export const agentConversationPartSchema = z.discriminatedUnion("type", [

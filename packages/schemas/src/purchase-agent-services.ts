@@ -107,16 +107,16 @@ export const agentUsageEvent = purchaseAgentEventRef.extend({
   feature: z.literal("purchase_import_agent"),
   operation: z.string(),
   attempt: z.number(),
-  inputTokens: z.number(),
-  outputTokens: z.number(),
-  cacheReadTokens: z.number(),
-  cacheWriteTokens: z.number(),
+  inputTokens: z.number().nullable(),
+  outputTokens: z.number().nullable(),
+  cacheReadTokens: z.number().nullable(),
+  cacheWriteTokens: z.number().nullable(),
   durationMs: z.number(),
   status: z.enum(["succeeded", "failed"]),
   /** Selected before the request left; `unknown` if none was selected. */
   transport: aiUsageTransport,
   gatewayLogId: z.string().optional(),
-  estimatedCost: z.number().optional(),
+  gatewayCacheStatus: z.enum(["hit", "miss"]).optional(),
 });
 export type AgentUsageEvent = z.infer<typeof agentUsageEvent>;
 

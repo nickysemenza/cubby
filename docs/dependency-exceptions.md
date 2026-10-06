@@ -13,10 +13,6 @@ as soon as the upstream range is corrected.
   2.x; Cubby uses no API-key features, so the peer exception accepts major 2.
   The pin also brings the deprecated React Email 1.x component family
   transitively; Cubby does not import those packages directly.
-- `@cloudflare/tanstack-ai@0.2.1` bundles grok/gemini/openrouter/openai adapters
-  that peer `@tanstack/ai` `^0.40`. Cubby imports only the anthropic adapter,
-  and `@tanstack/ai-anthropic` requires `^0.41`, so the peer exception accepts
-  `^0.41.0` until Cloudflare republishes against 0.41.
 - `@triplit/logger@0.0.3` declares TypeScript `^5`, although it is runtime-only
   logging code and Cubby typechecks clean on TypeScript 7.
   `peerDependencyRules.allowedVersions.typescript` accepts versions 5–7 while

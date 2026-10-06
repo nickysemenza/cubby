@@ -5,7 +5,7 @@
  * two). An older build would otherwise fail deep inside a generated decoder;
  * the gate turns that into one actionable message.
  */
-export const MINIMUM_APPLE_CLIENT_VERSION = "2.5";
+export const MINIMUM_APPLE_CLIENT_VERSION = "2.6";
 
 /**
  * `ClientIdentity.userAgent` in CubbyKit: `<product>/<version> (<platform>; <install>)`.

@@ -32,7 +32,7 @@ afterEach(() => {
 });
 
 async function send(
-  gatewayEnv: typeof env,
+  gatewayEnv: Parameters<typeof liveGateway.fetch>[1],
   pathname: string,
   body: string,
   contentType = "application/json",
@@ -63,7 +63,7 @@ async function send(
   };
 }
 
-async function usage(gatewayEnv: typeof env) {
+async function usage(gatewayEnv: Parameters<typeof liveGateway.fetch>[1]) {
   return (
     await liveGateway.fetch(
       new Request("https://live-gateway.test/usage"),
@@ -96,6 +96,39 @@ it("swaps the configured model and effort into Responses calls", async () => {
     "Application/JSON; charset=utf-8",
   );
   expect(JSON.parse(mixedCase.body)).toEqual(swapped);
+});
+
+it("refuses a swap the Responses protocol cannot carry", async () => {
+  // The peer rewrites only OpenAI Responses bodies; an Anthropic model there
+  // would be sent upstream on the wrong protocol.
+  await expect(
+    send(
+      { ...agentEnv, RESPONSES_MODEL: "claude-haiku-4-5" },
+      "/openai/responses",
+      JSON.stringify(responsesBody),
+    ),
+  ).rejects.toThrow(/OpenAI Responses/u);
+  expect(upstream).not.toHaveBeenCalled();
+});
+
+it("strips SDK credentials before the gateway authorizes the call", async () => {
+  vi.stubGlobal("fetch", upstream);
+  upstream.mockResolvedValue(new Response("ok"));
+  await liveGateway.fetch(
+    new Request("https://ai-gateway.invalid/openai/responses", {
+      method: "POST",
+      headers: {
+        authorization: "Bearer sdk-placeholder",
+        "x-api-key": "sdk-placeholder",
+      },
+      body: JSON.stringify(responsesBody),
+    }),
+    env,
+  );
+  const headers = new Headers(upstream.mock.lastCall?.[1]?.headers);
+  expect(headers.get("authorization")).toBeNull();
+  expect(headers.get("x-api-key")).toBeNull();
+  expect(headers.get("cf-aig-authorization")).toBe("Bearer synthetic-token");
 });
 
 it("forwards unconfigured peers and other routes unchanged", async () => {

@@ -1,10 +1,12 @@
 import { readdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 
+import type { AiModelPricing } from "@cubby/shared/ai/pricing";
+type ModelCost = NonNullable<AiModelPricing[keyof AiModelPricing]["cost"]>;
 import { sql } from "drizzle-orm";
 import { MIGRATIONS_FOLDER } from "tooling/db-migrate";
 import { withTestDb } from "tooling/test-setup";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi, afterEach, beforeEach } from "vitest";
 
 import { aiUsage } from "~/server/db/schema";
 import { ensureRun } from "~/server/runs/ensure-run";
@@ -15,6 +17,54 @@ import {
   summarizeAiUsage,
 } from "./ai-usage";
 import { getDb } from "./database-helpers";
+
+// Integration files share a module graph; create the pricing client only
+// after this file installs its catalog socket, even after another file priced.
+vi.hoisted(() => {
+  vi.resetModules();
+  const realFetch = globalThis.fetch;
+  vi.stubGlobal(
+    "fetch",
+    async (input: RequestInfo | URL, init?: RequestInit) =>
+      String(input).includes("models.dev")
+        ? Response.json({
+            openai: {
+              models: {
+                "gpt-6-sol": {
+                  cost: { input: 2, output: 10, cache_read: 0.2 },
+                },
+              },
+            },
+          })
+        : realFetch(input, init),
+  );
+});
+
+function stubPricingCatalog(catalog: {
+  openai: { models: Record<string, { cost: ModelCost }> };
+}) {
+  const realFetch = globalThis.fetch;
+  vi.stubGlobal(
+    "fetch",
+    async (input: RequestInfo | URL, init?: RequestInit) =>
+      String(input).includes("models.dev")
+        ? Response.json(catalog)
+        : realFetch(input, init),
+  );
+}
+beforeEach(() =>
+  stubPricingCatalog({
+    openai: {
+      models: {
+        "gpt-6-sol": { cost: { input: 2, output: 10, cache_read: 0.2 } },
+      },
+    },
+  }),
+);
+afterEach(() => {
+  vi.unstubAllGlobals();
+  vi.resetModules();
+});
 
 describe("listAiUsageForRun", () => {
   const ctx = withTestDb();
@@ -201,6 +251,47 @@ describe("AiUsage transport", () => {
     ]);
   });
 
+  // Rows written before the writer zeroed them carry tokens but no cost; the
+  // read-time fallback must not price a replay or plan call as API spend.
+  it("never prices an unpriced cache or ChatGPT row from its tokens", async () => {
+    stubPricingCatalog({
+      openai: {
+        models: {
+          "gpt-6-sol": { cost: { input: 2, output: 10, cache_read: 0.2 } },
+        },
+      },
+    });
+    const tokens = { inputTokens: 1_000_000, outputTokens: 1_000_000 };
+    const runId = await insertCalls([
+      { minute: 1, transport: "cache", attempt: 1, ...tokens },
+      { minute: 2, transport: "chatgpt", ...tokens },
+      { minute: 3, transport: "gateway", ...tokens },
+    ]);
+
+    const recent = await listRecentAiUsage(ctx.db, { limit: 10 });
+    const recentCost = Object.fromEntries(
+      recent.map((row) => [row.transport, row.estimatedCost]),
+    );
+    expect(recentCost.cache).toBe(0);
+    expect(recentCost.chatgpt).toBe(0);
+    expect(recentCost.gateway).toBeGreaterThan(0);
+
+    const summary = await summarizeAiUsage(ctx.db, 7);
+    const summaryCost = Object.fromEntries(
+      summary.map((row) => [row.transport, row.estimatedCost]),
+    );
+    expect(summaryCost).toMatchObject({ cache: 0, chatgpt: 0 });
+    expect(summaryCost.gateway).toBe(recentCost.gateway);
+
+    const run = await listAiUsageForRun(ctx.db, runId);
+    expect(run.unpricedCount).toBe(1);
+    expect(
+      Object.fromEntries(
+        run.records.map((row) => [row.transport, row.estimatedCost]),
+      ),
+    ).toEqual({ cache: 0, chatgpt: 0, gateway: null });
+  });
+
   it("rejects a transport outside the shared vocabulary", async () => {
     const runId = await ensureRun(ctx.db, ctx.actor, { purpose: "ai_suggest" });
     await expect(
@@ -265,5 +356,70 @@ describe("AiUsage transport", () => {
       "unknown",
       "unknown",
     ]);
+  });
+});
+
+describe("daily context tier pricing", () => {
+  const ctx = withTestDb();
+  it("keeps a mixed priced and tokenless group unknown", async () => {
+    const runId = await ensureRun(ctx.db, ctx.actor, { purpose: "ai_suggest" });
+    await getDb(ctx.db)
+      .insert(aiUsage)
+      .values(
+        [0.1, null].map((estimatedCost) => ({
+          runId,
+          feature: "synthetic-mixed",
+          operation: "price",
+          provider: "openai",
+          model: "gpt-6-sol",
+          transport: "gateway" as const,
+          durationMs: 1,
+          estimatedCost,
+        })),
+      );
+    const rows = await summarizeAiUsage(ctx.db, 7);
+    expect(rows[0]?.estimatedCost).toBeNull();
+  });
+  it("prices each unpriced call before aggregating its day", async () => {
+    stubPricingCatalog({
+      openai: {
+        models: {
+          "gpt-6-sol": {
+            cost: {
+              input: 2,
+              output: 10,
+              tiers: [
+                {
+                  tier: { type: "context", size: 272000 },
+                  input: 4,
+                  output: 20,
+                },
+              ],
+            },
+          },
+        },
+      },
+    });
+    vi.resetModules();
+    const { summarizeAiUsage: summarize } = await import("./ai-usage");
+    const runId = await ensureRun(ctx.db, ctx.actor, { purpose: "ai_suggest" });
+    await getDb(ctx.db)
+      .insert(aiUsage)
+      .values(
+        [0, 1].map(() => ({
+          runId,
+          feature: "synthetic-tier",
+          operation: "price",
+          provider: "openai",
+          model: "gpt-6-sol",
+          transport: "gateway" as const,
+          inputTokens: 150_000,
+          outputTokens: 0,
+          durationMs: 1,
+          estimatedCost: null,
+        })),
+      );
+    const summaries = await summarize(ctx.db, 7);
+    expect(summaries[0]?.estimatedCost).toBeCloseTo(0.6);
   });
 });

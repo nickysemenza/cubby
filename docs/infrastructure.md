@@ -137,7 +137,7 @@ checked-in configuration is part of `apps/web/wrangler.jsonc`:
   dispatch generation (`canDispatchCoordinator` / `acknowledgeCoordinator`),
   retries a transient failure, and fails the Run after three attempts;
 - every model call through AI Gateway `cubby` on the Worker's `AI` binding,
-  by the shared pi-ai providers (`@cubby/shared/pi-gateway`). The gateway
+  by the shared pi-ai providers (`@cubby/shared/ai/pi-providers`). The gateway
   shim disables parallel tool calls: pi ends a run on a terminating tool only
   when it is the round's sole call, so a pending browser command can never
   share a round with a non-terminating call.
@@ -500,10 +500,34 @@ separate that request allowance. See the
 [consolidation research](research/ai-gateway-consolidation.md) for current
 Cloudflare contracts and their limits.
 Provider routing and model identifiers live in
-`apps/web/src/server/ai/models.ts`. Provider credentials or unified-billing
+`packages/shared/src/ai/models.ts`. The declarations supply the model IDs,
+provider names, capabilities, role-specific schemas, and defaults for application
+and tooling callers. Provider credentials or unified-billing
 configuration are Cloudflare AI Gateway state; no provider key belongs in this
 repository. Verify that every model in the checked-in registry is enabled in
 the gateway before relying on a feature that selects it.
+
+AI prices come from the live catalog fetched by the runtime client in
+`@opencode-ai/models`; Cubby maintains no rate table or generated pricing
+snapshot. The shared pricing module selects exact model IDs under their serving
+catalog providers while preserving the vendor names stored in usage records.
+One in-flight request per isolate is shared, successful prices are cached for
+one hour, and fetches time out after five seconds. A failure records its
+diagnostic and backs off for five minutes; unavailable prices remain unknown
+rather than being counted as free. Estimates include cache token rates and
+context tiers per call before aggregating spend. Pricing fetches happen in
+accounting, outside inference. The ledger owns cost estimates; conversation
+messages carry token evidence without a second SDK price estimate. Failed
+calls without reported usage remain unpriced. Import-run summaries return an
+unknown total when any recorded call is unpriced; a run with no calls totals
+zero. The nullable run-history cost contract requires Apple client 2.6 or newer.
+
+The shared transport owns request controls, response headers, Universal gateway
+calls, and the choice between test peers, ChatGPT, and billed gateway calls.
+ChatGPT selection fails closed if that transport fails. Chat, decision,
+embedding, cookbook, and native recovery calls retain their protocol-specific
+payloads and retry policies. Gateway cache verdicts describe upstream billing;
+application `cacheStatus` continues to describe the caller's own cache.
 
 Closed-set decision calls run a random 50/50 trial between `typesafe/jev` and
 `@cf/cloudflare/clef` (the full model). The shared runner samples once before
@@ -516,10 +540,8 @@ high-confidence/autofill threshold. There are no shadow calls or paired
 comparison records. Existing AI usage records retain the selected model,
 provider, latency, token counts and failures, including model-specific cache
 hits. Compare upstream latency on rows with `attempt > 0`, excluding
-application-cache hits. `CLEF_TRAFFIC_SHARE` in `models.ts` controls the trial:
-0 returns all calls to Jev; 1 selects Clef for all calls. Clef requires
-`model: "clef"` in its body and is priced from its registry rate while absent
-from the pinned Rust catalog. Jev's gateway response wraps `answers` and
+application-cache hits. The shared `selectDecisionModel` controls the trial.
+Clef requires `model: "clef"` in its body. Jev's gateway response wraps `answers` and
 `usage` under `result`; Clef can return them at the root. The scoped Workers AI
 run API can additionally wrap the model output in a `Completed` run result.
 The decision parser accepts these observed envelopes, rejects incomplete or

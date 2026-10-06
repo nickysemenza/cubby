@@ -62,7 +62,7 @@
   // forwarder all fetch through one shim that authenticates with implicit
   // (Worker-identity) auth. Dev (vite Node) has no `env.AI`, so the shim falls
   // back to gateway-REST with AI_GATEWAY_API_KEY. See
-  // src/server/clients/ai-gateway.ts + src/server/cf-env.ts.
+  // src/server/ai/gateway.ts + src/server/cf-env.ts.
   "ai": { "binding": "AI" },
   // Entity embedding vectors. One index per (model, dimensions) — the index's
   // dimension count is immutable, so a model change is a new index. Only

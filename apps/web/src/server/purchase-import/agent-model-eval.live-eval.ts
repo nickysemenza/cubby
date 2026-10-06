@@ -4,6 +4,15 @@ import path from "node:path";
 import { runEntityId, parseEntityId } from "@cubby/schemas/identifiers";
 import { sleep } from "@cubby/shared/retry";
 import { and, eq, inArray } from "drizzle-orm";
+import {
+  type EvalCandidate,
+  evalCandidates,
+  evalCostUsd,
+  evalUsageReport,
+  evalWebRoot,
+  liveEvalModelWorker,
+  meanEvalCostUsd,
+} from "tooling/ai/eval-support";
 import { withTestDb } from "tooling/test-setup";
 import { withWorkerdRuntime } from "tooling/workerd-runtime";
 import { describe, expect, it } from "vitest";
@@ -29,14 +38,6 @@ import {
   ensurePurchaseAgentOAuthClient,
   PURCHASE_AGENT_OAUTH_CLIENT_ID,
 } from "./agent-auth";
-import {
-  type EvalCandidate,
-  evalCandidates,
-  evalCostUsd,
-  evalUsageReport,
-  evalWebRoot,
-  liveEvalModelWorker,
-} from "./agent-eval-live-support";
 import {
   type EvalCase,
   agentModelEvalCases,
@@ -280,7 +281,7 @@ describe("photo coordinator model eval", () => {
                 settled && (final?.status === "running" || reviewed),
               wallMs,
               usage,
-              costUsd: evalCostUsd(choice.model, usage),
+              costUsd: await evalCostUsd(choice.model, usage),
               ...score,
               exact: reviewed || score.exact,
               pairF1: reviewed ? 1 : score.pairF1,
@@ -333,7 +334,9 @@ describe("photo coordinator model eval", () => {
               meanInputTokens: mean(
                 mine.map((result) => result.usage.inputTokens),
               ),
-              meanCostUsd: mean(mine.map((result) => result.costUsd)),
+              meanCostUsd: meanEvalCostUsd(
+                mine.map((result) => result.costUsd),
+              ),
             };
           });
           writeFileSync(
@@ -345,7 +348,7 @@ describe("photo coordinator model eval", () => {
             "|---|---|---|---|---|---|---|---|---|",
             ...summary.map(
               (row) =>
-                `| ${row.candidate} | ${row.exact}/${row.runs} | ${row.meanPairF1.toFixed(2)} | ${row.meanMatchAccuracy.toFixed(2)} | ${row.reachedApproval}/${row.runs} | ${row.meanWallSeconds.toFixed(0)} | ${Math.round(row.meanInputTokens)} | ${Math.round(row.meanOutputTokens)} | $${row.meanCostUsd.toFixed(3)} |`,
+                `| ${row.candidate} | ${row.exact}/${row.runs} | ${row.meanPairF1.toFixed(2)} | ${row.meanMatchAccuracy.toFixed(2)} | ${row.reachedApproval}/${row.runs} | ${row.meanWallSeconds.toFixed(0)} | ${Math.round(row.meanInputTokens)} | ${Math.round(row.meanOutputTokens)} | ${row.meanCostUsd === null ? "unknown" : `$${row.meanCostUsd.toFixed(3)}`} |`,
             ),
           ].join("\n");
           writeFileSync(path.join(outDir, "report.md"), `${table}\n`);

@@ -114,7 +114,7 @@ export const runSummary = z.object({
   updated: z.number().int(),
   skipped: z.number().int(),
   failureCode: z.string().nullable(),
-  estimatedCost: z.number(),
+  estimatedCost: z.number().nullable(),
 });
 export type RunSummary = z.infer<typeof runSummary>;
 

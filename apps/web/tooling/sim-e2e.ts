@@ -232,6 +232,8 @@ mkdirSync(artifacts, { recursive: true });
 const runStartedAt = performance.now();
 const phases: Array<{ name: string; durationMs: number }> = [];
 let phase = "setup";
+/** The driver model the preflight resolved; recorded in the run bundle. */
+let testerArmyDriverModel: string | undefined;
 let nativeBuildBinary: string | undefined;
 let nativeBuildSourceVersion: string | undefined;
 let currentNativeSourceVersion: (() => string) | undefined;
@@ -1309,7 +1311,7 @@ function finishE2ERun(failure: Error | undefined): Error | undefined {
         ? {
             ...runtime,
             testerArmy: "0.16.0",
-            model: process.env.TESTER_ARMY_MODEL ?? "openai/gpt-6-luna",
+            ...(testerArmyDriverModel && { model: testerArmyDriverModel }),
             effort: "medium",
           }
         : runtime,
@@ -1776,7 +1778,9 @@ async function main(): Promise<void> {
   try {
     if (testerArmy) {
       phase = "model-preflight";
-      const { preflightTesterArmyModel } = await import("./tester-army/model");
+      const { modelConfiguration, preflightTesterArmyModel } =
+        await import("./tester-army/model");
+      testerArmyDriverModel = modelConfiguration().TESTER_ARMY_MODEL;
       process.env.E2E_TELEMETRY_DISABLED = "1";
       await preflightTesterArmyModel();
     }

@@ -4,7 +4,7 @@ import {
   aiGatewayRateLimitDelayMs,
   isAiGatewayRateLimit,
   wrapAiGatewayError,
-} from "./ai-gateway-error";
+} from "./gateway-error";
 
 const context = {
   model: "synthetic-model",

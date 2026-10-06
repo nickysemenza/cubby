@@ -1,7 +1,7 @@
+import type { GatewayResponseFailure } from "@cubby/shared/ai/gateway-request";
+
 import { describeErrorCauses } from "~/lib/error-diagnostics";
 import type { UnparsedError } from "~/lib/error-utils";
-
-import type { GatewayResponseFailure } from "./ai-gateway";
 
 class GatewayHttpError extends Error {
   readonly status: number;

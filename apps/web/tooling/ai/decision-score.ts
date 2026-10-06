@@ -1,3 +1,4 @@
+import { meanEvalCostUsd } from "./eval-support";
 import { cents } from "~/server/repo/money";
 /** A line's Product decision, by fixture catalog key. */
 export type ProductDecision =
@@ -178,7 +179,7 @@ export function summarizeDecisions(
     verdict: DecisionVerdict;
     wallMs: number;
     usage: DecisionUsage;
-    costUsd: number;
+    costUsd: number | null;
   }>,
 ) {
   const mean = (values: number[]) =>
@@ -193,6 +194,6 @@ export function summarizeDecisions(
     meanWallSeconds: mean(results.map(({ wallMs }) => wallMs)) / 1_000,
     meanInputTokens: mean(results.map(({ usage }) => usage.inputTokens)),
     meanOutputTokens: mean(results.map(({ usage }) => usage.outputTokens)),
-    meanCostUsd: mean(results.map(({ costUsd }) => costUsd)),
+    meanCostUsd: meanEvalCostUsd(results.map(({ costUsd }) => costUsd)),
   };
 }

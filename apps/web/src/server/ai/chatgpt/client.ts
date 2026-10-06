@@ -1,4 +1,4 @@
-import type { gatewayQuery } from "@cubby/shared/ai-gateway-request";
+import type { GatewayQuery } from "@cubby/shared/ai/gateway-request";
 import { z } from "zod";
 
 import { getChatGptPlanNamespace } from "../../cf-env";
@@ -23,7 +23,7 @@ export interface ChatGptCallOptions {
 }
 
 export async function chatGptInference(
-  body: Awaited<ReturnType<typeof gatewayQuery>>,
+  body: GatewayQuery,
   options?: ChatGptCallOptions,
 ): Promise<Response | null> {
   const plan = chatGptPlan();
@@ -36,7 +36,7 @@ export async function chatGptInference(
  */
 export async function connectedChatGptInference(
   plan: ChatGptPlanRpc,
-  body: Awaited<ReturnType<typeof gatewayQuery>>,
+  body: GatewayQuery,
   options: ChatGptCallOptions = {},
 ): Promise<Response | null> {
   if (!(await plan.status()).connected) return null;
@@ -46,7 +46,7 @@ export async function connectedChatGptInference(
 
 export async function inferChatGptPlan(
   plan: ChatGptPlanRpc,
-  body: Awaited<ReturnType<typeof gatewayQuery>>,
+  body: GatewayQuery,
   options: { signal?: AbortSignal; requestTimeoutMs?: number } = {},
 ): Promise<Response> {
   options.signal?.throwIfAborted();

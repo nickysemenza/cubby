@@ -9,6 +9,7 @@ import {
   type ImageDescriptionResult,
   imageDescriptionResult,
 } from "@cubby/schemas/image-processing";
+import { providerFor } from "@cubby/shared/ai/models";
 import {
   fetchExternalResponse,
   readResponseWithLimit,
@@ -17,7 +18,6 @@ import {
 import { TIER1_NUTRIENTS } from "@cubby/usda";
 
 import { IMAGE_DESCRIPTION_FEATURE } from "~/server/ai/features";
-import { providerFor } from "~/server/ai/models";
 import {
   type AiImagePart,
   runStructuredFeature,

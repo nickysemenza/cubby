@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-import { AI_CACHE_TTL_SECONDS } from "~/server/clients/ai-adapters";
+import { AI_CACHE_TTL_SECONDS } from "~/server/ai/adapters";
 
 afterEach(() => {
   vi.unstubAllEnvs();

@@ -1,6 +1,6 @@
 import type { DurableObjectState } from "@cloudflare/workers-types";
 import type { ChatGptAuthorization } from "@cubby/schemas/chatgpt";
-import type { gatewayQuery } from "@cubby/shared/ai-gateway-request";
+import type { GatewayQuery } from "@cubby/shared/ai/gateway-request";
 import { DurableObject } from "cloudflare:workers";
 
 import { ChatGptInferenceRequests, type ChatGptInferenceOptions } from "./rpc";
@@ -38,11 +38,7 @@ export class ChatGptPlanDurableObject extends DurableObject<Env> {
   disconnect() {
     return this.session.disconnect();
   }
-  infer(
-    body: Awaited<ReturnType<typeof gatewayQuery>>,
-    model: string,
-    options: ChatGptInferenceOptions,
-  ) {
+  infer(body: GatewayQuery, model: string, options: ChatGptInferenceOptions) {
     return this.requests.infer(body, model, options);
   }
   async cancel(requestId: string) {

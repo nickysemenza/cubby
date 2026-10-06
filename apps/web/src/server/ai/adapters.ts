@@ -1,4 +1,10 @@
-import { cubbyPiProviders, type GatewayRoute } from "@cubby/shared/pi-gateway";
+import {
+  adaptiveThinkingFor,
+  getChatModelConfig,
+  type OpenAiEffort,
+  type SupportedChatModel,
+} from "@cubby/shared/ai/models";
+import { cubbyPiProviders } from "@cubby/shared/ai/pi-providers";
 import {
   createModels,
   type Api,
@@ -11,16 +17,10 @@ import {
 } from "@earendil-works/pi-ai";
 
 import {
-  type ChatRoute,
-  type SupportedChatModel,
-  adaptiveThinkingFor,
-  getChatModelConfig,
-} from "~/server/ai/models";
-import {
   type GatewayCallOptions,
   type GatewayMetadata,
   gatewayFetch,
-} from "~/server/clients/ai-gateway";
+} from "~/server/ai/gateway";
 
 /**
  * The one cache lifetime deterministic structured calls get: the gateway's
@@ -47,16 +47,6 @@ export function cachedCall(args: {
     : { metadata, cacheTtlSeconds: AI_CACHE_TTL_SECONDS };
 }
 
-/** The registry's chat route, translated to the shared gateway module's provider id. */
-function gatewayRouteFor(route: ChatRoute): GatewayRoute {
-  switch (route) {
-    case "openai-responses":
-      return "openai";
-    case "anthropic":
-      return "anthropic";
-  }
-}
-
 /** A chat model resolved against pi-ai's catalog, plus a `complete()` bound to it. */
 export interface PiCallTarget {
   model: Model<Api>;
@@ -78,8 +68,7 @@ export function piCallTarget(
   model: SupportedChatModel,
   call: GatewayCallOptions,
 ): PiCallTarget {
-  const config = getChatModelConfig(model);
-  const gatewayRoute = gatewayRouteFor(config.route);
+  const { gatewayProvider } = getChatModelConfig(model);
   const models = createModels();
   for (const provider of cubbyPiProviders((route, onUnbilledResponse) =>
     gatewayFetch(route, {
@@ -92,10 +81,10 @@ export function piCallTarget(
   )) {
     models.setProvider(provider);
   }
-  const resolved = models.getModel(gatewayRoute, config.wireModel);
+  const resolved = models.getModel(gatewayProvider, model);
   if (!resolved) {
     throw new Error(
-      `pi-ai does not declare a model for ${gatewayRoute}/${config.wireModel} (Cubby model "${model}")`,
+      `pi-ai does not declare a model for ${gatewayProvider}/${model}`,
     );
   }
   return {
@@ -103,22 +92,6 @@ export function piCallTarget(
     complete: (context, options) => models.complete(resolved, context, options),
   };
 }
-
-/**
- * The reasoning dial OpenAI's Responses API accepts. GPT-6 (like gpt-5.1)
- * supports "none" to disable reasoning entirely; pi-ai's own type omits it
- * because most reasoning models reject it, but it forwards the raw string
- * to the wire unvalidated (`openai-responses.js`'s `reasoningEffort` branch),
- * so passing it through is safe and preserves the old TanStack behavior.
- */
-export type OpenAiEffort =
-  | "none"
-  | "minimal"
-  | "low"
-  | "medium"
-  | "high"
-  | "xhigh"
-  | "max";
 
 export type AnthropicEffort = NonNullable<AnthropicOptions["effort"]>;
 
@@ -151,16 +124,15 @@ export function chatCompletionOptionsFor(
   },
   toolName: string,
 ): OpenAIResponsesOptions | AnthropicOptions {
-  const config = getChatModelConfig(model);
-  switch (config.route) {
-    case "openai-responses": {
+  switch (getChatModelConfig(model).gatewayProvider) {
+    case "openai": {
       const options: OpenAIResponsesOptions = {
         maxTokens: args.maxTokens,
         toolChoice: { type: "function", name: toolName },
       };
       if (args.effort) {
         // SAFETY: pi-ai's `reasoningEffort` type excludes "none"; the
-        // provider forwards it verbatim (see `OpenAiEffort`'s comment).
+        // provider forwards it verbatim (see `openAiEffortSchema`).
         options.reasoningEffort =
           args.effort as OpenAIResponsesOptions["reasoningEffort"];
       }

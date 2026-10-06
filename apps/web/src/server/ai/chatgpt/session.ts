@@ -4,7 +4,7 @@ import {
   type ChatGptAuthorization,
   type ChatGptStatus,
 } from "@cubby/schemas/chatgpt";
-import type { gatewayQuery } from "@cubby/shared/ai-gateway-request";
+import type { GatewayQuery } from "@cubby/shared/ai/gateway-request";
 import { createRemoteJWKSet, jwtVerify } from "jose";
 import { z } from "zod";
 
@@ -291,7 +291,7 @@ export class ChatGptSession {
   }
 
   async infer(
-    body: Awaited<ReturnType<typeof gatewayQuery>>,
+    body: GatewayQuery,
     model: string,
     signal?: AbortSignal,
   ): Promise<Response> {
