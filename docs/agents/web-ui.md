@@ -2,10 +2,10 @@
 
 Human record dates use `formatDateSpan(day, null)` and declared ranges use
 `formatDateSpan(start, end)`: retain the calendar label, omit the current year,
-and append relative context for present/future dates (today, tomorrow, in a few
+and append relative context for past/present/future dates (today, tomorrow, in a few
 days, in about a week, in a few weeks, in about a month, in a few months,
 in about a year, then approximate years). Ranges covering today say ongoing;
-past dates stay absolute. Compare household calendar days, never elapsed hours
+past dates mirror these buckets with yesterday or ago. Fully ended ranges use their end for relative context. Compare household calendar days, never elapsed hours
 or UTC dates. Generic scalar dates, declared spans, and task due-date summaries
 share this formatter through `CalendarDate`. Mounted labels subscribe to
 `useHouseholdToday`, whose shared clock refreshes at household midnight, on

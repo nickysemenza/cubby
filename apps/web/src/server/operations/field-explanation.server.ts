@@ -30,6 +30,7 @@ import { ENTITY_KERNEL_ENTITIES } from "~/server/entity-kernel/contracts";
 import { implementOperationDomain } from "~/server/operation-domain.server";
 import { getCookbookSummary } from "~/server/repo/cookbook";
 import { loadQualityBreakdown } from "~/server/repo/data-quality/hydrate";
+import { explanationReferenceValues } from "~/server/repo/explanation-reference-values";
 import {
   loadFieldCountEvidence,
   withFieldExplanationSnapshot,
@@ -874,6 +875,14 @@ export async function explainField(
     snapshot.qualityBreakdown,
     snapshot.resolutionEvidenceTruncated,
   );
+  const linkedValues = await explanationReferenceValues(
+    context.db,
+    finalSources.sources.map((source) => source.value),
+  );
+  const linkedSources = finalSources.sources.map((source, index) => ({
+    ...source,
+    value: linkedValues[index] ?? source.value,
+  }));
   return fieldExplanationOutput.parse({
     subject,
     field: field.key,
@@ -887,7 +896,7 @@ export async function explainField(
       revision: explanation.version,
       description: explanation.description,
     },
-    sources: finalSources.sources,
+    sources: linkedSources,
     resolution,
     resolutionEvidence: snapshot.resolutionEvidence,
     truncated:

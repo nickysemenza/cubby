@@ -974,6 +974,14 @@ check must be closable through supported data entry or an allowed exception;
 optional planning fields and operational inactivity are not universal
 completeness requirements. Actual zero or negative costs remain valid.
 
+Product core identity checks apply to every catalog record, including products
+without stock or expenses. Name and known price carry weight 3, manufacturer and
+external identity weight 2, and category weight 3 with an unresolved cap of 69.
+Model evidence applies when the category requires it. A known explicit or derived
+price earns credit, including zero; an unknown price is required only for stocked
+products outside miscellaneous buckets. Catalog inactivity remains an unscored
+diagnostic, so recorded identity can earn points without purchase history.
+
 Core identity, classification, usable evidence, and financial consistency matter
 more than optional imagery and descriptions. Score explanations name deductions
 and applicable caps. Related gaps remain separate from the owner's score and
@@ -1116,14 +1124,13 @@ and fallback-source evidence so clients do not reconstruct these rules.
 Web field explanations keep one compact hierarchy across quality, derived values,
 and inheritance: the result and interpretation lead, followed by applicable checks
 and source evidence, then technical metadata. Check rows distinguish missing data,
-defects, and accepted exceptions with labeled semantic badges; weights and rule
-identifiers remain secondary but visible. Inheritance ladders align source, value,
+defects, and accepted exceptions with labeled semantic badges; weights and caps stay inline; check identifiers and raw evidence remain available in Technical details. Satisfied checks collapse into a green labeled summary; gaps use amber and defects red, with labels carrying the meaning. Repeated owner gaps are shown once through the check rows, while related-record gaps remain separate. Inheritance ladders align source, value,
 and precedence, allow long values to wrap, and emphasize the winning source.
 Reset and navigation actions remain in the popover footer, while exception actions
 stay with their check. Tables retain their compact rows and lazy explanations.
 The sticky footer stays wholly inside the scrollport so its actions retain their
 phone touch targets. Nested evidence switches from aligned facts to stacked labels
-based on its own container width, avoiding progressively narrower columns.
+based on its own container width, avoiding progressively narrower columns. Generic evidence values link validated HTTP(S) URLs, format ISO timestamps in the household zone, and use calendar-date context for plain dates. Bounded evidence IDs resolve in one identity batch to canonical public codes and then shared entity links; unregistered row IDs and source slugs remain literal. Technical details is collapsed by default.
 
 An Image has provenance (`own`, `catalog`, `unknown`, or `screenshot`, plus
 optional supplying source name/page/asset URLs). Its Product attachment has

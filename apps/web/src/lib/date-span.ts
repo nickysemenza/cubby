@@ -6,7 +6,7 @@ const PLAIN_DATE = /^(\d{4})-(\d{2})-\d{2}$/;
 /**
  * The one human format for a (start, optional end) plain-date span: "Sep 22",
  * "Sep 22 – 25", "Sep 30 – Oct 2". The year appears only when it is not the
- * household's current year, and on both ends when they differ in year. Today
+ * household's current year, and on both ends when they differ in year. Past, present,
  * and future days include relative context; a range covering today is ongoing. A null
  * or equal end collapses to a single day. Declared spans
  * (`presentation.spans`) and every ad hoc range label share this.
@@ -43,7 +43,9 @@ function spanContext(
   today: string,
 ): string | null {
   if (end !== null && start <= today && end >= today) return "ongoing";
-  return calendarDayContext(plainDateDaysBetween(today, start));
+  return calendarDayContext(
+    plainDateDaysBetween(today, end !== null && end < today ? end : start),
+  );
 }
 
 function validCalendarDays(...days: (string | null)[]): boolean {
@@ -54,7 +56,11 @@ function validCalendarDays(...days: (string | null)[]): boolean {
 
 /** Calendar-day distance avoids elapsed-hour rounding at midnight and DST. */
 function calendarDayContext(days: number): string | null {
-  if (days < 0) return null;
+  if (days < 0) {
+    if (days === -1) return "yesterday";
+    const future = calendarDayContext(-days);
+    return future?.replace(/^in /, "").concat(" ago") ?? null;
+  }
   if (days === 0) return "today";
   if (days === 1) return "tomorrow";
   if (days < 7) return "in a few days";

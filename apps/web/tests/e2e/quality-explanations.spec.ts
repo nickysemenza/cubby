@@ -67,10 +67,20 @@ test("quality leads entity tables, explains its calculation, and restores tempor
     .click();
   const popover = page.locator('[data-slot="popover-content"]');
   await expect(
-    popover.getByRole("heading", { name: "What this means" }),
+    popover.getByRole("heading", { name: "Score calculation" }),
   ).toBeVisible();
   await expect(
     popover.getByRole("heading", { name: "Technical details" }),
+  ).toBeVisible();
+  const technicalDisclosure = popover
+    .locator("details")
+    .filter({
+      has: page.getByRole("heading", { name: "Technical details" }),
+    })
+    .first();
+  await expect(technicalDisclosure).not.toHaveAttribute("open");
+  await expect(
+    popover.locator("summary").filter({ hasText: /satisfied checks/ }),
   ).toBeVisible();
   await expect(popover).toContainText("applicable weight");
   await expect(popover).toContainText(
@@ -195,8 +205,8 @@ test("quality explanations reconcile exceptions, defects, and related gaps", asy
     );
   const unstocked = await explain("product", product.id);
   expect(unstocked.qualityBreakdown).toMatchObject({
-    score: 99,
-    expectedWeight: 0,
+    score: 30,
+    expectedWeight: 10,
   });
   const location = await seedLocationPrerequisite(page, `${name} shelf`);
   await createEntityFixture(page, "inventory", {
@@ -349,6 +359,7 @@ test("quality explanations reconcile exceptions, defects, and related gaps", asy
 
 test("a person accepts a data gap as an exception from the explanation and clears it", async ({
   page,
+  baseURL,
 }) => {
   test.setTimeout(60_000);
   await page.setViewportSize({ width: 402, height: 874 });
@@ -372,9 +383,7 @@ test("a person accepts a data gap as an exception from the explanation and clear
     name: /How (data )?quality is determined/,
   });
   const popover = page.locator('[data-slot="popover-content"]');
-  const check = popover
-    .getByRole("listitem")
-    .filter({ hasText: "product_manufacturer" });
+  const check = popover.locator('[data-quality-check="product_manufacturer"]');
   await expect(async () => {
     if (!(await popover.isVisible())) await trigger.click();
     await expect(check).toContainText("Missing data");
@@ -390,6 +399,28 @@ test("a person accepts a data gap as an exception from the explanation and clear
   await check.getByRole("button", { name: "Clear exception" }).click();
   await expect(check).toContainText("Missing data");
   await expect(check.getByRole("button", { name: "Accept as…" })).toBeVisible();
+  await check.getByRole("button", { name: "Accept as…" }).click();
+  await check.getByRole("button", { name: "Accept exception" }).click();
+  await expect(check).toContainText("Accepted exception");
+  const changed = await page.request.patch(`/api/v1/products/${product.id}`, {
+    headers: { Origin: baseURL! },
+    data: { manufacturer: "Synthetic recorded maker" },
+  });
+  expect(changed.ok(), await changed.text()).toBeTruthy();
+  await reloadAuthenticatedPage(page, row);
+  await expect(async () => {
+    if (!(await popover.isVisible())) await trigger.click();
+    await expect(check).toContainText(
+      "Evidence changed since this exception was recorded",
+    );
+  }).toPass();
+  await expect(
+    check.getByRole("button", { name: "Clear exception" }),
+  ).toBeVisible();
+  await check.getByRole("button", { name: "Clear exception" }).click();
+  await expect(
+    check.getByRole("button", { name: "Clear exception" }),
+  ).toHaveCount(0);
 });
 
 test("explanations load lazily, recover from errors, and expand bounded evidence on phones", async ({
@@ -480,7 +511,7 @@ test("explanations load lazily, recover from errors, and expand bounded evidence
     });
   });
   await popover.getByRole("button", { name: "Retry explanation" }).click();
-  await expect(popover).toContainText("What this means");
+  await expect(popover).toContainText("Score calculation");
   await expect(popover).toContainText("Technical details");
   await expect(
     popover.getByText("Synthetic evidence 7", { exact: true }),
@@ -550,4 +581,80 @@ test("specialist board and gallery cards retain the shared quality explanation",
     .click();
   await expect(popover).toContainText("location.data-quality");
   expect(task.id).toBeTruthy();
+});
+
+test("explanation evidence formats links and dates without exposing internal entity ids", async ({
+  page,
+}) => {
+  const { getFixtureDb } = await import("./fixtures-core");
+  const { getDb } = await import("~/server/repo/database-helpers");
+  const { vendor } = await import("~/server/db/schema");
+  const { eq } = await import("drizzle-orm");
+  const suffix = Date.now();
+  const vendorName = `Synthetic evidence supplier ${suffix}`;
+  const supplier = await createEntityFixture(page, "vendor", {
+    name: vendorName,
+  });
+  const storedVendor = await getDb(getFixtureDb()).query.vendor.findFirst({
+    where: eq(vendor.shortcode, supplier.id),
+    columns: { id: true },
+  });
+  if (!storedVendor) throw new Error("Synthetic supplier fixture is missing");
+  const productName = `Synthetic formatted evidence ${suffix}`;
+  const url = `https://example.com/catalog/${"synthetic-".repeat(30)}item`;
+  const product = await seedProductPrerequisite(page, {
+    name: productName,
+    externalIds: [
+      {
+        source: `vendor-${storedVendor.id}`,
+        kind: "retailer_sku",
+        externalId: `SYNTHETIC-${suffix}`,
+        url,
+      },
+    ],
+  });
+  await createEntityFixture(page, "expense", {
+    name: `Synthetic dated line ${suffix}`,
+    productId: product.id,
+    productQuantity: 1,
+    cost: 12,
+    date: "2022-03-11",
+    costType: "materials",
+    trade: "other",
+  });
+  await gotoAuthenticatedPage(
+    page,
+    `/products?view=table&name=${encodeURIComponent(productName)}`,
+  );
+  const row = page.getByRole("row").filter({ hasText: productName });
+  await expect(row.locator('[data-cell-col="purchaseDate"]')).toContainText(
+    /Mar 11, 2022 \(.+ ago\)/,
+  );
+  await row
+    .locator('[data-cell-col="primaryGtin"]')
+    .getByRole("button", { name: /How primary gtin is determined/ })
+    .click();
+  const popover = page.locator('[data-slot="popover-content"]');
+  await expect(
+    popover.getByRole("link", { name: /example.com\/catalog\// }),
+  ).toHaveAttribute("href", url);
+  await expect(
+    popover.getByRole("link", { name: vendorName, exact: true }),
+  ).toHaveAttribute("href", `/vendors/${supplier.id}`);
+  await expect(popover).not.toContainText(storedVendor.id);
+  const times = popover.locator("time[datetime]:visible");
+  await expect(times).toHaveCount(2);
+  await expect(times.first()).not.toContainText(/T\d{2}:\d{2}/);
+  await page.setViewportSize({ width: 402, height: 874 });
+  await gotoAuthenticatedPage(page, `/products/${product.id}`);
+  await page
+    .getByRole("button", { name: /How external ids is determined/ })
+    .click();
+  await expect(
+    popover.getByRole("link", { name: vendorName, exact: true }),
+  ).toBeVisible();
+  await expectViewportBounded(page);
+  expect(
+    await popover.evaluate((panel) => panel.scrollWidth),
+  ).toBeLessThanOrEqual(await popover.evaluate((panel) => panel.clientWidth));
 });

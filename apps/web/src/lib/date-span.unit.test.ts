@@ -7,16 +7,20 @@ const span = (start: string | null, end: string | null) =>
 
 describe("formatDateSpan", () => {
   it("collapses a null or equal end to one day", () => {
-    expect(span("2026-09-22", null)).toBe("Sep 22");
-    expect(span("2026-09-22", "2026-09-22")).toBe("Sep 22");
+    expect(span("2026-09-22", null)).toBe("Sep 22 (a few months ago)");
+    expect(span("2026-09-22", "2026-09-22")).toBe("Sep 22 (a few months ago)");
   });
 
   it("names the month once inside one month", () => {
-    expect(span("2026-09-22", "2026-09-25")).toBe("Sep 22 – 25");
+    expect(span("2026-09-22", "2026-09-25")).toBe(
+      "Sep 22 – 25 (a few months ago)",
+    );
   });
 
   it("names both months across a month boundary", () => {
-    expect(span("2026-09-30", "2026-10-02")).toBe("Sep 30 – Oct 2");
+    expect(span("2026-09-30", "2026-10-02")).toBe(
+      "Sep 30 – Oct 2 (a few months ago)",
+    );
   });
 
   it("shows the year when it is not the current year", () => {
@@ -24,7 +28,9 @@ describe("formatDateSpan", () => {
     expect(span("2027-03-01", "2027-03-04")).toBe(
       "Mar 1 – 4, 2027 (in a few months)",
     );
-    expect(span("2025-11-30", "2025-12-02")).toBe("Nov 30 – Dec 2, 2025");
+    expect(span("2025-11-30", "2025-12-02")).toBe(
+      "Nov 30 – Dec 2, 2025 (about a year ago)",
+    );
   });
 
   it("shows both years when the ends differ in year", () => {
@@ -35,18 +41,20 @@ describe("formatDateSpan", () => {
 
   it("falls back for missing or unreadable ends", () => {
     expect(span(null, null)).toBe("No date");
-    expect(span(null, "2026-09-25")).toBe("Sep 25");
+    expect(span(null, "2026-09-25")).toBe("Sep 25 (a few months ago)");
     expect(span("not-a-date", "2026-09-25")).toBe("not-a-date – 2026-09-25");
   });
 });
 
 // Isolated regressions: household midnight differs from UTC; DST days are not
 // 24 hours; ongoing ranges must describe the interval rather than its past start.
-describe("present and future date context", () => {
+describe("past, present and future date context", () => {
   afterEach(() => vi.useRealTimers());
 
   it.each([
-    ["2026-10-04", "Oct 4"],
+    ["2026-10-04", "Oct 4 (yesterday)"],
+    ["2026-09-22", "Sep 22 (about a week ago)"],
+    ["2025-10-05", "Oct 5, 2025 (about a year ago)"],
     ["2026-10-05", "Oct 5 (today)"],
     ["2026-10-06", "Oct 6 (tomorrow)"],
     ["2026-10-10", "Oct 10 (in a few days)"],
@@ -68,7 +76,7 @@ describe("present and future date context", () => {
       "Oct 6 – 8 (tomorrow)",
     );
     expect(formatDateSpan("2026-10-01", "2026-10-04", "2026-10-05")).toBe(
-      "Oct 1 – 4",
+      "Oct 1 – 4 (yesterday)",
     );
   });
 
