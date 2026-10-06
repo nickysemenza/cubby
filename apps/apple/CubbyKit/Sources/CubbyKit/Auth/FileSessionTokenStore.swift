@@ -20,29 +20,36 @@ public final class FileSessionTokenStore: SessionTokenStore, Sendable {
     }
 
     public func loadState(for host: String) throws -> CubbyAuthState? {
-        try read()[host]
+        try read()?[host]
     }
 
     public func saveState(_ state: CubbyAuthState, for host: String) throws {
-        var all = try read()
+        var all = try read() ?? [:]
         all[host] = state
         try write(all)
     }
 
     public func clear(for host: String) throws {
-        var all = try read()
+        guard var all = try read() else {
+            try FileManager.default.removeItem(at: fileURL)
+            return
+        }
         all.removeValue(forKey: host)
         try write(all)
     }
 
-    private func read() throws -> [String: CubbyAuthState] {
+    /// `nil` when the file exists but holds no current-format entry: not a JSON object, or the
+    /// retired `[host: CubbyCredential]` shape (no entry carries `version`). It reads as signed
+    /// out, `saveState` overwrites it, and `clear` deletes it, so a stale file costs one sign-in
+    /// rather than making every load, save, and clear throw. Otherwise each host decodes on its
+    /// own and only a malformed entry is dropped, so one bad host never signs out the others.
+    private func read() throws -> [String: CubbyAuthState]? {
         guard FileManager.default.fileExists(atPath: fileURL.path(percentEncoded: false)) else { return [:] }
         let data = try Data(contentsOf: fileURL)
-        if let states = try? JSONDecoder().decode([String: CubbyAuthState].self, from: data) {
-            return states
-        }
-        let credentials = try JSONDecoder().decode([String: CubbyCredential].self, from: data)
-        return credentials.mapValues { CubbyAuthState(credential: $0) }
+        guard let entries = try? JSONDecoder().decode([String: StoredEntry].self, from: data),
+            entries.values.contains(where: \.hasVersion)
+        else { return nil }
+        return entries.compactMapValues(\.state)
     }
 
     private func write(_ all: [String: CubbyAuthState]) throws {
@@ -53,5 +60,18 @@ public final class FileSessionTokenStore: SessionTokenStore, Sendable {
         try data.write(to: fileURL, options: .atomic)
         try FileManager.default.setAttributes(
             [.posixPermissions: 0o600], ofItemAtPath: fileURL.path(percentEncoded: false))
+    }
+}
+
+/// One host's entry, decoded without throwing so a malformed host cannot fail the whole file.
+private struct StoredEntry: Decodable {
+    private enum ProbeKey: String, CodingKey { case version }
+
+    let hasVersion: Bool
+    let state: CubbyAuthState?
+
+    init(from decoder: any Decoder) {
+        hasVersion = (try? decoder.container(keyedBy: ProbeKey.self))?.contains(.version) ?? false
+        state = try? CubbyAuthState(from: decoder)
     }
 }

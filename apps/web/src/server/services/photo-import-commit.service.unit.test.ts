@@ -39,7 +39,6 @@ const context = entityKernelContextSchema.parse({
 });
 
 const input = (): PhotoImportCommitInput => ({
-  idempotencyKey: "legacy-client-key",
   images: [
     {
       clientId: "photo-1",
@@ -156,7 +155,6 @@ describe("photo import atomic commit", () => {
 
     expect(adapter.apply).toHaveBeenCalledTimes(2);
     expect(first).not.toHaveProperty("receiptId");
-    expect(first).not.toHaveProperty("idempotencyKey");
   });
 
   it("rolls back when final activation count is incomplete", async () => {

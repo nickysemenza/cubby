@@ -110,50 +110,6 @@ struct PhotoAnalysisStoreTests {
         #expect(try await store.record(for: "kept") != nil)
     }
 
-    @Test func legacyJSONCacheMigratesOnceAndDeletesTheFile() async throws {
-        let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
-        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
-        let fileURL = directory.appendingPathComponent("library-photo-hashes-v1.json")
-        let date = Date(timeIntervalSince1970: 100)
-        let expectedHash = PerceptualHash64(value: 42)
-        // `PerceptualHash64` encodes as its hex string (`PerceptualHash.swift`), not a `{value:}`
-        // object — this fixture mirrors the real `LibraryHashCache` JSON shape on disk.
-        let legacyJSON = """
-            {
-              "algorithmRevision": 1,
-              "entries": [
-                {
-                  "key": {
-                    "localIdentifier": "legacy-asset",
-                    "modificationDate": \(date.timeIntervalSinceReferenceDate),
-                    "algorithmRevision": 1
-                  },
-                  "hash": "\(expectedHash.hex)"
-                }
-              ]
-            }
-            """
-        try Data(legacyJSON.utf8).write(to: fileURL)
-
-        let store = try makeStore()
-        try await store.migrateLegacyHashCacheIfNeeded(fileURL: fileURL)
-
-        #expect(try await store.hash(for: "legacy-asset", modificationDate: date) == expectedHash)
-        #expect(!FileManager.default.fileExists(atPath: fileURL.path(percentEncoded: false)))
-
-        // Re-running after the file is gone is a no-op, not an error — every launch calls this.
-        try await store.migrateLegacyHashCacheIfNeeded(fileURL: fileURL)
-        #expect(try await store.hash(for: "legacy-asset", modificationDate: date) == expectedHash)
-    }
-
-    @Test func aFreshInstallWithNoLegacyFileNoOps() async throws {
-        let store = try makeStore()
-        let missingURL = FileManager.default.temporaryDirectory.appendingPathComponent(
-            "\(UUID().uuidString).json")
-        try await store.migrateLegacyHashCacheIfNeeded(fileURL: missingURL)
-        #expect(try await store.record(for: "anything") == nil)
-    }
-
     // MARK: - v2_library_sighting_sync (PR 5)
 
     @Test func unsentLibrarySightingReportsFalse() async throws {

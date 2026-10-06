@@ -170,7 +170,6 @@ const photoImportSourceSchema = z.object({
 });
 
 const photoImportCommitInputSchema = z.object({
-  idempotencyKey: z.string().min(8).max(200),
   // Installation id (`Device.installationId`, NOT a `DEV-` shortcode — the
   // native app always knows the former, and may not yet have registered for
   // the latter). Resolved to a Device row server-side; when absent or
@@ -214,8 +213,7 @@ const photoImportCommitInputSchema = z.object({
 
 /**
  * The commit response is deliberately an ordinary value, not a persisted
- * receipt. `idempotencyKey` remains accepted on the input for older clients,
- * but a commit response is never replayed from server-side state.
+ * receipt: a commit response is never replayed from server-side state.
  */
 const photoImportCommitResultSchema = z.object({
   committedPhotoIds: z.array(imageShortcode),

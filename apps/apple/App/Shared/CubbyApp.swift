@@ -102,9 +102,6 @@ struct CubbyApp: App {
                 #endif
             }
             .onAppear {
-                #if os(macOS)
-                    DockBadge.clear()
-                #endif
                 model.setCompanionSceneActive(scenePhase == .active)
                 #if os(iOS)
                     DeviceWorkLiveActivityCoordinator.shared.start(

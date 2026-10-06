@@ -637,26 +637,6 @@ public actor PhotoAnalysisStore {
         }
     }
 
-    public static let legacyHashCacheURL = FileManager.default.urls(
-        for: .cachesDirectory, in: .userDomainMask
-    ).first!.appendingPathComponent("Cubby", isDirectory: true)
-        .appendingPathComponent("library-photo-hashes-v1.json")
-
-    public func migrateLegacyHashCacheIfNeeded(fileURL: URL = PhotoAnalysisStore.legacyHashCacheURL) throws {
-        guard let data = try? Data(contentsOf: fileURL),
-            let document = try? JSONDecoder().decode(LegacyDocument.self, from: data)
-        else { return }
-        try database.write { db in
-            for entry in document.entries {
-                try Self.upsertHash(
-                    in: db, localIdentifier: entry.key.localIdentifier,
-                    modificationDate: entry.key.modificationDate, perceptualHash: entry.hash,
-                    revision: entry.key.algorithmRevision)
-            }
-        }
-        try? FileManager.default.removeItem(at: fileURL)
-    }
-
     private static let selectSQL = """
         SELECT local_identifier, modification_date, perceptual_hash, hash_revision, categories,
                top_labels, classify_version, classify_ms, classified_at, full_analysis,
@@ -810,17 +790,4 @@ private struct StoredRecord: FetchableRecord {
             classifiedAt: classifiedAt, fullAnalysis: fullAnalysis,
             fullAnalysisVersion: fullAnalysisVersion)
     }
-}
-
-private struct LegacyDocument: Decodable {
-    struct Key: Decodable {
-        let localIdentifier: String
-        let modificationDate: Date?
-        let algorithmRevision: Int
-    }
-    struct Record: Decodable {
-        let key: Key
-        let hash: PerceptualHash64
-    }
-    let entries: [Record]
 }
