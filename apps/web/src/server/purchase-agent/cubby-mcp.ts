@@ -17,6 +17,9 @@ import type { McpToolDefinition, RunServices } from "./environment";
 // it to Cubby's MCP handler in process with the run's bearer.
 const MCP_PLACEHOLDER_URL = "https://cubby-mcp.invalid/mcp";
 const MCP_TOOL_PREFIX = "mcp__cubby__";
+// Cubby's MCP handler serves only the modern era. A pin fails loudly instead
+// of falling back to the `initialize` handshake the handler rejects.
+const MCP_PROTOCOL_VERSION = "2026-07-28";
 
 /** The private Cubby MCP server's transport for one run. */
 function cubbyMcpFetch(services: () => RunServices): typeof fetch {
@@ -28,7 +31,10 @@ async function connectCubbyMcp(services: () => RunServices): Promise<Client> {
     new URL(MCP_PLACEHOLDER_URL),
     { fetch: cubbyMcpFetch(services) },
   );
-  const client = new Client({ name: "cubby-purchase-agent", version: "1.0.0" });
+  const client = new Client(
+    { name: "cubby-purchase-agent", version: "1.0.0" },
+    { versionNegotiation: { mode: { pin: MCP_PROTOCOL_VERSION } } },
+  );
   await client.connect(transport);
   return client;
 }
