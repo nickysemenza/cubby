@@ -188,7 +188,7 @@ type EntityKeyLookup = (raw: string, context: string) => string;
 // shared manifest-wire description: property names as keys, `String` enums as
 // their raw value, an enum case with associated values as
 // `{"case": {"label": value}}` (`_0` for an unlabelled one), a payload-less
-// case as `{"case": {}}`, and every optional present as `null` when absent.
+// case as `{"case": {}}`. Nullable fields use `null`; optional members can be absent.
 
 const options = (
   values: readonly { value: string; label: string; color?: string }[] | null,
@@ -198,7 +198,7 @@ const options = (
     : values.map(({ value, label, color }) => ({
         value,
         label,
-        color: color ?? null,
+        color,
       }));
 
 const filterJSON = (

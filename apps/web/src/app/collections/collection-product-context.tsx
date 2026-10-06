@@ -9,7 +9,7 @@ import { ReceiptIcon } from "@phosphor-icons/react/dist/csr/Receipt";
 import { Link } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
 
-import { TradeBadge } from "~/app/projects/trade-options";
+import { TradeBadge } from "~/app/projects/trade-badge";
 import { copyShortcodes } from "~/lib/clipboard";
 import { formatCalendarDay } from "~/lib/date-format";
 import { purchaseLabel, purchaseLabelUsedVendor } from "~/lib/purchase-label";

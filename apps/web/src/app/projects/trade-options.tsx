@@ -20,9 +20,7 @@ import { TruckIcon } from "@phosphor-icons/react/dist/csr/Truck";
 import { WrenchIcon } from "@phosphor-icons/react/dist/csr/Wrench";
 import type { Icon } from "@phosphor-icons/react/lib";
 
-import { fieldEnumOptions } from "~/entity/enum-field-display";
 import type { FilterableComboboxItem } from "~/ui/primitives/combobox";
-import { EnumPill } from "~/ui/primitives/enum-pill";
 
 import { TRADE_LABELS } from "./project-formatting";
 
@@ -65,19 +63,6 @@ const TRADE_ICONS = {
   auto: CarIcon,
   other: ShapesIcon,
 } satisfies Record<Trade, Icon>;
-
-/** The task trade roster supplies the palette for every trade chip. */
-export function TradeBadge({ trade }: { trade: Trade }) {
-  const Icon = TRADE_ICONS[trade];
-  const option = fieldEnumOptions("task", "trade").find(
-    (option) => option.value === trade,
-  );
-  return (
-    <EnumPill color={option?.color} icon={<Icon />}>
-      {option?.label ?? TRADE_LABELS[trade]}
-    </EnumPill>
-  );
-}
 
 /**
  * Bare trade glyph — the same icon as `TradeBadge` without the pill, for tight

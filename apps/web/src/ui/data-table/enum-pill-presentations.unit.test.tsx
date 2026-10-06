@@ -1,7 +1,8 @@
 import { cleanup, render, screen } from "@testing-library/react";
 import { afterEach, describe, expect, it } from "vitest";
 
-import { TradeBadge, tradeOptions } from "~/app/projects/trade-options";
+import { TradeBadge } from "~/app/projects/trade-badge";
+import { tradeOptions } from "~/app/projects/trade-options";
 import { fieldEnumOptions } from "~/entity/enum-field-display";
 import { CategoryLabel } from "~/features/products/CategoryLabel";
 import { createBrowserTestHarness } from "~/lib/test/browser-harness";
