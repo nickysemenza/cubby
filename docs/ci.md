@@ -49,7 +49,7 @@ Node 24, pnpm 12.7.0, Rust/wasm-pack, Apple `container` on macOS (external Postg
 browsers must be available; [test tiers](agents/validation-tests.md) cover database setup.
 PostgreSQL remains the authoritative integration tier; Playwright defaults to
 one worker on hosted runners and two on local macOS in `playwright.config.ts`,
-the CI workflow passes `--workers=2` for each shard, and there are no retries. Both tiers reject an empty selection or an
+the CI workflow benchmarks `--workers=3` for each shard, and there are no retries. Both tiers reject an empty selection or an
 unexpected skipped test without freezing the suite to a hand-maintained count;
 a Vitest `-t` run accepts tests the pattern left out but still fails when the
 pattern matches nothing or a matched test is skipped.
@@ -180,7 +180,7 @@ Desktop browser shards depend only on `Scope` and build the Worker during their
 own setup, with the same source commit and branch provenance. This overlaps
 setup with `Build Workers` without adding runner slots, at the cost of two
 additional Worker builds. The browser lanes retain the discovery and no-skip guard;
-desktop Chromium runs as two Playwright shards (two workers each). Phone-web and
+desktop Chromium runs as two Playwright shards (currently benchmarking three workers each). Phone-web and
 WebKit browser coverage was removed from PR CI and the Playwright suite; native
 checks remain separate. There is no coverage mode.
 Desktop CI passes Playwright's `--trace=off`: recording every test for
@@ -339,6 +339,13 @@ database contracts; it does not establish a five-minute full suite.
   did not improve the required-check critical path enough to justify their
   setup and contention costs. Keep the two browser shards when several PRs run
   concurrently; the PostgreSQL split preserves its three total runner slots.
+  A three-worker re-benchmark remains unproven on the current larger desktop
+  workload, after route-owned browser imports, real image fixtures and reduced
+  navigation/setup duplication. It adds no runner slots or custom scheduler.
+  Keep it only if exact-head hosted runs preserve every discovered case without
+  retries and improve the slower shard and overall gate without increasing
+  contention or combined runner time; use the multi-run sampling rule above
+  before claiming a new median. Preserve the earlier rejected results.
   Phone and WebKit browser projects were removed
   from PR CI; device-dependent phone behavior still needs device acceptance.
 - The fast projects share one job to reduce runner demand. Ten completed PR
