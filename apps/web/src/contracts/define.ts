@@ -1,6 +1,7 @@
-import type { z } from "zod";
+import { z } from "zod";
 
 import type { QueryCachePolicy, RippleKey } from "~/contracts/cache-policy";
+import { kernelActionName } from "~/contracts/mcp-define";
 
 /**
  * Transport-neutral operation contracts.
@@ -28,6 +29,61 @@ interface OperationObservability {
 }
 
 /**
+ * Why a query or mutation is not an MCP tool action. `pnpm generate` fails
+ * unless every query and mutation is either named by an action in
+ * `contracts/mcp-tools.ts` or declares one of these (never both), so a new
+ * operation cannot silently stay off the agent surface. There is no
+ * contract-level default: each member declares its own. A `note` says why
+ * when the reason alone is not obvious.
+ */
+const note = z.string().min(1);
+export const mcpOmission = z.discriminatedUnion("omit", [
+  z.strictObject({
+    omit: z.enum([
+      /** A web or Apple UI read model, form helper, or UI-only state. */
+      "client_view",
+      /** A person-triggered Cubby model call; an agent makes that judgment itself. */
+      "model_assist",
+      /** A person reviews or decides; agents only propose. */
+      "human_approval",
+      /** Byte or URL plumbing behind an upload. */
+      "upload_transport",
+      /** Apple app, companion, or in-browser driver protocol. */
+      "device_protocol",
+      /** Credentials, sign-in, OAuth grants, and login linkage. */
+      "auth_connection",
+      /** Admin, backfill, repair, and telemetry. */
+      "operator_maintenance",
+    ]),
+    note: note.optional(),
+  }),
+  /** An exposed, agent-shaped operation serves the same need. */
+  z.strictObject({
+    omit: z.literal("agent_twin"),
+    /** The exposed operation id (`domain.member`); generation checks it. */
+    twin: z.string().regex(/^[\w-]+\.\w+$/u),
+    note: note.optional(),
+  }),
+  /**
+   * An MCP entity-kernel verb can do it. Recorded as an omission, not as
+   * proven parity: `note` says how the verb stands in.
+   */
+  z.strictObject({
+    omit: z.literal("kernel_alternative"),
+    kernel: z.tuple([kernelActionName], kernelActionName).readonly(),
+    note,
+  }),
+  /** A real agent capability not yet exposed. */
+  z.strictObject({
+    omit: z.literal("deferred_capability"),
+    /** The bold title of the docs/todos.md entry that lists this operation. */
+    todo: z.string().min(1),
+    note: note.optional(),
+  }),
+]);
+type McpOmission = z.input<typeof mcpOmission>;
+
+/**
  * `http: false` keeps an operation off the HTTP API while the Start transport
  * and MCP still expose it. Used for operations whose input and output are
  * type-only carriers over a per-entity union, which HTTP serves better as
@@ -38,6 +94,8 @@ interface OperationObservability {
  * flagged member is also the only way an RPC id reaches CubbyKit. Resource
  * verbs are flagged on the entity declaration (`native.create/update/delete`)
  * instead.
+ *
+ * `mcp` records why an operation is not an MCP tool action (`McpOmission`).
  *
  * Ordinary interactive queries and mutations use the authoritative adapter.
  * `readPolicy` remains declaration metadata for specialized read workflows.
@@ -54,6 +112,7 @@ export interface QueryContract<
   readonly observability?: OperationObservability;
   readonly http?: false;
   readonly native?: string;
+  readonly mcp?: McpOmission;
   readonly readPolicy?: "strong";
   /** Browser cache tags and freshness profile; see `QueryCachePolicy`. */
   readonly cache?: QueryCachePolicy;
@@ -69,6 +128,7 @@ export interface MutationContract<
   readonly observability?: OperationObservability;
   readonly http?: false;
   readonly native?: string;
+  readonly mcp?: McpOmission;
   /**
    * The browser fan-out rows a successful call invalidates. Absent or empty
    * invalidates nothing (a mutation that writes no cache-backed state, or whose

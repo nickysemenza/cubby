@@ -35,6 +35,8 @@ const INPUTS = [
   "apps/web/wrangler.jsonc",
   "apps/web/tooling/wrangler-public-config.ts",
   "apps/web/tsconfig.json",
+  // Deferred MCP capabilities must be listed here (start-operations/mcp-tools.ts).
+  "docs/todos.md",
   "package.json",
   "pnpm-lock.yaml",
 ];

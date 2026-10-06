@@ -40,9 +40,14 @@ const memberLogins = z.object({
 
 export const ledgerPartyContract = defineContract("ledgerParty", {
   /** Every signed-in login and the member ledger party it represents. */
-  memberLogins: query({ input: z.null(), output: memberLogins }),
+  memberLogins: query({
+    mcp: { omit: "auth_connection" },
+    input: z.null(),
+    output: memberLogins,
+  }),
   /** Links (or unlinks) one login to a member ledger party. */
   setMemberLogin: mutation({
+    mcp: { omit: "auth_connection" },
     input: z.object({
       userId,
       ledgerParty: ledgerPartyShortcode.nullable(),
@@ -56,6 +61,10 @@ export const financialTransactionContract = defineContract(
   "financialTransaction",
   {
     previewBookingCorrection: query({
+      mcp: {
+        omit: "deferred_capability",
+        todo: "Deferred MCP agent capabilities",
+      },
       input: financialBookingCorrectionInput,
       output: financialBookingCorrectionPreview,
       transport: "post",
@@ -70,6 +79,10 @@ export const financialTransactionContract = defineContract(
       },
     }),
     commitBookingCorrection: mutation({
+      mcp: {
+        omit: "deferred_capability",
+        todo: "Deferred MCP agent capabilities",
+      },
       input: financialBookingCorrectionPreview,
       output: financialBookingCorrectionResult,
       native: "Apply reviewed financial corrections atomically",
@@ -81,6 +94,10 @@ export const financialTransactionContract = defineContract(
       ],
     }),
     previewBooking: query({
+      mcp: {
+        omit: "deferred_capability",
+        todo: "Deferred MCP agent capabilities",
+      },
       input: financialBookingInput,
       output: financialBookingPreview,
       transport: "post",
@@ -88,6 +105,10 @@ export const financialTransactionContract = defineContract(
       cache: { tags: [["financialTransaction"], ["purchase"], ["expense"]] },
     }),
     commitBooking: mutation({
+      mcp: {
+        omit: "deferred_capability",
+        todo: "Deferred MCP agent capabilities",
+      },
       input: financialBookingPreview,
       output: financialBookingResult,
       native: "Book reviewed spending",
@@ -99,10 +120,16 @@ export const financialTransactionContract = defineContract(
       cache: { tags: [["financialTransaction"], ["financialAccount"]] },
     }),
     sourceOptions: query({
+      mcp: { omit: "client_view" },
       input: z.null(),
       output: financialTransactionSourceOptionsOut,
     }),
     vendorInference: query({
+      mcp: {
+        omit: "agent_twin",
+        twin: "financialTransaction.previewStatementImport",
+        note: "The preview carries the same merchant-vendor inference",
+      },
       input: merchantVendorInferenceInput,
       output: merchantVendorInference,
       cache: { tags: [["financialTransaction"], ["purchase"], ["vendor"]] },

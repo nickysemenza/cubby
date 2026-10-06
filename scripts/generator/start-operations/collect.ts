@@ -10,7 +10,7 @@ import {
   type StringLiteral,
 } from "oxc-parser";
 
-const ROOT = new URL("../../..", import.meta.url).pathname;
+export const ROOT = new URL("../../..", import.meta.url).pathname;
 export const SOURCE_ROOT = join(ROOT, "apps/web/src");
 const SERVER_ROOT = join(SOURCE_ROOT, "server");
 const CONTRACTS_ROOT = join(SOURCE_ROOT, "contracts");
@@ -43,6 +43,8 @@ export type ContractMember = {
   http?: false;
   /** Why the Apple app calls this operation (see contracts/define.ts). */
   native?: string;
+  /** Why the operation is not an MCP tool action (see contracts/define.ts). */
+  mcp?: unknown;
   transport?: "post";
   /** Keeps a query on the authoritative adapter (see contracts/define.ts). */
   readPolicy?: "strong";

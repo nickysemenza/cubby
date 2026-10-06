@@ -1,4 +1,4 @@
-import type { JSONType, z } from "zod";
+import { type JSONType, z } from "zod";
 
 import type { MutationContract, QueryContract } from "~/contracts/define";
 
@@ -18,21 +18,23 @@ type OperationMember = QueryContract | MutationContract;
 type Kind = "query" | "mutation";
 
 /** Entity-kernel verbs; their schemas and executor live in `server/mcp/kernel-actions.ts`. */
-export type KernelActionName =
-  | "get"
-  | "list"
-  | "search"
-  | "preview"
-  | "resolve"
-  | "resolveOrCreate"
-  | "create"
-  | "update"
-  | "delete"
-  | "merge"
-  | "bulkUpdate"
-  | "link"
-  | "unlink"
-  | "commands";
+export const kernelActionName = z.enum([
+  "get",
+  "list",
+  "search",
+  "preview",
+  "resolve",
+  "resolveOrCreate",
+  "create",
+  "update",
+  "delete",
+  "merge",
+  "bulkUpdate",
+  "link",
+  "unlink",
+  "commands",
+]);
+export type KernelActionName = z.infer<typeof kernelActionName>;
 
 export interface KernelActionRef<K extends Kind = Kind> {
   readonly kernel: KernelActionName;

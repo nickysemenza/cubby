@@ -10,6 +10,11 @@ import {
 
 export const entityDetailContract = defineContract("entity", {
   detail: query({
+    mcp: {
+      omit: "kernel_alternative",
+      kernel: ["get"],
+      note: "The browser detail read; agents use entity_read.get",
+    },
     // Type-only carriers: the per-entity runtime schemas live in the generated
     // detail bindings and are applied by the browser `parse` policy and the
     // server handler; the HTTP router substitutes the real wire schema.

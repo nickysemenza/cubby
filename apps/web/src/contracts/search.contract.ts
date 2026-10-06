@@ -26,29 +26,35 @@ import {
 
 export const searchContract = defineContract("search", {
   find: query({
+    mcp: { omit: "agent_twin", twin: "search.global" },
     native: "Search and intents",
     input: searchQueryInputSchema,
     output: searchHitsOut,
   }),
   grouped: query({
+    mcp: { omit: "agent_twin", twin: "search.global" },
     input: searchQueryInputSchema,
     output: searchResultGroupsOut,
   }),
   related: query({
+    mcp: { omit: "agent_twin", twin: "search.similar" },
     input: searchQueryInputSchema,
     output: relatedSearchOutSchema,
   }),
   relatedGrouped: query({
+    mcp: { omit: "agent_twin", twin: "search.similar" },
     input: searchQueryInputSchema,
     output: relatedSearchGroupsOutSchema,
   }),
   // Integrity/repair diagnostics.
   debug: query({
+    mcp: { omit: "operator_maintenance" },
     readPolicy: "strong",
     input: searchQueryInputSchema,
     output: searchDebugOutSchema,
   }),
   requestEmbeddingRefresh: mutation({
+    mcp: { omit: "operator_maintenance" },
     input: requestEmbeddingRefreshInputSchema,
     output: requestEmbeddingRefreshOutSchema,
     invalidates: [],

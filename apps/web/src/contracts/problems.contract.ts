@@ -39,10 +39,12 @@ const noInput = z.undefined();
 
 export const problemsContract = defineContract("problems", {
   getFast: query({
+    mcp: { omit: "client_view" },
     input: noInput,
     output: problemsFastSchema,
   }),
   getCounts: query({
+    mcp: { omit: "agent_twin", twin: "problems.report" },
     readPolicy: "strong",
     native: "Today problems tile",
     input: noInput,
@@ -50,52 +52,63 @@ export const problemsContract = defineContract("problems", {
     cache: { profile: "stable" },
   }),
   getViews: query({
+    mcp: { omit: "client_view" },
     input: noInput,
     output: problemsViewsSchema,
   }),
   getCoverage: query({
+    mcp: { omit: "client_view" },
     input: noInput,
     output: problemsCoverageSchema,
   }),
   getUpc: query({
+    mcp: { omit: "client_view" },
     input: noInput,
     output: problemsUpcSchema,
   }),
   getTracker: query({
+    mcp: { omit: "client_view" },
     input: noInput,
     output: problemsTrackerSchema,
   }),
   getCoverageTotals: query({
+    mcp: { omit: "client_view" },
     input: noInput,
     output: coverageTotalsSchema,
   }),
   getMaintenanceCounts: query({
+    mcp: { omit: "client_view" },
     readPolicy: "strong",
     input: noInput,
     output: maintenanceCountsSchema,
     cache: { profile: "stable" },
   }),
   dryRunReparse: query({
+    mcp: { omit: "operator_maintenance" },
     readPolicy: "strong",
     input: noInput,
     output: dryRunReparseOut,
   }),
   // Integrity/repair diagnostics.
   dryRunPruneAliases: query({
+    mcp: { omit: "operator_maintenance" },
     readPolicy: "strong",
     input: noInput,
     output: dryRunPruneAliasesOut,
   }),
   recipeUsageByProduct: query({
+    mcp: { omit: "client_view" },
     input: recipeUsageByProductInput,
     output: recipeUsageByProductOut,
   }),
   deleteUnused: mutation({
+    mcp: { omit: "operator_maintenance" },
     input: deleteUnusedIngredientsInput,
     output: deleteUnusedIngredientsOut,
     invalidates: ["ingredientCleanup"],
   }),
   resolveRunFinding: mutation({
+    mcp: { omit: "human_approval" },
     native: "Review and apply import corrections",
     input: resolveRunFindingInput,
     output: resolveRunFindingOut,
@@ -108,6 +121,11 @@ export const problemsContract = defineContract("problems", {
     ],
   }),
   resolveArrivedFindings: mutation({
+    mcp: {
+      omit: "deferred_capability",
+      todo: "Deferred MCP agent capabilities",
+      note: "Closes a Purchase's arrived finding once receiving lands",
+    },
     input: resolveArrivedFindingsInput,
     output: resolveArrivedFindingsOut,
     invalidates: ["problems"],

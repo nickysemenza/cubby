@@ -6,6 +6,7 @@ import {
 
 export const upcContract = defineContract("upc", {
   lookup: query({
+    mcp: { omit: "agent_twin", twin: "product.lookupUpc" },
     native: "Capture barcode lookup",
     input: upcLookupInput,
     output: productLookupResponseSchema.nullable(),

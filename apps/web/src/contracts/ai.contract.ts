@@ -63,39 +63,49 @@ const detectedInventoryWithProvenance = detectedInventorySchema.extend({
 
 export const aiContract = defineContract("ai", {
   describeLocation: mutation({
+    mcp: { omit: "model_assist" },
     native: "Analyze a location's photos from its AI description section",
     input: aiLocationIdInput,
     output: locationDescriptionWithProvenance,
     invalidates: ["location"],
   }),
   detectInventoryItems: mutation({
+    mcp: { omit: "model_assist" },
     input: detectInventoryItemsInput,
     output: detectedInventoryWithProvenance,
     invalidates: ["inventory"],
     native: "Detect items in a just-added location photo",
   }),
   approveDetectedInventoryItem: mutation({
+    mcp: { omit: "human_approval" },
     input: approveDetectedInventoryItemInput,
     output: approveDetectedInventoryItemOut,
     invalidates: ["inventory"],
     native: "Approve one detected item into a location's inventory",
   }),
   identifyProduct: mutation({
+    mcp: { omit: "model_assist" },
     input: productIdentificationInput,
     output: productIdentificationSchema,
     invalidates: [],
   }),
   suggestUsdaFood: mutation({
+    mcp: {
+      omit: "model_assist",
+      note: "Agents rank with usda_food.suggest_for_product",
+    },
     input: usdaFoodSuggestionInput,
     output: usdaFoodSuggestionOut,
     invalidates: [],
   }),
   suggestUsdaFoodBatch: mutation({
+    mcp: { omit: "model_assist" },
     input: usdaFoodSuggestionBatchInput,
     output: usdaFoodSuggestionBatchOut,
     invalidates: ["ingredient"],
   }),
   suggestIngredientMergeBatch: mutation({
+    mcp: { omit: "model_assist" },
     input: ingredientMergeSuggestionBatchInput,
     output: ingredientMergeSuggestionBatchOut,
     invalidates: ["ingredient"],
@@ -104,6 +114,10 @@ export const aiContract = defineContract("ai", {
   // `entity-list.contract.ts`'s `list`) — `.queryOptions()` still works.
   // AI and externally hydrated food reads own authoritative database helpers.
   applyFinanceCategorySuggestion: mutation({
+    mcp: {
+      omit: "human_approval",
+      note: "Applies suggestions a person reviewed; agents classify through spending_classification_write",
+    },
     input: financeCategoryApplyInput,
     output: financeCategoryApplyOut,
     invalidates: [
@@ -116,6 +130,7 @@ export const aiContract = defineContract("ai", {
     native: "Reviewed saved finance category suggestions",
   }),
   suggestFields: query({
+    mcp: { omit: "model_assist" },
     readPolicy: "strong",
     input: fieldSuggestionsInput,
     output: fieldSuggestionsOut,
@@ -123,6 +138,7 @@ export const aiContract = defineContract("ai", {
     cache: { profile: "stable" },
   }),
   suggestFieldsReview: query({
+    mcp: { omit: "model_assist" },
     readPolicy: "strong",
     input: fieldSuggestionsInput,
     output: fieldSuggestionsReviewOut,
@@ -132,6 +148,7 @@ export const aiContract = defineContract("ai", {
   }),
   // Same reason as `suggestFields`: a per-row hint, not a public HTTP query.
   suggestExternalIdKind: query({
+    mcp: { omit: "model_assist" },
     readPolicy: "strong",
     input: externalIdKindSuggestionInput,
     output: suggestExternalIdKindOut,
@@ -139,11 +156,13 @@ export const aiContract = defineContract("ai", {
     cache: { profile: "stable" },
   }),
   usageFilterOptions: query({
+    mcp: { omit: "operator_maintenance", note: "AI spend telemetry" },
     input: zod.undefined(),
     output: aiUsageFilterOptionsOut,
     cache: { tags: [["ai", "usage"]] },
   }),
   usageRecent: query({
+    mcp: { omit: "operator_maintenance", note: "AI spend telemetry" },
     input: aiUsageRecentInput,
     output: aiUsageRecentOut,
     // Nested `filters` has no GET query projection.
@@ -151,6 +170,7 @@ export const aiContract = defineContract("ai", {
     cache: { tags: [["ai", "usage"]] },
   }),
   usageSummary: query({
+    mcp: { omit: "operator_maintenance", note: "AI spend telemetry" },
     input: aiUsageSummaryInput,
     output: aiUsageSummaryOut,
     cache: { tags: [["ai", "usage"]] },

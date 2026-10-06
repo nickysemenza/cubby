@@ -22,12 +22,18 @@ import { defineContract, mutation, query } from "~/contracts/define";
 
 export const statementRowContract = defineContract("statementRow", {
   previewCsv: query({
+    mcp: {
+      omit: "agent_twin",
+      twin: "financialTransaction.previewStatementImport",
+      note: "Local CSV parse in the Apple app",
+    },
     native: "Preview local statement CSV in Apple apps using the shared parser",
     input: statementCsvFileInput,
     output: statementCsvPreviewOut,
     cache: { tags: [] },
   }),
   commitCsv: mutation({
+    mcp: { omit: "agent_twin", twin: "statementRow.record" },
     native: "Confirm statement CSV rows from Apple apps",
     input: statementCsvCommitInput,
     output: statementCsvCommitOut,

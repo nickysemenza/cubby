@@ -14,6 +14,7 @@ const referentialLivenessResultSchema = z.object({
 
 export const entityIntegrityContract = defineContract("entityIntegrity", {
   catalog: query({
+    mcp: { omit: "operator_maintenance" },
     input: z.null(),
     output: integrityCatalogSchema,
     cache: { tags: [["entityIntegrity"]] },
@@ -22,6 +23,10 @@ export const entityIntegrityContract = defineContract("entityIntegrity", {
 
 export const integrityProblemsContract = defineContract("problems", {
   getByType: query({
+    mcp: {
+      omit: "operator_maintenance",
+      note: "Referential-liveness diagnostics",
+    },
     input: z.object({ key: z.literal("referentialLivenessViolations") }),
     output: referentialLivenessResultSchema,
     cache: { tags: [["problems"]] },

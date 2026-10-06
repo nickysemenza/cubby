@@ -21,3 +21,24 @@ target immediately before the write and provide its `expectedImageCount` and a
 deterministic idempotency key. Multiple attachments to one Product are
 dependent count changes; prefer independent target batches and retry only
 failed items after a fresh read.
+
+## Exposure
+
+Every `query()` and `mutation()` contract member is either named by an action
+in `apps/web/src/contracts/mcp-tools.ts` or declares why not with
+`mcp: { omit }` (`mcpOmission` in `apps/web/src/contracts/define.ts`), never
+both; `pnpm generate` fails otherwise. Subscriptions are exempt. Declare the
+reason on the member itself — there is no contract-level default — and add a
+`note` when the reason alone does not say why.
+
+- `agent_twin` names the exposed operation (`twin`) agents call instead.
+- `kernel_alternative` names the entity-kernel verbs (`kernel`) that can do the
+  work, with a `note` on how. It records an omission, not proven parity.
+- `deferred_capability` is real agent work not yet exposed: `todo` names the
+  [todos](../todos.md) entry, which must list the operation id.
+- `client_view`, `model_assist`, `human_approval`, `upload_transport`,
+  `device_protocol`, `auth_connection`, and `operator_maintenance` are the
+  closed reasons agents do without it.
+
+Exposing an operation means adding its action and deleting its `mcp`
+declaration (and its todo line when deferred).

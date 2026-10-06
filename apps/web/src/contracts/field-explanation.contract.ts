@@ -8,6 +8,10 @@ import { defineContract, query } from "~/contracts/define";
 
 export const fieldExplanationContract = defineContract("fieldExplanation", {
   explain: query({
+    mcp: {
+      omit: "deferred_capability",
+      todo: "Deferred MCP agent capabilities",
+    },
     native: "Explain a derived field",
     input: fieldExplanationInput,
     output: fieldExplanationOutput,

@@ -60,6 +60,10 @@ export const splitExpenseWithDeltaOut = z.object({
 
 export const purchaseContract = defineContract("purchase", {
   settlementCandidates: query({
+    mcp: {
+      omit: "deferred_capability",
+      todo: "Deferred MCP agent capabilities",
+    },
     native: "Review statement activity near a Purchase",
     input: purchaseSettlementCandidatesInput,
     output: purchaseSettlementCandidatesOut,
@@ -68,10 +72,13 @@ export const purchaseContract = defineContract("purchase", {
   /**
    * On-demand Jev tie-break over candidates tied at the top deterministic
    * rank. A mutation because it is person-triggered and bills model usage,
-   * not because it writes: it never allocates and invalidates nothing. Off
-   * MCP on purpose, so agents keep the deterministic candidates.
+   * not because it writes: it never allocates and invalidates nothing.
    */
   suggestSettlementMatch: mutation({
+    mcp: {
+      omit: "model_assist",
+      note: "A person asks for a tie-break; agents keep the deterministic candidates",
+    },
     native: "Ask for an advisory ordering of equally ranked statement charges",
     input: purchaseSettlementSuggestInput,
     output: purchaseSettlementSuggestOut,
@@ -82,6 +89,10 @@ export const purchaseContract = defineContract("purchase", {
    * so no client restates it; the write still validates on its own.
    */
   checkSettlementAllocation: query({
+    mcp: {
+      omit: "client_view",
+      note: "Allocation form check; the write validates on its own",
+    },
     native: "Validate settlement allocation rows before saving",
     transport: "post",
     input: purchaseSettlementAllocationCheckInput,
@@ -89,12 +100,17 @@ export const purchaseContract = defineContract("purchase", {
     cache: { tags: [] },
   }),
   orderMail: query({
+    mcp: { omit: "client_view" },
     native: "Show linked order email events on native Purchase detail",
     input: purchaseOrderMailInput,
     output: purchaseOrderMailOut,
     cache: { tags: [["purchase"]] },
   }),
   products: query({
+    mcp: {
+      omit: "client_view",
+      note: "Agents read purchase products through entity_read.relations",
+    },
     native: "Show Product movement evidence for a Purchase",
     input: purchaseProductsInput,
     output: purchaseProductsOut,
@@ -106,6 +122,7 @@ export const purchaseContract = defineContract("purchase", {
     invalidates: ["purchase"],
   }),
   split: mutation({
+    mcp: { omit: "agent_twin", twin: "purchase.splitWithDelta" },
     native: "Split an Expense into parts filed under its Purchase",
     input: splitExpenseInput,
     output: splitExpenseOut,
@@ -117,6 +134,7 @@ export const purchaseContract = defineContract("purchase", {
    * an attribution choice). Both clients consult it; `split` re-checks on write.
    */
   splitStart: query({
+    mcp: { omit: "client_view" },
     native:
       "Start splitting an Expense: the starting parts and the confirmation",
     input: purchaseSplitStartInput,
@@ -124,6 +142,7 @@ export const purchaseContract = defineContract("purchase", {
     cache: { tags: [["expense"]] },
   }),
   checkSplit: query({
+    mcp: { omit: "client_view" },
     native: "Validate typed split parts before saving",
     transport: "post",
     input: purchaseSplitCheckInput,
@@ -132,6 +151,7 @@ export const purchaseContract = defineContract("purchase", {
   }),
   /** Expenses worth attaching to a Purchase for a scope and search, already worded. */
   linkExpenseCandidates: query({
+    mcp: { omit: "client_view" },
     native: "List expenses that can be attached to a Purchase",
     input: purchaseLinkExpensesCandidatesInput,
     output: purchaseLinkExpensesCandidatesOut,
@@ -139,6 +159,7 @@ export const purchaseContract = defineContract("purchase", {
   }),
   /** Whether a selection can be attached and what it does to the Purchase's expense total. */
   checkLinkExpenses: query({
+    mcp: { omit: "client_view" },
     native: "Validate an expense selection before attaching it to a Purchase",
     transport: "post",
     input: purchaseLinkExpensesCheckInput,
@@ -147,12 +168,18 @@ export const purchaseContract = defineContract("purchase", {
   }),
   /** Products worth attaching to a Purchase: a search minus what is already attached. */
   linkProductCandidates: query({
+    mcp: { omit: "client_view" },
     native: "List products that can be attached to a Purchase",
     input: purchaseLinkProductsCandidatesInput,
     output: purchaseLinkProductsCandidatesOut,
     cache: { tags: [["product"], ["purchase"]] },
   }),
   attachProducts: mutation({
+    mcp: {
+      omit: "kernel_alternative",
+      kernel: ["link"],
+      note: "entity.link on purchase products",
+    },
     native: "Attach products to a Purchase",
     input: purchaseAttachProductsInput,
     output: relationMutationOut,

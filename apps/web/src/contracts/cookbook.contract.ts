@@ -13,6 +13,11 @@ export const cookbookContract = defineContract("cookbook", {
     cache: { tags: [["cookbook"]], profile: "browse" },
   }),
   detail: query({
+    mcp: {
+      omit: "kernel_alternative",
+      kernel: ["get"],
+      note: "entity_read.get on a cookbook",
+    },
     native: "Native cookbook detail",
     input: z.object({ shortcode: cookbookShortcode }),
     output: cookbookSummary.nullable(),
@@ -20,6 +25,11 @@ export const cookbookContract = defineContract("cookbook", {
   }),
   // A retitle also moves every recipe's source label.
   update: mutation({
+    mcp: {
+      omit: "kernel_alternative",
+      kernel: ["update"],
+      note: "entity.update on a cookbook",
+    },
     input: z.object({ id: cookbookShortcode, data: cookbookUpdateInput }),
     output: cookbookSummary,
     invalidates: ["recipeCookbook"],
