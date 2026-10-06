@@ -153,6 +153,9 @@ Raw HTML reports, traces, screenshots, and database dumps stay local because
 they can contain household data or credentials. Run `shasum -a 256 -c
 SHA256SUMS` from the downloaded bundle directory to verify its contents, then
 replay the `command` array in `run-manifest.json` against the recorded commit.
+Desktop CI disables trace recording because raw traces are never uploaded.
+For a local debugging replay, replace its `--trace=off` argument with
+`--trace=retain-on-failure`; local runs otherwise retain traces on failure.
 
 A failed E2E test attaches the Worker harness's structured workerd logs
 (`harness.getLogs()`, credential-shaped values scrubbed) to the Playwright

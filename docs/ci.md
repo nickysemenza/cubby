@@ -179,6 +179,12 @@ additional Worker builds. The browser lanes retain the discovery and no-skip gua
 desktop Chromium runs as two Playwright shards (two workers each). Phone-web and
 WebKit browser coverage was removed from PR CI and the Playwright suite; native
 checks remain separate. There is no coverage mode.
+Desktop CI passes Playwright's `--trace=off`: recording every test for
+`retain-on-failure` adds work, and raw traces are excluded from hosted artifacts.
+Local runs retain failure traces; CI preserves failure annotations, sanitized
+case results, provenance, checksums, and structured Worker diagnostics.
+For a local debugging replay, replace the manifest's `--trace=off` argument
+with `--trace=retain-on-failure`.
 Browser shards save sanitized case results, a run manifest, and SHA-256
 checksums on success and failure for seven days. The manifest records the tested
 commit, build fingerprint, and replay arguments; a dirty local run or unmatched
