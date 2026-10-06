@@ -2,11 +2,14 @@ import { productCreateInput } from "@cubby/schemas/product";
 import { testUserId } from "@cubby/schemas/testing";
 import { vendorCreateInput } from "@cubby/schemas/vendor";
 import { wishCreateInput } from "@cubby/schemas/wish";
+import { fromPartial } from "@total-typescript/shoehorn";
 import { withTestDb } from "tooling/test-setup";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { z } from "zod";
 
+import { projectEntityResult } from "~/contracts/mcp-projections";
 import { mock } from "~/lib/test/mock-schema";
+import type { USDAClient } from "~/server/clients/usda";
 import {
   entityKernelContextSchema,
   executeEntity,
@@ -246,6 +249,72 @@ describe("MCP entity kernel boundary", () => {
       id: "VND-ABC123",
     });
     expect(wrongPrefix.isError).toBe(true);
+  });
+
+  it("answers a summary list with the full list's projection without loading enrichment", async () => {
+    const entityKernel = entityKernelContextSchema.parse(
+      createTestRequestContext(ctx.db, {
+        auth: { userId: testUserId("test-user-id") },
+      }),
+    );
+    const callEntity = (command: ToolArguments) =>
+      callKernel(command, entityKernel);
+    const ids = await Promise.all(
+      [
+        { name: "Summary probe A", upc: "012345678905", fdc_id: 2_000_001 },
+        { name: "Summary probe B", upc: "036000291452" },
+        { name: "Summary probe C" },
+      ].map(async (overrides) => {
+        const created = await callEntity({
+          action: "create",
+          entity: "product",
+          data: mock(productCreateInput, { overrides }),
+        });
+        return idResultSchema.parse(created.structuredContent).item.id;
+      }),
+    );
+    const command = {
+      action: "list",
+      entity: "product",
+      filters: { ids },
+      sort: [{ orderBy: "name", direction: "desc" }],
+      pagination: { pageIndex: 0, pageSize: 2 },
+    };
+    const findFoodsBatch = vi.fn(async (lookups: unknown[]) =>
+      lookups.map(() => null),
+    );
+    const listKernel = {
+      ...entityKernel,
+      usdaClient: fromPartial<USDAClient>({ findFoodsBatch }),
+    };
+    const list = (input: ToolArguments) => callKernel(input, listKernel);
+
+    const summary = await list(command);
+    expect(summary.isError).not.toBe(true);
+    // Summary detail publishes identity only, so it skips USDA, quality,
+    // pricing, and media enrichment the full row needs.
+    expect(findFoodsBatch).not.toHaveBeenCalled();
+
+    const full = await list({ ...command, resultDetail: "full" });
+    expect(full.isError).not.toBe(true);
+    expect(findFoodsBatch).toHaveBeenCalled();
+    const fullResult = z
+      .object({ action: z.literal("list"), entity: z.literal("product") })
+      .passthrough()
+      .parse(full.structuredContent);
+    expect(summary.structuredContent).toEqual(
+      projectEntityResult({ action: "list" }, fullResult),
+    );
+    expect(summary.structuredContent).toMatchObject({
+      items: [
+        { name: "Summary probe C" },
+        {
+          name: "Summary probe B",
+          externalIds: [expect.objectContaining({ source: "gtin" })],
+        },
+      ],
+      meta: { totalCount: 3 },
+    });
   });
 
   it("keeps a product unit mapping's row id across `entity_read.get` product, so resending it updates in place", async () => {

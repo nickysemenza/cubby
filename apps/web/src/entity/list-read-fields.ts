@@ -13,7 +13,7 @@ type ListFieldOwnership = {
   derived: string[];
 };
 
-const listEnrichmentGroups = [
+export const listEnrichmentGroups = [
   "media",
   "quality",
   "relations",

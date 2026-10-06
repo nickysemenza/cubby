@@ -175,7 +175,10 @@ import {
   productHasGtin,
   productMatchesGtinTerm,
 } from "./gtin";
-import { enrichProductListItems } from "./list-enrichment";
+import {
+  enrichProductListItems,
+  prefetchProductFoods,
+} from "./list-enrichment";
 import {
   dbProductToAPI,
   deriveProductQuantitySummary,
@@ -1213,7 +1216,7 @@ export const productList = async (
   const ids = results.map((row) => row.id);
   const [listRelations, qualities, priced, ledgered, displayImages] =
     await Promise.all([
-      loadProductListRelations(db, ids),
+      loadRelationsPrefetchingFoods(db, results, usdaClient),
       loadProductDataQualities(db, ids),
       enrichProductRowsWithPricing(db, results),
       enrichProductRowsWithQuantityLedger(db, results),
@@ -1348,7 +1351,12 @@ export const listProductsRead = async (
   const ids = results.map((row) => row.id);
   const [listRelations, qualities, priced, ledgered, displayImages] =
     await Promise.all([
-      loadProductListRelations(db, ids, projection),
+      loadRelationsPrefetchingFoods(
+        db,
+        results,
+        wantsListGroup(projection, "derived") ? usdaClient : undefined,
+        projection,
+      ),
       loadListGroup(projection, "quality", () =>
         loadProductDataQualities(db, ids),
       ),
@@ -1503,6 +1511,28 @@ const emptyProductListRelations = (): ProductListRelations => ({
  * JSON plan that can exceed the small production compute's memory before the
  * rows reach TypeScript.
  */
+/** List relations, starting the page's USDA lookups as soon as its barcodes load. */
+const loadRelationsPrefetchingFoods = async (
+  db: Database,
+  rows: ReadonlyArray<{ id: ProductId; fdc_id: number | null }>,
+  usdaClient: Pick<USDAClient, "findFoodsBatch"> | undefined,
+  projection?: ListProjection,
+) => {
+  const relations = await loadProductListRelations(
+    db,
+    rows.map((row) => row.id),
+    projection,
+  );
+  prefetchProductFoods(
+    rows.map((row) => ({
+      primaryGtin: primaryGtinOf(relations.get(row.id)?.externalIds),
+      fdc_id: row.fdc_id,
+    })),
+    usdaClient,
+  );
+  return relations;
+};
+
 const loadProductListRelations = async (
   db: Database,
   ids: readonly ProductId[],

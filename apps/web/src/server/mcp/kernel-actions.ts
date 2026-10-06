@@ -18,6 +18,7 @@ import { z } from "zod";
 
 import type { KernelActionName } from "~/contracts/mcp-define";
 import {
+  entitySummaryFields,
   entitySummaryResultSchema,
   mcpResultsEnvelope,
   projectEntityResult,
@@ -53,6 +54,7 @@ import {
   generatedMcpEntityMutationUpdateResultSchema,
   generatedMcpEntityUpdateCommandSchema,
 } from "~/server/generated/entity-bindings.gen";
+import { ENTITY_LIST_READ_OPERATIONS } from "~/server/generated/entity-list-read-bindings.gen";
 import {
   generatedMcpEntityRelationCommandSchema,
   generatedMcpEntityRelationPreviewInputSchema,
@@ -122,7 +124,34 @@ const kernelCommand = (
 export type McpEntityExecutor = (
   context: ReturnType<typeof getEntityKernelContext>,
   command: McpEntityCommand,
+  detail?: ResultDetail,
 ) => Promise<z.output<z.ZodType>>;
+
+type ResultDetail = NonNullable<
+  z.output<typeof commandWithDetail>["resultDetail"]
+>;
+
+const hasListReader = (
+  entity: string,
+): entity is keyof typeof ENTITY_LIST_READ_OPERATIONS =>
+  Object.hasOwn(ENTITY_LIST_READ_OPERATIONS, entity);
+
+/**
+ * Production executor. A summary list publishes only `entitySummaryFields`, so
+ * it reads the base page plus the groups owning those fields instead of the
+ * complete row (data quality, pricing, USDA, media); every other command and
+ * an entity without a progressive reader run the full kernel operation.
+ */
+const executeMcpEntity: McpEntityExecutor = async (context, command, detail) =>
+  detail === "summary" &&
+  command.action === "list" &&
+  hasListReader(command.entity)
+    ? ENTITY_LIST_READ_OPERATIONS[command.entity].listFields(
+        context,
+        { ...command, filters: command.filters ?? {} },
+        entitySummaryFields(command.entity),
+      )
+    : executeEntity(context, command);
 
 const writtenEntity = z.object({
   entity: z.string(),
@@ -197,6 +226,7 @@ const commandAction = (
   output,
   run: async (raw, extra) => {
     const command = commandWithDetail.parse(raw);
+    const detail = command.resultDetail ?? "summary";
     const context = getEntityKernelContext(extra);
     const project = (result: z.output<z.ZodType>) =>
       // SAFETY: every kernel result names its entity; the projection reads only
@@ -216,7 +246,7 @@ const commandAction = (
       z
         .object({ action: z.string(), entity: z.string() })
         .passthrough()
-        .parse(await execute(context, kernelCommand(command))),
+        .parse(await execute(context, kernelCommand(command), detail)),
     );
   },
 });
@@ -309,9 +339,9 @@ const ingredientResolveWithProductsOut = z.array(
   }),
 );
 
-/** Build the kernel verbs over one executor (production: `executeEntity`). */
+/** Build the kernel verbs over one executor (production: `executeMcpEntity`). */
 export const createKernelMcpActions = (
-  execute: McpEntityExecutor = executeEntity,
+  execute: McpEntityExecutor = executeMcpEntity,
 ) =>
   ({
     get: commandAction(

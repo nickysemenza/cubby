@@ -6,6 +6,8 @@ Base reads perform authoritative filtering, ordering, grouping, pagination, and 
 
 The browser list session and native enrichment model maintain separate field readiness. Pending values are not zero, missing images, or healthy quality. Visible columns and structural/provider dependencies determine requested groups. Superseded work is cancelled and responses from earlier generations are discarded. Ready patches preserve row identity and order. A failed combined server enrichment read falls back to the same reader for individual groups so independent fields remain available; healthy batches select their page once. Failed groups can be retried.
 
+MCP `entity_read.list` at the default summary detail publishes only `entitySummaryFields` (`contracts/mcp-projections.ts`), so it runs `listFields`: the base read, one enrichment read of only the groups that own those fields, and the complete-population summary. `resultDetail: "full"` and kinds without a progressive reader run the complete list. Product list readers start the page's USDA batch as soon as its barcodes load, so the external lookup overlaps the remaining enrichment reads instead of following them.
+
 Specialist workflows keep their existing readers. No database migration, persisted aggregate, new cache, telemetry exporter, or connection-policy change is included.
 
 ## Timing evidence
