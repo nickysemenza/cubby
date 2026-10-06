@@ -8,6 +8,7 @@ import type {
 import { usdaContract } from "@cubby/usda/contract";
 import { createLogger } from "@cubby/worker-tracing";
 import { initClient } from "@ts-rest/core";
+import { z } from "zod";
 
 import { TraceNames, withTrace } from "~/server/tracing";
 
@@ -19,6 +20,13 @@ const log = createLogger("USDA");
 // chasing the recompute slowdown — that was a wasm_tracing CPU-starvation
 // artifact mis-timed by workerd's frozen clock, since fixed; 15s is ample.)
 const USDA_FETCH_TIMEOUT_MS = 15_000;
+
+// Cross-request lifetime of a batch lookup answer in the edge cache.
+const HIT_TTL_SECONDS = 86_400;
+const MISS_TTL_SECONDS = 21_600;
+const cachedLookupSchema = z.object({
+  food: z.custom<FoodSummary>().nullable(),
+});
 
 interface FoodCache {
   match(request: RequestInfo | URL): Promise<Response | undefined>;
@@ -41,9 +49,10 @@ export class USDAClient {
   private fetcher: typeof fetch;
   private cache: FoodCache | null;
   // Request-scoped memo of batch-resolved foods, keyed by canonical lookup. The
-  // client is built per-request in ctx (see buildCrudServices), so this can't
-  // serve cross-request stale data; it just stops the same product being
-  // re-POSTed when several queries in one request enrich overlapping products.
+  // client is built per-request in ctx (see buildCrudServices), so it only
+  // stops the same product being re-POSTed when several queries in one request
+  // enrich overlapping products; cross-request reuse is the edge cache in
+  // `findUncachedBatch`.
   //
   // Stores the in-flight *promise*, not the resolved value, so concurrent
   // callers (e.g. the two coverage detectors on the Problems page, which run
@@ -260,21 +269,7 @@ export class USDAClient {
 
     if (missing.size > 0) {
       const missKeys = [...missing.keys()];
-      const missLookups = [...missing.values()];
-      const batch = this.traced("findByLookupBatch", async () => {
-        const res = await this.client.findByLookupBatch({
-          body: { lookups: missLookups },
-        });
-        // A batch is a single POST; a non-200 is a service error (per-item
-        // not-founds come back as nulls in `results`), so throw rather than
-        // silently degrading every lookup to null.
-        if (res.status !== 200) {
-          throw new Error(
-            `[USDA] findByLookupBatch failed with status ${res.status}`,
-          );
-        }
-        return res.body.results;
-      });
+      const batch = this.findUncachedBatch(missKeys, [...missing.values()]);
       // Register each key's slice of the shared POST in the memo *before*
       // awaiting, so a concurrent caller requesting an overlapping key awaits
       // this same batch instead of issuing a second POST.
@@ -289,6 +284,74 @@ export class USDAClient {
     return Promise.all(
       keys.map((key) => this.batchMemo.get(key) ?? Promise.resolve(null)),
     );
+  }
+
+  /**
+   * Resolve `lookups` (aligned with `keys`) from the edge cache, POSTing only
+   * the keys it lacks and caching their answers. A miss is cached for less
+   * time than a hit so a newly loaded USDA food appears within hours.
+   */
+  private async findUncachedBatch(
+    keys: string[],
+    lookups: FoodLookupParam[],
+  ): Promise<(FoodSummary | null)[]> {
+    const cache = this.cache;
+    const cacheKey = (key: string) =>
+      new URL(`api/foods/lookup-cache/${encodeURIComponent(key)}`, this.baseUrl)
+        .href;
+    const cached = cache
+      ? await Promise.all(
+          keys.map(async (key) => {
+            const response = await cache.match(cacheKey(key));
+            return response
+              ? cachedLookupSchema.parse(await response.json())
+              : undefined;
+          }),
+        )
+      : keys.map(() => undefined);
+    const uncached = keys.flatMap((key, i) =>
+      cached[i] === undefined ? [{ key, lookup: lookups[i]! }] : [],
+    );
+    const fetched = new Map<string, FoodSummary | null>();
+    if (uncached.length > 0) {
+      const results = await this.traced("findByLookupBatch", async () => {
+        const res = await this.client.findByLookupBatch({
+          body: { lookups: uncached.map(({ lookup }) => lookup) },
+        });
+        // A batch is a single POST; a non-200 is a service error (per-item
+        // not-founds come back as nulls in `results`), so throw rather than
+        // silently degrading every lookup to null.
+        if (res.status !== 200) {
+          throw new Error(
+            `[USDA] findByLookupBatch failed with status ${res.status}`,
+          );
+        }
+        return res.body.results;
+      });
+      uncached.forEach(({ key }, i) => fetched.set(key, results[i] ?? null));
+      if (cache)
+        await Promise.all(
+          uncached.map(async ({ key }) => {
+            const food = fetched.get(key) ?? null;
+            try {
+              await cache.put(
+                cacheKey(key),
+                new Response(JSON.stringify({ food }), {
+                  headers: {
+                    "Content-Type": "application/json",
+                    "Cache-Control": `public, max-age=${food ? HIT_TTL_SECONDS : MISS_TTL_SECONDS}`,
+                  },
+                }),
+              );
+            } catch (error) {
+              // SILENT: a cache-write failure must not fail the lookup the
+              // POST already answered; the next request simply re-POSTs.
+              log.warn(`Cache write failed for ${key}`, { error });
+            }
+          }),
+        );
+    }
+    return keys.map((key, i) => cached[i]?.food ?? fetched.get(key) ?? null);
   }
 
   async getFoodSummaryByID(fdc_id: number): Promise<FoodSummary | null> {
