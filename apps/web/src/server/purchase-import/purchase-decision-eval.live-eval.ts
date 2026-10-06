@@ -68,8 +68,10 @@ const repeats = Number(process.env.AGENT_EVAL_REPEATS ?? "1");
 const RUN_TIMEOUT_MS = 8 * 60_000;
 const SETTLED = new Set(["completed", "needs_review", "failed"]);
 
-/** The fixture input for a catalog entry; an explicit undefined would
- * override the fixture's own manufacturer and model defaults. */
+/** The fixture input for a catalog entry. The model is only what the case
+ * declares: the builder's placeholder model is a number no order line prints,
+ * which the coordinator rightly reads as an unverified variant. An explicit
+ * undefined would override the builder's manufacturer default. */
 function catalogProductInput(entry: {
   name: string;
   manufacturer?: string;
@@ -79,7 +81,7 @@ function catalogProductInput(entry: {
   return makeProductInput({
     name: entry.name,
     manufacturer: entry.manufacturer ?? defaults.manufacturer,
-    model: entry.model ?? defaults.model,
+    model: entry.model ?? null,
   });
 }
 

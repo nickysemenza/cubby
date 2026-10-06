@@ -117,8 +117,10 @@ flowchart LR
    identity. A generic email subject is an event clue, not an itemized order.
 4. **Review ambiguous identity.** An identifier that names one exact variant
    may connect a new order line to an existing Product; a style or family
-   number shared by sizes or colors only ranks candidates. A descriptive match
-   is proposed for review. If two variants remain plausible, show both and the distinguishing
+   number shared by sizes or colors only ranks candidates. A Product named
+   exactly as the order line, with no recorded field contradicting it, is
+   that line's Product. A merely similar descriptive match is proposed for
+   review. If two variants remain plausible, show both and the distinguishing
    evidence. If duplicate Products already exist, the merge preview shows
    which scalar values survive, which values are filled, and which images and
    relationships combine before the person confirms.

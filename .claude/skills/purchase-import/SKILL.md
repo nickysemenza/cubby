@@ -95,9 +95,14 @@ same outcome without prescribing an agent runtime.
    same category/owner) — see the either-side-first contract in
    [product identity](../product-enrichment/references/product-identity.md).
    An exact-variant identifier match resolves the line straight to that Product
-   (`existingId`); a descriptive-only match does not — choose `new` for this
-   line's own vendor Product instead, then call `product_enrichment.propose_match` with
-   the candidate pair and evidence for human review. Otherwise choose an
+   (`existing`). So does a candidate whose name or alias is the line's exact
+   title (same brand, item, size, count, and variant) when none of its
+   recorded fields contradicts the line: a missing identifier alone is no
+   reason to fork it. A descriptive-only match — a similar but not identical
+   name, such as a photo Product described from its tag — does not resolve
+   the line: choose `new` for this line's own vendor Product instead, then
+   call `product_enrichment.propose_match` with the candidate pair and
+   evidence for human review. Otherwise choose an
    existing Product shortcode, explicitly choose `new`, or leave the line
    `unresolved`. Never create a Product merely because search was
    inconclusive, and never claim a descriptive-only candidate directly.
