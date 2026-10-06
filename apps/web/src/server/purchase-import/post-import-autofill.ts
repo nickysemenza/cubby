@@ -193,7 +193,8 @@ async function fillTarget(
   ports: AutoFillPorts,
 ) {
   const row = await loadBasis(db, productId);
-  if (!row || row[target] !== null) return;
+  // The read can outlast the budget; no suggestion starts after it.
+  if (!row || row[target] !== null || Date.now() >= deadline) return;
   const out = await ports.suggest(db, runId, {
     entity: "product",
     entityId: row.shortcode,
