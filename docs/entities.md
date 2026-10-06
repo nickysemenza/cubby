@@ -305,8 +305,8 @@ conformances, and public initializer defaults. `structured-value-schema.ts` deri
 from it; the native catalog generator validates its JSON and emits `EntityDescriptors.swift`,
 including recursive `ValueSchema`. Synthesized Codable still owns encoding and decoding;
 optionals and initializer defaults stay distinct, and the catalog stays bundled JSON to avoid
-the Release compiler stall from a giant Swift literal. `LabeledOption.color` is explicitly
-wire-only: existing JSON carries this web hint and native continues to ignore it. Computed
+the Release compiler stall from a giant Swift literal. `LabeledOption.color` is retained
+in both web and native descriptors and resolves to the shared adaptive palette. Computed
 native conveniences remain extensions in `Catalog/EntityManifest.swift`.
 
 A source claim is edited under the identity its read exposes: the read carries `sourceKey` (a hash
@@ -1151,6 +1151,10 @@ semantic tokens (`var(--warning)`, `var(--slate)`) or brand domain tokens
 adaptive asset lookup. Unknown expectation and acquisition values are amber,
 expected evidence is teal, and explicitly not-expected evidence is neutral.
 Color supplements the visible label.
+
+Specialized surfaces, including task-board trade badges and native journal
+rows, resolve the same field option color instead of choosing their own badge
+variant or tone.
 
 `dashboardLocalCounts` owns the local navigation-count roster, including
 Spending Categories. The server count query and web navigation derive their

@@ -1015,7 +1015,10 @@ struct EntityJournalEntryRow: View {
                     if let field = descriptor.field("kind"),
                         let kind = EntityFieldValue.text(row.raw["kind"], field: field)
                     {
-                        StatusChip(text: kind)
+                        StatusChip(
+                            text: kind,
+                            color: FieldGuideMetrics.optionColor(
+                                EntityFieldValue.optionColor(in: row.raw, field: field, surface: "detail")))
                     }
                 }
             }

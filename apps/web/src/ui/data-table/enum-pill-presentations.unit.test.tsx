@@ -1,7 +1,8 @@
 import { cleanup, render, screen } from "@testing-library/react";
 import { afterEach, describe, expect, it } from "vitest";
 
-import { tradeOptions } from "~/app/projects/trade-options";
+import { TradeBadge, tradeOptions } from "~/app/projects/trade-options";
+import { fieldEnumOptions } from "~/entity/enum-field-display";
 import { CategoryLabel } from "~/features/products/CategoryLabel";
 import { createBrowserTestHarness } from "~/lib/test/browser-harness";
 
@@ -19,6 +20,13 @@ function pillFor(label: string) {
 }
 
 describe("enum pill icons", () => {
+  it("uses the declared trade palette on task-board badges", () => {
+    render(<TradeBadge trade="plumbing" />);
+    expect(pillFor("Plumbing")).toHaveStyle(
+      `--enum-pill-color: ${fieldEnumOptions("task", "trade").find((option) => option.value === "plumbing")?.color}`,
+    );
+    expect(pillFor("Plumbing").querySelectorAll("svg")).toHaveLength(1);
+  });
   it("shows the existing category glyph", () => {
     const harness = createBrowserTestHarness();
     render(<CategoryLabel category={categorySummaryFixture("supplies")} />, {
