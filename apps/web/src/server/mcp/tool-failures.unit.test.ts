@@ -4,6 +4,7 @@ import { fromAny } from "@total-typescript/shoehorn";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { z } from "zod";
 
+import { SENTRY_IGNORED_ERRORS } from "~/lib/sentry-noise";
 import { withErrorReporting } from "~/server/errors/report-error";
 
 import { handleMcpHttpRequest, type McpServe } from "./http-handler";
@@ -439,7 +440,7 @@ describe("MCP HTTP handler", () => {
         dsn: "https://public@o0.ingest.sentry.io/0",
         stackParser: Sentry.defaultStackParser,
         integrations: [Sentry.eventFiltersIntegration()],
-        ignoreErrors: ["The client has disconnected"],
+        ignoreErrors: SENTRY_IGNORED_ERRORS,
         transport: () =>
           Sentry.createTransport(
             { recordDroppedEvent: () => undefined },
@@ -466,19 +467,26 @@ describe("MCP HTTP handler", () => {
       expect(body.error.data).not.toHaveProperty("diagnostics.sentryEventId");
     });
 
-    it("omits the Sentry reference for an error the client ignores", async () => {
-      const { client, sent } = installSentryClient();
-      const response = await handleMcpHttpRequest(
-        post(toolCall({ action: "create" })),
-        failAfterBody(new Error("The client has disconnected")),
-      );
-      await client.flush(1000);
+    // An anchored pattern matches only the bare message, not `Error: …`.
+    it.each([
+      "The client has disconnected",
+      "Decision request failed (429): rate limited",
+    ])(
+      "omits the Sentry reference for an ignored error: %s",
+      async (message) => {
+        const { client, sent } = installSentryClient();
+        const response = await handleMcpHttpRequest(
+          post(toolCall({ action: "create" })),
+          failAfterBody(new Error(message)),
+        );
+        await client.flush(1000);
 
-      const body = rpcError.parse(await response.json());
-      expect(body.error.message).not.toContain("Sentry");
-      expect(body.error.data).not.toHaveProperty("diagnostics.sentryEventId");
-      expect(sent).toHaveLength(0);
-    });
+        const body = rpcError.parse(await response.json());
+        expect(body.error.message).not.toContain("Sentry");
+        expect(body.error.data).not.toHaveProperty("diagnostics.sentryEventId");
+        expect(sent).toHaveLength(0);
+      },
+    );
 
     it("names the event a client actually sends", async () => {
       const { client, sent } = installSentryClient();

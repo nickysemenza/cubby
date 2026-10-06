@@ -86,17 +86,27 @@ function captureError<TError>(
  * drops the event; a reference nobody can search is worse than none.
  * `beforeSend` (`scrubSentryEvent`) never drops, and error sampling is
  * unknowable per event, so a client sampling errors gives no id.
+ *
+ * This rules out only the deterministic drops. Dedupe of an identical
+ * consecutive error and transport rate limiting still drop an event after
+ * its id is returned; the id is then a best-effort reference (the deduped
+ * twin's issue, or nothing during a rate-limit window).
  */
 function sentrySends<TError>(error: TError): boolean {
   const options = Sentry.getClient()?.getOptions();
   if (!options?.dsn || options.enabled === false) return false;
   if (options.sampleRate !== undefined && options.sampleRate < 1) return false;
-  const message =
-    error instanceof Error ? `${error.name}: ${error.message}` : String(error);
+  // EventFilters matches both the bare message and `Name: message`.
+  const messages =
+    error instanceof Error
+      ? [error.message, `${error.name}: ${error.message}`]
+      : [String(error)];
   return !(options.ignoreErrors ?? []).some((pattern) =>
-    pattern instanceof RegExp
-      ? pattern.test(message)
-      : message.includes(pattern),
+    messages.some((message) =>
+      pattern instanceof RegExp
+        ? pattern.test(message)
+        : message.includes(pattern),
+    ),
   );
 }
 
