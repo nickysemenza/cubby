@@ -107,9 +107,9 @@ are OpenAI Responses ids (`openai/gpt-…`, default `openai/${FAST_MODEL}`).
 
 The coupled import journeys always need that token as well, whichever
 provider drives: their peers forward the application's own Workers AI (Jev
-decisions, embeddings) and Anthropic recovery calls through the gateway. The
-agent swap's OpenAI model defaults to `FAST_MODEL` and accepts only OpenAI chat
-models because the peer speaks the Responses protocol. Blank Actions
+decisions, embeddings) and Anthropic recovery calls through the gateway. An
+explicit agent swap accepts only OpenAI chat models because the peer speaks
+the Responses protocol. Blank Actions
 variables use these defaults rather than becoming invalid values.
 
 ```sh
@@ -228,12 +228,13 @@ settles anywhere else fails at once with its last progress and failed
 operations. Final assertions read the imported Purchase, its expense total,
 the imported order candidate, or the committed photo groups.
 
-The agent's peer swaps the coordinator model under test into its
-`/openai/responses` calls (`tooling/responses-model-swap.ts`, shared with the
-live coordinator eval): `gpt-6-luna` at `high` effort by default, overridden by
-`TESTER_ARMY_AGENT_MODEL` and `TESTER_ARMY_AGENT_EFFORT` locally or as Actions
-repository variables. The web peer's calls are forwarded unchanged. The run
-manifest records `agentModel` and `agentEffort`, and the bundle adds
+The coordinator runs on the model production sends unless
+`TESTER_ARMY_AGENT_MODEL` (and optionally `TESTER_ARMY_AGENT_EFFORT`, default
+`high`) is set locally or as an Actions repository variable; then the agent's
+peer swaps that model into its `/openai/responses` calls
+(`tooling/responses-model-swap.ts`, shared with the live coordinator eval).
+The web peer's calls are forwarded unchanged. The run manifest records
+`agentModel` and `agentEffort` (`production` when unswapped), and the bundle adds
 `gateway-usage.json`: request counts, wire models, and failed statuses per
 gateway route for each peer, never content. Those two files are the record of
 the swap: the run page's generation telemetry and AI spend still name and

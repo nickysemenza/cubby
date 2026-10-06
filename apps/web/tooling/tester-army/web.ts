@@ -1,7 +1,6 @@
 import { mkdirSync, rmSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import { testAiGatewayEnvironment } from "@cubby/shared/ai/gateway-metadata";
-import { FAST_MODEL } from "@cubby/shared/ai/models";
 import { Pool } from "pg";
 import { z } from "zod";
 import { runOrThrow } from "../../../../scripts/lib/run.ts";
@@ -40,10 +39,17 @@ const harnesses = (["standard", "coupled"] as const).filter((harness) =>
 );
 const usageFile = path.join(output, "gateway-usage.json");
 // The coupled harness swaps this coordinator model in for the agent's pinned one.
-const agentModel = modelSwapSchema.parse({
-  model: process.env.TESTER_ARMY_AGENT_MODEL || FAST_MODEL,
-  effort: process.env.TESTER_ARMY_AGENT_EFFORT || "high",
-});
+/**
+ * An explicit coordinator swap for a model comparison. Unset, the coordinator
+ * runs on whatever model production sends (`coordinatorModelFor`), so a
+ * journey exercises the coordinator the household actually uses.
+ */
+const agentModel = process.env.TESTER_ARMY_AGENT_MODEL
+  ? modelSwapSchema.parse({
+      model: process.env.TESTER_ARMY_AGENT_MODEL,
+      effort: process.env.TESTER_ARMY_AGENT_EFFORT || "high",
+    })
+  : undefined;
 
 type Runtime = {
   origin: string;
@@ -262,6 +268,9 @@ else
     tracker,
     evidence: [usageFile],
     runtime: harnesses.includes("coupled")
-      ? { agentModel: agentModel.model, agentEffort: agentModel.effort }
+      ? {
+          agentModel: agentModel?.model ?? "production",
+          agentEffort: agentModel?.effort ?? "production",
+        }
       : undefined,
   });
