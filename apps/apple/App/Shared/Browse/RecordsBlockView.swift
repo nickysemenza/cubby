@@ -78,6 +78,9 @@ struct RecordRowView: View {
             }
             .font(.caption)
         }
+        if let label = row.externalLinkLabel, let url = row.externalLinkURL {
+            Link(label, destination: url).font(.fieldGuideLabel).frame(minHeight: 44)
+        }
         if let model, !row.commands.isEmpty {
             ReportCommandBar(commands: row.commands, model: model)
         }

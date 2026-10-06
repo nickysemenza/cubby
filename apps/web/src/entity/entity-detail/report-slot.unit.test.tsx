@@ -71,6 +71,44 @@ const row = (id: string, title: string, commands: ReportCommand[] = []) => ({
 });
 
 describe("EntityReportSlot records", () => {
+  // A diagnostic link must stay navigable without sending a report command.
+  it("renders an external diagnostic link in a new tab", async () => {
+    answer = () => ({
+      live: false,
+      status: "completed",
+      blocks: [
+        {
+          kind: "records",
+          empty: "",
+          rows: [
+            {
+              ...row("workflow", "Attempt 2"),
+              externalLink: {
+                label: "Open in Cloudflare",
+                url: "https://example.test/workflows/fixture/instance/RUN-4K7M-2",
+              },
+            },
+          ],
+        },
+      ],
+    });
+    render(<EntityReportSlot slot="run.live-progress" id={RUN_ID} />, {
+      wrapper: harness.wrapper,
+    });
+    const link = await screen.findByRole("link", {
+      name: "Open in Cloudflare",
+    });
+    expect(link).toHaveAttribute(
+      "href",
+      "https://example.test/workflows/fixture/instance/RUN-4K7M-2",
+    );
+    expect(link).toHaveAttribute("target", "_blank");
+    expect(link).toHaveAttribute("rel", "noreferrer");
+    expect(
+      calls.every((call) => call.operation.startsWith("entityReport.get")),
+    ).toBe(true);
+  });
+
   it("links shortcodes in server text", async () => {
     answer = () => ({
       live: false,

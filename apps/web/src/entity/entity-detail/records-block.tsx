@@ -155,6 +155,16 @@ function RowExtras({
           </pre>
         </details>
       ) : null}
+      {row.externalLink ? (
+        <a
+          href={row.externalLink.url}
+          target="_blank"
+          rel="noreferrer"
+          className="inline-flex min-h-11 items-center text-sm text-primary underline underline-offset-4"
+        >
+          {row.externalLink.label}
+        </a>
+      ) : null}
       {(row.commands ?? []).length > 0 ? (
         <Row wrap gap="sm">
           {(row.commands ?? []).map((command) => (

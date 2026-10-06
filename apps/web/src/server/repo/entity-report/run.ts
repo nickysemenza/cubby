@@ -9,6 +9,7 @@ import type {
 import { runStatus } from "@cubby/schemas/run-fields";
 import { TRADE_LABELS, tradeValues } from "@cubby/schemas/task-fields";
 import { AI_USAGE_TRANSPORT_LABELS } from "@cubby/schemas/telemetry";
+import { CF_ACCOUNT_ID } from "@cubby/shared/ai/gateway-metadata";
 import {
   ACTIVE_RUN_STATUSES,
   HOUSEHOLD_TIMEZONE,
@@ -60,6 +61,7 @@ interface RowFields {
   ref?: { entity: string; id: string } | undefined;
   detail?: { label: string; text: string } | undefined;
   actions?: ReportCommand[];
+  externalLink?: Row["externalLink"];
 }
 
 const LIVE_STATUSES: ReadonlySet<string> = new Set(ACTIVE_RUN_STATUSES);
@@ -99,6 +101,7 @@ const row = (id: string, fields: RowFields = {}): Row => ({
   lines: fields.lines ?? [],
   detail: fields.detail,
   commands: fields.actions ?? [],
+  externalLink: fields.externalLink,
 });
 
 /** `empty` is the copy for no rows; an empty string hides the block. */
@@ -772,6 +775,10 @@ function workflowBlocks(
     records(
       [
         row("workflow", {
+          externalLink: {
+            label: "Open in Cloudflare",
+            url: `https://dash.cloudflare.com/${CF_ACCOUNT_ID}/workers/workflows/${workflow.purpose === "mail_search" ? "cubby-vendor-mail-search" : "cubby-mail-discovery"}/instance/${encodeURIComponent(workflow.instanceId)}`,
+          },
           title: `Attempt ${workflow.attempt} · ${workflow.instanceId}`,
           body: `Workflow instance ${instance}${workflow.instance?.error ? `: ${workflow.instance.error}` : ""}`,
           actions,
