@@ -291,7 +291,9 @@ export default defineConfig({
             clearMocks: true,
             unstubGlobals: true,
             unstubEnvs: true,
-            sequence: { groupOrder: 0 },
+            // Run UI after Node projects so each phase can reuse its own
+            // warmed module graph instead of mixing worker environments.
+            sequence: { groupOrder: 1 },
           },
         },
         {

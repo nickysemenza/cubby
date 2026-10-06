@@ -29,6 +29,11 @@ while Playwright reuses it, so the E2E fixtures retry an idempotent
 `page.request`/`request` call once on `ECONNRESET` ("socket hang up"); a POST
 or PATCH is never replayed.
 
+Browser dispatch can batch concurrent queries. A mock that parses a single
+operation envelope uses `unbatchFor` before its per-operation handler. Keep
+lazy-fetch assertions sensitive to every envelope; after refusing a batch,
+count individual operation attempts separately from transport fallback.
+
 Playwright E2E and the coupled Workers harness share a machine-wide lock
 (`/tmp/cubby-harness.lock`, `scripts/lib/harness-lock.ts`): a second suite on
 the same machine queues and logs who holds the lock instead of starving both

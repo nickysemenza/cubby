@@ -168,7 +168,9 @@ whenever web validation is selected. `Tests - web` runs the existing `unit`,
 `mcp-contract`, `worker-safety`, and `ui` Vitest projects together in one job,
 preserving each project's environment and isolation. One dependency setup and
 MCP App build serve all four projects; there is no fast-test job matrix. This
-uses one fewer Linux runner slot per selected PR. `Build Workers` builds the
+uses one fewer Linux runner slot per selected PR. Node projects run first,
+then UI uses Vitest's standard project group ordering, keeping each phase's
+worker environment together. `Build Workers` builds the
 web Cloudflare bundle (which hosts the purchase agent) and uploads it
 with the MCP App assets and the WASM package as the `worker-build` artifact; the
 workerd PostgreSQL and optional purchase browser lanes download that exact bundle.
