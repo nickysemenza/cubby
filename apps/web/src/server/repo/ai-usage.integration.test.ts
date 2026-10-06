@@ -18,7 +18,10 @@ import {
 } from "./ai-usage";
 import { getDb } from "./database-helpers";
 
+// Integration files share a module graph; create the pricing client only
+// after this file installs its catalog socket, even after another file priced.
 vi.hoisted(() => {
+  vi.resetModules();
   const realFetch = globalThis.fetch;
   vi.stubGlobal(
     "fetch",

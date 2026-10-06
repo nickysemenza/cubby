@@ -16,7 +16,7 @@ import {
   type ModelsApiStreamOptions,
 } from "@earendil-works/pi-ai";
 import { withTestDb } from "tooling/test-setup";
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import {
   ENTITY_EMBEDDING_FEATURE,
@@ -40,16 +40,20 @@ import { resolveOrThrow } from "~/server/repo/shortcode-resolver";
 import { persistTelemetryMessages } from "~/server/repo/telemetry";
 import { ensureRun } from "~/server/runs/ensure-run";
 
-// The catalog socket is synthetic before the pricing client is created;
-// inference sockets keep each test's independent scripted response.
-vi.hoisted(() => {
-  const realFetch = globalThis.fetch;
+// The SDK reads global fetch at request time. Route the catalog separately
+// on every test, including when an inference socket is overridden.
+const realFetch = vi.hoisted(() => {
+  vi.resetModules();
+  return globalThis.fetch;
+});
+function stubInferenceFetch(inference: typeof fetch) {
   const decisionCost = { input: 1, output: 2 };
   vi.stubGlobal(
     "fetch",
     async (input: RequestInfo | URL, init?: RequestInit) =>
       String(input).includes("models.dev")
         ? Response.json({
+            openai: { models: { "gpt-6-sol": { cost: decisionCost } } },
             "cloudflare-ai-gateway": {
               models: { "typesafe/jev": { cost: decisionCost } },
             },
@@ -57,9 +61,10 @@ vi.hoisted(() => {
               models: { "@cf/cloudflare/clef": { cost: decisionCost } },
             },
           })
-        : realFetch(input, init),
+        : inference(input, init),
   );
-});
+}
+beforeEach(() => stubInferenceFetch(realFetch));
 
 afterEach(() => {
   vi.restoreAllMocks();
@@ -84,7 +89,7 @@ describe("AiUsage accounting", () => {
       vi.stubEnv("AI_GATEWAY_API_KEY", "test-gateway-key");
       vi.spyOn(Math, "random").mockReturnValue(random);
       vi.resetModules();
-      vi.stubGlobal("fetch", async () => {
+      stubInferenceFetch(async () => {
         const answer = {
           answers: {
             selection: {
@@ -133,7 +138,7 @@ describe("AiUsage accounting", () => {
     vi.stubEnv("AI_GATEWAY_API_KEY", "test-gateway-key");
     vi.spyOn(Math, "random").mockReturnValue(0.25);
     vi.resetModules();
-    vi.stubGlobal("fetch", async () =>
+    stubInferenceFetch(async () =>
       Response.json(
         {
           result: {
@@ -180,7 +185,7 @@ describe("AiUsage accounting", () => {
   it("records one row for one embeddings call", async () => {
     vi.stubEnv("AI_GATEWAY_API_KEY", "test-gateway-key");
     vi.resetModules();
-    vi.stubGlobal("fetch", () =>
+    stubInferenceFetch(() =>
       Promise.resolve(
         new Response(
           JSON.stringify({
@@ -336,7 +341,7 @@ describe("AiUsage accounting", () => {
     async (gatewayCacheStatus) => {
       // A catalog that cannot price this model must stay unknown; pi's own
       // estimate must not bypass the single accounting pricing source.
-      vi.stubGlobal("fetch", async () => Response.json({}));
+      stubInferenceFetch(async () => Response.json({}));
       const runId = await ensureRun(ctx.db, ctx.actor, {
         purpose: "ai_suggest",
       });
@@ -573,7 +578,7 @@ describe("AiUsage accounting", () => {
       rows.map((row) => [row.transport, row.estimatedCost]),
     );
     expect(cost.cache).toBe(0);
-    expect(cost.gateway).toBeGreaterThan(0);
+    expect(cost.gateway).toBe(0.003);
   });
 
   it("records unknown when a failed call never selected a transport", async () => {
