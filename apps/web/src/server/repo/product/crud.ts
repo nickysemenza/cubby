@@ -51,7 +51,7 @@ import {
   type SQL,
 } from "drizzle-orm";
 import type { PgColumn } from "drizzle-orm/pg-core";
-import { uniq } from "es-toolkit";
+import { groupBy, uniq } from "es-toolkit";
 
 import { projectListRows } from "~/entity/list-read-schema";
 import { startOperationDefinition } from "~/lib/start-operation-observability";
@@ -1216,7 +1216,12 @@ export const productList = async (
   const ids = results.map((row) => row.id);
   const [listRelations, qualities, priced, ledgered, displayImages] =
     await Promise.all([
-      loadRelationsPrefetchingFoods(db, results, usdaClient),
+      loadProductListRelations(
+        db,
+        ids,
+        undefined,
+        prefetchFoodsOnExternalIds(results, usdaClient),
+      ),
       loadProductDataQualities(db, ids),
       enrichProductRowsWithPricing(db, results),
       enrichProductRowsWithQuantityLedger(db, results),
@@ -1351,11 +1356,13 @@ export const listProductsRead = async (
   const ids = results.map((row) => row.id);
   const [listRelations, qualities, priced, ledgered, displayImages] =
     await Promise.all([
-      loadRelationsPrefetchingFoods(
+      loadProductListRelations(
         db,
-        results,
-        wantsListGroup(projection, "derived") ? usdaClient : undefined,
+        ids,
         projection,
+        wantsListGroup(projection, "derived")
+          ? prefetchFoodsOnExternalIds(results, usdaClient)
+          : undefined,
       ),
       loadListGroup(projection, "quality", () =>
         loadProductDataQualities(db, ids),
@@ -1504,6 +1511,23 @@ const emptyProductListRelations = (): ProductListRelations => ({
   inventoryEntry: [],
 });
 
+/** Starts a page's USDA lookups from its barcode rows, before its other relations finish. */
+const prefetchFoodsOnExternalIds =
+  (
+    rows: ReadonlyArray<{ id: ProductId; fdc_id: number | null }>,
+    usdaClient: Pick<USDAClient, "findFoodsBatch"> | undefined,
+  ) =>
+  (externalIds: ProductListRelations["externalIds"]) => {
+    const byProduct = groupBy(externalIds, (row) => row.entityId);
+    prefetchProductFoods(
+      rows.map((row) => ({
+        primaryGtin: primaryGtinOf(byProduct[row.id]),
+        fdc_id: row.fdc_id,
+      })),
+      usdaClient,
+    );
+  };
+
 /**
  * Hydrate Product-list to-many fields in independent batch reads. Drizzle's
  * relational list query is excellent for a single detail graph, but combining
@@ -1511,32 +1535,11 @@ const emptyProductListRelations = (): ProductListRelations => ({
  * JSON plan that can exceed the small production compute's memory before the
  * rows reach TypeScript.
  */
-/** List relations, starting the page's USDA lookups as soon as its barcodes load. */
-const loadRelationsPrefetchingFoods = async (
-  db: Database,
-  rows: ReadonlyArray<{ id: ProductId; fdc_id: number | null }>,
-  usdaClient: Pick<USDAClient, "findFoodsBatch"> | undefined,
-  projection?: ListProjection,
-) => {
-  const relations = await loadProductListRelations(
-    db,
-    rows.map((row) => row.id),
-    projection,
-  );
-  prefetchProductFoods(
-    rows.map((row) => ({
-      primaryGtin: primaryGtinOf(relations.get(row.id)?.externalIds),
-      fdc_id: row.fdc_id,
-    })),
-    usdaClient,
-  );
-  return relations;
-};
-
 const loadProductListRelations = async (
   db: Database,
   ids: readonly ProductId[],
   projection: ListProjection = { kind: "full" },
+  onExternalIds?: (rows: ProductListRelations["externalIds"]) => void,
 ): Promise<Map<ProductId, ProductListRelations>> => {
   const uniqueIds = uniq([...ids]);
   const result = new Map<ProductId, ProductListRelations>(
@@ -1559,14 +1562,16 @@ const loadProductListRelations = async (
           with: { image: true },
         }),
       ),
-      loadListGroup(projection, ["relations", "derived"], () =>
-        getDb(db).query.entityExternalId.findMany({
+      loadListGroup(projection, ["relations", "derived"], async () => {
+        const rows = await getDb(db).query.entityExternalId.findMany({
           where: and(
             inArray(entityExternalId.entityId, uniqueIds),
             notDeleted(entityExternalId),
           ),
-        }),
-      ),
+        });
+        onExternalIds?.(rows);
+        return rows;
+      }),
       loadListGroup(projection, ["relations", "derived"], () =>
         getDb(db).query.productUnitMappings.findMany({
           where: and(
