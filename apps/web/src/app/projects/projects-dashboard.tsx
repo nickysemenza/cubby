@@ -30,7 +30,6 @@ import {
   image,
   project,
 } from "~/integrations/tanstack-query/generated/catalog.gen";
-import { formatCalendarDay } from "~/lib/date-format";
 import { formatDateSpan } from "~/lib/date-span";
 import { cn, formatCurrency } from "~/lib/utils";
 import { SavedViewsMenu } from "~/ui/data-table/DataTableViews";
@@ -435,7 +434,7 @@ function NextWork({ tasks }: { tasks: TaskOut[] }) {
             )}
             {task.dueDate && (
               <span className="ml-auto shrink-0 text-xs text-muted-foreground">
-                {formatCalendarDay(task.dueDate, "monthDay")}
+                {formatDateSpan(task.dueDate, task.dueEndDate)}
               </span>
             )}
           </Row>

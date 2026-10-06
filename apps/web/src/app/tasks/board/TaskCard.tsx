@@ -12,7 +12,6 @@ import { EntityRefLink } from "~/entity/components/entity-ref-link";
 import { EntityQualityFact } from "~/entity/data-quality-value";
 import { entities, entityDetailParams } from "~/entity/entities";
 import { useEntityDisplayImage } from "~/entity/entity-media/entity-display-images";
-import { formatCalendarDay } from "~/lib/date-format";
 import { formatDateSpan } from "~/lib/date-span";
 import { householdLocalDate } from "~/lib/household-date";
 import { statusTone } from "~/lib/status-tone";
@@ -267,9 +266,7 @@ export function TaskCard({
                 overdue && "text-destructive",
               )}
             >
-              {task.dueEndDate
-                ? formatDateSpan(task.dueDate, task.dueEndDate)
-                : formatCalendarDay(task.dueDate, "monthDay")}
+              {formatDateSpan(task.dueDate, task.dueEndDate)}
             </span>
           )}
           {showStatus && (

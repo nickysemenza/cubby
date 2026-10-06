@@ -147,7 +147,9 @@ const orderedListFields = (entity: Entity): DisplayField[] =>
  */
 function widthClassName(
   width: DisplayField["display"]["width"],
+  kind?: DisplayField["kind"],
 ): string | undefined {
+  if (kind === "date") return "w-64";
   switch (width) {
     case "xs":
       return "w-20";
@@ -763,10 +765,13 @@ const renderSpanValue = <TRecord extends object>(
 ): ReactNode => {
   const start = spanDateOf(entity, record, span.start);
   const end = spanDateOf(entity, record, span.end);
+  const label = formatDateSpan(start, end);
   return start === null && end === null ? (
     <NoneValue />
   ) : (
-    <span className="tabular-nums">{formatDateSpan(start, end)}</span>
+    <span className="tabular-nums" title={label}>
+      {label}
+    </span>
   );
 };
 
@@ -1385,7 +1390,7 @@ export function createEntityDisplayColumns<TRecord extends object>(
             enableSorting: sortableColumnIds.includes(columnId),
             meta: attachCubbyColumnMeta({
               entityColumnRole: "fact",
-              className: widthClassName("md"),
+              className: "w-80",
               mobile: toMobileColumnMeta(field.display.mobile),
               cellData: dateCellData<TRecord>(
                 startOf,
@@ -1535,7 +1540,7 @@ export function createEntityDisplayColumns<TRecord extends object>(
               explanation: field.explanation
                 ? { entity, field: field.key, label: field.label }
                 : undefined,
-              className: widthClassName(field.display.width),
+              className: widthClassName(field.display.width, field.kind),
               mobile: toMobileColumnMeta(field.display.mobile),
               cellData,
               entityRefs: (row) => referenceMediaRefs(row, field),
@@ -1586,7 +1591,7 @@ export function createEntityDisplayColumns<TRecord extends object>(
                 explanation: field.explanation
                   ? { entity, field: field.key, label: field.label }
                   : undefined,
-                className: widthClassName(field.display.width),
+                className: widthClassName(field.display.width, field.kind),
                 numeric: field.kind === "number" ? true : undefined,
                 mobile: toMobileColumnMeta(field.display.mobile),
                 cellData: textCellData<TRecord>("text", labelOf),
@@ -1629,7 +1634,7 @@ export function createEntityDisplayColumns<TRecord extends object>(
               explanation: field.explanation
                 ? { entity, field: field.key, label: field.label }
                 : undefined,
-              className: widthClassName(field.display.width),
+              className: widthClassName(field.display.width, field.kind),
               mobile: toMobileColumnMeta(field.display.mobile),
               entityRefs: field.reference
                 ? (row) => referenceMediaRefs(row, field)
@@ -1671,7 +1676,7 @@ export function createEntityDisplayColumns<TRecord extends object>(
               explanation: field.explanation
                 ? { entity, field: field.key, label: field.label }
                 : undefined,
-              className: widthClassName(field.display.width),
+              className: widthClassName(field.display.width, field.kind),
               mobile: toMobileColumnMeta(field.display.mobile),
               numeric: control.kind === "number" ? true : undefined,
               cellData: editableFieldCellData<TRecord>(
@@ -1708,7 +1713,7 @@ export function createEntityDisplayColumns<TRecord extends object>(
               explanation: field.explanation
                 ? { entity, field: field.key, label: field.label }
                 : undefined,
-              className: widthClassName(field.display.width),
+              className: widthClassName(field.display.width, field.kind),
               numeric:
                 format === "currency" ||
                 format === "signedCurrency" ||

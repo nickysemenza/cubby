@@ -1,3 +1,5 @@
+import { formatCalendarDay } from "~/lib/date-format";
+import { householdLocalDate, householdDaysFromNow } from "~/lib/household-date";
 import {
   seedVendorDisplayPrerequisite,
   seedLocationPrerequisite,
@@ -365,4 +367,104 @@ test("run history hides ephemeral runs by default and shows them once cleared", 
 
   await page.reload();
   await expect(table).toContainText(fixture.hiddenName);
+});
+
+test("record dates retain their calendar label with present and future context", async ({
+  page,
+}) => {
+  const prefix = `Date context ${Date.now()}`;
+  const today = householdLocalDate();
+  const later = householdDaysFromNow(26);
+  const project = await createFixture(page, "project", {
+    name: `${prefix} project`,
+  });
+  await createFixture(page, "task", {
+    name: `${prefix} ongoing`,
+    trade: "other",
+    projectId: project.id,
+    dueDate: today,
+    dueEndDate: householdDaysFromNow(1),
+  });
+  const currentLabel = `${formatCalendarDay(today, "monthDay")} (today)`;
+  const laterYear =
+    later.slice(0, 4) === today.slice(0, 4) ? "" : `, ${later.slice(0, 4)}`;
+  const futureLabel = `${formatCalendarDay(later, "monthDay")}${laterYear} (in a few weeks)`;
+  await createFixture(page, "task", {
+    name: `${prefix} current`,
+    projectId: project.id,
+    trade: "other",
+    dueDate: today,
+  });
+  await createFixture(page, "task", {
+    name: `${prefix} future`,
+    projectId: project.id,
+    trade: "other",
+    dueDate: later,
+  });
+  await gotoAuthenticatedPage(
+    page,
+    `/tasks?view=next&q=${encodeURIComponent(prefix)}`,
+  );
+  await expect(
+    page.getByRole("row").filter({ hasText: `${prefix} current` }),
+  ).toContainText(currentLabel);
+  await expect(
+    page.getByRole("row").filter({ hasText: `${prefix} future` }),
+  ).toContainText(futureLabel);
+  await gotoAuthenticatedPage(page, `/tasks?q=${encodeURIComponent(prefix)}`);
+  await expect(
+    page.locator('[data-cell-col="dueDate"]').filter({ hasText: "(today)" }),
+  ).toHaveText(currentLabel);
+  await expect(
+    page
+      .locator('[data-cell-col="dueDate"]')
+      .filter({ hasText: "(in a few weeks)" }),
+  ).toHaveText(futureLabel);
+  const futureTaskLabel = page.getByText(futureLabel, { exact: true });
+  const unclipped = async (label: typeof futureTaskLabel) => {
+    await expect(label).toBeVisible();
+    expect(
+      await label.evaluate((element) => {
+        for (
+          let node = element instanceof HTMLElement ? element : null;
+          node;
+          node = node.parentElement
+        ) {
+          const overflow = getComputedStyle(node).overflowX;
+          if (
+            (overflow === "hidden" || overflow === "clip") &&
+            node.scrollWidth > node.clientWidth + 1
+          )
+            return false;
+          if (node.hasAttribute("data-cell-col")) break;
+        }
+        return true;
+      }),
+    ).toBe(true);
+  };
+  await unclipped(futureTaskLabel);
+  await createFixture(page, "expense", {
+    name: `${prefix} expense`,
+    date: later,
+    cost: 2,
+    costType: "materials",
+    trade: "other",
+  });
+  await gotoAuthenticatedPage(
+    page,
+    `/expenses?q=${encodeURIComponent(`${prefix} expense`)}`,
+  );
+  await expect(
+    page
+      .locator('[data-cell-col="date"]')
+      .filter({ hasText: "(in a few weeks)" }),
+  ).toHaveText(futureLabel);
+  await unclipped(page.getByText(futureLabel, { exact: true }));
+  await gotoAuthenticatedPage(page, "/projects?view=overview");
+  const ongoing = page.getByRole("link", {
+    name: `${prefix} ongoing`,
+    exact: true,
+  });
+  await expect(ongoing).toBeVisible();
+  await expect(ongoing.locator("..")).toContainText("(ongoing)");
 });

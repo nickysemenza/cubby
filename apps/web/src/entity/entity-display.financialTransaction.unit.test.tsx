@@ -1,7 +1,7 @@
 import type { CellData } from "@tanstack/react-table";
 import { render, screen } from "@testing-library/react";
 import type { ReactNode } from "react";
-import { describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import {
   createCubbyColumnCollection,
@@ -169,6 +169,13 @@ function buildTransactionColumnMeta() {
 }
 
 describe("financial transaction list display columns", () => {
+  beforeEach(() =>
+    vi.useFakeTimers({
+      toFake: ["Date"],
+      now: new Date("2026-10-05T19:00:00Z"),
+    }),
+  );
+  afterEach(() => vi.useRealTimers());
   it("derives enableSorting from the generated sort roster per column id", () => {
     const byId = Object.fromEntries(
       buildTransactionColumnMeta().map((d) => [d.id, d.enableSorting]),
@@ -194,7 +201,7 @@ describe("financial transaction list display columns", () => {
     const byId = Object.fromEntries(
       buildTransactionColumnMeta().map((d) => [d.id, d]),
     );
-    expect(byId.transactionDate?.className).toBe("w-28");
+    expect(byId.transactionDate?.className).toBe("w-64");
     expect(byId.transactionDate?.mobile).toEqual({
       slot: "meta",
       priority: 25,
@@ -214,7 +221,7 @@ describe("financial transaction list display columns", () => {
   });
 
   it.each([
-    ["transactionDate", "Sep 10, 2026"],
+    ["transactionDate", "Sep 10"],
     ["merchant", "Ace Hardware"],
   ] as const)(
     "renders the generic %s column from its declaration",

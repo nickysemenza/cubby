@@ -111,9 +111,11 @@ export const DERIVED_SPEC_GLOBS: SpecGlobMap = {
     "apps/web/src/routes/_authenticated/locations.$shortcode.tsx",
     "apps/web/src/routes/_authenticated/locations.index.tsx",
     "apps/web/src/routes/_authenticated/products.$shortcode.tsx",
+    "apps/web/src/routes/_authenticated/projects.index.tsx",
     "apps/web/src/routes/_authenticated/purchases.$shortcode.tsx",
     "apps/web/src/routes/_authenticated/purchases.index.tsx",
     "apps/web/src/routes/_authenticated/runs.index.tsx",
+    "apps/web/src/routes/_authenticated/tasks.index.tsx",
     "apps/web/src/routes/api/v1/$resource.ts",
   ],
   "dnd-interactions.spec.ts": [

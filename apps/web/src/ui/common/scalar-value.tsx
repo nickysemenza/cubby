@@ -1,7 +1,7 @@
 import type { ReactNode } from "react";
 import { z } from "zod";
 
-import { formatCalendarDay } from "~/lib/date-format";
+import { formatDateSpan } from "~/lib/date-span";
 import { HoverableTimestamp } from "~/ui/HoverableTimestamp";
 import JsonRenderer from "~/ui/json-renderer";
 import { EnumPill } from "~/ui/primitives/enum-pill";
@@ -152,8 +152,10 @@ export function renderScalarValue(
       return value.raw === undefined ? undefined : <NoneValue />;
     case "timestamp":
       return <HoverableTimestamp timestamp={value.raw} />;
-    case "date":
-      return formatCalendarDay(value.raw, "dateShort");
+    case "date": {
+      const label = formatDateSpan(value.raw, null);
+      return <span title={label}>{label}</span>;
+    }
     case "boolean":
       return value.raw ? "Yes" : "No";
     case "number":

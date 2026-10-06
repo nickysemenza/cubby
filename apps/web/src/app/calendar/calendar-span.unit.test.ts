@@ -55,13 +55,13 @@ describe("itemSpanLabel", () => {
   it("renders the INCLUSIVE end, one day back from endDateExclusive", () => {
     // The off-by-one that matters: exclusive 2026-11-13 is an inclusive Nov 12.
     expect(itemSpanLabel(projectSpan("2026-10-03", "2026-11-13"))).toBe(
-      "Oct 3 – Nov 12",
+      "Oct 3 – Nov 12 (in a few days)",
     );
   });
 
   it("qualifies both ends with the year when the span crosses one", () => {
     expect(itemSpanLabel(projectSpan("2025-12-01", "2027-07-02"))).toBe(
-      "Dec 1, 2025 – Jul 1, 2027",
+      "Dec 1, 2025 – Jul 1, 2027 (ongoing)",
     );
   });
 

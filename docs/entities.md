@@ -392,7 +392,8 @@ create/update rosters and edit intents exactly once — the image-block keys
 are excluded, since the editors' image block owns them on both platforms.
 `presentation.spans` (`[{ start, end, label }]`, date fields only) declares a
 start/optional-end pair: detail and list render one row in the start field's
-place through `formatDateSpan` ("Sep 22", "Sep 22 – 25"), hide the end field,
+place through `formatDateSpan` ("Sep 22 (today)", "Sep 22 – 25 (ongoing)"),
+including present/future context shared with scalar dates on web, hide the end field,
 and the editor rejects an end before its start; the native catalog's
 `editDateRanges` is generated from it. `edit.readOnlyOnUpdate` and
 `edit.readOnlyWhen` lock fields in the update editor. `capabilities.timeline`
