@@ -138,7 +138,11 @@ async function startedOutcome(
   db: Database,
   started: Awaited<ReturnType<typeof startTargetedRun>>,
 ): Promise<TargetedImportStartOutput["runs"][number]> {
-  if (!started.created)
+  if (!started.created) {
+    if (!started.blockingRun)
+      throw new Error(
+        "Every Product here is already being enriched by an active run",
+      );
     return {
       created: false,
       run: null,
@@ -147,6 +151,7 @@ async function startedOutcome(
         status: started.blockingRun.status,
       },
     };
+  }
   return {
     created: true,
     run: await queueStartedRun(db, started.run),

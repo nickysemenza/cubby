@@ -1,11 +1,21 @@
 import type {
+  ProductId,
   PurchaseId,
   RunId,
   VendorAccountId,
 } from "@cubby/schemas/identifiers";
-import { and, asc, eq, gte, inArray, isNotNull } from "drizzle-orm";
+import {
+  type AnyColumn,
+  and,
+  eq,
+  gte,
+  inArray,
+  or,
+  type SQL,
+  sql,
+} from "drizzle-orm";
 
-import type { Database } from "~/server/db";
+import type { Database, DrizzleTransaction } from "~/server/db";
 import {
   auditLog,
   expense,
@@ -14,7 +24,7 @@ import {
   run as runTable,
   runTarget,
 } from "~/server/db/schema";
-import { getDb, notDeleted } from "~/server/repo/database-helpers";
+import { getDb, notDeleted, unwrapDb } from "~/server/repo/database-helpers";
 
 import { browsingAccountFor, browsingAccounts } from "./browsing-account";
 import { productEnrichmentTarget } from "./product-enrichment-target";
@@ -22,6 +32,7 @@ import {
   ACTIVE_RUN_STATUSES,
   type PurchaseImportNamespace,
   startTargetedRun,
+  type TargetedRunTarget,
 } from "./run-service";
 import { dispatchStartedRun, enrichmentStartPage } from "./targeted-run";
 
@@ -77,66 +88,48 @@ export async function sweepPendingEnrichment(
   } = {},
 ): Promise<EnrichmentSweepResult> {
   const result: EnrichmentSweepResult = { started: [], waiting: [] };
-  const pending = await pendingProducts(
+  const candidates = await pendingCandidates(
     db,
     new Date((options.now ?? new Date()).getTime() - SWEEP_WINDOW_MS),
   );
   const accounts = await browsingAccounts(
     db,
-    pending.map((row) => row.vendorId),
+    candidates.map((row) => row.vendorId),
   );
-  const byAccount = new Map<
-    VendorAccountId,
-    { account: (typeof accounts)[number]; rows: typeof pending }
-  >();
-  for (const row of pending) {
-    const account = browsingAccountFor(accounts, row);
-    if (!account) continue;
-    if (
-      options.vendorAccountIds &&
-      !options.vendorAccountIds.includes(account.id)
-    )
-      continue;
-    const group = byAccount.get(account.id) ?? { account, rows: [] };
-    group.rows.push(row);
-    byAccount.set(account.id, group);
-  }
-  for (const { account, rows } of byAccount.values()) {
+  const byAccount = groupByAccount(
+    candidates,
+    accounts,
+    options.vendorAccountIds,
+  );
+  // A Product goes to the first account (in candidate order) that can run
+  // and yields a page for it; later accounts skip it.
+  const assigned = new Set<ProductId>();
+  for (const { account, products } of byAccount.values()) {
     if (options.bridge && !(await options.bridge.connected(account.id))) {
       result.waiting.push({ vendorAccountId: account.id, reason: "offline" });
       continue;
     }
-    const targets = [];
-    for (const row of rows) {
-      if (targets.length === TARGETS_PER_RUN) break;
-      const startUrl = await enrichmentStartPage(db, {
-        productId: row.productId,
-        vendorId: account.vendorId,
-        pages: [row.url],
-      });
-      const live = await productEnrichmentTarget(getDb(db), row.productId);
-      // No page on the Vendor's browser domains: the bridge could not open
-      // one, so the Product waits for a domain or website on the Vendor.
-      if (!startUrl || !live) continue;
-      targets.push({
-        kind: "product" as const,
-        productId: row.productId,
-        vendorAccountId: account.id,
-        sourceExternalKey: startUrl,
-        targetFingerprint: live.fingerprint,
-      });
-    }
+    const targets = await selectTargets(db, account, products, assigned);
     if (targets.length === 0) continue;
-    const started = await startTargetedRun(db, {
-      ledgerPartyId: account.ledgerPartyId,
-      purpose: "product_enrichment",
-      vendorId: account.vendorId,
-      vendorAccountId: account.id,
-      trigger: "discovery",
-      targets,
-    });
+    const started = await startTargetedRun(
+      db,
+      {
+        ledgerPartyId: account.ledgerPartyId,
+        purpose: "product_enrichment",
+        vendorId: account.vendorId,
+        vendorAccountId: account.id,
+        trigger: "discovery",
+        targets,
+      },
+      { admit: admitOpenProducts },
+    );
     if (!started.created) {
-      result.waiting.push({ vendorAccountId: account.id, reason: "occupied" });
+      // No blocking run: a racing pass already took every Product.
+      if (started.blockingRun)
+        result.waiting.push({
+          vendorAccountId: account.id,
+          reason: "occupied",
+        });
       continue;
     }
     if (started.run.dispatchEventId)
@@ -148,6 +141,74 @@ export async function sweepPendingEnrichment(
     result.started.push({ runId: started.run.id, vendorAccountId: account.id });
   }
   return result;
+}
+
+type Candidate = Awaited<ReturnType<typeof pendingCandidates>>[number];
+type Account = Awaited<ReturnType<typeof browsingAccounts>>[number];
+
+/**
+ * In memory only: each browsing account with its Products and their line
+ * pages (product page first). A Product sold through two browsing accounts is
+ * listed under both; start pages are resolved only once an account can run.
+ */
+function groupByAccount(
+  candidates: readonly Candidate[],
+  accounts: readonly Account[],
+  only: readonly VendorAccountId[] | undefined,
+) {
+  const byAccount = new Map<
+    VendorAccountId,
+    { account: Account; products: Map<ProductId, (string | null)[]> }
+  >();
+  for (const row of candidates) {
+    const account = browsingAccountFor(accounts, row);
+    if (!account || (only && !only.includes(account.id))) continue;
+    const group = byAccount.get(account.id) ?? {
+      account,
+      products: new Map(),
+    };
+    group.products.set(row.productId, [
+      ...(group.products.get(row.productId) ?? []),
+      row.url,
+    ]);
+    byAccount.set(account.id, group);
+  }
+  return byAccount;
+}
+
+/**
+ * Up to `TARGETS_PER_RUN` targets, resolving start pages one Product at a
+ * time: the first line page on the Vendor's browser domains, else a learned
+ * page or the Vendor's website. A Product with none waits for a domain or
+ * website on its Vendor.
+ */
+async function selectTargets(
+  db: Database,
+  account: Account,
+  products: ReadonlyMap<ProductId, (string | null)[]>,
+  assigned: Set<ProductId>,
+) {
+  const targets = [];
+  for (const [id, pages] of products) {
+    if (targets.length === TARGETS_PER_RUN) break;
+    if (assigned.has(id)) continue;
+    const startUrl = await enrichmentStartPage(db, {
+      productId: id,
+      vendorId: account.vendorId,
+      pages,
+    });
+    const live = startUrl ? await productEnrichmentTarget(getDb(db), id) : null;
+    if (!startUrl || !live) continue;
+    assigned.add(id);
+    targets.push({
+      kind: "product" as const,
+      productId: id,
+      vendorAccountId: account.id,
+      sourceExternalKey: startUrl,
+      targetFingerprint: live.fingerprint,
+    });
+  }
+  return targets;
 }
 
 /**
@@ -184,50 +245,37 @@ export async function sweepImportedPurchases(
 }
 
 /**
- * Live Products a purchase import created within the window, each with one
- * Purchase that bought it (its line's product page first), oldest first,
- * minus the ones an enrichment run finished, is working, or gave up on.
+ * Recheck the sweep's earlier read inside the admission transaction, after
+ * `startTargetedRun` has locked the Products and dropped any an active run
+ * holds: a racing pass may have spent a Product's last attempt or finished
+ * it since.
  */
-async function pendingProducts(db: Database, since: Date) {
-  const database = getDb(db);
-  const rows = await database
-    .selectDistinctOn([product.id], {
-      productId: product.id,
-      createdAt: product.createdAt,
-      url: expense.url,
-      vendorId: purchase.vendorId,
-      vendorAccountId: purchase.vendorAccountId,
-    })
-    .from(product)
-    .innerJoin(
-      auditLog,
-      and(
-        eq(auditLog.entityId, product.id),
-        eq(auditLog.entityKind, "product"),
-        eq(auditLog.action, "create"),
-        isNotNull(auditLog.runId),
-        gte(auditLog.createdAt, since),
-      ),
-    )
-    .innerJoin(
-      runTable,
-      and(
-        eq(runTable.id, auditLog.runId),
-        eq(runTable.purpose, "account_sync"),
-      ),
-    )
-    .innerJoin(
-      expense,
-      and(eq(expense.productId, product.id), notDeleted(expense)),
-    )
-    .innerJoin(
-      purchase,
-      and(eq(purchase.id, expense.purchaseId), notDeleted(purchase)),
-    )
-    .where(notDeleted(product))
-    .orderBy(product.id, asc(expense.url));
-  if (rows.length === 0) return [];
-  const attempts = await database
+async function admitOpenProducts(
+  tx: DrizzleTransaction,
+  targets: TargetedRunTarget[],
+): Promise<TargetedRunTarget[]> {
+  const open = await openProducts(
+    tx,
+    targets.flatMap((target) =>
+      target.kind === "product" ? [target.productId] : [],
+    ),
+  );
+  return targets.filter(
+    (target) => target.kind === "product" && open.has(target.productId),
+  );
+}
+
+/**
+ * Of these Products, the ones no enrichment run has committed or skipped,
+ * none is working now, and fewer than `MAX_ENRICHMENT_ATTEMPTS` runs ended
+ * without either.
+ */
+async function openProducts(
+  db: Database | DrizzleTransaction,
+  productIds: readonly string[],
+) {
+  if (productIds.length === 0) return new Set<string>();
+  const attempts = await unwrapDb(db)
     .select({
       productId: runTarget.entityId,
       state: runTarget.state,
@@ -239,10 +287,7 @@ async function pendingProducts(db: Database, since: Date) {
       and(
         eq(runTable.purpose, "product_enrichment"),
         eq(runTarget.entityKind, "product"),
-        inArray(
-          runTarget.entityId,
-          rows.map((row) => row.productId),
-        ),
+        inArray(runTarget.entityId, [...productIds]),
       ),
     );
   // A dispatch_failed run is not retried by itself, so it is a spent
@@ -259,15 +304,94 @@ async function pendingProducts(db: Database, since: Date) {
       settled.add(attempt.productId);
     tries.set(attempt.productId, (tries.get(attempt.productId) ?? 0) + 1);
   }
+  return new Set(
+    productIds.filter(
+      (id) =>
+        !settled.has(id) && (tries.get(id) ?? 0) < MAX_ENRICHMENT_ATTEMPTS,
+    ),
+  );
+}
+
+/** An audit row this entity got from a purchase-import (account_sync) Run. */
+const importRunTouched = (
+  entityKind: "product" | "purchase",
+  entityId: SQL | AnyColumn,
+) =>
+  sql`EXISTS (
+    SELECT 1 FROM ${auditLog}
+    INNER JOIN ${runTable} ON ${runTable.id} = ${auditLog.runId}
+      AND ${runTable.purpose} = 'account_sync'
+    WHERE ${auditLog.entityKind} = ${entityKind}
+      AND ${auditLog.entityId} = ${entityId}
+      ${entityKind === "product" ? sql`AND ${auditLog.action} = 'create'` : sql``}
+  )`;
+
+/**
+ * Every Purchase line of each open Product a purchase import created within
+ * the window: oldest Product first, and within one Product the lines with a
+ * product page first, then by page and Purchase so the choice is stable.
+ *
+ * A Product is import-created when its `create` audit row names an import
+ * Run, or, for imports from before the writer recorded the Products it
+ * created (no `create` row at all), when it was created in the window and
+ * bought on a Purchase an import Run wrote.
+ */
+async function pendingCandidates(db: Database, since: Date) {
+  const rows = await getDb(db)
+    .selectDistinct({
+      productId: product.id,
+      createdAt: product.createdAt,
+      url: expense.url,
+      purchaseId: purchase.id,
+      vendorId: purchase.vendorId,
+      vendorAccountId: purchase.vendorAccountId,
+    })
+    .from(product)
+    .innerJoin(
+      expense,
+      and(eq(expense.productId, product.id), notDeleted(expense)),
+    )
+    .innerJoin(
+      purchase,
+      and(eq(purchase.id, expense.purchaseId), notDeleted(purchase)),
+    )
+    .where(
+      and(
+        notDeleted(product),
+        gte(product.createdAt, since),
+        or(
+          importRunTouched("product", product.id),
+          // Only a Product with no create row at all (an import before the
+          // writer recorded them) falls back to its Purchase's import Run; a
+          // Product created by hand or from photos keeps that provenance.
+          and(
+            sql`NOT EXISTS (
+              SELECT 1 FROM ${auditLog}
+              WHERE ${auditLog.entityKind} = 'product'
+                AND ${auditLog.entityId} = ${product.id}
+                AND ${auditLog.action} = 'create'
+            )`,
+            importRunTouched("purchase", purchase.id),
+          ),
+        ),
+      ),
+    );
+  const open = await openProducts(
+    db,
+    rows.map((row) => row.productId),
+  );
+  const order = (left: string | null, right: string | null) =>
+    (left ?? "").localeCompare(right ?? "");
   return rows
     .flatMap(({ vendorId, ...row }) =>
-      vendorId &&
-      !settled.has(row.productId) &&
-      (tries.get(row.productId) ?? 0) < MAX_ENRICHMENT_ATTEMPTS
-        ? [{ ...row, vendorId }]
-        : [],
+      vendorId && open.has(row.productId) ? [{ ...row, vendorId }] : [],
     )
     .sort(
-      (left, right) => left.createdAt.getTime() - right.createdAt.getTime(),
+      (left, right) =>
+        left.createdAt.getTime() - right.createdAt.getTime() ||
+        order(left.productId, right.productId) ||
+        Number(left.url === null) - Number(right.url === null) ||
+        order(left.url, right.url) ||
+        order(left.purchaseId, right.purchaseId),
     );
 }

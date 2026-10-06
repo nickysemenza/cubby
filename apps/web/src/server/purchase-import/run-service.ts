@@ -10,6 +10,7 @@ import {
   runEntityId,
   vendorAccountId,
   type LedgerPartyId,
+  type ProductId,
   type RunId,
   type UserId,
   type VendorAccountId,
@@ -234,7 +235,7 @@ async function assertNoHoldingChargeRun(
   if (held) throw new ActiveChargeRunError(held.shortcode);
 }
 
-type TargetedRunTarget =
+export type TargetedRunTarget =
   | {
       kind: "purchase";
       purchaseId: string;
@@ -431,12 +432,88 @@ export async function startOrResumeRun(
 }
 
 /**
+ * One Product is enriched by at most one active run. Every path that makes
+ * enrichment targets active (a new run, a restart's successor, a retried
+ * dispatch) locks its Products in id order inside its transaction, so two
+ * such paths on different accounts cannot both admit a Product or deadlock
+ * over overlapping ones. Returns each locked Product another active run
+ * holds, with that run's shortcode.
+ */
+async function lockProductsFindHeld(
+  tx: DrizzleTransaction,
+  productIds: readonly ProductId[],
+  exceptRunId?: RunId,
+) {
+  const held = new Map<string, string>();
+  if (productIds.length === 0) return held;
+  for (const id of [...new Set(productIds)].sort())
+    await tx.execute(
+      sql`SELECT pg_advisory_xact_lock(hashtext(${`product-enrichment:${id}`}))`,
+    );
+  const rows = await tx
+    .select({ productId: runTarget.entityId, runCode: runTable.shortcode })
+    .from(runTarget)
+    .innerJoin(runTable, eq(runTable.id, runTarget.runId))
+    .where(
+      and(
+        eq(runTable.purpose, "product_enrichment"),
+        inArray(runTable.status, [...ACTIVE_RUN_STATUSES]),
+        inArray(runTarget.entityId, [...productIds]),
+        exceptRunId ? ne(runTable.id, exceptRunId) : undefined,
+      ),
+    );
+  for (const row of rows) held.set(row.productId, row.runCode);
+  return held;
+}
+
+/** A new run admits only the Products no active run holds. */
+async function withoutHeldProducts(
+  tx: DrizzleTransaction,
+  targets: TargetedRunTarget[],
+) {
+  const held = await lockProductsFindHeld(
+    tx,
+    targets.flatMap((target) =>
+      target.kind === "product" ? [productId.parse(target.productId)] : [],
+    ),
+  );
+  return targets.filter(
+    (target) => target.kind !== "product" || !held.has(target.productId),
+  );
+}
+
+/** A member's restart or retry refuses rather than drop a held Product. */
+async function assertProductsUnheld(
+  tx: DrizzleTransaction,
+  productIds: readonly ProductId[],
+  exceptRunId: RunId,
+) {
+  const held = await lockProductsFindHeld(tx, productIds, exceptRunId);
+  const [holder] = held.values();
+  if (holder)
+    throw new Error(
+      `A Product in this run is already being enriched by ${holder}; finish or stop that run first`,
+    );
+}
+
+/**
  * Creates an explicit validation/enrichment run. Unlike account sync, an
  * occupied account is a refusal, never a silently persisted waiting job.
  */
 export async function startTargetedRun(
   db: Database,
   input: StartTargetedRunInput,
+  options: {
+    /**
+     * Narrow the targets inside the admission transaction, after the account
+     * lock: a caller that chose them from an earlier read rechecks them here.
+     * No target left admits nothing.
+     */
+    admit?: (
+      tx: DrizzleTransaction,
+      targets: TargetedRunTarget[],
+    ) => Promise<TargetedRunTarget[]>;
+  } = {},
 ) {
   const purpose = runPurpose.parse(input.purpose);
   if (purpose === "account_sync")
@@ -494,6 +571,13 @@ export async function startTargetedRun(
         .limit(1);
       if (blockingRun) return { created: false as const, blockingRun };
     }
+    const unheld =
+      purpose === "product_enrichment"
+        ? await withoutHeldProducts(tx, input.targets)
+        : input.targets;
+    const targets = options.admit ? await options.admit(tx, unheld) : unheld;
+    if (targets.length === 0)
+      return { created: false as const, blockingRun: null };
 
     const [actor] = await tx
       .select({
@@ -559,7 +643,7 @@ export async function startTargetedRun(
       ),
     });
     await tx.insert(runTarget).values(
-      input.targets.map((target) => ({
+      targets.map((target) => ({
         runId: id,
         entityKind: target.kind,
         entityId:
@@ -2235,7 +2319,14 @@ export async function importBrowserOrderEvidence(
           "Browser evidence captured; awaiting the purpose-specific comparison or bounded enrichment commit.",
         updatedAt: new Date(),
       })
-      .where(eq(runTarget.id, target.id));
+      // A capture answered after its target was committed or skipped keeps
+      // its evidence but must not reopen the target.
+      .where(
+        and(
+          eq(runTarget.id, target.id),
+          inArray(runTarget.state, ["pending", "prepared", "needs_evidence"]),
+        ),
+      );
     return {
       kind: "targeted_evidence" as const,
       targetId: target.id,
@@ -4135,6 +4226,16 @@ export async function controlRun(
             agentImportRunPurpose.parse(locked.purpose),
           ),
         });
+        if (locked.purpose === "product_enrichment")
+          await assertProductsUnheld(
+            tx,
+            sourceTargets.flatMap((target) =>
+              target.entityKind === "product"
+                ? [productId.parse(target.entityId)]
+                : [],
+            ),
+            scope.public.runId,
+          );
         if (sourceTargets.length)
           await tx.insert(runTarget).values(
             sourceTargets.map((target) => ({
@@ -4229,6 +4330,22 @@ export async function controlRun(
           locked.coordinatorStartedAt
         ) {
           throw new Error("Only an unacknowledged dispatch can be retried");
+        }
+        if (locked.purpose === "product_enrichment") {
+          const targets = await tx
+            .select({ entityId: runTarget.entityId })
+            .from(runTarget)
+            .where(
+              and(
+                eq(runTarget.runId, scope.public.runId),
+                eq(runTarget.entityKind, "product"),
+              ),
+            );
+          await assertProductsUnheld(
+            tx,
+            targets.map((target) => productId.parse(target.entityId)),
+            scope.public.runId,
+          );
         }
         const dispatchEventId = crypto.randomUUID();
         await tx

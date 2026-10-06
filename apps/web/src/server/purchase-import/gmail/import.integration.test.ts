@@ -3,11 +3,12 @@ import {
   vendorAccountShortcode,
 } from "@cubby/schemas/identifiers";
 import type { PurchaseAgentEvent } from "@cubby/schemas/purchase-import";
-import { eq } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
 import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 
 import {
+  auditLog,
   ledgerParty,
   orderMail,
   orderMailCandidateDecision,
@@ -955,6 +956,44 @@ describe("saved confirmation imports", () => {
         ]);
       });
 
+      // Imports before the writer recorded the Products it created leave no
+      // Product `create` audit row; the import's Purchase still names its run.
+      it("enriches a Product imported before imports recorded the Products they created", async () => {
+        const { accountId, line } = await mailOnlyImport();
+        await enableBrowserSync(accountId);
+        await getDb(ctx.db)
+          .delete(auditLog)
+          .where(
+            and(
+              eq(auditLog.entityId, line.productId!),
+              eq(auditLog.action, "create"),
+            ),
+          );
+        await sweepPendingEnrichment(ctx.db, { bridge: online });
+        expect(await enrichmentTargets()).toMatchObject([
+          { productId: line.productId, vendorAccountId: accountId },
+        ]);
+      });
+
+      // A Product someone created outside an import (by hand, or from photos)
+      // and later bought on an imported Purchase keeps its own provenance.
+      it("leaves a Product created outside an import to its creator", async () => {
+        const { accountId, line } = await mailOnlyImport();
+        await enableBrowserSync(accountId);
+        await getDb(ctx.db)
+          .update(auditLog)
+          .set({ runId: null })
+          .where(
+            and(
+              eq(auditLog.entityId, line.productId!),
+              eq(auditLog.action, "create"),
+            ),
+          );
+        expect(
+          (await sweepPendingEnrichment(ctx.db, { bridge: online })).started,
+        ).toEqual([]);
+      });
+
       it("finds the vendor's browsing account for a Purchase with no account link", async () => {
         const { accountId, line } = await mailOnlyImport();
         await enableBrowserSync(accountId);
@@ -1024,6 +1063,147 @@ describe("saved confirmation imports", () => {
         expect(
           (await sweepPendingEnrichment(ctx.db, { bridge: online })).started,
         ).toEqual([]);
+      });
+
+      // Eligibility is decided per Purchase: a Product another Vendor also
+      // sold must not be dropped because that Vendor does not browse.
+      it("enriches through the Purchase whose Vendor browses when another Vendor also sold the Product", async () => {
+        const { accountId, line } = await mailOnlyImport();
+        await enableBrowserSync(accountId);
+        const otherVendor = await insertWithShortcode(ctx.db, "vendor", {
+          name: `Synthetic other shop ${crypto.randomUUID()}`,
+        });
+        const otherPurchase = await insertWithShortcode(ctx.db, "purchase", {
+          vendorId: otherVendor.id,
+          orderId: "OTHER-1",
+          date: "2026-09-02",
+        });
+        await insertWithShortcode(ctx.db, "expense", {
+          purchaseId: otherPurchase.id,
+          name: "Synthetic herb packet",
+          cost: 4,
+          date: "2026-09-02",
+          lineKind: "principal",
+          costType: "materials",
+          // Sorts ahead of the browsing Vendor's product page.
+          url: "https://aaa.other.example.test/herb",
+          productId: line.productId,
+          productQuantity: 1,
+        });
+        expect(
+          (await sweepPendingEnrichment(ctx.db, { bridge: online })).started,
+        ).toEqual([{ runId: expect.any(String), vendorAccountId: accountId }]);
+      });
+
+      // A line whose page is off the Vendor's browser domains cannot start a
+      // run; another line of the same Product with a usable page must.
+      it("starts from a later line's product page when the first line's page is unusable", async () => {
+        const { accountId, line, run, productUrl } = await mailOnlyImport();
+        await enableBrowserSync(accountId);
+        await getDb(ctx.db)
+          .update(vendor)
+          .set({ website: null })
+          .where(eq(vendor.id, run.vendorId!));
+        const repeat = await insertWithShortcode(ctx.db, "purchase", {
+          vendorId: run.vendorId!,
+          vendorAccountId: accountId,
+          orderId: "REPEAT-1",
+          date: "2026-09-03",
+        });
+        await insertWithShortcode(ctx.db, "expense", {
+          purchaseId: repeat.id,
+          name: "Synthetic herb packet",
+          cost: 5,
+          date: "2026-09-03",
+          lineKind: "principal",
+          costType: "materials",
+          // Sorts ahead of the usable page and is off the browser domains.
+          url: "https://aaa.offsite.example.test/herb",
+          productId: line.productId,
+          productQuantity: 1,
+        });
+        await sweepPendingEnrichment(ctx.db, { bridge: online });
+        expect(await enrichmentTargets()).toMatchObject([
+          { productId: line.productId, startUrl: productUrl },
+        ]);
+      });
+
+      // Two browsing Vendors sold the Product and only the second has a page
+      // the bridge may open: it must not be stranded on the first.
+      it("enriches through a later browsing Vendor when the first has no usable page", async () => {
+        const { accountId, line, run } = await mailOnlyImport();
+        await enableBrowserSync(accountId);
+        await getDb(ctx.db)
+          .update(vendor)
+          .set({ website: null })
+          .where(eq(vendor.id, run.vendorId!));
+        await getDb(ctx.db)
+          .update(expense)
+          .set({ url: "https://aaa.offsite.example.test/herb" })
+          .where(eq(expense.productId, line.productId!));
+        const otherVendor = await insertWithShortcode(ctx.db, "vendor", {
+          name: `Synthetic second seed shop ${crypto.randomUUID()}`,
+          website: "https://bbb.second.example.test",
+          browserDomains: ["bbb.second.example.test"],
+        });
+        const otherAccount = await insertWithShortcode(
+          ctx.db,
+          "vendorAccount",
+          {
+            label: "Synthetic second seed account",
+            vendorId: otherVendor.id,
+            ledgerPartyId: run.ledgerPartyId!,
+            status: "active",
+            browserSyncEnabled: true,
+          },
+        );
+        const otherPurchase = await insertWithShortcode(ctx.db, "purchase", {
+          vendorId: otherVendor.id,
+          vendorAccountId: otherAccount.id,
+          orderId: "SECOND-1",
+          date: "2026-09-04",
+        });
+        await insertWithShortcode(ctx.db, "expense", {
+          purchaseId: otherPurchase.id,
+          name: "Synthetic herb packet",
+          cost: 4,
+          date: "2026-09-04",
+          lineKind: "principal",
+          costType: "materials",
+          url: "https://bbb.second.example.test/products/herb",
+          productId: line.productId,
+          productQuantity: 1,
+        });
+        await sweepPendingEnrichment(ctx.db, { bridge: online });
+        expect(await enrichmentTargets()).toMatchObject([
+          {
+            productId: line.productId,
+            vendorAccountId: otherAccount.id,
+            startUrl: "https://bbb.second.example.test/products/herb",
+          },
+        ]);
+      });
+
+      // Two passes racing (cron and app open) must not spend a fourth
+      // attempt or start the same Product twice.
+      it("admits a Product once when two sweeps race", async () => {
+        const { accountId } = await mailOnlyImport();
+        await enableBrowserSync(accountId);
+        for (let attempt = 0; attempt < 2; attempt++) {
+          const { started } = await sweepPendingEnrichment(ctx.db, {
+            bridge: online,
+          });
+          await getDb(ctx.db)
+            .update(runTable)
+            .set({ status: "failed", failureCode: "offline_expired" })
+            .where(eq(runTable.id, started[0]!.runId));
+        }
+        const raced = await Promise.all([
+          sweepPendingEnrichment(ctx.db, { bridge: online }),
+          sweepPendingEnrichment(ctx.db, { bridge: online }),
+        ]);
+        expect(raced.flatMap((result) => result.started)).toHaveLength(1);
+        expect(await enrichmentTargets()).toHaveLength(3);
       });
 
       it("never re-sweeps a Product a run skipped", async () => {

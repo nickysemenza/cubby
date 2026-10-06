@@ -1788,6 +1788,10 @@ export async function skipProductEnrichment(
           .where(eq(runTable.id, scope.public.runId))
           .limit(1)
           .for("update");
+        // A concurrent delivery of this operation may have completed while
+        // this one waited for the run lock.
+        const recorded = await ledger.replay(tx, skipProductEnrichmentOut);
+        if (recorded) return recorded;
         if (lockedRun?.status !== "running")
           throw new Error(
             `Import run is fenced in status ${lockedRun?.status ?? "missing"}`,
