@@ -191,7 +191,10 @@ run. This does not add parallel main runs or jobs. The newest main CI result may
 wait for the active run; deployment remains independent. `Scope` and
 `Validation` retain stable required names. A documentation-only
 change runs Oxfmt, documented repository-path checks, and offline relative-link
-validation. Generated output is never
+validation. Formatting-only validation sets up Node and invokes the exact Oxfmt
+version pinned in `package.json` with `npm exec`; it skips the workspace dependency
+install and pnpm-store restore. Jobs that need generation or application code
+still install their dependencies. Generated output is never
 committed; every job that installs dependencies generates it (`postinstall`), and
 `Validation`'s `generate` gate checks that it generates cleanly and that the OpenAPI
 document lints. Guides under `docs/` are lazy static Markdown assets, so prose
@@ -201,7 +204,8 @@ MCP capabilities; its filtered dependency install skips WASM. Markdown bundled
 as Worker agent instructions still selects the web lanes, as does
 `docs/README.md`, the fixed `/docs/` landing page. Mixed documentation
 and code changes retain all checks selected by the code. Runner startup and
-dependency installation still contribute to documentation-only latency.
+tool downloads and any required generation still contribute to
+documentation-only latency.
 Native, auxiliary, Rust, web, and PostgreSQL/E2E lanes run only when their inputs
 can affect them. A manual run selects all lanes. `Web checks` is the stable
 required aggregate: it checks the web, PostgreSQL, and browser matrix results

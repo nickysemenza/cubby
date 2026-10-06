@@ -35,6 +35,10 @@ local gates sequential.
 
 ## Commit, push, and merge
 
+When a shell call runs a check before dependent Git operations, stop on failure
+with `set -e` or use separate calls. A failed check must not be followed by a
+commit, push, or rebase continuation in the same call.
+
 Commits run only `pnpm check:staged`: read-only Oxlint and Oxfmt checks on staged
 files, with the existing rules and ignore patterns. Partial staging is preserved;
 fix reported issues explicitly and stage the intended corrections. Use the
