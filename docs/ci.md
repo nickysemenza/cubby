@@ -208,16 +208,17 @@ and it runs on pushes to `main` and on PRs that touch the agent, purchase
 import, the Run, Purchase and vendor order-mail UI, its harness, or the
 bundled skills (`importE2e` in `scripts/ci-change-scope.ts`). It saves the
 same run bundle as the desktop shards.
-PostgreSQL integration tests use three runners. The `integration` Vitest
-project never starts workerd, so its two `--shard` jobs wait only on `Scope`
-and restore the WASM package themselves. The
+PostgreSQL integration tests use two runners. The `integration` Vitest
+project runs all its files in one job with four fork workers, waits only on
+`Scope`, and restores the WASM package itself. This removes one runner slot
+and one repeated database/dependency setup compared with two shards. The
 `integration-workerd` project (the files that start the built Worker, listed in
 `workerdIntegrationTests` in `apps/web/vitest.config.ts`) runs in one job that
 needs `Build Workers` and downloads `worker-build`. A workerd consumer missing
-from that list runs in an ordinary shard and fails there, because in CI the
-harness refuses to rebuild a missing or stale Worker. `Web checks` requires
-both jobs to succeed, so required-check names do not change with the shard
-count. Jobs that need the databases (`test-postgres`, `test-postgres-workerd`,
+from that list runs in the ordinary integration job and fails there, because
+in CI the harness refuses to rebuild a missing or stale Worker. `Web checks` requires
+both jobs to succeed, so the required-check name stays stable. Jobs that need
+the databases (`test-postgres`, `test-postgres-workerd`,
 `test-e2e`, `db-check`) start them with the `start-test-services` composite
 action, which runs the pgvector PostgreSQL and IntegreSQL images on ports 5432
 and 5000; a composite action cannot declare `services:`, so it uses `docker
@@ -342,7 +343,8 @@ database contracts; it does not establish a five-minute full suite.
 - Desktop Chromium uses two shards. More workers per runner and three shards
   did not improve the required-check critical path enough to justify their
   setup and contention costs. Keep the two browser shards when several PRs run
-  concurrently; the PostgreSQL split preserves its three total runner slots.
+  concurrently. Ordinary PostgreSQL files share one four-worker job; workerd
+  integration retains its own job and built-Worker dependency.
   A three-worker re-benchmark on the larger suite passed all 160 cases, but a
   same-head replay of its slower 80-case shard reduced Playwright execution
   only from 391 to 375 seconds while cumulative case time rose from 665 to
