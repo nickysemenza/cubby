@@ -2,6 +2,7 @@ import { productCategoryShortcode } from "../identifier-fields";
 import { recordEmojiField } from "../emoji";
 import { z } from "zod";
 import { spendingCategoryShortcode as code } from "../identifier-fields";
+import { productExpectation } from "../purchase-evidence-policy";
 import { defineEntity } from "./definition";
 
 const expectation = z.enum(["unknown", "required", "not_expected"]);
@@ -141,13 +142,14 @@ export default defineEntity({
             { value: "unknown", label: "Unclassified" },
             { value: "required", label: "Expected" },
             { value: "not_expected", label: "Not expected" },
+            { value: "not_allowed", label: "Not allowed" },
           ],
         },
         display: { list: true, detail: true },
         validation: {
-          read: expectation,
-          create: expectation.default("unknown"),
-          update: expectation.optional(),
+          read: productExpectation,
+          create: productExpectation.default("unknown"),
+          update: productExpectation.optional(),
         },
       },
       {

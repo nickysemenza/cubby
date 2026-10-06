@@ -1,7 +1,11 @@
 import { createHash } from "node:crypto";
 
 import { parseShortcodeFor } from "@cubby/schemas/identifiers";
-import { evidenceExpectation } from "@cubby/schemas/purchase-evidence-policy";
+import {
+  evidenceExpectation,
+  productExpectation,
+  type ProductExpectation,
+} from "@cubby/schemas/purchase-evidence-policy";
 import { sql } from "drizzle-orm";
 import { z } from "zod";
 
@@ -40,7 +44,9 @@ export const reviewedEvidencePolicyDecisions = z
           id: z.string(),
           name: z.string(),
           evidenceExpectation: policy.optional(),
-          productExpectation: policy.optional(),
+          productExpectation: productExpectation
+            .exclude(["unknown"])
+            .optional(),
         })
         .strict()
         .refine(
@@ -58,7 +64,7 @@ const liveRow = z.object({
   shortcode: z.string(),
   name: z.string(),
   evidenceExpectation: evidenceExpectation.nullable(),
-  productExpectation: evidenceExpectation.optional(),
+  productExpectation: productExpectation.optional(),
   parentId: z.string().nullable().optional(),
 });
 const coverageRow = z.object({
@@ -109,7 +115,7 @@ export async function previewReviewedEvidencePolicies(
     uuid: string;
     data: {
       evidenceExpectation?: "required" | "not_expected";
-      productExpectation?: "required" | "not_expected";
+      productExpectation?: Exclude<ProductExpectation, "unknown">;
     };
   }[] = [];
   let preservedFields = 0;

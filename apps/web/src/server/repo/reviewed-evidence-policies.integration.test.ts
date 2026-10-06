@@ -111,6 +111,38 @@ describe("reviewed evidence policy rollout", () => {
     const replay = await previewReviewedEvidencePolicies(ctx.db, decisions);
     expect(replay.updates).toHaveLength(0);
   });
+  // A live `not_allowed` category once failed every preview's category parse,
+  // and the decision schema refused the value.
+  it("reads and applies the not_allowed Product expectation", async () => {
+    await insertWithShortcode(ctx.db, "spendingCategory", {
+      name: "Fixture dining",
+      productExpectation: "not_allowed",
+    });
+    const tickets = await insertWithShortcode(ctx.db, "spendingCategory", {
+      name: "Fixture tickets",
+    });
+    const decisions = [
+      {
+        entity: "spendingCategory" as const,
+        id: tickets.shortcode,
+        name: tickets.name,
+        productExpectation: "not_allowed" as const,
+      },
+    ];
+    const preview = await previewReviewedEvidencePolicies(ctx.db, decisions);
+    await applyReviewedEvidencePolicies(
+      context(),
+      decisions,
+      preview.fingerprint,
+    );
+    expect(
+      (
+        await unwrapDb(ctx.db).execute(
+          sql`SELECT "productExpectation" FROM "SpendingCategory" WHERE id = ${tickets.id}`,
+        )
+      ).rows[0]?.productExpectation,
+    ).toBe("not_allowed");
+  });
   it("refuses changed identity, stale graph approval, and rolls back a later failed kernel write", async () => {
     const first = await insertWithShortcode(ctx.db, "vendor", {
       name: "Fixture first merchant",

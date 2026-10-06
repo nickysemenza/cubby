@@ -45,7 +45,9 @@ import {
 } from "@cubby/schemas/project-fields";
 import {
   evidenceExpectationValues,
+  productExpectationValues,
   type EvidenceExpectation,
+  type ProductExpectation,
 } from "@cubby/schemas/purchase-evidence-policy";
 import {
   spendingCategoryFilters,
@@ -476,39 +478,50 @@ function spendingCategorySpec(
   };
 }
 
+const expectationLabels = {
+  unknown: "Unclassified",
+  required: "Expected",
+  not_expected: "Not expected",
+  not_allowed: "Not allowed",
+} satisfies Record<ProductExpectation, string>;
+
 function expectationSpec(
   entity: "vendor" | "purchase" | "financialTransaction" | "spendingCategory",
-  products = false,
 ): EnumSuggestSpec<EvidenceExpectation> {
   return {
     kind: "enum",
     values: evidenceExpectationValues,
-    labelOf: (value) =>
-      ({
-        unknown: "Unclassified",
-        required: "Expected",
-        not_expected: "Not expected",
-      })[value] ?? value,
+    labelOf: (value) => expectationLabels[value],
     describe: (value) =>
-      products
-        ? {
-            unknown: "Insufficient evidence for durable Product records",
-            required: "Durable purchased goods should have Product records",
-            not_expected:
-              "Services, meals, groceries, reimbursements or other non-durable spending do not require Product records",
-          }[value]
-        : {
-            unknown:
-              "Insufficient or mixed evidence; leave receipt expectation unclassified",
-            required: "Household expects a receipt or order evidence",
-            not_expected: "Household does not expect receipt or order evidence",
-          }[value],
-    rules: products
-      ? "Suggest Product expectation independently from receipt expectation using the spending category and parent context. Durable goods such as tools, furniture and clothing require Product records. Restaurant meals, groceries, services and friend reimbursements do not. A mixed or unclear category must remain unknown. Do not infer that every receipted purchase requires Products. Return a reviewed proposal only; never overwrite explicit decisions."
-      : "Suggest the household's receipt/order evidence expectation, not whether a merchant is capable of issuing receipts. Amazon and Home Depot purchases are expected (required). Restaurant meals, BiRite groceries and friend reimbursements are not_expected. Use the actual purchase/source description when available; broad or mixed vendor/category evidence without a clear purpose remains unknown. Missing receipt evidence alone never means not_expected. Return a reviewed proposal only; never overwrite explicit decisions.",
+      ({
+        unknown:
+          "Insufficient or mixed evidence; leave receipt expectation unclassified",
+        required: "Household expects a receipt or order evidence",
+        not_expected: "Household does not expect receipt or order evidence",
+      })[value],
+    rules:
+      "Suggest the household's receipt/order evidence expectation, not whether a merchant is capable of issuing receipts. Amazon and Home Depot purchases are expected (required). Restaurant meals, BiRite groceries and friend reimbursements are not_expected. Use the actual purchase/source description when available; broad or mixed vendor/category evidence without a clear purpose remains unknown. Missing receipt evidence alone never means not_expected. Return a reviewed proposal only; never overwrite explicit decisions.",
     subject: (basis) => renderSubject(entity, basis),
   };
 }
+
+const productExpectationSpec: EnumSuggestSpec<ProductExpectation> = {
+  kind: "enum",
+  values: productExpectationValues,
+  labelOf: (value) => expectationLabels[value],
+  describe: (value) =>
+    ({
+      unknown: "Insufficient evidence for durable Product records",
+      required: "Durable purchased goods should have Product records",
+      not_expected:
+        "Groceries, services, reimbursements or other non-durable spending do not require Product records, but may link one",
+      not_allowed:
+        "Restaurant meals, event tickets, rides and donations never link a Product",
+    })[value],
+  rules:
+    "Suggest Product expectation independently from receipt expectation using the spending category and parent context. Durable goods such as tools, furniture, clothing and tracked software require Product records (required). Groceries, services and friend reimbursements do not require one but may link one (not_expected). Restaurant meals, event tickets, rides and donations can never be a Product (not_allowed); choose not_allowed only when every Expense in the category is such spending. A mixed or unclear category must remain unknown. Do not infer that every receipted purchase requires Products. Return a reviewed proposal only; never overwrite explicit decisions.",
+  subject: (basis) => renderSubject("spendingCategory", basis),
+};
 
 export const FIELD_SUGGEST_REGISTRY = {
   "vendor.defaultSpendingCategoryId": {
@@ -539,10 +552,7 @@ export const FIELD_SUGGEST_REGISTRY = {
     "financialTransaction",
   ),
   "spendingCategory.evidenceExpectation": expectationSpec("spendingCategory"),
-  "spendingCategory.productExpectation": expectationSpec(
-    "spendingCategory",
-    true,
-  ),
+  "spendingCategory.productExpectation": productExpectationSpec,
   "planting.status": {
     kind: "enum",
     values: plantingStatus.options,
