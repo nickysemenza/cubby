@@ -559,6 +559,21 @@ Steps in order; each is independently shippable.
   constants, flag string literals such as `'not_allowed'` or `'principal'`
   inside `sql` templates so a typo or stale value fails at build time instead
   of matching nothing.
+- 🤔 **Review every Jev proposal on one page.** Jev suggestions are computed
+  per record and never stored, so a wrong or missing classification surfaces
+  only on a record someone opens. One generic page lists every manifest
+  `control.suggest` target across entities as a correction (current ≠
+  proposed) or an addition (blank), with current → proposed, reasoning, and
+  probability. Accept one or a selection through the normal update or the
+  reviewed finance apply, which previews Expense reach. Reject into
+  `SuggestionDismissal` (`server/repo/suggestion-dismissal.ts`, dormant), keyed
+  on target and proposed value, so the same proposal never resurfaces;
+  `features/ai/suggestion-review.tsx` dismissals last one visit. Proposals
+  come from the **Suggestion sweep primitive** (AI & search); the page derives
+  its targets after **Derive Jev suggestion specs from the manifest**. Decide
+  whether proposals persist as Run output or recompute per bounded scan,
+  whether low-probability proposals stay visible, and what invalidates a
+  dismissal.
 
 Per-row household policies (SpendingCategory `productExpectation`) stay
 columns; algorithms (allocation, reconciliation, fingerprints) stay code and
