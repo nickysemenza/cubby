@@ -1,5 +1,16 @@
 import type { CompiledEntity } from "./declarations.ts";
 
+/**
+ * The kernel serves `get` (and so the generic detail page) for every entity
+ * with a contract and a repository; image's repository is bound specially.
+ */
+export const servesKernelGet = ({
+  key,
+  contract,
+  ports,
+}: Pick<CompiledEntity, "key" | "contract" | "ports">): boolean =>
+  contract !== null && (ports.repository !== null || key === "image");
+
 /** A routed list page may use either a generated or a hand-written index. */
 export const hasBrowserListPage = (entity: CompiledEntity): boolean =>
   entity.route !== null && entity.descriptor.browserRoutes !== false;

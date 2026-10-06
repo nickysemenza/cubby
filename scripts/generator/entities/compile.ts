@@ -1,3 +1,4 @@
+import { servesKernelGet } from "./list-capabilities.ts";
 import { humanize } from "../../../packages/shared/src/text-case.ts";
 import { colorizeEnumOptions } from "../../../packages/shared/src/enum-palette.ts";
 import {
@@ -1472,13 +1473,6 @@ const validateLifecycleAndResolve = (
   }
 };
 
-/** The kernel serves `get` for every entity with a contract and a repository (and image). */
-const servesKernelGet = (
-  key: string,
-  contract: CompiledEntity["contract"],
-  ports: CompiledEntity["ports"],
-) => contract !== null && (ports.repository !== null || key === "image");
-
 /**
  * A route defaults to generated list and detail pages over the generic
  * renderers. The detail page reads the kernel `get`, so every kernel entity
@@ -1910,7 +1904,7 @@ export const compileEntity = (
     declaration.key,
     route,
     contract,
-    servesKernelGet(declaration.key, contract, ports),
+    servesKernelGet({ key: declaration.key, contract, ports }),
     declaration.capabilities.timeline,
     context,
   );

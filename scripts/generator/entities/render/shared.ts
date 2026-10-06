@@ -1,3 +1,4 @@
+import { servesKernelGet } from "../list-capabilities.ts";
 import type { CompiledEntity } from "../declarations.ts";
 
 /**
@@ -9,11 +10,7 @@ import type { CompiledEntity } from "../declarations.ts";
  */
 export const kernelEntitiesFor = (
   entities: readonly CompiledEntity[],
-): readonly CompiledEntity[] =>
-  entities.filter(
-    ({ contract, key, ports }) =>
-      (contract !== null && ports.repository !== null) || key === "image",
-  );
+): readonly CompiledEntity[] => entities.filter(servesKernelGet);
 
 /**
  * The list search an entity's browser surfaces use: the declared

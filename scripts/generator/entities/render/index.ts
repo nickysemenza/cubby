@@ -25,7 +25,10 @@ import {
   kernelEntitiesFor,
   resolvedPrimarySearch,
 } from "./shared.ts";
-import { hasGenericListOperation } from "../list-capabilities.ts";
+import {
+  hasGenericListOperation,
+  servesKernelGet,
+} from "../list-capabilities.ts";
 import { renderStructuredValueSchemas } from "./structured-value-schemas.ts";
 import { renderSwiftEntityCatalog } from "./swift-catalog.ts";
 import { renderSwiftSharedConstants } from "./swift-shared-constants.ts";
@@ -62,9 +65,7 @@ export const entityProjectionMaps = (
   );
   // The generic detail page reads the kernel `get`, which every kernel entity
   // serves whether or not it accepts writes.
-  const detail = schema.filter(
-    ({ key, ports }) => ports.repository !== null || key === "image",
-  );
+  const detail = schema.filter(servesKernelGet);
   const list = schema.filter(hasGenericListOperation);
   const crud = list.filter(
     ({ contract }) => contract.create !== null && contract.update !== null,
