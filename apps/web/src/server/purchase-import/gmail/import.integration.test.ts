@@ -572,7 +572,44 @@ describe("saved confirmation imports", () => {
         .innerJoin(runTable, eq(runTable.id, runTarget.runId))
         .where(eq(runTable.purpose, "product_enrichment"));
       // No SKU, so no learned product URL: the Vendor's own site.
-      expect(targets).toEqual([{ startUrl: "https://seed.example.test" }]);
+      expect(targets).toEqual([{ startUrl: "https://seed.example.test/" }]);
+    });
+
+    // The browser bridge refuses any navigation off the Vendor's browser
+    // domains, so a start page must be on one; with none, starting refuses
+    // with what to add instead of handing the agent a Gmail key.
+    it("refuses manual enrichment when no start page is on the Vendor's browser domains", async () => {
+      const { run } = await importNewLine(false);
+      const [claim] = await getDb(ctx.db)
+        .select({
+          id: importSourceClaim.id,
+          purchaseId: importSourceClaim.purchaseId,
+        })
+        .from(importSourceClaim)
+        .where(eq(importSourceClaim.lastRunId, run.id));
+      const [line] = await getDb(ctx.db)
+        .select({ productId: product.shortcode })
+        .from(expense)
+        .innerJoin(product, eq(product.id, expense.productId))
+        .where(eq(expense.purchaseId, claim!.purchaseId!));
+      const start = () =>
+        startTargetedImport(ctx.db, run.ledgerPartyId!, {
+          purpose: "product_enrichment",
+          targets: [
+            {
+              productId: line!.productId,
+              sourceId: claim!.id,
+              vendorAccountId: null,
+            },
+          ],
+        });
+      for (const website of ["https://www.other-host.example.test", null]) {
+        await getDb(ctx.db)
+          .update(vendor)
+          .set({ website })
+          .where(eq(vendor.id, run.vendorId!));
+        await expect(start()).rejects.toThrow(/browser domains/u);
+      }
     });
 
     it("starts nothing for a mail-only account", async () => {

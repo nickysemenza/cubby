@@ -384,18 +384,33 @@ async function startPurchaseValidation(
 }
 
 /**
- * The page an enrichment run opens first. A browser-captured source's key is
- * its order page; any other source (a Gmail message, a receipt photo) names
- * no page, so the run starts at the Product's own learned page, else the
- * Vendor's website, where the agent searches for the Product by name.
+ * The page an enrichment run opens first: the first HTTP(S) candidate on the
+ * Vendor's browser domains, because the browser bridge refuses any other
+ * navigation. Candidates in order: a browser-captured claim's own page (an
+ * order page), the Product's learned pages (primary first), the Vendor's
+ * website. A Gmail or receipt claim's key names no page and is never used.
  */
 async function enrichmentStartUrl(
   db: Database,
   productId: ProductId,
-  claim: { kind: string; externalKey: string; vendorId: VendorId },
+  claim: Pick<
+    NonNullable<Awaited<ReturnType<typeof claimForActor>>>,
+    "externalKey" | "vendorId"
+  >,
 ) {
-  if (/^https?:\/\//u.test(claim.externalKey)) return claim.externalKey;
-  const [page] = await getDb(db)
+  const [owner] = await getDb(db)
+    .select({
+      name: vendor.name,
+      website: vendor.website,
+      browserDomains: vendor.browserDomains,
+    })
+    .from(vendor)
+    .where(eq(vendor.id, claim.vendorId))
+    .limit(1);
+  const allowed = new Set(
+    owner?.browserDomains.map((host) => host.toLowerCase()),
+  );
+  const pages = await getDb(db)
     .select({ url: entityExternalId.url })
     .from(entityExternalId)
     .where(
@@ -405,15 +420,30 @@ async function enrichmentStartUrl(
         notDeleted(entityExternalId),
       ),
     )
-    .orderBy(desc(entityExternalId.isPrimary))
-    .limit(1);
-  if (page?.url) return page.url;
-  const [owner] = await getDb(db)
-    .select({ website: vendor.website })
-    .from(vendor)
-    .where(eq(vendor.id, claim.vendorId))
-    .limit(1);
-  return owner?.website ?? claim.externalKey;
+    .orderBy(desc(entityExternalId.isPrimary));
+  const candidates = [
+    claim.externalKey,
+    ...pages.map((page) => page.url),
+    owner?.website,
+  ];
+  for (const candidate of candidates) {
+    if (!candidate) continue;
+    let url: URL;
+    try {
+      url = new URL(candidate);
+    } catch {
+      // SILENT: a claim key or malformed website is not a page; try the next.
+      continue;
+    }
+    if (
+      (url.protocol === "https:" || url.protocol === "http:") &&
+      allowed.has(url.hostname.toLowerCase())
+    )
+      return url.href;
+  }
+  throw new Error(
+    `No page to start enriching this Product is on ${owner?.name ?? "its Vendor"}'s browser domains (${[...allowed].join(", ") || "none"}). Add the site's host to the Vendor's browser domains or a website on one of them.`,
+  );
 }
 
 async function startProductEnrichment(
