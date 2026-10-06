@@ -493,7 +493,9 @@ describe("runStartOperation", () => {
       error: {
         code: "INTERNAL_SERVER_ERROR",
         reason: "INVALID_OUTPUT",
-        message: "The operation could not be completed",
+        message:
+          "Output does not match its schema: ok: Invalid input: expected boolean, received string",
+        validationIssues: [{ path: ["ok"] }],
       },
     });
     expect(inspections).toHaveLength(2);

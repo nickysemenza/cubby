@@ -1,6 +1,7 @@
 import { mcpAppResourceUriForTool } from "@cubby/mcp-apps/metadata";
 import { runEntityId } from "@cubby/schemas/identifiers";
 import { purchaseImportRunExecution } from "@cubby/schemas/purchase-import";
+import { createLogger } from "@cubby/worker-tracing";
 import {
   type McpServer,
   type ToolCallback,
@@ -11,11 +12,12 @@ import { eq } from "drizzle-orm";
 import { type JSONType, z } from "zod";
 
 import type { McpActionSpec } from "~/contracts/mcp-define";
+import { roundTo } from "~/lib/round-to";
 import type { StartOperationId } from "~/lib/start-operation-observability";
 import { scheduleCalendarFeedDirty } from "~/server/calendar/client";
 import { recordDatabaseWrite } from "~/server/database-freshness/client";
 import { run as runTable } from "~/server/db/schema";
-import { toPublicErrorPayload } from "~/server/errors/app-error";
+import { AppError, toPublicErrorPayload } from "~/server/errors/app-error";
 import {
   errorReportingHeaders,
   withErrorReporting,
@@ -67,6 +69,8 @@ import { safeToJsonSchema, sdkOutputSchema } from "./tool-json-schema";
 
 export type McpRequestContext = AuthenticatedRequestContext;
 
+const log = createLogger("MCP");
+
 const toolArgumentsSchema = z.looseObject({});
 const emptyInputSchema = z.object({});
 
@@ -100,9 +104,33 @@ export type McpToolBindings = Readonly<
   >
 >;
 
+/**
+ * Wall-clock budget for one MCP tool call, by action kind. A call that dies at
+ * the platform (an empty 503 from a Worker resource limit) reaches the MCP
+ * client as no JSON-RPC response at all, which the connector proxy reports as
+ * a bare "Invalid content from server"; answering first keeps the tool name,
+ * request id, and next step in front of the caller.
+ *
+ * - Reads, 18 s: the motivating read's HTTP twin died with an empty 503 after
+ *   ~22 s. Abandoning a read loses nothing, and the caller can narrow it.
+ * - Writes, 230 s: the Postgres work is not cancelled, so an early answer only
+ *   turns a likely success into an unknown one. AI-backed imports legitimately
+ *   run for minutes: the connector held tool calls open for up to ~208 s that
+ *   returned 200, and one at ~240 s ended in a 500.
+ *
+ * A deadline only fires when the call yields to the event loop; a synchronous
+ * CPU loop or an out-of-memory kill still ends the request without an answer.
+ */
+const MCP_TOOL_DEADLINE_MS = {
+  query: 18_000,
+  mutation: 230_000,
+} as const satisfies Record<"query" | "mutation", number>;
+
 export interface McpToolRegistrationRuntime {
   markCalendarDirty(reason: string): void;
   recordDatabaseWrite?(source: string): Promise<void>;
+  /** Overrides {@link MCP_TOOL_DEADLINE_MS}; tests shorten it. */
+  toolDeadlineMs?: Record<"query" | "mutation", number>;
 }
 
 const productionMcpToolRegistrationRuntime: McpToolRegistrationRuntime = {
@@ -227,6 +255,28 @@ export function describeToolError<T>(
   if (code) detail.code = code;
   if (reason) detail.reason = reason;
   return detail;
+}
+
+/**
+ * The answer for a call that outlived its {@link MCP_TOOL_DEADLINE_MS} budget:
+ * which call, how long, which request, and what the caller can do next.
+ */
+function deadlineError(
+  name: string,
+  write: boolean,
+  budgetMs: number,
+  elapsedMs: number,
+): AppError {
+  const requestId = getRequestId(errorReportingHeaders());
+  const request = requestId ? `; Cubby request ${requestId}` : "";
+  const next = write
+    ? "The write may have completed; re-read the affected records before retrying."
+    : "The work may still be running server-side; it is too slow for the connector. Try a narrower request or the web app.";
+  return new AppError({
+    code: "INTERNAL_SERVER_ERROR",
+    reason: "MCP_TOOL_DEADLINE_EXCEEDED",
+    message: `${name} did not finish within ${budgetMs / 1000}s (answered after ${roundTo(elapsedMs / 1000, 1)}s${request}). ${next}`,
+  });
 }
 
 function formatToolError({ code, reason, message }: ToolErrorDetail): string {
@@ -673,98 +723,27 @@ function registerCompiledTool(
     extra: ToolExtra,
   ): Promise<CallToolResult> =>
     withErrorReporting(async () => {
+      const startedAt = performance.now();
       let stage: OperationStage = "input";
       let entity: string | undefined;
       let mutation = false;
       let enteredHandler = false;
       let operationName = tool.name;
-      try {
-        const action = actionOf(params);
-        if (!action)
-          throw new Error(
-            `${tool.name} needs an \`action\`: one of ${actionNames.join(", ")}.`,
-          );
-        operationName = action.name;
-        const execution = purchaseImportRunExecution
-          .optional()
-          .parse(params._runExecution);
-        const input = action.input.parse(
-          action.prepareInput(actionArguments(action, params)),
-        );
-        entity = action.telemetryEntity(input);
-        stage = "context";
-        mutation = action.kind === "mutation";
-        const preparedExtra = await prepareToolExtra(
-          extra,
-          action.readPolicy(input),
-        );
-        enteredHandler = true;
-        const trusted = trustedPurchaseAgent(preparedExtra);
-        if (trusted)
-          await assertPurchaseAgentAction(
-            getEntityKernelContext(preparedExtra).db,
-            trusted.runId,
-            action.name,
-            mutation,
-          );
-        const governed = selfGoverned(action);
-        if (trusted && mutation && governed) {
-          if (!execution)
-            throw new Error(
-              "Purchase-agent writes require the run execution envelope",
-            );
-          const [delegatedRun] = await getDb(
-            getEntityKernelContext(preparedExtra).db,
-          )
-            .select({ id: runTable.id })
-            .from(runTable)
-            .where(eq(runTable.id, runEntityId.parse(trusted.runId)))
-            .limit(1);
-          if (delegatedRun?.id !== execution.runId)
-            throw new Error(
-              "Purchase-agent run execution does not match its delegation",
-            );
-        }
-        stage = "run";
-        const result =
-          trusted && mutation && !governed
-            ? await (async () => {
-                const operationContext =
-                  operationContextFromExtra(preparedExtra);
-                if (!operationContext)
-                  throw new Error(
-                    "Purchase-agent operation context is missing",
-                  );
-                if (!execution)
-                  throw new Error(
-                    "Purchase-agent writes require the run execution envelope",
-                  );
-                const kernel = getEntityKernelContext(preparedExtra);
-                return executePurchaseAgentMutation({
-                  db: kernel.db,
-                  actor: kernel.actorContext,
-                  operationContext,
-                  trusted,
-                  toolName: action.name,
-                  args: input,
-                  execution,
-                  run: (transactionExtra) =>
-                    action.invoke(
-                      input,
-                      transactionExtra,
-                      action.name,
-                      execution,
-                    ),
-                  baseExtra: preparedExtra,
-                });
-              })()
-            : await action.invoke(input, preparedExtra, action.name, execution);
-        stage = "output";
-        const response = structuredSuccess(result, action.output);
-        if (mutation) runtime.markCalendarDirty(`mcp.${action.name}`);
-        return response;
-      } catch (error) {
-        return structuredError(
+      const kind = actionOf(params)?.kind ?? "query";
+      const budgetMs = (runtime.toolDeadlineMs ?? MCP_TOOL_DEADLINE_MS)[kind];
+      // The deadline aborts the same signal a client cancel does. Only work
+      // that reads it stops (AI and upstream fetches); kernel verbs and
+      // Postgres queries run on until they finish or the request ends.
+      const deadline = new AbortController();
+      const callExtra: ToolExtra = {
+        ...extra,
+        mcpReq: {
+          ...extra.mcpReq,
+          signal: AbortSignal.any([extra.mcpReq.signal, deadline.signal]),
+        },
+      };
+      const failure = <T>(error: T) =>
+        structuredError(
           error,
           {
             operation: operationName,
@@ -773,11 +752,144 @@ function registerCompiledTool(
           },
           stage,
         );
+      const execute = async (): Promise<CallToolResult> => {
+        try {
+          const action = actionOf(params);
+          if (!action)
+            throw new Error(
+              `${tool.name} needs an \`action\`: one of ${actionNames.join(", ")}.`,
+            );
+          operationName = action.name;
+          const execution = purchaseImportRunExecution
+            .optional()
+            .parse(params._runExecution);
+          const input = action.input.parse(
+            action.prepareInput(actionArguments(action, params)),
+          );
+          entity = action.telemetryEntity(input);
+          stage = "context";
+          mutation = action.kind === "mutation";
+          const preparedExtra = await prepareToolExtra(
+            callExtra,
+            action.readPolicy(input),
+          );
+          enteredHandler = true;
+          const trusted = trustedPurchaseAgent(preparedExtra);
+          if (trusted)
+            await assertPurchaseAgentAction(
+              getEntityKernelContext(preparedExtra).db,
+              trusted.runId,
+              action.name,
+              mutation,
+            );
+          const governed = selfGoverned(action);
+          if (trusted && mutation && governed) {
+            if (!execution)
+              throw new Error(
+                "Purchase-agent writes require the run execution envelope",
+              );
+            const [delegatedRun] = await getDb(
+              getEntityKernelContext(preparedExtra).db,
+            )
+              .select({ id: runTable.id })
+              .from(runTable)
+              .where(eq(runTable.id, runEntityId.parse(trusted.runId)))
+              .limit(1);
+            if (delegatedRun?.id !== execution.runId)
+              throw new Error(
+                "Purchase-agent run execution does not match its delegation",
+              );
+          }
+          stage = "run";
+          const result =
+            trusted && mutation && !governed
+              ? await (async () => {
+                  const operationContext =
+                    operationContextFromExtra(preparedExtra);
+                  if (!operationContext)
+                    throw new Error(
+                      "Purchase-agent operation context is missing",
+                    );
+                  if (!execution)
+                    throw new Error(
+                      "Purchase-agent writes require the run execution envelope",
+                    );
+                  const kernel = getEntityKernelContext(preparedExtra);
+                  return executePurchaseAgentMutation({
+                    db: kernel.db,
+                    actor: kernel.actorContext,
+                    operationContext,
+                    trusted,
+                    toolName: action.name,
+                    args: input,
+                    execution,
+                    run: (transactionExtra) =>
+                      action.invoke(
+                        input,
+                        transactionExtra,
+                        action.name,
+                        execution,
+                      ),
+                    baseExtra: preparedExtra,
+                  });
+                })()
+              : await action.invoke(
+                  input,
+                  preparedExtra,
+                  action.name,
+                  execution,
+                );
+          stage = "output";
+          const response = structuredSuccess(result, action.output);
+          if (mutation) runtime.markCalendarDirty(`mcp.${action.name}`);
+          return response;
+        } catch (error) {
+          // Past the deadline the caller already has its answer; the abandoned
+          // work's own late failure is not a second error to report.
+          if (deadline.signal.aborted) throw error;
+          return failure(error);
+        }
+      };
+
+      let timer: ReturnType<typeof setTimeout> | undefined;
+      const expired = new Promise<void>((resolve) => {
+        timer = setTimeout(resolve, budgetMs);
+      });
+      const work = execute();
+      try {
+        const finished = await Promise.race([work, expired]);
+        if (finished) return finished;
+        const elapsedMs = Math.round(performance.now() - startedAt);
+        deadline.abort(
+          new DOMException(
+            `${operationName} exceeded its ${budgetMs} ms MCP deadline`,
+            "TimeoutError",
+          ),
+        );
+        // SILENT: the abandoned work rejects only after the abort above, and
+        // its outcome no longer reaches anyone.
+        void work.catch(() => undefined);
+        log.warn("MCP tool deadline exceeded", {
+          tool: operationName,
+          stage,
+          budgetMs,
+          elapsedMs,
+        });
+        return failure(
+          deadlineError(
+            operationName,
+            kind === "mutation",
+            budgetMs,
+            elapsedMs,
+          ),
+        );
       } finally {
+        clearTimeout(timer);
         // A tool can commit before later validation or another item in a batch
-        // fails. Advancing the shared window here keeps every client strong for
-        // that possible partial write without turning a committed response into
-        // an error when the Durable Object is unavailable.
+        // fails, or after its deadline answered. Advancing the shared window
+        // here keeps every client strong for that possible partial write
+        // without turning a committed response into an error when the Durable
+        // Object is unavailable.
         if (enteredHandler && mutation)
           await runtime.recordDatabaseWrite?.(`mcp.${operationName}`);
       }

@@ -207,6 +207,11 @@ export const AppErrors = {
   // ProductImage query failed transiently).
   WRITE_COMMITTED_READBACK_FAILED: "INTERNAL_SERVER_ERROR",
 
+  // An MCP tool call outlived its wall-clock budget and was answered before
+  // it finished. A 5xx so every occurrence reaches Sentry with the tool name;
+  // a write may still have committed (see `MCP_TOOL_DEADLINE_MS`).
+  MCP_TOOL_DEADLINE_EXCEEDED: "INTERNAL_SERVER_ERROR",
+
   // Image operations
   IMAGE_UPLOAD_FAILED: "INTERNAL_SERVER_ERROR",
   IMAGE_CULL_FAILED: "INTERNAL_SERVER_ERROR",
