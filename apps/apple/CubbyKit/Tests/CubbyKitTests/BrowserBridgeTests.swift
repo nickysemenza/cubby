@@ -404,6 +404,34 @@ struct BrowserBridgeTests {
             #expect(!encoded.variantGroup)
             #expect(encoded.products.map(\.skus) == [["FW-TEE-BLK-M"]])
         }
+
+        @Test("An identifier longer than the capture keeps fails closed instead of comparing a prefix")
+        func structuredProductsOverlongIdentifier() throws {
+            let prefix = String(repeating: "X", count: 100)
+            let block = """
+                {"@context":"https://schema.org","@type":"Product","sku":"\(prefix)S",
+                 "gtin13":"0036000291452","offers":\(Self.offer(sku: prefix + "M", variant: 222))}
+                """
+            let capture = try walkStructuredProducts(
+                pageURL: "https://shop.forgewear.example.test/products/tee?variant=222", blocks: [block])
+            #expect(capture.variantGroup)
+        }
+
+        @Test("A repeated or undecodable served variant never takes the agreement shortcut")
+        func structuredProductsInvalidServedVariant() throws {
+            let block = """
+                {"@context":"https://schema.org","@type":"Product","sku":"SYN-S",
+                 "offers":\(Self.offer(sku: "SYN-S", variant: 111))}
+                """
+            let base = "https://shop.forgewear.example.test/products/tee"
+            for query in ["?variant=111&variant=222", "?variant=%ZZ"] {
+                let capture = try walkStructuredProducts(pageURL: base + query, blocks: [block])
+                #expect(capture.variantGroup, "\(query)")
+            }
+            let absent = try walkStructuredProducts(pageURL: base, blocks: [block])
+            #expect(!absent.variantGroup)
+            #expect(absent.products.map(\.skus) == [["SYN-S"]])
+        }
     #endif
 
     @Test("Completed results replay until acknowledged")

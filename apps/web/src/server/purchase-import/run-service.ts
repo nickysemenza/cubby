@@ -431,6 +431,41 @@ export async function startOrResumeRun(
 }
 
 /**
+ * One Product is enriched by at most one active run. Product locks are taken
+ * in id order, inside the admitting transaction and after its account lock,
+ * so two admissions on different accounts (a sweep and a member's manual
+ * start) cannot both admit a Product or deadlock over overlapping ones.
+ */
+async function withoutHeldProducts(
+  tx: DrizzleTransaction,
+  targets: TargetedRunTarget[],
+) {
+  const productIds = targets.flatMap((target) =>
+    target.kind === "product" ? [productId.parse(target.productId)] : [],
+  );
+  if (productIds.length === 0) return targets;
+  for (const id of [...productIds].sort())
+    await tx.execute(
+      sql`SELECT pg_advisory_xact_lock(hashtext(${`product-enrichment:${id}`}))`,
+    );
+  const held = await tx
+    .select({ productId: runTarget.entityId })
+    .from(runTarget)
+    .innerJoin(runTable, eq(runTable.id, runTarget.runId))
+    .where(
+      and(
+        eq(runTable.purpose, "product_enrichment"),
+        inArray(runTable.status, [...ACTIVE_RUN_STATUSES]),
+        inArray(runTarget.entityId, productIds),
+      ),
+    );
+  const heldIds = new Set<string>(held.map((row) => row.productId));
+  return targets.filter(
+    (target) => target.kind !== "product" || !heldIds.has(target.productId),
+  );
+}
+
+/**
  * Creates an explicit validation/enrichment run. Unlike account sync, an
  * occupied account is a refusal, never a silently persisted waiting job.
  */
@@ -484,9 +519,11 @@ export async function startTargetedRun(
         .limit(1);
       if (blockingRun) return { created: false as const, blockingRun };
     }
-    const targets = options.admit
-      ? await options.admit(tx, input.targets)
-      : input.targets;
+    const unheld =
+      purpose === "product_enrichment"
+        ? await withoutHeldProducts(tx, input.targets)
+        : input.targets;
+    const targets = options.admit ? await options.admit(tx, unheld) : unheld;
     if (targets.length === 0)
       return { created: false as const, blockingRun: null };
 

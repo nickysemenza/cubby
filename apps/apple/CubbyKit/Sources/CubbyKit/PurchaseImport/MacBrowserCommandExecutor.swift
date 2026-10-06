@@ -15,8 +15,9 @@
         }
         /// Bumped when the fixed capture script's output changes. Version 2 adds schema.org
         /// Product identifiers (`structuredProducts`); version 3 reads them from a Product's
-        /// `offers`, selecting only the served `?variant=` Offer.
-        static let captureVersion = 3
+        /// `offers`, selecting only the served `?variant=` Offer; version 4 fails closed on an
+        /// overlong identifier or an unreadable served variant.
+        static let captureVersion = 4
 
         struct FixedCapturePayload: Decodable {
             struct Link: Decodable { let url: String; let label: String? }
@@ -640,7 +641,10 @@
                 for (const key of keys) {
                   for (const item of [].concat(node[key] ?? [])) {
                     if (typeof item !== 'string' && typeof item !== 'number') continue;
-                    const text = clean(item).slice(0, 100);
+                    const full = clean(item);
+                    // A clipped identifier could equal another variant's; never compare prefixes.
+                    if (full.length > 100) truncated = true;
+                    const text = full.slice(0, 100);
                     if (text && !out.includes(text)) out.push(text);
                   }
                 }
@@ -674,8 +678,10 @@
               const conflicts = (left, right) =>
                 left.length > 0 && right.length > 0 && !sameList(left, right);
               // Shopify-style `?variant=<id>`, hand-parsed because JavaScriptCore has no URL: only
-              // the query component counts, names and values are decoded, and a missing,
-              // repeated or undecodable variant parameter selects nothing.
+              // the query component counts and names and values are decoded. No variant parameter
+              // is null; a repeated, empty or undecodable one is `invalid`, which never matches and
+              // never lets a Product and its Offers merge.
+              const invalid = {};
               const variantOf = url => {
                 const beforeFragment = String(url ?? '').split('#')[0];
                 const start = beforeFragment.indexOf('?');
@@ -689,10 +695,11 @@
                   try {
                     name = decode(equals < 0 ? pair : pair.slice(0, equals));
                     value = decode(equals < 0 ? '' : pair.slice(equals + 1));
-                  } catch { return null; }
+                  } catch { return invalid; }
                   if (name === 'variant') found.push(value);
                 }
-                return found.length === 1 && found[0] ? found[0] : null;
+                if (found.length === 0) return null;
+                return found.length === 1 && found[0] ? found[0] : invalid;
               };
               const servedVariant = variantOf(location.href);
               const products = [];
@@ -722,6 +729,11 @@
                 const own = identifiers(product);
                 const offers = collectOffers(product);
                 if (offers.length === 0) return own;
+                // The page's variant cannot be read, so no Offer may stand for it.
+                if (servedVariant === invalid) {
+                  variantGroup = true;
+                  return own;
+                }
                 const offerSets = offers.map(identifiers);
                 const offerVariants = offers.map(offer => variantOf(offer.url));
                 const agree = offerSets.every(set => sameSet(set, offerSets[0]))

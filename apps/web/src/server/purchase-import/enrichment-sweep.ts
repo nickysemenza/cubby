@@ -1,9 +1,10 @@
 import type {
+  ProductId,
   PurchaseId,
   RunId,
   VendorAccountId,
 } from "@cubby/schemas/identifiers";
-import { and, eq, gte, inArray, isNotNull, sql } from "drizzle-orm";
+import { and, eq, gte, inArray, isNotNull } from "drizzle-orm";
 
 import type { Database, DrizzleTransaction } from "~/server/db";
 import {
@@ -88,11 +89,15 @@ export async function sweepPendingEnrichment(
   );
   const byAccount = new Map<
     VendorAccountId,
-    { account: (typeof accounts)[number]; rows: typeof candidates }
+    {
+      account: (typeof accounts)[number];
+      rows: { productId: ProductId; startUrl: string }[];
+    }
   >();
   const chosen = new Set<string>();
   // Candidates arrive oldest Product first, each Product's product page
-  // first: a Product goes to the first of its Purchases whose Vendor browses.
+  // first: a Product goes to the first of its lines whose Vendor browses and
+  // that yields a page on that Vendor's browser domains.
   for (const row of candidates) {
     if (chosen.has(row.productId)) continue;
     const account = browsingAccountFor(accounts, row);
@@ -102,9 +107,17 @@ export async function sweepPendingEnrichment(
       !options.vendorAccountIds.includes(account.id)
     )
       continue;
+    const startUrl = await enrichmentStartPage(db, {
+      productId: row.productId,
+      vendorId: account.vendorId,
+      pages: [row.url],
+    });
+    // No page the bridge may open: try the Product's next line. A Product
+    // with none waits for a domain or website on its Vendor.
+    if (!startUrl) continue;
     chosen.add(row.productId);
     const group = byAccount.get(account.id) ?? { account, rows: [] };
-    group.rows.push(row);
+    group.rows.push({ productId: row.productId, startUrl });
     byAccount.set(account.id, group);
   }
   for (const { account, rows } of byAccount.values()) {
@@ -113,22 +126,14 @@ export async function sweepPendingEnrichment(
       continue;
     }
     const targets = [];
-    for (const row of rows) {
-      if (targets.length === TARGETS_PER_RUN) break;
-      const startUrl = await enrichmentStartPage(db, {
-        productId: row.productId,
-        vendorId: account.vendorId,
-        pages: [row.url],
-      });
+    for (const row of rows.slice(0, TARGETS_PER_RUN)) {
       const live = await productEnrichmentTarget(getDb(db), row.productId);
-      // No page on the Vendor's browser domains: the bridge could not open
-      // one, so the Product waits for a domain or website on the Vendor.
-      if (!startUrl || !live) continue;
+      if (!live) continue;
       targets.push({
         kind: "product" as const,
         productId: row.productId,
         vendorAccountId: account.id,
-        sourceExternalKey: startUrl,
+        sourceExternalKey: row.startUrl,
         targetFingerprint: live.fingerprint,
       });
     }
@@ -199,23 +204,21 @@ export async function sweepImportedPurchases(
 }
 
 /**
- * Recheck the sweep's earlier read inside the admission transaction: two
- * passes (cron and app open) or a member's manual start on another account
- * may have admitted a Product since. Product locks are taken in one order so
- * concurrent admissions over overlapping Products cannot deadlock.
+ * Recheck the sweep's earlier read inside the admission transaction, after
+ * `startTargetedRun` has locked the Products and dropped any an active run
+ * holds: a racing pass may have spent a Product's last attempt or finished
+ * it since.
  */
 async function admitOpenProducts(
   tx: DrizzleTransaction,
   targets: TargetedRunTarget[],
 ): Promise<TargetedRunTarget[]> {
-  const productIds = targets.flatMap((target) =>
-    target.kind === "product" ? [target.productId] : [],
+  const open = await openProducts(
+    tx,
+    targets.flatMap((target) =>
+      target.kind === "product" ? [target.productId] : [],
+    ),
   );
-  for (const id of [...productIds].sort())
-    await tx.execute(
-      sql`SELECT pg_advisory_xact_lock(hashtext(${`product-enrichment:${id}`}))`,
-    );
-  const open = await openProducts(tx, productIds);
   return targets.filter(
     (target) => target.kind === "product" && open.has(target.productId),
   );

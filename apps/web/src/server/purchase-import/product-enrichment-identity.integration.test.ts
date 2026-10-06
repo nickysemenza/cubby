@@ -472,7 +472,7 @@ describe("product enrichment worklist", () => {
         .where(eq(runTarget.id, targetId));
       return row;
     };
-    return { runId, claim, capture, skip, targetState };
+    return { runId, party, products, claim, capture, skip, targetState };
   }
 
   it("captures for the claimed target and moves past a skipped Product", async () => {
@@ -565,6 +565,40 @@ describe("product enrichment worklist", () => {
       warning: "No exact source page shows this variant.",
     });
     expect((await claim()).targetId).not.toBe(claimed.targetId);
+  });
+
+  // Any enrichment admission (a member's manual start included) must not
+  // put a Product into a second concurrent run on another account.
+  it("does not admit a Product another active run is enriching", async () => {
+    const { party, products } = await worklist();
+    const otherVendor = await insertWithShortcode(ctx.db, "vendor", {
+      name: `Example Other Shop ${crypto.randomUUID()}`,
+      website: "https://other.example.test",
+      browserDomains: ["other.example.test"],
+    });
+    const otherAccount = await insertWithShortcode(ctx.db, "vendorAccount", {
+      label: "Synthetic other account",
+      vendorId: otherVendor.id,
+      ledgerPartyId: party.id,
+      status: "active",
+      browserSyncEnabled: true,
+    });
+    const second = await startTargetedRun(ctx.db, {
+      ledgerPartyId: party.id,
+      purpose: "product_enrichment",
+      vendorId: otherVendor.id,
+      vendorAccountId: otherAccount.id,
+      trigger: "manual",
+      targets: [
+        {
+          kind: "product",
+          productId: products[0]!.entityId,
+          sourceExternalKey: "https://other.example.test/",
+          targetFingerprint: "f".repeat(64),
+        },
+      ],
+    });
+    expect(second).toEqual({ created: false, blockingRun: null });
   });
 
   it("returns the recorded result to a concurrent replay of one skip", async () => {

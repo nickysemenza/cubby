@@ -133,9 +133,10 @@ async function startedOutcome(
   started: Awaited<ReturnType<typeof startTargetedRun>>,
 ): Promise<TargetedImportStartOutput["runs"][number]> {
   if (!started.created) {
-    // Only an `admit` narrowing leaves no blocking run; manual starts pass none.
     if (!started.blockingRun)
-      throw new Error("Targeted import run admitted no targets");
+      throw new Error(
+        "Every Product here is already being enriched by an active run",
+      );
     return {
       created: false,
       run: null,

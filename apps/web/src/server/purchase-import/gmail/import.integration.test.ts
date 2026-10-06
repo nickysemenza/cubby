@@ -1059,6 +1059,39 @@ describe("saved confirmation imports", () => {
         ).toEqual([{ runId: expect.any(String), vendorAccountId: accountId }]);
       });
 
+      // A line whose page is off the Vendor's browser domains cannot start a
+      // run; another line of the same Product with a usable page must.
+      it("starts from a later line's product page when the first line's page is unusable", async () => {
+        const { accountId, line, run, productUrl } = await mailOnlyImport();
+        await enableBrowserSync(accountId);
+        await getDb(ctx.db)
+          .update(vendor)
+          .set({ website: null })
+          .where(eq(vendor.id, run.vendorId!));
+        const repeat = await insertWithShortcode(ctx.db, "purchase", {
+          vendorId: run.vendorId!,
+          vendorAccountId: accountId,
+          orderId: "REPEAT-1",
+          date: "2026-09-03",
+        });
+        await insertWithShortcode(ctx.db, "expense", {
+          purchaseId: repeat.id,
+          name: "Synthetic herb packet",
+          cost: 5,
+          date: "2026-09-03",
+          lineKind: "principal",
+          costType: "materials",
+          // Sorts ahead of the usable page and is off the browser domains.
+          url: "https://aaa.offsite.example.test/herb",
+          productId: line.productId,
+          productQuantity: 1,
+        });
+        await sweepPendingEnrichment(ctx.db, { bridge: online });
+        expect(await enrichmentTargets()).toMatchObject([
+          { productId: line.productId, startUrl: productUrl },
+        ]);
+      });
+
       // Two passes racing (cron and app open) must not spend a fourth
       // attempt or start the same Product twice.
       it("admits a Product once when two sweeps race", async () => {
