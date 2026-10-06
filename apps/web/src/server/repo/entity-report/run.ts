@@ -499,6 +499,11 @@ function productChoice(id: string, prepared: PreparedLine): ReportChoice {
         label: "Leave Product unresolved",
         text: { label: `Reason for leaving ${prepared.title} unresolved` },
       },
+      {
+        id: "expense_only",
+        label: "Record as an expense only",
+        hint: "For a meal, ticket, ride, subscription, donation, or service: no Product is created.",
+      },
     ],
     suggestions: prepared.candidates.map((candidate) => {
       const subtitle = [

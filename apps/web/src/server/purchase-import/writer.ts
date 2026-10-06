@@ -686,6 +686,10 @@ export async function resolveLineProduct(
   productsByExternalIdentity: Map<string, string>,
   onCreated?: (productId: ProductId) => void,
 ) {
+  // A line decided to carry no Product (expense-only, or coarse-only) keeps
+  // none, even when an earlier line with the same SKU resolved one.
+  if (!decision.productId && !decision.promote && !decision.unresolvedReason)
+    return null;
   const source = externalSource(line.productUrl, vendorId);
   const externalIdentity = lineExternalIdentity(line, vendorId);
   const resolvedEarlier = externalIdentity

@@ -78,6 +78,8 @@ type PlanLine = {
   quantity?: number;
   /** Product shortcode (existing) for a principal line. */
   product?: string;
+  /** Resolve the principal line as an expense with no Product. */
+  expenseOnly?: boolean;
 };
 
 describe("apply a reviewed purchase-validation diff", () => {
@@ -248,10 +250,12 @@ describe("apply a reviewed purchase-validation diff", () => {
                 {
                   stableOrderId: `order-${n}`,
                   stableLineId: `line-${n}-${i}`,
-                  resolution: {
-                    kind: "existing",
-                    productId: line.product ?? baseRow!.shortcode,
-                  },
+                  resolution: line.expenseOnly
+                    ? { kind: "expense_only" }
+                    : {
+                        kind: "existing",
+                        productId: line.product ?? baseRow!.shortcode,
+                      },
                 },
               ]
             : [],
@@ -596,6 +600,28 @@ describe("apply a reviewed purchase-validation diff", () => {
     expect(row).toMatchObject({
       productId: resolved.entityId,
       productQuantity: 1,
+    });
+  });
+
+  // An expense-only line (a meal, a ticket) was saved with no Product and no
+  // unit count; validating the unchanged order must find nothing to correct.
+  it("finds no drift on an unchanged expense-only line", async () => {
+    const s = await scenario({
+      live: [{ name: "Spicy basil noodles", cost: 10, productId: null }],
+      plan: [
+        {
+          title: "Spicy basil noodles",
+          amount: 10,
+          quantity: 1,
+          expenseOnly: true,
+        },
+      ],
+      planStatedTotal: 10,
+    });
+    // Semantically equal: the target completes with no diff to review.
+    expect(await s.targetDiff()).toMatchObject({
+      state: "completed",
+      diff: null,
     });
   });
 

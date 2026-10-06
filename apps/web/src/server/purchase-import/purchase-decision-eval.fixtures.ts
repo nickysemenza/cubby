@@ -573,6 +573,23 @@ export const purchaseDecisionCases: DecisionCase[] = [
     ]),
   },
   {
+    // A subscription that ships seeds is still a stocked item.
+    name: "line-roles-seed-subscription",
+    focus: "line_roles",
+    orderId: "DEC20012",
+    orderedAt: "2026-09-23",
+    extraction: { status: "ready" },
+    printsTotal: true,
+    lines: [line("seeds", "Monthly seed club: Example Sun Tomato packet", 12)],
+    catalog: [],
+    expected: written("2026-09-23", [
+      [
+        line("seeds", "Monthly seed club: Example Sun Tomato packet", 12),
+        { kind: "new" },
+      ],
+    ]),
+  },
+  {
     name: "line-roles-fee-and-tip",
     focus: "line_roles",
     orderId: "DEC20002",

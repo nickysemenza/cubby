@@ -429,12 +429,22 @@ describe("saved confirmation imports", () => {
                 orderedAt: "2026-09-01T12:00:00Z",
                 merchant: "Example Noodle Bar",
                 currency: "USD",
-                printedGrandTotal: 5,
+                printedGrandTotal: 10,
+                // Both lines print the same menu SKU: the expense-only line
+                // must not inherit the Product the first line created.
                 lines: [
+                  {
+                    title: "Chili crisp jar",
+                    amount: 5,
+                    quantity: 1,
+                    sku: "MENU-7",
+                    lineKind: "principal" as const,
+                  },
                   {
                     title: "Spicy basil noodles, large",
                     amount: 5,
                     quantity: 1,
+                    sku: "MENU-7",
                     lineKind: "principal" as const,
                   },
                 ],
@@ -442,7 +452,7 @@ describe("saved confirmation imports", () => {
                 allShipmentsDelivered: null,
               },
             },
-            lineIds: ["noodles"],
+            lineIds: ["jar", "noodles"],
             primaryDocumentImageId: null,
             screenshotImageId: null,
           },
@@ -459,6 +469,11 @@ describe("saved confirmation imports", () => {
         resolutions: [
           {
             stableOrderId: "assigned-mail",
+            stableLineId: "jar",
+            resolution: { kind: "new" as const },
+          },
+          {
+            stableOrderId: "assigned-mail",
             stableLineId: "noodles",
             resolution: { kind: "expense_only" as const },
           },
@@ -472,11 +487,13 @@ describe("saved confirmation imports", () => {
       .from(expense)
       .innerJoin(purchase, eq(purchase.id, expense.purchaseId))
       .where(eq(purchase.orderId, evidence!.orderId));
-    expect(lines).toEqual([
-      { name: "Spicy basil noodles, large", productId: null },
-    ]);
+    expect(lines.find((line) => line.name.startsWith("Spicy"))).toEqual({
+      name: "Spicy basil noodles, large",
+      productId: null,
+    });
+    // Only the jar became a Product.
     expect(await getDb(ctx.db).select().from(product)).toHaveLength(
-      productsBefore.length,
+      productsBefore.length + 1,
     );
     expect(
       await getDb(ctx.db)

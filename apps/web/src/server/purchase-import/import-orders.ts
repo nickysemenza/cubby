@@ -1093,13 +1093,16 @@ export async function validatePurchaseImport(
                 throw new Error(
                   `Missing product resolution for ${order.stableOrderId}/${line.stableLineId}`,
                 );
+              // An expense-only line has no Product and no unit count, the
+              // same as the expense the writer saved for it.
+              const expenseOnly = resolution?.kind === "expense_only";
               return {
                 title: parsed.title,
                 amount: parsed.amount,
                 lineKind: parsed.lineKind,
-                quantity: parsed.quantity ?? null,
+                quantity: expenseOnly ? null : (parsed.quantity ?? null),
                 productId:
-                  parsed.lineKind !== "principal"
+                  parsed.lineKind !== "principal" || expenseOnly
                     ? null
                     : resolution?.kind === "existing"
                       ? resolution.productId

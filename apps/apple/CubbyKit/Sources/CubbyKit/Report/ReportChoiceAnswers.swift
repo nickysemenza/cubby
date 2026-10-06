@@ -92,6 +92,7 @@ public struct ReportChoiceAnswers: Equatable, Sendable {
         case existing(String)
         case new
         case unresolved(String)
+        case expenseOnly
     }
 
     private func decision(of choiceID: String) -> Decision? {
@@ -107,6 +108,8 @@ public struct ReportChoiceAnswers: Equatable, Sendable {
                 !reason.isEmpty
             else { return nil }
             return .unresolved(reason)
+        case "expense_only":
+            return .expenseOnly
         default:
             return nil
         }
@@ -140,6 +143,10 @@ public struct ReportChoiceAnswers: Equatable, Sendable {
                     .init(
                         stableOrderId: line.stableOrderID, stableLineId: line.stableLineID,
                         resolution: .unresolved(.init(kind: .unresolved, reason: reason)))
+                case .expenseOnly:
+                    .init(
+                        stableOrderId: line.stableOrderID, stableLineId: line.stableLineID,
+                        resolution: .expenseOnly(.init(kind: .expenseOnly)))
                 }
             },
             runId: command.runID, operationId: operationID)
