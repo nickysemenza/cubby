@@ -6,8 +6,11 @@ import { TEST_ACTOR, withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 import { z } from "zod";
 
+import { entityExternalId, productCategory } from "~/server/db/schema";
 import { unwrapDb } from "~/server/repo/database-helpers";
+import { ensureExternalSources } from "~/server/repo/entity-external-ids";
 import { createExpense } from "~/server/repo/expense/crud";
+import { createProductCategory } from "~/server/repo/product-category";
 import { productList } from "~/server/repo/product/crud";
 import { purchaseList } from "~/server/repo/purchase";
 import {
@@ -56,8 +59,9 @@ describe("data quality: list filters, sort and hydration agree", () => {
       makeProductInput({ name: "DQ middling", manufacturer: "Acme", price: 4 }),
       TEST_ACTOR,
     );
-    // Neither stocked nor purchased: completeness stays 100, while the
-    // unscored orphan diagnostic remains visible and cannot be exempted.
+    // Neither stocked nor purchased: no weighted check applies, so the
+    // unscored orphan diagnostic alone caps the score at 99; it remains
+    // visible and cannot be exempted.
     const outOfScope = await createProductFixture(
       ctx.db,
       makeProductInput({
@@ -90,7 +94,7 @@ describe("data quality: list filters, sort and hydration agree", () => {
     expect(hydrated.get(middling.entityId)?.status).toBe("needs_data");
     expect(hydrated.get(outOfScope.entityId)).toMatchObject({
       status: "defect",
-      score: 100,
+      score: 99,
       gaps: [expect.objectContaining({ check: "product_orphaned" })],
     });
     expect(hydrated.get(weak.entityId)?.gaps.map((gap) => gap.check)).toContain(
@@ -131,10 +135,10 @@ describe("data quality: list filters, sort and hydration agree", () => {
       middling.entityId,
       outOfScope.entityId,
     ]);
-    const weakScore = hydrated.get(weak.entityId)!.score;
-    const middlingScore = hydrated.get(middling.entityId)!.score;
+    const weakScore = hydrated.get(weak.entityId)!.score!;
+    const middlingScore = hydrated.get(middling.entityId)!.score!;
     expect(weakScore).toBeLessThan(middlingScore);
-    expect(middlingScore).toBeLessThan(100);
+    expect(middlingScore).toBeLessThan(99);
 
     const { data } = await productList(
       ctx.db,
@@ -150,7 +154,7 @@ describe("data quality: list filters, sort and hydration agree", () => {
     expect(data.map((row) => row.dataQuality.score)).toEqual([
       weakScore,
       middlingScore,
-      100,
+      99,
     ]);
   });
 
@@ -179,7 +183,7 @@ describe("data quality: list filters, sort and hydration agree", () => {
     expect(excepted.gaps.map((gap) => gap.check)).not.toContain(
       "product_manufacturer",
     );
-    expect(excepted.score).toBeGreaterThan(before.score);
+    expect(excepted.score).toBeGreaterThan(before.score!);
     const noMaker = new Set(
       (
         await productList(
@@ -199,6 +203,137 @@ describe("data quality: list filters, sort and hydration agree", () => {
     );
     expect(cleared.exceptions).toEqual([]);
     expect(cleared.score).toBe(before.score);
+  });
+
+  // Failure modes: a sale/discard Expense passing as purchase evidence; a
+  // soft-deleted category or a blank external id passing as identity; a
+  // missing category scoring like any other identity gap.
+  it("product: requires live identity and acquiring evidence", async () => {
+    const shelf = await createLocationFixture(
+      ctx.db,
+      makeLocationInput({ name: "DQ identity shelf" }),
+      TEST_ACTOR,
+    );
+    const category = await createProductCategory(
+      ctx.db,
+      buildEntity("productCategory", { name: "DQ doomed category" }),
+      TEST_ACTOR,
+    );
+    const sold = await createProductFixture(
+      ctx.db,
+      makeProductInput({
+        name: "DQ sold only",
+        manufacturer: "Acme",
+        categoryId: category.output.id,
+      }),
+      TEST_ACTOR,
+    );
+    const bought = await createProductFixture(
+      ctx.db,
+      makeProductInput({ name: "DQ bought", manufacturer: "Acme" }),
+      TEST_ACTOR,
+    );
+    for (const item of [sold, bought])
+      await createInventoryFixture(
+        ctx.db,
+        {
+          productId: item.id,
+          locationId: shelf.id,
+          amount: { value: 1, unit: "each" },
+          placement: "stock",
+        },
+        TEST_ACTOR,
+      );
+    // A resale is a product-linked Expense whose money flows in.
+    await createExpense(
+      ctx.db,
+      buildEntity(
+        "expense",
+        makeExpenseInput({ name: "DQ resale", productId: sold.id, cost: -20 }),
+      ),
+      TEST_ACTOR,
+    );
+    await createExpense(
+      ctx.db,
+      buildEntity(
+        "expense",
+        makeExpenseInput({ name: "DQ buy", productId: bought.id, cost: 20 }),
+      ),
+      TEST_ACTOR,
+    );
+    await ensureExternalSources(ctx.db, ["synthetic"]);
+    await unwrapDb(ctx.db)
+      .insert(entityExternalId)
+      .values({
+        entityId: sold.entityId,
+        entityKind: "product" as const,
+        source: "synthetic",
+        kind: "retailer_sku",
+        externalId: "   ",
+        isPrimary: true,
+      });
+    await unwrapDb(ctx.db)
+      .update(productCategory)
+      .set({ deletedAt: new Date() })
+      .where(sql`${productCategory.id} = ${category.entityId}`);
+
+    const hydrated = await loadDataQualities(ctx.db, "product", [
+      sold.entityId,
+      bought.entityId,
+    ]);
+    const soldQuality = hydrated.get(sold.entityId)!;
+    const soldGaps = soldQuality.gaps.map((gap) => gap.check);
+    expect(soldGaps).toContain("product_unpurchased");
+    expect(soldGaps).toContain("product_category");
+    expect(soldGaps).toContain("product_external_id");
+    // A missing category is indispensable identity: capped at 69.
+    expect(soldQuality.score).toBeLessThanOrEqual(69);
+    expect(
+      hydrated.get(bought.entityId)?.gaps.map((gap) => gap.check),
+    ).not.toContain("product_unpurchased");
+  });
+
+  // Failure mode: a planned (future) line, which may be unpriced by policy,
+  // still flagging its Purchase as having an unpriced line.
+  it("purchase: an unpriced future line is not an unpriced expense", async () => {
+    const line = await createExpense(
+      ctx.db,
+      buildEntity(
+        "expense",
+        makeExpenseInput({
+          name: "DQ planned line",
+          cost: undefined,
+          future: true,
+          vendor: "DQ planned vendor",
+          orderId: "DQ-PLAN-1",
+        }),
+      ),
+      TEST_ACTOR,
+    );
+    const purchaseId = line.output.purchaseId;
+    if (!purchaseId) throw new Error("Fixture has no Purchase");
+    const planned = (
+      await purchaseList(ctx.db, { dataGap: ["unpriced_expense"] }, [], page)
+    ).data.map((row) => row.id);
+    expect(planned).not.toContain(purchaseId);
+
+    await createExpense(
+      ctx.db,
+      buildEntity(
+        "expense",
+        makeExpenseInput({
+          name: "DQ spent unpriced line",
+          cost: undefined,
+          future: false,
+          purchaseId,
+        }),
+      ),
+      TEST_ACTOR,
+    );
+    const spent = (
+      await purchaseList(ctx.db, { dataGap: ["unpriced_expense"] }, [], page)
+    ).data.map((row) => row.id);
+    expect(spent).toContain(purchaseId);
   });
 
   it("rolls a linked product's gap up onto the purchase's dataGap filter", async () => {

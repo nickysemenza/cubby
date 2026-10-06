@@ -4,6 +4,7 @@ import { fieldSuggestionsOut } from "@cubby/schemas/ai";
 import { dispatchesOperation, unbatchFor } from "./dispatch-wire";
 import { expectViewportBounded, gotoAuthenticatedPage } from "./e2e-helpers";
 import { expect, test } from "./e2e-test";
+import { createEntityFixture } from "./fixtures-core";
 
 // Real HTTP, editor and reference rendering verify reviewed identity persistence.
 test("edits compound emoji, clears it, and browses inherited category membership", async ({
@@ -307,4 +308,45 @@ test("reviews vendor purchase evidence and rejects stale accepted defaults", asy
   } finally {
     await pool.end();
   }
+});
+
+test("unassessed quality remains visible in phone cards", async ({
+  page,
+}, testInfo) => {
+  await page.setViewportSize({ width: 402, height: 874 });
+  const name = `Synthetic planned quality ${Date.now()}`;
+  await createEntityFixture(page, "expense", {
+    name: `Synthetic unrelated quality ${Date.now()}`,
+    future: false,
+    cost: 12,
+    date: "2026-01-01",
+    costType: "services",
+    trade: "other",
+  });
+  await createEntityFixture(page, "expense", {
+    name,
+    future: true,
+    cost: null,
+    date: null,
+    costType: "services",
+    trade: "other",
+  });
+  await gotoAuthenticatedPage(
+    page,
+    `/expenses?q=${encodeURIComponent(name)}&pageSize=1`,
+  );
+  await expect(
+    page.getByRole("button", { name: `Expense ${name}`, exact: true }),
+  ).toBeVisible();
+  const card = page.getByRole("listitem").filter({ hasText: name });
+  await expect(card).toContainText("Not assessed");
+  await card
+    .getByRole("button", { name: /How (data )?quality is determined/ })
+    .click();
+  const popover = page.locator('[data-slot="popover-content"]');
+  await expect(popover).toContainText("No weighted checks apply");
+  await expectViewportBounded(page);
+  await page.screenshot({
+    path: testInfo.outputPath("unassessed-quality-phone.png"),
+  });
 });

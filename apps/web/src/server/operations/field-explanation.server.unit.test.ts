@@ -20,8 +20,8 @@ import {
 it.each([
   {
     check: dataChecksByEntity.financialAccount.enum.financial_account_unclaimed,
-    summary: "does not reduce this record's score",
-    score: 100,
+    summary: "carries no weight but caps this record's score below 100",
+    score: 99,
     noWeightedChecks: true,
   },
   {

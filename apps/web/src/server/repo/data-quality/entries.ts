@@ -20,6 +20,7 @@ import { productCategoryChecks } from "./checks/product-category";
 import { projectChecks } from "./checks/project";
 import { purchaseChecks } from "./checks/purchase";
 import { recipeChecks } from "./checks/recipe";
+import { spendingCategoryChecks } from "./checks/spending-category";
 import { taskChecks } from "./checks/task";
 import { vendorChecks } from "./checks/vendor";
 import { wishChecks } from "./checks/wish";
@@ -55,6 +56,7 @@ export const dataQualityEntries = {
   financialAccount: financialAccountChecks,
   financialTransaction: financialTransactionChecks,
   expense: expenseChecks,
+  spendingCategory: spendingCategoryChecks,
   wish: wishChecks,
   plant: plantChecks,
   planting: plantingChecks,

@@ -1056,6 +1056,7 @@ export default defineEntity({
           facet: "integrity",
           kind: "defect",
           weight: 2,
+          scoreCap: 49,
           label: "Counted twice",
           message:
             "This furniture location's Product also has live inventory entries, so the item is counted twice.",

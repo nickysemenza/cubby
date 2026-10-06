@@ -119,8 +119,12 @@ describe("combined entity records", () => {
       quality: quality?.score,
       qualityStatus: quality?.status,
     });
-    expect(first.items[0]?.quality).toBeGreaterThanOrEqual(0);
-    expect(first.items[0]?.quality).toBeLessThanOrEqual(100);
+    expect(first.items[0]).toMatchObject({
+      quality: null,
+      qualityStatus: "not_assessed",
+    });
+    expect(second.items[0]?.quality).toBeGreaterThanOrEqual(0);
+    expect(second.items[0]?.quality).toBeLessThan(100);
     expect(
       (
         await listEntityRecords(

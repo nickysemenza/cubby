@@ -20,6 +20,7 @@ export {
   dataCheckMessage,
   dataChecksByEntity,
   dataCheckWeight,
+  dataCheckScoreCap,
   dataCheckExemptible,
   dataQualityExceptionEntities,
   dataQualityFacets,
@@ -29,6 +30,12 @@ export {
   type DataCheckOf,
   type ScoredEntity,
 } from "./generated/data-quality-checks.gen";
+export {
+  DEFAULT_UNRESOLVED_SCORE_CAP,
+  scoreQualityTerms,
+  type QualityScore,
+  type QualityTerm,
+} from "./data-quality-score";
 export {
   dataQualityCheckKind,
   dataQualityFacetName,

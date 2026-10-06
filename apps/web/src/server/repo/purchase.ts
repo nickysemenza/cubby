@@ -376,6 +376,9 @@ const purchaseColumns = {
   spendingCategoryShortcode: sql<
     string | null
   >`(SELECT shortcode FROM "SpendingCategory" WHERE id = "Purchase"."spendingCategoryId" AND "deletedAt" IS NULL)`,
+  spendingCategoryName: sql<
+    string | null
+  >`(SELECT name FROM "SpendingCategory" WHERE id = "Purchase"."spendingCategoryId" AND "deletedAt" IS NULL)`,
   evidenceExpectation: purchase.evidenceExpectation,
   itemizationEvidence: purchase.itemizationEvidence,
   statedTotal: purchase.statedTotal,
@@ -403,6 +406,7 @@ type PurchaseRow = {
   fieldResolutions: PurchaseOut["fieldResolutions"];
   spendingCategoryOrigin: string;
   spendingCategoryShortcode: string | null;
+  spendingCategoryName: PurchaseOut["spendingCategoryName"];
   evidenceExpectation: PurchaseOut["evidenceExpectation"];
   itemizationEvidence: boolean;
   defaultProjectShortcode: string | null;
@@ -453,6 +457,7 @@ const dbPurchaseToAPI = (
   spendingCategoryId: row.spendingCategoryShortcode
     ? parseShortcodeFor("spendingCategory", row.spendingCategoryShortcode)
     : null,
+  spendingCategoryName: row.spendingCategoryName,
   evidenceExpectation: row.evidenceExpectation,
   itemizationEvidence: row.itemizationEvidence,
   coverage: row.coverage,
@@ -700,6 +705,7 @@ export const purchaseListRead = async (
   projection: ListProjection = { kind: "full" },
 ) => {
   const {
+    spendingCategoryName,
     coverage,
     fieldResolutions,
     defaultProjectShortcode,
@@ -729,6 +735,7 @@ export const purchaseListRead = async (
           .select({
             ...core,
             ...listGroupFields(projection, "relations", () => ({
+              spendingCategoryName,
               defaultProjectShortcode,
               vendorShortcode,
               vendorAccountShortcode,
@@ -793,6 +800,7 @@ export const purchaseListRead = async (
                 date: row.date,
               }),
               ...listGroupFields(projection, "relations", () => ({
+                spendingCategoryName: row.spendingCategoryName ?? null,
                 spendingCategoryId: row.spendingCategoryShortcode
                   ? parseShortcodeFor(
                       "spendingCategory",

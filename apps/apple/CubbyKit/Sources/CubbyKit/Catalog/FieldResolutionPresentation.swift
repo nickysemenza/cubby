@@ -55,6 +55,11 @@ public struct FieldResolutionPresentation: Sendable {
         -> String?
     {
         let stem = field.key.hasSuffix("Id") ? String(field.key.dropLast(2)) : field.key
+        if let allocation = raw["\(stem)Allocations"]?.arrayValue?.first(where: {
+            $0["\(stem)Id"]?.stringValue == effectiveID
+        }), let name = allocation["\(stem)Name"]?.stringValue {
+            return name
+        }
         if raw[field.key]?.stringValue == effectiveID {
             if let name = raw["\(stem)Name"]?.stringValue { return name }
             if raw[stem]?["id"]?.stringValue == effectiveID { return raw[stem]?["name"]?.stringValue }
@@ -66,6 +71,28 @@ public struct FieldResolutionPresentation: Sendable {
             return source.name
         }
         return nil
+    }
+
+    /// Allocated references can be complete even when there is no singular target.
+    public static func allocatedReferenceLabel(in raw: JSONValue, field: FieldDescriptor) -> String? {
+        guard field.reference != nil,
+            FieldResolutionPresentation(raw: raw, field: field)?.resolution.mode == .allocated
+        else { return nil }
+        let stem = field.key.hasSuffix("Id") ? String(field.key.dropLast(2)) : field.key
+        let shares = raw["\(stem)Allocations"]?.arrayValue ?? []
+        var labels: [String] = []
+        var incomplete = shares.isEmpty
+        for share in shares {
+            guard let id = share["\(stem)Id"]?.stringValue else {
+                incomplete = true
+                continue
+            }
+            let label = share["\(stem)Name"]?.stringValue ?? id
+            if !labels.contains(label) { labels.append(label) }
+            incomplete = incomplete || share["incomplete"]?.boolValue == true
+        }
+        if incomplete { labels.append(labels.isEmpty ? "Unclassified" : "Partly unclassified") }
+        return labels.joined(separator: ", ")
     }
 
     private static func value(at path: String, in raw: JSONValue) -> JSONValue? {

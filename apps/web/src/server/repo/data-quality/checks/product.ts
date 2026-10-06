@@ -2,6 +2,7 @@ import { UNSPECIFIED_MANUFACTURER } from "@cubby/shared";
 import { sql } from "drizzle-orm";
 
 import { product } from "~/server/db/schema";
+import { expenseAcquisitionSql } from "~/server/repo/expense-aggregate-sql";
 import { productHasDisplayableImageSql } from "~/server/repo/image-displayability";
 import { categoryFeatureSql } from "~/server/repo/product-category-sql";
 import { orphanedProductCondition } from "~/server/repo/product/orphan-condition";
@@ -65,6 +66,15 @@ const hasAmazonId = (t: Product) => sql`EXISTS (
     AND dq_asin."kind" = 'asin'
 )`;
 
+// Only a line that brought the Product in counts as purchase evidence: an
+// eBay sale or a discard is a product-linked Expense too
+// (`expenseAcquisitionSql`).
+const hasAcquiringExpense = (t: Product) => sql`EXISTS (
+  SELECT 1 FROM "Expense" dq_acq
+  WHERE dq_acq."productId" = ${t.id} AND dq_acq."deletedAt" IS NULL
+    AND ${sql.raw(expenseAcquisitionSql("dq_acq"))}
+)`;
+
 // A photo-inventory-created Product is stocked (has inventory) but was never
 // claimed by a purchase: no acquiring Expense, and no explicit `purchaseProduct`
 // link (the enrichment path a purchase import takes when it later matches
@@ -77,6 +87,13 @@ const hasPurchaseProductLink = (t: Product) => sql`EXISTS (
 const hasExternalId = (t: Product) => sql`EXISTS (
   SELECT 1 FROM "EntityExternalId" dq_xid
   WHERE dq_xid."entityId" = ${t.id} AND dq_xid."deletedAt" IS NULL
+    AND trim(dq_xid."externalId") <> ''
+)`;
+
+// A soft-deleted category still sits in `categoryId`; it classifies nothing.
+const hasLiveCategory = (t: Product) => sql`EXISTS (
+  SELECT 1 FROM "ProductCategory" dq_cat
+  WHERE dq_cat."id" = ${t.categoryId} AND dq_cat."deletedAt" IS NULL
 )`;
 
 const modelRequired = (t: Product) =>
@@ -107,7 +124,7 @@ export const productChecks = defineEntityChecks({
     },
     product_category: {
       expected: inScope,
-      missing: (t) => sql`${t.categoryId} IS NULL`,
+      missing: (t) => sql`NOT ${hasLiveCategory(t)}`,
       fingerprint: (t) => [sql`${t.categoryId}`],
     },
     product_model: {
@@ -144,10 +161,10 @@ export const productChecks = defineEntityChecks({
       expected: (t) =>
         sql`${hasInventory(t)} AND ${t.acquisitionOrigin} NOT IN ('gift', 'previously_owned')`,
       missing: (t) =>
-        sql`NOT (${hasExpenses(t)} OR ${hasPurchaseProductLink(t)})`,
+        sql`NOT (${hasAcquiringExpense(t)} OR ${hasPurchaseProductLink(t)})`,
       fingerprint: (t) => [
         sql`${t.acquisitionOrigin}`,
-        hasExpenses(t),
+        hasAcquiringExpense(t),
         hasPurchaseProductLink(t),
       ],
     },

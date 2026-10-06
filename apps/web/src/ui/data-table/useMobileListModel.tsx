@@ -261,6 +261,7 @@ function collectMobileSlots<TItem extends RowData>(
     const valueUnavailable = meta?.valueUnavailable?.(row.original) ?? false;
     if (
       !valueUnavailable &&
+      !meta?.mobile?.showWhenEmpty &&
       !(explanation && resolution) &&
       cell.column.accessorFn &&
       isEmptyCellValue(cell.getValue())

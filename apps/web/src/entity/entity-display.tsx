@@ -64,7 +64,11 @@ import { ShortcodeProse } from "~/ui/shortcode-prose";
 import { compactFieldRendererFor } from "./compact-field-renderers";
 import { recordFieldClearing } from "./editing/field-clearing";
 import { entities, entityPluralLabel, isBrowserRoutedEntity } from "./entities";
-import { readReferenceField, type ReferenceItem } from "./entity-references";
+import {
+  readDisplayReferenceField,
+  readReferenceField,
+  type ReferenceItem,
+} from "./entity-references";
 import {
   enumDisplayValue,
   enumFieldOptions,
@@ -445,7 +449,7 @@ function referenceMediaRefs<TRecord extends object>(
   record: TRecord,
   field: DisplayField,
 ): EntityRef[] {
-  const reference = readReferenceField(record, field);
+  const reference = readDisplayReferenceField(record, field);
   const entityKind = reference && referenceMediaEntity(reference.entity);
   if (!reference || entityKind === null) return [];
   return reference.items.map((item) => ({ entityKind, entityId: item.id }));
@@ -531,17 +535,47 @@ export function renderDetailFieldValue<TRecord extends object>(
       <span className="whitespace-pre-line">{label}</span>
     );
   }
-  const reference = readReferenceField(record, field);
+  const reference = readDisplayReferenceField(record, field);
   if (reference !== null) {
-    if (reference.items.length === 0) return <NoneValue />;
+    if (
+      reference.items.length === 0 &&
+      !reference.unclassifiedAllocations?.length
+    )
+      return reference.incomplete ? <span>Unclassified</span> : <NoneValue />;
     return (
       <>
         {referenceBrowse(record, field)}
         <ReferencePreview
           items={reference.items}
           limit={field.display.referencePreviewLimit}
-          renderItem={(item) => referenceLink(reference.entity, item)}
+          renderItem={(item) => (
+            <span className="flex items-center gap-2">
+              {referenceLink(reference.entity, item)}
+              {item.amount !== undefined && (
+                <span className="tabular-nums">
+                  {item.amount === null
+                    ? "Unpriced"
+                    : formatCurrency(item.amount)}
+                </span>
+              )}
+            </span>
+          )}
         />
+        {!!reference.unclassifiedAllocations?.length && (
+          <span className="text-muted-foreground">
+            Unclassified ·{" "}
+            {reference.unclassifiedAllocations
+              .map((share) =>
+                share.amount == null
+                  ? "Unpriced"
+                  : formatCurrency(share.amount),
+              )
+              .join(", ")}
+          </span>
+        )}
+        {reference.incomplete && !reference.unclassifiedAllocations?.length && (
+          <span className="text-muted-foreground">Partly unclassified</span>
+        )}
       </>
     );
   }
@@ -564,9 +598,10 @@ export function renderCompactFieldValue<TRecord extends object>(
   const domainRenderer = compactFieldRendererFor(entity, field.key);
   const domainValue = domainRenderer?.(record);
   if (domainValue !== undefined) return domainValue;
-  const reference = readReferenceField(record, field);
+  const reference = readDisplayReferenceField(record, field);
   if (reference !== null) {
-    if (reference.items.length === 0) return <NoneValue />;
+    if (reference.items.length === 0)
+      return reference.incomplete ? <span>Unclassified</span> : <NoneValue />;
     return (
       <>
         {referenceBrowse(record, field)}
@@ -575,6 +610,9 @@ export function renderCompactFieldValue<TRecord extends object>(
           limit={field.display.referencePreviewLimit}
           renderItem={(item) => referenceLink(reference.entity, item)}
         />
+        {reference.incomplete && (
+          <span className="text-muted-foreground">Partly unclassified</span>
+        )}
       </>
     );
   }
@@ -683,7 +721,7 @@ function cohortFilterAction<TRecord extends object>(
       className={LEDGER_FILTER_ACTION_CLASS}
     />
   );
-  const reference = readReferenceField(record, field);
+  const reference = readDisplayReferenceField(record, field);
   if (reference !== null) {
     const [item] = reference.items;
     return item && reference.items.length === 1
@@ -810,7 +848,7 @@ export function entityPreviewFacts<TRecord extends object>(
     if (preview.length === 0 && facts.length >= limit) break;
     const field = fields.find((candidate) => candidate.key === key);
     if (!field || field.kind === "json") continue;
-    const reference = readReferenceField(record, field);
+    const reference = readDisplayReferenceField(record, field);
     const known = reference
       ? reference.items.length > 0
       : field.readKey !== null &&
@@ -1551,16 +1589,22 @@ export function createEntityDisplayColumns<TRecord extends object>(
                 clearable={field.nullable}
                 trigger="pencil"
                 clipboard={specFromCellData(cellData, row.original)}
-                renderValue={(item) =>
-                  item ? (
-                    (compactFieldRendererFor(
+                renderValue={(item) => {
+                  const original = getItem(row.original);
+                  if (item?.id !== original?.id)
+                    return item ? (
+                      referenceLink(referenceEntity, item)
+                    ) : (
+                      <NoneValue />
+                    );
+                  return (
+                    compactFieldRendererFor(
                       entity,
                       field.key,
-                    )?.(row.original) ?? referenceLink(referenceEntity, item))
-                  ) : (
-                    <NoneValue />
-                  )
-                }
+                    )?.(row.original) ??
+                    renderCompactFieldValue(entity, row.original, field)
+                  );
+                }}
               />
             ),
           }),

@@ -106,32 +106,42 @@ test("quality leads entity tables, explains its calculation, and restores tempor
     page,
     `/spending-categories?view=table&name=${encodeURIComponent(categoryName)}`,
   );
-  const unassessedRow = page
+  const categoryRow = page
     .getByRole("row")
     .filter({ hasText: categoryName })
     .first();
   await expect(
+    categoryRow.locator('[data-cell-col="dataQuality"] [data-cell-value]'),
+  ).toHaveText("0/100");
+
+  const plannedName = `${name} planned`;
+  await createEntityFixture(page, "expense", {
+    name: plannedName,
+    costType: "services",
+    trade: "other",
+    future: true,
+    cost: null,
+    date: null,
+  });
+  await gotoAuthenticatedPage(
+    page,
+    `/expenses?view=table&q=${encodeURIComponent(plannedName)}`,
+  );
+  const unassessedRow = page
+    .getByRole("row")
+    .filter({ hasText: plannedName })
+    .first();
+  await expect(
     unassessedRow.locator('[data-cell-col="dataQuality"] [data-cell-value]'),
-  ).toHaveText("—");
-  const unscoredURL = page.url();
+  ).toHaveText("Not assessed");
   await page.getByRole("columnheader", { name: /Quality/ }).click();
-  await expect(page).toHaveURL(unscoredURL);
+  await expect(page).toHaveURL(/sort=.*dataQuality/);
   await unassessedRow
     .getByRole("button", { name: /How (data )?quality is determined/ })
     .click();
-  await expect(popover).toContainText("No quality checks are defined");
-  await expect(popover).toContainText("not a score of zero");
+  await expect(popover).toContainText("Not assessed");
+  await expect(popover).toContainText("No weighted checks apply");
   await page.keyboard.press("Escape");
-  await page.setViewportSize({ width: 402, height: 874 });
-  await page
-    .getByRole("listitem")
-    .filter({ hasText: categoryName })
-    .getByRole("button", { name: /How (data )?quality is determined/ })
-    .click();
-  await expect(popover).toBeVisible();
-  await expectViewportBounded(page);
-  await page.screenshot({ path: testInfo.outputPath("quality-phone.png") });
-  expect(product.id).toBeTruthy();
 });
 
 test("quality explanations reconcile exceptions, defects, and related gaps", async ({
@@ -167,7 +177,7 @@ test("quality explanations reconcile exceptions, defects, and related gaps", asy
     );
   const unstocked = await explain("product", product.id);
   expect(unstocked.qualityBreakdown).toMatchObject({
-    score: 100,
+    score: 99,
     expectedWeight: 0,
   });
   const location = await seedLocationPrerequisite(page, `${name} shelf`);
@@ -196,8 +206,39 @@ test("quality explanations reconcile exceptions, defects, and related gaps", asy
     }),
   );
   expect(active.qualityBreakdown!.score).toBeGreaterThan(
-    before.qualityBreakdown!.score,
+    z.number().parse(before.qualityBreakdown!.score),
   );
+  for (const check of active.qualityBreakdown!.checks.filter(
+    (check) => check.state === "gap",
+  )) {
+    const reason = check.exceptionReasons[0]?.reason;
+    expect(
+      reason,
+      `Synthetic gap ${check.check} must admit an evidence-bound exception`,
+    ).toBeTruthy();
+    await dispatch("dataQuality.setException", {
+      entityId: product.id,
+      check: check.check,
+      reason,
+      note: "Synthetic unavailable evidence.",
+    });
+  }
+  const accepted = await explain("product", product.id);
+  expect(accepted.qualityBreakdown).toMatchObject({
+    score: 100,
+    status: "complete_with_exceptions",
+  });
+  await gotoAuthenticatedPage(
+    page,
+    `/products?view=table&name=${encodeURIComponent(name)}`,
+  );
+  const acceptedRow = page.getByRole("row").filter({ hasText: name }).first();
+  const acceptedCell = acceptedRow.locator(
+    '[data-cell-col="dataQuality"] [data-cell-value]',
+  );
+  await expect(acceptedCell).toContainText("100/100");
+  await expect(acceptedCell).toContainText("Complete with exceptions");
+  await expect(acceptedCell.locator("svg")).toBeVisible();
   const updated = await page.request.patch(`/api/v1/products/${product.id}`, {
     headers: { Origin: baseURL! },
     data: { manufacturer: "(UNSPECIFIED)" },
@@ -267,13 +308,17 @@ test("quality explanations reconcile exceptions, defects, and related gaps", asy
     }),
   );
   const breakdown = defect.qualityBreakdown!;
-  expect(breakdown.score).toBe(
+  expect(breakdown.weightedScore).toBe(
     Math.round((breakdown.satisfiedWeight / breakdown.expectedWeight) * 10000) /
       100,
   );
+  expect(breakdown.score).toBe(
+    Math.min(breakdown.weightedScore!, breakdown.scoreCap ?? 100),
+  );
+  expect(breakdown.score).toBeLessThanOrEqual(49);
   await gotoAuthenticatedPage(
     page,
-    `/purchases?view=table&search=${encodeURIComponent(name)}`,
+    `/purchases?view=table&q=${encodeURIComponent(name)}`,
   );
   const row = page.getByRole("row").filter({ hasText: name }).first();
   await row
@@ -454,7 +499,7 @@ test("specialist board and gallery cards retain the shared quality explanation",
   const locationCard = page
     .locator(`[data-location-id="${location.id}"]`)
     .first();
-  await expect(locationCard).toContainText("/100");
+  await expect(locationCard).toContainText("Not assessed");
   await locationCard
     .getByRole("button", { name: /How (data )?quality is determined/ })
     .click();

@@ -18,10 +18,30 @@ struct EntityRowPresentationTests {
         #expect(presentation.facts.first?.value == "75/100 · Needs data")
         let category = EntityRow(
             id: "SPC-1001", title: "Synthetic tools", subtitle: nil, imageURL: nil,
-            raw: ["id": "SPC-1001", "name": "Synthetic tools"])
+            raw: [
+                "id": "SPC-1001", "name": "Synthetic tools",
+                "dataQuality": ["score": .null, "status": "not_assessed"],
+            ])
         let unassessed = EntityRowPresentation.resolve(
             descriptor: EntityCatalog[.spendingCategory], row: category)
         #expect(unassessed.facts.first?.value == "Not assessed")
+    }
+
+    /// A scored entity's record can itself be unassessed (null score), and an exceptions-only
+    /// record must not read as a plain complete 100.
+    @Test func qualityShowsNullScoresAndExceptionsOnlyCompleteness() {
+        func quality(_ dataQuality: JSONValue) -> String? {
+            let row = EntityRow(
+                id: "PRD-1001", title: "Synthetic skillet", subtitle: nil, imageURL: nil,
+                raw: ["id": "PRD-1001", "name": "Synthetic skillet", "dataQuality": dataQuality])
+            return EntityRowPresentation.resolve(descriptor: EntityCatalog[.product], row: row)
+                .facts.first?.value
+        }
+        #expect(quality(["score": .null, "status": "not_assessed"]) == "Not assessed")
+        #expect(
+            quality(["score": 100, "status": "complete_with_exceptions"])
+                == "100/100 · Complete with exceptions")
+        #expect(quality(["score": 99, "status": "defect"]) == "99/100 · Defect")
     }
 
     @Test func resolvesOnlyDeclaredFactsInMetadataOrder() throws {

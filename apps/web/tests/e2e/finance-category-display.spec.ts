@@ -367,3 +367,112 @@ test("draft category edits hide obsolete policy provenance while the replacement
       },
     });
 });
+
+// A complete allocation can have no singular category id. Tables must expose
+// the same effective classification that quality checks evaluate.
+test("expense category pills agree with quality for direct, allocated, and missing categories", async ({
+  page,
+  baseURL,
+}) => {
+  const tag = `Synthetic strict quality ${Date.now()}`;
+  const create = async (path: string, data: unknown) => {
+    const response = await page.request.post(`/api/v1/${path}`, {
+      headers: { Origin: baseURL! },
+      data: z.json().parse(data),
+    });
+    expect(response.status(), await response.text()).toBe(201);
+    return z
+      .object({ item: z.object({ id: z.string() }) })
+      .parse(await response.json()).item.id;
+  };
+  const categoryName = `${tag} supplies`;
+  const categoryId = await create("spending-categories", {
+    name: categoryName,
+    evidenceExpectation: "not_expected",
+    productExpectation: "not_expected",
+  });
+  const vendorId = await create("vendors", { name: tag });
+  const purchaseId = await create("purchases", {
+    vendorId,
+    date: "2026-09-10",
+    evidenceExpectation: "not_expected",
+  });
+  const principal = await create("expenses", {
+    name: `${tag} principal`,
+    costType: "services",
+    trade: "other",
+    purchaseId,
+    cost: 20,
+    date: "2026-09-10",
+    spendingCategoryId: categoryId,
+  });
+  const secondCategoryName = `${tag} services`;
+  const secondCategoryId = await create("spending-categories", {
+    name: secondCategoryName,
+    evidenceExpectation: "not_expected",
+    productExpectation: "not_expected",
+  });
+  await create("expenses", {
+    name: `${tag} second principal`,
+    costType: "services",
+    trade: "other",
+    purchaseId,
+    cost: 10,
+    date: "2026-09-10",
+    spendingCategoryId: secondCategoryId,
+  });
+  const adjustment = await create("expenses", {
+    name: `${tag} shipping`,
+    costType: "services",
+    purchaseId,
+    lineKind: "shipping",
+    cost: 3,
+    date: "2026-09-10",
+  });
+  const missing = await create("expenses", {
+    name: `${tag} unclassified`,
+    costType: "services",
+    trade: "other",
+    cost: 10,
+    date: "2026-09-10",
+  });
+  const read = async (id: string) => {
+    const response = await page.request.get(`/api/v1/expenses/${id}`);
+    expect(response.ok(), await response.text()).toBeTruthy();
+    return z
+      .object({
+        dataQuality: z.object({
+          score: z.number().nullable(),
+          gaps: z.array(z.object({ check: z.string() })),
+        }),
+      })
+      .parse(await response.json()).dataQuality;
+  };
+  expect((await read(missing)).score).toBeLessThan(100);
+  expect((await read(missing)).gaps.map((gap) => gap.check)).toContain(
+    "expense_spending_category",
+  );
+  expect((await read(principal)).gaps.map((gap) => gap.check)).not.toContain(
+    "expense_spending_category",
+  );
+  expect((await read(adjustment)).gaps.map((gap) => gap.check)).not.toContain(
+    "expense_spending_category",
+  );
+  await gotoAuthenticatedPage(page, `/expenses?q=${encodeURIComponent(tag)}`);
+  for (const name of [`${tag} principal`, `${tag} shipping`]) {
+    const row = page.getByRole("row").filter({ hasText: name });
+    await expect(
+      row.getByRole("link", { name: categoryName, exact: true }),
+    ).toBeVisible();
+    await expect(
+      row.getByRole("link", { name: categoryName, exact: true }),
+    ).toHaveAttribute("href", `/spending-categories/${categoryId}`);
+    await expect(row.getByText(categoryId, { exact: true })).toHaveCount(0);
+  }
+  const shipping = page.getByRole("row").filter({ hasText: `${tag} shipping` });
+  await expect(
+    shipping.getByRole("link", { name: secondCategoryName, exact: true }),
+  ).toBeVisible();
+  const row = page.getByRole("row").filter({ hasText: `${tag} unclassified` });
+  await expect(row).not.toContainText("100/100");
+});

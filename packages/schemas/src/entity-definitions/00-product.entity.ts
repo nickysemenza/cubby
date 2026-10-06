@@ -3070,9 +3070,10 @@ export default defineEntity({
         {
           id: "product_category",
           facet: "identity",
-          weight: 2,
+          weight: 3,
+          scoreCap: 69,
           label: "Category",
-          message: "Product category is not recorded.",
+          message: "No live product category is recorded.",
         },
         {
           id: "product_model",

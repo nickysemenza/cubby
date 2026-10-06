@@ -720,10 +720,18 @@ export default defineEntity({
         {
           id: "category_feature",
           facet: "identity",
-          weight: 1,
+          weight: 2,
           label: "Feature",
           message:
             "No feature classification is recorded for this root category.",
+        },
+        {
+          id: "category_spending_category",
+          facet: "linkage",
+          weight: 2,
+          label: "Spending category",
+          message:
+            "No spending category is mapped here or inherited, and none is deliberately kept unresolved.",
         },
       ],
     },

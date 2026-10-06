@@ -16,16 +16,16 @@ import { product } from "~/server/db/schema";
 import { dataQualityEntries } from "./entries";
 import { calculateDataQualityScore } from "./hydrate";
 import {
-  anyGapCondition,
   checksOf,
   dataQualityFilterPredicates,
-  defectCondition,
+  dataQualitySortResolver,
   entryFor,
   filterableChecks,
   gapCondition,
   relatedGapCondition,
   scoreSql,
   statusCondition,
+  statusSql,
 } from "./sql";
 
 const dialect = new PgDialect();
@@ -72,9 +72,8 @@ describe("data-quality predicate grouping", () => {
           () => statusCondition(entity, status),
         ] as const,
     ),
-    [`anyGapCondition(${entity})`, () => anyGapCondition(entity)] as const,
-    [`defectCondition(${entity})`, () => defectCondition(entity)] as const,
     [`scoreSql(${entity})`, () => scoreSql(entity)] as const,
+    [`statusSql(${entity})`, () => statusSql(entity)] as const,
     ...checksOf(entity).map(
       (check) =>
         [
@@ -139,8 +138,8 @@ describe("data-quality registry", () => {
 describe("calculateDataQualityScore", () => {
   const gap = (check: "product_image" | "product_manufacturer") => ({ check });
 
-  it("treats no expected checks as complete", () => {
-    expect(calculateDataQualityScore([], [])).toBe(100);
+  it("does not score a record with no expected checks", () => {
+    expect(calculateDataQualityScore([], [])).toBeNull();
   });
 
   it("weights unresolved gaps by the check's declared weight", () => {
@@ -166,6 +165,43 @@ describe("calculateDataQualityScore", () => {
         [gap("product_image")],
       ),
     ).toBe(100);
+  });
+});
+
+/**
+ * Postgres has no common-subexpression elimination: every inlined copy of a
+ * correlated predicate is planned again (one list once planned ~0.5 GB). The
+ * score and status read each check's `expected`, `missing` and exception
+ * lookup once, from one state column per check.
+ */
+describe("score and status evaluate each predicate once", () => {
+  it.each([
+    ["scoreSql", scoreSql],
+    ["statusSql", statusSql],
+    [
+      "statusCondition",
+      (entity: "product") => statusCondition(entity, "complete"),
+    ],
+  ] as const)("%s", (_, build) => {
+    const rendered = render(build("product"));
+    const exemptible = checksOf("product").filter(
+      (check) => dataCheckExemptible[check],
+    ).length;
+    expect(rendered.split('FROM "DataException"').length - 1).toBe(exemptible);
+    expect(rendered.split("OFFSET 0").length - 1).toBe(1);
+  });
+
+  it("sorts records without a score after every scored record", () => {
+    for (const direction of ["asc", "desc"]) {
+      const [order] = dataQualitySortResolver(
+        "product",
+        product,
+      )({
+        orderBy: "dataQuality",
+        direction,
+      })!;
+      expect(render(order!)).toMatch(/ NULLS LAST$/);
+    }
   });
 });
 

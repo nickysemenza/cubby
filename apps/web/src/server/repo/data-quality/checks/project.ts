@@ -14,10 +14,15 @@ export const projectChecks = defineEntityChecks({
       missing: (t: Project) => sql`${t.kind} IS NULL`,
     },
     project_start_date: {
-      // A project still in `planning` has no committed start; every other
-      // status expects one.
-      expected: (t: Project) => sql`${t.status} <> 'planning'`,
+      // `planning` and `not_started` have no actual start yet; only work
+      // that has begun (or finished) expects one.
+      expected: (t: Project) => sql`${t.status} IN ('in_progress', 'done')`,
       missing: (t: Project) => sql`${t.startDate} IS NULL`,
+    },
+    project_date_order: {
+      expected: (t: Project) =>
+        sql`${t.startDate} IS NOT NULL AND ${t.endDate} IS NOT NULL`,
+      missing: (t: Project) => sql`${t.endDate} < ${t.startDate}`,
     },
   },
 });

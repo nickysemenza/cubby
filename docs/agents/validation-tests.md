@@ -3,8 +3,11 @@
 Prefer E2E for complete behavior through the built browser application or the
 native client. Keep a focused unit, UI, PostgreSQL, or Workers test when it
 catches a concrete failure the available E2E suites do not reasonably observe.
-Before adding an isolated test, record its failure modes and write the failing
-test before the code. For `.tsx` changes, choose browser E2E when it observes
+Before changing isolated behavior, record its failure modes and run a failing
+regression test before editing the implementation, including declarations, SQL
+bindings, and compiler guards. A delegated lane returns the pre-change failing
+command and relevant output; tests added after implementation do not satisfy
+this requirement. For `.tsx` changes, choose browser E2E when it observes
 the behavior; use the UI or preview tier for distinct rendering or layout
 failures. Keep pure logic imported by node tests in alias-free `.ts` files.
 
@@ -186,6 +189,12 @@ can select nothing. Name the affected spec explicitly or run the full
 `test:e2e` for those changes. CI keeps running the full suite. Set
 `CUBBY_TEST_SERVICES=warm` to reuse local macOS services, as with direct
 Playwright runs.
+
+List URLs in browser fixtures use the filter descriptor's declared `urlKey`
+(for example, `q` for Expense and Purchase search). Assert the active filter
+control and include unrelated records with a small page size when testing a
+filtered record; an ignored filter can pass against a small local corpus and
+hide the target behind pagination in CI.
 
 ## Preview tests (real-browser layout invariants)
 

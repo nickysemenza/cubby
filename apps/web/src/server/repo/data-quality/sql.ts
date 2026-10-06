@@ -1,5 +1,7 @@
 import {
+  DEFAULT_UNRESOLVED_SCORE_CAP,
   dataCheckExemptible,
+  dataCheckScoreCap,
   type DataCheck,
   type DataQualityStatus,
   dataCheckEntity,
@@ -8,6 +10,7 @@ import {
   dataQualityExceptionEntities,
   dataQualityStatus,
   isDefectDataCheck,
+  type QualityTerm,
   relatedDataQualityEntities,
   type ScoredEntity,
 } from "@cubby/schemas/data-quality";
@@ -20,7 +23,7 @@ import type { CheckBinding, EntityChecks, ScoredTable } from "./registry";
 
 /**
  * Every builder here returns ONE parenthesized group. Callers embed these
- * under `NOT` (`dataStatus: "complete"` is `NOT anyGap`) and beside `OR`, and
+ * under `NOT` and beside `OR`, and
  * `NOT a AND b` once emptied a production worklist because the group was a
  * bare conjunction. The unit test asserts the shape on the rendered SQL.
  */
@@ -135,111 +138,129 @@ const orGroup = (conditions: readonly SQL[]): SQL =>
     ? group(sql`false`)
     : group(sql.join([...conditions], sql` OR `));
 
-export const defectCondition = (
-  entity: ScoredEntity,
-  t: ScoredTable = entryFor(entity).table,
-): SQL =>
-  orGroup(
-    checksOf(entity)
-      .filter(isDefectDataCheck)
-      .map((check) => gapCondition(entity, check, t)),
+/** One integer per check and row; `QualityTerm.state` spelled for SQL. */
+export const qualityStateCode = {
+  not_applicable: 0,
+  satisfied: 1,
+  gap: 2,
+  excepted: 3,
+} as const satisfies Record<QualityTerm["state"], number>;
+
+type StateTerm = Omit<QualityTerm, "state"> & { state: SQL };
+
+const code = (state: QualityTerm["state"]) =>
+  sql.raw(String(qualityStateCode[state]));
+
+/**
+ * `scoreQualityTerms` in SQL over one state column per check. `LEAST` skips
+ * NULLs, so the weighted score (NULL without applicable weight) and the
+ * lowest unresolved cap (NULL without a gap) combine exactly as the TS does.
+ */
+export const scoreFromStates = (terms: readonly StateTerm[]): SQL => {
+  if (terms.length === 0) return sql`NULL::numeric`;
+  const sum = (pick: (term: StateTerm) => SQL) =>
+    sql.join(terms.map(pick), sql` + `);
+  const expected = sum(
+    (term) =>
+      sql`CASE WHEN ${term.state} <> ${code("not_applicable")} THEN ${sql.raw(String(term.weight))} ELSE 0 END`,
   );
-
-const missingCondition = (entity: ScoredEntity, t: ScoredTable): SQL =>
-  orGroup(
-    checksOf(entity)
-      .filter((check) => !isDefectDataCheck(check))
-      .map((check) => gapCondition(entity, check, t)),
+  const satisfied = sum(
+    (term) =>
+      sql`CASE WHEN ${term.state} IN (${code("satisfied")}, ${code("excepted")}) THEN ${sql.raw(String(term.weight))} ELSE 0 END`,
   );
-
-export const anyGapCondition = (
-  entity: ScoredEntity,
-  t: ScoredTable = entryFor(entity).table,
-): SQL =>
-  group(sql`${missingCondition(entity, t)} OR ${defectCondition(entity, t)}`);
-
-export const statusCondition = (
-  entity: ScoredEntity,
-  status: DataQualityStatus,
-  t: ScoredTable = entryFor(entity).table,
-): SQL => {
-  switch (status) {
-    case "defect":
-      return defectCondition(entity, t);
-    case "needs_data":
-      return group(
-        sql`${missingCondition(entity, t)} AND NOT ${defectCondition(entity, t)}`,
-      );
-    case "complete":
-      return group(sql`NOT ${anyGapCondition(entity, t)}`);
-  }
+  const caps = sql.join(
+    terms.map(
+      (term) =>
+        sql`CASE WHEN ${term.state} = ${code("gap")} THEN ${sql.raw(String(term.scoreCap ?? DEFAULT_UNRESOLVED_SCORE_CAP))} END`,
+    ),
+    sql`, `,
+  );
+  return group(
+    sql`LEAST(round(100.0 * (${satisfied}) / NULLIF((${expected}), 0), 2), ${caps})`,
+  );
 };
+
+/** `scoreQualityTerms(...).status` in SQL; the precedence order is the TS one. */
+export const statusFromStates = (terms: readonly StateTerm[]): SQL => {
+  const any = (
+    pick: (term: StateTerm) => boolean,
+    state: QualityTerm["state"],
+  ) =>
+    orGroup(
+      terms.filter(pick).map((term) => sql`${term.state} = ${code(state)}`),
+    );
+  const weighted = orGroup(
+    terms
+      .filter((term) => term.weight > 0)
+      .map((term) => sql`${term.state} <> ${code("not_applicable")}`),
+  );
+  return group(sql`CASE
+  WHEN ${any((term) => term.defect, "gap")} THEN 'defect'
+  WHEN ${any(() => true, "gap")} THEN 'needs_data'
+  WHEN NOT ${weighted} THEN 'not_assessed'
+  WHEN ${any(() => true, "excepted")} THEN 'complete_with_exceptions'
+  ELSE 'complete' END`);
+};
+
+/**
+ * Each check's `expected`, `missing` and active-exception lookup evaluated
+ * ONCE, as one state code, in an `OFFSET 0` subquery (the offset stops
+ * Postgres pulling it up and re-inlining them). Postgres has no
+ * common-subexpression elimination, and planner memory grows with every
+ * inlined copy of a correlated policy subquery until the statement ends:
+ * spelling each `expected` in several sums once helped one
+ * FinancialTransaction list plan ~0.5 GB. The CASE also skips `missing` where
+ * a check is not expected and the exception lookup where nothing is missing.
+ */
+const fromCheckStates = (
+  entity: ScoredEntity,
+  t: ScoredTable,
+  select: (terms: readonly StateTerm[]) => SQL,
+): SQL => {
+  const checks = checksOf(entity);
+  const inputs = sql.join(
+    checks.map((check, index) => {
+      const active = activeExceptionSql(entity, check, t);
+      return sql`CASE
+    WHEN ${expectedCondition(entity, check, t)} IS NOT TRUE THEN ${code("not_applicable")}
+    WHEN ${checkMissingCondition(entity, check, t)} IS NOT TRUE THEN ${code("satisfied")}
+    ${active === null ? sql`` : sql`WHEN ${active} THEN ${code("excepted")}`}
+    ELSE ${code("gap")} END AS ${sql.identifier(`s${index}`)}`;
+    }),
+    sql`, `,
+  );
+  const terms = checks.map((check, index) => ({
+    weight: dataCheckWeight[check],
+    scoreCap: dataCheckScoreCap[check],
+    defect: isDefectDataCheck(check),
+    state: sql`dq_state.${sql.identifier(`s${index}`)}`,
+  }));
+  return group(
+    sql`(SELECT ${select(terms)} FROM (SELECT ${inputs} OFFSET 0) dq_state)`,
+  );
+};
+
+/**
+ * The record's score: what `entity.records` returns and `ORDER BY
+ * dataQuality` sorts on, equal to the hydrated `score`.
+ */
+export const scoreSql = (
+  entity: ScoredEntity,
+  t: ScoredTable = entryFor(entity).table,
+): SQL => fromCheckStates(entity, t, scoreFromStates);
 
 /** Authoritative pill tone; a defect cannot be inferred from the numeric score. */
 export const statusSql = (
   entity: ScoredEntity,
   t: ScoredTable = entryFor(entity).table,
-): SQL => sql`CASE
-  WHEN ${statusCondition(entity, "defect", t)} THEN 'defect'
-  WHEN ${statusCondition(entity, "needs_data", t)} THEN 'needs_data'
-  ELSE 'complete' END`;
+): SQL => fromCheckStates(entity, t, statusFromStates);
 
-/**
- * `100 * satisfied expected weight / expected weight`, 100 when nothing is
- * expected; an excepted check counts as satisfied because `gapCondition`
- * already excludes it. Same arithmetic as `calculateDataQualityScore`, so
- * `ORDER BY dataQualityScore` agrees with the hydrated `score`.
- *
- * Each check's `expected` and unexcepted `missing` are evaluated ONCE in an
- * `OFFSET 0` subquery (the offset stops Postgres pulling it up and
- * re-inlining them). Postgres has no common-subexpression elimination, and
- * planner memory grows with every inlined copy of a correlated policy
- * subquery until the statement ends: spelling each `expected` in both sums
- * and again inside `gapCondition` helped one FinancialTransaction list plan
- * ~0.5 GB. `expected AND NOT (expected AND unexcepted)` is the former
- * `expected AND NOT gapCondition` over the same values.
- */
-export const scoreSql = (
+/** The `dataStatus` filter: the same status expression the row displays. */
+export const statusCondition = (
   entity: ScoredEntity,
+  status: DataQualityStatus,
   t: ScoredTable = entryFor(entity).table,
-): SQL => {
-  const terms = checksOf(entity).map((check, index) => {
-    const active = activeExceptionSql(entity, check, t);
-    const missing = checkMissingCondition(entity, check, t);
-    return {
-      weight: sql.raw(String(dataCheckWeight[check])),
-      expectedKey: sql.identifier(`e${index}`),
-      unexceptedKey: sql.identifier(`m${index}`),
-      expected: expectedCondition(entity, check, t),
-      unexcepted:
-        active === null ? missing : group(sql`${missing} AND NOT ${active}`),
-    };
-  });
-  const inputs = sql.join(
-    terms.map(
-      ({ expectedKey, unexceptedKey, expected, unexcepted }) =>
-        sql`${expected} AS ${expectedKey}, ${unexcepted} AS ${unexceptedKey}`,
-    ),
-    sql`, `,
-  );
-  const satisfied = sql.join(
-    terms.map(
-      ({ weight, expectedKey, unexceptedKey }) =>
-        sql`CASE WHEN dq_score.${expectedKey} AND NOT (dq_score.${expectedKey} AND dq_score.${unexceptedKey}) THEN ${weight} ELSE 0 END`,
-    ),
-    sql` + `,
-  );
-  const expected = sql.join(
-    terms.map(
-      ({ weight, expectedKey }) =>
-        sql`CASE WHEN dq_score.${expectedKey} THEN ${weight} ELSE 0 END`,
-    ),
-    sql` + `,
-  );
-  return group(
-    sql`(SELECT COALESCE(round(100.0 * (${satisfied}) / NULLIF((${expected}), 0), 2), 100) FROM (SELECT ${inputs} OFFSET 0) dq_score)`,
-  );
-};
+): SQL => group(sql`${statusSql(entity, t)} = ${status}`);
 
 /** The alias a related row is evaluated under inside a roll-up subquery. */
 const RELATED_ALIAS = "dq_r";
@@ -336,6 +357,7 @@ export const dataQualitySortResolver =
   (sort: { orderBy: string; direction: string }): SQL[] | null =>
     sort.orderBy === DATA_QUALITY_SORT
       ? [
-          sql`${scoreSql(entity, t)} ${sql.raw(sort.direction === "asc" ? "asc" : "desc")}`,
+          // A not-assessed (null) score sorts after every scored row either way.
+          sql`${scoreSql(entity, t)} ${sql.raw(sort.direction === "asc" ? "asc" : "desc")} NULLS LAST`,
         ]
       : null;

@@ -11,7 +11,10 @@ export const financialAccountChecks = defineEntityChecks({
   table: financialAccount,
   checks: {
     financial_account_unclaimed: {
+      // Cash has no provider to claim it; the account itself is the evidence
+      // (the same rule `settlement_reference` applies).
       missing: (t: FinancialAccount) => sql`(${t.provisional} = true
+        AND ${t.identity}->>'kind' <> 'cash'
         AND CASE WHEN jsonb_typeof(${t.sourceAliases}) = 'array' THEN jsonb_array_length(${t.sourceAliases}) ELSE 0 END = 0
         AND NOT EXISTS (
           SELECT 1 FROM "FinancialTransaction" ft

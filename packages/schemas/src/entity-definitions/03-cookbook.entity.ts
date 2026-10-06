@@ -397,7 +397,8 @@ export default defineEntity({
           id: "cookbook_import_incomplete",
           facet: "integrity",
           kind: "defect",
-          weight: 2,
+          weight: 3,
+          scoreCap: 69,
           label: "Import incomplete",
           message:
             "Fewer recipes are imported than the source cookbook contains.",

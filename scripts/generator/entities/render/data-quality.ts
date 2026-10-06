@@ -88,6 +88,13 @@ export const renderDataQualityArtifacts = (
       ),
     ) +
     "\n" +
+    "/** A declared `scoreCap`, or null for the default unresolved-gap cap. */\n" +
+    record(
+      "dataCheckScoreCap",
+      "Record<DataCheck, number | null>",
+      byCheck((check) => String(check.scoreCap ?? null)),
+    ) +
+    "\n" +
     record(
       "dataCheckExemptible",
       "Record<DataCheck, boolean>",

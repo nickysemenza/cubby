@@ -3,9 +3,11 @@ import {
   dataCheckEntity,
   dataCheckExemptible,
   dataCheckKind,
+  dataCheckLabel,
   dataCheckWeight,
   dataChecksByEntity,
   dataQualityExceptionEntities,
+  isDefectDataCheck,
 } from "@cubby/schemas/data-quality";
 import { describe, expect, it } from "vitest";
 
@@ -43,14 +45,42 @@ describe("quality explanation calculation", () => {
     expect(result.score).toBeLessThan(100);
   });
 
-  it("does not penalize inapplicable checks and explains the empty denominator", () => {
+  it("does not assess a record with no applicable checks", () => {
     const result = buildQualityBreakdown([], [first], []);
     expect(result).toMatchObject({
-      score: 100,
+      score: null,
+      status: "not_assessed",
       expectedWeight: 0,
       satisfiedWeight: 0,
       checks: [],
     });
+  });
+
+  // An unscored diagnostic carries no weight, but an unresolved one must
+  // still keep the record below 100 and say why.
+  it("caps an unscored gap and names it in the summary", () => {
+    const unscored = dataCheck.options.find(
+      (check) => dataCheckWeight[check] === 0 && isDefectDataCheck(check),
+    )!;
+    const alone = buildQualityBreakdown([unscored], [unscored], []);
+    expect(alone).toMatchObject({ score: 99, status: "defect" });
+    expect(alone.summary).toBe(
+      `No applicable weighted checks; unresolved “${dataCheckLabel[unscored]}” caps the score at 99 → 99/100`,
+    );
+    const mixed = buildQualityBreakdown([first, unscored], [unscored], []);
+    expect(mixed.score).toBe(99);
+    expect(mixed.summary).toBe(
+      `${dataCheckWeight[first]} satisfied weight ÷ ${dataCheckWeight[first]} applicable weight × 100 = 100, capped at 99 while “${dataCheckLabel[unscored]}” is unresolved → 99/100`,
+    );
+  });
+
+  it("marks a record complete only through accepted exceptions", () => {
+    const result = buildQualityBreakdown([first, second], [], [second]);
+    expect(result).toMatchObject({
+      score: 100,
+      status: "complete_with_exceptions",
+    });
+    expect(result.summary).toContain("accepted exceptions count as satisfied");
   });
 
   // The display wording lives here only; web and native render these strings,
@@ -81,20 +111,8 @@ describe("quality explanation calculation", () => {
     );
     const excepted = buildQualityBreakdown([missing], [], [missing]);
     expect(excepted.checks[0]!.stateLabel).toBe("Accepted exception");
-    expect(
-      buildQualityBreakdown(dataCheck.options, [], []).checks.map(
-        ({ check, weightLabel }) => [check, weightLabel],
-      ),
-    ).toEqual(
-      dataCheck.options.map((check) => [
-        check,
-        dataCheckWeight[check] === 0
-          ? "Unscored diagnostic"
-          : `weight ${dataCheckWeight[check]}`,
-      ]),
-    );
     expect(buildQualityBreakdown([], [], []).summary).toBe(
-      "No applicable weighted checks: the score is 100/100. Unscored diagnostics remain visible below.",
+      "No applicable checks: quality is not assessed.",
     );
   });
 

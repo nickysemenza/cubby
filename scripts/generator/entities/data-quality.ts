@@ -14,6 +14,7 @@ type CompiledDataQualityCheck = Readonly<{
   kind: "missing" | "defect";
   weight: number;
   scoring: "weighted" | "unscored";
+  scoreCap?: number;
   exceptions: "inherit" | "forbidden";
   label: string;
   message: string;
@@ -44,8 +45,14 @@ const DATA_QUALITY_LIST_RENDERER = "data-quality";
 
 const STATUS_OPTIONS = [
   { value: "complete", label: "Complete", color: "var(--slate)" },
+  {
+    value: "complete_with_exceptions",
+    label: "Complete with exceptions",
+    color: "var(--plum)",
+  },
   { value: "needs_data", label: "Needs data", color: "var(--warning)" },
   { value: "defect", label: "Defect", color: "var(--destructive)" },
+  { value: "not_assessed", label: "Not assessed", color: "var(--slate)" },
 ] as const;
 
 const qualityField = (entityKey: string): EntityField => ({
@@ -114,6 +121,7 @@ export const compileDataQuality = (
       kind: "missing" | "defect";
       weight: number;
       scoring: "weighted" | "unscored";
+      scoreCap?: number;
       exceptions: "inherit" | "forbidden";
       label: string;
       message: string;
@@ -340,6 +348,12 @@ export const validateDataQualityDeclarations = (
       if (!target)
         throw new EntityDeclarationError(
           `${entity.key}.capabilities.dataQuality.related names ${related}, which declares no data-quality checks.`,
+        );
+      // Roll-ups are one hop: hydration loads a related entity's own gaps
+      // only, so a chain (or cycle) would silently drop the far end.
+      if (target.related.length > 0)
+        throw new EntityDeclarationError(
+          `${entity.key}.capabilities.dataQuality.related names ${related}, which rolls up ${target.related.join(", ")} itself; related data quality is one hop.`,
         );
       return target.checks.map((check) => ({
         value: check.id,

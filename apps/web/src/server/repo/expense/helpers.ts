@@ -424,6 +424,7 @@ const expenseEvidenceFields = (row: ExpenseRow) => ({
   spendingCategoryId: row.spendingCategoryShortcode
     ? parseShortcodeFor("spendingCategory", row.spendingCategoryShortcode)
     : null,
+  spendingCategoryName: row.spendingCategoryName ?? null,
   economicRole: row.economicRole ?? "vendor",
   bookingTransactionCode: row.bookingTransactionCode
     ? parseShortcodeFor("financialTransaction", row.bookingTransactionCode)

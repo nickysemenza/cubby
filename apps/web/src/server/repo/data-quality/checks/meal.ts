@@ -6,8 +6,12 @@ import { defineEntityChecks } from "../registry";
 
 type Meal = typeof meal;
 
+// A MealRecipe row still pointing at a deleted Recipe contributes no food.
 const hasRecipe = (t: Meal) => sql`EXISTS (
   SELECT 1 FROM "MealRecipe" dq_meal_recipe
+  JOIN "Recipe" dq_meal_live_recipe
+    ON dq_meal_live_recipe."id" = dq_meal_recipe."recipeId"
+    AND dq_meal_live_recipe."deletedAt" IS NULL
   WHERE dq_meal_recipe."mealId" = ${t.id} AND dq_meal_recipe."deletedAt" IS NULL
 )`;
 

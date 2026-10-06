@@ -910,9 +910,11 @@ export default defineEntity({
         {
           id: "meal_contents",
           facet: "content",
-          weight: 2,
+          weight: 3,
+          scoreCap: 69,
           label: "Contents",
-          message: "No recipes or food entries are recorded for this meal.",
+          message:
+            "No live recipes or food entries are recorded for this cooked meal.",
         },
       ],
     },

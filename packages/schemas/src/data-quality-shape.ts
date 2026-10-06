@@ -11,7 +11,18 @@ import {
  * are plain strings here; `@cubby/schemas/data-quality` composes the typed
  * input schemas (filters, exceptions) from the generated enums.
  */
-export const dataQualityStatus = z.enum(["complete", "needs_data", "defect"]);
+/**
+ * `not_assessed`: no applicable check holds a gap and none carries weight, so
+ * the score is null. `complete_with_exceptions`: no unresolved gap, but at
+ * least one is satisfied only by an accepted exception.
+ */
+export const dataQualityStatus = z.enum([
+  "complete",
+  "complete_with_exceptions",
+  "needs_data",
+  "defect",
+  "not_assessed",
+]);
 export type DataQualityStatus = z.infer<typeof dataQualityStatus>;
 
 export const dataExceptionReason = z.enum([
@@ -68,7 +79,8 @@ export type DataQualityFacet = z.infer<typeof dataQualityFacet>;
 
 export const dataQuality = z.object({
   status: dataQualityStatus,
-  score: z.number().min(0).max(100).default(100),
+  /** Null exactly when `status` is `not_assessed`. */
+  score: z.number().min(0).max(100).nullable(),
   facets: z.array(dataQualityFacet),
   gaps: z.array(dataQualityGap),
   exceptions: z.array(dataQualityException),

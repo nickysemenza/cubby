@@ -28,6 +28,7 @@ export default defineEntity({
       read: {
         relations: ["parentId", "productCategories"],
         media: ["displayImages"],
+        quality: ["dataQuality"],
       },
       tree: { parentField: "parentId" },
     },
@@ -375,6 +376,28 @@ export default defineEntity({
     merge: false,
     operationOwners: { delete: "kernel", merge: null },
     mcp: ["get", "list", "create", "update", "delete"],
+    dataQuality: {
+      checks: [
+        {
+          id: "spending_category_evidence_expectation",
+          facet: "paperwork",
+          exceptions: "forbidden",
+          weight: 2,
+          label: "Receipt expectation",
+          message:
+            "Whether spending in this category needs a receipt is unclassified.",
+        },
+        {
+          id: "spending_category_product_expectation",
+          facet: "identity",
+          exceptions: "forbidden",
+          weight: 1,
+          label: "Product expectation",
+          message:
+            "Whether lines in this category need a Product identity is unclassified.",
+        },
+      ],
+    },
   },
   extensions: {
     ports: {

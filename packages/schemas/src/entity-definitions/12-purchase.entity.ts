@@ -125,6 +125,7 @@ export default defineEntity({
           "defaultProjectId",
           "vendorName",
           "orderUrl",
+          "spendingCategoryName",
         ],
         media: ["vendorLogo", "images", "displayImages"],
         derived: [
@@ -333,6 +334,12 @@ export default defineEntity({
           create: spendingCategoryShortcode.nullable().default(null),
           update: spendingCategoryShortcode.nullable().optional(),
         },
+      },
+      {
+        key: "spendingCategoryName",
+        kind: "text",
+        nullable: true,
+        validation: { read: z.string().nullable(), create: null, update: null },
       },
       {
         key: "fieldResolutions",
@@ -1091,6 +1098,7 @@ export default defineEntity({
       "spendingCategorySummary",
       "fieldResolutions",
       "spendingCategoryId",
+      "spendingCategoryName",
       "spendingCategoryOrigin",
       "evidenceExpectation",
       "itemizationEvidence",
@@ -1632,6 +1640,8 @@ export default defineEntity({
         {
           id: "purchase_date",
           facet: "identity",
+          weight: 3,
+          scoreCap: 69,
           label: "Missing date",
           message: "Purchase date is not recorded.",
         },
@@ -1650,6 +1660,7 @@ export default defineEntity({
         {
           id: "primary_document",
           facet: "paperwork",
+          weight: 2,
           label: "No primary document",
           message:
             "No primary order confirmation, sales order, invoice, or receipt is attached.",
@@ -1657,6 +1668,8 @@ export default defineEntity({
         {
           id: "empty_expenses",
           facet: "ledger",
+          weight: 3,
+          scoreCap: 69,
           label: "No expense lines",
           message: "Purchase has no live Expenses.",
         },
@@ -1685,13 +1698,16 @@ export default defineEntity({
         {
           id: "unpriced_expense",
           facet: "ledger",
+          weight: 2,
           label: "Unpriced expense line",
-          message: "At least one linked Expense is unpriced.",
+          message: "At least one linked, non-future Expense is unpriced.",
         },
         {
           id: "paperwork_mismatch",
           facet: "paperwork",
           kind: "defect",
+          weight: 2,
+          scoreCap: 49,
           label: "Paperwork mismatch",
           message:
             "Expense total differs from the literal vendor-stated total, and posted refunds do not fully explain it.",
@@ -1699,6 +1715,7 @@ export default defineEntity({
         {
           id: "settlement_reference",
           facet: "settlement",
+          weight: 2,
           label: "No settlement evidence",
           message:
             "No posted qualifying FinancialTransaction with external or cash-account evidence is linked.",
@@ -1707,6 +1724,8 @@ export default defineEntity({
           id: "settlement_mismatch",
           facet: "settlement",
           kind: "defect",
+          weight: 2,
+          scoreCap: 49,
           label: "Settlement mismatch",
           message:
             "Settlement evidence differs from incurred Expenses. Review the ledger and source evidence, or record a reasoned expected mismatch.",

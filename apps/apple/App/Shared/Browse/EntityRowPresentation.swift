@@ -103,12 +103,16 @@ struct EntityRowPresentation: Sendable, Hashable {
                 let text: String
                 if field.readKey == nil {
                     text = "Not assessed"
-                } else if let score = row.raw[key]?["score"]?.doubleValue,
-                    let status = row.raw[key]?["status"]?.stringValue
-                {
+                } else if let status = row.raw[key]?["status"]?.stringValue {
                     let label =
                         field.valueOptions?.first { $0.value == status }?.label ?? "Unavailable"
-                    text = "\(Int(score.rounded()))/100 · \(label)"
+                    // A null score is a not-assessed record; the server caps any unresolved gap at
+                    // 99 or below, so rounding never shows a gap as 100.
+                    if let score = row.raw[key]?["score"]?.doubleValue {
+                        text = "\(Int(score.rounded()))/100 · \(label)"
+                    } else {
+                        text = label
+                    }
                 } else {
                     text = row.pendingFields.contains(key) ? "Loading…" : "Unavailable"
                 }
@@ -124,6 +128,10 @@ struct EntityRowPresentation: Sendable, Hashable {
                 let text =
                     names.isEmpty ? summary.classificationLabel : "\(summary.classificationLabel): \(names)"
                 facts.append(Fact(id: key, label: label ?? field.label, value: text))
+                return
+            }
+            if let names = FieldResolutionPresentation.allocatedReferenceLabel(in: row.raw, field: field) {
+                facts.append(Fact(id: key, label: label ?? field.label, value: names))
                 return
             }
             // A declared `labelPath` is the text the server composed (or the name of the record

@@ -50,6 +50,7 @@ describe("productMcpOut", () => {
       ingredientId: null,
       unitMappings: [],
       dataQuality: {
+        score: 100,
         status: "complete",
         facets: [],
         gaps: [],

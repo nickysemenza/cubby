@@ -59,6 +59,12 @@ const EXCEPTION_REASONS = {
   unpriced_expense: ["unavailable", "history_expired"],
   expense_cost: ["unavailable", "history_expired"],
   expense_product_resolution: ["unavailable", "insufficient_detail"],
+  // A receipt that prices a line without counting it (by weight, a bundle).
+  expense_quantity: ["unavailable", "insufficient_detail"],
+  // A hand-to-hand cash transfer leaves no statement transaction.
+  ledger_transfer_transaction: ["not_issued", "unavailable"],
+  // A crop the garden guide does not cover has no guide key to record.
+  plant_crop: ["not_applicable"],
   // Statement-sourced facts that no source states: a blank merchant, or a
   // booking that cannot be allocated from the detail the statement carries.
   financial_transaction_merchant: ["unavailable"],

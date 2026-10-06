@@ -125,18 +125,17 @@ const dataQualityRenderer = <TRow extends object>(
   createCubbyColumnCollection<TRow>((add) => {
     const qualityOf = (row: TRow) => qualityRow.parse(row).dataQuality;
     add(
-      helper.accessor((row) => qualityOf(row)?.status ?? "not_assessed", {
+      // A not-assessed (null) score sinks below every scored row in both
+      // directions, matching the server's `NULLS LAST`.
+      helper.accessor((row) => qualityOf(row)?.score ?? undefined, {
         id: "dataQuality",
         header: "Quality",
         enableSorting: scored,
         sortDescFirst: false,
-        sortFn: (left, right) => {
-          const leftQuality = qualityOf(left.original);
-          const rightQuality = qualityOf(right.original);
-          if (!leftQuality) return rightQuality ? 1 : 0;
-          if (!rightQuality) return -1;
-          return leftQuality.score - rightQuality.score;
-        },
+        sortUndefined: "last",
+        sortFn: (left, right) =>
+          (qualityOf(left.original)?.score ?? 0) -
+          (qualityOf(right.original)?.score ?? 0),
         meta: attachCubbyColumnMeta<TRow>({
           className: "w-20",
           numeric: true,
@@ -144,7 +143,7 @@ const dataQualityRenderer = <TRow extends object>(
             "number",
             (row) => qualityOf(row)?.score ?? null,
           ),
-          mobile: { slot: "meta", priority: 0 },
+          mobile: { slot: "meta", priority: 0, showWhenEmpty: true },
         }),
         cell: (info) => {
           const quality = qualityOf(info.row.original);

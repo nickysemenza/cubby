@@ -86,4 +86,39 @@ struct FieldResolutionPresentationTests {
             FieldResolutionPresentation.readValue(in: row(), field: field, surface: "list")
                 == .string("not_expected"))
     }
+    // An allocation label belongs to its effective target, not a stored override or source Purchase.
+    @Test func allocatedReferenceUsesTheMatchingTargetName() throws {
+        let source =
+            #"{"key":"spendingCategoryId","label":"Spending category","kind":"identifier","nullable":true,"reference":{"entity":"spendingCategory","multiple":false,"scope":[],"filters":[]},"inCreate":true,"requiredOnCreate":false,"inUpdate":true,"showInList":true,"showInDetail":true,"listHidden":false,"mobileInteractive":false}"#
+        let field = try JSONDecoder().decode(FieldDescriptor.self, from: Data(source.utf8))
+        let raw: JSONValue = [
+            "spendingCategoryId": "SPC-4K7M", "spendingCategoryName": "Stored label",
+            "spendingCategoryAllocations": [
+                ["spendingCategoryId": "SPC-7M4K", "spendingCategoryName": "Supplies", "incomplete": false]
+            ],
+        ]
+        #expect(
+            FieldResolutionPresentation.referenceName(in: raw, field: field, effectiveID: "SPC-7M4K")
+                == "Supplies")
+        var allocatedObject = try #require(raw.objectValue)
+        allocatedObject["fieldResolutions"] = [
+            "spendingCategoryId": [
+                "mode": "allocated", "storedValue": "SPC-4K7M", "value": .null,
+                "fallbackValue": .null, "source": "purchase_principal_allocations",
+                "sourceEntity": .null, "matchesFallback": false, "canReset": false,
+            ]
+        ]
+        allocatedObject["spendingCategoryAllocations"] = [
+            ["spendingCategoryId": "SPC-7M4K", "spendingCategoryName": "Supplies", "incomplete": false],
+            ["spendingCategoryId": "SPC-4M7K", "spendingCategoryName": "Services", "incomplete": false],
+            ["spendingCategoryId": .null, "spendingCategoryName": .null, "incomplete": true],
+        ]
+        let allocated = JSONValue.object(allocatedObject)
+        #expect(
+            FieldResolutionPresentation.allocatedReferenceLabel(in: allocated, field: field)
+                == "Supplies, Services, Partly unclassified")
+        #expect(FieldResolutionPresentation.allocatedReferenceLabel(in: raw, field: field) == nil)
+
+    }
+
 }
