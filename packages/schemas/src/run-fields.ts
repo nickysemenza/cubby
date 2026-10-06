@@ -216,6 +216,36 @@ export const chargeHuntRunInput = z.object({
   kind: z.literal("charge_hunts"),
   huntIds: z.array(z.uuid()).min(1).max(50),
 });
+/**
+ * What a restart copies from `Run.input`, by public values only: a mail
+ * import's order ids, a backfill's range, or how many charges a charge run
+ * carries. Mail-event and hunt ids are private and never cross it.
+ */
+export const runRestartOrderMailInput = z
+  .object({
+    kind: z.literal("order_mail_import"),
+    orderIds: z.array(z.string()),
+  })
+  .meta({ id: "RunRestartOrderMailInput" });
+export const runRestartOrderBackfillInput = z
+  .object({
+    kind: z.literal("order_backfill"),
+    from: z.iso.date(),
+    to: z.iso.date(),
+  })
+  .meta({ id: "RunRestartOrderBackfillInput" });
+export const runRestartChargeHuntsInput = z
+  .object({
+    kind: z.literal("charge_hunts"),
+    chargeCount: z.number().int().positive(),
+  })
+  .meta({ id: "RunRestartChargeHuntsInput" });
+export const runRestartInput = z.discriminatedUnion("kind", [
+  runRestartOrderMailInput,
+  runRestartOrderBackfillInput,
+  runRestartChargeHuntsInput,
+]);
+export type RunRestartInput = z.infer<typeof runRestartInput>;
 /** `ImportHunt.state` values a selected-charges run writes (plain text column). */
 export const CHARGE_HUNT_STATE = {
   queued: "browser_queued",

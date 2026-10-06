@@ -23,6 +23,7 @@ import {
   controlRun,
   deferOrderForReview,
   finishRun,
+  loadRunDetail,
 } from "../run-service";
 import {
   loadOrderMailImportEvidence,
@@ -108,6 +109,14 @@ describe("saved confirmation imports", () => {
     if (!run) throw new Error("Missing confirmation run");
     expect(run.vendorAccountId).toBeNull();
     expect(run.purpose).toBe("account_sync");
+    // Restart copies the Vendor and the assigned confirmation, so the panel
+    // that claims to show exactly what it copies must show both, by public id.
+    const { restartInputs } = await loadRunDetail(ctx.db, first.runId);
+    expect(restartInputs).toMatchObject({
+      vendor: expect.stringMatching(/^VEN-/),
+      input: { kind: "order_mail_import", orderIds: ["EXAMPLE-123"] },
+    });
+    expect(JSON.stringify(restartInputs)).not.toContain(event.id);
     expect(await loadOrderMailImportEvidence(ctx.db, run.id)).toMatchObject({
       orderId: "EXAMPLE-123",
       evidenceChecksum: mail.rawChecksum,

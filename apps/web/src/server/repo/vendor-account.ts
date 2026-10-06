@@ -358,14 +358,19 @@ async function updateVendorAccount(
       [id],
       patch,
     );
-    if (data.browserSyncEnabled) {
-      const [row] = await tx
-        .select({ vendorId: vendorAccount.vendorId })
-        .from(vendorAccount)
-        .where(eq(vendorAccount.id, id))
-        .limit(1);
-      if (row) await classifyOnlineAccountVendor(tx, actor, row.vendorId);
-    }
+    // Same predicate as creation, on the resulting row: either field may
+    // arrive in a later update than the other.
+    const [row] = await tx
+      .select({
+        vendorId: vendorAccount.vendorId,
+        status: vendorAccount.status,
+        browserSyncEnabled: vendorAccount.browserSyncEnabled,
+      })
+      .from(vendorAccount)
+      .where(eq(vendorAccount.id, id))
+      .limit(1);
+    if (row?.status === "active" && row.browserSyncEnabled)
+      await classifyOnlineAccountVendor(tx, actor, row.vendorId);
   });
   return { output: await reader.getByID(db, id), entityId: id };
 }

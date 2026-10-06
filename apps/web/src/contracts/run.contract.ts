@@ -25,6 +25,7 @@ import {
   type TargetedImportStartInput,
   type TargetedImportStartOutput,
 } from "@cubby/schemas/run";
+import { runRestartInput } from "@cubby/schemas/run-fields";
 import {
   runControlAction,
   runPurpose,
@@ -57,7 +58,9 @@ const restartInputs = z.object({
   purpose: z.string(),
   trigger: z.literal("manual"),
   coordinatorModel: z.string(),
+  vendor: z.string().nullable(),
   vendorAccount: z.string().nullable(),
+  input: runRestartInput.nullable(),
   notes: z.string().nullable(),
   skillRevision: z.string().nullable(),
   runtimeRevision: z.string().nullable(),
