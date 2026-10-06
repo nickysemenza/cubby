@@ -105,6 +105,7 @@ import {
   modelStyleTokens,
   sharesModelWithinManufacturer,
 } from "./manufacturer-identity";
+import { autoFillCreatedProducts } from "./post-import-autofill";
 import { startPostImportEnrichment } from "./post-import-enrichment";
 
 const log = createLogger("purchase-import-commit");
@@ -942,7 +943,9 @@ export async function commitPurchaseImport(
         },
       ),
   );
-  // Network fetches stay outside the import transaction; each is best-effort.
+  // Network work stays outside the import transaction; each is best-effort.
+  // Auto-fill runs first so enrichment fingerprints the filled Products.
+  await autoFillCreatedProducts(db, { runId: scope.public.runId });
   for (const work of transactionResult.thumbnailWork ?? []) {
     await attachOrderLineThumbnails(db, work);
     // The import already committed: a follow-up failure is logged, never

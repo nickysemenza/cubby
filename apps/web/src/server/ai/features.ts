@@ -217,7 +217,7 @@ export const PURCHASE_IMPORT_PRODUCT_PROMOTION_FEATURE = defineFeature({
   feature: "product-promotion",
   tier: "decision",
   cache: true,
-  promptVersion: "2026-09-19.1",
+  promptVersion: "2026-10-06.1",
 }) satisfies AiDecisionFeature;
 
 export const PURCHASE_IMPORT_REVERSAL_KIND_FEATURE = defineFeature({
