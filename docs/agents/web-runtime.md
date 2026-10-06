@@ -16,6 +16,11 @@ isomorphic function. `ssr: false` is a measured cost choice, not a correctness
 workaround; a loader may await `ensureQueryData` when that latency is warranted.
 Workflow streams use typed JSONL server routes and an `AbortSignal`; the owning
 screen opens them explicitly rather than a generic dispatcher.
+Cookbook import stays busy until its recipe stream and photo phase finish.
+The stream's done event precedes iterator completion; hand off recipe progress
+to photo progress atomically, with the outer import cleanup owning completion.
+An enabled import button must not let a reattached EPUB feed an unfinished
+automatic photo pass and bypass the failed photo's Retry action.
 
 Hydration: TanStack Start's SSR query stream lands in the client cache before
 React hydrates, so gate loading branches with `useHydratedLoading`/`useHydrated`,
