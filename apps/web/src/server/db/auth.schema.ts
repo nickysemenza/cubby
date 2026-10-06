@@ -188,10 +188,6 @@ export const oauthClient = pgTable(
     jwks: text("jwks"),
     jwksUri: text("jwks_uri"),
     dpopBoundAccessTokens: boolean("dpop_bound_access_tokens").default(false),
-    // Kept through the additive rollout so the previous deployment can drain.
-    // Better Auth 1.7 ignores these legacy columns; contract them separately.
-    public: boolean("public"),
-    type: text("type"),
     requirePKCE: boolean("require_pkce"),
     referenceId: text("reference_id"),
     metadata: jsonb("metadata"),

@@ -255,12 +255,13 @@ After deployment, authorize each member once from Settings and verify the
 client/grant without printing token values:
 
 ```sql
-SELECT c.client_id, c.public, c.require_pkce, count(r.id) AS active_grants
+SELECT c.client_id, c.token_endpoint_auth_method, c.require_pkce,
+  count(r.id) AS active_grants
 FROM oauth_client c
 LEFT JOIN oauth_refresh_token r
   ON r.client_id = c.client_id AND r.revoked IS NULL
 WHERE c.client_id = 'cubby-purchase-agent'
-GROUP BY c.client_id, c.public, c.require_pkce;
+GROUP BY c.client_id, c.token_endpoint_auth_method, c.require_pkce;
 ```
 
 Three suites exercise the real agent in the workerd harness's
