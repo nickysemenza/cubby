@@ -322,6 +322,14 @@ describe("order confirmation line links", () => {
     });
   });
 
+  it("drops a URL that is only a prefix of a longer link in the email", async () => {
+    const extraction = await extract([
+      line("Tomato seeds", "https://seeds.example.test/products/tomato", null),
+      line("Pepper seeds", null, null),
+    ]);
+    expect(extraction.candidate?.lines[0]?.productUrl).toBeUndefined();
+  });
+
   it("drops an invented URL and a tracking redirect off the Vendor's site", async () => {
     const extraction = await extract([
       line(

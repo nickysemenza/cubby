@@ -35,6 +35,7 @@ import {
   type ValidatePurchaseImportInput,
 } from "@cubby/schemas/purchase-import";
 import { sha256Hex } from "@cubby/shared/sha256";
+import { createLogger } from "@cubby/worker-tracing";
 import * as Sentry from "@sentry/tanstackstart-react";
 import { and, asc, eq, ilike, inArray, or, sql } from "drizzle-orm";
 import { z } from "zod";
@@ -105,6 +106,8 @@ import {
   sharesModelWithinManufacturer,
 } from "./manufacturer-identity";
 import { startPostImportEnrichment } from "./post-import-enrichment";
+
+const log = createLogger("purchase-import-commit");
 import { productEnrichmentTarget } from "./product-enrichment-target";
 import { recordRunWrites } from "./run-audit";
 import { auditAllImportBatches, loadRunScope } from "./run-service";
@@ -942,11 +945,20 @@ export async function commitPurchaseImport(
   // Network fetches stay outside the import transaction; each is best-effort.
   for (const work of transactionResult.thumbnailWork ?? []) {
     await attachOrderLineThumbnails(db, work);
-    await startPostImportEnrichment(db, {
-      parentRunId: scope.public.runId,
-      purchaseId: work.purchaseId,
-      lines: work.lines,
-    });
+    // The import already committed: a follow-up failure is logged, never
+    // reported as a failed import.
+    try {
+      await startPostImportEnrichment(db, {
+        parentRunId: scope.public.runId,
+        purchaseId: work.purchaseId,
+        lines: work.lines,
+      });
+    } catch (error) {
+      log.warn("Post-import enrichment not started", {
+        runId: scope.public.runId,
+        error,
+      });
+    }
   }
   if (transactionResult.requiresReview) {
     await finalizeReviewRun(

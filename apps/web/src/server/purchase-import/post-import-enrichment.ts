@@ -1,4 +1,4 @@
-import type { PurchaseId, RunId } from "@cubby/schemas/identifiers";
+import type { ProductId, PurchaseId, RunId } from "@cubby/schemas/identifiers";
 import { and, eq, ne } from "drizzle-orm";
 
 import type { Database } from "~/server/db";
@@ -74,15 +74,30 @@ export async function startPostImportEnrichment(
       ),
     )
     .where(and(eq(expense.purchaseId, input.purchaseId), notDeleted(expense)));
+  // Only a title one line uses names one Product's page; a shared title is
+  // skipped rather than guessed. A Product two lines name (one SKU, two
+  // titles) is targeted once, and only when both lines agree on its page.
+  const titleCount = new Map<string, number>();
+  for (const line of input.lines)
+    titleCount.set(line.title, (titleCount.get(line.title) ?? 0) + 1);
   const pageFor = new Map(
     input.lines.flatMap((line) =>
-      line.productUrl ? [[line.title, line.productUrl] as const] : [],
+      line.productUrl && titleCount.get(line.title) === 1
+        ? [[line.title, line.productUrl] as const]
+        : [],
     ),
   );
-  const created = createdRows.flatMap((row) => {
-    const startUrl = pageFor.get(row.title);
-    return startUrl ? [{ productId: row.productId, startUrl }] : [];
-  });
+  const pagesByProduct = new Map<ProductId, Set<string>>();
+  for (const row of createdRows) {
+    const page = pageFor.get(row.title);
+    if (!page) continue;
+    const pages = pagesByProduct.get(row.productId) ?? new Set<string>();
+    pages.add(page);
+    pagesByProduct.set(row.productId, pages);
+  }
+  const created = [...pagesByProduct].flatMap(([productId, pages]) =>
+    pages.size === 1 ? [{ productId, startUrl: [...pages][0]! }] : [],
+  );
   if (created.length === 0) return null;
 
   const targets = await Promise.all(

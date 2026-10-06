@@ -393,7 +393,15 @@ describe("saved confirmation imports", () => {
     // when the member can browse that Vendor. Failure modes: no follow-up at
     // all; a follow-up on a mail-only account (no browser to use); a child
     // that starts from the Gmail source key instead of the product page.
-    const importNewLine = async (synced: boolean) => {
+    const importNewLine = async (
+      synced: boolean,
+      extraLines: {
+        title: string;
+        productUrl: string;
+        sku?: string;
+        amount: number;
+      }[] = [],
+    ) => {
       const { mail, event } = await seed();
       const productUrl = "https://seed.example.test/products/herb";
       await getDb(ctx.db)
@@ -441,21 +449,31 @@ describe("saved confirmation imports", () => {
                   orderedAt: "2026-09-01T12:00:00Z",
                   merchant: "Example Seed Shop",
                   currency: "USD",
-                  printedGrandTotal: 5,
+                  printedGrandTotal:
+                    5 + extraLines.reduce((sum, line) => sum + line.amount, 0),
                   lines: [
                     {
                       title: "Synthetic herb packet",
                       amount: 5,
                       quantity: 1,
                       productUrl,
+                      sku: extraLines.length ? "HERB-1" : undefined,
                       lineKind: "principal" as const,
                     },
+                    ...extraLines.map((line) => ({
+                      ...line,
+                      quantity: 1,
+                      lineKind: "principal" as const,
+                    })),
                   ],
                   payments: [],
                   allShipmentsDelivered: null,
                 },
               },
-              lineIds: ["herb"],
+              lineIds: [
+                "herb",
+                ...extraLines.map((_, index) => `extra${index}`),
+              ],
               primaryDocumentImageId: null,
               screenshotImageId: null,
             },
@@ -469,13 +487,13 @@ describe("saved confirmation imports", () => {
           _runExecution: { runId: run.id, operationId: "commit-new" },
           prepareOperationId: "prepare-new",
           defaultTrade: "other" as const,
-          resolutions: [
-            {
+          resolutions: ["herb", ...extraLines.map((_, i) => `extra${i}`)].map(
+            (stableLineId) => ({
               stableOrderId: "assigned-mail",
-              stableLineId: "herb",
+              stableLineId,
               resolution: { kind: "new" as const },
-            },
-          ],
+            }),
+          ),
         },
         ctx.actor,
       );
@@ -500,6 +518,23 @@ describe("saved confirmation imports", () => {
         .from(runTarget)
         .where(eq(runTarget.runId, child!.id));
       expect(targets).toEqual([{ startUrl: productUrl }]);
+    });
+
+    it("targets a Product once when two differently titled lines share its SKU", async () => {
+      const { children } = await importNewLine(true, [
+        {
+          title: "Synthetic herb packet (gift)",
+          productUrl: "https://seed.example.test/products/herb",
+          sku: "HERB-1",
+          amount: 5,
+        },
+      ]);
+      expect(children).toHaveLength(1);
+      const targets = await getDb(ctx.db)
+        .select({ productId: runTarget.entityId })
+        .from(runTarget)
+        .where(eq(runTarget.runId, children[0]!.id));
+      expect(targets).toHaveLength(1);
     });
 
     it("starts nothing for a mail-only account", async () => {

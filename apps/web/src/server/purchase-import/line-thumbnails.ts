@@ -42,7 +42,12 @@ export async function attachOrderLineThumbnails(
   },
   ports: ThumbnailPorts = { importImage: importImageFromUrl },
 ) {
+  const titleCount = new Map<string, number>();
+  for (const line of input.lines)
+    titleCount.set(line.title, (titleCount.get(line.title) ?? 0) + 1);
   for (const raw of input.lines) {
+    // A title two lines share cannot name one Product; skip rather than guess.
+    if ((titleCount.get(raw.title) ?? 0) > 1) continue;
     // Re-check at the point of fetching: only URLs the email itself shows.
     const line = retainLiteralLineLinks(raw, input.mailContent, []);
     if (!line.imageUrl) continue;
@@ -115,6 +120,8 @@ async function hasImage(db: Database | DrizzleTransaction, productId: string) {
     .where(
       and(
         eq(entityAttachment.entityId, productId),
+        // A label photo is never a cover, so it does not count as one.
+        eq(entityAttachment.purpose, "item"),
         notDeleted(entityAttachment),
       ),
     )

@@ -85,6 +85,74 @@ describe("order line thumbnails", () => {
     };
   };
 
+  it("covers a Product whose only image is a label", async () => {
+    const { purchase, pictured } = await seed();
+    await getDb(ctx.db)
+      .update(entityAttachment)
+      .set({ purpose: "label" })
+      .where(eq(entityAttachment.entityId, pictured.id));
+    await attachOrderLineThumbnails(
+      ctx.db,
+      {
+        purchaseId: purchase.id,
+        mailContent: {
+          bodyHtml: '<img src="https://cdn.example.test/pepper.jpg">',
+          bodyText: null,
+        },
+        lines: [
+          {
+            title: "Example pepper packet",
+            imageUrl: "https://cdn.example.test/pepper.jpg",
+          },
+        ],
+      },
+      { importImage },
+    );
+    expect(fetched).toContain("https://cdn.example.test/pepper.jpg");
+  });
+
+  it("skips a title two order lines share rather than guess its Product", async () => {
+    const { purchase } = await seed();
+    await insertWithShortcode(ctx.db, "expense", {
+      name: "Example tomato packet",
+      purchaseId: purchase.id,
+      productId: (
+        await insertWithShortcode(ctx.db, "product", {
+          name: "Example tomato packet, large",
+          manufacturer: "",
+        })
+      ).id,
+      cost: 5,
+      date: "2026-09-21",
+      lineKind: "principal",
+      costType: "materials",
+    });
+    fetched.length = 0;
+    await attachOrderLineThumbnails(
+      ctx.db,
+      {
+        purchaseId: purchase.id,
+        mailContent: {
+          bodyHtml:
+            '<img src="https://cdn.example.test/t1.jpg"><img src="https://cdn.example.test/t2.jpg">',
+          bodyText: null,
+        },
+        lines: [
+          {
+            title: "Example tomato packet",
+            imageUrl: "https://cdn.example.test/t1.jpg",
+          },
+          {
+            title: "Example tomato packet",
+            imageUrl: "https://cdn.example.test/t2.jpg",
+          },
+        ],
+      },
+      { importImage },
+    );
+    expect(fetched).toEqual([]);
+  });
+
   it("covers only image-less Products with images the email literally shows", async () => {
     const { purchase, bare, pictured, failing } = await seed();
     const html =
@@ -111,7 +179,7 @@ describe("order line thumbnails", () => {
             imageUrl: "https://cdn.example.test/pepper.jpg",
           },
           {
-            title: "Example tomato packet",
+            title: "Example tomato packet, invented",
             imageUrl: "https://cdn.example.test/not-in-email.jpg",
           },
         ],

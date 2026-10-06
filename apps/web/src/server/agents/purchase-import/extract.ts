@@ -155,18 +155,36 @@ export function retainLiteralLineLinks<
   content: { bodyHtml: string | null; bodyText: string | null },
   productHosts: readonly string[],
 ): T {
-  // HTML attribute values escape `&`; compare against the decoded markup.
-  const literal = `${content.bodyHtml?.replaceAll("&amp;", "&") ?? ""}\n${content.bodyText ?? ""}`;
+  const literal = literalEmailUrls(content);
   const kept = { ...line };
   if (
     kept.productUrl &&
-    !(
-      literal.includes(kept.productUrl) && onHost(kept.productUrl, productHosts)
-    )
+    !(literal.has(kept.productUrl) && onHost(kept.productUrl, productHosts))
   )
     delete kept.productUrl;
-  if (kept.imageUrl && !literal.includes(kept.imageUrl)) delete kept.imageUrl;
+  if (kept.imageUrl && !literal.has(kept.imageUrl)) delete kept.imageUrl;
   return kept;
+}
+
+/**
+ * Every whole URL the email shows: `href`/`src` attribute values (HTML-escaped
+ * `&` decoded) and bare URLs in its text. A model URL must equal one of these,
+ * so a prefix of a longer link never passes.
+ */
+function literalEmailUrls(content: {
+  bodyHtml: string | null;
+  bodyText: string | null;
+}) {
+  const urls = new Set<string>();
+  for (const match of (content.bodyHtml ?? "").matchAll(
+    /\b(?:href|src)\s*=\s*(["'])(.*?)\1/giu,
+  ))
+    if (match[2]) urls.add(match[2].replaceAll("&amp;", "&").trim());
+  for (const match of (content.bodyText ?? "").matchAll(
+    /https?:\/\/[^\s<>"')\]]+/giu,
+  ))
+    urls.add(match[0]);
+  return urls;
 }
 
 function onHost(url: string, hosts: readonly string[]) {
