@@ -508,10 +508,10 @@ jobs:
         uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6
         with:
           path: apps/apple/CubbyKit/.build
-          key: spm-build-v1-${{ runner.os }}-${{ steps.swift-version.outputs.hash }}-${{ hashFiles('apps/apple/CubbyKit/Package.resolved') }}-${{ hashFiles('apps/apple/CubbyKit/**') }}-${{ hashFiles('apps/apple/scripts/check-openapi-warnings.sh') }}
+          key: spm-build-v2-${{ runner.os }}-${{ steps.swift-version.outputs.hash }}-${{ hashFiles('apps/apple/CubbyKit/Package.resolved') }}-${{ hashFiles('apps/apple/CubbyKit/**') }}-${{ hashFiles('apps/apple/scripts/check-openapi-warnings.sh') }}
           restore-keys: |
-            spm-build-v1-${{ runner.os }}-${{ steps.swift-version.outputs.hash }}-${{ hashFiles('apps/apple/CubbyKit/Package.resolved') }}-
-            spm-build-v1-${{ runner.os }}-${{ steps.swift-version.outputs.hash }}-
+            spm-build-v2-${{ runner.os }}-${{ steps.swift-version.outputs.hash }}-${{ hashFiles('apps/apple/CubbyKit/Package.resolved') }}-
+            spm-build-v2-${{ runner.os }}-${{ steps.swift-version.outputs.hash }}-
       - name: Stamp source mtimes from content
         run: node scripts/stamp-source-mtimes.ts apps/apple/CubbyKit
       # --disable-index-store: nothing reads the index on CI, and it would
@@ -523,10 +523,8 @@ jobs:
       # the document, config, generator pin, toolchain and gate are unchanged.
       - name: Check OpenAPI generator warnings
         run: apps/apple/scripts/check-openapi-warnings.sh
-      # Saved here rather than by actions/cache's post step so a red test run
-      # still keeps the build for the next attempt (policy: the action).
+      # Publish only successful builds: exact-key cache entries are immutable.
       - name: Save SwiftPM build cache
-        if: always()
         uses: ./.github/actions/save-cache-main-only
         with:
           path: apps/apple/CubbyKit/.build
@@ -556,10 +554,8 @@ jobs:
         id: derived-data
       - name: Run iOS app checks
         run: sh scripts/apple-check.sh ci
-      # Saved here rather than by actions/cache's post step so a red build
-      # still keeps the caches for the next attempt (policy: the action).
+      # A canceled compile must not permanently populate an exact cache key.
       - name: Save DerivedData cache
-        if: always()
         uses: ./.github/actions/save-cache-main-only
         with:
           path: ${{ steps.derived-data.outputs.cache-paths }}
@@ -567,7 +563,6 @@ jobs:
           cache-hit: ${{ steps.derived-data.outputs.cache-hit }}
           matched-key: ${{ steps.derived-data.outputs.save-matched-key }}
       - name: Save SPM clone cache
-        if: always()
         uses: ./.github/actions/save-cache-main-only
         with:
           path: apps/apple/SourcePackages
@@ -647,7 +642,6 @@ jobs:
             pnpm test:e2e:sim
           fi
       - name: Save Apple test runner cache
-        if: always()
         uses: ./.github/actions/save-apple-test-runner-cache
         with:
           path: ${{ steps.test-runner.outputs.cache-paths }}
@@ -655,7 +649,6 @@ jobs:
           cache-hit: ${{ steps.test-runner.outputs.cache-hit }}
           matched-key: ${{ steps.test-runner.outputs.matched-key }}
       - name: Save DerivedData cache
-        if: always()
         uses: ./.github/actions/save-cache-main-only
         with:
           path: ${{ steps.derived-data.outputs.cache-paths }}
@@ -832,7 +825,6 @@ jobs:
           "$pg_bin/psql" -h 127.0.0.1 -p 55432 -U postgres -d postgres -Atc "SELECT name FROM pg_available_extensions WHERE name = 'vector'" | grep -qx vector
       - run: pnpm test:e2e:agent:ios
       - name: Save Apple test runner cache
-        if: always()
         uses: ./.github/actions/save-apple-test-runner-cache
         with:
           path: ${{ steps.test-runner.outputs.cache-paths }}
@@ -840,7 +832,6 @@ jobs:
           cache-hit: ${{ steps.test-runner.outputs.cache-hit }}
           matched-key: ${{ steps.test-runner.outputs.matched-key }}
       - name: Save DerivedData cache
-        if: always()
         uses: ./.github/actions/save-cache-main-only
         with:
           path: ${{ steps.derived-data.outputs.cache-paths }}

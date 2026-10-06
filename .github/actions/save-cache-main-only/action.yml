@@ -5,8 +5,8 @@ description: >-
   only on a full miss. A PR's cache is private to its ref, and a ~1 GB copy per
   PR evicts everyone else's caches (the repo sat at 13.4 GB of 10 GB on
   2026-09-22). A concurrent job may have saved the same key first; that 409 is
-  harmless and never fails the check. Call it with `if: always()` so a red run
-  still keeps the build for the next attempt.
+  harmless and never fails the check. Save only after successful work: immutable
+  exact-key entries must never contain interrupted or failed compilation.
 
 inputs:
   path:
@@ -27,7 +27,7 @@ runs:
   steps:
     - name: Save cache
       if: >-
-        always() && inputs.cache-hit != 'true' &&
+        success() && inputs.cache-hit != 'true' &&
         (github.event_name == 'push' || inputs.matched-key == '')
       continue-on-error: true
       uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6

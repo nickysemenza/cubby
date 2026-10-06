@@ -102,8 +102,9 @@ like tracked sources so the restored build caches still apply. A skipped job sti
 satisfies its required status check. `Apple package tests` runs `swift test --package-path
 apps/apple/CubbyKit --force-resolved-versions` on the macOS host — no
 simulator — restoring/saving an exact-key cache of
-`apps/apple/CubbyKit/.build/{checkouts,repositories}` keyed on
-`Package.resolved` (SPM fetch+resolve was 53s of that job otherwise). It then
+`apps/apple/CubbyKit/.build`, including compiled products and dependency
+checkouts, keyed on the Swift toolchain, package pins, CubbyKit sources, and
+the warning-check script. It then
 runs `apps/apple/scripts/check-openapi-warnings.sh`, which fails on any
 swift-openapi-generator warning (a schema the `CubbyAPI` build plugin would
 silently drop). A successful warning check records its content key inside
@@ -124,6 +125,14 @@ GRDB, Nuke and swift-openapi-generator (previously an uncached "Resolve Package
 Graph" on every run), used only by `Apple checks`. It is separate from the
 target-specific FFI output cache (`.github/actions/setup-apple-ffi`) and the
 package-test job's build cache described above.
+
+Compiled Apple caches are published only after successful work. GitHub cache
+entries are immutable: saving an interrupted compile under the final content
+key makes every exact hit repeat that unfinished work, and a successful build
+cannot repair the entry. The DerivedData `v6` and SwiftPM `v2` generations
+exclude earlier entries that could have been saved after cancellation or
+failure. A new generation pays one cold build; unchanged successful restores
+are the evidence for warm performance. Dependency clones remain advisory.
 
 ## Hosted suite
 
