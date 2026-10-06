@@ -162,17 +162,34 @@ See also the image operational passes at the end of this file.
 
 Runs are the household's unattended work: account syncs, mail passes, charge
 searches, Product enrichment, photo inventory. Today each is a separate Run
-with ad hoc links between them; the Runs list and `imports_read.run_status`
-read one shared projection (`server/repo/activity.ts`).
+linked only by restarts (`predecessorRunId`) and the records it wrote. The
+Runs list and `imports_read.run_status` read one shared projection
+(`server/repo/activity.ts`).
 
-- 🧱 **Jobs, Steps, and Runs.** A Job is the objective (enrich this order's
-  Products), a Step is durable pending work with dependencies, a Run is one
-  execution attempt. Store causation (what spawned this) apart from
-  dependency (what must finish first). In order: record Job/Step provenance
-  for existing Runs (data migration); a durable admission queue per vendor
-  account in place of the `AccountOccupiedError` refusal; evidence
-  prerequisites (an order's purchased variant before its Products enrich);
-  one retry policy; one status projection for web, Mac, and MCP.
+- 🧱 **Run lineage.** Keep Run as the one unit of work; a Job or Step table
+  would duplicate status, actor, and the one-active-run-per-account fence,
+  and the pending work already lives in `RunOrderCandidate`, `ImportHunt`,
+  and open Products. Add `parentRunId` (the run whose work caused this one,
+  apart from `predecessorRunId`, the same work's next attempt), a `cause`
+  enum, and `attempt` to the Run declaration, and write them at every
+  starter. Give the discovery pass its own Run so every automatic child has
+  a parent, and group the Runs list by root. Historical rows stay null; do
+  not backfill lineage from AuditLog. Enum values reach production before
+  any writer uses them (two deploys).
+
+- 🧱 **An honest purpose for mail imports.** Order-mail imports are
+  vendor-less `account_sync` Runs told apart only by `input.kind`. Add a
+  `mail_import` purpose and relabel existing rows, updating the enrichment
+  sweep's import-provenance join, the run cap, and skill text that names
+  purposes in the same change. Production data change: confirm first.
+
+- 🟢 **Chain enrichment from run completion, on one path.** A finished
+  mail import or account sync triggers the enrichment sweep for its account
+  (after commit, never inside the finish transaction), replacing the sweep's
+  wait on an occupied account. Delete the inline enrichment of image-less
+  Products inside an account-sync claim (`run-service.ts`), so the sweep is
+  the only enrichment path. Only import completions trigger, so enrichment
+  cannot re-trigger itself.
 
 - 🧱 **Fold legacy unknown-sender holder Runs into their passes.** Mail
   passes now file unknown-sender findings on themselves, but hundreds of
@@ -198,8 +215,10 @@ read one shared projection (`server/repo/activity.ts`).
   per-variant barcode (Shopify's `.js` product JSON exposes them).
 
 - 🟢 **Sync order history before enriching mail-imported orders.** Order mail
-  rarely names the variant; the vendor's order page does. Make the
-  enrichment Step depend on an order-history sync for that order.
+  rarely names the variant; the vendor's order page does. Enrichment
+  targets carry the order line (`sourceKind: order_line`) and its parent
+  run's evidence, and a commit whose variant disagrees with the ordered line
+  is refused.
 
 - 🤔 **Link enriched seeds to Plants.** Seed Products could set `growsPlantId`
   and carry plant facts (days to maturity, spacing) from the vendor page.
