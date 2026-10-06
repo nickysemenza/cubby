@@ -9,7 +9,7 @@ import {
   type ImpactPreviewOperations,
   MergeImpactPreview,
 } from "~/entity/actions/entity-operation-impact-preview";
-import { entities } from "~/entity/entities";
+import { mergeConfigFor } from "~/entity/entities";
 import type { MergeDisplayRow, MergeableConfig } from "~/entity/types";
 import { product } from "~/integrations/tanstack-query/generated/catalog.gen";
 import { Row, Stack } from "~/ui/layout";
@@ -83,9 +83,7 @@ export function EntityMergeDialog<T extends MergeRow>({
   /** Test-injectable seam for the per-loser impact preview's `connections` query. */
   impactPreviewOperations?: ImpactPreviewOperations;
 }) {
-  const definition = entities[entity];
-  if (!("mergeable" in definition)) return null;
-  const config = definition.mergeable;
+  const config = mergeConfigFor(entity);
   if (!config) return null;
 
   if (config.keeperMode === "fixed") {

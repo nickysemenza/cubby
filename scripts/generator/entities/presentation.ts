@@ -302,9 +302,15 @@ const compileEditSections = (
   fieldModel: EntityFieldModel,
   lookup: FieldLookup,
 ): CompiledEditSection[] => {
+  const ids = sections.map((section) => section.id);
+  const repeated = ids.find((id, index) => ids.indexOf(id) !== index);
+  if (repeated !== undefined)
+    throw new EntityDeclarationError(
+      `${lookup.context}.edit.sections declare ${repeated} twice.`,
+    );
   const placed = new Map<string, string>();
   for (const section of sections) {
-    if (!("fields" in section)) continue;
+    if (section.fields === null) continue;
     for (const key of section.fields) {
       lookup.edit(key, `edit.sections[${section.id}]`);
       const previous = placed.get(key);
@@ -334,11 +340,23 @@ const compileEditSections = (
       )
       .map((field) => field.key),
   };
-  const ordered = sections.some((section) => section.id === "main")
+  const declared = sections.some((section) => section.id === "main")
     ? sections
-    : [{ id: "main" as const }, ...sections];
-  return ordered
-    .map((section) => ("fields" in section ? section : main))
+    : [
+        { id: "main", title: null, fields: null, collapsed: false },
+        ...sections,
+      ];
+  return declared
+    .map((section) =>
+      section.fields === null
+        ? main
+        : {
+            id: section.id,
+            title: section.title,
+            fields: section.fields,
+            collapsed: section.collapsed,
+          },
+    )
     .filter((section) => section.fields.length > 0);
 };
 

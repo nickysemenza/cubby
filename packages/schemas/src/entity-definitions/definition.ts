@@ -1377,19 +1377,40 @@ const buildMetadataSchemas = () => {
            */
           sections: z
             .array(
-              z.union([
-                z.object({ id: z.literal("main") }).strict(),
-                z
-                  .object({
-                    id: sectionId,
-                    title: nonEmptyString(),
-                    fields: z.array(fieldKey).min(1),
-                    /** Render the section's body behind a disclosure that
-                     * starts closed (a rarely-used section, e.g. Nutrition). */
-                    collapsed: z.boolean().optional().default(false),
-                  })
-                  .strict(),
-              ]),
+              z
+                .object({
+                  id: sectionId,
+                  title: nonEmptyString().optional(),
+                  fields: z.array(fieldKey).min(1).optional(),
+                  /** Render the section's body behind a disclosure that
+                   * starts closed (a rarely-used section, e.g. Nutrition). */
+                  collapsed: z.boolean().optional().default(false),
+                })
+                .strict()
+                .superRefine((section, context) => {
+                  const named =
+                    section.title !== undefined || section.fields !== undefined;
+                  if (section.id === "main" && named)
+                    context.addIssue({
+                      code: "custom",
+                      message:
+                        'main is reserved for the untitled remainder; place it with a bare { id: "main" }',
+                    });
+                  if (
+                    section.id !== "main" &&
+                    (section.title === undefined ||
+                      section.fields === undefined)
+                  )
+                    context.addIssue({
+                      code: "custom",
+                      message: "needs a title and fields",
+                    });
+                })
+                .transform(({ id, title, fields, collapsed }) =>
+                  title === undefined || fields === undefined
+                    ? { id, title: null, fields: null, collapsed }
+                    : { id, title, fields, collapsed },
+                ),
             )
             .optional()
             .default([]),

@@ -2,7 +2,7 @@ import { testShortcode } from "@cubby/schemas/testing";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { fireEvent, render, screen } from "@testing-library/react";
 import type { ReactNode } from "react";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 
 import { entities } from "~/entity/entities";
 import { entityGraph } from "~/integrations/tanstack-query/generated/catalog.gen";
@@ -144,5 +144,40 @@ describe("EntityMergeDialog impact preview", () => {
 
     const confirm = screen.getByRole("button", { name: /^Merge/ });
     expect(confirm).not.toBeDisabled();
+  });
+});
+
+describe("EntityMergeDialog generic kernel merge", () => {
+  it("offers a ranked merge for a kernel-merged entity without its own config", async () => {
+    const onConfirm = vi.fn();
+    const rows = [
+      { id: testShortcode("plant", "PLANT-4K7M"), name: "Basil" },
+      { id: testShortcode("plant", "PLANT-4K7N"), name: "Sweet basil" },
+    ];
+
+    renderWithClient(
+      <EntityMergeDialog
+        entity="plant"
+        open
+        onOpenChange={() => {}}
+        onConfirm={onConfirm}
+        isPending={false}
+        rows={rows}
+        impactPreviewOperations={{
+          connections: entityGraph.connections.withTransport(() =>
+            Promise.resolve({
+              id: rows[1]!.id,
+              kind: "plant",
+              redirectedFrom: null,
+              groups: [],
+            }),
+          ),
+        }}
+      />,
+    );
+
+    expect(await screen.findByText("Merge plants?")).toBeVisible();
+    fireEvent.click(screen.getByRole("button", { name: "Merge" }));
+    expect(onConfirm).toHaveBeenCalledWith(rows[0]!.id, [rows[1]!.id]);
   });
 });

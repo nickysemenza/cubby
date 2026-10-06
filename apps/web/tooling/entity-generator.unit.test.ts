@@ -1540,6 +1540,23 @@ describe("typed entity compiler", () => {
     expect(() => sectioned(["name", "name"])).toThrow("place name twice");
   });
 
+  it("reserves main for a bare placement entry and rejects repeated section ids", () => {
+    const withSections = (sections: readonly unknown[]) =>
+      compileEntityDeclarations([
+        {
+          ...base,
+          model,
+          presentation: { ...base.presentation, edit: { sections } },
+        },
+      ]);
+    expect(() =>
+      withSections([{ id: "main", title: "Identity", fields: ["name"] }]),
+    ).toThrow("main is reserved");
+    expect(() => withSections([{ id: "main" }, { id: "main" }])).toThrow(
+      "declare main twice",
+    );
+  });
+
   it("compiles a card view for an entity without stored images and preserves captions", () => {
     const [compiled] = compileEntityDeclarations([
       {

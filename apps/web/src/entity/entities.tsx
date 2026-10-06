@@ -48,6 +48,7 @@ import {
   defineMergeableConfig,
   type EntityColor,
   type EntityDefinition,
+  type MergeableConfig,
   type MergeDisplayRow,
 } from "./types";
 
@@ -524,6 +525,28 @@ export type EntityDetailRoute =
 
 /** Browser presentation exists only for entities with browser routes. */
 export const entities = entityDefinitions;
+
+/**
+ * The merge dialog configuration for an entity: its own, or — for any entity
+ * the kernel merges without a bespoke dialog — a ranked pick among the
+ * selected rows by name. Null where the kernel serves no merge.
+ */
+export const mergeConfigFor = (
+  entity: BrowserRoutedEntity,
+): MergeableConfig | null => {
+  const definition = entities[entity];
+  if ("mergeable" in definition && definition.mergeable)
+    return definition.mergeable;
+  if (!entitySummary[entity].merge) return null;
+  return defineMergeableConfig({
+    keeperMode: "ranked",
+    isRow: isNamedMergeRow,
+    rowLabel: (row) => <span className="truncate">{row.name}</span>,
+    copy: {
+      title: `Merge ${entitySummary[entity].plural.toLowerCase()}?`,
+    },
+  });
+};
 
 export const isBrowserRoutedEntity = (
   entity: Entity,
