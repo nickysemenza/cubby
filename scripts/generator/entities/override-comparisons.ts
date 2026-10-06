@@ -58,6 +58,9 @@ type ComparisonValue = string | number | boolean | null | object | undefined;
 const effectiveValue = (
   entity: CompiledEntity,
   path: string,
+  // Keyed readers compare the declared entity's keys on both sides; the
+  // counterfactual has no override keys of its own to enumerate.
+  declared: CompiledEntity = entity,
 ): ComparisonValue => {
   const fieldPath = /^model\.fields\[([^\]]+)\]\.(.*)$/u.exec(path);
   if (fieldPath !== null) {
@@ -110,7 +113,7 @@ const effectiveValue = (
       return entity.inspector.detail.sections;
     case "presentation.detail.relationFilterOverrides":
       return Object.fromEntries(
-        Object.keys(entity.inspector.detail.relationFilterOverrides).map(
+        Object.keys(declared.inspector.detail.relationFilterOverrides).map(
           (key) => {
             const section = entity.inspector.detail.sections.find(
               (candidate) =>
@@ -156,7 +159,8 @@ export const renderOverrideComparisonArtifact = (
         if (counterfactual === undefined)
           throw new Error(`Missing ${entity.key} after compilation.`);
         const without =
-          JSON.stringify(effectiveValue(counterfactual, path)) ?? "null";
+          JSON.stringify(effectiveValue(counterfactual, path, entity)) ??
+          "null";
         return {
           path,
           declared: value,

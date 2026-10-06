@@ -932,33 +932,38 @@ export type FieldGroup = Readonly<{
 }>;
 
 /**
- * Buckets one intent's field roster (already in model order) into the
- * compiled editor sections, which place every controlled roster field exactly
- * once and in the same order `GenericEntityEditModel.sections` renders on
- * native. A field no section names (an intent-only roster the compiler did
- * not see) joins `main`.
+ * Buckets one intent's field roster into the compiled editor sections, in
+ * each section's declared order — the same order
+ * `GenericEntityEditModel.sections` renders on native. A field no section
+ * names (an intent-only roster the compiler did not see) joins `main`.
  */
 export function buildFieldGroups(
   sections: readonly CompiledEditSection[],
   fields: readonly PrimitiveFieldModel[],
 ): FieldGroup[] {
-  const sectionOf = new Map<string, string>();
-  for (const section of sections)
-    for (const key of section.fields) sectionOf.set(key, section.id);
-  const ordered: readonly Pick<
-    CompiledEditSection,
-    "id" | "title" | "collapsed"
-  >[] = sections.some((section) => section.id === "main")
+  const byKey = new Map<string, PrimitiveFieldModel>(
+    fields.map((field) => [field.key, field]),
+  );
+  const placed = new Set<string>(sections.flatMap((section) => section.fields));
+  const unplaced = fields.filter((field) => !placed.has(field.key));
+  const ordered: readonly CompiledEditSection[] = sections.some(
+    (section) => section.id === "main",
+  )
     ? sections
-    : [{ id: "main", title: null, collapsed: false }, ...sections];
+    : [{ id: "main", title: null, collapsed: false, fields: [] }, ...sections];
   return ordered
     .map((section) => ({
       id: section.id,
       title: section.title,
       collapsed: section.collapsed,
-      fields: fields.filter(
-        (field) => (sectionOf.get(field.key) ?? "main") === section.id,
-      ),
+      // Declared order, as the native editor renders it.
+      fields: [
+        ...section.fields.flatMap((key) => {
+          const field = byKey.get(key);
+          return field === undefined ? [] : [field];
+        }),
+        ...(section.id === "main" ? unplaced : []),
+      ],
     }))
     .filter((group) => group.fields.length > 0);
 }

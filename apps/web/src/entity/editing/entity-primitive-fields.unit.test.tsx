@@ -589,6 +589,23 @@ describe("buildFieldGroups", () => {
     ]);
   });
 
+  it("renders a section's fields in declared order, not input order", () => {
+    const sections: DeclaredEditSection[] = [
+      {
+        id: "identity",
+        title: "Identity",
+        fields: ["model", "name"],
+        collapsed: false,
+      },
+    ];
+    const fields = [syntheticField("name"), syntheticField("model")];
+
+    expect(buildFieldGroups(sections, fields)[0]?.fields).toEqual([
+      fields[1],
+      fields[0],
+    ]);
+  });
+
   it("puts a field no section names into a leading main group", () => {
     const sections: DeclaredEditSection[] = [
       { id: "details", title: "Details", fields: ["url"], collapsed: false },
