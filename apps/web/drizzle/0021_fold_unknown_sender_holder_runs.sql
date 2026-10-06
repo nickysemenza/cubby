@@ -2,7 +2,7 @@
 -- only to hold one finding (about itself). Mail discovery passes now file the
 -- finding on themselves, so move each held finding to the pass that was
 -- running when it was filed, then retire the empty holder. A holder is
--- recognized by shape alone: vendor-less, needs_review, and never worked
+-- recognized by shape alone: vendor-less, kindless, needs_review, never worked
 -- (no target, operation, progress, AI usage, or audit row). Apply after the
 -- code that stops creating holders has deployed.
 CREATE TEMP TABLE "UnknownSenderHolder" AS
@@ -18,6 +18,8 @@ FROM "Run" h
 WHERE h.purpose = 'account_sync' AND h."deletedAt" IS NULL
   AND h.status = 'needs_review'
   AND h."vendorId" IS NULL AND h."vendorAccountId" IS NULL
+  -- Order-mail imports are vendor-less account syncs too; they name their kind.
+  AND h.input->>'kind' IS NULL
   AND NOT EXISTS (SELECT 1 FROM "RunTarget" t WHERE t."runId" = h.id)
   AND NOT EXISTS (SELECT 1 FROM "RunOperation" o WHERE o."runId" = h.id)
   AND NOT EXISTS (SELECT 1 FROM "RunProgress" p WHERE p."runId" = h.id)

@@ -105,6 +105,23 @@ describe("folding unknown-sender holder runs into their passes", () => {
       .insert(runFinding)
       .values(finding(sibling, "a".repeat(64)));
 
+    // An order-mail import is a vendor-less account sync as well; it is
+    // member work, not a holder, even when it never ran.
+    const mailImport = await insertRun({
+      purpose: "account_sync",
+      status: "needs_review",
+      startedAt: at(8),
+      endedAt: at(8),
+    });
+    // Only the discriminator matters to the transform; the full order input
+    // would add nothing here.
+    await getDb(ctx.db).execute(
+      sql`UPDATE "Run" SET input = '{"kind":"order_mail_import"}'::jsonb WHERE id = ${mailImport}`,
+    );
+    await getDb(ctx.db)
+      .insert(runFinding)
+      .values(finding(mailImport, "c".repeat(64)));
+
     // Applying it twice is harmless (the runner never should, but a rerun
     // after a partial manual apply must not fail).
     for (const _pass of [1, 2])
@@ -124,6 +141,7 @@ describe("folding unknown-sender holder runs into their passes", () => {
       { runId: pass, entityId: pass, fingerprint: "a".repeat(64) },
       { runId: sibling, entityId: sibling, fingerprint: "a".repeat(64) },
       { runId: worked, entityId: worked, fingerprint: "b".repeat(64) },
+      { runId: mailImport, entityId: mailImport, fingerprint: "c".repeat(64) },
     ]);
     const deleted = await getDb(ctx.db)
       .select({ id: runTable.id, deletedAt: runTable.deletedAt })
@@ -138,6 +156,7 @@ describe("folding unknown-sender holder runs into their passes", () => {
       [holder]: true,
       [sibling]: false,
       [worked]: false,
+      [mailImport]: false,
     });
   });
 });
