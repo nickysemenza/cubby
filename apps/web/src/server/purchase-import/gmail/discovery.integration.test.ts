@@ -11,13 +11,15 @@
  * - a message deleted between listing and fetching, or history about a
  *   message never saved, wedges the pass;
  * - the cursor moves before every batch is in, or rewinds after a later pass;
- * - routine passes pile up forever, or a pass that found mail is pruned.
+ * - routine passes pile up forever, or a pass that found mail is pruned;
+ * - a saved batch never offers its confirmations for automatic import.
  */
 import { runEntityId } from "@cubby/schemas/identifiers";
 import { and, eq } from "drizzle-orm";
 import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it, vi } from "vitest";
 
+import type { Database } from "~/server/db";
 import { account } from "~/server/db/auth.schema";
 import { mailboxCursor, orderMail, run, runProgress } from "~/server/db/schema";
 import { getDb } from "~/server/repo/database-helpers";
@@ -128,10 +130,18 @@ describe("scheduled Gmail discovery", () => {
         .where(eq(mailboxCursor.ledgerPartyId, ledgerPartyId))
     )[0]?.historyId ?? null;
 
+  const autoImported: string[][] = [];
   const ports = (provider: GmailProvider) => ({
     providerForUser: async () => provider,
     storage,
     process: async () => 0,
+    autoImport: async (
+      _db: Database,
+      input: { messageIds: readonly string[] },
+    ) => {
+      autoImported.push([...input.messageIds]);
+      return [];
+    },
   });
 
   it("starts one pass per connected mailbox and refuses an overlapping one", async () => {
@@ -193,6 +203,27 @@ describe("scheduled Gmail discovery", () => {
       }),
     });
     expect(await getDb(ctx.db).select().from(orderMail)).toHaveLength(11);
+    // Every saved message is offered for automatic import with its batch.
+    expect(autoImported.flat()).toEqual(
+      expect.arrayContaining(
+        Array.from(
+          { length: 11 },
+          (_, index) => `msg-${String(index).padStart(2, "0")}`,
+        ),
+      ),
+    );
+  });
+
+  it("saves a batch with nothing to import without the agent queue", async () => {
+    await seedMember();
+    const { params } = await startOne();
+    const provider = gmail();
+    await listMailDiscovery(ctx.db, params, ports(provider));
+    // The production auto-import port, with no queue binding in tests.
+    const { autoImport: _stub, ...withoutStub } = ports(provider);
+    expect(
+      await saveMailDiscoveryBatch(ctx.db, params, 0, withoutStub),
+    ).toEqual({ kind: "done" });
   });
 
   it("marks a quiet pass routine and starts the next pass fresh", async () => {

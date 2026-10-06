@@ -7,6 +7,7 @@ import {
 } from "@cubby/schemas/run-fields";
 import { and, eq, lt, sql } from "drizzle-orm";
 
+import { getPurchaseAgentQueue } from "~/server/cf-env";
 import type { Database } from "~/server/db";
 import { run as runTable, runProgress } from "~/server/db/schema";
 import { isUniqueViolation } from "~/server/errors/db-errors";
@@ -31,6 +32,7 @@ import {
 } from "~/server/workflow-runs/lifecycle";
 
 import type { OrderMailAttachmentStorage } from "./attachment-storage";
+import { autoImportOrderMail } from "./auto-import";
 import { ingestGmailMessages } from "./ingest";
 import {
   advanceMailboxCursor,
@@ -62,6 +64,23 @@ type DiscoveryPorts = {
   providerForUser?: (userId: string) => Promise<GmailProvider>;
   storage?: OrderMailAttachmentStorage;
   process?: typeof processOrderMails;
+  autoImport?: (
+    db: Database,
+    input: Parameters<typeof autoImportOrderMail>[1],
+  ) => Promise<string[]>;
+};
+
+const productionAutoImport: NonNullable<DiscoveryPorts["autoImport"]> = async (
+  db,
+  input,
+) => {
+  // Resolved at send: a batch with nothing to start never needs the queue.
+  const queue = getPurchaseAgentQueue() ?? {
+    send: async () => {
+      throw new Error("Purchase Agent queue is unavailable");
+    },
+  };
+  return autoImportOrderMail(db, input, queue);
 };
 
 const patchProgress = (patch: Partial<MailDiscoveryRunProgress>) =>
@@ -195,8 +214,9 @@ export async function listMailDiscovery(
 }
 
 /**
- * The `batch.<n>` step: save and classify one frozen batch. A batch an
- * earlier delivery or attempt already saved is not fetched again.
+ * The `batch.<n>` step: save and classify one frozen batch, then start an
+ * import for each new order confirmation in it. A batch an earlier delivery
+ * or attempt already saved is not fetched again.
  */
 export async function saveMailDiscoveryBatch(
   db: Database,
@@ -228,6 +248,12 @@ export async function saveMailDiscoveryBatch(
     undefined,
     row.id,
   );
+  // New confirmations import themselves; a replayed batch reuses its runs.
+  await (ports.autoImport ?? productionAutoImport)(db, {
+    ledgerPartyId: claimed.ledgerPartyId,
+    messageIds: ingested.saved,
+    since: row.startedAt,
+  });
   const [saved] = await getDb(db)
     .update(runTable)
     .set({
