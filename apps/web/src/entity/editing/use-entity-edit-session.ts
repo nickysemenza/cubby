@@ -44,11 +44,13 @@ export interface EntityEditSessionOptions {
   readonly mutationPort?: EntityMutationPort;
 }
 
+/** A top-level draft key or a path inside one (`externalIds.0.kind`), so a
+ * nested validation issue lands on its own control instead of the root. */
 function isDraftField<T extends object>(
   values: T,
   field: string,
 ): field is Path<T> {
-  return field in values;
+  return (field.split(".")[0] ?? field) in values;
 }
 
 const NO_ISSUES: readonly EntityEditIssue[] = [];

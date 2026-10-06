@@ -17,7 +17,12 @@ import { productDataCheck } from "./data-quality";
 import { amount } from "./codec";
 import { requiredName } from "./common";
 import { money, moneyNullable, positiveMoneyNullable } from "./money";
-import { externalIdKind, externalIdOut, externalIdSource } from "./external-id";
+import {
+  externalIdKind,
+  externalIdOut,
+  externalIdSource,
+  writableExternalIdKind,
+} from "./external-id";
 import {
   cookbookShortcode,
   expenseShortcode,
@@ -1241,7 +1246,7 @@ export const patchProductExternalIdsInput = z
       .array(
         z.object({
           source: externalIdSource,
-          kind: externalIdKind,
+          kind: writableExternalIdKind,
           externalId: z.string().min(1),
           url: z.string().url().nullish(),
           isPrimary: z.boolean().optional(),

@@ -188,7 +188,7 @@ export function ProductUnitMappingsField({
 /** A freshly added row has no kind until the operator or Jev picks one; the
  * form schema rejects the blank select on save. */
 type ExternalIdDraft = Omit<ExternalIdInput, "kind"> & {
-  kind: ExternalIdKind | "";
+  kind: Exclude<ExternalIdKind, "legacy_unspecified"> | "";
 };
 
 export function ProductExternalIdsField({
@@ -231,10 +231,12 @@ export function ProductExternalIdsField({
                 name={kindPath}
                 label=""
                 placeholder="Select kind"
-                options={externalIdKind.options.map((kind) => ({
-                  value: kind,
-                  label: kind.replaceAll("_", " "),
-                }))}
+                options={externalIdKind.options
+                  .filter((kind) => kind !== "legacy_unspecified")
+                  .map((kind) => ({
+                    value: kind,
+                    label: kind.replaceAll("_", " "),
+                  }))}
               />
               <ExternalIdKindSuggestion
                 form={form}
