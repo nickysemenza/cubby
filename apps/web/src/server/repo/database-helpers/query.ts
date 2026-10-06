@@ -30,6 +30,11 @@ import type { PgTable } from "drizzle-orm/pg-core";
 import { uniq } from "es-toolkit";
 import { match } from "ts-pattern";
 
+import {
+  HOUSEHOLD_TIMEZONE,
+  householdDateTime,
+  shiftPlainDate,
+} from "~/lib/household-date";
 import type { Database, DrizzleTransaction } from "~/server/db";
 import { createAppError } from "~/server/errors/app-error";
 import { TraceNames, withTrace } from "~/server/tracing";
@@ -57,10 +62,42 @@ export function buildSearchConditions(
 }
 
 /**
- * Shared server-side bounds for list-table Created / Updated filters. The upper
- * bound is exclusive midnight on the following day, so a YYYY-MM-DD selection
- * includes every timestamp on that calendar day.
+ * The household calendar day of a timestamp column. Timestamp columns are
+ * `timestamp without time zone` holding UTC wall time, so a bare `::date` is
+ * the UTC day — the next day from about 5pm Pacific. Takes SQL text for the
+ * raw-string query builders.
  */
+export const householdDaySqlText = (timestamp: string): string =>
+  `((${timestamp} AT TIME ZONE 'UTC') AT TIME ZONE '${HOUSEHOLD_TIMEZONE}')::date`;
+
+export const householdDaySql = (column: AnyColumn | SQL): SQL =>
+  sql`((${column} AT TIME ZONE 'UTC') AT TIME ZONE ${sql.raw(`'${HOUSEHOLD_TIMEZONE}'`)})::date`;
+
+const LAST_PLAIN_DATE = "9999-12-31";
+
+/**
+ * Bounds a timestamp column to whole household days `from` through `to`
+ * (either optional): `[household midnight of from, household midnight after
+ * to)`. The ISO instant is cast to `timestamp`, which drops its `Z` and
+ * leaves the UTC wall time the column stores.
+ */
+export function householdDayRangeConditions(
+  column: AnyColumn | SQL,
+  from: string | undefined,
+  to: string | undefined,
+): Array<SQL | undefined> {
+  return [
+    from
+      ? sql`${column} >= ${householdDateTime(from).toISOString()}::timestamp`
+      : undefined,
+    // The last four-digit day has no representable next day; it is open-ended.
+    to && to < LAST_PLAIN_DATE
+      ? sql`${column} < ${householdDateTime(shiftPlainDate(to, 1)).toISOString()}::timestamp`
+      : undefined,
+  ];
+}
+
+/** Shared server-side bounds for list-table Created / Updated filters. */
 export function auditDateWhereConditions(
   table: { createdAt: AnyColumn; updatedAt: AnyColumn },
   filters: {
@@ -71,18 +108,16 @@ export function auditDateWhereConditions(
   },
 ): Array<SQL | undefined> {
   return [
-    filters.createdFrom
-      ? sql`${table.createdAt} >= ${filters.createdFrom}::date`
-      : undefined,
-    filters.createdTo
-      ? sql`${table.createdAt} < (${filters.createdTo}::date + interval '1 day')`
-      : undefined,
-    filters.updatedFrom
-      ? sql`${table.updatedAt} >= ${filters.updatedFrom}::date`
-      : undefined,
-    filters.updatedTo
-      ? sql`${table.updatedAt} < (${filters.updatedTo}::date + interval '1 day')`
-      : undefined,
+    ...householdDayRangeConditions(
+      table.createdAt,
+      filters.createdFrom,
+      filters.createdTo,
+    ),
+    ...householdDayRangeConditions(
+      table.updatedAt,
+      filters.updatedFrom,
+      filters.updatedTo,
+    ),
   ];
 }
 

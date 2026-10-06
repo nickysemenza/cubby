@@ -14,8 +14,9 @@ function monthKey(year: number, month: number): string {
   return `${year}-${String(month).padStart(2, "0")}`;
 }
 
-function calendarDate(year: number, month: number, day: number): string {
-  return new Date(Date.UTC(year, month - 1, day)).toISOString().slice(0, 10);
+function lastDayOfMonth(year: number, month: number): string {
+  const day = new Date(Date.UTC(year, month, 0)).getUTCDate();
+  return `${monthKey(year, month)}-${String(day).padStart(2, "0")}`;
 }
 
 /** Shared household-local query inputs for SSR and hydration. */
@@ -40,7 +41,7 @@ export function getHomeAsOfWindow(now: Date = new Date()): HomeAsOfWindow {
       months,
       filters: {
         dateFrom: `${firstMonth}-01`,
-        dateTo: calendarDate(year, month + 1, 0),
+        dateTo: lastDayOfMonth(year, month),
         future: false,
       },
     },

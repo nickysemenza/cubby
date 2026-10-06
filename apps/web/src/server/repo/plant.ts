@@ -20,6 +20,7 @@ import {
 import { and, eq, inArray, sql } from "drizzle-orm";
 import { uniq } from "es-toolkit";
 
+import { householdLocalDate } from "~/lib/household-date";
 import type { Database, DrizzleTransaction } from "~/server/db";
 import type { IncomingEdgePolicy } from "~/server/db/entity-incoming-edges";
 import { ingredient, plant } from "~/server/db/schema";
@@ -125,7 +126,7 @@ const hydrateRead = async (
         Object.assign(result, {
           guideSowWindow: windows.sow,
           guideTransplantWindow: windows.transplant,
-          routes: plantRoutesFor(key, new Date().getUTCMonth() + 1),
+          routes: plantRoutesFor(key, Number(householdLocalDate().slice(5, 7))),
         });
       return result;
     },

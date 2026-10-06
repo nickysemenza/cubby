@@ -37,6 +37,7 @@ import {
   type ViewProblemDeclaration,
   viewProblemDeclarations,
 } from "~/entity/view-manifest";
+import { householdLocalDate } from "~/lib/household-date";
 import { countLabel } from "~/lib/pluralize";
 import type { Database } from "~/server/db";
 import { expenseList } from "~/server/repo/expense/lookup";
@@ -639,7 +640,7 @@ const toStaleLocation = (row: ListRow) => {
     r,
     [
       r.lastBulkInventory
-        ? `last recounted ${r.lastBulkInventory.toISOString().slice(0, 10)}`
+        ? `last recounted ${householdLocalDate(r.lastBulkInventory)}`
         : "never recounted",
     ],
     [

@@ -22,6 +22,7 @@ import {
 import { sha256Hex } from "@cubby/shared/sha256";
 import { and, desc, eq, inArray, isNull, sql } from "drizzle-orm";
 
+import { householdLocalDate } from "~/lib/household-date";
 import type { Database, DrizzleTransaction } from "~/server/db";
 import {
   importSourceClaim,
@@ -353,7 +354,7 @@ export async function startSelectedOrderMailImport(
         runId: id,
         orderId: row.orderId,
         orderUrl: null,
-        orderedAt: at.toISOString().slice(0, 10),
+        orderedAt: householdLocalDate(at),
         state: "pending" as const,
       })),
     );

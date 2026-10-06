@@ -1,6 +1,7 @@
 import { eslintCompatPlugin } from "@oxlint/plugins";
 
 import {
+  noAdHocCalendarDayRule,
   noAdHocNumberFormatRule,
   noHandParsedCreateInputRule,
   noKernelActionGuardRule,
@@ -18,6 +19,7 @@ import { requireSoftDeleteFilterRule } from "./rules/require-soft-delete-filter.
 const cubbyPlugin = eslintCompatPlugin({
   meta: { name: "cubby" },
   rules: {
+    "no-ad-hoc-calendar-day": noAdHocCalendarDayRule,
     "no-ad-hoc-number-format": noAdHocNumberFormatRule,
     "no-error-toast-in-handler": noErrorToastInHandlerRule,
     "no-hand-parsed-create-input": noHandParsedCreateInputRule,

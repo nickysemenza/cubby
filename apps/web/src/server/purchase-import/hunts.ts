@@ -8,7 +8,7 @@ import {
 } from "@cubby/schemas/purchase-import";
 import { and, asc, eq, inArray, isNull, lte, or, sql } from "drizzle-orm";
 
-import { shiftPlainDate } from "~/lib/plain-date";
+import { shiftPlainDate } from "~/lib/household-date";
 import type { Database } from "~/server/db";
 import {
   financialAccount,

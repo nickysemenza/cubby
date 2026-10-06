@@ -19,6 +19,8 @@ import {
   gardenPracticeSources,
 } from "@cubby/schemas/garden-practice";
 
+import { shiftPlainDate } from "~/lib/household-date";
+
 export type GardenGuideKey = GardenCropKey;
 
 const gardenCropKeySet = new Set<string>(gardenCropKeys);
@@ -240,12 +242,6 @@ const packetRange = (
 ): DayRange | null =>
   min === null && max === null ? null : [min ?? max!, max ?? min!];
 
-const addDays = (date: string, days: number): string => {
-  const next = new Date(`${date}T00:00:00Z`);
-  next.setUTCDate(next.getUTCDate() + days);
-  return next.toISOString().slice(0, 10);
-};
-
 const formatDay = (date: string): string => {
   const [, month, day] = date.split("-").map(Number);
   return `${MONTH_ABBREVIATIONS[month! - 1]} ${day}`;
@@ -320,8 +316,8 @@ export function expectedHarvestFor(args: {
       ? []
       : [
           {
-            start: addDays(date, days.range[0]),
-            end: addDays(date, days.range[1]),
+            start: shiftPlainDate(date, days.range[0]),
+            end: shiftPlainDate(date, days.range[1]),
             basis: days.basis,
           },
         ],

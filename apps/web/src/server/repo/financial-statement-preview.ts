@@ -15,6 +15,7 @@ import { parseShortcodeFor } from "@cubby/schemas/identifiers";
 import { and, inArray, or, sql } from "drizzle-orm";
 import { uniq, uniqBy } from "es-toolkit";
 
+import { shiftPlainDate } from "~/lib/household-date";
 import type { Database } from "~/server/db";
 import {
   financialAccount,
@@ -112,11 +113,9 @@ export async function previewFinancialStatementImport(
   );
   const dates = uniq(
     input.rows.flatMap((row) =>
-      Array.from({ length: 7 }, (_, offset) => {
-        const day = new Date(`${row.date}T00:00:00Z`);
-        day.setUTCDate(day.getUTCDate() + offset - 3);
-        return day.toISOString().slice(0, 10);
-      }),
+      Array.from({ length: 7 }, (_, offset) =>
+        shiftPlainDate(row.date, offset - 3),
+      ),
     ),
   );
   const providerPairs = input.rows.filter((row) => row.providerTransactionId);

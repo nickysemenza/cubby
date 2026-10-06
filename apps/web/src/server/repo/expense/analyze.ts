@@ -17,13 +17,7 @@ import type {
   ExpenseFacetCountsOut,
   ExpenseFilters,
 } from "@cubby/schemas/project";
-import {
-  differenceInCalendarDays,
-  endOfMonth,
-  format,
-  parseISO,
-  subDays,
-} from "date-fns";
+import { endOfMonth, format, parseISO } from "date-fns";
 import {
   and,
   eq,
@@ -36,6 +30,7 @@ import {
 } from "drizzle-orm";
 import { alias } from "drizzle-orm/pg-core";
 
+import { plainDateDaysBetween, shiftPlainDate } from "~/lib/household-date";
 import type { Database } from "~/server/db";
 import {
   expense,
@@ -450,16 +445,9 @@ export function previousExpenseFilters(filters: ExpenseFilters) {
   if (!filters.dateFrom || !filters.dateTo) {
     throw new Error("Previous-period comparison requires dateFrom and dateTo");
   }
-  const days =
-    differenceInCalendarDays(
-      parseISO(filters.dateTo),
-      parseISO(filters.dateFrom),
-    ) + 1;
-  const dateTo = format(subDays(parseISO(filters.dateFrom), 1), "yyyy-MM-dd");
-  const dateFrom = format(
-    subDays(parseISO(filters.dateFrom), days),
-    "yyyy-MM-dd",
-  );
+  const days = plainDateDaysBetween(filters.dateFrom, filters.dateTo) + 1;
+  const dateTo = shiftPlainDate(filters.dateFrom, -1);
+  const dateFrom = shiftPlainDate(filters.dateFrom, -days);
   // An explicit comparison window replaces every date-window constraint. A
   // saved relative predicate (for example, `beforeToday`) must not continue to
   // narrow the shifted period behind the user's back.

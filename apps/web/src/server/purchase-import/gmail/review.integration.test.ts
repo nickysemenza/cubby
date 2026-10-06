@@ -135,6 +135,59 @@ describe("Vendor order mail review", () => {
     expect(linkedPurchase?.vendorAccountId).toBeNull();
   });
 
+  it("offers Purchases within 45 household days of the mail as nearby candidates", async () => {
+    const party = await insertWithShortcode(ctx.db, "ledgerParty", {
+      name: "Synthetic window reviewer",
+      kind: "member",
+      userId: ctx.actor.userId,
+    });
+    const vendor = await insertWithShortcode(ctx.db, "vendor", {
+      name: "Example Window Shop",
+    });
+    // 02:00Z on 09-18 is the evening of 09-17 in the household; 08-03 is
+    // exactly 45 household days earlier, 08-02 one day too many.
+    const edge = await insertWithShortcode(ctx.db, "purchase", {
+      vendorId: vendor.id,
+      date: "2026-08-03",
+    });
+    await insertWithShortcode(ctx.db, "purchase", {
+      vendorId: vendor.id,
+      date: "2026-08-02",
+    });
+    const [mail] = await getDb(ctx.db)
+      .insert(orderMail)
+      .values({
+        ledgerPartyId: party.id,
+        vendorId: vendor.id,
+        messageId: "review-window-mail",
+        sender: "Example Window Shop <orders@example.test>",
+        subject: "Order update",
+        receivedAt: new Date("2026-09-18T02:00:00.000Z"),
+        rawChecksum: "review-window-checksum",
+      })
+      .returning({ id: orderMail.id });
+    if (!mail) throw new Error("test setup: mail missing");
+    await getDb(ctx.db).insert(orderMailEvent).values({
+      orderMailId: mail.id,
+      event: "placed",
+      orderId: "WS-SYN-2001",
+      amount: 12,
+      currency: "USD",
+      sourceKey: "classified:review-window-checksum:0",
+    });
+
+    const candidates = (
+      await listVendorOrderMail(ctx.db, {
+        vendorId: vendor.shortcode,
+        ledgerPartyId: party.shortcode,
+      })
+    ).items[0]?.events[0]?.candidates;
+    expect(candidates?.map((candidate) => candidate.purchaseId)).toEqual([
+      edge.shortcode,
+    ]);
+    expect(candidates?.[0]?.reason).toBe("nearby_date");
+  });
+
   it("lets a member's link win over an automatic link committed mid-decision", async () => {
     const party = await insertWithShortcode(ctx.db, "ledgerParty", {
       name: "Synthetic race reviewer",

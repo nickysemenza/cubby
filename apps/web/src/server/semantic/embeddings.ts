@@ -126,6 +126,7 @@ export async function embedTexts(
       ? (opts.runId ??
         (await ensureRun(opts.db, systemActor(), {
           purpose: "background",
+          // oxlint-disable-next-line cubby/no-ad-hoc-calendar-day -- an operational daily bucket
           clientKey: `embeddings:${new Date().toISOString().slice(0, 10)}`,
         })))
       : undefined;

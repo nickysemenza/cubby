@@ -13,7 +13,10 @@ import {
 } from "~/contracts/entity-records.schema";
 import type { Database } from "~/server/db";
 import { entryFor, scoreSql, statusSql } from "~/server/repo/data-quality/sql";
-import { unwrapDb } from "~/server/repo/database-helpers";
+import {
+  householdDayRangeConditions,
+  unwrapDb,
+} from "~/server/repo/database-helpers";
 import {
   entityDisplayImagePresenceSql,
   resolveEntityDisplayImageLists,
@@ -99,11 +102,12 @@ export function buildEntityRecordsQuery(input: EntityRecordsInput): SQL {
     ["createdAt", input.createdFrom, input.createdTo],
     ["updatedAt", input.updatedFrom, input.updatedTo],
   ] as const) {
-    if (from) predicates.push(sql`${sql.identifier(column)} >= ${from}::date`);
-    if (to)
-      predicates.push(
-        sql`${sql.identifier(column)} < ${to}::date + interval '1 day'`,
-      );
+    for (const bound of householdDayRangeConditions(
+      sql`${sql.identifier(column)}`,
+      from,
+      to,
+    ))
+      if (bound) predicates.push(bound);
   }
   const where = predicates.length
     ? sql`WHERE ${sql.join(predicates, sql` AND `)}`

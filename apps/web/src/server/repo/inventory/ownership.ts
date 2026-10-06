@@ -10,6 +10,7 @@ import type { EffectiveInventoryOwnership } from "@cubby/schemas/inventory-owner
 import { sha256Hex } from "@cubby/shared/sha256";
 import { and, eq, inArray, lte, sql } from "drizzle-orm";
 
+import { householdLocalDate } from "~/lib/household-date";
 import type { Database, DrizzleClient, DrizzleTransaction } from "~/server/db";
 import {
   entityLink,
@@ -26,7 +27,6 @@ import {
 import { notDeleted, unwrapDb } from "~/server/repo/database-helpers";
 import { liveLinks } from "~/server/repo/entity-links";
 import { expenseAcquisitionSql } from "~/server/repo/expense-aggregate-sql";
-import { dateOnly } from "~/server/utils/date-only";
 
 import {
   resolveBeneficiaryEvidence,
@@ -69,7 +69,7 @@ const isIndividual = <Party extends { kind: string }>(
 ): party is Party & { kind: "member" | "guest" } =>
   party?.kind === "member" || party?.kind === "guest";
 
-const today = (): string => dateOnly();
+const today = (): string => householdLocalDate();
 
 const unresolvedCandidate = (): InheritedCandidate => ({
   owner: null,

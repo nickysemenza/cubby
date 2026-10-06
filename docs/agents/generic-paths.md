@@ -96,6 +96,13 @@ existing block. Extend the generic path when it almost fits. See
 - Purchase-agent proxy: `server/purchase-import/agent-proxy.ts` forwards the
   caller's abort signal to its Durable Object request. Internal disconnects still
   propagate as failures; cancellation does not replace the Run's abort command.
+- Calendar days: `householdLocalDate`, `householdDateTime`, `householdDaysAgo`/
+  `householdDaysFromNow`, `shiftPlainDate`, `plainDateDaysBetween`
+  (`lib/household-date.ts`); `householdDaySql`, `householdDaySqlText`, and
+  `householdDayRangeConditions` for SQL. `lib/plain-date.ts` adapts plain dates
+  to local-midnight `Date`s for pickers and is browser-only. The
+  `cubby/no-ad-hoc-calendar-day` lint rule flags `toISOString()` cut to a day
+  and server imports of `~/lib/plain-date`.
 - Digests, encodings, and casing (browser, Worker, and scripts alike):
   `sha256Hex`, the stable row-id `sha256Uuid` (`@cubby/shared/sha256`);
   `encodeBase64`, `encodeBase64Url`, `decodeBase64Url`, `decodeBase64UrlText`

@@ -1,6 +1,7 @@
 import type { LedgerPartyId, VendorId } from "@cubby/schemas/identifiers";
-import { and, eq, gt, gte, isNotNull, isNull, lte, ne } from "drizzle-orm";
+import { and, eq, gt, gte, isNotNull, isNull, lt, ne } from "drizzle-orm";
 
+import { householdDateTime, shiftPlainDate } from "~/lib/household-date";
 import type { Database } from "~/server/db";
 import { orderMail, orderMailEvent } from "~/server/db/schema";
 import { getDb } from "~/server/repo/database-helpers";
@@ -40,13 +41,10 @@ export async function orderAmountsInHuntWindow(db: Database, hunt: HuntWindow) {
         hunt.amount < 0
           ? eq(orderMailEvent.event, "refunded")
           : ne(orderMailEvent.event, "refunded"),
-        gte(
+        gte(orderMailEvent.occurredAt, householdDateTime(hunt.dateFrom)),
+        lt(
           orderMailEvent.occurredAt,
-          new Date(`${hunt.dateFrom}T00:00:00.000Z`),
-        ),
-        lte(
-          orderMailEvent.occurredAt,
-          new Date(`${hunt.dateTo}T23:59:59.999Z`),
+          householdDateTime(shiftPlainDate(hunt.dateTo, 1)),
         ),
       ),
     );

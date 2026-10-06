@@ -15,7 +15,10 @@ import {
   identityFromSearchTerms,
   matchesVendorSender,
 } from "./vendor-identity";
-import { listVendorMailPage } from "./vendor-search";
+import {
+  defaultVendorMailSearchAfter,
+  listVendorMailPage,
+} from "./vendor-search";
 
 export type VendorMailSearchProgress = (
   phase: string,
@@ -68,12 +71,7 @@ export async function searchVendorOrderMail(
   await onProgress("gmail_connect", "Connecting to Gmail");
   const target = await resolveVendorMailSearchTarget(db, input.vendorId, actor);
   const provider = await gmailProviderForUser(db, target.userId);
-  const after =
-    input.after ??
-    new Date(Date.now() - 365 * 86_400_000)
-      .toISOString()
-      .slice(0, 10)
-      .replaceAll("-", "/");
+  const after = input.after ?? defaultVendorMailSearchAfter();
   const identity = input.searchTerms?.length
     ? identityFromSearchTerms(input.searchTerms)
     : target.identity;

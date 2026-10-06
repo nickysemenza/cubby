@@ -36,6 +36,7 @@ import {
 import { alias } from "drizzle-orm/pg-core";
 import type { z } from "zod";
 
+import { householdLocalDate } from "~/lib/household-date";
 import type { Database, DrizzleTransaction } from "~/server/db";
 import {
   entityLink,
@@ -61,6 +62,7 @@ import {
   associatePendingImages,
   buildPartialUpdateValues,
   eqAnyRequested,
+  householdDaySql,
   imageJoinBindings,
   mapImages,
   type MappableImageRecord,
@@ -812,7 +814,7 @@ export const plantingListRead = async (
   const where = plantingScaffold.where(filters, [
     buildPlantingWhere(),
     filters.activeOn
-      ? sql`COALESCE(${planting.sowedOn}, ${planting.transplantedOn}, ${planting.createdAt}::date) <= ${filters.activeOn}::date
+      ? sql`COALESCE(${planting.sowedOn}, ${planting.transplantedOn}, ${householdDaySql(planting.createdAt)}) <= ${filters.activeOn}::date
           AND (${planting.finishedOn} IS NULL OR ${planting.finishedOn} >= ${filters.activeOn}::date)`
       : undefined,
     eqAnyRequested(planting.locationId, locationIds),
@@ -916,9 +918,7 @@ const journalPredicate = async (db: Database, plantingId: PlantingId) => {
   const wholeAreaEntry = alias(gardenEntry, "wholeAreaGardenEntry");
   const wholeAreaLink = alias(entityLink, "wholeAreaGardenEntryPlanting");
   const start =
-    row.sowedOn ??
-    row.transplantedOn ??
-    row.createdAt.toISOString().slice(0, 10);
+    row.sowedOn ?? row.transplantedOn ?? householdLocalDate(row.createdAt);
   const wholeAreaEntryIds = unwrapDb(db)
     .select({ id: wholeAreaEntry.id })
     .from(wholeAreaEntry)

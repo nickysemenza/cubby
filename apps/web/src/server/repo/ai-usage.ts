@@ -12,7 +12,11 @@ import { z } from "zod";
 import { estimateAiUsageCostUsd } from "~/server/ai/pricing";
 import type { Database } from "~/server/db";
 import { aiUsage } from "~/server/db/schema";
-import { getDb, notDeleted } from "~/server/repo/database-helpers";
+import {
+  getDb,
+  householdDaySql,
+  notDeleted,
+} from "~/server/repo/database-helpers";
 
 /**
  * A `cache` replay made no model call and ChatGPT plan usage is not API
@@ -120,8 +124,8 @@ export async function listRecentAiUsage(
 
 export async function summarizeAiUsage(db: Database, days: number) {
   const since = new Date(Date.now() - days * 24 * 60 * 60 * 1000);
-  const usageDay = sql<string>`to_char(date_trunc('day', ${aiUsage.createdAt}), 'YYYY-MM-DD')`;
-  const usageDayGroup = sql`date_trunc('day', ${aiUsage.createdAt})`;
+  const usageDayGroup = householdDaySql(aiUsage.createdAt);
+  const usageDay = sql<string>`to_char(${usageDayGroup}, 'YYYY-MM-DD')`;
 
   const rows = await getDb(db)
     .select({

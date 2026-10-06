@@ -39,6 +39,7 @@ import {
   amountFromColumns,
   amountToColumns,
   auditDateWhereConditions,
+  householdDayRangeConditions,
   buildOrderBy,
   buildPartialUpdateValues,
   buildSearchConditions,
@@ -357,12 +358,11 @@ export const buildInventoryWhere = async (
                 sql`${inventoryValuationSql(valuations, inventoryEntry.id)} IS NULL`,
                 sql`${sql.raw(effectiveProductPriceSql('"Product"'))} IS NOT NULL`,
               ),
-      filters.verifiedFrom
-        ? sql`${inventoryEntry.verifiedAt} >= ${filters.verifiedFrom}::date`
-        : undefined,
-      filters.verifiedTo
-        ? sql`${inventoryEntry.verifiedAt} < (${filters.verifiedTo}::date + interval '1 day')`
-        : undefined,
+      ...householdDayRangeConditions(
+        inventoryEntry.verifiedAt,
+        filters.verifiedFrom,
+        filters.verifiedTo,
+      ),
       // The browse contract: an omitted filter means movable stock, NOT
       // everything. Defaulted here rather than in zod so the UI, MCP
       // `list_inventory`, and any direct workflow caller cannot disagree about what

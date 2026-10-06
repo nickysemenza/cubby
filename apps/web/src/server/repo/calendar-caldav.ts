@@ -8,7 +8,7 @@ import {
 import { MEAL_TYPE_LABELS } from "@cubby/schemas/meal-classification";
 import { and, eq, isNotNull, or, sql } from "drizzle-orm";
 
-import { shiftPlainDate } from "~/lib/plain-date";
+import { shiftPlainDate } from "~/lib/household-date";
 import {
   type CalDavWrite,
   type CalendarProjection,

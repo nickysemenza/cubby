@@ -14,6 +14,12 @@ import {
   sql,
 } from "drizzle-orm";
 
+import {
+  householdDaysAgo,
+  householdDaysFromNow,
+  householdLocalDate,
+  plainDateDaysBetween,
+} from "~/lib/household-date";
 import type { Database } from "~/server/db";
 import {
   ledgerParty,
@@ -47,9 +53,11 @@ const candidateReason = (
   const withinWindow =
     candidate.date !== null &&
     Math.abs(
-      event.receivedAt.getTime() - Date.parse(`${candidate.date}T12:00:00Z`),
-    ) <=
-      45 * 86_400_000;
+      plainDateDaysBetween(
+        candidate.date,
+        householdLocalDate(event.receivedAt),
+      ),
+    ) <= 45;
   if (!withinWindow) return null;
   if (
     event.amount !== null &&
@@ -175,12 +183,8 @@ export async function listVendorOrderMail(
   const lastMailTime = Math.max(
     ...mails.map((mail) => mail.receivedAt.getTime()),
   );
-  const candidateDateFrom = new Date(firstMailTime - 45 * 86_400_000)
-    .toISOString()
-    .slice(0, 10);
-  const candidateDateTo = new Date(lastMailTime + 45 * 86_400_000)
-    .toISOString()
-    .slice(0, 10);
+  const candidateDateFrom = householdDaysAgo(45, new Date(firstMailTime));
+  const candidateDateTo = householdDaysFromNow(45, new Date(lastMailTime));
   const candidates = await database
     .select({
       id: purchase.id,

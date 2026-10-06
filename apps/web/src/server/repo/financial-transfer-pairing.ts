@@ -6,6 +6,7 @@ import type {
 import { parseShortcodeFor } from "@cubby/schemas/identifiers";
 import { and, asc, eq, gte, inArray, isNull, lte, or, sql } from "drizzle-orm";
 
+import { plainDateDaysBetween, shiftPlainDate } from "~/lib/household-date";
 import type { Database } from "~/server/db";
 import {
   financialAccount,
@@ -15,7 +16,6 @@ import {
 import { notDeleted, unwrapDb } from "~/server/repo/database-helpers";
 import { cents } from "~/server/repo/money";
 import { resolveAllOrThrow } from "~/server/repo/shortcode-resolver";
-import { dateOnly } from "~/server/utils/date-only";
 
 export type PairingRow = {
   id: string;
@@ -30,10 +30,7 @@ export type PairingRow = {
 };
 
 const daysBetween = (a: string, b: string) =>
-  Math.round(
-    Math.abs(Date.parse(`${a}T00:00:00Z`) - Date.parse(`${b}T00:00:00Z`)) /
-      86_400_000,
-  );
+  Math.abs(plainDateDaysBetween(a, b));
 
 /**
  * Read-only candidate policy. Equal and opposite statement rows are evidence,
@@ -212,10 +209,8 @@ export async function suggestFinancialTransferPairs(
   }
 
   const dates = dated.map((row) => row.date!).sort();
-  const dateStart = new Date(`${dates[0]}T00:00:00Z`);
-  dateStart.setUTCDate(dateStart.getUTCDate() - input.maxDateDistanceDays);
-  const dateEnd = new Date(`${dates.at(-1)}T00:00:00Z`);
-  dateEnd.setUTCDate(dateEnd.getUTCDate() + input.maxDateDistanceDays);
+  const dateStart = shiftPlainDate(dates[0]!, -input.maxDateDistanceDays);
+  const dateEnd = shiftPlainDate(dates.at(-1)!, input.maxDateDistanceDays);
   const requestedAmounts = [
     ...new Set(dated.map((row) => Math.abs(cents(row.amount)))),
   ];
@@ -239,8 +234,8 @@ export async function suggestFinancialTransferPairs(
         notDeleted(financialTransaction),
         eq(financialTransaction.status, "posted"),
         isNull(financialTransaction.ledgerTransferId),
-        gte(effectiveDate, dateOnly(dateStart)),
-        lte(effectiveDate, dateOnly(dateEnd)),
+        gte(effectiveDate, dateStart),
+        lte(effectiveDate, dateEnd),
         noLiveAllocations,
         or(
           ...requestedAmounts.map(
