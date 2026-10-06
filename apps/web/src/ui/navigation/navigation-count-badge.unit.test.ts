@@ -6,12 +6,14 @@ describe("navigation list counts", () => {
   const counts = {
     product: 0,
     device: 7,
+    spendingCategory: 3,
     usdaFoods: 0,
   };
 
   it("shows a loaded zero and leaves an absent optional count empty", () => {
     expect(navigationCount(counts, "product")).toBe(0);
     expect(navigationCount(counts, "device")).toBe(7);
+    expect(navigationCount(counts, "spendingCategory")).toBe(3);
     expect(navigationCount(counts, "vendorAccount")).toBeUndefined();
     expect(navigationCount(undefined, "product")).toBeUndefined();
   });

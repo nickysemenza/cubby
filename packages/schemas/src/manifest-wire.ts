@@ -43,8 +43,8 @@ const tagged = <
 export const manifestWire = {
   CollectionActionScope: raw({ section: "section", row: "row" }, codable),
   LabeledOption: record(
-    { value: "string", label: "string" },
-    { wireOnly: { color: "string?" } },
+    { value: "string", label: "string", color: "string?" },
+    { defaults: { color: "nil" } },
   ),
   FieldReference: record({
     entity: "EntityKey",

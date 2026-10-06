@@ -38,6 +38,7 @@ import { lookupEntityReferences, resolveOrThrow } from "./shortcode-resolver";
 import { insertWithShortcode } from "./shortcode-utils";
 
 const scaffold = listScaffold("spendingCategory", spendingCategory);
+export const buildSpendingCategoryWhere = scaffold.where;
 type Row = typeof spendingCategory.$inferSelect;
 const hydrate = (
   db: Database | DrizzleTransaction,

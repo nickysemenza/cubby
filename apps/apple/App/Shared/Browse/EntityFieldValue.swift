@@ -91,7 +91,16 @@ nonisolated enum EntityFieldValue {
     }
 
     static func enumLabel(_ raw: String, field: FieldDescriptor) -> String {
-        field.controlOptions?.first { $0.value == raw }?.label ?? "Unknown option"
+        (field.controlOptions ?? field.valueOptions)?.first { $0.value == raw }?.label ?? raw
+    }
+
+    static func optionColor(in raw: JSONValue, field: FieldDescriptor, surface: String) -> String? {
+        let value =
+            surface == "detail" && field.readPath != nil
+            ? field.detailValue(in: raw)
+            : FieldResolutionPresentation.readValue(in: raw, field: field, surface: surface)
+        guard let code = value?.stringValue else { return nil }
+        return (field.controlOptions ?? field.valueOptions)?.first { $0.value == code }?.color
     }
 
     // MARK: - Value readers

@@ -21,21 +21,29 @@ struct StatusChip: View {
 
     let text: String
     var tone: Tone = .neutral
+    var color: Color? = nil
+
+    private var ink: Color { color ?? tone.color }
+    private var isNeutral: Bool { color == nil && tone == .neutral }
 
     var body: some View {
         Text(text)
             .font(.caption2.weight(.medium))
-            .foregroundStyle(tone == .neutral ? FieldGuideTokens.graphite : tone.color)
+            .foregroundStyle(
+                isNeutral
+                    ? FieldGuideTokens.graphite
+                    : ink.mix(with: FieldGuideTokens.graphite, by: 0.35, in: .device)
+            )
             .padding(.horizontal, FieldGuideTokens.Space.sm - 2)
             .padding(.vertical, 2)
             .background(
                 RoundedRectangle(cornerRadius: FieldGuideTokens.radiusChip)
-                    .fill(tone.color.opacity(tone == .neutral ? 0.06 : 0.08))
+                    .fill(ink.opacity(isNeutral ? 0.06 : 0.08))
             )
             .overlay(
                 RoundedRectangle(cornerRadius: FieldGuideTokens.radiusChip)
                     .strokeBorder(
-                        tone.color.opacity(tone == .neutral ? 0.35 : 0.5),
+                        ink.opacity(isNeutral ? 0.35 : 0.5),
                         lineWidth: FieldGuideTokens.hairlineWidth
                     )
             )

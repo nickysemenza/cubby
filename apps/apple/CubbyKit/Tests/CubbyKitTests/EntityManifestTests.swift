@@ -8,6 +8,26 @@ import Testing
 /// fails here, in CI, instead of at app launch.
 @Suite("EntityManifest")
 struct EntityManifestTests {
+    // The bundle used to strip option colors before decoding; web and native then disagreed.
+    @Test func declaredOptionColorsSurviveTheCatalog() throws {
+        let field = try #require(EntityCatalog[.vendor].fields.first { $0.key == "evidenceExpectation" })
+        let encoded = try JSONEncoder().encode(field.controlOptions)
+        let options = try #require(JSONSerialization.jsonObject(with: encoded) as? [[String: Any]])
+        #expect(
+            options.first { $0["value"] as? String == "unknown" }?["color"] as? String == "var(--warning)")
+        #expect(
+            options.first { $0["value"] as? String == "required" }?["color"] as? String
+                == "var(--brand-domain-house)")
+    }
+
+    @Test func schemaDerivedReadOnlyPaletteSurvivesTheCatalog() throws {
+        let field = try #require(EntityCatalog[.image].fields.first { $0.key == "captureAttribution" })
+        let options = try #require(field.valueOptions)
+        let ambiguous = try #require(options.first { $0.value == "ambiguous" })
+        #expect(ambiguous.label == "Ambiguous")
+        #expect(ambiguous.color == "var(--warning)")
+    }
+
     @Test func suggestionMetadataDecodesAlongsideOlderFields() throws {
         let field = try JSONDecoder().decode(
             FieldDescriptor.self,
@@ -36,6 +56,9 @@ struct EntityManifestTests {
                 try JSONSerialization.jsonObject(with: JSONEncoder().encode(decoded)) as? NSDictionary
             #expect(roundTrip == expected)
         }
+        try check(
+            LabeledOption(value: "synthetic", label: "Synthetic"),
+            #"{"value":"synthetic","label":"Synthetic"}"#)
         try check(FilterWire.param(name: "searchQuery"), #"{"param":{"name":"searchQuery"}}"#)
         try check(
             FilterWire.range(from: "start", to: "end", presence: nil),

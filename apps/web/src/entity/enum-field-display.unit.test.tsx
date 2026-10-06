@@ -40,6 +40,20 @@ describe("declared value rosters (display.valueOptions)", () => {
     );
   });
 
+  // Capture attribution is server-derived; reproducing ambiguous attribution needs an image
+  // provenance workflow, so this guards its generic renderer independently of that workflow.
+  it("renders image attribution with a schema-derived label and warning color", () => {
+    render(
+      renderOptionCell(
+        "ambiguous",
+        fieldEnumOptions("image", "captureAttribution"),
+      ),
+    );
+    expect(pillFor("Ambiguous")).toHaveStyle(
+      "--enum-pill-color: var(--warning)",
+    );
+  });
+
   it("serves a read-only enum's roster without a select control", () => {
     expect(
       fieldEnumOptions("image", "status").map(({ value }) => value),

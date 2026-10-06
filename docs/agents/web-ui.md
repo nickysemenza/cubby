@@ -8,8 +8,9 @@ A declared enum field renders as an `EnumPill` through one roster,
 every surface — generic list cell, embedded relation table, detail value, hero
 chip, previews — and is inline-editable wherever the entity has an update
 command. Never read `control.options` directly for a label, and never add a
-hand-written column for an enum: register rich labels/colors in
-`ENTITY_SELECT_OPTIONS` and declare width/mobile on the field instead.
+hand-written column for an enum: declare shared labels/colors in
+`control.options` or `display.valueOptions` (web-only icons belong in
+`ENTITY_SELECT_OPTIONS`) and declare width/mobile on the field instead.
 Every `<Image>` declares `displayWidth` as the box's true maximum rendered CSS
 width (widest breakpoint), never a guess or a rung: the helper fetches 2× and
 snaps up to 128/640/2048, so declaring 400 for a ~225px card fetches the 2048

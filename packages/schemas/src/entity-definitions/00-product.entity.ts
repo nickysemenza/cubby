@@ -603,9 +603,17 @@ export default defineEntity({
           kind: "select",
           options: [
             { value: "unknown", label: "Unclassified" },
-            { value: "purchased", label: "Purchased" },
-            { value: "gift", label: "Gift" },
-            { value: "previously_owned", label: "Previously owned" },
+            {
+              value: "purchased",
+              label: "Purchased",
+              color: "var(--brand-domain-finance)",
+            },
+            { value: "gift", label: "Gift", color: "var(--brand-domain-plan)" },
+            {
+              value: "previously_owned",
+              label: "Previously owned",
+              color: "var(--brand-domain-house)",
+            },
           ],
         },
         display: { list: true, detail: true },

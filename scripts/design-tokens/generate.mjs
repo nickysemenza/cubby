@@ -18,6 +18,7 @@ const assetRoles = {
   Positive: "positive",
   Warning: "warning",
   Destructive: "destructive",
+  Slate: "slate",
 };
 
 export function renderBrandCss(roles, aliases, values) {
@@ -113,6 +114,16 @@ export function renderMetricsSwift(values) {
     "",
     "enum FieldGuideMetrics {",
     ...declarations,
+    "",
+    "    static func optionColor(_ token: String?) -> Color? {",
+    "        switch token {",
+    ...Object.entries(assetRoles).map(
+      ([asset, role]) =>
+        `        case "var(--${role})", "var(--brand-${role})": Color("${asset}")`,
+    ),
+    "        default: nil",
+    "        }",
+    "    }",
     "}",
     "",
   ].join("\n");

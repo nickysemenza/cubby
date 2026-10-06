@@ -13,6 +13,8 @@ import {
   createProductFixture,
   makeProductInput,
 } from "~/server/repo/repo.fixtures";
+import { insertWithShortcode } from "~/server/repo/shortcode-utils";
+import { listSpendingCategories } from "~/server/repo/spending-category";
 
 import { getDashboardCounts } from "./dashboard";
 
@@ -72,6 +74,26 @@ describe("dashboard count workflow", () => {
     });
     const result = await getEntityCounts(ctx.db);
     expect(result.ledgerParty).toBe(list.count);
+  });
+
+  it("includes the spending category roster count", async () => {
+    await insertWithShortcode(ctx.db, "spendingCategory", {
+      name: "Sample category",
+    });
+    const list = await listSpendingCategories(ctx.db, {}, [], {
+      pageIndex: 0,
+      pageSize: 1,
+    });
+    const result = await getDashboardCounts({
+      db: ctx.db,
+      usdaClient: {
+        getCounts: async () => {
+          throw new Error("External count unavailable");
+        },
+      },
+    });
+    expect(result).toHaveProperty("spendingCategory", list.count);
+    expect(list.count).toBeGreaterThan(0);
   });
 
   it("reads live local counts even when a stale snapshot is available", async () => {

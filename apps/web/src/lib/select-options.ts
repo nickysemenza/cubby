@@ -1,56 +1,12 @@
+import { colorizeEnumOptions } from "@cubby/shared/enum-palette";
+
 import type { FilterableComboboxItem } from "~/ui/primitives/combobox";
 
-const CATEGORICAL_COLORS = [
-  "var(--chart-1)",
-  "var(--chart-2)",
-  "var(--chart-3)",
-  "var(--chart-4)",
-  "var(--chart-5)",
-] as const;
-
-function semanticOptionColor(value: string): string | undefined {
-  const normalized = value.toLowerCase().replace(/[\s-]+/g, "_");
-  if (
-    ["active", "available", "verified", "growing", "match", "matched"].includes(
-      normalized,
-    )
-  )
-    return "var(--positive)";
-  if (normalized === "pending" || normalized.startsWith("pending_"))
-    return "var(--warning)";
-  if (normalized === "paused" || normalized.startsWith("paused_"))
-    return "var(--warning)";
-  if (["failed", "missing", "mismatch", "mismatched"].includes(normalized))
-    return "var(--destructive)";
-  if (
-    [
-      "__none__",
-      "none",
-      "unknown",
-      "unverified",
-      "disabled",
-      "finished",
-    ].includes(normalized)
-  )
-    return "var(--slate)";
-  if (normalized === "planned") return "var(--chart-4)";
-  return undefined;
-}
-
-/** Complete an enum roster with semantic or stable declaration-order colors. */
+/** Shared defaults also cover web-only editor sentinels. */
 export function colorizeSelectOptions<T extends FilterableComboboxItem>(
   options: readonly T[],
 ): Array<T & { color: string }> {
-  let categoricalIndex = 0;
-  return options.map((option) => {
-    if (option.color !== undefined) return { ...option, color: option.color };
-    const semantic = semanticOptionColor(option.value);
-    if (semantic !== undefined) return { ...option, color: semantic };
-    const color =
-      CATEGORICAL_COLORS[categoricalIndex % CATEGORICAL_COLORS.length]!;
-    categoricalIndex += 1;
-    return { ...option, color };
-  });
+  return colorizeEnumOptions(options);
 }
 
 /** Default dot inks for a boolean whose `true` really is the good outcome. */

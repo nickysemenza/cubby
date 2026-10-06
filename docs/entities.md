@@ -1130,3 +1130,30 @@ precedence rule.
 The compiler owns mechanical catalogs and capabilities. Repositories retain the
 handwritten transaction seams until their ports can be generated without
 weakening domain invariants.
+
+### Cross-platform option colors and roster counts
+
+The shared `colorizeEnumOptions` policy completes every roster once during
+manifest compilation: semantic statuses use condition colors and ordinary
+categories cycle through teal, violet, ochre, rose, and green in declaration
+order. Explicit overrides win; legacy web chart/action tokens normalize to
+shared adaptive roles. Clients filter only after assignment so colors stay
+stable across surfaces.
+
+A read-only enum without an explicit roster derives its labels and colors from
+its existing Zod enum schema.
+
+Enum presentation color overrides live in the field's `control.options` or
+`display.valueOptions`, alongside labels. Web's generic `EnumPill` and Apple's
+generic list, detail, and hero chips consume those declarations. Use shared
+semantic tokens (`var(--warning)`, `var(--slate)`) or brand domain tokens
+(`var(--brand-domain-house)`); the design-token generator derives Apple's
+adaptive asset lookup. Unknown expectation and acquisition values are amber,
+expected evidence is teal, and explicitly not-expected evidence is neutral.
+Color supplements the visible label.
+
+`dashboardLocalCounts` owns the local navigation-count roster, including
+Spending Categories. The server count query and web navigation derive their
+keys from that schema, rather than separate supplemental entity lists. Each
+server entry uses its entity's unfiltered list predicate. Missing responses
+remain absent; loaded zero counts remain visible.

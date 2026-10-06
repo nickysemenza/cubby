@@ -190,8 +190,16 @@ type EntityKeyLookup = (raw: string, context: string) => string;
 // `{"case": {"label": value}}` (`_0` for an unlabelled one), a payload-less
 // case as `{"case": {}}`, and every optional present as `null` when absent.
 
-const options = (values: readonly { value: string; label: string }[] | null) =>
-  values === null ? null : values.map(({ value, label }) => ({ value, label }));
+const options = (
+  values: readonly { value: string; label: string; color?: string }[] | null,
+) =>
+  values === null
+    ? null
+    : values.map(({ value, label, color }) => ({
+        value,
+        label,
+        color: color ?? null,
+      }));
 
 const filterJSON = (
   filter: CompiledEntity["filterDescriptors"][number],
@@ -204,7 +212,7 @@ const filterJSON = (
   placeholder: filter.placeholder,
   label: filter.label ?? null,
   options: options(filter.options),
-  // `meta`/`color` steer web-only rendering, not the generic catalog surface.
+  // Filter metadata steers web-only rendering.
   wire:
     filter.wire.kind === "param"
       ? { param: { name: filter.wire.name } }

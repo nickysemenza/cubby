@@ -11,6 +11,7 @@ export const dashboardCountsOut = z.object({
   vendorAccount: z.number().int().optional(),
   productCategory: z.number().int().optional(),
   device: z.number().int().optional(),
+  spendingCategory: z.number().int().optional(),
 });
 
 export type DashboardCountsOut = z.infer<typeof dashboardCountsOut>;
@@ -18,11 +19,5 @@ export type DashboardCountsOut = z.infer<typeof dashboardCountsOut>;
 /** The complete local snapshot; USDA remains a separate live worker read. */
 export const dashboardLocalCounts = dashboardCountsOut
   .omit({ usdaFoods: true, usdaFoodsAvailable: true })
-  .required({
-    ledgerParty: true,
-    ledgerTransfer: true,
-    vendorAccount: true,
-    productCategory: true,
-    device: true,
-  });
+  .required();
 export type DashboardLocalCounts = z.infer<typeof dashboardLocalCounts>;
