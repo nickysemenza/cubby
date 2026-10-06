@@ -203,7 +203,7 @@ Collection verbs derive from the declared sections and `reportSlotActions`;
 the typed header hook registry supplies specialist controls (meal food capture,
 cookbook source import/reprocess, inventory expense capture, Run diagnostics,
 recipe meal-planning/parse-copy/export actions, walkthrough generation, product
-enrichment, wardrobe navigation, photo grouping, and image processing). The
+enrichment, wardrobe navigation, photo grouping, image processing, vendor mail search, and section-scoped finance verbs). The
 header owns their component lifetime,
 so switching Overview, Relations, or a dedicated tab does not remove controls
 or abandon an open dialog. Section consumers use `DetailAction` to retain local
@@ -215,7 +215,10 @@ per recipe and observe the latest generation outcome, so another surface cannot
 launch competing generation or leave a stale failure after a successful retry. `reportDetailActions` explicitly identifies record-level
 report commands and diagnostic rows, leaving approvals, selections, recipe
 scales, per-row imports, guided regeneration, ownership confirmations, and other contextual work
-beside its evidence. Stored URLs, source mail links, map coordinates, and
+beside its evidence. Finance verbs with `scope: "section"` use the header;
+`scope: "selection"` verbs stay with the checked rows and their disabled reasons.
+Vendor search and product indexing controls observe the same cached job/readiness
+state as their worklists. Stored URLs, source mail links, map coordinates, and
 linked entity/identifier values remain facts rather than header actions.
 
 `detail.sectionOverrides` replaces the inferred Overview section with an ordered list of

@@ -119,6 +119,18 @@ test("queues a local synthetic Gmail search, shows progress, and continues to ol
     `/vendors/${vendor.id}`,
     page.getByRole("button", { name: "Search Gmail now" }),
   );
+  const actions = page.getByRole("group", {
+    name: "Entity actions",
+    exact: true,
+  });
+  await expect(
+    actions.getByRole("button", { name: "Search Gmail now" }),
+  ).toBeVisible();
+  await page.getByRole("tab", { name: "Relations", exact: true }).click();
+  await expect(
+    actions.getByRole("button", { name: "Search Gmail now" }),
+  ).toBeVisible();
+  await page.getByRole("tab", { name: "Overview", exact: true }).click();
   await page.getByRole("button", { name: "Search Gmail now" }).click();
   await expect(page.getByText(/Scanning Gmail/u)).toBeVisible();
   await expect(page.getByRole("link", { name: "View run" })).toHaveAttribute(

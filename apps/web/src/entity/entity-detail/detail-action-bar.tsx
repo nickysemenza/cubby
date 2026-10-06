@@ -38,9 +38,20 @@ type HeaderActionRegistry = Partial<{
   [E in GenericDetailEntity]: LazyExoticComponent<DetailSlotComponent<E>>;
 }>;
 const headerActions: HeaderActionRegistry = {
+  vendor: action<"vendor">(() =>
+    import("~/app/vendors/order-mail-worklist").then((m) => ({
+      default: m.VendorMailActions,
+    })),
+  ),
+  purchase: action<"purchase">(() =>
+    import("./report-slot").then((m) => ({ default: m.PurchaseDetailActions })),
+  ),
+  expense: action<"expense">(() =>
+    import("./report-slot").then((m) => ({ default: m.ExpenseDetailActions })),
+  ),
   product: action<"product">(() =>
     import("~/app/products/product-runs").then((m) => ({
-      default: m.ProductEnrichmentAction,
+      default: m.ProductDetailActions,
     })),
   ),
   ledgerParty: action<"ledgerParty">(() =>
@@ -125,11 +136,15 @@ function ReportCollectionActions<E extends GenericDetailEntity>({
 export type ReportDetailActionPlacement = {
   rows?: readonly string[];
   commands?: boolean;
+  verbs?: boolean;
 };
 type ReportDetailActionRegistry = Partial<
   Record<ReportSlot, ReportDetailActionPlacement>
 >;
 const reportDetailActions = {
+  "purchase.financial-settlement": { verbs: true },
+  "purchase.reconciliation": { verbs: true },
+  "expense.settlement": { verbs: true },
   "run.live-progress": { rows: ["workflow"] },
 } satisfies ReportDetailActionRegistry;
 

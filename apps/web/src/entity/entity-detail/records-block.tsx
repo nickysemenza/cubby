@@ -456,12 +456,18 @@ export function RecordsBlockView({
                 key={verb.id}
                 fallback={<Skeleton className="h-8 w-24" />}
               >
-                <Verb
-                  record={erasedRecord}
-                  action={verb}
-                  selection={[...selection]}
-                  clearSelection={clearSelection}
-                />
+                <RowActionPlacement
+                  inDetailBar={
+                    verb.scope === "section" && (detailActions?.verbs ?? false)
+                  }
+                >
+                  <Verb
+                    record={erasedRecord}
+                    action={verb}
+                    selection={[...selection]}
+                    clearSelection={clearSelection}
+                  />
+                </RowActionPlacement>
               </Suspense>
             ) : null;
           })}
@@ -481,11 +487,18 @@ export function RecordsBlockView({
 export function RecordsDetailActions({
   block,
   detailActions,
+  entity,
+  record,
 }: {
   block: RecordsBlock;
   detailActions?: ReportDetailActionPlacement;
+  entity?: string;
+  record?: object;
 }) {
   const commands = useReportCommands();
+  const available = entity === undefined ? {} : sectionActionsFor(entity);
+  // SAFETY: the action registry correlates this entity with its loaded record.
+  const erasedRecord = record as never;
   return (
     <>
       {block.rows
@@ -500,6 +513,25 @@ export function RecordsDetailActions({
             commands={commands}
           />
         ))}
+      {detailActions?.verbs && record
+        ? (block.verbs ?? [])
+            .filter((verb) => verb.scope === "section")
+            .map((verb) => {
+              const Verb = available[verb.id];
+              return Verb ? (
+                <Suspense key={verb.id} fallback={null}>
+                  <span title={verb.disabledReason ?? undefined}>
+                    <Verb
+                      record={erasedRecord}
+                      action={verb}
+                      selection={[]}
+                      clearSelection={() => {}}
+                    />
+                  </span>
+                </Suspense>
+              ) : null;
+            })
+        : null}
       {detailActions?.commands
         ? (block.commands ?? []).map((command) => (
             <CommandButton

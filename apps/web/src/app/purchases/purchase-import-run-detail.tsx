@@ -251,7 +251,9 @@ function RunControls({ run }: { run: RunDetail }) {
         </RunActionButtons>
       </DetailAction>
       <RunLineageAndInputs run={run} />
-      <ManualEvidenceUpload run={run} />
+      <DetailAction>
+        <ManualEvidenceUpload run={run} />
+      </DetailAction>
     </Stack>
   );
 }
@@ -1335,6 +1337,7 @@ function RunAgentActionRead({ record }: { record: RunOut }) {
       {query.data.purpose === "photo_inventory" ? (
         <PhotoRunGroupingAction run={query.data} />
       ) : null}
+      <ManualEvidenceUpload run={query.data} />
       <RunActionButtons
         runId={query.data.publicId}
         actions={runActions(query.data)}

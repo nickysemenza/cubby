@@ -2,14 +2,12 @@ import {
   ledgerPartyShortcode,
   vendorShortcode,
 } from "@cubby/schemas/identifiers";
-import type {
-  VendorOrderMailOut,
-  VendorSearchMailOut,
-} from "@cubby/schemas/order-mail-review";
+import type { VendorOrderMailOut } from "@cubby/schemas/order-mail-review";
 import { useQuery } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
 
+import { DetailAction } from "~/entity/entity-detail/detail-action-bar";
 import type { DetailSlotComponent } from "~/entity/entity-detail/detail-slots";
 import { vendor } from "~/integrations/tanstack-query/generated/catalog.gen";
 import { formatInstant } from "~/lib/date-format";
@@ -228,9 +226,6 @@ function OrderMailWorklist({
   hasSearchTerms?: boolean;
 }) {
   const [memberFilter, setMemberFilter] = useState(ledgerPartyId ?? "");
-  const [searchPage, setSearchPage] = useState<VendorSearchMailOut | null>(
-    null,
-  );
   const [selection, setSelection] = useState<MailSelection>(new Map());
   const importSelected = useActionMutation({
     mutationFn: vendor.importSelectedOrderMail.mutationOptions,
@@ -246,40 +241,8 @@ function OrderMailWorklist({
     }),
   );
   const { refetch: refetchWorklist } = worklist;
-  const jobStatus = useQuery({
-    ...vendor.orderMailSearchStatus.queryOptions({
-      vendorId: vendorShortcode.parse(vendorId),
-    }),
-    enabled: canSearch,
-    refetchInterval: (query) =>
-      query.state.data?.status === "queued" ||
-      query.state.data?.status === "running" ||
-      query.state.data?.status === "waiting"
-        ? 2_000
-        : false,
-  });
-  const search = useActionMutation({
-    mutationFn: vendor.searchOrderMail.mutationOptions,
-    error: "Gmail search failed",
-    onSuccess: (result) => {
-      setSearchPage(result);
-      void jobStatus.refetch();
-    },
-  });
-  const savedJob = jobStatus.data;
-  const currentJob =
-    savedJob && (!searchPage || savedJob.createdAt >= searchPage.createdAt)
-      ? savedJob
-      : searchPage;
-  const jobActive =
-    currentJob?.status === "queued" ||
-    currentJob?.status === "running" ||
-    currentJob?.status === "waiting";
-  const completedPage = currentJob?.status === "completed" ? currentJob : null;
-  const resumablePage =
-    currentJob?.status === "failed" && currentJob.nextPageToken
-      ? currentJob
-      : null;
+  const jobStatus = useVendorMailJob(vendorId, canSearch);
+  const currentJob = jobStatus.data;
   useEffect(() => {
     if (jobStatus.data?.status === "completed") void refetchWorklist();
   }, [jobStatus.data?.createdAt, jobStatus.data?.status, refetchWorklist]);
@@ -291,56 +254,12 @@ function OrderMailWorklist({
       {canSearch ? (
         <Stack gap="sm">
           <Row align="center" gap="sm" className="flex-wrap">
-            <Button
-              type="button"
-              size="sm"
-              variant="outline"
-              disabled={search.isPending || jobActive || !hasSearchTerms}
-              onClick={() => {
-                search.mutate({
-                  vendorId: vendorShortcode.parse(vendorId),
-                  after: resumablePage?.after,
-                  pageToken: resumablePage?.nextPageToken ?? undefined,
-                });
-              }}
-            >
-              {search.isPending || jobActive
-                ? "Searching Gmail…"
-                : resumablePage
-                  ? "Resume Gmail search"
-                  : "Search Gmail now"}
-            </Button>
-            {completedPage?.nextPageToken ? (
-              <Button
-                type="button"
-                size="sm"
-                variant="outline"
-                disabled={search.isPending}
-                onClick={() =>
-                  search.mutate({
-                    vendorId: vendorShortcode.parse(vendorId),
-                    after: completedPage.after,
-                    pageToken: completedPage.nextPageToken ?? undefined,
-                  })
-                }
-              >
-                Continue unfinished search
-              </Button>
-            ) : null}
-            <Button
-              type="button"
-              size="sm"
-              variant="outline"
-              disabled={search.isPending || jobActive || !hasSearchTerms}
-              onClick={() =>
-                search.mutate({
-                  vendorId: vendorShortcode.parse(vendorId),
-                  after: "1970/01/01",
-                })
-              }
-            >
-              Search all history
-            </Button>
+            <DetailAction>
+              <VendorMailSearchActions
+                vendorId={vendorId}
+                hasSearchTerms={hasSearchTerms}
+              />
+            </DetailAction>
             <span className="text-xs text-muted-foreground">
               {hasSearchTerms
                 ? "Search all matching email since the date shown in the Run, using this Vendor’s website domain and known senders. Saved order evidence appears below."
@@ -544,3 +463,106 @@ export const VendorAccountOrderMail: DetailSlotComponent<"vendorAccount"> = ({
     ledgerPartyId={record.ledgerPartyId}
   />
 );
+
+function useVendorMailJob(vendorId: string, enabled = true) {
+  return useQuery({
+    ...vendor.orderMailSearchStatus.queryOptions({
+      vendorId: vendorShortcode.parse(vendorId),
+    }),
+    enabled: enabled,
+    refetchInterval: (query) =>
+      query.state.data?.status === "queued" ||
+      query.state.data?.status === "running" ||
+      query.state.data?.status === "waiting"
+        ? 2_000
+        : false,
+  });
+}
+export const VendorMailActions: DetailSlotComponent<"vendor"> = ({
+  record,
+}) => (
+  <VendorMailSearchActions
+    vendorId={record.id}
+    hasSearchTerms={Boolean(record.website || record.orderEmailSenders.length)}
+  />
+);
+function VendorMailSearchActions({
+  vendorId,
+  hasSearchTerms,
+}: {
+  vendorId: string;
+  hasSearchTerms: boolean;
+}) {
+  const jobStatus = useVendorMailJob(vendorId);
+  const search = useActionMutation({
+    mutationFn: vendor.searchOrderMail.mutationOptions,
+    error: "Gmail search failed",
+    onSuccess: () => {
+      void jobStatus.refetch();
+    },
+  });
+  const currentJob = jobStatus.data;
+  const jobActive =
+    currentJob?.status === "queued" ||
+    currentJob?.status === "running" ||
+    currentJob?.status === "waiting";
+  const completedPage = currentJob?.status === "completed" ? currentJob : null;
+  const resumablePage =
+    currentJob?.status === "failed" && currentJob.nextPageToken
+      ? currentJob
+      : null;
+  return (
+    <>
+      <Button
+        type="button"
+        size="sm"
+        variant="outline"
+        disabled={search.isPending || jobActive || !hasSearchTerms}
+        onClick={() => {
+          search.mutate({
+            vendorId: vendorShortcode.parse(vendorId),
+            after: resumablePage?.after,
+            pageToken: resumablePage?.nextPageToken ?? undefined,
+          });
+        }}
+      >
+        {search.isPending || jobActive
+          ? "Searching Gmail…"
+          : resumablePage
+            ? "Resume Gmail search"
+            : "Search Gmail now"}
+      </Button>
+      {completedPage?.nextPageToken ? (
+        <Button
+          type="button"
+          size="sm"
+          variant="outline"
+          disabled={search.isPending}
+          onClick={() =>
+            search.mutate({
+              vendorId: vendorShortcode.parse(vendorId),
+              after: completedPage.after,
+              pageToken: completedPage.nextPageToken ?? undefined,
+            })
+          }
+        >
+          Continue unfinished search
+        </Button>
+      ) : null}
+      <Button
+        type="button"
+        size="sm"
+        variant="outline"
+        disabled={search.isPending || jobActive || !hasSearchTerms}
+        onClick={() =>
+          search.mutate({
+            vendorId: vendorShortcode.parse(vendorId),
+            after: "1970/01/01",
+          })
+        }
+      >
+        Search all history
+      </Button>
+    </>
+  );
+}

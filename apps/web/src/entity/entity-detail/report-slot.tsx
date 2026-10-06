@@ -501,7 +501,8 @@ export function ReportDetailActions({
   slot,
   id,
   status,
-}: EntityReportInput & { status?: string }) {
+  record,
+}: EntityReportInput & { status?: string; record?: object }) {
   const query = useReportBlocks({ slot, id }, status, true);
   const placement = reportDetailActionsFor(slot);
   return (
@@ -512,6 +513,8 @@ export function ReportDetailActions({
             key={blockKey(block, index)}
             block={block}
             detailActions={placement}
+            entity={slot.split(".")[0]}
+            record={record}
           />
         ) : null,
       )}
@@ -550,3 +553,29 @@ export function RunSentryAction({
     </a>
   ) : null;
 }
+
+export const PurchaseDetailActions: import("./detail-slots").DetailSlotComponent<
+  "purchase"
+> = ({ record }) => (
+  <>
+    <ReportDetailActions
+      slot="purchase.financial-settlement"
+      id={record.id}
+      record={record}
+    />
+    <ReportDetailActions
+      slot="purchase.reconciliation"
+      id={record.id}
+      record={record}
+    />
+  </>
+);
+export const ExpenseDetailActions: import("./detail-slots").DetailSlotComponent<
+  "expense"
+> = ({ record }) => (
+  <ReportDetailActions
+    slot="expense.settlement"
+    id={record.id}
+    record={record}
+  />
+);
