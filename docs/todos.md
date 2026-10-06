@@ -545,12 +545,13 @@ declaration that the generator, the field-policy evaluator, and Jev all read.
 Steps in order; each is independently shippable.
 
 - 🟢 **Derive Jev suggestion specs from the manifest.** The Jev registry
-  (`server/ai/field-suggest/registry.ts`) restates enum values, labels, and
-  per-value descriptions by hand (`expectationSpec`), which is how a new value
-  such as `not_allowed` goes missing. Each enum field declares its options
+  (`server/ai/field-suggest/registry.ts`) imports the shared enum value arrays
+  but restates each value's label and description by hand in every spec
+  (`expectationSpec`, `productExpectationSpec`, and the other enum specs), so
+  a label or meaning lives in two places. Each enum field declares its options
   once — value, label, meaning — and only the prompt guidance stays
   hand-written, as `suggest: { rules }` on the field declaration; the registry
-  becomes generated, so adding a value updates what Jev may suggest.
+  becomes generated from those declarations.
 - 🟢 **Finish the field-policy migration.** The remaining items of
   **Classification-declared field policies** (Entity platform & data model):
   move `not_allowed` enforcement (`validateProductPolicy`,
@@ -562,11 +563,11 @@ Steps in order; each is independently shippable.
   Purchase default → Vendor default" lives in hand SQL
   (`repo/expense-category-resolution.ts`), as do trade and project
   inheritance. Declare each chain and generate the resolution SQL, the
-  "inherited from" explanation, and the reach scope that the reviewed
-  classification preview hand-maintains
-  (`repo/spending-classification-review.ts`). Generated SQL must match the
-  hand-tuned performance; the preview equivalence and scale tests are the
-  guard. Decide the declaration shape first.
+  "inherited from" explanation, and the set of Expenses a change can reach —
+  the reach scope the reviewed classification preview hand-writes once #1712
+  lands. Generated SQL must match hand-tuned performance; #1712's preview
+  equivalence and scale tests are the guard. Decide the declaration shape
+  first.
 - 🟢 **Lint raw enum literals in SQL.** Once vocabularies are generated
   constants, flag string literals such as `'not_allowed'` or `'principal'`
   inside `sql` templates so a typo or stale value fails at build time instead
