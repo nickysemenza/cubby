@@ -89,15 +89,18 @@ export const extractPurchaseCapture = async (
   );
 };
 
-export const extractPurchaseOrderMail = async (args: {
-  db: Database;
-  runId: string;
-  orderId: string;
-  mail: Pick<
-    typeof orderMail.$inferSelect,
-    "sender" | "subject" | "receivedAt" | "content"
-  >;
-}) => {
+export const extractPurchaseOrderMail = async (
+  args: {
+    db: Database;
+    runId: string;
+    orderId: string;
+    mail: Pick<
+      typeof orderMail.$inferSelect,
+      "sender" | "subject" | "receivedAt" | "content"
+    >;
+  },
+  ports = { runStructured: runStructuredFeature },
+) => {
   const content = JSON.stringify({
     kind: "order_confirmation_email",
     orderId: args.orderId,
@@ -117,15 +120,19 @@ export const extractPurchaseOrderMail = async (args: {
     ],
     messages: [{ role: "user" as const, content }],
   };
-  const extraction = await extractPurchaseText({
-    db: args.db,
-    runId: args.runId,
-    request,
-  });
+  const extraction = await extractPurchaseText(
+    { db: args.db, runId: args.runId, request },
+    ports,
+  );
   if (extraction.candidate && extraction.candidate.orderId !== args.orderId)
     throw new Error(
       "Extracted confirmation order id differs from its assigned order; review the saved email.",
     );
+  // Only a placement confirmation is assigned here, and it is sent when the
+  // order is placed. Without this, a confirmation that prints no order date
+  // left `orderedAt` null and the writer dated the Purchase on import day.
+  if (extraction.candidate && extraction.candidate.orderedAt === null)
+    extraction.candidate.orderedAt = args.mail.receivedAt.toISOString();
   return extraction;
 };
 

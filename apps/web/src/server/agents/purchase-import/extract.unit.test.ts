@@ -6,7 +6,11 @@ import type { GatewayCallOptions } from "~/server/ai/gateway";
 import { type AiUsagePort, recordAiUsage } from "~/server/ai/usage";
 import { Database } from "~/server/db";
 
-import { auditPurchaseImportBatch, type PurchaseAuditPorts } from "./extract";
+import {
+  auditPurchaseImportBatch,
+  extractPurchaseOrderMail,
+  type PurchaseAuditPorts,
+} from "./extract";
 
 describe("purchase import audit recovery", () => {
   it("uses Opus native structured output after the primary audit fails", async () => {
@@ -175,5 +179,73 @@ describe("purchase import audit recovery", () => {
       transport: "gateway",
       estimatedCost: 0,
     });
+  });
+});
+
+type MailPorts = NonNullable<Parameters<typeof extractPurchaseOrderMail>[1]>;
+
+describe("order confirmation email extraction", () => {
+  const db = new Database(() => {
+    throw new Error("Mail extraction unit test never resolves a database");
+  });
+  const mail = {
+    sender: "Example Seeds <orders@seeds.example.test>",
+    subject: "Order 1001 confirmed",
+    receivedAt: new Date("2026-09-22T06:23:46.000Z"),
+    content: { snippet: null, bodyText: "Order 1001", bodyHtml: null },
+  };
+  const modelOutput = (orderedAt: string | null) => ({
+    status: "ready" as const,
+    candidate: {
+      orderId: "1001",
+      orderedAt,
+      merchant: "Example Seeds",
+      currency: "USD",
+      printedGrandTotal: 4.5,
+      lines: [
+        {
+          title: "Tomato seeds",
+          amount: 4.5,
+          lineKind: "principal" as const,
+          quantity: 1,
+          productUrl: null,
+          imageUrl: null,
+          sku: null,
+          seller: null,
+        },
+      ],
+      payments: [],
+      allShipmentsDelivered: null,
+    },
+    reason: null,
+    detail: null,
+  });
+
+  it("dates an undated placement confirmation by when it was sent", async () => {
+    const extraction = await extractPurchaseOrderMail(
+      {
+        db,
+        runId: "00000000-0000-4000-8000-000000000001",
+        orderId: "1001",
+        mail,
+      },
+      fromPartial<MailPorts>({ runStructured: async () => modelOutput(null) }),
+    );
+    expect(extraction.candidate?.orderedAt).toBe("2026-09-22T06:23:46.000Z");
+  });
+
+  it("keeps an order date the confirmation prints", async () => {
+    const extraction = await extractPurchaseOrderMail(
+      {
+        db,
+        runId: "00000000-0000-4000-8000-000000000001",
+        orderId: "1001",
+        mail,
+      },
+      fromPartial<MailPorts>({
+        runStructured: async () => modelOutput("2026-09-20T12:00:00.000Z"),
+      }),
+    );
+    expect(extraction.candidate?.orderedAt).toBe("2026-09-20T12:00:00.000Z");
   });
 });

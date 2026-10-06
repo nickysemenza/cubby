@@ -7,7 +7,25 @@ import {
   buildPurchaseImportPlan,
   explicitLineDecisions,
   lineExternalIdentity,
+  purchaseDateFor,
 } from "./writer";
+
+describe("purchase date", () => {
+  it("is the household-local day of an evening Pacific order, not its UTC day", () => {
+    // 9:32 PM PDT on Sep 22 is already Sep 23 in UTC.
+    expect(purchaseDateFor("2026-09-23T04:32:43.000Z", null)).toBe(
+      "2026-09-22",
+    );
+  });
+
+  it("keeps an existing Purchase's date when the evidence states none", () => {
+    expect(purchaseDateFor(null, "2026-08-14")).toBe("2026-08-14");
+  });
+
+  it("refuses to invent a date for a new Purchase", () => {
+    expect(() => purchaseDateFor(null, null)).toThrow(/no order date/);
+  });
+});
 
 describe("purchase import line identity", () => {
   it("groups duplicate vendor SKUs before independent identity decisions", () => {

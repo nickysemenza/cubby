@@ -1,4 +1,5 @@
 import { parseShortcodeFor } from "@cubby/schemas/identifiers";
+import type { VendorAccountUpdateData } from "@cubby/schemas/vendor-account";
 import { eq } from "drizzle-orm";
 import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
@@ -113,6 +114,7 @@ describe("vendor account creation classifies order evidence", () => {
         status,
         browser: "chrome",
         inventoryOwnerDefaultEnabled: false,
+        browserSyncEnabled: true,
       },
       ctx.actor,
     );
@@ -138,6 +140,65 @@ describe("vendor account creation classifies order evidence", () => {
       await expect(
         create({ orderEvidence, browserDomains: ["shop.example.test"] }),
       ).resolves.toBe(orderEvidence);
+  });
+
+  it("classifies a mail-only account only once it is both active and synced", async () => {
+    const { entityKernelContextSchema, executeEntity } =
+      await import("~/server/entity-kernel");
+    const { requireActor } = await import("~/server/request-context");
+    const { createTestRequestContext } =
+      await import("~/server/testing/request-context");
+    const kernel = entityKernelContextSchema.parse(
+      requireActor(
+        createTestRequestContext(ctx.db, {
+          auth: { userId: ctx.actor.userId },
+        }),
+      ),
+    );
+    const { row: party } = await findOrCreateWithShortcode(
+      ctx.db,
+      "ledgerParty",
+      {
+        where: eq(ledgerParty.userId, ctx.actor.userId),
+        values: () => ({
+          name: "Classifier member",
+          kind: "member" as const,
+          userId: ctx.actor.userId,
+        }),
+      },
+    );
+    const vendor = await insertWithShortcode(ctx.db, "vendor", {
+      name: "Classifier mail-only vendor",
+      browserDomains: ["shop.example.test"],
+    });
+    const account = await insertWithShortcode(ctx.db, "vendorAccount", {
+      label: "Classifier mail",
+      vendorId: vendor.id,
+      ledgerPartyId: party.id,
+      status: "disabled",
+      browserSyncEnabled: false,
+    });
+    const evidence = async () =>
+      (
+        await getDb(ctx.db)
+          .select({ orderEvidence: vendorTable.orderEvidence })
+          .from(vendorTable)
+          .where(eq(vendorTable.id, vendor.id))
+      )[0]?.orderEvidence;
+    const update = (data: VendorAccountUpdateData) =>
+      executeEntity(kernel, {
+        action: "update",
+        entity: "vendorAccount",
+        id: account.shortcode,
+        data,
+      });
+
+    // Sync on while still disabled is not yet an online account.
+    await update({ browserSyncEnabled: true });
+    await expect(evidence()).resolves.toBeNull();
+    // Activating it later, without resending the sync flag, completes it.
+    await update({ status: "active" });
+    await expect(evidence()).resolves.toBe("online_account");
   });
 
   it("leaves weak signals unclassified for review", async () => {

@@ -50,6 +50,8 @@ import {
   chargeHuntRunInput,
   orderBackfillRunInput,
   orderMailImportRunInput,
+  orderMailImportRunOrders,
+  type RunRestartInput,
 } from "@cubby/schemas/run-fields";
 import type { Trade } from "@cubby/schemas/task-fields";
 import { vendorAccountCursor } from "@cubby/schemas/vendor-account-fields";
@@ -3299,6 +3301,27 @@ function projectPreparedOrders(
  * `run` row plus its child collections, projected once. Private UUIDs
  * and operation payloads never cross this boundary.
  */
+/** What a restart copies from `Run.input`, by public values only. */
+function restartInputSummary(input: unknown): RunRestartInput | null {
+  const mail = orderMailImportRunInput.safeParse(input);
+  if (mail.success)
+    return {
+      kind: "order_mail_import" as const,
+      orderIds: orderMailImportRunOrders(mail.data).map(
+        (order) => order.orderId,
+      ),
+    };
+  const backfill = orderBackfillRunInput.safeParse(input);
+  if (backfill.success) return backfill.data;
+  const charges = chargeHuntRunInput.safeParse(input);
+  if (charges.success)
+    return {
+      kind: "charge_hunts" as const,
+      chargeCount: charges.data.huntIds.length,
+    };
+  return null;
+}
+
 export async function loadRunDetail(
   db: Database,
   shortcode: string,
@@ -3313,6 +3336,7 @@ export async function loadRunDetail(
         dispatchEventId: runTable.dispatchEventId,
         actorLedgerPartyShortcode: runTable.actorLedgerPartyShortcode,
         actorLedgerPartyName: runTable.actorLedgerPartyName,
+        input: runTable.input,
       })
       .from(runTable)
       .where(and(eq(runTable.shortcode, publicId), notDeleted(runTable)))
@@ -3523,7 +3547,9 @@ export async function loadRunDetail(
           purpose: header.purpose,
           trigger: "manual",
           coordinatorModel: coordinatorModelFor(header.purpose),
+          vendor: header.vendorId,
           vendorAccount: header.vendorAccountId,
+          input: restartInputSummary(run.input),
           notes: header.notes,
           skillRevision: header.skillRevision,
           runtimeRevision: header.runtimeRevision,
