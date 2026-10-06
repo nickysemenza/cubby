@@ -7,7 +7,7 @@ import {
 } from "@cubby/schemas/identifiers";
 import { and, asc, eq, gte, inArray, lte } from "drizzle-orm";
 
-import { shiftPlainDate } from "~/lib/plain-date";
+import { plainDateDaysBetween, shiftPlainDate } from "~/lib/household-date";
 import type { Database, DrizzleTransaction } from "~/server/db";
 import {
   meal,
@@ -27,16 +27,6 @@ import { insertWithShortcode } from "~/server/repo/shortcode-utils";
 
 /** A copy that must stay a plan-sized write: a couple of months of meals. */
 const MAX_COPY_RANGE_DAYS = 62;
-
-const DAY_MS = 86_400_000;
-
-const utcDay = (date: string) => {
-  const [year, month, day] = date.split("-").map(Number);
-  return Date.UTC(year ?? 0, (month ?? 1) - 1, day ?? 1);
-};
-
-const dayDistance = (from: string, to: string) =>
-  Math.round((utcDay(to) - utcDay(from)) / DAY_MS);
 
 export type CopiedMeals = {
   mealIds: MealId[];
@@ -201,7 +191,7 @@ export const copyMealRange = (
   actor: ActorContext,
   range: { from: string; to: string; targetFrom: string },
 ): Promise<CopiedMeals> => {
-  const span = dayDistance(range.from, range.to);
+  const span = plainDateDaysBetween(range.from, range.to);
   if (span < 0)
     throw createAppError(
       "CONSTRAINT_VIOLATION",
@@ -212,7 +202,7 @@ export const copyMealRange = (
       "CONSTRAINT_VIOLATION",
       `Copy range spans ${span + 1} days; the limit is ${MAX_COPY_RANGE_DAYS}.`,
     );
-  const offset = dayDistance(range.from, range.targetFrom);
+  const offset = plainDateDaysBetween(range.from, range.targetFrom);
   return withTransaction(db, async (tx) => {
     const inRange = await tx
       .select({ id: meal.id })

@@ -23,7 +23,7 @@ import { z } from "zod";
 
 import type { Database } from "~/server/db";
 import { mcpToolCall, oauthClient, user } from "~/server/db/schema";
-import { getDb } from "~/server/repo/database-helpers";
+import { getDb, householdDaySql } from "~/server/repo/database-helpers";
 
 export function mcpUsageSince(window: McpUsageWindow): Date | null {
   if (window === "lifetime") return null;
@@ -79,18 +79,15 @@ export async function getMcpUsageAggregateData(
     drizzle
       .select({
         toolName: mcpToolCall.toolName,
-        day: sql<string>`to_char(date_trunc('day', ${mcpToolCall.occurredAt}), 'YYYY-MM-DD')`,
+        day: sql<string>`to_char(${householdDaySql(mcpToolCall.occurredAt)}, 'YYYY-MM-DD')`,
         success: sql<number>`count(*) filter (where ${mcpToolCall.outcome} = 'success')::int`,
         error: sql<number>`count(*) filter (where ${mcpToolCall.outcome} = 'error')::int`,
         total: countInt(),
       })
       .from(mcpToolCall)
       .where(periodWhere)
-      .groupBy(
-        mcpToolCall.toolName,
-        sql`date_trunc('day', ${mcpToolCall.occurredAt})`,
-      )
-      .orderBy(asc(sql`date_trunc('day', ${mcpToolCall.occurredAt})`)),
+      .groupBy(mcpToolCall.toolName, householdDaySql(mcpToolCall.occurredAt))
+      .orderBy(asc(householdDaySql(mcpToolCall.occurredAt))),
     drizzle
       .select({
         toolName: mcpToolCall.toolName,

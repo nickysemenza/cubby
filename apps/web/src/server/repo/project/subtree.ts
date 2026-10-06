@@ -24,10 +24,10 @@ import {
   type ProjectDateWindow,
   type ProjectStatus,
 } from "@cubby/schemas/project";
-import { format } from "date-fns";
 import { asc } from "drizzle-orm";
 import { uniq } from "es-toolkit";
 
+import { householdLocalDate } from "~/lib/household-date";
 import type { Database } from "~/server/db";
 import { project } from "~/server/db/schema";
 import { getDb, notDeleted } from "~/server/repo/database-helpers";
@@ -333,10 +333,7 @@ export function projectCompletionYear(
   row: Pick<ProjectParentRow, "updatedAt">,
   window: ProjectDateWindow,
 ): string {
-  return (window.effectiveEnd ?? format(row.updatedAt, "yyyy-MM-dd")).slice(
-    0,
-    4,
-  );
+  return (window.effectiveEnd ?? householdLocalDate(row.updatedAt)).slice(0, 4);
 }
 
 /**

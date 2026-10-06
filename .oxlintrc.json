@@ -353,6 +353,19 @@
       }
     },
     {
+      "files": ["apps/web/src/**/*.ts", "apps/web/src/**/*.tsx"],
+      "excludeFiles": [
+        "**/*.test.ts",
+        "**/*.test.tsx",
+        "**/*.spec.ts",
+        "**/*.spec.tsx",
+        "apps/web/src/lib/household-date.ts"
+      ],
+      "rules": {
+        "cubby/no-ad-hoc-calendar-day": "error"
+      }
+    },
+    {
       "files": ["apps/web/src/server/**/*.ts"],
       "excludeFiles": [
         "**/*.test.ts",

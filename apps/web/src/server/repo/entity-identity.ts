@@ -17,9 +17,9 @@ import { parseShortcode } from "@cubby/shared";
 import { and, eq, inArray, isNotNull, or } from "drizzle-orm";
 import { alias } from "drizzle-orm/pg-core";
 
+import { householdLocalDate } from "~/lib/household-date";
 import type { Database, DrizzleTransaction } from "~/server/db";
 import { entityIdentity } from "~/server/db/schema";
-import { dateOnly } from "~/server/utils/date-only";
 
 import { unwrapDb } from "./database-helpers";
 
@@ -181,9 +181,9 @@ export async function describeUnresolvableCode(
     case "redirected":
       return resolved.canonicalDeletedAt === null
         ? `${notFound} — it was merged into ${resolved.canonicalShortcode}; use ${resolved.canonicalShortcode}.`
-        : `${notFound} — it was merged into ${resolved.canonicalShortcode}, which was deleted on ${dateOnly(resolved.canonicalDeletedAt)}.`;
+        : `${notFound} — it was merged into ${resolved.canonicalShortcode}, which was deleted on ${householdLocalDate(resolved.canonicalDeletedAt)}.`;
     case "deleted":
-      return `${notFound} — it was deleted on ${dateOnly(resolved.deletedAt)}.`;
+      return `${notFound} — it was deleted on ${householdLocalDate(resolved.deletedAt)}.`;
     case "live":
       return null;
   }

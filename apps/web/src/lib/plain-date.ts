@@ -1,14 +1,13 @@
 /**
- * Shared helpers for the app's "plain date" convention: a timezone-free
- * "YYYY-MM-DD" string (project `startDate`/`endDate`, task
- * `dueDate`/`dueEndDate`, expense `date` — see `plainDate` in
- * `@cubby/schemas/project`). These convert to/from a local-midnight `Date`
- * for display and for date-picker UIs; nothing here should ever touch UTC.
+ * Date-picker adapters between a "YYYY-MM-DD" plain date and a `Date` at local
+ * midnight in the runtime's zone — what react-day-picker and chrono-node
+ * expect. Browser code only: on a Worker the runtime zone is UTC, so
+ * `formatPlainDate(new Date())` there is a UTC day. Calendar arithmetic and
+ * the day an instant happened on live in `~/lib/household-date`.
  */
 
 /**
- * Parse a "YYYY-MM-DD" plain-date string (no time component — a task due
- * date, an expense date) into a local `Date` at midnight via its components,
+ * Parse a plain date into a local `Date` at midnight via its components,
  * rather than `new Date(isoString)` (which parses as UTC midnight and can
  * shift a day back for negative UTC offsets, e.g. US timezones).
  */
@@ -19,27 +18,12 @@ export function parsePlainDate(value: string): Date {
 
 /**
  * Format a local `Date` (e.g. from a date-picker's `onSelect`) back into a
- * "YYYY-MM-DD" plain-date string, using its LOCAL date parts — never
- * `toISOString()`, which normalizes to UTC and can shift the date by a day.
+ * plain date using its LOCAL date parts — never `toISOString()`, which
+ * normalizes to UTC and can shift the date by a day.
  */
 export function formatPlainDate(date: Date): string {
   const year = date.getFullYear();
   const month = String(date.getMonth() + 1).padStart(2, "0");
   const day = String(date.getDate()).padStart(2, "0");
   return `${year}-${month}-${day}`;
-}
-
-/**
- * Add whole days to a "YYYY-MM-DD" plain date. Calendar arithmetic in UTC, so
- * DST never moves the result. Throws `RangeError` on a malformed date rather
- * than returning a garbled string.
- */
-export function shiftPlainDate(value: string, days: number): string {
-  const [year, month, day] = value.split("-").map(Number);
-  if (year === undefined || month === undefined || day === undefined) {
-    throw new RangeError(`Invalid plain date: ${value}`);
-  }
-  return new Date(Date.UTC(year, month - 1, day + days))
-    .toISOString()
-    .slice(0, 10);
 }

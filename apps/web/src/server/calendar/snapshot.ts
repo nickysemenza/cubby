@@ -1,8 +1,7 @@
 import { sha256Hex } from "@cubby/shared/sha256";
-import { addDays } from "date-fns";
 import { uniq } from "es-toolkit";
 
-import { formatPlainDate } from "~/lib/plain-date";
+import { householdDaysAgo, householdDaysFromNow } from "~/lib/household-date";
 import type { Database } from "~/server/db";
 import { getCalendarRange } from "~/server/repo/calendar";
 
@@ -37,8 +36,8 @@ export async function buildCalendarSnapshot(
   options: { origin: string; now: Date; revision: number },
   getRange: typeof getCalendarRange = getCalendarRange,
 ): Promise<CalendarSnapshot> {
-  const startDate = formatPlainDate(addDays(options.now, -PAST_DAYS));
-  const endDateExclusive = formatPlainDate(addDays(options.now, FUTURE_DAYS));
+  const startDate = householdDaysAgo(PAST_DAYS, options.now);
+  const endDateExclusive = householdDaysFromNow(FUTURE_DAYS, options.now);
   // One read covers every published feed: the union of what "all" and
   // "garden" each publish, so a feed-specific render below never needs a
   // kind this range read didn't fetch.

@@ -1,5 +1,6 @@
 import type { ImageSightingOut } from "@cubby/schemas/image-sighting";
 
+import { householdLocalDate } from "~/lib/household-date";
 import { NoneValue } from "~/ui/primitives/none-value";
 
 import type { EntityDetailFieldRenderers } from "./index";
@@ -82,9 +83,7 @@ function renderSightings(sightings: readonly ImageSightingOut[] | undefined) {
           <span className="text-muted-foreground">
             {[
               SOURCE_TYPE_LABEL[sighting.sourceType],
-              (sighting.capturedAt ?? sighting.observedAt)
-                .toISOString()
-                .slice(0, 10),
+              householdLocalDate(sighting.capturedAt ?? sighting.observedAt),
               sighting.placeName,
             ]
               .filter(Boolean)

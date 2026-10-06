@@ -91,6 +91,63 @@ export const noAdHocNumberFormatRule = defineRule({
   },
 });
 
+/** A literal's value when it is the number or string `expected`. */
+function isLiteralValue(
+  node: ESTree.Node | undefined,
+  expected: string | number,
+): boolean {
+  return node?.type === "Literal" && node.value === expected;
+}
+
+/**
+ * `instant.toISOString().slice(0, 10)` / `.split("T")` — the UTC day, which
+ * Workers also return from local getters. A day an instant happened on is
+ * `householdLocalDate`; plain-date arithmetic is `shiftPlainDate`. On the
+ * server, `~/lib/plain-date` (local-midnight `Date` adapters for pickers) is
+ * a UTC day too.
+ */
+export const noAdHocCalendarDayRule = defineRule({
+  meta: {
+    type: "problem",
+    docs: { description: "Derive calendar days through lib/household-date." },
+    messages: {
+      isoDay: `toISOString() is a UTC day, the next household day from about 5pm Pacific. Use householdLocalDate(instant) or shiftPlainDate from ~/lib/household-date; for a deliberately UTC day, disable this line with the reason. ${CATALOG}`,
+      serverPicker: `~/lib/plain-date converts through the runtime zone, which is UTC on a Worker. Use ~/lib/household-date on the server. ${CATALOG}`,
+    },
+  },
+  createOnce(context) {
+    return {
+      CallExpression(node) {
+        const method = memberPropertyName(node.callee);
+        if (node.callee.type !== "MemberExpression") return;
+        const receiver = node.callee.object;
+        if (
+          receiver.type !== "CallExpression" ||
+          memberPropertyName(receiver.callee) !== "toISOString"
+        )
+          return;
+        const [first, second] = node.arguments;
+        const dayCut =
+          method === "split"
+            ? isLiteralValue(first, "T")
+            : (method === "slice" ||
+                method === "substring" ||
+                method === "substr") &&
+              isLiteralValue(first, 0) &&
+              isLiteralValue(second, 10);
+        if (dayCut) context.report({ node, messageId: "isoDay" });
+      },
+      ImportDeclaration(node) {
+        if (
+          node.source.value === "~/lib/plain-date" &&
+          context.filename.includes("/src/server/")
+        )
+          context.report({ node, messageId: "serverPicker" });
+      },
+    };
+  },
+});
+
 /** `pageSize: 100_000` — an unbounded read disguised as one page. */
 export const noUnboundedPageSizeRule = defineRule({
   meta: {

@@ -852,6 +852,54 @@ describe("Gmail order mail processing", () => {
     });
   });
 
+  it("bounds a charge's mail window by household days, not UTC days", async () => {
+    // A 2026-09-10 charge looks for mail on household days 09-03 through
+    // 09-17. 02:00Z on 09-18 is still the evening of 09-17 in the household.
+    const eveningAfterLastDay = "2026-09-18T02:00:00.000Z";
+    // 06:00Z on 09-03 is still the evening of 09-02, the day before the window.
+    const eveningBeforeFirstDay = "2026-09-03T06:00:00.000Z";
+    const seed = await seedForgeWear();
+
+    // Mail first: discovery matches the new hunt through order events.
+    await receiveMail(
+      seed,
+      "msg-mail-first-late",
+      eveningAfterLastDay,
+      placed("FW-SYN-5001", 41.5, eveningAfterLastDay),
+    );
+    await receiveMail(
+      seed,
+      "msg-mail-first-early",
+      eveningBeforeFirstDay,
+      placed("FW-SYN-5002", 17.25, eveningBeforeFirstDay),
+    );
+    const mailFirst = await statementRow(seed, 41.5, "2026-09-10");
+    const earlyCharge = await statementRow(seed, 17.25, "2026-09-10");
+    await expect(discoverImportHunts(ctx.db)).resolves.toBe(2);
+    expect(await huntFor(mailFirst.id)).toMatchObject({
+      state: "pending_browser",
+      matchedOrderIds: ["FW-SYN-5001"],
+    });
+    expect(await huntFor(earlyCharge.id)).toMatchObject({
+      state: "pending_mail",
+      matchedOrderIds: [],
+    });
+
+    // Charge first: processing the mail matches the open hunt.
+    const chargeFirst = await statementRow(seed, 23.75, "2026-09-10");
+    await expect(discoverImportHunts(ctx.db)).resolves.toBe(1);
+    await receiveMail(
+      seed,
+      "msg-charge-first",
+      eveningAfterLastDay,
+      placed("FW-SYN-5003", 23.75, eveningAfterLastDay),
+    );
+    expect(await huntFor(chargeFirst.id)).toMatchObject({
+      state: "pending_browser",
+      matchedOrderIds: ["FW-SYN-5003"],
+    });
+  });
+
   it("never matches earlier refund mail to a new charge hunt", async () => {
     const seed = await seedForgeWear();
     await receiveMail(

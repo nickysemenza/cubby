@@ -15,8 +15,8 @@ import {
   HOUSEHOLD_TIMEZONE,
   householdDateTime,
   householdLocalDate,
+  shiftPlainDate,
 } from "~/lib/household-date";
-import { shiftPlainDate } from "~/lib/plain-date";
 
 import type {
   CalDavCollection,
@@ -33,7 +33,9 @@ function invalid(message: string): never {
 function validDate(date: string): boolean {
   const value = new Date(`${date}T00:00:00Z`);
   return (
-    !Number.isNaN(value.getTime()) && value.toISOString().slice(0, 10) === date
+    !Number.isNaN(value.getTime()) &&
+    // oxlint-disable-next-line cubby/no-ad-hoc-calendar-day -- round-trips a UTC-midnight plain date
+    value.toISOString().slice(0, 10) === date
   );
 }
 function plainDate(time: ICAL.Time): string {

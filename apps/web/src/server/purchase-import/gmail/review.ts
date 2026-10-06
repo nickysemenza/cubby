@@ -14,6 +14,7 @@ import {
   sql,
 } from "drizzle-orm";
 
+import { householdDaysAgo, householdDaysFromNow } from "~/lib/household-date";
 import type { Database } from "~/server/db";
 import {
   ledgerParty,
@@ -175,12 +176,8 @@ export async function listVendorOrderMail(
   const lastMailTime = Math.max(
     ...mails.map((mail) => mail.receivedAt.getTime()),
   );
-  const candidateDateFrom = new Date(firstMailTime - 45 * 86_400_000)
-    .toISOString()
-    .slice(0, 10);
-  const candidateDateTo = new Date(lastMailTime + 45 * 86_400_000)
-    .toISOString()
-    .slice(0, 10);
+  const candidateDateFrom = householdDaysAgo(45, new Date(firstMailTime));
+  const candidateDateTo = householdDaysFromNow(45, new Date(lastMailTime));
   const candidates = await database
     .select({
       id: purchase.id,

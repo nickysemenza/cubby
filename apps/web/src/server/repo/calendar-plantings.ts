@@ -8,7 +8,7 @@ import type { ProjectId } from "@cubby/schemas/identifiers";
 import type { AnyColumn, SQL } from "drizzle-orm";
 import { and, eq, gte, isNotNull, isNull, lte, or, sql } from "drizzle-orm";
 
-import { shiftPlainDate } from "~/lib/plain-date";
+import { shiftPlainDate } from "~/lib/household-date";
 import type { Database } from "~/server/db";
 import { location, plant, planting } from "~/server/db/schema";
 import { plantingDisplayName } from "~/server/repo/garden";

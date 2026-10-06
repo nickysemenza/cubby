@@ -19,6 +19,8 @@ import {
   or,
 } from "drizzle-orm";
 
+import { formatInstant } from "~/lib/date-format";
+import { householdLocalDate } from "~/lib/household-date";
 import { classifyOrderMail } from "~/server/agents/purchase-import/extract";
 import { AiGatewayRequestError } from "~/server/ai/gateway-error";
 import type { Database } from "~/server/db";
@@ -432,7 +434,7 @@ export async function processOrderMails(
         throw new Error("Classified order mail event was not persisted");
 
       if (event.orderId) {
-        const date = mail.receivedAt.toISOString().slice(0, 10);
+        const date = householdLocalDate(mail.receivedAt);
         const candidates = await database
           .select({
             id: importHunt.id,
@@ -686,7 +688,7 @@ export async function processOrderMails(
                 entityKind: "purchase",
                 entityId: target.id,
                 kind: "return_window",
-                summary: `${costlyLines.length} line${costlyLines.length === 1 ? "" : "s"} worth at least $50 can be returned until ${expiresAt.toLocaleDateString("en-US", { timeZone: "UTC" })}.`,
+                summary: `${costlyLines.length} line${costlyLines.length === 1 ? "" : "s"} worth at least $50 can be returned until ${formatInstant(expiresAt, "dateNumeric")}.`,
                 evidenceFingerprint: await sha256Hex(
                   JSON.stringify({
                     sourceKey,

@@ -27,6 +27,7 @@ import {
 
 import { resolveVendorMailSearchTarget } from "./targets";
 import { vendorSearchTerms } from "./vendor-identity";
+import { defaultVendorMailSearchAfter } from "./vendor-search";
 
 /*
  * A Gmail search is one `mail_search` Run that the `VendorMailSearchWorkflow`
@@ -153,12 +154,7 @@ export async function startVendorMailSearchJob(
     .orderBy(desc(runTable.createdAt))
     .limit(1);
   if (active) return displayJob(readJob(active));
-  const after =
-    input.after ??
-    new Date(Date.now() - 365 * 86_400_000)
-      .toISOString()
-      .slice(0, 10)
-      .replaceAll("-", "/");
+  const after = input.after ?? defaultVendorMailSearchAfter();
   const runId = await ensureRun(
     db,
     { ...actor, runId: null },

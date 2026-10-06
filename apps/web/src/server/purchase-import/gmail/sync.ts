@@ -1,4 +1,4 @@
-import { dateOnly } from "~/server/utils/date-only";
+import { householdDaysAgo } from "~/lib/household-date";
 
 import { normalizeHistoryPage } from "./normalize";
 import {
@@ -8,8 +8,6 @@ import {
   type GmailOrderMailEvent,
   type GmailProvider,
 } from "./types";
-
-const DAY_MS = 24 * 60 * 60 * 1_000;
 
 const historyNumber = (value: string): bigint | null => {
   try {
@@ -32,9 +30,6 @@ export const maxHistoryId = (
     return right > left ? candidate : current;
   return candidate > current ? candidate : current;
 };
-
-const subtractDays = (value: Date, days: number): Date =>
-  new Date(value.getTime() - days * DAY_MS);
 
 /**
  * The plan is deliberately query-shaped, not Gmail-message-shaped. The
@@ -61,15 +56,16 @@ export const buildBootstrapPlan = ({
         .filter((sender) => sender.length > 0),
     ),
   ].sort();
+  // Gmail reads a bare `after:` date as Pacific midnight: a household day.
   const knownStart = earliestUnresolvedHuntAt
-    ? subtractDays(earliestUnresolvedHuntAt, 7)
-    : subtractDays(now, lookbackDays);
-  const unknownStart = subtractDays(now, lookbackDays);
+    ? householdDaysAgo(7, earliestUnresolvedHuntAt)
+    : householdDaysAgo(lookbackDays, now);
+  const unknownStart = householdDaysAgo(lookbackDays, now);
   return {
     knownSenderQueries: uniqueSenders.map(
-      (sender) => `from:${sender} after:${dateOnly(knownStart)}`,
+      (sender) => `from:${sender} after:${knownStart}`,
     ),
-    unknownOrderQuery: `after:${dateOnly(unknownStart)}`,
+    unknownOrderQuery: `after:${unknownStart}`,
   };
 };
 

@@ -23,7 +23,7 @@ import { uniq } from "es-toolkit";
 import { z } from "zod";
 
 import type { Database } from "~/server/db";
-import { getDb } from "~/server/repo/database-helpers";
+import { getDb, householdDaySqlText } from "~/server/repo/database-helpers";
 import { resolveEntityDisplayImages } from "~/server/repo/entity-display-image";
 import { expenseProjectAllocationSql } from "~/server/repo/expense-project-allocation";
 import { compileTraversal } from "~/server/repo/relatedness/traversal";
@@ -145,7 +145,7 @@ const SQL_RELATED_VIEWS = {
   "vendor.projects": named(),
   "vendor.transactions": dated(
     `COALESCE(NULLIF(t."merchant", ''), NULLIF(t."rawDescription", ''), t."shortcode")`,
-    `COALESCE(t."postedDate", t."transactionDate", t."createdAt"::date)`,
+    `COALESCE(t."postedDate", t."transactionDate", ${householdDaySqlText('t."createdAt"')})`,
   ),
   "purchase.expenses": dated(
     `t."name"`,
@@ -153,7 +153,7 @@ const SQL_RELATED_VIEWS = {
   ),
   "purchase.transactions": dated(
     `COALESCE(NULLIF(t."merchant", ''), NULLIF(t."rawDescription", ''), t."shortcode")`,
-    `COALESCE(t."postedDate", t."transactionDate", t."createdAt"::date)`,
+    `COALESCE(t."postedDate", t."transactionDate", ${householdDaySqlText('t."createdAt"')})`,
   ),
   "purchase.products": {
     ...named(),
@@ -161,11 +161,11 @@ const SQL_RELATED_VIEWS = {
   "purchase.projects": named(),
   "expense.transactions": dated(
     `COALESCE(NULLIF(t."merchant", ''), NULLIF(t."rawDescription", ''), t."shortcode")`,
-    `COALESCE(t."postedDate", t."transactionDate", t."createdAt"::date)`,
+    `COALESCE(t."postedDate", t."transactionDate", ${householdDaySqlText('t."createdAt"')})`,
   ),
   "financialAccount.transactions": dated(
     `COALESCE(NULLIF(t."merchant", ''), NULLIF(t."rawDescription", ''), t."shortcode")`,
-    `COALESCE(t."postedDate", t."transactionDate", t."createdAt"::date)`,
+    `COALESCE(t."postedDate", t."transactionDate", ${householdDaySqlText('t."createdAt"')})`,
   ),
   "financialAccount.purchases": dated(
     `COALESCE(NULLIF(t."orderId", ''), t."shortcode")`,

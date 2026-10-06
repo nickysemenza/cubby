@@ -1,3 +1,5 @@
+import { householdDaysAgo } from "~/lib/household-date";
+
 import type { GmailProvider } from "./types";
 import { vendorSearchTerms, type VendorMailIdentity } from "./vendor-identity";
 
@@ -32,3 +34,7 @@ export async function listVendorMailPage(
     nextPageToken: page.nextPageToken ?? null,
   };
 }
+
+/** The default `after:` bound for a vendor search: a year of household days. */
+export const defaultVendorMailSearchAfter = (now = new Date()): string =>
+  householdDaysAgo(365, now).replaceAll("-", "/");

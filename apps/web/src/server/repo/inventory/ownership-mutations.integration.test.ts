@@ -9,7 +9,7 @@ import {
 import { and, eq } from "drizzle-orm";
 import { buildEntity } from "tooling/factories/build";
 import { raceUniqueInsert, TEST_ACTOR, withTestDb } from "tooling/test-setup";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 
 import { inventoryEntry } from "~/server/db/schema";
 import { getDb, notDeleted } from "~/server/repo/database-helpers";
@@ -82,6 +82,7 @@ describe("inventory ownership mutations", () => {
 
   const addPurchase = async (args: {
     label: string;
+    date?: string;
     links?: ProductId[];
     lines: Array<{
       name: string;
@@ -98,7 +99,7 @@ describe("inventory ownership mutations", () => {
     );
     const purchase = await insertWithShortcode(ctx.db, "purchase", {
       vendorId,
-      date: "2026-09-01",
+      date: args.date ?? "2026-09-01",
       displayLabel: args.label,
     });
     if (args.links?.length) {
@@ -498,6 +499,40 @@ describe("inventory ownership mutations", () => {
       effectiveOwner: null,
       evidence: null,
     });
+  });
+
+  it("does not treat a purchase dated household-tomorrow as acquired on a UTC-tomorrow evening", async () => {
+    // 18:30 PDT on Aug 31 is already Sep 1 in UTC; the Workers runtime is UTC.
+    vi.useFakeTimers({
+      toFake: ["Date"],
+      now: new Date("2026-09-01T01:30:00Z"),
+    });
+    try {
+      const owner = await createLedgerParty(
+        ctx.db,
+        { name: "Tomorrow beneficiary", kind: "member", notes: null },
+        TEST_ACTOR,
+      );
+      const subject = await createSubject("Household tomorrow");
+      await addPurchase({
+        label: "tomorrow order",
+        date: "2026-09-01",
+        links: [subject.product.entityId],
+        lines: [
+          {
+            name: "preorder",
+            ownerId: owner.output.id,
+            productId: subject.product.id,
+          },
+        ],
+      });
+
+      expect(
+        await loadEffectiveInventoryOwnershipById(ctx.db, subject.entryId),
+      ).toMatchObject({ source: "unresolved", effectiveOwner: null });
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it("keeps a confirmed Expense beneficiary after its inventory entry is removed", async () => {

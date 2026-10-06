@@ -97,6 +97,17 @@ also needs a `SOURCE_FACTORIES` fixture in
 `detectors-integrity.integration.test.ts`, which `pnpm check` cannot see, on
 top of the exhaustive `Record<Entity, …>` registries.
 
+Calendar days are household days (`America/Los_Angeles`), and Workers run in
+UTC. A plain date (`YYYY-MM-DD`: due dates, expense and purchase dates) is
+shifted and compared only with `shiftPlainDate`/`plainDateDaysBetween`; the day
+an instant happened on is `householdLocalDate(instant)` (`~/lib/household-date`).
+Timestamp columns are `timestamp without time zone` holding UTC wall time, so
+SQL `::date` and `date_trunc('day', …)` on them are UTC days: use
+`householdDaySql` and bound day filters with `householdDayRangeConditions`
+(`server/repo/database-helpers`). Deliberate UTC days — retained-settlement
+payment keys that must match `chargedAt::date`, operational bucket keys — carry
+a disable comment with the reason.
+
 Inside the entity kernel's write transaction every DB touch must go through the
 transaction-bound context: a service still bound to the request pool that
 updates the row the transaction holds deadlocks silently, and only E2E on

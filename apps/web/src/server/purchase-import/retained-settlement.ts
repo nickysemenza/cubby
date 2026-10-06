@@ -85,7 +85,10 @@ export type RetainedSettlementOutcome =
 // Sources record the same payment at different precision (a full timestamp
 // and card on the page, a date only in an export), so they agree on amount
 // and charge day.
+// The UTC day on purpose: date-only sources arrive as UTC-midnight
+// timestamps, and the deferred-settlement SQL compares `chargedAt::date`.
 const paymentKey = (payment: RetainedPayment) =>
+  // oxlint-disable-next-line cubby/no-ad-hoc-calendar-day -- same UTC day as the SQL side
   `${cents(payment.amount)}|${payment.chargedAt?.toISOString().slice(0, 10) ?? ""}`;
 
 /**
@@ -145,6 +148,7 @@ async function settleableCharges(
     payment.chargedAt ? [payment.chargedAt.getTime()] : [],
   );
   if (dated.length === 0) return [];
+  // oxlint-disable-next-line cubby/no-ad-hoc-calendar-day -- matches paymentKey's UTC day
   const day = (ms: number) => new Date(ms).toISOString().slice(0, 10);
   const rows = await tx
     .select({

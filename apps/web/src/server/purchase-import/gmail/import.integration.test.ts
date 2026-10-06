@@ -786,6 +786,33 @@ describe("saved confirmation imports", () => {
       );
     };
 
+    it("dates each selected order by the household day its mail arrived", async () => {
+      const { first, selection } = await seedPair();
+      // 03:00Z on Sep 1 is the evening of Aug 31 in the household.
+      await getDb(ctx.db)
+        .update(orderMail)
+        .set({ receivedAt: new Date("2026-09-01T03:00:00Z") })
+        .where(eq(orderMail.id, first.mail.id));
+      const started = await startSelectedOrderMailImport(
+        ctx.db,
+        selection,
+        ctx.actor,
+        { send: async () => {} },
+      );
+      const [run] = await getDb(ctx.db)
+        .select()
+        .from(runTable)
+        .where(eq(runTable.shortcode, started.runId));
+      if (!run) throw new Error("Missing selected run");
+      const rows = await getDb(ctx.db)
+        .select()
+        .from(runOrderCandidate)
+        .where(eq(runOrderCandidate.runId, run.id));
+      expect(
+        Object.fromEntries(rows.map((row) => [row.orderId, row.orderedAt])),
+      ).toEqual({ "EXAMPLE-123": "2026-08-31", "EXAMPLE-456": "2026-09-02" });
+    });
+
     it("records each selected order's terminal outcome on one run and carries the deferred one on restart", async () => {
       const { first, second, orders, selection } = await seedPair();
       const sent: PurchaseAgentEvent[] = [];

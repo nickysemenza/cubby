@@ -9,6 +9,7 @@ import type {
   ScheduleSegment,
   ScheduleWindow,
 } from "~/features/schedule/schedule-grid";
+import { shiftPlainDate } from "~/lib/household-date";
 
 export const yearWindow = (year: number): ScheduleWindow => ({
   startDate: `${year}-01-01`,
@@ -21,12 +22,6 @@ const isoDate = (year: number, month: number, day: number) =>
 
 const lastDay = (year: number, month: number) =>
   new Date(Date.UTC(year, month, 0)).getUTCDate();
-
-const nextDay = (date: string) => {
-  const parsed = new Date(`${date}T00:00:00Z`);
-  parsed.setUTCDate(parsed.getUTCDate() + 1);
-  return parsed.toISOString().slice(0, 10);
-};
 
 const methodLabels = {
   sow: "Sow",
@@ -59,7 +54,7 @@ export function guideWindowSegments(
   const runs: Array<{ start: string; end: string }> = [];
   for (const span of spans) {
     const previous = runs.at(-1);
-    if (previous && nextDay(previous.end) === span.start) {
+    if (previous && shiftPlainDate(previous.end, 1) === span.start) {
       previous.end = span.end;
     } else {
       runs.push({ ...span });

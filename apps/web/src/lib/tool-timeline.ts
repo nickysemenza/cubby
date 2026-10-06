@@ -24,7 +24,7 @@
  */
 import type { ProjectDateWindow } from "@cubby/schemas/project";
 
-import { shiftPlainDate } from "~/lib/plain-date";
+import { shiftPlainDate } from "~/lib/household-date";
 
 /**
  * Slack allowed on a boundary the window merely *inferred*. Wide enough to

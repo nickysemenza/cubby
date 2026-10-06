@@ -3,6 +3,23 @@ import { TZDate } from "@date-fns/tz";
 
 export { HOUSEHOLD_TIMEZONE };
 
+/*
+ * The one home for calendar days. Two kinds of value meet here:
+ *
+ * - A plain date is a timezone-free "YYYY-MM-DD" (a due date, an expense
+ *   date). Shift and compare it with `shiftPlainDate` and
+ *   `plainDateDaysBetween`; never convert it through an instant.
+ * - An instant is a `Date` (createdAt, a mail's receivedAt). The day it
+ *   happened on is `householdLocalDate(instant)`; the instant a household
+ *   day starts is `householdDateTime(day)`.
+ *
+ * Workers run in UTC, so `toISOString().slice(0, 10)` and server-side local
+ * getters both yield UTC days — wrong from about 5pm Pacific. The
+ * `cubby/no-ad-hoc-calendar-day` lint rule flags those shapes. Timestamp
+ * columns are `timestamp without time zone` holding UTC wall time, so SQL
+ * `::date` and `date_trunc('day', …)` on them are UTC days too.
+ */
+
 /**
  * The instant at which `minutes` past midnight on `plainDate` occurs in the
  * household's timezone — e.g. `householdDateTime("2026-08-15", 19 * 60)` is
@@ -55,7 +72,7 @@ export function householdDaysAgo(
   days: number,
   from: Date = new Date(),
 ): string {
-  return shiftHouseholdCalendarDate(from, -days);
+  return shiftPlainDate(householdLocalDate(from), -days);
 }
 
 /** Household-local calendar date `days` from now, for "due within" checks. */
@@ -63,18 +80,21 @@ export function householdDaysFromNow(
   days: number,
   from: Date = new Date(),
 ): string {
-  return shiftHouseholdCalendarDate(from, days);
+  return shiftPlainDate(householdLocalDate(from), days);
 }
 
 /**
- * Shift the household's calendar date, not an elapsed 24-hour duration.
- * Spring-forward days are 23 hours and fall-back days are 25; subtracting
- * milliseconds can therefore skip or repeat a local date near midnight.
+ * Add whole calendar days to a plain date. Shift the household's calendar
+ * date, never an instant by 24-hour multiples: spring-forward days are 23
+ * hours and fall-back days 25, so elapsed-time arithmetic can skip or repeat a
+ * local date near midnight. `Date.UTC` here is only a day-number function on
+ * a value with no time component. Throws `RangeError` on a malformed date
+ * rather than returning a garbled string.
  */
-function shiftHouseholdCalendarDate(from: Date, days: number): string {
-  const [year, month, day] = householdLocalDate(from).split("-").map(Number);
-  if (year == null || month == null || day == null) {
-    throw new Error("Could not resolve household calendar date");
+export function shiftPlainDate(value: string, days: number): string {
+  const [year, month, day] = value.split("-").map(Number);
+  if (year === undefined || month === undefined || day === undefined) {
+    throw new RangeError(`Invalid plain date: ${value}`);
   }
   return new Date(Date.UTC(year, month - 1, day + days))
     .toISOString()
@@ -88,8 +108,6 @@ function shiftHouseholdCalendarDate(from: Date, days: number): string {
  * Safe to do in UTC despite the warnings above: both operands are already
  * calendar dates with no time component, so `Date.UTC` is being used purely as
  * a day-number function — there is no instant to misplace across a timezone.
- * The DST hazard `shiftHouseholdCalendarDate` guards against applies to
- * shifting a date, not to counting the days between two of them.
  */
 export function plainDateDaysBetween(from: string, to: string): number {
   const toUtcDay = (date: string): number => {
