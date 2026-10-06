@@ -40,7 +40,7 @@ struct DiagnosticStoredPhotoPreview: View {
             detail = nil
             error = nil
             do {
-                let result = try await appModel.client.imageDetail(.init(id: id.rawValue))
+                let result = try await appModel.client.imageDetail(id: id.rawValue)
                 try Task.checkCancellation()
                 detail = result
                 if result.imageURL == nil { error = "No image URL is available." }

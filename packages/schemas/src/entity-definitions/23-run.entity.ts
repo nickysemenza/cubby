@@ -28,21 +28,7 @@ const readOnly = <T extends z.ZodTypeAny>(read: T) => ({
 export default defineEntity({
   key: "run",
   names: { singular: "Run", plural: "Runs" },
-  route: {
-    listColumns: {
-      module: "~/entity/list-columns/run",
-      export: "runListOverride",
-    },
-    basePath: "runs",
-    // No create/update contract, so outside the kernel detail roster: the
-    // generic page reads the run through its own query.
-    detail: {
-      query: {
-        module: "~/entity/run-queries",
-        export: "runDetailQuery",
-      },
-    },
-  },
+  route: { basePath: "runs" },
   table: "Run",
   children: runChildren,
   identifiers: { brand: "RunId", shortcode: "RUN-" },
@@ -118,6 +104,8 @@ export default defineEntity({
       ],
     },
     list: {
+      // Display images borrow from the vendor; they load as list media.
+      read: { media: ["displayImages"] },
       savedViews: [
         {
           id: "imports",

@@ -701,7 +701,7 @@ export function GenericEntityDetail<E extends GenericDetailEntity>({
             <EntityEditDialog<EditableEntity>
               open
               onOpenChange={setEditing}
-              request={editRequestFor(entity, record)}
+              request={editRequestFor<E>(entity, record)}
             />
           )
         ) : null}

@@ -808,19 +808,16 @@ const buildMetadataSchemas = () => {
       /** Specialist columns are imported only by this route component. */
       listColumns: sourceRefMetadataSchema.optional(),
       /**
-       * Which detail page renders: `true` the generic page over the kernel
-       * detail read (the default inside the create+update roster), `{ query }`
-       * the generic page over the entity's own query (required outside it),
-       * or `null` a hand-written detail route.
+       * Where a read-only entity's generated index gets its rows: the kernel
+       * list (the default), or `custom` — its `listColumns` module supplies
+       * them. An entity the browser creates and edits always reads the kernel.
        */
-      detail: z
-        .union([
-          z.literal(true),
-          z.object({ query: sourceRefMetadataSchema }).strict(),
-        ])
-        .nullable()
-        .optional()
-        .default(true),
+      listRows: z.enum(["kernel", "custom"]).optional().default("kernel"),
+      /**
+       * Which detail page renders: `true` the generic page over the kernel
+       * `get` (the default), or `null` a hand-written detail route.
+       */
+      detail: z.literal(true).nullable().optional().default(true),
     })
     .strict()
     .transform(
@@ -830,6 +827,7 @@ const buildMetadataSchemas = () => {
         createOverride,
         list,
         listColumns,
+        listRows,
         detail,
       }) => ({
         basePath,
@@ -837,6 +835,7 @@ const buildMetadataSchemas = () => {
         create: createOverride,
         list,
         listColumns,
+        listRows,
         detail,
       }),
     );
@@ -1680,6 +1679,16 @@ const buildMetadataSchemas = () => {
   const imagePolicyMetadataSchema = z
     .object({
       storage: imageStorageMetadataSchema,
+      /**
+       * Related records whose images stand in when this entity's own storage
+       * holds none. Only an entity with image storage declares these; it has
+       * no derived default to replace.
+       */
+      displaySources: z.array(imageDisplaySourceMetadataSchema).optional(),
+      /**
+       * Replaces the ranking derived for an entity without image storage
+       * (its singular outgoing relations to image-bearing entities).
+       */
       displaySourceOverrides: z
         .array(imageDisplaySourceMetadataSchema)
         .optional(),
@@ -1687,12 +1696,39 @@ const buildMetadataSchemas = () => {
       routing: imageRoutingMetadataSchema.nullable().optional().default(null),
     })
     .strict()
-    .transform(({ storage, displaySourceOverrides, ingress, routing }) => ({
-      storage,
-      displaySources: displaySourceOverrides ?? [],
-      ingress,
-      routing,
-    }));
+    .superRefine((policy, context) => {
+      if (policy.storage === false && policy.displaySources !== undefined)
+        context.addIssue({
+          code: "custom",
+          path: ["displaySources"],
+          message:
+            "replaces a derived ranking without image storage; declare displaySourceOverrides",
+        });
+      if (
+        policy.storage !== false &&
+        policy.displaySourceOverrides !== undefined
+      )
+        context.addIssue({
+          code: "custom",
+          path: ["displaySourceOverrides"],
+          message:
+            "has no derived default with image storage; declare displaySources",
+        });
+    })
+    .transform(
+      ({
+        storage,
+        displaySources,
+        displaySourceOverrides,
+        ingress,
+        routing,
+      }) => ({
+        storage,
+        displaySources: displaySourceOverrides ?? displaySources ?? [],
+        ingress,
+        routing,
+      }),
+    );
 
   const entityDataQualityCheckMetadataSchema = z
     .object({

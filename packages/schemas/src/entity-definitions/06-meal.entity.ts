@@ -864,7 +864,7 @@ export default defineEntity({
   capabilities: {
     images: {
       storage: "gallery",
-      displaySourceOverrides: [
+      displaySources: [
         {
           relationPath: ["recipes"],
           priority: 1,

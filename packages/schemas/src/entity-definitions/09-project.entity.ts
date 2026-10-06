@@ -1298,7 +1298,7 @@ export default defineEntity({
   capabilities: {
     images: {
       storage: "gallery",
-      displaySourceOverrides: [
+      displaySources: [
         {
           relationPath: ["tasks"],
           priority: 1,

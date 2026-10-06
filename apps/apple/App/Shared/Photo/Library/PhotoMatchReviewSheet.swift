@@ -268,7 +268,7 @@ struct MatchCandidateView: View {
         }
         .task(id: candidate.id) {
             guard !candidate.id.rawValue.hasPrefix("draft:") else { return }
-            do { detail = try await appModel.client.imageDetail(.init(id: candidate.id.rawValue)) } catch {
+            do { detail = try await appModel.client.imageDetail(id: candidate.id.rawValue) } catch {
                 self.error = error.localizedDescription;
                 Diagnostics.report(error, context: "photos.matchDetail")
             }

@@ -1030,7 +1030,7 @@ export default defineEntity({
     timeline: "default",
     images: {
       storage: "gallery",
-      displaySourceOverrides: [
+      displaySources: [
         {
           relationPath: ["subject"],
           priority: 1,

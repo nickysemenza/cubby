@@ -1,4 +1,3 @@
-import type { ActivityRun } from "@cubby/schemas/activity";
 import { dataQuality } from "@cubby/schemas/data-quality";
 import type { DataQuality } from "@cubby/schemas/data-quality";
 import type { Entity } from "@cubby/schemas/entity";
@@ -48,7 +47,6 @@ import {
  */
 type ClientListRows = {
   cookbook: CookbookSummary;
-  run: ActivityRun;
   "usda-food": FoodSummaryWithLinkedProducts;
   // `dataQuality` is optional on `ImageWithEntity` at the schema level (it's
   // a postprocessed field `imageWithRelationsToAPI`'s callers merge in, like
@@ -288,8 +286,8 @@ export const listRendererCoverage = {
     ),
   },
   run: {
-    "data-quality": implemented<ClientListRenderer<ClientListRows["run"]>>(
-      (helper) => dataQualityRenderer(helper, false),
+    "data-quality": implemented<ListRenderer<"run">>((helper) =>
+      dataQualityRenderer(helper, false),
     ),
   },
   "usda-food": {

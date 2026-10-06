@@ -222,7 +222,6 @@ export const imageHandlers = implementOperationDomain(imageContract, {
   recordSightings: (context, input) =>
     recordImageSightings(context.db, input.items, context.actorContext),
   list: (context, input) => listImages(context, input),
-  detail: (context, input) => getImage(context, input.id, "null"),
   analysis: (context, input) => readImageAnalysis(context, input.id),
   recordAnalysis: (context, input) =>
     recordImageAnalysis(context, input.id, input.analysis),

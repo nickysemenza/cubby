@@ -342,9 +342,9 @@ describe("HTTP boundary", () => {
     },
   );
   it("resolves registered operation names before resource identifiers", async () => {
-    expect((await request("image/detail?id=IMG-ABCD")).status).toBe(200);
+    expect((await request("image/analysis?id=IMG-ABCD")).status).toBe(200);
     expect(ports.dispatch).toHaveBeenCalledWith(
-      expect.objectContaining({ operation: "image.detail" }),
+      expect.objectContaining({ operation: "image.analysis" }),
     );
   });
   it("returns 404 for invalid identifiers and 405 with supported methods", async () => {

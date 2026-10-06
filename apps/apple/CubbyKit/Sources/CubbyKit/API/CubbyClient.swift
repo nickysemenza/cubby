@@ -241,17 +241,20 @@ public actor CubbyClient {
         try await perform { try await descriptor.delete(id: id, client: api) }
     }
 
+    /// One image with its owning records through the kernel `get` every entity shares. The
+    /// detail read is a superset of the photo views' `ImageWithEntity`, which it projects to.
+    public func imageDetail(id: String) async throws -> ImageWithEntity {
+        try await perform {
+            try JSONValue(encoding: try await api.resources_image_get(path: .init(id: id)).ok.body.json)
+                .decoded()
+        }
+    }
+
     /// One row by id, or `nil` when the server does not have it.
     public func row(_ descriptor: EntityDescriptor, id: String) async throws -> EntityRow? {
         do {
             let raw: JSONValue
             switch descriptor.key.nativeReadKind {
-            case .cookbook:
-                raw = try cookbookJSON(
-                    try await api.cookbook_detail(query: .init(shortcode: id)).ok.body.json)
-            case .image:
-                raw = try imageJSON(
-                    try await api.image_detail(query: .init(id: id)).ok.body.json)
             case .usdaFood:
                 guard let fdcID = Int(id) else {
                     throw EntityFilterError.invalidValue(
@@ -259,7 +262,9 @@ public actor CubbyClient {
                 }
                 raw = try usdaFoodJSON(
                     try await api.usdaFood_detail(query: .init(id: fdcID)).ok.body.json)
-            case .resource:
+            // Cookbook and image list through their own reads but share the
+            // kernel `get` every other entity uses.
+            case .resource, .cookbook, .image:
                 raw = try await descriptor.getRow(client: api, id: id)
             case .unavailable:
                 throw EntityOperationError.unsupported(descriptor.key, .get)

@@ -115,17 +115,11 @@ const renderNewRoute = (entity: RoutedEntity): string => {
   );
 };
 
-const renderDetailRoute = (
-  entity: RoutedEntity,
-  detail: NonNullable<RoutedEntity["route"]["detail"]>,
-): string => {
+const renderDetailRoute = (entity: RoutedEntity): string => {
   const { basePath, detailParam } = browserRoutes(entity);
   const name = pascalCase(basePath);
-  const queryRef = detail === true ? undefined : detail.query;
   const query = (shortcode: string) =>
-    queryRef === undefined
-      ? `entityDetailFor(${JSON.stringify(entity.key)}).queryOptions(${shortcode})`
-      : `${queryRef.export}(${shortcode})`;
+    `entityDetailFor(${JSON.stringify(entity.key)}).queryOptions(${shortcode})`;
   const imports = [
     'import { createFileRoute } from "@tanstack/react-router";',
     "",
@@ -134,9 +128,7 @@ const renderDetailRoute = (
     'import { detailPage, notFoundPage } from "~/entity/routing/detail-page";',
     'import { RouteErrorComponent } from "~/ui/route-error";',
     'import { DetailPagePending } from "~/ui/route-pending";',
-    queryRef === undefined
-      ? 'import { entityDetailFor } from "~/entity/entity-detail";'
-      : importLine(queryRef),
+    'import { entityDetailFor } from "~/entity/entity-detail";',
     'import { shortcodeHead } from "~/lib/page-title";',
   ];
   return (
@@ -200,7 +192,7 @@ export const renderBrowserRouteArtifacts = (
           : [
               {
                 relativePath: `${directory}/${basePath}.$${detailParam}.tsx`,
-                source: renderDetailRoute(entity, entity.route.detail),
+                source: renderDetailRoute(entity),
               },
             ]),
         ...(entity.route.create === "dialog"

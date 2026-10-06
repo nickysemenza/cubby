@@ -93,7 +93,7 @@ describe("catalog-driven invalidation", () => {
 
   it("keeps a query with an explicit empty tag list out of every fan-out", async () => {
     const { wrapper, cacheQuery } = mountedClient();
-    const detail = cacheQuery("detail", run.detail);
+    const detail = cacheQuery("detail", run.history);
     const untagged = cacheQuery("untagged", run.merchantRules);
 
     await runMutation(wrapper, run.control, {});

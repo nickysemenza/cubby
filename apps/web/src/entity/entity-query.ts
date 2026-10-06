@@ -2,33 +2,30 @@ import type { Entity } from "@cubby/schemas/entity";
 import type { QueryClient } from "@tanstack/react-query";
 
 import { entityDetailFor } from "~/entity/entity-detail";
-import {
-  cookbook,
-  image,
-  usdaFood,
-} from "~/integrations/tanstack-query/generated/catalog.gen";
+import { usdaFood } from "~/integrations/tanstack-query/generated/catalog.gen";
 import type { CubbyOperationMeta } from "~/integrations/tanstack-query/operation-meta";
 
-import { isGeneratedBrowserCrudEntity } from "./entity-contracts";
+import {
+  type DetailEntity,
+  detailEntities,
+} from "./generated/entity-details.gen";
+
+const isDetailEntity = (entity: Entity): entity is DetailEntity =>
+  detailEntities.some((candidate) => candidate === entity);
 
 export const fdcIdFromParam = (id: string): number => Number.parseInt(id, 10);
 export const usdaRouteId = (fdcId: number): string => String(fdcId);
 
 /**
  * Map an entity + route id to its detail query options — the single source for
- * "how do I fetch entity X by id", owning the Start entity-detail path, USDA
- * route-id coercion and the explicit Image/Cookbook projections.
+ * "how do I fetch entity X by id": the kernel detail read for every kernel
+ * entity, and USDA's external catalog by its numeric route id.
  */
 export function entityPreviewQueryOptions(entity: Entity, id: string) {
-  if (entity === "image") return image.detail.queryOptions({ id });
   if (entity === "usda-food") {
     return usdaFood.detail.queryOptions({ id: fdcIdFromParam(id) });
   }
-  if (entity === "cookbook")
-    return cookbook.detail.queryOptions({ shortcode: id });
-  if (isGeneratedBrowserCrudEntity(entity)) {
-    return entityDetailFor(entity).queryOptions(id);
-  }
+  if (isDetailEntity(entity)) return entityDetailFor(entity).queryOptions(id);
   throw new Error(`Entity ${entity} has no browser detail transport`);
 }
 
@@ -47,11 +44,6 @@ export function prefetchEntityPreview(
   entity: Entity,
   id: string,
 ): Promise<void> {
-  if (entity === "image") {
-    return queryClient.prefetchQuery(
-      speculativeQueryOptions(image.detail.queryOptions({ id })),
-    );
-  }
   if (entity === "usda-food") {
     return queryClient.prefetchQuery(
       speculativeQueryOptions(
@@ -59,12 +51,7 @@ export function prefetchEntityPreview(
       ),
     );
   }
-  if (entity === "cookbook") {
-    return queryClient.prefetchQuery(
-      speculativeQueryOptions(cookbook.detail.queryOptions({ shortcode: id })),
-    );
-  }
-  if (isGeneratedBrowserCrudEntity(entity)) {
+  if (isDetailEntity(entity)) {
     return queryClient.prefetchQuery(
       speculativeQueryOptions(entityDetailFor(entity).queryOptions(id)),
     );

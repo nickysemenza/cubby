@@ -26,11 +26,7 @@ import {
 } from "~/entity/entity-references";
 import { enumFieldLabel, heroChipLabel } from "~/entity/enum-field-display";
 import type { EntityDetailByEntity } from "~/entity/generated/entity-details.gen";
-import {
-  cookbook,
-  image,
-  usdaFood,
-} from "~/integrations/tanstack-query/generated/catalog.gen";
+import { usdaFood } from "~/integrations/tanstack-query/generated/catalog.gen";
 import { dataTypeColor, UsdaDataTypeDot } from "~/lib/usda-data-type";
 
 import {
@@ -271,9 +267,7 @@ export function CookbookPreviewContent({
   onNameResolved,
   onRecordResolved,
 }: { cookbookId: string } & CompactPreviewPresentation) {
-  const query = useQuery(
-    cookbook.detail.queryOptions({ shortcode: cookbookId }),
-  );
+  const query = useQuery(entityDetailFor("cookbook").queryOptions(cookbookId));
 
   return (
     <PreviewQuery
@@ -378,7 +372,7 @@ function ImagePreviewContent({
 }: {
   id: string;
 } & StandardPreviewPresentation) {
-  const query = useQuery(image.detail.queryOptions({ id }));
+  const query = useQuery(entityDetailFor("image").queryOptions(id));
 
   return (
     <PreviewQuery query={query} label="Image" onUnavailable={onRecordResolved}>

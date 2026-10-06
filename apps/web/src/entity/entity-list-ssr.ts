@@ -1,4 +1,5 @@
 import type { Entity } from "@cubby/schemas/entity";
+import { isSlotListView } from "@cubby/schemas/entity-definitions/definition";
 import { entitySummary } from "@cubby/schemas/entity-summary";
 import type { QueryClient } from "@tanstack/react-query";
 
@@ -8,6 +9,7 @@ import {
 } from "~/entity/entity-list";
 
 import { defaultSortDirectionFor, defaultSortFor } from "./entities";
+import { resolveListView } from "./entity-list/resolve-list-view";
 import { getEntityFilters } from "./filter-manifest";
 import {
   decodeFilters,
@@ -31,6 +33,10 @@ export function entityListLoader<E extends ListEntity>(entity: E) {
       queryClient: context.queryClient,
       entity,
       search: deps,
+      // A slot view (Runs history) owns its reads and its URL keys — `sort`
+      // there is `newest|oldest`, not a kernel sort field — so the kernel
+      // list is not its first page to hydrate.
+      active: !isSlotListView(resolveListView(entity, deps).view),
       signal: abortController.signal,
     });
 }

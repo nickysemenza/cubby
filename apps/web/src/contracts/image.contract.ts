@@ -44,17 +44,6 @@ export const imageContract = defineContract("image", {
     output: imageBrowserListOut,
     cache: { tags: [["image"]] },
   }),
-  detail: query({
-    mcp: {
-      omit: "kernel_alternative",
-      kernel: ["get"],
-      note: "entity_read.get on an image",
-    },
-    native: "Native photo detail",
-    input: z.object({ id: z.string() }),
-    output: imageWithEntitySchema.nullable(),
-    cache: { tags: [["image"]] },
-  }),
   analysis: query({
     mcp: { omit: "client_view", note: "Native photo diagnostics" },
     native: "Native photo diagnostics",

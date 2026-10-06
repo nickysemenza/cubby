@@ -1,17 +1,11 @@
 import { z } from "zod";
 import { runPurpose } from "./run-fields";
 
-import { runFilters, runOut } from "./generated/run.gen";
-import { generatedEntitySort } from "./generated/entity-sort.gen";
 import {
   productShortcode,
   purchaseShortcode,
   runShortcode,
 } from "./identifiers";
-import {
-  createPaginatedResponseSchema,
-  createSortPaginationFields,
-} from "./pagination";
 
 export {
   runFilterFields,
@@ -20,19 +14,6 @@ export {
   type RunFilters,
   type RunOut,
 } from "./generated/run.gen";
-export const runListResponse = createPaginatedResponseSchema(runOut);
-
-/**
- * The web Runs list read. A Run has no create/update contract, so it sits
- * outside the kernel list roster and its generated index reads this instead.
- */
-export const runBrowserListInput = z.object({
-  filters: runFilters,
-  ...createSortPaginationFields({
-    sortableFields: generatedEntitySort.run.fields,
-    defaultSort: generatedEntitySort.run.default,
-  }),
-});
 
 export const targetedImportPurpose = z.enum([
   "purchase_validation",

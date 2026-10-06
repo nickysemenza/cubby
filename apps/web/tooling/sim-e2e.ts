@@ -74,7 +74,9 @@ Modes (one per run; no mode = full native journey in the iOS simulator):
   --product-clarity [--video]  focused synthetic Product journey (Maestro)
   --input-journey [--video]  PhotosPicker/Files input acceptance
   --emoji-review [--video]   category emoji review replay
-  --qa [--hold] [--video]    seeded synthetic household QA pass; --hold keeps it up
+  --qa [--hold] [--video] [--journey qa-a,qa-b]
+                             seeded synthetic household QA pass; --hold keeps it
+                             up; --journey replays only the named scripts
   --qa-photo-completion     stopped photo Run final approval updates hero and reports
   --tester-army [--journey a,b] [--replay] [--wrong]
                              live-model agent journeys (billed; see docs/tester-army.md)
@@ -91,11 +93,14 @@ Workflow guide: apps/apple/ITERATION.md; acceptance map: docs/agents/core-journe
   process.exit(0);
 }
 const journeyFlag = rawFlags.indexOf("--journey");
-if (journeyFlag >= 0) {
+/** `--journey a,b`: Tester Army journey ids, or `--qa` script names without extension. */
+const selectedJourneys: readonly string[] = (() => {
+  if (journeyFlag < 0) return [];
   const value = rawFlags[journeyFlag + 1];
   if (!value) throw new Error("--journey needs a comma-separated id list");
   process.env.TESTER_ARMY_JOURNEYS = value;
-}
+  return value.split(",");
+})();
 const flags = rawFlags.filter(
   (argument, index) =>
     argument !== "--journey" && rawFlags[index - 1] !== "--journey",
@@ -180,7 +185,7 @@ if (
   )
 )
   throw new Error(
-    "Usage (see --help): sim-e2e.ts [--emoji-review [--video] | --input-journey [--video] | --tester-army [--journey a,b] [--replay] [--wrong] | --video | --layout [--video] | --product-clarity [--video] | --qa [--hold] [--video] | --watch | --headless [--watch | --photo [--purchase] | --statement-csv]]",
+    "Usage (see --help): sim-e2e.ts [--emoji-review [--video] | --input-journey [--video] | --tester-army [--journey a,b] [--replay] [--wrong] | --video | --layout [--video] | --product-clarity [--video] | --qa [--hold] [--video] [--journey qa-a,qa-b] | --watch | --headless [--watch | --photo [--purchase] | --statement-csv]]",
   );
 const lane = qa
   ? "sim-qa-e2e"
@@ -1526,7 +1531,16 @@ async function runQaJourneys(
   }
   const journeys = readdirSync(path.join(appleRoot, "e2e"))
     .filter((file) => /^qa-.*\.(ad|yaml)$/u.test(file))
+    .filter(
+      (file) =>
+        selectedJourneys.length === 0 ||
+        selectedJourneys.includes(file.replace(/\.(ad|yaml)$/u, "")),
+    )
     .sort();
+  if (journeys.length === 0)
+    throw new Error(
+      `--journey matched no qa script: ${selectedJourneys.join(", ")}`,
+    );
   const stopRecording = video
     ? await recordSimulatorVideo(common[3] ?? "")
     : undefined;
@@ -1601,35 +1615,41 @@ async function runQaJourneys(
         }
       }
     }
-    // The stop guard's two phases share one open screen, so only the first relaunches; a
-    // retry seeds a fresh running Run.
-    const { runNativeRunStopJourney } =
-      await import("./scenarios/native-run-stop");
-    const stopPool = new Pool({ connectionString: databaseURL });
-    try {
-      for (let attempt = 1; ; attempt += 1) {
-        await relaunch();
-        try {
-          scenarioEvidence.push(
-            await runNativeRunStopJourney({
-              pool: stopPool,
-              userId: qaUserId,
-              artifacts,
-              replay: (journey, variables) =>
-                replay(journey, attempt, variables),
-            }),
-          );
-          break;
-        } catch (error) {
-          flaky.push("run-stop");
-          if (attempt >= 2 || interrupted) throw error;
-          console.log(`[${lane}] run-stop attempt ${attempt} failed; retrying`);
+    // The scripted scenarios belong to the full lane; `--journey` replays only
+    // the named qa scripts.
+    if (selectedJourneys.length === 0) {
+      // The stop guard's two phases share one open screen, so only the first relaunches; a
+      // retry seeds a fresh running Run.
+      const { runNativeRunStopJourney } =
+        await import("./scenarios/native-run-stop");
+      const stopPool = new Pool({ connectionString: databaseURL });
+      try {
+        for (let attempt = 1; ; attempt += 1) {
+          await relaunch();
+          try {
+            scenarioEvidence.push(
+              await runNativeRunStopJourney({
+                pool: stopPool,
+                userId: qaUserId,
+                artifacts,
+                replay: (journey, variables) =>
+                  replay(journey, attempt, variables),
+              }),
+            );
+            break;
+          } catch (error) {
+            flaky.push("run-stop");
+            if (attempt >= 2 || interrupted) throw error;
+            console.log(
+              `[${lane}] run-stop attempt ${attempt} failed; retrying`,
+            );
+          }
         }
+      } finally {
+        await stopPool.end();
       }
-    } finally {
-      await stopPool.end();
+      await completePhotoRun();
     }
-    await completePhotoRun();
   } finally {
     await stopRecording?.();
     if (flaky.length > 0)
@@ -1637,7 +1657,13 @@ async function runQaJourneys(
         `[${lane}] Failed an attempt: ${[...new Set(flaky)].join(", ")}`,
       );
   }
-  await assertQaOutcomes();
+  // The outcome checks read back every journey's writes; a focused replay
+  // runs only some journeys, so it leaves them to the full lane.
+  if (selectedJourneys.length > 0)
+    console.log(
+      `[${lane}] Skipped the full-lane outcome checks for --journey ${selectedJourneys.join(",")}`,
+    );
+  else await assertQaOutcomes();
 }
 
 async function runNativeJourney(

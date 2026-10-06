@@ -1,3 +1,4 @@
+import { servesKernelGet } from "./list-capabilities.ts";
 import { humanize } from "../../../packages/shared/src/text-case.ts";
 import { colorizeEnumOptions } from "../../../packages/shared/src/enum-palette.ts";
 import {
@@ -1473,17 +1474,17 @@ const validateLifecycleAndResolve = (
 };
 
 /**
- * A route defaults to generated list and detail pages over the
- * generic renderers, which read the kernel's list/detail projections: the
- * detail roster is every entity with create and update contracts, the list
- * roster its browser-routed members. An entity outside the detail roster
- * declares `detail: { query }` instead (image); one outside the list roster
- * hand-writes its index route.
+ * A route defaults to generated list and detail pages over the generic
+ * renderers. The detail page reads the kernel `get`, so every kernel entity
+ * gets it, writable or not; only the allowlisted hand-written routes opt out.
+ * A generated index needs rows: the kernel list, or a declared
+ * `route.listRows: "custom"` source.
  */
 const validateRouteRosters = (
   key: string,
   route: EntityDeclarationMetadata["route"],
   contract: CompiledEntity["contract"],
+  kernel: boolean,
   timeline: CompiledEntity["timeline"],
   context: string,
 ) => {
@@ -1492,26 +1493,17 @@ const validateRouteRosters = (
       `${context}.capabilities.timeline needs a contract (the timeline is an HTTP resource verb).`,
     );
   if (route === null) return;
-  if (route.detail === null && !HAND_WRITTEN_DETAIL_ROUTES.has(key))
-    throw new EntityDeclarationError(
-      `${context}.route.detail is null; every entity gets the generic detail page. Omit route.detail, or declare detail: { query } outside the kernel detail roster, and put specialized UI in a detail slot.`,
-    );
-  const inDetailRoster =
-    contract !== null && contract.create !== null && contract.update !== null;
-  if (route.detail === true && !inDetailRoster)
-    throw new EntityDeclarationError(
-      `${context}.route.detail is true but the entity has no create+update contract; declare route.detail: { query } or null.`,
-    );
-  if (route.detail !== null && route.detail !== true && inDetailRoster)
-    throw new EntityDeclarationError(
-      `${context}.route.detail.query is for entities outside the kernel detail roster; omit route.detail.`,
-    );
-  // A generated index route needs rows to list: the kernel list read for a
-  // roster entity, or (outside the roster) a client-paged override module in
-  // `apps/web/src/entity/list-columns` over the entity's own projection.
   if (route.list === true && contract === null)
     throw new EntityDeclarationError(
       `${context}.route.list is true but the entity has no contract (nothing to list); declare route.list: null.`,
+    );
+  if (route.detail === null && !HAND_WRITTEN_DETAIL_ROUTES.has(key))
+    throw new EntityDeclarationError(
+      `${context}.route.detail is null; every entity gets the generic detail page. Omit route.detail and put specialized UI in a detail slot.`,
+    );
+  if (route.detail === true && !kernel)
+    throw new EntityDeclarationError(
+      `${context}.route.detail is true but the kernel serves no get for this entity; declare route.detail: null.`,
     );
 };
 
@@ -1912,6 +1904,7 @@ export const compileEntity = (
     declaration.key,
     route,
     contract,
+    servesKernelGet({ key: declaration.key, contract, ports }),
     declaration.capabilities.timeline,
     context,
   );

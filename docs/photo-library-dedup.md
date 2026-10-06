@@ -95,7 +95,8 @@ The server exposes these revision-one contracts:
 - `image.uploadImage` accepts optional revision, hash, source fingerprint, and
   dimensions. Older callers remain valid. The metadata is written with the
   pending row, before the object upload is finalized.
-- `image.detail` is available to the native client through the generated API.
+- Native reads one image through the kernel `resources.image.get` route
+  (`CubbyClient.imageDetail(id:)`).
 
 Attachment updates deduplicate incoming image IDs, ignore an already-active
 link, preserve its order, append only new links, and still promote a retried

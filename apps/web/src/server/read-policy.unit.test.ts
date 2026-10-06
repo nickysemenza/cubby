@@ -11,7 +11,6 @@ describe("shared read policy", () => {
       "suggestions.getRecipeAvailability",
       "calendar.range",
       "collection.detail",
-      "cookbook.detail",
       "expense.analytics",
       "image.projectSummaries",
       "ingredient.recipeUsages",

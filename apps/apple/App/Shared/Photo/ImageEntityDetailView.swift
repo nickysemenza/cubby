@@ -3,7 +3,7 @@ import CubbyKit
 import MapKit
 import SwiftUI
 
-/// Images use image.detail; they do not have the generic resources.image.get route.
+/// One image: the photo, its owning records, and its analysis diagnostics.
 struct ImageEntityDetailView: View {
     enum Tab: String, CaseIterable { case photo = "Photo", diagnostics = "Diagnostics" }
 
@@ -113,7 +113,7 @@ struct ImageEntityDetailView: View {
     private func load() async {
         error = nil
         do {
-            async let detail = appModel.client.imageDetail(.init(id: id.rawValue))
+            async let detail = appModel.client.imageDetail(id: id.rawValue)
             async let analyses = processing.load(id: id, client: appModel.client)
             async let jobLoad = jobs.load(id: id, client: appModel.client)
             self.detail = try await detail

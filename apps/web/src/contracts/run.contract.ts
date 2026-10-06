@@ -16,10 +16,7 @@ import {
   preparePurchaseImportOut,
 } from "@cubby/schemas/purchase-import";
 import {
-  runBrowserListInput,
   runHistoryOut,
-  runListResponse,
-  runOut,
   targetedImportPurpose,
   targetedImportStartInput,
   targetedImportStartOutput,
@@ -300,33 +297,7 @@ export type TargetedImportLaunch = z.infer<typeof targetedImportLaunch>;
 // members must resolve to real components.
 export { type TargetedImportStartInput, type TargetedImportStartOutput };
 
-/**
- * Run reads for the generic list and detail pages. A Run has no create/update
- * contract, so it sits outside the kernel list and detail rosters and reads
- * its own queries (a list override source, `route.detail: { query }`), like
- * image and cookbook.
- */
 export const runContract = defineContract("run", {
-  list: query({
-    mcp: {
-      omit: "kernel_alternative",
-      kernel: ["list"],
-      note: "entity_read.list on runs",
-    },
-    input: runBrowserListInput,
-    output: runListResponse,
-    cache: { tags: [["run"]], profile: "browse" },
-  }),
-  detail: query({
-    mcp: {
-      omit: "kernel_alternative",
-      kernel: ["get"],
-      note: "entity_read.get on a run",
-    },
-    input: z.object({ shortcode: z.string() }),
-    output: runOut.nullable(),
-    cache: { tags: [["run"]] },
-  }),
   workSnapshot: query({
     mcp: { omit: "client_view" },
     native: "Show durable live import progress in Apple apps",
