@@ -1,3 +1,5 @@
+import { formatCalendarDay } from "~/lib/date-format";
+import { householdLocalDate, householdDaysFromNow } from "~/lib/household-date";
 import {
   seedVendorDisplayPrerequisite,
   seedLocationPrerequisite,
@@ -365,4 +367,59 @@ test("run history hides ephemeral runs by default and shows them once cleared", 
 
   await page.reload();
   await expect(table).toContainText(fixture.hiddenName);
+});
+
+test("record dates retain their calendar label with present and future context", async ({
+  page,
+}) => {
+  const prefix = `Date context ${Date.now()}`;
+  const today = householdLocalDate();
+  const later = householdDaysFromNow(26);
+  const currentLabel = `${formatCalendarDay(today, "monthDay")} (today)`;
+  const laterYear =
+    later.slice(0, 4) === today.slice(0, 4) ? "" : `, ${later.slice(0, 4)}`;
+  const futureLabel = `${formatCalendarDay(later, "monthDay")}${laterYear} (in a few weeks)`;
+  await createFixture(page, "task", {
+    name: `${prefix} current`,
+    trade: "other",
+    dueDate: today,
+  });
+  await createFixture(page, "task", {
+    name: `${prefix} future`,
+    trade: "other",
+    dueDate: later,
+  });
+  await gotoAuthenticatedPage(
+    page,
+    `/tasks?view=next&q=${encodeURIComponent(prefix)}`,
+  );
+  await expect(
+    page.getByRole("row").filter({ hasText: `${prefix} current` }),
+  ).toContainText(currentLabel);
+  await expect(
+    page.getByRole("row").filter({ hasText: `${prefix} future` }),
+  ).toContainText(futureLabel);
+  await gotoAuthenticatedPage(page, `/tasks?q=${encodeURIComponent(prefix)}`);
+  await expect(
+    page.locator('[data-cell-col="dueDate"]').filter({ hasText: "(today)" }),
+  ).toHaveText(currentLabel);
+  await expect(
+    page
+      .locator('[data-cell-col="dueDate"]')
+      .filter({ hasText: "(in a few weeks)" }),
+  ).toHaveText(futureLabel);
+  await createFixture(page, "expense", {
+    name: `${prefix} expense`,
+    date: today,
+    cost: 2,
+    costType: "materials",
+    trade: "other",
+  });
+  await gotoAuthenticatedPage(
+    page,
+    `/expenses?q=${encodeURIComponent(`${prefix} expense`)}`,
+  );
+  await expect(
+    page.locator('[data-cell-col="date"]').filter({ hasText: "(today)" }),
+  ).toHaveText(currentLabel);
 });

@@ -12,7 +12,7 @@ import { WarningIcon } from "@phosphor-icons/react/dist/csr/Warning";
 import type { Icon } from "@phosphor-icons/react/lib";
 import { Link } from "@tanstack/react-router";
 
-import { formatCalendarDay } from "~/lib/date-format";
+import { formatDateSpan } from "~/lib/date-span";
 import { formatCurrency } from "~/lib/utils";
 import { Row, Stack } from "~/ui/layout";
 
@@ -151,7 +151,7 @@ export function NeedsAttention({ items }: { items: ProjectAttentionItem[] }) {
                 </Link>
                 {item.date && (
                   <span className="shrink-0 text-muted-foreground">
-                    {formatCalendarDay(item.date, "monthDay")}
+                    {formatDateSpan(item.date, null)}
                   </span>
                 )}
                 {item.amount != null && (

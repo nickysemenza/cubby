@@ -1,5 +1,15 @@
 # Web UI contracts
 
+Human record dates use `formatDateSpan(day, null)` and declared ranges use
+`formatDateSpan(start, end)`: retain the calendar label, omit the current year,
+and append relative context for present/future dates (today, tomorrow, in a few
+days, in about a week, in a few weeks, in about a month, in a few months,
+in about a year, then approximate years). Ranges covering today say ongoing;
+past dates stay absolute. Compare household calendar days, never elapsed hours
+or UTC dates. Generic scalar dates, declared spans, and task due-date summaries
+share this formatter. `formatCalendarDay` remains the absolute primitive for
+editable date inputs, calendar axes/headings, and fixed-format diagnostics.
+
 Use style tokens—never component hardcoded colors. Semantic color additions get
 both `:root` and `@theme inline` mirrors. Use `size-N` icon sizing (inline/nav
 `size-3.5`, card/tile `size-5`) and the `Badge` primitive for categorical chips.
