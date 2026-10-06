@@ -360,6 +360,11 @@ See also the image operational passes at the end of this file.
 
 ## Web UI
 
+- 🟢 **Show unmatched edit issues in the dialog banner.** A validation issue
+  whose path has no rendered control (e.g. `externalIds.0.isPrimary`) is set on
+  the form but never shown: `entityEditBannerIssues`
+  (`entity-edit-dialog-content.tsx`) excludes every field-scoped issue, so Save
+  fails silently. Surface issues no registered control can display.
 - 🤔 **All-entities record interaction parity.** Reuse standard row inspection,
   selection, clipboard behavior, and actions in the Records tab. Decide which
   actions are eligible for mixed entity types before enabling batch work;
@@ -660,49 +665,28 @@ spanner"` → `adjustable wrench` (product); `"wet dry vac"` → `shop vacuum`
 [Breaking changes](../AGENTS.md#breaking-changes) is the rule; these are the
 compatibility paths still live. Printed `P-`/`L-` QR labels and stored agent
 transcript tool names (`app/purchases/agent-tool-names.ts`) are physical or
-historical records and stay readable.
+historical records and stay readable. `oauth_client.requirePKCE` and
+`referenceId` are not legacy: Better Auth 1.7 still declares and reads them.
 
-- 🟢 **Drop legacy MCP protocol support.** Move the purchase agent's MCP client
-  to modern version negotiation (replace or wrap the client if it cannot), then
-  delete the `isLegacyRequest` branch in `server/mcp/server.ts` and the
-  remaining SDK v1 transport/test helpers. Preserve tool contracts,
-  purchase-agent authorization, MCP Apps, and Cloudflare-safe validation.
-- 🟢 **Delete the `public/sw.js` unregister stub** and its
-  `docs/inventory-audit.md` note; household browsers have long since reloaded.
-- 🟢 **Delete retired fieldwork recovery** (`ui/feedback/retired-fieldwork.tsx`,
-  `lib/retired-fieldwork-storage.ts`) after confirming no household browser
-  still holds `cubby:audit-session:*` or `cubby:photo-pass:*` keys.
-- 🟢 **Remove old-client wire inputs.** Photo import `idempotencyKey`
-  (`contracts/photo-import.contract.ts`, `PhotoImportStager.swift`); the
-  single-object `sort` arm of `sortInput` (`packages/schemas/src/pagination.ts`;
-  update MCP tool descriptions to the stack form); the former ISO audit cursor
-  (`schemas/src/audit.ts`, `repo/audit-log.ts`); the `validateParent` forwarder
-  in `routes/_authenticated/problems.tsx`.
-- 🤔 **Require statement-row positions.** `repo/statement-row.ts` keeps a v1
-  path for callers without file positions. Require positions on input; decide
-  whether the frozen identity hash (`repo/statement-row-identity.ts`) must stay
-  because stored `settlement_ref` values derive from it.
-- 🟢 **Collapse internal shims.** Ingredient/product `resolveNames` shims for
-  MCP (`repo/ingredient/crud.ts`, `repo/product/resolve-names.ts`) →
-  `resolveEntity`; the legacy `touchDataQualityTargets` hook
-  (`repo/data-quality/touch.ts`); the legacy list field-override consumption in
-  `entity/entity-display.tsx`; optional-column fixture shapes in
-  `database-helpers/transform.ts` (fix the fixtures); terracotta and shadow
-  alias tokens in `styles.css`.
-- 🧱 **Drop legacy OAuth client columns** (`public`, `type`, `requirePKCE`,
-  `referenceId` in `server/db/auth.schema.ts`), which Better Auth 1.7 ignores.
-- 🧱 **Backfill data, then delete read-time fallbacks.** Each needs a data
-  migration first: null `sortOrder`/purpose image joins
-  (`db/schema.ts`, `repo/database-helpers/relations.ts`,
-  `repo/entity-display-image.ts`); `legacy_unspecified` external-id kinds
-  (`schemas/src/external-id.ts`); data exceptions without a fingerprint
-  (`repo/data-quality/exceptions.ts`); flat-array cookbook extractions
-  (`repo/cookbook.ts`; re-extract); legacy costing rows
-  (`services/recipe-costing.service.ts`).
-- 🟢 **Delete one-time Apple migrations** once every household device runs the
-  current build: the JSON hash-cache import
-  (`PhotoAnalysisStore.migrateLegacyHashCacheIfNeeded`), legacy credential-file
-  reads in `FileSessionTokenStore.swift`, and `DockBadge.clear()`.
+- 🤔 **Require statement-row positions.** `repo/statement-row.ts` keeps the v1
+  content-hash path for callers without file positions, and that path is what
+  dedupes overlapping full-history exports today. Requiring positions needs a
+  cross-file occurrence rule first. A prototype on branch
+  `compat/statement-row-positions` (`statement-row-occurrence.ts`) maps the
+  k-th incoming row of a legacy hash to the k-th live row from another export.
+  Review reproduced three gaps it must close: concurrent overlapping commits
+  create one row but two transactions (hold the source lock across the whole
+  commit and revalidate settlement refs inside it); chunked record (500) and
+  paged preview (200) restart the occurrence count, losing identical
+  occurrences (count across the whole file); attach re-resolves each row
+  singly, so replaying two settled identical charges fails (pass the resolved
+  occurrence ref through). Keep `statementRowExternalId` frozen: stored
+  `settlement_ref` values derive from it.
+- 🧱 **Re-extract flat-array cookbooks, then delete their fallback.** A few
+  cookbooks still store the retired flat-array extraction
+  (`repo/cookbook.ts`, `isLegacyCookbookRawJson`); the list shows a
+  needs-reextract badge. Re-extract them from their EPUBs (not stored), then
+  delete the fallback.
 
 ---
 
