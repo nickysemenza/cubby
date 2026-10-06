@@ -196,8 +196,9 @@ one main run active and at most one pending; a newer push replaces the pending
 run. This does not add parallel main runs or jobs. The newest main CI result may
 wait for the active run; deployment remains independent. `Scope` and
 `Validation` retain stable required names. A documentation-only
-change runs Oxfmt, documented repository-path checks, and offline relative-link
-validation. Formatting-only validation sets up Node and invokes the exact Oxfmt
+change runs Oxfmt and offline relative-link validation through the pinned Lychee action.
+Paths written as inline code are informational; link a repository file when its
+existence should be checked. Formatting-only validation sets up Node and invokes the exact Oxfmt
 version pinned in `package.json` with `npm exec`; it skips the workspace dependency
 install and pnpm-store restore. Jobs that need generation or application code
 still install their dependencies. Generated output is never
@@ -207,7 +208,7 @@ document lints. On PRs, Markdown changes select checks according to their runtim
 
 | Changed Markdown                                                           | Selected work                                                                                 |
 | -------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------- |
-| Ordinary guides and agent documentation                                    | Oxfmt, documented repository paths, offline relative links                                    |
+| Ordinary guides and agent documentation                                    | Oxfmt and offline relative links                                                              |
 | `docs/todos.md`                                                            | Documentation checks plus generation and OpenAPI lint, with filtered dependencies and no WASM |
 | `docs/README.md`                                                           | Documentation and full web lanes: the fixed `/docs/` landing page is a runtime route input    |
 | `.claude/skills/purchase-import/` and `.claude/skills/product-enrichment/` | Documentation, full web lanes, and the optional purchase-import browser lane                  |
