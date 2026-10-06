@@ -56,7 +56,7 @@ const toneBadge = {
   allocated: "secondary",
 } as const satisfies Record<ResolutionTone, BadgeVariant>;
 
-function ResolutionHeadline({
+export function ResolutionHeadline({
   entity,
   field,
   resolution,
@@ -346,21 +346,25 @@ export function ResolutionExplanation({
   field,
   resolution,
   evidence,
+  showHeadline = true,
 }: {
   entity: Entity;
   id?: string;
   field: string;
   resolution: FieldResolution;
   evidence?: FieldExplanationOutput["resolutionEvidence"];
+  showHeadline?: boolean;
 }) {
   const stats = resolutionStats(entity, field, resolution, evidence);
   return (
     <div className="grid grid-cols-[minmax(0,1fr)] gap-2">
-      <ResolutionHeadline
-        entity={entity}
-        field={field}
-        resolution={resolution}
-      />
+      {showHeadline ? (
+        <ResolutionHeadline
+          entity={entity}
+          field={field}
+          resolution={resolution}
+        />
+      ) : null}
       {stats.length > 0 ? (
         <dl className="grid grid-cols-[auto_minmax(0,1fr)] gap-x-3 gap-y-1 text-xs">
           {stats.map((stat) => (

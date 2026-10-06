@@ -41,6 +41,7 @@ import {
 } from "./field-resolution";
 import {
   ResolutionExplanation,
+  ResolutionHeadline,
   sectionLabelClassName,
 } from "./field-resolution-explanation";
 
@@ -139,20 +140,24 @@ function ReadableExplanationRecord({
     );
   }
   return (
-    <dl className="grid grid-cols-[minmax(5rem,0.35fr)_minmax(0,1fr)] gap-x-3 gap-y-1 text-xs">
-      {Object.entries(record.data).map(([key, item]) => (
-        <div key={key} className="contents">
-          <dt className="text-muted-foreground">{humanize(key)}</dt>
-          <dd className="min-w-0">
-            <ReadableExplanationValue
-              value={item}
-              depth={depth + 1}
-              property={key}
-            />
-          </dd>
-        </div>
-      ))}
-    </dl>
+    <div className="@container">
+      <dl className="grid gap-x-3 gap-y-1 text-xs @min-[18rem]:grid-cols-[minmax(5rem,0.35fr)_minmax(0,1fr)]">
+        {Object.entries(record.data).map(([key, item]) => (
+          <div key={key} className="contents">
+            <dt className="break-words text-muted-foreground">
+              {humanize(key)}
+            </dt>
+            <dd className="min-w-0">
+              <ReadableExplanationValue
+                value={item}
+                depth={depth + 1}
+                property={key}
+              />
+            </dd>
+          </div>
+        ))}
+      </dl>
+    </div>
   );
 }
 
@@ -340,6 +345,23 @@ type FieldExplanationProps = {
   resolution?: FieldResolution | null;
 };
 
+function ExplanationResult({
+  entity,
+  field,
+  resolution,
+  value,
+}: Pick<FieldExplanationProps, "entity" | "field" | "resolution"> & {
+  value: ExplanationValue;
+}) {
+  return resolution ? (
+    <ResolutionHeadline entity={entity} field={field} resolution={resolution} />
+  ) : (
+    <p className="text-lg leading-snug font-semibold break-words">
+      <ReadableExplanationValue value={value} />
+    </p>
+  );
+}
+
 export function FieldExplanation({
   entity,
   id,
@@ -441,9 +463,12 @@ function FieldExplanationContents({
             <h3 className={sectionLabelClassName}>What this means</h3>
             {result.data.interpretation ? (
               <>
-                <p className="text-lg leading-snug font-semibold break-words">
-                  {result.data.interpretation.result}
-                </p>
+                <ExplanationResult
+                  entity={entity}
+                  field={field}
+                  resolution={result.data.resolution}
+                  value={result.data.interpretation.result}
+                />
                 <p className="text-sm leading-5">
                   {result.data.interpretation.summary}
                 </p>
@@ -474,6 +499,7 @@ function FieldExplanationContents({
                 field={field}
                 resolution={result.data.resolution}
                 evidence={result.data.resolutionEvidence}
+                showHeadline={!result.data.interpretation}
               />
             ) : !result.data.interpretation &&
               (result.data.value !== null ||
@@ -675,7 +701,7 @@ function ExplanationFooter({
   ) : null;
   if (actions.length === 0 && !resolution?.canReset) return null;
   return (
-    <footer className="sticky -bottom-3 z-10 -mx-3 -mb-3 grid grid-cols-[minmax(0,1fr)] gap-2 border-t border-border bg-popover px-3 py-2 text-xs">
+    <footer className="sticky bottom-0 z-10 -mx-3 -mb-3 grid grid-cols-[minmax(0,1fr)] gap-2 border-t border-border bg-popover px-3 py-2 text-xs">
       {actions.length > 0 || resolution?.canReset ? (
         <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5">
           {resets}

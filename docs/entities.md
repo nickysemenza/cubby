@@ -1121,6 +1121,9 @@ identifiers remain secondary but visible. Inheritance ladders align source, valu
 and precedence, allow long values to wrap, and emphasize the winning source.
 Reset and navigation actions remain in the popover footer, while exception actions
 stay with their check. Tables retain their compact rows and lazy explanations.
+The sticky footer stays wholly inside the scrollport so its actions retain their
+phone touch targets. Nested evidence switches from aligned facts to stacked labels
+based on its own container width, avoiding progressively narrower columns.
 
 An Image has provenance (`own`, `catalog`, `unknown`, or `screenshot`, plus
 optional supplying source name/page/asset URLs). Its Product attachment has

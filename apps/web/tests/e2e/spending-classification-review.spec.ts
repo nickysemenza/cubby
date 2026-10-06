@@ -293,8 +293,11 @@ test("reviews historical item classification and preserves explicit purpose", as
     `/purchases/${purchase}#expenses`,
     page.locator("#expenses"),
   );
+  const principalLink = page.locator(`a[href="/expenses/${expense}"]`);
   const tableExplanation = page
     .locator("#expenses")
+    .getByRole("row")
+    .filter({ has: principalLink })
     .getByRole("button", {
       name: "How spending category is determined",
       exact: true,
@@ -309,6 +312,12 @@ test("reviews historical item classification and preserves explicit purpose", as
     .locator('[data-slot="popover-content"] [data-role="wins"]')
     .getByRole("link", { name: toolsName, exact: true });
   await expect(winningValue).toBeVisible();
+  await expect(
+    page
+      .locator('[data-slot="popover-content"] section')
+      .first()
+      .getByText(tools, { exact: true }),
+  ).toHaveCount(0);
   const winningLabel = winningValue.locator("span").last();
   expect(
     await winningLabel.evaluate((label) => label.scrollWidth),
@@ -322,6 +331,8 @@ test("reviews historical item classification and preserves explicit purpose", as
   await page.setViewportSize({ width: 402, height: 874 });
   const phoneExplanation = page
     .locator("#expenses")
+    .getByRole("listitem")
+    .filter({ has: principalLink })
     .getByRole("button", {
       name: "How spending category is determined",
       exact: true,
