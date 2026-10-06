@@ -202,6 +202,7 @@ export default defineEntity({
           "funders",
           "sourceClaims",
           "spendingCategoryId",
+          "spendingCategoryName",
           "spendingCategoryAllocations",
           "projectAllocations",
         ],
@@ -314,6 +315,12 @@ export default defineEntity({
           create: spendingCategoryShortcode.nullable().default(null),
           update: spendingCategoryShortcode.nullable().optional(),
         },
+      },
+      {
+        key: "spendingCategoryName",
+        kind: "text",
+        nullable: true,
+        validation: { read: z.string().nullable(), create: null, update: null },
       },
       {
         key: "economicRole",
@@ -1142,6 +1149,7 @@ export default defineEntity({
     output: [
       "bookingTransactionCode",
       "spendingCategoryId",
+      "spendingCategoryName",
       "economicRole",
       "fieldResolutions",
       "spendingCategoryAllocations",
@@ -1781,7 +1789,8 @@ export default defineEntity({
         {
           id: "expense_cost",
           facet: "ledger",
-          weight: 2,
+          weight: 3,
+          scoreCap: 49,
           label: "Cost",
           message: "No cost is recorded for this expense.",
         },
@@ -1789,7 +1798,8 @@ export default defineEntity({
           id: "expense_spending_category",
           facet: "identity",
           exceptions: "forbidden",
-          weight: 1,
+          weight: 2,
+          scoreCap: 69,
           label: "Spending category",
           message:
             "Expense has no spending category of its own or inherited from its Purchase.",
@@ -1797,9 +1807,16 @@ export default defineEntity({
         {
           id: "expense_product_resolution",
           facet: "identity",
-          weight: 1,
+          weight: 2,
           label: "Product identity",
           message: "This merchandise line needs its Product identity resolved.",
+        },
+        {
+          id: "expense_quantity",
+          facet: "ledger",
+          weight: 1,
+          label: "Quantity",
+          message: "This merchandise line has no unit quantity.",
         },
       ],
     },

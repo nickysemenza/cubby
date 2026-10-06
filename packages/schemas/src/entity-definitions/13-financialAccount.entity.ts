@@ -740,7 +740,7 @@ export default defineEntity({
         {
           id: "financial_account_ledger_party",
           facet: "linkage",
-          weight: 1,
+          weight: 2,
           label: "Ledger party",
           message: "No ledger party is linked to this account.",
         },
@@ -751,12 +751,13 @@ export default defineEntity({
           scoring: "unscored",
           exceptions: "forbidden",
           label: "Unclaimed account",
-          message: "This provisional account has no provider evidence.",
+          message:
+            "This provisional non-cash account has no provider evidence.",
         },
         {
           id: "financial_account_confirmed",
           facet: "identity",
-          weight: 1,
+          weight: 2,
           label: "Confirmed",
           message: "This account is still provisional.",
         },

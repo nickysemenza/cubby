@@ -21,7 +21,7 @@ import { entityDetailFor } from "~/entity/entity-detail";
 import { entityPreviewFacts } from "~/entity/entity-display";
 import { fdcIdFromParam } from "~/entity/entity-query";
 import {
-  readReferenceField,
+  readDisplayReferenceField,
   readRecordField,
 } from "~/entity/entity-references";
 import { enumFieldLabel, heroChipLabel } from "~/entity/enum-field-display";
@@ -114,7 +114,7 @@ export function manifestPreviewCard<E extends ManifestPreviewEntity>(
   const chipField = field(hero.chip);
   const breadcrumbField = field(hero.breadcrumb);
   const breadcrumb = breadcrumbField
-    ? readReferenceField(data, breadcrumbField)
+    ? readDisplayReferenceField(data, breadcrumbField)
     : null;
   const thumbUrl = hero.images
     ? displayImageUrls.safeParse(data).data?.displayImages[0]?.url

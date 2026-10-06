@@ -899,7 +899,17 @@ export default defineEntity({
           facet: "integrity",
           weight: 1,
           label: "Dimensions",
-          message: "Image width or height is missing.",
+          message: "Raster image width or height is missing or not positive.",
+        },
+        {
+          id: "image_asset_unusable",
+          facet: "integrity",
+          kind: "defect",
+          weight: 3,
+          scoreCap: 49,
+          label: "Unusable file",
+          message:
+            "The stored file is missing, mismatched, or failed to render.",
         },
         {
           id: "image_sighting_missing",

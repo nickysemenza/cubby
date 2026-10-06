@@ -9,12 +9,17 @@ import {
   dataCheckLabel,
   dataCheckMessage,
   dataCheckWeight,
+  dataCheckScoreCap,
   dataCheckExemptible,
+  DEFAULT_UNRESOLVED_SCORE_CAP,
   dataException,
   dataExceptionReasonLabel,
   dataQualityExceptionEntities,
   dataQualityFacets,
   relatedDataQualityEntities,
+  type QualityScore,
+  type QualityTerm,
+  scoreQualityTerms,
   type ScoredEntity,
 } from "@cubby/schemas/data-quality";
 import { qualityBreakdown } from "@cubby/schemas/field-explanation";
@@ -35,31 +40,56 @@ import {
   fingerprintSql,
 } from "./sql";
 
+type CheckState = QualityTerm["state"];
+
+const effectiveScoreCap = (check: DataCheck): number =>
+  dataCheckScoreCap[check] ?? DEFAULT_UNRESOLVED_SCORE_CAP;
+
+/**
+ * One term per distinct expected check: a gap unless an active exception
+ * covers it. A gap or exception on a check that is not expected is ignored,
+ * so unrelated (rolled-up) gaps never touch this record's score.
+ */
+const qualityTerms = (
+  expectedChecks: readonly DataCheck[],
+  unresolvedChecks: readonly DataCheck[],
+  activeExceptions: readonly DataCheck[],
+): Array<QualityTerm & { check: DataCheck }> => {
+  const gaps = new Set(unresolvedChecks);
+  const exceptions = new Set(activeExceptions);
+  return [...new Set(expectedChecks)].map((check) => {
+    const state: CheckState = gaps.has(check)
+      ? "gap"
+      : exceptions.has(check)
+        ? "excepted"
+        : "satisfied";
+    return {
+      check,
+      weight: dataCheckWeight[check],
+      scoreCap: dataCheckScoreCap[check],
+      defect: dataCheckKind[check] === "defect",
+      state,
+    };
+  });
+};
+
 /**
  * A target's score is independent of related entities: a Purchase can be
  * complete on its own evidence while a linked Product remains incomplete.
  * Active exceptions are absent from `unresolvedGaps`, and therefore count as
- * satisfied. No applicable checks is deliberately a perfect score.
+ * satisfied. No applicable check is null (not assessed), never a perfect score.
  */
 export const calculateDataQualityScore = (
   expectedChecks: readonly DataCheck[],
   unresolvedGaps: readonly { check: DataCheck }[],
-): number => {
-  const expected = new Set(expectedChecks);
-  const totalWeight = [...expected].reduce(
-    (total, check) => total + dataCheckWeight[check],
-    0,
-  );
-  if (totalWeight === 0) return 100;
-  const unresolvedWeight = unresolvedGaps.reduce(
-    (total, gap) =>
-      expected.has(gap.check) ? total + dataCheckWeight[gap.check] : total,
-    0,
-  );
-  const score =
-    Math.round(((totalWeight - unresolvedWeight) / totalWeight) * 10_000) / 100;
-  return Math.max(0, score);
-};
+): number | null =>
+  scoreQualityTerms(
+    qualityTerms(
+      expectedChecks,
+      unresolvedGaps.map((gap) => gap.check),
+      [],
+    ),
+  ).score;
 
 const exceptionOf = (
   recorded: readonly DataQualityException[],
@@ -77,57 +107,84 @@ const exceptionOf = (
     : {};
 };
 
+const quoted = (checks: readonly DataCheck[]) =>
+  checks.map((check) => `“${dataCheckLabel[check]}”`).join(", ");
+
+/** The score arithmetic, naming the unresolved checks that cap it. */
+const scoreSummary = (
+  result: QualityScore,
+  terms: ReadonlyArray<QualityTerm & { check: DataCheck }>,
+): string => {
+  const capping = terms
+    .filter(
+      (term) =>
+        term.state === "gap" &&
+        effectiveScoreCap(term.check) === result.scoreCap,
+    )
+    .map((term) => term.check);
+  const verb = capping.length === 1 ? "is" : "are";
+  const accepted =
+    result.status === "complete_with_exceptions"
+      ? " All checks pass; accepted exceptions count as satisfied."
+      : "";
+  if (result.score === null)
+    return terms.length === 0
+      ? "No applicable checks: quality is not assessed."
+      : "No applicable weighted checks: quality is not assessed. Unscored diagnostics remain visible below.";
+  if (result.weightedScore === null)
+    return `No applicable weighted checks; unresolved ${quoted(capping)} caps the score at ${result.scoreCap} → ${result.score}/100`;
+  const arithmetic = `${result.satisfiedWeight} satisfied weight ÷ ${result.expectedWeight} applicable weight × 100 = ${result.weightedScore}`;
+  return result.scoreCap !== null && result.scoreCap < result.weightedScore
+    ? `${arithmetic}, capped at ${result.scoreCap} while ${quoted(capping)} ${verb} unresolved → ${result.score}/100`
+    : `${arithmetic}/100${accepted}`;
+};
+
 export const buildQualityBreakdown = (
   expectedChecks: readonly DataCheck[],
   unresolvedChecks: readonly DataCheck[],
   activeExceptions: readonly DataCheck[],
   recorded: readonly DataQualityException[] = [],
 ): z.infer<typeof qualityBreakdown> => {
-  const expected = [...new Set(expectedChecks)];
-  const gaps = new Set(unresolvedChecks);
-  const exceptions = new Set(activeExceptions);
-  const score = calculateDataQualityScore(
-    expected,
-    [...gaps].map((check) => ({ check })),
+  const terms = qualityTerms(
+    expectedChecks,
+    unresolvedChecks,
+    activeExceptions,
   );
-  const expectedWeight = expected.reduce(
-    (sum, check) => sum + dataCheckWeight[check],
-    0,
-  );
-  const satisfiedWeight = expected.reduce(
-    (sum, check) => sum + (gaps.has(check) ? 0 : dataCheckWeight[check]),
-    0,
-  );
+  const result = scoreQualityTerms(terms);
   return qualityBreakdown.parse({
-    score,
-    expectedWeight,
-    satisfiedWeight,
-    summary:
-      expectedWeight === 0
-        ? "No applicable weighted checks: the score is 100/100. Unscored diagnostics remain visible below."
-        : `${satisfiedWeight} satisfied weight ÷ ${expectedWeight} applicable weight × 100 = ${score}/100`,
-    checks: expected.map((check) => ({
+    score: result.score,
+    status: result.status,
+    weightedScore: result.weightedScore,
+    scoreCap: result.scoreCap,
+    expectedWeight: result.expectedWeight,
+    satisfiedWeight: result.satisfiedWeight,
+    summary: scoreSummary(result, terms),
+    checks: terms.map(({ check, state }) => ({
       check,
       label: dataCheckLabel[check],
       facet: dataCheckFacet[check],
       kind: dataCheckKind[check],
       weight: dataCheckWeight[check],
-      state: gaps.has(check)
-        ? "gap"
-        : exceptions.has(check)
-          ? "excepted"
-          : "satisfied",
-      stateLabel: gaps.has(check)
-        ? dataCheckKind[check] === "defect"
-          ? "Defect"
-          : "Missing data"
-        : exceptions.has(check)
-          ? "Accepted exception"
-          : "Satisfied",
-      weightLabel:
+      scoreCap: effectiveScoreCap(check),
+      state,
+      stateLabel:
+        state === "gap"
+          ? dataCheckKind[check] === "defect"
+            ? "Defect"
+            : "Missing data"
+          : state === "excepted"
+            ? "Accepted exception"
+            : "Satisfied",
+      weightLabel: [
         dataCheckWeight[check] === 0
           ? "Unscored diagnostic"
           : `weight ${dataCheckWeight[check]}`,
+        dataCheckScoreCap[check] === null
+          ? null
+          : `caps at ${dataCheckScoreCap[check]} while unresolved`,
+      ]
+        .filter(Boolean)
+        .join(" · "),
       description: dataCheckMessage[check],
       exceptionReasons: exceptionReasonsFor(check).map((reason) => ({
         reason,
@@ -172,15 +229,6 @@ export const loadQualityBreakdown = async (
     evaluation.exceptions,
   );
 };
-
-const qualityStatus = (
-  gaps: readonly Pick<DataQualityGap, "kind">[],
-): DataQuality["status"] =>
-  gaps.some((gap) => gap.kind === "defect")
-    ? "defect"
-    : gaps.length > 0
-      ? "needs_data"
-      : "complete";
 
 const hydrationRow = z
   .object({
@@ -301,17 +349,20 @@ const evaluateRow = (
   const gaps = rawGaps
     .filter((gap) => !activeChecks.has(gap.check))
     .map(({ fingerprint: _fingerprint, ...gap }) => gap);
-  const facets = dataQualityFacets[entity].map((name) => {
-    const facetGaps = gaps.filter((gap) => gap.facet === name);
-    return { name, status: qualityStatus(facetGaps), gaps: facetGaps };
-  });
-  return {
-    status: qualityStatus(gaps),
-    score: calculateDataQualityScore(expectedChecks, gaps),
-    facets,
-    gaps,
-    exceptions,
-  };
+  const terms = qualityTerms(
+    expectedChecks,
+    gaps.map((gap) => gap.check),
+    [...activeChecks].map((check) => dataCheck.parse(check)),
+  );
+  const facets = dataQualityFacets[entity].map((name) => ({
+    name,
+    status: scoreQualityTerms(
+      terms.filter((term) => dataCheckFacet[term.check] === name),
+    ).status,
+    gaps: gaps.filter((gap) => gap.facet === name),
+  }));
+  const { score, status } = scoreQualityTerms(terms);
+  return { status, score, facets, gaps, exceptions };
 };
 
 /** `(ownerId, relatedId)` pairs for every declared roll-up relation. */
@@ -362,22 +413,20 @@ export const loadDataQualities = async <E extends ScoredEntity>(
     loadEvaluations(db, entity, uniqueIds),
     loadRelatedIds(db, entity, uniqueIds),
   ]);
-  const relatedQualities = new Map<ScoredEntity, Map<string, DataQuality>>();
+  // Roll-ups are one hop (the generator rejects chains): a related row
+  // contributes its own gaps and exceptions, never its own roll-ups.
+  const relatedQualities = new Map<ScoredEntity, Map<string, Evaluated>>();
   for (const target of relatedDataQualityEntities[entity]) {
     const targetIds = uniq(
       [...relatedIds.values()].flatMap((links) =>
         links.filter((link) => link.entity === target).map((link) => link.id),
       ),
     );
-    relatedQualities.set(
-      target,
-      await loadDataQualities(
-        db,
-        target,
-        // SAFETY: ids came from the related table's own id column.
-        targetIds as EntityId<typeof target>[],
-      ),
-    );
+    const evaluated = new Map<string, Evaluated>();
+    if (targetIds.length > 0)
+      for (const row of await loadEvaluations(db, target, targetIds))
+        evaluated.set(row.id, evaluateRow(target, row));
+    relatedQualities.set(target, evaluated);
   }
   for (const row of rows) {
     const relatedGaps: DataQualityGap[] = [];

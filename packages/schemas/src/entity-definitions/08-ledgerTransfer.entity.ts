@@ -485,13 +485,16 @@ export default defineEntity({
     operationOwners: { delete: "kernel", merge: null },
     mcp: ["get", "list", "create", "update", "delete"],
     dataQuality: {
+      // A cash transfer with no statement records why, instead of staying open.
+      exceptions: true,
       checks: [
         {
           id: "ledger_transfer_transaction",
           facet: "settlement",
           weight: 1,
           label: "Transaction",
-          message: "No financial transaction evidences this transfer.",
+          message:
+            "No live, non-void financial transaction evidences this transfer.",
         },
       ],
     },

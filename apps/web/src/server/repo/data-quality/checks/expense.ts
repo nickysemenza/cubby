@@ -37,6 +37,18 @@ export const expenseChecks = defineEntityChecks({
         sql`(SELECT jsonb_agg(jsonb_build_array(a."spendingCategoryId",a.amount,a.incomplete) ORDER BY a."spendingCategoryId") FROM (${expenseSpendingAllocationSql(sql`ARRAY[${t.id}]::uuid[]`)}) a WHERE a."expenseId"=${t.id})`,
       ],
     },
+    // Only a merchandise line (one whose Product identity is expected) feeds
+    // the quantity ledger; a fee, tax, or service line has no unit count.
+    expense_quantity: {
+      expected: (t) =>
+        sql`(${t.future} = false AND ${policyProjection(t, expenseProductExpectedSql)})`,
+      missing: (t) => sql`${t.productQuantity} IS NULL`,
+      fingerprint: (t) => [
+        sql`${t.future}`,
+        policyProjection(t, expenseProductExpectedSql),
+        sql`${t.productQuantity}`,
+      ],
+    },
     expense_product_resolution: {
       expected: (t) => policyProjection(t, expenseProductExpectedSql),
       missing: (t) => sql`${t.productId} IS NULL`,

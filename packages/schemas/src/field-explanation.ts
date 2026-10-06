@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { dataExceptionReason } from "./data-quality-shape";
+import { dataExceptionReason, dataQualityStatus } from "./data-quality-shape";
 import { entityRefSchema } from "./entity";
 import {
   fieldResolutionSchema,
@@ -18,7 +18,13 @@ export const fieldExplanationSource = z.object({
 });
 
 export const qualityBreakdown = z.object({
-  score: z.number(),
+  /** Null when not assessed; otherwise the weighted score after caps. */
+  score: z.number().nullable(),
+  status: dataQualityStatus,
+  /** The uncapped weighted score; null when no weighted check applies. */
+  weightedScore: z.number().nullable(),
+  /** The lowest cap an unresolved check imposes; null when none is unresolved. */
+  scoreCap: z.number().nullable(),
   expectedWeight: z.number(),
   satisfiedWeight: z.number(),
   /** The score arithmetic as display text; clients render it verbatim. */
@@ -30,10 +36,15 @@ export const qualityBreakdown = z.object({
       facet: z.string(),
       kind: z.enum(["missing", "defect"]),
       weight: z.number(),
+      /** The highest score this record may show while the check is a gap. */
+      scoreCap: z.number(),
       state: z.enum(["satisfied", "gap", "excepted"]),
       /** Display text for `state` (and `kind` when a gap): "Defect", "Missing data", … */
       stateLabel: z.string(),
-      /** Display text for `weight`: "weight 3" or "Unscored diagnostic". */
+      /**
+       * Display text for `weight` (and a declared cap): "weight 3",
+       * "Unscored diagnostic", "weight 3 · caps at 60 while unresolved".
+       */
       weightLabel: z.string(),
       description: z.string(),
       /**

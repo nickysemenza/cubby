@@ -50,9 +50,12 @@ const expenseCount = (t: Purchase) => sql`(
   WHERE dq_e."purchaseId" = ${t.id} AND dq_e."deletedAt" IS NULL
 )`;
 
+// A future (planned, not yet spent) line may be unpriced, as `expense_cost`
+// already allows on the line itself.
 const unpricedExpenseCount = (t: Purchase) => sql`(
   SELECT count(*)::int FROM "Expense" dq_e
   WHERE dq_e."purchaseId" = ${t.id} AND dq_e."deletedAt" IS NULL AND dq_e."cost" IS NULL
+    AND dq_e."future" = false
 )`;
 
 const expenseCents = (t: Purchase) =>

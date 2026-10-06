@@ -402,6 +402,7 @@ export type CompiledEntity = Readonly<{
       kind: "missing" | "defect";
       weight: number;
       scoring: "weighted" | "unscored";
+      scoreCap?: number;
       exceptions: "inherit" | "forbidden";
       label: string;
       message: string;

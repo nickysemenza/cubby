@@ -43,7 +43,7 @@ import {
 } from "~/entity/entity-display";
 import {
   readRecordField,
-  readReferenceField,
+  readDisplayReferenceField,
 } from "~/entity/entity-references";
 import { heroChipLabel } from "~/entity/enum-field-display";
 import { FieldExplanation } from "~/entity/field-explanation";
@@ -270,7 +270,7 @@ function ancestry<TRecord extends object>(
   record: TRecord,
   field: DisplayField,
 ): Array<{ id: string; name: string }> {
-  const reference = readReferenceField(record, field);
+  const reference = readDisplayReferenceField(record, field);
   if (reference === null || reference.items.length === 0) return [];
   const base = field.key.replace(/Ids?$/u, "");
   const chain: Array<{ id: string; name: string }> = [];

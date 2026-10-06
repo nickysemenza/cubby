@@ -1,9 +1,13 @@
 import type { DataQuality } from "@cubby/schemas/data-quality";
 import { scoredEntities } from "@cubby/schemas/data-quality";
 import type { Entity } from "@cubby/schemas/entity";
+import { AsteriskSimpleIcon } from "@phosphor-icons/react/dist/csr/AsteriskSimple";
 import { z } from "zod";
 
-import { dataQualityOptions } from "~/lib/data-quality-options";
+import {
+  dataQualityOptions,
+  dataQualityStatusLabel,
+} from "~/lib/data-quality-options";
 import { EnumPill } from "~/ui/primitives/enum-pill";
 
 import { FieldExplanation } from "./field-explanation";
@@ -15,23 +19,40 @@ export function DataQualityValue({
   quality?: Pick<DataQuality, "score" | "status">;
   scored?: boolean;
 }) {
-  return quality ? (
+  if (!quality)
+    return (
+      <span
+        className="text-muted-foreground"
+        aria-label={scored ? "Quality unavailable" : "Quality not assessed"}
+      >
+        —
+      </span>
+    );
+  const label = dataQualityStatusLabel(quality.status);
+  // Exceptions-only completeness is a distinct state, not a plain 100: the
+  // marker is visible and spoken, not color alone.
+  const excepted = quality.status === "complete_with_exceptions";
+  return (
     <EnumPill
       color={
         dataQualityOptions.find((option) => option.value === quality.status)
           ?.color
       }
+      icon={excepted ? <AsteriskSimpleIcon weight="bold" /> : undefined}
+      description={label}
       className="tabular-nums"
     >
-      {Math.round(quality.score)}/100
+      {quality.score === null ? (
+        label
+      ) : (
+        // Caps keep an unresolved gap at 99 or below, so this never rounds
+        // a gap up to 100.
+        <>
+          {Math.round(quality.score)}/100
+          {excepted ? <span className="sr-only">, {label}</span> : null}
+        </>
+      )}
     </EnumPill>
-  ) : (
-    <span
-      className="text-muted-foreground"
-      aria-label={scored ? "Quality unavailable" : "Quality not assessed"}
-    >
-      —
-    </span>
   );
 }
 

@@ -27,6 +27,13 @@ const hasProduct = (t: Ingredient) => sql`EXISTS (
   WHERE dq_ing_prod."ingredientId" = ${t.id} AND dq_ing_prod."deletedAt" IS NULL
 )`;
 
+// A sub-recipe-as-ingredient stands in for its Recipe; once that Recipe is
+// deleted every line using this Ingredient cooks nothing.
+const hasLiveRecipe = (t: Ingredient) => sql`EXISTS (
+  SELECT 1 FROM "Recipe" dq_ing_sub
+  WHERE dq_ing_sub."id" = ${t.recipeId} AND dq_ing_sub."deletedAt" IS NULL
+)`;
+
 export const ingredientChecks = defineEntityChecks({
   entity: "ingredient",
   table: ingredient,
@@ -34,6 +41,10 @@ export const ingredientChecks = defineEntityChecks({
     ingredient_product: {
       expected: (t) => sql`${t.recipeId} IS NULL AND ${isUsedByOwnRecipe(t)}`,
       missing: (t) => sql`NOT ${hasProduct(t)}`,
+    },
+    ingredient_recipe_deleted: {
+      expected: (t) => sql`${t.recipeId} IS NOT NULL`,
+      missing: (t) => sql`NOT ${hasLiveRecipe(t)}`,
     },
   },
 });

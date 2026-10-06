@@ -24,6 +24,23 @@ struct EntityRowPresentationTests {
         #expect(unassessed.facts.first?.value == "Not assessed")
     }
 
+    /// A scored entity's record can itself be unassessed (null score), and an exceptions-only
+    /// record must not read as a plain complete 100.
+    @Test func qualityShowsNullScoresAndExceptionsOnlyCompleteness() {
+        func quality(_ dataQuality: JSONValue) -> String? {
+            let row = EntityRow(
+                id: "PRD-1001", title: "Synthetic skillet", subtitle: nil, imageURL: nil,
+                raw: ["id": "PRD-1001", "name": "Synthetic skillet", "dataQuality": dataQuality])
+            return EntityRowPresentation.resolve(descriptor: EntityCatalog[.product], row: row)
+                .facts.first?.value
+        }
+        #expect(quality(["score": .null, "status": "not_assessed"]) == "Not assessed")
+        #expect(
+            quality(["score": 100, "status": "complete_with_exceptions"])
+                == "100/100 · Complete with exceptions")
+        #expect(quality(["score": 99, "status": "defect"]) == "99/100 · Defect")
+    }
+
     @Test func resolvesOnlyDeclaredFactsInMetadataOrder() throws {
         let descriptor = EntityCatalog[.product]
         let row = EntityRow(

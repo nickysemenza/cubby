@@ -1,4 +1,8 @@
-import { dataQuality, scoredEntities } from "@cubby/schemas/data-quality";
+import {
+  type DataQuality,
+  dataQuality,
+  scoredEntities,
+} from "@cubby/schemas/data-quality";
 import type { Entity } from "@cubby/schemas/entity";
 import { entityFieldModels } from "@cubby/schemas/entity-fields";
 import {
@@ -686,12 +690,24 @@ function qualityGapSummary(
       ? `${weightedGaps} unresolved ${weightedGaps === 1 ? "check reduces" : "checks reduce"} this record's score.`
       : null,
     unscoredGaps
-      ? `${unscoredGaps} unresolved ${unscoredGaps === 1 ? "diagnostic does" : "diagnostics do"} not reduce this record's score.`
+      ? `${unscoredGaps} unresolved ${unscoredGaps === 1 ? "diagnostic carries" : "diagnostics carry"} no weight but ${unscoredGaps === 1 ? "caps" : "cap"} this record's score below 100.`
       : null,
     "Missing information and detected defects are shown separately below.",
   ]
     .filter(Boolean)
     .join(" ");
+}
+
+function qualitySummary(
+  quality: DataQuality,
+  breakdown: z.infer<typeof fieldExplanationOutput>["qualityBreakdown"],
+): string {
+  if (quality.status === "not_assessed")
+    return "No weighted check applies to this record and nothing is unresolved, so its quality is not assessed. Not assessed is not a score of zero or a guarantee of completeness.";
+  if (quality.gaps.length > 0) return qualityGapSummary(breakdown);
+  return quality.status === "complete_with_exceptions"
+    ? "Every applicable check passes, at least one only through an accepted exception. This score describes the checks defined for this record; it does not guarantee that every possible detail is correct."
+    : "All applicable checks are satisfied. This score describes the checks defined for this record; it does not guarantee that every possible detail is correct.";
 }
 
 export function explainInterpretation(
@@ -718,13 +734,14 @@ export function explainInterpretation(
     caveats.length = 0;
     nextSteps.length = 0;
     const q = quality.data;
-    summary =
-      q.gaps.length === 0
-        ? "All applicable checks are satisfied, including any accepted exceptions. This score describes the checks defined for this record; it does not guarantee that every possible detail is correct."
-        : qualityGapSummary(qualityBreakdown);
+    summary = qualitySummary(q, qualityBreakdown);
     if (qualityBreakdown?.expectedWeight === 0)
       caveats.push(
-        "No weighted checks apply to this record. The scoring rule returns 100 when the expected weight is zero; unscored diagnostics remain visible.",
+        "No weighted checks apply to this record. Without an unresolved check it is not assessed; an unresolved diagnostic sets the score to its cap.",
+      );
+    if (q.gaps.length > 0)
+      caveats.push(
+        "Every unresolved check caps the score at 99, or lower where the check declares a cap, so a record with a gap never reads 100.",
       );
     caveats.push(
       "Only this record's applicable weighted checks affect its score. Related records' gaps are reported separately.",
@@ -764,7 +781,9 @@ export function explainInterpretation(
   return {
     interpretation: {
       result: quality?.success
-        ? `${Math.round(quality.data.score)}/100`
+        ? quality.data.score === null
+          ? "Not assessed"
+          : `${Math.round(quality.data.score)}/100`
         : resultLabel,
       summary,
       caveats,

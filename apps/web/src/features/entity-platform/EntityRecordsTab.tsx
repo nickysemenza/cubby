@@ -150,7 +150,7 @@ const columns = createCubbyColumnCollection<EntityRecord>((add) => {
       cell: ({ row: { original } }) => (
         <DataQualityValue
           quality={
-            original.quality !== null && original.qualityStatus !== null
+            original.qualityStatus !== null
               ? { score: original.quality, status: original.qualityStatus }
               : undefined
           }

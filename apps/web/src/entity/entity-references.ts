@@ -1,4 +1,5 @@
 import type { EntityFieldModel } from "@cubby/schemas/entity-fields";
+import { fieldResolutionsSchema } from "@cubby/schemas/field-resolution";
 import { z } from "zod";
 
 type ReferenceField = Pick<
@@ -16,6 +17,7 @@ export interface ReferenceItem {
   id: string;
   name: string | null;
   emoji?: string | null;
+  amount?: number | null;
 }
 
 export interface ReferenceFieldValue {
@@ -73,6 +75,39 @@ const singleItem = (
       ];
 };
 
+const storedReference = <TRecord extends object>(
+  record: TRecord,
+  field: ReferenceField,
+  intent: "stored" | "display",
+): ReferenceFieldValue | null => {
+  if (intent !== "stored" || !field.reference || field.reference.multiple)
+    return null;
+  const resolution = readRecordField(
+    record,
+    "fieldResolutions",
+    fieldResolutionsSchema.optional(),
+  )?.[field.key];
+  if (!resolution) return null;
+  const id = z.string().nullable().parse(resolution.storedValue);
+  const base = field.key.replace(/Ids?$/u, "");
+  const raw =
+    field.readKey === null
+      ? undefined
+      : readRecordField(record, field.readKey, z.unknown());
+  const carriesStoredTarget = raw === id;
+  const nested = readRecordField(record, base, z.unknown());
+  const nestedName =
+    readRecordField(record, `${base}Name`, z.string().nullish()) ?? null;
+  return {
+    entity: field.reference.entity,
+    items: singleItem(
+      id,
+      carriesStoredTarget ? nested : null,
+      carriesStoredTarget ? nestedName : null,
+    ),
+  };
+};
+
 /**
  * The linked record(s) a reference field names. A projection carries the
  * shortcode under the field's `readKey` (`projectId`), or nests the target
@@ -84,6 +119,7 @@ const singleItem = (
 export function readReferenceField<TRecord extends object>(
   record: TRecord,
   field: ReferenceField,
+  intent: "stored" | "display" = "stored",
 ): ReferenceFieldValue | null {
   const reference = field.reference;
   if (reference === null) return null;
@@ -96,6 +132,8 @@ export function readReferenceField<TRecord extends object>(
     field.readKey === null
       ? undefined
       : readRecordField(record, field.readKey, z.unknown());
+  const assigned = storedReference(record, field, intent);
+  if (assigned) return assigned;
   // A reference whose read key carries a count (recipe `meals` reads
   // `meals`) names related records without listing them; it renders as
   // the scalar it is.
@@ -128,4 +166,69 @@ export function readReferenceField<TRecord extends object>(
             readRecordField(record, `${base}Emoji`, z.string().nullish()),
         })),
   };
+}
+
+/** Effective references share the <stem>Allocations projection and Id/Name
+ * vocabulary. Assignment readers retain the stored value for editing. */
+export function readDisplayReferenceField<TRecord extends object>(
+  record: TRecord,
+  field: ReferenceField,
+):
+  | (ReferenceFieldValue & {
+      incomplete?: boolean;
+      unclassifiedAllocations?: { amount?: number | null }[];
+    })
+  | null {
+  const stored = readReferenceField(record, field, "display");
+  if (stored === null || field.reference?.multiple) return stored;
+  const resolutions = readRecordField(
+    record,
+    "fieldResolutions",
+    fieldResolutionsSchema.optional(),
+  );
+  const resolution = resolutions?.[field.key];
+  if (!resolution) return stored;
+  const stem = field.key.replace(/Ids?$/u, "");
+  const allocations = readRecordField(
+    record,
+    `${stem}Allocations`,
+    z.array(z.looseObject({})).optional(),
+  );
+  const shares = (allocations ?? []).map((share) => ({
+    id: readRecordField(share, `${stem}Id`, z.string().nullish()) ?? null,
+    name: readRecordField(share, `${stem}Name`, z.string().nullish()) ?? null,
+    incomplete:
+      readRecordField(share, "incomplete", z.boolean().optional()) ?? false,
+    amount: readRecordField(share, "amount", z.number().nullish()),
+  }));
+  if (resolution.mode === "allocated") {
+    const items = new Map<string, ReferenceItem>();
+    for (const share of shares)
+      if (share.id) {
+        const item: ReferenceItem = { id: share.id, name: share.name };
+        if (share.amount !== undefined) item.amount = share.amount;
+        items.set(share.id, item);
+      }
+    return {
+      entity: stored.entity,
+      items: [...items.values()],
+      unclassifiedAllocations: shares
+        .filter((share) => !share.id)
+        .map((share) => ({ amount: share.amount })),
+      incomplete:
+        shares.length === 0 ||
+        shares.some((share) => !share.id || share.incomplete),
+    };
+  }
+  const effectiveID = z.string().nullable().parse(resolution.value);
+  if (effectiveID === null) return { entity: stored.entity, items: [] };
+  const sameTarget = stored.items.find((item) => item.id === effectiveID);
+  const source = resolution.sourceEntity;
+  const name =
+    shares.find((share) => share.id === effectiveID)?.name ??
+    sameTarget?.name ??
+    (source?.entityKind === stored.entity && source.entityId === effectiveID
+      ? source.name
+      : null);
+  return { entity: stored.entity, items: [{ id: effectiveID, name }] };
 }

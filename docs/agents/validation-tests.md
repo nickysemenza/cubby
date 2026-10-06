@@ -3,8 +3,11 @@
 Prefer E2E for complete behavior through the built browser application or the
 native client. Keep a focused unit, UI, PostgreSQL, or Workers test when it
 catches a concrete failure the available E2E suites do not reasonably observe.
-Before adding an isolated test, record its failure modes and write the failing
-test before the code. For `.tsx` changes, choose browser E2E when it observes
+Before changing isolated behavior, record its failure modes and run a failing
+regression test before editing the implementation, including declarations, SQL
+bindings, and compiler guards. A delegated lane returns the pre-change failing
+command and relevant output; tests added after implementation do not satisfy
+this requirement. For `.tsx` changes, choose browser E2E when it observes
 the behavior; use the UI or preview tier for distinct rendering or layout
 failures. Keep pure logic imported by node tests in alias-free `.ts` files.
 

@@ -919,7 +919,7 @@ and emit no migration.
 `capabilities.dataQuality` on an entity definition
 (`entityDataQualityMetadataSchema` in
 `packages/schemas/src/entity-definitions/definition.ts`) declares
-`checks[{id, facet, kind, weight, label, message}]`, `exceptions` (true where
+`checks[{id, facet, kind, weight, scoreCap?, label, message}]`, `exceptions` (true where
 the entity may record `DataException` rows), `related` (other
 scored entities whose gaps roll up into this one), and `listOrder`. `id` must
 be globally unique across every entity's checks — it doubles as the `dataGap`
@@ -957,9 +957,27 @@ safely embed it under `NOT` or beside `OR` — a bare conjunction once emptied
 a production worklist; the unit test asserts the shape.
 `expected`/`missing`/`fingerprint` combine into a live-gap condition (expected,
 missing, not covered by an active exception) and the score:
-`100 × satisfied expected weight / expected weight`, 100 when nothing is
-expected — the same arithmetic the hydrated `score` uses, so `ORDER BY`
-agrees with the read value. The score is unindexed — a correlated `EXISTS`
+`100 × satisfied expected weight / expected weight`, limited by the lowest
+`scoreCap` of an applicable unresolved check. A cap also applies to an
+unscored integrity diagnostic: supporting evidence cannot turn a known defect
+into perfect quality. Any unresolved check also caps at 99, so a rounded
+display cannot show 100 while a gap remains. Caps belong in the declaration, alongside importance
+weights; domain applicability and validity stay in the existing typed SQL
+bindings. No applicable weighted evidence and no active cap produces a nullable
+score and **Not assessed**, never an automatic 100. SQL sorting puts unassessed
+records last in either direction and uses the same arithmetic as hydration.
+
+Active exceptions remain accepted evidence for score arithmetic, but an otherwise
+complete record is **Complete with exceptions**, visibly distinct from fully
+satisfied evidence. Stale exceptions reopen their gaps. Every weighted missing
+check must be closable through supported data entry or an allowed exception;
+optional planning fields and operational inactivity are not universal
+completeness requirements. Actual zero or negative costs remain valid.
+
+Core identity, classification, usable evidence, and financial consistency matter
+more than optional imagery and descriptions. Score explanations name deductions
+and applicable caps. Related gaps remain separate from the owner's score and
+must not propagate through recursive relationship chains. The score is unindexed — a correlated `EXISTS`
 per check per row — which is fine at household scale. `related` roll-ups add
 an `EXISTS` against an aliased related table using that entity's own
 bindings; `repo/list.ts` binds the resulting filters and sort for every
@@ -972,6 +990,15 @@ Enabling it requires fingerprint inputs for every check and an allowed-reason
 list per check (`EXCEPTION_REASONS` in `repo/data-quality/exception-reasons.ts`, exposed on each
 explained check as `exceptionReasons`). An
 exception goes with its entity when the entity is removed or merged away.
+
+Reference read surfaces display effective resolution, while editors retain the
+stored assignment baseline. Named reference pills use the target's projected
+name; provenance may name a different source record and must not supply a
+mismatched label. Allocated references share the `<stem>Allocations` projection
+with `<stem>Id`, `<stem>Name`, `amount`, and `incomplete` fields. The generic
+reference reader renders distinct targets and unresolved-share indicators in
+lists, embedded tables, and details. Detail allocations retain their amounts.
+Do not create another entity-specific category column or allocation renderer.
 
 ## Relations, deletion, and merge
 

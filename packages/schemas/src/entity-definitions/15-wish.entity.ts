@@ -429,7 +429,7 @@ export default defineEntity({
           facet: "linkage",
           weight: 1,
           label: "Candidate",
-          message: "No candidate product is linked to this wish.",
+          message: "No live candidate product is linked to this wish.",
         },
       ],
     },

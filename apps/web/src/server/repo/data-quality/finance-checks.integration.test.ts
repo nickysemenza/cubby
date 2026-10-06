@@ -1,9 +1,11 @@
 import { parseEntityId, parseShortcodeFor } from "@cubby/schemas/identifiers";
+import { sql } from "drizzle-orm";
 import { createRepoEntity } from "tooling/factories/repo";
 import { taxonomyShortcode } from "tooling/product-category-fixtures";
 import { TEST_ACTOR, withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 
+import { unwrapDb } from "~/server/repo/database-helpers";
 import { createGardenEntry, createPlanting } from "~/server/repo/garden";
 import { createLedgerParty } from "~/server/repo/ledger-party";
 import { createLedgerTransfer } from "~/server/repo/ledger-transfer";
@@ -39,9 +41,14 @@ import { loadDataQualities } from "./hydrate";
 describe("data quality: finance and project entities", () => {
   const ctx = withTestDb();
 
-  it("project: kind and start date", async () => {
+  it("project: kind, and a start date only once work has begun", async () => {
     const gap = await createRepoEntity(ctx, "project", {
       name: "DQ project gap",
+      status: "in_progress",
+    });
+    const notStarted = await createRepoEntity(ctx, "project", {
+      name: "DQ project not started",
+      kind: "furniture",
       status: "not_started",
     });
     const complete = await createRepoEntity(ctx, "project", {
@@ -53,18 +60,21 @@ describe("data quality: finance and project entities", () => {
 
     const hydrated = await loadDataQualities(ctx.db, "project", [
       gap.entityId,
+      notStarted.entityId,
       complete.entityId,
     ]);
     const gapChecks = hydrated.get(gap.entityId)?.gaps.map((g) => g.check);
     expect(gapChecks).toContain("project_kind");
     expect(gapChecks).toContain("project_start_date");
+    // `not_started` has no actual start to record.
+    expect(hydrated.get(notStarted.entityId)?.gaps).toEqual([]);
     expect(hydrated.get(complete.entityId)).toMatchObject({
       status: "complete",
       gaps: [],
     });
   });
 
-  it("task: due date and trade", async () => {
+  it("task: due date optional, trade inherited", async () => {
     // A task needs a trade or an inherited source (`assertEffectiveTaskTrade`)
     // — give it a project default so create succeeds while the task's OWN
     // `trade` column, which this check reads, stays unset.
@@ -82,13 +92,19 @@ describe("data quality: finance and project entities", () => {
       dueDate: "2026-09-01",
     });
 
+    // A due window end with no start is the only due-date gap.
+    await unwrapDb(ctx.db).execute(
+      sql`UPDATE "Task" SET "dueEndDate" = '2026-09-10' WHERE "id" = ${gap.entityId}`,
+    );
+
     const hydrated = await loadDataQualities(ctx.db, "task", [
       gap.entityId,
       complete.entityId,
     ]);
     const gapChecks = hydrated.get(gap.entityId)?.gaps.map((g) => g.check);
     expect(gapChecks).toContain("task_due_date");
-    expect(gapChecks).toContain("task_trade");
+    // The project's default trade is the task's effective trade.
+    expect(gapChecks).not.toContain("task_trade");
     expect(hydrated.get(complete.entityId)).toMatchObject({
       status: "complete",
       gaps: [],
@@ -401,7 +417,7 @@ describe("data quality: finance and project entities", () => {
     );
     const gap = await createPlanting(
       ctx.db,
-      { plantId: crop.id, status: "growing" },
+      { plantId: crop.id, status: "growing", sowedOn: "2026-04-01" },
       TEST_ACTOR,
     );
     const complete = await createPlanting(
@@ -410,9 +426,34 @@ describe("data quality: finance and project entities", () => {
         plantId: crop.id,
         locationId: bed.id,
         status: "growing",
+        sowedOn: "2026-04-01",
       },
       TEST_ACTOR,
     );
+
+    const contradictory = await createPlanting(
+      ctx.db,
+      {
+        plantId: crop.id,
+        locationId: bed.id,
+        status: "growing",
+        sowedOn: "2026-04-01",
+        finishedOn: "2026-05-01",
+        outcome: null,
+      },
+      TEST_ACTOR,
+    );
+    const contradictoryId = parseEntityId(
+      "planting",
+      (await resolveLiveShortcode(ctx.db, contradictory.id, "planting"))!,
+    );
+    const quality = (
+      await loadDataQualities(ctx.db, "planting", [contradictoryId])
+    ).get(contradictoryId);
+    expect(quality?.gaps.map((gap) => gap.check)).toContain(
+      "planting_lifecycle",
+    );
+    expect(quality?.score).toBeLessThanOrEqual(49);
 
     const gapId = parseEntityId(
       "planting",
@@ -513,7 +554,8 @@ describe("data quality: finance and project entities", () => {
     ]);
     // A guest party is never expected to map to a financial account.
     expect(hydrated.get(guest.entityId)).toMatchObject({
-      status: "complete",
+      score: null,
+      status: "not_assessed",
       gaps: [],
     });
     const gapChecks = hydrated.get(gap.entityId)?.gaps.map((g) => g.check);

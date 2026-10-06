@@ -468,6 +468,8 @@ export default defineEntity({
     resolve: { match: ["name"], createMissing: true },
     mcp: ["get", "list", "create", "update", "delete", "bulkUpdate", "merge"],
     dataQuality: {
+      // An off-guide crop records why it has no guide key.
+      exceptions: true,
       checks: [
         {
           id: "plant_crop",

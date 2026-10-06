@@ -455,14 +455,6 @@ export default defineEntity({
           label: "Owner",
           message: "No owner is recorded for this device.",
         },
-        {
-          id: "device_stale",
-          facet: "content",
-          weight: 1,
-          label: "Last seen",
-          message:
-            "This device hasn't checked in within the last 30 days, or has never checked in.",
-        },
       ],
     },
   },

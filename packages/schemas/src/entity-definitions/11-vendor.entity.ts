@@ -1057,14 +1057,16 @@ export default defineEntity({
         {
           id: "vendor_order_evidence",
           facet: "identity",
-          weight: 2,
+          weight: 3,
           label: "Order evidence",
           message: "No order evidence is recorded for this vendor.",
         },
         {
           id: "vendor_order_evidence_conflict",
           facet: "identity",
-          weight: 2,
+          kind: "defect",
+          weight: 3,
+          scoreCap: 49,
           exceptions: "forbidden",
           label: "Order evidence conflict",
           message:

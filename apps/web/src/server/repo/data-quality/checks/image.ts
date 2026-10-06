@@ -1,3 +1,4 @@
+import { PDF_CONTENT_TYPE } from "@cubby/schemas/image";
 import { sql } from "drizzle-orm";
 
 import { image } from "~/server/db/schema";
@@ -9,6 +10,9 @@ type Image = typeof image;
 const isOwn = (t: Image) => sql`${t.source} = 'own'`;
 const isOwnOrScreenshot = (t: Image) =>
   sql`${t.source} IN ('own', 'screenshot')`;
+
+// A PDF document carries pages, not raster dimensions.
+const isRaster = (t: Image) => sql`${t.contentType} <> ${PDF_CONTENT_TYPE}`;
 
 const hasLiveSighting = (t: Image) => sql`EXISTS (
   SELECT 1 FROM "ImageSighting" dq_sighting
@@ -36,7 +40,17 @@ export const imageChecks = defineEntityChecks({
       missing: (t) => sql`${t.capturedAt} IS NULL`,
     },
     image_dimensions: {
-      missing: (t) => sql`(${t.width} IS NULL OR ${t.height} IS NULL)`,
+      expected: isRaster,
+      missing: (t) =>
+        sql`(${t.width} IS NULL OR ${t.height} IS NULL OR ${t.width} <= 0 OR ${t.height} <= 0)`,
+    },
+    // The same storage/render verdicts `displayableImageWhere` reads: the
+    // record exists but its bytes are gone, mismatched, or unrenderable.
+    image_asset_unusable: {
+      missing: (t) => sql`(
+        ${t.storageStatus} IN ('missing', 'metadata_mismatch')
+        OR (${isRaster(t)} AND ${t.renderStatus} = 'failed')
+      )`,
     },
     // `own` without any live sighting means the household-sourced claim has
     // no photo-library evidence behind it — a legacy upload never matched by

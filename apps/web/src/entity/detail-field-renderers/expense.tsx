@@ -15,48 +15,6 @@ const categoryField = entityFieldModels.expense.fields.find(
   (field) => field.key === "spendingCategoryId",
 );
 
-function ExpenseCategoryField({ expense }: { expense: ExpenseOut }) {
-  if (
-    expense.lineKind === "principal" ||
-    expense.fieldResolutions?.spendingCategoryId?.mode !== "allocated"
-  )
-    return categoryField
-      ? renderDetailFieldValue("expense", expense, categoryField)
-      : null;
-  return (
-    <Stack gap="xs">
-      {expense.spendingCategoryAllocations?.map((share) => (
-        <div
-          key={share.spendingCategoryId ?? "unknown"}
-          className="flex min-w-0 justify-between gap-3 text-sm"
-        >
-          {share.spendingCategoryId ? (
-            <EntityRefLink
-              variant="chip"
-              entity="spendingCategory"
-              id={share.spendingCategoryId}
-              name={share.spendingCategoryName}
-              displayImage={null}
-            />
-          ) : (
-            <span>Unclassified</span>
-          )}
-          <span className="tabular-nums">
-            {share.amount === null ? "Unpriced" : formatCurrency(share.amount)}
-          </span>
-        </div>
-      ))}
-      {expense.spendingCategoryAllocations?.some(
-        (share) => share.incomplete,
-      ) && (
-        <p className="text-xs text-muted-foreground">
-          Some category shares remain unresolved.
-        </p>
-      )}
-    </Stack>
-  );
-}
-
 const projectField = entityFieldModels.expense.fields.find(
   (field) => field.key === "projectId",
 );
@@ -124,7 +82,9 @@ function ExpenseProjectField({ expense }: { expense: ExpenseOut }) {
 
 export const expenseDetailFields = {
   "expense-spending-category": (expense) => ({
-    value: <ExpenseCategoryField expense={expense} />,
+    value: categoryField
+      ? renderDetailFieldValue("expense", expense, categoryField)
+      : null,
   }),
   "expense-project": (expense) => ({
     value: <ExpenseProjectField expense={expense} />,

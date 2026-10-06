@@ -23,6 +23,7 @@ const expense: ExpenseOut = {
   bookingTransactionCode: null,
   economicRole: "vendor",
   spendingCategoryId: null,
+  spendingCategoryName: null,
   lineKind: "principal",
   lineBasis: "item_line",
   costType: "materials",
