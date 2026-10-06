@@ -833,9 +833,7 @@ export const updateExpense = async (
     // target Purchase's other lines, so check it whole once this line lands.
     await validateProductPolicy(
       tx,
-      resolved === undefined
-        ? { expenseIds: [state.id] }
-        : { purchaseId: resolved },
+      resolved ? { purchaseId: resolved } : { expenseIds: [state.id] },
     );
     await auditNestedChanges(tx, state, output);
     await touchUpdatedAt(
