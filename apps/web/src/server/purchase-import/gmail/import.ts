@@ -106,7 +106,7 @@ type PlacementRow = Awaited<ReturnType<typeof lockPlacementEvent>>;
  * import; every other status, including needs_review, keeps its orders so the
  * same evidence never gets a second run.
  */
-async function ownersOf(
+export async function ownersOf(
   tx: DrizzleTransaction,
   scope: { ledgerPartyId: LedgerPartyId; vendorId: VendorId },
   eventIds: readonly string[],
@@ -176,13 +176,19 @@ const needsDispatch = (run: typeof runTable.$inferSelect) =>
   run.status === "dispatch_failed" ||
   (run.status === "running" && run.dispatchAttempts === 0);
 
-function runIdentity(row: PlacementRow, actor: ActorContext) {
+type ImportTrigger = "manual" | "discovery";
+
+function runIdentity(
+  row: PlacementRow,
+  actor: ActorContext,
+  trigger: ImportTrigger,
+) {
   return {
     ledgerPartyId: row.mail.ledgerPartyId,
     vendorId: row.vendorId,
     vendorAccountId: null,
     purpose: "account_sync" as const,
-    trigger: "manual" as const,
+    trigger,
     actorUserId: actor.userId,
     actorName: row.actorName,
     actorEmail: row.actorEmail,
@@ -199,6 +205,8 @@ export async function startOrderMailImport(
   rawInput: OrderMailImportInput,
   actor: ActorContext,
   queue: PurchaseAgentQueueProducer,
+  /** `discovery` when a scheduled Gmail pass started it without a click. */
+  trigger: ImportTrigger = "manual",
 ) {
   const input = orderMailImportInput.parse(rawInput);
   const admitted = await withTransaction(db, async (tx) => {
@@ -233,7 +241,7 @@ export async function startOrderMailImport(
       );
     const id = runEntityId.parse(crypto.randomUUID());
     const run = await insertWithShortcode(tx, "run", {
-      ...runIdentity(row, actor),
+      ...runIdentity(row, actor, trigger),
       id,
       agentSessionId: importRunAgentIdentity(id, "account_sync"),
       clientKey: `order-mail:${input.eventId}:${input.evidenceChecksum}`,
@@ -336,7 +344,7 @@ export async function startSelectedOrderMailImport(
     }
     const id = runEntityId.parse(crypto.randomUUID());
     const run = await insertWithShortcode(tx, "run", {
-      ...runIdentity(head, actor),
+      ...runIdentity(head, actor, "manual"),
       id,
       agentSessionId: importRunAgentIdentity(id, "account_sync"),
       clientKey,

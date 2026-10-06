@@ -103,7 +103,11 @@ The Run row is the record; an instance is one attempt at it, named
   trigger start one pass. A pass freezes its message batches and history
   events on the Run, saves ten messages per step with each attachment
   streamed to R2 on its own, and moves the mailbox cursor last, only from the
-  position the pass started at.
+  position the pass started at. Each batch step also starts an order import
+  (`trigger: discovery`) for every new confirmation it saved: a known Vendor,
+  no Purchase or member decision for the order, no live run owning it, at most
+  five per Vendor per pass (`gmail/auto-import.ts`). A replayed step reuses
+  the runs it started.
 - A completed scheduled pass that saved no message and recorded no history
   event is `routine`; the Runs list hides routine Runs by default.
 

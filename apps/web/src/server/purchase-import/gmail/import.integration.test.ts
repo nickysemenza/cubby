@@ -6,6 +6,7 @@ import { describe, expect, it } from "vitest";
 import {
   ledgerParty,
   orderMail,
+  orderMailCandidateDecision,
   importSourceClaim,
   orderMailEvent,
   product,
@@ -31,6 +32,7 @@ import {
   loadRunDetail,
 } from "../run-service";
 import { startTargetedImport } from "../targeted-run";
+import { autoImportOrderMail, AUTO_IMPORTS_PER_VENDOR } from "./auto-import";
 import {
   loadOrderMailImportEvidence,
   startOrderMailImport,
@@ -1075,6 +1077,134 @@ describe("saved confirmation imports", () => {
           queue,
         ),
       ).rejects.toThrow(new RegExp(`already on run ${started.runId}`, "i"));
+    });
+  });
+
+  // A scheduled pass imports a new confirmation without a click. Failure
+  // modes: a replayed batch starts a second run; shipping mail, an order
+  // already imported, or a member's decision starts one anyway; a backlog of
+  // saved placements floods the queue; a confirmation a live run already owns
+  // gets a second run.
+  describe("automatic import of new confirmations", () => {
+    const recordingQueue = () => {
+      const sent: PurchaseAgentEvent[] = [];
+      return {
+        sent,
+        send: async (value: PurchaseAgentEvent) => {
+          sent.push(value);
+        },
+      };
+    };
+
+    it("starts one discovery run per new confirmation and replays to the same run", async () => {
+      const { mail } = await seed();
+      const queue = recordingQueue();
+      const pass = {
+        ledgerPartyId: mail.ledgerPartyId,
+        messageIds: [mail.messageId],
+      };
+      const first = await autoImportOrderMail(ctx.db, pass, queue);
+      const again = await autoImportOrderMail(ctx.db, pass, queue);
+      expect(first).toHaveLength(1);
+      expect(again).toEqual(first);
+      expect(queue.sent).toHaveLength(1);
+      const [run] = await getDb(ctx.db)
+        .select()
+        .from(runTable)
+        .where(eq(runTable.vendorId, mail.vendorId!));
+      expect(run).toMatchObject({
+        trigger: "discovery",
+        purpose: "account_sync",
+        actorUserId: ctx.actor.userId,
+        input: { kind: "order_mail_import", orderId: "EXAMPLE-123" },
+      });
+    });
+
+    it("leaves shipping mail, imported orders, and decided confirmations alone", async () => {
+      const queue = recordingQueue();
+      const shipped = await seed("shipped");
+      const imported = await seed();
+      await insertWithShortcode(ctx.db, "purchase", {
+        vendorId: imported.mail.vendorId!,
+        orderId: "EXAMPLE-123",
+        date: "2026-09-01",
+      });
+      const decided = await seed();
+      const other = await insertWithShortcode(ctx.db, "purchase", {
+        vendorId: decided.mail.vendorId!,
+        orderId: "OTHER-9",
+        date: "2026-09-01",
+      });
+      await getDb(ctx.db).insert(orderMailCandidateDecision).values({
+        eventId: decided.event.id,
+        purchaseId: other.id,
+        decision: "dismissed",
+        evidenceChecksum: decided.mail.rawChecksum,
+        decidedByUserId: ctx.actor.userId,
+      });
+      const started = await autoImportOrderMail(
+        ctx.db,
+        {
+          ledgerPartyId: shipped.mail.ledgerPartyId,
+          messageIds: [shipped.mail, imported.mail, decided.mail].map(
+            (mail) => mail.messageId,
+          ),
+        },
+        queue,
+      );
+      expect(started).toEqual([]);
+      expect(queue.sent).toEqual([]);
+    });
+
+    it("caps one Vendor's imports per pass and skips a confirmation a live run owns", async () => {
+      const queue = recordingQueue();
+      const { mail: head } = await seed();
+      const mails = [head];
+      for (let index = 1; index <= AUTO_IMPORTS_PER_VENDOR + 1; index += 1) {
+        const [mail] = await getDb(ctx.db)
+          .insert(orderMail)
+          .values({
+            ...head,
+            id: undefined,
+            messageId: `${head.messageId}-${index}`,
+          })
+          .returning();
+        await getDb(ctx.db)
+          .insert(orderMailEvent)
+          .values({
+            orderMailId: mail!.id,
+            event: "placed",
+            orderId: `EXAMPLE-${200 + index}`,
+            amount: 5,
+            currency: "USD",
+            sourceKey: `synthetic:${mail!.id}`,
+          });
+        mails.push(mail!);
+      }
+      const [owned] = await getDb(ctx.db)
+        .select()
+        .from(orderMailEvent)
+        .where(eq(orderMailEvent.orderMailId, mails[1]!.id));
+      await startSelectedOrderMailImport(
+        ctx.db,
+        {
+          orders: [
+            { eventId: owned!.id, evidenceChecksum: mails[1]!.rawChecksum },
+          ],
+        },
+        ctx.actor,
+        { send: async () => {} },
+      );
+      const started = await autoImportOrderMail(
+        ctx.db,
+        {
+          ledgerPartyId: head.ledgerPartyId,
+          messageIds: mails.map((mail) => mail.messageId),
+        },
+        queue,
+      );
+      expect(started).toHaveLength(AUTO_IMPORTS_PER_VENDOR);
+      expect(queue.sent).toHaveLength(AUTO_IMPORTS_PER_VENDOR);
     });
   });
 });
