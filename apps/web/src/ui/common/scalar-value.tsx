@@ -152,8 +152,10 @@ export function renderScalarValue(
       return value.raw === undefined ? undefined : <NoneValue />;
     case "timestamp":
       return <HoverableTimestamp timestamp={value.raw} />;
-    case "date":
-      return formatDateSpan(value.raw, null);
+    case "date": {
+      const label = formatDateSpan(value.raw, null);
+      return <span title={label}>{label}</span>;
+    }
     case "boolean":
       return value.raw ? "Yes" : "No";
     case "number":

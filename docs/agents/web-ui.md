@@ -7,7 +7,11 @@ days, in about a week, in a few weeks, in about a month, in a few months,
 in about a year, then approximate years). Ranges covering today say ongoing;
 past dates stay absolute. Compare household calendar days, never elapsed hours
 or UTC dates. Generic scalar dates, declared spans, and task due-date summaries
-share this formatter. `formatCalendarDay` remains the absolute primitive for
+share this formatter. Date columns reserve 256px and declared spans 320px so
+relative context stays visible by default; full labels remain available in the
+title when a column is resized narrower. Task summaries pass the optional end
+so an ongoing window cannot collapse to a past start day. Browser checks verify
+unclipped labels rather than only matching DOM text. `formatCalendarDay` remains the absolute primitive for
 editable date inputs, calendar axes/headings, and fixed-format diagnostics.
 
 Use style tokens—never component hardcoded colors. Semantic color additions get

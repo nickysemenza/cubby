@@ -762,7 +762,7 @@ describe("declared entity displays", () => {
       expect(byId.status?.enableSorting).toBe(true);
       // "dueDate" is the declared span column: its own width, the declared
       // `mobile` placement, and no inline-edit affordance.
-      expect(byId.dueDate?.className).toBe("w-40");
+      expect(byId.dueDate?.className).toBe("w-80");
       expect(byId.dueDate?.mobile).toEqual({
         slot: "meta",
         priority: 40,

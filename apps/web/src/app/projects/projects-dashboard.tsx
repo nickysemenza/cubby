@@ -434,7 +434,7 @@ function NextWork({ tasks }: { tasks: TaskOut[] }) {
             )}
             {task.dueDate && (
               <span className="ml-auto shrink-0 text-xs text-muted-foreground">
-                {formatDateSpan(task.dueDate, null)}
+                {formatDateSpan(task.dueDate, task.dueEndDate)}
               </span>
             )}
           </Row>
