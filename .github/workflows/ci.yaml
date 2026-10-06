@@ -513,27 +513,28 @@ jobs:
           cache-hit: ${{ steps.apple-tools.outputs.spm-clones-cache-hit }}
           matched-key: ${{ steps.apple-tools.outputs.spm-clones-cache-matched-key }}
 
-  # Populates apple-testflight.yaml's release FFI caches (setup-apple-ffi's
-  # targets=device/mac, profile=dist) on every main push, so a release hits
-  # a warm cache instead of the cold ~7-minute Rust build those keys
-  # previously only ever saw during a release itself. Deliberately does not
-  # `need` scope: it should warm regardless of the PR path filter, and there
-  # is no PR here to filter anyway (push-only). Not a required check.
+  # Release-only FFI caches use dist, while the required Apple checks use
+  # release. Warm both dist targets sequentially after the required native
+  # gate so background builds do not occupy two more macOS runners first.
   warm-apple-ffi:
-    name: Warm Apple FFI cache (${{ matrix.targets }})
-    needs: scope
+    name: Warm Apple release FFI caches
+    needs: [scope, test-apple]
     if: github.event_name == 'push' && needs.scope.outputs.apple == 'true'
     runs-on: macos-26
-    timeout-minutes: 30
-    strategy:
-      fail-fast: false
-      matrix:
-        targets: [device, mac]
+    timeout-minutes: 40
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
       - uses: ./.github/actions/setup-apple-ffi
         with:
-          targets: ${{ matrix.targets }}
+          targets: mac
+          profile: dist
+      # Cache restore overlays directories; keep the device cache free of
+      # the macOS slices from the preceding target.
+      - name: Replace macOS FFI with device FFI
+        run: rm -rf apps/apple/CubbyKit/Frameworks/CubbyFFI.xcframework
+      - uses: ./.github/actions/setup-apple-ffi
+        with:
+          targets: device
           profile: dist
 
   simulator-e2e:

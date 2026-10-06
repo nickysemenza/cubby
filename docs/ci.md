@@ -297,11 +297,16 @@ subcommands, `archive <ios|macos>` and `export <ios|macos>`; the macOS
 Distribution identity check (the v1.0.2 failure) runs in both the macOS
 `archive` leg and the `upload` job, each behind its own signing import.
 
-A `warm-apple-ffi` job in `ci.yaml` runs on `main` pushes selected for Apple and
-restores/builds the `device`/`dist` and `mac`/`dist` `setup-apple-ffi`
-caches, so a release normally hits a warm cache instead of the cold
-~7-minute Rust build those two cache keys previously only ever saw during a
-release itself. It is not a required check.
+A `warm-apple-ffi` job in `ci.yaml` runs after successful required Apple checks
+on `main` pushes selected for Apple. One macOS runner restores/builds the
+`mac`/`dist` then `device`/`dist` `setup-apple-ffi` caches sequentially, keeping
+their compiled products and output keys separate. The disposable macOS
+XCFramework is removed before the device restore to prevent cache overlays.
+If the macOS phase fails, the device phase is skipped; a later release can
+still build either missing cache. These background builds no longer run
+alongside the required native gate. A release normally restores the warmed
+outputs rather than compiling Rust from scratch. Warming is not a required
+check.
 
 To validate a change to the release workflow without uploading anything,
 push a deliberately invalid tag such as `v0.0.0-smoke`: it matches `v*`,
