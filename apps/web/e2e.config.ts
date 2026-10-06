@@ -14,6 +14,11 @@ process.env.E2E_TELEMETRY_DISABLED = "1";
 const target = z.enum(["web", "ios"]).parse(process.env.TESTER_ARMY_TARGET);
 const origin = z.url().parse(process.env.TESTER_ARMY_ORIGIN);
 const cookies = target === "web" ? readBrowserCookies() : [];
+const inferenceToken = modelConfiguration().TESTER_ARMY_CF_API_TOKEN;
+// Only the gateway provider has a token to mask; the ChatGPT login stays in
+// `~/.config/e2e/oauth.json` and never enters the run.
+const inferenceSecret: Record<string, string> = {};
+if (inferenceToken) inferenceSecret.inferenceToken = inferenceToken;
 
 export default {
   projectId: "cubby-tester-army-trial",
@@ -55,7 +60,7 @@ export default {
     ...Object.fromEntries(
       cookies.map((cookie, index) => [`session-${index}`, cookie.value]),
     ),
-    inferenceToken: modelConfiguration().TESTER_ARMY_CF_API_TOKEN,
+    ...inferenceSecret,
   },
   agents: {
     default: {

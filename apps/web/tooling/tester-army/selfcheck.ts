@@ -7,8 +7,9 @@ import { assertDatabase, JourneyIds, type DbCheck } from "./journey";
  * `node scripts/test-services.ts -- pnpm --dir apps/web exec tsx tooling/tester-army/selfcheck.ts`
  */
 process.env.TESTER_ARMY_DB_TIMEOUT_MS = "400";
-process.env.DATABASE_URL ??=
-  "postgresql://postgres:password@localhost:5432/cubby";
+// test-services hands over the database host it started (a container
+// address on macOS); localhost only holds where the port is published.
+process.env.DATABASE_URL ??= `postgresql://postgres:password@${process.env.INTEGRESQL_DATABASE_HOST ?? "localhost"}:${process.env.INTEGRESQL_DATABASE_PORT ?? "5432"}/cubby`;
 const ids = new JourneyIds({ code: "X-1" }, "selfcheck");
 const check = (value: number): DbCheck => ({
   label: "constant row",

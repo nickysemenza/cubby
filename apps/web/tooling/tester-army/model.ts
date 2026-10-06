@@ -3,7 +3,8 @@ import {
   CUBBY_AI_GATEWAY_ID,
   testAiGatewayEnvironment,
 } from "@cubby/shared/ai/gateway-metadata";
-import { FAST_MODEL } from "@cubby/shared/ai/models";
+import { FAST_MODEL, QUALITY_MODEL } from "@cubby/shared/ai/models";
+import { chatgpt } from "e2e/oauth/chatgpt";
 import { localSecret } from "../local-secret";
 import { createOpenAI } from "@ai-sdk/openai";
 import { generateText, tool } from "ai";
@@ -13,31 +14,70 @@ import { z } from "zod";
 const optionalSetting = <Schema extends z.ZodType>(schema: Schema) =>
   z.preprocess((value) => (value === "" ? undefined : value), schema);
 
-/** The driver model when `TESTER_ARMY_MODEL` is omitted. */
-export const testerArmyModelSetting = optionalSetting(
-  z
-    .string()
-    .regex(/^openai\/gpt-[a-z0-9.-]+$/)
-    .default(`openai/${FAST_MODEL}`),
+/**
+ * How the driver reaches its model. `chatgpt` (the default) uses the member's
+ * ChatGPT subscription from `e2e login openai` (`~/.config/e2e/oauth.json`,
+ * or `E2E_OAUTH_CREDENTIALS` in CI) and needs no Cloudflare token; `gateway`
+ * keeps the Cloudflare AI Gateway route with Unified Billing.
+ */
+export const testerArmyProvider = optionalSetting(
+  z.enum(["chatgpt", "gateway"]).default("chatgpt"),
 );
 
-const configuration = z.object({
-  TESTER_ARMY_CF_API_TOKEN: z.string().min(1),
-  TESTER_ARMY_CF_ACCOUNT_ID: optionalSetting(
-    z
-      .string()
-      .regex(/^[a-f0-9]{32}$/)
-      .default(CF_ACCOUNT_ID),
-  ),
-  TESTER_ARMY_MODEL: testerArmyModelSetting,
-});
+const configuration = z
+  .object({
+    TESTER_ARMY_PROVIDER: testerArmyProvider,
+    TESTER_ARMY_CF_API_TOKEN: optionalSetting(z.string().min(1).optional()),
+    TESTER_ARMY_CF_ACCOUNT_ID: optionalSetting(
+      z
+        .string()
+        .regex(/^[a-f0-9]{32}$/)
+        .default(CF_ACCOUNT_ID),
+    ),
+    TESTER_ARMY_MODEL: optionalSetting(z.string().min(1).optional()),
+  })
+  .superRefine((value, context) => {
+    if (
+      value.TESTER_ARMY_PROVIDER === "gateway" &&
+      !value.TESTER_ARMY_CF_API_TOKEN
+    )
+      context.addIssue({
+        code: "custom",
+        path: ["TESTER_ARMY_CF_API_TOKEN"],
+        message: "The gateway provider needs a Cloudflare inference token",
+      });
+    if (
+      value.TESTER_ARMY_PROVIDER === "gateway" &&
+      value.TESTER_ARMY_MODEL &&
+      !/^openai\/gpt-[a-z0-9.-]+$/u.test(value.TESTER_ARMY_MODEL)
+    )
+      context.addIssue({
+        code: "custom",
+        path: ["TESTER_ARMY_MODEL"],
+        message: "Gateway models are OpenAI Responses ids like openai/gpt-…",
+      });
+  })
+  .transform((value) => {
+    const id = value.TESTER_ARMY_MODEL?.replace(/^(openai|chatgpt)\//u, "");
+    return {
+      ...value,
+      /** `provider/model`, as reports and summaries show it. */
+      TESTER_ARMY_MODEL:
+        value.TESTER_ARMY_PROVIDER === "chatgpt"
+          ? `chatgpt/${id ?? QUALITY_MODEL}`
+          : `openai/${id ?? FAST_MODEL}`,
+    };
+  });
 
-export function modelConfiguration() {
+export function modelConfiguration(
+  env: NodeJS.ProcessEnv = process.env,
+  readSecret: typeof localSecret = localSecret,
+) {
   const result = configuration.safeParse({
-    ...process.env,
-    TESTER_ARMY_CF_API_TOKEN: localSecret(
+    ...env,
+    TESTER_ARMY_CF_API_TOKEN: readSecret(
       ["TESTER_ARMY_CF_API_TOKEN", "AI_GATEWAY_API_KEY"],
-      { envFile: process.env.TESTER_ARMY_ENV_FILE },
+      { envFile: env.TESTER_ARMY_ENV_FILE },
     ),
   });
   if (!result.success)
@@ -60,13 +100,15 @@ export function testerArmyGatewayHeaders(ci: string | undefined) {
   };
 }
 
-export function testerArmyModel() {
-  const config = modelConfiguration();
+export function testerArmyModel(config = modelConfiguration()) {
+  if (config.TESTER_ARMY_PROVIDER === "chatgpt")
+    return chatgpt(config.TESTER_ARMY_MODEL.replace(/^chatgpt\//u, ""));
   const provider = createOpenAI({
     apiKey: config.TESTER_ARMY_CF_API_TOKEN,
     baseURL: `https://api.cloudflare.com/client/v4/accounts/${config.TESTER_ARMY_CF_ACCOUNT_ID}/ai/v1`,
     headers: testerArmyGatewayHeaders(process.env.CI),
   });
+  // The unified endpoint names models `author/model` (`openai/gpt-…`).
   return provider.responses(config.TESTER_ARMY_MODEL);
 }
 

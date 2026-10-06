@@ -82,6 +82,8 @@ export type Journey = {
    * with live model peers, object storage, and a simulated Mac browser. Web only.
    */
   coupled?: true;
+  /** Exercises a control only the web app renders; never selected for iOS. */
+  webOnly?: true;
   /** Extra agent context for this journey's steps. */
   context?: string;
   /** Attempt deadline when the journey waits on a live run. */
@@ -194,12 +196,17 @@ export async function assertDatabase(
 const harnessName = z.enum(["standard", "coupled"]);
 export type Harness = z.infer<typeof harnessName>;
 
+/** Coupled journeys run on the web harness, so they are web only too. */
+const isWebOnly = (journey: Pick<Journey, "coupled" | "webOnly">) =>
+  Boolean(journey.coupled || journey.webOnly);
+
 export const harnessOf = (journey: Pick<Journey, "coupled">): Harness =>
   journey.coupled ? "coupled" : "standard";
 
 /**
  * `--journey a,b` (`TESTER_ARMY_JOURNEYS`) and `--harness`
- * (`TESTER_ARMY_HARNESS`) narrow the catalog; coupled journeys are web only.
+ * (`TESTER_ARMY_HARNESS`) narrow the catalog; coupled and `webOnly` journeys
+ * are web only.
  */
 export function selectedJourneys(all: Journey[], engine: Engine) {
   const wanted = process.env.TESTER_ARMY_JOURNEYS?.split(",").filter(Boolean);
@@ -210,7 +217,7 @@ export function selectedJourneys(all: Journey[], engine: Engine) {
   if (unknown.length)
     throw new Error(`Unknown Tester Army journey: ${unknown.join(", ")}`);
   const webOnly = all.filter(
-    (j) => j.coupled && engine === "ios" && wanted?.includes(j.id),
+    (j) => isWebOnly(j) && engine === "ios" && wanted?.includes(j.id),
   );
   if (webOnly.length)
     throw new Error(
@@ -220,7 +227,7 @@ export function selectedJourneys(all: Journey[], engine: Engine) {
     (j) =>
       (!wanted?.length || wanted.includes(j.id)) &&
       (!harness || harnessOf(j) === harness) &&
-      (engine === "web" || !j.coupled),
+      (engine === "web" || !isWebOnly(j)),
   );
 }
 

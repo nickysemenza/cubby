@@ -2,7 +2,11 @@ import { testUserId } from "@cubby/schemas/testing";
 import type { Pool } from "pg";
 
 import { parseEntityId } from "@cubby/schemas/identifiers";
+import { buildActorContext } from "@cubby/schemas/context";
+import { orderMail, orderMailEvent } from "~/server/db/schema";
+import { startOrderMailImport } from "~/server/purchase-import/gmail/import";
 import { startOrResumeRun } from "~/server/purchase-import/run-service";
+import { getDb } from "~/server/repo/database-helpers";
 import { insertWithShortcode } from "~/server/repo/shortcode-utils";
 
 import { seedBaseWorld } from "../factories/base-world";
@@ -349,6 +353,74 @@ export async function seedJourneyWorld(
     "running",
   ]);
   seed["run-console"] = { run: consoleRun.publicId };
+
+  // A mail-only account (created by order mail) the member turns into a
+  // browser-synced one; its vendor's order evidence is still unclassified.
+  const syncVendor = await insertWithShortcode(db, "vendor", {
+    name: JOURNEY_NAMES.syncVendor,
+    website: "https://sync-journey.example.test",
+    browserDomains: ["sync-journey.example.test"],
+  });
+  const mailOnly = await insertWithShortcode(db, "vendorAccount", {
+    label: `${JOURNEY_NAMES.syncVendor} mail`,
+    vendorId: syncVendor.id,
+    ledgerPartyId: parseEntityId("ledgerParty", memberId),
+    status: "disabled",
+    browserSyncEnabled: false,
+  });
+  seed["vendor-account-browser-sync"] = {
+    account: mailOnly.shortcode,
+    vendor: syncVendor.shortcode,
+  };
+
+  // A finished mail import: restart must show which Vendor and order it copies.
+  const restartVendor = await insertWithShortcode(db, "vendor", {
+    name: JOURNEY_NAMES.restartVendor,
+  });
+  const [restartMail] = await getDb(db)
+    .insert(orderMail)
+    .values({
+      ledgerPartyId: parseEntityId("ledgerParty", memberId),
+      vendorId: restartVendor.id,
+      messageId: `synthetic-restart-${crypto.randomUUID()}`,
+      sender: "orders@restart.example.test",
+      subject: "Synthetic restart confirmation",
+      receivedAt: new Date("2026-09-12T15:00:00Z"),
+      rawChecksum: "c".repeat(64),
+      content: {
+        snippet: null,
+        bodyHtml: null,
+        bodyText: `Order ${JOURNEY_NAMES.restartOrderId}. Synthetic seed packet, qty 1, $7.00. Grand total $7.00 USD.`,
+      },
+    })
+    .returning();
+  if (!restartMail) throw new Error("Synthetic restart mail was not saved");
+  const [restartEvent] = await getDb(db)
+    .insert(orderMailEvent)
+    .values({
+      orderMailId: restartMail.id,
+      event: "placed",
+      orderId: JOURNEY_NAMES.restartOrderId,
+      amount: 7,
+      currency: "USD",
+      sourceKey: `synthetic:${restartMail.id}`,
+    })
+    .returning();
+  if (!restartEvent) throw new Error("Synthetic restart event was not saved");
+  const restartRun = await startOrderMailImport(
+    db,
+    { eventId: restartEvent.id, evidenceChecksum: restartMail.rawChecksum },
+    buildActorContext(testUserId(userId)),
+    { send: async () => {} },
+  );
+  await pool.query(
+    'UPDATE "Run" SET status = \'completed\', "endedAt" = now() WHERE shortcode = $1',
+    [restartRun.runId],
+  );
+  seed["run-restart-inputs"] = {
+    run: restartRun.runId,
+    vendor: restartVendor.shortcode,
+  };
 
   return seed;
 }

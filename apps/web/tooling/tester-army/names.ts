@@ -11,6 +11,9 @@ export const JOURNEY_NAMES = {
   inventoryShelf: "Synthetic Inventory Shelf",
   boardProjectA: "Synthetic Board Project A",
   boardProjectB: "Synthetic Board Project B",
+  syncVendor: "Synthetic Sync Journey Seeds",
+  restartVendor: "Synthetic Restart Seeds",
+  restartOrderId: "SYN-RESTART-7",
 } as const;
 
 /**
@@ -26,6 +29,16 @@ export const LIVE_IMPORT = {
     // packet" correctly stopped the live coordinator for review.
     item: "Synthetic Seed Supply Genovese basil seed packet, 1 g",
     cents: 500,
+    host: "seed-supply.example.test",
+    productUrl: "https://seed-supply.example.test/products/genovese-basil-1g",
+  },
+  enrich: {
+    vendor: "Synthetic Sprout Supply",
+    orderId: "SYN-CONFIRM-LIVE-2",
+    item: "Synthetic Sprout Supply Thai basil seed packet, 1 g",
+    cents: 500,
+    host: "sprout-supply.example.test",
+    productUrl: "https://sprout-supply.example.test/products/thai-basil-1g",
   },
   sync: {
     vendor: "Synthetic Trowel Works",

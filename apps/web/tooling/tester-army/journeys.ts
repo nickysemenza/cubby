@@ -45,12 +45,60 @@ const importedOrder = (orderId: string, cents: number): DbCheck => ({
   rows: () => [{ orderId, cents }],
 });
 
+/**
+ * What a committed mail import does without a click: both of the order's
+ * emails (confirmation and shipping notice) link to its Purchase as
+ * `cubby-system` decisions, the Purchase is dated by the confirmation's
+ * placement (no printed date, 08:00 Pacific on the 10th), and the new Product
+ * keeps the product link the email showed.
+ */
+const mailImportFollowUps = (
+  source: (typeof LIVE_IMPORT)["mail" | "enrich"],
+): DbCheck[] => [
+  {
+    label: "both order emails link themselves to the Purchase",
+    sql: `SELECT e.event, d."decidedByUserId" AS "decidedBy", p."orderId"
+            FROM "OrderMailEvent" e
+            JOIN "OrderMail" m ON m.id = e."orderMailId"
+            JOIN "Vendor" v ON v.id = m."vendorId"
+            JOIN "OrderMailCandidateDecision" d ON d."eventId" = e.id AND d.decision = 'linked'
+            JOIN "Purchase" p ON p.id = d."purchaseId"
+           WHERE v.shortcode = $1
+           ORDER BY e.event`,
+    params: only("vendor"),
+    rows: () => [
+      { event: "placed", decidedBy: "cubby-system", orderId: source.orderId },
+      { event: "shipped", decidedBy: "cubby-system", orderId: source.orderId },
+    ],
+  },
+  {
+    label: "the Purchase is dated by the confirmation's household-local day",
+    sql: `SELECT p.date::text AS date FROM "Purchase" p JOIN "Vendor" v ON v.id = p."vendorId"
+           WHERE v.shortcode = $1 AND p."deletedAt" IS NULL`,
+    params: only("vendor"),
+    rows: () => [{ date: "2026-09-10" }],
+  },
+  {
+    label: "the new Product keeps the product link the email showed",
+    sql: `SELECT DISTINCT x.url FROM "Expense" ex
+            JOIN "Purchase" p ON p.id = ex."purchaseId"
+            JOIN "Vendor" v ON v.id = p."vendorId"
+            JOIN "EntityExternalId" x ON x."entityId" = ex."productId" AND x."deletedAt" IS NULL
+           WHERE v.shortcode = $1 AND ex."deletedAt" IS NULL AND x.url IS NOT NULL`,
+    params: only("vendor"),
+    rows: () => [{ url: source.productUrl }],
+  },
+];
+
 /** A live coordinator run: minutes of real model turns, never instant. */
 const LIVE_RUN_MS = 480_000;
 
 const vendorRun = (until: RunWait["until"]): RunWait => ({
+  // The import itself: a follow-up enrichment run for the same vendor is
+  // newer but is not the run under test.
   sql: `SELECT r.id FROM "Run" r JOIN "Vendor" v ON v.id = r."vendorId"
-         WHERE v.shortcode = $1 ORDER BY r."startedAt" DESC LIMIT 1`,
+         WHERE v.shortcode = $1 AND r.purpose = 'account_sync'
+         ORDER BY r."startedAt" DESC LIMIT 1`,
   params: only("vendor"),
   until,
   timeoutMs: LIVE_RUN_MS,
@@ -96,7 +144,59 @@ const coupledJourneys: Journey[] = [
     ],
     awaitRun: vendorRun("completed"),
     visible: () => ["Purchases changed"],
-    db: [importedOrder(LIVE_IMPORT.mail.orderId, LIVE_IMPORT.mail.cents)],
+    db: [
+      importedOrder(LIVE_IMPORT.mail.orderId, LIVE_IMPORT.mail.cents),
+      ...mailImportFollowUps(LIVE_IMPORT.mail),
+      {
+        label: "the Purchase belongs to the member's mail-only account",
+        sql: `SELECT a."browserSyncEnabled" AS synced, a.status
+                FROM "Purchase" p JOIN "Vendor" v ON v.id = p."vendorId"
+                JOIN "VendorAccount" a ON a.id = p."vendorAccountId"
+               WHERE v.shortcode = $1 AND p."deletedAt" IS NULL`,
+        params: only("vendor"),
+        rows: () => [{ synced: false, status: "disabled" }],
+      },
+    ],
+  },
+  {
+    id: "import-order-mail-enrich",
+    title: "a mail import on a browsing account starts product enrichment",
+    coupled: true,
+    timeoutMs: 600_000,
+    context:
+      "A vendor page lists saved order confirmation emails; each importable order has an Import order button, which starts an agent run and then shows a View import link to that run's page.",
+    start: "vendor",
+    steps: [
+      {
+        goal: `Import the saved order confirmation for order ${LIVE_IMPORT.enrich.orderId}, then open the import it starts.`,
+        check: { visible: () => ["Live agent"] },
+      },
+    ],
+    awaitRun: vendorRun("completed"),
+    visible: () => ["Purchases changed"],
+    db: [
+      importedOrder(LIVE_IMPORT.enrich.orderId, LIVE_IMPORT.enrich.cents),
+      ...mailImportFollowUps(LIVE_IMPORT.enrich),
+      {
+        label: "one enrichment run follows the import at the product page",
+        sql: `SELECT child.purpose, child.trigger, t."sourceExternalKey" AS "startUrl",
+                     (child.input->>'parentRunId') = parent.id::text AS "fromImport"
+                FROM "Run" child
+                JOIN "RunTarget" t ON t."runId" = child.id
+                JOIN "Run" parent ON parent.id::text = child.input->>'parentRunId'
+                JOIN "Vendor" v ON v.id = parent."vendorId"
+               WHERE v.shortcode = $1 AND child.input->>'kind' = 'post_import_enrichment'`,
+        params: only("vendor"),
+        rows: () => [
+          {
+            purpose: "product_enrichment",
+            trigger: "discovery",
+            startUrl: LIVE_IMPORT.enrich.productUrl,
+            fromImport: true,
+          },
+        ],
+      },
+    ],
   },
   {
     id: "import-photo-inventory",
@@ -552,6 +652,54 @@ export const journeys: Journey[] = [
         sql: `SELECT f.status, (f."resolvedAt" IS NOT NULL) AS resolved FROM "RunFinding" f JOIN "Run" r ON r.id = f."runId" WHERE r.shortcode = $1`,
         params: only("run"),
         rows: () => [{ status: "dismissed", resolved: true }],
+      },
+    ],
+  },
+  {
+    id: "vendor-account-browser-sync",
+    title: "turn a mail-only vendor account into a browser-synced one",
+    start: "account",
+    steps: [
+      {
+        goal: "Edit this vendor account, turn on Browser sync enabled, set Status to Active, and save.",
+      },
+    ],
+    visible: () => ["Active"],
+    db: [
+      {
+        label: "account browses and its vendor is an online account",
+        sql: `SELECT a."browserSyncEnabled" AS synced, a.status, v."orderEvidence" AS evidence
+                FROM "VendorAccount" a JOIN "Vendor" v ON v.id = a."vendorId"
+               WHERE a.shortcode = $1`,
+        params: only("account"),
+        rows: () => [
+          { synced: true, status: "active", evidence: "online_account" },
+        ],
+      },
+    ],
+  },
+  {
+    id: "run-restart-inputs",
+    title: "a finished mail import shows the Vendor and order a restart copies",
+    // The native run screen has no Restart inputs disclosure.
+    webOnly: true,
+    start: "run",
+    steps: [
+      {
+        goal: "Open Restart inputs on this run and read what starting it again would copy.",
+        check: {
+          visible: (ids) => [ids.get("vendor"), JOURNEY_NAMES.restartOrderId],
+        },
+      },
+    ],
+    visible: () => [],
+    db: [
+      {
+        label: "reading the run never restarts it",
+        sql: `SELECT status, (SELECT count(*)::int FROM "Run" s WHERE s."predecessorRunId" = r.id) AS successors
+                FROM "Run" r WHERE r.shortcode = $1`,
+        params: only("run"),
+        rows: () => [{ status: "completed", successors: 0 }],
       },
     ],
   },
