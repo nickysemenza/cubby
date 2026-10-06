@@ -43,7 +43,7 @@ import { RecipeCostingService } from "~/server/services/recipe-costing.service";
 const log = createLogger("post-import-autofill");
 
 /** Jev's calibrated probability a pick must reach to be written unreviewed. */
-export const AUTO_FILL_PROBABILITY = 0.95;
+const AUTO_FILL_PROBABILITY = 0.95;
 
 /**
  * The commit tool call waits for auto-fill, so it gets a fixed budget: no new
@@ -71,7 +71,12 @@ type AutoFillPorts = {
     ingredientIds: IngredientId[],
   ) => Promise<number>;
   budgetMs?: number;
+  /** The Product write; tests wrap it to stall past the budget. */
+  writeProduct?: typeof updateProduct;
 };
+
+/** Thrown inside the write transaction to roll back a write that outlived the budget. */
+class AutoFillBudgetElapsed extends Error {}
 
 const productionRecompute: NonNullable<
   AutoFillPorts["recomputeForIngredients"]
@@ -212,41 +217,55 @@ async function fillTarget(
   )
     return;
   const patch = await patchFor(db, target, value);
-  const written = await withTransaction(db, async (tx) => {
-    // Re-read under the row lock: a member who filled the field, or changed
-    // the category the pick was based on, while Jev decided keeps their value.
-    const [locked] = await tx
-      .select({
-        categoryId: product.categoryId,
-        ingredientId: product.ingredientId,
-        growsPlantId: product.growsPlantId,
-      })
-      .from(product)
-      .where(and(eq(product.id, productId), notDeleted(product)))
-      .for("update")
-      .limit(1);
-    // Checked once the lock is held: past the budget the commit already
-    // returned and enrichment may have fingerprinted the Product, so a late
-    // answer, or one that waited on the lock, writes nothing.
-    if (Date.now() >= deadline) return false;
-    if (
-      !locked ||
-      locked[target] !== null ||
-      locked.categoryId !== row.categoryId
-    )
-      return false;
-    // An ingredient link files the Product under food; it never replaces a
-    // category that is not food, counting a feature inherited from an
-    // ancestor ("Rice" under a food root).
-    if (
-      target === "ingredientId" &&
-      locked.categoryId !== null &&
-      (await getCategoryFeature(tx, locked.categoryId)) !== "food"
-    )
-      return false;
-    await updateProduct(databaseForTransaction(tx), productId, patch, actor);
-    return true;
-  });
+  let written: boolean;
+  try {
+    written = await withTransaction(db, async (tx) => {
+      // Re-read under the row lock: a member who filled the field, or changed
+      // the category the pick was based on, while Jev decided keeps their value.
+      const [locked] = await tx
+        .select({
+          categoryId: product.categoryId,
+          ingredientId: product.ingredientId,
+          growsPlantId: product.growsPlantId,
+        })
+        .from(product)
+        .where(and(eq(product.id, productId), notDeleted(product)))
+        .for("update")
+        .limit(1);
+      // Checked once the lock is held: past the budget the commit already
+      // returned and enrichment may have fingerprinted the Product, so a late
+      // answer, or one that waited on the lock, writes nothing.
+      if (Date.now() >= deadline) return false;
+      if (
+        !locked ||
+        locked[target] !== null ||
+        locked.categoryId !== row.categoryId
+      )
+        return false;
+      // An ingredient link files the Product under food; it never replaces a
+      // category that is not food, counting a feature inherited from an
+      // ancestor ("Rice" under a food root).
+      if (
+        target === "ingredientId" &&
+        locked.categoryId !== null &&
+        (await getCategoryFeature(tx, locked.categoryId)) !== "food"
+      )
+        return false;
+      await (ports.writeProduct ?? updateProduct)(
+        databaseForTransaction(tx),
+        productId,
+        patch,
+        actor,
+      );
+      // The update itself can wait on dependent rows; one that finished past
+      // the budget rolls back rather than commit after the import returned.
+      if (Date.now() >= deadline) throw new AutoFillBudgetElapsed();
+      return true;
+    });
+  } catch (error) {
+    if (!(error instanceof AutoFillBudgetElapsed)) throw error;
+    written = false;
+  }
   if (!written) return;
   await runMutationSideEffectsForEntities(
     db,

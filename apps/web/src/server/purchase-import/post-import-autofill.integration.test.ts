@@ -16,6 +16,7 @@ import {
   notDeleted,
   withTransaction,
 } from "~/server/repo/database-helpers";
+import { updateProduct } from "~/server/repo/product/crud";
 import { insertWithShortcode } from "~/server/repo/shortcode-utils";
 import { ensureRun } from "~/server/runs/ensure-run";
 
@@ -385,6 +386,34 @@ describe("auto-fill after an import", () => {
     await holder;
     // Give the waiting write its turn, then confirm it wrote nothing.
     await new Promise((resolve) => setTimeout(resolve, 300));
+    expect((await fieldsOf(seeded.created.id))?.categoryId).toBeNull();
+  });
+
+  it("rolls back a write whose Product update finishes past the budget", async () => {
+    const seeded = await seed();
+    const suggest: Suggest = async (_db, _runId, input) =>
+      pick(input.targets[0]!, seeded.category.shortcode, 0.99);
+    let finished!: () => void;
+    const writeDone = new Promise<void>((resolve) => {
+      finished = resolve;
+    });
+    await autoFillCreatedProducts(
+      ctx.db,
+      { runId: seeded.runId, purchaseIds: [seeded.purchase.id] },
+      {
+        suggest,
+        budgetMs: 200,
+        // The real update, then a wait on a dependent row past the budget.
+        writeProduct: async (...args) => {
+          const out = await updateProduct(...args);
+          await new Promise((resolve) => setTimeout(resolve, 400));
+          finished();
+          return out;
+        },
+      },
+    );
+    await writeDone;
+    await new Promise((resolve) => setTimeout(resolve, 200));
     expect((await fieldsOf(seeded.created.id))?.categoryId).toBeNull();
   });
 
