@@ -1,13 +1,13 @@
 import { useQuery } from "@tanstack/react-query";
 import type { FunctionComponent } from "react";
 
+import { gmailThreadUrl } from "~/app/vendors/order-mail-worklist";
 import type { CollectionActionProps } from "~/entity/entity-detail/collection-actions";
 import type { DetailSlotComponent } from "~/entity/entity-detail/detail-slots";
 import { EntityReportSlot } from "~/entity/entity-detail/report-slot";
 import { purchase as purchaseOperations } from "~/integrations/tanstack-query/generated/catalog.gen";
 import { formatInstant } from "~/lib/date-format";
 import { purchaseLabel } from "~/lib/purchase-label";
-import { Row, Stack } from "~/ui/layout";
 import { StatusText } from "~/ui/primitives/status-text";
 
 import { TargetedImportLaunchButton } from "./targeted-import-launch";
@@ -26,43 +26,55 @@ export const PurchaseOrderMail: DetailSlotComponent<"purchase"> = ({
   if (mailQuery.data.items.length === 0)
     return <StatusText>No order email is linked to this Purchase.</StatusText>;
   return (
-    <Stack gap="sm">
-      {mailQuery.data.items.map((mail) => (
-        <article
-          key={mail.messageId}
-          className="border-b border-border pb-2 text-sm last:border-0"
-        >
-          <Row align="center" justify="between" gap="sm" className="flex-wrap">
-            <span className="font-medium">{mail.subject}</span>
-            <span className="text-xs text-muted-foreground">
-              {formatInstant(mail.receivedAt, "dateTime")}
+    <div className="text-sm">
+      <ul className="divide-y divide-border">
+        {mailQuery.data.items.map((mail) => (
+          <li
+            key={mail.messageId}
+            className="flex flex-wrap items-baseline gap-x-2 gap-y-0.5 py-1"
+          >
+            <span className="shrink-0 text-xs font-medium">
+              {mail.events
+                .map(
+                  (event) =>
+                    `${event.event} · ${event.orderId ?? "Order unknown"} · ${
+                      event.candidates[0]?.decision ?? "Exact order evidence"
+                    }`,
+                )
+                .join("; ")}
             </span>
-          </Row>
-          <div className="text-xs text-muted-foreground">{mail.sender}</div>
-          {mail.events.map((event) => (
-            <div key={event.id} className="mt-1 text-xs">
-              {event.event} · {event.orderId ?? "Order unknown"} ·{" "}
-              {event.candidates[0]?.decision ?? "Exact order evidence"}
-            </div>
-          ))}
-          {mail.threadId ? (
-            <a
-              href={`https://mail.google.com/mail/u/0/#all/${encodeURIComponent(mail.threadId)}`}
-              target="_blank"
-              rel="noreferrer"
-              className="mt-1 inline-block text-xs font-medium text-primary hover:underline"
+            <span className="min-w-0 truncate" title={mail.sender}>
+              {mail.subject}
+            </span>
+            <span
+              className="font-mono text-xs text-muted-foreground tabular-nums"
+              title={formatInstant(mail.receivedAt, "dateTime")}
             >
-              Open Gmail conversation
-            </a>
-          ) : null}
-          <details className="mt-1 text-xs text-muted-foreground">
-            <summary>Technical details</summary>
-            <div>Message ID: {mail.messageId}</div>
-            {mail.threadId ? <div>Thread ID: {mail.threadId}</div> : null}
-          </details>
-        </article>
-      ))}
-    </Stack>
+              {formatInstant(mail.receivedAt, "monthDay")}
+            </span>
+            {mail.threadId ? (
+              <a
+                href={gmailThreadUrl(mail.threadId)}
+                target="_blank"
+                rel="noreferrer"
+                className="text-xs font-medium text-primary hover:underline"
+              >
+                Open Gmail conversation
+              </a>
+            ) : null}
+          </li>
+        ))}
+      </ul>
+      <details className="mt-1 text-xs text-muted-foreground">
+        <summary className="cursor-pointer">Technical details</summary>
+        {mailQuery.data.items.map((mail) => (
+          <div key={mail.messageId} className="font-mono">
+            Message ID: {mail.messageId}
+            {mail.threadId ? ` · Thread ID: ${mail.threadId}` : null}
+          </div>
+        ))}
+      </details>
+    </div>
   );
 };
 

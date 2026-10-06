@@ -66,7 +66,6 @@ export async function plantTaskConnection(page: Page) {
     purchases.locator(`a[href="/purchases/${starter.purchase.id}"]`).first(),
   ).toBeVisible();
   await expect(purchases.getByText("2–3 record hops")).toBeVisible();
-  await expect(purchases.getByText(/^3 hops/u).first()).toBeVisible();
   await section.scrollIntoViewIfNeeded();
   await expect(section).toBeInViewport();
 

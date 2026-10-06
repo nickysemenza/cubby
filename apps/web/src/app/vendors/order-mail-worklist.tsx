@@ -24,12 +24,16 @@ import { NativeSelect } from "~/ui/primitives/native-select";
 import { StatusText } from "~/ui/primitives/status-text";
 import { TechnicalError } from "~/ui/primitives/technical-error";
 
-type MailEvent = VendorOrderMailOut["items"][number]["events"][number];
+type MailItem = VendorOrderMailOut["items"][number];
+type MailEvent = MailItem["events"][number];
 type MailCandidate = MailEvent["candidates"][number];
 type MailSelection = Map<
   string,
   { evidenceChecksum: string; ledgerPartyId: string }
 >;
+
+export const gmailThreadUrl = (threadId: string) =>
+  `https://mail.google.com/mail/u/0/#all/${encodeURIComponent(threadId)}`;
 
 const matchEvidence = (candidate: MailCandidate) => {
   switch (candidate.reason) {
@@ -38,135 +42,260 @@ const matchEvidence = (candidate: MailCandidate) => {
         label: "Strong match",
         explanation: "Exact order ID",
         tone: "positive",
-      } as const;
-    case "amount_and_date":
-      return {
-        label: "Possible match",
-        explanation: "Amount and date match",
-        tone: "secondary",
-      } as const;
-    case "nearby_date":
-      return {
-        label: "Weak lead",
-        explanation: "Date only",
-        tone: "outline",
+        rank: 0,
       } as const;
     case "previous_decision":
       return {
         label: "Reviewed",
         explanation: "Previous decision",
         tone: "secondary",
+        rank: 1,
+      } as const;
+    case "amount_and_date":
+      return {
+        label: "Possible match",
+        explanation: "Amount and date match",
+        tone: "secondary",
+        rank: 2,
+      } as const;
+    case "nearby_date":
+      return {
+        label: "Weak lead",
+        explanation: "Date only",
+        tone: "outline",
+        rank: 3,
       } as const;
   }
 };
 
-function OrderMailEvent({
-  event,
-  ledgerPartyId,
+type OrderStep = { mail: MailItem; event: MailEvent | null; at: string };
+type OrderGroup = {
+  key: string;
+  orderId: string | null;
+  ledgerPartyId: string;
+  steps: OrderStep[];
+};
+
+/**
+ * One row per order. A vendor sends placed, shipped, and delivered mail for
+ * the same order; each names the same Purchase, so they read as one timeline.
+ */
+function groupByOrder(items: readonly MailItem[]): OrderGroup[] {
+  const groups = new Map<string, OrderGroup>();
+  for (const mail of items)
+    for (const event of mail.events.length > 0 ? mail.events : [null]) {
+      const key = event?.orderId
+        ? `${mail.ledgerPartyId}|${event.orderId}`
+        : `${mail.messageId}|${event?.id ?? ""}`;
+      const group = groups.get(key) ?? {
+        key,
+        orderId: event?.orderId ?? null,
+        ledgerPartyId: mail.ledgerPartyId,
+        steps: [],
+      };
+      group.steps.push({
+        mail,
+        event,
+        at: event?.occurredAt ?? mail.receivedAt,
+      });
+      groups.set(key, group);
+    }
+  for (const group of groups.values())
+    group.steps.sort((left, right) => left.at.localeCompare(right.at));
+  return [...groups.values()];
+}
+
+type OrderCandidate = {
+  candidate: MailCandidate;
+  /** Every email in the order that names this Purchase, with its decision. */
+  events: Array<{ event: MailEvent; decision: MailCandidate["decision"] }>;
+  /** Shared decision; `null` when undecided or the emails disagree. */
+  decision: MailCandidate["decision"];
+};
+
+function orderCandidates(steps: readonly OrderStep[]): OrderCandidate[] {
+  const byPurchase = new Map<string, OrderCandidate>();
+  for (const { event } of steps)
+    for (const candidate of event?.candidates ?? []) {
+      const entry = byPurchase.get(candidate.purchaseId) ?? {
+        candidate,
+        events: [],
+        decision: null,
+      };
+      if (matchEvidence(candidate).rank < matchEvidence(entry.candidate).rank)
+        entry.candidate = candidate;
+      if (event) entry.events.push({ event, decision: candidate.decision });
+      byPurchase.set(candidate.purchaseId, entry);
+    }
+  return [...byPurchase.values()].map((entry) => {
+    const [first] = entry.events;
+    return {
+      ...entry,
+      decision:
+        first &&
+        entry.events.every(({ decision }) => decision === first.decision)
+          ? first.decision
+          : null,
+    };
+  });
+}
+
+const canImport = (event: MailEvent | null): event is MailEvent =>
+  event?.event === "placed" &&
+  Boolean(event.orderId) &&
+  !event.candidates.some(
+    (candidate) =>
+      candidate.reason === "exact_order_id" || candidate.decision === "linked",
+  );
+
+function OrderMailRow({
+  group,
   selection,
   onSelect,
 }: {
-  event: MailEvent;
-  ledgerPartyId: string;
+  group: OrderGroup;
   selection: MailSelection;
-  onSelect: (checked: boolean) => void;
+  onSelect: (event: MailEvent, checked: boolean) => void;
 }) {
   const importOrder = useActionMutation({
     mutationFn: vendor.importOrderMail.mutationOptions,
     success: "Order import started",
   });
-  const canImport =
-    event.event === "placed" &&
-    event.orderId &&
-    !event.candidates.some(
-      (candidate) =>
-        candidate.reason === "exact_order_id" ||
-        candidate.decision === "linked",
-    );
   const decide = useActionMutation({
     mutationFn: vendor.decideOrderMail.mutationOptions,
     success: "Order email match reviewed",
+    // One decision writes every email in the order; toast it once.
+    successToastId: `order-mail-decision:${group.key}`,
   });
+  const importable = group.steps.map((step) => step.event).find(canImport);
+  const amount =
+    group.steps.find((step) => step.event?.event === "placed")?.event?.amount ??
+    group.steps.find((step) => step.event?.amount != null)?.event?.amount ??
+    null;
+  const candidates = orderCandidates(group.steps);
+  const decideAll = (
+    { candidate, events }: OrderCandidate,
+    decision: "linked" | "dismissed",
+  ) =>
+    void Promise.allSettled(
+      events
+        .filter((entry) => entry.decision !== decision)
+        .map(({ event }) =>
+          decide.mutateAsync({
+            eventId: event.id,
+            purchaseId: candidate.purchaseId,
+            decision,
+            evidenceChecksum: event.evidenceChecksum,
+          }),
+        ),
+    );
+  const mails = [
+    ...new Map(group.steps.map(({ mail }) => [mail.messageId, mail])).values(),
+  ];
   return (
-    <div className="border-t border-border pt-2 text-sm">
-      <Row align="center" justify="between" gap="sm" className="flex-wrap">
-        <span className="font-medium">
-          {event.event === "other" ? "Other update" : event.event} ·{" "}
-          {event.orderId ?? "Order unknown"}
+    <article className="px-3 py-2 text-sm">
+      <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
+        <span
+          className="shrink-0 truncate font-mono font-medium sm:w-40"
+          title={group.orderId ?? undefined}
+        >
+          {group.orderId ?? "Order unknown"}
         </span>
-        {event.amount !== null ? (
-          <span className="font-mono tabular-nums">
-            {formatCurrency(event.amount)}
+        <ol className="flex min-w-0 flex-1 flex-wrap items-baseline gap-x-4 gap-y-0.5">
+          {group.steps.map(({ mail, event, at }) => (
+            <li
+              key={`${mail.messageId}|${event?.id ?? ""}`}
+              className="flex max-w-full min-w-0 items-baseline gap-1.5"
+            >
+              <span className="shrink-0 text-xs font-medium">
+                {!event || event.event === "other" ? "update" : event.event}
+              </span>
+              <span
+                className="shrink-0 font-mono text-xs text-muted-foreground tabular-nums"
+                title={formatInstant(at, "dateTime")}
+              >
+                {formatInstant(at, "monthDay")}
+              </span>
+              {mail.threadId ? (
+                <a
+                  className="max-w-64 min-w-0 truncate text-muted-foreground hover:text-foreground hover:underline"
+                  href={gmailThreadUrl(mail.threadId)}
+                  target="_blank"
+                  rel="noreferrer"
+                  title={`Open Gmail conversation · ${mail.sender}`}
+                >
+                  {mail.subject}
+                </a>
+              ) : (
+                <span
+                  className="max-w-64 min-w-0 truncate text-muted-foreground"
+                  title={mail.sender}
+                >
+                  {mail.subject}
+                </span>
+              )}
+            </li>
+          ))}
+        </ol>
+        {amount !== null ? (
+          <span className="ml-auto font-mono tabular-nums">
+            {formatCurrency(amount)}
           </span>
         ) : null}
-      </Row>
-      {canImport ? (
-        <Stack gap="sm" className="mt-2">
-          {importOrder.data ? null : (
-            <div className="flex items-center gap-2 text-muted-foreground">
-              <Checkbox
-                id={`select-${event.id}`}
-                checked={selection.has(event.id)}
-                // One run covers one member's mail.
-                disabled={[...selection.values()].some(
-                  (picked) => picked.ledgerPartyId !== ledgerPartyId,
-                )}
-                onCheckedChange={(checked) => onSelect(checked === true)}
-              />
-              <label htmlFor={`select-${event.id}`}>
-                Select order {event.orderId} to import with others
-              </label>
-            </div>
-          )}
-          {importOrder.data ? (
-            <Link
-              to="/runs/$shortcode"
-              params={{ shortcode: importOrder.data.runId }}
-              className="text-primary underline underline-offset-4"
+      </div>
+      <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 sm:pl-43">
+        {importable && !importOrder.data ? (
+          <div className="flex items-center gap-1.5">
+            <Checkbox
+              aria-label={`Select order ${importable.orderId} to import with others`}
+              checked={selection.has(importable.id)}
+              // One run covers one member's mail.
+              disabled={[...selection.values()].some(
+                (picked) => picked.ledgerPartyId !== group.ledgerPartyId,
+              )}
+              onCheckedChange={(checked) =>
+                onSelect(importable, checked === true)
+              }
+            />
+            <Button
+              size="xs"
+              variant="outline"
+              disabled={importOrder.isPending}
+              title="The agent reads the saved confirmation and imports its itemized order."
+              onClick={() =>
+                importOrder.mutate({
+                  eventId: importable.id,
+                  evidenceChecksum: importable.evidenceChecksum,
+                })
+              }
             >
-              View import
-            </Link>
-          ) : (
-            <div>
-              <Button
-                size="sm"
-                variant="outline"
-                disabled={importOrder.isPending}
-                onClick={() =>
-                  importOrder.mutate({
-                    eventId: event.id,
-                    evidenceChecksum: event.evidenceChecksum,
-                  })
-                }
-              >
-                {importOrder.isPending ? "Starting import…" : "Import order"}
-              </Button>
-              <p className="mt-1 text-muted-foreground">
-                The agent reads the saved confirmation and imports its itemized
-                order.
-              </p>
-            </div>
-          )}
-          {importOrder.error ? (
-            <TechnicalError error={getErrorMessage(importOrder.error)} />
-          ) : null}
-        </Stack>
-      ) : null}
-      {event.candidates.length === 0 ? (
-        <p className="mt-1 text-muted-foreground">No likely Purchase yet.</p>
-      ) : (
-        <div className="mt-2 grid gap-2">
-          {event.candidates.map((candidate) => {
+              {importOrder.isPending ? "Starting import…" : "Import order"}
+            </Button>
+          </div>
+        ) : null}
+        {importOrder.data ? (
+          <Link
+            to="/runs/$shortcode"
+            params={{ shortcode: importOrder.data.runId }}
+            className="text-xs text-primary underline underline-offset-4"
+          >
+            View import
+          </Link>
+        ) : null}
+        {candidates.length === 0 ? (
+          <span className="text-xs text-muted-foreground">
+            No Purchase match
+          </span>
+        ) : (
+          candidates.map((entry) => {
+            const { candidate, decision } = entry;
             const evidence = matchEvidence(candidate);
             return (
-              <Row
+              <div
                 key={candidate.purchaseId}
-                align="center"
-                justify="between"
-                gap="sm"
-                className="flex-wrap rounded-md bg-muted/50 px-2 py-1"
+                className="flex items-center gap-1 rounded-md bg-muted/50 py-0.5 ps-2 pe-0.5"
               >
-                <div className="flex min-w-0 items-center gap-2">
+                <div className="flex min-w-0 items-center gap-1.5">
                   <a
                     className="font-medium text-primary hover:underline"
                     href={`/purchases/${candidate.purchaseId}`}
@@ -177,52 +306,50 @@ function OrderMailEvent({
                   <span className="text-xs text-muted-foreground">
                     {evidence.explanation}
                   </span>
-                  {candidate.decision ? (
-                    <Badge variant="secondary">{candidate.decision}</Badge>
+                  {decision ? (
+                    <Badge variant="secondary">{decision}</Badge>
                   ) : null}
                 </div>
-                <div className="flex gap-2">
-                  {candidate.decision !== "linked" ? (
+                <div className="flex">
+                  {decision !== "linked" ? (
                     <Button
-                      size="sm"
-                      variant="outline"
+                      size="xs"
+                      variant="ghost"
                       disabled={decide.isPending}
-                      onClick={() =>
-                        decide.mutate({
-                          eventId: event.id,
-                          purchaseId: candidate.purchaseId,
-                          decision: "linked",
-                          evidenceChecksum: event.evidenceChecksum,
-                        })
-                      }
+                      onClick={() => decideAll(entry, "linked")}
                     >
                       Link
                     </Button>
                   ) : null}
-                  {candidate.decision !== "dismissed" ? (
+                  {decision !== "dismissed" ? (
                     <Button
-                      size="sm"
+                      size="xs"
                       variant="ghost"
                       disabled={decide.isPending}
-                      onClick={() =>
-                        decide.mutate({
-                          eventId: event.id,
-                          purchaseId: candidate.purchaseId,
-                          decision: "dismissed",
-                          evidenceChecksum: event.evidenceChecksum,
-                        })
-                      }
+                      onClick={() => decideAll(entry, "dismissed")}
                     >
                       Dismiss
                     </Button>
                   ) : null}
                 </div>
-              </Row>
+              </div>
             );
-          })}
-        </div>
-      )}
-    </div>
+          })
+        )}
+        <details className="ml-auto text-xs text-muted-foreground [&[open]]:basis-full">
+          <summary className="cursor-pointer">Technical details</summary>
+          {mails.map((mail) => (
+            <div key={mail.messageId} className="font-mono">
+              Message ID: {mail.messageId}
+              {mail.threadId ? ` · Thread ID: ${mail.threadId}` : null}
+            </div>
+          ))}
+        </details>
+      </div>
+      {importOrder.error ? (
+        <TechnicalError error={getErrorMessage(importOrder.error)} />
+      ) : null}
+    </article>
   );
 }
 
@@ -473,58 +600,27 @@ function OrderMailWorklist({
             : "No order email has been matched to this Vendor."}
         </StatusText>
       ) : (
-        worklist.data.items.map((mail) => (
-          <article
-            key={mail.messageId}
-            className="rounded-lg border border-border bg-card p-3"
-          >
-            <Row align="start" justify="between" gap="sm" className="flex-wrap">
-              <div>
-                <div className="font-medium">{mail.subject}</div>
-                <div className="text-xs text-muted-foreground">
-                  {mail.sender} · {formatInstant(mail.receivedAt, "dateTime")}
-                </div>
-              </div>
-              {mail.threadId ? (
-                <a
-                  className="text-xs font-medium text-primary hover:underline"
-                  href={`https://mail.google.com/mail/u/0/#all/${encodeURIComponent(mail.threadId)}`}
-                  target="_blank"
-                  rel="noreferrer"
-                >
-                  Open Gmail conversation
-                </a>
-              ) : null}
-            </Row>
-            <div className="mt-2 grid gap-2">
-              {mail.events.map((event) => (
-                <OrderMailEvent
-                  key={event.id}
-                  event={event}
-                  ledgerPartyId={mail.ledgerPartyId}
-                  selection={selection}
-                  onSelect={(checked) =>
-                    setSelection((current) => {
-                      const next = new Map(current);
-                      if (checked)
-                        next.set(event.id, {
-                          evidenceChecksum: event.evidenceChecksum,
-                          ledgerPartyId: mail.ledgerPartyId,
-                        });
-                      else next.delete(event.id);
-                      return next;
-                    })
-                  }
-                />
-              ))}
-            </div>
-            <details className="mt-2 text-xs text-muted-foreground">
-              <summary>Technical details</summary>
-              <div>Message ID: {mail.messageId}</div>
-              {mail.threadId ? <div>Thread ID: {mail.threadId}</div> : null}
-            </details>
-          </article>
-        ))
+        <div className="divide-y divide-border rounded-lg border border-border bg-card">
+          {groupByOrder(worklist.data.items).map((group) => (
+            <OrderMailRow
+              key={group.key}
+              group={group}
+              selection={selection}
+              onSelect={(event, checked) =>
+                setSelection((current) => {
+                  const next = new Map(current);
+                  if (checked)
+                    next.set(event.id, {
+                      evidenceChecksum: event.evidenceChecksum,
+                      ledgerPartyId: group.ledgerPartyId,
+                    });
+                  else next.delete(event.id);
+                  return next;
+                })
+              }
+            />
+          ))}
+        </div>
       )}
     </Stack>
   );

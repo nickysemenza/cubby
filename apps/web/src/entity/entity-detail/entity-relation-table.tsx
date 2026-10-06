@@ -33,6 +33,7 @@ import {
 } from "~/entity/entities";
 import { createEntityDisplayColumns } from "~/entity/entity-display";
 import { entityListFor } from "~/entity/entity-list";
+import { EntityDisplayImagesProvider } from "~/entity/entity-media/entity-display-images";
 import {
   listEntities,
   type ListEntity,
@@ -59,7 +60,11 @@ import {
 import { type BaseListRow, useEntityList } from "../../ui/hooks/useEntityList";
 import type { ListQueryOptionsFn } from "../../ui/hooks/usePaginatedTableCore";
 import { useEntityFieldSave } from "../../ui/hooks/useUpdateMutation";
-import { HopRange, RecordPaths } from "./connected-records-table";
+import {
+  connectionRefs,
+  HopRange,
+  RecordPaths,
+} from "./connected-records-table";
 import {
   relationshipMovementSource,
   RelationshipMovementBadges,
@@ -683,32 +688,29 @@ function LiveEntityRelationTable({
         {evidenceQuery.data ? (
           <HopRange range={evidenceQuery.data.routeHopRange} />
         ) : null}
-        <EvidenceContext.Provider value={evidence}>
-          <ListWorkbench
-            model={list.workbench}
-            mode="embedded"
-            toolbarMode="none"
-            ariaLabel={title}
-            renderMobileRowFooter={(row) => {
-              const item = evidence.get(row.id);
-              return item || movementSource !== null ? (
-                <div className="border-t border-border/60 pt-2">
-                  {movementSource !== null ? (
-                    <RelationshipMovementBadges id={row.id} />
-                  ) : null}
-                  {item ? (
-                    <>
-                      <span className="text-xs text-muted-foreground">
-                        Connected through
-                      </span>
-                      <RecordPaths paths={item.paths} />
-                    </>
-                  ) : null}
-                </div>
-              ) : null;
-            }}
-          />
-        </EvidenceContext.Provider>
+        <EntityDisplayImagesProvider
+          refs={connectionRefs(evidenceQuery.data?.items ?? [])}
+        >
+          <EvidenceContext.Provider value={evidence}>
+            <ListWorkbench
+              model={list.workbench}
+              mode="embedded"
+              toolbarMode="none"
+              ariaLabel={title}
+              renderMobileRowFooter={(row) => {
+                const item = evidence.get(row.id);
+                return item || movementSource !== null ? (
+                  <div className="border-t border-border/60 pt-2">
+                    {movementSource !== null ? (
+                      <RelationshipMovementBadges id={row.id} />
+                    ) : null}
+                    {item ? <RecordPaths paths={item.paths} /> : null}
+                  </div>
+                ) : null;
+              }}
+            />
+          </EvidenceContext.Provider>
+        </EntityDisplayImagesProvider>
         {evidenceQuery.isError ? (
           <p role="alert" className="text-xs text-destructive">
             Could not load connection paths: {String(evidenceQuery.error)}
