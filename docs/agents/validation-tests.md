@@ -179,6 +179,12 @@ can select nothing. Name the affected spec explicitly or run the full
 `CUBBY_TEST_SERVICES=warm` to reuse local macOS services, as with direct
 Playwright runs.
 
+List URLs in browser fixtures use the filter descriptor's declared `urlKey`
+(for example, `q` for Expense and Purchase search). Assert the active filter
+control and include unrelated records with a small page size when testing a
+filtered record; an ignored filter can pass against a small local corpus and
+hide the target behind pagination in CI.
+
 ## Preview tests (real-browser layout invariants)
 
 The `preview` Vitest project (`**/*.preview.test.tsx`, `pnpm --dir apps/web

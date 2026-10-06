@@ -458,10 +458,7 @@ test("expense category pills agree with quality for direct, allocated, and missi
   expect((await read(adjustment)).gaps.map((gap) => gap.check)).not.toContain(
     "expense_spending_category",
   );
-  await gotoAuthenticatedPage(
-    page,
-    `/expenses?search=${encodeURIComponent(tag)}`,
-  );
+  await gotoAuthenticatedPage(page, `/expenses?q=${encodeURIComponent(tag)}`);
   for (const name of [`${tag} principal`, `${tag} shipping`]) {
     const row = page.getByRole("row").filter({ hasText: name });
     await expect(

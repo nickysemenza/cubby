@@ -125,7 +125,7 @@ test("quality leads entity tables, explains its calculation, and restores tempor
   });
   await gotoAuthenticatedPage(
     page,
-    `/expenses?view=table&search=${encodeURIComponent(plannedName)}`,
+    `/expenses?view=table&q=${encodeURIComponent(plannedName)}`,
   );
   const unassessedRow = page
     .getByRole("row")
@@ -318,7 +318,7 @@ test("quality explanations reconcile exceptions, defects, and related gaps", asy
   expect(breakdown.score).toBeLessThanOrEqual(49);
   await gotoAuthenticatedPage(
     page,
-    `/purchases?view=table&search=${encodeURIComponent(name)}`,
+    `/purchases?view=table&q=${encodeURIComponent(name)}`,
   );
   const row = page.getByRole("row").filter({ hasText: name }).first();
   await row
