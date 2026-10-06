@@ -72,8 +72,13 @@ to the isolated worker object store; do not fulfill application image URLs with
 page routes. Assert image decoding as well as visibility. Retired-route HTTP status
 contracts use `request.get`; browser scenarios own visible not-found behavior.
 When a journey already exposes the destination link, follow that link to exercise
-client navigation. Keep document loads and reloads that own direct-link, SSR, or
-persistence regressions. A link transition expected to stay within the app can
+client navigation. When a record name occurs on links to multiple entity kinds,
+combine its accessible name with the canonical href before choosing a link.
+Keep document loads and reloads that own direct-link, SSR, or
+persistence regressions. Use the existing authenticated request context for fixture setup before any
+page load. A synthetic socket-only browser peer can use the same-origin session
+response as its document; its separate capture page still exercises the real
+external DOM. A link transition expected to stay within the app can
 assert that `performance.timeOrigin` is unchanged, so a plain anchor cannot
 silently turn it into another document load. When comparing card geometry across
 enrichment, await the card and ancestor animations after switching list views

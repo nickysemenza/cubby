@@ -7,7 +7,7 @@ import * as schema from "~/server/db/schema";
 import { getDb } from "~/server/repo/database-helpers";
 import { createEvidenceHarnessContext } from "./fixtures-core";
 import { sha256Hex } from "../../tooling/convergence-harness";
-import { gotoAuthenticatedPage, uniqueName } from "./e2e-helpers";
+import { uniqueName } from "./e2e-helpers";
 import { expect, test } from "./e2e-test";
 
 for (const order of BROWSER_SOURCE_ORDERS) {
@@ -16,7 +16,6 @@ for (const order of BROWSER_SOURCE_ORDERS) {
     baseURL,
   }, testInfo) => {
     test.setTimeout(120_000);
-    await gotoAuthenticatedPage(page, "/statement-rows");
     const token = uniqueName(testInfo, "order")
       .replaceAll(/[^a-zA-Z0-9-]/g, "-")
       .toLowerCase();
@@ -81,16 +80,45 @@ for (const order of BROWSER_SOURCE_ORDERS) {
       mail: 1,
       linkedMail: 1,
     });
-    await gotoAuthenticatedPage(page, `/purchases/${result.purchaseCode}`);
+    const purchaseLink = page
+      .locator("#order-mail")
+      .getByRole("article")
+      .filter({ hasText: harness.orderId })
+      .getByRole("link", { name: harness.orderId, exact: true });
+    await expect(purchaseLink).toHaveAttribute(
+      "href",
+      `/purchases/${result.purchaseCode}`,
+    );
+    const documentOrigin = await page.evaluate(() => performance.timeOrigin);
+    await purchaseLink.click();
+    await expect(page).toHaveURL(
+      new RegExp(`/purchases/${result.purchaseCode}$`),
+    );
+    expect(await page.evaluate(() => performance.timeOrigin)).toBe(
+      documentOrigin,
+    );
     await expect(
       page.getByText(harness.orderId, { exact: true }).first(),
     ).toBeVisible();
     if (!result.productCode) throw new Error("No reviewed Product identity");
-    await gotoAuthenticatedPage(
-      page,
+    const productLink = page
+      .getByRole("link", { name: harness.productName, exact: true })
+      .and(page.locator(`a[href="/products/${result.productCode}"]`))
+      .first();
+    await expect(productLink).toHaveAttribute(
+      "href",
       `/products/${result.productCode}`,
-      page.getByRole("heading", { name: harness.productName, exact: true }),
     );
+    await productLink.click();
+    await expect(page).toHaveURL(
+      new RegExp(`/products/${result.productCode}$`),
+    );
+    expect(await page.evaluate(() => performance.timeOrigin)).toBe(
+      documentOrigin,
+    );
+    await expect(
+      page.getByRole("heading", { name: harness.productName, exact: true }),
+    ).toBeVisible();
     await expect(
       page
         .locator("#images")
