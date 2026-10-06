@@ -433,7 +433,7 @@ describe("purchase coordinator decision eval", () => {
             "|---|---|---|---|---|---|---|---|",
             ...summary.map(
               (row) =>
-                `| ${row.candidate} | ${row.correct}/${row.runs} | ${row.unsafe} | ${row.reviewableMiss} | ${row.meanWallSeconds.toFixed(0)} | ${Math.round(row.meanInputTokens)} | ${Math.round(row.meanOutputTokens)} | $${row.meanCostUsd.toFixed(3)} |`,
+                `| ${row.candidate} | ${row.correct}/${row.runs} | ${row.unsafe} | ${row.reviewableMiss} | ${row.meanWallSeconds.toFixed(0)} | ${Math.round(row.meanInputTokens)} | ${Math.round(row.meanOutputTokens)} | ${row.meanCostUsd === null ? "unknown" : `$${row.meanCostUsd.toFixed(3)}`} |`,
             ),
           ].join("\n");
           writeFileSync(path.join(outDir, "report.md"), `${table}\n`);

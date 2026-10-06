@@ -362,7 +362,7 @@ describe("structured feature routing eval", () => {
       "|---|---|---|---|---|---|---|---|---|",
       ...summary.map(
         (row) =>
-          `| ${row.feature} | ${row.candidate} | ${row.correct}/${row.runs} | ${row.unsafe} | ${row.reviewableMiss} | ${row.meanWallSeconds.toFixed(1)} | ${Math.round(row.meanInputTokens)} | ${Math.round(row.meanOutputTokens)} | $${row.meanCostUsd.toFixed(4)} |`,
+          `| ${row.feature} | ${row.candidate} | ${row.correct}/${row.runs} | ${row.unsafe} | ${row.reviewableMiss} | ${row.meanWallSeconds.toFixed(1)} | ${Math.round(row.meanInputTokens)} | ${Math.round(row.meanOutputTokens)} | ${row.meanCostUsd === null ? "unknown" : `$${row.meanCostUsd.toFixed(4)}`} |`,
       ),
     ].join("\n");
     writeFileSync(path.join(outDir, "report.md"), `${table}\n`);
