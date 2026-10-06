@@ -270,12 +270,24 @@ test("column layout changes by pointer and keyboard, keeps locked edges, and res
     name: "Move Purchase count earlier",
     exact: true,
   });
-  await moveEarlier.press("Enter");
+  const beforeMove = expected;
   const purchaseCountIndex = expected.indexOf("purchaseCount");
   const before = expected[purchaseCountIndex - 1];
   if (!before) throw new Error("purchaseCount has no earlier neighbour");
   expected = placedAfter(expected, before, "purchaseCount");
-  await expect.poll(() => headerIds(page)).toEqual(expected);
+  // Removing the focused Notes row schedules dialog focus restoration, which
+  // can consume the next Enter. Retry only while the full order is unchanged;
+  // an incorrect move or an overshoot must still fail.
+  await expect(async () => {
+    const current = await headerIds(page);
+    if (current.join("\0") !== expected.join("\0")) {
+      expect(current).toEqual(beforeMove);
+      await moveEarlier.press("Enter");
+    }
+    await expect
+      .poll(() => headerIds(page), { timeout: 1_000 })
+      .toEqual(expected);
+  }).toPass();
   await page.keyboard.press("Escape");
   await expect(dialog).toBeHidden();
   expect(expected).not.toEqual(defaults);
