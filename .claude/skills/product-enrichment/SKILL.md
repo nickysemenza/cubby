@@ -6,7 +6,7 @@ description: Enrich Cubby Products with verified identity facts and representati
 # Enrich Cubby products
 
 Add proven facts and one representative cover through existing MCP tools. Keep
-research interactive: there is no enrichment queue or evidence table. Return a
+research interactive: there is no background enrichment queue. Return a
 source-backed batch report.
 
 ## Worklist and read shape
@@ -44,14 +44,45 @@ SKUs in their typed slot. Use lowercase kebab-case source slugs. A source/kind/
 external-ID tuple has one live owner; do not invent, relabel, or choose between
 variants. Ambiguity is a reported skip.
 
-A targeted run's commit trusts only retained browser evidence of the exact
-variant. Besides an Amazon ASIN, the server proves a retailer SKU, item or
-catalog number, or GTIN from any run-vendor page that exposes exactly one
-schema.org Product (never a ProductGroup or several variants) whose matching
-field equals the identifier. Search results, aggregators, and free-text hints
-are leads, not proof; an identifier the page does not show is refused. A proven
-identifier another Product owns is skipped, reported in `skippedIdentifiers`, and
-proposed in the match queue, never reassigned.
+A targeted run's commit trusts only retained page evidence of the exact
+variant: a Mac browser capture, or a server capture from `capture_page`.
+Besides an Amazon ASIN (browser captures only), the server proves a retailer
+SKU, item or catalog number, or GTIN from any run-vendor page that exposes
+exactly one schema.org Product (never a ProductGroup or several variants) whose
+matching field equals the identifier. Search results, aggregators, and
+free-text hints are leads, not proof; an identifier the page does not show is
+refused. A proven identifier another Product owns is skipped, reported in
+`skippedIdentifiers`, and proposed in the match queue, never reassigned.
+
+## Claimed Products: run, capture, commit, finish
+
+Outside a run the server dispatched to you, enrich an import-created Product
+through a caller-owned run so every identifier and cover keeps its source page.
+`imports_read.enrichment_sources` shows whether a Product has a verified
+purchase source (`selected: true`); a claimless or photo-created Product keeps
+the fill-only writes below.
+
+1. `product_enrichment.start_run({productIds})` (up to 50) starts one run per
+   vendor that you work yourself. A `blockingRun` means that vendor already has
+   an active run; leave its Products to it.
+2. Loop `imports_read.enrichment_next({runId})`. Research the target, then
+   `product_enrichment.capture_page({runId, productId, url})` on the exact
+   variant's page on the run vendor's site. The server fetches and parses it;
+   an off-vendor URL or redirect, a sign-in page, or a page without exactly one
+   Product is refused, and that is a skip, not a reason to try another site.
+3. `product_enrichment.commit` with `runId`, one stable `operationId` per
+   target, the target's `targetFingerprint`, and only blank fields. Manufacturer,
+   category, and model need no evidence; identifiers and the image cite the
+   capture's `evidenceId` and must match its `product` and `images` exactly. A
+   retry reuses the operationId with identical arguments.
+4. Close an unprovable target with `product_enrichment.skip_target`: `skipped`
+   when no exact source exists, `needs_review` for ambiguity, a populated field
+   that looks wrong, or a conflicting identifier. A caller-owned run never
+   overwrites a populated field.
+5. When `next` is null, `product_enrichment.finish_run({runId})`.
+
+The run captures only the vendor's own site. A fact proven only by a
+manufacturer or other page stays a fill-only write below, reported as such.
 
 Read [source mechanics](references/sources.md) only for the source in hand.
 Read [write and image rules](references/writes-and-images.md) when preparing a

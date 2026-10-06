@@ -11,6 +11,11 @@ import {
   findActivePurchaseAgentGrant,
   PURCHASE_AGENT_OAUTH_CLIENT_ID,
 } from "~/server/purchase-import/agent-auth";
+import {
+  callerEnrichmentNext,
+  finishCallerEnrichment,
+  skipCallerEnrichmentTarget,
+} from "~/server/purchase-import/caller-enrichment";
 import { dispatchRunEvent } from "~/server/purchase-import/dispatch";
 import {
   confirmMerchantVendorRule,
@@ -34,6 +39,7 @@ import {
 import {
   dispatchStartedRun,
   loadTargetedImportLaunch,
+  startCallerEnrichment,
   startTargetedImport,
 } from "~/server/purchase-import/targeted-run";
 import { listAiUsageForRun } from "~/server/repo/ai-usage";
@@ -188,6 +194,14 @@ export const runHandlers = implementOperationDomain(runContract, {
     ),
   startTargeted: async (context, input) =>
     startTargetedImport(context.db, (await memberParty(context)).id, input),
+  startCallerEnrichment: async (context, input) =>
+    startCallerEnrichment(context.db, (await memberParty(context)).id, input),
+  callerEnrichmentNext: (context, input) =>
+    callerEnrichmentNext(context.db, context.actorContext, input),
+  skipCallerEnrichmentTarget: (context, input) =>
+    skipCallerEnrichmentTarget(context.db, context.actorContext, input),
+  finishCallerEnrichment: (context, input) =>
+    finishCallerEnrichment(context.db, context.actorContext, input),
   agentConnection: async (context) => {
     const grant = await findActivePurchaseAgentGrant(
       context.db,

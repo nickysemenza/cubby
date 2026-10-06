@@ -50,6 +50,11 @@ const DECLARED_UUID_OUTPUT_PATHS = new Set([
   // the approval fingerprint and attribution comparison in applyFix.
   "activity.runFindings[].proposedFix.reviewedLineIdentities[].productId",
   "activity.runFindings[].proposedFix.reviewedLineAttributions[].partyId",
+  // Run evidence has no shortcode. A caller-owned enrichment run's capture
+  // and next-target read return it as the `evidenceId` handle that
+  // product_enrichment.commit cites.
+  "product_enrichment.evidenceId",
+  "imports_read.next.evidence[].id",
 ]);
 
 const NOT_YET_CUT_OVER: string[] = [];

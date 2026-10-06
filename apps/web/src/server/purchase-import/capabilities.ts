@@ -24,7 +24,13 @@ type Capability =
   | "enrichment_commit"
   | "photo_commit"
   /** Review-queue metadata only: never changes household records. */
-  | "match_proposal";
+  | "match_proposal"
+  /**
+   * Starting and working a caller-owned run. No purpose grants it, so a
+   * run-delegated coordinator can never start, capture into, skip, or finish
+   * one; only the member's own MCP client can.
+   */
+  | "caller_run";
 
 const capabilityMatrix = {
   account_sync: new Set([
@@ -98,6 +104,10 @@ const actionCapability = {
   "purchase_import.reclassify": "generic_mutation",
   "expenses.link_to_purchase": "generic_mutation",
   "expenses.split": "generic_mutation",
+  "product_enrichment.start_run": "caller_run",
+  "product_enrichment.capture_page": "caller_run",
+  "product_enrichment.skip_target": "caller_run",
+  "product_enrichment.finish_run": "caller_run",
   "product_enrichment.commit": "enrichment_commit",
   "product_enrichment.overwrite": "enrichment_commit",
   "product_enrichment.verify_images": "generic_mutation",

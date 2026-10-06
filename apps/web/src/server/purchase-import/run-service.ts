@@ -51,6 +51,7 @@ import {
   orderBackfillRunInput,
   orderMailImportRunInput,
   orderMailImportRunOrders,
+  type RunExecutionMode,
   type RunInput,
   type RunRestartInput,
 } from "@cubby/schemas/run-fields";
@@ -252,6 +253,8 @@ export type StartTargetedRunInput = {
   predecessorRunId?: string;
   input?: RunInput;
   targets: TargetedRunTarget[];
+  /** Defaults to `coordinator`; see `runExecutionMode`. */
+  executionMode?: RunExecutionMode;
 };
 
 const OFFLINE_EXPIRY_MS = 24 * 60 * 60_000;
@@ -433,6 +436,13 @@ export async function startTargetedRun(
   const trigger = runTrigger.parse(input.trigger);
   if (input.targets.length === 0)
     throw new Error("A targeted import run requires at least one target");
+  const caller = input.executionMode === "caller";
+  if (caller && purpose !== "product_enrichment")
+    throw new Error("Only product enrichment runs can be caller-owned");
+  // A caller-owned run never drives the browser, so it must not occupy the
+  // account's one active-run slot and block that member's account sync.
+  if (caller && input.vendorAccountId)
+    throw new Error("A caller-owned run never holds a vendor account");
   const targetKeys = input.targets.map((target) =>
     target.kind === "purchase"
       ? `purchase:${z.uuid().parse(target.purchaseId)}`
@@ -501,7 +511,8 @@ export async function startTargetedRun(
     }
 
     const id = runEntityId.parse(crypto.randomUUID());
-    const eventId = crypto.randomUUID();
+    // No dispatch generation: nothing can ever queue a coordinator for it.
+    const eventId = caller ? null : crypto.randomUUID();
     const run = await insertWithShortcode(tx, "run", {
       id,
       ledgerPartyId: input.ledgerPartyId,
@@ -519,8 +530,9 @@ export async function startTargetedRun(
       purpose,
       trigger,
       input: input.input ?? null,
+      executionMode: caller ? "caller" : "coordinator",
       dispatchEventId: eventId,
-      coordinatorModel: coordinatorModelFor(purpose),
+      coordinatorModel: caller ? undefined : coordinatorModelFor(purpose),
       agentSessionId: importRunAgentIdentity(
         id,
         agentImportRunPurpose.parse(purpose),
@@ -551,6 +563,7 @@ export async function startTargetedRun(
         publicId: run.shortcode,
         status: run.status,
         purpose: run.purpose,
+        executionMode: run.executionMode,
         dispatchEventId: run.dispatchEventId,
       },
     };
@@ -761,6 +774,7 @@ export async function loadRunScope(db: Database, runId: string) {
       dispatchError: runTable.dispatchError,
       coordinatorStartedAt: runTable.coordinatorStartedAt,
       runUpdatedAt: runTable.updatedAt,
+      executionMode: runTable.executionMode,
     })
     .from(runTable)
     .leftJoin(
@@ -815,6 +829,7 @@ export async function loadRunScope(db: Database, runId: string) {
     vendorId: row.vendorId,
     actorUserId: row.actorUserId,
     runUpdatedAt: row.runUpdatedAt,
+    executionMode: row.executionMode,
   };
 }
 
@@ -1027,6 +1042,7 @@ export async function resumeAuthorizedRuns(
         and(
           eq(runTable.actorUserId, owner),
           eq(runTable.status, "paused_auth"),
+          eq(runTable.executionMode, "coordinator"),
         ),
       )
       .returning({
@@ -1047,6 +1063,7 @@ export async function resumeAuthorizedRuns(
         and(
           eq(runTable.actorUserId, owner),
           eq(runTable.status, "running"),
+          eq(runTable.executionMode, "coordinator"),
           isNull(runTable.coordinatorStartedAt),
           isNotNull(runTable.dispatchEventId),
           lt(runTable.updatedAt, repairCutoff),
@@ -1056,6 +1073,10 @@ export async function resumeAuthorizedRuns(
   });
 }
 
+/**
+ * Revoking the purchase-agent grant pauses the coordinator runs it
+ * authorized. A caller-owned run never used that grant, so it keeps running.
+ */
 export async function pauseAuthorizedRuns(db: Database, actorUserId: string) {
   return getDb(db)
     .update(runTable)
@@ -1064,6 +1085,7 @@ export async function pauseAuthorizedRuns(db: Database, actorUserId: string) {
       and(
         eq(runTable.actorUserId, userId.parse(actorUserId)),
         eq(runTable.status, "running"),
+        eq(runTable.executionMode, "coordinator"),
       ),
     )
     .returning({ id: runTable.id });
@@ -3965,6 +3987,7 @@ export async function controlRun(
           coordinatorStartedAt: runTable.coordinatorStartedAt,
           decisionRevision: runTable.decisionRevision,
           historyCursorUrl: runTable.historyCursorUrl,
+          executionMode: runTable.executionMode,
         })
         .from(runTable)
         .where(eq(runTable.id, scope.public.runId))
@@ -3973,6 +3996,12 @@ export async function controlRun(
         // whose foreign keys share-lock the Run, so a full lock could deadlock.
         .for("no key update");
       if (!locked) throw new Error("Purchase import run was not found");
+      // Every other control dispatches, resumes, pauses, or restarts a
+      // coordinator; a caller-owned run has none, and its owner can only stop it.
+      if (locked.executionMode === "caller" && input.action !== "cancel")
+        throw new Error(
+          `A caller-owned run is worked by its member's MCP client and cannot ${input.action}; cancel it or start a new one`,
+        );
       if (input.action === "restart") {
         if (
           !new Set([

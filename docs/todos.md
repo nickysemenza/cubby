@@ -597,9 +597,10 @@ consume the declarations.
   - Order mail: `vendor.orderMail`, `vendor.searchOrderMail`,
     `vendor.orderMailSearchStatus`, `vendor.importOrderMail`,
     `vendor.importSelectedOrderMail`.
-  - Targeted runs and their evidence: `run.targetedLaunch`,
-    `run.startTargeted`, `vendor.chargeHunts`, `vendor.startChargeRun`,
-    `purchaseImport.initiateRunEvidenceUpload`.
+  - Coordinator-dispatched targeted runs: `run.startTargeted` (purchase
+    validation, and enrichment through the Mac browser; caller-owned
+    enrichment already ships as `product_enrichment.start_run`),
+    `vendor.chargeHunts`, `vendor.startChargeRun`.
   - Inventory receiving: `inventory.receiveExpense`,
     `inventory.receivingContext`, `problems.resolveArrivedFindings`.
   - Discarding units: `inventory.bulkDiscard`, `product.discard`.

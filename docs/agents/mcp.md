@@ -22,6 +22,12 @@ deterministic idempotency key. Multiple attachments to one Product are
 dependent count changes; prefer independent target batches and retry only
 failed items after a fresh read.
 
+Provenance-backed Product enrichment from an MCP client is a caller-owned run:
+`product_enrichment.start_run`, then `imports_read.enrichment_next`,
+`product_enrichment.capture_page`, `commit` or `skip_target`, and
+`finish_run`. The [product-enrichment skill](../../.claude/skills/product-enrichment/SKILL.md)
+owns the workflow.
+
 ## Failures and timeouts
 
 A tool failure comes back as an `isError` result whose text names the cause

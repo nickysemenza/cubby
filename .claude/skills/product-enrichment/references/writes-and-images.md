@@ -24,8 +24,10 @@ Enrichment itself never merges without that human confirmation.
 
 In a targeted run's commit, a non-Amazon catalog image is verified only when the
 same single-Product vendor page proves an identifier the Product already has or
-is committing, and the image URL and dimensions appear in that capture. If the
-page lists several variants, capture the exact variant's page or leave the
+is committing, and the image URL and dimensions appear in that capture. A
+`capture_page` capture measures only the page Product's schema.org `image`
+URLs, and the commit refuses a cover whose bytes changed since the capture. If
+the page lists several variants, capture the exact variant's page or leave the
 Product for review. A commit that finds a proven identifier owned by another
 Product still succeeds for the rest; read `skippedIdentifiers` and let a human
 resolve the proposed pair.

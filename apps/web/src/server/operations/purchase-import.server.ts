@@ -1,6 +1,7 @@
 import { purchaseImportContract } from "~/contracts/purchase-import.contract";
 import { getPurchaseAgentQueue } from "~/server/cf-env";
 import { implementOperationDomain } from "~/server/operation-domain.server";
+import { captureEnrichmentPage } from "~/server/purchase-import/enrichment-capture";
 import { confirmMerchantVendorRule } from "~/server/purchase-import/hunts";
 import {
   commitProductEnrichment,
@@ -62,6 +63,8 @@ export const purchaseImportHandlers = implementOperationDomain(
       confirmMerchantVendorRule(context.db, input, context.actorContext),
     commitProductEnrichment: (context, input) =>
       commitProductEnrichment(context.db, input, context.actorContext),
+    captureEnrichmentPage: (context, input) =>
+      captureEnrichmentPage(context.db, context.actorContext, input),
     overwriteProductEnrichment: (context, input) =>
       overwriteProductEnrichment(context.db, input, context.actorContext),
   },

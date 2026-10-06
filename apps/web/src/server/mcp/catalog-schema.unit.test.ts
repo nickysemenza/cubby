@@ -495,6 +495,11 @@ describe("MCP catalog schemas", () => {
       "purchase_import.prepareOperationId",
       "purchase_import.resolutions[].stableOrderId",
       "purchase_import.resolutions[].stableLineId",
+      // A caller-owned enrichment commit's own replay key.
+      "product_enrichment.operationId",
+      // run.targetedLaunch takes a PRD- or PUR- code by `purpose`; its plain
+      // string input is shared with the web and native launch sheets.
+      "imports_read.targetId",
       // Run-scoped evidence ids address immutable operational captures, not
       // public Cubby entities.
       "product_enrichment.changes.identifiers[].evidenceId",

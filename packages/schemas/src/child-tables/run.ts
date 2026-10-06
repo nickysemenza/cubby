@@ -242,7 +242,7 @@ export const runChildren = [
     checks: [
       {
         name: "RunEvidence_kind_check",
-        sql: "{kind} IN ('browser_capture', 'gmail_attachment', 'manual_upload')",
+        sql: "{kind} IN ('browser_capture', 'http_capture', 'gmail_attachment', 'manual_upload')",
       },
     ],
   }),

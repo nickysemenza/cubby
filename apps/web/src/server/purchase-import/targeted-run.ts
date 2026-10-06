@@ -6,7 +6,11 @@ import type {
 } from "@cubby/schemas/identifiers";
 import { runShortcode, vendorAccountId } from "@cubby/schemas/identifiers";
 import { agentImportRunPurpose } from "@cubby/schemas/import-run-agent";
-import type { PurchaseAgentEvent } from "@cubby/schemas/purchase-import";
+import {
+  type PurchaseAgentEvent,
+  startCallerEnrichmentInput,
+} from "@cubby/schemas/purchase-import";
+import type { RunExecutionMode } from "@cubby/schemas/run-fields";
 import { sha256Hex } from "@cubby/shared/sha256";
 import { and, desc, eq, isNotNull } from "drizzle-orm";
 import { z } from "zod";
@@ -137,9 +141,19 @@ async function startedOutcome(
         status: started.blockingRun.status,
       },
     };
+  const { run } = started;
   return {
     created: true,
-    run: await queueStartedRun(db, started.run),
+    // A caller-owned run is never queued: its member's MCP client works it.
+    run:
+      run.executionMode === "caller"
+        ? {
+            id: runShortcode.parse(run.publicId),
+            status: run.status,
+            purpose: targetedImportPurpose.parse(run.purpose),
+            dispatchEventId: null,
+          }
+        : await queueStartedRun(db, run),
     blockingRun: null,
   };
 }
@@ -221,6 +235,45 @@ async function claimForActor(
 const claimLabel = (claim: { kind: string; externalKey: string }) =>
   `${claim.kind.replaceAll("_", " ")} · ${claim.externalKey}`;
 
+/** The member's most recent source claim on a Purchase that contains the Product. */
+async function newestProductClaim(
+  db: Database,
+  ledgerPartyId: LedgerPartyId,
+  productId: ProductId,
+) {
+  const [claim] = await getDb(db)
+    .select({
+      id: importSourceClaim.id,
+      kind: importSourceClaim.kind,
+      externalKey: importSourceClaim.externalKey,
+      vendorAccountId: importSourceClaim.vendorAccountId,
+      vendorAccountLabel: vendorAccount.label,
+    })
+    .from(expense)
+    .innerJoin(
+      purchase,
+      and(eq(purchase.id, expense.purchaseId), notDeleted(purchase)),
+    )
+    .innerJoin(
+      importSourceClaim,
+      and(
+        eq(importSourceClaim.purchaseId, purchase.id),
+        eq(importSourceClaim.ledgerPartyId, ledgerPartyId),
+      ),
+    )
+    .leftJoin(
+      vendorAccount,
+      and(
+        eq(vendorAccount.id, importSourceClaim.vendorAccountId),
+        notDeleted(vendorAccount),
+      ),
+    )
+    .where(and(eq(expense.productId, productId), notDeleted(expense)))
+    .orderBy(desc(importSourceClaim.updatedAt))
+    .limit(1);
+  return claim ?? null;
+}
+
 /** The sources a targeted run could replay for one Purchase or Product. */
 export async function loadTargetedImportLaunch(
   db: Database,
@@ -280,36 +333,7 @@ export async function loadTargetedImportLaunch(
     .where(and(eq(product.id, productId), notDeleted(product)))
     .limit(1);
   if (!target) throw new Error("Target was not found");
-  const [claim] = await getDb(db)
-    .select({
-      id: importSourceClaim.id,
-      kind: importSourceClaim.kind,
-      externalKey: importSourceClaim.externalKey,
-      vendorAccountId: importSourceClaim.vendorAccountId,
-      vendorAccountLabel: vendorAccount.label,
-    })
-    .from(expense)
-    .innerJoin(
-      purchase,
-      and(eq(purchase.id, expense.purchaseId), notDeleted(purchase)),
-    )
-    .innerJoin(
-      importSourceClaim,
-      and(
-        eq(importSourceClaim.purchaseId, purchase.id),
-        eq(importSourceClaim.ledgerPartyId, ledgerPartyId),
-      ),
-    )
-    .leftJoin(
-      vendorAccount,
-      and(
-        eq(vendorAccount.id, importSourceClaim.vendorAccountId),
-        notDeleted(vendorAccount),
-      ),
-    )
-    .where(and(eq(expense.productId, productId), notDeleted(expense)))
-    .orderBy(desc(importSourceClaim.updatedAt))
-    .limit(1);
+  const claim = await newestProductClaim(db, ledgerPartyId, productId);
   return {
     purpose,
     purchase: null,
@@ -384,6 +408,20 @@ async function startPurchaseValidation(
 }
 
 /**
+ * Whether an enrichment run may open `url`: HTTP(S) on exactly one of the
+ * Vendor's browser domains. The start page and a caller-owned run's
+ * server-side capture (every redirect hop) share it.
+ */
+export const isVendorBrowserUrl = (
+  url: URL,
+  browserDomains: readonly string[],
+) =>
+  (url.protocol === "https:" || url.protocol === "http:") &&
+  browserDomains.some(
+    (domain) => domain.toLowerCase() === url.hostname.toLowerCase(),
+  );
+
+/**
  * The page an enrichment run opens first: the first HTTP(S) candidate on the
  * Vendor's browser domains, because the browser bridge refuses any other
  * navigation. Candidates in order: a browser-captured claim's own page (an
@@ -435,11 +473,7 @@ async function enrichmentStartUrl(
       // SILENT: a claim key or malformed website is not a page; try the next.
       continue;
     }
-    if (
-      (url.protocol === "https:" || url.protocol === "http:") &&
-      allowed.has(url.hostname.toLowerCase())
-    )
-      return url.href;
+    if (isVendorBrowserUrl(url, owner?.browserDomains ?? [])) return url.href;
   }
   throw new Error(
     `No page to start enriching this Product is on ${owner?.name ?? "its Vendor"}'s browser domains (${[...allowed].join(", ") || "none"}). Add the site's host to the Vendor's browser domains or a website on one of them.`,
@@ -450,6 +484,7 @@ async function startProductEnrichment(
   db: Database,
   ledgerPartyId: LedgerPartyId,
   input: Extract<TargetedImportStartInput, { purpose: "product_enrichment" }>,
+  executionMode: RunExecutionMode = "coordinator",
 ): Promise<TargetedImportStartOutput> {
   const resolved = await Promise.all(
     input.targets.map(async (target) => {
@@ -487,7 +522,11 @@ async function startProductEnrichment(
   );
   const groups = new Map<string, typeof resolved>();
   for (const row of resolved) {
-    const key = `${row.claim.vendorId}:${row.claim.vendorAccountId ?? "none"}`;
+    // A coordinator run drives one account's browser; a caller run, none.
+    const key =
+      executionMode === "caller"
+        ? row.claim.vendorId
+        : `${row.claim.vendorId}:${row.claim.vendorAccountId ?? "none"}`;
     groups.set(key, [...(groups.get(key) ?? []), row]);
   }
   const runs = await Promise.all(
@@ -497,10 +536,14 @@ async function startProductEnrichment(
         ledgerPartyId,
         purpose: "product_enrichment",
         vendorId: claim.vendorId,
-        vendorAccountId: claim.vendorAccountId
-          ? vendorAccountId.parse(claim.vendorAccountId)
-          : null,
+        // Targets keep their claim's account as provenance; only a
+        // coordinator run occupies the account to drive its browser.
+        vendorAccountId:
+          executionMode === "coordinator" && claim.vendorAccountId
+            ? vendorAccountId.parse(claim.vendorAccountId)
+            : null,
         trigger: "manual",
+        executionMode,
         targets: group.map((row) => ({
           kind: "product" as const,
           productId: row.productId,
@@ -518,6 +561,41 @@ async function startProductEnrichment(
     }),
   );
   return { runs };
+}
+
+/**
+ * Admit caller-owned enrichment runs for Products, each from its newest
+ * verified purchase source; the same admission as a browser-started run,
+ * grouped per vendor, but never queued.
+ */
+export async function startCallerEnrichment(
+  db: Database,
+  ledgerPartyId: LedgerPartyId,
+  input: z.infer<typeof startCallerEnrichmentInput>,
+): Promise<TargetedImportStartOutput> {
+  const { productIds } = startCallerEnrichmentInput.parse(input);
+  if (new Set(productIds).size !== productIds.length)
+    throw new Error("Each Product can be named once");
+  const targets = await Promise.all(
+    productIds.map(async (productId) => {
+      const claim = await newestProductClaim(
+        db,
+        ledgerPartyId,
+        await resolveOrThrow(db, "product", productId),
+      );
+      if (!claim)
+        throw new Error(
+          `${productId} has no verified purchase source; enrich it with fill-only writes instead`,
+        );
+      return { productId, sourceId: claim.id, vendorAccountId: null };
+    }),
+  );
+  return startProductEnrichment(
+    db,
+    ledgerPartyId,
+    { purpose: "product_enrichment", targets },
+    "caller",
+  );
 }
 
 /** Admit and dispatch targeted validation or enrichment runs. */

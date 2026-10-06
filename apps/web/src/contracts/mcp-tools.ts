@@ -62,6 +62,10 @@ import {
   suggestionsContract,
 } from "~/contracts/recipe.contract";
 import { recommendationsContract } from "~/contracts/recommendations.contract";
+import {
+  runContract,
+  type TargetedImportLaunch as TargetedLaunch,
+} from "~/contracts/run.contract";
 import { searchContract } from "~/contracts/search.contract";
 import { spendingClassificationContract } from "~/contracts/spending-classification.contract";
 import { statementRowContract } from "~/contracts/statement-row.contract";
@@ -83,6 +87,68 @@ import { vendorContract } from "~/contracts/vendor.contract";
  * `server/purchase-import/capabilities.ts`): authorizing
  * `purchase_import.prepare` never authorizes `purchase_import.commit`.
  */
+
+/**
+ * `run.targetedLaunch` without its source-claim and vendor-account ids: an
+ * MCP caller starts a caller-owned run by Product, and the server picks the
+ * source again from the member's own claims.
+ */
+const launchCandidate = z.object({
+  productId: z.string(),
+  productName: z.string(),
+  selected: z.boolean(),
+  sourceLabel: z.string().nullable(),
+  vendorAccountLabel: z.string().nullable(),
+  reason: z.string().nullable(),
+});
+const enrichmentSourcesOut = z.object({
+  purpose: z.string(),
+  purchase: z
+    .object({
+      id: z.string(),
+      label: z.string(),
+      canValidate: z.boolean(),
+      reason: z.string().nullable(),
+      sources: z.array(
+        z.object({
+          label: z.string(),
+          kind: z.string(),
+          usable: z.boolean(),
+          reason: z.string().nullable(),
+        }),
+      ),
+    })
+    .nullable(),
+  products: z.array(launchCandidate),
+});
+const slimCandidate = (
+  candidate: TargetedLaunch["products"][number],
+): z.output<typeof launchCandidate> => ({
+  productId: candidate.productId,
+  productName: candidate.productName,
+  selected: candidate.selected,
+  sourceLabel: candidate.sourceLabel,
+  vendorAccountLabel: candidate.vendorAccountLabel,
+  reason: candidate.reason,
+});
+const slimTargetedLaunch = (
+  launch: TargetedLaunch,
+): z.output<typeof enrichmentSourcesOut> => ({
+  purpose: launch.purpose,
+  purchase: launch.purchase && {
+    id: launch.purchase.id,
+    label: launch.purchase.label,
+    canValidate: launch.purchase.canValidate,
+    reason: launch.purchase.reason,
+    sources: launch.purchase.sources.map((source) => ({
+      label: source.label,
+      kind: source.kind,
+      usable: source.usable,
+      reason: source.reason,
+    })),
+  },
+  products: launch.products.map(slimCandidate),
+});
 
 const usdaFoodLookupOut = z.object({ food: usdaFoodMcpOut });
 const usdaFood = (output: {
@@ -497,7 +563,7 @@ export const MCP_TOOLS = defineMcpTools({
 
   imports_read: {
     description:
-      "Import-run and enrichment reads: purchase-import operation status, vendor coverage, photo-run context and proposals, image processing, external-id collisions, and barcode lookup.",
+      "Import-run and enrichment reads: purchase-import operation status, vendor coverage, photo-run context and proposals, image processing, external-id collisions, barcode lookup, enrichment sources, and a caller-owned enrichment run's next target.",
     actions: {
       purchase_status: mcpAction({
         op: purchaseImportContract.ops.operationStatus,
@@ -548,6 +614,18 @@ export const MCP_TOOLS = defineMcpTools({
         }),
         description:
           "Resolve a UPC barcode to an identity WITHOUT creating anything: the Product already claiming the barcode, the USDA branded-food match, and the UPC lookup service's record, all at once. Use it whenever the question is what a barcode names — verifying a scan, confirming a product page describes the item you hold, or telling a bare tool from the kit it ships in. A barcode identifies the PACKAGE, so a kit and its bare-tool variant carry different UPCs; a manufacturer page reached by guessing a URL from a barcode is not evidence. Prefer this over upc.find_or_create unless you intend to create a Product.",
+      }),
+      enrichment_sources: mcpAction({
+        op: runContract.ops.targetedLaunch,
+        project: slimTargetedLaunch,
+        output: enrichmentSourcesOut,
+        description:
+          'Whether one Product (purpose "product_enrichment", targetId PRD-…) or Purchase has a verified purchase source a targeted run can work from. A Product with `selected: false` has no source containing it (a photo-created or hand-made Product): enrich it with fill-only writes instead of product_enrichment.start_run.',
+      }),
+      enrichment_next: mcpAction({
+        op: runContract.ops.callerEnrichmentNext,
+        description:
+          "The next pending target of a caller-owned enrichment run you started with product_enrichment.start_run: its Product, the `targetFingerprint` every commit must echo, a start page, and the evidence already captured for it. `next: null` means every target is committed or skipped; call product_enrichment.finish_run.",
       }),
     },
   },
@@ -645,12 +723,33 @@ export const MCP_TOOLS = defineMcpTools({
 
   product_enrichment: {
     description:
-      "Source-backed Product identity writes: fill-only enrichment, approved overwrites, identifier slots, image integrity, and match proposals.",
+      "Source-backed Product identity writes: caller-owned enrichment runs and their page captures, fill-only enrichment, approved overwrites, identifier slots, image integrity, and match proposals.",
     actions: {
+      start_run: mcpAction({
+        op: runContract.ops.startCallerEnrichment,
+        description:
+          "Start caller-owned enrichment runs for up to 50 import-created Products. YOU work these runs (no browser agent is queued): imports_read.enrichment_next, then capture_page, then commit or skip_target, then finish_run. Every Product needs a verified purchase source (imports_read.enrichment_sources); Products are grouped into one run per vendor. A Product whose vendor already has an active run returns that `blockingRun` instead.",
+      }),
+      capture_page: mcpAction({
+        op: purchaseImportContract.ops.captureEnrichmentPage,
+        openWorld: true,
+        description:
+          "Have the server fetch one product page on the run vendor's site for a caller-owned run's target, retain its bytes, and derive the proof itself. Refused: an off-vendor URL or redirect, a sign-in page, and a page without exactly one schema.org Product (a ProductGroup or several variants never proves which one you hold). Returns the `evidenceId` to cite in commit, the page Product's identifiers, and the images it measured. Identical bytes return the same evidence.",
+      }),
       commit: mcpAction({
         op: purchaseImportContract.ops.commitProductEnrichment,
         description:
-          "Apply a bounded, fill-only Product enrichment to one explicit target. Price, attachments, source claims, identifier reassignment, and populated-field overwrites are forbidden.",
+          "Apply a bounded, fill-only Product enrichment to one explicit target. Price, attachments, source claims, identifier reassignment, and populated-field overwrites are forbidden. For a caller-owned run pass `runId` (RUN-…) and your own stable `operationId`; retrying the same operationId with the same arguments returns the original result. Identifiers and an image must cite this target's captured `evidenceId` and appear in that capture exactly.",
+      }),
+      skip_target: mcpAction({
+        op: runContract.ops.skipCallerEnrichmentTarget,
+        description:
+          "Close one caller-owned run target without a commit: `skipped` when there is no exact source, `needs_review` when a person must decide (ambiguity, a populated field to replace, a conflicting identifier); the reason is recorded as a run finding.",
+      }),
+      finish_run: mcpAction({
+        op: runContract.ops.finishCallerEnrichment,
+        description:
+          "Finish a caller-owned enrichment run once every target is committed or skipped: `completed`, or `needs_review` when any target needs a person. Repeating it returns the same terminal status; a finished run refuses further captures, commits, and skips.",
       }),
       overwrite: mcpAction({
         op: purchaseImportContract.ops.overwriteProductEnrichment,

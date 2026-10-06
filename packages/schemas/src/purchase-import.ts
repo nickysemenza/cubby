@@ -65,6 +65,8 @@ export type RunTargetOutcome = z.infer<typeof runTargetOutcome>;
 
 export const runEvidenceKind = z.enum([
   "browser_capture",
+  /** A vendor page the server fetched itself (`captureEnrichmentPage`). */
+  "http_capture",
   "gmail_attachment",
   "manual_upload",
 ]);
@@ -79,7 +81,9 @@ export const initiateRunEvidenceUploadInput = z.object({
   // echoes the one its capture command's evidence scope carried.
   runId: runShortcode,
   targetId: z.uuid(),
-  kind: runEvidenceKind,
+  // `http_capture` is server-derived only: a client upload carries its own
+  // metadata, so it can never claim the server's fetch-and-parse proof.
+  kind: runEvidenceKind.exclude(["http_capture"]),
   contentType: z.enum([
     "application/pdf",
     "image/jpeg",
@@ -1127,42 +1131,61 @@ export type ApplyValidationCorrectionsOut = z.infer<
   typeof applyValidationCorrectionsOut
 >;
 
-/** Bounded Product enrichment write. Price is deliberately absent. */
-export const commitProductEnrichmentInput = z.object({
-  _runExecution: purchaseImportRunExecution,
-  productId: productShortcode,
-  targetFingerprint: z.string().regex(/^[a-f0-9]{64}$/),
-  changes: z
-    .object({
-      manufacturer: z.string().trim().min(1).max(300).optional(),
-      categoryId: productCategoryShortcode.optional(),
-      model: z.string().trim().min(1).max(300).optional(),
-      identifiers: z
-        .array(
-          z.object({
+/**
+ * Bounded Product enrichment write. Price is deliberately absent. A
+ * coordinator names its run with the private `_runExecution` envelope; a
+ * member's MCP client working a caller-owned run names it by public `runId`
+ * and its own stable `operationId` instead. Exactly one form is accepted.
+ */
+export const commitProductEnrichmentInput = z
+  .object({
+    _runExecution: purchaseImportRunExecution.optional(),
+    runId: runShortcode.optional(),
+    operationId: importOperationId.optional(),
+    productId: productShortcode,
+    targetFingerprint: z.string().regex(/^[a-f0-9]{64}$/),
+    changes: z
+      .object({
+        manufacturer: z.string().trim().min(1).max(300).optional(),
+        categoryId: productCategoryShortcode.optional(),
+        model: z.string().trim().min(1).max(300).optional(),
+        identifiers: z
+          .array(
+            z.object({
+              evidenceId: z.uuid(),
+              source: externalIdSource,
+              kind: externalIdKind,
+              externalId: z.string().trim().min(1).max(500),
+              url: z.url().nullable().optional(),
+            }),
+          )
+          .max(20)
+          .optional(),
+        image: z
+          .object({
             evidenceId: z.uuid(),
-            source: externalIdSource,
-            kind: externalIdKind,
-            externalId: z.string().trim().min(1).max(500),
-            url: z.url().nullable().optional(),
-          }),
-        )
-        .max(20)
-        .optional(),
-      image: z
-        .object({
-          evidenceId: z.uuid(),
-          url: z.url(),
-          naturalWidth: z.number().int().positive(),
-          naturalHeight: z.number().int().positive(),
-        })
-        .optional(),
-    })
-    .refine(
-      (value) => Object.keys(value).length > 0,
-      "at least one change is required",
-    ),
-});
+            url: z.url(),
+            naturalWidth: z.number().int().positive(),
+            naturalHeight: z.number().int().positive(),
+          })
+          .optional(),
+      })
+      .refine(
+        (value) => Object.keys(value).length > 0,
+        "at least one change is required",
+      ),
+  })
+  .superRefine((value, context) => {
+    const envelope = value._runExecution !== undefined;
+    const caller = value.runId !== undefined || value.operationId !== undefined;
+    if (envelope === caller || (caller && !(value.runId && value.operationId)))
+      context.addIssue({
+        code: "custom",
+        path: ["runId"],
+        message:
+          "Name the run with either _runExecution, or runId plus operationId (a caller-owned run)",
+      });
+  });
 export type CommitProductEnrichmentInput = z.infer<
   typeof commitProductEnrichmentInput
 >;
@@ -1218,6 +1241,92 @@ export const overwriteProductEnrichmentOut = z.object({
   runId: runShortcode,
   productId: productShortcode,
   changedField: z.enum(["manufacturer", "categoryId", "model"]),
+});
+
+/**
+ * Start caller-owned enrichment runs for import-created Products. The server
+ * picks each Product's newest verified purchase source itself, so no claim or
+ * account id crosses the caller's boundary.
+ */
+export const startCallerEnrichmentInput = z.object({
+  productIds: z.array(productShortcode).min(1).max(50),
+});
+
+export const callerEnrichmentRunInput = z.object({ runId: runShortcode });
+
+/** The next pending target of a caller-owned run, or null when none is left. */
+export const callerEnrichmentNextOut = z.object({
+  runId: runShortcode,
+  status: runStatus,
+  /** Hosts a capture URL and every redirect it follows must stay on. */
+  allowedHosts: z.array(z.string()),
+  next: z
+    .object({
+      productId: productShortcode,
+      productName: z.string(),
+      targetFingerprint: z.string().regex(/^[a-f0-9]{64}$/),
+      startUrl: z.string().nullable(),
+      evidence: z.array(
+        z.object({
+          /** The handle `product_enrichment.commit` cites as `evidenceId`. */
+          id: z.uuid(),
+          kind: runEvidenceKind,
+          checksum: z.string(),
+          sourceUrl: z.string().nullable(),
+        }),
+      ),
+    })
+    .nullable(),
+});
+
+/** Fetch one vendor product page for a caller-owned run's target. */
+export const captureEnrichmentPageInput = z.object({
+  runId: runShortcode,
+  productId: productShortcode,
+  url: z.url().max(2_048),
+});
+
+export const captureEnrichmentPageOut = z.object({
+  runId: runShortcode,
+  productId: productShortcode,
+  /** The handle `product_enrichment.commit` cites as `evidenceId`. */
+  evidenceId: z.uuid(),
+  /** True when identical bytes were already retained for this target. */
+  replayed: z.boolean(),
+  sourceUrl: z.url(),
+  canonicalUrl: z.url().nullable(),
+  checksum: z.string().regex(/^[a-f0-9]{64}$/),
+  byteSize: z.number().int().positive(),
+  /** The page's single schema.org Product: the only identifiers it can prove. */
+  product: browserStructuredProduct,
+  /** Product images the server fetched and measured; commit cites one exactly. */
+  images: z.array(
+    z.object({
+      url: z.url(),
+      naturalWidth: z.number().int().positive(),
+      naturalHeight: z.number().int().positive(),
+    }),
+  ),
+});
+
+export const skipCallerEnrichmentTargetInput = z.object({
+  runId: runShortcode,
+  productId: productShortcode,
+  /** `skipped`: no exact source. `needs_review`: a person must decide. */
+  outcome: z.enum(["skipped", "needs_review"]),
+  reason: z.string().trim().min(1).max(1_000),
+});
+
+export const skipCallerEnrichmentTargetOut = z.object({
+  runId: runShortcode,
+  productId: productShortcode,
+  state: z.enum(["skipped", "unresolved"]),
+});
+
+export const finishCallerEnrichmentOut = z.object({
+  runId: runShortcode,
+  status: z.enum(["completed", "needs_review"]),
+  findingCount: z.number().int().nonnegative(),
 });
 
 export const importOperationStatusInput = z.object({

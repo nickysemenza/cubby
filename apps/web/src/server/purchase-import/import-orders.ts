@@ -1,6 +1,7 @@
 import { type ActorContext, actorInRun } from "@cubby/schemas/context";
 import { GTIN_KIND, GTIN_SOURCE } from "@cubby/schemas/external-id";
 import {
+  type ImageId,
   type LedgerPartyId,
   parseEntityId,
   type ProductId,
@@ -84,6 +85,7 @@ import {
   deleteStoredObjects,
   importImageFromUrl,
 } from "~/server/services/image-storage.service";
+import { getS3Object } from "~/server/utils/s3";
 
 import { assertRunCapability } from "./capabilities";
 import {
@@ -1195,10 +1197,62 @@ const retainedCaptureMetadata = z.object({
         naturalWidth: z.number().int().positive().nullable(),
         naturalHeight: z.number().int().positive().nullable(),
         highResolutionUrl: z.url().nullable(),
+        /** Server-measured bytes (`http_capture`); a browser capture has none. */
+        sha256: z.string().optional(),
       }),
     )
     .default([]),
 });
+
+/**
+ * Evidence kinds whose proof the commit accepts: a page the Mac browser
+ * captured, or one the server fetched itself. Both carry server-checked
+ * structured data and measured images; an uploaded file or mail never does.
+ */
+const PAGE_EVIDENCE_KINDS = ["browser_capture", "http_capture"] as const;
+
+/**
+ * A server capture measured exactly these bytes; the image URL may serve
+ * others by commit time, which would make an unproven cover. A browser
+ * capture records no hash, so it keeps its URL-and-dimensions proof.
+ */
+async function assertCapturedImageBytes(
+  db: Database,
+  stored: { id: ImageId; key: string; created: boolean },
+  capturedSha256: string | undefined,
+) {
+  if (!capturedSha256) return;
+  const response = await getS3Object(stored.key);
+  const actual = response.ok
+    ? await sha256Hex(new Uint8Array(await response.arrayBuffer()))
+    : null;
+  if (actual === capturedSha256) return;
+  if (stored.created) {
+    const removed = await deleteImages(db, [stored.id]);
+    await deleteStoredObjects(removed.deletedKeys);
+  }
+  throw new Error(
+    "Product image bytes changed since the page was captured; capture it again",
+  );
+}
+
+/**
+ * The run a commit names. A coordinator sends its private `_runExecution`
+ * envelope; a member's MCP client names its caller-owned run publicly.
+ */
+async function enrichmentExecution(
+  db: Database,
+  input: CommitProductEnrichmentInput,
+): Promise<{ runId: string; operationId: string; caller: boolean }> {
+  if (input._runExecution) return { ...input._runExecution, caller: false };
+  if (!input.runId || !input.operationId)
+    throw new Error("Product enrichment commit names no run");
+  return {
+    runId: await resolveOrThrow(db, "run", input.runId),
+    operationId: input.operationId,
+    caller: true,
+  };
+}
 
 /**
  * Identifiers this Product carries or is committing, for proving which exact
@@ -1267,7 +1321,7 @@ type SkippedEnrichmentIdentifier = z.output<
 >["skippedIdentifiers"][number];
 
 /**
- * Prove one identifier from this target's retained browser evidence and learn
+ * Prove one identifier from this target's captured page evidence and learn
  * it. A proven identifier another Product owns is never reassigned and never
  * aborts the commit: it becomes a match proposal. An unproven one throws,
  * because that is write authority, not a collision.
@@ -1293,7 +1347,7 @@ async function commitEnrichmentIdentifier(
         eq(runEvidence.id, identifier.evidenceId),
         eq(runEvidence.runId, input.runId),
         eq(runEvidence.targetId, input.targetId),
-        eq(runEvidence.kind, "browser_capture"),
+        inArray(runEvidence.kind, [...PAGE_EVIDENCE_KINDS]),
       ),
     )
     .limit(1);
@@ -1333,7 +1387,7 @@ async function commitEnrichmentIdentifier(
       throw error;
     await upsertAgentProductMatch(tx, {
       productIds: [productId, error.ownerProductId],
-      evidence: `Retained browser evidence proves ${error.source}/${error.kind} ${error.externalId} for this Product's exact variant, but it already identifies the other Product. Confirm whether both are the same exact variant before merging.`,
+      evidence: `Retained page evidence proves ${error.source}/${error.kind} ${error.externalId} for this Product's exact variant, but it already identifies the other Product. Confirm whether both are the same exact variant before merging.`,
       sourceUrls:
         observed.success && observed.data.sourceURL
           ? [observed.data.sourceURL]
@@ -1363,17 +1417,24 @@ export async function commitProductEnrichment(
   actor: ActorContext,
 ) {
   const input = commitProductEnrichmentInput.parse(rawInput);
-  const scope = await assertOwnedRun(db, actor, input._runExecution.runId);
+  const execution = await enrichmentExecution(db, input);
+  const scope = await assertOwnedRun(db, actor, execution.runId);
   if (scope.public.purpose !== "product_enrichment")
     throw new Error(
       "Product enrichment commit requires a product enrichment run",
+    );
+  // The public run name is only for runs no coordinator works, so a member's
+  // client can never interleave writes with a live coordinator.
+  if (execution.caller && scope.executionMode !== "caller")
+    throw new Error(
+      `${input.runId} is worked by its coordinator; only a caller-owned run is committed by runId`,
     );
   if (scope.public.status !== "running")
     throw new Error(`Import run is fenced in status ${scope.public.status}`);
   const productId = await resolveOrThrow(db, "product", input.productId);
   const database = getDb(db);
   const changes = input.changes;
-  const operationId = input._runExecution.operationId;
+  const { operationId } = execution;
   return executeAtomicOperation(
     db,
     {
@@ -1428,7 +1489,7 @@ export async function commitProductEnrichment(
               eq(runEvidence.id, changes.image.evidenceId),
               eq(runEvidence.runId, scope.public.runId),
               eq(runEvidence.targetId, targetRef.id),
-              eq(runEvidence.kind, "browser_capture"),
+              inArray(runEvidence.kind, [...PAGE_EVIDENCE_KINDS]),
             ),
           )
           .limit(1);
@@ -1450,17 +1511,17 @@ export async function commitProductEnrichment(
               ));
         const verified =
           metadata.success && exactVariant
-            ? metadata.data.images.some(
+            ? metadata.data.images.find(
                 (image) =>
                   (image.url === changes.image?.url ||
                     image.highResolutionUrl === changes.image?.url) &&
                   image.naturalWidth === changes.image?.naturalWidth &&
                   image.naturalHeight === changes.image?.naturalHeight,
               )
-            : false;
+            : undefined;
         if (!verified)
           throw new Error(
-            "Product image was not verified by this target's browser evidence",
+            "Product image was not verified by this target's captured page evidence",
           );
         const imported = await importImageFromUrl(db, {
           sourceUrl: changes.image.url,
@@ -1469,6 +1530,11 @@ export async function commitProductEnrichment(
         if (!imported)
           throw new Error("Verified Product image could not be stored");
         importedImageId = await resolveOrThrow(db, "image", imported.imageId);
+        await assertCapturedImageBytes(
+          db,
+          { ...imported, id: importedImageId },
+          verified.sha256,
+        );
         importedImageShortcode = imported.imageId;
         importedImageCreated = imported.created;
         importedImageSourcePageUrl = metadata.data!.sourceURL ?? null;
@@ -1697,6 +1763,12 @@ export async function overwriteProductEnrichment(
   const scope = await assertOwnedRun(db, actor, input._runExecution.runId);
   if (scope.public.purpose !== "product_enrichment")
     throw new Error("Product overwrite requires a product enrichment run");
+  // Only the coordinator's exact-argument approval wrapper reaches this
+  // writer; a caller-owned run leaves a populated field for a person.
+  if (scope.executionMode === "caller")
+    throw new Error(
+      "A caller-owned run cannot overwrite a populated field; skip the target for review",
+    );
   const resolvedProductId = await resolveOrThrow(
     db,
     "product",

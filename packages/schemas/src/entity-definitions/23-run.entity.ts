@@ -7,7 +7,12 @@ import {
   vendorAccountShortcode,
   vendorShortcode,
 } from "../identifier-fields.js";
-import { runPurpose, runStatus, runTrigger } from "../run-fields.js";
+import {
+  runExecutionMode,
+  runPurpose,
+  runStatus,
+  runTrigger,
+} from "../run-fields.js";
 import { defineEntity } from "./definition.js";
 
 const readOnly = <T extends z.ZodTypeAny>(read: T) => ({
@@ -601,6 +606,17 @@ export default defineEntity({
       },
       // Stable queue generation; duplicate and late deliveries are fenced to it.
       { key: "dispatchEventId", kind: "text" },
+      // `caller` Runs are worked by the member's MCP client and never queued.
+      {
+        key: "executionMode",
+        kind: "text",
+        notNull: true,
+        type: {
+          module: "@cubby/schemas/run-fields",
+          export: "RunExecutionMode",
+        },
+        defaultValue: "coordinator",
+      },
       { key: "agentSessionId", kind: "text" },
       // The order-history page the walk resumes from; null before the first
       // listing.
@@ -687,6 +703,7 @@ export default defineEntity({
       },
       { column: "status" },
       { column: "purpose" },
+      { column: "executionMode", values: [...runExecutionMode.options] },
       {
         name: "Run_photo_inventory_no_vendor_check",
         sql: "{purpose} <> 'photo_inventory' OR {vendorAccountId} IS NULL",

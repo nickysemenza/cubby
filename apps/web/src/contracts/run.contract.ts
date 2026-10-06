@@ -7,6 +7,12 @@ import {
 } from "@cubby/schemas/identifiers";
 import { runTargetDeviceWorkState } from "@cubby/schemas/photo-import-run";
 import {
+  callerEnrichmentNextOut,
+  callerEnrichmentRunInput,
+  finishCallerEnrichmentOut,
+  skipCallerEnrichmentTargetInput,
+  skipCallerEnrichmentTargetOut,
+  startCallerEnrichmentInput,
   proposedImportFix,
   confirmMerchantVendorRuleInput,
   commitPurchaseImportInput,
@@ -430,10 +436,6 @@ export const runContract = defineContract("run", {
     cache: { tags: [["run"]] },
   }),
   targetedLaunch: query({
-    mcp: {
-      omit: "deferred_capability",
-      todo: "Deferred MCP agent capabilities",
-    },
     native: "Replayable evidence for a targeted purchase-validation launch",
     input: z.object({
       purpose: targetedImportPurpose,
@@ -450,6 +452,35 @@ export const runContract = defineContract("run", {
     native: "Launch a targeted purchase-validation or product-enrichment run",
     input: targetedImportStartInput,
     output: targetedImportStartOutput,
+    invalidates: ["runOnly"],
+  }),
+  /**
+   * Caller-owned product enrichment: the member's MCP client works these runs
+   * itself (next, capture, commit or skip, finish). The server never queues a
+   * coordinator for them.
+   */
+  startCallerEnrichment: mutation({
+    http: false,
+    input: startCallerEnrichmentInput,
+    output: targetedImportStartOutput,
+    invalidates: ["runOnly"],
+  }),
+  callerEnrichmentNext: query({
+    http: false,
+    input: callerEnrichmentRunInput,
+    output: callerEnrichmentNextOut,
+    cache: { tags: [] },
+  }),
+  skipCallerEnrichmentTarget: mutation({
+    http: false,
+    input: skipCallerEnrichmentTargetInput,
+    output: skipCallerEnrichmentTargetOut,
+    invalidates: ["runOnly"],
+  }),
+  finishCallerEnrichment: mutation({
+    http: false,
+    input: callerEnrichmentRunInput,
+    output: finishCallerEnrichmentOut,
     invalidates: ["runOnly"],
   }),
   /** The member's purchase-import agent OAuth grant. */

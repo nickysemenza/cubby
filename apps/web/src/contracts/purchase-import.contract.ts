@@ -1,6 +1,8 @@
 import {
   applyValidationCorrectionsInput,
   applyValidationCorrectionsOut,
+  captureEnrichmentPageInput,
+  captureEnrichmentPageOut,
   commitProductEnrichmentInput,
   commitProductEnrichmentOut,
   commitPurchaseImportInput,
@@ -28,8 +30,9 @@ import { defineContract, mutation, query } from "~/contracts/define";
 export const purchaseImportContract = defineContract("purchaseImport", {
   initiateRunEvidenceUpload: mutation({
     mcp: {
-      omit: "deferred_capability",
-      todo: "Deferred MCP agent capabilities",
+      omit: "agent_twin",
+      twin: "purchaseImport.captureEnrichmentPage",
+      note: "The Mac browser's upload transport, which trusts client metadata; an MCP agent has the server fetch and derive the page instead",
     },
     input: initiateRunEvidenceUploadInput,
     output: initiateRunEvidenceUploadOut,
@@ -99,6 +102,16 @@ export const purchaseImportContract = defineContract("purchaseImport", {
     input: commitProductEnrichmentInput,
     output: commitProductEnrichmentOut,
     invalidates: ["product"],
+  }),
+  /**
+   * Fetch one vendor product page for a caller-owned enrichment run and retain
+   * it as `http_capture` evidence with server-derived proof metadata.
+   */
+  captureEnrichmentPage: mutation({
+    http: false,
+    input: captureEnrichmentPageInput,
+    output: captureEnrichmentPageOut,
+    invalidates: ["runOnly"],
   }),
   /** Propose one populated-field replacement; pauses for exact human approval. */
   overwriteProductEnrichment: mutation({

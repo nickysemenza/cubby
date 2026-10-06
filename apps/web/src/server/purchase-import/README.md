@@ -45,6 +45,21 @@ conversation: it reaches Cubby through one Run's services and nothing else
    `agent-proxy.ts` to the run's agent Durable Object. Member controls go
    through `controlRun` and `recordRunControlEvent`.
 
+## Caller-owned enrichment runs
+
+A `product_enrichment` Run can instead be worked by the member's own MCP
+client (`Run.executionMode = 'caller'`, `caller-enrichment.ts`).
+`startCallerEnrichment` (`targeted-run.ts`) admits it like a browser-started
+run but stores no dispatch generation and no vendor account, so nothing
+queues, resumes, or pauses a coordinator for it, the Mac never receives a
+command, and account sync is not blocked. `controlRun` only cancels one. The
+client reads `claimNextImportWork`, has the server fetch the vendor's page
+(`enrichment-capture.ts`, `http_capture` evidence with server-derived proof),
+commits through the same `commitProductEnrichment`, and finishes through
+`finishRun`. A run-delegated coordinator never mounts these actions, and their
+`caller_run` capability belongs to no purpose (`capabilities.ts`). An
+abandoned run is reviewed by the same stale-run sweep after two hours.
+
 ## Where to look
 
 | Need                                             | File                                                        |

@@ -56,6 +56,14 @@ export const runPurpose = z.enum([
   "mail_discovery",
 ]);
 export type RunPurpose = z.infer<typeof runPurpose>;
+/**
+ * Who executes an import Run. `coordinator`: the server queues the purpose's
+ * agent (`dispatchStartedRun`). `caller`: the member's own MCP client works
+ * the Run directly; the server never dispatches, resumes, or pauses it for a
+ * coordinator, and it holds no vendor account or browser device.
+ */
+export const runExecutionMode = z.enum(["coordinator", "caller"]);
+export type RunExecutionMode = z.infer<typeof runExecutionMode>;
 
 /**
  * `Run.input` / `Run.progress` for a `mail_search` run: the Gmail search a
