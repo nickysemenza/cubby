@@ -446,7 +446,7 @@ for (const statementFirst of [true, false]) {
     const mail = page
       .getByRole("article")
       .filter({ hasText: `Order ${names.orderId}` });
-    // The exact-order mail links itself to the imported Purchase; no click.
+    // Exact-order mail is already linked before following its canonical Purchase.
     await expect(
       mail.getByRole("link", { name: names.orderId, exact: true }),
     ).toBeVisible();
@@ -454,7 +454,16 @@ for (const statementFirst of [true, false]) {
     await expect(
       mail.getByRole("button", { name: "Link", exact: true }),
     ).toHaveCount(0);
-    await gotoAuthenticatedPage(page, `/purchases/${purchaseCode}`);
+    const purchaseLink = mail.getByRole("link", {
+      name: names.orderId,
+      exact: true,
+    });
+    await expect(purchaseLink).toHaveAttribute(
+      "href",
+      `/purchases/${purchaseCode}`,
+    );
+    await purchaseLink.click();
+    await expect(page).toHaveURL(new RegExp(`/purchases/${purchaseCode}$`));
     await expect(
       page.getByRole("link", { name: "Open Gmail conversation", exact: true }),
     ).toBeVisible();
