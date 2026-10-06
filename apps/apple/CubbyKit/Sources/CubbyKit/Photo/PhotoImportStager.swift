@@ -143,7 +143,6 @@ public actor PhotoImportTransaction {
     private let client: CubbyClient
     private let put: PresignedUpload.FilePut
     private let maximumConcurrentUploads: Int
-    private let idempotencyKey: String
     /// This install's id (`AppInstallationID.current`, lowercased), passed by the caller since
     /// CubbyKit itself has no notion of "this app's installation" — the server resolves it to a
     /// `Device` row and records no sighting when it is `nil` or unresolvable.
@@ -153,7 +152,6 @@ public actor PhotoImportTransaction {
 
     public init(
         client: CubbyClient,
-        idempotencyKey: String = UUID().uuidString,
         maximumConcurrentUploads: Int = 4,
         deviceID: String? = nil,
         put: @escaping PresignedUpload.FilePut = {
@@ -161,7 +159,6 @@ public actor PhotoImportTransaction {
         }
     ) {
         self.client = client
-        self.idempotencyKey = idempotencyKey
         self.maximumConcurrentUploads = max(1, maximumConcurrentUploads)
         self.deviceID = deviceID
         self.put = put
@@ -259,14 +256,12 @@ public actor PhotoImportTransaction {
                     capturedAt: item.createCapturedAt,
                     body: PhotoImportCreateBody(additionalProperties: try body.mapValues(apiJSON))))
         }
-        // The legacy idempotency key remains in the wire input for client compatibility. The
-        // result is deliberately derived from the submitted batch rather than from a persisted
+        // The result is deliberately derived from the submitted batch rather than from a persisted
         // receipt; the server commit is a one-shot operation and callers must not auto-retry an
         // ambiguous transport response.
         do {
             _ = try await client.commitPhotoImport(
-                PhotoImportCommitInput(
-                    idempotencyKey: idempotencyKey, deviceId: deviceID, images: images, creates: drafts))
+                PhotoImportCommitInput(deviceId: deviceID, images: images, creates: drafts))
         } catch let apiError as CubbyAPIError {
             // A rejected 4xx request has a definite outcome: never route it through the full
             // ambiguous-commit reconciliation below, and never return committed ids for it — for

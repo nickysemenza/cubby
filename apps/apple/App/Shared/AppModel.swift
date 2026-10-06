@@ -165,7 +165,6 @@ final class AppModel {
             isParticipating: participation.automaticWork)
         let matches = photoMatches
         sweep.onClassified = { id, snapshot in matches.markAnalysis([id: snapshot]) }
-        Task { try? await storedPhotoAnalysisStore?.migrateLegacyHashCacheIfNeeded() }
         return sweep
     }
 
@@ -456,9 +455,6 @@ final class AppModel {
         phase = .signedOut
         await spotlight.wipe()
         ImageCaches.reset()
-        #if os(macOS)
-            DockBadge.clear()
-        #endif
     }
 
     /// Called by any screen that receives a `CubbyAPIError`: a 401 means the middleware already

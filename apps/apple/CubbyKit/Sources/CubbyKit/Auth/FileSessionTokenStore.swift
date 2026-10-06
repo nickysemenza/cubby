@@ -37,12 +37,7 @@ public final class FileSessionTokenStore: SessionTokenStore, Sendable {
 
     private func read() throws -> [String: CubbyAuthState] {
         guard FileManager.default.fileExists(atPath: fileURL.path(percentEncoded: false)) else { return [:] }
-        let data = try Data(contentsOf: fileURL)
-        if let states = try? JSONDecoder().decode([String: CubbyAuthState].self, from: data) {
-            return states
-        }
-        let credentials = try JSONDecoder().decode([String: CubbyCredential].self, from: data)
-        return credentials.mapValues { CubbyAuthState(credential: $0) }
+        return try JSONDecoder().decode([String: CubbyAuthState].self, from: Data(contentsOf: fileURL))
     }
 
     private func write(_ all: [String: CubbyAuthState]) throws {

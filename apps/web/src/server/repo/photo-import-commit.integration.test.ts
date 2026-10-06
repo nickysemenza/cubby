@@ -45,7 +45,6 @@ describe("photo import transaction", () => {
       }),
     );
     const input = {
-      idempotencyKey: "photo-import-retry-1",
       images: [
         {
           clientId: "photo-library-1",
@@ -186,7 +185,6 @@ describe("photo import transaction", () => {
       },
     };
     const input = {
-      idempotencyKey: "photo-import-shared-image",
       images: [
         {
           clientId: "photo-library-duplicate-1",
@@ -266,7 +264,6 @@ describe("photo import transaction", () => {
       }),
     );
     const input = {
-      idempotencyKey: "photo-import-createself-1",
       images: [
         {
           clientId: "photo-library-createself-1",
