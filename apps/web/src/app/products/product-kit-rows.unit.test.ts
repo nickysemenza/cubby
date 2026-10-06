@@ -1,6 +1,6 @@
 import { productListItemOut } from "@cubby/schemas/product";
 import { kitComponentRowOut } from "@cubby/schemas/product-components";
-import { testShortcode } from "@cubby/schemas/testing";
+import { testCompleteDataQuality, testShortcode } from "@cubby/schemas/testing";
 import { describe, expect, it } from "vitest";
 
 import {
@@ -52,14 +52,7 @@ const productAt = (shortcode: string, componentCount = 0) =>
     usdaUnavailable: null,
     stockTracked: null,
     kind: null,
-    dataQuality: {
-      status: "complete",
-      facets: [],
-      gaps: [],
-      exceptions: [],
-      relatedGaps: [],
-      relatedExceptions: [],
-    },
+    dataQuality: testCompleteDataQuality(),
     unitMappings: [],
     ingredient: null,
     inventoryEntry: [],

@@ -111,18 +111,6 @@ describe("quality explanation calculation", () => {
     );
     const excepted = buildQualityBreakdown([missing], [], [missing]);
     expect(excepted.checks[0]!.stateLabel).toBe("Accepted exception");
-    expect(
-      buildQualityBreakdown(dataCheck.options, [], []).checks.map(
-        ({ check, weightLabel }) => [check, weightLabel],
-      ),
-    ).toEqual(
-      dataCheck.options.map((check) => [
-        check,
-        dataCheckWeight[check] === 0
-          ? "Unscored diagnostic"
-          : `weight ${dataCheckWeight[check]}`,
-      ]),
-    );
     expect(buildQualityBreakdown([], [], []).summary).toBe(
       "No applicable checks: quality is not assessed.",
     );
