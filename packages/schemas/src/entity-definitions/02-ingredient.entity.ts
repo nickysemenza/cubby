@@ -8,6 +8,10 @@ export default defineEntity({
   key: "ingredient",
   names: { singular: "Ingredient", plural: "Ingredients" },
   route: {
+    listColumns: {
+      module: "~/entity/list-columns/ingredient",
+      export: "ingredientListOverride",
+    },
     basePath: "ingredients",
   },
   table: "Ingredient",

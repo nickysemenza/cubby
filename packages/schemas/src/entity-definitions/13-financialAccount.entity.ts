@@ -15,6 +15,10 @@ export default defineEntity({
   key: "financialAccount",
   names: { singular: "Financial Account", plural: "Accounts" },
   route: {
+    listColumns: {
+      module: "~/entity/list-columns/finance",
+      export: "financialAccountListOverride",
+    },
     basePath: "financial-accounts",
   },
   table: "FinancialAccount",

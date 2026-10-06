@@ -36,6 +36,10 @@ export default defineEntity({
   key: "image",
   names: { singular: "Image", plural: "Images" },
   route: {
+    listColumns: {
+      module: "~/entity/list-columns/image",
+      export: "imageListOverride",
+    },
     basePath: "images",
     // The image list is not a kernel list (no create contract), so its index
     // route stays hand-written; the detail reads its own query.

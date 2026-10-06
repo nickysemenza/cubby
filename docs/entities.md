@@ -21,6 +21,11 @@ Declarations may import shared primitives and cycle-safe field modules. They
 must not import canonical schemas, generated artifacts, server implementations,
 or browser modules. Implementation references remain `{ module, export }` data.
 Browser metadata is generated separately and contains no executable schemas.
+Existing specialist list columns declare `route.listColumns: { module, export }`;
+the generated index route passes that synchronous override to `listPage`. Its
+component split owns the import, so other entities do not load that specialist
+code. The test-only override roster preserves hook-stability coverage and the
+shrink-only boundary; new columns still belong in the generic declaration.
 
 Generated detail and list type maps derive from their schema maps, preserving
 the entity key's input/output correlation. These schema-contract artifacts remain
@@ -187,7 +192,13 @@ names (`phosphor` is checked against the browser registry's icon map at compile
 time; `sfSymbol` reaches the native catalog verbatim). The generator emits it
 as part of `entitySummary` (`packages/schemas/src/generated/entity-summary.gen.ts`,
 data only, safe for eagerly-loaded client code), spreads it into the inspector,
-and writes `domain`/`sfSymbol` onto the Swift `EntityDescriptor`. Navigation
+and writes `domain`/`sfSymbol` onto the Swift `EntityDescriptor`. The summary
+also carries the resolved `primarySearch` (the declared one, else
+`searchQuery` for a searchable entity with a contract) and the `bulkUpdate`
+field roster, from the same generator helpers the inspector uses
+(`scripts/generator/entities/render/shared.ts`). `bulkUpdate` is the
+capability's own roster, not `entityFieldModels[entity].bulk` (Expense
+bulk-updates `date`, which the field model does not mark bulk). Navigation
 grouping, the Records catalog, empty states and the native shell's sections
 all read it; none of them keep a per-entity list of their own.
 
@@ -769,7 +780,7 @@ declaration module must not export `filterSchemas`.
 Generated artifacts provide the exhaustive entity keys and traits, public
 shortcode contracts (the inbound-only `P-`/`L-` label aliases live only in
 `packages/shared/src/shortcode.ts`, never in the manifest), schema bindings,
-client-safe inspector metadata, browser route roster, the typed list search
+inspector metadata (server and `EntityManifestGrid` only), browser route roster, the typed list search
 schema per entity (`entity/generated/entity-search.gen.ts`: manifest filter
 keys, table keys and `create`, with `defaults` naming every key for
 `stripSearchParams`), kernel and MCP action capabilities, relation-specific

@@ -1,7 +1,5 @@
-import {
-  entityInspectorMetadata,
-  type BrowserRoutedEntity,
-} from "@cubby/schemas/entity-manifest";
+import type { BrowserRoutedEntity } from "@cubby/schemas/entity-manifest";
+import { entitySummary } from "@cubby/schemas/entity-summary";
 import { relatedViewsFor } from "@cubby/schemas/related-view";
 import type { UnitMapping } from "@cubby/schemas/unitmapping";
 import type { ColumnVisibilityState } from "@tanstack/react-table";
@@ -97,14 +95,14 @@ export function useEntityListPresentationState<TData extends BaseListRow>({
       initialSortDesc: defaultSortDesc,
       urlSync: true,
       filterSpecs: getEntityFilters(entity),
-      primarySearch: entityInspectorMetadata[entity].primarySearch,
+      primarySearch: entitySummary[entity].primarySearch,
       ...tableStateOptions,
     };
     // The declared default filter belongs to the route's own list; a table
     // embedded beside it (no URL sync) shows what its scope names.
     return options.urlSync
       ? {
-          initialFilter: entityInspectorMetadata[entity].list.initialFilter,
+          initialFilter: entitySummary[entity].list.initialFilter,
           ...options,
         }
       : options;

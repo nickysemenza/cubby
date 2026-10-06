@@ -27,7 +27,7 @@ import {
   parseEntityListInput,
   productListItem,
 } from "~/entity/generated/entity-lists.gen";
-import { listOverrides } from "~/entity/list-columns";
+import { listOverrides } from "~/entity/list-columns/list-overrides.fixtures";
 import { mealNameUpdate } from "~/entity/list-columns/meal";
 import { listReadFields, projectListRows } from "~/entity/list-read-schema";
 import { listPage } from "~/entity/routing/list-page";
@@ -81,6 +81,7 @@ async function renderListPage(
 ) {
   const Page = listPage({
     entity,
+    override: listOverrides[entity],
     operations: { list: operation ?? listOperation(rows) },
   });
   harness = createBrowserTestHarness({

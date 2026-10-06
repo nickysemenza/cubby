@@ -1,7 +1,8 @@
 import { describe, expect, it } from "vitest";
 
+import { loadEntityDeclarations } from "../../../../scripts/generator/entities/declarations";
 import { editHooks } from "./editing/definitions";
-import { listOverrides } from "./list-columns";
+import { listOverrides } from "./list-columns/list-overrides.fixtures";
 
 /**
  * The hand-written halves of an entity — its list override module and its
@@ -65,8 +66,13 @@ const hookMembers = Object.entries(editHooks).flatMap(([entity, hooks]) =>
 );
 
 describe("hand-written per-entity registries only shrink", () => {
-  it("adds no list override module", () => {
-    const added = Object.keys(listOverrides).filter(
+  it("adds no list override module", async () => {
+    const declared = (await loadEntityDeclarations())
+      .filter((entity) => entity.route?.listColumns)
+      .map((entity) => entity.key);
+    // Every production binding retains the hook-stability regression coverage.
+    expect(declared.sort()).toEqual(Object.keys(listOverrides).sort());
+    const added = declared.filter(
       (entity) => !LIST_OVERRIDE_BASELINE.includes(entity),
     );
     expect(

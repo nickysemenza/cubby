@@ -1756,12 +1756,12 @@ describe("typed entity compiler", () => {
   it("requires a list override for a generated index with no kernel list read", async () => {
     const entities = await loadEntityDeclarations();
     expect(missingListSources(entities)).toEqual([]);
-    const registry = (await import("node:fs/promises")).readFile(
-      new URL("../src/entity/list-columns/index.ts", import.meta.url),
-      "utf8",
+    const withoutRuns = entities.map((entity) =>
+      entity.key === "run" && entity.route
+        ? { ...entity, route: { ...entity.route, listColumns: undefined } }
+        : entity,
     );
-    const withoutRuns = (await registry).replace(/^\s+run:.*$/mu, "");
-    expect(missingListSources(entities, withoutRuns)).toEqual(["run"]);
+    expect(missingListSources(withoutRuns)).toEqual(["run"]);
   });
 
   it("keeps generated artifacts on their side of the schema and server boundaries", async () => {

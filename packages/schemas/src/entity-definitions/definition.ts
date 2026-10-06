@@ -809,6 +809,8 @@ const buildMetadataSchemas = () => {
       createOverride: z.enum(["dialog", "page"]).nullable().optional(),
       /** A routed entity gets the generated list unless explicitly replaced. */
       listOverride: z.literal(true).nullable().optional(),
+      /** Specialist columns are imported only by this route component. */
+      listColumns: sourceRefMetadataSchema.optional(),
       /** A routed entity gets the generated detail unless explicitly replaced. */
       detailOverride: z
         .union([
@@ -825,12 +827,14 @@ const buildMetadataSchemas = () => {
         detailParamOverride,
         createOverride,
         listOverride,
+        listColumns,
         detailOverride,
       }) => ({
         basePath,
         detailParam: detailParamOverride,
         create: createOverride,
         list: listOverride === undefined ? true : listOverride,
+        listColumns,
         detail: detailOverride === undefined ? true : detailOverride,
       }),
     );

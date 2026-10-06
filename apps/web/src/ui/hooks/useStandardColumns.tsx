@@ -13,7 +13,7 @@ import { browserEntityDefinition, getSortableFields } from "~/entity/entities";
 import { createEntityDisplayColumns } from "~/entity/entity-display";
 import { identityWidthClassName } from "~/entity/entity-list/identity-list-config";
 import { manifestFilterConfig } from "~/entity/filter-manifest";
-import { createUnitMappingsColumn } from "~/entity/list-columns/product";
+import { createUnitMappingsColumn } from "~/features/units/unit-mappings-column";
 import { type FilterConfig } from "~/ui/data-table/table-meta";
 
 import {

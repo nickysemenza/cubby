@@ -23,7 +23,15 @@ import { z } from "zod";
 export default defineEntity({
   key: "recipe",
   names: { singular: "Recipe", plural: "Recipes" },
-  route: { basePath: "recipes", createOverride: "page", detailOverride: null },
+  route: {
+    listColumns: {
+      module: "~/entity/list-columns/recipe",
+      export: "recipeListOverride",
+    },
+    basePath: "recipes",
+    createOverride: "page",
+    detailOverride: null,
+  },
   table: "Recipe",
   children: recipeChildren,
   identifiers: { brand: "RecipeId", shortcode: "RCP-" },

@@ -16,6 +16,11 @@ isomorphic function. `ssr: false` is a measured cost choice, not a correctness
 workaround; a loader may await `ensureQueryData` when that latency is warranted.
 Workflow streams use typed JSONL server routes and an `AbortSignal`; the owning
 screen opens them explicitly rather than a generic dispatcher.
+Cookbook import stays busy until its recipe stream and photo phase finish.
+The stream's done event precedes iterator completion; hand off recipe progress
+to photo progress atomically, with the outer import cleanup owning completion.
+An enabled import button must not let a reattached EPUB feed an unfinished
+automatic photo pass and bypass the failed photo's Retry action.
 
 Hydration: TanStack Start's SSR query stream lands in the client cache before
 React hydrates, so gate loading branches with `useHydratedLoading`/`useHydrated`,
@@ -31,6 +36,22 @@ or do a naive vendor split — it drags lazy-route code into first paint. Detail
 and list slot fills stay `lazy` in their registries (`detail-slots.tsx`,
 `list-slots.ts`): every generic list route shares one closure, so one static
 slot import ships to every list.
+Specialist list columns are declared as `route.listColumns` source references.
+The generated route component imports only its own override and passes it to
+`listPage`; the generic list must never import an all-entity column registry.
+Shared cells live with their generic feature (for example, the unit-mappings
+column lives in `features/units`), so generic hooks do not import a specialist
+list module merely to reuse one renderer.
+Timeline rendering loads only when its view is selected.
+Ordinary browser surfaces never import `entityInspectorMetadata`: it carries the
+compiler's filter descriptors, port refs, and a duplicate of the summary, and
+one import ships all of it to every list. Read names, titles, resolved
+`primarySearch`, `list.initialFilter`, and `bulkUpdate` from `entitySummary`;
+`shortcodePrefix`/`searchable` from `entityManifest`; and filter
+`field`/`columnId`/`kind`/URL key/`referenceEntity` from `getEntityFilters`
+with `filterUrlKey` (a runtime spec omits `urlKey` when it equals
+`columnId`). The server and the lazily loaded `EntityManifestGrid` keep the
+full inspector.
 Keep list page factories (`list-page.tsx`) separate from detail factories
 (`detail-page.tsx`) so lists do not import generic detail sections. Bind each
 factory result to a module-level constant referenced by a splittable property

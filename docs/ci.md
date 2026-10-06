@@ -43,7 +43,7 @@ Commit hooks, push behavior, and the merge gate are defined in the
 [validation policy](agents/validation.md); GitHub checks on the final PR head
 remain the merge gate.
 
-Node 24, pnpm 12.4.1, Rust/wasm-pack, Apple `container` on macOS (external PostgreSQL/IntegreSQL on Linux) and Playwright
+Node 24, pnpm 12.7.0, Rust/wasm-pack, Apple `container` on macOS (external PostgreSQL/IntegreSQL on Linux) and Playwright
 browsers must be available; [test tiers](agents/validation-tests.md) cover database setup.
 PostgreSQL remains the authoritative integration tier; Playwright defaults to
 one worker on hosted runners and two on local macOS (`tooling/e2e-workers.ts`),
@@ -133,6 +133,24 @@ cannot repair the entry. The DerivedData `v6` and SwiftPM `v2` generations
 exclude earlier entries that could have been saved after cancellation or
 failure. A new generation pays one cold build; unchanged successful restores
 are the evidence for warm performance. Dependency clones remain advisory.
+A controlled same-head [cold build and warm rerun](https://github.com/nickysemenza/cubby/actions/runs/37418543352)
+on 2026-10-05 took 7:39 and 4:35 respectively in the Apple app job after the
+successful exact-key DerivedData restore. Swift compilation log entries fell
+from 1,380 to two. This verifies reuse for unchanged inputs; one controlled
+rerun does not establish a PR median.
+After the main cache was seeded, a [normal main Apple app job](https://github.com/nickysemenza/cubby/actions/runs/37423177521/job/112138086525)
+on 2026-10-05 restored the same exact 419 MB DerivedData entry and passed in
+3:47, with two Swift compilation log entries for generated asset symbols.
+This confirms cross-run main-cache reuse, not a new required-check median.
+A controlled [same-head SwiftPM cold build and warm rerun](https://github.com/nickysemenza/cubby/actions/runs/37423177521)
+passed the same 646 tests in both attempts: the package job fell from 8:03 to
+2:57 after restoring its exact main cache, and compilation fell from 357s to
+72s. Cache restore and generator-warning checks still contribute to the warm
+job. This controlled measurement does not establish a PR median.
+Retire obsolete cache generations and merged PRs' private cache entries with
+GitHub's cache controls after main is seeded; retain active PR and current main
+entries. The repository keeps the default 10 GB cache limit, so no paid cache
+capacity or custom cleanup scheduler is needed.
 
 ## Hosted suite
 
@@ -146,10 +164,14 @@ app, so edits there select the web lanes.
 Native, auxiliary, Rust, web, and PostgreSQL/E2E lanes run only when their inputs
 can affect them. A manual run selects all lanes. `Web checks` is the stable
 required aggregate: it checks the web, PostgreSQL, and browser matrix results
-whenever web validation is selected. A single `Build Workers` job builds the
-web Cloudflare bundle (which hosts the purchase agent) once and uploads it
-with the MCP App assets and the WASM package as the `worker-build` artifact; the workerd PostgreSQL and browser
-lanes `need` it and download that exact bundle. The browser lanes retain the discovery and no-skip guard;
+whenever web validation is selected. `Build Workers` builds the
+web Cloudflare bundle (which hosts the purchase agent) and uploads it
+with the MCP App assets and the WASM package as the `worker-build` artifact; the
+workerd PostgreSQL and optional purchase browser lanes download that exact bundle.
+Desktop browser shards depend only on `Scope` and build the Worker during their
+own setup, with the same source commit and branch provenance. This overlaps
+setup with `Build Workers` without adding runner slots, at the cost of two
+additional Worker builds. The browser lanes retain the discovery and no-skip guard;
 desktop Chromium runs as two Playwright shards (two workers each). Phone-web and
 WebKit browser coverage was removed from PR CI and the Playwright suite; native
 checks remain separate. There is no coverage mode.

@@ -924,6 +924,7 @@ export function CookbookImport({
       if (ids.length === 0) return;
       updateBook(book.source, (current) => ({
         ...current,
+        importProgress: undefined,
         photoProgress: { done: 0, total: ids.length },
       }));
       let done = 0;
@@ -1155,8 +1156,6 @@ export function CookbookImport({
                 ...b,
                 importProgress: { done, total },
               })),
-            onDone: () =>
-              updateBook(source, (b) => ({ ...b, importProgress: undefined })),
             successToast: (r) => `Imported ${r.succeeded} from ${bookName}`,
           },
         );

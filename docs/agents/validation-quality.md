@@ -1,8 +1,11 @@
 # Quality and local diagnostics
 
 `pnpm typecheck:web` checks web app code for web-only work; it leaves out
-tests and test tooling, about 20% faster. After editing tests or test tooling,
-run `pnpm typecheck:web:tests`, the full program that `pnpm check` and CI run.
+tests and test tooling, about 20% faster. When tests or test tooling change,
+include `pnpm typecheck:web:tests` as an affected check: passing Vitest does not
+prove those files typecheck. This checks the full program that `pnpm check` and
+CI run. Tests use the configured TypeScript libraries; runtime support for an
+API does not establish that the configured libraries expose it.
 Use these rather than a raw `tsc`: the wrapper discards a stale incremental
 cache and holds one of two machine-wide slots, since each web check keeps
 5–7 GB resident ([measurements](../local-check-performance.md#typechecking)).
@@ -16,7 +19,9 @@ locally when diagnosing dependency duplication.
 The `knip` gate also runs `pnpm knip:production`, which fails on a file or
 dependency the production graph never reaches. A script invoked only by a hook,
 CI, or package script needs a `!` entry in `knip.json`; a test seam (fixture,
-mock, harness) belongs in the negated `project` patterns.
+mock, harness) belongs in the negated `project` patterns. Name reusable test
+fixtures `*.fixtures.ts` or `*.fixtures.tsx` to match the existing exclusion;
+do not add production entry points or per-file ignores for test-only modules.
 
 `pnpm verify:local` runs the clean-tree full graph sequentially. Its target
 order is not dependency order; Nx supplies generation and build prerequisites.

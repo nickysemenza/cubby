@@ -157,9 +157,8 @@ jobs:
       - run: cargo clippy --workspace --all-targets -- -D warnings
       - run: cargo test --workspace
 
-  # Builds the Worker bundle once. The workerd PostgreSQL job and E2E download
-  # the result instead of rebuilding (and instead of polling for an artifact
-  # another job happens to publish).
+  # Shares the Worker bundle with workerd PostgreSQL and the optional purchase
+  # lane. Desktop shards build during their own setup to avoid this dependency.
   build-worker:
     name: Build Workers
     needs: scope
@@ -294,7 +293,7 @@ jobs:
 
   test-e2e:
     name: E2E tests (${{ matrix.lane }})
-    needs: [scope, build-worker]
+    needs: scope
     if: needs.scope.outputs.web == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 20
@@ -325,7 +324,7 @@ jobs:
       - uses: ./.github/actions/start-test-services
       - uses: ./.github/actions/setup-node-with-deps
         with:
-          wasm: "false"
+          wasm: "restore"
           workspace-filter: "@cubby/web..."
       - name: Resolve installed Playwright version
         id: playwright
@@ -346,14 +345,16 @@ jobs:
         with:
           path: ~/.cache/ms-playwright
           key: playwright-${{ runner.os }}-${{ steps.playwright.outputs.version }}-${{ matrix.browser }}
-      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
-        with:
-          name: worker-build
-          path: .
+      - name: Build the Worker
+        env:
+          CUBBY_SOURCE_COMMIT: ${{ github.sha }}
+          CUBBY_SOURCE_BRANCH: ${{ github.ref_name }}
+        run: |
+          # wasm-pack may add a trailing newline to the tracked package metadata.
+          git restore -- packages/wasm/package.json
+          pnpm --filter @cubby/web run build:cf
       - name: Run Playwright tests
         run: |
-          # The downloaded WASM package may carry regenerated metadata.
-          git restore -- packages/wasm/package.json
           pnpm --filter @cubby/web run ${{ matrix.test-script }} --shard=${{ matrix.shard }} --workers=2
       - name: Save Playwright run bundle
         if: always()

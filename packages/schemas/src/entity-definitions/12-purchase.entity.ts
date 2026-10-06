@@ -26,7 +26,13 @@ import { tradeSchema } from "@cubby/schemas/task-fields";
 export default defineEntity({
   key: "purchase",
   names: { singular: "Purchase", plural: "Purchases" },
-  route: { basePath: "purchases" },
+  route: {
+    listColumns: {
+      module: "~/entity/list-columns/purchase",
+      export: "purchaseListOverride",
+    },
+    basePath: "purchases",
+  },
   table: "Purchase",
   children: purchaseChildren,
   identifiers: { brand: "PurchaseId", shortcode: "PUR-" },

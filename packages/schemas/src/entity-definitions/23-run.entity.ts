@@ -29,6 +29,10 @@ export default defineEntity({
   key: "run",
   names: { singular: "Run", plural: "Runs" },
   route: {
+    listColumns: {
+      module: "~/entity/list-columns/run",
+      export: "runListOverride",
+    },
     basePath: "runs",
     // No create/update contract, so outside the kernel detail roster: the
     // generic page reads the run through its own query.

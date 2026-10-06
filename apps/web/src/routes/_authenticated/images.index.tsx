@@ -2,6 +2,7 @@ import { createFileRoute, stripSearchParams } from "@tanstack/react-router";
 
 import { UploadImageDialog } from "~/app/images/upload-image-dialog";
 import { entitySearch } from "~/entity/generated/entity-search.gen";
+import { imageListOverride } from "~/entity/list-columns/image";
 import { listPage } from "~/entity/routing/list-page";
 import { pageTitle } from "~/lib/page-title";
 
@@ -10,6 +11,7 @@ import { pageTitle } from "~/lib/page-title";
 // module's own source, and the upload dialog is this route's create trigger.
 const ImagesPage = listPage({
   entity: "image",
+  override: imageListOverride,
   actions: () => <UploadImageDialog />,
 });
 

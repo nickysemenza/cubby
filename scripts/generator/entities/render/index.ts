@@ -20,7 +20,11 @@ import { renderFieldExplanationReference } from "./field-explanations-reference.
 import { renderRecord } from "./record.ts";
 import { renderEntityTablesArtifact } from "./tables.ts";
 import { browserRoutes, lowerCamelCase } from "./routes.ts";
-import { kernelEntitiesFor } from "./shared.ts";
+import {
+  bulkUpdateFor,
+  kernelEntitiesFor,
+  resolvedPrimarySearch,
+} from "./shared.ts";
 import { hasGenericListOperation } from "../list-capabilities.ts";
 import { renderStructuredValueSchemas } from "./structured-value-schemas.ts";
 import { renderSwiftEntityCatalog } from "./swift-catalog.ts";
@@ -866,14 +870,7 @@ export const entityListSummaryOutputSchema = z.object({entity:z.enum(listEntitie
           // Search is a list capability, not a synthetic model field. Keeping
           // this descriptor beside the generated list metadata gives web and
           // native one transport key without teaching either about `name`.
-          primarySearch:
-            entity.inspector.list.primarySearch ??
-            (entity.contract !== null && entity.descriptor.searchable === true
-              ? {
-                  key: "searchQuery",
-                  placeholder: `Search ${(entity.inspector.plural ?? entity.inspector.singular).toLowerCase()} or shortcode`,
-                }
-              : null),
+          primarySearch: resolvedPrimarySearch(entity),
           browserRouted: entity.descriptor.browserRoutes !== false,
           auditable: entity.descriptor.auditable === true,
           hasImages: entity.descriptor.hasImages === true,
@@ -897,10 +894,7 @@ export const entityListSummaryOutputSchema = z.object({entity:z.enum(listEntitie
             softDelete: entity.descriptor.softDelete === true,
             delete: lifecycle.delete,
             merge: lifecycle.merge === true,
-            bulkUpdate:
-              entity.bulkUpdateFields === null
-                ? null
-                : { fields: entity.bulkUpdateFields },
+            bulkUpdate: bulkUpdateFor(entity),
           },
           operationOwners: {
             delete: entity.operationOwners.delete,
@@ -1123,11 +1117,16 @@ export const entityListSummaryOutputSchema = z.object({entity:z.enum(listEntitie
         "/**\n" +
         " * One entity's names plus its `presentation` block with the hero defaults\n" +
         " * resolved: domain, description, empty-state copy, icon names, title field,\n" +
-        " * detail sections, list views, edit rules. Data only — for eagerly-loaded\n" +
-        " * client code (the entity registry, navigation, empty states,\n" +
-        " * `identifiers.ts`) that must not pull the inspector.\n" +
+        " * detail sections, list views, edit rules — plus the resolved list search\n" +
+        " * (the compiler's `searchQuery` fallback included) and the bulk-update field\n" +
+        " * roster. Data only — for eagerly-loaded client code (the entity registry,\n" +
+        " * navigation, list hooks, bulk edit, `identifiers.ts`) that must not pull\n" +
+        " * the inspector.\n" +
         " */\n" +
-        "export type EntitySummary = EntityNames & CompiledEntityPresentation;\n\n" +
+        "export type EntitySummary = EntityNames & CompiledEntityPresentation & {\n" +
+        "  primarySearch: { key: string; placeholder: string } | null;\n" +
+        "  bulkUpdate: { fields: readonly string[] } | null;\n" +
+        "};\n\n" +
         "/**\n" +
         " * Every entity key, in declaration order. The leaf roster: `entity-core`'s\n" +
         " * `entitySchema` is `z.enum(entityKeys)`, so this tuple carries no `Entity`\n" +
@@ -1142,7 +1141,14 @@ export const entityListSummaryOutputSchema = z.object({entity:z.enum(listEntitie
         renderRecord({
           name: "entitySummary",
           entries: Object.fromEntries(
-            entities.map(({ key, inspector }) => [key, inspector]),
+            entities.map((entity) => [
+              entity.key,
+              {
+                ...entity.inspector,
+                primarySearch: resolvedPrimarySearch(entity),
+                bulkUpdate: bulkUpdateFor(entity),
+              },
+            ]),
           ),
           satisfies: "Record<Entity, EntitySummary>",
           comment: "// Generated summary stays one entity per line.",

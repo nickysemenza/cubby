@@ -3,7 +3,6 @@ import type { CompiledEntityPresentation } from "@cubby/schemas/entity-definitio
 import { generatedEntityEditIntents } from "@cubby/schemas/entity-edit-intents";
 import { entityFieldModels } from "@cubby/schemas/entity-fields";
 import {
-  entityInspectorMetadata,
   entityManifest,
   type BrowserRoutedEntity,
 } from "@cubby/schemas/entity-manifest";
@@ -34,6 +33,8 @@ import {
 import { createEntityDisplayColumns } from "~/entity/entity-display";
 import { entityListFor } from "~/entity/entity-list";
 import { EntityDisplayImagesProvider } from "~/entity/entity-media/entity-display-images";
+import { getEntityFilters } from "~/entity/filter-manifest";
+import { filterUrlKey } from "~/entity/filters";
 import {
   listEntities,
   type ListEntity,
@@ -166,7 +167,7 @@ export function planRelationSection(
     throw new Error(
       `${entity}.${section.relation} targets ${target}, which has no list`,
     );
-  const descriptor = entityInspectorMetadata[target].filterDescriptors.find(
+  const descriptor = getEntityFilters(target).find(
     (candidate) => candidate.columnId === section.filter.descriptor,
   );
   if (descriptor === undefined)
@@ -188,10 +189,10 @@ export function planRelationSection(
   if (
     (section.prefill === null || section.prefill === undefined) &&
     seed === null &&
-    descriptor.brandRef !== null
+    descriptor.referenceEntity !== undefined
   ) {
     const referenceField = entityFieldModels[target].fields.find(
-      (field) => field.reference?.entity === descriptor.brandRef?.entity,
+      (field) => field.reference?.entity === descriptor.referenceEntity,
     );
     if (referenceField !== undefined)
       seed = createSeedThrough(target, referenceField.key);
@@ -202,7 +203,7 @@ export function planRelationSection(
     target,
     descriptorId: descriptor.columnId,
     filterKey,
-    urlKey: descriptor.urlKey,
+    urlKey: filterUrlKey(descriptor),
     seed: seed ? { intent: seed.intent, field: seed.field } : null,
     seedMultiple: seed?.multiple === true,
     columns: section.columns,

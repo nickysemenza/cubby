@@ -6,7 +6,6 @@ import {
   entityFieldModels,
   type EntityFieldModel,
 } from "@cubby/schemas/entity-fields";
-import { entityInspectorMetadata } from "@cubby/schemas/entity-manifest";
 import { entityKeys, entitySummary } from "@cubby/schemas/entity-summary";
 import {
   canClearExpenseDate,
@@ -107,7 +106,7 @@ function absentRecordIdentity(
 ) {
   return (
     Boolean(record) &&
-    entityInspectorMetadata[entity].recordEmojiField === id &&
+    entitySummary[entity].recordEmojiField === id &&
     baseline === undefined &&
     value === null
   );

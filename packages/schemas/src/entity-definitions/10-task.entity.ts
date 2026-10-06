@@ -20,7 +20,13 @@ const inheritanceModeSchema = z.enum(["inherit", "explicit"]);
 export default defineEntity({
   key: "task",
   names: { singular: "Task", plural: "Tasks" },
-  route: { basePath: "tasks" },
+  route: {
+    listColumns: {
+      module: "~/entity/list-columns/task",
+      export: "taskListOverride",
+    },
+    basePath: "tasks",
+  },
   table: "Task",
   identifiers: { brand: "TaskId", shortcode: "TSK-" },
   presentation: {

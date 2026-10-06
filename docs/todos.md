@@ -564,10 +564,6 @@ spanner"` → `adjustable wrench` (product); `"wet dry vac"` → `shop vacuum`
   Decide whether a Docker backend is worth supporting for non-macOS
   contributors and agent sandboxes.
 
-- 🤔 **Narrow the `e2e` Nx target's inputs, then cache it.** `nx affected`
-  treats all of `apps/web/src/**` as e2e input and the target is uncached.
-  Decide whether a cache hit on an unchanged tree is acceptable evidence.
-
 - 🤔 **Capture exact runtime error shapes before broadening suppression.**
   Client-disconnected cancellation, missing update-result, opaque database
   failure, and pathological LIKE/GLOB reports need sanitized

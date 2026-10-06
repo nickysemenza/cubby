@@ -13,6 +13,7 @@ import {
 import { sourceRefImports } from "./filters.ts";
 import { entityProjectionMaps } from "./index.ts";
 import { renderRecord } from "./record.ts";
+import { resolvedPrimarySearch } from "./shared.ts";
 
 /**
  * The search-param codec for one filter descriptor. Every codec is built on
@@ -81,11 +82,7 @@ export const renderSearchArtifacts = (
   ];
   const entries = filterEntities
     .map((entity) => {
-      const primarySearch =
-        entity.inspector.list.primarySearch ??
-        (entity.contract !== null && entity.descriptor.searchable === true
-          ? { key: "searchQuery" }
-          : null);
+      const primarySearch = resolvedPrimarySearch(entity);
       const filterDescriptors = entity.filterDescriptors.filter(
         (descriptor) => descriptor.urlKey !== primarySearch?.key,
       );
@@ -165,20 +162,15 @@ export const renderSearchArtifacts = (
         renderRecord({
           name: "entityFilterUrlKeyRoster",
           entries: Object.fromEntries(
-            filterEntities.map(
-              ({ key, filterUrlKeys, contract, descriptor, inspector }) => [
-                key,
-                inspector.list.primarySearch !== null ||
-                (contract !== null && descriptor.searchable === true)
-                  ? [
-                      ...new Set([
-                        inspector.list.primarySearch?.key ?? "searchQuery",
-                        ...filterUrlKeys,
-                      ]),
-                    ]
-                  : filterUrlKeys,
-              ],
-            ),
+            filterEntities.map((entity) => {
+              const primarySearch = resolvedPrimarySearch(entity);
+              return [
+                entity.key,
+                primarySearch === null
+                  ? entity.filterUrlKeys
+                  : [...new Set([primarySearch.key, ...entity.filterUrlKeys])],
+              ];
+            }),
           ),
           satisfies: "Record<Entity, readonly string[]>",
           comment: "// Generated data stays one entity per line.",
