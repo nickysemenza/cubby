@@ -6,7 +6,7 @@ outputs:
     value: ${{ steps.paths.outputs.value }}
   save-matched-key:
     description: Matching key for the shared save policy
-    value: ${{ startsWith(steps.derived-data.outputs.cache-matched-key, 'xcode-dd-v5-') && steps.derived-data.outputs.cache-matched-key || '' }}
+    value: ${{ startsWith(steps.derived-data.outputs.cache-matched-key, 'xcode-dd-v6-') && steps.derived-data.outputs.cache-matched-key || '' }}
   toolchain-hash:
     value: ${{ steps.xcode-version.outputs.hash }}
     description: Xcode toolchain hash
@@ -51,20 +51,20 @@ runs:
       with:
         # Must list exactly the save step's paths: the cache version hashes them.
         path: ${{ steps.paths.outputs.value }}
-        # v5 pairs the app certificate with its resolved dependency state.
+        # v6 excludes entries published by interrupted or failed builds.
         # Optional E2E can verify the bundle without restoring package clones.
-        key: xcode-dd-v5-${{ runner.os }}-${{ steps.xcode-version.outputs.hash }}-${{ steps.packages.outputs.hash }}-${{ hashFiles('apps/apple/App/**', 'apps/apple/CubbyKit/**') }}-${{ hashFiles('scripts/apple-check.sh', 'scripts/apple-simulator-build-cache.ts', 'apps/apple/scripts/prepare-project.sh') }}
+        key: xcode-dd-v6-${{ runner.os }}-${{ steps.xcode-version.outputs.hash }}-${{ steps.packages.outputs.hash }}-${{ hashFiles('apps/apple/App/**', 'apps/apple/CubbyKit/**') }}-${{ hashFiles('scripts/apple-check.sh', 'scripts/apple-simulator-build-cache.ts', 'apps/apple/scripts/prepare-project.sh') }}
         # Earlier generations used different paths and cannot restore this pair.
         restore-keys: |
-          xcode-dd-v5-${{ runner.os }}-${{ steps.xcode-version.outputs.hash }}-${{ steps.packages.outputs.hash }}-
-          xcode-dd-v5-${{ runner.os }}-${{ steps.xcode-version.outputs.hash }}-
+          xcode-dd-v6-${{ runner.os }}-${{ steps.xcode-version.outputs.hash }}-${{ steps.packages.outputs.hash }}-
+          xcode-dd-v6-${{ runner.os }}-${{ steps.xcode-version.outputs.hash }}-
 
     # Explicit precompiled modules are keyed without header contents, so a
     # cache from another package graph reuses a stale binary-package module
     # (for example a Sentry bump fails with "SentryScope.h has been modified
     # since the module file was built"). Rebuild them; other products stay warm.
     - name: Drop precompiled modules from another package graph
-      if: steps.derived-data.outputs.cache-matched-key != '' && !startsWith(steps.derived-data.outputs.cache-matched-key, format('xcode-dd-v5-{0}-{1}-{2}-', runner.os, steps.xcode-version.outputs.hash, steps.packages.outputs.hash))
+      if: steps.derived-data.outputs.cache-matched-key != '' && !startsWith(steps.derived-data.outputs.cache-matched-key, format('xcode-dd-v6-{0}-{1}-{2}-', runner.os, steps.xcode-version.outputs.hash, steps.packages.outputs.hash))
       shell: bash
       run: |
         rm -rf apps/apple/DerivedData/Build/Intermediates.noindex/SwiftExplicitPrecompiledModules \

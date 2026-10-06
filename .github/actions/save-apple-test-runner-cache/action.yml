@@ -19,7 +19,6 @@ runs:
     # Presence prevents an immutable, incomplete v5 archive after early failure.
     # The SDK still validates source/toolchain identity and bytes before reuse.
     - id: snapshot
-      if: always()
       shell: bash
       run: |
         ready=false
@@ -34,7 +33,7 @@ runs:
         done
         echo "ready=$ready" >> "$GITHUB_OUTPUT"
     - uses: ./.github/actions/save-cache-main-only
-      if: always() && steps.snapshot.outputs.ready == 'true'
+      if: success() && steps.snapshot.outputs.ready == 'true'
       with:
         path: ${{ inputs.path }}
         key: ${{ inputs.key }}

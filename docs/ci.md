@@ -125,6 +125,14 @@ Graph" on every run), used only by `Apple checks`. It is separate from the
 target-specific FFI output cache (`.github/actions/setup-apple-ffi`) and the
 package-test job's build cache described above.
 
+Compiled Apple caches are published only after successful work. GitHub cache
+entries are immutable: saving an interrupted compile under the final content
+key makes every exact hit repeat that unfinished work, and a successful build
+cannot repair the entry. The DerivedData `v6` and SwiftPM `v2` generations
+exclude earlier entries that could have been saved after cancellation or
+failure. A new generation pays one cold build; unchanged successful restores
+are the evidence for warm performance. Dependency clones remain advisory.
+
 ## Hosted suite
 
 The `CI` workflow runs automatically for pull requests to `main` and pushes to
