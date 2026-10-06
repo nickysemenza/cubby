@@ -288,10 +288,15 @@ from that list runs in the ordinary integration job and fails there, because
 in CI the harness refuses to rebuild a missing or stale Worker. `Web checks` requires
 both jobs to succeed, so the required-check name stays stable. Jobs that need
 the databases (`test-postgres`, `build-worker`,
-`test-e2e`, `db-check`) start them with the `start-test-services` composite
-action, which runs the pgvector PostgreSQL and IntegreSQL images on ports 5432
-and 5000; a composite action cannot declare `services:`, so it uses `docker
-run`. Affected jobs wait on
+`test-e2e`, `db-check`) declare native GitHub Actions service containers.
+YAML anchors reuse the pgvector PostgreSQL and pinned IntegreSQL definitions;
+the migration job selects PostgreSQL alone. GitHub owns the network, container
+startup, PostgreSQL health wait, logs, and cleanup. PostgreSQL also maps port
+55432 for guarded named-database tests. `POSTGRES_INITDB_ARGS` sets the disposable
+settings in the fresh PostgreSQL 17 configuration. IntegreSQL retries its
+PostgreSQL connection during startup; its pinned distroless image has no
+`/bin/sh` for Docker shell health checks. The optional purchase-import and
+Tester Army Linux lanes use the same service definitions. Affected jobs wait on
 `Scope`. The offline Markdown link check runs in `Validation` for Markdown
 changes. The
 `@claude` mention workflow (`claude.yml`) remains manual;

@@ -152,7 +152,7 @@ watchdog close its agent-device session. Native scenario seeding stays in the
 runner's lease `setup` callback, which runs after migration. Both callbacks
 receive only the name and URL, never the lease's `close`. The lease
 regressions (`named-database-lease.integration.test.ts`) need the guarded
-55432 endpoint: CI publishes it from `start-test-services`, and locally the
+55432 endpoint: CI publishes it from native PostgreSQL service containers, and locally the
 suite runs `scripts/dev-db.ts up` unless `CUBBY_SIM_DB_EXTERNAL=1`. A watchdog
 regression that holds a migration-blocking connection destroys that connection
 on release before waiting for the forced DROP; returning it to the idle pool
