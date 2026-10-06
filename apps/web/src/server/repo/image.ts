@@ -2803,7 +2803,7 @@ const associateImageWithEntity = async (
         role: "attachment",
         imageId,
         sortOrder,
-        purpose: purpose ?? null,
+        purpose: purpose ?? "item",
       });
     })
     .with({ entity: "recipe" }, ({ id }) =>

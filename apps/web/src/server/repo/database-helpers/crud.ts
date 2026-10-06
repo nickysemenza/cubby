@@ -316,7 +316,7 @@ const galleryBinding = (
   entityKind: GalleryEntity,
   extraColumns: Pick<
     InferInsertModel<typeof entityAttachment>,
-    "documentKind"
+    "documentKind" | "purpose"
   > = {},
 ) =>
   defineImageJoinBinding({
@@ -337,10 +337,11 @@ const galleryBinding = (
  * One binding per entity whose declaration says `images: "gallery"`. Every
  * binding targets the shared `EntityAttachment` table (ADR 0006); the
  * `satisfies Record<GalleryEntity, …>` still fails to compile when a gallery
- * entity has no binding, and Purchase keeps its default document kind.
+ * entity has no binding; Purchase keeps its default document kind and Product
+ * its default `item` purpose.
  */
 export const imageJoinBindings = {
-  product: galleryBinding("product"),
+  product: galleryBinding("product", { purpose: "item" }),
   location: galleryBinding("location"),
   recipe: galleryBinding("recipe"),
   project: galleryBinding("project"),
