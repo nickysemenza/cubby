@@ -10,8 +10,9 @@ import type { Database, DrizzleTransaction } from "~/server/db";
 import { run as runTable } from "~/server/db/schema";
 import { notDeleted, unwrapDb } from "~/server/repo/database-helpers";
 import { listScaffold } from "~/server/repo/list";
+import type { ListProjection } from "~/server/repo/list-projection";
 import { defineRepository, listOn, onDb } from "~/server/repo/repository";
-import { createEntityReader } from "~/server/repo/repository";
+import { createEntityReader, listReadOn } from "~/server/repo/repository";
 import { lookupEntityReferences } from "~/server/repo/shortcode-resolver";
 
 /**
@@ -100,6 +101,23 @@ export const listRuns = (
     { hydrate: (rows) => hydrate(db, rows) },
   );
 
+/**
+ * The kernel's progressive list read. Run declares no deferred list groups
+ * (`presentation.list.read`), so every projection hydrates the full row.
+ */
+export const listRunsRead = (
+  db: Database,
+  filters: RunFilters,
+  sorts: SortParams[],
+  pagination: PaginationParams,
+  projection: ListProjection,
+) =>
+  scaffold.list(
+    db,
+    { filters, sorts, pagination, projection },
+    { hydrate: (rows) => hydrate(db, rows) },
+  );
+
 const reader = createEntityReader<
   RunRow,
   RunOut,
@@ -124,4 +142,5 @@ export const getRunByShortcode = reader.getByShortcode;
 export const runRepository = defineRepository("run", {
   get: onDb(getRunByShortcode),
   list: listOn(listRuns),
+  listRead: listReadOn(listRunsRead),
 });

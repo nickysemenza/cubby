@@ -5,7 +5,6 @@ import { and, eq, isNull } from "drizzle-orm";
 import { runContract } from "~/contracts/run.contract";
 import { getPurchaseAgentQueue } from "~/server/cf-env";
 import { oauthRefreshToken, run as runTable } from "~/server/db/schema";
-import { executeEntityAs } from "~/server/entity-kernel";
 import { implementOperationDomain } from "~/server/operation-domain.server";
 import {
   findActivePurchaseAgentGrant,
@@ -38,7 +37,6 @@ import {
 } from "~/server/purchase-import/targeted-run";
 import { listAiUsageForRun } from "~/server/repo/ai-usage";
 import { getDb } from "~/server/repo/database-helpers";
-import { getRunByShortcode } from "~/server/repo/run";
 import { resolveOrThrow } from "~/server/repo/shortcode-resolver";
 import type { AuthenticatedRequestContext } from "~/server/request-context";
 import { isWorkflowRunPurpose } from "~/server/workflow-runs/contract";
@@ -52,17 +50,6 @@ async function memberParty(context: AuthenticatedRequestContext) {
 }
 
 export const runHandlers = implementOperationDomain(runContract, {
-  list: async (context, input) => {
-    const result = await executeEntityAs(context, "list", {
-      entity: "run",
-      filters: input.filters,
-      sort: input.sort,
-      pagination: input.pagination,
-      groupBy: input.groupBy,
-    });
-    return { items: result.items, meta: result.meta };
-  },
-  detail: (context, input) => getRunByShortcode(context.db, input.shortcode),
   workSnapshot: async (context, input) => {
     const run = await loadRunDetail(context.db, input.runId);
     return {

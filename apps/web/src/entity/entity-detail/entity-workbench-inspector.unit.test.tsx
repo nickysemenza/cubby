@@ -7,7 +7,6 @@ import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { entityPreviewQueryOptions } from "~/entity/entity-query";
 import {
   entityGraph,
-  image,
   recommendations,
 } from "~/integrations/tanstack-query/generated/catalog.gen";
 import { createBrowserTestHarness } from "~/lib/test/browser-harness";
@@ -164,7 +163,7 @@ function seedVendorInspector() {
 }
 
 function seedImageInspector() {
-  const detailOptions = image.detail.queryOptions({ id: IMAGE_ID });
+  const detailOptions = entityPreviewQueryOptions("image", IMAGE_ID);
   harness.queryClient.setQueryDefaults(detailOptions.queryKey, {
     staleTime: Number.POSITIVE_INFINITY,
   });

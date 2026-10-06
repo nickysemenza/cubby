@@ -68,7 +68,7 @@ describe("Start operation trace context", () => {
         new Headers({
           "x-cubby-operation": "entity.detail",
           "x-cubby-operation-kind": "query",
-          "x-cubby-operation-entity": "image",
+          "x-cubby-operation-entity": "usda-food",
         }),
       ),
     ).toEqual({ operation: "entity.detail", kind: "query" });

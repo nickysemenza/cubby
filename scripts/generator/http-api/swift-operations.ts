@@ -917,7 +917,6 @@ const CLIENT_PASSTHROUGH_METHODS = {
   },
   "dataQuality.setException": { method: "setDataException", doc: null },
   "dataQuality.clearException": { method: "clearDataException", doc: null },
-  "image.detail": { method: "imageDetail", doc: null },
   "imageProcessing.analyses": { method: "imageAnalyses", doc: null },
   "imageProcessing.status": { method: "imageProcessingStatus", doc: null },
   "imageProcessing.pull": { method: "pullCompanionImageProcessing", doc: null },

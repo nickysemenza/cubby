@@ -122,19 +122,3 @@ export const missingBrowserRouteFiles = (
   handWrittenBrowserRouteFiles(entities).filter(
     (relativePath) => !exists(resolve(ROOT, relativePath)),
   );
-
-/**
- * A generated index outside the kernel list roster needs a declared source.
- * The web regression verifies that the override actually supplies rows.
- */
-export const missingListSources = (
-  entities: readonly CompiledEntity[],
-): readonly string[] =>
-  routedEntities(entities)
-    .filter(
-      (entity) =>
-        entity.route.list !== null &&
-        (entity.contract?.create == null || entity.contract.update == null) &&
-        !entity.route.listColumns,
-    )
-    .map((entity) => entity.key);

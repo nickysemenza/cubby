@@ -1751,7 +1751,7 @@ export default defineEntity({
     },
     images: {
       storage: "gallery",
-      displaySourceOverrides: [
+      displaySources: [
         {
           relationPath: ["products"],
           priority: 1,

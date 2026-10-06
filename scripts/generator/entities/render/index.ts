@@ -43,6 +43,8 @@ type EntityProjectionMaps = Readonly<{
   schema: readonly ContractEntity[];
   detail: readonly ContractEntity[];
   list: readonly ContractEntity[];
+  /** List-roster entities the browser also creates and edits. */
+  crud: readonly ContractEntity[];
   filters: readonly CompiledEntity[];
   routes: readonly CompiledEntity[];
 }>;
@@ -58,14 +60,20 @@ export const entityProjectionMaps = (
   const schema = entities.filter(
     (entity): entity is ContractEntity => entity.contract !== null,
   );
+  // The generic detail page reads the kernel `get`, which every kernel entity
+  // serves whether or not it accepts writes.
   const detail = schema.filter(
-    ({ contract }) => contract.create !== null && contract.update !== null,
+    ({ key, ports }) => ports.repository !== null || key === "image",
   );
   const list = schema.filter(hasGenericListOperation);
+  const crud = list.filter(
+    ({ contract }) => contract.create !== null && contract.update !== null,
+  );
   return {
     schema,
     detail,
     list,
+    crud,
     filters: entities,
     routes: entities.filter(
       ({ descriptor }) => descriptor.browserRoutes !== false,
@@ -452,15 +460,17 @@ export const renderEntityArtifacts = (
     )
     .join(",\n  ");
 
-  const browserCrudEntitySpecs = projections.list;
-  const browserCrudEntities = browserCrudEntitySpecs.map(({ key }) => key);
-  const listRuntimeOutputImports = browserCrudEntitySpecs
+  const listEntitySpecs = projections.list;
+  const listEntityKeys = listEntitySpecs.map(({ key }) => key);
+  const crudEntitySpecs = projections.crud;
+  const browserCrudEntities = crudEntitySpecs.map(({ key }) => key);
+  const listRuntimeOutputImports = listEntitySpecs
     .map(
       ({ key, contract }) =>
         `import { ${contract.list.export} as ${key}ListOutputSchema } from ${JSON.stringify(contract.list.module)};`,
     )
     .join("\n");
-  const listFilterFieldImports = browserCrudEntitySpecs
+  const listFilterFieldImports = listEntitySpecs
     .flatMap(({ key, filterSchema }) =>
       filterSchema === null
         ? []
@@ -469,13 +479,13 @@ export const renderEntityArtifacts = (
           ],
     )
     .join("\n");
-  const listInputVariants = browserCrudEntitySpecs
+  const listInputVariants = listEntitySpecs
     .map(
       ({ key, filterSchema }) =>
         `z.object({entity:z.literal(${JSON.stringify(key)}),filters:${filterSchema === null ? "z.record(z.string(),z.unknown())" : `${key}ListFiltersSchema`},sort:entityListSortsSchema.optional(),pagination:entityListPaginationSchema.optional(),groupBy:z.string().min(1).optional()})`,
     )
     .join(",\n  ");
-  const listFilterSchemas = browserCrudEntitySpecs
+  const listFilterSchemas = listEntitySpecs
     .map(({ key, filterSchema, descriptor }) =>
       filterSchema === null
         ? `const ${key}ListFiltersSchema = z.record(z.string(), z.unknown());`
@@ -486,26 +496,26 @@ export const renderEntityArtifacts = (
           }.extend({ids:z.array(z.string()).max(500).optional()});`,
     )
     .join("\n");
-  const listFilterSchemaBindings = browserCrudEntitySpecs
+  const listFilterSchemaBindings = listEntitySpecs
     .map(({ key }) => `  ${JSON.stringify(key)}: ${key}ListFiltersSchema,`)
     .join("\n");
   // One named export per list row so the OpenAPI stage names the component
   // `<Entity>ListItem` (the export walk in `http-api/schema-names.ts` names
   // exported instances only); an inline `withEntityListMedia(...)` call would
   // surface in Swift as a positional `ItemsPayloadPayload`.
-  const listItemSchemas = browserCrudEntitySpecs
+  const listItemSchemas = listEntitySpecs
     .map(
       ({ key }) =>
         `export const ${key}ListItem = withEntityListMedia(${key}ListOutputSchema);`,
     )
     .join("\n");
-  const listReadSchemas = browserCrudEntitySpecs
+  const listReadSchemas = listEntitySpecs
     .map(
       ({ key, inspector }) =>
         `  ${JSON.stringify(key)}: compileListReadSchema(${key}ListItem, ${compactLiteral(inspector.list.read)}, ${compactLiteral(inspector.list.read.dependencies)}),`,
     )
     .join("\n");
-  const listBaseItemSchemas = browserCrudEntitySpecs
+  const listBaseItemSchemas = listEntitySpecs
     .map(({ key, inspector }) => {
       const read = inspector.list.read;
       const fields = [
@@ -517,13 +527,13 @@ export const renderEntityArtifacts = (
       return `export const ${key}ListBaseItem = z.object(${key}ListItem.shape).omit(${compactLiteral(Object.fromEntries(fields.map((field) => [field, true])))});`;
     })
     .join("\n");
-  const listBaseVariants = browserCrudEntitySpecs
+  const listBaseVariants = listEntitySpecs
     .map(
       ({ key }) =>
         `z.object({entity:z.literal(${JSON.stringify(key)}),data:z.array(${key}ListBaseItem),meta:entityListMetaSchema.omit({sums:true}),groups:z.array(entityListGroupSchema)})`,
     )
     .join(",\n");
-  const listEnrichmentVariants = browserCrudEntitySpecs
+  const listEnrichmentVariants = listEntitySpecs
     .map(({ key, inspector }) => {
       // A deferred patch may carry only fields owned by its group. A partial
       // full-row schema applies defaults to absent core fields and erases them.
@@ -551,14 +561,14 @@ export const entityListEnrichmentInputSchema = z.object({entity:z.enum(listEntit
 export const entityListEnrichmentOutputSchema = z.discriminatedUnion("entity",[${listEnrichmentVariants}]);
 export const entityListSummaryOutputSchema = z.object({entity:z.enum(listEntities),sums:z.record(z.string(),z.number()).optional()});
 `;
-  const listOutputSchemas = browserCrudEntitySpecs
+  const listOutputSchemas = listEntitySpecs
     .map(
       ({ key }) =>
         `  ${JSON.stringify(key)}: z.object({items:z.array(${key}ListItem),meta:entityListMetaSchema}),`,
     )
     .join("\n");
   const mutationOutputImportEntries = new Map<string, Set<string>>();
-  for (const { contract } of browserCrudEntitySpecs) {
+  for (const { contract } of crudEntitySpecs) {
     if (!contract)
       throw new EntityDeclarationError(
         "Browser CRUD entity is missing its contract.",
@@ -576,7 +586,7 @@ export const entityListSummaryOutputSchema = z.object({entity:z.enum(listEntitie
         `import { ${[...exports].sort().join(", ")} } from ${JSON.stringify(module)};`,
     )
     .join("\n");
-  const mutationOutputTypes = browserCrudEntitySpecs
+  const mutationOutputTypes = crudEntitySpecs
     .map(({ key, contract }) => {
       if (!contract)
         throw new EntityDeclarationError(
@@ -585,7 +595,7 @@ export const entityListSummaryOutputSchema = z.object({entity:z.enum(listEntitie
       return `  ${JSON.stringify(key)}: z.output<typeof ${contract.output.export}>;`;
     })
     .join("\n");
-  const mutationOutputSchemas = browserCrudEntitySpecs
+  const mutationOutputSchemas = crudEntitySpecs
     .map(({ key, contract }) => {
       if (!contract)
         throw new EntityDeclarationError(
@@ -1386,7 +1396,7 @@ export const entityListSummaryOutputSchema = z.object({entity:z.enum(listEntitie
         'import { MAX_PAGE_SIZE, MAX_SORTS, paginatedMetaSchema } from "@cubby/schemas/pagination";\n' +
         'import type { FilterPatch } from "../filters";\n' +
         'import { z } from "zod";\n\n' +
-        `export const listEntities = ${compactLiteral(browserCrudEntities)} as const;\n` +
+        `export const listEntities = ${compactLiteral(listEntityKeys)} as const;\n` +
         "export type ListEntity = (typeof listEntities)[number];\n\n" +
         'const entityListSortSchema = z.object({ orderBy: z.string().min(1), direction: z.enum(["asc", "desc"]) });\n' +
         "const entityListSortsSchema = z.array(entityListSortSchema).min(1).max(MAX_SORTS);\n" +

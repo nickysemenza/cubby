@@ -12,13 +12,6 @@ export default defineEntity({
       export: "cookbookListOverride",
     },
     basePath: "cookbooks",
-    // No kernel `get`: the detail reads the cookbook summary query.
-    detail: {
-      query: {
-        module: "~/entity/cookbook-queries",
-        export: "cookbookDetailQuery",
-      },
-    },
   },
   table: "Cookbook",
   identifiers: { brand: "CookbookId", shortcode: "CKB-" },
@@ -353,7 +346,7 @@ export default defineEntity({
   capabilities: {
     images: {
       storage: "cover",
-      displaySourceOverrides: [
+      displaySources: [
         {
           relationPath: ["product"],
           priority: 1,

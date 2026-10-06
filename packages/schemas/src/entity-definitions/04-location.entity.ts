@@ -342,14 +342,13 @@ export default defineEntity({
       {
         key: "imageOrder",
         kind: "text",
-        readKeyOverride: null,
         control: { kind: "specialized", renderer: "image-order" },
         provenance: {
           kind: "relation",
           sources: [{ entity: "image", relation: "images" }],
         },
         validation: {
-          read: locationIdentityProductOut.nullable(),
+          read: null,
           create: null,
           update: z
             .array(imageShortcode)
@@ -997,7 +996,7 @@ export default defineEntity({
   capabilities: {
     images: {
       storage: "gallery",
-      displaySourceOverrides: [
+      displaySources: [
         {
           relationPath: ["product"],
           priority: 1,

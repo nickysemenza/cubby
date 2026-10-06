@@ -161,14 +161,14 @@ struct NativeListAdaptersTests {
         }
     }
 
-    @Test func cookbookAndUsdaDetailsUseTypedRPCsAndNormalizeRowIdentity() async throws {
+    @Test func cookbookDetailUsesTheKernelGetAndUsdaKeepsItsTypedRPC() async throws {
         defer { NativeListStub.handler.withLock { $0 = nil } }
         let urls = Mutex<[URL]>([])
         NativeListStub.handler.withLock { handler in
             handler = { request in
                 if let url = request.url { urls.withLock { $0.append(url) } }
                 switch request.url?.path {
-                case "/api/v1/cookbook/detail": return (200, Self.cookbookDetailPayload)
+                case "/api/v1/cookbooks/CKB-1": return (200, Self.cookbookDetailPayload)
                 case "/api/v1/usda-food/detail": return (200, Self.usdaDetailPayload)
                 default: return (500, Data())
                 }
@@ -179,7 +179,6 @@ struct NativeListAdaptersTests {
         let cookbook = try #require(await client.row(EntityCatalog[.cookbook], id: "CKB-1"))
         #expect(cookbook.id == "CKB-1")
         #expect(cookbook.title == "Alpha Cookbook")
-        #expect(cookbook.raw["shortcode"] == "CKB-1")
 
         let food = try #require(await client.row(EntityCatalog[.usdaFood], id: "12345"))
         #expect(food.id == "12345")
@@ -190,7 +189,6 @@ struct NativeListAdaptersTests {
             urls.map { URLComponents(url: $0, resolvingAgainstBaseURL: false)?.queryItems ?? [] }
         }
         try #require(queryItems.count == 2)
-        #expect(queryItems[0].contains(URLQueryItem(name: "shortcode", value: "CKB-1")))
         #expect(queryItems[1].contains(URLQueryItem(name: "id", value: "12345")))
     }
 
@@ -263,8 +261,14 @@ struct NativeListAdaptersTests {
         try! JSONEncoder.cubby().encode(cookbooks)
     }()
 
+    /// The kernel `get` adds the shared detail media to the cookbook summary.
     nonisolated private static let cookbookDetailPayload: Data = {
-        try! JSONEncoder.cubby().encode(cookbooks[0])
+        let summary = try! JSONEncoder.cubby().encode(cookbooks[0])
+        var object = try! JSONSerialization.jsonObject(with: summary) as! [String: Any]
+        object["attachments"] = [Any]()
+        object["redirectedFrom"] = NSNull()
+        object["previousShortcodes"] = [Any]()
+        return try! JSONSerialization.data(withJSONObject: object)
     }()
 
     nonisolated private static func requestBody(_ request: URLRequest) throws -> Data {

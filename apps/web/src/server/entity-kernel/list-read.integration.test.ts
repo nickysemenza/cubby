@@ -10,6 +10,7 @@ import { listEntities } from "~/entity/generated/entity-lists.gen";
 import { executeEntity } from "~/server/entity-kernel";
 import { ENTITY_LIST_READ_OPERATIONS } from "~/server/generated/entity-list-read-bindings.gen";
 import { getDb } from "~/server/repo/database-helpers";
+import { ensureRun } from "~/server/runs/ensure-run";
 
 import {
   buildKernelContext,
@@ -154,5 +155,23 @@ describe("standard progressive list composition", () => {
       expect(empty.data).toEqual([]);
       expect(empty.meta.totalCount).toBe(0);
     }
+  });
+
+  // A read-only entity joins the list roster without a create/update
+  // contract; without its own `listRead` the generated Runs index failed.
+  it("lists a read-only entity through the generic progressive read", async () => {
+    await ensureRun(ctx.db, ctx.actor, { purpose: "ai_suggest" });
+    const context = buildKernelContext(ctx.db);
+
+    const base = await ENTITY_LIST_READ_OPERATIONS.run.base(context, {
+      filters: {},
+      pagination: { pageIndex: 0, pageSize: 25 },
+    });
+
+    expect(listEntities).toContain("run");
+    expect(base.data).toEqual([
+      expect.objectContaining({ purpose: "ai_suggest" }),
+    ]);
+    expect(base.meta.totalCount).toBe(1);
   });
 });

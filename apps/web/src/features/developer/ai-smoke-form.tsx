@@ -6,10 +6,8 @@ import { useQuery } from "@tanstack/react-query";
 import { useMemo, useState } from "react";
 import { z } from "zod";
 
-import {
-  image,
-  run,
-} from "~/integrations/tanstack-query/generated/catalog.gen";
+import { entityListFor } from "~/entity/entity-list";
+import { image } from "~/integrations/tanstack-query/generated/catalog.gen";
 import type { ComboboxItem } from "~/ui/combobox/combobox-types";
 import { EntityPicker } from "~/ui/combobox/entity-picker";
 import type { PickerSearchEntity } from "~/ui/combobox/entity-search-hooks";
@@ -139,7 +137,7 @@ function RunPicker({
   const [open, setOpen] = useState(false);
   const [selected, setSelected] = useState<ComboboxItem | null>(null);
   const query = useQuery({
-    ...run.list.queryOptions({
+    ...entityListFor("run").queryOptions({
       filters: {},
       pagination: { pageIndex: 0, pageSize: 100 },
     }),

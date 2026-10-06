@@ -41,15 +41,8 @@ export default defineEntity({
       export: "imageListOverride",
     },
     basePath: "images",
-    // The image list is not a kernel list (no create contract), so its index
-    // route stays hand-written; the detail reads its own query.
+    // The photo library's index stays hand-written over its own filters.
     list: null,
-    detail: {
-      query: {
-        module: "~/entity/image-queries",
-        export: "imageDetailQuery",
-      },
-    },
   },
   table: "Image",
   children: imageChildren,

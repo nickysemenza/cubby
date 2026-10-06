@@ -28,7 +28,6 @@ import {
   generatedBrowserRouteFiles,
   handWrittenBrowserRouteFiles,
   missingBrowserRouteFiles,
-  missingListSources,
 } from "../../../scripts/generator/entities/render/routes";
 
 const temporaryRoots: string[] = [];
@@ -1645,17 +1644,31 @@ describe("typed entity compiler", () => {
         "alpha",
       ).route?.create,
     ).toBeUndefined();
+    // A kernel entity: a contract and a repository, so the kernel serves `get`.
+    const kernelReady = {
+      ...routeReady,
+      // A kernel entity's MCP operations derive from its kernel actions.
+      capabilities: { ...base.capabilities, mcp: undefined },
+      identifiers: { brand: "AlphaId", shortcode: "ALP-" },
+      extensions: {
+        ...base.extensions,
+        ports: {
+          ...base.extensions.ports,
+          repository: {
+            module: "~/server/repo/alpha",
+            export: "alphaRepository",
+          },
+        },
+      },
+    };
     const entities = compileEntityDeclarations([
       {
-        ...base,
+        ...kernelReady,
         route: {
           basePath: "alphas",
           detailParamOverride: "id",
           createOverride: "page",
           list: null,
-          detail: {
-            query: { module: "~/entity/alpha", export: "alphaQuery" },
-          },
         },
       },
     ]);
@@ -1670,42 +1683,23 @@ describe("typed entity compiler", () => {
     expect(
       missingBrowserRouteFiles(entities, (path) => path.endsWith(expected[0]!)),
     ).toEqual([expected[1]]);
-    // A generated detail page reads the kernel projections, which need a
-    // create+update contract; a generated index only needs something to list.
+    // A generated index needs something to list; a generated detail page
+    // reads the kernel `get`, which only a kernel entity serves.
     expect(() =>
-      compileEntityDeclarations([
-        {
-          ...base,
-          route: {
-            basePath: "alphas",
-            list: null,
-            detail: true,
-          },
-        },
-      ]),
-    ).toThrow("no create+update contract");
-    const alphaDetail = {
-      query: { module: "~/entity/alpha", export: "alphaQuery" },
-    };
-    expect(() =>
-      compileEntityDeclarations([
-        {
-          ...base,
-          route: { basePath: "alphas", detail: alphaDetail },
-        },
-      ]),
+      compileEntityDeclarations([{ ...base, route: { basePath: "alphas" } }]),
     ).toThrow("has no contract (nothing to list)");
+    expect(() =>
+      compileEntityDeclarations([
+        { ...base, route: { basePath: "alphas", list: null } },
+      ]),
+    ).toThrow("the kernel serves no get");
     // Every entity gets the generic detail page; only the allowlisted
     // recipe and usda-food routes stay hand-written.
     expect(() =>
       compileEntityDeclarations([
         {
-          ...base,
-          route: {
-            basePath: "alphas",
-            list: null,
-            detail: null,
-          },
+          ...kernelReady,
+          route: { basePath: "alphas", list: null, detail: null },
         },
       ]),
     ).toThrow("every entity gets the generic detail page");
@@ -1713,13 +1707,9 @@ describe("typed entity compiler", () => {
     expect(() =>
       compileEntityDeclarations([
         {
-          ...base,
-          route: {
-            basePath: "alphas",
-            createOverride: "dialog",
-            list: null,
-            detail: alphaDetail,
-          },
+          ...kernelReady,
+          model,
+          route: { basePath: "alphas", createOverride: "dialog", list: null },
         },
       ]),
     ).toThrow('model.intents.create lacks "capture"');
@@ -1754,20 +1744,6 @@ describe("typed entity compiler", () => {
       "entity-literal-alpha.gen.ts",
       "notes.gen.ts",
     ]);
-  });
-
-  // Regression: run declared `route.list: true` with no create/update
-  // contract (so no kernel list read) and no list override, and the
-  // generated Runs index crashed on SSR. The generator must refuse that.
-  it("requires a list override for a generated index with no kernel list read", async () => {
-    const entities = await loadEntityDeclarations();
-    expect(missingListSources(entities)).toEqual([]);
-    const withoutRuns = entities.map((entity) =>
-      entity.key === "run" && entity.route
-        ? { ...entity, route: { ...entity.route, listColumns: undefined } }
-        : entity,
-    );
-    expect(missingListSources(withoutRuns)).toEqual(["run"]);
   });
 
   it("keeps generated artifacts on their side of the schema and server boundaries", async () => {

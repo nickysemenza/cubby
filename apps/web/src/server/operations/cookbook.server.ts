@@ -5,7 +5,6 @@ import { getCookbookSummary, listCookbooks } from "~/server/repo/cookbook";
 
 export const cookbookHandlers = implementOperationDomain(cookbookContract, {
   list: (context) => listCookbooks(context.db),
-  detail: (context, input) => getCookbookSummary(context.db, input.shortcode),
   update: async (context, input) => {
     await executeEntityAs(context, "update", {
       entity: "cookbook",

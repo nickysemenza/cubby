@@ -1,0 +1,15 @@
+context platform=ios timeout=240000
+
+# A Run reads through the generic kernel list and get, so it browses like any
+# other entity: Library → Browse catalog → Runs → the seeded run's detail.
+open com.nickysemenza.cubby
+wait "role=Button label=Library" 240000
+click "role=Button label=Library"
+wait text "Browse catalog" 30000
+click "label=\"Browse catalog\""
+wait "id=browse.catalog.run" 30000
+click "id=browse.catalog.run"
+wait "id=browse.run.list" 60000
+wait "id=browse.run.row.${APPROVAL_RUN_ID}" 60000
+click "id=browse.run.row.${APPROVAL_RUN_ID}"
+wait text "Paused Approval" 90000
