@@ -453,12 +453,14 @@ for (const statementFirst of [true, false]) {
     const mail = page
       .getByRole("article")
       .filter({ hasText: `Order ${names.orderId}` });
-    const match = mail
-      .getByRole("link", { name: names.orderId, exact: true })
-      .locator("..")
-      .locator("..");
-    await match.getByRole("button", { name: "Link", exact: true }).click();
+    // The exact-order mail links itself to the imported Purchase; no click.
+    await expect(
+      mail.getByRole("link", { name: names.orderId, exact: true }),
+    ).toBeVisible();
     await expect(mail.getByText("linked", { exact: true })).toBeVisible();
+    await expect(
+      mail.getByRole("button", { name: "Link", exact: true }),
+    ).toHaveCount(0);
     await gotoAuthenticatedPage(page, `/purchases/${purchaseCode}`);
     await expect(
       page.getByRole("link", { name: "Open Gmail conversation", exact: true }),
