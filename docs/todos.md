@@ -149,6 +149,12 @@ See also the image operational passes at the end of this file.
   high 8/12, 1 unsafe (duplicate Product) and three runs that misread the
   extractor result, so purchase runs stay on Sol. Scripted agent scenarios
   prove orchestration, not model judgment.
+- 🔭 **Grow the purchase evals from member dismissals.** A dismissed mail
+  link, a dismissed import finding, or a cancelled automatic import is a
+  labeled mistake. A scheduled worker skill would read recent ones and draft
+  synthetic look-alike cases for `purchase-decision-eval.fixtures.ts` (never
+  real household data), opening a PR for review. Dismiss stays one tap with
+  no reason field, and nothing tunes itself.
 
 ---
 
@@ -421,11 +427,11 @@ See also the image operational passes at the end of this file.
 
 ## Entity platform & data model
 
-- 🤔 **Classification-declared field policies.** A classification decides
+- 🟢 **Classification-declared field policies.** A classification decides
   whether a field or link is expected, and whether it is allowed at all: a
-  "Restaurant meals" SpendingCategory with `productExpectation: not_expected`
+  SpendingCategory with `productExpectation: not_allowed` (Restaurants)
   means an Expense neither expects nor may link a Product (strict refusal on
-  every write path; #1682 is the first instance). Generalize it so a
+  every write path; #1685 and #1682 are the first instance). Generalize it so a
   classification declares, per field, `required | not_expected | unknown` and
   whether a value is allowed, read by one generic evaluator for data-quality
   gaps, write validation, Jev targets (never suggest a disallowed field), and
@@ -436,9 +442,11 @@ See also the image operational passes at the end of this file.
   expect `growsPlantId`, others refuse it), SpendingCategory `evidenceExpectation`
   and Vendor/Purchase overrides (`repo/purchase-evidence-policy.ts`), Location
   type (which kinds carry a Product or plantings), and Task/Project trade.
-  Decide the declaration shape (manifest field metadata keyed by the
-  classifying field, or a policy table) and how inherited classifications
-  (Vendor → Purchase → Expense) resolve before a refusal applies.
+  Decided shape: fixed classifications (ProductCategory `feature`, Location
+  type) declare policies in the entity manifest; household-editable ones
+  (SpendingCategory) keep per-row columns; one registry and evaluator reads
+  both. First slice: ProductCategory `feature`. Inherited classifications
+  resolve through their existing effective-value SQL before a refusal applies.
 
 - 🤔 **One FROM context per entity list.** Each list repo pairs a relational
   `findMany` (root aliased) with an unaliased `$count`, so a predicate
