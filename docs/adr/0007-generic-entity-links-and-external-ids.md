@@ -99,7 +99,7 @@ system gave an entity. The kinds are the keys of `EXTERNAL_ID_KINDS` in
 attach to and whether it has a primary slot:
 
 - Product identifiers: `asin`, `retailer_sku`, `internet_number`,
-  `item_number`, `catalog_number`, `gtin_14`, `legacy_unspecified`.
+  `item_number`, `catalog_number`, `manufacturer_part`, `gtin_14`.
 - `settlement_ref` on `financialTransaction`: one card charge can name several
   orders, so it has no primary slot and `isPrimary` is NULL.
 - `page` on expense, task, project, and recipe (Notion); `folder` on project

@@ -414,7 +414,7 @@ export const dataExceptionRecord = pgTable(
     check: text("check").notNull(),
     reason: text("reason").notNull(),
     note: text("note").notNull(),
-    fingerprint: text("fingerprint"),
+    fingerprint: text("fingerprint").notNull(),
     ...baseTimestamps(),
   },
   (table) => [
@@ -432,8 +432,9 @@ export const dataExceptionRecord = pgTable(
  *
  * `role` follows the subject kind's declared image storage: gallery entities
  * hold `attachment` rows, a cookbook one `cover`, a vendor one `logo`.
- * `purpose` is Product-only and `documentKind` Purchase-only, enforced by
- * CHECKs on the stored `entityKind`.
+ * Every Product row carries a `purpose` and no other kind does;
+ * `documentKind` is Purchase-only. CHECKs on the stored `entityKind` enforce
+ * both.
  *
  * Detach soft-deletes. Upload idempotency lives here rather than on `Image`,
  * so a key reuses a file only while that exact association is active.
@@ -450,9 +451,9 @@ export const entityAttachment = pgTable(
       .notNull()
       .default("attachment")
       .$type<EntityAttachmentRole>(),
-    // Display order; 0 default means legacy rows tie-break on createdAt.
+    // Display order; ties (a promoted cover also sits at 0) break on
+    // createdAt, then id.
     sortOrder: integer("sortOrder").notNull().default(0),
-    // `null` is the legacy item role and deliberately remains displayable.
     purpose: text("purpose", { enum: ["item", "label"] as const }),
     documentKind: text("documentKind", {
       enum: purchaseDocumentKindValues,
@@ -491,7 +492,7 @@ export const entityAttachment = pgTable(
     ),
     check(
       "EntityAttachment_purpose_kind_check",
-      sql`${table.purpose} IS NULL OR ${table.entityKind} = 'product'`,
+      sql`(${table.purpose} IS NOT NULL) = (${table.entityKind} = 'product')`,
     ),
     check(
       "EntityAttachment_documentKind_kind_check",

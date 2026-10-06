@@ -40,18 +40,8 @@ export const externalIdKind = z.enum([
   // the write boundary (`gtin` below), so the encoding is a presentation
   // concern (`displayGtin`) rather than an identity one.
   "gtin_14",
-  "legacy_unspecified",
 ]);
 export type ExternalIdKind = z.infer<typeof externalIdKind>;
-
-/** Kinds a write may set. `legacy_unspecified` stays readable until its rows
- * are backfilled, but no new identifier may take it. */
-export const writableExternalIdKind = externalIdKind.refine(
-  // `: boolean` keeps TS from inferring a type predicate that would narrow
-  // the inferred type away from rows that still read back as legacy.
-  (kind): boolean => kind !== "legacy_unspecified",
-  "Pick the identifier's kind; legacy_unspecified is retired",
-);
 
 /**
  * The `source` slug for a manufacturer-scoped identifier. Mirrors the vendor
@@ -154,7 +144,7 @@ const externalIdValueFields = {
   source: externalIdSource.describe(
     "Canonical provider slug (e.g. 'amazon', 'home-depot', 'mcmaster')",
   ),
-  kind: writableExternalIdKind,
+  kind: externalIdKind,
   externalId: z
     .string()
     .min(1)
@@ -280,7 +270,6 @@ export const EXTERNAL_ID_KINDS = {
   catalog_number: { entities: ["product"], primarySlot: true },
   manufacturer_part: { entities: ["product"], primarySlot: true },
   gtin_14: { entities: ["product"], primarySlot: true },
-  legacy_unspecified: { entities: ["product"], primarySlot: true },
   settlement_ref: { entities: ["financialTransaction"], primarySlot: false },
   page: {
     entities: ["expense", "task", "project", "recipe"],

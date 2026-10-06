@@ -134,6 +134,13 @@
       "when": 1791248108802,
       "tag": "0018_drop_legacy_oauth_client_columns",
       "breakpoints": true
+    },
+    {
+      "idx": 19,
+      "version": "7",
+      "when": 1791253178990,
+      "tag": "0019_compat_backfill_fallbacks",
+      "breakpoints": true
     }
   ]
 }

@@ -225,16 +225,14 @@ const loadEvaluations = async (
         ]
       : []),
   ]);
-  // `jsonb_strip_nulls` keeps a legacy null fingerprint absent, as the
-  // read schema expects.
   const exceptions = withFingerprints
     ? sql`COALESCE((
-  SELECT jsonb_agg(jsonb_strip_nulls(jsonb_build_object(
+  SELECT jsonb_agg(jsonb_build_object(
     'check', dq_exception."check",
     'reason', dq_exception."reason",
     'note', dq_exception."note",
     'fingerprint', dq_exception."fingerprint"
-  )) ORDER BY dq_exception."check")
+  ) ORDER BY dq_exception."check")
   FROM "DataException" dq_exception
   WHERE dq_exception."entityId" = ${t.id}
 ), '[]'::jsonb)`
@@ -291,7 +289,6 @@ const evaluateRow = (
         targetId,
         state:
           dataCheckExemptible[exception.check] &&
-          fingerprint !== undefined &&
           rawByCheck.get(exception.check)?.fingerprint === fingerprint
             ? "active"
             : "stale",

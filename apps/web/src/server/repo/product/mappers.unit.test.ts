@@ -148,6 +148,7 @@ const activeExternalId = {
   entityId: PRODUCT_ID,
   entityKind: "product" as const,
   source: "amazon",
+  kind: "retailer_sku" as const,
   externalId: "B000000001",
   url: "https://example.com/product",
   createdAt: CREATED_AT,

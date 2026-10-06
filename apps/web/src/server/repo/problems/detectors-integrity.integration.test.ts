@@ -1675,15 +1675,18 @@ const SOURCE_FACTORIES = {
       entityId: p.id,
       entityKind: "product",
       imageId: targetId,
+      purpose: "item",
     });
   },
 
   "EntityAttachment.entityId": async (db, targetId) => {
     const img = await mkImage(db);
+    const entityKind = await entityKindOf(db, targetId);
     return insertAndReturn(db, entityAttachment, {
       entityId: targetId,
-      entityKind: await entityKindOf(db, targetId),
+      entityKind,
       imageId: img.id,
+      purpose: entityKind === "product" ? "item" : null,
     });
   },
 } satisfies Record<

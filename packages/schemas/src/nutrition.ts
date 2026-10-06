@@ -35,8 +35,8 @@ export const measureEstimate = z
         status: z.literal("unavailable"),
         reason: z.enum(["no_data", "yield_missing", "empty", "not_applicable"]),
         // Present when the aggregate saw contributors but priced none of them
-        // (`covered` is always 0); absent for `empty` and rows persisted
-        // before the field existed.
+        // (`covered` is always 0); absent for `empty` and for single-value
+        // display estimates with no contributors.
         coverage: coverage.optional(),
       })
       .refine(

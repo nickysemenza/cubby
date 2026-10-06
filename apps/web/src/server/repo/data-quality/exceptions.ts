@@ -34,14 +34,14 @@ const storedException = (row: {
   check: string;
   reason: string;
   note: string;
-  fingerprint: string | null;
-}) => {
-  const base = { check: row.check, reason: row.reason, note: row.note };
-  // A legacy exception has no fingerprint; the read schema keeps it absent.
-  return dataException.parse(
-    row.fingerprint === null ? base : { ...base, fingerprint: row.fingerprint },
-  );
-};
+  fingerprint: string;
+}) =>
+  dataException.parse({
+    check: row.check,
+    reason: row.reason,
+    note: row.note,
+    fingerprint: row.fingerprint,
+  });
 
 const mutateException = async (
   db: Database,

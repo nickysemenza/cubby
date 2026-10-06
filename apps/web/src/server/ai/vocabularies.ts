@@ -190,8 +190,6 @@ Rules:
 2. Prefer the most specific feature that fits over "household", the catch-all — reserve "household" for a genuinely general-purpose category with no more specific behavior.
 3. A consumable used alongside a tool (blades, bits, abrasives) is "tool-consumables"; a durable attachment for one is "tool-accessories"; the tool itself is "tools".`;
 
-/** `legacy_unspecified` is excluded — it is a migration artifact, never a
- * Jev answer (`external-id-kind.ts` classifies over the other six). */
 export const EXTERNAL_ID_KIND_DESCRIPTIONS = {
   asin: "Amazon's own catalog id: 'B0' followed by 8 letters/digits",
   retailer_sku:
@@ -205,7 +203,7 @@ export const EXTERNAL_ID_KIND_DESCRIPTIONS = {
   manufacturer_part:
     "A manufacturer's part number (MPN) that names ONE exact size/color variant; source is the manufacturer, not a seller. A shared family or style number is NOT this",
   gtin_14: "A barcode — UPC, EAN, or GTIN — 8 to 14 digits",
-} satisfies Record<Exclude<ExternalIdKind, "legacy_unspecified">, string>;
+} satisfies Record<ExternalIdKind, string>;
 
 export const EXTERNAL_ID_KIND_RULES = `You are a product external-identifier classification assistant. Given an identifier's source, its value, and (when known) the URL it came from and the product's name/manufacturer, determine which kind of identifier it is.
 

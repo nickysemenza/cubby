@@ -506,8 +506,8 @@ export async function claimImageProcessingJob(
     if (!candidate) return null;
 
     // Product-image purpose belongs to the attachment, rather than the Image.
-    // A shared source still needs a cutout when any live attachment is an item
-    // (including a legacy null purpose). Only a confirmed label-only source is
+    // A shared source still needs a cutout when any live attachment is an
+    // item. Only a confirmed label-only source is
     // terminal before we mint a device capability.
     if (candidate.kind === "subject_lift") {
       if (await isAttachedOnlyAsLabel(tx, candidate.imageId)) {

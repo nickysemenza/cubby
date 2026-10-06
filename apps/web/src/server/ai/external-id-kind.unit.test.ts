@@ -124,24 +124,5 @@ describe("suggestExternalIdKind", () => {
       expect(jev).toHaveBeenCalledTimes(1);
       expect(result?.value).toBe("catalog_number");
     });
-
-    it("never offers legacy_unspecified as a choice", async () => {
-      const jev = jevPortPicking("retailer_sku");
-      let seenChoices: string[] = [];
-      const capturingJev: JevPort = async (input) => {
-        seenChoices = Object.values(input.questions.selection.criteria);
-        return jev(input);
-      };
-
-      await suggestExternalIdKind(
-        inputFor({ source: "target", identifier: "50-1234567" }),
-        usage,
-        { jev: capturingJev },
-      );
-
-      expect(
-        seenChoices.some((choice) => choice.includes("legacy_unspecified")),
-      ).toBe(false);
-    });
   });
 });

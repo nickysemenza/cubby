@@ -78,8 +78,8 @@ export const dataException = z.object({
   check: dataCheck,
   reason: dataExceptionReason,
   note: z.string().trim().min(1),
-  /** Server-computed evidence signature. Missing only on legacy rows. */
-  fingerprint: z.string().min(1).optional(),
+  /** Server-computed evidence signature. */
+  fingerprint: z.string().min(1),
 });
 export type DataException = z.infer<typeof dataException>;
 

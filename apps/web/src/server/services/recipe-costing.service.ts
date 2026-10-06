@@ -101,8 +101,7 @@ const estimateDiffers = (
     );
   }
   if ("reason" in a && "reason" in b && a.reason !== b.reason) return true;
-  // Unavailable rows gain `coverage` on recompute; without comparing it a
-  // legacy `{unavailable, no_data}` row would never converge to the new shape.
+  // Unavailable rows can gain or lose contributors without changing reason.
   const aCoverage = estimateCoverage(a);
   const bCoverage = estimateCoverage(b);
   return (

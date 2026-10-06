@@ -154,7 +154,7 @@ const sectionOrder = (t: {
 /**
  * Display order for entity attachments:
  * same shape as sections — explicit sortOrder (first = cover), createdAt/id
- * tie-break for legacy rows that all sit at the 0 default. Exported for the
+ * breaking ties such as a promoted cover at 0. Exported for the
  * few image loads that don't go through these relation presets.
  */
 export const imageOrder = sectionOrder;

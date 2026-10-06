@@ -149,6 +149,7 @@ describe("inventory mappers", () => {
             entityId: PRODUCT_ID,
             entityKind: "product" as const,
             source: "amazon",
+            kind: "retailer_sku" as const,
             externalId: "B000000001",
             url: "https://example.com/product",
             createdAt: CREATED_AT,
@@ -160,6 +161,7 @@ describe("inventory mappers", () => {
             entityId: PRODUCT_ID,
             entityKind: "product" as const,
             source: "old",
+            kind: "retailer_sku" as const,
             externalId: "OLD",
             url: null,
             createdAt: CREATED_AT,
@@ -241,7 +243,7 @@ describe("inventory mappers", () => {
           {
             id: EXTERNAL_ID,
             source: "amazon",
-            kind: "legacy_unspecified",
+            kind: "retailer_sku",
             externalId: "B000000001",
             url: "https://example.com/product",
             // Rows written before the column existed default to primary — back
