@@ -3,11 +3,12 @@ import {
   vendorAccountShortcode,
 } from "@cubby/schemas/identifiers";
 import type { PurchaseAgentEvent } from "@cubby/schemas/purchase-import";
-import { eq } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
 import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 
 import {
+  auditLog,
   ledgerParty,
   orderMail,
   orderMailCandidateDecision,
@@ -953,6 +954,25 @@ describe("saved confirmation imports", () => {
             },
           ],
         });
+        expect(await enrichmentTargets()).toMatchObject([
+          { productId: line.productId, vendorAccountId: accountId },
+        ]);
+      });
+
+      // Imports before the writer recorded the Products it created leave no
+      // Product `create` audit row; the import's Purchase still names its run.
+      it("enriches a Product imported before imports recorded the Products they created", async () => {
+        const { accountId, line } = await mailOnlyImport();
+        await enableBrowserSync(accountId);
+        await getDb(ctx.db)
+          .delete(auditLog)
+          .where(
+            and(
+              eq(auditLog.entityId, line.productId!),
+              eq(auditLog.action, "create"),
+            ),
+          );
+        await sweepPendingEnrichment(ctx.db, { bridge: online });
         expect(await enrichmentTargets()).toMatchObject([
           { productId: line.productId, vendorAccountId: accountId },
         ]);

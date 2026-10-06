@@ -4,7 +4,16 @@ import type {
   RunId,
   VendorAccountId,
 } from "@cubby/schemas/identifiers";
-import { and, eq, gte, inArray, isNotNull } from "drizzle-orm";
+import {
+  type AnyColumn,
+  and,
+  eq,
+  gte,
+  inArray,
+  or,
+  type SQL,
+  sql,
+} from "drizzle-orm";
 
 import type { Database, DrizzleTransaction } from "~/server/db";
 import {
@@ -271,10 +280,29 @@ async function openProducts(
   );
 }
 
+/** An audit row this entity got from a purchase-import (account_sync) Run. */
+const importRunTouched = (
+  entityKind: "product" | "purchase",
+  entityId: SQL | AnyColumn,
+) =>
+  sql`EXISTS (
+    SELECT 1 FROM ${auditLog}
+    INNER JOIN ${runTable} ON ${runTable.id} = ${auditLog.runId}
+      AND ${runTable.purpose} = 'account_sync'
+    WHERE ${auditLog.entityKind} = ${entityKind}
+      AND ${auditLog.entityId} = ${entityId}
+      ${entityKind === "product" ? sql`AND ${auditLog.action} = 'create'` : sql``}
+  )`;
+
 /**
  * Every Purchase line of each open Product a purchase import created within
  * the window: oldest Product first, and within one Product the lines with a
  * product page first, then by page and Purchase so the choice is stable.
+ *
+ * A Product is import-created when its `create` audit row names an import
+ * Run, or, for imports from before the writer recorded the Products it
+ * created, when it was created in the window and bought on a Purchase an
+ * import Run wrote.
  */
 async function pendingCandidates(db: Database, since: Date) {
   const rows = await getDb(db)
@@ -288,23 +316,6 @@ async function pendingCandidates(db: Database, since: Date) {
     })
     .from(product)
     .innerJoin(
-      auditLog,
-      and(
-        eq(auditLog.entityId, product.id),
-        eq(auditLog.entityKind, "product"),
-        eq(auditLog.action, "create"),
-        isNotNull(auditLog.runId),
-        gte(auditLog.createdAt, since),
-      ),
-    )
-    .innerJoin(
-      runTable,
-      and(
-        eq(runTable.id, auditLog.runId),
-        eq(runTable.purpose, "account_sync"),
-      ),
-    )
-    .innerJoin(
       expense,
       and(eq(expense.productId, product.id), notDeleted(expense)),
     )
@@ -312,7 +323,16 @@ async function pendingCandidates(db: Database, since: Date) {
       purchase,
       and(eq(purchase.id, expense.purchaseId), notDeleted(purchase)),
     )
-    .where(notDeleted(product));
+    .where(
+      and(
+        notDeleted(product),
+        gte(product.createdAt, since),
+        or(
+          importRunTouched("product", product.id),
+          importRunTouched("purchase", purchase.id),
+        ),
+      ),
+    );
   const open = await openProducts(
     db,
     rows.map((row) => row.productId),
