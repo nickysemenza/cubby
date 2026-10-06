@@ -9,6 +9,7 @@ import { describe, expect, it } from "vitest";
 
 import {
   entityExternalId,
+  image,
   ledgerParty,
   product,
   productMatchCandidate,
@@ -174,7 +175,15 @@ describe("product enrichment structured identifier proof", () => {
         },
         ctx.actor,
       );
-    return { target: { id: target.entityId }, commit, commitImage };
+    return {
+      target: { id: target.entityId },
+      commit,
+      commitImage,
+      runId: started.run.id,
+      targetCode,
+      fingerprint: live.fingerprint,
+      evidenceId: evidence.id,
+    };
   }
 
   async function shortcodeOf(productId: ProductId) {
@@ -322,6 +331,76 @@ describe("product enrichment structured identifier proof", () => {
   it("verifies no catalog image when the Product has no identifier the page proves", async () => {
     const { commitImage } = await fixture();
     await expect(commitImage()).rejects.toThrow("was not verified");
+  });
+
+  // A target closed by product_enrichment.skip is settled. A late commit,
+  // from a model that kept going or a retried tool call, must neither write
+  // the Product nor learn an identifier, and must refuse before importing an
+  // image.
+  it("refuses a commit for a skipped target and writes nothing", async () => {
+    const { target, runId, targetCode, fingerprint, evidenceId, commitImage } =
+      await fixture();
+    await skipProductEnrichment(
+      ctx.db,
+      {
+        _runExecution: { runId, operationId: "skip-before-commit" },
+        productId: targetCode,
+        reason: "No exact source page shows this variant.",
+      },
+      ctx.actor,
+    );
+    const imagesBefore = await getDb(ctx.db)
+      .select({ id: image.id })
+      .from(image);
+    await expect(
+      commitProductEnrichment(
+        ctx.db,
+        {
+          _runExecution: { runId, operationId: "commit-after-skip" },
+          productId: targetCode,
+          targetFingerprint: fingerprint,
+          changes: {
+            identifiers: [
+              {
+                evidenceId,
+                source: "forgewear",
+                kind: "retailer_sku",
+                externalId: "FW-TEE-BLK-M",
+              },
+            ],
+          },
+        },
+        ctx.actor,
+      ),
+    ).rejects.toThrow(/is skipped, not an open target/u);
+    await expect(commitImage()).rejects.toThrow(
+      /is skipped, not an open target/u,
+    );
+    expect(await identifiersOf(target.id)).toEqual([]);
+    expect(await getDb(ctx.db).select({ id: image.id }).from(image)).toEqual(
+      imagesBefore,
+    );
+    const [closed] = await getDb(ctx.db)
+      .select({ state: runTarget.state, warning: runTarget.warning })
+      .from(runTarget)
+      .where(eq(runTarget.runId, runId));
+    expect(closed).toEqual({
+      state: "skipped",
+      warning: "No exact source page shows this variant.",
+    });
+  });
+
+  it("still replays a commit that succeeded once its target is completed", async () => {
+    const { commit } = await fixture();
+    const identifiers = [
+      {
+        source: "forgewear",
+        kind: "retailer_sku" as const,
+        externalId: "FW-TEE-BLK-M",
+      },
+    ];
+    const first = await commit(identifiers, "op-completed-replay");
+    expect(await commit(identifiers, "op-completed-replay")).toEqual(first);
   });
 
   it("replays the same operation id without re-running and rejects changed input", async () => {

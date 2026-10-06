@@ -1358,6 +1358,17 @@ async function commitEnrichmentIdentifier(
   }
 }
 
+/**
+ * A commit may fill only a target its run still works. Completed, skipped,
+ * unresolved and the other settled states are closed for writes.
+ */
+function assertOpenEnrichmentTarget(productCode: string, state: string) {
+  if (state !== "pending" && state !== "prepared")
+    throw new Error(
+      `${productCode} is ${state}, not an open target of this run`,
+    );
+}
+
 /** Fill only blank Product identity fields for an explicit enrichment target. */
 export async function commitProductEnrichment(
   db: Database,
@@ -1405,7 +1416,7 @@ export async function commitProductEnrichment(
         )
         .parse(Object.keys(changes));
       const [targetRef] = await database
-        .select({ id: runTarget.id })
+        .select({ id: runTarget.id, state: runTarget.state })
         .from(runTarget)
         .where(
           and(
@@ -1416,6 +1427,9 @@ export async function commitProductEnrichment(
         .limit(1);
       if (!targetRef)
         throw new Error("Product enrichment target was not found");
+      // Checked again under the target lock; this early read only keeps a
+      // settled target from importing an image it would then discard.
+      assertOpenEnrichmentTarget(input.productId, targetRef.state);
       let importedImageId: Awaited<ReturnType<typeof resolveOrThrow>> | null =
         null;
       let importedImageShortcode: string | null = null;
@@ -1487,6 +1501,14 @@ export async function commitProductEnrichment(
               .where(eq(runTable.id, scope.public.runId))
               .limit(1)
               .for("update");
+            // An identical commit that completed while this one waited for
+            // the run lock is answered from the ledger, before the target's
+            // now-settled state would refuse it.
+            const recorded = await ledger.replay(
+              tx,
+              commitProductEnrichmentOut,
+            );
+            if (recorded) return recorded;
             if (lockedRun?.status !== "running")
               throw new Error(
                 `Import run is fenced in status ${lockedRun?.status ?? "missing"}`,
@@ -1494,6 +1516,7 @@ export async function commitProductEnrichment(
             const [target] = await tx
               .select({
                 id: runTarget.id,
+                state: runTarget.state,
                 targetFingerprint: runTarget.targetFingerprint,
               })
               .from(runTarget)
@@ -1505,6 +1528,10 @@ export async function commitProductEnrichment(
               )
               .limit(1)
               .for("update");
+            // A skip keeps the fingerprint, so only the state says a target
+            // is settled: a late commit must not write or learn anything.
+            if (target)
+              assertOpenEnrichmentTarget(input.productId, target.state);
             if (!target || target.targetFingerprint !== input.targetFingerprint)
               throw new Error(
                 "Product enrichment target changed before commit",
