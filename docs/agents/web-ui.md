@@ -55,6 +55,10 @@ table order/pinning/visibility/sizing. Decorated cells render through
 readable: use `EntityRefLink` (all record links, one component with variants), a titled truncated link, or `createNameColumn`
 in RTable. Pages use the `Page` shell; detail bodies use `DetailSections`.
 
+Column factories reuse module-level render components for selection controls:
+`flexRender` treats callbacks as React component types, so refreshing column
+metadata must not remount a focused row or header checkbox.
+
 Component traps that typecheck cannot catch: `DropdownMenuLabel` crashes at
 runtime unless wrapped in `DropdownMenuGroup` (Base UI, not Radix). A column
 `cell` that depends on separately-fetched data must read `row.original` in the

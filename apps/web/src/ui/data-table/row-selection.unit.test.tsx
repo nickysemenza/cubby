@@ -67,6 +67,47 @@ function renderSelectHeader() {
 }
 
 describe("buildSelectColumn", () => {
+  it.each(["Select row", "Select all"])(
+    "keeps %s mounted and focused when column metadata refreshes",
+    (label) => {
+      const data = [{ id: "wish" }];
+      const { result, rerender: updateTable } = renderHook(
+        ({ heading }) =>
+          useCubbyTable({
+            data,
+            columns: columnHelper.columns([
+              buildSelectColumn<TestRow>(),
+              columnHelper.accessor("id", { id: "id", header: heading }),
+            ]),
+            getRowId: (row) => row.id,
+            enableRowSelection: true,
+          }),
+        { initialProps: { heading: "ID" } },
+      );
+      const content = () => {
+        const header = result.current.getHeaderGroups()[0]?.headers[0];
+        const cell = result.current.getRow("wish").getVisibleCells()[0];
+        if (!header || !cell) throw new Error("Selection column missing");
+        return (
+          <div>
+            {flexRender(header.column.columnDef.header, header.getContext())}
+            {flexRender(cell.column.columnDef.cell, cell.getContext())}
+          </div>
+        );
+      };
+      const { rerender } = render(content());
+      const checkbox = screen.getByRole("checkbox", { name: label });
+      checkbox.focus();
+      expect(checkbox).toHaveFocus();
+
+      updateTable({ heading: "Updated ID" });
+      rerender(content());
+
+      expect(screen.getByRole("checkbox", { name: label })).toBe(checkbox);
+      expect(checkbox).toHaveFocus();
+    },
+  );
+
   it("renders no checkbox for a row the table won't select", () => {
     // A heterogeneous tree's foreign child (see `EntityListTreeConfig.
     // rowIsEntity`). A rendered-but-inert checkbox reads as an affordance
