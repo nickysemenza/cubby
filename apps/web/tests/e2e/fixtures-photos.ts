@@ -78,12 +78,32 @@ export async function seedPhotoReviewLabelText(
     });
 }
 
-export const seedImagePrerequisite = async (name: string) => {
+export const seedImagePrerequisite = async (
+  name: string,
+  objectStorageUrl: string,
+) => {
+  const bytes = readFileSync(
+    new URL("./fixtures/synthetic-wardrobe-shirt.png", import.meta.url),
+  );
+  const key = `e2e/images/${name}-${crypto.randomUUID()}`;
+  const upload = await fetch(
+    `${objectStorageUrl}/e2e-bucket/${encodeURIComponent(key)}`,
+    { method: "PUT", headers: { "Content-Type": "image/png" }, body: bytes },
+  );
+  if (!upload.ok)
+    throw new Error(`Synthetic image upload failed: ${upload.status}`);
   const created = await createUploadedImageRecord(getFixtureDb(), {
-    key: `e2e-${name}`,
+    key,
     filename: `${name}.png`,
     contentType: "image/png",
-    size: 100,
+    size: bytes.length,
+    width: 640,
+    height: 640,
+    detectedContentType: "image/png",
+    sha256: createHash("sha256").update(bytes).digest("hex"),
+    renderStatus: "verified",
+    storageStatus: "available",
+    verifiedAt: new Date(),
   });
   return { id: parseShortcodeFor("image", created.shortcode) };
 };

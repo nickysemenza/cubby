@@ -273,6 +273,7 @@ test("reviews historical item classification and preserves explicit purpose", as
       await disclosure.locator("summary").first().click();
     await expect(popover.getByText("Rule:", { exact: true })).toBeVisible();
   }).toPass();
+  await page.unroute("**/api/browser/dispatch");
   await page.keyboard.press("Escape");
   await page.setViewportSize({ width: 1440, height: 900 });
   await patch(expense, { spendingCategoryId: null });
