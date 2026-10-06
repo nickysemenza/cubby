@@ -114,6 +114,7 @@ const workerSafetyTests = ["src/server/mcp/worker-validation.unit.test.ts"];
 // runs in an ordinary shard and fails there: in CI `ensureWorkerBuilds`
 // refuses to rebuild a missing or stale bundle.
 const workerdIntegrationTests = [
+  "tooling/database-socket-lifecycle.integration.test.ts",
   "src/server/purchase-import/purchase-agent-scenarios.integration.test.ts",
   "tooling/workerd-runtime.integration.test.ts",
 ];
