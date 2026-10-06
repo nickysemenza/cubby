@@ -8,7 +8,7 @@ click "role=Button label=Edit"
 wait text "Edit Garden Entry" 90000
 click "label=\"Planting IDs, None\""
 wait text "Synthetic Pea" 90000
-fill "label=\"Search Plantings\"" "No matching synthetic plant"
+fill "label=\"Search Plantings\"" "zzqvnonexistent"
 wait text "No matches" 90000
 fill "label=\"Search Plantings\"" "Pea"
 wait "label=\"Synthetic Pea, ${NORTH_PLANTING_ID}\"" 90000
