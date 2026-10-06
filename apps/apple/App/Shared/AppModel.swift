@@ -607,6 +607,12 @@ final class AppModel {
     func setCompanionSceneActive(_ active: Bool) {
         companionSceneActive = active
         Task { await companionImageWorker?.setForeground(active) }
+        #if os(macOS)
+            // The same gate that connects the bridge at sign-in; activation re-lists its roster.
+            if active, phase == .signedIn, participation.automaticWork {
+                browserBridge.appDidBecomeActive()
+            }
+        #endif
     }
 
     func runCompanionJobsInBackground() async -> Bool {

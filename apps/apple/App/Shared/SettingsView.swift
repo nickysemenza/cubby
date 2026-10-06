@@ -194,7 +194,6 @@ struct SettingsView: View {
             .onChange(of: scenePhase) { _, phase in
                 if phase == .active {
                     browserPermissions = .current(browser: purchaseImportBrowser)
-                    model.browserBridge.appDidBecomeActive()
                 }
             }
         #endif

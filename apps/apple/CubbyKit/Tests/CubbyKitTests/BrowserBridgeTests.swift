@@ -1,4 +1,5 @@
 import Foundation
+import JavaScriptCore
 import Testing
 
 @testable import CubbyKit
@@ -232,6 +233,103 @@ struct BrowserBridgeTests {
             let without = try JSONDecoder().decode(
                 MacBrowserCommandExecutor.FixedCapturePayload.self, from: Data("{\(base)}".utf8))
             #expect(without.structuredProducts == nil)
+        }
+
+        /// Runs the production ld+json walker in JavaScriptCore against a stub page.
+        private func walkStructuredProducts(pageURL: String, blocks: [String]) throws
+            -> BrowserStructuredProducts
+        {
+            let context = try #require(JSContext())
+            context.setObject(pageURL, forKeyedSubscript: "pageURL" as NSString)
+            context.setObject(blocks, forKeyedSubscript: "blocks" as NSString)
+            let result = context.evaluateScript(
+                """
+                var location = { href: pageURL };
+                var document = { querySelectorAll: () => blocks.map(text => ({ textContent: text })) };
+                JSON.stringify((\(MacBrowserCommandExecutor.structuredProductsScript))());
+                """)
+            #expect(context.exception == nil, "\(String(describing: context.exception))")
+            let json = try #require(result?.toString())
+            return try JSONDecoder().decode(
+                MacBrowserCommandExecutor.FixedCapturePayload.StructuredProducts.self,
+                from: Data(json.utf8)
+            ).capture
+        }
+
+        private static let shopifyTee = """
+            {"@context":"https://schema.org","@type":"Product","name":"Forgewear Tee",
+             "productID":"8800001","mpn":"TEE-100","sku":"FW-TEE-BLK-S","gtin13":"0036000291452",
+             "offers":[
+              {"@type":"Offer","sku":"FW-TEE-BLK-S","gtin13":"0036000291452","mpn":"TEE-100-S",
+               "url":"https://shop.forgewear.example.test/products/tee?variant=41000000000111"},
+              {"@type":"Offer","sku":"FW-TEE-BLK-M","gtin13":"0036000291469","mpn":"TEE-100-M",
+               "url":"https://shop.forgewear.example.test/products/tee?variant=41000000000222"}]}
+            """
+
+        @Test("A Shopify Product's single Offer contributes its identifiers")
+        func structuredProductsSingleOffer() throws {
+            let block = """
+                {"@context":"https://schema.org","@type":"Product","name":"Forgewear Mug","mpn":"MUG-1",
+                 "offers":{"@type":"Offer","sku":"FW-MUG-1","gtin12":"036000291452",
+                  "url":"https://shop.forgewear.example.test/products/mug?variant=41000000000333"}}
+                """
+            let captured = try walkStructuredProducts(
+                pageURL: "https://shop.forgewear.example.test/products/mug", blocks: [block])
+            #expect(
+                captured
+                    == BrowserStructuredProducts(
+                        products: [
+                            BrowserStructuredProduct(
+                                skus: ["FW-MUG-1"], mpns: ["MUG-1"], gtins: ["036000291452"],
+                                productIds: [])
+                        ], variantGroup: false))
+        }
+
+        @Test("Offers with identical identifiers merge into their Product")
+        func structuredProductsIdenticalOffers() throws {
+            let block = """
+                {"@context":"https://schema.org","@type":"Product","name":"Forgewear Mug",
+                 "offers":[
+                  {"@type":"Offer","sku":"FW-MUG-1","gtin12":"036000291452","price":"12.00",
+                   "url":"https://shop.forgewear.example.test/products/mug?variant=41000000000333"},
+                  {"@type":"Offer","sku":"FW-MUG-1","gtin12":"036000291452","price":"10.00",
+                   "url":"https://shop.forgewear.example.test/products/mug?variant=41000000000333"}]}
+                """
+            let captured = try walkStructuredProducts(
+                pageURL: "https://shop.forgewear.example.test/products/mug", blocks: [block])
+            #expect(
+                captured
+                    == BrowserStructuredProducts(
+                        products: [
+                            BrowserStructuredProduct(
+                                skus: ["FW-MUG-1"], mpns: [], gtins: ["036000291452"], productIds: [])
+                        ], variantGroup: false))
+        }
+
+        @Test("The served ?variant= selects exactly one Offer and drops default-variant identifiers")
+        func structuredProductsServedVariant() throws {
+            let captured = try walkStructuredProducts(
+                pageURL: "https://shop.forgewear.example.test/products/tee?variant=41000000000222",
+                blocks: [Self.shopifyTee])
+            #expect(
+                captured
+                    == BrowserStructuredProducts(
+                        products: [
+                            BrowserStructuredProduct(
+                                skus: ["FW-TEE-BLK-M"], mpns: ["TEE-100", "TEE-100-M"],
+                                gtins: ["0036000291469"], productIds: ["8800001"])
+                        ], variantGroup: false))
+        }
+
+        @Test("Differing Offers without a served variant are an ambiguous variant group")
+        func structuredProductsAmbiguousOffers() throws {
+            let captured = try walkStructuredProducts(
+                pageURL: "https://shop.forgewear.example.test/products/tee", blocks: [Self.shopifyTee])
+            #expect(captured.variantGroup)
+            let unmatched = try walkStructuredProducts(
+                pageURL: "https://shop.forgewear.example.test/products/tee?variant=41000000000999",
+                blocks: [Self.shopifyTee])
+            #expect(unmatched.variantGroup)
         }
     #endif
 

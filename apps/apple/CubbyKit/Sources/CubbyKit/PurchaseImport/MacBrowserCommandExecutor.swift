@@ -13,9 +13,10 @@
             let evidence: BrowserLocalEvidence
             let image: CGImage
         }
-        /// Bumped when the fixed capture script's output shape changes. Version 2 adds
-        /// schema.org Product identifiers (`structuredProducts`).
-        static let captureVersion = 2
+        /// Bumped when the fixed capture script's output changes. Version 2 adds schema.org
+        /// Product identifiers (`structuredProducts`); version 3 reads them from a Product's
+        /// `offers`, selecting only the served `?variant=` Offer.
+        static let captureVersion = 3
 
         struct FixedCapturePayload: Decodable {
             struct Link: Decodable { let url: String; let label: String? }
@@ -626,6 +627,103 @@
             return components[index - 1].lowercased() == "gp"
         }
 
+        /// The ld+json Product walker the capture script calls, kept as its own expression so the
+        /// tests evaluate the exact production source in JavaScriptCore.
+        nonisolated static let structuredProductsScript = #"""
+            () => {
+              const clean = value => String(value || '').replace(/\s+/g, ' ').trim();
+              // Only schema.org Product nodes in ld+json blocks; never page text.
+              const values = (node, keys) => {
+                const out = [];
+                for (const key of keys) {
+                  for (const item of [].concat(node[key] ?? [])) {
+                    if (typeof item !== 'string' && typeof item !== 'number') continue;
+                    const text = clean(item).slice(0, 100);
+                    if (text && !out.includes(text)) out.push(text);
+                  }
+                }
+                return out.slice(0, 10);
+              };
+              const hasType = (node, name) => [].concat(node['@type'] ?? []).includes(name);
+              const gtinKeys = ['gtin', 'gtin8', 'gtin12', 'gtin13', 'gtin14'];
+              const identifiers = node => ({
+                skus: values(node, ['sku']),
+                mpns: values(node, ['mpn']),
+                gtins: values(node, gtinKeys),
+                productIds: values(node, ['productID'])
+              });
+              const merge = (...sets) => {
+                const out = { skus: [], mpns: [], gtins: [], productIds: [] };
+                for (const set of sets) {
+                  for (const key of Object.keys(out)) {
+                    for (const item of set[key]) if (!out[key].includes(item)) out[key].push(item);
+                  }
+                }
+                for (const key of Object.keys(out)) out[key] = out[key].slice(0, 10);
+                return out;
+              };
+              // Shopify-style `?variant=<id>`; parsed without URL so the walker runs anywhere.
+              const variantOf = url => {
+                const match = String(url || '').match(/[?&]variant=([^&#]*)/);
+                return match && match[1] ? match[1] : null;
+              };
+              const servedVariant = variantOf(location.href);
+              const products = [];
+              let variantGroup = false;
+              let visited = 0;
+              // Per-variant identifiers live in a Product's `offers` (an Offer, an array of Offers,
+              // or an AggregateOffer carrying `offers`). Never choose between variants: only the
+              // Offer whose `?variant=` is the served page's own variant may stand for the page.
+              const productIdentifiers = product => {
+                const offers = [];
+                for (const offer of [].concat(product.offers ?? [])) {
+                  if (!offer || typeof offer !== 'object') continue;
+                  const nested = offer.offers && typeof offer.offers === 'object'
+                    ? [].concat(offer.offers) : [offer];
+                  for (const item of nested) {
+                    if (offers.length >= 100 || ++visited > 500) break;
+                    if (item && typeof item === 'object') offers.push(item);
+                  }
+                }
+                const own = identifiers(product);
+                if (offers.length === 0) return own;
+                const offerSets = offers.map(identifiers);
+                const signature = set => JSON.stringify([set.skus, set.mpns, set.gtins, set.productIds]);
+                if (offerSets.every(set => signature(set) === signature(offerSets[0]))) {
+                  return merge(own, offerSets[0]);
+                }
+                const served = servedVariant
+                  ? offers.flatMap((offer, index) => variantOf(offer.url) === servedVariant ? [index] : [])
+                  : [];
+                if (served.length !== 1) {
+                  variantGroup = true;
+                  return own;
+                }
+                // Product-level sku/gtin describe the default variant, not the served one.
+                return merge(
+                  { skus: [], mpns: own.mpns, gtins: [], productIds: own.productIds },
+                  offerSets[served[0]]);
+              };
+              const walk = (value, depth) => {
+                if (!value || typeof value !== 'object' || depth > 8 || ++visited > 500) return;
+                if (Array.isArray(value)) { value.forEach(item => walk(item, depth + 1)); return; }
+                if (hasType(value, 'ProductGroup')) variantGroup = true;
+                if (hasType(value, 'Product')) products.push(productIdentifiers(value));
+                for (const key of ['@graph', 'hasVariant', 'mainEntity', 'itemListElement', 'item']) {
+                  walk(value[key], depth + 1);
+                }
+              };
+              const blocks = document.querySelectorAll('script[type="application/ld+json"]');
+              for (const script of Array.from(blocks).slice(0, 20)) {
+                try {
+                  const raw = script.textContent || '';
+                  if (raw.length <= 524288) walk(JSON.parse(raw), 0);
+                } catch {}
+              }
+              return { products: products.slice(0, 20), variantGroup };
+            }
+            """#
+
         /// Fixed and versioned. Page text is treated only as data; it cannot introduce a selector,
         /// script, navigation, click, or form action into the browser executor.
         private static let captureScript = #"""
@@ -644,48 +742,7 @@
                 variantMarkers: Array.from(document.querySelectorAll(
                   '#variation_color_name .selection, #variation_size_name .selection, [data-asin][aria-checked="true"], select[name*="variation"] option:checked'
                 )).map(node => clean(node.getAttribute('data-asin') || node.textContent)).filter(Boolean).slice(0, 50),
-                structuredProducts: (() => {
-                  // Only schema.org Product nodes in ld+json blocks; never page text.
-                  const values = (node, keys) => {
-                    const out = [];
-                    for (const key of keys) {
-                      for (const item of [].concat(node[key] ?? [])) {
-                        if (typeof item !== 'string' && typeof item !== 'number') continue;
-                        const text = clean(item).slice(0, 100);
-                        if (text && !out.includes(text)) out.push(text);
-                      }
-                    }
-                    return out.slice(0, 10);
-                  };
-                  const hasType = (node, name) => [].concat(node['@type'] ?? []).includes(name);
-                  const products = [];
-                  let variantGroup = false;
-                  let visited = 0;
-                  const walk = (value, depth) => {
-                    if (!value || typeof value !== 'object' || depth > 8 || ++visited > 500) return;
-                    if (Array.isArray(value)) { value.forEach(item => walk(item, depth + 1)); return; }
-                    if (hasType(value, 'ProductGroup')) variantGroup = true;
-                    if (hasType(value, 'Product')) {
-                      products.push({
-                        skus: values(value, ['sku']),
-                        mpns: values(value, ['mpn']),
-                        gtins: values(value, ['gtin', 'gtin8', 'gtin12', 'gtin13', 'gtin14']),
-                        productIds: values(value, ['productID'])
-                      });
-                    }
-                    for (const key of ['@graph', 'hasVariant', 'mainEntity', 'itemListElement', 'item']) {
-                      walk(value[key], depth + 1);
-                    }
-                  };
-                  const blocks = document.querySelectorAll('script[type="application/ld+json"]');
-                  for (const script of Array.from(blocks).slice(0, 20)) {
-                    try {
-                      const raw = script.textContent || '';
-                      if (raw.length <= 524288) walk(JSON.parse(raw), 0);
-                    } catch {}
-                  }
-                  return { products: products.slice(0, 20), variantGroup };
-                })(),
+                structuredProducts: (\#(structuredProductsScript))(),
                 title: clean(document.title).slice(0, 500),
                 text: clean(document.body?.innerText).slice(0, 24576),
                 links: Array.from(document.querySelectorAll('a[href]')).slice(0, 200).map(a => ({
