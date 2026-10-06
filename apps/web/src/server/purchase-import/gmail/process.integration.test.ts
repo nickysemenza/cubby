@@ -573,6 +573,10 @@ describe("Gmail order mail processing", () => {
   // pending replacement, a totals mismatch) asks to be received.
   it("asks to receive a delivered order only for stocked or unresolved goods", async () => {
     const seed = await seedForgeWear();
+    const restaurants = await insertWithShortcode(ctx.db, "spendingCategory", {
+      name: `Example restaurants ${crypto.randomUUID()}`,
+      productExpectation: "not_allowed",
+    });
     const order = async (
       orderId: string,
       line:
@@ -580,13 +584,17 @@ describe("Gmail order mail processing", () => {
         | "unresolved"
         | "expense_only"
         | "replacement"
-        | "mismatch",
+        | "mismatch"
+        | "meal_under_review",
     ) => {
       const row = await insertWithShortcode(ctx.db, "purchase", {
         vendorId: seed.vendor.id,
         vendorAccountId: seed.account.id,
         orderId,
         date: "2026-09-20",
+        spendingCategoryId:
+          line === "meal_under_review" ? restaurants.id : null,
+        spendingCategoryOrigin: "manual",
       });
       const item =
         line === "stocked"
@@ -625,7 +633,7 @@ describe("Gmail order mail processing", () => {
             },
             evidenceFingerprint: `replacement-${orderId}`,
           });
-      if (line === "mismatch")
+      if (line === "mismatch" || line === "meal_under_review")
         await getDb(ctx.db)
           .insert(runFinding)
           .values({
@@ -654,6 +662,8 @@ describe("Gmail order mail processing", () => {
     const pending = await order("FW-PEND-1", "unresolved");
     const awaiting = await order("FW-AGG-1", "replacement");
     const mismatched = await order("FW-SUM-1", "mismatch");
+    // A restaurant meal is never goods, whatever review is open.
+    const meal = await order("FW-MEAL-1", "meal_under_review");
     const delivered = (orderId: string): OrderMailClassification => ({
       event: "delivered",
       orderId,
@@ -667,6 +677,7 @@ describe("Gmail order mail processing", () => {
       "FW-PEND-1",
       "FW-AGG-1",
       "FW-SUM-1",
+      "FW-MEAL-1",
     ])
       await receiveMail(
         seed,
@@ -682,6 +693,7 @@ describe("Gmail order mail processing", () => {
       [gloves.id, pending.id, awaiting.id, mismatched.id].sort(),
     );
     expect(arrived.map((row) => row.entityId)).not.toContain(bouquet.id);
+    expect(arrived.map((row) => row.entityId)).not.toContain(meal.id);
   });
 
   it("matches a website-domain sender when no receipt address was configured", async () => {

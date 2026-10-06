@@ -46,6 +46,7 @@ import {
   withTransaction,
 } from "~/server/repo/database-helpers";
 import { cents } from "~/server/repo/money";
+import { expenseProductForbiddenSql } from "~/server/repo/purchase-evidence-policy";
 import { resolveOrThrow } from "~/server/repo/shortcode-resolver";
 import { insertWithShortcode } from "~/server/repo/shortcode-utils";
 import { attachFileToEntity } from "~/server/services/image-storage.service";
@@ -655,11 +656,12 @@ export async function processOrderMails(
       }
 
       // Receiving (and its return window) is for stocked items: a line with
-      // a Product, or a Purchase whose import still awaits review (unresolved
-      // goods, a pending itemized replacement, a totals mismatch). A Purchase
-      // whose lines are all productless with nothing left to review was booked
-      // expense-only (a meal, a ticket, a bouquet) or judged not worth a
-      // Product; neither has anything to receive.
+      // a Product, or a line that may still become one — its import awaits
+      // review (unresolved goods, a pending replacement, a totals mismatch)
+      // and its spending category allows a Product. Productless lines with
+      // nothing left to review were booked expense-only (a meal, a ticket, a
+      // bouquet) or judged not worth a Product; a restaurant meal is never
+      // goods, whatever review is open.
       const [stocked] =
         target && event.event === "delivered"
           ? await database
@@ -670,12 +672,12 @@ export async function processOrderMails(
                   eq(expense.purchaseId, target.id),
                   eq(expense.lineKind, "principal"),
                   notDeleted(expense),
-                  sql`(${expense.productId} IS NOT NULL OR EXISTS (
+                  sql`(${expense.productId} IS NOT NULL OR (NOT ${expenseProductForbiddenSql("Expense")} AND EXISTS (
                     SELECT 1 FROM ${runFinding}
                     WHERE ${runFinding.entityKind} = 'purchase'
                       AND ${runFinding.entityId} = ${target.id}
                       AND ${runFinding.status} = 'open'
-                      AND ${runFinding.kind} NOT IN ('arrived', 'return_window', 'refund_unbooked')))`,
+                      AND ${runFinding.kind} NOT IN ('arrived', 'return_window', 'refund_unbooked'))))`,
                 ),
               )
               .limit(1)
