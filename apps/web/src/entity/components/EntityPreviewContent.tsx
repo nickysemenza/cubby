@@ -257,7 +257,7 @@ export function toCookbookCard(data: CookbookSummary): ManifestCardProps {
     entity: "cookbook",
     routeParam: data.id,
     icon: <EntityIcon entity="cookbook" size={14} colored />,
-    name: data.book,
+    name: data.name,
     tag: "cookbook",
     identity: data.author.length > 0 ? data.author.join(", ") : undefined,
     body,

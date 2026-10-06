@@ -21,6 +21,22 @@ export default defineEntity({
   table: "Vendor",
   identifiers: { brand: "VendorId", shortcode: "VEN-" },
   presentation: {
+    edit: {
+      sections: [
+        {
+          id: "details",
+          title: "Details",
+          fields: [
+            "orderUrlTemplate",
+            "orderEvidence",
+            "orderEmailSenders",
+            "browserDomains",
+            "agentHints",
+            "returnWindowDays",
+          ],
+        },
+      ],
+    },
     titleField: "name",
     domain: "finance",
     description: "Sources for purchases and expense evidence.",
@@ -32,7 +48,7 @@ export default defineEntity({
     },
     icons: { phosphor: "Storefront", sfSymbol: "storefront", emoji: "🏪" },
     detail: {
-      additionalSectionOverrides: [
+      additionalSections: [
         {
           kind: "slot",
           id: "spending-classification",
@@ -67,8 +83,7 @@ export default defineEntity({
         derived: ["purchaseCount", "spend", "latestPurchaseDate"],
         quality: ["dataQuality"],
       },
-      actionOverrides: ["merge", "delete"],
-      totalOverrides: [
+      totals: [
         { id: "spend", label: "Spend", keys: ["spend"], format: "currency" },
         {
           id: "purchaseCount",
@@ -254,7 +269,7 @@ export default defineEntity({
         key: "orderUrlTemplate",
         kind: "text",
         nullable: true,
-        control: { kind: "text", renderer: "url", sectionOverride: "details" },
+        control: { kind: "text", renderer: "url" },
         display: { detail: true },
         validation: {
           read: z
@@ -297,7 +312,6 @@ export default defineEntity({
         nullable: true,
         control: {
           kind: "select",
-          sectionOverride: "details",
           options: [
             { value: "online_account", label: "Online account" },
             { value: "receipt_only", label: "Receipt only" },
@@ -317,7 +331,6 @@ export default defineEntity({
         control: {
           kind: "specialized",
           renderer: "tag-list",
-          sectionOverride: "details",
         },
         display: { detail: true },
         validation: {
@@ -332,7 +345,6 @@ export default defineEntity({
         control: {
           kind: "specialized",
           renderer: "tag-list",
-          sectionOverride: "details",
         },
         display: { detail: true },
         validation: {
@@ -347,7 +359,6 @@ export default defineEntity({
         control: {
           kind: "specialized",
           renderer: "structured-field",
-          sectionOverride: "details",
         },
         display: { detail: true, detailLabelPath: "agentHintsLabel" },
         validation: {
@@ -367,7 +378,6 @@ export default defineEntity({
         nullable: true,
         control: {
           kind: "number",
-          sectionOverride: "details",
           placeholder: "Days",
         },
         display: { detail: true },
@@ -1018,9 +1028,8 @@ export default defineEntity({
       },
     },
   ],
-  search: { enabled: true },
+  search: "semantic",
   capabilities: {
-    auditable: true,
     images: {
       storage: "logo",
       ingress: [
@@ -1045,13 +1054,9 @@ export default defineEntity({
         abstention: { minimumScore: 0.76, minimumMargin: 0.14 },
       },
     },
-    countable: true,
-    softDelete: true,
     delete: { mode: "soft", bulk: true },
     bulkUpdate: null,
     merge: true,
-    operationOwners: { delete: "kernel", merge: "kernel" },
-    mcp: ["get", "list", "search", "create", "update", "delete", "merge"],
     dataQuality: {
       checks: [
         {

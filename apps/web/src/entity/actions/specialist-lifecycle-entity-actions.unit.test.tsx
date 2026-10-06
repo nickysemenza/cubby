@@ -17,13 +17,13 @@ import {
 
 const cookbookRow = {
   id: testShortcode("cookbook", "CKB-4K7M"),
-  book: "Weeknight Suppers",
+  name: "Weeknight Suppers",
   recipeCount: 3,
 } satisfies EntityActionRow;
 
 const preservesRow = {
   id: testShortcode("cookbook", "CKB-4K7N"),
-  book: "Preserves",
+  name: "Preserves",
   recipeCount: 1,
 } satisfies EntityActionRow;
 

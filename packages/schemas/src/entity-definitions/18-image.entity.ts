@@ -43,8 +43,8 @@ export default defineEntity({
     basePath: "images",
     // The image list is not a kernel list (no create contract), so its index
     // route stays hand-written; the detail reads its own query.
-    listOverride: null,
-    detailOverride: {
+    list: null,
+    detail: {
       query: {
         module: "~/entity/image-queries",
         export: "imageDetailQuery",
@@ -65,7 +65,7 @@ export default defineEntity({
     },
     icons: { phosphor: "Image", sfSymbol: "photo", emoji: "🖼️" },
     detail: {
-      additionalSectionOverrides: [
+      additionalSections: [
         { kind: "slot", id: "associations", title: "Used by" },
       ],
     },
@@ -862,17 +862,13 @@ export default defineEntity({
   ],
   // Image filenames and the current preferred description/correction are
   // searchable. The shared search document loader adds only direct owners.
-  search: { enabled: true },
+  search: "semantic",
   capabilities: {
     auditable: false,
     images: { storage: false },
-    countable: true,
-    softDelete: true,
     delete: { mode: "hard", bulk: true },
     bulkUpdate: null,
     merge: false,
-    operationOwners: { delete: "kernel", merge: null },
-    mcp: ["get", "list", "update", "delete"],
     dataQuality: {
       checks: [
         {

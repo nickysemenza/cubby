@@ -411,30 +411,24 @@ const backFilter = (
 };
 
 /**
- * Validates `presentation.detail.emptyOverrides` keys: each must name a
- * declared `many` relation, and must not also have a hand-declared section
- * (which sets its own `empty` directly instead).
+ * A relation's `empty` copy belongs to its derived detail table: a `one`
+ * relation has none, and a hand-declared section sets its own `empty`.
  */
-const emptyOverrideGaps = (
+const relationEmptyGaps = (
   entity: CompiledEntity,
-  detail: CompiledEntity["inspector"]["detail"],
   declared: ReadonlySet<string>,
 ): string[] =>
-  Object.keys(detail.emptyOverrides).flatMap((key) => {
-    const gaps: string[] = [];
-    if (
-      !entity.relations.some(
-        (relation) => relation.key === key && relation.cardinality === "many",
-      )
-    )
-      gaps.push(
-        `${entity.key}.presentation.detail.emptyOverrides.${key} names no many relation.`,
-      );
-    if (declared.has(key))
-      gaps.push(
-        `${entity.key}.presentation.detail.emptyOverrides.${key} targets a declared section — set its own \`empty\` instead.`,
-      );
-    return gaps;
+  entity.relations.flatMap((relation) => {
+    if (relation.empty === undefined) return [];
+    if (relation.cardinality !== "many")
+      return [
+        `${entity.key}.relations[${relation.key}].empty needs a many relation.`,
+      ];
+    if (declared.has(relation.key))
+      return [
+        `${entity.key}.relations[${relation.key}].empty targets a declared section — set its own \`empty\` instead.`,
+      ];
+    return [];
   });
 
 export const deriveRelationSections = (
@@ -462,7 +456,7 @@ export const deriveRelationSections = (
           `${entity.key}.presentation.detail.relationFilterOverrides.${key} names no many relation.`,
         );
     }
-    gaps.push(...emptyOverrideGaps(entity, detail, declared));
+    gaps.push(...relationEmptyGaps(entity, declared));
     for (const [key, reason] of Object.entries(omitRelations)) {
       const relation = entity.relations.find(
         (candidate) => candidate.key === key,
@@ -531,7 +525,7 @@ export const deriveRelationSections = (
         prefill: filterOverride?.prefill ?? null,
         sort: null,
         limit: null,
-        empty: detail.emptyOverrides[relation.key] ?? null,
+        empty: relation.empty ?? null,
         hideWhenEmpty: false,
         collapseWhenEmpty: true,
         derived: true,

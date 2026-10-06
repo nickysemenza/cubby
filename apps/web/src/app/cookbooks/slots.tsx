@@ -104,7 +104,7 @@ export const CookbookActions: DetailSlotComponent<"cookbook"> = ({
             importableExtras.length > 0
               ? ` (${importableExtras.length} more in the source not yet imported)`
               : "";
-          return `Reprocessed ${reprocessed} recipe${reprocessed === 1 ? "" : "s"} from ${cookbook.book}${extra}`;
+          return `Reprocessed ${reprocessed} recipe${reprocessed === 1 ? "" : "s"} from ${cookbook.name}${extra}`;
         },
         onDone: () => {
           void invalidateOperationTags(queryClient, ripple.recipeList);

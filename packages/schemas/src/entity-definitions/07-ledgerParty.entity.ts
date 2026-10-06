@@ -25,9 +25,7 @@ export default defineEntity({
         "recipes-eaten":
           "Reachable through the Meals table on this page; the recipe rollup is three joins deep.",
       },
-      additionalSectionOverrides: [
-        { kind: "slot", id: "wardrobe", title: "Wardrobe" },
-      ],
+      additionalSections: [{ kind: "slot", id: "wardrobe", title: "Wardrobe" }],
     },
     // Merge is a kernel capability with no browser operation yet.
   },
@@ -407,17 +405,13 @@ export default defineEntity({
       },
     },
   ],
-  search: { enabled: false },
+  search: false,
   capabilities: {
-    auditable: true,
     images: { storage: false },
     countable: false,
-    softDelete: true,
     delete: { mode: "soft", bulk: true },
     bulkUpdate: null,
     merge: true,
-    operationOwners: { delete: "kernel", merge: "kernel" },
-    mcp: ["get", "list", "create", "update", "delete", "merge"],
     dataQuality: {
       checks: [
         {
@@ -431,7 +425,6 @@ export default defineEntity({
     },
   },
   extensions: {
-    mcpNames: { plural: "ledger_parties" },
     ports: {
       repository: {
         module: "~/server/repo/ledger-party.repository",

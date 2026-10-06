@@ -36,7 +36,7 @@ public final class FieldSuggestionReviewModel {
     public var fields: [FieldDescriptor] {
         editor.visibleFields.filter {
             $0.suggestion != nil && ($0.suggestion?.mode ?? "fill") == "fill"
-                && !editor.readOnly($0.key) && $0.reference?.multiple != true
+                && $0.reference?.multiple != true
                 && [.text, .enum, .identifier].contains($0.kind)
         }
     }

@@ -68,7 +68,7 @@ export default defineEntity({
         transactions:
           "The settlement slot renders the transactions that settle this expense.",
       },
-      additionalSectionOverrides: [
+      additionalSections: [
         {
           kind: "fields",
           id: "purchase",
@@ -223,7 +223,7 @@ export default defineEntity({
         ],
         quality: ["dataQuality"],
       },
-      totalOverrides: [
+      totals: [
         {
           id: "cost",
           label: "Ledger cost",
@@ -231,7 +231,7 @@ export default defineEntity({
           format: "currency",
         },
       ],
-      viewOverrides: [
+      views: [
         "table",
         {
           kind: "slot",
@@ -246,12 +246,40 @@ export default defineEntity({
           ],
         },
       ],
-      actionOverrides: ["bulkEdit", "delete"],
     },
-    // Mirrors the capture dialog's old hand-rolled behavior: a line with a
-    // product picked has no separate "line kind" (it IS the product's
-    // purchase), and a quantity is only meaningful once a product is set.
     edit: {
+      sections: [
+        {
+          id: "details",
+          title: "Details",
+          fields: [
+            "cost",
+            "lineKind",
+            "lineBasis",
+            "costType",
+            "trade",
+            "url",
+            "notes",
+            "future",
+            "productQuantity",
+            "vendor",
+            "orderId",
+          ],
+        },
+        {
+          id: "schedule",
+          title: "Schedule",
+          fields: ["date"],
+        },
+        {
+          id: "evidence",
+          title: "Evidence",
+          fields: ["sourceClaims"],
+        },
+      ],
+      // Mirrors the capture dialog's old hand-rolled behavior: a line with a
+      // product picked has no separate "line kind" (it IS the product's
+      // purchase), and a quantity is only meaningful once a product is set.
       hiddenWhen: [
         { field: "productId", present: true, fields: ["lineKind"] },
         { field: "productId", present: false, fields: ["productQuantity"] },
@@ -394,7 +422,6 @@ export default defineEntity({
         control: {
           kind: "number",
           renderer: "money",
-          sectionOverride: "details",
         },
         display: {
           list: true,
@@ -414,7 +441,6 @@ export default defineEntity({
         nullable: true,
         control: {
           kind: "date",
-          sectionOverride: "schedule",
           initial: "today",
           // Optional while the cost is unknown; `validateExpenseDate` owns
           // the cost/date pairing.
@@ -439,7 +465,6 @@ export default defineEntity({
         control: {
           kind: "select",
           options: selectControlOptions.expenseLineKind,
-          sectionOverride: "details",
           suggest: { basis: ["name", "cost", "notes"] },
         },
         display: {
@@ -462,7 +487,6 @@ export default defineEntity({
         control: {
           kind: "select",
           options: selectControlOptions.expenseLineBasis,
-          sectionOverride: "details",
         },
         display: {
           list: true,
@@ -484,7 +508,6 @@ export default defineEntity({
         control: {
           kind: "select",
           options: selectControlOptions.costType,
-          sectionOverride: "details",
           suggest: { basis: ["name", "productId", "vendor"] },
         },
         display: {
@@ -506,7 +529,6 @@ export default defineEntity({
         control: {
           kind: "select",
           options: selectControlOptions.trade,
-          sectionOverride: "details",
           suggest: {
             basis: ["name", "notes", "productId", "vendor", "projectId"],
           },
@@ -552,7 +574,7 @@ export default defineEntity({
         key: "url",
         kind: "text",
         nullable: true,
-        control: { kind: "text", renderer: "url", sectionOverride: "details" },
+        control: { kind: "text", renderer: "url" },
         display: { list: true, detail: true, width: "xs" },
         validation: {
           read: z.string().nullable(),
@@ -564,7 +586,7 @@ export default defineEntity({
         key: "notes",
         kind: "text",
         nullable: true,
-        control: { kind: "textarea", sectionOverride: "details" },
+        control: { kind: "textarea" },
         display: { list: true, detail: true },
         validation: {
           read: z.string().nullable(),
@@ -575,7 +597,7 @@ export default defineEntity({
       {
         key: "future",
         kind: "boolean",
-        control: { kind: "checkbox", sectionOverride: "details" },
+        control: { kind: "checkbox" },
         display: {
           list: true,
           detail: true,
@@ -669,7 +691,7 @@ export default defineEntity({
         key: "productQuantity",
         kind: "number",
         nullable: true,
-        control: { kind: "number", sectionOverride: "details" },
+        control: { kind: "number" },
         display: {
           list: true,
           detail: true,
@@ -698,7 +720,6 @@ export default defineEntity({
         control: {
           kind: "specialized",
           renderer: "vendor-name",
-          sectionOverride: "details",
           suggest: { basis: ["name", "notes", "orderId"] },
         },
         display: { detail: true },
@@ -722,7 +743,7 @@ export default defineEntity({
         key: "orderId",
         kind: "text",
         nullable: true,
-        control: { kind: "text", sectionOverride: "details" },
+        control: { kind: "text" },
         display: {
           list: true,
           detail: true,
@@ -819,7 +840,6 @@ export default defineEntity({
         control: {
           kind: "specialized",
           renderer: "structured-field",
-          sectionOverride: "evidence",
         },
         provenance: { kind: "relation", sources: [{ label: "Source claims" }] },
         explanation: {
@@ -1730,9 +1750,8 @@ export default defineEntity({
       },
     },
   ],
-  search: { enabled: true, embeddingOverride: false },
+  search: "lexical",
   capabilities: {
-    auditable: true,
     images: {
       storage: false,
       displaySourceOverrides: [
@@ -1782,13 +1801,9 @@ export default defineEntity({
         abstention: { minimumScore: 0.78, minimumMargin: 0.16 },
       },
     },
-    countable: true,
-    softDelete: true,
     delete: { mode: "soft", bulk: true },
     bulkUpdate: { fields: ["projectId", "trade", "costType", "date"] },
     merge: false,
-    operationOwners: { delete: "kernel", merge: null },
-    mcp: ["get", "list", "search", "create", "update", "delete", "bulkUpdate"],
     dataQuality: {
       exceptions: true,
       checks: [

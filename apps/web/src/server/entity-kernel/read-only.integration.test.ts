@@ -49,7 +49,7 @@ describe("kernel read-only boundaries", () => {
       sort: [{ orderBy: "name", direction: "asc" }],
     });
     if (list.action !== "list") throw new Error("expected list");
-    expect(list.items.map((row) => row.book)).toEqual([
+    expect(list.items.map((row) => row.name)).toEqual([
       "Another Synthetic Book",
       "Synthetic Loaves",
     ]);
@@ -64,7 +64,7 @@ describe("kernel read-only boundaries", () => {
     if (detail.action !== "get") throw new Error("expected get");
     expect(detail.item).toMatchObject({
       id,
-      book: "Synthetic Loaves",
+      name: "Synthetic Loaves",
       author: ["Synthetic Author"],
       recipeCount: 0,
     });
@@ -99,6 +99,6 @@ describe("kernel read-only boundaries", () => {
       missing: "error",
     });
     if (detail.action !== "get") throw new Error("expected get");
-    expect(detail.item).toMatchObject({ book: "Refused Writes" });
+    expect(detail.item).toMatchObject({ name: "Refused Writes" });
   });
 });

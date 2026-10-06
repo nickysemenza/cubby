@@ -26,7 +26,7 @@ describe("EntityOverrideTable", () => {
     });
     const invalid = within(table).getAllByRole("row").slice(1);
     for (const row of invalid)
-      expect(within(row).getByText("Invalid default")).toBeInTheDocument();
+      expect(within(row).getByText("Required")).toBeInTheDocument();
 
     const firstEntity = within(invalid[0]!).getAllByRole("button")[0]!;
     fireEvent.click(firstEntity);

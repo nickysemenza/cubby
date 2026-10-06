@@ -32,7 +32,7 @@ export default defineEntity({
         eaters:
           "Who ate it is per-portion meal data; the Meals table on this page shows each meal and its eaters.",
       },
-      additionalSectionOverrides: [
+      additionalSections: [
         { kind: "slot", id: "recipe-usages", title: "Recipe lines" },
         { kind: "slot", id: "nutrition-product", title: "Nutrition" },
       ],
@@ -105,7 +105,6 @@ export default defineEntity({
         media: ["displayImages"],
         quality: ["dataQuality"],
       },
-      actionOverrides: ["bulkEdit", "merge", "delete"],
       links: [
         { label: "Equivalences", path: "/ingredients/equivalences" },
         { label: "Workbench", path: "/ingredients/workbench" },
@@ -571,9 +570,8 @@ export default defineEntity({
       },
     },
   ],
-  search: { enabled: true },
+  search: "semantic",
   capabilities: {
-    auditable: true,
     images: {
       storage: false,
       displaySourceOverrides: [
@@ -611,12 +609,9 @@ export default defineEntity({
         abstention: { minimumScore: 0.78, minimumMargin: 0.16 },
       },
     },
-    countable: true,
-    softDelete: true,
     delete: { mode: "soft", bulk: true },
     bulkUpdate: { fields: ["usuallyOnHand"] },
     merge: true,
-    operationOwners: { delete: "kernel", merge: "kernel" },
     // Standalone ingredients only: a recipe's own ingredient rows (`recipeId`
     // set) are never a resolve target.
     resolve: {
@@ -624,16 +619,6 @@ export default defineEntity({
       createMissing: true,
       scope: ["recipeId"],
     },
-    mcp: [
-      "get",
-      "list",
-      "search",
-      "create",
-      "update",
-      "delete",
-      "merge",
-      "bulkUpdate",
-    ],
     dataQuality: {
       checks: [
         {
@@ -657,8 +642,6 @@ export default defineEntity({
     },
   },
   extensions: {
-    countFilter: "recipeIdNull",
-    mcpNames: { overrides: { list: "search_ingredients" } },
     ports: {
       repository: {
         module: "~/server/repo/ingredient/repository",

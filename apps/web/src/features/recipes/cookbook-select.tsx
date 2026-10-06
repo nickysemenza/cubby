@@ -37,7 +37,7 @@ export function CookbookSelect({ value, onChange }: CookbookSelectProps) {
         <option value="">All cookbooks</option>
         {cookbooks?.map((c) => (
           <option key={c.id} value={c.id}>
-            {c.book}
+            {c.name}
           </option>
         ))}
       </NativeSelect>

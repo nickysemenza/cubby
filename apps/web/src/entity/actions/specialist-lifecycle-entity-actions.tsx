@@ -123,7 +123,7 @@ export function useDeleteCookbookEntityAction(
   const stageRow = useCallback((row: EntityActionRow): StagedDeleteRow => {
     return {
       ...row,
-      name: row.name || row.book || "Untitled",
+      name: row.name || "Untitled",
     };
   }, []);
   const submit = useCallback(

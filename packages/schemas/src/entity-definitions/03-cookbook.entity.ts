@@ -13,7 +13,7 @@ export default defineEntity({
     },
     basePath: "cookbooks",
     // No kernel `get`: the detail reads the cookbook summary query.
-    detailOverride: {
+    detail: {
       query: {
         module: "~/entity/cookbook-queries",
         export: "cookbookDetailQuery",
@@ -23,7 +23,7 @@ export default defineEntity({
   table: "Cookbook",
   identifiers: { brand: "CookbookId", shortcode: "CKB-" },
   presentation: {
-    titleField: "book",
+    titleField: "name",
     domain: "cook",
     description: "Imported and maintained recipe collections.",
     emptyState: {
@@ -33,7 +33,7 @@ export default defineEntity({
     },
     icons: { phosphor: "BookOpen", sfSymbol: "book.closed", emoji: "📖" },
     detail: {
-      additionalSectionOverrides: [
+      additionalSections: [
         {
           kind: "fields",
           id: "physical-copy",
@@ -47,27 +47,24 @@ export default defineEntity({
     },
     // The client-paged cookbook list has no generic row delete action.
     list: {
-      actionOverrides: [],
       links: [{ label: "Import", path: "/recipes/import" }],
     },
   },
   model: {
     fields: [
-      { key: "id", kind: "identifier" },
       {
-        key: "shortcode",
-        kind: "text",
-        readKeyOverride: "id",
+        key: "id",
+        kind: "identifier",
         validation: {
           read: cookbookShortcode,
           create: null,
           update: null,
         },
       },
+      { key: "shortcode", kind: "text" },
       {
         key: "name",
         kind: "text",
-        readKeyOverride: "book",
         control: { kind: "text", placeholder: "Cookbook title" },
         display: { list: true, detail: true },
         validation: {
@@ -259,11 +256,9 @@ export default defineEntity({
     sort: {
       fields: ["name", "recipeCount", "createdAt", "updatedAt"],
       computed: ["recipeCount"],
-      // A shelf reads alphabetically, not by import date.
-      defaultOverride: "name",
     },
     output: [
-      "shortcode",
+      "id",
       "name",
       "author",
       "subjects",
@@ -354,9 +349,8 @@ export default defineEntity({
       },
     },
   ],
-  search: { enabled: true },
+  search: "semantic",
   capabilities: {
-    auditable: true,
     images: {
       storage: "cover",
       displaySourceOverrides: [
@@ -386,15 +380,16 @@ export default defineEntity({
         abstention: { minimumScore: 0.82, minimumMargin: 0.18 },
       },
     },
-    countable: true,
-    softDelete: true,
     delete: { mode: "soft", bulk: false },
     bulkUpdate: null,
     merge: false,
     operationOwners: { delete: "workflow", merge: null },
+    mcpExclude: {
+      delete:
+        "The EPUB import workflow deletes a cookbook together with its recipes.",
+    },
     // Born only from an EPUB import and deleted with its recipes by that
     // import workflow; the kernel serves reads and title/author/subject edits.
-    mcp: ["get", "list", "update"],
     dataQuality: {
       checks: [
         {

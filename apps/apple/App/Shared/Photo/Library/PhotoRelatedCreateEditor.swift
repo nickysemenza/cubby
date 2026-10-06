@@ -134,12 +134,12 @@ struct PhotoRelatedCreateEditor: View {
                             ForEach(model.sections) { section in
                                 let fields = section.fields.compactMap(descriptor.field).filter(renders)
                                 if !fields.isEmpty {
-                                    if model.sections.count == 1 && section.id == "main" {
-                                        editorFields(fields, model: model)
-                                    } else {
-                                        Section(section.title) {
+                                    if let title = section.title {
+                                        Section(title) {
                                             editorFields(fields, model: model)
                                         }
+                                    } else {
+                                        editorFields(fields, model: model)
                                     }
                                 }
                             }

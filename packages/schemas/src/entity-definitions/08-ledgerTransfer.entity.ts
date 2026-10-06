@@ -23,6 +23,15 @@ export default defineEntity({
   // Ledger transfers have no name field; `fromPartyName` is the most
   // identifying human-readable value a transfer carries.
   presentation: {
+    edit: {
+      sections: [
+        {
+          id: "evidence",
+          title: "Evidence",
+          fields: ["sourceClaims"],
+        },
+      ],
+    },
     list: {
       read: {
         relations: [
@@ -51,7 +60,7 @@ export default defineEntity({
       emoji: "🔁",
     },
     detail: {
-      additionalSectionOverrides: [
+      additionalSections: [
         {
           kind: "fields",
           id: "evidence",
@@ -167,7 +176,6 @@ export default defineEntity({
         control: {
           kind: "specialized",
           renderer: "structured-field",
-          sectionOverride: "evidence",
         },
         provenance: {
           kind: "relation",
@@ -473,17 +481,13 @@ export default defineEntity({
       },
     },
   ],
-  search: { enabled: false },
+  search: false,
   capabilities: {
-    auditable: true,
     images: { storage: false },
     countable: false,
-    softDelete: true,
     delete: { mode: "soft", bulk: true },
     bulkUpdate: null,
     merge: false,
-    operationOwners: { delete: "kernel", merge: null },
-    mcp: ["get", "list", "create", "update", "delete"],
     dataQuality: {
       // A cash transfer with no statement records why, instead of staying open.
       exceptions: true,

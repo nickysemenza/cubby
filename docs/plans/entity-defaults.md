@@ -7,13 +7,15 @@ An entity declares its supported capabilities once; the compiler does not
 infer write availability from the mere presence of a schema or repository
 method.
 
-Declaration inputs that replace inferred values use explicit `Override` names
-(`defaultOverride`, `directionOverride`, `sectionOverrides`,
-`actionOverrides`, `viewOverrides`, `displaySourceOverrides`). Omission selects
-the default; an empty collection opts out where the schema permits it. The
-generated manifest retains ordinary resolved names. Field labels, read keys,
-control sections, display column identities and orders, storage fallbacks,
-route parameters, and embedding decisions follow the same naming rule.
+Declaration inputs that replace a computed default use explicit `Override`
+names (`defaultOverride`, `directionOverride`, `detail.sectionOverrides`,
+`displaySourceOverrides`); additive or required declarations take plain names
+(`views`, `totals`, `additionalSections`, `extraActions`, `edit.sections`,
+`route.list`/`route.detail`). The generator refuses an override that compiles
+to its default. Omission selects the default; an empty collection opts out
+where the schema permits it. The generated manifest retains ordinary resolved
+names. Field labels, read keys, display column identities and orders, storage
+fallbacks, and route parameters follow the same naming rule.
 
 ## Current boundary
 

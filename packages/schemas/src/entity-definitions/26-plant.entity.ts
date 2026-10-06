@@ -439,9 +439,8 @@ export default defineEntity({
       },
     },
   ],
-  search: { enabled: true },
+  search: "semantic",
   capabilities: {
-    auditable: true,
     images: {
       storage: false,
       displaySourceOverrides: [
@@ -459,14 +458,10 @@ export default defineEntity({
         },
       ],
     },
-    countable: true,
-    softDelete: true,
     delete: { mode: "soft", bulk: true },
     bulkUpdate: { fields: ["verdict", "gardenGuideKey"] },
     merge: true,
-    operationOwners: { delete: "kernel", merge: "kernel" },
     resolve: { match: ["name"], createMissing: true },
-    mcp: ["get", "list", "create", "update", "delete", "bulkUpdate", "merge"],
     dataQuality: {
       // An off-guide crop records why it has no guide key.
       exceptions: true,

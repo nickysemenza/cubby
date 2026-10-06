@@ -103,45 +103,17 @@ public final class GenericEntityEditModel {
         }
     }
 
-    /// Declared editor sections, or the visible fields grouped by `controlSection` in order of
-    /// first appearance. A declared section lists only its fields that are visible in this mode.
+    /// The compiled editor sections (every controlled field placed once; `main` untitled), each
+    /// listing only its fields that are visible in this mode.
     public var sections: [EditSection] {
-        let visible = visibleFields
-        if let declared = descriptor.presentation.editSections {
-            let visibleKeys = Set(visible.map(\.key))
-            return declared.compactMap { section in
-                let fields = section.fields.filter { visibleKeys.contains($0) }
-                return fields.isEmpty
-                    ? nil
-                    : EditSection(
-                        id: section.id, title: section.title, fields: fields,
-                        collapsed: section.collapsed)
-            }
-        }
-        var order: [String] = []
-        var grouped: [String: [String]] = [:]
-        for field in visible {
-            let section = field.controlSection ?? "main"
-            if grouped[section] == nil { order.append(section) }
-            grouped[section, default: []].append(field.key)
-        }
-        return order.map {
-            EditSection(id: $0, title: Self.sectionTitle($0), fields: grouped[$0] ?? [], collapsed: false)
-        }
-    }
-
-    /// Whether `key` is locked in this mode: `readOnlyOnUpdate`, or a `readOnlyWhen` rule whose
-    /// `field` on the original equals its `equals`. A locked key never enters the body.
-    public func readOnly(_ key: String) -> Bool {
-        guard case .update = mode else { return false }
-        let presentation = descriptor.presentation
-        if presentation.readOnlyOnUpdate.contains(key) { return true }
-        return presentation.readOnlyWhen.contains { rule in
-            guard rule.fields.contains(key), let value = original?[rule.field] else { return false }
-            switch rule.equals {
-            case .string(let expected): return value.stringValue == expected
-            case .bool(let expected): return value.boolValue == expected
-            }
+        let visibleKeys = Set(visibleFields.map(\.key))
+        return descriptor.presentation.editSections.compactMap { section in
+            let fields = section.fields.filter { visibleKeys.contains($0) }
+            return fields.isEmpty
+                ? nil
+                : EditSection(
+                    id: section.id, title: section.title, fields: fields,
+                    collapsed: section.collapsed)
         }
     }
 
@@ -221,7 +193,7 @@ public final class GenericEntityEditModel {
         guard !isSaving, !isLoading, !values.isEmpty,
             values.keys.allSatisfy({ key in
                 guard let field = descriptor.field(key) else { return false }
-                return (isCreate ? field.inCreate : field.inUpdate) && !readOnly(key)
+                return (isCreate ? field.inCreate : field.inUpdate)
             })
         else { return false }
         for (key, value) in values {
@@ -241,10 +213,9 @@ public final class GenericEntityEditModel {
         imageOrder != originalImageOrder.filter { !removedImages.contains($0) }
     }
 
-    /// The update patch for the current draft; locked keys and unchanged values are left out.
+    /// The update patch for the current draft; unchanged values are left out.
     public func patch() throws -> EntityPatch {
-        let editable = wireDraft().filter { !readOnly($0.key) }
-        var patch = try EntityPatch.diff(original: original, draft: editable, nullableKeys: nullableKeys)
+        var patch = try EntityPatch.diff(original: original, draft: wireDraft(), nullableKeys: nullableKeys)
         if imageField("pendingImageIds"), !pendingUploads.isEmpty {
             patch.values["pendingImageIds"] = Self.codes(pendingUploads)
         }
@@ -439,11 +410,5 @@ public final class GenericEntityEditModel {
 
     private static func codes(_ ids: [ImageCode]) -> JSONValue {
         .array(ids.map { .string($0.rawValue) })
-    }
-
-    private static func sectionTitle(_ section: String) -> String {
-        section.split(whereSeparator: { $0 == "-" || $0 == "_" })
-            .map { $0.prefix(1).uppercased() + $0.dropFirst() }
-            .joined(separator: " ")
     }
 }

@@ -227,7 +227,7 @@ export default defineEntity({
       "createdAt",
       "updatedAt",
     ],
-    sort: { fields: ["name", "updatedAt"], directionOverride: "asc" },
+    sort: { fields: ["name", "updatedAt"] },
     intents: {
       fields: {
         capture: ["emoji", "name", "evidenceExpectation", "productExpectation"],
@@ -367,17 +367,13 @@ export default defineEntity({
       },
     },
   ],
-  search: { enabled: false },
+  search: false,
   capabilities: {
-    auditable: true,
     images: { storage: false },
     countable: false,
-    softDelete: true,
     delete: { mode: "soft", bulk: true },
     bulkUpdate: null,
     merge: true,
-    operationOwners: { delete: "kernel", merge: "kernel" },
-    mcp: ["get", "list", "create", "update", "delete", "merge"],
     dataQuality: {
       checks: [
         {

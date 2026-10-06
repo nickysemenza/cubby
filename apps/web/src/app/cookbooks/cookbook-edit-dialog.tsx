@@ -22,7 +22,7 @@ export function CookbookEditDialog({
   record: CookbookSummary;
   onClose: () => void;
 }) {
-  const [name, setName] = useState(record.book);
+  const [name, setName] = useState(record.name);
   const [author, setAuthor] = useState(record.author);
   const [subjects, setSubjects] = useState(record.subjects);
   const update = useActionMutation({

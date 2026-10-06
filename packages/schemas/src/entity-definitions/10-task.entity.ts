@@ -30,6 +30,20 @@ export default defineEntity({
   table: "Task",
   identifiers: { brand: "TaskId", shortcode: "TSK-" },
   presentation: {
+    edit: {
+      sections: [
+        {
+          id: "schedule",
+          title: "Schedule",
+          fields: ["dueDate", "dueEndDate"],
+        },
+        {
+          id: "ordering",
+          title: "Ordering",
+          fields: ["sortOrder"],
+        },
+      ],
+    },
     titleField: "name",
     domain: "house",
     description: "Concrete work, schedules, and completion state.",
@@ -51,9 +65,9 @@ export default defineEntity({
       },
       hero: {
         chip: "status",
-        actionOverrides: ["edit", "bulkEdit", "delete"],
+        extraActions: ["bulkEdit", "delete"],
       },
-      additionalSectionOverrides: [
+      additionalSections: [
         {
           kind: "fields",
           id: "dependencies",
@@ -106,7 +120,7 @@ export default defineEntity({
         media: ["images", "displayImages"],
         quality: ["dataQuality"],
       },
-      viewOverrides: [
+      views: [
         "table",
         { kind: "slot", id: "agenda", label: "Next" },
         {
@@ -117,7 +131,6 @@ export default defineEntity({
         },
         "timeline",
       ],
-      actionOverrides: ["bulkEdit", "delete"],
       timeline: {
         fields: ["dueDate", "dueEndDate"],
         lifecycle: {
@@ -310,7 +323,7 @@ export default defineEntity({
         key: "dueDate",
         kind: "date",
         nullable: true,
-        control: { kind: "date", sectionOverride: "schedule" },
+        control: { kind: "date" },
         display: {
           list: true,
           detail: true,
@@ -328,7 +341,7 @@ export default defineEntity({
         key: "dueEndDate",
         kind: "date",
         nullable: true,
-        control: { kind: "date", sectionOverride: "schedule" },
+        control: { kind: "date" },
         display: {
           list: true,
           detail: true,
@@ -399,7 +412,7 @@ export default defineEntity({
         key: "sortOrder",
         kind: "number",
         nullable: true,
-        control: { kind: "number", sectionOverride: "ordering" },
+        control: { kind: "number" },
         display: { list: true, listHidden: true },
         validation: {
           read: z.number().nullable(),
@@ -1012,9 +1025,8 @@ export default defineEntity({
       },
     },
   ],
-  search: { enabled: true },
+  search: "semantic",
   capabilities: {
-    auditable: true,
     timeline: "default",
     images: {
       storage: "gallery",
@@ -1053,8 +1065,6 @@ export default defineEntity({
         abstention: { minimumScore: 0.72, minimumMargin: 0.12 },
       },
     },
-    countable: true,
-    softDelete: true,
     delete: { mode: "soft", bulk: true },
     bulkUpdate: {
       fields: [
@@ -1067,8 +1077,6 @@ export default defineEntity({
       ],
     },
     merge: false,
-    operationOwners: { delete: "kernel", merge: null },
-    mcp: ["get", "list", "search", "create", "update", "delete", "bulkUpdate"],
     dataQuality: {
       checks: [
         {

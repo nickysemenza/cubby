@@ -23,18 +23,12 @@ import {
 } from "./entity-primitive-fields";
 import { entitySelectOptionsFor } from "./select-options";
 
-/** A minimal synthetic field — `buildFieldGroups` only reads `key` and
- * `control?.section`, so a `buildFieldGroups`-only test doesn't need a real
- * manifest field's full generated shape (nor a mocked one — this repo's own
- * rule against module mocking applies to `entitySummary` here too). */
-function syntheticField(key: string, section?: string): PrimitiveFieldModel {
-  // SAFETY: `buildFieldGroups` only reads `key` and `control?.section`; this
-  // fixture supplies exactly those two. `key` and `control.section` are
-  // generated literal unions of today's real manifest values (from the
-  // `satisfies`-typed field model), which a synthetic test key can't be a
-  // member of — this cast widens past that back to the plain-string shape
-  // the function actually reads.
-  return { key, control: { section } } as PrimitiveFieldModel;
+/** A minimal synthetic field — `buildFieldGroups` only reads `key`, so a
+ * grouping test doesn't need a real manifest field's full generated shape. */
+function syntheticField(key: string): PrimitiveFieldModel {
+  // SAFETY: `buildFieldGroups` only reads `key`; a synthetic key can't be a
+  // member of the generated literal key union, so widen past it.
+  return { key } as PrimitiveFieldModel;
 }
 
 type IngredientValues = { name: string; usuallyOnHand: boolean };
@@ -539,10 +533,9 @@ function VendorAccountCaptureFields() {
   );
 }
 
-/** `11-vendor.entity.ts`'s "full" intent: `name`/`website`/`notes` have no
- * declared `control.section` (the flat `main` bucket); `orderUrlTemplate`
- * and four siblings declare `section: "details"` with no `edit.sections`
- * entry naming them — the undeclared-fallback path this file doesn't mock. */
+/** `11-vendor.entity.ts`'s "full" intent: `name`/`website`/`notes` sit in
+ * the untitled `main` section; `orderUrlTemplate` and four siblings are in
+ * the declared `details` section. */
 function VendorFullFields() {
   const form = useForm({
     defaultValues: {
@@ -564,75 +557,47 @@ function VendorFullFields() {
 }
 
 describe("buildFieldGroups", () => {
-  it("renders declared sections in their declared order, ahead of any undeclared fallback", () => {
-    const declared: DeclaredEditSection[] = [
+  const main = (fields: string[]): DeclaredEditSection => ({
+    id: "main",
+    title: null,
+    fields,
+    collapsed: false,
+  });
+
+  it("renders compiled sections in their order, keyed by membership", () => {
+    const sections: DeclaredEditSection[] = [
       { id: "stock", title: "Stock", fields: ["price"], collapsed: false },
+      main(["notes"]),
       { id: "identity", title: "Identity", fields: ["name"], collapsed: true },
     ];
-    // `price`/`name` are deliberately out of declared order — the grouping
-    // is keyed by field membership, not by input position. `upc`'s
-    // undeclared fallback section appears before `notes`'s `main` bucket
-    // because it's the earlier of the two in this input order.
+    // Input order differs from section order: membership decides the group.
     const fields = [
+      syntheticField("name"),
+      syntheticField("notes"),
       syntheticField("price"),
-      syntheticField("name"),
-      syntheticField("upc", "identifiers"),
-      syntheticField("notes"),
     ];
 
-    const groups = buildFieldGroups(declared, fields);
-
-    expect(groups.map((group) => group.id)).toEqual([
-      "stock",
-      "identity",
-      "identifiers",
-      "main",
-    ]);
-    expect(groups[0]).toMatchObject({
-      title: "Stock",
-      collapsed: false,
-      fields: [{ key: "price" }],
-    });
-    expect(groups[1]).toMatchObject({
-      title: "Identity",
-      collapsed: true,
-      fields: [{ key: "name" }],
-    });
-  });
-
-  it("falls back an undeclared control.section to a humanized group, accumulating every main field into one flat bucket regardless of scatter", () => {
-    const fields = [
-      syntheticField("name"),
-      syntheticField("orderUrlTemplate", "order-details"),
-      // `main` again, non-contiguous with `name` — same bucket by key, not
-      // by position (`GenericEntityEditModel.sections`'s own precedent).
-      syntheticField("notes"),
-    ];
-
-    const groups = buildFieldGroups(null, fields);
-
-    expect(groups).toEqual([
+    expect(buildFieldGroups(sections, fields)).toEqual([
+      { id: "stock", title: "Stock", collapsed: false, fields: [fields[2]] },
+      { id: "main", title: null, collapsed: false, fields: [fields[1]] },
       {
-        id: "main",
-        title: null,
-        collapsed: false,
-        fields: [fields[0], fields[2]],
-      },
-      {
-        id: "order-details",
-        title: "Order details",
-        collapsed: false,
-        fields: [fields[1]],
+        id: "identity",
+        title: "Identity",
+        collapsed: true,
+        fields: [fields[0]],
       },
     ]);
   });
 
-  it("renders exactly today's flat output when every field is main and no sections are declared", () => {
-    const fields = [syntheticField("a"), syntheticField("b")];
+  it("puts a field no section names into a leading main group", () => {
+    const sections: DeclaredEditSection[] = [
+      { id: "details", title: "Details", fields: ["url"], collapsed: false },
+    ];
+    const fields = [syntheticField("url"), syntheticField("extra")];
 
-    expect(buildFieldGroups(null, fields)).toEqual([
-      { id: "main", title: null, collapsed: false, fields },
-    ]);
+    expect(buildFieldGroups(sections, fields).map((group) => group.id)).toEqual(
+      ["main", "details"],
+    );
   });
 });
 
@@ -705,7 +670,7 @@ describe("EntityIntentFields", () => {
     expect(screen.getByLabelText("Browser")).toBeInTheDocument();
   });
 
-  it("buckets an undeclared control.section into a titled region, leaving main fields ungrouped", () => {
+  it("renders a declared section as a titled region, leaving main fields ungrouped", () => {
     render(<VendorFullFields />, { wrapper: harness.wrapper });
 
     const details = screen.getByRole("region", { name: "Details" });
@@ -715,9 +680,8 @@ describe("EntityIntentFields", () => {
     expect(details).toContainElement(
       screen.getByRole("spinbutton", { name: "Return window days" }),
     );
-    // `name`/`notes` have no declared `control.section` (the flat `main`
-    // bucket) and render with no section wrapper at all — not even one of
-    // their own.
+    // `name`/`notes` are in the untitled `main` section and render with no
+    // section wrapper at all.
     const name = screen.getByRole("textbox", { name: "Name" });
     const notes = screen.getByRole("textbox", { name: "Notes" });
     expect(details).not.toContainElement(name);

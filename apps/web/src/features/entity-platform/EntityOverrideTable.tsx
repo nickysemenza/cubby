@@ -25,11 +25,28 @@ const gridCell =
 const gridHead =
   "sticky top-0 z-10 h-7 border-r border-b border-border bg-muted px-2 text-left text-2xs font-medium text-muted-foreground";
 
+/** `invalid`: the manifest does not compile without the input. The generator
+ * refuses an override that compiles to its default, so none is `unchanged`. */
 const OUTCOME_LABEL = {
-  invalid: "Invalid default",
-  changed: "Changed",
-  unchanged: "Unchanged",
+  invalid: "Required",
+  changed: "Changes default",
 } as const;
+
+/** `model.fields[name].labelOverride` → `model.fields[*].labelOverride`. */
+const familyOf = (path: string) => path.replace(/\[[^\]]*\]/gu, "[*]");
+
+const families = [
+  ...rows
+    .reduce(
+      (counts, row) =>
+        counts.set(
+          familyOf(row.path),
+          (counts.get(familyOf(row.path)) ?? 0) + 1,
+        ),
+      new Map<string, number>(),
+    )
+    .entries(),
+].sort(([, left], [, right]) => right - left);
 
 /** Every declaration override across the manifest, one row each. Values are
  * truncated to one line with the full text in the title; the entity panel
@@ -88,23 +105,36 @@ export function EntityOverrideTable({
           value={outcome}
           onChange={(event) => {
             const value = event.target.value;
-            setOutcome(
-              value === "changed" ||
-                value === "invalid" ||
-                value === "unchanged"
-                ? value
-                : "",
-            );
+            setOutcome(value === "changed" || value === "invalid" ? value : "");
           }}
         >
           <option value="">All outcomes</option>
-          <option value="changed">Changed</option>
-          <option value="invalid">Invalid default</option>
-          <option value="unchanged">Unchanged</option>
+          <option value="changed">Changes default</option>
+          <option value="invalid">Required</option>
         </NativeSelect>
         <span className="font-mono text-2xs text-muted-foreground tabular-nums">
           {filtered.length} of {rows.length}
         </span>
+      </div>
+      <div className="flex flex-wrap gap-1" aria-label="Override types">
+        {families.map(([family, count]) => {
+          const name = family.slice(family.lastIndexOf(".") + 1);
+          return (
+            <button
+              key={family}
+              type="button"
+              title={family}
+              aria-pressed={query === name}
+              onClick={() => setQuery(query === name ? "" : name)}
+              className="inline-flex items-center gap-1 rounded-sm border border-border px-1.5 py-0.5 font-mono text-2xs hover:bg-muted aria-pressed:bg-[var(--row-selected)]"
+            >
+              {name}
+              <span className="text-muted-foreground tabular-nums">
+                {count}
+              </span>
+            </button>
+          );
+        })}
       </div>
       <Table
         containerClassName="max-h-[calc(100dvh-14rem)] overflow-auto border-t border-l border-border"
@@ -161,8 +191,13 @@ export function EntityOverrideTable({
               <TableCell
                 className={cn(
                   gridCell,
-                  row.status === "invalid" && "text-destructive",
+                  row.status === "invalid" && "text-muted-foreground",
                 )}
+                title={
+                  row.status === "invalid"
+                    ? "Removing this input fails compilation."
+                    : undefined
+                }
               >
                 {OUTCOME_LABEL[row.status]}
               </TableCell>

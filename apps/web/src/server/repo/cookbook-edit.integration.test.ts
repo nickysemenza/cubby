@@ -33,7 +33,7 @@ describe("cookbook edits and recipe re-pointing", () => {
       subjects: ["Baking"],
     });
     expect(renamed.output).toMatchObject({
-      book: "Edit book uno",
+      name: "Edit book uno",
       author: ["Ada Author"],
       subjects: ["Baking"],
     });

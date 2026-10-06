@@ -69,16 +69,12 @@ const effectiveValue = (
     switch (fieldPath[2]) {
       case "readKeyOverride":
         return field.readKey;
-      case "control.sectionOverride":
-        return field.control?.section ?? null;
       case "labelOverride":
         return field.label;
       case "display.columnIdOverride":
         return field.display.columnId ?? field.key;
       case "display.listOrderOverride":
         return field.display.listOrder;
-      case "display.detailOrderOverride":
-        return field.display.detailOrder;
       default:
         throw new Error(`No effective-value reader for ${path}.`);
     }
@@ -93,8 +89,8 @@ const effectiveValue = (
     switch (storagePath[2]) {
       case "defaultOverride":
         return field.default;
-      case "kindOverride":
-        return field.kind;
+      case "nullableOverride":
+        return field.nullable;
       default:
         throw new Error(`No effective-value reader for ${path}.`);
     }
@@ -106,21 +102,11 @@ const effectiveValue = (
       return entity.fieldModel.sort?.direction ?? null;
     case "route.createOverride":
       return entity.route?.create ?? null;
-    case "route.listOverride":
-      return entity.route?.list ?? null;
-    case "route.detailOverride":
-      return entity.route?.detail ?? null;
     case "route.detailParamOverride":
       return entity.route?.detailParam ?? null;
-    case "presentation.detail.hero.imagesOverride":
-      return entity.inspector.detail.hero.images;
-    case "presentation.detail.hero.actionOverrides":
-      return entity.inspector.detail.hero.actions;
     case "presentation.detail.variantOverride":
       return entity.inspector.detail.variant;
     case "presentation.detail.sectionOverrides":
-      return entity.inspector.detail.sections;
-    case "presentation.detail.additionalSectionOverrides":
       return entity.inspector.detail.sections;
     case "presentation.detail.relationFilterOverrides":
       return Object.fromEntries(
@@ -139,16 +125,8 @@ const effectiveValue = (
           },
         ),
       );
-    case "presentation.list.viewOverrides":
-      return entity.inspector.list.views;
-    case "presentation.list.actionOverrides":
-      return entity.inspector.list.actions;
     case "presentation.list.shelfSubtitleOverride":
       return entity.inspector.list.shelf.subtitle;
-    case "presentation.edit.sectionOverrides":
-      return entity.inspector.edit.sections;
-    case "search.embeddingOverride":
-      return entity.descriptor.embeddable;
     case "capabilities.images.displaySourceOverrides":
       return entity.imagePolicy.displaySources;
     default:
@@ -166,6 +144,9 @@ export const renderOverrideComparisonArtifact = (
     if (index < 0) throw new Error(`Missing raw declaration ${entity.key}.`);
     const raw = declarations[index]!;
     values[entity.key] = entity.overrides.map(({ path, value }) => {
+      // Outside the try: a path without a reader is a generator defect, not
+      // an invalid default, and must stop generation.
+      const before = JSON.stringify(effectiveValue(entity, path)) ?? "null";
       try {
         const changed = [...declarations];
         changed[index] = withoutInput(raw, path);
@@ -174,7 +155,6 @@ export const renderOverrideComparisonArtifact = (
         );
         if (counterfactual === undefined)
           throw new Error(`Missing ${entity.key} after compilation.`);
-        const before = JSON.stringify(effectiveValue(entity, path)) ?? "null";
         const without =
           JSON.stringify(effectiveValue(counterfactual, path)) ?? "null";
         return {
@@ -195,6 +175,15 @@ export const renderOverrideComparisonArtifact = (
       }
     });
   }
+  const redundant = Object.entries(values).flatMap(([key, comparisons]) =>
+    comparisons
+      .filter(({ status }) => status === "unchanged")
+      .map(({ path }) => `${key}.${path}`),
+  );
+  if (redundant.length > 0)
+    throw new Error(
+      `Delete overrides that compile to their default: ${redundant.join(", ")}.`,
+    );
   return {
     relativePath:
       "apps/web/src/entity/generated/entity-override-comparisons.gen.ts",

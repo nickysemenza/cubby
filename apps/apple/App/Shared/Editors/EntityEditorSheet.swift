@@ -167,15 +167,15 @@ struct EntityEditorSheet: View {
             ForEach(model.sections) { section in
                 let fields = section.fields.compactMap(descriptor.field).filter { renders($0) }
                 if !fields.isEmpty {
-                    if model.sections.count == 1 && section.id == "main" {
-                        ForEach(fields, id: \.key) { field in
-                            EntityFieldControl(field: field, model: model, pickedTitles: $pickedTitles)
-                        }
-                    } else {
-                        Section(section.title) {
+                    if let title = section.title {
+                        Section(title) {
                             ForEach(fields, id: \.key) { field in
                                 EntityFieldControl(field: field, model: model, pickedTitles: $pickedTitles)
                             }
+                        }
+                    } else {
+                        ForEach(fields, id: \.key) { field in
+                            EntityFieldControl(field: field, model: model, pickedTitles: $pickedTitles)
                         }
                     }
                 }
@@ -223,7 +223,7 @@ struct EntityEditorSheet: View {
     /// When the entity records an `observedOn` day and every picked photo was captured on one
     /// other day, offer that day (the garden journal's EXIF-date rule).
     private func photoDaySuggestion(_ model: GenericEntityEditModel) -> Date? {
-        guard let field = descriptor.field("observedOn"), field.kind == .date, !model.readOnly("observedOn"),
+        guard let field = descriptor.field("observedOn"), field.kind == .date,
             let first = selections.first?.capturedAt
         else { return nil }
         let calendar = Calendar.current

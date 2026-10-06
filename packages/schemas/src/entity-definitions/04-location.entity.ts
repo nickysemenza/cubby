@@ -44,11 +44,8 @@ export default defineEntity({
       },
       // The generic "No locations yet." reads oddly under "Sub-locations" —
       // a self-relation whose target label doesn't match the section title.
-      emptyOverrides: {
-        children: "No sub-locations yet.",
-      },
       hero: { breadcrumb: "parentId" },
-      additionalSectionOverrides: [
+      additionalSections: [
         {
           kind: "slot",
           id: "contents-valuation",
@@ -172,12 +169,12 @@ export default defineEntity({
         media: ["images", "displayImages"],
         quality: ["dataQuality"],
       },
-      viewOverrides: [
+      views: [
         { kind: "slot", id: "gallery", label: "Contents" },
         "table",
         { kind: "slot", id: "visualizations", label: "Visualizations" },
       ],
-      actionOverrides: ["moveUnder", "delete"],
+      extraActions: ["moveUnder"],
       links: [
         { label: "Arrange", path: "/locations/arrange" },
         { label: "Print labels", path: "/labels" },
@@ -879,6 +876,7 @@ export default defineEntity({
     {
       key: "children",
       label: "Sub-locations",
+      empty: "No sub-locations yet.",
       target: "location",
       cardinality: "many",
       provenance: {
@@ -995,9 +993,8 @@ export default defineEntity({
       },
     },
   ],
-  search: { enabled: true },
+  search: "semantic",
   capabilities: {
-    auditable: true,
     images: {
       storage: "gallery",
       displaySourceOverrides: [
@@ -1038,13 +1035,9 @@ export default defineEntity({
         abstention: { minimumScore: 0.7, minimumMargin: 0.12 },
       },
     },
-    countable: true,
-    softDelete: true,
     delete: { mode: "soft", bulk: true },
     bulkUpdate: { fields: ["parentId"] },
     merge: false,
-    operationOwners: { delete: "kernel", merge: null },
-    mcp: ["get", "list", "search", "create", "update", "delete", "bulkUpdate"],
     dataQuality: {
       checks: [
         {

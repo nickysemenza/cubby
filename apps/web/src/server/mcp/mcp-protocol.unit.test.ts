@@ -1,5 +1,4 @@
 import { USDA_PICKER } from "@cubby/mcp-apps/metadata";
-import { mcpToolName } from "@cubby/schemas/entity-manifest";
 import { ingredientWithFoodOut } from "@cubby/schemas/ingredient";
 import { mealOut, mealRecipeOut } from "@cubby/schemas/meal";
 import {
@@ -28,10 +27,7 @@ import { projectEntityResult } from "~/contracts/mcp-projections";
 import { MCP_TOOLS } from "~/contracts/mcp-tools";
 import { mock } from "~/lib/test/mock-schema";
 import { setCfEnv } from "~/server/cf-env";
-import {
-  ENTITY_KERNEL_ENTITIES,
-  entityMcpReadCommandSchema,
-} from "~/server/entity-kernel/contracts";
+import { entityMcpReadCommandSchema } from "~/server/entity-kernel/contracts";
 
 import { resetMcpAppAssetCacheForTests } from "./apps";
 import type { McpEntityExecutor } from "./kernel-actions";
@@ -215,11 +211,13 @@ describe("MCP protocol smoke", () => {
       "entities://catalog",
     );
     expect(entityInput.properties?.action).toBeDefined();
-    for (const entity of ENTITY_KERNEL_ENTITIES) {
-      for (const operation of ["list", "get", "create", "update"] as const) {
-        expect(names).not.toContain(mcpToolName(entity, operation));
-      }
-    }
+    // The per-entity tools (`list_products`, `get_recipe`, ...) were folded
+    // into `entity` / `entity_read`; none may come back.
+    expect(
+      [...names].filter((name) =>
+        /^(get|list|search|create|update|delete)_/u.test(name),
+      ),
+    ).toEqual([]);
     for (const retired of [
       "get_entities",
       "entity_batch",
@@ -317,7 +315,7 @@ describe("MCP protocol smoke", () => {
   });
 
   it.each([
-    ["cookbook", { id: "CBK-2ABC", book: "Synthetic book" }, "Synthetic book"],
+    ["cookbook", { id: "CBK-2ABC", name: "Synthetic book" }, "Synthetic book"],
     [
       "purchase",
       { id: "PUR-2ABC", displayName: "Synthetic receipt" },

@@ -34,8 +34,8 @@ export default defineEntity({
         candidates:
           "The Candidate alternatives section edits candidates in place with its own renderer.",
       },
-      hero: { actionOverrides: ["edit", "markPurchased"] },
-      additionalSectionOverrides: [
+      hero: { extraActions: ["markPurchased"] },
+      additionalSections: [
         {
           kind: "fields",
           id: "candidates",
@@ -59,8 +59,8 @@ export default defineEntity({
         media: ["displayImages"],
         quality: ["dataQuality"],
       },
-      actionOverrides: ["markPurchased", "delete"],
-      totalOverrides: [
+      extraActions: ["markPurchased"],
+      totals: [
         {
           id: "priceRange",
           label: "Price range",
@@ -384,9 +384,8 @@ export default defineEntity({
       },
     },
   ],
-  search: { enabled: true },
+  search: "semantic",
   capabilities: {
-    auditable: true,
     images: {
       storage: false,
       displaySourceOverrides: [
@@ -421,13 +420,9 @@ export default defineEntity({
         abstention: { minimumScore: 0.78, minimumMargin: 0.16 },
       },
     },
-    countable: true,
-    softDelete: true,
     delete: { mode: "soft", bulk: true },
     bulkUpdate: null,
     merge: false,
-    operationOwners: { delete: "kernel", merge: null },
-    mcp: ["get", "list", "search", "create", "update", "delete"],
     dataQuality: {
       checks: [
         {
@@ -441,7 +436,6 @@ export default defineEntity({
     },
   },
   extensions: {
-    mcpNames: { plural: "wishes" },
     ports: {
       repository: {
         module: "~/server/repo/wish",

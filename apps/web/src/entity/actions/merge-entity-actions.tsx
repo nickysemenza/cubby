@@ -1,3 +1,4 @@
+import { entitySummary } from "@cubby/schemas/entity-summary";
 import {
   parseShortcodeFor,
   type SpendingCategoryShortcode,
@@ -5,10 +6,12 @@ import {
 import { lazy, Suspense, useState } from "react";
 import { z } from "zod";
 
+import { entityPluralLabel } from "~/entity/entities";
 import {
   entityMergeMutationOptions,
   type MergeCommand,
 } from "~/entity/entity-mutation";
+import { generatedBrowserCrudEntities } from "~/entity/generated/entity-routes.gen";
 import {
   ingredient,
   vendor,
@@ -35,12 +38,25 @@ const SpendingCategoryMergeReview = lazy(() =>
   })),
 );
 
-type MergeEntity =
-  | "ingredient"
-  | "product"
-  | "purchase"
-  | "spendingCategory"
-  | "vendor";
+type MergeEntity = MergeCommand["entity"] | "ingredient" | "vendor";
+
+/** Entities whose merge needs more than the kernel's `{ keepId, mergeIds }`. */
+const BESPOKE_MERGE = new Set<string>([
+  "ingredient",
+  "vendor",
+  "purchase",
+  "spendingCategory",
+]);
+
+const isKernelMergeEntity = (
+  entity: (typeof generatedBrowserCrudEntities)[number],
+): entity is MergeCommand["entity"] =>
+  entitySummary[entity].merge && !BESPOKE_MERGE.has(entity);
+
+/** Every kernel-merged entity without a bespoke handler gets the generic merge. */
+const kernelMergeEntities =
+  generatedBrowserCrudEntities.filter(isKernelMergeEntity);
+
 type MergeRow = EntityActionRow & { name: string };
 export type MergeMutation<TOutput> = {
   mutateAsync: (input: {
@@ -194,12 +210,14 @@ function useMergeSpendingCategoriesEntityAction(): EntityActionHandles {
   };
 }
 
-function useMergeProductsEntityAction(): EntityActionHandles {
+function useKernelMergeEntityAction(
+  entity: MergeCommand["entity"],
+): EntityActionHandles {
   const mutation = useActionMutation({
-    mutationFn: entityMergeMutationOptions("product"),
-    success: "Products merged",
+    mutationFn: entityMergeMutationOptions(entity),
+    success: `${entityPluralLabel(entity)} merged`,
   });
-  return useStagedMerge("product", kernelMerge("product", mutation));
+  return useStagedMerge(entity, kernelMerge(entity, mutation));
 }
 
 function useMergePurchasesEntityAction(): EntityActionHandles {
@@ -243,12 +261,12 @@ export const mergeEntityActionDefinitions = [
   }),
   defineEntityAction({
     verb: "merge",
-    entities: ["product"],
+    entities: kernelMergeEntities,
     arity: "both",
     minSelection: 2,
     group: "organize",
     priority: 100,
-    use: useMergeProductsEntityAction,
+    use: useKernelMergeEntityAction,
   }),
   defineEntityAction({
     verb: "merge",

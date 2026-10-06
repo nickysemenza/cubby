@@ -30,12 +30,27 @@ export default defineEntity({
     },
     basePath: "recipes",
     createOverride: "page",
-    detailOverride: null,
+    detail: null,
   },
   table: "Recipe",
   children: recipeChildren,
   identifiers: { brand: "RecipeId", shortcode: "RCP-" },
   presentation: {
+    edit: {
+      sections: [
+        {
+          id: "identity",
+          title: "Identity",
+          fields: ["name"],
+        },
+        { id: "main" },
+        {
+          id: "servings",
+          title: "Servings",
+          fields: ["servings"],
+        },
+      ],
+    },
     titleField: "name",
     domain: "cook",
     description: "Recipes, their sections, and composition.",
@@ -48,7 +63,7 @@ export default defineEntity({
     icons: { phosphor: "ChefHat", sfSymbol: "fork.knife", emoji: "🍳" },
     detail: {
       hero: {},
-      additionalSectionOverrides: [
+      additionalSections: [
         {
           kind: "fields",
           id: "contents",
@@ -121,7 +136,7 @@ export default defineEntity({
       {
         key: "name",
         kind: "text",
-        control: { kind: "text", sectionOverride: "identity" },
+        control: { kind: "text" },
         display: { list: true, detail: true, standard: "name" },
         validation: {
           read: recipeTopLevelFields.name,
@@ -167,7 +182,7 @@ export default defineEntity({
         key: "servings",
         kind: "number",
         nullable: true,
-        control: { kind: "number", sectionOverride: "servings" },
+        control: { kind: "number" },
         display: {
           list: true,
           detail: true,
@@ -450,7 +465,6 @@ export default defineEntity({
       // estimate shows what is known, anything else reads as absent.
       {
         key: "cost",
-        labelOverride: "Cost",
         kind: "number",
         nullable: true,
         display: { preview: true, format: "currency" },
@@ -466,7 +480,6 @@ export default defineEntity({
       },
       {
         key: "calories",
-        labelOverride: "Calories",
         kind: "number",
         nullable: true,
         display: { preview: true },
@@ -1190,9 +1203,8 @@ export default defineEntity({
       ],
     },
   ],
-  search: { enabled: true },
+  search: "semantic",
   capabilities: {
-    auditable: true,
     images: {
       storage: "gallery",
       displaySourceOverrides: [
@@ -1243,13 +1255,9 @@ export default defineEntity({
         abstention: { minimumScore: 0.74, minimumMargin: 0.14 },
       },
     },
-    countable: true,
-    softDelete: true,
     delete: { mode: "soft", bulk: true },
     bulkUpdate: null,
     merge: false,
-    operationOwners: { delete: "kernel", merge: null },
-    mcp: ["get", "list", "search", "create", "update", "delete"],
     dataQuality: {
       checks: [
         {
@@ -1289,7 +1297,6 @@ export default defineEntity({
     },
   },
   extensions: {
-    mcpNames: { overrides: { delete: "delete_recipe" } },
     ports: {
       repository: {
         module: "~/server/repo/recipe/repository",

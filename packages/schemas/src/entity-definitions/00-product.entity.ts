@@ -83,14 +83,10 @@ export default defineEntity({
       // The generic "No products yet." reads oddly under a self-relation
       // whose target happens to also be Product — say what's missing
       // instead of what type it is.
-      emptyOverrides: {
-        components: "This isn't a kit yet — no components added.",
-        "containing-kits": "Not used as a component in any kit yet.",
-      },
       hero: {
-        actionOverrides: ["edit", "addToInventory", "recordSale", "discard"],
+        extraActions: ["addToInventory", "recordSale", "discard"],
       },
-      additionalSectionOverrides: [
+      additionalSections: [
         { kind: "slot", id: "ownership", title: "Ownership & evidence" },
         { kind: "slot", id: "runs", title: "Enrichment history" },
         {
@@ -528,7 +524,7 @@ export default defineEntity({
           "unitPriceLabel",
         ],
       },
-      totalOverrides: [
+      totals: [
         { id: "price", label: "Prices", keys: ["price"], format: "currency" },
         {
           id: "expenseTotal",
@@ -538,14 +534,7 @@ export default defineEntity({
         },
       ],
       shelfSubtitleOverride: ["price", "category"],
-      actionOverrides: [
-        "addToInventory",
-        "discard",
-        "bulkEdit",
-        "printLabels",
-        "merge",
-        "delete",
-      ],
+      extraActions: ["addToInventory", "discard", "printLabels"],
       timeline: { fields: ["purchaseDate"] },
     },
     // Restructures the generated Apple editor too (`GenericEntityEditModel`
@@ -554,7 +543,7 @@ export default defineEntity({
     // block and product's `media` presentation hook render it outside this
     // grouping (`entity-edit-dialog-content.tsx`, `editor-presentations.tsx`).
     edit: {
-      sectionOverrides: [
+      sections: [
         {
           id: "identity",
           title: "Identity",
@@ -1273,7 +1262,6 @@ export default defineEntity({
         key: "unitPrice",
         kind: "json",
         nullable: true,
-        labelOverride: "Unit price",
         // Display-only: the list query exposes no server sort for this value.
         display: { list: true, labelPath: "unitPriceLabel", width: "sm" },
         provenance: {
@@ -1326,7 +1314,6 @@ export default defineEntity({
       {
         key: "modelPresence",
         kind: "boolean",
-        labelOverride: "Model present",
         display: {
           list: true,
           listHidden: true,
@@ -1354,7 +1341,6 @@ export default defineEntity({
       {
         key: "upcPresence",
         kind: "boolean",
-        labelOverride: "UPC present",
         display: {
           list: true,
           listHidden: true,
@@ -1383,7 +1369,6 @@ export default defineEntity({
       {
         key: "notesPresence",
         kind: "boolean",
-        labelOverride: "Notes present",
         display: {
           list: true,
           listHidden: true,
@@ -2966,6 +2951,7 @@ export default defineEntity({
     {
       key: "components",
       label: "Components",
+      empty: "This isn't a kit yet — no components added.",
       target: "product",
       cardinality: "many",
       sourceKey: "explicit",
@@ -3008,6 +2994,7 @@ export default defineEntity({
     {
       key: "containing-kits",
       label: "Containing kits",
+      empty: "Not used as a component in any kit yet.",
       target: "product",
       cardinality: "many",
       sourceKey: "explicit",
@@ -3043,9 +3030,8 @@ export default defineEntity({
       },
     },
   ],
-  search: { enabled: true },
+  search: "semantic",
   capabilities: {
-    auditable: true,
     timeline: "custom",
     // Identity carries the weight: `dataQualityScore asc` is the enrichment
     // worklist (it replaced the bespoke `identity_strength` sort), so a
@@ -3154,12 +3140,9 @@ export default defineEntity({
         visualEvidence: [{ relationPath: [], priority: 1, ordering: "newest" }],
       },
     },
-    countable: true,
-    softDelete: true,
     delete: { mode: "soft", bulk: true },
     bulkUpdate: { fields: ["stockTracked"] },
     merge: true,
-    operationOwners: { delete: "kernel", merge: "kernel" },
     // Receipt lines name products loosely; a miss is the caller's decision
     // (create, merge, or pick a candidate), never an automatic row.
     resolve: {
@@ -3167,16 +3150,6 @@ export default defineEntity({
       createMissing: false,
       candidates: 3,
     },
-    mcp: [
-      "get",
-      "list",
-      "search",
-      "create",
-      "update",
-      "delete",
-      "bulkUpdate",
-      "merge",
-    ],
   },
   extensions: {
     relatednessSignals: [
@@ -3196,7 +3169,6 @@ export default defineEntity({
         scoring: "displayOnly",
       },
     ],
-    mcpNames: { overrides: { list: "search_products" } },
     ports: {
       repository: {
         module: "~/server/repo/product/repository",

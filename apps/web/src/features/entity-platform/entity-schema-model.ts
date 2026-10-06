@@ -238,7 +238,13 @@ export function schemaRow(
     rows: entityManifest[entity].countable ? counts?.[entity] : undefined,
     crud,
     extras,
-    searchable: metadata.searchable,
+    search: !metadata.searchable
+      ? null
+      : entityManifest[entity].embeddable
+        ? ("semantic" as const)
+        : ("lexical" as const),
+    /** Served by its own workflow, with no kernel repository (USDA). */
+    external: metadata.ports.repository === null,
     one,
     many: relationships.length - one,
     tables,

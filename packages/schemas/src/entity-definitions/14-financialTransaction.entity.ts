@@ -57,6 +57,30 @@ export default defineEntity({
   // `displayName` falls back through `rawDescription` and `kind` for a
   // human-identifying label that is never blank.
   presentation: {
+    edit: {
+      sections: [
+        {
+          id: "schedule",
+          title: "Schedule",
+          fields: ["transactionDate", "postedDate"],
+        },
+        {
+          id: "identity",
+          title: "Identity",
+          fields: ["merchant"],
+        },
+        {
+          id: "details",
+          title: "Details",
+          fields: ["rawDescription", "sourceCategory"],
+        },
+        {
+          id: "notes",
+          title: "Notes",
+          fields: ["notes"],
+        },
+      ],
+    },
     list: {
       savedViews: [
         {
@@ -294,7 +318,6 @@ export default defineEntity({
       },
       {
         key: "evidenceExpectation",
-        labelOverride: "Evidence expectation",
         description:
           "Leave blank to use the effective policy from linked records and the spending category.",
         kind: "enum",
@@ -510,7 +533,7 @@ export default defineEntity({
         key: "transactionDate",
         kind: "date",
         nullable: true,
-        control: { sectionOverride: "schedule", kind: "date" },
+        control: { kind: "date" },
         display: {
           list: true,
           width: "sm",
@@ -527,7 +550,7 @@ export default defineEntity({
         key: "postedDate",
         kind: "date",
         nullable: true,
-        control: { sectionOverride: "schedule", kind: "date" },
+        control: { kind: "date" },
         display: {
           list: true,
           detail: true,
@@ -545,7 +568,7 @@ export default defineEntity({
         key: "merchant",
         kind: "text",
         nullable: true,
-        control: { sectionOverride: "identity", kind: "text" },
+        control: { kind: "text" },
         display: {
           list: true,
           detail: true,
@@ -562,7 +585,7 @@ export default defineEntity({
         key: "rawDescription",
         kind: "text",
         nullable: true,
-        control: { sectionOverride: "details", kind: "textarea" },
+        control: { kind: "textarea" },
         display: { list: true, listHidden: true },
         validation: {
           read: z.string().nullable(),
@@ -574,7 +597,7 @@ export default defineEntity({
         key: "sourceCategory",
         kind: "text",
         nullable: true,
-        control: { sectionOverride: "details", kind: "text" },
+        control: { kind: "text" },
         display: { list: true, listHidden: true },
         validation: {
           read: z.string().nullable(),
@@ -615,7 +638,7 @@ export default defineEntity({
         key: "notes",
         kind: "text",
         nullable: true,
-        control: { sectionOverride: "notes", kind: "textarea" },
+        control: { kind: "textarea" },
         display: { list: true, listHidden: true },
         validation: {
           read: z.string().nullable(),
@@ -1489,9 +1512,8 @@ export default defineEntity({
       },
     },
   ],
-  search: { enabled: true, embeddingOverride: false },
+  search: "lexical",
   capabilities: {
-    auditable: true,
     images: {
       storage: false,
       displaySourceOverrides: [
@@ -1541,13 +1563,9 @@ export default defineEntity({
         abstention: { minimumScore: 0.8, minimumMargin: 0.16 },
       },
     },
-    countable: true,
-    softDelete: true,
     delete: { mode: "soft", bulk: true },
     bulkUpdate: null,
     merge: false,
-    operationOwners: { delete: "kernel", merge: null },
-    mcp: ["get", "list", "search", "create", "update", "delete"],
     dataQuality: {
       exceptions: true,
       checks: [
