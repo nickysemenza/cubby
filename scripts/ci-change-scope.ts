@@ -38,12 +38,15 @@ const fullScope = (): CiChangeScope => ({
 const markdown = /\.(?:md|mdx|markdown)$/i;
 const formatOnly = /\.(?:ya?ml|toml)$/i;
 // The Swift client and catalog are generated (never committed) from the
-// entity declarations and the HTTP contracts, so those inputs rebuild Apple.
+// entity declarations, HTTP contracts, shared constants, and media origin,
+// so those inputs rebuild Apple. Shared golden vectors also exercise Swift.
 const appleGeneratorInputs = [
   "apps/web/src/contracts/",
   "apps/web/src/lib/http-api/",
   "apps/web/scripts/apple-preview-fixtures.ts",
   "apps/web/src/lib/test/mock-schema.ts",
+  "apps/web/wrangler.jsonc",
+  "apps/web/tooling/wrangler-public-config.ts",
 ];
 
 // The Worker bundles these skills as agent instructions (?raw imports).
@@ -131,7 +134,9 @@ const affectedByPath = (path: string): Partial<CiChangeScope> | null => {
       validation: true,
       web: true,
       auxiliary: true,
-      ...(path.startsWith("packages/schemas/") && { apple: true }),
+      ...(["packages/schemas/", "packages/shared/"].some((prefix) =>
+        path.startsWith(prefix),
+      ) && { apple: true }),
     };
   if (path.startsWith("apps/web/"))
     return {

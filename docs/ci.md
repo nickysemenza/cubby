@@ -93,9 +93,12 @@ for whichever caller — local or hosted — ends up running that scheme there.
 
 Two hosted macOS jobs cover the Apple surface, both gated on the `scope`
 job's `apple` output. The scope job reads the PR file list or the files in a
-`main` push. Native source, FFI, Rust bridge, shared API schemas, the web
-contracts and HTTP API layer (they feed the generated Swift), and CI policy
-changes select Apple; an Apple README alone does not. The macOS jobs install no
+`main` push. Native source, FFI, Rust bridge, shared API schemas and the shared
+package (native constants, generator helpers, and Swift test vectors), the web
+contracts and HTTP API layer, preview fixture inputs, the Worker media-origin
+configuration (`wrangler.jsonc` and `wrangler-public-config.ts`), and CI policy
+changes select Apple. These inputs affect generated Swift or its binding tests;
+an Apple README or unrelated web page alone does not select Apple. The macOS jobs install no
 Node dependencies: the Linux `Apple generated inputs` job runs `pnpm generate`
 and uploads the generated Swift inputs as the `apple-generated` artifact
 (`.github/actions/generate-apple-inputs`), which both download before building,

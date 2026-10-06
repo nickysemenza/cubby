@@ -55,6 +55,7 @@ test("routes web, shared, auxiliary, Rust, and Apple dependencies", () => {
     "validation",
     "web",
     "auxiliary",
+    "apple",
   ]);
   assert.deepEqual(active(["packages/schemas/src/index.ts"]), [
     "validation",
@@ -74,6 +75,32 @@ test("routes web, shared, auxiliary, Rust, and Apple dependencies", () => {
   assert.deepEqual(active(["apps/usda-api/src/index.ts"]), [
     "validation",
     "auxiliary",
+  ]);
+});
+
+// Browser tests cannot detect an omitted native build or stale Swift constants.
+// Each input can change generated native bytes or the Swift binding assertions.
+test("selects Apple for shared native constants, vectors, and media configuration", () => {
+  for (const file of [
+    "packages/shared/src/client-constants.ts",
+    "packages/shared/src/collection-tag.ts",
+    "packages/shared/src/text-case.ts",
+    "packages/shared/golden-vectors/display-format.json",
+  ])
+    assert.deepEqual(
+      active([file]),
+      ["validation", "web", "auxiliary", "apple"],
+      file,
+    );
+  for (const file of [
+    "apps/web/wrangler.jsonc",
+    "apps/web/tooling/wrangler-public-config.ts",
+  ])
+    assert.deepEqual(active([file]), ["validation", "web", "apple"], file);
+
+  assert.deepEqual(active(["apps/web/src/app/products/page.tsx"]), [
+    "validation",
+    "web",
   ]);
 });
 

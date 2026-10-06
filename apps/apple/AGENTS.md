@@ -235,8 +235,11 @@ means `pnpm generate` (or `build-rust.sh`) has not run in this checkout.
   formatting; run
   `swift format --in-place --configuration apps/apple/.swift-format --recursive` to fix.
   `pnpm verify:local(:full)` runs the `apple` target locally when a full native
-  diagnostic is needed. GitHub Actions runs `pnpm apple check` on macOS for
-  every PR and `main` push.
+  diagnostic is needed. GitHub Actions selects native checks on PRs and `main`
+  pushes that touch Apple, its shared schemas/constants/vectors, generated
+  client inputs, Rust/FFI, or CI policy; unrelated web changes skip them.
+  `Apple checks` formats and builds the iOS app, and `Apple package tests`
+  runs host Swift tests and the OpenAPI warning gate. See [CI](../../docs/ci.md).
 - **Visual and interaction checks:** the Xcode MCP renders `#Preview`s headlessly and drives a
   simulator (tap, swipe, type, capture) — setup, loops, and failure fixes in
   [docs/agents/xcode-mcp.md](../../docs/agents/xcode-mcp.md). Preferred over launching the app
