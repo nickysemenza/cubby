@@ -724,7 +724,7 @@ export function EntityManifestGrid({
         value={sheet}
         onValueChange={(value) => onSheetChange(schemaSheetSchema.parse(value))}
       >
-        <TabsList className="h-8 gap-0.5 p-0.5">
+        <TabsList className="h-auto max-w-full flex-wrap justify-start gap-0.5 p-0.5 [&>[data-slot=tabs-trigger]]:flex-none">
           <TabsTrigger value="entities" className="text-xs">
             Entities{" "}
             <span className="font-mono text-muted-foreground">
