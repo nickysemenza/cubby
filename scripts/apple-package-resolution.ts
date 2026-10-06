@@ -31,7 +31,7 @@ export async function withKitPackageResolution<T>(
   const appLocations = new Set(
     [
       ...readFileSync(
-        path.join(root, "apps/apple/project.yml"),
+        path.join(root, "apps/apple/packages.yml"),
         "utf8",
       ).matchAll(/^\s+url:\s+(\S+)\s*$/gmu),
     ].map((match) => match[1]),

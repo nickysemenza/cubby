@@ -271,7 +271,10 @@ function swiftSourceVersion(): string {
 function appleSourceVersion(): string {
   const appRoot = path.join(appleRoot, "App");
   const files = walkFiles(appRoot).filter((entry) => entry.endsWith(".swift"));
-  files.push(path.join(appleRoot, "project.yml"));
+  files.push(
+    path.join(appleRoot, "project.yml"),
+    path.join(appleRoot, "packages.yml"),
+  );
   return [
     swiftSourceVersion(),
     ...files.sort().map((file) => {
@@ -294,6 +297,7 @@ function nativeSourceFingerprint(includeApp: boolean): string {
         .filter((entry) => entry.endsWith(".swift"))
         .map((entry) => path.join(appSources, entry)),
       path.join(appleRoot, "project.yml"),
+      path.join(appleRoot, "packages.yml"),
     );
   }
   const hash = createHash("sha256");

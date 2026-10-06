@@ -228,6 +228,7 @@ function nativeSourceFingerprint(): string {
   }
   for (const relative of [
     "project.yml",
+    "packages.yml",
     "CubbyKit/Package.swift",
     "CubbyKit/Package.resolved",
     "Cubby.xcodeproj/project.pbxproj",

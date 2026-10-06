@@ -21,6 +21,7 @@ const inputs = [
   "apps/apple/CubbyKit/Package.swift",
   "apps/apple/CubbyKit/Package.resolved",
   "apps/apple/project.yml",
+  "apps/apple/packages.yml",
   "apps/apple/Cubby.xcodeproj/project.pbxproj",
   "apps/apple/SourcePackages/workspace-state.json",
 ];
