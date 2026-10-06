@@ -655,11 +655,11 @@ export async function processOrderMails(
       }
 
       // Receiving (and its return window) is for stocked items: a line with
-      // a Product, goods the importer could not match yet (it files
-      // `product_unresolved` for those), or an itemized replacement of a
-      // hand-booked total still awaiting approval. Any other productless line is one
-      // the importer booked as expense-only (a meal, a ticket, a bouquet) or
-      // judged not worth a Product; neither has anything to receive.
+      // a Product, or a Purchase whose import still awaits review (unresolved
+      // goods, a pending itemized replacement, a totals mismatch). A Purchase
+      // whose lines are all productless with nothing left to review was booked
+      // expense-only (a meal, a ticket, a bouquet) or judged not worth a
+      // Product; neither has anything to receive.
       const [stocked] =
         target && event.event === "delivered"
           ? await database
@@ -675,8 +675,7 @@ export async function processOrderMails(
                     WHERE ${runFinding.entityKind} = 'purchase'
                       AND ${runFinding.entityId} = ${target.id}
                       AND ${runFinding.status} = 'open'
-                      AND (${runFinding.kind} = 'product_unresolved'
-                        OR ${runFinding.proposedFix}->>'kind' = 'replace_aggregate_line')))`,
+                      AND ${runFinding.kind} NOT IN ('arrived', 'return_window', 'refund_unbooked')))`,
                 ),
               )
               .limit(1)

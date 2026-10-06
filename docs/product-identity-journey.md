@@ -34,8 +34,9 @@ Product: every write that would leave a Product on such an Expense is refused
 (`repo/inheritance-validation.ts`), and a line-level category override is the
 way out. `not_expected` (Groceries) only drops the missing-Product gap. A
 delivered order asks to be received only when a principal line has a Product
-or the Purchase has an open `product_unresolved` finding (goods the importer
-could not match); any other productless line was booked expense-only.
+or the Purchase still has an open import-review finding (unresolved goods, a
+pending itemized replacement, a totals mismatch); a Purchase of productless
+lines with nothing left to review was booked expense-only.
 
 ```mermaid
 flowchart LR
