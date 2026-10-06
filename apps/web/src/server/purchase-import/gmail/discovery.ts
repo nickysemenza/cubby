@@ -74,8 +74,12 @@ const productionAutoImport: NonNullable<DiscoveryPorts["autoImport"]> = async (
   db,
   input,
 ) => {
-  const queue = getPurchaseAgentQueue();
-  if (!queue) throw new Error("Purchase Agent queue is unavailable");
+  // Resolved at send: a batch with nothing to start never needs the queue.
+  const queue = getPurchaseAgentQueue() ?? {
+    send: async () => {
+      throw new Error("Purchase Agent queue is unavailable");
+    },
+  };
   return autoImportOrderMail(db, input, queue);
 };
 
@@ -248,6 +252,7 @@ export async function saveMailDiscoveryBatch(
   await (ports.autoImport ?? productionAutoImport)(db, {
     ledgerPartyId: claimed.ledgerPartyId,
     messageIds: ingested.saved,
+    since: row.startedAt,
   });
   const [saved] = await getDb(db)
     .update(runTable)

@@ -1086,6 +1086,7 @@ describe("saved confirmation imports", () => {
   // saved placements floods the queue; a confirmation a live run already owns
   // gets a second run.
   describe("automatic import of new confirmations", () => {
+    const PASS_START = new Date(0);
     const recordingQueue = () => {
       const sent: PurchaseAgentEvent[] = [];
       return {
@@ -1102,6 +1103,7 @@ describe("saved confirmation imports", () => {
       const pass = {
         ledgerPartyId: mail.ledgerPartyId,
         messageIds: [mail.messageId],
+        since: PASS_START,
       };
       const first = await autoImportOrderMail(ctx.db, pass, queue);
       const again = await autoImportOrderMail(ctx.db, pass, queue);
@@ -1149,11 +1151,81 @@ describe("saved confirmation imports", () => {
           messageIds: [shipped.mail, imported.mail, decided.mail].map(
             (mail) => mail.messageId,
           ),
+          since: PASS_START,
         },
         queue,
       );
       expect(started).toEqual([]);
       expect(queue.sent).toEqual([]);
+    });
+
+    it("counts the cap across a pass's batches and its retries", async () => {
+      const queue = recordingQueue();
+      const { mail: head } = await seed();
+      const mails = [head];
+      for (let index = 1; index <= AUTO_IMPORTS_PER_VENDOR + 1; index += 1) {
+        const [mail] = await getDb(ctx.db)
+          .insert(orderMail)
+          .values({
+            ...head,
+            id: undefined,
+            messageId: `${head.messageId}-${index}`,
+          })
+          .returning();
+        await getDb(ctx.db)
+          .insert(orderMailEvent)
+          .values({
+            orderMailId: mail!.id,
+            event: "placed",
+            orderId: `EXAMPLE-${300 + index}`,
+            amount: 5,
+            currency: "USD",
+            sourceKey: `synthetic:${mail!.id}`,
+          });
+        mails.push(mail!);
+      }
+      const batch = (from: number, to: number) =>
+        autoImportOrderMail(
+          ctx.db,
+          {
+            ledgerPartyId: head.ledgerPartyId,
+            messageIds: mails.slice(from, to).map((mail) => mail.messageId),
+            since: PASS_START,
+          },
+          queue,
+        );
+      const first = await batch(0, 3);
+      const second = await batch(3, mails.length);
+      // A retried second batch admits nothing the first delivery left capped.
+      const retried = await batch(3, mails.length);
+      expect(first.length + second.length).toBe(AUTO_IMPORTS_PER_VENDOR);
+      expect(retried).toEqual(second);
+      expect(queue.sent).toHaveLength(AUTO_IMPORTS_PER_VENDOR);
+    });
+
+    it("rethrows a failed dispatch and redispatches the same run on retry", async () => {
+      const { mail } = await seed();
+      const pass = {
+        ledgerPartyId: mail.ledgerPartyId,
+        messageIds: [mail.messageId],
+        since: PASS_START,
+      };
+      await expect(
+        autoImportOrderMail(ctx.db, pass, {
+          send: async () => {
+            throw new Error("synthetic queue outage");
+          },
+        }),
+      ).rejects.toThrow(/synthetic queue outage/);
+      const queue = recordingQueue();
+      const [runId] = await autoImportOrderMail(ctx.db, pass, queue);
+      expect(queue.sent).toHaveLength(1);
+      expect(
+        await getDb(ctx.db)
+          .select({ shortcode: runTable.shortcode })
+          .from(runTable)
+          .where(eq(runTable.vendorId, mail.vendorId!)),
+      ).toEqual([{ shortcode: runId }]);
     });
 
     it("caps one Vendor's imports per pass and skips a confirmation a live run owns", async () => {
@@ -1200,6 +1272,7 @@ describe("saved confirmation imports", () => {
         {
           ledgerPartyId: head.ledgerPartyId,
           messageIds: mails.map((mail) => mail.messageId),
+          since: PASS_START,
         },
         queue,
       );

@@ -4,8 +4,17 @@ import {
   type LedgerPartyId,
   type VendorId,
 } from "@cubby/schemas/identifiers";
-import { createLogger } from "@cubby/worker-tracing";
-import { and, asc, eq, inArray, isNotNull, isNull } from "drizzle-orm";
+import {
+  and,
+  asc,
+  count,
+  eq,
+  gte,
+  inArray,
+  isNotNull,
+  isNull,
+  sql,
+} from "drizzle-orm";
 
 import type { Database } from "~/server/db";
 import {
@@ -25,8 +34,6 @@ import {
 
 import { ownersOf, startOrderMailImport } from "./import";
 
-const log = createLogger("order-mail-auto-import");
-
 /**
  * Most confirmations one Vendor auto-imports in one pass. A first pass over a
  * mailbox can save a backlog of old placements; past the cap they wait in the
@@ -38,13 +45,22 @@ export const AUTO_IMPORTS_PER_VENDOR = 5;
  * Start an order import for each new confirmation a scheduled Gmail pass just
  * saved, as the mailbox's member with `trigger: discovery`. A confirmation is
  * new when its order has no Purchase, no member decision, and no live run
- * owns it. Replaying a batch returns the runs the first delivery started, so
- * the cap counts them and no second run starts. A failure to start one order
- * is logged and never fails the pass: the confirmation stays in the worklist.
+ * owns it.
+ *
+ * The cap counts the automatic runs admitted for the member and Vendor since
+ * the pass started (`since`), not this call: a pass calls once per batch, and
+ * a retried batch must not admit orders an earlier attempt left capped. A
+ * replayed batch reuses the run it admitted, redispatching one whose dispatch
+ * failed. Any failure to admit or dispatch is rethrown after the rest of the
+ * batch, so the Workflow step retries it instead of moving the cursor past it.
  */
 export async function autoImportOrderMail(
   db: Database,
-  input: { ledgerPartyId: LedgerPartyId; messageIds: readonly string[] },
+  input: {
+    ledgerPartyId: LedgerPartyId;
+    messageIds: readonly string[];
+    since: Date;
+  },
   queue: PurchaseAgentQueueProducer,
 ) {
   if (input.messageIds.length === 0) return [];
@@ -73,6 +89,8 @@ export async function autoImportOrderMail(
         eq(orderMail.ledgerPartyId, input.ledgerPartyId),
         inArray(orderMail.messageId, [...input.messageIds]),
         isNotNull(orderMail.vendorId),
+        // The import refuses a confirmation with no body to extract.
+        sql`coalesce(${orderMail.content}->>'bodyText', ${orderMail.content}->>'bodyHtml') IS NOT NULL`,
         eq(orderMailEvent.event, "placed"),
         isNotNull(orderMailEvent.orderId),
         isNull(orderMailEvent.supersededAt),
@@ -81,15 +99,12 @@ export async function autoImportOrderMail(
     .orderBy(asc(orderMail.receivedAt), asc(orderMailEvent.id));
 
   const started: string[] = [];
-  const perVendor = new Map<VendorId, number>();
+  const failures: string[] = [];
   for (const placement of placements) {
     const { vendorId, orderId } = placement;
     if (!vendorId || !orderId) continue;
-    if ((perVendor.get(vendorId) ?? 0) >= AUTO_IMPORTS_PER_VENDOR) continue;
-    if (!(await isNewConfirmation(db, { ...placement, vendorId, orderId })))
-      continue;
-    // The run an earlier delivery of this batch started is reused, not
-    // refused as an owner.
+    // The run an earlier delivery of this batch admitted is reused, not
+    // refused as an owner or counted against the cap again.
     const [own] = await database
       .select({ id: runTable.id })
       .from(runTable)
@@ -101,6 +116,13 @@ export async function autoImportOrderMail(
       )
       .limit(1);
     if (!own) {
+      if (
+        (await admittedSince(db, { ...input, vendorId })) >=
+        AUTO_IMPORTS_PER_VENDOR
+      )
+        continue;
+      if (!(await isNewConfirmation(db, { ...placement, vendorId, orderId })))
+        continue;
       const owners = await withTransaction(db, (tx) =>
         ownersOf(tx, { ledgerPartyId: input.ledgerPartyId, vendorId }, [
           placement.eventId,
@@ -117,15 +139,37 @@ export async function autoImportOrderMail(
         "discovery",
       );
       started.push(runId);
-      perVendor.set(vendorId, (perVendor.get(vendorId) ?? 0) + 1);
     } catch (error) {
-      log.warn("Order confirmation auto-import skipped", {
-        orderId,
-        error,
-      });
+      failures.push(
+        `order ${orderId}: ${error instanceof Error ? error.message : String(error)}`,
+      );
     }
   }
+  if (failures.length > 0)
+    throw new Error(
+      `Automatic import failed to start ${failures.length} order(s): ${failures.join("; ")}`,
+    );
   return started;
+}
+
+/** Automatic mail imports admitted for this member and Vendor since `since`. */
+async function admittedSince(
+  db: Database,
+  scope: { ledgerPartyId: LedgerPartyId; vendorId: VendorId; since: Date },
+) {
+  const [row] = await getDb(db)
+    .select({ count: count() })
+    .from(runTable)
+    .where(
+      and(
+        eq(runTable.ledgerPartyId, scope.ledgerPartyId),
+        eq(runTable.vendorId, scope.vendorId),
+        eq(runTable.trigger, "discovery"),
+        sql`${runTable.input}->>'kind' = 'order_mail_import'`,
+        gte(runTable.startedAt, scope.since),
+      ),
+    );
+  return row?.count ?? 0;
 }
 
 /** No live Purchase has this order, and the member decided nothing on it. */

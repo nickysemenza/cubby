@@ -214,6 +214,18 @@ describe("scheduled Gmail discovery", () => {
     );
   });
 
+  it("saves a batch with nothing to import without the agent queue", async () => {
+    await seedMember();
+    const { params } = await startOne();
+    const provider = gmail();
+    await listMailDiscovery(ctx.db, params, ports(provider));
+    // The production auto-import port, with no queue binding in tests.
+    const { autoImport: _stub, ...withoutStub } = ports(provider);
+    expect(
+      await saveMailDiscoveryBatch(ctx.db, params, 0, withoutStub),
+    ).toEqual({ kind: "done" });
+  });
+
   it("marks a quiet pass routine and starts the next pass fresh", async () => {
     const party = await seedMember();
     await getDb(ctx.db).insert(mailboxCursor).values({
