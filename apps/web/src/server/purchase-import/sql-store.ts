@@ -1,9 +1,10 @@
 import type { DurableObjectStorage } from "@cloudflare/workers-types";
 import {
   browserBridgeRequest,
+  browserBridgeRunCompletion,
   type BrowserBridgeRequest,
+  type BrowserBridgeRunCompletion,
 } from "@cubby/schemas/purchase-import";
-import { z } from "zod";
 
 import { browserBridgeResult, type BrowserBridgeResult } from "./contracts";
 
@@ -13,41 +14,13 @@ type CommandRow = {
   result_json: string | null;
 };
 
-export type RunCompletionSummary = {
-  runID: string;
-  terminalStatus: "completed" | "needs_review" | "failed" | "dispatch_failed";
-  outcome?:
-    | "replayed"
-    | "raw_evidence_drift"
-    | "semantic_drift"
-    | "enriched"
-    | "unavailable"
-    | "skipped";
-  imported: number;
-  updated: number;
-  skipped: number;
-  findingCount: number;
-};
+export type RunCompletionSummary = BrowserBridgeRunCompletion;
 
-const runCompletionSummary = z.object({
-  runID: z.string(),
-  terminalStatus: z
-    .enum(["completed", "needs_review", "failed", "dispatch_failed"])
-    .default("completed"),
-  outcome: z
-    .enum([
-      "replayed",
-      "raw_evidence_drift",
-      "semantic_drift",
-      "enriched",
-      "unavailable",
-      "skipped",
-    ])
-    .optional(),
-  imported: z.number().int().nonnegative(),
-  updated: z.number().int().nonnegative(),
-  skipped: z.number().int().nonnegative(),
-  findingCount: z.number().int().nonnegative(),
+// Rows saved before a field existed parse with its default: a stored
+// completion is replayed until the Mac acknowledges it.
+const runCompletionSummary = browserBridgeRunCompletion.extend({
+  terminalStatus:
+    browserBridgeRunCompletion.shape.terminalStatus.default("completed"),
 });
 
 type ClaimedBrowserResult = {

@@ -36,6 +36,7 @@ import {
 import {
   browserBridgeOperation,
   browserBridgeRequest,
+  browserBridgeRunCompletion,
   browserCapture,
   runShortcode,
   runPurpose,
@@ -43,6 +44,7 @@ import {
   runTargetState,
   runScope,
   type BrowserBridgeOperation,
+  type BrowserBridgeRunCompletion,
   type RunTrigger,
   type RunPurpose,
 } from "@cubby/schemas/purchase-import";
@@ -163,6 +165,7 @@ import {
 import { attachPendingOrderMailEvidence } from "./gmail/process";
 import { classifyOrderCapture } from "./order-list";
 import { loadReceiptEvidenceForRun } from "./receipt-evidence";
+import { runCompletionNotice } from "./run-completion-notice";
 import { importVendorOrder } from "./writer";
 
 /**
@@ -3167,6 +3170,39 @@ async function accountSyncFinishStatus(db: Database, runId: RunId) {
   return (deferred?.value ?? 0) > 0 ? "needs_review" : "completed";
 }
 
+/** What the Mac is told when a run finishes, its notification included. */
+async function runCompletion(
+  db: Database,
+  runID: string,
+  run: Omit<
+    Parameters<typeof runCompletionNotice>[0],
+    "terminalStatus" | "findingCount" | "targetStates"
+  > & { status: string },
+  findingCount: number,
+): Promise<BrowserBridgeRunCompletion> {
+  const terminalStatus = browserBridgeRunCompletion.shape.terminalStatus.parse(
+    run.status,
+  );
+  const targets = await getDb(db)
+    .select({ state: runTarget.state })
+    .from(runTarget)
+    .where(eq(runTarget.runId, runEntityId.parse(runID)));
+  return {
+    runID,
+    terminalStatus,
+    imported: run.imported,
+    updated: run.updated,
+    skipped: run.skipped,
+    findingCount,
+    notice: runCompletionNotice({
+      ...run,
+      terminalStatus,
+      findingCount,
+      targetStates: targets.map((target) => runTargetState.parse(target.state)),
+    }),
+  };
+}
+
 /** A single-confirmation mail run finishes only once its order is committed. */
 async function assertSingleMailImported(db: Database, runId: RunId) {
   // A selected-orders run is gated by its pending candidates instead.
@@ -3301,8 +3337,13 @@ export async function finishRun(
       updated: runTable.updated,
       skipped: runTable.skipped,
       status: runTable.status,
+      purpose: runTable.purpose,
+      input: runTable.input,
+      vendorId: runTable.vendorId,
+      vendorName: vendor.name,
     })
     .from(runTable)
+    .leftJoin(vendor, eq(vendor.id, runTable.vendorId))
     .where(eq(runTable.id, runId))
     .limit(1);
   if (!run) throw new Error("Import run was not found");
@@ -3323,16 +3364,19 @@ export async function finishRun(
           vendorAccountId.parse(scope.public.vendorAccountId),
         ),
       );
-    await namespace.getByName(scope.public.vendorAccountId).notifyRunCompleted({
-      runID: input.runId,
-      terminalStatus: z
-        .enum(["completed", "needs_review", "failed", "dispatch_failed"])
-        .parse(run.status),
-      ...run,
-      findingCount: findingCount?.value ?? 0,
-    });
+    await namespace
+      .getByName(scope.public.vendorAccountId)
+      .notifyRunCompleted(
+        await runCompletion(db, input.runId, run, findingCount?.value ?? 0),
+      );
   }
-  return { ...run, findingCount: findingCount?.value ?? 0 };
+  return {
+    imported: run.imported,
+    updated: run.updated,
+    skipped: run.skipped,
+    status: run.status,
+    findingCount: findingCount?.value ?? 0,
+  };
 }
 
 /**  Called through the `PurchaseImportService` RPC namespace in cf-server.ts. */

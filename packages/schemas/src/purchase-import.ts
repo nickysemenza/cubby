@@ -734,7 +734,15 @@ export const browserBridgeRunCompletion = z.object({
   updated: z.number().int().nonnegative(),
   skipped: z.number().int().nonnegative(),
   findingCount: z.number().int().nonnegative(),
+  /**
+   * The notification, written by the server in the unit the run worked in.
+   * Absent only on completions a bridge stored before the server wrote one.
+   */
+  notice: z.object({ title: z.string(), body: z.string() }).optional(),
 });
+export type BrowserBridgeRunCompletion = z.infer<
+  typeof browserBridgeRunCompletion
+>;
 export const browserBridgeServerMessage = z.discriminatedUnion("type", [
   z.object({
     protocolVersion: z.literal(2),

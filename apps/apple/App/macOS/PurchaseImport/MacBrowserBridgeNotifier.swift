@@ -50,13 +50,12 @@ final class MacBrowserBridgeNotifier {
         // completion notification when the server replays its durable control message.
         defaults.set(Array(notified).sorted(), forKey: Key.completedRuns)
         guard await canPresentNotifications() else { return }
-        let changes = completion.imported + completion.updated
-        let summary = changes == 1 ? "1 order changed" : "\(changes) orders changed"
-        let findingSuffix =
-            completion.findingCount == 0 ? "" : " \(completion.findingCount) item(s) need review."
+        // The server writes the copy in the unit the run worked in; only a
+        // completion stored before it did lacks one.
         await post(
-            identifier: "purchase-import-run-\(completion.runID)", title: "Purchase import complete",
-            body: "\(summary); \(completion.skipped) skipped.\(findingSuffix)")
+            identifier: "purchase-import-run-\(completion.runID)",
+            title: completion.notice?.title ?? "Cubby run finished",
+            body: completion.notice?.body ?? "Open Runs in Cubby for its results.")
     }
 
     private var notifiedRunIDs: Set<String> {
