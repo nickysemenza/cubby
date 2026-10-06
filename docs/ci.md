@@ -102,8 +102,9 @@ like tracked sources so the restored build caches still apply. A skipped job sti
 satisfies its required status check. `Apple package tests` runs `swift test --package-path
 apps/apple/CubbyKit --force-resolved-versions` on the macOS host — no
 simulator — restoring/saving an exact-key cache of
-`apps/apple/CubbyKit/.build/{checkouts,repositories}` keyed on
-`Package.resolved` (SPM fetch+resolve was 53s of that job otherwise). It then
+`apps/apple/CubbyKit/.build`, including compiled products and dependency
+checkouts, keyed on the Swift toolchain, package pins, CubbyKit sources, and
+the warning-check script. It then
 runs `apps/apple/scripts/check-openapi-warnings.sh`, which fails on any
 swift-openapi-generator warning (a schema the `CubbyAPI` build plugin would
 silently drop). A successful warning check records its content key inside

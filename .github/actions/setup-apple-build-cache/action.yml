@@ -54,7 +54,7 @@ runs:
         # v6 excludes entries published by interrupted or failed builds.
         # Optional E2E can verify the bundle without restoring package clones.
         key: xcode-dd-v6-${{ runner.os }}-${{ steps.xcode-version.outputs.hash }}-${{ steps.packages.outputs.hash }}-${{ hashFiles('apps/apple/App/**', 'apps/apple/CubbyKit/**') }}-${{ hashFiles('scripts/apple-check.sh', 'scripts/apple-simulator-build-cache.ts', 'apps/apple/scripts/prepare-project.sh') }}
-        # Earlier generations used different paths and cannot restore this pair.
+        # Keep incomplete entries from earlier generations out of the restore.
         restore-keys: |
           xcode-dd-v6-${{ runner.os }}-${{ steps.xcode-version.outputs.hash }}-${{ steps.packages.outputs.hash }}-
           xcode-dd-v6-${{ runner.os }}-${{ steps.xcode-version.outputs.hash }}-

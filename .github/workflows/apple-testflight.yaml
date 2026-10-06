@@ -179,12 +179,9 @@ jobs:
           TESTFLIGHT_OUTPUT_DIR: ${{ runner.temp }}/CubbyTestFlight
         run: apps/apple/scripts/testflight.sh archive '${{ matrix.platform }}'
 
-      # setup-apple-tools only restores; save explicitly here so a cache
-      # miss populated by this run survives even if the archive step above
-      # failed (`if: always()`), matching the pattern PR 1 uses in the
-      # hosted Apple checks job. `continue-on-error` because another
-      # concurrent job racing the same key is a harmless 409, never a
-      # reason to fail this one.
+      # Dependency clones are advisory and can be reused after an archive
+      # failure. This is not a compiled-output cache. A concurrent save of
+      # the same immutable key is a harmless 409.
       - name: Save SPM clone cache
         if: always() && steps.apple-tools.outputs.spm-clones-cache-hit != 'true'
         continue-on-error: true
