@@ -54,9 +54,9 @@ struct ImageEntityDetailView: View {
                     ImageDiagnosticsCompareView(model: diagnostics)
                 }
             } else if let error {
-                InlineLoadFailure(message: error) { await load() }
+                LoadFailureView(title: "Couldn't load image", message: error) { await load() }
             } else {
-                ProgressView("Loading image…")
+                LoadingIndicator(label: "Loading image")
             }
         }
         .navigationTitle(detail?.filename ?? "Image")

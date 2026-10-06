@@ -819,7 +819,7 @@ private struct PhotoLibraryPreview: View {
         } else if let error {
             Text(error).foregroundStyle(FieldGuideTokens.destructive)
         } else {
-            ProgressView("Loading photo…")
+            LoadingIndicator(label: "Loading photo")
         }
         if let date = asset.creationDate { Text(date.formatted(date: .complete, time: .shortened)) }
         Section("Cubby") {

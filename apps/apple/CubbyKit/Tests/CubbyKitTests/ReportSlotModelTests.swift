@@ -11,7 +11,6 @@ private final class FakeReports: ReportServing {
         var reads: [String] = []
         var controls: [RunControlInput] = []
         var findings: [ResolveRunFindingInput] = []
-        var retries = 0
         var reparses: [RecipeReparseLineInput] = []
         var flows: [RecipeFlowGenerateInput] = []
         var reprocessed: [CookbookReprocessChunkInput] = []
@@ -24,6 +23,8 @@ private final class FakeReports: ReportServing {
     let calls = Mutex(Calls())
     /// The import call (1-based) that reports a failure; 0 means none do.
     let importFailsOnCall = Mutex(0)
+    /// When set, `run.control` answers with a server error.
+    let controlFails = Mutex(false)
     let pages: Mutex<[EntityReportOut]>
 
     /// How long a read takes, so a test can act while one is in flight.
@@ -53,15 +54,12 @@ private final class FakeReports: ReportServing {
     }
     func controlRun(_ input: RunControlInput) async throws -> String? {
         calls.withLock { $0.controls.append(input) }
+        if controlFails.withLock({ $0 }) { throw URLError(.badServerResponse) }
         return nil
     }
     func resolveFinding(_ input: ResolveRunFindingInput) async throws -> Bool {
         calls.withLock { $0.findings.append(input) }
         return input.action == .apply
-    }
-    func resendGmailSearch(_ input: RunRetryGmailSearchInput) async throws {
-        calls.withLock { $0.retries += 1 }
-        throw URLError(.badServerResponse)
     }
     func reparseLine(_ input: RecipeReparseLineInput) async throws -> RecipeReparseLineOutput {
         calls.withLock { $0.reparses.append(input) }
@@ -430,9 +428,12 @@ struct ReportSlotModelTests {
         let retry: ReportCommand = try decode(
             #"""
             {"id": "r", "label": "Retry", "prominent": false, "confirm": null,
-             "request": {"kind": "retry-gmail-search", "runId": "RUN-4K7M"}}
+             "request": {"kind": "run-control", "runId": "RUN-4K7M", "action": "retry",
+                         "operationId": null, "approvalId": null}}
             """#)
-        let model = model(FakeReports([try report(live: false, status: "completed")]))
+        let service = FakeReports([try report(live: false, status: "completed")])
+        service.controlFails.withLock { $0 = true }
+        let model = model(service)
         #expect(await model.run(retry, confirmed: false) == nil)
         #expect(model.actionError != nil)
         #expect(model.busyActionID == nil)

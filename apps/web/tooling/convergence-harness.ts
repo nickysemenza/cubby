@@ -15,8 +15,7 @@ import { IMAGE_DESCRIPTION_FEATURE } from "~/server/ai/features";
 import { providerFor } from "@cubby/shared/ai/models";
 import type { Database } from "~/server/db";
 import * as schema from "~/server/db/schema";
-import { persistGmailSyncResult } from "~/server/purchase-import/gmail/persistence";
-import { normalizeMessage } from "~/server/purchase-import/gmail/normalize";
+import { ingestGmailMessages } from "~/server/purchase-import/gmail/ingest";
 import { productionOrderMailAttachmentStorage } from "~/server/purchase-import/gmail/attachment-storage";
 import { processOrderMails } from "~/server/purchase-import/gmail/process";
 import {
@@ -175,7 +174,7 @@ export async function ingestGmailEvidence(
   names: ConvergenceNames,
 ) {
   const { token, orderId, sender, messageId } = names;
-  const normalized = normalizeMessage(`synthetic-mailbox-${token}`, {
+  const message = {
     id: messageId,
     threadId: `synthetic-thread-${token}`,
     historyId: "1",
@@ -192,21 +191,25 @@ export async function ingestGmailEvidence(
         ),
       },
     },
-  });
-  await persistGmailSyncResult(db, {
-    ledgerPartyId,
-    advanceCursor: false,
-    result: {
-      mode: "bootstrap",
-      reason: "first_sync",
-      cursor: { historyId: "1" },
-      messages: [normalized.mail],
-      attachments: normalized.attachments,
-      events: [],
+  };
+  // A provider that serves exactly this message, through the real ingestion.
+  const { saved } = await ingestGmailMessages(
+    db,
+    {
+      getProfile: async () => ({ historyId: "1" }),
+      listMessages: async () => ({ messages: [{ id: messageId }] }),
+      getMessage: async () => message,
+      listHistory: async () => ({ historyId: "1" }),
+      getAttachment: async () => ({}),
     },
-  });
+    {
+      ledgerPartyId,
+      mailboxId: `synthetic-mailbox-${token}`,
+      messageIds: [messageId],
+    },
+  );
   // Only the classifier's model response is supplied.
-  await processOrderMails(db, [normalized.mail.messageId], [], {
+  await processOrderMails(db, saved, {
     classify: async () => ({
       events: [
         {

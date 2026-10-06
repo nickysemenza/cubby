@@ -29,6 +29,7 @@ const PURPOSE_LABEL = {
   background: "Background",
   file_import: "File import",
   mail_search: "Mail search",
+  mail_discovery: "Mail discovery",
 } satisfies Record<RunPurpose, string>;
 
 // includes-deleted: a run is immutable history, so it keeps naming the

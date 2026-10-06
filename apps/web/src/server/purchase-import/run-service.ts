@@ -66,6 +66,7 @@ import {
   isNull,
   lt,
   ne,
+  notInArray,
   or,
   sql,
 } from "drizzle-orm";
@@ -138,6 +139,7 @@ import {
 } from "~/server/services/photo-import-commit.service";
 import { finalizeImportedImages } from "~/server/services/photo-import-finalize.service";
 import { getR2PublicUrl } from "~/server/utils/r2-public-url";
+import { WORKFLOW_RUN_PURPOSES } from "~/server/workflow-runs/contract";
 
 import { loadPurchaseAuditBatch } from "./audit-batch";
 import {
@@ -1298,6 +1300,9 @@ export async function expireStaleRuns(
       and(
         eq(runTable.status, "running"),
         lt(runTable.updatedAt, cutoff),
+        // A Workflow owns these Runs, and one may sleep through a rate limit;
+        // `reconcileWorkflowRuns` checks their instance instead.
+        notInArray(runTable.purpose, [...WORKFLOW_RUN_PURPOSES]),
         // Unstarted photo runs may sit between native upload sessions. Once
         // dispatched, they get the same stalled-coordinator backstop; review
         // proposals are preserved by reconcileSettledRun.

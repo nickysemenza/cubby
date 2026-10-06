@@ -64,3 +64,36 @@ it("forwards the swapped candidate to the gateway's OpenAI route", async () => {
     reasoning: { effort: "high" },
   });
 });
+
+it("counts a rejected upstream socket as an unpriced attempted request", async () => {
+  vi.stubGlobal("fetch", upstream);
+  upstream.mockRejectedValue(new Error("synthetic socket failure"));
+  await agentEvalModel.fetch(
+    new Request("https://eval-model.test/configure", {
+      method: "POST",
+      body: JSON.stringify({ model: "gpt-6-luna", effort: "high" }),
+    }),
+    env,
+    ctx,
+  );
+  await expect(
+    agentEvalModel.fetch(
+      new Request("https://ai-gateway.invalid/openai/responses", {
+        method: "POST",
+        body: JSON.stringify({ model: "gpt-6-sol", input: [] }),
+      }),
+      env,
+      ctx,
+    ),
+  ).rejects.toThrow("synthetic socket failure");
+  const result = await agentEvalModel.fetch(
+    new Request("https://eval-model.test/usage"),
+    env,
+    ctx,
+  );
+  await expect(result.json()).resolves.toMatchObject({
+    requests: 1,
+    failedRequests: 1,
+    calls: [],
+  });
+});

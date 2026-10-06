@@ -1,8 +1,8 @@
 import { parseEntityId } from "@cubby/schemas/identifiers";
 import { sha256Hex } from "@cubby/shared/sha256";
-import { and, eq, inArray } from "drizzle-orm";
+import { and, eq, inArray, sql } from "drizzle-orm";
 
-import type { Database, DrizzleTransaction } from "~/server/db";
+import type { Database } from "~/server/db";
 import { account } from "~/server/db/auth.schema";
 import {
   mailboxCursor,
@@ -14,9 +14,9 @@ import { getDb, withTransaction } from "~/server/repo/database-helpers";
 
 import {
   orderMailAttachmentKey,
-  productionOrderMailAttachmentStorage,
   type OrderMailAttachmentStorage,
 } from "./attachment-storage";
+import { maxHistoryId } from "./sync";
 import type {
   GmailAccountTokenPatch,
   GmailAccountTokenRecord,
@@ -25,7 +25,7 @@ import type {
 import type {
   GmailOrderMail,
   GmailOrderMailAttachment,
-  GmailSyncResult,
+  GmailOrderMailEvent,
 } from "./types";
 
 export const loadGmailCursor = async (
@@ -49,6 +49,13 @@ export const loadGmailCursor = async (
   return { historyId: row[0]?.historyId ?? null };
 };
 
+class GmailPersistenceError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = "GmailPersistenceError";
+  }
+}
+
 const dateFromInternalDate = (value: string | null): Date => {
   if (!value)
     throw new GmailPersistenceError("Gmail message has no internal date");
@@ -64,71 +71,36 @@ const dateFromInternalDate = (value: string | null): Date => {
 const header = (mail: GmailOrderMail, name: string): string =>
   mail.headers[name.toLowerCase()]?.trim() || "(unknown)";
 
-const attachmentProviderId = (attachment: GmailOrderMailAttachment): string =>
-  attachment.attachmentId?.trim() || `inline:${attachment.sourceKey}`;
-
-const attachmentChecksum = async (
-  attachment: GmailOrderMailAttachment,
-): Promise<string> =>
-  sha256Hex(
-    JSON.stringify({
-      sourceKey: attachment.sourceKey,
-      dataBase64Url: attachment.dataBase64Url ?? null,
-      size: attachment.size,
-    }),
-  );
-
-class GmailPersistenceError extends Error {
-  constructor(message: string) {
-    super(message);
-    this.name = "GmailPersistenceError";
-  }
-}
-
-export type GmailSyncPersistenceResult = {
-  messageIds: readonly string[];
-  eventCount: number;
-  attachmentCount: number;
-};
-
-const upsertMessage = async (
-  tx: DrizzleTransaction,
-  ledgerPartyId: ReturnType<typeof parseEntityId<"ledgerParty">>,
+/** Upsert one message row by `(ledgerPartyId, messageId)`; returns its id. */
+export const upsertOrderMail = async (
+  db: Database,
+  ledgerPartyId: string,
   mail: GmailOrderMail,
 ): Promise<string> => {
-  const [row] = await tx
+  const content = {
+    snippet: mail.snippet,
+    bodyText: mail.bodyText,
+    bodyHtml: mail.bodyHtml,
+  };
+  const fields = {
+    threadId: mail.threadId,
+    historyId: mail.historyId,
+    sender: header(mail, "from"),
+    subject: header(mail, "subject"),
+    receivedAt: dateFromInternalDate(mail.internalDate),
+    rawChecksum: await sha256Hex(JSON.stringify(mail)),
+    content,
+  };
+  const [row] = await getDb(db)
     .insert(orderMail)
     .values({
-      ledgerPartyId,
+      ledgerPartyId: parseEntityId("ledgerParty", ledgerPartyId),
       messageId: mail.messageId,
-      threadId: mail.threadId,
-      historyId: mail.historyId,
-      sender: header(mail, "from"),
-      subject: header(mail, "subject"),
-      receivedAt: dateFromInternalDate(mail.internalDate),
-      rawChecksum: await sha256Hex(JSON.stringify(mail)),
-      content: {
-        snippet: mail.snippet,
-        bodyText: mail.bodyText,
-        bodyHtml: mail.bodyHtml,
-      },
+      ...fields,
     })
     .onConflictDoUpdate({
       target: [orderMail.ledgerPartyId, orderMail.messageId],
-      set: {
-        threadId: mail.threadId,
-        historyId: mail.historyId,
-        sender: header(mail, "from"),
-        subject: header(mail, "subject"),
-        receivedAt: dateFromInternalDate(mail.internalDate),
-        rawChecksum: await sha256Hex(JSON.stringify(mail)),
-        content: {
-          snippet: mail.snippet,
-          bodyText: mail.bodyText,
-          bodyHtml: mail.bodyHtml,
-        },
-        updatedAt: new Date(),
-      },
+      set: { ...fields, updatedAt: new Date() },
     })
     .returning({ id: orderMail.id });
   if (!row) throw new GmailPersistenceError("Gmail mail upsert returned no id");
@@ -136,62 +108,141 @@ const upsertMessage = async (
 };
 
 /**
- * Persist a normalized sync as one unit. The cursor is written last in the
- * same transaction, so a failed attachment/event write is replayed safely.
- * Deletion-only history for an unknown message is rejected rather than
- * inventing a received date or silently advancing past evidence.
+ * Rows saved before part identity are keyed by Gmail's attachment id, which
+ * changes on every fetch. Re-key the oldest such row of this message with the
+ * same filename and type to the part, keeping its id, stored bytes and image
+ * link, so a re-fetched legacy message neither duplicates the row nor stores
+ * (or later attaches) its bytes twice. True when the adopted row needs no
+ * fetch.
  */
-export const persistGmailSyncResult = async (
+const adoptLegacyAttachment = async (
+  database: ReturnType<typeof getDb>,
+  input: { orderMailId: string; attachment: GmailOrderMailAttachment },
+): Promise<boolean> => {
+  const [adopted] = await database
+    .update(orderMailAttachment)
+    .set({
+      providerAttachmentId: input.attachment.sourceKey,
+      updatedAt: new Date(),
+    })
+    .where(
+      eq(
+        orderMailAttachment.id,
+        sql`(SELECT a.id FROM "OrderMailAttachment" a
+          WHERE a."orderMailId" = ${input.orderMailId}
+            AND a."providerAttachmentId" NOT LIKE 'gmail:%'
+            AND a.filename = ${input.attachment.filename}
+            AND a."mimeType" = ${input.attachment.mimeType}
+          ORDER BY a."createdAt", a.id LIMIT 1)`,
+      ),
+    )
+    .returning({
+      pendingObjectKey: orderMailAttachment.pendingObjectKey,
+      imageId: orderMailAttachment.imageId,
+    });
+  return Boolean(adopted?.pendingObjectKey || adopted?.imageId);
+};
+
+/**
+ * Store one attachment: its row, then its bytes in object storage, one
+ * attachment at a time so a batch never holds more than one payload.
+ *
+ * Identity is the MIME part (`sourceKey`), not Gmail's attachment id, which
+ * Gmail re-mints on every fetch — keyed on it, a replayed message would add a
+ * row and an object each time. A row that already has bytes (or a Purchase
+ * image) is skipped before any fetch. The upload follows the row because its
+ * key embeds the row id; an upload failure leaves the row keyless, and the
+ * replay stores it while Gmail still has the bytes.
+ */
+export const storeOrderMailAttachment = async (
   db: Database,
   input: {
-    ledgerPartyId: string;
-    provider?: string;
-    polledAt?: Date;
-    advanceCursor?: boolean;
-    result: GmailSyncResult;
-    storage?: OrderMailAttachmentStorage;
+    orderMailId: string;
+    attachment: GmailOrderMailAttachment;
+    fetchData: () => Promise<string | undefined>;
+    storage: OrderMailAttachmentStorage;
   },
-): Promise<GmailSyncPersistenceResult> => {
-  const storage = input.storage ?? productionOrderMailAttachmentStorage;
+): Promise<void> => {
+  const database = getDb(db);
+  const { orderMailId } = input;
+  const providerAttachmentId = input.attachment.sourceKey;
+  const [existing] = await database
+    .select({
+      pendingObjectKey: orderMailAttachment.pendingObjectKey,
+      imageId: orderMailAttachment.imageId,
+    })
+    .from(orderMailAttachment)
+    .where(
+      and(
+        eq(orderMailAttachment.orderMailId, orderMailId),
+        eq(orderMailAttachment.providerAttachmentId, providerAttachmentId),
+      ),
+    )
+    .limit(1);
+  if (existing?.pendingObjectKey || existing?.imageId) return;
+  if (!existing && (await adoptLegacyAttachment(database, input))) return;
+  const data = await input.fetchData();
+  const bytes = data ? Buffer.from(data, "base64url") : null;
+  const checksum = await sha256Hex(
+    bytes ?? JSON.stringify({ sourceKey: providerAttachmentId, data: null }),
+  );
+  const fields = {
+    filename: input.attachment.filename,
+    mimeType: input.attachment.mimeType,
+    checksum,
+  };
+  const [row] = await database
+    .insert(orderMailAttachment)
+    .values({ orderMailId, providerAttachmentId, ...fields })
+    .onConflictDoUpdate({
+      target: [
+        orderMailAttachment.orderMailId,
+        orderMailAttachment.providerAttachmentId,
+      ],
+      set: { ...fields, updatedAt: new Date() },
+    })
+    .returning({ id: orderMailAttachment.id });
+  if (!row) throw new GmailPersistenceError("Attachment upsert had no id");
+  if (!bytes) return;
+  const key = orderMailAttachmentKey(row.id);
+  await input.storage.put(key, bytes, input.attachment.mimeType);
+  await database
+    .update(orderMailAttachment)
+    .set({ pendingObjectKey: key })
+    .where(eq(orderMailAttachment.id, row.id));
+};
+
+/**
+ * Record history changes for messages Cubby saved. An event for a message it
+ * never saved (deleted before it was fetched, or never listed) is dropped and
+ * counted: rejecting it would hold the mailbox cursor back forever.
+ */
+export const persistGmailEvents = async (
+  db: Database,
+  input: { ledgerPartyId: string; events: readonly GmailOrderMailEvent[] },
+): Promise<{ saved: number; dropped: number }> => {
+  if (input.events.length === 0) return { saved: 0, dropped: 0 };
   const ledgerPartyId = parseEntityId("ledgerParty", input.ledgerPartyId);
-  const provider = input.provider ?? "gmail";
-  const polledAt = input.polledAt ?? new Date();
-
   return withTransaction(db, async (tx) => {
-    const ids = new Map<string, string>();
-    for (const mail of input.result.messages) {
-      ids.set(mail.messageId, await upsertMessage(tx, ledgerPartyId, mail));
-    }
-
-    const referencedMessageIds = [
-      ...new Set(input.result.events.map((event) => event.messageId)),
-    ];
-    if (referencedMessageIds.length > 0) {
-      const existing = await tx
-        .select({ messageId: orderMail.messageId, id: orderMail.id })
-        .from(orderMail)
-        .where(
-          and(
-            eq(orderMail.ledgerPartyId, ledgerPartyId),
-            inArray(orderMail.messageId, referencedMessageIds),
-          ),
-        );
-      for (const row of existing) ids.set(row.messageId, row.id);
-    }
-
-    const unresolved = input.result.events.filter(
-      (event) => !ids.has(event.messageId),
+    const known = new Map(
+      (
+        await tx
+          .select({ messageId: orderMail.messageId, id: orderMail.id })
+          .from(orderMail)
+          .where(
+            and(
+              eq(orderMail.ledgerPartyId, ledgerPartyId),
+              inArray(orderMail.messageId, [
+                ...new Set(input.events.map((event) => event.messageId)),
+              ]),
+            ),
+          )
+      ).map((row) => [row.messageId, row.id]),
     );
-    if (unresolved.length > 0) {
-      throw new GmailPersistenceError(
-        `Gmail history references ${unresolved.length} unknown message(s); cursor was not advanced`,
-      );
-    }
-
-    for (const event of input.result.events) {
-      const orderMailId = ids.get(event.messageId);
-      if (!orderMailId)
-        throw new GmailPersistenceError("Missing Gmail mail id");
+    let saved = 0;
+    for (const event of input.events) {
+      const orderMailId = known.get(event.messageId);
+      if (!orderMailId) continue;
       await tx
         .insert(orderMailEvent)
         .values({
@@ -208,118 +259,64 @@ export const persistGmailSyncResult = async (
           },
         })
         .onConflictDoNothing();
+      saved += 1;
     }
-
-    for (const attachment of input.result.attachments) {
-      const orderMailId = ids.get(attachment.messageId);
-      if (!orderMailId) {
-        throw new GmailPersistenceError(
-          `Gmail attachment references unknown message ${attachment.messageId}`,
-        );
-      }
-      const checksum = await attachmentChecksum(attachment);
-      const [row] = await tx
-        .insert(orderMailAttachment)
-        .values({
-          orderMailId,
-          providerAttachmentId: attachmentProviderId(attachment),
-          filename: attachment.filename,
-          mimeType: attachment.mimeType,
-          checksum,
-        })
-        .onConflictDoUpdate({
-          target: [
-            orderMailAttachment.orderMailId,
-            orderMailAttachment.providerAttachmentId,
-          ],
-          set: {
-            filename: attachment.filename,
-            mimeType: attachment.mimeType,
-            checksum,
-            updatedAt: new Date(),
-          },
-        })
-        .returning({
-          id: orderMailAttachment.id,
-          imageId: orderMailAttachment.imageId,
-        });
-      if (!row) throw new GmailPersistenceError("Attachment upsert had no id");
-      // Bytes are only pending until a Purchase attaches them (`imageId`), and
-      // a sync without data must not erase bytes an earlier sync stored.
-      if (!attachment.dataBase64Url || row.imageId) continue;
-      // The key embeds the row id, known only after the upsert, so the upload
-      // follows it. It stays inside this transaction: a failed upload rolls
-      // back the message, the attachment and the cursor, and the sync replays
-      // while Gmail still has the bytes. An object left behind by a rollback
-      // is an unreferenced orphan under a row id that never committed.
-      const key = orderMailAttachmentKey(row.id);
-      await storage.put(
-        key,
-        Buffer.from(attachment.dataBase64Url, "base64"),
-        attachment.mimeType,
-      );
-      await tx
-        .update(orderMailAttachment)
-        .set({ pendingObjectKey: key })
-        .where(eq(orderMailAttachment.id, row.id));
-    }
-
-    if (input.advanceCursor !== false) {
-      await tx
-        .insert(mailboxCursor)
-        .values({
-          ledgerPartyId,
-          provider,
-          historyId: input.result.cursor.historyId,
-          lastPolledAt: polledAt,
-        })
-        .onConflictDoUpdate({
-          target: [mailboxCursor.ledgerPartyId, mailboxCursor.provider],
-          set: {
-            historyId: input.result.cursor.historyId,
-            lastPolledAt: polledAt,
-            updatedAt: new Date(),
-          },
-        });
-    }
-
-    return {
-      messageIds: [...ids.keys()].sort(),
-      eventCount: input.result.events.length,
-      attachmentCount: input.result.attachments.length,
-    };
+    return { saved, dropped: input.events.length - saved };
   });
 };
 
-/** Advance only after classification and attachment processing has completed. */
-export const advanceGmailCursor = async (
+/**
+ * Move a mailbox cursor from the position a pass started at. Returns false
+ * when another pass already moved it, so a retried or stale pass can never
+ * rewind it; the stored id is the later of the two either way.
+ */
+export const advanceMailboxCursor = async (
   db: Database,
   input: {
     ledgerPartyId: string;
     provider?: string;
-    historyId: string | null;
+    from: string | null;
+    to: string | null;
     polledAt: Date;
   },
-): Promise<void> => {
-  const database = getDb(db);
+): Promise<boolean> => {
   const ledgerPartyId = parseEntityId("ledgerParty", input.ledgerPartyId);
   const provider = input.provider ?? "gmail";
-  await database
-    .insert(mailboxCursor)
-    .values({
-      ledgerPartyId,
-      provider,
-      historyId: input.historyId,
-      lastPolledAt: input.polledAt,
-    })
-    .onConflictDoUpdate({
-      target: [mailboxCursor.ledgerPartyId, mailboxCursor.provider],
-      set: {
-        historyId: input.historyId,
+  const next = maxHistoryId(input.from, input.to ?? undefined);
+  return withTransaction(db, async (tx) => {
+    // The row must exist before it can be locked: two first passes would
+    // otherwise both see no row and the later upsert could rewind the other.
+    await tx
+      .insert(mailboxCursor)
+      .values({ ledgerPartyId, provider, historyId: null })
+      .onConflictDoNothing();
+    const [current] = await tx
+      .select({ historyId: mailboxCursor.historyId })
+      .from(mailboxCursor)
+      .where(
+        and(
+          eq(mailboxCursor.ledgerPartyId, ledgerPartyId),
+          eq(mailboxCursor.provider, provider),
+        ),
+      )
+      .for("update")
+      .limit(1);
+    if ((current?.historyId ?? null) !== input.from) return false;
+    await tx
+      .update(mailboxCursor)
+      .set({
+        historyId: next,
         lastPolledAt: input.polledAt,
         updatedAt: new Date(),
-      },
-    });
+      })
+      .where(
+        and(
+          eq(mailboxCursor.ledgerPartyId, ledgerPartyId),
+          eq(mailboxCursor.provider, provider),
+        ),
+      );
+    return true;
+  });
 };
 
 /** Better Auth account-table adapter; token refresh itself remains injectable. */

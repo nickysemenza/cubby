@@ -25,6 +25,10 @@ public final class GenericEntityEditModel {
     public private(set) var nestedErrors: [String: [[String]: String]] = [:]
     /// A rejection that names no field, or a transport failure.
     public private(set) var bannerError: String?
+    /// The update read's failure, kept apart from `bannerError` (a refused write). A supplied
+    /// detail projection still seeds the form, but it is never an edit baseline, so a failed
+    /// read blocks saving until a retried read succeeds.
+    public private(set) var loadError: String?
     public private(set) var isSaving = false
     public private(set) var isLoading = false
     /// The saved record's id: the created id, or the updated record's own.
@@ -77,15 +81,16 @@ public final class GenericEntityEditModel {
     public func load() async {
         guard case .update(let id) = mode, !isLoading else { return }
         isLoading = true
+        loadError = nil
         defer { isLoading = false }
         do {
             guard let row = try await client.row(descriptor, id: id) else {
-                bannerError = "No \(descriptor.singular) called \(id)"
+                loadError = "No \(descriptor.singular) called \(id)"
                 return
             }
             seed(original: row.raw)
         } catch {
-            bannerError = error.userMessage
+            loadError = error.userMessage
         }
     }
 
@@ -290,7 +295,7 @@ public final class GenericEntityEditModel {
         case .create:
             return missingRequiredKeys.isEmpty
         case .update:
-            guard original != nil else { return false }
+            guard original != nil, loadError == nil else { return false }
             return hasImageChanges || ((try? patch())?.isEmpty == false)
         }
     }

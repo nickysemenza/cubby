@@ -168,11 +168,6 @@ export async function handleBackgroundTask(
       await discoverPurchases(db);
       return "succeeded";
     }
-    case "vendor-mail.search": {
-      const { runVendorMailSearchJob } =
-        await import("~/server/purchase-import/gmail/search-job");
-      return runVendorMailSearchJob(db, task.jobId, { page: task.page });
-    }
     case "calendar-feed.mark-dirty": {
       // Propagates a failure on purpose: the queue retries only a throwing
       // handler, and `markDirty` is a flag set, so replay is harmless.

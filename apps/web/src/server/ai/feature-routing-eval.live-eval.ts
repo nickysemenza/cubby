@@ -7,6 +7,7 @@ import {
   normalizeImportAuditModelOutput,
   normalizeImportExtractionModelOutput,
 } from "@cubby/schemas/purchase-import";
+import { piTokenUsage } from "@cubby/shared/ai/pi-providers";
 import {
   type EvalCandidate,
   evalCandidates,
@@ -225,6 +226,16 @@ function meteredPorts(usage: EvalUsage): StructuredRunPorts {
           usage.cachedInputTokens += message.usage.cacheRead;
           usage.outputTokens += message.usage.output;
           usage.reasoningTokens += message.usage.reasoning ?? 0;
+          const tokens = piTokenUsage(message);
+          if (tokens.inputTokens !== null)
+            usage.calls.push({
+              inputTokens:
+                message.usage.input +
+                message.usage.cacheRead +
+                message.usage.cacheWrite,
+              cachedInputTokens: message.usage.cacheRead,
+              outputTokens: message.usage.output,
+            });
           return message;
         },
       };
@@ -240,6 +251,7 @@ const emptyUsage = (): EvalUsage => ({
   outputTokens: 0,
   reasoningTokens: 0,
   modelMs: 0,
+  calls: [],
 });
 
 describe("structured feature routing eval", () => {

@@ -437,20 +437,12 @@ struct PhotoDestinationSheet: View {
             // its own fixed row, so it scrolls with the content rather than sitting above it.
             EmptyView()
         case .failed(let message):
-            HStack(alignment: .firstTextBaseline, spacing: 10) {
-                Label(message, systemImage: "exclamationmark.triangle")
-                    .foregroundStyle(FieldGuideTokens.destructive)
-                Spacer()
-                Button("Retry") {
-                    Task {
-                        manifest.startAnalysis(
-                            client: appModel.client, matches: appModel.photoMatches)
-                    }
-                }
+            InlineLoadFailure(message: message) {
+                manifest.startAnalysis(client: appModel.client, matches: appModel.photoMatches)
             }
-            .font(.subheadline)
             .padding(.horizontal)
             .padding(.vertical, 8)
+            .frame(maxWidth: .infinity, alignment: .leading)
         }
     }
 

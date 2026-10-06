@@ -71,6 +71,50 @@ struct InlineLoadFailure: View {
     }
 }
 
+/// A write the user asked for (a save, an accept) that the server refused. Not a failed load:
+/// the user's input stays where it is, and the raw message sits above it. Retry resends the same
+/// mutation, so the caller owns `canRetry` (still valid, nothing in flight); pass no `retry`
+/// where the failed action's own control is how the user tries again.
+struct ActionFailureNotice: View {
+    var title = "Couldn't save"
+    let message: String
+    var canRetry = true
+    var retry: (() -> Void)?
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: FieldGuideTokens.Space.sm) {
+            Label {
+                VStack(alignment: .leading, spacing: FieldGuideTokens.Space.xs) {
+                    Text(title).font(.callout.weight(.semibold))
+                    Text(message)
+                        .font(.callout)
+                        .foregroundStyle(FieldGuideTokens.graphite)
+                        .textSelection(.enabled)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+            } icon: {
+                Image(systemName: "exclamationmark.octagon")
+            }
+            .foregroundStyle(FieldGuideTokens.destructive)
+            .accessibilityElement(children: .combine)
+            if let retry {
+                // Borderless so a List row fires only the button, not a row-wide tap.
+                // The frame sits inside the label: outside it, it grows layout but not the hit area.
+                Button(action: retry) {
+                    Text("Retry")
+                        .frame(
+                            minWidth: FieldGuideTokens.touchTarget,
+                            minHeight: FieldGuideTokens.touchTarget, alignment: .leading
+                        )
+                        .contentShape(Rectangle())
+                }
+                .buttonStyle(.borderless)
+                .disabled(!canRetry)
+            }
+        }
+    }
+}
+
 #Preview("Load failures") {
     List {
         Section("Inline") {
@@ -78,6 +122,22 @@ struct InlineLoadFailure: View {
             InlineLoadFailure(message: "HTTP 503: upstream unavailable", isRetrying: true) {}
         }
         LoadFailureView(title: "Couldn't load products", message: "HTTP 503: upstream unavailable") {}
+    }
+}
+
+#Preview("Action failures") {
+    Form {
+        Section {
+            ActionFailureNotice(
+                message: "PRECONDITION_FAILED: Cannot set parent: would create a circular reference"
+            ) {}
+        }
+        Section {
+            ActionFailureNotice(message: "HTTP 503: upstream unavailable", canRetry: false) {}
+        }
+        Section {
+            ActionFailureNotice(message: "CONFLICT: the suggestion changed")
+        }
     }
 }
 

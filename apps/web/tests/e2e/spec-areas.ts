@@ -148,6 +148,8 @@ export const SPEC_EXTRA_GLOBS: SpecGlobMap = {
     `${WEB}/src/server/services/image-storage.service.ts`,
   ],
   "input-first-import.spec.ts": [
+    `${WEB}/src/server/workflow-runs/**`,
+    `${WEB}/src/server/gmail-workflows.ts`,
     `${WEB}/tests/e2e/prepare-retailer-source.ts`,
     `${WEB}/tests/e2e/retailer-browser-peer.ts`,
     `${WEB}/src/lib/auth.ts`,
@@ -585,6 +587,9 @@ export const SPEC_EXTRA_GLOBS: SpecGlobMap = {
     `${WEB}/src/app/vendors/**`,
     `${WEB}/src/app/purchases/**`,
     `${WEB}/src/server/purchase-import/gmail/**`,
+    `${WEB}/src/server/workflow-runs/**`,
+    `${WEB}/src/server/gmail-workflows.ts`,
+    `${WEB}/src/server/repo/entity-report/run.ts`,
   ],
   "purchase-import-run.spec.ts": [
     `${WEB}/src/app/vendors/order-mail*`,

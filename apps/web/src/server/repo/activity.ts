@@ -108,6 +108,7 @@ function runProjection(): SQL {
         )
       ) END AS "estimatedCost",
       j."lastError" AS error,
+      false AS routine,
       EXISTS(SELECT 1 FROM "ImageProcessingAttempt" a WHERE a."jobId" = j.id) AS "hasDiagnostics",
       coalesce(j.state = 'failed'
         AND i.sha256 = j."sourceContentHash"
@@ -168,6 +169,7 @@ function runProjection(): SQL {
         WHERE u."deletedAt" IS NULL AND u."runId" = r.id
       ) END AS "estimatedCost",
       coalesce(r."dispatchError", r."failureCode") AS error,
+      r.routine,
       EXISTS(SELECT 1 FROM "RunOperation" o WHERE o."runId" = r.id) AS "hasDiagnostics",
       false AS "canRetry"
     FROM "Run" r
@@ -202,6 +204,8 @@ function listPredicate(input: ActivityListInput): SQL {
         sql`, `,
       )}))`,
     );
+  if (input.routine !== undefined)
+    clauses.push(sql`routine = ${input.routine}`);
   if (input.vendorAccountId)
     clauses.push(sql`"vendorAccountId" = ${input.vendorAccountId}`);
   if (input.vendorId) clauses.push(sql`"vendorId" = ${input.vendorId}`);

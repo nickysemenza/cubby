@@ -230,10 +230,6 @@ export const reportCommandRequest = z.discriminatedUnion("kind", [
     decision: z.enum(["apply", "dismiss"]),
     reviewedFingerprint: z.string().nullable(),
   }),
-  z.object({
-    kind: z.literal("retry-gmail-search"),
-    runId: runShortcode,
-  }),
   /** Re-derive a book's imported recipes from its stored extraction (no AI). */
   z.object({
     kind: z.literal("reprocess-cookbook"),

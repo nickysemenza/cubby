@@ -11,7 +11,6 @@ public protocol ReportServing: Sendable {
     func controlRun(_ input: RunControlInput) async throws -> String?
     /// `problems.resolveRunFinding`; true when the fix was applied rather than dismissed.
     func resolveFinding(_ input: ResolveRunFindingInput) async throws -> Bool
-    func resendGmailSearch(_ input: RunRetryGmailSearchInput) async throws
     /// `recipe.reparseLine`: the server re-parses one stored line and writes what drifted.
     func reparseLine(_ input: RecipeReparseLineInput) async throws -> RecipeReparseLineOutput
     /// `recipe.generateFlow`: the AI arranges a recipe's steps into a walkthrough.
@@ -78,10 +77,6 @@ extension CubbyClient: ReportServing {
     public func resolveFinding(_ input: ResolveRunFindingInput) async throws -> Bool {
         let out: ResolveRunFindingOut = try await resolveRunFinding(input)
         return out.status == .applied
-    }
-
-    public func resendGmailSearch(_ input: RunRetryGmailSearchInput) async throws {
-        let _: VendorSearchMailOut = try await retryGmailSearch(input)
     }
 
     public func reparseLine(_ input: RecipeReparseLineInput) async throws -> RecipeReparseLineOutput {
@@ -399,9 +394,6 @@ public final class ReportSlotModel {
                     reviewedFingerprint: finding.reviewedFingerprint, id: finding.findingId,
                     action: finding.decision == .apply ? .apply : .dismiss))
             return .done(applied ? "Applied import correction" : "Dismissed import finding")
-        case .retryGmailSearch(let retry):
-            try await service.resendGmailSearch(.init(shortcode: retry.runId))
-            return .done("Resent to the background queue")
         case .mealAddRecipe(let add):
             guard let recipeID = form?.text("recipeId") ?? add.recipeId,
                 let scale = form?.number("scale") ?? add.scale

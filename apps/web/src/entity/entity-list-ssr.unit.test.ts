@@ -32,7 +32,8 @@ describe("entityListDefaultSort", () => {
 describe("searchWithInitialFilter", () => {
   it("opens the Run list on its declared default until the URL names a filter or clears it", () => {
     expect(searchWithInitialFilter("run", {})).toMatchObject({
-      trigger: "foreground,discovery,manual,backfill",
+      trigger: "foreground,discovery,manual,backfill,scheduled",
+      routine: "false",
     });
     expect(searchWithInitialFilter("run", { filters: "none" })).toEqual({
       filters: "none",

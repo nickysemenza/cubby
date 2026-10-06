@@ -2,11 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import { createGmailApiClient } from "./client";
 import { normalizeHistoryPage, normalizeMessage } from "./normalize";
-import {
-  advanceGmailCursor,
-  buildBootstrapPlan,
-  syncGmailMailbox,
-} from "./sync";
+import { buildBootstrapPlan, listGmailChanges, maxHistoryId } from "./sync";
 import { GmailApiError, type GmailMessage, type GmailProvider } from "./types";
 
 const NOW = new Date("2026-09-19T12:00:00.000Z");
@@ -265,7 +261,7 @@ describe("Gmail synchronization", () => {
     });
   });
 
-  it("bootstraps from a profile baseline and advances only after all pages finish", async () => {
+  it("bootstraps from a profile baseline captured before listing pages", async () => {
     const requestedQueries: string[] = [];
     const provider = providerWith({
       getProfile: async () => ({ historyId: "100" }),
@@ -281,33 +277,24 @@ describe("Gmail synchronization", () => {
       getAttachment: async () => ({ data: "YWJj", size: 3 }),
     });
 
-    const result = await syncGmailMailbox(provider, {
+    const result = await listGmailChanges(provider, {
       mailboxId: "mailbox-placeholder",
-      cursor: { historyId: null },
+      historyId: null,
       bootstrap: { knownSenders: ["orders@example.test"], now: NOW },
-      includeAttachmentData: true,
       maxResults: 50,
     });
 
     expect(result.mode).toBe("bootstrap");
-    expect(result.reason).toBe("first_sync");
-    expect(result.cursor).toEqual({ historyId: "100" });
-    expect(result.messages.map((message) => message.messageId)).toEqual([
-      "m-1",
-      "m-2",
-    ]);
-    expect(
-      result.attachments.every(
-        (attachment) => attachment.dataBase64Url === "YWJj",
-      ),
-    ).toBe(true);
+    expect(result.targetHistoryId).toBe("100");
+    expect(result.messageIds).toEqual(["m-1", "m-2"]);
+    expect(result.events).toEqual([]);
     expect(requestedQueries).toHaveLength(4);
     expect(
       new Set(requestedQueries.map((query) => query.split(":")[0])),
     ).toEqual(new Set(["from", "after"]));
   });
 
-  it("advances an incremental cursor through pages and fetches each changed message once", async () => {
+  it("lists every history page without fetching a message body", async () => {
     const fetched: string[] = [];
     const provider = providerWith({
       listHistory: async ({ pageToken }) =>
@@ -347,20 +334,21 @@ describe("Gmail synchronization", () => {
       },
     });
 
-    const result = await syncGmailMailbox(provider, {
+    const result = await listGmailChanges(provider, {
       mailboxId: "mailbox-placeholder",
-      cursor: { historyId: "100" },
+      historyId: "100",
       bootstrap: { knownSenders: [], now: NOW },
     });
 
     expect(result.mode).toBe("incremental");
-    expect(result.cursor).toEqual({ historyId: "103" });
+    expect(result.targetHistoryId).toBe("103");
     expect(result.events.map((event) => event.kind)).toEqual([
       "message_added",
       "labels_added",
       "message_deleted",
     ]);
-    expect(fetched).toEqual(["m-changed"]);
+    expect(result.messageIds).toEqual(["m-changed"]);
+    expect(fetched).toEqual([]);
   });
 
   it("falls back to a full resync when Gmail expires the history cursor", async () => {
@@ -381,30 +369,40 @@ describe("Gmail synchronization", () => {
           : { messages: [] },
     });
 
-    const result = await syncGmailMailbox(provider, {
+    const result = await listGmailChanges(provider, {
       mailboxId: "mailbox-placeholder",
-      cursor: { historyId: "1" },
+      historyId: "1",
       bootstrap: { knownSenders: [], now: NOW },
     });
 
     expect(historyCalls).toBe(1);
     expect(result.mode).toBe("full_resync");
-    expect(result.reason).toBe("history_expired");
-    expect(result.cursor).toEqual({ historyId: "200" });
-    expect(result.messages.map((message) => message.messageId)).toEqual([
-      "m-recovered",
-    ]);
+    expect(result.targetHistoryId).toBe("200");
+    expect(result.messageIds).toEqual(["m-recovered"]);
   });
 
   it("never regresses a cursor when a provider reports an older history id", () => {
-    expect(advanceGmailCursor({ historyId: "100" }, "99")).toEqual({
+    expect(maxHistoryId("100", "99")).toBe("100");
+    expect(maxHistoryId("100", "101")).toBe("101");
+    expect(maxHistoryId(null, undefined)).toBeNull();
+  });
+
+  // A message that vanishes between listing and fetching is skipped by the
+  // batch; only a 404 from history.list means the cursor expired.
+  it("does not treat a quiet mailbox as expired history", async () => {
+    const provider = providerWith({
+      listHistory: async () => ({ historyId: "100" }),
+    });
+    const result = await listGmailChanges(provider, {
+      mailboxId: "mailbox-placeholder",
       historyId: "100",
+      bootstrap: { knownSenders: [], now: NOW },
     });
-    expect(advanceGmailCursor({ historyId: "100" }, "101")).toEqual({
-      historyId: "101",
-    });
-    expect(advanceGmailCursor({ historyId: null }, undefined)).toEqual({
-      historyId: null,
+    expect(result).toMatchObject({
+      mode: "incremental",
+      targetHistoryId: "100",
+      messageIds: [],
+      events: [],
     });
   });
 });

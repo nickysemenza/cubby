@@ -73,43 +73,6 @@ describe("handleBackgroundQueueBatch", () => {
     handle.mockReset();
   });
 
-  it.each([
-    Object.assign(new Error("AI Gateway rate limited"), { status: 429 }),
-    new Error("Order email classification failed", {
-      cause: Object.assign(
-        new Error('429 [{"code":2018,"message":"Wholesale Rate limited"}]'),
-        {
-          code: "2018",
-        },
-      ),
-    }),
-  ])(
-    "delays a rate-limited Gmail page without acknowledging it",
-    async (error) => {
-      handle.mockRejectedValue(error);
-      const message = delivered({
-        version: 2,
-        queueType: "background",
-        task: {
-          kind: "vendor-mail.search",
-          jobId: testEntityId("run", "rate-limited"),
-          page: 2,
-          requestedAt,
-        },
-      });
-      vi.spyOn(console, "error").mockImplementation(() => {});
-
-      await handleBackgroundQueueBatch(
-        db,
-        { queue: "cubby-background", messages: [message] },
-        { captureException: vi.fn(), handleTask: handle },
-      );
-
-      expect(message.ack).not.toHaveBeenCalled();
-      expect(message.retry).toHaveBeenCalledWith({ delaySeconds: 120 });
-    },
-  );
-
   it("isolates a failed maintenance job and accepts duplicate delivery of the other", async () => {
     handle.mockImplementation(async (_db, parsed) => {
       if (parsed.kind === "maintenance.recover")

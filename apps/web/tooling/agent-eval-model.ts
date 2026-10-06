@@ -132,6 +132,8 @@ export default {
       ),
     );
     const started = Date.now();
+    usage.requests += 1;
+    usage.failedRequests += 1;
     const upstream = await fetch(
       gatewayProviderUrl({
         accountId: env.ACCOUNT_ID,
@@ -141,7 +143,7 @@ export default {
       }),
       { method: "POST", headers, body: JSON.stringify(body) },
     );
-    usage.requests += 1;
+    usage.failedRequests -= 1;
     if (!upstream.ok || !upstream.body) {
       usage.failedRequests += 1;
       return upstream;

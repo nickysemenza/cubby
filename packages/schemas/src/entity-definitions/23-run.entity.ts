@@ -19,7 +19,7 @@ const readOnly = <T extends z.ZodTypeAny>(read: T) => ({
 /**
  * One run: a purchase-agent account sync, validation or enrichment, a
  * photo-inventory batch a member uploads for an agent to work, a Gmail
- * search, or a group of AI calls (Jev suggestions on a page, an hour of MCP
+ * search or scheduled mailbox discovery, or a group of AI calls (Jev suggestions on a page, an hour of MCP
  * previews, background work). The record is
  * written only by the run service and the writers; the manifest
  * exposes it read-only so the generic list, detail, inspector and MCP get/list
@@ -46,7 +46,7 @@ export default defineEntity({
     titleField: "displayName",
     domain: "finance",
     description:
-      "Runs: purchase-agent syncs, validations, enrichments, photo-inventory batches and grouped AI work.",
+      "Runs: purchase-agent syncs, validations, enrichments, photo-inventory batches, Gmail searches and discovery, and grouped AI work.",
     emptyState: {
       title: "No runs yet",
       description:
@@ -119,7 +119,7 @@ export default defineEntity({
           id: "imports",
           label: "Imports",
           description:
-            "Account syncs, validations, enrichments, photo batches and Gmail searches",
+            "Account syncs, validations, enrichments, photo batches, Gmail searches and mailbox discovery",
           filters: [
             {
               id: "purpose",
@@ -129,6 +129,7 @@ export default defineEntity({
                 "product_enrichment",
                 "photo_inventory",
                 "mail_search",
+                "mail_discovery",
               ],
             },
           ],
@@ -141,13 +142,16 @@ export default defineEntity({
           filters: [{ id: "purpose", value: ["ai_suggest", "background"] }],
         },
       ],
-      // Ephemeral runs only group AI usage (thousands a day); a person opens
-      // the list for the work somebody started. Clearing the filter shows them.
+      // Ephemeral runs only group AI usage (thousands a day), and a routine
+      // run is a scheduled pass that found nothing; a person opens the list
+      // for work somebody started or that changed something. Clearing the
+      // filter shows both.
       initialFilter: [
         {
           id: "trigger",
-          value: ["foreground", "discovery", "manual", "backfill"],
+          value: ["foreground", "discovery", "manual", "backfill", "scheduled"],
         },
+        { id: "routine", value: "false" },
       ],
       viewOverrides: [
         {
@@ -211,6 +215,7 @@ export default defineEntity({
             { value: "background", label: "Background" },
             { value: "file_import", label: "File import" },
             { value: "mail_search", label: "Mail search" },
+            { value: "mail_discovery", label: "Mail discovery" },
           ],
         },
         display: { list: true, detail: true, width: "sm" },
@@ -226,11 +231,22 @@ export default defineEntity({
             { value: "discovery", label: "Discovery" },
             { value: "manual", label: "Manual" },
             { value: "backfill", label: "Backfill" },
+            { value: "scheduled", label: "Scheduled" },
             { value: "ephemeral", label: "Ephemeral" },
           ],
         },
         display: { list: true, detail: true, width: "sm" },
         validation: readOnly(runTrigger),
+      },
+      {
+        // Written when a scheduled run finishes: it completed and its purpose's
+        // own count of useful work is zero (`mail_discovery`: no message saved
+        // and no history event recorded). Stored, not computed, so list
+        // filtering, pagination and counts run on the column everywhere.
+        key: "routine",
+        kind: "boolean",
+        display: { detail: true },
+        validation: readOnly(z.boolean()),
       },
       {
         key: "vendorAccountId",
@@ -487,6 +503,7 @@ export default defineEntity({
       { key: "imported", defaultValue: 0 },
       { key: "updated", defaultValue: 0 },
       { key: "skipped", defaultValue: 0 },
+      { key: "routine", defaultValue: false },
       "auditedAt",
       "failureCode",
       "notes",
@@ -505,6 +522,7 @@ export default defineEntity({
       "status",
       "purpose",
       "trigger",
+      "routine",
       "vendorAccountId",
       "vendorId",
       "ledgerPartyId",
@@ -644,12 +662,20 @@ export default defineEntity({
         where:
           "{vendorAccountId} IS NOT NULL AND {status} IN ('running', 'paused_auth', 'paused_offline', 'paused_approval')",
       },
+      {
+        // One scheduled pass per mailbox at a time: an overlapping cron and
+        // app-open trigger lose the insert instead of both walking the cursor.
+        name: "Run_one_active_mail_discovery",
+        on: ["ledgerPartyId"],
+        unique: true,
+        where: "{purpose} = 'mail_discovery' AND {status} = 'running'",
+      },
     ],
     checks: [
       { column: "trigger" },
       {
         name: "Run_import_party_check",
-        sql: "{purpose} NOT IN ('account_sync', 'purchase_validation', 'product_enrichment', 'photo_inventory') OR ({ledgerPartyId} IS NOT NULL AND {actorLedgerPartyShortcode} IS NOT NULL)",
+        sql: "{purpose} NOT IN ('account_sync', 'purchase_validation', 'product_enrichment', 'photo_inventory', 'mail_discovery') OR ({ledgerPartyId} IS NOT NULL AND {actorLedgerPartyShortcode} IS NOT NULL)",
       },
       {
         column: "channel",
@@ -727,6 +753,20 @@ export default defineEntity({
         deriveSchema: true,
         stored: true,
         schemaFromRead: true,
+      },
+      {
+        columnId: "routine",
+        field: "routine",
+        kind: "boolean",
+        placeholder: "Filter routine runs...",
+        deriveSchema: true,
+        stored: true,
+        schemaDescription:
+          "Filter scheduled runs that completed without finding anything",
+        options: [
+          { value: "true", label: "Routine" },
+          { value: "false", label: "Not routine" },
+        ],
       },
       {
         columnId: "vendorAccountId",
