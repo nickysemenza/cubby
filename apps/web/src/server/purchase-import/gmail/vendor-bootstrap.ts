@@ -3,17 +3,34 @@ import { getDomain } from "tldts";
 
 import type { Database } from "~/server/db";
 import { vendor } from "~/server/db/schema";
-import { isUniqueViolation } from "~/server/errors/db-errors";
-import { getDb, notDeleted } from "~/server/repo/database-helpers";
+import { notDeleted, withTransaction } from "~/server/repo/database-helpers";
 import { insertWithShortcode } from "~/server/repo/shortcode-utils";
 
 /**
- * Domains many unrelated merchants send from. A Vendor keyed on one would
- * claim every merchant's mail, so their senders stay `unclassified_vendor`
- * findings for the member to resolve.
+ * Domains many unrelated merchants send from: free mail, storefront and
+ * payment platforms, and email relays that rewrite `From` onto their own
+ * domain. A Vendor keyed on one would claim every merchant's mail, so their
+ * senders stay `unclassified_vendor` findings for the member to resolve.
  */
 const SHARED_SENDER_DOMAINS = new Set([
+  "amazonses.com",
   "aol.com",
+  "bigcartel.com",
+  "campaign-archive.com",
+  "constantcontact.com",
+  "convertkit.com",
+  "ecwid.com",
+  "hubspotemail.net",
+  "klaviyomail.com",
+  "mailchimpapp.com",
+  "mailgun.org",
+  "mandrillapp.com",
+  "mcsv.net",
+  "postmarkapp.com",
+  "rsgsv.net",
+  "sendgrid.net",
+  "sendinblue.com",
+  "sparkpostmail.com",
   "fastmail.com",
   "gmail.com",
   "googlemail.com",
@@ -42,8 +59,14 @@ const GENERIC_DISPLAY_NAME =
   /^(?:customer (?:care|service|support)|info|no-?reply|notifications?|orders?|receipts?|sales|shop|store|support|team)$/iu;
 
 /** Only mail that reads like an order goes to the classifier from an unknown sender. */
-const ORDER_SUBJECT =
-  /\b(?:order|receipt|purchase|invoice|confirm(?:ed|ation)?|thank(?:s| you) for)\b/iu;
+const ORDER_SUBJECT = /\b(?:order|receipt|purchase|invoice)\b/iu;
+/** Account, list, and promotional mail that mentions orders without being one. */
+const NOT_ORDER_SUBJECT =
+  /%\s*off|\b(?:sale|deals?|newsletter|subscri\w*|verify|password|sign[- ]?in|log[- ]?in)\b|confirm your (?:email|account)/iu;
+
+/** Lowercase letters and digits only, to compare a name with a domain label. */
+const squash = (value: string) =>
+  value.toLowerCase().replace(/[^a-z0-9]/gu, "");
 
 export type SenderVendorCandidate = { name: string; domain: string };
 
@@ -51,13 +74,16 @@ export type SenderVendorCandidate = { name: string; domain: string };
  * The Vendor an unknown sender's order mail would create, or null when the
  * sender cannot safely name one: an unparseable address, a shared mailbox
  * domain, a display name carrying an address (an impersonation shape), or a
- * subject that does not read like an order.
+ * subject that does not read like an order. The display name names the
+ * Vendor only when it resembles the domain; otherwise a sender calling itself
+ * another merchant gets the domain's own name.
  */
 export function senderVendorCandidate(
   sender: string,
   subject: string,
 ): SenderVendorCandidate | null {
-  if (!ORDER_SUBJECT.test(subject)) return null;
+  if (!ORDER_SUBJECT.test(subject) || NOT_ORDER_SUBJECT.test(subject))
+    return null;
   const match = /^\s*(?:"?([^"<]*?)"?\s*)?<([^<>\s@]+@[^<>\s@]+)>\s*$/u.exec(
     sender,
   );
@@ -70,8 +96,12 @@ export function senderVendorCandidate(
   });
   if (!domain || SHARED_SENDER_DOMAINS.has(domain)) return null;
   const label = domain.split(".")[0] ?? domain;
+  const resembles =
+    squash(display).length > 0 &&
+    (squash(display).includes(squash(label)) ||
+      squash(label).includes(squash(display)));
   const name =
-    display && !GENERIC_DISPLAY_NAME.test(display)
+    display && resembles && !GENERIC_DISPLAY_NAME.test(display)
       ? display
       : label.charAt(0).toUpperCase() + label.slice(1);
   return { name, domain };
@@ -79,34 +109,58 @@ export function senderVendorCandidate(
 
 /**
  * Create the Vendor for a first order from a new website, keyed on its
- * registrable domain so later mail from any of its addresses matches. A name
- * another live Vendor already holds returns null: the same name on a
- * different domain is for the member to reconcile, not to merge.
+ * registrable domain so later mail from any of its addresses matches. Creation
+ * is serialized per domain, and a Vendor another pass already created for
+ * the domain is returned instead of a twin. A name another live Vendor holds
+ * returns null: the same name on a different domain is for the member to
+ * reconcile, not to merge.
  */
 export async function createVendorFromOrderMail(
   db: Database,
   candidate: SenderVendorCandidate,
   sender: string,
 ) {
-  const [taken] = await getDb(db)
-    .select({ id: vendor.id })
-    .from(vendor)
-    .where(
-      and(
-        sql`lower(${vendor.name}) = lower(${candidate.name})`,
-        notDeleted(vendor),
-      ),
-    )
-    .limit(1);
-  if (taken) return null;
-  try {
-    return await insertWithShortcode(db, "vendor", {
+  return withTransaction(db, async (tx) => {
+    await tx.execute(
+      sql`SELECT pg_advisory_xact_lock(hashtext(${`vendor-from-mail:${candidate.domain}`}))`,
+    );
+    const sameDomain = await tx
+      .select()
+      .from(vendor)
+      .where(
+        and(
+          sql`${vendor.website} ILIKE ${`%${candidate.domain}%`}`,
+          notDeleted(vendor),
+        ),
+      );
+    const existing = sameDomain.find(
+      (row) => websiteDomain(row.website) === candidate.domain,
+    );
+    if (existing) return existing;
+    const [taken] = await tx
+      .select({ id: vendor.id })
+      .from(vendor)
+      .where(
+        and(
+          sql`lower(${vendor.name}) = lower(${candidate.name})`,
+          notDeleted(vendor),
+        ),
+      )
+      .limit(1);
+    if (taken) return null;
+    return insertWithShortcode(tx, "vendor", {
       name: candidate.name,
       website: `https://${candidate.domain}`,
       notes: `Created from order mail sent by ${sender}.`,
     });
-  } catch (error) {
-    if (isUniqueViolation(error, "Vendor_name_key")) return null;
-    throw error;
+  });
+}
+
+function websiteDomain(website: string | null) {
+  if (!website) return null;
+  try {
+    return getDomain(new URL(website).hostname, { allowPrivateDomains: true });
+  } catch {
+    return null;
   }
 }

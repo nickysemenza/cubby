@@ -66,6 +66,7 @@ import {
 } from "./attachment-storage";
 import { type OrderMailPorts, processOrderMails } from "./process";
 import { decideOrderMailCandidate, listVendorOrderMail } from "./review";
+import { createVendorFromOrderMail } from "./vendor-bootstrap";
 
 const classifications = new Map<string, OrderMailMessageClassification>();
 const uploadedKeys: string[] = [];
@@ -457,13 +458,39 @@ describe("Gmail order mail processing", () => {
         "Seed Co <news@seedco.example>",
         "Spring planting tips",
       );
+      // Account and promotional mail that mentions orders never reaches the
+      // model: none of these has a registered classification.
+      for (const [index, subject] of [
+        "Confirm your email address",
+        "Thanks for subscribing to order updates",
+        "Invoice software: 20% off",
+      ].entries())
+        await receiveUnknown(
+          seed,
+          [`promo-${index}`],
+          "Seed Co <news@seedco.example>",
+          subject,
+        );
+      // Email relays rewrite many merchants onto one domain.
+      classifications.set("relay", {
+        events: [placed("RL-1", 5, "2026-09-20T12:00:00Z")],
+      });
+      await receiveUnknown(
+        seed,
+        ["relay"],
+        "Example Seeds <example.seeds@mailchimpapp.com>",
+      );
+      await insertWithShortcode(ctx.db, "vendor", {
+        name: "Seedco",
+        website: "https://other-seedco.example",
+      });
       classifications.set("taken-name", {
         events: [placed("TN-1", 5, "2026-09-20T12:00:00Z")],
       });
       await receiveUnknown(
         seed,
         ["taken-name"],
-        "ForgeWear <orders@seedco.example>",
+        "Seedco <orders@seedco.example>",
       );
       expect(await newVendors()).toEqual([]);
       expect(
@@ -473,6 +500,39 @@ describe("Gmail order mail processing", () => {
           .where(eq(vendor.website, "https://gmail.com")),
       ).toEqual([]);
       expect((await openSenderFindings()).length).toBeGreaterThan(0);
+    });
+
+    it("names a Vendor from its own domain when the display name claims another merchant", async () => {
+      const seed = await seedForgeWear();
+      classifications.set("claims-other", {
+        events: [placed("CO-1", 5, "2026-09-20T12:00:00Z")],
+      });
+      await receiveUnknown(
+        seed,
+        ["claims-other"],
+        "Example Outfitters <billing@seedco.example>",
+      );
+      expect(await newVendors()).toEqual([
+        expect.objectContaining({ name: "Seedco" }),
+      ]);
+    });
+
+    it("creates one Vendor when two passes bootstrap the same domain at once", async () => {
+      const created = await Promise.all([
+        createVendorFromOrderMail(
+          ctx.db,
+          { name: "Seed Co", domain: "seedco.example" },
+          "orders@seedco.example",
+        ),
+        createVendorFromOrderMail(
+          ctx.db,
+          { name: "Seedco", domain: "seedco.example" },
+          "billing@seedco.example",
+        ),
+      ]);
+      expect(created[0]?.id).toBeDefined();
+      expect(created[1]?.id).toBe(created[0]?.id);
+      expect(await newVendors()).toHaveLength(1);
     });
   });
 
