@@ -1,7 +1,9 @@
+import type { ActivityRun } from "@cubby/schemas/activity";
 import { CopyIcon } from "@phosphor-icons/react/dist/csr/Copy";
 import { useInfiniteQuery } from "@tanstack/react-query";
 import { useEffect, useMemo } from "react";
 
+import { RunSubject, RunTargetChips } from "~/app/runs/run-work-summary";
 import { cursorQueryOptions } from "~/integrations/tanstack-query/cursor-query-options";
 import { activity } from "~/integrations/tanstack-query/generated/catalog.gen";
 import { copyText } from "~/lib/clipboard";
@@ -68,10 +70,10 @@ export function ActivityRunDetail({
       <CardHeader>
         <Row justify="between" align="start" gap="sm" wrap>
           <div>
-            <CardTitle>{run?.subjectName ?? "Work detail"}</CardTitle>
+            <CardTitle>{run?.workLabel ?? "Work detail"}</CardTitle>
             <CardDescription>
               {run
-                ? `${run.id} · ${run.recordType === "run" ? "Run" : "Image job"} · ${run.kind.replaceAll("_", " ")} · ${run.state} · ${formatInstant(run.createdAt, "dateTime")}`
+                ? `${run.id} · ${run.recordType === "run" ? "Run" : "Image job"} · ${run.state} · ${formatInstant(run.createdAt, "dateTime")}`
                 : id}
             </CardDescription>
           </div>
@@ -81,12 +83,8 @@ export function ActivityRunDetail({
         </Row>
       </CardHeader>
       <CardContent>
+        {run ? <RunWorkFacts run={run} /> : null}
         <Row gap="sm" wrap>
-          {run?.subjectHref ? (
-            <a className="text-primary hover:underline" href={run.subjectHref}>
-              Open subject
-            </a>
-          ) : null}
           {id.startsWith("RUN-") ? (
             <a className="text-primary hover:underline" href={`/runs/${id}`}>
               Full details
@@ -274,5 +272,45 @@ export function ActivityRunDetail({
         </Stack>
       </CardContent>
     </Card>
+  );
+}
+
+/** What the work is about, how far it got, and which records it touched. */
+function RunWorkFacts({ run }: { run: ActivityRun }) {
+  const outcome = run.targetSummary;
+  return (
+    <dl className="mb-3 grid grid-cols-[max-content_minmax(0,1fr)] items-center gap-x-3 gap-y-1.5 text-sm">
+      <dt className="text-muted-foreground">Subject</dt>
+      <dd className="min-w-0">
+        <RunSubject run={run} />
+      </dd>
+      {run.currentStep ? (
+        <>
+          <dt className="text-muted-foreground">
+            {run.active ? "Now" : "Last step"}
+          </dt>
+          <dd>{run.currentStep}</dd>
+        </>
+      ) : null}
+      {outcome ? (
+        <>
+          <dt className="text-muted-foreground">Targets</dt>
+          <dd className="grid gap-1">
+            <span className="tabular-nums">{outcome}</span>
+            <RunTargetChips run={run} wrap />
+          </dd>
+        </>
+      ) : null}
+      {run.recordType === "run" ? (
+        <>
+          <dt className="text-muted-foreground">Changed</dt>
+          <dd className="tabular-nums">
+            {run.changedCount === 1
+              ? "1 record"
+              : `${run.changedCount} records`}
+          </dd>
+        </>
+      ) : null}
+    </dl>
   );
 }

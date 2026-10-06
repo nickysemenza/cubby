@@ -1,4 +1,5 @@
 import { buildActorContext, type ActorContext } from "@cubby/schemas/context";
+import { entityRefKey } from "@cubby/schemas/entity";
 import {
   parseEntityId,
   imageId,
@@ -7,6 +8,7 @@ import {
   productId,
   purchaseId,
   userId,
+  parseEntityRef,
   runEntityId,
   vendorAccountId,
   type LedgerPartyId,
@@ -54,6 +56,7 @@ import {
   orderMailImportRunOrders,
   type RunInput,
   type RunRestartInput,
+  runWorkLabel,
 } from "@cubby/schemas/run-fields";
 import type { Trade } from "@cubby/schemas/task-fields";
 import { vendorAccountCursor } from "@cubby/schemas/vendor-account-fields";
@@ -371,6 +374,29 @@ export async function startOrResumeRun(
         );
     }
     if (!chargeHunts) await assertNoHoldingChargeRun(tx, input.vendorAccountId);
+    // Only an account sync may be resumed here: an enrichment or validation
+    // run holding the account is other work, not this request's run.
+    const [otherWork] = await tx
+      .select({
+        shortcode: runTable.shortcode,
+        purpose: runTable.purpose,
+        input: runTable.input,
+        vendorId: runTable.vendorId,
+      })
+      .from(runTable)
+      .where(
+        and(
+          eq(runTable.vendorAccountId, input.vendorAccountId),
+          inArray(runTable.status, [...ACTIVE_RUN_STATUSES]),
+          ne(runTable.purpose, "account_sync"),
+        ),
+      )
+      .limit(1);
+    if (otherWork)
+      throw new AccountOccupiedError(
+        otherWork.shortcode,
+        runWorkLabel(otherWork).toLowerCase(),
+      );
     if (chargeHunts) {
       const [active] = await tx
         .select({ shortcode: runTable.shortcode })
@@ -1570,11 +1596,25 @@ async function deferQueuedChargeHunts(
 }
 
 /** An implicit start must not silently join a member's selected-charges run. */
-export class ActiveChargeRunError extends Error {
-  constructor(runShortcode: string) {
+/**
+ * The vendor account's one active run is doing other work, so this request
+ * cannot join it; the member finishes or stops that run first.
+ */
+export class AccountOccupiedError extends Error {
+  constructor(
+    readonly runShortcode: string,
+    work: string,
+  ) {
     super(
-      `Vendor account is running a selected charge search (${runShortcode}); finish or stop it first`,
+      `Vendor account is running ${work} (${runShortcode}); finish or stop it first`,
     );
+    this.name = "AccountOccupiedError";
+  }
+}
+
+export class ActiveChargeRunError extends AccountOccupiedError {
+  constructor(runShortcode: string) {
+    super(runShortcode, "a selected charge search");
     this.name = "ActiveChargeRunError";
   }
 }
@@ -3576,6 +3616,7 @@ export async function loadRunDetail(
       .select({
         id: runTarget.id,
         entityKind: runTarget.entityKind,
+        entityId: runTarget.entityId,
         entityCode: entityIdentity.shortcode,
         vendorAccountId: vendorAccount.shortcode,
         sourceKind: runTarget.sourceKind,
@@ -3617,6 +3658,12 @@ export async function loadRunDetail(
       ),
     selectRestartTargets(database, run.id),
   ]);
+  const { lookupEntityLabels } =
+    await import("~/server/repo/shortcode-resolver");
+  const targetNames = await lookupEntityLabels(
+    db,
+    targets.map((target) => parseEntityRef(target.entityKind, target.entityId)),
+  );
   const controller = (event: (typeof controlHistory)[number]) => ({
     name: event.name,
     ledgerParty: { id: event.ledgerPartyId, name: event.ledgerPartyName },
@@ -3707,7 +3754,9 @@ export async function loadRunDetail(
       targetType: target.entityKind,
       // Image targets have never carried a public code in the run detail.
       targetShortcode: target.entityKind === "image" ? null : target.entityCode,
-      targetName: null,
+      targetName:
+        targetNames.get(entityRefKey(target.entityKind, target.entityId)) ??
+        null,
       sourceId: null,
       sourceLabel: target.sourceKind
         ? `${target.sourceKind}${target.sourceExternalKey ? ` · ${target.sourceExternalKey}` : ""}`

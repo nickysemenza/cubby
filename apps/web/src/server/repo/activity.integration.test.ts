@@ -14,13 +14,17 @@ import {
 import {
   aiAnalysis,
   aiUsage,
+  auditLog,
   image,
   run as runTable,
   runOperation,
+  runProgress,
+  runTarget,
 } from "~/server/db/schema";
 import { ensureRun } from "~/server/runs/ensure-run";
 
 import {
+  activityDetail,
   activityDevices,
   activityEvents,
   activitySubmission,
@@ -36,6 +40,7 @@ import {
   IMAGE_SUBJECT_LIFT_PROCESSOR_REVISION,
   createImageProcessingJob,
 } from "./image-processing";
+import { insertEntityAttachments } from "./repo.fixtures";
 import { insertWithShortcode } from "./shortcode-utils";
 
 describe("activity image processing projection", () => {
@@ -544,6 +549,184 @@ describe("unified Runs history", () => {
 
   // The Runs list hides routine passes by default; a productive or failed
   // scheduled pass and every other Run must stay.
+  it("says what a run is doing and which records it worked on", async () => {
+    const vendor = await insertWithShortcode(ctx.db, "vendor", {
+      name: "Seed fixture vendor",
+    });
+    const logo = await createUploadedImageRecord(ctx.db, {
+      key: `activity/logo-${crypto.randomUUID()}.png`,
+      filename: "logo.png",
+      contentType: "image/png",
+      size: 128,
+    });
+    await insertEntityAttachments(ctx.db, {
+      entityId: vendor.id,
+      imageId: logo.id,
+      role: "logo",
+    });
+    const enriched = await insertWithShortcode(ctx.db, "product", {
+      name: "Fixture Nasturtium",
+      manufacturer: "Fixture Seeds",
+    });
+    const skipped = await insertWithShortcode(ctx.db, "product", {
+      name: "Fixture Tomato",
+      manufacturer: "Fixture Seeds",
+    });
+    const cover = await createUploadedImageRecord(ctx.db, {
+      key: `activity/cover-${crypto.randomUUID()}.jpg`,
+      filename: "cover.jpg",
+      contentType: "image/jpeg",
+      size: 128,
+    });
+    await insertEntityAttachments(ctx.db, {
+      entityId: enriched.id,
+      imageId: cover.id,
+      sortOrder: 0,
+    });
+    const party = await insertWithShortcode(ctx.db, "ledgerParty", {
+      name: "Enrichment member",
+      kind: "member",
+      userId: ctx.actor.userId,
+    });
+    const shortcode = generateShortcode("run");
+    const [run] = await getDb(ctx.db)
+      .insert(runTable)
+      .values({
+        shortcode,
+        ledgerPartyId: party.id,
+        actorUserId: ctx.actor.userId,
+        actorName: "Enrichment member",
+        actorEmail: "enrichment@example.test",
+        actorLedgerPartyShortcode: party.shortcode,
+        actorLedgerPartyName: party.name,
+        actorLedgerPartyKind: party.kind,
+        purpose: "product_enrichment",
+        trigger: "scheduled",
+        status: "running",
+        vendorId: vendor.id,
+        startedAt: new Date(),
+      })
+      .returning({ id: runTable.id });
+    await getDb(ctx.db)
+      .insert(runTarget)
+      .values([
+        {
+          runId: run!.id,
+          entityKind: "product",
+          entityId: enriched.id,
+          position: 0,
+          state: "completed",
+          outcome: "enriched",
+          targetFingerprint: "1".repeat(64),
+        },
+        {
+          runId: run!.id,
+          entityKind: "product",
+          entityId: skipped.id,
+          position: 1,
+          state: "skipped",
+          outcome: "skipped",
+          warning: "The page lists several variants",
+          targetFingerprint: "2".repeat(64),
+        },
+      ]);
+    await getDb(ctx.db)
+      .insert(runProgress)
+      .values([
+        {
+          runId: run!.id,
+          eventId: crypto.randomUUID(),
+          phase: "browsing",
+          detail: "Opening the first product page",
+          createdAt: new Date(Date.now() - 60_000),
+        },
+        {
+          runId: run!.id,
+          eventId: crypto.randomUUID(),
+          phase: "reading",
+          detail: "Reading Fixture Tomato",
+        },
+      ]);
+    await getDb(ctx.db)
+      .insert(auditLog)
+      .values([
+        {
+          runId: run!.id,
+          entityKind: "product",
+          entityId: enriched.id,
+          action: "update",
+          changes: { gtin: { from: null, to: "00012345678905" } },
+          userId: ctx.actor.userId,
+          channel: "system",
+        },
+        {
+          runId: run!.id,
+          entityKind: "product",
+          entityId: enriched.id,
+          action: "update",
+          changes: { brand: { from: null, to: "Fixture Seeds" } },
+          userId: ctx.actor.userId,
+          channel: "system",
+        },
+      ]);
+
+    const expected = {
+      id: shortcode,
+      workLabel: "Product enrichment",
+      subjectId: vendor.shortcode,
+      subjectImage: { url: expect.stringContaining(logo.key) },
+      currentStep: "Reading Fixture Tomato",
+      targetCounts: {
+        total: 2,
+        completed: 1,
+        skipped: 1,
+        blocked: 0,
+        pending: 0,
+      },
+      targetSummary: "1/2 done · 1 skipped",
+      targetPreview: [
+        {
+          entity: "product",
+          id: enriched.shortcode,
+          name: "Fixture Nasturtium",
+          state: "completed",
+          displayImage: { url: expect.stringContaining(cover.key) },
+        },
+        {
+          entity: "product",
+          id: skipped.shortcode,
+          name: "Fixture Tomato",
+          state: "skipped",
+          displayImage: null,
+        },
+      ],
+      changedCount: 1,
+    };
+    const list = await listActivity(ctx.db, null, {
+      recordType: "run",
+      kind: "product_enrichment",
+      executor: "all",
+      limit: 20,
+      sort: "newest",
+    });
+    expect(list.items.find((row) => row.id === shortcode)).toMatchObject(
+      expected,
+    );
+    const groups = await listActivityGroups(ctx.db, null, {
+      recordType: "run",
+      kind: "product_enrichment",
+      executor: "all",
+      limit: 20,
+      sort: "newest",
+    });
+    expect(
+      groups.items.find((group) => group.root.id === shortcode)?.root,
+    ).toMatchObject(expected);
+    expect(
+      (await activityDetail(ctx.db, null, { id: shortcode, limit: 5 })).run,
+    ).toMatchObject(expected);
+  });
+
   it("filters routine runs either way only when asked", async () => {
     const party = await insertWithShortcode(ctx.db, "ledgerParty", {
       name: "Routine member",

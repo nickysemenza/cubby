@@ -394,6 +394,10 @@ export async function pruneRoutineRuns(
     sql.raw(
       `NOT EXISTS (SELECT 1 FROM "AiUsage" u WHERE u."runId" = "Run"."id")`,
     ),
+    // A pass that filed a finding (mail from an unknown sender) owns it.
+    sql.raw(
+      `NOT EXISTS (SELECT 1 FROM "RunFinding" f WHERE f."runId" = "Run"."id")`,
+    ),
   );
   return withTransaction(db, async (tx) => {
     const ids = (

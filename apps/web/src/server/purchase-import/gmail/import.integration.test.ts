@@ -26,6 +26,7 @@ import {
   vendorAccount,
 } from "~/server/db/schema";
 import { getDb } from "~/server/repo/database-helpers";
+import { getRunByShortcode } from "~/server/repo/run";
 import { getRunLiveProgress } from "~/server/repo/run-progress";
 import { insertWithShortcode } from "~/server/repo/shortcode-utils";
 
@@ -125,6 +126,9 @@ describe("saved confirmation imports", () => {
     if (!run) throw new Error("Missing confirmation run");
     expect(run.vendorAccountId).toBeNull();
     expect(run.purpose).toBe("account_sync");
+    // Named for its work everywhere a Run is listed, never "Account sync".
+    const read = await getRunByShortcode(ctx.db, first.runId);
+    expect(read?.displayName).toMatch(/ · Order mail import$/u);
     // Restart copies the Vendor and the assigned confirmation, so the panel
     // that claims to show exactly what it copies must show both, by public id.
     const { restartInputs } = await loadRunDetail(ctx.db, first.runId);

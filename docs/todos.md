@@ -158,6 +158,80 @@ See also the image operational passes at the end of this file.
 
 ---
 
+## Runs, enrichment & browser capture
+
+Runs are the household's unattended work: account syncs, mail passes, charge
+searches, Product enrichment, photo inventory. Today each is a separate Run
+with ad hoc links between them; the Runs list and `imports_read.run_status`
+read one shared projection (`server/repo/activity.ts`).
+
+- 🧱 **Jobs, Steps, and Runs.** A Job is the objective (enrich this order's
+  Products), a Step is durable pending work with dependencies, a Run is one
+  execution attempt. Store causation (what spawned this) apart from
+  dependency (what must finish first). In order: record Job/Step provenance
+  for existing Runs (data migration); a durable admission queue per vendor
+  account in place of the `AccountOccupiedError` refusal; evidence
+  prerequisites (an order's purchased variant before its Products enrich);
+  one retry policy; one status projection for web, Mac, and MCP.
+
+- 🧱 **Fold legacy unknown-sender holder Runs into their passes.** Mail
+  passes now file unknown-sender findings on themselves, but hundreds of
+  older vendor-less account-sync Runs exist only to hold one finding. Move
+  each finding to the discovery pass that read it, then delete the empty
+  holders. Production data change: confirm first.
+
+- 🟢 **Thin Mac capture, server-side extraction.** The Mac app should return
+  raw artifacts (final URL, raw JSON-LD, a DOM snapshot, PDF or screenshot)
+  instead of running page-specific extraction JavaScript. The server
+  extracts deterministically (Rust `recipebridge`/html5ever) and can
+  re-parse retained evidence when an extractor improves. Keep Chrome as the
+  browser: vendor sign-in goes through the household password manager.
+
+- 🤔 **Fetch public product pages first.** Try a plain server fetch for a
+  public product page and fall back to the Mac bridge when it is blocked.
+  Expect many vendors to refuse; record the block rate per vendor before
+  routing any vendor fetch-only.
+
+- 🟢 **Enrich the variant that was bought.** Seed and Shopify pages are often
+  variant groups, which the single-Product proof rule rightly skips. Open
+  the purchased variant (`?variant=` matched by SKU or price) and read its
+  per-variant barcode (Shopify's `.js` product JSON exposes them).
+
+- 🟢 **Sync order history before enriching mail-imported orders.** Order mail
+  rarely names the variant; the vendor's order page does. Make the
+  enrichment Step depend on an order-history sync for that order.
+
+- 🤔 **Link enriched seeds to Plants.** Seed Products could set `growsPlantId`
+  and carry plant facts (days to maturity, spacing) from the vendor page.
+  Needs a decision on which facts live on Plant versus Product.
+
+- 🤔 **Provenance for already-filled fields.** Enrichment fills only empty
+  fields, so a verified value matching an existing one gains no provenance.
+  Decide whether a matching verified value records its source.
+
+- 🟢 **Live run status in the Mac app.** Show the current Run, its target,
+  and its latest step from the shared status projection, so the household
+  can tell whether Chrome is busy before touching it.
+
+- 🟢 **Mac capture preflight and update errors.** Check the screen-recording
+  permission before the first ScreenCaptureKit capture, and report an
+  outdated app (HTTP 426 from the client gate) as "update required" rather
+  than a generic upload failure.
+
+- 🟢 **Enrichment completion notification.** Summarize per-Product outcomes
+  (enriched, skipped and why) in the Mac notification instead of the
+  purchase-import "orders changed" copy.
+
+- 🟢 **Control runs over MCP.** `imports_read.run_status` reads a Run; add
+  stop, restart, and approve so an MCP client can follow work end to end.
+
+- 🤔 **Model routing for capture.** Use Jev for constrained choices (variant
+  matching), Luna for reading unstructured pages, and Sol only to
+  orchestrate. Measure on the purchase decision evaluation before switching.
+
+- 🟢 **Generate native activity kind titles.** The Apple `kind.title` and
+  `kind.symbol` extensions restate `ACTIVITY_KIND_LABEL`; generate them.
+
 ## Ingredients, recipes & nutrition
 
 - 🧱 **Ingredient as the grocery hub.** Product is SKU-grade and Ingredient

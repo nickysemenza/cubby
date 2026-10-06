@@ -1,5 +1,7 @@
 import {
+  ACTIVITY_KIND_LABEL,
   activityAttempt,
+  targetOutcomeSummary,
   activityDetailOutput,
   activityDevicesOutput,
   activityEvent,
@@ -11,10 +13,14 @@ import {
   imageAnalysisHistoryOutput,
   type ActivityListInput,
 } from "@cubby/schemas/activity";
+import { entityRefKey } from "@cubby/schemas/entity";
+import { parseEntityRef } from "@cubby/schemas/identifiers";
 import {
   imageDescriptionAnalysis,
   imageDescriptionResult,
 } from "@cubby/schemas/image-processing";
+import { runWorkLabel } from "@cubby/schemas/run-fields";
+import { parseShortcode } from "@cubby/shared";
 import { and, desc, eq, sql, type SQL } from "drizzle-orm";
 import { z } from "zod";
 
@@ -22,7 +28,14 @@ import type { Database } from "~/server/db";
 import { imageProcessingAttempt } from "~/server/db/image-processing-schema";
 import { aiAnalysis, aiUsage } from "~/server/db/schema";
 import { getDb, notDeleted } from "~/server/repo/database-helpers";
-import { resolveOrThrow } from "~/server/repo/shortcode-resolver";
+import {
+  resolveEntityDisplayImages,
+  resolvePublicEntityDisplayImages,
+} from "~/server/repo/entity-display-image";
+import {
+  lookupEntityLabels,
+  resolveOrThrow,
+} from "~/server/repo/shortcode-resolver";
 
 import {
   IMAGE_APPLE_DESCRIPTION_PROCESSOR_REVISION,
@@ -69,7 +82,6 @@ function runProjection(): SQL {
       parent_party.shortcode AS "ledgerPartyId",
       i.shortcode AS "subjectId",
       i.filename AS "subjectName",
-      '/images/' || i.shortcode AS "subjectHref",
       j.state,
       j.state IN ('pending', 'leased', 'waiting_for_device') AS active,
       j."createdAt",
@@ -141,10 +153,6 @@ function runProjection(): SQL {
         WHEN v.name IS NOT NULL THEN v.name
         ELSE initcap(replace(r.purpose, '_', ' '))
       END AS "subjectName",
-      CASE
-        WHEN v.shortcode IS NOT NULL THEN '/vendors/' || v.shortcode
-        ELSE '/runs/' || r.shortcode
-      END AS "subjectHref",
       r.status AS state,
       r.status IN ('running', 'paused_auth', 'paused_offline', 'paused_approval') AS active,
       r."startedAt" AS "createdAt",
@@ -180,15 +188,159 @@ function runProjection(): SQL {
   `;
 }
 
-const runWire = activityRun.extend({
-  createdAt: z.coerce.date().transform((date) => date.toISOString()),
-  completedAt: z.coerce
-    .date()
-    .nullable()
-    .transform((date) => date?.toISOString() ?? null),
-  durationMs: z.coerce.number().nullable(),
-  estimatedCost: z.coerce.number().nullable(),
+const runWire = activityRun
+  .omit({
+    subjectImage: true,
+    workLabel: true,
+    currentStep: true,
+    targetCounts: true,
+    targetSummary: true,
+    targetPreview: true,
+    changedCount: true,
+  })
+  .extend({
+    internal_id: z.string(),
+    createdAt: z.coerce.date().transform((date) => date.toISOString()),
+    completedAt: z.coerce
+      .date()
+      .nullable()
+      .transform((date) => date?.toISOString() ?? null),
+    durationMs: z.coerce.number().nullable(),
+    estimatedCost: z.coerce.number().nullable(),
+  });
+type RunWire = z.infer<typeof runWire>;
+
+/** How many targets a row names; the counts cover the rest. */
+const TARGET_PREVIEW_LIMIT = 3;
+
+const runFactsRow = z.object({
+  internalId: z.string(),
+  input: z.unknown(),
+  currentStep: z.string().nullable(),
+  targetCounts: activityRun.shape.targetCounts.unwrap(),
+  targets: z.array(
+    z.object({
+      entityKind: z.enum(["purchase", "product", "image"]),
+      entityId: z.string(),
+      shortcode: z.string(),
+      state: z.string(),
+    }),
+  ),
+  changedCount: z.coerce.number(),
 });
+
+/**
+ * Facts for a page of rows only: the projection stays cheap to filter and
+ * count, and the per-run subqueries below run once per shown row.
+ */
+async function loadRunFacts(db: Database, internalIds: readonly string[]) {
+  if (internalIds.length === 0)
+    return new Map<string, z.infer<typeof runFactsRow>>();
+  const query = await getDb(db).execute(sql`
+    SELECT
+      r.id AS "internalId",
+      r.input,
+      (SELECT coalesce(p.detail, p.phase) FROM "RunProgress" p
+        WHERE p."runId" = r.id
+        ORDER BY p."createdAt" DESC, p.id DESC LIMIT 1) AS "currentStep",
+      (SELECT jsonb_build_object(
+        'total', count(*),
+        'completed', count(*) FILTER (WHERE t.state = 'completed'),
+        'skipped', count(*) FILTER (WHERE t.state IN ('skipped', 'unavailable')),
+        'blocked', count(*) FILTER (WHERE t.state IN ('unresolved', 'needs_evidence')),
+        'pending', count(*) FILTER (WHERE t.state IN ('pending', 'prepared'))
+      ) FROM "RunTarget" t WHERE t."runId" = r.id) AS "targetCounts",
+      coalesce((SELECT jsonb_agg(jsonb_build_object(
+          'entityKind', shown."entityKind", 'entityId', shown."entityId",
+          'shortcode', shown.shortcode, 'state', shown.state
+        ) ORDER BY shown.position NULLS LAST, shown.id)
+        FROM (
+          SELECT t.id, t.position, t."entityKind", t."entityId", t.state, identity.shortcode
+          FROM "RunTarget" t
+          JOIN "Entity" identity ON identity.id = t."entityId"
+          WHERE t."runId" = r.id
+          ORDER BY t.position NULLS LAST, t.id
+          LIMIT ${TARGET_PREVIEW_LIMIT}
+        ) shown), '[]'::jsonb) AS targets,
+      (SELECT count(DISTINCT (a."entityKind", a."entityId"))
+        FROM "AuditLog" a WHERE a."runId" = r.id) AS "changedCount"
+    FROM "Run" r
+    WHERE r.id IN (${sql.join(
+      internalIds.map((id) => sql`${id}::uuid`),
+      sql`, `,
+    )})
+  `);
+  return new Map(
+    query.rows.map((row) => {
+      const facts = runFactsRow.parse(row);
+      return [facts.internalId, facts] as const;
+    }),
+  );
+}
+
+/** Rows as the Runs list shows them: what the work is and what it touched. */
+async function presentActivityRuns(db: Database, rows: readonly RunWire[]) {
+  const facts = await loadRunFacts(
+    db,
+    rows
+      .filter((row) => row.recordType === "run")
+      .map((row) => row.internal_id),
+  );
+  const targets = [...facts.values()].flatMap((fact) => fact.targets);
+  const targetRefs = targets.map((target) => ({
+    entityKind: target.entityKind,
+    entityId: target.entityId,
+  }));
+  const [names, targetImages, subjectImages] = await Promise.all([
+    lookupEntityLabels(
+      db,
+      targetRefs.map((ref) => parseEntityRef(ref.entityKind, ref.entityId)),
+    ),
+    resolveEntityDisplayImages(db, targetRefs),
+    resolvePublicEntityDisplayImages(
+      db,
+      rows.flatMap((row) => {
+        const parsed = row.subjectId ? parseShortcode(row.subjectId) : null;
+        return parsed
+          ? [{ entityKind: parsed.type, entityId: row.subjectId! }]
+          : [];
+      }),
+    ),
+  ]);
+  return rows.map(({ internal_id: internalId, ...row }) => {
+    const fact = facts.get(internalId);
+    const subject = row.subjectId ? parseShortcode(row.subjectId) : null;
+    return activityRun.parse({
+      ...row,
+      subjectImage: subject
+        ? (subjectImages.get(entityRefKey(subject.type, row.subjectId!)) ??
+          null)
+        : null,
+      workLabel:
+        row.recordType === "run"
+          ? runWorkLabel({
+              purpose: row.kind,
+              input: fact?.input,
+              vendorId: row.vendorId,
+            })
+          : ACTIVITY_KIND_LABEL[row.kind],
+      currentStep: fact?.currentStep ?? null,
+      targetCounts: fact?.targetCounts ?? null,
+      targetSummary: targetOutcomeSummary(fact?.targetCounts ?? null),
+      targetPreview: (fact?.targets ?? []).map((target) => {
+        const key = entityRefKey(target.entityKind, target.entityId);
+        return {
+          entity: target.entityKind,
+          id: target.shortcode,
+          name: names.get(key) ?? null,
+          state: target.state,
+          displayImage: targetImages.get(key) ?? null,
+        };
+      }),
+      changedCount: fact?.changedCount ?? 0,
+    });
+  });
+}
 
 function listPredicate(input: ActivityListInput): SQL {
   const clauses: SQL[] = [sql`true`];
@@ -317,7 +469,7 @@ export async function listActivity(
   const pageItems = data.items.slice(0, input.limit);
   const last = pageItems.at(-1);
   return activityListOutput.parse({
-    items: pageItems,
+    items: await presentActivityRuns(db, pageItems),
     total: data.total,
     nextCursor:
       data.items.length > input.limit && last
@@ -385,7 +537,9 @@ export async function listActivityGroups(
       totalItems: z.coerce.number(),
       items: z.array(
         z.object({
-          item: activityGroupsOutput.shape.items.element,
+          item: activityGroupsOutput.shape.items.element.extend({
+            root: runWire,
+          }),
           cursorAt: z.iso.datetime(),
           rootId: z.string(),
         }),
@@ -394,8 +548,12 @@ export async function listActivityGroups(
     .parse(query.rows[0]);
   const pageItems = data.items.slice(0, input.limit);
   const last = pageItems.at(-1);
+  const roots = await presentActivityRuns(
+    db,
+    pageItems.map((row) => row.item.root),
+  );
   return activityGroupsOutput.parse({
-    items: pageItems.map((row) => row.item),
+    items: pageItems.map((row, index) => ({ ...row.item, root: roots[index] })),
     total: data.total,
     totalItems: data.totalItems,
     nextCursor:
@@ -431,7 +589,8 @@ async function resolveActivity(
     .passthrough()
     .safeParse(query.rows[0]);
   if (!found.success) throw new Error("Activity run was not found");
-  return { internalId: found.data.internal_id, run: runWire.parse(found.data) };
+  const [run] = await presentActivityRuns(db, [runWire.parse(found.data)]);
+  return { internalId: found.data.internal_id, run: run! };
 }
 
 const activityAttemptWire = activityAttempt.extend({

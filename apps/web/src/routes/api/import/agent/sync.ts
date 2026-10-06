@@ -53,7 +53,7 @@ export const Route = createFileRoute("/api/import/agent/sync")({
         // otherwise load into every Worker request.
         const [
           { dispatchRunEvent },
-          { ActiveChargeRunError, startOrResumeRun },
+          { AccountOccupiedError, startOrResumeRun },
         ] = await Promise.all([
           import("~/server/purchase-import/dispatch"),
           import("~/server/purchase-import/run-service"),
@@ -68,9 +68,9 @@ export const Route = createFileRoute("/api/import/agent/sync")({
               : { trigger: "manual" as const }),
           });
         } catch (error) {
-          // A refused backfill (occupied account, invalid range) is the
-          // member's to act on; return the server's own reason.
-          if (!body.data.backfill && !(error instanceof ActiveChargeRunError))
+          // A refused backfill (occupied account, invalid range) or an account
+          // another run holds is the member's to act on; return the reason.
+          if (!body.data.backfill && !(error instanceof AccountOccupiedError))
             throw error;
           return Response.json(
             { error: error instanceof Error ? error.message : String(error) },

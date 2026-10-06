@@ -18,7 +18,7 @@
  * Only the external seams are faked, through the pipeline's ports: the mail
  * classifier (a model call) and object storage.
  */
-import { parseEntityId } from "@cubby/schemas/identifiers";
+import { parseEntityId, runEntityId } from "@cubby/schemas/identifiers";
 import type {
   OrderMailClassification,
   OrderMailMessageClassification,
@@ -38,6 +38,7 @@ import {
   orderMailAttachment,
   orderMailCandidateDecision,
   orderMailEvent,
+  run,
   vendor,
   vendorAccount,
   user,
@@ -500,6 +501,57 @@ describe("Gmail order mail processing", () => {
           .where(eq(vendor.website, "https://gmail.com")),
       ).toEqual([]);
       expect((await openSenderFindings()).length).toBeGreaterThan(0);
+    });
+
+    // The pass that read the mail owns what it found. Failure mode: a
+    // finished, vendor-less "account sync" Run minted per unknown sender
+    // just to hold the finding, flooding the Runs list.
+    it("files an unknown sender's finding on the discovery run that read it", async () => {
+      const seed = await seedForgeWear();
+      const discoveryId = runEntityId.parse(crypto.randomUUID());
+      await insertWithShortcode(ctx.db, "run", {
+        id: discoveryId,
+        ledgerPartyId: seed.party.id,
+        actorUserId: ctx.actor.userId,
+        actorName: "Mail pipeline member",
+        actorEmail: "member@example.test",
+        actorLedgerPartyShortcode: seed.party.shortcode,
+        actorLedgerPartyName: seed.party.name,
+        actorLedgerPartyKind: "member",
+        purpose: "mail_discovery",
+        trigger: "discovery",
+        agentSessionId: `mail-discovery:${discoveryId}`,
+      });
+      const runsBefore = await getDb(ctx.db).select({ id: run.id }).from(run);
+      classifications.set("newsletter-unknown", {
+        events: [placed("NU-1", 5, "2026-09-20T12:00:00Z")],
+      });
+      await getDb(ctx.db)
+        .insert(orderMail)
+        .values({
+          ledgerPartyId: seed.party.id,
+          messageId: "newsletter-unknown",
+          // A relay domain names no merchant, so no Vendor can be created.
+          sender: "Example Seeds <example.seeds@mailchimpapp.com>",
+          subject: "Your order is confirmed",
+          receivedAt: new Date("2026-09-20T12:00:00Z"),
+          rawChecksum: "raw-newsletter-unknown",
+        });
+      await processOrderMails(
+        ctx.db,
+        ["newsletter-unknown"],
+        ports,
+        discoveryId,
+      );
+      expect(await getDb(ctx.db).select({ id: run.id }).from(run)).toHaveLength(
+        runsBefore.length,
+      );
+      expect(
+        await getDb(ctx.db)
+          .select({ runId: runFinding.runId, kind: runFinding.kind })
+          .from(runFinding)
+          .where(eq(runFinding.kind, "unclassified_vendor")),
+      ).toEqual([{ runId: discoveryId, kind: "unclassified_vendor" }]);
     });
 
     it("names a Vendor from its own domain when the display name claims another merchant", async () => {

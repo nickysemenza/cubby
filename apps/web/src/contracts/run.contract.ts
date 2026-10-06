@@ -299,7 +299,6 @@ export { type TargetedImportStartInput, type TargetedImportStartOutput };
 
 export const runContract = defineContract("run", {
   workSnapshot: query({
-    mcp: { omit: "client_view" },
     native: "Show durable live import progress in Apple apps",
     input: z.object({ runId: runShortcode }),
     output: z.object({
@@ -317,6 +316,21 @@ export const runContract = defineContract("run", {
       findings: runDetail.shape.findings,
       targetsTotal: z.number().int(),
       targetsCompleted: z.number().int(),
+      /**
+       * Each target's outcome: what the run worked and why it ended where it
+       * did (a skip keeps its reason in `warning`).
+       */
+      targets: z.array(
+        runDetail.shape.targets.element.pick({
+          targetType: true,
+          targetShortcode: true,
+          targetName: true,
+          state: true,
+          outcome: true,
+          warning: true,
+          completedAt: true,
+        }),
+      ),
       progress: z.array(
         z.object({
           phase: z.string(),

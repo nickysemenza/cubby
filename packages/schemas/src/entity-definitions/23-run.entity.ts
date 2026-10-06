@@ -7,7 +7,12 @@ import {
   vendorAccountShortcode,
   vendorShortcode,
 } from "../identifier-fields.js";
-import { runPurpose, runStatus, runTrigger } from "../run-fields.js";
+import {
+  RUN_PURPOSE_LABEL,
+  runPurpose,
+  runStatus,
+  runTrigger,
+} from "../run-fields.js";
 import { defineEntity } from "./definition.js";
 
 const readOnly = <T extends z.ZodTypeAny>(read: T) => ({
@@ -198,17 +203,10 @@ export default defineEntity({
         kind: "enum",
         control: {
           kind: "select",
-          options: [
-            { value: "account_sync", label: "Account sync" },
-            { value: "purchase_validation", label: "Purchase validation" },
-            { value: "product_enrichment", label: "Product enrichment" },
-            { value: "photo_inventory", label: "Photo inventory" },
-            { value: "ai_suggest", label: "AI suggestions" },
-            { value: "background", label: "Background" },
-            { value: "file_import", label: "File import" },
-            { value: "mail_search", label: "Mail search" },
-            { value: "mail_discovery", label: "Mail discovery" },
-          ],
+          options: runPurpose.options.map((value) => ({
+            value,
+            label: RUN_PURPOSE_LABEL[value],
+          })),
         },
         display: { list: true, detail: true, width: "sm" },
         validation: readOnly(runPurpose),

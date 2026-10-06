@@ -417,7 +417,7 @@ private struct ActivityRunRow: View {
                 Text(run.subjectName).font(.headline)
                 EntityQualityFact(key: .run, id: run.id, raw: .null)
                 HStack(spacing: 6) {
-                    Text(run.kind.title)
+                    Text(run.workLabel)
                     Text("·")
                     Text(run.state.replacingOccurrences(of: "_", with: " ").capitalized)
                     Text("·")
@@ -425,6 +425,9 @@ private struct ActivityRunRow: View {
                 }
                 .font(.caption)
                 .foregroundStyle(.secondary)
+                if let progress = run.progressLine {
+                    Text(progress).font(.caption).monospacedDigit().lineLimit(1)
+                }
                 if !run.executors.isEmpty {
                     Text(run.executors.map(\.name).joined(separator: ", "))
                         .font(.caption).foregroundStyle(.secondary).lineLimit(1)
@@ -635,8 +638,17 @@ struct ActivityDetailView: View {
                 }
                 .font(.headline)
             }
-            LabeledContent("Work", value: detail.run.kind.title)
+            LabeledContent("Work", value: detail.run.workLabel)
             LabeledContent("Subject", value: detail.run.subjectName)
+            if let step = detail.run.currentStep {
+                LabeledContent(detail.run.active ? "Now" : "Last step", value: step)
+            }
+            if let targets = detail.run.targetSummary {
+                LabeledContent("Targets", value: targets)
+            }
+            if detail.run.recordType == .run {
+                LabeledContent("Changed", value: "\(detail.run.changedCount) records")
+            }
             LabeledContent(
                 "State", value: detail.run.state.replacingOccurrences(of: "_", with: " ").capitalized)
             LabeledContent("Started") { Text(detail.run.createdAt, style: .relative) }
@@ -751,4 +763,13 @@ extension ActivityKind {
 
 #Preview(traits: .modifier(SignedInPreview())) {
     NavigationStack { ActivityView() }
+}
+
+extension ActivityRun {
+    /// Target outcomes, then what an active run is doing now.
+    fileprivate var progressLine: String? {
+        let step = active ? currentStep : nil
+        let parts = [targetSummary, step].compactMap { $0 }
+        return parts.isEmpty ? nil : parts.joined(separator: " · ")
+    }
 }

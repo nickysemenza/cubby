@@ -1,7 +1,11 @@
 import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 
-import { importPreparedLine, importPreparedOrder } from "~/server/db/schema";
+import {
+  importPreparedLine,
+  importPreparedOrder,
+  runTarget,
+} from "~/server/db/schema";
 import { getDb } from "~/server/repo/database-helpers";
 import { insertWithShortcode } from "~/server/repo/shortcode-utils";
 
@@ -107,5 +111,49 @@ describe("immutable prepared purchase review", () => {
     expect(publicReview).not.toContain(run.id);
     expect(publicReview).not.toContain(order.id);
     expect(publicReview).not.toContain("privatePayload");
+  });
+
+  // Run detail once named every target by its bare kind ("product").
+  it("names each target by its record's name", async () => {
+    const party = await insertWithShortcode(ctx.db, "ledgerParty", {
+      name: "Target name member",
+      kind: "member",
+      userId: ctx.actor.userId,
+    });
+    const vendor = await insertWithShortcode(ctx.db, "vendor", {
+      name: "Target name vendor",
+    });
+    const account = await insertWithShortcode(ctx.db, "vendorAccount", {
+      label: "Target name account",
+      vendorId: vendor.id,
+      ledgerPartyId: party.id,
+    });
+    const run = await startOrResumeRun(ctx.db, {
+      ledgerPartyId: party.id,
+      vendorAccountId: account.id,
+      trigger: "manual",
+    });
+    const product = await insertWithShortcode(ctx.db, "product", {
+      name: "Fixture Nasturtium",
+      manufacturer: "Fixture Seeds",
+    });
+    await getDb(ctx.db)
+      .insert(runTarget)
+      .values({
+        runId: run.id,
+        entityKind: "product",
+        entityId: product.id,
+        position: 0,
+        targetFingerprint: "e".repeat(64),
+      });
+
+    const detail = await loadRunDetail(ctx.db, run.publicId);
+    expect(detail.targets).toMatchObject([
+      {
+        targetType: "product",
+        targetShortcode: product.shortcode,
+        targetName: "Fixture Nasturtium",
+      },
+    ]);
   });
 });
