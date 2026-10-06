@@ -79,8 +79,12 @@ The driver runs on the member's ChatGPT subscription by default
 (`TESTER_ARMY_PROVIDER=chatgpt`). Sign in once per machine with
 `pnpm --dir apps/web exec e2e login openai` (add `--device` for a device
 code); the login is stored for the user in `~/.config/e2e/oauth.json` and
-refreshes itself, so every checkout and worktree shares it. In Actions, store
-that file's JSON as the `E2E_OAUTH_CREDENTIALS` secret. The default driver
+refreshes itself, so every checkout and worktree shares it. Hosted Actions
+lanes default to `gateway` instead: the SDK reads `E2E_OAUTH_CREDENTIALS` as a
+read-only store, so once a refresh rotates the token, the next job (or a
+concurrent lane) presents the spent refresh token and fails `LOGIN_REQUIRED`.
+CI can use the subscription only after refreshed credentials gain a writable,
+serialized handoff between jobs. The default driver
 model is `QUALITY_MODEL` (GPT-6 Sol); `TESTER_ARMY_MODEL` overrides it with an
 id the plan serves (`pnpm --dir apps/web exec e2e models openai` lists them).
 The preflight verifies an image plus a forced function call before builds,

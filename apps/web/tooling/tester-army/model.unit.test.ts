@@ -1,7 +1,11 @@
 import { FAST_MODEL, QUALITY_MODEL } from "@cubby/shared/ai/models";
 import { afterEach, expect, it, vi } from "vitest";
 
-import { modelConfiguration, testerArmyGatewayHeaders } from "./model";
+import {
+  modelConfiguration,
+  testerArmyGatewayHeaders,
+  testerArmyModel,
+} from "./model";
 
 afterEach(() => vi.unstubAllEnvs());
 
@@ -52,4 +56,18 @@ it("requires a token and an OpenAI model id for the gateway provider", () => {
   expect(() => modelConfiguration(process.env, () => undefined)).toThrow(
     /TESTER_ARMY_CF_API_TOKEN/u,
   );
+});
+
+// Cloudflare's unified endpoint names models `author/model`; only the
+// ChatGPT subscription takes the bare id.
+it("sends the gateway the provider-prefixed model and ChatGPT the bare id", () => {
+  vi.stubEnv("TESTER_ARMY_PROVIDER", "gateway");
+  expect(
+    testerArmyModel(modelConfiguration(process.env, () => "synthetic-token"))
+      .modelId,
+  ).toBe(`openai/${FAST_MODEL}`);
+  vi.stubEnv("TESTER_ARMY_PROVIDER", "chatgpt");
+  expect(
+    testerArmyModel(modelConfiguration(process.env, () => undefined)).modelId,
+  ).toBe(QUALITY_MODEL);
 });

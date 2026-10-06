@@ -681,6 +681,8 @@ export const journeys: Journey[] = [
   {
     id: "run-restart-inputs",
     title: "a finished mail import shows the Vendor and order a restart copies",
+    // The native run screen has no Restart inputs disclosure.
+    webOnly: true,
     start: "run",
     steps: [
       {

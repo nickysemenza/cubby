@@ -100,18 +100,16 @@ export function testerArmyGatewayHeaders(ci: string | undefined) {
   };
 }
 
-export function testerArmyModel() {
-  const config = modelConfiguration();
-  const modelId = config.TESTER_ARMY_MODEL.slice(
-    config.TESTER_ARMY_MODEL.indexOf("/") + 1,
-  );
-  if (config.TESTER_ARMY_PROVIDER === "chatgpt") return chatgpt(modelId);
+export function testerArmyModel(config = modelConfiguration()) {
+  if (config.TESTER_ARMY_PROVIDER === "chatgpt")
+    return chatgpt(config.TESTER_ARMY_MODEL.replace(/^chatgpt\//u, ""));
   const provider = createOpenAI({
     apiKey: config.TESTER_ARMY_CF_API_TOKEN,
     baseURL: `https://api.cloudflare.com/client/v4/accounts/${config.TESTER_ARMY_CF_ACCOUNT_ID}/ai/v1`,
     headers: testerArmyGatewayHeaders(process.env.CI),
   });
-  return provider.responses(modelId);
+  // The unified endpoint names models `author/model` (`openai/gpt-…`).
+  return provider.responses(config.TESTER_ARMY_MODEL);
 }
 
 export const testerArmyProviderOptions = {
