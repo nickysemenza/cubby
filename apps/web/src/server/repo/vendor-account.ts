@@ -278,13 +278,14 @@ export async function createVendorAccount(
       status: data.status,
       browser: data.browser,
       inventoryOwnerDefaultEnabled: data.inventoryOwnerDefaultEnabled,
+      browserSyncEnabled: data.browserSyncEnabled,
     });
     await logAuditEntry(tx, actor, {
       entityKind: "vendorAccount",
       entityId: row.id,
       action: "create",
     });
-    if (data.status === "active")
+    if (data.status === "active" && data.browserSyncEnabled)
       await classifyOnlineAccountVendor(tx, actor, refs.vendorId);
     return parseEntityId("vendorAccount", row.id);
   });
@@ -294,8 +295,9 @@ export async function createVendorAccount(
 /**
  * A browser-synced (default-on) account for a vendor with browser domains is
  * the one deterministic signal of an online order trail. It fills only an
- * unset `orderEvidence`; an explicit choice is never overwritten, and mail-only
- * accounts (created disabled by mail processing) never reach this path.
+ * unset `orderEvidence`; an explicit choice is never overwritten. A mail-only
+ * account (created disabled by mail processing) reaches it only once a member
+ * turns browser sync on.
  */
 async function classifyOnlineAccountVendor(
   tx: DrizzleTransaction,
@@ -341,19 +343,30 @@ async function updateVendorAccount(
     status: data.status,
     browser: data.browser,
     inventoryOwnerDefaultEnabled: data.inventoryOwnerDefaultEnabled,
+    browserSyncEnabled: data.browserSyncEnabled,
     ...refs,
   };
-  await patchEntityRows(
-    db,
-    actor,
-    {
-      entity: "vendorAccount",
-      table: vendorAccount,
-      fields: entityFieldModels.vendorAccount.audit,
-    },
-    [id],
-    patch,
-  );
+  await withTransaction(db, async (tx) => {
+    await patchEntityRows(
+      tx,
+      actor,
+      {
+        entity: "vendorAccount",
+        table: vendorAccount,
+        fields: entityFieldModels.vendorAccount.audit,
+      },
+      [id],
+      patch,
+    );
+    if (data.browserSyncEnabled) {
+      const [row] = await tx
+        .select({ vendorId: vendorAccount.vendorId })
+        .from(vendorAccount)
+        .where(eq(vendorAccount.id, id))
+        .limit(1);
+      if (row) await classifyOnlineAccountVendor(tx, actor, row.vendorId);
+    }
+  });
   return { output: await reader.getByID(db, id), entityId: id };
 }
 

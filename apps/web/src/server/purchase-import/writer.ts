@@ -20,6 +20,7 @@ import {
 import { sha256Hex } from "@cubby/shared/sha256";
 import { and, eq, ilike, isNotNull, or, sql } from "drizzle-orm";
 
+import { householdLocalDate } from "~/lib/household-date";
 import {
   PURCHASE_IMPORT_EXPENSE_LINE_ROLE_FEATURE,
   PURCHASE_IMPORT_KIT_DETECTION_FEATURE,
@@ -58,7 +59,6 @@ import {
   findProductsByExternalIds,
 } from "~/server/repo/product/find-by-external-ids";
 import { insertWithShortcode } from "~/server/repo/shortcode-utils";
-import { dateOnly } from "~/server/utils/date-only";
 
 import {
   aggregateReplacementApprovalFingerprint,
@@ -81,8 +81,9 @@ const PURCHASE_EXTERNAL_ID_KIND = "retailer_sku" as const;
 export const PRODUCT_IDENTITY_RULES =
   "Choose an existing product only when the title, model, size, count, and variant identify the same sellable item. Choose none for a distinct or uncertain variant.";
 
-const orderedDate = (value: string | null): string =>
-  dateOnly(value ? new Date(value) : undefined);
+/** The household-local day an order was placed; `orderedAt` is an instant. */
+export const purchaseDateOf = (orderedAt: string | null): string =>
+  householdLocalDate(orderedAt ? new Date(orderedAt) : undefined);
 
 /**
  * Deterministic semantic projection shared by the writer and validation.
@@ -973,7 +974,7 @@ export async function importVendorOrder(
         runId: input.runId,
         orderId: candidate.orderId,
         displayLabel: candidate.merchant,
-        date: orderedDate(candidate.orderedAt),
+        date: purchaseDateOf(candidate.orderedAt),
         statedTotal: candidate.printedGrandTotal,
       });
     } else if (!isSourceRefresh) {
@@ -1030,7 +1031,7 @@ export async function importVendorOrder(
             purchaseId,
             name: candidate.merchant ?? "Imported order",
             cost: candidate.printedGrandTotal,
-            date: orderedDate(candidate.orderedAt),
+            date: purchaseDateOf(candidate.orderedAt),
             lineKind: "principal",
             lineBasis: "allocation",
             costType: "materials",
@@ -1129,7 +1130,7 @@ export async function importVendorOrder(
             name: line.title,
             notes: line.seller ? `Seller: ${line.seller}` : null,
             cost: line.amount,
-            date: orderedDate(candidate.orderedAt),
+            date: purchaseDateOf(candidate.orderedAt),
             lineKind: identity.lineKind,
             lineBasis: "item_line",
             costType: "materials",

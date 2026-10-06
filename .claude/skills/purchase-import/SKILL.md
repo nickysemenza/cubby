@@ -174,9 +174,9 @@ The website domain is the default Gmail sender signal. When two Vendors share
 that domain, an exact configured sender takes precedence; other ambiguous mail
 stays for review. Recognized order mail with an explicit order id creates a mail-only VendorAccount
 for that member when one does not exist. This records a vendor relationship,
-not proof of a browser login. Turn on browser sync only after confirming that
-member's online account; use Sync now while the Mac app and chosen browser are
-open. Review candidate Purchase links or dismissals from the Vendor's Order
+not proof of a browser login. Turn on browser sync (set the account's
+`browserSyncEnabled` and status `active`) only after confirming that member's
+online account; use Sync now while the Mac app and chosen browser are open. Review candidate Purchase links or dismissals from the Vendor's Order
 email worklist. Treat cached navigation hints as advisory observations within
 `browserDomains`.
 

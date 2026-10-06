@@ -107,6 +107,38 @@ describe("purchase import run admission", () => {
         trigger: "manual",
       }),
     ).rejects.toThrow("Browser sync is not enabled");
+
+    // A member who confirms an online login turns the mail-only account on
+    // through the ordinary entity update; it used to drop the field.
+    const { entityKernelContextSchema, executeEntity } =
+      await import("~/server/entity-kernel");
+    const { requireActor } = await import("~/server/request-context");
+    const { createTestRequestContext } =
+      await import("~/server/testing/request-context");
+    const updated = await executeEntity(
+      entityKernelContextSchema.parse(
+        requireActor(
+          createTestRequestContext(ctx.db, {
+            auth: { userId: ctx.actor.userId },
+          }),
+        ),
+      ),
+      {
+        action: "update",
+        entity: "vendorAccount",
+        id: account.shortcode,
+        data: { browserSyncEnabled: true, status: "active" },
+      },
+    );
+    if (updated.action !== "update") throw new Error("expected update");
+    expect(updated.item).toMatchObject({ browserSyncEnabled: true });
+    await expect(
+      startOrResumeRun(ctx.db, {
+        ledgerPartyId: party.id,
+        vendorAccountId: account.id,
+        trigger: "manual",
+      }),
+    ).resolves.toMatchObject({ status: "running" });
   });
 
   it("retries a historical run on the current coordinator model", async () => {

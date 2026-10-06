@@ -113,6 +113,7 @@ describe("vendor account creation classifies order evidence", () => {
         status,
         browser: "chrome",
         inventoryOwnerDefaultEnabled: false,
+        browserSyncEnabled: true,
       },
       ctx.actor,
     );
