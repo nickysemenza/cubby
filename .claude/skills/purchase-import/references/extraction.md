@@ -26,5 +26,10 @@ adjustments, printed order date, currency, and total. A checkout card or order
 total does not establish payment; placement does not establish delivery.
 `receivedAt` is email receipt time, not an order date. Use null for absent fields.
 If itemization is absent, return unreadable or needs_review rather than inventing
-lines. Product links and images must belong to the literal item, never a logo or
-promotion.
+lines. For each line of a saved confirmation, copy the item's own product-page
+link into `productUrl`, its item image into `imageUrl`, and a printed SKU or item
+number into `sku`, exactly as the HTML writes them (`href`/`src`). Product links
+and images must belong to the literal item, never a logo, tracking pixel, or
+promotion; leave a field null rather than compose or guess a URL. Cubby keeps
+only URLs that appear verbatim in the email, and only product links on the
+Vendor's own site.

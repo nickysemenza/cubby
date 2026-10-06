@@ -32,6 +32,7 @@ import {
   run as runTable,
   runOrderCandidate,
   user,
+  vendor,
 } from "~/server/db/schema";
 import type { PurchaseAgentQueueProducer } from "~/server/purchase-agent-queue-types";
 import {
@@ -450,10 +451,17 @@ export async function loadOrderMailImportEvidence(
     throw new Error(
       "Assigned order confirmation evidence changed or is no longer available to this member.",
     );
+  const [owner] = await getDb(db)
+    .select({ website: vendor.website, browserDomains: vendor.browserDomains })
+    .from(vendor)
+    .where(eq(vendor.id, run.vendorId))
+    .limit(1);
   return {
     eventId: input.eventId,
     orderId: input.orderId,
     evidenceChecksum: input.evidenceChecksum,
+    /** Where this Vendor's own product pages live. */
+    productHosts: vendorHosts(owner),
     selected,
     source: {
       kind: "mail_message" as const,
@@ -506,4 +514,18 @@ export async function markOrderMailCandidateImported(
         eq(runOrderCandidate.state, "pending"),
       ),
     );
+}
+
+function vendorHosts(
+  owner: { website: string | null; browserDomains: string[] } | undefined,
+) {
+  const hosts = new Set(owner?.browserDomains ?? []);
+  if (owner?.website) {
+    try {
+      hosts.add(new URL(owner.website).hostname);
+    } catch {
+      // SILENT: a malformed website adds no host; browser domains still apply.
+    }
+  }
+  return [...hosts];
 }

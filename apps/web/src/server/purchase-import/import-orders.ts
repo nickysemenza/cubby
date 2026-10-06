@@ -35,6 +35,7 @@ import {
   type ValidatePurchaseImportInput,
 } from "@cubby/schemas/purchase-import";
 import { sha256Hex } from "@cubby/shared/sha256";
+import { createLogger } from "@cubby/worker-tracing";
 import * as Sentry from "@sentry/tanstackstart-react";
 import { and, asc, eq, ilike, inArray, or, sql } from "drizzle-orm";
 import { z } from "zod";
@@ -92,16 +93,21 @@ import {
   loadOrderMailImportEvidence,
   markOrderMailCandidateImported,
 } from "./gmail/import";
+import { ensureMailVendorAccount } from "./gmail/mail-account";
 import {
   attachPendingOrderMailEvidence,
   type OrderMailEvidencePorts,
 } from "./gmail/process";
+import { attachOrderLineThumbnails } from "./line-thumbnails";
 import {
   MODEL_STYLE_MATCH_REASON,
   manufacturerPartRequests,
   modelStyleTokens,
   sharesModelWithinManufacturer,
 } from "./manufacturer-identity";
+import { startPostImportEnrichment } from "./post-import-enrichment";
+
+const log = createLogger("purchase-import-commit");
 import { productEnrichmentTarget } from "./product-enrichment-target";
 import { recordRunWrites } from "./run-audit";
 import { auditAllImportBatches, loadRunScope } from "./run-service";
@@ -686,9 +692,24 @@ export async function commitPurchaseImport(
             scope.public.runId,
             input.prepareOperationId,
           );
-          await loadOrderMailImportEvidence(transactionDb, scope.public.runId, {
-            allowComplete: true,
-          });
+          const assignedMail = await loadOrderMailImportEvidence(
+            transactionDb,
+            scope.public.runId,
+            { allowComplete: true },
+          );
+          // A mail import's Purchase belongs to the member's (mail-only)
+          // account; the run itself stays account-less so it never walks
+          // order history or competes with that account's browser runs.
+          const purchaseVendorAccountId =
+            scope.public.vendorAccountId ??
+            (assignedMail && scope.vendorId
+              ? (
+                  await ensureMailVendorAccount(transactionDb, {
+                    vendorId: scope.vendorId,
+                    ledgerPartyId: assignedMail.mail.ledgerPartyId,
+                  })
+                ).id
+              : null);
           const defaultProjectId = input.defaultProjectId
             ? await resolveOrThrow(
                 transactionDb,
@@ -755,6 +776,10 @@ export async function commitPurchaseImport(
           if (resolutionMap.size !== input.resolutions.length)
             throw new Error("Product resolutions contain duplicate line ids");
           const items = [];
+          // Mail orders whose line thumbnails are fetched after commit.
+          const thumbnailWork: Parameters<
+            typeof attachOrderLineThumbnails
+          >[1][] = [];
           let requiresReview = false;
           // Adjustment lines (tax/shipping/discount/etc.) never carry a
           // Product, so the caller's resolution roster is keyed to principal
@@ -809,7 +834,7 @@ export async function commitPurchaseImport(
                 runId: scope.public.runId,
                 ledgerPartyId: scope.ledgerPartyId,
                 vendorId,
-                vendorAccountId: scope.public.vendorAccountId,
+                vendorAccountId: purchaseVendorAccountId,
                 source: {
                   kind: importSourceKind.parse(order.sourceKind),
                   externalKey: order.sourceExternalKey,
@@ -855,6 +880,17 @@ export async function commitPurchaseImport(
                   )
                   .limit(1)
               : [];
+            if (
+              result.purchaseId &&
+              assignedMail &&
+              order.sourceKind === "mail_message" &&
+              (result.outcome === "created" || result.outcome === "updated")
+            )
+              thumbnailWork.push({
+                purchaseId: parseEntityId("purchase", result.purchaseId),
+                mailContent: assignedMail.mail.content,
+                lines: extraction.candidate?.lines ?? [],
+              });
             if (written && extraction.candidate?.orderId) {
               await attachPendingOrderMailEvidence(
                 transactionDb,
@@ -902,10 +938,28 @@ export async function commitPurchaseImport(
               updatedAt: new Date(),
             })
             .where(eq(runTable.id, scope.public.runId));
-          return { result: publicResult, requiresReview };
+          return { result: publicResult, requiresReview, thumbnailWork };
         },
       ),
   );
+  // Network fetches stay outside the import transaction; each is best-effort.
+  for (const work of transactionResult.thumbnailWork ?? []) {
+    await attachOrderLineThumbnails(db, work);
+    // The import already committed: a follow-up failure is logged, never
+    // reported as a failed import.
+    try {
+      await startPostImportEnrichment(db, {
+        parentRunId: scope.public.runId,
+        purchaseId: work.purchaseId,
+        lines: work.lines,
+      });
+    } catch (error) {
+      log.warn("Post-import enrichment not started", {
+        runId: scope.public.runId,
+        error,
+      });
+    }
+  }
   if (transactionResult.requiresReview) {
     await finalizeReviewRun(
       db,

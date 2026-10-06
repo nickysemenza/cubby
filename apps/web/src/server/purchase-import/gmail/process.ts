@@ -44,10 +44,7 @@ import {
 } from "~/server/repo/database-helpers";
 import { cents } from "~/server/repo/money";
 import { resolveOrThrow } from "~/server/repo/shortcode-resolver";
-import {
-  findOrCreateWithShortcode,
-  insertWithShortcode,
-} from "~/server/repo/shortcode-utils";
+import { insertWithShortcode } from "~/server/repo/shortcode-utils";
 import { attachFileToEntity } from "~/server/services/image-storage.service";
 
 import {
@@ -59,6 +56,8 @@ import {
   productionOrderMailAttachmentStorage,
   type OrderMailAttachmentStorage,
 } from "./attachment-storage";
+import { linkExactOrderMail } from "./exact-link";
+import { ensureMailVendorAccount } from "./mail-account";
 import { orderAmountsInHuntWindow, uniqueOrderSubsetIds } from "./match";
 import {
   matchesConfiguredVendorSender,
@@ -381,19 +380,9 @@ export async function processOrderMails(
     if (
       classifiedEvents.some((event) => event.orderId && event.event !== "other")
     ) {
-      await findOrCreateWithShortcode(db, "vendorAccount", {
-        where: and(
-          eq(vendorAccount.vendorId, matchedVendor.id),
-          eq(vendorAccount.ledgerPartyId, mail.ledgerPartyId),
-          notDeleted(vendorAccount),
-        ),
-        values: () => ({
-          label: `${matchedVendor.name} mail`,
-          vendorId: matchedVendor.id,
-          ledgerPartyId: mail.ledgerPartyId,
-          status: "disabled",
-          browserSyncEnabled: false,
-        }),
+      await ensureMailVendorAccount(db, {
+        vendorId: matchedVendor.id,
+        ledgerPartyId: mail.ledgerPartyId,
       });
     }
     const vendorMembers = await database
@@ -530,6 +519,11 @@ export async function processOrderMails(
         }
       }
 
+      if (event.orderId)
+        await linkExactOrderMail(db, {
+          vendorId: matchedVendor.id,
+          orderId: event.orderId,
+        });
       const decisions = await database
         .select({
           decision: orderMailCandidateDecision.decision,

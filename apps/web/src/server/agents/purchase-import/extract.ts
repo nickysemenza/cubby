@@ -94,6 +94,8 @@ export const extractPurchaseOrderMail = async (
     db: Database;
     runId: string;
     orderId: string;
+    /** The Vendor's website and browser domains; a product link must be on one. */
+    productHosts: readonly string[];
     mail: Pick<
       typeof orderMail.$inferSelect,
       "sender" | "subject" | "receivedAt" | "content"
@@ -133,8 +135,71 @@ export const extractPurchaseOrderMail = async (
   // left `orderedAt` null and the writer dated the Purchase on import day.
   if (extraction.candidate && extraction.candidate.orderedAt === null)
     extraction.candidate.orderedAt = args.mail.receivedAt.toISOString();
+  if (extraction.candidate)
+    extraction.candidate.lines = extraction.candidate.lines.map((line) =>
+      retainLiteralLineLinks(line, args.mail.content, args.productHosts),
+    );
   return extraction;
 };
+
+/**
+ * Keep a line's product link and image only when the saved email literally
+ * contains them: the model may copy a URL, never compose one. A product link
+ * must also be on the Vendor's own site, so a mail-platform click-tracking
+ * redirect never becomes the Product's identity URL.
+ */
+export function retainLiteralLineLinks<
+  T extends { productUrl?: string; imageUrl?: string },
+>(
+  line: T,
+  content: { bodyHtml: string | null; bodyText: string | null },
+  productHosts: readonly string[],
+): T {
+  const literal = literalEmailUrls(content);
+  const kept = { ...line };
+  if (
+    kept.productUrl &&
+    !(literal.has(kept.productUrl) && onHost(kept.productUrl, productHosts))
+  )
+    delete kept.productUrl;
+  if (kept.imageUrl && !literal.has(kept.imageUrl)) delete kept.imageUrl;
+  return kept;
+}
+
+/**
+ * Every whole URL the email shows: `href`/`src` attribute values (HTML-escaped
+ * `&` decoded) and bare URLs in its text. A model URL must equal one of these,
+ * so a prefix of a longer link never passes.
+ */
+function literalEmailUrls(content: {
+  bodyHtml: string | null;
+  bodyText: string | null;
+}) {
+  const urls = new Set<string>();
+  for (const match of (content.bodyHtml ?? "").matchAll(
+    /\b(?:href|src)\s*=\s*(["'])(.*?)\1/giu,
+  ))
+    if (match[2]) urls.add(match[2].replaceAll("&amp;", "&").trim());
+  for (const match of (content.bodyText ?? "").matchAll(
+    /https?:\/\/[^\s<>"')\]]+/giu,
+  ))
+    urls.add(match[0]);
+  return urls;
+}
+
+function onHost(url: string, hosts: readonly string[]) {
+  let hostname: string;
+  try {
+    hostname = new URL(url).hostname.toLowerCase();
+  } catch {
+    // SILENT: an unparseable link is simply not a product URL.
+    return false;
+  }
+  return hosts.some((host) => {
+    const domain = host.toLowerCase().replace(/^www\./u, "");
+    return hostname === domain || hostname.endsWith(`.${domain}`);
+  });
+}
 
 const extractPurchaseText = async (
   args: {

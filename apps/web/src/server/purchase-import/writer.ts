@@ -69,6 +69,7 @@ import {
   learnPurchaseProductExternalId,
   PurchaseProductExternalIdCollisionError,
 } from "./external-id-learning";
+import { linkExactOrderMail } from "./gmail/exact-link";
 import { manufacturerPartRequests } from "./manufacturer-identity";
 import {
   lockPartySettlement,
@@ -683,6 +684,7 @@ export async function resolveLineProduct(
   decision: LineIdentityDecision,
   vendorId: string,
   productsByExternalIdentity: Map<string, string>,
+  onCreated?: (productId: ProductId) => void,
 ) {
   const source = externalSource(line.productUrl, vendorId);
   const externalIdentity = lineExternalIdentity(line, vendorId);
@@ -706,6 +708,7 @@ export async function resolveLineProduct(
     name: line.title,
     manufacturer: "",
   });
+  onCreated?.(created.id);
   await learnLineIdentifiers(tx, created.id, line, source);
   if (externalIdentity)
     productsByExternalIdentity.set(externalIdentity, created.id);
@@ -1012,6 +1015,9 @@ export async function importVendorOrder(
         .where(eq(purchase.id, target.id));
     }
     const purchaseId = parseEntityId("purchase", target.id);
+    // Mail saved before this Purchase existed links now, without a click.
+    if (candidate.orderId)
+      await linkExactOrderMail(tx, { vendorId, orderId: candidate.orderId });
     const findingIds: string[] = [];
     let replacementExpenseId: string | null = null;
     const rowMutations: Array<{
@@ -1139,6 +1145,15 @@ export async function importVendorOrder(
             identity,
             input.vendorId,
             productsByExternalIdentity,
+            // Recorded on this run so its follow-up enrichment and Changes
+            // list know which Products the import created.
+            (createdId) =>
+              rowMutations.push({
+                targetKind: "product",
+                targetId: createdId,
+                mutationKind: "create",
+                fields: ["name", "externalIds"],
+              }),
           );
           const quantity = receiptProductQuantity(productId, line, identity);
           const inserted = await insertWithShortcode(tx, "expense", {

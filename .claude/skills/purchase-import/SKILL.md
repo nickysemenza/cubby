@@ -176,8 +176,17 @@ stays for review. Recognized order mail with an explicit order id creates a mail
 for that member when one does not exist. This records a vendor relationship,
 not proof of a browser login. Turn on browser sync (set the account's
 `browserSyncEnabled` and status `active`) only after confirming that member's
-online account; use Sync now while the Mac app and chosen browser are open. Review candidate Purchase links or dismissals from the Vendor's Order
-email worklist. Treat cached navigation hints as advisory observations within
+online account; use Sync now while the Mac app and chosen browser are open.
+Mail that names the exact order id of the one live Purchase for its Vendor links
+itself (a `cubby-system` decision), whichever arrived first; a member's
+dismissal is never overridden. Review the remaining candidate links (amount and
+date matches) or dismissals from the Vendor's Order email worklist. A mail
+import's Purchase belongs to the member's VendorAccount; the import run itself
+has none, so it never walks order history. After a mail import commits, each
+new Product gets its confirmation line's thumbnail as a provisional cover (a
+verified catalog image from enrichment takes cover ahead of it), and when the
+account is browser-synced, one `product_enrichment` run starts at the product
+pages the email linked (`Run.input.kind = post_import_enrichment`). Treat cached navigation hints as advisory observations within
 `browserDomains`.
 
 For every exact merchant descriptor observed on that member's statement, call

@@ -36,6 +36,7 @@ import {
   merchantVendorRule,
   orderMail,
   orderMailAttachment,
+  orderMailCandidateDecision,
   orderMailEvent,
   vendor,
   vendorAccount,
@@ -232,6 +233,15 @@ describe("Gmail order mail processing", () => {
       .where(eq(orderMailAttachment.id, row.id));
   }
 
+  const linkDecisions = () =>
+    getDb(ctx.db)
+      .select({
+        purchaseId: orderMailCandidateDecision.purchaseId,
+        decidedBy: orderMailCandidateDecision.decidedByUserId,
+      })
+      .from(orderMailCandidateDecision)
+      .where(eq(orderMailCandidateDecision.decision, "linked"));
+
   async function receiveMail(
     seed: Seed,
     messageId: string,
@@ -410,6 +420,7 @@ describe("Gmail order mail processing", () => {
       .from(entityAttachment)
       .where(eq(entityAttachment.entityId, target.id));
     expect(attachments).toEqual([]);
+    expect(await linkDecisions()).toEqual([]);
   });
 
   it("records separate order events when one message covers multiple orders", async () => {
@@ -524,6 +535,8 @@ describe("Gmail order mail processing", () => {
       .select({ imageId: orderMailAttachment.imageId })
       .from(orderMailAttachment);
     expect(attachment?.imageId).toBeNull();
+    // A member's dismissal survives replay; automatic linking never overrides it.
+    expect(await linkDecisions()).toEqual([]);
   });
 
   it("supersedes classified events when the same message content changes", async () => {
@@ -1127,5 +1140,14 @@ describe("Gmail order mail processing", () => {
     expect(attachedBytes.every((bytes) => bytes.equals(PDF_BYTES))).toBe(true);
     expect(await liveExpenseCents(ctx.db, mailFirst[0]!.id)).toEqual([2500]);
     expect(await liveExpenseCents(ctx.db, historyFirst[0]!.id)).toEqual([8800]);
+    // Both orders link their mail without a member click, whichever arrived first.
+    expect(
+      (await linkDecisions()).map((row) => [row.purchaseId, row.decidedBy]),
+    ).toEqual(
+      expect.arrayContaining([
+        [mailFirst[0]!.id, "cubby-system"],
+        [historyFirst[0]!.id, "cubby-system"],
+      ]),
+    );
   });
 });

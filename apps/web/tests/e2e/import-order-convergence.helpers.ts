@@ -9,7 +9,6 @@ import {
 
 import { parseShortcodeFor } from "@cubby/schemas/identifiers";
 
-import { orderMailDecisionOut } from "@cubby/schemas/order-mail-review";
 import { photoRunReviewResponse } from "@cubby/schemas/photo-import-run";
 
 import type { Page } from "@playwright/test";
@@ -45,7 +44,6 @@ import {
 } from "../../tooling/convergence-harness";
 import { gotoAuthenticatedPage } from "./e2e-helpers";
 import { expect } from "./e2e-test";
-import { dispatchesOperation, operationResult } from "./dispatch-wire";
 
 type EvidenceSource = "gmail" | "retailer" | "photo" | "csv";
 /** Cyclic shifts of one order: every source arrives in every position once and
@@ -412,41 +410,22 @@ export async function createConvergenceHarness(
       .locator("#order-mail")
       .getByRole("article")
       .filter({ hasText: orderId });
-    const [decisionResponse] = await Promise.all([
-      page.waitForResponse((response) =>
-        dispatchesOperation(response.request(), "vendor.decideOrderMail"),
-      ),
-      mail
-        .getByRole("button", { name: "Link", exact: true })
-        .click()
-        .catch(async (error: Error) => {
-          const { rows } = await database.execute(sql`
-          SELECT e.event, e."orderId", d.decision, p.shortcode AS "purchaseCode"
-          FROM "OrderMailEvent" e JOIN "OrderMail" m ON m.id = e."orderMailId"
-          LEFT JOIN "OrderMailCandidateDecision" d ON d."eventId" = e.id
-          LEFT JOIN "Purchase" p ON p.id = d."purchaseId"
-          WHERE m."messageId" = ${names.messageId}
-        `);
-          throw new Error(
-            `${error.message}\n${JSON.stringify({ path: new URL(page.url()).pathname, headings: await page.getByRole("heading").allTextContents(), candidates: rows })}`,
-          );
-        }),
-    ]);
-    expect(
-      await operationResult(
-        decisionResponse,
-        "vendor.decideOrderMail",
-        orderMailDecisionOut,
-      ),
-    ).toMatchObject({
-      purchaseId: purchase.shortcode,
-      decision: "linked",
-    });
-    // The mutation's vendor invalidation also refreshes connected records;
-    // its reviewed response precedes the worklist's streamed refetch.
+    // The exact-order mail links itself to the booked Purchase; no click.
     await expect(mail.getByText("linked", { exact: true })).toBeVisible({
       timeout: 30_000,
     });
+    await expect(
+      mail.getByRole("button", { name: "Link", exact: true }),
+    ).toHaveCount(0);
+    const { rows: links } = await database.execute(sql`
+      SELECT p.shortcode AS "purchaseCode"
+      FROM "OrderMailCandidateDecision" d
+      JOIN "OrderMailEvent" e ON e.id = d."eventId"
+      JOIN "OrderMail" m ON m.id = e."orderMailId"
+      JOIN "Purchase" p ON p.id = d."purchaseId"
+      WHERE m."messageId" = ${names.messageId} AND d.decision = 'linked'
+    `);
+    expect(links).toEqual([{ purchaseCode: purchase.shortcode }]);
     expect(purchase.shortcode).toBe(bookedPurchaseCode);
     return { purchaseCode: purchase.shortcode, productCode, photoRunId };
   }

@@ -24,13 +24,15 @@ import {
   vendor,
   vendorAccount,
 } from "~/server/db/schema";
+import { isUniqueViolation } from "~/server/errors/db-errors";
 import {
   getDb,
   notDeleted,
   withTransaction,
 } from "~/server/repo/database-helpers";
 import { resolveOrThrow } from "~/server/repo/shortcode-resolver";
-import { findOrCreateWithShortcode } from "~/server/repo/shortcode-utils";
+
+import { ensureMailVendorAccount } from "./mail-account";
 
 const candidateReason = (
   event: { orderId: string | null; amount: number | null; receivedAt: Date },
@@ -355,14 +357,40 @@ export async function listPurchaseOrderMail(
   };
 }
 
+type OrderMailDecisionInput = {
+  eventId: string;
+  purchaseId: string;
+  decision: "linked" | "dismissed";
+  evidenceChecksum: string;
+};
+
+/**
+ * A member's link or dismissal. An automatic exact-order link
+ * (`linkExactOrderMail`) can commit between this transaction's read and its
+ * insert and win the one-link-per-event index; the member's choice must still
+ * win, so that one conflict retries once, now seeing (and demoting) the
+ * committed automatic link.
+ */
 export async function decideOrderMailCandidate(
   db: Database,
-  input: {
-    eventId: string;
-    purchaseId: string;
-    decision: "linked" | "dismissed";
-    evidenceChecksum: string;
-  },
+  input: OrderMailDecisionInput,
+  actor: ActorContext,
+) {
+  try {
+    return await decideOrderMailCandidateOnce(db, input, actor);
+  } catch (error) {
+    if (
+      input.decision !== "linked" ||
+      !isUniqueViolation(error, "OrderMailCandidateDecision_one_link_key")
+    )
+      throw error;
+    return decideOrderMailCandidateOnce(db, input, actor);
+  }
+}
+
+async function decideOrderMailCandidateOnce(
+  db: Database,
+  input: OrderMailDecisionInput,
   actor: ActorContext,
 ) {
   const purchaseId = await resolveOrThrow(db, "purchase", input.purchaseId);
@@ -418,19 +446,9 @@ export async function decideOrderMailCandidate(
     )
       throw new Error("Order mail and Purchase belong to different members");
     if (input.decision === "linked") {
-      await findOrCreateWithShortcode(tx, "vendorAccount", {
-        where: and(
-          eq(vendorAccount.vendorId, vendorId),
-          eq(vendorAccount.ledgerPartyId, scope.ledgerPartyId),
-          notDeleted(vendorAccount),
-        ),
-        values: () => ({
-          label: `${scope.vendorName} mail`,
-          vendorId,
-          ledgerPartyId: scope.ledgerPartyId,
-          status: "disabled",
-          browserSyncEnabled: false,
-        }),
+      await ensureMailVendorAccount(tx, {
+        vendorId,
+        ledgerPartyId: scope.ledgerPartyId,
       });
       await tx
         .update(orderMailCandidateDecision)

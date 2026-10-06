@@ -220,6 +220,7 @@ export function runServicesFor(
                 runId,
                 mail: mail.mail,
                 orderId: mail.orderId,
+                productHosts: mail.productHosts,
               });
               const stableOrderId = `mail:${mail.eventId}`;
               return {
