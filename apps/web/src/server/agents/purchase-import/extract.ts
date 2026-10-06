@@ -161,8 +161,7 @@ export function retainLiteralLineLinks<
   if (
     kept.productUrl &&
     !(
-      literal.includes(kept.productUrl) &&
-      onHost(kept.productUrl, productHosts)
+      literal.includes(kept.productUrl) && onHost(kept.productUrl, productHosts)
     )
   )
     delete kept.productUrl;

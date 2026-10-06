@@ -97,6 +97,7 @@ import {
   attachPendingOrderMailEvidence,
   type OrderMailEvidencePorts,
 } from "./gmail/process";
+import { attachOrderLineThumbnails } from "./line-thumbnails";
 import {
   MODEL_STYLE_MATCH_REASON,
   manufacturerPartRequests,
@@ -771,6 +772,10 @@ export async function commitPurchaseImport(
           if (resolutionMap.size !== input.resolutions.length)
             throw new Error("Product resolutions contain duplicate line ids");
           const items = [];
+          // Mail orders whose line thumbnails are fetched after commit.
+          const thumbnailWork: Parameters<
+            typeof attachOrderLineThumbnails
+          >[1][] = [];
           let requiresReview = false;
           // Adjustment lines (tax/shipping/discount/etc.) never carry a
           // Product, so the caller's resolution roster is keyed to principal
@@ -871,6 +876,17 @@ export async function commitPurchaseImport(
                   )
                   .limit(1)
               : [];
+            if (
+              result.purchaseId &&
+              assignedMail &&
+              order.sourceKind === "mail_message" &&
+              (result.outcome === "created" || result.outcome === "updated")
+            )
+              thumbnailWork.push({
+                purchaseId: parseEntityId("purchase", result.purchaseId),
+                mailContent: assignedMail.mail.content,
+                lines: extraction.candidate?.lines ?? [],
+              });
             if (written && extraction.candidate?.orderId) {
               await attachPendingOrderMailEvidence(
                 transactionDb,
@@ -918,10 +934,13 @@ export async function commitPurchaseImport(
               updatedAt: new Date(),
             })
             .where(eq(runTable.id, scope.public.runId));
-          return { result: publicResult, requiresReview };
+          return { result: publicResult, requiresReview, thumbnailWork };
         },
       ),
   );
+  // Network fetches stay outside the import transaction; each is best-effort.
+  for (const work of transactionResult.thumbnailWork ?? [])
+    await attachOrderLineThumbnails(db, work);
   if (transactionResult.requiresReview) {
     await finalizeReviewRun(
       db,
