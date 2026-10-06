@@ -85,7 +85,9 @@ journeys and seed unrelated prerequisites rather than moving coverage after
 merge. The convergence sample-limit regression creates one background import
 through the writer, then seeds additional open findings from that valid row;
 all four foreground source orders still exercise their real import boundaries,
-browser approval, and persisted projections.
+browser approval, and persisted projections. Finance category display fixtures
+use the shared entity-kernel factory, preserving all 28 linked expense lines
+without repeating unrelated HTTP create requests.
 
 ### Workerd test runtime and profiles
 
