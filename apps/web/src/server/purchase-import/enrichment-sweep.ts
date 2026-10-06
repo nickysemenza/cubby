@@ -101,12 +101,15 @@ export async function sweepPendingEnrichment(
     accounts,
     options.vendorAccountIds,
   );
+  // A Product goes to the first account (in candidate order) that can run
+  // and yields a page for it; later accounts skip it.
+  const assigned = new Set<ProductId>();
   for (const { account, products } of byAccount.values()) {
     if (options.bridge && !(await options.bridge.connected(account.id))) {
       result.waiting.push({ vendorAccountId: account.id, reason: "offline" });
       continue;
     }
-    const targets = await selectTargets(db, account, products);
+    const targets = await selectTargets(db, account, products, assigned);
     if (targets.length === 0) continue;
     const started = await startTargetedRun(
       db,
@@ -144,9 +147,9 @@ type Candidate = Awaited<ReturnType<typeof pendingCandidates>>[number];
 type Account = Awaited<ReturnType<typeof browsingAccounts>>[number];
 
 /**
- * In memory only: a Product goes to the account of its first line whose
- * Vendor browses, keeping that account's lines (product page first) for the
- * start page, which is resolved only once the account can run.
+ * In memory only: each browsing account with its Products and their line
+ * pages (product page first). A Product sold through two browsing accounts is
+ * listed under both; start pages are resolved only once an account can run.
  */
 function groupByAccount(
   candidates: readonly Candidate[],
@@ -157,13 +160,9 @@ function groupByAccount(
     VendorAccountId,
     { account: Account; products: Map<ProductId, (string | null)[]> }
   >();
-  const owner = new Map<ProductId, VendorAccountId>();
   for (const row of candidates) {
     const account = browsingAccountFor(accounts, row);
     if (!account || (only && !only.includes(account.id))) continue;
-    const assigned = owner.get(row.productId);
-    if (assigned && assigned !== account.id) continue;
-    owner.set(row.productId, account.id);
     const group = byAccount.get(account.id) ?? {
       account,
       products: new Map(),
@@ -187,10 +186,12 @@ async function selectTargets(
   db: Database,
   account: Account,
   products: ReadonlyMap<ProductId, (string | null)[]>,
+  assigned: Set<ProductId>,
 ) {
   const targets = [];
   for (const [id, pages] of products) {
     if (targets.length === TARGETS_PER_RUN) break;
+    if (assigned.has(id)) continue;
     const startUrl = await enrichmentStartPage(db, {
       productId: id,
       vendorId: account.vendorId,
@@ -198,6 +199,7 @@ async function selectTargets(
     });
     const live = startUrl ? await productEnrichmentTarget(getDb(db), id) : null;
     if (!startUrl || !live) continue;
+    assigned.add(id);
     targets.push({
       kind: "product" as const,
       productId: id,
