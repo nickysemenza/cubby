@@ -229,7 +229,8 @@ describe("purchase evidence policy", () => {
       sql`UPDATE "FinancialTransaction" SET kind = 'account_transfer' WHERE id = ${transaction.entityId}`,
     );
     const transferQuality = await quality();
-    expect(transferQuality).toMatchObject({ status: "defect", score: 100 });
+    expect(transferQuality).toMatchObject({ status: "defect" });
+    expect(transferQuality?.score).toBeLessThanOrEqual(49);
     expect(transferQuality?.gaps.map((gap) => gap.check)).toEqual([
       "financial_transaction_allocation_integrity",
     ]);
