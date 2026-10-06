@@ -7,9 +7,12 @@ wait "role=Button label=Library" 240000
 click "role=Button label=Library"
 wait text "Browse catalog" 30000
 click "label=\"Browse catalog\""
-wait "id=browse.catalog.run" 30000
-click "id=browse.catalog.run"
+# Runs sits in the Finance group, the last group of the catalog.
+scroll bottom
+wait "label=Runs" 30000
+click "label=Runs"
 wait "id=browse.run.list" 60000
-wait "id=browse.run.row.${APPROVAL_RUN_ID}" 60000
-click "id=browse.run.row.${APPROVAL_RUN_ID}"
+# A row exposes its combined label (title, shortcode), not its identifier.
+wait "label=\"Synthetic Approval Vendor · Account sync, ${APPROVAL_RUN_ID}\"" 60000
+click "label=\"Synthetic Approval Vendor · Account sync, ${APPROVAL_RUN_ID}\""
 wait text "Paused Approval" 90000

@@ -6,7 +6,10 @@ import {
   entitySummaryFields,
   projectEntityResult,
 } from "~/contracts/mcp-projections";
-import { listEntities } from "~/entity/generated/entity-lists.gen";
+import {
+  entityListBaseOutputSchema,
+  listEntities,
+} from "~/entity/generated/entity-lists.gen";
 import { executeEntity } from "~/server/entity-kernel";
 import { ENTITY_LIST_READ_OPERATIONS } from "~/server/generated/entity-list-read-bindings.gen";
 import { getDb } from "~/server/repo/database-helpers";
@@ -171,6 +174,20 @@ describe("standard progressive list composition", () => {
     expect(listEntities).toContain("run");
     expect(base.data).toEqual([
       expect.objectContaining({ purpose: "ai_suggest" }),
+    ]);
+    // The wire schema the HTTP list route validates; a row missing a core
+    // field (e.g. undeclared `displayImages`) fails here, not just on device.
+    expect(() => entityListBaseOutputSchema.parse(base)).not.toThrow();
+    // The HTTP and native list read the full projection, whose items must
+    // carry display images (deferred to the media group in the base read).
+    const full = await executeEntity(context, {
+      action: "list",
+      entity: "run",
+      filters: {},
+    });
+    if (full.action !== "list") throw new Error("expected list");
+    expect(full.items).toEqual([
+      expect.objectContaining({ displayImages: expect.any(Array) }),
     ]);
     expect(base.meta.totalCount).toBe(1);
   });

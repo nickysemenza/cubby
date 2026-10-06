@@ -104,6 +104,8 @@ export default defineEntity({
       ],
     },
     list: {
+      // Display images borrow from the vendor; they load as list media.
+      read: { media: ["displayImages"] },
       savedViews: [
         {
           id: "imports",

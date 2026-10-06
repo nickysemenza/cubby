@@ -10,7 +10,10 @@ import type { Database, DrizzleTransaction } from "~/server/db";
 import { run as runTable } from "~/server/db/schema";
 import { notDeleted, unwrapDb } from "~/server/repo/database-helpers";
 import { listScaffold } from "~/server/repo/list";
-import type { ListProjection } from "~/server/repo/list-projection";
+import {
+  hydrateListRead,
+  type ListProjection,
+} from "~/server/repo/list-projection";
 import { defineRepository, listOn, onDb } from "~/server/repo/repository";
 import { createEntityReader, listReadOn } from "~/server/repo/repository";
 import { lookupEntityReferences } from "~/server/repo/shortcode-resolver";
@@ -103,7 +106,8 @@ export const listRuns = (
 
 /**
  * The kernel's progressive list read. Run declares no deferred list groups
- * (`presentation.list.read`), so every projection hydrates the full row.
+ * (`presentation.list.read`), so every projection hydrates the full row; the
+ * shared list hydration adds the display images every list item carries.
  */
 export const listRunsRead = (
   db: Database,
@@ -115,7 +119,17 @@ export const listRunsRead = (
   scaffold.list(
     db,
     { filters, sorts, pagination, projection },
-    { hydrate: (rows) => hydrate(db, rows) },
+    {
+      hydrate: (rows, selected) =>
+        hydrateListRead(db, "run", rows, selected, {
+          media: true,
+          load: async () => {
+            const hydrated = await hydrate(db, rows);
+            return new Map(rows.map((row, index) => [row.id, hydrated[index]]));
+          },
+          mapRow: (row, { loaded }) => ({ ...loaded.get(row.id) }),
+        }),
+    },
   );
 
 const reader = createEntityReader<
