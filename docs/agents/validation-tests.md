@@ -34,6 +34,12 @@ while Playwright reuses it, so the E2E fixtures retry an idempotent
 `page.request`/`request` call once on `ECONNRESET` ("socket hang up"); a POST
 or PATCH is never replayed.
 
+Hydration waiting uses one native `Locator.waitFor` for the authenticated
+shell's attached hydrated marker. Do not nest an auto-waiting locator assertion
+inside `toPass` for this single DOM condition. Session and sign-in diagnostics
+run only after timeout and distinguish an unauthenticated SSR shell from a
+client bundle that never hydrated.
+
 Browser dispatch can batch concurrent queries. A mock that parses a single
 operation envelope uses `unbatchFor` before its per-operation handler. Keep
 lazy-fetch assertions sensitive to every envelope; after refusing a batch,
