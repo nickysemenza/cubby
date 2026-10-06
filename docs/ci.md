@@ -183,7 +183,13 @@ capacity or custom cleanup scheduler is needed.
 ## Hosted suite
 
 The `CI` workflow runs automatically for pull requests to `main` and pushes to
-`main`. `Scope` and `Validation` retain stable required names. A documentation-only
+`main`. Superseded PR runs are canceled. Main runs finish rather than being
+canceled by later merges, so selected native checks can publish reusable caches
+and the sequential release-cache warming job can run. GitHub concurrency keeps
+one main run active and at most one pending; a newer push replaces the pending
+run. This does not add parallel main runs or jobs. The newest main CI result may
+wait for the active run; deployment remains independent. `Scope` and
+`Validation` retain stable required names. A documentation-only
 change runs Oxfmt, documented repository-path checks, and offline relative-link
 validation. Generated output is never
 committed; every job that installs dependencies generates it (`postinstall`), and

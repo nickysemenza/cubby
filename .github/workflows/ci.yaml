@@ -27,7 +27,10 @@ on:
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}-${{ github.event_name }}-${{ inputs.simulator_e2e }}-${{ inputs.simulator_journey }}-${{ inputs.tester_army }}
-  cancel-in-progress: true
+  # PR updates supersede old results. Main must finish publishing reusable
+  # caches, even when the next merge does not select the same native lanes.
+  # The default single pending slot retains only the newest waiting run.
+  cancel-in-progress: ${{ github.event_name != 'push' }}
 
 permissions:
   contents: read
