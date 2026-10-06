@@ -99,6 +99,7 @@ const actionCapability = {
   "expenses.link_to_purchase": "generic_mutation",
   "expenses.split": "generic_mutation",
   "product_enrichment.commit": "enrichment_commit",
+  "product_enrichment.skip": "enrichment_commit",
   "product_enrichment.overwrite": "enrichment_commit",
   "product_enrichment.verify_images": "generic_mutation",
   "product_enrichment.propose_match": "match_proposal",

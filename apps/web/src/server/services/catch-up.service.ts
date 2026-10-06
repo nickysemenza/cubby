@@ -100,7 +100,8 @@ export async function recoverMissedWork(db: Database) {
  * Find new purchase evidence: open charge hunts, start one Gmail discovery
  * Workflow per connected mailbox, and dispatch browser hunts. Gmail work runs
  * in its Workflow, not here; a hunt waiting on mail has a grace period before
- * it goes to the browser, which covers the pass's lag.
+ * it goes to the browser, which covers the pass's lag. Then start enrichment
+ * for imported Products an earlier pass left behind.
  */
 export async function discoverPurchases(db: Database) {
   const [
@@ -108,11 +109,13 @@ export async function discoverPurchases(db: Database) {
     { startMailDiscovery },
     { gmailOAuthConfigured },
     { reconcileWorkflowRuns },
+    { bridgeReachability, sweepPendingEnrichment },
   ] = await Promise.all([
     import("~/server/purchase-import/hunts"),
     import("~/server/purchase-import/gmail/discovery"),
     import("~/server/purchase-import/gmail/provider"),
     import("~/server/workflow-runs/lifecycle"),
+    import("~/server/purchase-import/enrichment-sweep"),
   ]);
   const gmailConfigured = gmailOAuthConfigured();
   if (!gmailConfigured)
@@ -127,6 +130,9 @@ export async function discoverPurchases(db: Database) {
       : Promise.resolve(null),
   ]);
   const queue = getPurchaseAgentQueue();
+  const namespace = getPurchaseImportNamespace();
+  // Hunts dispatch before the sweep so an account's charge search, which a
+  // member is waiting on, claims it ahead of background enrichment.
   const dispatchResult = await Promise.allSettled([
     queue
       ? dispatchImportHunts(db, queue)
@@ -136,20 +142,31 @@ export async function discoverPurchases(db: Database) {
           )
         : Promise.resolve(0),
   ]);
+  const [enrichmentResult] = await Promise.allSettled([
+    namespace
+      ? sweepPendingEnrichment(db, { bridge: bridgeReachability(namespace) })
+      : isCloudflareRuntime()
+        ? Promise.reject(new Error("PURCHASE_IMPORT binding is unavailable"))
+        : sweepPendingEnrichment(db),
+  ]);
   const huntsCreated =
     huntResult.status === "fulfilled" ? huntResult.value : null;
   const mail = gmailResult.status === "fulfilled" ? gmailResult.value : null;
   const huntsDispatched =
     dispatchResult[0]?.status === "fulfilled" ? dispatchResult[0].value : 0;
+  const enrichment =
+    enrichmentResult?.status === "fulfilled" ? enrichmentResult.value : null;
   log.info("purchase discovery", {
     huntsCreated,
     huntsDispatched,
     mailPassesStarted: mail?.started,
     mailPassesRunning: mail?.running,
+    enrichmentRunsStarted: enrichment?.started.length,
+    enrichmentAccountsWaiting: enrichment?.waiting,
   });
-  const errors = [huntResult, gmailResult, ...dispatchResult]
+  const errors = [huntResult, gmailResult, ...dispatchResult, enrichmentResult]
     .filter((result) => result.status === "rejected")
     .map((result) => String(result.reason));
   if (errors.length) throw new Error(errors.join("; "));
-  return { huntsCreated, huntsDispatched, mail };
+  return { huntsCreated, huntsDispatched, mail, enrichment };
 }

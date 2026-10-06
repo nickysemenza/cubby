@@ -29,10 +29,13 @@ import {
   importOperationStatusOut,
   overwriteProductEnrichmentInput,
   overwriteProductEnrichmentOut,
+  skipProductEnrichmentInput,
+  skipProductEnrichmentOut,
   type CommitPurchaseImportInput,
   type CommitProductEnrichmentInput,
   type OverwriteProductEnrichmentInput,
   type PreparePurchaseImportInput,
+  type SkipProductEnrichmentInput,
   type ValidatePurchaseImportInput,
 } from "@cubby/schemas/purchase-import";
 import { sha256Hex } from "@cubby/shared/sha256";
@@ -86,6 +89,7 @@ import {
 } from "~/server/services/image-storage.service";
 
 import { assertRunCapability } from "./capabilities";
+import { sweepImportedPurchases } from "./enrichment-sweep";
 import {
   learnPurchaseProductExternalId,
   PurchaseProductExternalIdCollisionError,
@@ -107,7 +111,6 @@ import {
   sharesModelWithinManufacturer,
 } from "./manufacturer-identity";
 import { autoFillCreatedProducts } from "./post-import-autofill";
-import { startPostImportEnrichment } from "./post-import-enrichment";
 
 const log = createLogger("purchase-import-commit");
 import { productEnrichmentTarget } from "./product-enrichment-target";
@@ -969,22 +972,21 @@ export async function commitPurchaseImport(
     runId: scope.public.runId,
     purchaseIds: transactionResult.committedPurchaseIds ?? [],
   });
-  for (const work of transactionResult.thumbnailWork ?? []) {
+  for (const work of transactionResult.thumbnailWork ?? [])
     await attachOrderLineThumbnails(db, work);
-    // The import already committed: a follow-up failure is logged, never
-    // reported as a failed import.
-    try {
-      await startPostImportEnrichment(db, {
-        parentRunId: scope.public.runId,
-        purchaseId: work.purchaseId,
-        lines: work.lines,
-      });
-    } catch (error) {
-      log.warn("Post-import enrichment not started", {
-        runId: scope.public.runId,
-        error,
-      });
-    }
+  // The import already committed: a follow-up failure is logged, never
+  // reported as a failed import. Whatever this misses, the next discovery
+  // pass's sweep picks up.
+  try {
+    await sweepImportedPurchases(
+      db,
+      transactionResult.committedPurchaseIds ?? [],
+    );
+  } catch (error) {
+    log.warn("Post-import enrichment not started", {
+      runId: scope.public.runId,
+      error,
+    });
   }
   if (transactionResult.requiresReview) {
     await finalizeReviewRun(
@@ -1683,6 +1685,79 @@ export async function commitProductEnrichment(
         }
       }
       return committed;
+    },
+  );
+}
+
+/**
+ * Close one enrichment target without writing the Product. The reason stays
+ * on the target (`warning`) for the member, the run claims its next Product,
+ * and the sweep counts the Product as finished. Replay-safe by operation id.
+ */
+export async function skipProductEnrichment(
+  db: Database,
+  rawInput: SkipProductEnrichmentInput,
+  actor: ActorContext,
+) {
+  const input = skipProductEnrichmentInput.parse(rawInput);
+  const scope = await assertOwnedRun(db, actor, input._runExecution.runId);
+  if (scope.public.purpose !== "product_enrichment")
+    throw new Error(
+      "Product enrichment skip requires a product enrichment run",
+    );
+  const productId = await resolveOrThrow(db, "product", input.productId);
+  return executeAtomicOperation(
+    db,
+    {
+      runId: scope.public.runId,
+      operationId: input._runExecution.operationId,
+      kind: "skip_product_enrichment",
+      payload: input,
+      subject: "Skip",
+    },
+    async (ledger) => {
+      const replayed = await ledger.replay(getDb(db), skipProductEnrichmentOut);
+      if (replayed) return replayed;
+      return withTransaction(db, async (tx) => {
+        const [lockedRun] = await tx
+          .select({ status: runTable.status })
+          .from(runTable)
+          .where(eq(runTable.id, scope.public.runId))
+          .limit(1)
+          .for("update");
+        if (lockedRun?.status !== "running")
+          throw new Error(
+            `Import run is fenced in status ${lockedRun?.status ?? "missing"}`,
+          );
+        const skipped = await tx
+          .update(runTarget)
+          .set({
+            state: "skipped",
+            outcome: "skipped",
+            warning: input.reason,
+            completedAt: new Date(),
+            updatedAt: new Date(),
+          })
+          .where(
+            and(
+              eq(runTarget.runId, scope.public.runId),
+              eq(runTarget.entityId, productId),
+              inArray(runTarget.state, ["pending", "prepared"]),
+            ),
+          )
+          .returning({ id: runTarget.id });
+        if (skipped.length === 0)
+          throw new Error(
+            "Product is not an open enrichment target of this run",
+          );
+        const result = skipProductEnrichmentOut.parse({
+          runId: scope.public.shortcode,
+          productId: input.productId,
+          state: "skipped",
+        });
+        await ledger.complete(tx, result);
+        return result;
+      });
     },
   );
 }

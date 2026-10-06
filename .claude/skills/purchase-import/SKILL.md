@@ -200,8 +200,10 @@ import's Purchase belongs to the member's VendorAccount; the import run itself
 has none, so it never walks order history. After a mail import commits, each
 new Product gets its confirmation line's thumbnail as a provisional cover (a
 verified catalog image from enrichment takes cover ahead of it), and when the
-account is browser-synced, one `product_enrichment` run starts at the product
-pages the email linked (`Run.input.kind = post_import_enrichment`). Treat cached navigation hints as advisory observations within
+Vendor has a browsing account, one `product_enrichment` run starts at the
+product pages the email linked (kept as each line's Expense `url`). Products
+it misses (occupied account, Mac offline, mail-only until browser sync turns
+on) are swept by later discovery passes. Treat cached navigation hints as advisory observations within
 `browserDomains`.
 
 For every exact merchant descriptor observed on that member's statement, call

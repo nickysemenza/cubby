@@ -1,3 +1,7 @@
+import {
+  type VendorAccountId,
+  vendorAccountShortcode,
+} from "@cubby/schemas/identifiers";
 import type { PurchaseAgentEvent } from "@cubby/schemas/purchase-import";
 import { eq } from "drizzle-orm";
 import { withTestDb } from "tooling/test-setup";
@@ -24,6 +28,7 @@ import { getDb } from "~/server/repo/database-helpers";
 import { getRunLiveProgress } from "~/server/repo/run-progress";
 import { insertWithShortcode } from "~/server/repo/shortcode-utils";
 
+import { sweepPendingEnrichment } from "../enrichment-sweep";
 import { commitPurchaseImport, preparePurchaseImport } from "../import-orders";
 import {
   claimNextImportWork,
@@ -31,6 +36,7 @@ import {
   deferOrderForReview,
   finishRun,
   loadRunDetail,
+  startTargetedRun,
 } from "../run-service";
 import { startTargetedImport } from "../targeted-run";
 import { autoImportOrderMail, AUTO_IMPORTS_PER_VENDOR } from "./auto-import";
@@ -718,8 +724,9 @@ describe("saved confirmation imports", () => {
       expect(child).toMatchObject({
         vendorAccountId: account.id,
         trigger: "discovery",
-        input: { kind: "post_import_enrichment", parentRunId: run.id },
+        purpose: "product_enrichment",
       });
+      expect(run.vendorAccountId).toBeNull();
       const targets = await getDb(ctx.db)
         .select({ startUrl: runTarget.sourceExternalKey })
         .from(runTarget)
@@ -819,6 +826,228 @@ describe("saved confirmation imports", () => {
     it("starts nothing for a mail-only account", async () => {
       const { children } = await importNewLine(false);
       expect(children).toEqual([]);
+    });
+
+    // A Product left unenriched by the one-shot start must be picked up by a
+    // later pass. Failure modes: no later pass at all; a mail-only account
+    // that turns browser sync on is never revisited; a Purchase imported
+    // before mail Purchases were linked to an account is invisible; an
+    // occupied account or an offline Mac drops the work instead of waiting;
+    // a failed run is never retried, or retried forever; a Product already
+    // enriched or skipped is swept again; the start page is lost.
+    describe("enrichment sweep", () => {
+      const online = { connected: async () => true };
+      const enrichmentTargets = () =>
+        getDb(ctx.db)
+          .select({
+            runId: runTarget.runId,
+            productId: runTarget.entityId,
+            startUrl: runTarget.sourceExternalKey,
+            vendorAccountId: runTable.vendorAccountId,
+          })
+          .from(runTarget)
+          .innerJoin(runTable, eq(runTable.id, runTarget.runId))
+          .where(eq(runTable.purpose, "product_enrichment"));
+      const enableBrowserSync = (accountId: VendorAccountId) =>
+        getDb(ctx.db)
+          .update(vendorAccount)
+          .set({ status: "active", browserSyncEnabled: true })
+          .where(eq(vendorAccount.id, accountId));
+      const mailOnlyImport = async () => {
+        const imported = await importNewLine(false);
+        const [line] = await getDb(ctx.db)
+          .select({
+            productId: expense.productId,
+            purchaseId: expense.purchaseId,
+            url: expense.url,
+            accountId: purchase.vendorAccountId,
+          })
+          .from(expense)
+          .innerJoin(purchase, eq(purchase.id, expense.purchaseId))
+          .where(eq(purchase.vendorId, imported.run.vendorId!));
+        if (!line?.accountId) throw new Error("Missing mail account link");
+        return { ...imported, line, accountId: line.accountId };
+      };
+
+      it("keeps each line's product page on its Expense", async () => {
+        const { line, productUrl } = await mailOnlyImport();
+        expect(line.url).toBe(productUrl);
+      });
+
+      it("enriches a mail-only account's Products once browser sync turns on", async () => {
+        const { accountId, line, productUrl } = await mailOnlyImport();
+        expect(
+          await sweepPendingEnrichment(ctx.db, { bridge: online }),
+        ).toEqual({ started: [], waiting: [] });
+        await enableBrowserSync(accountId);
+        const swept = await sweepPendingEnrichment(ctx.db, { bridge: online });
+        expect(swept.started).toHaveLength(1);
+        expect(await enrichmentTargets()).toEqual([
+          {
+            runId: expect.any(String),
+            productId: line.productId,
+            startUrl: productUrl,
+            vendorAccountId: accountId,
+          },
+        ]);
+      });
+
+      // The member's own switch is the trigger: no discovery pass needed.
+      it("starts enrichment when the member turns browser sync on in the account editor", async () => {
+        const { accountId, line } = await mailOnlyImport();
+        const { entityKernelContextSchema, executeEntity } =
+          await import("~/server/entity-kernel");
+        const { requireActor } = await import("~/server/request-context");
+        const { createTestRequestContext } =
+          await import("~/server/testing/request-context");
+        const kernel = entityKernelContextSchema.parse(
+          requireActor(
+            createTestRequestContext(ctx.db, {
+              auth: { userId: ctx.actor.userId },
+            }),
+          ),
+        );
+        const [account] = await getDb(ctx.db)
+          .select({ shortcode: vendorAccount.shortcode })
+          .from(vendorAccount)
+          .where(eq(vendorAccount.id, accountId));
+        await executeEntity(kernel, {
+          action: "update",
+          entity: "vendorAccount",
+          id: vendorAccountShortcode.parse(account!.shortcode),
+          data: { status: "active", browserSyncEnabled: true },
+        });
+        expect(await enrichmentTargets()).toMatchObject([
+          { productId: line.productId, vendorAccountId: accountId },
+        ]);
+      });
+
+      // A mail claim names no account; a run without one cannot browse.
+      it("starts a member's manual enrichment on the vendor's browsing account", async () => {
+        const { accountId, run, line } = await mailOnlyImport();
+        await enableBrowserSync(accountId);
+        const [claim] = await getDb(ctx.db)
+          .select({ id: importSourceClaim.id })
+          .from(importSourceClaim)
+          .where(eq(importSourceClaim.lastRunId, run.id));
+        // As imported before mail Purchases were linked to an account.
+        await getDb(ctx.db)
+          .update(importSourceClaim)
+          .set({ vendorAccountId: null })
+          .where(eq(importSourceClaim.id, claim!.id));
+        await getDb(ctx.db)
+          .update(purchase)
+          .set({ vendorAccountId: null })
+          .where(eq(purchase.id, line.purchaseId!));
+        const [code] = await getDb(ctx.db)
+          .select({ shortcode: product.shortcode })
+          .from(product)
+          .where(eq(product.id, line.productId!));
+        await startTargetedImport(ctx.db, run.ledgerPartyId!, {
+          purpose: "product_enrichment",
+          targets: [
+            {
+              productId: code!.shortcode,
+              sourceId: claim!.id,
+              vendorAccountId: null,
+            },
+          ],
+        });
+        expect(await enrichmentTargets()).toMatchObject([
+          { productId: line.productId, vendorAccountId: accountId },
+        ]);
+      });
+
+      it("finds the vendor's browsing account for a Purchase with no account link", async () => {
+        const { accountId, line } = await mailOnlyImport();
+        await enableBrowserSync(accountId);
+        await getDb(ctx.db)
+          .update(purchase)
+          .set({ vendorAccountId: null })
+          .where(eq(purchase.id, line.purchaseId!));
+        await sweepPendingEnrichment(ctx.db, { bridge: online });
+        expect(await enrichmentTargets()).toMatchObject([
+          { productId: line.productId, vendorAccountId: accountId },
+        ]);
+      });
+
+      it("waits while the account is occupied or its Mac is offline, then starts", async () => {
+        const { accountId, run, line } = await mailOnlyImport();
+        await enableBrowserSync(accountId);
+        const busy = await startTargetedRun(ctx.db, {
+          ledgerPartyId: run.ledgerPartyId!,
+          purpose: "purchase_validation",
+          vendorId: run.vendorId!,
+          vendorAccountId: accountId,
+          trigger: "manual",
+          targets: [
+            {
+              kind: "purchase",
+              purchaseId: line.purchaseId!,
+              targetFingerprint: "b".repeat(64),
+            },
+          ],
+        });
+        if (!busy.created) throw new Error("Expected an occupying run");
+        expect(
+          await sweepPendingEnrichment(ctx.db, { bridge: online }),
+        ).toEqual({
+          started: [],
+          waiting: [{ vendorAccountId: accountId, reason: "occupied" }],
+        });
+        await getDb(ctx.db)
+          .update(runTable)
+          .set({ status: "completed", endedAt: new Date() })
+          .where(eq(runTable.id, busy.run.id));
+        const offline = { connected: async () => false };
+        expect(
+          await sweepPendingEnrichment(ctx.db, { bridge: offline }),
+        ).toEqual({
+          started: [],
+          waiting: [{ vendorAccountId: accountId, reason: "offline" }],
+        });
+        expect(
+          (await sweepPendingEnrichment(ctx.db, { bridge: online })).started,
+        ).toHaveLength(1);
+      });
+
+      it("retries a failed run at most three times", async () => {
+        const { accountId } = await mailOnlyImport();
+        await enableBrowserSync(accountId);
+        for (let attempt = 0; attempt < 3; attempt++) {
+          const { started } = await sweepPendingEnrichment(ctx.db, {
+            bridge: online,
+          });
+          expect(started).toHaveLength(1);
+          await getDb(ctx.db)
+            .update(runTable)
+            .set({ status: "failed", failureCode: "offline_expired" })
+            .where(eq(runTable.id, started[0]!.runId));
+        }
+        expect(
+          (await sweepPendingEnrichment(ctx.db, { bridge: online })).started,
+        ).toEqual([]);
+      });
+
+      it("never re-sweeps a Product a run skipped", async () => {
+        const second = await mailOnlyImport();
+        await enableBrowserSync(second.accountId);
+        const { started } = await sweepPendingEnrichment(ctx.db, {
+          bridge: online,
+        });
+        expect(started).toHaveLength(1);
+        await getDb(ctx.db)
+          .update(runTarget)
+          .set({ state: "skipped", outcome: "skipped" })
+          .where(eq(runTarget.runId, started[0]!.runId));
+        await getDb(ctx.db)
+          .update(runTable)
+          .set({ status: "completed" })
+          .where(eq(runTable.id, started[0]!.runId));
+        expect(
+          (await sweepPendingEnrichment(ctx.db, { bridge: online })).started,
+        ).toEqual([]);
+      });
     });
   });
 

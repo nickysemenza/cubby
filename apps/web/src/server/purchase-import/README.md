@@ -31,6 +31,9 @@ conversation: it reaches Cubby through one Run's services and nothing else
    through `direct-socket-route.ts`. A Mac result publishes a `browser_result`
    event to the same queue, a reconnect publishes `browser_connected`, and the
    agent then calls `readBrowserCommandResult`.
+   An enrichment run works its targets in one order (`targetWorkOrder`):
+   a capture is retained for the target the agent last claimed, and
+   `product_enrichment.skip` closes a target no page proves.
 5. **Writes and finish.** `importOrderEvidence` routes to `writer.ts` and
    `import-orders.ts`, which are deterministic and stock-neutral.
    `finishRun`, `stopForReview` and `markRunFailed` set the terminal state.
@@ -54,6 +57,7 @@ conversation: it reaches Cubby through one Run's services and nothing else
 | What the agent may call, and its inputs          | `agent-services.ts`, `server/purchase-agent/environment.ts` |
 | Gmail order-mail pipeline (Workflow-backed Runs) | `gmail/` (`discovery.ts`, `search-job.ts`, `process.ts`)    |
 | Statement-charge hunts                           | `hunts.ts`, `charge-runs.ts`, `charge-hunt-state.ts`        |
+| Enriching imported Products (post-import, sweep) | `enrichment-sweep.ts`, `browsing-account.ts`                |
 | Agent model, prompts, and MCP tools              | `server/purchase-agent/run-agent.ts`, `cubby-mcp.ts`        |
 | Scripted/workerd harness for the agent           | `apps/web/tooling/purchase-agent-workerd-harness.ts`        |
 | Its workerd runtime and `purchase-agent` profile | `apps/web/tooling/workerd-runtime.ts`, `workerd-harness.ts` |

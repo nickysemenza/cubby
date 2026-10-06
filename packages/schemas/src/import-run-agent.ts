@@ -150,6 +150,7 @@ const purchaseAgent = {
 const ENRICHMENT_MCP_ACTIONS = [
   ...PURCHASE_MCP_ACTIONS,
   "product_enrichment.commit",
+  "product_enrichment.skip",
   "product_enrichment.overwrite",
 ] as const satisfies readonly CubbyMcpToolAction[];
 

@@ -1,5 +1,8 @@
 import { type ProductId, productShortcode } from "@cubby/schemas/identifiers";
-import type { BrowserStructuredProducts } from "@cubby/schemas/purchase-import";
+import type {
+  BrowserBridgeRequest,
+  BrowserStructuredProducts,
+} from "@cubby/schemas/purchase-import";
 import { and, eq } from "drizzle-orm";
 import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
@@ -21,9 +24,17 @@ import {
 } from "~/server/repo/repo.fixtures";
 import { insertWithShortcode } from "~/server/repo/shortcode-utils";
 
-import { commitProductEnrichment } from "./import-orders";
+import {
+  commitProductEnrichment,
+  skipProductEnrichment,
+} from "./import-orders";
 import { productEnrichmentTarget } from "./product-enrichment-target";
-import { startTargetedRun } from "./run-service";
+import {
+  claimNextImportWork,
+  finishRun,
+  issueBrowserCommand,
+  startTargetedRun,
+} from "./run-service";
 
 const single: BrowserStructuredProducts = {
   products: [
@@ -342,5 +353,153 @@ describe("product enrichment structured identifier proof", () => {
         "op-replay",
       ),
     ).rejects.toThrow("replayed with different input");
+  });
+});
+
+// One run works several Products in claim order. Failure modes: a Product
+// with no exact source holds the run forever (nothing moves its target out
+// of the worklist); a capture is filed under a different target than the
+// one claimed, so the claimed Product's commit is refused; targets inserted
+// together tie on createdAt and claim and capture pick different ones.
+describe("product enrichment worklist", () => {
+  const ctx = withTestDb();
+  const issued: BrowserBridgeRequest[] = [];
+  const broker = {
+    enqueue: async (command: BrowserBridgeRequest) => {
+      issued.push(command);
+    },
+    result: async () => null,
+    cancel: async () => undefined,
+    connected: async () => true,
+    pendingCommands: async () => [],
+    notifyRunCompleted: async () => undefined,
+    requestAuthentication: async () => undefined,
+  };
+  const namespace = { getByName: () => broker };
+
+  it("captures for the claimed target and moves past a skipped Product", async () => {
+    const [existingParty] = await getDb(ctx.db)
+      .select({ id: ledgerParty.id })
+      .from(ledgerParty)
+      .where(eq(ledgerParty.userId, ctx.actor.userId));
+    const party =
+      existingParty ??
+      (await insertWithShortcode(ctx.db, "ledgerParty", {
+        name: "Enrichment worklist member",
+        kind: "member",
+        userId: ctx.actor.userId,
+      }));
+    const vendor = await insertWithShortcode(ctx.db, "vendor", {
+      name: `Example Seed Shop ${crypto.randomUUID()}`,
+      website: "https://seed.example.test",
+      browserDomains: ["seed.example.test"],
+    });
+    const account = await insertWithShortcode(ctx.db, "vendorAccount", {
+      label: "Synthetic seed account",
+      vendorId: vendor.id,
+      ledgerPartyId: party.id,
+      status: "active",
+      browserSyncEnabled: true,
+    });
+    const products = await Promise.all(
+      ["Synthetic basil packet", "Synthetic dill packet"].map((name) =>
+        createProductFixture(ctx.db, makeProductInput({ name }), ctx.actor),
+      ),
+    );
+    const started = await startTargetedRun(ctx.db, {
+      ledgerPartyId: party.id,
+      purpose: "product_enrichment",
+      vendorId: vendor.id,
+      vendorAccountId: account.id,
+      trigger: "discovery",
+      targets: await Promise.all(
+        products.map(async (row) => ({
+          kind: "product" as const,
+          productId: row.entityId,
+          sourceExternalKey: "https://seed.example.test/",
+          targetFingerprint: (await productEnrichmentTarget(
+            getDb(ctx.db),
+            row.entityId,
+          ))!.fingerprint,
+        })),
+      ),
+    });
+    if (!started.created) throw new Error("Expected enrichment admission");
+    const runId = started.run.id;
+    const targetIds = new Map(
+      (
+        await getDb(ctx.db)
+          .select({ id: runTarget.id, productId: runTarget.entityId })
+          .from(runTarget)
+          .where(eq(runTarget.runId, runId))
+      ).map((row) => [row.id, row.productId]),
+    );
+    const captureFor = async (operationId: string) => {
+      await issueBrowserCommand(ctx.db, namespace, {
+        runId,
+        operationId,
+        operation: {
+          type: "capture",
+          allowedHosts: ["seed.example.test"],
+          enhancedEvidence: false,
+        },
+      });
+      const command = issued.at(-1);
+      return command?.operation.type === "capture"
+        ? command.operation.evidenceScope?.targetId
+        : undefined;
+    };
+
+    for (const expected of [0, 1]) {
+      const claimed = await claimNextImportWork(ctx.db, namespace, runId);
+      if (claimed.kind !== "product_enrichment" || !("targetId" in claimed))
+        throw new Error(`Expected enrichment work, got ${claimed.kind}`);
+      // Claim and capture agree even when every target shares createdAt.
+      expect(await captureFor(`capture-${expected}`)).toBe(claimed.targetId);
+      expect(targetIds.get(claimed.targetId)).toBeDefined();
+      const skipped = await skipProductEnrichment(
+        ctx.db,
+        {
+          _runExecution: { runId, operationId: `skip-${expected}` },
+          productId: productShortcode.parse(claimed.productId),
+          reason: "No exact source page shows this variant.",
+        },
+        ctx.actor,
+      );
+      expect(skipped).toMatchObject({
+        productId: claimed.productId,
+        state: "skipped",
+      });
+    }
+    expect(await claimNextImportWork(ctx.db, namespace, runId)).toEqual({
+      kind: "none",
+    });
+    await finishRun(ctx.db, namespace, { runId, operationId: "finish" });
+    const [finished] = await getDb(ctx.db)
+      .select({ status: runTable.status })
+      .from(runTable)
+      .where(eq(runTable.id, runId));
+    expect(finished?.status).toBe("completed");
+    expect(
+      await getDb(ctx.db)
+        .select({
+          state: runTarget.state,
+          outcome: runTarget.outcome,
+          warning: runTarget.warning,
+        })
+        .from(runTarget)
+        .where(eq(runTarget.runId, runId)),
+    ).toEqual([
+      {
+        state: "skipped",
+        outcome: "skipped",
+        warning: "No exact source page shows this variant.",
+      },
+      {
+        state: "skipped",
+        outcome: "skipped",
+        warning: "No exact source page shows this variant.",
+      },
+    ]);
   });
 });

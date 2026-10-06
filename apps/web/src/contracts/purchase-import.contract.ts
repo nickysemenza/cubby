@@ -17,6 +17,8 @@ import {
   overwriteProductEnrichmentOut,
   preparePurchaseImportInput,
   preparePurchaseImportOut,
+  skipProductEnrichmentInput,
+  skipProductEnrichmentOut,
   submitReceiptEvidenceInput,
   submitReceiptEvidenceOut,
   validatePurchaseImportInput,
@@ -99,6 +101,12 @@ export const purchaseImportContract = defineContract("purchaseImport", {
     input: commitProductEnrichmentInput,
     output: commitProductEnrichmentOut,
     invalidates: ["product"],
+  }),
+  /** Close one enrichment target without a write, keeping the reason. */
+  skipProductEnrichment: mutation({
+    http: false,
+    input: skipProductEnrichmentInput,
+    output: skipProductEnrichmentOut,
   }),
   /** Propose one populated-field replacement; pauses for exact human approval. */
   overwriteProductEnrichment: mutation({

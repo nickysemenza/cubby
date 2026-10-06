@@ -51,7 +51,14 @@ schema.org Product (never a ProductGroup or several variants) whose matching
 field equals the identifier. Search results, aggregators, and free-text hints
 are leads, not proof; an identifier the page does not show is refused. A proven
 identifier another Product owns is skipped, reported in `skippedIdentifiers`, and
-proposed in the match queue, never reassigned.
+proposed in the match queue, never reassigned. A target with no exact source is
+closed with `product_enrichment.skip` and its reason, never left open: the run
+moves to its next Product, and a committed or skipped Product is not swept again.
+
+Imported Products enrich without a click: after an import commits, on every
+discovery pass, and when an account turns browser sync on, the server starts one
+targeted run per browsing account whose Mac is connected, for Products an import
+created that no run has committed or skipped (at most three attempts each).
 
 Read [source mechanics](references/sources.md) only for the source in hand.
 Read [write and image rules](references/writes-and-images.md) when preparing a

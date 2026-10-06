@@ -23,6 +23,7 @@ import {
   aiUsage,
   auditLog,
   entityAttachment,
+  entityExternalId,
   expense,
   financialTransaction,
   financialTransactionAllocation,
@@ -42,6 +43,7 @@ import {
   runFinding,
   runOperation,
   runOrderCandidate,
+  runEvidence,
   runProgress,
   runTarget,
 } from "~/server/db/schema";
@@ -58,10 +60,12 @@ import { insertWithShortcode } from "~/server/repo/shortcode-utils";
 import { startSelectedChargeRun } from "./charge-runs";
 import { learnPurchaseProductExternalId } from "./external-id-learning";
 import {
+  loadOrderMailImportEvidence,
   startOrderMailImport,
   startSelectedOrderMailImport,
 } from "./gmail/import";
 import { discoverImportHunts } from "./hunts";
+import { commitPurchaseImport, preparePurchaseImport } from "./import-orders";
 import {
   authorizePurchaseAgent,
   mailCommit,
@@ -1615,4 +1619,347 @@ describe("purchase-agent scripted scenarios", () => {
     ).toEqual(before);
     expect(await scenario.violations()).toEqual([]);
   }, 60_000);
+
+  // The hands-free path for a mail-imported seed order: the import commits
+  // two new Products on a browsing account, the post-import sweep starts one
+  // enrichment run, the Mac captures each product page, and the agent commits
+  // what one page proves and skips the Product no page proves. Failure modes:
+  // no run after a mail import; a capture filed under another target; one
+  // unprovable Product stranding the rest; an identifier written without
+  // retained page evidence.
+  it("product enrichment: a mail import's new Products are enriched from captured pages, one committed and one skipped", async () => {
+    const SEED_HOST = "seed.example.test";
+    const basilUrl = `https://${SEED_HOST}/products/basil?variant=101`;
+    const dillUrl = `https://${SEED_HOST}/products/dill`;
+    const party = await insertWithShortcode(ctx.db, "ledgerParty", {
+      name: "Scenario member",
+      kind: "member",
+      userId: ctx.actor.userId,
+    });
+    const vendor = await insertWithShortcode(ctx.db, "vendor", {
+      name: `Scenario seed shop ${crypto.randomUUID()}`,
+      website: `https://${SEED_HOST}`,
+      browserDomains: [SEED_HOST],
+    });
+    const account = await insertWithShortcode(ctx.db, "vendorAccount", {
+      label: "Scenario seed account",
+      vendorId: vendor.id,
+      ledgerPartyId: party.id,
+      status: "active",
+      browserSyncEnabled: true,
+    });
+    const [mail] = await getDb(ctx.db)
+      .insert(orderMail)
+      .values({
+        ledgerPartyId: party.id,
+        vendorId: vendor.id,
+        messageId: `scenario-seed-order-${crypto.randomUUID()}`,
+        sender: `orders@${SEED_HOST}`,
+        subject: "Order confirmation",
+        receivedAt: new Date("2026-09-01T12:00:00Z"),
+        rawChecksum: "c".repeat(64),
+        content: {
+          snippet: null,
+          bodyHtml: null,
+          bodyText:
+            "Order SEED-1. Basil packet $3.00. Dill packet $2.00. Total $5.00 USD.",
+        },
+      })
+      .returning();
+    const [event] = await getDb(ctx.db)
+      .insert(orderMailEvent)
+      .values({
+        orderMailId: mail!.id,
+        event: "placed",
+        orderId: "SEED-1",
+        amount: 5,
+        currency: "USD",
+        sourceKey: `scenario:${mail!.id}`,
+      })
+      .returning();
+    const started = await startOrderMailImport(
+      ctx.db,
+      { eventId: event!.id, evidenceChecksum: mail!.rawChecksum },
+      ctx.actor,
+      { send: async () => {} },
+    );
+    const [mailRun] = await getDb(ctx.db)
+      .select({ id: runTable.id })
+      .from(runTable)
+      .where(eq(runTable.shortcode, started.runId));
+    const evidence = await loadOrderMailImportEvidence(ctx.db, mailRun!.id);
+    if (!evidence) throw new Error("Missing assigned mail");
+    await preparePurchaseImport(
+      ctx.db,
+      {
+        _runExecution: { runId: mailRun!.id, operationId: "prepare-seed" },
+        orders: [
+          {
+            stableOrderId: "seed-order",
+            itemOperationId: "seed-order",
+            source: evidence.source,
+            evidenceChecksum: evidence.evidenceChecksum,
+            extractionRevision: "order-mail@1",
+            extraction: {
+              status: "ready",
+              candidate: {
+                orderId: evidence.orderId,
+                orderedAt: "2026-09-01T12:00:00Z",
+                merchant: "Scenario seed shop",
+                currency: "USD",
+                printedGrandTotal: 5,
+                lines: [
+                  {
+                    title: "Synthetic basil packet",
+                    amount: 3,
+                    quantity: 1,
+                    productUrl: basilUrl,
+                    lineKind: "principal",
+                  },
+                  {
+                    title: "Synthetic dill packet",
+                    amount: 2,
+                    quantity: 1,
+                    productUrl: dillUrl,
+                    lineKind: "principal",
+                  },
+                ],
+                payments: [],
+                allShipmentsDelivered: null,
+              },
+            },
+            lineIds: ["basil", "dill"],
+            primaryDocumentImageId: null,
+            screenshotImageId: null,
+          },
+        ],
+      },
+      ctx.actor,
+    );
+    await commitPurchaseImport(
+      ctx.db,
+      {
+        _runExecution: { runId: mailRun!.id, operationId: "commit-seed" },
+        prepareOperationId: "prepare-seed",
+        defaultTrade: "landscaping",
+        resolutions: ["basil", "dill"].map((stableLineId) => ({
+          stableOrderId: "seed-order",
+          stableLineId,
+          resolution: { kind: "new" as const },
+        })),
+      },
+      ctx.actor,
+    );
+
+    // The commit's sweep started the run. This test process has no queue
+    // binding, so dispatch recorded a failure; the harness delivers the same
+    // start event the queue would have.
+    const [run] = await getDb(ctx.db)
+      .select({ id: runTable.id, dispatchEventId: runTable.dispatchEventId })
+      .from(runTable)
+      .where(
+        and(
+          eq(runTable.purpose, "product_enrichment"),
+          eq(runTable.vendorAccountId, account.id),
+        ),
+      );
+    if (!run?.dispatchEventId) throw new Error("No enrichment run started");
+    const runId = run.id;
+    scenarioRunId = runId;
+    await getDb(ctx.db)
+      .update(runTable)
+      .set({ status: "running", dispatchError: null })
+      .where(eq(runTable.id, runId));
+    const targets = await getDb(ctx.db)
+      .select({
+        id: runTarget.id,
+        productId: runTarget.entityId,
+        startUrl: runTarget.sourceExternalKey,
+      })
+      .from(runTarget)
+      .where(eq(runTarget.runId, runId));
+    const targetFor = (url: string) => {
+      const target = targets.find((row) => row.startUrl === url);
+      if (!target) throw new Error(`No target starts at ${url}`);
+      return target;
+    };
+    // Pin the claim order so the script knows which Product comes first.
+    for (const [position, url] of [basilUrl, dillUrl].entries())
+      await getDb(ctx.db)
+        .update(runTarget)
+        .set({ position })
+        .where(eq(runTarget.id, targetFor(url).id));
+    // The Mac uploads each capture's PDF before answering; its run evidence
+    // row is what the capture result names.
+    const retained = async (url: string) => {
+      const [row] = await getDb(ctx.db)
+        .insert(runEvidence)
+        .values({
+          runId,
+          targetId: targetFor(url).id,
+          kind: "browser_capture",
+          objectKey: `scenario/${crypto.randomUUID()}`,
+          checksum: "d".repeat(64),
+          mediaType: "application/pdf",
+        })
+        .returning({ id: runEvidence.id });
+      return row!.id;
+    };
+    const productPage = async (
+      url: string,
+      sku: string,
+      variantGroup: boolean,
+    ) => ({
+      status: "completed",
+      capture: {
+        sourceURL: url,
+        canonicalUrl: url,
+        title: `Seed packet ${sku}`,
+        capturedAt: "2026-09-25T12:00:00.000Z",
+        captureVersion: 2,
+        readableText: `Seed packet ${sku}`,
+        links: [],
+        images: [],
+        paymentEvidence: [],
+        evidence: [
+          {
+            id: await retained(url),
+            kind: "rendered_pdf",
+            checksum: "d".repeat(64),
+            contentType: "application/pdf",
+          },
+        ],
+        variantMarkers: [],
+        // The Mac resolved the Shopify offer for ?variant=101; the dill page
+        // lists several packet sizes and names no variant.
+        structuredProducts: {
+          products: [{ skus: [sku], mpns: [], gtins: [], productIds: [] }],
+          variantGroup,
+        },
+      },
+    });
+    const outcomes = {
+      [basilUrl]: await productPage(basilUrl, "BASIL-101", false),
+      [dillUrl]: await productPage(dillUrl, "DILL-PKT", true),
+    };
+    await authorizePurchaseAgent(ctx.db, ctx.actor.userId);
+    scenario = await startScenarioHarness(ctx.databaseUrl, {
+      steps: [
+        call("claim-basil", "claim_next_import_work"),
+        { check: "claim-basil", includes: basilUrl },
+        call("capture-basil", "issue_browser_command", {
+          command: { kind: "capture_pdf" },
+        }),
+        awaitBrowserResult("capture-basil"),
+        call("evidence-basil", "import_browser_order_evidence", {
+          commandId: from("capture-basil", "commandId"),
+        }),
+        call("claim-basil-evidence", "claim_next_import_work"),
+        mcp("commit-basil", "product_enrichment", runId, {
+          action: "commit",
+          productId: from("claim-basil", "productId"),
+          targetFingerprint: from("claim-basil", "targetFingerprint"),
+          changes: {
+            manufacturer: "Scenario Seed Co",
+            identifiers: [
+              {
+                evidenceId: from("claim-basil-evidence", "evidence.0.id"),
+                source: "seed",
+                kind: "retailer_sku",
+                externalId: "BASIL-101",
+                url: basilUrl,
+              },
+            ],
+          },
+        }),
+        { check: "commit-basil", includes: "identifiers" },
+        call("claim-dill", "claim_next_import_work"),
+        { check: "claim-dill", includes: dillUrl },
+        call("capture-dill", "issue_browser_command", {
+          command: { kind: "capture_pdf" },
+        }),
+        awaitBrowserResult("capture-dill"),
+        call("evidence-dill", "import_browser_order_evidence", {
+          commandId: from("capture-dill", "commandId"),
+        }),
+        // The page offers several packet sizes: no exact variant, so skip.
+        mcp("skip-dill", "product_enrichment", runId, {
+          action: "skip",
+          productId: from("claim-dill", "productId"),
+          reason: "The product page lists several packet sizes.",
+        }),
+        { check: "skip-dill", includes: "skipped" },
+        call("claim-none", "claim_next_import_work"),
+        { check: "claim-none", includes: "none" },
+        call("finish", "finish_import_run", {
+          operationId: "finish-enrichment",
+        }),
+      ],
+    });
+    await scenario.connectBrowser({
+      vendorAccountId: account.id,
+      ledgerPartyId: party.id,
+      userId: ctx.actor.userId,
+      outcomes,
+    });
+    await scenario.dispatch({
+      version: 1,
+      type: "start_or_resume",
+      runId,
+      purpose: "product_enrichment",
+      eventId: run.dispatchEventId,
+    });
+    await waitForStatus(runId, "completed");
+    expect(await scenario.violations()).toEqual([]);
+
+    const basil = parseEntityId("product", targetFor(basilUrl).productId);
+    const dill = parseEntityId("product", targetFor(dillUrl).productId);
+    const [basilRow] = await getDb(ctx.db)
+      .select({ manufacturer: product.manufacturer })
+      .from(product)
+      .where(eq(product.id, basil));
+    expect(basilRow?.manufacturer).toBe("Scenario Seed Co");
+    // The identifier is learned only from the page this run retained.
+    expect(
+      await getDb(ctx.db)
+        .select({
+          entityId: entityExternalId.entityId,
+          source: entityExternalId.source,
+          kind: entityExternalId.kind,
+          externalId: entityExternalId.externalId,
+        })
+        .from(entityExternalId)
+        .where(inArray(entityExternalId.entityId, [basil, dill])),
+    ).toEqual([
+      {
+        entityId: basil,
+        source: "seed",
+        kind: "retailer_sku",
+        externalId: "BASIL-101",
+      },
+    ]);
+    expect(
+      await getDb(ctx.db)
+        .select({
+          productId: runTarget.entityId,
+          state: runTarget.state,
+          outcome: runTarget.outcome,
+        })
+        .from(runTarget)
+        .where(eq(runTarget.runId, runId))
+        .orderBy(runTarget.position),
+    ).toEqual([
+      { productId: basil, state: "completed", outcome: "enriched" },
+      { productId: dill, state: "skipped", outcome: "skipped" },
+    ]);
+    // The run's evidence, not a free-text claim, backs the write.
+    const [basilEvidence] = await getDb(ctx.db)
+      .select({ sourceMetadata: runEvidence.sourceMetadata })
+      .from(runEvidence)
+      .where(eq(runEvidence.targetId, targetFor(basilUrl).id));
+    expect(basilEvidence?.sourceMetadata).toMatchObject({
+      sourceURL: basilUrl,
+      structuredProducts: { variantGroup: false },
+    });
+  }, 90_000);
 });

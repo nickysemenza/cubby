@@ -180,19 +180,18 @@ const coupledJourneys: Journey[] = [
       {
         label: "one enrichment run follows the import at the product page",
         sql: `SELECT child.purpose, child.trigger, t."sourceExternalKey" AS "startUrl",
-                     (child.input->>'parentRunId') = parent.id::text AS "fromImport"
+                     child."vendorAccountId" IS NOT NULL AS "browsing"
                 FROM "Run" child
                 JOIN "RunTarget" t ON t."runId" = child.id
-                JOIN "Run" parent ON parent.id::text = child.input->>'parentRunId'
-                JOIN "Vendor" v ON v.id = parent."vendorId"
-               WHERE v.shortcode = $1 AND child.input->>'kind' = 'post_import_enrichment'`,
+                JOIN "Vendor" v ON v.id = child."vendorId"
+               WHERE v.shortcode = $1 AND child.purpose = 'product_enrichment'`,
         params: only("vendor"),
         rows: () => [
           {
             purpose: "product_enrichment",
             trigger: "discovery",
             startUrl: LIVE_IMPORT.enrich.productUrl,
-            fromImport: true,
+            browsing: true,
           },
         ],
       },
