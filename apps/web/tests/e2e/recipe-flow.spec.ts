@@ -159,6 +159,25 @@ test.describe("Recipe Flow", () => {
       await pool.end();
     }
 
+    await page.reload();
+    const actions = page.getByRole("group", {
+      name: "Entity actions",
+      exact: true,
+    });
+    await expect(
+      actions.getByRole("button", { name: "Regenerate walkthrough" }),
+    ).toBeVisible();
+    await expect(
+      actions.getByRole("button", { name: "copy parse", exact: true }),
+    ).toBeVisible();
+    await page.getByRole("tab", { name: "Relations", exact: true }).click();
+    await expect(
+      actions.getByRole("button", { name: /Add to meal/i }),
+    ).toBeVisible();
+    await expect(
+      actions.getByRole("button", { name: "Regenerate walkthrough" }),
+    ).toBeVisible();
+    await page.getByRole("tab", { name: "Overview", exact: true }).click();
     await page.getByRole("button", { name: "Flow view", exact: true }).click();
     await expect(
       page.getByRole("heading", { name: "E2E Branching Biscuits", level: 2 }),

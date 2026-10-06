@@ -3,6 +3,7 @@ import type {
   EntityReportInput,
   ReportBlock,
 } from "@cubby/schemas/entity-report";
+import { ArrowSquareOutIcon } from "@phosphor-icons/react/dist/csr/ArrowSquareOut";
 import {
   type QueryClient,
   useInfiniteQuery,
@@ -12,15 +13,18 @@ import {
 import { Link } from "@tanstack/react-router";
 import { type ReactNode, useEffect } from "react";
 
+import { RunAgentActions } from "~/app/purchases/purchase-import-run-detail";
 import { entityDetailLink } from "~/entity/entities";
 import { ripple } from "~/integrations/tanstack-query/cache-tags";
 import { cursorQueryOptions } from "~/integrations/tanstack-query/cursor-query-options";
 import { entityReport } from "~/integrations/tanstack-query/generated/catalog.gen";
 import { invalidateOperationTags } from "~/integrations/tanstack-query/operation-cache";
+import { savedSentryEventId, sentryEventUrl } from "~/lib/error-diagnostics";
 import { cn, formatCurrency } from "~/lib/utils";
 import { useSectionVisible } from "~/ui/data-table/detail-page";
 import { ErrorDisplay } from "~/ui/feedback/error-display";
 import { Row, Stack } from "~/ui/layout";
+import { buttonVariants } from "~/ui/primitives/button";
 import { Button } from "~/ui/primitives/button";
 import { Description } from "~/ui/primitives/description";
 import { Eyebrow } from "~/ui/primitives/eyebrow";
@@ -35,7 +39,12 @@ import {
 } from "~/ui/primitives/table";
 import { ShortcodeProse } from "~/ui/shortcode-prose";
 
-import { RecordsBlockView, ReportVerb } from "./records-block";
+import { DetailAction, reportDetailActionsFor } from "./detail-action-bar";
+import {
+  RecordsBlockView,
+  RecordsDetailActions,
+  ReportVerb,
+} from "./records-block";
 
 const TONE_TEXT = {
   positive: "text-positive",
@@ -223,11 +232,13 @@ const blockKey = (block: ReportBlock, index: number) =>
  * itself instead.
  */
 function ReportBlocks({
+  slot,
   blocks,
   record,
   entity,
   recordsList,
 }: {
+  slot: EntityReportInput["slot"];
   blocks: readonly ReportBlock[];
   record?: object;
   /** The record's entity, for the finance verbs a `records` block offers. */
@@ -277,6 +288,7 @@ function ReportBlocks({
               <RecordsBlockView
                 key={key}
                 block={block}
+                detailActions={reportDetailActionsFor(slot)}
                 record={record}
                 entity={entity}
                 list={recordsList?.(block)}
@@ -445,7 +457,9 @@ export function EntityReportSlot({
     <Stack gap="sm" className="items-start">
       {record !== undefined
         ? verbs.map((action) => (
-            <ReportVerb key={action} action={action} record={record} />
+            <DetailAction key={action}>
+              <ReportVerb action={action} record={record} />
+            </DetailAction>
           ))
         : null}
       {query.isPending ? (
@@ -459,6 +473,7 @@ export function EntityReportSlot({
       ) : (
         <>
           <ReportBlocks
+            slot={input.slot}
             blocks={query.blocks}
             record={record}
             entity={entity}
@@ -479,4 +494,59 @@ export function EntityReportSlot({
       )}
     </Stack>
   );
+}
+
+/** Header reads share the section's cache and the Run's existing batched poll. */
+export function ReportDetailActions({
+  slot,
+  id,
+  status,
+}: EntityReportInput & { status?: string }) {
+  const query = useReportBlocks({ slot, id }, status, true);
+  const placement = reportDetailActionsFor(slot);
+  return (
+    <>
+      {query.blocks.map((block, index) =>
+        block.kind === "records" ? (
+          <RecordsDetailActions
+            key={blockKey(block, index)}
+            block={block}
+            detailActions={placement}
+          />
+        ) : null,
+      )}
+    </>
+  );
+}
+
+export const RunDetailActions: import("./detail-slots").DetailSlotComponent<
+  "run"
+> = ({ record }) => (
+  <>
+    <ReportDetailActions
+      slot="run.live-progress"
+      id={record.id}
+      status={record.status}
+    />
+    <RunAgentActions record={record} />
+    <RunSentryAction error={record.dispatchError} />
+  </>
+);
+export function RunSentryAction({
+  error,
+}: {
+  error: string | null | undefined;
+}) {
+  const event = error ? savedSentryEventId(error) : null;
+  return event ? (
+    <a
+      href={sentryEventUrl(event)}
+      target="_blank"
+      rel="noreferrer"
+      className={buttonVariants({ variant: "outline" })}
+    >
+      <ArrowSquareOutIcon />
+      View in Sentry
+    </a>
+  ) : null;
 }

@@ -2,12 +2,14 @@ import type { NutritionBasis } from "@cubby/schemas/nutrition";
 import { useNavigate, useSearch } from "@tanstack/react-router";
 
 import { AddToMeal } from "~/app/meals/add-to-meal";
+import { DetailAction } from "~/entity/entity-detail/detail-action-bar";
 import type { DetailSlotComponent } from "~/entity/entity-detail/detail-slots";
 import { EntityReportSlot } from "~/entity/entity-detail/report-slot";
 import { CopyRecipeParseButton } from "~/features/recipes/copy-corpus-button";
 import RecipeDetail, {
   type RecipeViewMode,
 } from "~/features/recipes/RecipeDetail";
+import { RecipeFlowAction } from "~/features/recipes/RecipeFlowView";
 import type { RecipeFlowLayoutMode } from "~/features/recipes/RecipeFlowView";
 import { Row, Stack } from "~/ui/layout";
 
@@ -15,7 +17,7 @@ import { Row, Stack } from "~/ui/layout";
  * The cooking workflow: view switcher, scaling, nutrition basis, costing
  * coverage and the flow layout, all URL state on the recipe route (which
  * keeps `route.detail: null` for exactly those keys). Availability and the
- * add-to-meal / copy-parse actions ride along as the workflow's own toolbar.
+ * record-level actions use the persistent detail header.
  */
 export const RecipeWorkflow: DetailSlotComponent<"recipe"> = ({
   record: recipe,
@@ -67,10 +69,9 @@ export const RecipeWorkflow: DetailSlotComponent<"recipe"> = ({
   };
   return (
     <Stack gap="md">
-      <Row gap="sm" wrap justify="end">
-        <AddToMeal recipeId={recipe.id} recipeName={recipe.name} />
-        <CopyRecipeParseButton recipe={recipe} />
-      </Row>
+      <DetailAction>
+        <RecipeActions record={recipe} />
+      </DetailAction>
       <EntityReportSlot slot="recipe.availability" id={recipe.id} />
       <RecipeDetail
         recipe={recipe}
@@ -88,3 +89,13 @@ export const RecipeWorkflow: DetailSlotComponent<"recipe"> = ({
     </Stack>
   );
 };
+
+export const RecipeActions: DetailSlotComponent<"recipe"> = ({
+  record: recipe,
+}) => (
+  <Row gap="sm" wrap>
+    <AddToMeal recipeId={recipe.id} recipeName={recipe.name} />
+    <CopyRecipeParseButton recipe={recipe} />
+    <RecipeFlowAction recipeId={recipe.id} />
+  </Row>
+);

@@ -16,6 +16,18 @@ test("a cookbook is retitled from its page and a recipe is re-pointed to it from
   // Retitle: the detail heading follows the saved title.
   const retitled = `${name} retitled`;
   await gotoAuthenticatedPage(page, `/cookbooks/${book.id}`);
+  const actions = page.getByRole("group", {
+    name: "Entity actions",
+    exact: true,
+  });
+  await expect(
+    actions.getByRole("button", { name: "Reprocess", exact: true }),
+  ).toBeVisible();
+  await page.getByRole("tab", { name: "Relations", exact: true }).click();
+  await expect(
+    actions.getByRole("button", { name: "Reprocess", exact: true }),
+  ).toBeVisible();
+  await page.getByRole("tab", { name: "Overview", exact: true }).click();
   await page.getByRole("button", { name: "Edit Cookbook" }).click();
   const dialog = page.getByRole("dialog", { name: "Edit cookbook" });
   await dialog.getByLabel("Title").fill(retitled);

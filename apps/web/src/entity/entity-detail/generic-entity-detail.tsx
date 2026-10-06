@@ -82,6 +82,7 @@ import {
   type EntityTimelineOperations,
 } from "../timeline/entity-timeline";
 import { ConnectedRecordsTable } from "./connected-records-table";
+import { DetailActionProvider, DetailActionTarget } from "./detail-action-bar";
 import { detailEditOverrideFor } from "./detail-edit-overrides";
 import type { DetailRecordOf, GenericDetailEntity } from "./detail-record";
 import { detailSlotsFor } from "./detail-slots";
@@ -617,89 +618,94 @@ export function GenericEntityDetail<E extends GenericDetailEntity>({
   // SAFETY: `detailEditOverrideFor` hands back this entity's own override,
   // typed against the record this page received.
   const overrideRecord = record as never;
-  const plateActions: DetailHeroActions | undefined =
-    editable || hasVerbs
-      ? {
-          // Visible text stays "Edit"; the name carries the entity so the
-          // control reads "Edit Ingredient" to assistive tech and tests.
-          primary: editable ? (
-            <DetailEditAction
-              aria-label={`Edit ${singular}`}
-              onClick={() => setEditing(true)}
-            />
-          ) : undefined,
-          // Overflow-aware: the plate spells every verb out at `md+` and
-          // falls back to a primary + "More actions" popover on phone.
-          secondary: hasVerbs ? (
-            <EntityActionButtons
-              entity={entity}
-              // The whole record, not just its id: a verb's availability
-              // reads the fields it gates on (a planting's status hides
-              // "Start planting" once it has started).
-              record={{ ...record, id: bag.id }}
-              verbs={declaredVerbs}
-              overflow="responsive"
-            />
-          ) : undefined,
-        }
-      : undefined;
+  const plateActions: DetailHeroActions = {
+    // Visible text stays "Edit"; the name carries the entity so the
+    // control reads "Edit Ingredient" to assistive tech and tests.
+    primary: editable ? (
+      <DetailEditAction
+        aria-label={`Edit ${singular}`}
+        onClick={() => setEditing(true)}
+      />
+    ) : undefined,
+    // Overflow-aware: the plate spells every verb out at `md+` and
+    // falls back to a primary + "More actions" popover on phone.
+    secondary: (
+      <>
+        {hasVerbs ? (
+          <EntityActionButtons
+            entity={entity}
+            // The whole record, not just its id: a verb's availability
+            // reads the fields it gates on (a planting's status hides
+            // "Start planting" once it has started).
+            record={{ ...record, id: bag.id }}
+            verbs={declaredVerbs}
+            overflow="responsive"
+          />
+        ) : null}
+        <DetailActionTarget entity={entity} record={record} />
+      </>
+    ),
+  };
 
   return (
-    <Page
-      variant="detail"
-      entity={entity}
-      wayfinding={detailWayfinding(entity, record)}
-      title={
-        <span className="inline-flex items-baseline gap-2">
-          <RecordEmoji
-            entity={entity}
-            emoji={
-              z.looseObject({ emoji: z.string().nullish() }).parse(record).emoji
-            }
-            size={20}
-          />
-          {title}
-        </span>
-      }
-      rawData={record}
-      heroImages={heroImages}
-      heroNo={bag.id}
-      heroStamp={heroStamp}
-      heroStats={heroStats.length > 0 ? heroStats : undefined}
-      heroActions={plateActions}
-    >
-      <AncestryBreadcrumb
+    <DetailActionProvider>
+      <Page
+        variant="detail"
         entity={entity}
-        chain={breadcrumbChain}
-        current={title}
-      />
-      <RecordSuggestionsProvider
-        entity={entity}
-        records={[record]}
-        fieldKeys={entityFieldModels[entity].fields
-          .filter((field) => field.display.detail)
-          .map((field) => field.key)}
+        wayfinding={detailWayfinding(entity, record)}
+        title={
+          <span className="inline-flex items-baseline gap-2">
+            <RecordEmoji
+              entity={entity}
+              emoji={
+                z.looseObject({ emoji: z.string().nullish() }).parse(record)
+                  .emoji
+              }
+              size={20}
+            />
+            {title}
+          </span>
+        }
+        rawData={record}
+        heroImages={heroImages}
+        heroNo={bag.id}
+        heroStamp={heroStamp}
+        heroStats={heroStats.length > 0 ? heroStats : undefined}
+        heroActions={plateActions}
       >
-        <DetailSections
-          sections={sections}
-          rawData={record}
-          heroImages={heroImages}
+        <AncestryBreadcrumb
+          entity={entity}
+          chain={breadcrumbChain}
+          current={title}
         />
-      </RecordSuggestionsProvider>
-      {editable && editing ? (
-        EditOverride ? (
-          <EditOverride
-            record={overrideRecord}
-            onClose={() => setEditing(false)}
+        <RecordSuggestionsProvider
+          entity={entity}
+          records={[record]}
+          fieldKeys={entityFieldModels[entity].fields
+            .filter((field) => field.display.detail)
+            .map((field) => field.key)}
+        >
+          <DetailSections
+            sections={sections}
+            rawData={record}
+            heroImages={heroImages}
           />
-        ) : (
-          <EntityEditDialog<EditableEntity>
-            open
-            onOpenChange={setEditing}
-            request={editRequestFor(entity, record)}
-          />
-        )
-      ) : null}
-    </Page>
+        </RecordSuggestionsProvider>
+        {editable && editing ? (
+          EditOverride ? (
+            <EditOverride
+              record={overrideRecord}
+              onClose={() => setEditing(false)}
+            />
+          ) : (
+            <EntityEditDialog<EditableEntity>
+              open
+              onOpenChange={setEditing}
+              request={editRequestFor(entity, record)}
+            />
+          )
+        ) : null}
+      </Page>
+    </DetailActionProvider>
   );
 }
