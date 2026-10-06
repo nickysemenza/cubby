@@ -428,7 +428,7 @@ jobs:
         test-e2e,
       ]
     if: always() && (github.event_name == 'pull_request' || github.event_name == 'push' || (!inputs.simulator_e2e && inputs.tester_army == 'none'))
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-slim
     timeout-minutes: 5
     steps:
       - name: Require affected web lanes to pass

@@ -166,7 +166,11 @@ app, so edits there select the web lanes.
 Native, auxiliary, Rust, web, and PostgreSQL/E2E lanes run only when their inputs
 can affect them. A manual run selects all lanes. `Web checks` is the stable
 required aggregate: it checks the web, PostgreSQL, and browser matrix results
-whenever web validation is selected. `Tests - web` runs the existing `unit`,
+whenever web validation is selected. Its shell-only status check uses the
+standard `ubuntu-slim` container runner; it needs no checkout, dependencies,
+services, or privileged operations. This keeps the same runner-slot count and
+five-minute timeout. Queue and startup time remain part of measured gate latency.
+`Tests - web` runs the existing `unit`,
 `mcp-contract`, `worker-safety`, and `ui` Vitest projects together in one job,
 preserving each project's environment and isolation. One dependency setup and
 MCP App build serve all four projects; there is no fast-test job matrix. This
