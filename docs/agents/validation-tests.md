@@ -40,6 +40,8 @@ inside `toPass` for this single DOM condition. Session and sign-in diagnostics
 run only after timeout and distinguish an unauthenticated SSR shell from a
 client bundle that never hydrated.
 
+Request-correlation browser fixtures use a valid Cloudflare ray (hex with an
+optional data-center suffix): the server rejects arbitrary `cf-ray` strings.
 Browser dispatch can batch concurrent queries. A mock that parses a single
 operation envelope uses `unbatchFor` before its per-operation handler. Keep
 lazy-fetch assertions sensitive to every envelope; after refusing a batch,
