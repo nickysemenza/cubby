@@ -24,8 +24,7 @@ import { NativeSelect } from "~/ui/primitives/native-select";
 import { StatusText } from "~/ui/primitives/status-text";
 import { TechnicalError } from "~/ui/primitives/technical-error";
 
-type MailItem = VendorOrderMailOut["items"][number];
-type MailEvent = MailItem["events"][number];
+type MailEvent = VendorOrderMailOut["items"][number]["events"][number];
 type MailCandidate = MailEvent["candidates"][number];
 type MailSelection = Map<
   string,
@@ -42,328 +41,177 @@ const matchEvidence = (candidate: MailCandidate) => {
         label: "Strong match",
         explanation: "Exact order ID",
         tone: "positive",
-        rank: 0,
-      } as const;
-    case "previous_decision":
-      return {
-        label: "Reviewed",
-        explanation: "Previous decision",
-        tone: "secondary",
-        rank: 1,
       } as const;
     case "amount_and_date":
       return {
         label: "Possible match",
         explanation: "Amount and date match",
         tone: "secondary",
-        rank: 2,
       } as const;
     case "nearby_date":
       return {
         label: "Weak lead",
         explanation: "Date only",
         tone: "outline",
-        rank: 3,
+      } as const;
+    case "previous_decision":
+      return {
+        label: "Reviewed",
+        explanation: "Previous decision",
+        tone: "secondary",
       } as const;
   }
 };
 
-type OrderStep = { mail: MailItem; event: MailEvent | null; at: string };
-type OrderGroup = {
-  key: string;
-  orderId: string | null;
-  ledgerPartyId: string;
-  steps: OrderStep[];
-};
-
-/**
- * One row per order. A vendor sends placed, shipped, and delivered mail for
- * the same order; each names the same Purchase, so they read as one timeline.
- */
-function groupByOrder(items: readonly MailItem[]): OrderGroup[] {
-  const groups = new Map<string, OrderGroup>();
-  for (const mail of items)
-    for (const event of mail.events.length > 0 ? mail.events : [null]) {
-      const key = event?.orderId
-        ? `${mail.ledgerPartyId}|${event.orderId}`
-        : `${mail.messageId}|${event?.id ?? ""}`;
-      const group = groups.get(key) ?? {
-        key,
-        orderId: event?.orderId ?? null,
-        ledgerPartyId: mail.ledgerPartyId,
-        steps: [],
-      };
-      group.steps.push({
-        mail,
-        event,
-        at: event?.occurredAt ?? mail.receivedAt,
-      });
-      groups.set(key, group);
-    }
-  for (const group of groups.values())
-    group.steps.sort((left, right) => left.at.localeCompare(right.at));
-  return [...groups.values()];
-}
-
-type OrderCandidate = {
-  candidate: MailCandidate;
-  /** Every email in the order, with its decision for this Purchase. */
-  events: Array<{ event: MailEvent; decision: MailCandidate["decision"] }>;
-  /** Shared decision; `null` when undecided or the emails disagree. */
-  decision: MailCandidate["decision"];
-};
-
-function orderCandidates(steps: readonly OrderStep[]): OrderCandidate[] {
-  const events = steps.flatMap(({ event }) => (event ? [event] : []));
-  const strongest = new Map<string, MailCandidate>();
-  for (const event of events)
-    for (const candidate of event.candidates) {
-      const current = strongest.get(candidate.purchaseId);
-      if (
-        !current ||
-        matchEvidence(candidate).rank < matchEvidence(current).rank
-      )
-        strongest.set(candidate.purchaseId, candidate);
-    }
-  // A decision covers every email in the order, including one whose own
-  // candidate window missed this Purchase (a late shipment notice); it counts
-  // as undecided until written.
-  return [...strongest.values()].map((candidate) => {
-    const decisions = events.map((event) => ({
-      event,
-      decision:
-        event.candidates.find(
-          (other) => other.purchaseId === candidate.purchaseId,
-        )?.decision ?? null,
-    }));
-    const [first] = decisions;
-    return {
-      candidate,
-      events: decisions,
-      decision:
-        first && decisions.every(({ decision }) => decision === first.decision)
-          ? first.decision
-          : null,
-    };
-  });
-}
-
-const canImport = (event: MailEvent | null): event is MailEvent =>
-  event?.event === "placed" &&
-  Boolean(event.orderId) &&
-  !event.candidates.some(
-    (candidate) =>
-      candidate.reason === "exact_order_id" || candidate.decision === "linked",
-  );
-
-function OrderMailRow({
-  group,
+function OrderMailEvent({
+  event,
+  ledgerPartyId,
   selection,
   onSelect,
 }: {
-  group: OrderGroup;
+  event: MailEvent;
+  ledgerPartyId: string;
   selection: MailSelection;
-  onSelect: (event: MailEvent, checked: boolean) => void;
+  onSelect: (checked: boolean) => void;
 }) {
   const importOrder = useActionMutation({
     mutationFn: vendor.importOrderMail.mutationOptions,
     success: "Order import started",
   });
+  const canImport =
+    event.event === "placed" &&
+    event.orderId &&
+    !event.candidates.some(
+      (candidate) =>
+        candidate.reason === "exact_order_id" ||
+        candidate.decision === "linked",
+    );
   const decide = useActionMutation({
     mutationFn: vendor.decideOrderMail.mutationOptions,
     success: "Order email match reviewed",
-    // One decision writes every email in the order; toast it once.
-    successToastId: `order-mail-decision:${group.key}`,
   });
-  const importable = group.steps.map((step) => step.event).find(canImport);
-  const amount =
-    group.steps.find((step) => step.event?.event === "placed")?.event?.amount ??
-    group.steps.find((step) => step.event?.amount != null)?.event?.amount ??
-    null;
-  const candidates = orderCandidates(group.steps);
-  // `decide.isPending` tracks only the latest call; a group decision is
-  // several, so hold every button until the whole batch settles.
-  const [deciding, setDeciding] = useState(false);
-  const decideAll = async (
-    { candidate, events }: OrderCandidate,
-    decision: "linked" | "dismissed",
-  ) => {
-    setDeciding(true);
-    await Promise.allSettled(
-      events
-        .filter((entry) => entry.decision !== decision)
-        .map(({ event }) =>
-          decide.mutateAsync({
-            eventId: event.id,
-            purchaseId: candidate.purchaseId,
-            decision,
-            evidenceChecksum: event.evidenceChecksum,
-          }),
-        ),
-    );
-    setDeciding(false);
-  };
-  const mails = [
-    ...new Map(group.steps.map(({ mail }) => [mail.messageId, mail])).values(),
-  ];
   return (
-    <article className="px-3 py-2 text-sm">
-      <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
-        <span
-          className="shrink-0 truncate font-mono font-medium sm:w-40"
-          title={group.orderId ?? undefined}
-        >
-          {group.orderId ?? "Order unknown"}
-        </span>
-        <ol className="flex min-w-0 flex-1 flex-wrap items-baseline gap-x-4 gap-y-0.5">
-          {group.steps.map(({ mail, event, at }) => (
-            <li
-              key={`${mail.messageId}|${event?.id ?? ""}`}
-              className="flex max-w-full min-w-0 items-baseline gap-1.5"
-            >
-              <span className="shrink-0 text-xs font-medium">
-                {!event || event.event === "other" ? "update" : event.event}
-              </span>
-              <span
-                className="shrink-0 font-mono text-xs text-muted-foreground tabular-nums"
-                title={formatInstant(at, "dateTime")}
-              >
-                {formatInstant(at, "monthDay")}
-              </span>
-              {mail.threadId ? (
-                <a
-                  className="max-w-64 min-w-0 truncate text-muted-foreground hover:text-foreground hover:underline"
-                  href={gmailThreadUrl(mail.threadId)}
-                  target="_blank"
-                  rel="noreferrer"
-                  title={`Open Gmail conversation · ${mail.sender}`}
-                >
-                  {mail.subject}
-                </a>
-              ) : (
-                <span
-                  className="max-w-64 min-w-0 truncate text-muted-foreground"
-                  title={mail.sender}
-                >
-                  {mail.subject}
-                </span>
-              )}
-            </li>
-          ))}
-        </ol>
-        {amount !== null ? (
-          <span className="ml-auto font-mono tabular-nums">
-            {formatCurrency(amount)}
-          </span>
-        ) : null}
-      </div>
-      <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 sm:pl-43">
-        {importable && !importOrder.data ? (
-          <div className="flex items-center gap-1.5">
-            <Checkbox
-              aria-label={`Select order ${importable.orderId} to import with others`}
-              checked={selection.has(importable.id)}
-              // One run covers one member's mail.
-              disabled={[...selection.values()].some(
-                (picked) => picked.ledgerPartyId !== group.ledgerPartyId,
-              )}
-              onCheckedChange={(checked) =>
-                onSelect(importable, checked === true)
-              }
-            />
-            <Button
-              size="xs"
-              variant="outline"
-              disabled={importOrder.isPending}
-              title="The agent reads the saved confirmation and imports its itemized order."
-              onClick={() =>
-                importOrder.mutate({
-                  eventId: importable.id,
-                  evidenceChecksum: importable.evidenceChecksum,
-                })
-              }
-            >
-              {importOrder.isPending ? "Starting import…" : "Import order"}
-            </Button>
-          </div>
-        ) : null}
-        {importOrder.data ? (
-          <Link
-            to="/runs/$shortcode"
-            params={{ shortcode: importOrder.data.runId }}
-            className="text-xs text-primary underline underline-offset-4"
+    <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-sm">
+      <span className="font-medium">
+        {event.event === "other" ? "Other update" : event.event} ·{" "}
+        <span className="font-mono">{event.orderId ?? "Order unknown"}</span>
+      </span>
+      {canImport && !importOrder.data ? (
+        <div className="flex items-center gap-1.5">
+          <Checkbox
+            aria-label={`Select order ${event.orderId} to import with others`}
+            checked={selection.has(event.id)}
+            // One run covers one member's mail.
+            disabled={[...selection.values()].some(
+              (picked) => picked.ledgerPartyId !== ledgerPartyId,
+            )}
+            onCheckedChange={(checked) => onSelect(checked === true)}
+          />
+          <Button
+            size="xs"
+            variant="outline"
+            disabled={importOrder.isPending}
+            title="The agent reads the saved confirmation and imports its itemized order."
+            onClick={() =>
+              importOrder.mutate({
+                eventId: event.id,
+                evidenceChecksum: event.evidenceChecksum,
+              })
+            }
           >
-            View import
-          </Link>
-        ) : null}
-        {candidates.length === 0 ? (
-          <span className="text-xs text-muted-foreground">
-            No Purchase match
-          </span>
-        ) : (
-          candidates.map((entry) => {
-            const { candidate, decision } = entry;
-            const evidence = matchEvidence(candidate);
-            return (
-              <div
-                key={candidate.purchaseId}
-                className="flex items-center gap-1 rounded-md bg-muted/50 py-0.5 ps-2 pe-0.5"
-              >
-                <div className="flex min-w-0 items-center gap-1.5">
-                  <a
-                    className="font-medium text-primary hover:underline"
-                    href={`/purchases/${candidate.purchaseId}`}
-                  >
-                    {candidate.orderId ?? candidate.purchaseId}
-                  </a>
-                  <Badge variant={evidence.tone}>{evidence.label}</Badge>
-                  <span className="text-xs text-muted-foreground">
-                    {evidence.explanation}
-                  </span>
-                  {decision ? (
-                    <Badge variant="secondary">{decision}</Badge>
-                  ) : null}
-                </div>
-                <div className="flex">
-                  {decision !== "linked" ? (
-                    <Button
-                      size="xs"
-                      variant="ghost"
-                      disabled={deciding}
-                      onClick={() => void decideAll(entry, "linked")}
-                    >
-                      Link
-                    </Button>
-                  ) : null}
-                  {decision !== "dismissed" ? (
-                    <Button
-                      size="xs"
-                      variant="ghost"
-                      disabled={deciding}
-                      onClick={() => void decideAll(entry, "dismissed")}
-                    >
-                      Dismiss
-                    </Button>
-                  ) : null}
-                </div>
-              </div>
-            );
-          })
-        )}
-        <details className="ml-auto text-xs text-muted-foreground [&[open]]:basis-full">
-          <summary className="cursor-pointer">Technical details</summary>
-          {mails.map((mail) => (
-            <div key={mail.messageId} className="font-mono">
-              Message ID: {mail.messageId}
-              {mail.threadId ? ` · Thread ID: ${mail.threadId}` : null}
-            </div>
-          ))}
-        </details>
-      </div>
-      {importOrder.error ? (
-        <TechnicalError error={getErrorMessage(importOrder.error)} />
+            {importOrder.isPending ? "Starting import…" : "Import order"}
+          </Button>
+        </div>
       ) : null}
-    </article>
+      {canImport && importOrder.data ? (
+        <Link
+          to="/runs/$shortcode"
+          params={{ shortcode: importOrder.data.runId }}
+          className="text-xs text-primary underline underline-offset-4"
+        >
+          View import
+        </Link>
+      ) : null}
+      {event.candidates.length === 0 ? (
+        <span className="text-xs text-muted-foreground">
+          No likely Purchase yet.
+        </span>
+      ) : (
+        event.candidates.map((candidate) => {
+          const evidence = matchEvidence(candidate);
+          return (
+            <Row
+              key={candidate.purchaseId}
+              align="center"
+              gap="xs"
+              className="rounded-md bg-muted/50 py-0.5 ps-2 pe-0.5"
+            >
+              <div className="flex min-w-0 items-center gap-1.5">
+                <a
+                  className="font-medium text-primary hover:underline"
+                  href={`/purchases/${candidate.purchaseId}`}
+                >
+                  {candidate.orderId ?? candidate.purchaseId}
+                </a>
+                <Badge variant={evidence.tone}>{evidence.label}</Badge>
+                <span className="text-xs text-muted-foreground">
+                  {evidence.explanation}
+                </span>
+                {candidate.decision ? (
+                  <Badge variant="secondary">{candidate.decision}</Badge>
+                ) : null}
+              </div>
+              <div className="flex">
+                {candidate.decision !== "linked" ? (
+                  <Button
+                    size="xs"
+                    variant="ghost"
+                    disabled={decide.isPending}
+                    onClick={() =>
+                      decide.mutate({
+                        eventId: event.id,
+                        purchaseId: candidate.purchaseId,
+                        decision: "linked",
+                        evidenceChecksum: event.evidenceChecksum,
+                      })
+                    }
+                  >
+                    Link
+                  </Button>
+                ) : null}
+                {candidate.decision !== "dismissed" ? (
+                  <Button
+                    size="xs"
+                    variant="ghost"
+                    disabled={decide.isPending}
+                    onClick={() =>
+                      decide.mutate({
+                        eventId: event.id,
+                        purchaseId: candidate.purchaseId,
+                        decision: "dismissed",
+                        evidenceChecksum: event.evidenceChecksum,
+                      })
+                    }
+                  >
+                    Dismiss
+                  </Button>
+                ) : null}
+              </div>
+            </Row>
+          );
+        })
+      )}
+      {event.amount !== null ? (
+        <span className="ml-auto font-mono tabular-nums">
+          {formatCurrency(event.amount)}
+        </span>
+      ) : null}
+      {importOrder.error ? (
+        <div className="basis-full">
+          <TechnicalError error={getErrorMessage(importOrder.error)} />
+        </div>
+      ) : null}
+    </div>
   );
 }
 
@@ -615,24 +463,64 @@ function OrderMailWorklist({
         </StatusText>
       ) : (
         <div className="divide-y divide-border rounded-lg border border-border bg-card">
-          {groupByOrder(worklist.data.items).map((group) => (
-            <OrderMailRow
-              key={group.key}
-              group={group}
-              selection={selection}
-              onSelect={(event, checked) =>
-                setSelection((current) => {
-                  const next = new Map(current);
-                  if (checked)
-                    next.set(event.id, {
-                      evidenceChecksum: event.evidenceChecksum,
-                      ledgerPartyId: group.ledgerPartyId,
-                    });
-                  else next.delete(event.id);
-                  return next;
-                })
-              }
-            />
+          {worklist.data.items.map((mail) => (
+            <article key={mail.messageId} className="px-3 py-2">
+              <div className="flex min-w-0 items-baseline gap-2 text-xs text-muted-foreground">
+                {mail.threadId ? (
+                  <a
+                    className="min-w-0 truncate text-sm font-medium text-foreground hover:underline"
+                    href={gmailThreadUrl(mail.threadId)}
+                    target="_blank"
+                    rel="noreferrer"
+                    title="Open Gmail conversation"
+                  >
+                    {mail.subject}
+                  </a>
+                ) : (
+                  <span className="min-w-0 truncate text-sm font-medium text-foreground">
+                    {mail.subject}
+                  </span>
+                )}
+                <span className="min-w-0 shrink-[2] truncate">
+                  {mail.sender}
+                </span>
+                <span
+                  className="ml-auto shrink-0 font-mono tabular-nums"
+                  title={formatInstant(mail.receivedAt, "dateTime")}
+                >
+                  {formatInstant(mail.receivedAt, "dateShort")}
+                </span>
+                <details className="shrink-0">
+                  <summary className="cursor-pointer">IDs</summary>
+                  <div className="font-mono">Message ID: {mail.messageId}</div>
+                  {mail.threadId ? (
+                    <div className="font-mono">Thread ID: {mail.threadId}</div>
+                  ) : null}
+                </details>
+              </div>
+              <div className="mt-1 grid gap-1">
+                {mail.events.map((event) => (
+                  <OrderMailEvent
+                    key={event.id}
+                    event={event}
+                    ledgerPartyId={mail.ledgerPartyId}
+                    selection={selection}
+                    onSelect={(checked) =>
+                      setSelection((current) => {
+                        const next = new Map(current);
+                        if (checked)
+                          next.set(event.id, {
+                            evidenceChecksum: event.evidenceChecksum,
+                            ledgerPartyId: mail.ledgerPartyId,
+                          });
+                        else next.delete(event.id);
+                        return next;
+                      })
+                    }
+                  />
+                ))}
+              </div>
+            </article>
           ))}
         </div>
       )}
