@@ -1,9 +1,7 @@
 import type { Entity } from "@cubby/schemas/entity";
-import {
-  entityInspectorMetadata,
-  type BrowserRoutedEntity,
-} from "@cubby/schemas/entity-manifest";
+import type { BrowserRoutedEntity } from "@cubby/schemas/entity-manifest";
 import { generatedEntitySort } from "@cubby/schemas/entity-sort";
+import { entitySummary } from "@cubby/schemas/entity-summary";
 import type { UnitMapping } from "@cubby/schemas/unitmapping";
 import { useSearch } from "@tanstack/react-router";
 import { flexRender } from "@tanstack/react-table";
@@ -394,7 +392,7 @@ export function useEntityList<
         ),
         ...scopeFilters,
       };
-      const primarySearch = entityInspectorMetadata[entity].primarySearch;
+      const primarySearch = entitySummary[entity].primarySearch;
       if (primarySearch) {
         const primaryValue = ts.getColumnFilter(primarySearch.key);
         if (primaryValue !== undefined) {

@@ -1,9 +1,7 @@
 import type { Entity } from "@cubby/schemas/entity";
 import { entityFieldModels } from "@cubby/schemas/entity-fields";
-import {
-  entityInspectorMetadata,
-  type ShortcodeEntity,
-} from "@cubby/schemas/entity-manifest";
+import type { ShortcodeEntity } from "@cubby/schemas/entity-manifest";
+import { entitySummary } from "@cubby/schemas/entity-summary";
 import { canClearExpenseDate } from "@cubby/schemas/expense-fields";
 import type { MutationSideEffects } from "@cubby/schemas/mutation-side-effects";
 import type { UseMutationOptions } from "@tanstack/react-query";
@@ -46,19 +44,17 @@ import type { EntityActionHandles, EntityActionRow } from "./entity-actions";
 
 /**
  * Entities whose manifest declares `capabilities.bulkUpdate` — the generic
- * `bulkEdit` verb's roster. Derived from `entityInspectorMetadata` (the
- * compiled inspector `@cubby/schemas/entity-manifest` re-exports; the
- * generator emits `capabilities.bulkUpdate` onto its `lifecycle.bulkUpdate`
- * — see `scripts/generator/entities/render/index.ts` where `inspectorMetadata`
- * is built). Not `entityManifest`/`EntityDescriptor` — that type's
- * `lifecycle` (`entityLifecycleSchema`) is only `{ delete, merge }` and never
- * carries bulk-update field info. Never from server bindings either: a
- * bindings-derived list would follow whichever entities the kernel happens to
- * wire up rather than what the manifest declares editable in bulk.
+ * `bulkEdit` verb's roster. Derived from `entitySummary[entity].bulkUpdate`
+ * (the generator's `bulkUpdateFor`, shared with the inspector's
+ * `lifecycle.bulkUpdate`). Not `entityFieldModels[entity].bulk`: a bulk update
+ * may name a field the field model does not mark bulk-editable (Expense
+ * `date`). Never from server bindings either: a bindings-derived list would
+ * follow whichever entities the kernel happens to wire up rather than what the
+ * manifest declares editable in bulk.
  */
 export const bulkEditEntities: readonly GeneratedBrowserCrudEntity[] =
   generatedBrowserCrudEntities.filter(
-    (entity) => entityInspectorMetadata[entity].lifecycle.bulkUpdate !== null,
+    (entity) => entitySummary[entity].bulkUpdate !== null,
   );
 
 /**
@@ -476,10 +472,7 @@ export function useBulkEditEntityAction(
   // Invariant: `entity` is only ever one of `bulkEditEntities`, all of which
   // declare a non-null `capabilities.bulkUpdate` — the `?? []` is a defensive
   // fallback, not an expected path.
-  const fieldKeys =
-    fields ??
-    entityInspectorMetadata[entity].lifecycle.bulkUpdate?.fields ??
-    [];
+  const fieldKeys = fields ?? entitySummary[entity].bulkUpdate?.fields ?? [];
 
   const stage = useCallback((rows: readonly EntityActionRow[]) => {
     setItems(rows.map(asBulkEditRow));

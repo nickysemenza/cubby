@@ -5,7 +5,6 @@ import {
   type EntityFieldModel,
 } from "@cubby/schemas/entity-fields";
 import {
-  entityInspectorMetadata,
   entityManifest,
   type BrowserRoutedEntity,
 } from "@cubby/schemas/entity-manifest";
@@ -18,6 +17,8 @@ import { z } from "zod";
 import { EntityRefLink } from "~/entity/components/entity-ref-link";
 import { ReferencePreview } from "~/entity/components/reference-preview";
 import { EntityDisplayImagesProvider } from "~/entity/entity-media/entity-display-images";
+import { getEntityFilters } from "~/entity/filter-manifest";
+import { filterUrlKey } from "~/entity/filters";
 import { RecordFieldSuggestion } from "~/features/ai/record-suggestions";
 import { tryFormatAmount } from "~/features/inventory/format-amount";
 import { formatCurrency } from "~/lib/utils";
@@ -469,13 +470,13 @@ function referenceBrowse<TRecord extends object>(
   const data = z.record(z.string(), z.unknown()).parse(record);
   const search = new URLSearchParams();
   for (const binding of field.reference.scope) {
-    const descriptor = entityInspectorMetadata[target].filterDescriptors.find(
+    const spec = getEntityFilters(target).find(
       (item) =>
         item.field === binding.targetField ||
         item.columnId === binding.targetField,
     );
     const value = z.string().safeParse(data[binding.sourceField]);
-    if (descriptor && value.success) search.set(descriptor.urlKey, value.data);
+    if (spec && value.success) search.set(filterUrlKey(spec), value.data);
   }
   return search.size ? (
     <a
@@ -600,15 +601,15 @@ const COHORT_FILTER_KINDS = new Set(["select", "multiselect", "id", "idMulti"]);
  * whose `field`/`columnId` names the field (or the key minus `Id` for a
  * reference, `ingredientId` → `ingredient`) and whose kind takes one value.
  */
-function cohortDescriptorFor(entity: Entity, field: DisplayField) {
+function cohortFilterSpecFor(entity: Entity, field: DisplayField) {
   const base = field.key.replace(/Ids?$/u, "");
   return (
-    entityInspectorMetadata[entity].filterDescriptors.find(
-      (descriptor) =>
-        COHORT_FILTER_KINDS.has(descriptor.kind) &&
-        (descriptor.columnId === field.key ||
-          descriptor.field === field.key ||
-          (field.reference !== null && descriptor.columnId === base)),
+    getEntityFilters(entity).find(
+      (spec) =>
+        COHORT_FILTER_KINDS.has(spec.kind) &&
+        (spec.columnId === field.key ||
+          spec.field === field.key ||
+          (field.reference !== null && spec.columnId === base)),
     ) ?? null
   );
 }
@@ -633,13 +634,13 @@ function relationCountFilter(entity: Entity, field: DisplayField) {
     (relation) => relation.key === source.relation,
   )?.target;
   if (target === undefined || !isBrowserRoutedEntity(target)) return null;
-  const descriptor = entityInspectorMetadata[target].filterDescriptors.find(
+  const spec = getEntityFilters(target).find(
     (candidate) => candidate.columnId === section.filter.descriptor,
   );
-  return descriptor
+  return spec
     ? {
         to: entities[target].routes.list,
-        urlKey: descriptor.urlKey,
+        urlKey: filterUrlKey(spec),
         plural: entityPluralLabel(target).toLocaleLowerCase(),
       }
     : null;
@@ -669,8 +670,9 @@ function cohortFilterAction<TRecord extends object>(
     );
   }
   if (!isBrowserRoutedEntity(entity)) return undefined;
-  const descriptor = cohortDescriptorFor(entity, field);
-  if (descriptor === null) return undefined;
+  const spec = cohortFilterSpecFor(entity, field);
+  if (spec === null) return undefined;
+  const urlKey = filterUrlKey(spec);
   const plural = entityPluralLabel(entity).toLocaleLowerCase();
   const label = field.label.toLocaleLowerCase();
   const linkTo = (value: string, text: string) => (
@@ -678,7 +680,7 @@ function cohortFilterAction<TRecord extends object>(
       variant="filter"
       key={value}
       to={entities[entity].routes.list}
-      search={{ [descriptor.urlKey]: value }}
+      search={{ [urlKey]: value }}
       label={`Show all ${plural} with ${label} ${text}`}
       className={LEDGER_FILTER_ACTION_CLASS}
     />

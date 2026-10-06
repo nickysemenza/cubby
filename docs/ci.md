@@ -133,6 +133,11 @@ cannot repair the entry. The DerivedData `v6` and SwiftPM `v2` generations
 exclude earlier entries that could have been saved after cancellation or
 failure. A new generation pays one cold build; unchanged successful restores
 are the evidence for warm performance. Dependency clones remain advisory.
+A controlled same-head [cold build and warm rerun](https://github.com/nickysemenza/cubby/actions/runs/37418543352)
+on 2026-10-05 took 7:39 and 4:35 respectively in the Apple app job after the
+successful exact-key DerivedData restore. Swift compilation log entries fell
+from 1,380 to two. This verifies reuse for unchanged inputs; one controlled
+rerun does not establish a PR median.
 
 ## Hosted suite
 
@@ -146,10 +151,14 @@ app, so edits there select the web lanes.
 Native, auxiliary, Rust, web, and PostgreSQL/E2E lanes run only when their inputs
 can affect them. A manual run selects all lanes. `Web checks` is the stable
 required aggregate: it checks the web, PostgreSQL, and browser matrix results
-whenever web validation is selected. A single `Build Workers` job builds the
-web Cloudflare bundle (which hosts the purchase agent) once and uploads it
-with the MCP App assets and the WASM package as the `worker-build` artifact; the workerd PostgreSQL and browser
-lanes `need` it and download that exact bundle. The browser lanes retain the discovery and no-skip guard;
+whenever web validation is selected. `Build Workers` builds the
+web Cloudflare bundle (which hosts the purchase agent) and uploads it
+with the MCP App assets and the WASM package as the `worker-build` artifact; the
+workerd PostgreSQL and optional purchase browser lanes download that exact bundle.
+Desktop browser shards depend only on `Scope` and build the Worker during their
+own setup, with the same source commit and branch provenance. This overlaps
+setup with `Build Workers` without adding runner slots, at the cost of two
+additional Worker builds. The browser lanes retain the discovery and no-skip guard;
 desktop Chromium runs as two Playwright shards (two workers each). Phone-web and
 WebKit browser coverage was removed from PR CI and the Playwright suite; native
 checks remain separate. There is no coverage mode.

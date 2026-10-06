@@ -1,5 +1,5 @@
 import { activityKind, activityRunId } from "@cubby/schemas/activity";
-import { entityInspectorMetadata } from "@cubby/schemas/entity-manifest";
+import { entitySummary } from "@cubby/schemas/entity-summary";
 import { runTrigger } from "@cubby/schemas/run-fields";
 import { z } from "zod";
 
@@ -7,6 +7,8 @@ import type {
   ListSearch,
   ListSlotProps,
 } from "~/entity/entity-list/list-slot-types";
+import { getEntityFilters } from "~/entity/filter-manifest";
+import { filterUrlKey } from "~/entity/filters";
 
 import { RunHistory } from "./run-history";
 
@@ -42,7 +44,8 @@ const searchSchema = z.object({
  * a filter of its own or records clearing the default (`filters=none`), like
  * every declared list.
  */
-const declaredFilter = entityInspectorMetadata.run.list.initialFilter;
+const declaredFilter = entitySummary.run.list.initialFilter;
+const runFilterUrlKeys = getEntityFilters("run").map(filterUrlKey);
 const declaredTriggers = declaredFilter.flatMap((filter) =>
   filter.id === "trigger" && Array.isArray(filter.value) ? [filter.value] : [],
 )[0];
@@ -60,9 +63,7 @@ function RunHistorySlot({ search, navigate }: ListSlotProps) {
   // is the person's choice of what to see; the default only opens a bare list.
   const namesFilter =
     Boolean(parsed.kind) ||
-    entityInspectorMetadata.run.filterUrlKeys.some((key) =>
-      Boolean(search[key]),
-    );
+    runFilterUrlKeys.some((key) => Boolean(search[key]));
   const hasDefaultFilter = hiddenByDefault.length > 0 || routineHiddenByDefault;
   const hideDefault =
     hasDefaultFilter && !namesFilter && parsed.filters !== "none";

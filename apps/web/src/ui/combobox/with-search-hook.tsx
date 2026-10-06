@@ -1,4 +1,4 @@
-import { entityInspectorMetadata } from "@cubby/schemas/entity-manifest";
+import { entityManifest } from "@cubby/schemas/entity-manifest";
 import type {
   LocationShortcode,
   ProductShortcode,
@@ -91,7 +91,7 @@ export interface SearchProviderProps<TId extends string = string> {
 export type EntitySearchEntity = Exclude<PickerSearchEntity, "vendor">;
 
 const detailPlaceholder = (entity: PickerSearchEntity) =>
-  `${entityInspectorMetadata[entity].shortcodePrefix}2222`;
+  `${entityManifest[entity].shortcodePrefix}2222`;
 
 function parseCreated<T>(schema: z.ZodType<T>): CreatedResultParser<T> {
   return (result: unknown) => schema.safeParse(result).data;
@@ -170,7 +170,7 @@ function manifestConfig<E extends ManifestPickerEntity>(
   return {
     detailPlaceholder: detailPlaceholder(entity),
     splitBlankTyped: true,
-    supportsGlobalSearch: entityInspectorMetadata[entity].searchable,
+    supportsGlobalSearch: entityManifest[entity].searchable,
     useListSource: manifestListSource(entity),
     build,
     buildDetail: build,

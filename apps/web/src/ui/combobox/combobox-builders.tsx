@@ -1,4 +1,4 @@
-import { entityInspectorMetadata } from "@cubby/schemas/entity-manifest";
+import { entitySummary } from "@cubby/schemas/entity-summary";
 import {
   type LocationShortcode,
   parseShortcodeFor,
@@ -395,7 +395,7 @@ export function buildRecordComboboxItem<E extends ShortcodeType>(
   record: PickerRecord,
 ): ComboboxItem<ShortcodeFor<E>> {
   const shortcode = parseShortcodeFor(entity, record.id);
-  const title = record[entityInspectorMetadata[entity].titleField];
+  const title = record[entitySummary[entity].titleField];
   const aliases = pickerAliases.safeParse(record.aliases).data;
   return {
     id: shortcode,
