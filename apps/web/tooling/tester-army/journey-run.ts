@@ -1,10 +1,13 @@
 import {
   assertDatabase,
+  assertScreenRead,
   awaitRun,
   loadJourneyIds,
   stepGoal,
   type Engine,
   type Journey,
+  type Json,
+  type ScreenRead,
 } from "./journey";
 
 type Fixtures = {
@@ -14,7 +17,15 @@ type Fixtures = {
     web?: string;
     ios?: string;
   }) => Promise<void>;
-  agent: { act(goal: string): Promise<void | object> };
+  agent: {
+    act(goal: string): Promise<void | object>;
+    extract(
+      instruction: string,
+      options: { schema: ScreenRead["schema"] },
+    ): Promise<Json>;
+  };
+  /** Web only: fixes the viewport before the journey opens its page. */
+  setViewport?: (size: { width: number; height: number }) => Promise<void>;
   /** Reloads the current page so it shows what a live run wrote meanwhile. */
   reload: () => Promise<void>;
   /** Exact-text assertions supplied by the engine's own `expect`/`screen`. */
@@ -37,6 +48,7 @@ async function runJourneyBody(
   const ids = loadJourneyIds(journey.id);
   const wrong = process.env.TESTER_ARMY_WRONG === "1";
   const entity = journey.start ? ids.get(journey.start) : undefined;
+  if (journey.viewport) await fixtures.setViewport?.(journey.viewport);
   await fixtures.open({ entity, ...journey.open?.(ids) });
   for (const step of journey.steps) {
     if (step.ready) await assertDatabase(journey, [step.ready], ids, false);
@@ -46,6 +58,16 @@ async function runJourneyBody(
     await expectTexts(fixtures, step.check?.visible?.(ids) ?? [], true);
     if (step.check?.db)
       await assertDatabase(journey, step.check.db, ids, false);
+    if (step.read)
+      assertScreenRead(
+        journey,
+        step.read,
+        await fixtures.agent.extract(step.read.instruction, {
+          schema: step.read.schema,
+        }),
+        ids,
+        wrong,
+      );
   }
   if (journey.awaitRun) {
     await awaitRun(journey, journey.awaitRun, ids);

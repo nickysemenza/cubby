@@ -727,6 +727,68 @@ describe("unified Runs history", () => {
     ).toMatchObject(expected);
   });
 
+  // The row names the targets the run works first: tied positions fall back
+  // to creation order, as the run itself does, never to the random row id.
+  it("previews targets in the order the run works them", async () => {
+    const party = await insertWithShortcode(ctx.db, "ledgerParty", {
+      name: "Order member",
+      kind: "member",
+      userId: ctx.actor.userId,
+    });
+    const shortcode = generateShortcode("run");
+    const [run] = await getDb(ctx.db)
+      .insert(runTable)
+      .values({
+        shortcode,
+        ledgerPartyId: party.id,
+        actorUserId: ctx.actor.userId,
+        actorName: "Order member",
+        actorEmail: "order@example.test",
+        actorLedgerPartyShortcode: party.shortcode,
+        actorLedgerPartyName: party.name,
+        actorLedgerPartyKind: party.kind,
+        purpose: "product_enrichment",
+        trigger: "manual",
+        status: "running",
+        startedAt: new Date(),
+      })
+      .returning({ id: runTable.id });
+    const products = [];
+    for (const index of [0, 1, 2, 3])
+      products.push(
+        await insertWithShortcode(ctx.db, "product", {
+          name: `Order fixture ${index}`,
+          manufacturer: "Fixture Seeds",
+        }),
+      );
+    // Ids descend while creation ascends, so an id tiebreak would reverse them.
+    await getDb(ctx.db)
+      .insert(runTarget)
+      .values(
+        products.map((product, index) => ({
+          id: `0000000${9 - index}-0000-4000-8000-000000000000`,
+          runId: run!.id,
+          entityKind: "product" as const,
+          entityId: product.id,
+          position: 0,
+          targetFingerprint: String(index).repeat(64),
+          createdAt: new Date(Date.UTC(2026, 8, 1, 0, index)),
+        })),
+      );
+
+    const list = await listActivity(ctx.db, null, {
+      recordType: "run",
+      executor: "all",
+      limit: 50,
+      sort: "newest",
+    });
+    expect(
+      list.items
+        .find((row) => row.id === shortcode)
+        ?.targetPreview.map((target) => target.name),
+    ).toEqual(["Order fixture 0", "Order fixture 1", "Order fixture 2"]);
+  });
+
   it("filters routine runs either way only when asked", async () => {
     const party = await insertWithShortcode(ctx.db, "ledgerParty", {
       name: "Routine member",

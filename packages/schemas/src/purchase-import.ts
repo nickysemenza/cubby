@@ -53,6 +53,33 @@ export const runTargetState = z.enum([
 ]);
 export type RunTargetState = z.infer<typeof runTargetState>;
 
+/**
+ * How every client counts a run's targets: done, skipped (the member need not
+ * act), blocked (waiting on the member or on evidence), or still to do.
+ */
+export const RUN_TARGET_BUCKET = {
+  pending: "pending",
+  prepared: "pending",
+  completed: "completed",
+  skipped: "skipped",
+  unavailable: "skipped",
+  unresolved: "blocked",
+  needs_evidence: "blocked",
+} as const satisfies Record<
+  RunTargetState,
+  "completed" | "skipped" | "blocked" | "pending"
+>;
+export type RunTargetBucket = (typeof RUN_TARGET_BUCKET)[RunTargetState];
+
+export function countRunTargets(states: readonly RunTargetState[]) {
+  const counts = { total: 0, completed: 0, skipped: 0, blocked: 0, pending: 0 };
+  for (const state of states) {
+    counts.total += 1;
+    counts[RUN_TARGET_BUCKET[state]] += 1;
+  }
+  return counts;
+}
+
 export const runTargetOutcome = z.enum([
   "replayed",
   "raw_evidence_drift",

@@ -191,12 +191,6 @@ Runs list and `imports_read.run_status` read one shared projection
   the only enrichment path. Only import completions trigger, so enrichment
   cannot re-trigger itself.
 
-- 🧱 **Fold legacy unknown-sender holder Runs into their passes.** Mail
-  passes now file unknown-sender findings on themselves, but hundreds of
-  older vendor-less account-sync Runs exist only to hold one finding. Move
-  each finding to the discovery pass that read it, then delete the empty
-  holders. Production data change: confirm first.
-
 - 🟢 **Thin Mac capture, server-side extraction.** The Mac app should return
   raw artifacts (final URL, raw JSON-LD, a DOM snapshot, PDF or screenshot)
   instead of running page-specific extraction JavaScript. The server

@@ -19,6 +19,7 @@ import {
   imageDescriptionAnalysis,
   imageDescriptionResult,
 } from "@cubby/schemas/image-processing";
+import { RUN_TARGET_BUCKET } from "@cubby/schemas/purchase-import";
 import { runWorkLabel } from "@cubby/schemas/run-fields";
 import { parseShortcode } from "@cubby/shared";
 import { and, desc, eq, sql, type SQL } from "drizzle-orm";
@@ -210,6 +211,20 @@ const runWire = activityRun
   });
 type RunWire = z.infer<typeof runWire>;
 
+/** One count per `RUN_TARGET_BUCKET`, so SQL and every client agree. */
+const targetBucketCounts = sql.join(
+  (["completed", "skipped", "blocked", "pending"] as const).map(
+    (bucket) =>
+      sql`${bucket}::text, count(*) FILTER (WHERE t.state IN (${sql.join(
+        Object.entries(RUN_TARGET_BUCKET)
+          .filter(([, value]) => value === bucket)
+          .map(([state]) => sql`${state}`),
+        sql`, `,
+      )}))`,
+  ),
+  sql`, `,
+);
+
 /** How many targets a row names; the counts cover the rest. */
 const TARGET_PREVIEW_LIMIT = 3;
 
@@ -243,23 +258,19 @@ async function loadRunFacts(db: Database, internalIds: readonly string[]) {
       (SELECT coalesce(p.detail, p.phase) FROM "RunProgress" p
         WHERE p."runId" = r.id
         ORDER BY p."createdAt" DESC, p.id DESC LIMIT 1) AS "currentStep",
-      (SELECT jsonb_build_object(
-        'total', count(*),
-        'completed', count(*) FILTER (WHERE t.state = 'completed'),
-        'skipped', count(*) FILTER (WHERE t.state IN ('skipped', 'unavailable')),
-        'blocked', count(*) FILTER (WHERE t.state IN ('unresolved', 'needs_evidence')),
-        'pending', count(*) FILTER (WHERE t.state IN ('pending', 'prepared'))
-      ) FROM "RunTarget" t WHERE t."runId" = r.id) AS "targetCounts",
+      (SELECT jsonb_build_object('total', count(*), ${targetBucketCounts})
+        FROM "RunTarget" t WHERE t."runId" = r.id) AS "targetCounts",
       coalesce((SELECT jsonb_agg(jsonb_build_object(
           'entityKind', shown."entityKind", 'entityId', shown."entityId",
           'shortcode', shown.shortcode, 'state', shown.state
-        ) ORDER BY shown.position NULLS LAST, shown.id)
+        ) ORDER BY shown.position NULLS LAST, shown."createdAt", shown.id)
         FROM (
-          SELECT t.id, t.position, t."entityKind", t."entityId", t.state, identity.shortcode
+          SELECT t.id, t.position, t."createdAt", t."entityKind", t."entityId", t.state, identity.shortcode
           FROM "RunTarget" t
           JOIN "Entity" identity ON identity.id = t."entityId"
           WHERE t."runId" = r.id
-          ORDER BY t.position NULLS LAST, t.id
+          -- The order the run works its targets in (targetWorkOrder).
+          ORDER BY t.position NULLS LAST, t."createdAt", t.id
           LIMIT ${TARGET_PREVIEW_LIMIT}
         ) shown), '[]'::jsonb) AS targets,
       (SELECT count(DISTINCT (a."entityKind", a."entityId"))

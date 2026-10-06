@@ -3752,8 +3752,8 @@ export async function loadRunDetail(
     targets: targets.map((target) => ({
       id: target.id,
       targetType: target.entityKind,
-      // Image targets have never carried a public code in the run detail.
-      targetShortcode: target.entityKind === "image" ? null : target.entityCode,
+      // Image targets need their IMG- code too: photos often share a filename.
+      targetShortcode: target.entityCode,
       targetName:
         targetNames.get(entityRefKey(target.entityKind, target.entityId)) ??
         null,

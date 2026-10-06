@@ -21,6 +21,7 @@ for (const journey of selectedJourneys(journeys, "web"))
         },
         open: ({ entity, web }) => app.open(web ?? `/${entity}`),
         reload: () => browser.reload(),
+        setViewport: (size) => browser.setViewport(size),
       });
     },
   );

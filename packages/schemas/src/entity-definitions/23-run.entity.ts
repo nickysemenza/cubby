@@ -66,18 +66,20 @@ export default defineEntity({
       },
       additionalSections: [
         { kind: "slot", id: "live-progress", title: "Progress" },
+        // What the run counted and the records it worked, before its
+        // controls and agent: the first questions about any run.
+        { kind: "slot", id: "import-stats", title: "Counts" },
+        { kind: "slot", id: "import-targets", title: "Targets and outcome" },
         // Import runs (sync, validation, enrichment, file import) declare
         // their workflow as slots that each gate their own visibility. A live
         // run leads with progress and its agent; a stopped run carries the
         // same two after its evidence.
         { kind: "slot", id: "import-controls", title: "Controls" },
-        { kind: "slot", id: "import-stats", title: "Order counts" },
         { kind: "slot", id: "import-progress-live", title: "Run progress" },
         { kind: "slot", id: "import-agent-live", title: "Live agent" },
         { kind: "slot", id: "import-purchases", title: "Purchases changed" },
         { kind: "slot", id: "import-approvals", title: "Approvals" },
         { kind: "slot", id: "import-findings", title: "Findings" },
-        { kind: "slot", id: "import-targets", title: "Targets and outcome" },
         { kind: "slot", id: "import-evidence", title: "Run evidence" },
         {
           kind: "slot",

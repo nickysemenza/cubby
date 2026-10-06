@@ -514,19 +514,22 @@ export const MCP_TOOLS = defineMcpTools({
       }),
       run_status: mcpAction({
         op: runContract.ops.workSnapshot,
-        // A finding's proposed fix carries private ids for the member's
-        // review screen; an agent reads the finding and whether a fix exists.
+        // A finding's row id and proposed fix are private handles for the
+        // member's review screen; an agent reads the finding and whether a
+        // fix exists.
         project: (output) => ({
           ...output,
-          findings: output.findings.map(({ proposedFix, ...finding }) => ({
-            ...finding,
-            hasProposedFix: proposedFix !== null,
-          })),
+          findings: output.findings.map(
+            ({ id: _id, proposedFix, ...finding }) => ({
+              ...finding,
+              hasProposedFix: proposedFix !== null,
+            }),
+          ),
         }),
         output: runContract.ops.workSnapshot.output.extend({
           findings: z.array(
             runContract.ops.workSnapshot.output.shape.findings.element
-              .omit({ proposedFix: true })
+              .omit({ id: true, proposedFix: true })
               .extend({ hasProposedFix: z.boolean() }),
           ),
         }),

@@ -1,9 +1,8 @@
-import type { ActivityRun } from "@cubby/schemas/activity";
 import { CopyIcon } from "@phosphor-icons/react/dist/csr/Copy";
 import { useInfiniteQuery } from "@tanstack/react-query";
 import { useEffect, useMemo } from "react";
 
-import { RunSubject, RunTargetChips } from "~/app/runs/run-work-summary";
+import { RunWorkFacts } from "~/app/runs/run-work-summary";
 import { cursorQueryOptions } from "~/integrations/tanstack-query/cursor-query-options";
 import { activity } from "~/integrations/tanstack-query/generated/catalog.gen";
 import { copyText } from "~/lib/clipboard";
@@ -272,45 +271,5 @@ export function ActivityRunDetail({
         </Stack>
       </CardContent>
     </Card>
-  );
-}
-
-/** What the work is about, how far it got, and which records it touched. */
-function RunWorkFacts({ run }: { run: ActivityRun }) {
-  const outcome = run.targetSummary;
-  return (
-    <dl className="mb-3 grid grid-cols-[max-content_minmax(0,1fr)] items-center gap-x-3 gap-y-1.5 text-sm">
-      <dt className="text-muted-foreground">Subject</dt>
-      <dd className="min-w-0">
-        <RunSubject run={run} />
-      </dd>
-      {run.currentStep ? (
-        <>
-          <dt className="text-muted-foreground">
-            {run.active ? "Now" : "Last step"}
-          </dt>
-          <dd>{run.currentStep}</dd>
-        </>
-      ) : null}
-      {outcome ? (
-        <>
-          <dt className="text-muted-foreground">Targets</dt>
-          <dd className="grid gap-1">
-            <span className="tabular-nums">{outcome}</span>
-            <RunTargetChips run={run} wrap />
-          </dd>
-        </>
-      ) : null}
-      {run.recordType === "run" ? (
-        <>
-          <dt className="text-muted-foreground">Changed</dt>
-          <dd className="tabular-nums">
-            {run.changedCount === 1
-              ? "1 record"
-              : `${run.changedCount} records`}
-          </dd>
-        </>
-      ) : null}
-    </dl>
   );
 }

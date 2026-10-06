@@ -14,6 +14,15 @@ export const JOURNEY_NAMES = {
   syncVendor: "Synthetic Sync Journey Seeds",
   restartVendor: "Synthetic Restart Seeds",
   restartOrderId: "SYN-RESTART-7",
+  enrichVendor: "Synthetic Enrichment Seeds",
+  enrichPhoneVendor: "Synthetic Pocket Seeds",
+  enrichTargets: [
+    "Synthetic Nasturtium Seed Packet",
+    "Synthetic Tomato Seed Mix",
+    "Synthetic Pepper Seed Packet",
+  ],
+  enrichStep: "Reading Synthetic Pepper Seed Packet",
+  enrichSkip: "The page lists several variants",
 } as const;
 
 /**
