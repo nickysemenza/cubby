@@ -151,6 +151,10 @@ The generated `CubbyAPI` target forwards `-gline-tables-only` directly to the
 Swift frontend, so the driver's default `-g` does not restore full debug type
 information. Handwritten Swift targets retain their normal debug information.
 
+Both macOS build commands use `/usr/bin/time -l` to report elapsed time, CPU
+time, and native resource counters in their job logs. These measurements help
+compare cold and cached builds without adding a profiling script or job.
+
 The earlier simulator-test job ran `xcodebuild test` on a concrete simulator:
 first boot cost about 6 minutes plus roughly 10 minutes of CPU starvation
 (a 5s script took 2.6 minutes, and compilation doubled). Host tests and the

@@ -492,7 +492,7 @@ jobs:
       # --disable-index-store: nothing reads the index on CI, and it would
       # otherwise be rebuilt and cached with every module.
       - name: Run CubbyKit Swift tests
-        run: swift test --package-path apps/apple/CubbyKit --force-resolved-versions --disable-index-store
+        run: /usr/bin/time -l swift test --package-path apps/apple/CubbyKit --force-resolved-versions --disable-index-store
       # The build plugin lets a generator warning (a silently dropped schema)
       # through; this gate fails on one, reusing a recorded pass only when
       # the document, config, generator pin, toolchain and gate are unchanged.
@@ -531,7 +531,7 @@ jobs:
       - uses: ./.github/actions/setup-apple-build-cache
         id: derived-data
       - name: Run iOS app checks
-        run: sh scripts/apple-check.sh ci
+        run: /usr/bin/time -l sh scripts/apple-check.sh ci
       # A canceled compile must not permanently populate an exact cache key.
       - name: Save DerivedData cache
         uses: ./.github/actions/save-cache-main-only
