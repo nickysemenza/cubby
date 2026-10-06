@@ -49,6 +49,7 @@ const savedExpense: ExpenseOut = expenseOut.parse({
   vendor: "Target",
   vendorId: null,
   vendorLogo: null,
+  spendingCategoryName: null,
   projectId: null,
   projectName: null,
   productId: null,

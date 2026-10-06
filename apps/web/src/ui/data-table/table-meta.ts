@@ -32,6 +32,8 @@ export type MobileSlot =
   | "hidden";
 
 export interface MobileColumnMeta {
+  /** Retain a semantic null state rendered by the cell, such as Not assessed. */
+  showWhenEmpty?: boolean;
   slot?: MobileSlot;
   /** Lower values render first within a slot. */
   priority?: number;

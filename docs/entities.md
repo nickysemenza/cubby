@@ -992,7 +992,9 @@ explained check as `exceptionReasons`). An
 exception goes with its entity when the entity is removed or merged away.
 
 Reference read surfaces display effective resolution, while editors retain the
-stored assignment baseline. Named reference pills use the target's projected
+stored assignment baseline. Quality cells retain their semantic null state in
+phone cards (`mobile.showWhenEmpty`), so Not assessed is visible even though
+there is no numeric score. Named reference pills use the target's projected
 name; provenance may name a different source record and must not supply a
 mismatched label. Allocated references share the `<stem>Allocations` projection
 with `<stem>Id`, `<stem>Name`, `amount`, and `incomplete` fields. The generic

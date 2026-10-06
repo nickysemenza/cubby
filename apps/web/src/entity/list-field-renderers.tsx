@@ -143,7 +143,7 @@ const dataQualityRenderer = <TRow extends object>(
             "number",
             (row) => qualityOf(row)?.score ?? null,
           ),
-          mobile: { slot: "meta", priority: 0 },
+          mobile: { slot: "meta", priority: 0, showWhenEmpty: true },
         }),
         cell: (info) => {
           const quality = qualityOf(info.row.original);
