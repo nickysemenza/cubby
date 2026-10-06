@@ -121,7 +121,7 @@ export type McpToolBindings = Readonly<
  * A deadline only fires when the call yields to the event loop; a synchronous
  * CPU loop or an out-of-memory kill still ends the request without an answer.
  */
-export const MCP_TOOL_DEADLINE_MS = {
+const MCP_TOOL_DEADLINE_MS = {
   query: 18_000,
   mutation: 230_000,
 } as const satisfies Record<"query" | "mutation", number>;
