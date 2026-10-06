@@ -30,6 +30,10 @@ import {
   vendorAccount,
 } from "~/server/db/schema";
 import {
+  browsingAccountFor,
+  browsingAccounts,
+} from "~/server/purchase-import/browsing-account";
+import {
   dispatchRunEvent,
   recordRunDispatchAttempt,
 } from "~/server/purchase-import/dispatch";
@@ -386,45 +390,36 @@ async function startPurchaseValidation(
 /**
  * The page an enrichment run opens first: the first HTTP(S) candidate on the
  * Vendor's browser domains, because the browser bridge refuses any other
- * navigation. Candidates in order: a browser-captured claim's own page (an
- * order page), the Product's learned pages (primary first), the Vendor's
- * website. A Gmail or receipt claim's key names no page and is never used.
+ * navigation. Candidates in order: the given pages (a browser-captured
+ * claim's order page, or the import line's product page), the Product's
+ * learned pages (primary first), the Vendor's website. A Gmail or receipt
+ * claim's key names no page and is never used. Null when none is on the
+ * Vendor's browser domains.
  */
-async function enrichmentStartUrl(
+export async function enrichmentStartPage(
   db: Database,
-  productId: ProductId,
-  claim: Pick<
-    NonNullable<Awaited<ReturnType<typeof claimForActor>>>,
-    "externalKey" | "vendorId"
-  >,
+  input: {
+    productId: ProductId;
+    vendorId: VendorId;
+    pages: readonly (string | null | undefined)[];
+  },
 ) {
-  const [owner] = await getDb(db)
-    .select({
-      name: vendor.name,
-      website: vendor.website,
-      browserDomains: vendor.browserDomains,
-    })
-    .from(vendor)
-    .where(eq(vendor.id, claim.vendorId))
-    .limit(1);
-  const allowed = new Set(
-    owner?.browserDomains.map((host) => host.toLowerCase()),
-  );
-  const pages = await getDb(db)
+  const vendorRow = await vendorPages(db, input.vendorId);
+  const learned = await getDb(db)
     .select({ url: entityExternalId.url })
     .from(entityExternalId)
     .where(
       and(
-        eq(entityExternalId.entityId, productId),
+        eq(entityExternalId.entityId, input.productId),
         isNotNull(entityExternalId.url),
         notDeleted(entityExternalId),
       ),
     )
     .orderBy(desc(entityExternalId.isPrimary));
   const candidates = [
-    claim.externalKey,
-    ...pages.map((page) => page.url),
-    owner?.website,
+    ...input.pages,
+    ...learned.map((page) => page.url),
+    vendorRow.website,
   ];
   for (const candidate of candidates) {
     if (!candidate) continue;
@@ -437,12 +432,47 @@ async function enrichmentStartUrl(
     }
     if (
       (url.protocol === "https:" || url.protocol === "http:") &&
-      allowed.has(url.hostname.toLowerCase())
+      vendorRow.allowed.has(url.hostname.toLowerCase())
     )
       return url.href;
   }
+  return null;
+}
+
+async function vendorPages(db: Database, vendorId: VendorId) {
+  const [owner] = await getDb(db)
+    .select({
+      name: vendor.name,
+      website: vendor.website,
+      browserDomains: vendor.browserDomains,
+    })
+    .from(vendor)
+    .where(eq(vendor.id, vendorId))
+    .limit(1);
+  return {
+    name: owner?.name,
+    website: owner?.website,
+    allowed: new Set(owner?.browserDomains.map((host) => host.toLowerCase())),
+  };
+}
+
+async function enrichmentStartUrl(
+  db: Database,
+  productId: ProductId,
+  claim: Pick<
+    NonNullable<Awaited<ReturnType<typeof claimForActor>>>,
+    "externalKey" | "vendorId"
+  >,
+) {
+  const page = await enrichmentStartPage(db, {
+    productId,
+    vendorId: claim.vendorId,
+    pages: [claim.externalKey],
+  });
+  if (page) return page;
+  const owner = await vendorPages(db, claim.vendorId);
   throw new Error(
-    `No page to start enriching this Product is on ${owner?.name ?? "its Vendor"}'s browser domains (${[...allowed].join(", ") || "none"}). Add the site's host to the Vendor's browser domains or a website on one of them.`,
+    `No page to start enriching this Product is on ${owner.name ?? "its Vendor"}'s browser domains (${[...owner.allowed].join(", ") || "none"}). Add the site's host to the Vendor's browser domains or a website on one of them.`,
   );
 }
 
@@ -485,9 +515,18 @@ async function startProductEnrichment(
       };
     }),
   );
+  // A mail or receipt claim may name no account, or a mail-only one; the
+  // run browses with the Vendor's browsing account when there is one.
+  const accounts = await browsingAccounts(
+    db,
+    resolved.map((row) => row.claim.vendorId),
+  );
   const groups = new Map<string, typeof resolved>();
   for (const row of resolved) {
-    const key = `${row.claim.vendorId}:${row.claim.vendorAccountId ?? "none"}`;
+    const vendorAccountId =
+      browsingAccountFor(accounts, row.claim)?.id ?? row.claim.vendorAccountId;
+    row.claim = { ...row.claim, vendorAccountId };
+    const key = `${row.claim.vendorId}:${vendorAccountId ?? "none"}`;
     groups.set(key, [...(groups.get(key) ?? []), row]);
   }
   const runs = await Promise.all(

@@ -168,6 +168,21 @@ export async function handleBackgroundTask(
       await discoverPurchases(db);
       return "succeeded";
     }
+    case "purchase-import.enrichment-sweep": {
+      const [
+        { bridgeReachability, sweepPendingEnrichment },
+        { getPurchaseImportNamespace },
+      ] = await Promise.all([
+        import("~/server/purchase-import/enrichment-sweep"),
+        import("~/server/cf-env"),
+      ]);
+      const namespace = getPurchaseImportNamespace();
+      const { started } = await sweepPendingEnrichment(db, {
+        vendorAccountIds: [task.vendorAccountId],
+        bridge: namespace ? bridgeReachability(namespace) : undefined,
+      });
+      return started.length ? "succeeded" : "skipped";
+    }
     case "calendar-feed.mark-dirty": {
       // Propagates a failure on purpose: the queue retries only a throwing
       // handler, and `markDirty` is a flag set, so replay is harmless.

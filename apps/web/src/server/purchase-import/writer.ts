@@ -1172,6 +1172,8 @@ export async function importVendorOrder(
             purchaseId,
             name: line.title,
             notes: line.seller ? `Seller: ${line.seller}` : null,
+            // The line's product page is where a later enrichment pass starts.
+            url: line.productUrl ?? null,
             cost: line.amount,
             date: orderDate,
             lineKind: identity.lineKind,
@@ -1193,6 +1195,7 @@ export async function importVendorOrder(
               "productId",
               "productQuantity",
               "purchaseId",
+              ...(line.productUrl ? ["url"] : []),
             ],
           });
           if (identity.unresolvedReason && identity.lineKind === "principal") {

@@ -189,6 +189,17 @@ function selectRestartTargets(
     .orderBy(asc(runTarget.position), asc(runTarget.createdAt));
 }
 
+/**
+ * The order a targeted run works its targets. Claiming and a capture's
+ * evidence scope must agree on it: targets inserted together share
+ * `createdAt`, so the id breaks the tie deterministically.
+ */
+const targetWorkOrder = [
+  asc(runTarget.position),
+  asc(runTarget.createdAt),
+  asc(runTarget.id),
+] as const;
+
 export const ACTIVE_RUN_STATUSES = [
   "running",
   "paused_auth",
@@ -1575,7 +1586,7 @@ export async function claimNextImportWork(
           inArray(runTarget.state, ["pending", "prepared", "needs_evidence"]),
         ),
       )
-      .orderBy(asc(runTarget.createdAt))
+      .orderBy(...targetWorkOrder)
       .limit(1);
     if (target) {
       const [evidence] = await getDb(db)
@@ -1617,7 +1628,7 @@ export async function claimNextImportWork(
           inArray(runTarget.state, ["pending", "prepared"]),
         ),
       )
-      .orderBy(asc(runTarget.createdAt))
+      .orderBy(...targetWorkOrder)
       .limit(1);
     if (!target) return { kind: "none" as const };
     const evidence = await getDb(db)
@@ -1894,7 +1905,7 @@ export async function issueBrowserCommand(
               ]),
             ),
           )
-          .orderBy(asc(runTarget.createdAt))
+          .orderBy(...targetWorkOrder)
           .limit(1)
       : [];
   if (

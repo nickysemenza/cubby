@@ -1191,6 +1191,25 @@ export const commitProductEnrichmentOut = z.object({
     .default([]),
 });
 
+/**
+ * Close one enrichment target without a write: no exact source proves the
+ * variant, or the Product is retired, bundle-only, or ambiguous. The reason
+ * stays on the target for the member, and the run moves to its next Product.
+ */
+export const skipProductEnrichmentInput = z.object({
+  _runExecution: purchaseImportRunExecution,
+  productId: productShortcode,
+  reason: z.string().trim().min(1).max(500),
+});
+export type SkipProductEnrichmentInput = z.infer<
+  typeof skipProductEnrichmentInput
+>;
+export const skipProductEnrichmentOut = z.object({
+  runId: runShortcode,
+  productId: productShortcode,
+  state: z.literal("skipped"),
+});
+
 export const overwriteProductEnrichmentInput = z.object({
   _runExecution: purchaseImportRunExecution,
   productId: productShortcode,

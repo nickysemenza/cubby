@@ -4,6 +4,7 @@ import { implementOperationDomain } from "~/server/operation-domain.server";
 import { confirmMerchantVendorRule } from "~/server/purchase-import/hunts";
 import {
   commitProductEnrichment,
+  skipProductEnrichment,
   commitPurchaseImport,
   overwriteProductEnrichment,
   preparePurchaseImport,
@@ -62,6 +63,8 @@ export const purchaseImportHandlers = implementOperationDomain(
       confirmMerchantVendorRule(context.db, input, context.actorContext),
     commitProductEnrichment: (context, input) =>
       commitProductEnrichment(context.db, input, context.actorContext),
+    skipProductEnrichment: (context, input) =>
+      skipProductEnrichment(context.db, input, context.actorContext),
     overwriteProductEnrichment: (context, input) =>
       overwriteProductEnrichment(context.db, input, context.actorContext),
   },

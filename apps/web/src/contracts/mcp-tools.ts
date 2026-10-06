@@ -652,6 +652,11 @@ export const MCP_TOOLS = defineMcpTools({
         description:
           "Apply a bounded, fill-only Product enrichment to one explicit target. Price, attachments, source claims, identifier reassignment, and populated-field overwrites are forbidden.",
       }),
+      skip: mcpAction({
+        op: purchaseImportContract.ops.skipProductEnrichment,
+        description:
+          "Close one enrichment target without writing anything, with the reason (no exact source page proves this variant; retired, bundle-only, or ambiguous). The run then claims its next Product; a Product a run committed or skipped is not swept again.",
+      }),
       overwrite: mcpAction({
         op: purchaseImportContract.ops.overwriteProductEnrichment,
         description:

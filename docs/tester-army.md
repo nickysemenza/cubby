@@ -204,7 +204,8 @@ seeds the sources:
   the member's mail-only account, and the new Product keeps the email's
   product link.
 - `import-order-mail-enrich`: the same on a browser-synced account; the
-  commit also starts one `post_import_enrichment` run at the product page.
+  commit also starts one `product_enrichment` run on that account at the
+  product page.
 - `import-photo-inventory`: two synthetic photos uploaded over the native HTTP
   API (create run, stage, PUT, finalize). The journey waits for their cloud
   descriptions, starts grouping, waits for the agent's proposals, and
