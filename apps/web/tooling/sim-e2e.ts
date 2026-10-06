@@ -1311,7 +1311,7 @@ function finishE2ERun(failure: Error | undefined): Error | undefined {
         ? {
             ...runtime,
             testerArmy: "0.16.0",
-            model: testerArmyDriverModel,
+            ...(testerArmyDriverModel && { model: testerArmyDriverModel }),
             effort: "medium",
           }
         : runtime,

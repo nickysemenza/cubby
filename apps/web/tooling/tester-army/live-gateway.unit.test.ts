@@ -32,7 +32,7 @@ afterEach(() => {
 });
 
 async function send(
-  gatewayEnv: typeof env,
+  gatewayEnv: Parameters<typeof liveGateway.fetch>[1],
   pathname: string,
   body: string,
   contentType = "application/json",
@@ -63,7 +63,7 @@ async function send(
   };
 }
 
-async function usage(gatewayEnv: typeof env) {
+async function usage(gatewayEnv: Parameters<typeof liveGateway.fetch>[1]) {
   return (
     await liveGateway.fetch(
       new Request("https://live-gateway.test/usage"),

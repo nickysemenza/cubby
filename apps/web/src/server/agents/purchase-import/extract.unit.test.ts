@@ -142,7 +142,10 @@ describe("purchase import audit recovery", () => {
         call.onResponse?.(gatewayResponseInfo(response));
         return response;
       },
-      usage: (database, input) => recordAiUsage(database, input, { emit }),
+      usage: (
+        database: Parameters<PurchaseAuditPorts["usage"]>[0],
+        input: Parameters<PurchaseAuditPorts["usage"]>[1],
+      ) => recordAiUsage(database, input, { emit }),
     });
     const db = new Database(() => {
       throw new Error(
