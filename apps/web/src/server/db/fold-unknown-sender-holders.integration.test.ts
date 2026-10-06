@@ -122,6 +122,26 @@ describe("folding unknown-sender holder runs into their passes", () => {
       .insert(runFinding)
       .values(finding(mailImport, "c".repeat(64)));
 
+    // A holder some record still points at (here a Purchase it wrote) is
+    // not disposable, whatever its shape.
+    const referenced = await insertRun({
+      purpose: "account_sync",
+      status: "needs_review",
+      startedAt: at(9),
+      endedAt: at(9),
+    });
+    const seller = await insertWithShortcode(ctx.db, "vendor", {
+      name: "Fold fixture vendor",
+    });
+    await insertWithShortcode(ctx.db, "purchase", {
+      vendorId: seller.id,
+      date: "2026-10-06",
+      runId: referenced,
+    });
+    await getDb(ctx.db)
+      .insert(runFinding)
+      .values(finding(referenced, "d".repeat(64)));
+
     // Applying it twice is harmless (the runner never should, but a rerun
     // after a partial manual apply must not fail).
     for (const _pass of [1, 2])
@@ -142,6 +162,7 @@ describe("folding unknown-sender holder runs into their passes", () => {
       { runId: sibling, entityId: sibling, fingerprint: "a".repeat(64) },
       { runId: worked, entityId: worked, fingerprint: "b".repeat(64) },
       { runId: mailImport, entityId: mailImport, fingerprint: "c".repeat(64) },
+      { runId: referenced, entityId: referenced, fingerprint: "d".repeat(64) },
     ]);
     const deleted = await getDb(ctx.db)
       .select({ id: runTable.id, deletedAt: runTable.deletedAt })
@@ -157,6 +178,7 @@ describe("folding unknown-sender holder runs into their passes", () => {
       [sibling]: false,
       [worked]: false,
       [mailImport]: false,
+      [referenced]: false,
     });
   });
 });

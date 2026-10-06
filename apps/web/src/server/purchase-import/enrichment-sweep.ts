@@ -314,12 +314,15 @@ async function openProducts(
 }
 
 /**
- * Nothing a product page could still fill: a category, an identifier, and a
- * cover. Such a Product (often finished by hand or an earlier pass) would only
- * cost a browser page load to be skipped again.
+ * Nothing a product page could still fill: a maker, a category, an
+ * identifier, and a cover. Such a Product (often finished by hand or an
+ * earlier pass) would only cost a browser page load to be skipped again.
+ * Model is not required: most household Products (seed packets, groceries)
+ * have none to find.
  */
 const productComplete = sql`(
-  ${product.categoryId} IS NOT NULL
+  btrim(${product.manufacturer}) <> ''
+  AND ${product.categoryId} IS NOT NULL
   AND EXISTS (
     SELECT 1 FROM "EntityExternalId" x
     WHERE x."entityKind" = 'product' AND x."entityId" = ${product.id}

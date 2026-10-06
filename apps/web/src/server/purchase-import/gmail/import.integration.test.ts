@@ -1227,7 +1227,7 @@ describe("saved confirmation imports", () => {
         });
         await getDb(ctx.db)
           .update(product)
-          .set({ categoryId: category.id })
+          .set({ categoryId: category.id, manufacturer: "Example Seed Co" })
           .where(eq(product.id, productId));
         await ensureExternalSources(ctx.db, ["example-seeds"]);
         await getDb(ctx.db).insert(entityExternalId).values({
@@ -1248,6 +1248,14 @@ describe("saved confirmation imports", () => {
         expect(
           (await sweepPendingEnrichment(ctx.db, { bridge: online })).started,
         ).toEqual([]);
+        // A blank maker is still a fact a page can supply.
+        await getDb(ctx.db)
+          .update(product)
+          .set({ manufacturer: "" })
+          .where(eq(product.id, productId));
+        expect(
+          (await sweepPendingEnrichment(ctx.db, { bridge: online })).started,
+        ).toHaveLength(1);
       });
 
       it("never re-sweeps a Product a run skipped", async () => {

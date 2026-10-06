@@ -33,6 +33,31 @@ WHERE h.purpose = 'account_sync' AND h."deletedAt" IS NULL
     SELECT 1 FROM "RunFinding" f
     WHERE f."runId" = h.id AND f.kind <> 'unclassified_vendor'
   );--> statement-breakpoint
+-- A holder any record still points at is not disposable, whatever its
+-- shape: drop candidates referenced through any foreign key into "Run"
+-- (read from the catalog, so a future reference is covered too), or named
+-- by a finding another run owns.
+DO $$
+DECLARE edge record;
+BEGIN
+  FOR edge IN
+    SELECT k.conrelid::regclass AS source, a.attname AS col
+    FROM pg_constraint k
+    JOIN pg_attribute a ON a.attrelid = k.conrelid AND a.attnum = k.conkey[1]
+    WHERE k.contype = 'f' AND k.confrelid = '"Run"'::regclass
+      AND cardinality(k.conkey) = 1
+      AND k.conrelid <> '"RunFinding"'::regclass
+  LOOP
+    EXECUTE format(
+      'DELETE FROM "UnknownSenderHolder" m USING %s x WHERE x.%I = m.holder',
+      edge.source, edge.col
+    );
+  END LOOP;
+END $$;--> statement-breakpoint
+DELETE FROM "UnknownSenderHolder" m
+USING "RunFinding" f
+WHERE f."entityKind" = 'run' AND f."entityId" = m.holder
+  AND f."runId" IS DISTINCT FROM m.holder;--> statement-breakpoint
 -- A finding about the holder becomes a finding about its pass. An open
 -- finding moves only when no open finding already holds its key on that pass
 -- (RunFinding_open_evidence_key), and of several holders for one sender in
