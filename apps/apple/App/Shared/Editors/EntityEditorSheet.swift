@@ -76,7 +76,7 @@ struct EntityEditorSheet: View {
                 if let model, let failure = loadFailure(model) {
                     // A failed update read is not a refused save: offer a load retry.
                     LoadFailureView(title: "Couldn't load \(descriptor.singular)", message: failure) {
-                        await model.load()
+                        await retryLoad(model)
                     }
                 } else if let model {
                     form(model)
@@ -251,12 +251,27 @@ struct EntityEditorSheet: View {
             descriptor: descriptor, mode: mode, client: appModel.client, original: original)
         model = created
         await created.load()
-        guard !Task.isCancelled, initializedIdentity == identity, model === created else { return }
-        initialDraft = created.draft
-        if let resolutionResetField { created.stageResolutionReset(resolutionResetField) }
-        created.stage(stagedValues)
-        seedPickedTitles(created)
-        suggestions = suggestionReview(for: created)
+        finishLoad(created, identity: identity)
+    }
+
+    /// Retries a failed update read. The sheet's identity is unchanged, so `.task(id:)` won't
+    /// rerun setup; the retry must re-baseline the draft itself or the untouched editor reads
+    /// as dirty.
+    private func retryLoad(_ model: GenericEntityEditModel) async {
+        let identity = editorIdentity
+        await model.load()
+        finishLoad(model, identity: identity)
+    }
+
+    /// Baselines the loaded draft, then applies the sheet's staged values and reference names.
+    private func finishLoad(_ loaded: GenericEntityEditModel, identity: EditorIdentity) {
+        guard !Task.isCancelled, initializedIdentity == identity, model === loaded else { return }
+        initialDraft = loaded.draft
+        if let resolutionResetField { loaded.stageResolutionReset(resolutionResetField) }
+        loaded.stage(stagedValues)
+        seedPickedTitles(loaded)
+        suggestions?.invalidate()
+        suggestions = suggestionReview(for: loaded)
     }
 
     private func suggestionReview(for model: GenericEntityEditModel) -> FieldSuggestionReviewModel {
