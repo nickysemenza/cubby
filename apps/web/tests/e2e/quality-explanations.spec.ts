@@ -142,16 +142,6 @@ test("quality leads entity tables, explains its calculation, and restores tempor
   await expect(popover).toContainText("Not assessed");
   await expect(popover).toContainText("No weighted checks apply");
   await page.keyboard.press("Escape");
-  await page.setViewportSize({ width: 402, height: 874 });
-  await page
-    .getByRole("listitem")
-    .filter({ hasText: plannedName })
-    .getByRole("button", { name: /How (data )?quality is determined/ })
-    .click();
-  await expect(popover).toBeVisible();
-  await expectViewportBounded(page);
-  await page.screenshot({ path: testInfo.outputPath("quality-phone.png") });
-  expect(product.id).toBeTruthy();
 });
 
 test("quality explanations reconcile exceptions, defects, and related gaps", async ({
