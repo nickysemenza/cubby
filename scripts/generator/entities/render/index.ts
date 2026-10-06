@@ -531,7 +531,7 @@ export const renderEntityArtifacts = (
   const listBaseVariants = listEntitySpecs
     .map(
       ({ key }) =>
-        `z.object({entity:z.literal(${JSON.stringify(key)}),data:z.array(${key}ListBaseItem),meta:entityListMetaSchema.omit({sums:true}),groups:z.array(entityListGroupSchema)})`,
+        `z.object({entity:z.literal(${JSON.stringify(key)}),data:z.array(${key}ListBaseItem),meta:entityListBaseMetaSchema,groups:z.array(entityListGroupSchema)})`,
     )
     .join(",\n");
   const listEnrichmentVariants = listEntitySpecs
@@ -555,6 +555,7 @@ export const renderEntityArtifacts = (
     })
     .join(",\n");
   const progressiveListSchemas = `
+export const entityListBaseMetaSchema = entityListMetaSchema.omit({sums:true});
 export const entityListGroupSchema = z.object({id:z.enum(["media","quality","relations","derived"]),fields:z.array(z.string())});
 ${listBaseItemSchemas}
 export const entityListBaseOutputSchema = z.discriminatedUnion("entity", [${listBaseVariants}]);
