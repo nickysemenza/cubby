@@ -231,8 +231,10 @@ Runs list and `imports_read.run_status` read one shared projection
   outdated app (HTTP 426 from the client gate) as "update required" rather
   than a generic upload failure.
 
-- 🟢 **Control runs over MCP.** `imports_read.run_status` reads a Run; add
-  stop, restart, and approve so an MCP client can follow work end to end.
+- 🟢 **Stop and restart runs over MCP.** `imports_read.run_status` reads a
+  Run; offer stop, retry, and restart beside it. Approve and reject stay
+  human (`run.control` is omitted from MCP as `human_approval`), so this is a
+  narrower operation, not that one exposed.
 
 - 🤔 **Model routing for capture.** Use Jev for constrained choices (variant
   matching), Luna for reading unstructured pages, and Sol only to
