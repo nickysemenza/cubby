@@ -6,7 +6,11 @@ import { z } from "zod";
 import { withErrorReporting } from "~/server/errors/report-error";
 
 import { handleMcpHttpRequest, type McpServe } from "./http-handler";
-import { callMcpTool, registerTestTool } from "./mcp-test-utils";
+import {
+  callMcpTool,
+  registerTestTool,
+  withTestClient,
+} from "./mcp-test-utils";
 
 /**
  * Failures that used to reach the connector proxy as no valid JSON-RPC
@@ -51,7 +55,12 @@ describe("MCP tool deadline", () => {
     expect(result.isError).toBe(true);
     const text = errorText(result);
     expect(text).toContain("slow_read.run did not finish within 0.03s");
-    expect(text).toContain(`Cubby request ${RAY}`);
+    expect(text).toMatch(
+      new RegExp(
+        `\\(answered after [\\d.]+s; Cubby request ${RAY}; Sentry sentry-event-1\\)\\. The work may still be running`,
+        "u",
+      ),
+    );
     expect(text).toContain("Try a narrower request or the web app");
     expect(text).not.toContain("re-read");
     expect(result._meta).toMatchObject({
@@ -64,6 +73,7 @@ describe("MCP tool deadline", () => {
           stage: "run",
           cfRayId: RAY,
           sentryEventId: "sentry-event-1",
+          sentryUrl: expect.stringContaining("sentry-event-1"),
         },
       },
     });
@@ -97,7 +107,7 @@ describe("MCP tool deadline", () => {
     const text = errorText(result);
     expect(text).toContain("slow_write.run did not finish within 0.06s");
     expect(text).toContain(
-      "The write may have completed; re-read the affected records before retrying.",
+      `; Sentry sentry-event-2). The write may have completed; re-read the affected records before retrying.`,
     );
     expect(result._meta).toMatchObject({
       "cubby/error": { reason: "MCP_TOOL_DEADLINE_EXCEEDED", requestId: RAY },
@@ -219,13 +229,22 @@ describe("MCP tool work that settles after its deadline", () => {
       },
     );
 
+    // The transports stay open through the late settle, so a second response
+    // would actually be sent and counted.
     const result = await withErrorReporting(
-      () => callMcpTool(server, "late_write", { action: "run" }),
+      () =>
+        withTestClient(server, {}, {}, async (client) => {
+          const answer = await client.callTool({
+            name: "late_write",
+            arguments: { action: "run" },
+          });
+          finish?.[settle]();
+          await new Promise((resolve) => setTimeout(resolve, 20));
+          return answer;
+        }),
       rayHeaders(),
       capture,
     );
-    finish?.[settle]();
-    await new Promise((resolve) => setTimeout(resolve, 20));
 
     const messages = sent.mock.calls.map(([message]) => message);
     const callIds = messages.flatMap((message) =>
@@ -339,11 +358,19 @@ describe("MCP HTTP handler", () => {
       await progress.readBody();
       throw error;
     };
+  /** Serves `request` with Sentry capture returning `eventId` ("": no event captured). */
+  const handle = (request: Request, serve: McpServe, eventId = "") =>
+    withErrorReporting(
+      () => handleMcpHttpRequest(request, serve),
+      undefined,
+      vi.fn(() => eventId),
+    );
 
   it("answers a throw after the body was read with a JSON-RPC error naming the call", async () => {
-    const response = await handleMcpHttpRequest(
+    const response = await handle(
       post(toolCall({ action: "create" })),
       failAfterBody(new TypeError("Do not know how to serialize a BigInt")),
+      "sentry-event-http",
     );
 
     expect(response.status).toBe(500);
@@ -353,19 +380,37 @@ describe("MCP HTTP handler", () => {
     expect(body.error.message).toContain(
       "entity.create failed: Do not know how to serialize a BigInt",
     );
-    expect(body.error.message).toContain(`Cubby request ${RAY}`);
-    expect(body.error.message).toMatch(/after \d+ ms/u);
-    expect(body.error.message).toContain(
-      "The write may have completed; re-read the affected records before retrying.",
+    expect(body.error.message).toMatch(
+      new RegExp(
+        `\\(after \\d+ ms; Cubby request ${RAY}; Sentry sentry-event-http\\)\\. The write may have completed; re-read the affected records before retrying\\.$`,
+        "u",
+      ),
     );
     expect(body.error.data).toMatchObject({
       requestId: RAY,
-      diagnostics: { operation: "mcp", stage: "dispatch", cfRayId: RAY },
+      diagnostics: {
+        operation: "mcp",
+        stage: "dispatch",
+        cfRayId: RAY,
+        sentryEventId: "sentry-event-http",
+        sentryUrl: expect.stringContaining("sentry-event-http"),
+      },
     });
   });
 
+  it("omits the Sentry reference when nothing was captured", async () => {
+    const response = await handle(
+      post(toolCall({ action: "create" })),
+      failAfterBody(new Error("dispatch failed")),
+    );
+
+    const body = rpcError.parse(await response.json());
+    expect(body.error.message).not.toContain("Sentry");
+    expect(body.error.data).not.toHaveProperty("diagnostics.sentryEventId");
+  });
+
   it("keeps the request id when the tool arguments are malformed", async () => {
-    const response = await handleMcpHttpRequest(
+    const response = await handle(
       post(toolCall({ action: 42 })),
       failAfterBody(new Error("dispatch failed")),
     );
@@ -376,7 +421,7 @@ describe("MCP HTTP handler", () => {
   });
 
   it("scrubs credential-shaped values from the assembled message and data", async () => {
-    const response = await handleMcpHttpRequest(
+    const response = await handle(
       post(
         JSON.stringify({
           jsonrpc: "2.0",
@@ -394,6 +439,42 @@ describe("MCP HTTP handler", () => {
     expect(rpcError.parse(JSON.parse(text)).id).toBe(8);
   });
 
+  const suffix =
+    "The write may have completed; re-read the affected records before retrying.";
+
+  it("keeps the elapsed time, request id, and guidance after a long cause", async () => {
+    const sql = `insert into expense values ${"($1, $2, $3), ".repeat(200)} -- password=fixture-long-secret`;
+    const response = await handle(
+      post(toolCall({ action: "create" })),
+      failAfterBody(new Error(sql)),
+    );
+
+    const body = rpcError.parse(await response.json());
+    expect(body.error.message).toContain("entity.create failed: insert into");
+    expect(body.error.message).toMatch(
+      new RegExp(`after \\d+ ms; Cubby request ${RAY}\\)\\. ${suffix}$`, "u"),
+    );
+    expect(JSON.stringify(body)).not.toContain("fixture-long-secret");
+  });
+
+  it("keeps the guidance when the cause carries an authorization header", async () => {
+    const response = await handle(
+      post(toolCall({ action: "create" })),
+      failAfterBody(
+        new Error(
+          "upstream rejected authorization: Bearer fixture-token-value",
+        ),
+      ),
+    );
+
+    const body = rpcError.parse(await response.json());
+    expect(body.error.message).toContain("authorization: [REDACTED]");
+    expect(body.error.message).toMatch(
+      new RegExp(`after \\d+ ms; Cubby request ${RAY}\\)\\. ${suffix}$`, "u"),
+    );
+    expect(JSON.stringify(body)).not.toContain("fixture-token-value");
+  });
+
   it("refuses a declared oversized body without reading it", async () => {
     const pulled = vi.fn();
     const stream = new ReadableStream<Uint8Array>(
@@ -405,7 +486,7 @@ describe("MCP HTTP handler", () => {
       },
       { highWaterMark: 0 },
     );
-    const response = await handleMcpHttpRequest(
+    const response = await handle(
       post(stream, { "content-length": String(64 * 1024 * 1024) }),
       failAfterBody(new Error("unreachable: the body is over the limit")),
     );
@@ -430,7 +511,7 @@ describe("MCP HTTP handler", () => {
       },
       { highWaterMark: 0 },
     );
-    const response = await handleMcpHttpRequest(
+    const response = await handle(
       post(stream),
       failAfterBody(new Error("unreachable: the body is over the limit")),
     );
@@ -448,7 +529,7 @@ describe("MCP HTTP handler", () => {
       },
       { highWaterMark: 0 },
     );
-    const response = await handleMcpHttpRequest(
+    const response = await handle(
       post(stream),
       failAfterBody(new Error("unreachable: the body stream failed")),
     );
@@ -469,7 +550,7 @@ describe("MCP HTTP handler", () => {
       },
       { highWaterMark: 0 },
     );
-    const response = await handleMcpHttpRequest(post(stream), async () =>
+    const response = await handle(post(stream), async () =>
       Response.json({ error: "Unauthorized" }, { status: 401 }),
     );
 

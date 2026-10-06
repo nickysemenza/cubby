@@ -219,8 +219,11 @@ function structuredError<T>(
   error: T,
   context: OperationFailureContext,
   stage: OperationStage,
+  /** Appended after reporting, so it can name the captured Sentry event. */
+  suffix?: (detail: ToolErrorDetail) => string,
 ): CallToolResult {
   const detail = describeToolError(error, context, stage);
+  if (suffix) detail.message += suffix(detail);
   return {
     content: [
       {
@@ -273,24 +276,33 @@ export function describeToolError<T>(
 
 /**
  * The answer for a call that outlived its {@link MCP_TOOL_DEADLINE_MS} budget:
- * which call, how long, which request, and what the caller can do next.
+ * which call, how long, which request and Sentry event, and what the caller
+ * can do next. The error reaches Sentry as the bare overrun; the suffix is
+ * appended once the event id is known.
  */
 function deadlineError(
   name: string,
   write: boolean,
   budgetMs: number,
   elapsedMs: number,
-): AppError {
-  const requestId = getRequestId(errorReportingHeaders());
-  const request = requestId ? `; Cubby request ${requestId}` : "";
+) {
   const next = write
     ? "The write may have completed; re-read the affected records before retrying."
     : "The work may still be running server-side; it is too slow for the connector. Try a narrower request or the web app.";
-  return new AppError({
-    code: "INTERNAL_SERVER_ERROR",
-    reason: "MCP_TOOL_DEADLINE_EXCEEDED",
-    message: `${name} did not finish within ${budgetMs / 1000}s (answered after ${roundTo(elapsedMs / 1000, 1)}s${request}). ${next}`,
-  });
+  return {
+    error: new AppError({
+      code: "INTERNAL_SERVER_ERROR",
+      reason: "MCP_TOOL_DEADLINE_EXCEEDED",
+      message: `${name} did not finish within ${budgetMs / 1000}s`,
+    }),
+    suffix: ({ requestId, diagnostics }: ToolErrorDetail) => {
+      const request = requestId ? `; Cubby request ${requestId}` : "";
+      const sentry = diagnostics?.sentryEventId
+        ? `; Sentry ${diagnostics.sentryEventId}`
+        : "";
+      return ` (answered after ${roundTo(elapsedMs / 1000, 1)}s${request}${sentry}). ${next}`;
+    },
+  };
 }
 
 function formatToolError({ code, reason, message }: ToolErrorDetail): string {
@@ -756,7 +768,10 @@ function registerCompiledTool(
           signal: AbortSignal.any([extra.mcpReq.signal, deadline.signal]),
         },
       };
-      const failure = <T>(error: T) =>
+      const failure = <T>(
+        error: T,
+        suffix?: (detail: ToolErrorDetail) => string,
+      ) =>
         structuredError(
           error,
           {
@@ -765,6 +780,7 @@ function registerCompiledTool(
             entity,
           },
           stage,
+          suffix,
         );
       const execute = async (): Promise<CallToolResult> => {
         try {
@@ -889,9 +905,13 @@ function registerCompiledTool(
           budgetMs,
           elapsedMs,
         });
-        return failure(
-          deadlineError(operationName, budget === "write", budgetMs, elapsedMs),
+        const overrun = deadlineError(
+          operationName,
+          budget === "write",
+          budgetMs,
+          elapsedMs,
         );
+        return failure(overrun.error, overrun.suffix);
       } finally {
         clearTimeout(timer);
         // A tool can commit before later validation or another item in a batch

@@ -164,6 +164,10 @@ async function jsonRpcFailure<TError>(failure: {
   const tooLarge = detail.reason === "MCP_REQUEST_TOO_LARGE";
   const writes = await callWrites(tool, action).catch(() => undefined);
   const request = detail.requestId ? `; Cubby request ${detail.requestId}` : "";
+  // Present only when the failure was captured (not sampled out, DSN set).
+  const sentry = detail.diagnostics?.sentryEventId
+    ? `; Sentry ${detail.diagnostics.sentryEventId}`
+    : "";
   const next =
     writes === true
       ? " The write may have completed; re-read the affected records before retrying."
@@ -174,9 +178,11 @@ async function jsonRpcFailure<TError>(failure: {
       id: jsonRpcId.safeParse(message).data?.id ?? null,
       error: {
         code: tooLarge ? -32600 : -32603,
-        message: scrubErrorMessage(
-          `${target ? `${target} failed` : "Cubby MCP request failed"}: ${detail.message} (after ${elapsedMs} ms${request}).${next}`,
-        ),
+        // Scrub and bound each untrusted part on its own: scrubbing the whole
+        // line let the 2,000-char cap or an `authorization:` redaction (which
+        // runs to end of line) swallow the elapsed time, request id, and
+        // write guidance appended after the cause.
+        message: `${target ? `${scrubErrorMessage(target)} failed` : "Cubby MCP request failed"}: ${scrubErrorMessage(detail.message)} (after ${elapsedMs} ms${request}${sentry}).${next}`,
         data: scrubStrings({ ...detail, elapsedMs }),
       },
     },
