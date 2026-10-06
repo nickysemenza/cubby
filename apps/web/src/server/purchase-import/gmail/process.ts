@@ -46,7 +46,7 @@ import {
   withTransaction,
 } from "~/server/repo/database-helpers";
 import { cents } from "~/server/repo/money";
-import { expenseProductExpectationSql } from "~/server/repo/purchase-evidence-policy";
+import { expenseProductForbiddenSql } from "~/server/repo/purchase-evidence-policy";
 import { resolveOrThrow } from "~/server/repo/shortcode-resolver";
 import { insertWithShortcode } from "~/server/repo/shortcode-utils";
 import { attachFileToEntity } from "~/server/services/image-storage.service";
@@ -669,7 +669,7 @@ export async function processOrderMails(
                   eq(expense.purchaseId, target.id),
                   eq(expense.lineKind, "principal"),
                   notDeleted(expense),
-                  sql`(${expense.productId} IS NOT NULL OR ${expenseProductExpectationSql("Expense")} IS DISTINCT FROM 'not_allowed')`,
+                  sql`(${expense.productId} IS NOT NULL OR NOT ${expenseProductForbiddenSql("Expense")})`,
                 ),
               )
               .limit(1)

@@ -21,8 +21,11 @@ export async function validateLiveInheritedPolicies(
   await validateLiveProductPolicy(tx);
 }
 
-/** Validate the prospective graph before committing a source/default change. */
-async function validateLiveEffectiveTrades(
+/**
+ * Required trades only, for a Task or Project write: those cannot move an
+ * Expense's effective spending category, so they skip the Product scan.
+ */
+export async function validateLiveEffectiveTrades(
   tx: Database | DrizzleTransaction,
 ): Promise<void> {
   const result = await unwrapDb(tx).execute<{
@@ -59,11 +62,13 @@ async function validateLiveEffectiveTrades(
 /** Which Expenses a line-level write touched; omitted checks the whole graph. */
 type ProductPolicyScope =
   | { expenseIds: readonly string[] }
-  | { purchaseId: string };
+  | { purchaseId: string }
+  | { vendorId: string };
 
 /**
- * The product policy for the Expenses a line-level write touched, or for the
- * whole graph after a change to a category, Vendor, or classification policy.
+ * The product policy for the Expenses a line-level write touched, for a
+ * Vendor's Purchases, or for the whole graph after a change to a category or
+ * classification policy.
  */
 export const validateProductPolicy = (
   tx: Database | DrizzleTransaction,
@@ -106,10 +111,12 @@ async function validateLiveProductPolicy(
           ? sql``
           : "purchaseId" in scope
             ? sql`AND e."purchaseId" = ${scope.purchaseId}::uuid`
-            : sql`AND e.id IN (${sql.join(
-                scope.expenseIds.map((id) => sql`${id}::uuid`),
-                sql`, `,
-              )})`
+            : "vendorId" in scope
+              ? sql`AND e."purchaseId" IN (SELECT p.id FROM "Purchase" p WHERE p."vendorId" = ${scope.vendorId}::uuid)`
+              : sql`AND e.id IN (${sql.join(
+                  scope.expenseIds.map((id) => sql`${id}::uuid`),
+                  sql`, `,
+                )})`
       }
     ORDER BY e."shortcode"
     LIMIT 50

@@ -47,7 +47,7 @@ import {
   withTransaction,
 } from "~/server/repo/database-helpers";
 import { bulkPatchEntities } from "~/server/repo/entity-patch";
-import { validateLiveInheritedPolicies } from "~/server/repo/inheritance-validation";
+import { validateLiveEffectiveTrades } from "~/server/repo/inheritance-validation";
 /**
  * Task CRUD operations.
  *
@@ -420,7 +420,7 @@ export const createTask = async (
       trade: data.trade,
     });
     await assertEffectiveTaskTrade(tx, created.id);
-    await validateLiveInheritedPolicies(tx);
+    await validateLiveEffectiveTrades(tx);
     if (data.pendingImageIds && data.pendingImageIds.length > 0) {
       const resolvedImageIds = await resolveAllPresent(
         tx,
@@ -582,7 +582,7 @@ export const updateTask = async (
     });
     const updated = await updateLiveAndReturn(tx, task, updateValues, id);
     await assertEffectiveTaskTrade(tx, id);
-    await validateLiveInheritedPolicies(tx);
+    await validateLiveEffectiveTrades(tx);
     ({ detachedImageKeys } = await syncEntityImages(
       tx,
       "task",
@@ -677,7 +677,7 @@ export const updateTasksInBulk = (
         dueDate: data.dueDate,
         dueEndDate: data.dueEndDate,
       }),
-      afterWrite: validateLiveInheritedPolicies,
+      afterWrite: validateLiveEffectiveTrades,
     },
     shortcodes,
     data,

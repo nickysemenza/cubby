@@ -1,8 +1,14 @@
+import { eq } from "drizzle-orm";
 import { createRepoEntity } from "tooling/factories/repo";
 import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 
+import { productCategory } from "~/server/db/schema";
+import { getDb } from "~/server/repo/database-helpers";
+import { linkExpensesToPurchase } from "~/server/repo/purchase";
 import { insertWithShortcode } from "~/server/repo/shortcode-utils";
+import { withReviewedSpendingClassification } from "~/server/repo/spending-classification-review-authorization";
+import { mergeVendors } from "~/server/repo/vendor";
 import { updateThroughKernel } from "~/server/testing/entity-kernel";
 
 // A spending category with productExpectation "not_allowed" (a restaurant
@@ -10,7 +16,9 @@ import { updateThroughKernel } from "~/server/testing/entity-kernel";
 // linked to a restaurant meal; groceries ("not_expected") lose the ability to
 // link Products; a line-level category override cannot escape the inherited
 // category; a category is moved to not_allowed while Expenses in it still
-// link Products.
+// link Products; a write that reclassifies existing lines without touching
+// them (attaching a line to another Purchase, a Vendor becoming a
+// restaurant, merging into a restaurant Vendor) commits a forbidden link.
 describe("not_allowed product expectation", () => {
   const ctx = withTestDb();
 
@@ -94,6 +102,79 @@ describe("not_allowed product expectation", () => {
         {
           productExpectation: "not_allowed",
         },
+      ),
+    ).rejects.toThrow(/does not allow/i);
+  });
+
+  it("refuses attaching a Product line to a restaurant Purchase", async () => {
+    const { restaurants, groceries, purchaseIn, product } = await seed();
+    const shop = await purchaseIn(groceries);
+    const { output } = await line(shop.shortcode, product.shortcode);
+    const meal = await purchaseIn(restaurants);
+    await expect(
+      linkExpensesToPurchase(
+        ctx.db,
+        { purchaseId: meal.shortcode, expenseIds: [output.id] },
+        ctx.actor,
+      ),
+    ).rejects.toThrow(/does not allow/i);
+  });
+
+  // A restaurant Vendor's default classifies its food lines (vendor food
+  // context), so food bought from a grocer moves with the Vendor.
+  async function foodLineAt(vendorName: string) {
+    const { restaurants } = await seed();
+    const [root] = await getDb(ctx.db)
+      .select({ id: productCategory.id })
+      .from(productCategory)
+      .where(eq(productCategory.feature, "food"))
+      .limit(1);
+    const food = await insertWithShortcode(ctx.db, "productCategory", {
+      name: `Example pantry ${crypto.randomUUID()}`,
+      parentId: root?.id ?? null,
+    });
+    const product = await insertWithShortcode(ctx.db, "product", {
+      name: `Example noodles ${crypto.randomUUID()}`,
+      manufacturer: "",
+      categoryId: food.id,
+    });
+    const grocer = await insertWithShortcode(ctx.db, "vendor", {
+      name: `${vendorName} ${crypto.randomUUID()}`,
+      spendingProfile: "food_retail",
+    });
+    const order = await insertWithShortcode(ctx.db, "purchase", {
+      vendorId: grocer.id,
+      date: "2026-09-21",
+      defaultTrade: "other",
+    });
+    await line(order.shortcode, product.shortcode);
+    return { restaurants, grocer };
+  }
+
+  it("refuses turning a Vendor with food lines into a restaurant that forbids Products", async () => {
+    const { restaurants, grocer } = await foodLineAt("Example grocer");
+    await expect(
+      withReviewedSpendingClassification(ctx.db, () =>
+        updateThroughKernel(ctx.db, ctx.actor, "vendor", grocer.shortcode, {
+          spendingProfile: "restaurant",
+          defaultSpendingCategoryId: restaurants.shortcode,
+        }),
+      ),
+    ).rejects.toThrow(/does not allow/i);
+  });
+
+  it("refuses merging a Vendor with food lines into a restaurant that forbids Products", async () => {
+    const { restaurants, grocer } = await foodLineAt("Example market");
+    const keeper = await insertWithShortcode(ctx.db, "vendor", {
+      name: `Example diner ${crypto.randomUUID()}`,
+      spendingProfile: "restaurant",
+      defaultSpendingCategoryId: restaurants.id,
+    });
+    await expect(
+      mergeVendors(
+        ctx.db,
+        { keepId: keeper.shortcode, mergeIds: [grocer.shortcode] },
+        ctx.actor,
       ),
     ).rejects.toThrow(/does not allow/i);
   });

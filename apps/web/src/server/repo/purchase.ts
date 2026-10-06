@@ -1340,6 +1340,9 @@ export const linkExpensesToPurchase = async (
       .where(and(inArray(expense.id, expenseIds), notDeleted(expense)));
 
     await validatePurchaseItemInheritance(tx, [purchaseId]);
+    await validateProductPolicy(tx, {
+      expenseIds: before.map((row) => row.id),
+    });
 
     await touchUpdatedAt(
       tx,
@@ -2098,6 +2101,7 @@ export const foldChargeInto = async (
           to: survivorId,
           liveOnly: true,
         });
+        await validateProductPolicy(tx, { expenseIds: moved });
         await logAuditEntries(
           tx,
           actor,

@@ -577,15 +577,16 @@ describe("Gmail order mail processing", () => {
     });
     const order = async (
       orderId: string,
-      line: "stocked" | "unresolved" | "expense_only",
+      line: "stocked" | "unresolved" | "expense_only" | "aggregate",
     ) => {
       const stocked = line === "stocked";
+      const dining = line === "expense_only" || line === "aggregate";
       const row = await insertWithShortcode(ctx.db, "purchase", {
         vendorId: seed.vendor.id,
         vendorAccountId: seed.account.id,
         orderId,
         date: "2026-09-20",
-        spendingCategoryId: line === "expense_only" ? restaurants.id : null,
+        spendingCategoryId: dining ? restaurants.id : null,
         spendingCategoryOrigin: "manual",
       });
       const item = stocked
@@ -596,18 +597,20 @@ describe("Gmail order mail processing", () => {
         : null;
       await insertWithShortcode(ctx.db, "expense", {
         purchaseId: row.id,
-        name: line === "expense_only" ? "Delivered lunch" : "Work gloves",
+        name: dining ? "Delivered lunch" : "Work gloves",
         cost: 20,
         date: "2026-09-20",
         costType: "materials",
         trade: "other",
         lineKind: "principal",
-        lineBasis: "item_line",
+        lineBasis: line === "aggregate" ? "allocation" : "item_line",
         productId: item?.id ?? null,
       });
       return row;
     };
     const meal = await order("FW-MEAL-1", "expense_only");
+    // An unitemized total awaiting its meal lines asks for nothing either.
+    const tab = await order("FW-TAB-1", "aggregate");
     const gloves = await order("FW-GLOVE-1", "stocked");
     // Goods whose Product is not resolved yet are still goods.
     const pending = await order("FW-PEND-1", "unresolved");
@@ -623,6 +626,12 @@ describe("Gmail order mail processing", () => {
       "delivered-meal",
       "2026-09-21T12:00:00Z",
       delivered("FW-MEAL-1"),
+    );
+    await receiveMail(
+      seed,
+      "delivered-tab",
+      "2026-09-21T12:00:00Z",
+      delivered("FW-TAB-1"),
     );
     await receiveMail(
       seed,
@@ -644,6 +653,7 @@ describe("Gmail order mail processing", () => {
       [gloves.id, pending.id].sort(),
     );
     expect(arrived.map((row) => row.entityId)).not.toContain(meal.id);
+    expect(arrived.map((row) => row.entityId)).not.toContain(tab.id);
   });
 
   it("matches a website-domain sender when no receipt address was configured", async () => {

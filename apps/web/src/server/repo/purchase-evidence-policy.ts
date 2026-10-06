@@ -128,7 +128,15 @@ export const purchaseEvidenceFingerprintSql = (
       AND ep_changed_line."deletedAt" IS NULL AND ep_changed_line."economicRole" = 'vendor')
 )`;
 
-export const expenseProductExpectationSql = (alias: string): SQL => sql`(CASE
+/**
+ * The Expense's effective spending category forbids a Product (a restaurant
+ * meal), whatever its line basis: an allocation line awaiting itemization
+ * counts too.
+ */
+export const expenseProductForbiddenSql = (alias: string): SQL =>
+  sql`(${categoryPolicy(effectiveExpenseSpendingCategorySql(alias), "productExpectation")} IS NOT DISTINCT FROM 'not_allowed')`;
+
+const expenseProductExpectationSql = (alias: string): SQL => sql`(CASE
   WHEN ${column(alias, "economicRole")} <> 'vendor'
     OR ${column(alias, "lineKind")} <> 'principal'
     OR ${column(alias, "lineBasis")} <> 'item_line' THEN 'not_expected'

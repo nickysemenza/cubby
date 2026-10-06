@@ -61,6 +61,7 @@ import {
   displayableImageSql,
   displayableImageWhere,
 } from "~/server/repo/image-displayability";
+import { validateProductPolicy } from "~/server/repo/inheritance-validation";
 import { listScaffold } from "~/server/repo/list";
 import {
   listGroupFields,
@@ -747,6 +748,7 @@ export const updateVendor = async (
             "spendingCategory",
             data.defaultSpendingCategoryId,
           );
+  let reclassifies = false;
   if (
     data.spendingProfile !== undefined ||
     defaultSpendingCategoryId !== undefined
@@ -769,20 +771,28 @@ export const updateVendor = async (
       const affected = await getDb(db).execute(
         sql`SELECT 1 FROM "Expense" e JOIN "Purchase" p ON p.id=e."purchaseId" WHERE e."deletedAt" IS NULL AND p."deletedAt" IS NULL AND p."vendorId"=${id}::uuid LIMIT 1`,
       );
-      if (affected.rows.length) assertReviewedSpendingClassification(db);
+      if (affected.rows.length) {
+        assertReviewedSpendingClassification(db);
+        reclassifies = true;
+      }
     }
   }
-  await patchEntityRows(
-    db,
-    actor,
-    {
-      entity: "vendor",
-      table: vendor,
-      fields: entityFieldModels.vendor.audit,
-    },
-    [id],
-    { ...data, defaultSpendingCategoryId, name: data.name?.trim() },
-  );
+  await withTransaction(db, async (tx) => {
+    await patchEntityRows(
+      tx,
+      actor,
+      {
+        entity: "vendor",
+        table: vendor,
+        fields: entityFieldModels.vendor.audit,
+      },
+      [id],
+      { ...data, defaultSpendingCategoryId, name: data.name?.trim() },
+    );
+    // A new profile or default reclassifies this Vendor's lines, so it can
+    // put a linked Product in a category that forbids one.
+    if (reclassifies) await validateProductPolicy(tx, { vendorId: id });
+  });
 
   return { output: await getVendorByID(db, id), entityId: id };
 };
@@ -1010,6 +1020,8 @@ export const mergeVendors = async (
             to: keepId,
             liveOnly: true,
           });
+          // The keeper's food context and default now classify these lines.
+          await validateProductPolicy(tx, { vendorId: keepId });
         },
         // Detach every loser logo before tombstoning, then give the survivor
         // the carried one, so a logo that was not carried is eligible for the
