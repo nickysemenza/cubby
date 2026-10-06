@@ -655,10 +655,13 @@ export async function processOrderMails(
         );
       }
 
-      // Receiving (and its return window) is for stocked items: an order
-      // whose principal lines all sit in a spending category that forbids a
-      // Product (a restaurant meal) asks for nothing. Goods with an
-      // unresolved Product still count.
+      // Receiving (and its return window) is for stocked items: a line with
+      // a Product, or a line that may still become one — its import awaits
+      // review (unresolved goods, a pending replacement, a totals mismatch)
+      // and its spending category allows a Product. Productless lines with
+      // nothing left to review were booked expense-only (a meal, a ticket, a
+      // bouquet) or judged not worth a Product; a restaurant meal is never
+      // goods, whatever review is open.
       const [stocked] =
         target && event.event === "delivered"
           ? await database
@@ -669,7 +672,12 @@ export async function processOrderMails(
                   eq(expense.purchaseId, target.id),
                   eq(expense.lineKind, "principal"),
                   notDeleted(expense),
-                  sql`(${expense.productId} IS NOT NULL OR NOT ${expenseProductForbiddenSql("Expense")})`,
+                  sql`(${expense.productId} IS NOT NULL OR (NOT ${expenseProductForbiddenSql("Expense")} AND EXISTS (
+                    SELECT 1 FROM ${runFinding}
+                    WHERE ${runFinding.entityKind} = 'purchase'
+                      AND ${runFinding.entityId} = ${target.id}
+                      AND ${runFinding.status} = 'open'
+                      AND ${runFinding.kind} NOT IN ('arrived', 'return_window', 'refund_unbooked'))))`,
                 ),
               )
               .limit(1)

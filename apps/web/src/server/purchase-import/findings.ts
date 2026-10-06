@@ -200,6 +200,7 @@ async function applyFix(
   fix: ProposedImportFix,
   actor: ActorContext,
   ledgerPartyId: string,
+  runId: (typeof runFinding.$inferSelect)["runId"],
 ) {
   if (fix.kind === "receive_purchase") {
     throw new Error(
@@ -281,7 +282,10 @@ async function applyFix(
     return;
   }
 
-  await applyAggregateReplacement(tx, fix, actor, targetPurchase);
+  await applyAggregateReplacement(tx, fix, actor, targetPurchase, {
+    ledgerPartyId: parseEntityId("ledgerParty", ledgerPartyId),
+    runId,
+  });
 }
 
 async function applyAggregateReplacement(
@@ -292,6 +296,7 @@ async function applyAggregateReplacement(
     typeof purchase.$inferSelect,
     "id" | "date" | "displayLabel" | "vendorId"
   >,
+  source: Pick<typeof runFinding.$inferSelect, "ledgerPartyId" | "runId">,
 ) {
   const purchaseId = targetPurchase.id;
   if (fix.lines.length === 0)
@@ -386,6 +391,21 @@ async function applyAggregateReplacement(
         })),
       );
     await validateExpenseInheritance(tx, row);
+    // Goods left unresolved keep their finding, as the writer files it, so
+    // a later delivery still asks to receive them (gmail/process.ts).
+    if (identity.lineKind === "principal" && identity.unresolvedReason)
+      await tx
+        .insert(runFinding)
+        .values({
+          runId: source.runId,
+          ledgerPartyId: source.ledgerPartyId,
+          entityKind: "purchase",
+          entityId: purchaseId,
+          kind: "product_unresolved",
+          summary: `Product resolution is required for “${line.title}”: ${identity.unresolvedReason}`,
+          evidenceFingerprint: `replacement:${row.id}`,
+        })
+        .onConflictDoNothing();
     audit.push({
       entityKind: "expense" as const,
       entityId: row.id,
@@ -495,7 +515,7 @@ export async function resolveRunFinding(
         );
       assertFixTargetsFinding(finding, fix);
       await assertRunProvenance(tx, finding);
-      await applyFix(tx, fix, actor, finding.ledgerPartyId);
+      await applyFix(tx, fix, actor, finding.ledgerPartyId, finding.runId);
     }
     const status = input.action === "apply" ? "applied" : "dismissed";
     await tx
