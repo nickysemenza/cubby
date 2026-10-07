@@ -14,6 +14,7 @@ import {
   expireStaleRuns,
   finishRun,
   issueBrowserCommand,
+  claimNextImportWork,
   readBrowserCommandResult,
   reconcileSettledRun,
   resumeAuthorizedRuns,
@@ -970,6 +971,54 @@ describe("purchase import run admission", () => {
       ).toEqual([{ summary: expect.stringContaining("Update Cubby for Mac") }]);
     },
   );
+  // A reconnect claim that read "paused_offline" must not resume a run that
+  // was stopped while it waited on the bridge (an outdated Mac's stop).
+  it("never resumes a run that stopped while the claim checked the bridge", async () => {
+    const party = await createMember();
+    const account = await createVendorAccount(party.id);
+    const run = await startOrResumeRun(ctx.db, {
+      ledgerPartyId: party.id,
+      vendorAccountId: account.id,
+      trigger: "manual",
+    });
+    const { run: runTable } = await import("~/server/db/schema");
+    const { eq } = await import("drizzle-orm");
+    const { getDb } = await import("~/server/repo/database-helpers");
+    await getDb(ctx.db)
+      .update(runTable)
+      .set({ status: "paused_offline" })
+      .where(eq(runTable.id, run.id));
+    const broker = {
+      enqueue: async () => undefined,
+      result: async () => null,
+      cancel: async () => undefined,
+      connected: async () => {
+        await getDb(ctx.db)
+          .update(runTable)
+          .set({
+            status: "needs_review",
+            failureCode: "client_update_required",
+          })
+          .where(eq(runTable.id, run.id));
+        return true;
+      },
+      pendingCommands: async () => [],
+      notifyRunCompleted: async () => undefined,
+      requestAuthentication: async () => undefined,
+    };
+
+    await expect(
+      claimNextImportWork(ctx.db, { getByName: () => broker }, run.id),
+    ).rejects.toThrow(/fenced/u);
+    const [row] = await getDb(ctx.db)
+      .select({ status: runTable.status, failureCode: runTable.failureCode })
+      .from(runTable)
+      .where(eq(runTable.id, run.id));
+    expect(row).toEqual({
+      status: "needs_review",
+      failureCode: "client_update_required",
+    });
+  });
   it("abandons a browser command nobody answered within the stale window", async () => {
     const party = await createMember();
     const account = await createVendorAccount(party.id);

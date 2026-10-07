@@ -1663,10 +1663,20 @@ export async function claimNextImportWork(
       }
       return { kind: "paused_offline" as const };
     }
-    await getDb(db)
+    // Resume only from the status read above: a run stopped while this
+    // claim waited on the bridge (an outdated Mac) must stay stopped.
+    const [resumed] = await getDb(db)
       .update(runTable)
       .set({ status: "running", failureCode: null, updatedAt: new Date() })
-      .where(eq(runTable.id, scope.public.runId));
+      .where(
+        and(
+          eq(runTable.id, scope.public.runId),
+          eq(runTable.status, scope.public.status),
+        ),
+      )
+      .returning({ id: runTable.id });
+    if (!resumed)
+      throw new Error("Import run is fenced: its status changed during claim");
   } else {
     assertRunActive(scope.public.status);
   }
