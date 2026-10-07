@@ -56,7 +56,8 @@ verifies declaration types and referenced exports.
 
 Progressive list enrichment reuses one exported error schema across entities,
 so OpenAPI and Swift emit one shared error type while each entity retains its
-own successful enrichment shape.
+own successful enrichment shape. Base-list responses likewise share one
+metadata schema, so each entity uses the same pagination and grouping type.
 
 ## One declaration, several consumers
 
