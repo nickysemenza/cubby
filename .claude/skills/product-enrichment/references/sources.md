@@ -118,7 +118,7 @@ the whole file.
   ~40 rapid loads trips a session-scoped error page; open a fresh tab on the
   home page to reset.
 - A product page's header exposes `Internet # / Model # / UPC Code # / Store
-SKU #` in one line; the cover is the `…-64_600.jpg` variant (`64_1000` for
+  SKU #` in one line; the cover is the `…-64_600.jpg` variant (`64_1000` for
   full size — verify it loads). Read `new URL(src).origin + pathname` — the
   browser tool redacts URLs carrying query strings. Read a price from a
   screenshot, not page text: a half-hydrated page renders a promo banner where

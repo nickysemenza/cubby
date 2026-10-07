@@ -111,7 +111,7 @@ skill never creates a Product for an unbought line.
 ## Verification for this batch
 
 - `entity_read.list planting {filters:{taskId:"TSK-BRC3"}}` and `{filters:
-{taskId:"TSK-FAVA"}}` each return exactly the one planned Planting created
+  {taskId:"TSK-FAVA"}}` each return exactly the one planned Planting created
   above.
 - `entity_read.list task {filters:{projectId:"PRJ-TEST"}}` includes all three
   Tasks, with `dueDate` matching the plan's headings.

@@ -327,7 +327,7 @@ Object per vendor account (`PurchaseImportDurableObject`,
 Mac is a thin hand; the server reads and decides:
 
 - **Commands.** `navigate`, `scroll`, `capture` (with `screenshot:
-required | preferred | skip`), and `window` (`raise` / `background`). A
+  required | preferred | skip`), and `window` (`raise` / `background`). A
   capture returns the page's trimmed DOM (deflated, with its checksum), any
   screenshot or PDF evidence, and every result carries an observation (URL,
   ready state, window state, Screen Recording permission). The Mac finds its

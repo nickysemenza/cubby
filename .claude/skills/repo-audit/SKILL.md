@@ -35,7 +35,7 @@ those calls into the current host's subagent operations.
    empty findings list rather than padding weak observations.
 4. The root runs `pnpm check` once and `cargo fmt --all -- --check` once, then supplies concise pass/fail and
    raw failure evidence as `rootGateResults: [{ command, status: "pass" |
-"fail", output }]` to the workflow, covering both commands. Treat it as
+   "fail", output }]` to the workflow, covering both commands. Treat it as
    ground truth and do not send it through adversarial verification. Without
    that argument, the workflow must report its mechanical gate unchecked and
    the audit incomplete.

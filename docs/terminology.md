@@ -308,7 +308,7 @@ FinancialAccount ──< FinancialTransaction >──< Allocation >──< Purch
   `purchaseId` is nullable: a row with no Purchase attached is exactly "no vendor
   recorded", since `purchase.vendorId` is NOT NULL.
   - `lineKind` is `principal | tax | shipping | discount | fee | tip |
-other_adjustment`. Every kind participates in total, monthly, project,
+    other_adjustment`. Every kind participates in total, monthly, project,
     Purchase-reconciliation, and vendor spend. Cost-type, trade, tool, and
     affinity analytics use only `principal` and expose the signed adjustment
     remainder separately.
