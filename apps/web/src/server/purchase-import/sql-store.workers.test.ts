@@ -7,7 +7,7 @@ import { bridgeServerMessage, type BrowserBridgeResult } from "./contracts";
 import { PurchaseImportSqlStore } from "./sql-store";
 
 const command = {
-  protocolVersion: 2 as const,
+  protocolVersion: 3 as const,
   id: "894efe4d-8567-56db-9c06-e533b9945c6f",
   operationId: "browser-command:nav-001",
   runID: "df62c017-5669-4d6d-9f7e-088b6bcffc9f",
@@ -20,14 +20,25 @@ const command = {
 };
 
 const result: BrowserBridgeResult = {
-  protocolVersion: 2,
+  protocolVersion: 3,
   // Foundation's UUID Codable representation is uppercase while the web
   // command producer emits lowercase UUID strings.
   commandID: command.id.toUpperCase(),
   operationID: command.operationId,
   runID: command.runID,
   completedAt: "2026-09-19T21:50:00.000Z",
-  outcome: { status: "completed" },
+  outcome: {
+    status: "completed",
+    snapshot: null,
+    observation: {
+      url: null,
+      title: null,
+      readyState: null,
+      window: null,
+      screenRecording: "unknown",
+      durationMs: 0,
+    },
+  },
 };
 
 describe("purchase-import broker SQLite", () => {
@@ -75,7 +86,7 @@ describe("purchase-import broker SQLite", () => {
 
     socket.send(
       JSON.stringify({
-        protocolVersion: 2,
+        protocolVersion: 3,
         type: "hello",
         deviceID: "11111111-1111-4111-8111-111111111111",
         browser: "chrome",
@@ -91,9 +102,9 @@ describe("purchase-import broker SQLite", () => {
       command: { id: command.id },
     });
 
-    socket.send(JSON.stringify({ protocolVersion: 2, type: "result", result }));
+    socket.send(JSON.stringify({ protocolVersion: 3, type: "result", result }));
     expect(await receiveMessage(socket)).toEqual({
-      protocolVersion: 2,
+      protocolVersion: 3,
       type: "acknowledge",
       commandID: command.id,
     });

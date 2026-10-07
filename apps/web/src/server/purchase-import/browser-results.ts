@@ -149,14 +149,14 @@ export type BrowserRecovery =
 /** Automatic retries a single browser step gets before it pauses. */
 export const MAX_BROWSER_RETRIES = 1;
 
-const memberFix: Record<string, string> = {
-  screen_recording_denied:
-    "Allow Cubby to record the screen (System Settings > Privacy & Security > Screen & System Audio Recording), then reopen Cubby.",
+const SCREEN_RECORDING_FIX =
+  "Allow Cubby to record the screen (System Settings > Privacy & Security > Screen & System Audio Recording), then reopen Cubby.";
+const memberFix = {
   javascript_disabled:
     "In Chrome, turn on View > Developer > Allow JavaScript from Apple Events.",
   browser_permission_denied:
     "Allow Cubby to control the browser (System Settings > Privacy & Security > Automation).",
-};
+} satisfies Partial<Record<FailedOutcome["code"], string>>;
 
 export function browserRecovery(
   outcome: FailedOutcome,
@@ -168,9 +168,13 @@ export function browserRecovery(
     return {
       action: "pause",
       status: "paused_offline",
-      reason: memberFix.screen_recording_denied!,
+      reason: SCREEN_RECORDING_FIX,
     };
-  const fix = memberFix[outcome.code];
+  const fix =
+    outcome.code === "javascript_disabled" ||
+    outcome.code === "browser_permission_denied"
+      ? memberFix[outcome.code]
+      : null;
   if (fix) return { action: "pause", status: "paused_offline", reason: fix };
   const canRetry = retriesSoFar < MAX_BROWSER_RETRIES;
   if (outcome.code === "screenshot_unavailable")
@@ -199,7 +203,11 @@ export function browserRecovery(
     outcome.code === "deadline_exceeded" ||
     outcome.code === "browser_unavailable"
   )
-    return { action: "pause", status: "paused_offline", reason: outcome.message };
+    return {
+      action: "pause",
+      status: "paused_offline",
+      reason: outcome.message,
+    };
   return { action: "fail" };
 }
 

@@ -213,9 +213,7 @@ describe("structured product identifiers from JSON-LD", () => {
       expect(walk(base + query, [block]).variantGroup).toBe(true);
     const absent = walk(base, [block]);
     expect(absent.variantGroup).toBe(false);
-    expect(absent.products.map((product) => product.skus)).toEqual([
-      ["SYN-S"],
-    ]);
+    expect(absent.products.map((product) => product.skus)).toEqual([["SYN-S"]]);
   });
 
   // Blocks the page compactor left out (too many or too large) leave the

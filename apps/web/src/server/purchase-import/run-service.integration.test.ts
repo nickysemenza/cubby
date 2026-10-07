@@ -1,13 +1,15 @@
 import { runEntityId } from "@cubby/schemas/identifiers";
-import type {
-  BrowserBridgeRequest,
-  BrowserBridgeResult,
+import {
+  BROWSER_BRIDGE_PROTOCOL,
+  type BrowserBridgeRequest,
+  type BrowserBridgeResult,
 } from "@cubby/schemas/purchase-import";
 import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 
 import { executeLeasedOperation } from "~/server/runs/operation";
 
+import { observation } from "./browser.fixtures";
 import { dispatchRunEvent, recordRunDispatchAttempt } from "./dispatch";
 import {
   AccountOccupiedError,
@@ -542,7 +544,7 @@ describe("purchase import run admission", () => {
           operation: {
             type: "capture",
             allowedHosts: ["shop.example.test"],
-            enhancedEvidence: false,
+            screenshot: "preferred",
             recoveryURL: "https://attacker.example/orders",
           },
         },
@@ -839,7 +841,7 @@ describe("purchase import run admission", () => {
         issued = command;
       },
       result: async (): Promise<BrowserBridgeResult> => ({
-        protocolVersion: 2,
+        protocolVersion: BROWSER_BRIDGE_PROTOCOL,
         commandID: issued!.id,
         operationID: issued!.operationId,
         runID: run.id,
@@ -849,6 +851,8 @@ describe("purchase import run admission", () => {
           code: "disallowed_url",
           message: "Navigation left the vendor allowlist",
           retryable: false,
+          screenshotGap: null,
+          observation: observation(),
         },
       }),
       cancel: async () => undefined,
@@ -873,7 +877,7 @@ describe("purchase import run admission", () => {
       operationId: "browser:bad-link",
     });
 
-    expect(read.state).toBe("completed");
+    expect(read.state).toBe("failed");
     const { runOperation } = await import("~/server/db/schema");
     const { and, eq } = await import("drizzle-orm");
     const { getDb } = await import("~/server/repo/database-helpers");
@@ -891,7 +895,9 @@ describe("purchase import run admission", () => {
       );
     expect(operation).toEqual({
       state: "failed",
-      error: "disallowed_url: Navigation left the vendor allowlist",
+      error: expect.stringMatching(
+        /^disallowed_url: Navigation left the vendor allowlist \[/u,
+      ),
     });
   });
   // An outdated Mac once reported every capture as "The evidence file could
@@ -919,7 +925,7 @@ describe("purchase import run admission", () => {
           issued = command;
         },
         result: async (): Promise<BrowserBridgeResult> => ({
-          protocolVersion: 2,
+          protocolVersion: BROWSER_BRIDGE_PROTOCOL,
           commandID: issued!.id,
           operationID: issued!.operationId,
           runID: run.id,
@@ -929,6 +935,8 @@ describe("purchase import run admission", () => {
             code: "client_update_required",
             message: "Update Cubby for Mac, then restart this run.",
             retryable: false,
+            screenshotGap: null,
+            observation: observation(),
           },
         }),
         cancel: async () => undefined,
@@ -985,8 +993,9 @@ describe("purchase import run admission", () => {
         );
       expect(operation).toEqual({
         state: "failed",
-        error:
-          "client_update_required: Update Cubby for Mac, then restart this run.",
+        error: expect.stringMatching(
+          /^client_update_required: Update Cubby for Mac, then restart this run\. \[/u,
+        ),
       });
       const [row] = await getDb(ctx.db)
         .select({ status: runTable.status, failureCode: runTable.failureCode })

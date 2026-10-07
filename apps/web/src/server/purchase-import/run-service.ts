@@ -154,8 +154,8 @@ import { finalizeImportedImages } from "~/server/services/photo-import-finalize.
 import { getR2PublicUrl } from "~/server/utils/r2-public-url";
 import { WORKFLOW_RUN_PURPOSES } from "~/server/workflow-runs/contract";
 
+import { loadPurchaseAuditBatch } from "./audit-batch";
 import { encodeSnapshotDom } from "./browser-page";
-import { fetchPublicPage, type FetchPage } from "./server-page-fetch";
 import {
   browserCommandRecord,
   browserRecovery,
@@ -165,7 +165,6 @@ import {
   type BrowserEvidenceStorage,
   type BrowserRecovery,
 } from "./browser-results";
-import { loadPurchaseAuditBatch } from "./audit-batch";
 import { CAPTURE_INTERIM_NOTE } from "./capture-interim-note";
 import {
   notHeldByChargeRun,
@@ -182,6 +181,7 @@ import { attachPendingOrderMailEvidence } from "./gmail/process";
 import { classifyOrderCapture } from "./order-list";
 import { loadReceiptEvidenceForRun } from "./receipt-evidence";
 import { runCompletionNotice } from "./run-completion-notice";
+import { fetchPublicPage, type FetchPage } from "./server-page-fetch";
 import { importVendorOrder } from "./writer";
 
 /**
@@ -2446,7 +2446,10 @@ async function pauseForBrowser(
       .update(vendorAccount)
       .set({ status: input.status, updatedAt: new Date() })
       .where(
-        eq(vendorAccount.id, vendorAccountId.parse(scope.public.vendorAccountId)),
+        eq(
+          vendorAccount.id,
+          vendorAccountId.parse(scope.public.vendorAccountId),
+        ),
       );
   await reportBrowserStep(db, scope.public.runId, input.eventId, input.reason);
 }
@@ -2476,7 +2479,10 @@ export async function readBrowserCommandResult(
   );
   if (!original.success) return { state: "missing" as const };
   const retries = original.data.retries ?? [];
-  const attemptKey = { runId, operationId: retries.at(-1) ?? input.operationId };
+  const attemptKey = {
+    runId,
+    operationId: retries.at(-1) ?? input.operationId,
+  };
   const attempt = retries.length
     ? browserCommandRecord.parse(
         (await readOperation(getDb(db), attemptKey))?.result,
@@ -2495,7 +2501,10 @@ export async function readBrowserCommandResult(
     const recovery: BrowserRecovery =
       policy.action === "pause" &&
       original.data.pausedAt === attemptKey.operationId
-        ? { action: "retry", raiseWindow: outcome.code === "screenshot_unavailable" }
+        ? {
+            action: "retry",
+            raiseWindow: outcome.code === "screenshot_unavailable",
+          }
         : policy;
     const diagnostic = `${outcome.code}${outcome.screenshotGap ? ` (${outcome.screenshotGap})` : ""}: ${outcome.message} [${describeObservation(outcome.observation)}]`;
     if (recovery.action === "stop_outdated_client") {
@@ -2511,16 +2520,26 @@ export async function readBrowserCommandResult(
       const next = retries.length + 1;
       const retryOperationId = `${input.operationId}:retry-${next}`;
       if (recovery.raiseWindow)
-        await issueBrowserCommand(db, namespace, {
+        await issueBrowserCommand(
+          db,
+          namespace,
+          {
+            runId: input.runId,
+            operationId: `${input.operationId}:raise-${next}`,
+            operation: { type: "window", action: "raise" },
+          },
+          ports,
+        );
+      const reissued = await issueBrowserCommand(
+        db,
+        namespace,
+        {
           runId: input.runId,
-          operationId: `${input.operationId}:raise-${next}`,
-          operation: { type: "window", action: "raise" },
-        });
-      const reissued = await issueBrowserCommand(db, namespace, {
-        runId: input.runId,
-        operationId: retryOperationId,
-        operation: attempt.command.operation,
-      });
+          operationId: retryOperationId,
+          operation: attempt.command.operation,
+        },
+        ports,
+      );
       await setOperationResult(getDb(db), key, {
         ...original.data,
         retries: [...retries, retryOperationId],

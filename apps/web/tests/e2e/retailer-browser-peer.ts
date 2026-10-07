@@ -2,12 +2,18 @@ import { randomUUID } from "node:crypto";
 import type { Page } from "@playwright/test";
 import type { z } from "zod";
 import {
+  BROWSER_BRIDGE_PROTOCOL,
   browserBridgeResult,
   type BrowserBridgeResult,
   browserBridgeServerMessage,
   browserPageCapture,
 } from "@cubby/schemas/purchase-import";
 import type { Database } from "~/server/db";
+import { encodeSnapshotDom } from "~/server/purchase-import/browser-page";
+import {
+  observation,
+  testBrowserPorts,
+} from "~/server/purchase-import/browser.fixtures";
 import {
   issueBrowserCommand,
   readBrowserCommandResult,
@@ -61,43 +67,29 @@ export async function connectRetailerBrowserPeer(input: {
     )
       throw new Error("Retailer recovery escaped the production allowlist");
     await retailer.goto(operation.recoveryURL);
-    const capture = browserPageCapture.parse(
-      await retailer.evaluate(() => ({
-        sourceURL: location.href,
-        canonicalUrl:
-          document.querySelector<HTMLLinkElement>('link[rel="canonical"]')
-            ?.href ?? null,
-        title: document.title,
-        readableText: document.body.innerText,
-        links: [...document.querySelectorAll<HTMLAnchorElement>("a[href]")]
-          .slice(0, 200)
-          .map((link, index) => ({
-            id: `link-${index}`,
-            url: link.href,
-            label: link.innerText,
-          })),
-        images: [...document.querySelectorAll<HTMLImageElement>("img[src]")]
-          .slice(0, 200)
-          .filter((image) => image.naturalWidth > 0)
-          .map((image) => ({
-            url: image.src,
-            alt: image.alt,
-            naturalWidth: image.naturalWidth,
-            naturalHeight: image.naturalHeight,
-          })),
-        paymentEvidence: [],
-        evidence: [],
-        capturedAt: new Date().toISOString(),
-        captureVersion: 1,
-      })),
-    );
+    // Like the Mac: send the rendered DOM; the server derives the page.
+    const page = await retailer.evaluate(() => ({
+      sourceURL: location.href,
+      title: document.title,
+      html: document.documentElement.outerHTML,
+    }));
     return browserBridgeResult.parse({
-      protocolVersion: 2,
+      protocolVersion: BROWSER_BRIDGE_PROTOCOL,
       commandID: command.id,
       operationID: command.operationId,
       runID: command.runID,
       completedAt: new Date().toISOString(),
-      outcome: { status: "completed", capture },
+      outcome: {
+        status: "completed",
+        snapshot: {
+          sourceURL: page.sourceURL,
+          title: page.title,
+          capturedAt: new Date().toISOString(),
+          dom: await encodeSnapshotDom(page.html),
+          screenshot: { status: "skipped" },
+        },
+        observation: observation({ url: page.sourceURL, title: page.title }),
+      },
     });
   });
   await peer.evaluate(
@@ -117,15 +109,11 @@ export async function connectRetailerBrowserPeer(input: {
           () => {
             socket.send(
               JSON.stringify({
-                protocolVersion: 2,
+                protocolVersion: 3,
                 type: "hello",
                 deviceID,
                 browser: "chrome",
-                capabilities: {
-                  fixedCaptureVersion: 1,
-                  enhancedScreenshot: false,
-                  renderedPDF: false,
-                },
+                capabilities: { snapshotVersion: 1, screenshot: false },
               }),
             );
             resolve();
@@ -139,7 +127,7 @@ export async function connectRetailerBrowserPeer(input: {
           const result = await window.syntheticBrowserCommand(message);
           if (result)
             socket.send(
-              JSON.stringify({ protocolVersion: 2, type: "result", result }),
+              JSON.stringify({ protocolVersion: 3, type: "result", result }),
             );
         });
       });
@@ -151,20 +139,28 @@ export async function connectRetailerBrowserPeer(input: {
     },
   );
   const broker = input.namespace.getByName(input.accountId);
+  // Evidence stays in memory and the server never reads the synthetic
+  // retailer itself, so every page goes through the browser peer.
+  const ports = testBrowserPorts();
   await expect.poll(() => broker.connected()).toBe(true);
   return {
     retailer,
     async capture(url: string, operationId: string) {
-      await issueBrowserCommand(input.db, input.namespace, {
-        runId: input.runId,
-        operationId,
-        operation: {
-          type: "capture",
-          recoveryURL: url,
-          allowedHosts: [new URL(url).hostname],
-          enhancedEvidence: false,
+      await issueBrowserCommand(
+        input.db,
+        input.namespace,
+        {
+          runId: input.runId,
+          operationId,
+          operation: {
+            type: "capture",
+            recoveryURL: url,
+            allowedHosts: [new URL(url).hostname],
+            screenshot: "preferred",
+          },
         },
-      });
+        ports,
+      );
       let capture: z.output<typeof browserPageCapture> | undefined;
       await expect
         .poll(
@@ -173,12 +169,10 @@ export async function connectRetailerBrowserPeer(input: {
               input.db,
               input.namespace,
               { runId: input.runId, operationId },
+              ports,
             );
-            if (
-              result.state === "completed" &&
-              result.result.outcome.status === "completed"
-            )
-              capture = result.result.outcome.capture ?? undefined;
+            if (result.state === "completed" && result.capture)
+              capture = result.capture;
             return Boolean(capture);
           },
           { timeout: 30_000 },

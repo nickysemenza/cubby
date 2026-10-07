@@ -1,6 +1,4 @@
-import type {
-  BrowserStructuredProducts,
-} from "@cubby/schemas/purchase-import";
+import type { BrowserStructuredProducts } from "@cubby/schemas/purchase-import";
 import { z } from "zod";
 
 /**
@@ -25,13 +23,13 @@ const MAX_DEPTH = 8;
 const MAX_NODES = 500;
 const OFFER_BUDGET = 1_000;
 
-const record = z.record(z.string(), z.unknown());
+const jsonValue = z.json();
+type Json = z.infer<typeof jsonValue>;
+type JsonNode = { [key: string]: Json };
 const scalar = z.union([z.string(), z.number()]);
-const asRecord = (value: unknown) => {
-  const parsed = record.safeParse(value);
-  return parsed.success && !Array.isArray(value) ? parsed.data : null;
-};
-const asArray = (value: unknown): unknown[] =>
+const asRecord = (value: Json | undefined): JsonNode | null =>
+  value instanceof Object && !Array.isArray(value) ? value : null;
+const asArray = (value: Json | undefined): Json[] =>
   value === undefined || value === null
     ? []
     : Array.isArray(value)
@@ -48,7 +46,7 @@ type Variant = string | null | typeof INVALID;
  * Shopify-style `?variant=<id>`: only the query component counts, names and
  * values are decoded, and anything but exactly one non-empty value is invalid.
  */
-function variantOf(url: unknown): Variant {
+function variantOf(url: Json | undefined): Variant {
   const beforeFragment = String(url ?? "").split("#")[0] ?? "";
   const start = beforeFragment.indexOf("?");
   if (start < 0) return null;
@@ -79,7 +77,7 @@ export function structuredProductsFromJsonLd(input: {
   omitted: number;
 }): BrowserStructuredProducts {
   let truncated = input.omitted > 0;
-  const values = (node: Record<string, unknown>, keys: readonly string[]) => {
+  const values = (node: JsonNode, keys: readonly string[]) => {
     const out: string[] = [];
     for (const key of keys) {
       for (const item of asArray(node[key])) {
@@ -95,9 +93,9 @@ export function structuredProductsFromJsonLd(input: {
     if (out.length > MAX_VALUES) truncated = true;
     return out.slice(0, MAX_VALUES);
   };
-  const hasType = (node: Record<string, unknown>, name: string) =>
+  const hasType = (node: JsonNode, name: string) =>
     asArray(node["@type"]).includes(name);
-  const identifiers = (node: Record<string, unknown>): Identifiers => ({
+  const identifiers = (node: JsonNode): Identifiers => ({
     skus: values(node, ["sku"]),
     mpns: values(node, ["mpn"]),
     gtins: values(node, ["gtin", "gtin8", "gtin12", "gtin13", "gtin14"]),
@@ -129,8 +127,8 @@ export function structuredProductsFromJsonLd(input: {
   let visited = 0;
   let offerBudget = OFFER_BUDGET;
 
-  const collectOffers = (product: Record<string, unknown>) => {
-    const offers: Record<string, unknown>[] = [];
+  const collectOffers = (product: JsonNode) => {
+    const offers: JsonNode[] = [];
     for (const raw of asArray(product.offers)) {
       const offerNode = asRecord(raw);
       if (!offerNode) continue;
@@ -155,9 +153,7 @@ export function structuredProductsFromJsonLd(input: {
   // between variants: Product and Offers merge only when they agree, and
   // otherwise only the one Offer whose `?variant=` is the served page's own
   // variant may stand for the page.
-  const productIdentifiers = (
-    product: Record<string, unknown>,
-  ): Identifiers => {
+  const productIdentifiers = (product: JsonNode): Identifiers => {
     const own = identifiers(product);
     const offers = collectOffers(product);
     if (offers.length === 0) return own;
@@ -195,7 +191,7 @@ export function structuredProductsFromJsonLd(input: {
     );
   };
 
-  const walk = (value: unknown, depth: number): void => {
+  const walk = (value: Json | undefined, depth: number): void => {
     if (value === null || value === undefined) return;
     if (Array.isArray(value)) {
       if (depth > MAX_DEPTH || ++visited > MAX_NODES) {
@@ -224,10 +220,12 @@ export function structuredProductsFromJsonLd(input: {
   };
 
   for (const raw of input.blocks) {
-    let parsed: unknown;
+    let parsed: Json | undefined;
     try {
-      parsed = JSON.parse(raw);
+      parsed = jsonValue.parse(JSON.parse(raw));
     } catch {
+      // SILENT: pages often carry malformed JSON-LD next to valid blocks; an
+      // unreadable block contributes no identifiers rather than failing the page.
       continue;
     }
     walk(parsed, 0);

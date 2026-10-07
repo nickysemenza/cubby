@@ -40,7 +40,10 @@ export async function readSnapshotDom(dom: SnapshotDom): Promise<string> {
     decodeBase64Url(dom.data),
     new DecompressionStream("deflate-raw"),
   );
-  if (bytes.byteLength !== dom.byteSize || (await sha256Hex(bytes)) !== dom.sha256)
+  if (
+    bytes.byteLength !== dom.byteSize ||
+    (await sha256Hex(bytes)) !== dom.sha256
+  )
     throw new Error("Browser snapshot DOM does not match its checksum");
   return new TextDecoder().decode(bytes);
 }

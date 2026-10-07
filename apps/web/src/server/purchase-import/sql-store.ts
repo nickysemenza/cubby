@@ -94,7 +94,9 @@ export class PurchaseImportSqlStore {
       )
       .toArray();
     for (const row of rows) {
-      const parsed = browserBridgeRequest.safeParse(JSON.parse(row.request_json));
+      const parsed = browserBridgeRequest.safeParse(
+        JSON.parse(row.request_json),
+      );
       if (parsed.success) return parsed.data;
       // A command from an older protocol no current Mac can run.
       this.storage.sql.exec(
@@ -123,7 +125,10 @@ export class PurchaseImportSqlStore {
       )
       .toArray()[0];
     if (!row) return null;
-    this.storage.sql.exec("DELETE FROM broker_wake WHERE run_id = ?", row.run_id);
+    this.storage.sql.exec(
+      "DELETE FROM broker_wake WHERE run_id = ?",
+      row.run_id,
+    );
     return row.run_id;
   }
 
