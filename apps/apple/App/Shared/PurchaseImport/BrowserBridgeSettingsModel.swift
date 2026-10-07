@@ -63,6 +63,7 @@ final class BrowserBridgeSettingsModel {
     var isConfigured: Bool { controller != nil }
 
     func install(controller: any BrowserBridgeControlling) {
+        syncPlanGeneration = UUID()
         syncGeneration = UUID()
         isSyncing = false
         syncStartedAt = nil

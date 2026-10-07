@@ -51,7 +51,8 @@ conversation: it reaches Cubby through one Run's services and nothing else
    refreshing the advisory plan; Sync all opens Activity when it submits
    multiple runs. Partial batches retain submitted runs and raw failure/skip
    diagnostics. Replacing or disconnecting the controller invalidates pending
-   sync navigation, so a late result cannot open a run on another server.
+   sync navigation and plan reads, so late results cannot show another server’s
+   accounts or open its runs.
    History import uses a per-account date-range popover. Settings retains
    browser choice and permissions, with a link to the pane. The run page proxies the agent conversation through
    `agent-proxy.ts` to the run's agent Durable Object. Member controls go

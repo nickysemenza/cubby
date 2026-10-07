@@ -16,10 +16,14 @@ struct BrowserBridgeSettingsModelTests {
         var submitted: [StartSyncOutput] = []
         var pending: CheckedContinuation<Void, Never>?
         var suspendSubmission = false
+        var suspendPlanRead = false
+        var pendingPlan: CheckedContinuation<Void, Never>?
 
         func syncPlan() async throws -> SyncPlanOutput {
             planReads += 1
-            return .init(accounts: plans)
+            let result = SyncPlanOutput(accounts: plans)
+            if suspendPlanRead { await withCheckedContinuation { pendingPlan = $0 } }
+            return result
         }
 
         func connect(browser: BrowserChoice) async throws {}
@@ -118,6 +122,27 @@ struct BrowserBridgeSettingsModelTests {
         #expect(replacement.planReads == 0)
         #expect(model.error == nil)
         #expect(!model.isSyncing)
+    }
+
+    @Test func replacedControllerDiscardsLatePlan() async throws {
+        let old = StubController()
+        old.suspendPlanRead = true
+        old.plans = [
+            .init(
+                shortcode: "VACCT-4K7M", label: "Old server account",
+                vendorName: "Example shop", action: .firstSync(.init(kind: .firstSync)),
+                line: "First sync", disabledReason: nil)
+        ]
+        let model = BrowserBridgeSettingsModel()
+        model.install(controller: old)
+        let refresh = Task { await model.refreshSyncPlan() }
+        for _ in 0..<500 where old.pendingPlan == nil { await Task.yield() }
+        let pending = try #require(old.pendingPlan)
+        let replacement = StubController()
+        model.install(controller: replacement)
+        pending.resume()
+        await refresh.value
+        #expect(model.syncPlans.isEmpty)
     }
 
     @Test func plainSyncCarriesNoBackfillRange() async {
