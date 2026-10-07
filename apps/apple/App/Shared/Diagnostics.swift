@@ -33,7 +33,7 @@ nonisolated enum Diagnostics {
 
     /// `bundleId@MARKETING_VERSION+CURRENT_PROJECT_VERSION` — the SDK's own default format, spelled
     /// out so DevView can read back exactly what was sent (the SDK exposes no options after
-    /// `start`). Bumping those two in project.yml per TestFlight upload is the existing ritual.
+    /// `start`).
     static var release: String {
         let info = Bundle.main.infoDictionary ?? [:]
         let id = Bundle.main.bundleIdentifier ?? "com.nickysemenza.cubby"

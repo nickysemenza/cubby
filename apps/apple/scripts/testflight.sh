@@ -1,38 +1,25 @@
 #!/usr/bin/env bash
-# Archive, verify, and export/upload a single Cubby Apple app platform.
-# GitHub Actions owns runner credentials and per-platform job topology
-# (parallel per-platform archives, one shared upload job); this script owns
-# the Xcode contract for each subcommand. See
-# .github/workflows/apple-testflight.yaml for how `archive` and `export`
-# compose into a release: the `archive` job runs `archive <ios|macos>` for
-# each platform in parallel, then the `upload` job runs `export ios` and
-# `export macos` after downloading both archives, so neither platform
-# uploads unless both archived successfully.
+# Archive, verify, and export/upload one Cubby Apple app platform. GitHub
+# Actions owns runner credentials and runs one job per platform (see
+# .github/workflows/apple-testflight.yaml); this script owns the Xcode
+# contract. The marketing version comes from the generated project settings;
+# RELEASE_VERSION is what the planner expects them to carry.
 set -euo pipefail
 
 usage() {
-  echo "usage: $0 archive <ios|macos>" >&2
-  echo "       $0 export <ios|macos>" >&2
-  echo "common env: MARKETING_VERSION TESTFLIGHT_OUTPUT_DIR" >&2
-  echo "archive additionally needs: <PLATFORM>_BUILD_NUMBER <PLATFORM>_PROFILES_JSON" >&2
-  echo "export additionally needs: <PLATFORM>_PROFILES_JSON ASC_API_KEY_PATH APP_STORE_CONNECT_KEY_ID APP_STORE_CONNECT_ISSUER_ID" >&2
-  echo "  (iOS archive and export also need IOS_LIVE_ACTIVITY_PROFILES_JSON)" >&2
+  echo "usage: $0 <ios|macos>" >&2
+  echo "env: RELEASE_VERSION RELEASE_BUILD_NUMBER TESTFLIGHT_OUTPUT_DIR PROFILES_JSON" >&2
+  echo "     ASC_API_KEY_PATH APP_STORE_CONNECT_KEY_ID APP_STORE_CONNECT_ISSUER_ID" >&2
+  echo "     GITHUB_TOKEN plus the run's GITHUB_* variables (the pre-upload guard)" >&2
+  echo "  (iOS also needs IOS_LIVE_ACTIVITY_PROFILES_JSON)" >&2
   echo "  (macOS also needs MAC_INSTALLER_SIGNING_CERTIFICATE)" >&2
 }
 
-if [[ $# -ne 2 ]]; then
+if [[ $# -ne 1 ]]; then
   usage
   exit 2
 fi
-command="$1"
-platform="$2"
-case "$command" in
-  archive | export) ;;
-  *)
-    usage
-    exit 2
-    ;;
-esac
+platform="$1"
 case "$platform" in
   ios | macos) ;;
   *)
@@ -51,7 +38,8 @@ require() {
   done
 }
 
-require MARKETING_VERSION TESTFLIGHT_OUTPUT_DIR
+require RELEASE_VERSION RELEASE_BUILD_NUMBER TESTFLIGHT_OUTPUT_DIR PROFILES_JSON \
+  ASC_API_KEY_PATH APP_STORE_CONNECT_KEY_ID APP_STORE_CONNECT_ISSUER_ID
 
 readonly team_id="Y9A97FXT63"
 readonly bundle_id="com.nickysemenza.cubby"
@@ -148,8 +136,7 @@ archive_platform() {
   local destination="$2"
   local archive="$3"
   local profile_uuid="$4"
-  local build_number="$5"
-  shift 5
+  shift 4
 
   xcodebuild archive \
     -project "$project" \
@@ -160,8 +147,7 @@ archive_platform() {
     -derivedDataPath "$derived_data" \
     -skipPackagePluginValidation \
     CUBBY_PROVISIONING_PROFILE_SPECIFIER="$profile_uuid" \
-    MARKETING_VERSION="$MARKETING_VERSION" \
-    CURRENT_PROJECT_VERSION="$build_number" \
+    CURRENT_PROJECT_VERSION="$RELEASE_BUILD_NUMBER" \
     COMPILER_INDEX_STORE_ENABLE=NO \
     "$@"
 }
@@ -172,12 +158,16 @@ verify_archive() {
   local info="$3"
   local privacy_manifest="$4"
   local embedded_profile="$5"
-  local build_number="$6"
-  local check_macos_category="${7:-false}"
+  local check_macos_category="${6:-false}"
 
   [[ -d "$app" ]]
-  [[ "$(plutil -extract CFBundleShortVersionString raw -o - "$info")" == "$MARKETING_VERSION" ]]
-  [[ "$(plutil -extract CFBundleVersion raw -o - "$info")" == "$build_number" ]]
+  # The generated MARKETING_VERSION must be the version the server's minimum
+  # was set from, or the server would refuse (HTTP 426) the build it ships.
+  [[ "$(plutil -extract CFBundleShortVersionString raw -o - "$info")" == "$RELEASE_VERSION" ]] || {
+    echo "error: $info does not carry the planned version $RELEASE_VERSION" >&2
+    exit 1
+  }
+  [[ "$(plutil -extract CFBundleVersion raw -o - "$info")" == "$RELEASE_BUILD_NUMBER" ]]
   [[ -f "$privacy_manifest" && -f "$embedded_profile" ]]
   # v1.0.7 archived fine but App Store Connect rejected the upload (90360)
   # because the Live Activity extension had no CFBundleDisplayName.
@@ -210,83 +200,50 @@ export_platform() {
   local archive="$1"
   local output="$2"
   local options="$3"
-  local arguments=(
-    -exportArchive
-    -archivePath "$archive"
-    -exportPath "$output"
-    -exportOptionsPlist "$options"
-  )
-  arguments+=(
-    -authenticationKeyPath "$ASC_API_KEY_PATH"
-    -authenticationKeyID "$APP_STORE_CONNECT_KEY_ID"
+  xcodebuild -exportArchive \
+    -archivePath "$archive" \
+    -exportPath "$output" \
+    -exportOptionsPlist "$options" \
+    -authenticationKeyPath "$ASC_API_KEY_PATH" \
+    -authenticationKeyID "$APP_STORE_CONNECT_KEY_ID" \
     -authenticationKeyIssuerID "$APP_STORE_CONNECT_ISSUER_ID"
-  )
-  xcodebuild "${arguments[@]}"
 }
 
-if [[ "$command" == "archive" ]]; then
-  build_number_var="$(tr '[:lower:]' '[:upper:]' <<< "$platform")_BUILD_NUMBER"
-  profiles_var="$(tr '[:lower:]' '[:upper:]' <<< "$platform")_PROFILES_JSON"
-  require "$build_number_var" "$profiles_var"
-  build_number="${!build_number_var}"
-  profiles_json="${!profiles_var}"
-
-  case "$platform" in
-    ios)
-      profile_uuid="$(resolve_profile "$profiles_json" "AppStore com.nickysemenza.cubby iOS" IOS_APP_STORE mobileprovision)"
-      require IOS_LIVE_ACTIVITY_PROFILES_JSON
-      live_activity_profile_uuid="$(resolve_live_activity_profile)"
-      archive_platform Cubby-iOS 'generic/platform=iOS' "$ios_archive" "$profile_uuid" "$build_number" \
-        CUBBY_LIVE_ACTIVITY_PROVISIONING_PROFILE_SPECIFIER="$live_activity_profile_uuid"
-      verify_archive \
-        "$ios_archive" \
-        "$ios_archive/Products/Applications/Cubby.app" \
-        "$ios_archive/Products/Applications/Cubby.app/Info.plist" \
-        "$ios_archive/Products/Applications/Cubby.app/PrivacyInfo.xcprivacy" \
-        "$ios_archive/Products/Applications/Cubby.app/embedded.mobileprovision" \
-        "$build_number"
-      ;;
-    macos)
-      profile_uuid="$(resolve_profile "$profiles_json" "AppStore com.nickysemenza.cubby macOS" MAC_APP_STORE provisionprofile)"
-      archive_platform Cubby-macOS 'generic/platform=macOS' "$macos_archive" "$profile_uuid" "$build_number" ARCHS=arm64
-      verify_archive \
-        "$macos_archive" \
-        "$macos_archive/Products/Applications/Cubby.app" \
-        "$macos_archive/Products/Applications/Cubby.app/Contents/Info.plist" \
-        "$macos_archive/Products/Applications/Cubby.app/Contents/Resources/PrivacyInfo.xcprivacy" \
-        "$macos_archive/Products/Applications/Cubby.app/Contents/embedded.provisionprofile" \
-        "$build_number" \
-        true
-      ;;
-  esac
-
-elif [[ "$command" == "export" ]]; then
-  # Unlike `archive`, `export` never reads a build number: xcodebuild
-  # -exportArchive takes it from the already-archived .xcarchive.
-  profiles_var="$(tr '[:lower:]' '[:upper:]' <<< "$platform")_PROFILES_JSON"
-  require "$profiles_var"
-  profiles_json="${!profiles_var}"
-  if [[ "$platform" == "macos" ]]; then
+export_options="$TESTFLIGHT_OUTPUT_DIR/ExportOptions-$platform.plist"
+case "$platform" in
+  ios)
+    require IOS_LIVE_ACTIVITY_PROFILES_JSON
+    profile_uuid="$(resolve_profile "$PROFILES_JSON" "AppStore com.nickysemenza.cubby iOS" IOS_APP_STORE mobileprovision)"
+    live_activity_profile_uuid="$(resolve_live_activity_profile)"
+    archive_platform Cubby-iOS 'generic/platform=iOS' "$ios_archive" "$profile_uuid" \
+      CUBBY_LIVE_ACTIVITY_PROVISIONING_PROFILE_SPECIFIER="$live_activity_profile_uuid"
+    verify_archive \
+      "$ios_archive" \
+      "$ios_archive/Products/Applications/Cubby.app" \
+      "$ios_archive/Products/Applications/Cubby.app/Info.plist" \
+      "$ios_archive/Products/Applications/Cubby.app/PrivacyInfo.xcprivacy" \
+      "$ios_archive/Products/Applications/Cubby.app/embedded.mobileprovision"
+    write_export_options "$export_options" "$profile_uuid" "" "$live_activity_profile_uuid"
+    archive="$ios_archive"
+    ;;
+  macos)
     require MAC_INSTALLER_SIGNING_CERTIFICATE
-  fi
-  require ASC_API_KEY_PATH APP_STORE_CONNECT_KEY_ID APP_STORE_CONNECT_ISSUER_ID
+    profile_uuid="$(resolve_profile "$PROFILES_JSON" "AppStore com.nickysemenza.cubby macOS" MAC_APP_STORE provisionprofile)"
+    archive_platform Cubby-macOS 'generic/platform=macOS' "$macos_archive" "$profile_uuid" ARCHS=arm64
+    verify_archive \
+      "$macos_archive" \
+      "$macos_archive/Products/Applications/Cubby.app" \
+      "$macos_archive/Products/Applications/Cubby.app/Contents/Info.plist" \
+      "$macos_archive/Products/Applications/Cubby.app/Contents/Resources/PrivacyInfo.xcprivacy" \
+      "$macos_archive/Products/Applications/Cubby.app/Contents/embedded.provisionprofile" \
+      true
+    write_export_options "$export_options" "$profile_uuid" "$MAC_INSTALLER_SIGNING_CERTIFICATE"
+    archive="$macos_archive"
+    ;;
+esac
 
-  mkdir -p "$TESTFLIGHT_OUTPUT_DIR/exports/$platform"
-
-  case "$platform" in
-    ios)
-      profile_uuid="$(resolve_profile "$profiles_json" "AppStore com.nickysemenza.cubby iOS" IOS_APP_STORE mobileprovision)"
-      require IOS_LIVE_ACTIVITY_PROFILES_JSON
-      live_activity_profile_uuid="$(resolve_live_activity_profile)"
-      ios_export_options="$TESTFLIGHT_OUTPUT_DIR/ExportOptions-iOS.plist"
-      write_export_options "$ios_export_options" "$profile_uuid" "" "$live_activity_profile_uuid"
-      export_platform "$ios_archive" "$TESTFLIGHT_OUTPUT_DIR/exports/ios" "$ios_export_options"
-      ;;
-    macos)
-      profile_uuid="$(resolve_profile "$profiles_json" "AppStore com.nickysemenza.cubby macOS" MAC_APP_STORE provisionprofile)"
-      macos_export_options="$TESTFLIGHT_OUTPUT_DIR/ExportOptions-macOS.plist"
-      write_export_options "$macos_export_options" "$profile_uuid" "$MAC_INSTALLER_SIGNING_CERTIFICATE"
-      export_platform "$macos_archive" "$TESTFLIGHT_OUTPUT_DIR/exports/macos" "$macos_export_options"
-      ;;
-  esac
-fi
+# Archiving takes long enough for another run to start; never upload a build
+# number a newer run may already have used.
+node scripts/apple-release.ts guard
+mkdir -p "$TESTFLIGHT_OUTPUT_DIR/exports/$platform"
+export_platform "$archive" "$TESTFLIGHT_OUTPUT_DIR/exports/$platform" "$export_options"

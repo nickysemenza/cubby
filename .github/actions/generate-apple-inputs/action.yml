@@ -1,9 +1,10 @@
 name: "Generate Apple inputs"
 description: >-
   Writes the gitignored generated Swift inputs (CubbyKit/Generated, the
-  CubbyAPI OpenAPI document and generator config, preview fixtures) with
+  CubbyAPI OpenAPI document and generator config, preview fixtures, the
+  shared marketing version in Generated/AppleVersion.xcconfig) with
   `pnpm generate` and uploads them as the `apple-generated` artifact. The
-  macOS jobs have no Node install; they restore it with actions/download-artifact.
+  macOS jobs skip dependency installation; they restore it with actions/download-artifact.
 
 runs:
   using: "composite"
@@ -28,3 +29,4 @@ runs:
           apps/apple/CubbyKit/Sources/CubbyAPI/openapi.json
           apps/apple/CubbyKit/Sources/CubbyAPI/openapi-generator-config.yaml
           apps/apple/App/Shared/Previews/Fixtures
+          apps/apple/Generated

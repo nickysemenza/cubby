@@ -177,19 +177,8 @@ launchd's SIGTERM-to-SIGKILL window (20s by default) is longer than the 10s stop
 
 ## TestFlight releases
 
-The `Apple TestFlight` GitHub Actions workflow runs when a `vMAJOR.MINOR.PATCH` tag is pushed at a
-commit on `main`. Every run uploads both the iOS and native macOS apps to the shared App Store
-Connect record; there is no dispatch or dry-run mode. The tag supplies `MARKETING_VERSION`, and
-both platforms share a `<commit-count>.<run-attempt>` build number. A failed run can be retried
-with `gh run rerun --failed`, which produces a fresh build number. A fix to release code uses the
-next version rather than moving the failed tag.
-
-The iOS and macOS archives build in parallel, then one downstream job exports and uploads both.
-Neither platform uploads unless both archives succeed. Every export sets
-`testFlightInternalTestingOnly`, so distribution is limited to internal household testers and
-cannot be promoted to external TestFlight or the public App Store. See
-[the release procedure](../../docs/ci.md#apple-testflight-release) for verification and failure
-handling.
+See [release policy and manual dispatch](../../docs/ci.md#apple-testflight-release).
+Versions come from the shared compatibility declaration; release tags are unnecessary.
 
 ### One-time Apple and GitHub setup
 

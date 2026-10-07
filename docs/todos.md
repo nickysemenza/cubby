@@ -237,7 +237,7 @@ change the shape of the pipeline. The browser bridge contract is in
 
 - 🟢 **One-command Mac app install.** Build, sign, install to
   `/Applications`, and relaunch with one command, so the installed app
-  matches `MINIMUM_APPLE_CLIENT_VERSION` and a protocol release is one step.
+  matches `APPLE_CLIENT_COMPATIBILITY_VERSION` and a protocol release is one step.
   Today the household app runs from a Debug build folder.
 
 - 🟢 **Account status from the server.** Mac Settings shows "Connected" from

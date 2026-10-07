@@ -29,6 +29,11 @@ options:
     plutil -replace DerivedDataLocationStyle -string WorkspaceRelativePath "$settings"
     plutil -replace DerivedDataCustomLocation -string DerivedData "$settings"
 
+# MARKETING_VERSION comes from the shared compatibility version (`pnpm generate`).
+configFiles:
+  Debug: Generated/AppleVersion.xcconfig
+  Release: Generated/AppleVersion.xcconfig
+
 settings:
   base:
     SWIFT_VERSION: "6.0"
@@ -44,7 +49,7 @@ settings:
     "EXCLUDED_ARCHS[sdk=iphonesimulator*]": x86_64
     CODE_SIGN_STYLE: Automatic
     DEVELOPMENT_TEAM: Y9A97FXT63
-    MARKETING_VERSION: "2.13"
+    # Local default; TestFlight releases pass their build number.
     CURRENT_PROJECT_VERSION: "2"
 
 targetTemplates:
@@ -86,8 +91,7 @@ targetTemplates:
           ]
         LSMinimumSystemVersion: "26.0"
         # XcodeGen otherwise hardcodes 1.0/1 here, orphaning MARKETING_VERSION and
-        # CURRENT_PROJECT_VERSION above. The TestFlight workflow overrides both values from the
-        # release tag and commit/run-attempt build coordinates; these remain local defaults.
+        # CURRENT_PROJECT_VERSION. ClientIdentity sends this marketing version to the server.
         CFBundleShortVersionString: $(MARKETING_VERSION)
         CFBundleVersion: $(CURRENT_PROJECT_VERSION)
         # Only HTTPS via URLSession (exempt); answers App Store Connect's export-compliance

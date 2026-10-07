@@ -10,6 +10,7 @@ import {
   TASK_BOARD_INBOX_LABEL,
   TASK_BOARD_UNTITLED_PROJECT_LABEL,
 } from "../../../../packages/shared/src/client-constants.ts";
+import { APPLE_CLIENT_COMPATIBILITY_VERSION } from "../../../../packages/shared/src/apple-client-version.ts";
 import {
   WAYFINDING_DOMAINS,
   WAYFINDING_DOMAIN_PRESENTATION,
@@ -24,7 +25,8 @@ const swiftString = (value: string): string => JSON.stringify(value);
  * Renders the constants and vocabulary the native app must not restate: the
  * image-transform rungs and media host, the household time zone, and each
  * wayfinding line's title and SF Symbol. Everything here is read from the
- * same declaration the web client imports, so the two cannot drift.
+ * same declaration the web client imports, so the two cannot drift. The app's
+ * marketing version is the server's compatibility minimum.
  */
 export const renderSwiftSharedConstants = (): EntityArtifacts[] => {
   const domainCases = (property: "label" | "sfSymbol") =>
@@ -33,6 +35,14 @@ export const renderSwiftSharedConstants = (): EntityArtifacts[] => {
         `        case .${domain}: ${swiftString(WAYFINDING_DOMAIN_PRESENTATION[domain][property])}`,
     ).join("\n");
   return [
+    {
+      // project.yml's configFiles; releases override only CURRENT_PROJECT_VERSION.
+      relativePath: "apps/apple/Generated/AppleVersion.xcconfig",
+      source:
+        generatedHeader +
+        "// APPLE_CLIENT_COMPATIBILITY_VERSION (packages/shared/src/apple-client-version.ts).\n" +
+        `MARKETING_VERSION = ${APPLE_CLIENT_COMPATIBILITY_VERSION}\n`,
+    },
     {
       relativePath:
         "apps/apple/CubbyKit/Sources/CubbyKit/Generated/SharedConstants.swift",

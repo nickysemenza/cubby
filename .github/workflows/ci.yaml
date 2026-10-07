@@ -575,30 +575,6 @@ jobs:
             exit 1
           fi
 
-  # Release-only FFI caches use dist, while the required Apple checks use
-  # release. Warm both dist targets sequentially after the required native
-  # gate so background builds do not occupy two more macOS runners first.
-  warm-apple-ffi:
-    name: Warm Apple release FFI caches
-    needs: [scope, test-apple]
-    if: github.event_name == 'push' && needs.scope.outputs.apple == 'true'
-    runs-on: macos-26
-    timeout-minutes: 40
-    steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
-      - uses: ./.github/actions/setup-apple-ffi
-        with:
-          targets: mac
-          profile: dist
-      # Cache restore overlays directories; keep the device cache free of
-      # the macOS slices from the preceding target.
-      - name: Replace macOS FFI with device FFI
-        run: rm -rf apps/apple/CubbyKit/Frameworks/CubbyFFI.xcframework
-      - uses: ./.github/actions/setup-apple-ffi
-        with:
-          targets: device
-          profile: dist
-
   simulator-e2e:
     name: iPhone simulator E2E (manual)
     if: github.event_name == 'workflow_dispatch' && inputs.simulator_e2e && inputs.tester_army == 'none'
