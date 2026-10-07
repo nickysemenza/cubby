@@ -7,6 +7,18 @@ import Testing
 @Suite("Field resolution presentation")
 @MainActor
 struct FieldResolutionPresentationTests {
+    // A custom label belongs only to its projected target, never an inherited replacement.
+    @Test func declaredRunAccountLabelPreservesTargetIdentity() throws {
+        let descriptor = try #require(EntityCatalog.all.first { $0.key == .run })
+        let field = try #require(descriptor.fields.first { $0.key == "vendorAccountId" })
+        let raw: JSONValue = ["vendorAccountId": "VACCT-4K7M", "vendorAccountLabel": "Fixture store login"]
+        #expect(
+            FieldResolutionPresentation.referenceName(in: raw, field: field, effectiveID: "VACCT-4K7M")
+                == "Fixture store login")
+        #expect(
+            FieldResolutionPresentation.referenceName(in: raw, field: field, effectiveID: "VACCT-7M4K") == nil
+        )
+    }
     private func field() throws -> FieldDescriptor {
         let source =
             #"{"key":"evidenceExpectation","label":"Receipt expectation","kind":"enum","nullable":true,"controlKind":"select","controlOptions":[{"value":"unknown","label":"Unclassified"},{"value":"required","label":"Expected"},{"value":"not_expected","label":"Not expected"}],"resolution":{"reset":{"evidenceExpectation":null},"none":null,"redundancy":"eligible"},"inCreate":true,"requiredOnCreate":false,"inUpdate":true,"showInList":true,"showInDetail":true,"listHidden":false,"mobileInteractive":false}"#

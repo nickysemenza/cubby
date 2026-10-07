@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { dataQuality } from "./data-quality";
 import { parseShortcode } from "@cubby/shared";
 import { imageShortcode } from "./identifiers";
 import { entitySchema, type Entity } from "./entity";
@@ -74,6 +75,8 @@ export const activityRun = z.object({
   subjectId: z.string().nullable(),
   subjectName: z.string(),
   iconEntity: entitySchema,
+  /** Shared Run quality; image-processing jobs are not scored entities. */
+  dataQuality: dataQuality.nullable(),
   /** The subject's cover (a vendor's logo, an image job's own image). */
   subjectImage: imageUrlSummary.nullable(),
   /** What the run does, e.g. "Order mail import" for a mail-pass account sync. */

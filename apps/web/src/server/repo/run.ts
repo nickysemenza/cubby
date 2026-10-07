@@ -3,12 +3,13 @@ import { parseShortcodeFor } from "@cubby/schemas/identifiers";
 import type { PaginationParams, SortParams } from "@cubby/schemas/pagination";
 import type { RunFilters, RunOut } from "@cubby/schemas/run";
 import { runOut } from "@cubby/schemas/run";
-import { runWorkLabel } from "@cubby/schemas/run-fields";
+import { runPurpose, runWorkLabel } from "@cubby/schemas/run-fields";
 import { and, eq } from "drizzle-orm";
 
 import { formatDuration } from "~/lib/format-duration";
 import type { Database, DrizzleTransaction } from "~/server/db";
 import { run as runTable } from "~/server/db/schema";
+import { loadDataQualities } from "~/server/repo/data-quality/hydrate";
 import { notDeleted, unwrapDb } from "~/server/repo/database-helpers";
 import { listScaffold } from "~/server/repo/list";
 import {
@@ -24,13 +25,14 @@ import { lookupEntityReferences } from "~/server/repo/shortcode-resolver";
  * `purchase-import/run-service.ts`; this file only projects the row.
  */
 type RunRow = typeof runTable.$inferSelect;
+const runProjection = runOut.omit({ dataQuality: true });
 
 // includes-deleted: a run is immutable history, so it keeps naming the
 // account, vendor and party it ran for after they are tombstoned.
-const hydrate = async (
+const hydrateProjection = async (
   db: Database | DrizzleTransaction,
   rows: RunRow[],
-): Promise<RunOut[]> => {
+): Promise<Omit<RunOut, "dataQuality">[]> => {
   const refs = <E extends "vendorAccount" | "vendor" | "ledgerParty" | "run">(
     entity: E,
     ids: (string | null)[],
@@ -61,6 +63,7 @@ const hydrate = async (
     const party = at(parties, row.ledgerPartyId);
     const projected = {
       ...row,
+      purpose: runPurpose.parse(row.purpose),
       id: parseShortcodeFor("run", row.shortcode),
       displayName: `${vendor?.name ?? party?.name ?? row.actorName} · ${runWorkLabel(row)}`,
       wallTime: row.endedAt
@@ -76,7 +79,7 @@ const hydrate = async (
       ledgerPartyName: party?.name ?? null,
       predecessorRunId: at(predecessors, row.predecessorRunId)?.id ?? null,
     };
-    return runOut.parse({
+    return runProjection.parse({
       ...projected,
       iconEntity: activityIconEntity({
         kind: projected.purpose,
@@ -85,6 +88,23 @@ const hydrate = async (
       }),
     });
   });
+};
+
+const hydrate = async (
+  db: Database | DrizzleTransaction,
+  rows: RunRow[],
+): Promise<RunOut[]> => {
+  const [projected, qualities] = await Promise.all([
+    hydrateProjection(db, rows),
+    loadDataQualities(
+      db,
+      "run",
+      rows.map((row) => row.id),
+    ),
+  ]);
+  return projected.map((row, index) =>
+    runOut.parse({ ...row, dataQuality: qualities.get(rows[index]!.id) }),
+  );
 };
 
 const scaffold = listScaffold("run", runTable);
@@ -102,9 +122,8 @@ export const listRuns = (
   );
 
 /**
- * The kernel's progressive list read. Run declares no deferred list groups
- * (`presentation.list.read`), so every projection hydrates the full row; the
- * shared list hydration adds the display images every list item carries.
+ * Core identity is shared with canonical reads; the generic loader owns
+ * the manifest's deferred quality and media groups.
  */
 export const listRunsRead = (
   db: Database,
@@ -121,7 +140,7 @@ export const listRunsRead = (
         hydrateListRead(db, "run", rows, selected, {
           media: true,
           load: async () => {
-            const hydrated = await hydrate(db, rows);
+            const hydrated = await hydrateProjection(db, rows);
             return new Map(rows.map((row, index) => [row.id, hydrated[index]]));
           },
           mapRow: (row, { loaded }) => ({ ...loaded.get(row.id) }),

@@ -125,6 +125,36 @@ const model = {
 };
 
 describe("typed entity compiler", () => {
+  it("requires a declared label path for custom reference label projections", () => {
+    const compile = (labelPath: string | null) =>
+      compileEntityDeclarations([
+        {
+          ...base,
+          model: {
+            ...model,
+            fields: [
+              ...model.fields,
+              {
+                key: "accountId",
+                kind: "identifier",
+                reference: { entity: "alpha" },
+                display: { list: true, labelPath },
+                validation: { read: z.string(), create: null, update: null },
+              },
+              {
+                key: "accountLabel",
+                kind: "text",
+                validation: { read: z.string(), create: null, update: null },
+              },
+            ],
+            output: ["name", "accountId", "accountLabel"],
+          },
+        },
+      ]);
+    expect(() => compile(null)).toThrow("display.labelPath");
+    expect(() => compile("missingLabel")).toThrow("read projection");
+    expect(() => compile("accountLabel")).not.toThrow();
+  });
   it("rejects image policies whose routes, evidence, or candidate fields escape the manifest", () => {
     const definition = (
       images: EntityDeclaration["capabilities"]["images"],

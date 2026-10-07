@@ -13,6 +13,17 @@ const field = (entity: keyof typeof entityFieldModels, key: string) => {
 };
 
 describe("readReferenceField", () => {
+  it("reads the manifest's Run account label on both stored and display paths", () => {
+    const row = {
+      vendorAccountId: "VACCT-4K7M",
+      vendorAccountLabel: "Fixture store login",
+    };
+    const account = field("run", "vendorAccountId");
+    for (const intent of ["stored", "display"] as const)
+      expect(readReferenceField(row, account, intent)?.items).toEqual([
+        { id: row.vendorAccountId, name: row.vendorAccountLabel },
+      ]);
+  });
   it("links a shortcode-bearing reference and labels it from the sibling name", () => {
     expect(
       readReferenceField(

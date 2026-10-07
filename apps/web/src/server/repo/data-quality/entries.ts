@@ -20,6 +20,7 @@ import { productCategoryChecks } from "./checks/product-category";
 import { projectChecks } from "./checks/project";
 import { purchaseChecks } from "./checks/purchase";
 import { recipeChecks } from "./checks/recipe";
+import { runChecks } from "./checks/run";
 import { spendingCategoryChecks } from "./checks/spending-category";
 import { taskChecks } from "./checks/task";
 import { vendorChecks } from "./checks/vendor";
@@ -39,6 +40,7 @@ export type DataQualityEntries = {
  * a roll-up can `alias()` a related table without losing its columns.
  */
 export const dataQualityEntries = {
+  run: runChecks,
   product: productChecks,
   purchase: purchaseChecks,
   // pantry and garden entities

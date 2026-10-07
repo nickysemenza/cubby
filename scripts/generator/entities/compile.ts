@@ -597,6 +597,34 @@ const compileFieldModel = (
         );
     }
     const labelPath = field.display.labelPath;
+    if (
+      field.reference !== null &&
+      !field.reference.multiple &&
+      (field.display.list || field.display.detail)
+    ) {
+      const stem = field.key.replace(/Id$/u, "");
+      const alias = [`${stem}Label`, `${stem}DisplayLabel`].find((key) =>
+        model.output.includes(key),
+      );
+      if (alias && !model.output.includes(`${stem}Name`) && labelPath === null)
+        throw new EntityDeclarationError(
+          `${context}.${field.key} must declare display.labelPath for custom reference label ${alias}.`,
+        );
+      if (labelPath !== null) {
+        const root = labelPath.split(/[.[]/u)[0];
+        if (
+          !model.output.some((key) => {
+            const outputField = model.fields.find(
+              (candidate) => candidate.key === key,
+            );
+            return (outputField?.readKey ?? key) === root;
+          })
+        )
+          throw new EntityDeclarationError(
+            `${context}.${field.key}.display.labelPath must name a read projection.`,
+          );
+      }
+    }
     if (labelPath !== null) {
       if (!DISPLAY_READ_PATH.test(labelPath))
         throw new EntityDeclarationError(

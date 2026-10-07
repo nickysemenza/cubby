@@ -85,7 +85,8 @@ extension EntityDescriptor {
                             } ?? id
                     } else {
                         value =
-                            object[base]?["name"]?.stringValue
+                            field.labelPath.flatMap { object.pathText($0) }
+                            ?? object[base]?["name"]?.stringValue
                             ?? object["\(base)Name"]?.stringValue
                             ?? object[field.key]?["name"]?.stringValue
                             ?? object[field.key]?.stringValue

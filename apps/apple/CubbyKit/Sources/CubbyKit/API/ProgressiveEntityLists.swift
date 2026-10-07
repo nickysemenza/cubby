@@ -69,6 +69,11 @@ extension CubbyClient {
         for field in descriptor.fields
         where (field.showInList && !field.listHidden) || field.mobileSlot != nil {
             fields.insert(field.key)
+            if let path = field.labelPath,
+                let root = path.split(whereSeparator: { $0 == "." || $0 == "[" }).first
+            {
+                fields.insert(String(root))
+            }
             if field.reference != nil, field.key.hasSuffix("Id") {
                 let stem = String(field.key.dropLast(2))
                 fields.insert(stem)

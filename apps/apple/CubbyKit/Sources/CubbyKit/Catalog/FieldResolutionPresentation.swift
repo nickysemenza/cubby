@@ -61,6 +61,7 @@ public struct FieldResolutionPresentation: Sendable {
             return name
         }
         if raw[field.key]?.stringValue == effectiveID {
+            if let path = field.labelPath, let name = raw.pathText(path) { return name }
             if let name = raw["\(stem)Name"]?.stringValue { return name }
             if raw[stem]?["id"]?.stringValue == effectiveID { return raw[stem]?["name"]?.stringValue }
         }

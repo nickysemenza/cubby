@@ -416,7 +416,11 @@ private struct ActivityRunRow: View {
                 .accessibilityHidden(true)
             VStack(alignment: .leading, spacing: 4) {
                 Text(run.subjectName).font(.headline)
-                EntityQualityFact(key: .run, id: run.id, raw: .null)
+                if run.recordType == .run {
+                    EntityQualityFact(key: .run, id: run.id, raw: (try? JSONValue(encoding: run)) ?? .null)
+                } else {
+                    Text("Not assessed").font(.caption).foregroundStyle(.secondary)
+                }
                 HStack(spacing: 6) {
                     Text(run.workLabel)
                     Text("·")

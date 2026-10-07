@@ -2446,7 +2446,12 @@ export function parseEntityDeclarationMetadata(
 
 /** Preserve literal field keys and schema types without inspecting Zod internals. */
 export const defineEntity = <const T extends EntityDeclaration>(
-  declaration: T,
+  declaration: T &
+    (InvalidLabelPaths<NoInfer<T>> extends never
+      ? unknown
+      : {
+          invalidLabelPath: InvalidLabelPaths<NoInfer<T>>;
+        }),
 ): T => declaration;
 
 type ReadableDeclaration = {
@@ -2468,6 +2473,53 @@ type ReadFieldSchemas<D extends ReadableDeclaration> = {
       : never
   ]: F extends { validation: { read: infer S extends z.ZodType } } ? S : never;
 };
+
+/** Label paths end at readable scalars, including projections through arrays. */
+type LabelValuePaths<T> =
+  NonNullable<T> extends readonly (infer Item)[]
+    ? NonNullable<Item> extends string
+      ? "[]" | `[${number}]`
+      : `[].${LabelValuePaths<Item>}` | `[${number}].${LabelValuePaths<Item>}`
+    : NonNullable<T> extends object
+      ? {
+          [K in keyof NonNullable<T> & string]: NonNullable<
+            NonNullable<T>[K]
+          > extends string
+            ? K
+            : NonNullable<NonNullable<T>[K]> extends readonly unknown[]
+              ? `${K}${LabelValuePaths<NonNullable<T>[K]>}`
+              : `${K}.${LabelValuePaths<NonNullable<T>[K]>}`;
+        }[keyof NonNullable<T> & string]
+      : never;
+
+type LabelFieldSchemas<D extends ReadableDeclaration> = {
+  [
+    F in D["model"]["fields"][number] as F extends {
+      validation: { read: z.ZodType };
+    }
+      ? F extends { readKeyOverride: null }
+        ? never
+        : F extends { readKeyOverride: infer R extends string }
+          ? R
+          : F["key"]
+      : never
+  ]: F extends { validation: { read: infer S extends z.ZodType } } ? S : never;
+};
+type DeclarationLabelPaths<D> = D extends ReadableDeclaration
+  ? LabelValuePaths<{
+      [K in keyof LabelFieldSchemas<D>]: z.output<LabelFieldSchemas<D>[K]>;
+    }>
+  : string;
+type InvalidFieldLabelPaths<F, D> = F extends { display: infer Display }
+  ? {
+      [K in "labelPath" | "detailLabelPath"]: K extends keyof Display
+        ? Exclude<Display[K], DeclarationLabelPaths<D> | null | undefined>
+        : never;
+    }["labelPath" | "detailLabelPath"]
+  : never;
+type InvalidLabelPaths<D> = D extends ReadableDeclaration
+  ? InvalidFieldLabelPaths<D["model"]["fields"][number], D>
+  : never;
 
 type MutableDeclaration = {
   model: {

@@ -8,6 +8,10 @@ existing block. Extend the generic path when it almost fits. See
 
 - Declarations: `packages/schemas/src/entity-definitions/*.entity.ts`, metadata
   schema in `definition.ts`, compiled by `scripts/generator/entities/*`.
+- Reference names and composed display labels: use the typed `display.labelPath`
+  contract in [entities](../entities.md), consumed by `readReferenceField` on
+  web and `FieldResolutionPresentation.referenceName` on native. Declare
+  custom label sources instead of adding suffix guesses to a renderer.
 - List columns: field `display` (`standard`, `format`, `readPath`,
   `renderer.list`) compiled by `createEntityDisplayColumns`
   (`apps/web/src/entity/entity-display.tsx`); named renderers in

@@ -32,6 +32,7 @@ import type { Database, DrizzleTransaction } from "~/server/db";
 import { unwrapDb, uuidArrayParam } from "~/server/repo/database-helpers";
 
 import { exceptionReasonsFor } from "./exception-reasons";
+import { liveQualityRow } from "./registry";
 import {
   checkMissingCondition,
   checksOf,
@@ -207,7 +208,7 @@ export const loadQualityBreakdown = async (
     .parse(
       (
         await unwrapDb(db).execute(
-          sql`SELECT ${entry.table.id} AS "id" FROM ${entry.table} WHERE ${entry.table.shortcode} = ${id} AND ${entry.table.deletedAt} IS NULL`,
+          sql`SELECT ${entry.table.id} AS "id" FROM ${entry.table} WHERE ${entry.table.shortcode} = ${id} AND ${liveQualityRow(entry.table)}`,
         )
       ).rows,
     );
@@ -291,7 +292,7 @@ const loadEvaluations = async (
   ${exceptions} AS "exceptions",
   ${sql.join(columns, sql`, `)}
 FROM ${t}
-WHERE ${t.id} = ANY(${uuidArrayParam(ids)}) AND ${t.deletedAt} IS NULL`);
+WHERE ${t.id} = ANY(${uuidArrayParam(ids)}) AND ${liveQualityRow(t)}`);
   return z.array(hydrationRow).parse(result.rows);
 };
 
@@ -384,8 +385,8 @@ const loadRelatedIds = async (
     const result = await unwrapDb(db).execute(sql`SELECT
   ${t.id} AS "ownerId", ${r.id} AS "relatedId"
 FROM ${t}, ${r}
-WHERE ${t.id} = ANY(${uuidArrayParam(ids)}) AND ${t.deletedAt} IS NULL
-  AND ${r.deletedAt} IS NULL AND ${link(t, sql`${r.id}`)}`);
+WHERE ${t.id} = ANY(${uuidArrayParam(ids)}) AND ${liveQualityRow(t)}
+  AND ${liveQualityRow(r)} AND ${link(t, sql`${r.id}`)}`);
     for (const row of z
       .array(z.object({ ownerId: z.string(), relatedId: z.string() }))
       .parse(result.rows)) {

@@ -747,7 +747,7 @@ describe("unified Runs history", () => {
       .update(vendorTable)
       .set({ deletedAt: new Date() })
       .where(eq(vendorTable.id, vendor.id));
-    expect((await getRunByShortcode(ctx.db, shortcode)).iconEntity).toBe(
+    expect((await getRunByShortcode(ctx.db, shortcode))?.iconEntity).toBe(
       "vendor",
     );
     expect(

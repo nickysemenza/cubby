@@ -15,7 +15,7 @@ import {
   type ActivityListInput,
 } from "@cubby/schemas/activity";
 import { entityRefKey } from "@cubby/schemas/entity";
-import { parseEntityRef } from "@cubby/schemas/identifiers";
+import { parseEntityId, parseEntityRef } from "@cubby/schemas/identifiers";
 import {
   imageDescriptionAnalysis,
   imageDescriptionResult,
@@ -29,6 +29,7 @@ import { z } from "zod";
 import type { Database } from "~/server/db";
 import { imageProcessingAttempt } from "~/server/db/image-processing-schema";
 import { aiAnalysis, aiUsage } from "~/server/db/schema";
+import { loadDataQualities } from "~/server/repo/data-quality/hydrate";
 import { getDb, notDeleted } from "~/server/repo/database-helpers";
 import {
   resolveEntityDisplayImages,
@@ -194,6 +195,7 @@ function runProjection(): SQL {
 const runWire = activityRun
   .omit({
     iconEntity: true,
+    dataQuality: true,
     subjectImage: true,
     workLabel: true,
     currentStep: true,
@@ -305,7 +307,7 @@ async function presentActivityRuns(db: Database, rows: readonly RunWire[]) {
     entityKind: target.entityKind,
     entityId: target.entityId,
   }));
-  const [names, targetImages, subjectImages] = await Promise.all([
+  const [names, targetImages, subjectImages, qualities] = await Promise.all([
     lookupEntityLabels(
       db,
       targetRefs.map((ref) => parseEntityRef(ref.entityKind, ref.entityId)),
@@ -320,12 +322,23 @@ async function presentActivityRuns(db: Database, rows: readonly RunWire[]) {
           : [];
       }),
     ),
+    loadDataQualities(
+      db,
+      "run",
+      rows
+        .filter((row) => row.recordType === "run")
+        .map((row) => parseEntityId("run", row.internal_id)),
+    ),
   ]);
   return rows.map(({ internal_id: internalId, ...row }) => {
     const fact = facts.get(internalId);
     const subject = row.subjectId ? parseShortcode(row.subjectId) : null;
     return activityRun.parse({
       ...row,
+      dataQuality:
+        row.recordType === "run"
+          ? qualities.get(parseEntityId("run", internalId))
+          : null,
       iconEntity: activityIconEntity({
         kind: row.kind,
         subjectId: row.subjectId,
