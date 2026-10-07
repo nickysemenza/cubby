@@ -163,15 +163,17 @@ export class PurchaseImportDurableObject
       }
       // Nothing to replay, but a run paused on a failed step (a permission
       // the member just granted, a window brought back) resumes now.
-      const wake = this.store.takeWake();
-      if (wake)
+      const wake = this.store.nextWake();
+      if (wake) {
         await this.publish({
           version: 1,
           type: "browser_connected",
-          runId: wake,
-          eventId: `browser-connected:wake:${wake}:${Date.now()}`,
+          runId: wake.runId,
+          eventId: `browser-connected:wake:${wake.runId}:${wake.generation}`,
           connectionId: parsed.data.deviceID,
         });
+        this.store.forgetWake(wake.runId, wake.generation);
+      }
       return;
     }
     if (parsed.data.type === "run_completed_ack") {

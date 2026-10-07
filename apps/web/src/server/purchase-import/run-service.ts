@@ -2313,8 +2313,14 @@ export async function issueBrowserCommand(
  */
 async function stopRunForOutdatedClient(
   db: Database,
-  input: { runId: string; operationId: string; message: string },
+  input: {
+    runId: string;
+    operationId: string;
+    message: string;
+    failureCode?: string;
+  },
 ) {
+  const failureCode = input.failureCode ?? "client_update_required";
   const scope = await loadRunScope(db, input.runId);
   const runId = runEntityId.parse(input.runId);
   if (!ACTIVE_RUN_STATUSES.some((status) => status === scope.public.status))
@@ -2333,13 +2339,13 @@ async function stopRunForOutdatedClient(
     }
   }
   const summary = [input.message, auditGap].filter(Boolean).join(" ");
-  const fingerprint = await sha256Hex(`client_update_required:${summary}`);
+  const fingerprint = await sha256Hex(`${failureCode}:${summary}`);
   await withTransaction(db, async (tx) => {
     const [stopped] = await tx
       .update(runTable)
       .set({
         status: "needs_review",
-        failureCode: "client_update_required",
+        failureCode,
         // A skipped audit keeps whatever audit stamp the run already had.
         auditedAt: auditedAt ?? sql`${runTable.auditedAt}`,
         endedAt: new Date(),
@@ -2474,10 +2480,22 @@ export async function readBrowserCommandResult(
     throw new Error("This import run has no browser account");
   const runId = runEntityId.parse(input.runId);
   const key = { runId, operationId: input.operationId };
-  const original = browserCommandRecord.safeParse(
-    (await readOperation(getDb(db), key))?.result,
-  );
-  if (!original.success) return { state: "missing" as const };
+  const stored = await readOperation(getDb(db), key);
+  const original = browserCommandRecord.safeParse(stored?.result);
+  if (!stored) return { state: "missing" as const };
+  if (!original.success) {
+    // A step issued in an earlier bridge protocol: no current Mac can run or
+    // answer it, and its operation id cannot be reissued, so the run stops
+    // for review instead of waiting on it.
+    await stopRunForOutdatedClient(db, {
+      runId: input.runId,
+      operationId: input.operationId,
+      failureCode: "browser_protocol_changed",
+      message:
+        "This step was issued before Cubby's browser protocol changed. Restart the run.",
+    });
+    return { state: "stopped" as const, observation: null };
+  }
   const retries = original.data.retries ?? [];
   const attemptKey = {
     runId,

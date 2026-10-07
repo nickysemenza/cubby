@@ -6,12 +6,13 @@ import {
   type BrowserBridgeResult,
   type BrowserObservation,
 } from "@cubby/schemas/purchase-import";
+import { sha256Uuid } from "@cubby/shared/sha256";
 import { z } from "zod";
 
 import { env } from "~/env";
 import type { Database } from "~/server/db";
 import { runEvidence } from "~/server/db/schema";
-import { getDb } from "~/server/repo/database-helpers";
+import { withTransaction } from "~/server/repo/database-helpers";
 import {
   setOperationResult,
   type OperationKey,
@@ -79,10 +80,6 @@ export async function materializeCapture(
     operation.type === "capture"
       ? (operation.evidenceScope?.targetId ?? null)
       : null;
-  const evidenceId = crypto.randomUUID();
-  const objectKey = `${env.R2_KEY_PREFIX}/import-runs/${input.runShortcode}/${targetId ?? "pages"}/${evidenceId}-page.html`;
-  const bytes = new TextEncoder().encode(html);
-  await input.storage.put(objectKey, bytes, "text/html; charset=utf-8");
   const capture = derivePageCapture({
     html,
     sourceURL: snapshot.sourceURL,
@@ -96,31 +93,37 @@ export async function materializeCapture(
         ? snapshot.screenshot.evidence
         : [],
   });
-  await getDb(db)
-    .insert(runEvidence)
-    .values({
-      id: evidenceId,
-      runId: input.key.runId,
-      targetId,
-      kind: "browser_capture",
-      objectKey,
-      checksum: snapshot.dom.sha256,
-      mediaType: "text/html",
-      byteSize: bytes.byteLength,
-      sourceMetadata: {
-        sourceURL: snapshot.sourceURL,
-        derivationRevision: capture.captureVersion,
-        truncated: snapshot.dom.truncated,
-      },
-    });
+  // One command's DOM has one evidence id and object key, so a read
+  // interrupted after the upload, or two reads racing, store it once.
+  const evidenceId = await sha256Uuid(`browser-dom:${input.record.commandId}`);
+  const objectKey = `${env.R2_KEY_PREFIX}/import-runs/${input.runShortcode}/${targetId ?? "pages"}/${evidenceId}-page.html`;
+  const bytes = new TextEncoder().encode(html);
+  await input.storage.put(objectKey, bytes, "text/html; charset=utf-8");
   const page = materializedPage.parse({
     capture,
     domEvidenceId: evidenceId,
     observation: outcome.observation,
   });
-  await setOperationResult(getDb(db), input.key, {
-    ...input.record,
-    page,
+  await withTransaction(db, async (tx) => {
+    await tx
+      .insert(runEvidence)
+      .values({
+        id: evidenceId,
+        runId: input.key.runId,
+        targetId,
+        kind: "browser_capture",
+        objectKey,
+        checksum: snapshot.dom.sha256,
+        mediaType: "text/html",
+        byteSize: bytes.byteLength,
+        sourceMetadata: {
+          sourceURL: snapshot.sourceURL,
+          derivationRevision: capture.captureVersion,
+          truncated: snapshot.dom.truncated,
+        },
+      })
+      .onConflictDoNothing();
+    await setOperationResult(tx, input.key, { ...input.record, page });
   });
   return page;
 }

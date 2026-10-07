@@ -15,6 +15,10 @@ import {
   createProductFixture,
   makeProductInput,
 } from "~/server/repo/repo.fixtures";
+import {
+  insertOperation,
+  setOperationResult,
+} from "~/server/repo/run-operation";
 import { insertWithShortcode } from "~/server/repo/shortcode-utils";
 
 import {
@@ -152,6 +156,71 @@ describe("the server's reading of browser steps", () => {
       { mediaType: "text/html", targetId: null, objectKey: expect.any(String) },
     ]);
     expect([...ports.objects.keys()]).toEqual([evidence[0]!.objectKey]);
+  });
+
+  // A read interrupted after the DOM was stored (the cached page never
+  // written) must not store the page a second time.
+  it("stores a command's DOM once when a read is repeated before the page was cached", async () => {
+    const runId = await accountSync();
+    const bridge = scriptedBroker(() =>
+      completedCapture(ORDERS, { title: "Your orders", text: "Order 42" }),
+    );
+    const ports = testBrowserPorts();
+    const issued = await issueBrowserCommand(
+      ctx.db,
+      bridge.namespace,
+      { runId, operationId: "capture:twice", operation: capture },
+      ports,
+    );
+    const read = () =>
+      readBrowserCommandResult(
+        ctx.db,
+        bridge.namespace,
+        { runId, operationId: "capture:twice" },
+        ports,
+      );
+    await read();
+    await setOperationResult(
+      getDb(ctx.db),
+      { runId: runEntityId.parse(runId), operationId: "capture:twice" },
+      { command: bridge.issued[0]!, commandId: issued.commandId },
+    );
+    expect(await read()).toMatchObject({ state: "completed" });
+    const evidence = await getDb(ctx.db)
+      .select({ id: runEvidence.id })
+      .from(runEvidence)
+      .where(eq(runEvidence.runId, runEntityId.parse(runId)));
+    expect(evidence).toHaveLength(1);
+    expect(ports.objects.size).toBe(1);
+  });
+
+  // Protocol 3 is a hard cut: a step an older server issued can be neither
+  // answered nor reissued, so its run stops for review rather than waiting.
+  it("stops a run for review when it reads a step issued in the older protocol", async () => {
+    const runId = await accountSync();
+    await insertOperation(getDb(ctx.db), {
+      runId: runEntityId.parse(runId),
+      operationId: "capture:v2",
+      kind: "browser_command",
+      inputFingerprint: "f".repeat(64),
+      result: {
+        commandId: crypto.randomUUID(),
+        command: { protocolVersion: 2, operation: { type: "capture" } },
+      },
+    });
+    const bridge = scriptedBroker(() => null);
+    expect(
+      await readBrowserCommandResult(
+        ctx.db,
+        bridge.namespace,
+        { runId, operationId: "capture:v2" },
+        testBrowserPorts(),
+      ),
+    ).toMatchObject({ state: "stopped" });
+    expect(await runStatus(runId)).toEqual({
+      status: "needs_review",
+      failureCode: "browser_protocol_changed",
+    });
   });
 
   it("raises a minimized window and retries once, answering with the retry's page", async () => {

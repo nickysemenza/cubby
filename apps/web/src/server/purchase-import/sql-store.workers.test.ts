@@ -76,8 +76,31 @@ describe("purchase-import broker SQLite", () => {
       store.rememberWake("run-a");
       store.rememberWake("run-b");
       store.forgetWake("run-b");
-      expect(store.takeWake()).toBe("run-a");
-      expect(store.takeWake()).toBeNull();
+      const wake = store.nextWake();
+      expect(wake?.runId).toBe("run-a");
+      // An unpublished wake survives for the next reconnect.
+      expect(store.nextWake()).toEqual(wake);
+      store.forgetWake("run-a", wake!.generation);
+      expect(store.nextWake()).toBeNull();
+    });
+  });
+
+  // The cut to protocol 3 cancels commands no current Mac can run; their run
+  // must still be woken so the server stops it for review.
+  it("wakes the run of a command from an older protocol it cancels", async () => {
+    const stub = env.DB_FRESHNESS.getByName(crypto.randomUUID());
+    await runInDurableObject(stub, (_instance, state) => {
+      const store = new PurchaseImportSqlStore(state.storage);
+      store.migrate();
+      state.storage.sql.exec(
+        "INSERT INTO broker_command (request_id, operation_id, run_id, request_json, state, created_at, updated_at) VALUES (?, ?, ?, ?, 'pending', 1, 1)",
+        command.id,
+        command.operationId,
+        command.runID,
+        JSON.stringify({ ...command, protocolVersion: 2 }),
+      );
+      expect(store.nextReplayable()).toBeNull();
+      expect(store.nextWake()?.runId).toBe(command.runID);
     });
   });
 

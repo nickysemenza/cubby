@@ -89,8 +89,8 @@ export class PurchaseImportSqlStore {
 
   nextReplayable(): BrowserBridgeRequest | null {
     const rows = this.storage.sql
-      .exec<{ request_id: string; request_json: string }>(
-        "SELECT request_id, request_json FROM broker_command WHERE state IN ('pending','sent') AND NOT EXISTS (SELECT 1 FROM broker_completed_command WHERE broker_completed_command.request_id = broker_command.request_id) ORDER BY created_at, request_id",
+      .exec<{ request_id: string; run_id: string; request_json: string }>(
+        "SELECT request_id, run_id, request_json FROM broker_command WHERE state IN ('pending','sent') AND NOT EXISTS (SELECT 1 FROM broker_completed_command WHERE broker_completed_command.request_id = broker_command.request_id) ORDER BY created_at, request_id",
       )
       .toArray();
     for (const row of rows) {
@@ -98,12 +98,14 @@ export class PurchaseImportSqlStore {
         JSON.parse(row.request_json),
       );
       if (parsed.success) return parsed.data;
-      // A command from an older protocol no current Mac can run.
+      // A command from an older protocol no current Mac can run. Its run is
+      // woken so the server reads the step and stops the run for review.
       this.storage.sql.exec(
         "UPDATE broker_command SET state = 'cancelled', updated_at = ? WHERE request_id = ?",
         Date.now(),
         row.request_id,
       );
+      this.rememberWake(row.run_id);
     }
     return null;
   }
@@ -118,23 +120,29 @@ export class PurchaseImportSqlStore {
   }
 
   /** A later step of the run went through: it is no longer stuck. */
-  forgetWake(runId: string): void {
-    this.storage.sql.exec("DELETE FROM broker_wake WHERE run_id = ?", runId);
+  forgetWake(runId: string, generation?: number): void {
+    if (generation === undefined)
+      this.storage.sql.exec("DELETE FROM broker_wake WHERE run_id = ?", runId);
+    else
+      this.storage.sql.exec(
+        "DELETE FROM broker_wake WHERE run_id = ? AND updated_at = ?",
+        runId,
+        generation,
+      );
   }
 
-  /** The newest run to wake, removed so one reconnect wakes it once. */
-  takeWake(): string | null {
+  /**
+   * The newest run to wake. It stays until the caller has published the wake
+   * and forgets that generation, so a failed publication is retried on the
+   * next reconnect and a newer failure recorded meanwhile is kept.
+   */
+  nextWake(): { runId: string; generation: number } | null {
     const row = this.storage.sql
-      .exec<{ run_id: string }>(
-        "SELECT run_id FROM broker_wake ORDER BY updated_at DESC LIMIT 1",
+      .exec<{ run_id: string; updated_at: number }>(
+        "SELECT run_id, updated_at FROM broker_wake ORDER BY updated_at DESC LIMIT 1",
       )
       .toArray()[0];
-    if (!row) return null;
-    this.storage.sql.exec(
-      "DELETE FROM broker_wake WHERE run_id = ?",
-      row.run_id,
-    );
-    return row.run_id;
+    return row ? { runId: row.run_id, generation: row.updated_at } : null;
   }
 
   markSent(requestId: string): void {
