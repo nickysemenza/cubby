@@ -312,7 +312,7 @@ export const runContract = defineContract("run", {
     native: "Start or resume one browser account sync or historical backfill",
     input: startSyncInput,
     output: startSyncOutput,
-    invalidates: ["runOnly", "vendor"],
+    invalidates: ["runOnly", "vendor", "vendorAccount"],
   }),
   workSnapshot: query({
     native: "Show durable live import progress in Apple apps",
