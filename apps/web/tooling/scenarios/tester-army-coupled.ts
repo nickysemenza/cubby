@@ -6,8 +6,8 @@ import {
   runShortcode,
 } from "@cubby/schemas/identifiers";
 import type { photoImportCreateRunInput } from "@cubby/schemas/photo-import-run";
-import type { BrowserBridgeResult } from "@cubby/schemas/purchase-import";
 import { parseEntityId } from "@cubby/schemas/identifiers";
+import type { BrowserBridgeResult } from "@cubby/schemas/purchase-import";
 import { testUserId } from "@cubby/schemas/testing";
 import { and, eq, isNull } from "drizzle-orm";
 import type { Pool } from "pg";
@@ -19,6 +19,7 @@ import {
   orderMailEvent,
   run as runTable,
 } from "~/server/db/schema";
+import { completedCapture } from "~/server/purchase-import/browser.fixtures";
 import { authorizePurchaseAgent } from "~/server/purchase-import/purchase-agent-workerd.fixtures";
 import { startOrResumeRun } from "~/server/purchase-import/run-service";
 import type {
@@ -249,23 +250,9 @@ async function seedAccountSync(
   const capture = (
     sourceURL: string,
     title: string,
-    readableText: string,
-    links: Array<{ id: string; url: string; label: string }>,
-  ): BrowserBridgeResult["outcome"] => ({
-    status: "completed",
-    capture: {
-      sourceURL,
-      title,
-      capturedAt: new Date().toISOString(),
-      captureVersion: 1,
-      readableText,
-      links,
-      images: [],
-      paymentEvidence: [],
-      evidence: [],
-      variantMarkers: [],
-    },
-  });
+    text: string,
+    links: Array<{ url: string; label: string }>,
+  ) => completedCapture(sourceURL, { title, text, links });
   const dollars = (cents: number) => `$${(cents / 100).toFixed(2)}`;
   const principal = sync.cents - 100;
   await services.connectBrowser({
@@ -273,19 +260,13 @@ async function seedAccountSync(
     ledgerPartyId: memberId,
     userId,
     outcomes: {
-      [historyUrl]: capture(
+      [historyUrl]: await capture(
         historyUrl,
         "Your Orders",
         `Your orders\nOrder placed September 20, 2026 Order # ${sync.orderId} Total ${dollars(sync.cents)}`,
-        [
-          {
-            id: `link-${sync.orderId}`,
-            url: orderUrl,
-            label: "View order details",
-          },
-        ],
+        [{ url: orderUrl, label: "View order details" }],
       ),
-      [orderUrl]: capture(
+      [orderUrl]: await capture(
         orderUrl,
         `Order ${sync.orderId}`,
         `Order ${sync.orderId} placed September 20, 2026. ${sync.item} (SKU TROWEL-1) qty 1 ${dollars(principal)}. Sales tax $1.00. Order total ${dollars(sync.cents)}.`,

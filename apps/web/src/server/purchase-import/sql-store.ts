@@ -45,6 +45,26 @@ export class PurchaseImportSqlStore {
     this.storage.sql.exec(
       "CREATE TABLE IF NOT EXISTS broker_completed_command (request_id TEXT PRIMARY KEY, completed_at INTEGER NOT NULL)",
     );
+    // Runs whose last browser result failed: a reconnecting Mac wakes the
+    // newest one, since a finished command has nothing to replay.
+    const wakesExisted =
+      this.storage.sql
+        .exec(
+          "SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'broker_wake'",
+        )
+        .toArray().length > 0;
+    this.storage.sql.exec(
+      "CREATE TABLE IF NOT EXISTS broker_wake (run_id TEXT PRIMARY KEY, updated_at INTEGER NOT NULL)",
+    );
+    // Once, at the cut to protocol 3: a run whose last step was an older
+    // protocol's (even a finished one) is woken, so the server reads it and
+    // stops the run for review. Older than a command deadline, the run has
+    // already expired.
+    if (!wakesExisted)
+      this.storage.sql.exec(
+        "INSERT OR IGNORE INTO broker_wake (run_id, updated_at) SELECT run_id, MAX(updated_at) FROM broker_command WHERE json_extract(request_json, '$.protocolVersion') < 3 AND updated_at > ? GROUP BY run_id",
+        Date.now() - 25 * 60 * 60_000,
+      );
     this.storage.sql.exec(
       "CREATE TABLE IF NOT EXISTS broker_notification (run_id TEXT PRIMARY KEY, summary_json TEXT NOT NULL, acknowledged INTEGER NOT NULL DEFAULT 0, created_at INTEGER NOT NULL, updated_at INTEGER NOT NULL)",
     );
@@ -83,14 +103,61 @@ export class PurchaseImportSqlStore {
   }
 
   nextReplayable(): BrowserBridgeRequest | null {
+    const rows = this.storage.sql
+      .exec<{ request_id: string; run_id: string; request_json: string }>(
+        "SELECT request_id, run_id, request_json FROM broker_command WHERE state IN ('pending','sent') AND NOT EXISTS (SELECT 1 FROM broker_completed_command WHERE broker_completed_command.request_id = broker_command.request_id) ORDER BY created_at, request_id",
+      )
+      .toArray();
+    for (const row of rows) {
+      const parsed = browserBridgeRequest.safeParse(
+        JSON.parse(row.request_json),
+      );
+      if (parsed.success) return parsed.data;
+      // A command from an older protocol no current Mac can run. Its run is
+      // woken so the server reads the step and stops the run for review.
+      this.storage.sql.exec(
+        "UPDATE broker_command SET state = 'cancelled', updated_at = ? WHERE request_id = ?",
+        Date.now(),
+        row.request_id,
+      );
+      this.rememberWake(row.run_id);
+    }
+    return null;
+  }
+
+  /** Remember a run whose browser step failed, for the next reconnect. */
+  rememberWake(runId: string): void {
+    this.storage.sql.exec(
+      "INSERT INTO broker_wake (run_id, updated_at) VALUES (?, ?) ON CONFLICT(run_id) DO UPDATE SET updated_at = excluded.updated_at",
+      runId,
+      Date.now(),
+    );
+  }
+
+  /** A later step of the run went through: it is no longer stuck. */
+  forgetWake(runId: string, generation?: number): void {
+    if (generation === undefined)
+      this.storage.sql.exec("DELETE FROM broker_wake WHERE run_id = ?", runId);
+    else
+      this.storage.sql.exec(
+        "DELETE FROM broker_wake WHERE run_id = ? AND updated_at = ?",
+        runId,
+        generation,
+      );
+  }
+
+  /**
+   * The newest run to wake. It stays until the caller has published the wake
+   * and forgets that generation, so a failed publication is retried on the
+   * next reconnect and a newer failure recorded meanwhile is kept.
+   */
+  nextWake(): { runId: string; generation: number } | null {
     const row = this.storage.sql
-      .exec<{ request_json: string }>(
-        "SELECT request_json FROM broker_command WHERE state IN ('pending','sent') AND NOT EXISTS (SELECT 1 FROM broker_completed_command WHERE broker_completed_command.request_id = broker_command.request_id) ORDER BY created_at, request_id LIMIT 1",
+      .exec<{ run_id: string; updated_at: number }>(
+        "SELECT run_id, updated_at FROM broker_wake ORDER BY updated_at DESC LIMIT 1",
       )
       .toArray()[0];
-    return row
-      ? browserBridgeRequest.parse(JSON.parse(row.request_json))
-      : null;
+    return row ? { runId: row.run_id, generation: row.updated_at } : null;
   }
 
   markSent(requestId: string): void {
@@ -150,9 +217,10 @@ export class PurchaseImportSqlStore {
         requestId,
       )
       .toArray()[0];
-    return row?.result_json
-      ? browserBridgeResult.parse(JSON.parse(row.result_json))
-      : null;
+    if (!row?.result_json) return null;
+    // A result from an older protocol is unreadable; its step is retried.
+    const parsed = browserBridgeResult.safeParse(JSON.parse(row.result_json));
+    return parsed.success ? parsed.data : null;
   }
 
   pendingCommands(

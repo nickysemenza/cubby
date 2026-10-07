@@ -34,8 +34,11 @@ import {
   commitPurchaseImportOut,
 } from "@cubby/schemas/purchase-import";
 import {
+  BROWSER_BRIDGE_PROTOCOL,
+  BROWSER_DOM_MAX_ENCODED,
   browserBridgeOperation,
   browserBridgeRequest,
+  browserBridgeResult,
   browserBridgeRunCompletion,
   browserCapture,
   runShortcode,
@@ -44,7 +47,10 @@ import {
   runTargetState,
   runScope,
   type BrowserBridgeOperation,
+  type BrowserBridgeRequest,
   type BrowserBridgeRunCompletion,
+  type BrowserObservation,
+  type BrowserPageCapture,
   type RunTrigger,
   type RunPurpose,
 } from "@cubby/schemas/purchase-import";
@@ -87,6 +93,7 @@ import type {
 } from "~/contracts/photo-import.contract";
 import type { RunDetail, RunLogEntry } from "~/contracts/run.contract";
 import { purchaseImportDebugEvent } from "~/lib/purchase-import-debug";
+import { wasm } from "~/lib/wasm";
 import type { Database, DrizzleClient, DrizzleTransaction } from "~/server/db";
 import {
   aiUsage,
@@ -151,6 +158,17 @@ import { getR2PublicUrl } from "~/server/utils/r2-public-url";
 import { WORKFLOW_RUN_PURPOSES } from "~/server/workflow-runs/contract";
 
 import { loadPurchaseAuditBatch } from "./audit-batch";
+import { encodeSnapshotDom } from "./browser-page";
+import {
+  browserCommandRecord,
+  type BrowserCommandRecord,
+  browserRecovery,
+  describeObservation,
+  materializeCapture,
+  productionBrowserEvidenceStorage,
+  type BrowserEvidenceStorage,
+  type BrowserRecovery,
+} from "./browser-results";
 import { CAPTURE_INTERIM_NOTE } from "./capture-interim-note";
 import {
   notHeldByChargeRun,
@@ -167,6 +185,7 @@ import { attachPendingOrderMailEvidence } from "./gmail/process";
 import { classifyOrderCapture } from "./order-list";
 import { loadReceiptEvidenceForRun } from "./receipt-evidence";
 import { runCompletionNotice } from "./run-completion-notice";
+import { fetchPublicPage, type FetchPage } from "./server-page-fetch";
 import { importVendorOrder } from "./writer";
 
 /**
@@ -2045,6 +2064,88 @@ async function recordOrderListing(
   return seen?.value ?? 0;
 }
 
+/**
+ * Try a public page without the Mac. A fetched page becomes the command's
+ * result (DOM only; enrichment reads no screenshot); a refusal is reported on
+ * the run and the caller sends the command to the Mac instead.
+ */
+async function readPageOnServer(
+  db: Database,
+  input: {
+    runId: RunId;
+    operationId: string;
+    command: BrowserBridgeRequest;
+    url: string;
+    allowedHosts: readonly string[];
+    fetchPage: FetchPage;
+  },
+) {
+  const fetched = await input.fetchPage(input.url, input.allowedHosts);
+  const host = new URL(input.url).host;
+  if (fetched.status === "blocked") {
+    await reportBrowserStep(
+      db,
+      input.runId,
+      `server-read:${input.operationId}`,
+      `${host} refused a direct read (${fetched.reason}); using the Mac's browser`,
+    );
+    return null;
+  }
+  // A sign-in form served to the server is not the page: the Mac's signed-in
+  // browser reads it (after a sign-in pause the retry must not land here).
+  if (wasm.compact_browser_page(fetched.html, fetched.url).has_password_input) {
+    await reportBrowserStep(
+      db,
+      input.runId,
+      `server-read:${input.operationId}`,
+      `${host} asked the server to sign in; using the Mac's browser`,
+    );
+    return null;
+  }
+  const dom = await encodeSnapshotDom(fetched.html);
+  if (dom.data.length > BROWSER_DOM_MAX_ENCODED) {
+    await reportBrowserStep(
+      db,
+      input.runId,
+      `server-read:${input.operationId}`,
+      `${host} page is too large to read directly; using the Mac's browser`,
+    );
+    return null;
+  }
+  const completedAt = new Date().toISOString();
+  await reportBrowserStep(
+    db,
+    input.runId,
+    `server-read:${input.operationId}`,
+    `Read ${host} directly, without the Mac`,
+  );
+  return browserBridgeResult.parse({
+    protocolVersion: BROWSER_BRIDGE_PROTOCOL,
+    commandID: input.command.id,
+    operationID: input.command.operationId,
+    runID: input.command.runID,
+    completedAt,
+    outcome: {
+      status: "completed",
+      snapshot: {
+        sourceURL: fetched.url,
+        title: "",
+        capturedAt: completedAt,
+        dom,
+        screenshot: { status: "skipped" },
+      },
+      observation: {
+        url: fetched.url,
+        title: null,
+        readyState: "complete",
+        window: null,
+        screenRecording: "unknown",
+        durationMs: fetched.durationMs,
+      },
+    },
+  });
+}
+
 // eslint-disable-next-line complexity -- Browser commands are fenced by purpose, target, and allowlisted operation type here.
 export async function issueBrowserCommand(
   db: Database,
@@ -2054,6 +2155,7 @@ export async function issueBrowserCommand(
     operationId: string;
     operation: BrowserBridgeOperation;
   },
+  ports: BrowserPagePorts = productionBrowserPagePorts,
 ) {
   const scope = await loadRunScope(db, input.runId);
   assertRunActive(scope.public.status);
@@ -2088,20 +2190,18 @@ export async function issueBrowserCommand(
   const scopedOperation =
     operation.type === "navigate"
       ? { ...operation, allowedHosts }
-      : operation.type === "follow_captured_link"
-        ? { ...operation, allowedHosts }
-        : operation.type === "capture"
-          ? {
-              ...operation,
-              allowedHosts,
-              evidenceScope: captureTarget
-                ? {
-                    runId: scope.public.shortcode,
-                    targetId: captureTarget.id,
-                  }
-                : undefined,
-            }
-          : operation;
+      : operation.type === "capture"
+        ? {
+            ...operation,
+            allowedHosts,
+            evidenceScope: captureTarget
+              ? {
+                  runId: scope.public.shortcode,
+                  targetId: captureTarget.id,
+                }
+              : undefined,
+          }
+        : operation;
   const boundedNavigationURL =
     scopedOperation.type === "navigate"
       ? scopedOperation.url
@@ -2116,7 +2216,7 @@ export async function issueBrowserCommand(
   const commandId = await operationUuid(input.runId, input.operationId);
   const fingerprint = await sha256Hex(
     JSON.stringify({
-      protocolVersion: 2,
+      protocolVersion: BROWSER_BRIDGE_PROTOCOL,
       id: commandId,
       operationId: input.operationId,
       runID: input.runId,
@@ -2134,13 +2234,17 @@ export async function issueBrowserCommand(
     recorded.inputFingerprint !== fingerprint
   )
     throw new Error("Operation id was replayed with different input");
-  const command = recorded
-    ? browserBridgeRequest.parse(
-        z.object({ command: browserBridgeRequest }).parse(recorded.result)
-          .command,
-      )
+  const recordedStep = recorded
+    ? browserCommandRecord.parse(recorded.result)
+    : undefined;
+  // A replayed step the server already read answers with that read; it never
+  // falls through to the Mac.
+  if (recordedStep?.serverResult)
+    return { commandId, state: "completed" as const };
+  const command = recordedStep
+    ? recordedStep.command
     : browserBridgeRequest.parse({
-        protocolVersion: 2,
+        protocolVersion: BROWSER_BRIDGE_PROTOCOL,
         id: commandId,
         operationId: input.operationId,
         runID: input.runId,
@@ -2149,6 +2253,36 @@ export async function issueBrowserCommand(
         deadline: new Date(Date.now() + 25 * 60 * 60_000).toISOString(),
         operation: scopedOperation,
       });
+  // A public product page is read without the Mac when the vendor allows it;
+  // a refusal falls back to the signed-in browser and says why.
+  const serverRead =
+    !recorded &&
+    scope.public.purpose === "product_enrichment" &&
+    scopedOperation.type === "capture" &&
+    scopedOperation.recoveryURL
+      ? await readPageOnServer(db, {
+          runId: runEntityId.parse(input.runId),
+          operationId: input.operationId,
+          command,
+          url: scopedOperation.recoveryURL,
+          allowedHosts,
+          fetchPage: ports.fetchPage,
+        })
+      : null;
+  if (serverRead) {
+    await insertOperation(database, {
+      ...key,
+      kind: "browser_command",
+      inputFingerprint: fingerprint,
+      result: { command, commandId, serverResult: serverRead },
+    });
+    await completeOperation(database, key, {
+      command,
+      commandId,
+      serverResult: serverRead,
+    });
+    return { commandId, state: "completed" as const };
+  }
   if (!recorded) {
     await insertOperation(database, {
       ...key,
@@ -2179,13 +2313,18 @@ export async function issueBrowserCommand(
   }
   // A replay re-enqueues a command the broker already answered; its recorded
   // terminal failure (`readBrowserCommandResult`) is still the diagnostic.
+  // The replay keeps everything the step has learned since (its cached page,
+  // retries, and pause).
   await completeOperation(
     database,
     key,
-    { command, commandId },
+    { ...recordedStep, command, commandId },
     { keepError: true },
   );
-  return { commandId, state: connected ? "dispatched" : "paused_offline" };
+  return {
+    commandId,
+    state: connected ? ("dispatched" as const) : ("paused_offline" as const),
+  };
 }
 
 /**
@@ -2198,8 +2337,14 @@ export async function issueBrowserCommand(
  */
 async function stopRunForOutdatedClient(
   db: Database,
-  input: { runId: string; operationId: string; message: string },
+  input: {
+    runId: string;
+    operationId: string;
+    message: string;
+    failureCode?: string;
+  },
 ) {
+  const failureCode = input.failureCode ?? "client_update_required";
   const scope = await loadRunScope(db, input.runId);
   const runId = runEntityId.parse(input.runId);
   if (!ACTIVE_RUN_STATUSES.some((status) => status === scope.public.status))
@@ -2218,13 +2363,13 @@ async function stopRunForOutdatedClient(
     }
   }
   const summary = [input.message, auditGap].filter(Boolean).join(" ");
-  const fingerprint = await sha256Hex(`client_update_required:${summary}`);
+  const fingerprint = await sha256Hex(`${failureCode}:${summary}`);
   await withTransaction(db, async (tx) => {
     const [stopped] = await tx
       .update(runTable)
       .set({
         status: "needs_review",
-        failureCode: "client_update_required",
+        failureCode,
         // A skipped audit keeps whatever audit stamp the run already had.
         auditedAt: auditedAt ?? sql`${runTable.auditedAt}`,
         endedAt: new Date(),
@@ -2278,95 +2423,285 @@ async function stopRunForOutdatedClient(
   });
 }
 
+/**
+ * Where the server keeps a captured page's DOM, and how it reads a public
+ * page itself; tests pass their own.
+ */
+export type BrowserPagePorts = {
+  storage: BrowserEvidenceStorage;
+  fetchPage: FetchPage;
+};
+const productionBrowserPagePorts: BrowserPagePorts = {
+  storage: productionBrowserEvidenceStorage,
+  fetchPage: fetchPublicPage,
+};
+
+/** A line on the run's live progress, so the Runs UI says what happened. */
+async function reportBrowserStep(
+  db: Database,
+  runId: RunId,
+  eventId: string,
+  detail: string,
+) {
+  await getDb(db)
+    .insert(runProgress)
+    .values({ runId, eventId, phase: "browser", detail })
+    .onConflictDoNothing();
+}
+
+/**
+ * Pause the run (and its account) for a condition the member can fix, with
+ * the fix as the run's latest progress line.
+ */
+async function pauseForBrowser(
+  db: Database,
+  scope: Awaited<ReturnType<typeof loadRunScope>>,
+  input: {
+    status: "paused_offline" | "paused_auth";
+    failureCode: string;
+    reason: string;
+    eventId: string;
+  },
+) {
+  await getDb(db)
+    .update(runTable)
+    .set({
+      status: input.status,
+      failureCode: input.failureCode,
+      updatedAt: new Date(),
+    })
+    .where(eq(runTable.id, scope.public.runId));
+  if (scope.public.vendorAccountId)
+    await getDb(db)
+      .update(vendorAccount)
+      .set({ status: input.status, updatedAt: new Date() })
+      .where(
+        eq(
+          vendorAccount.id,
+          vendorAccountId.parse(scope.public.vendorAccountId),
+        ),
+      );
+  await reportBrowserStep(db, scope.public.runId, input.eventId, input.reason);
+}
+
+/**
+ * The agent's read of a browser step. The Mac only reports what it saw; this
+ * decides what that means: a capture is derived from its DOM (and kept as
+ * evidence), a sign-in page pauses the run and raises the window, and a
+ * failure follows `browserRecovery` (retry as a fresh command, pause with the
+ * member's fix, or fail). A step the server retried answers with its latest
+ * attempt, so the agent keeps asking about the operation it issued.
+ */
+type BrowserStepRead =
+  | { state: "missing" }
+  | {
+      /** `paused_offline` here: the retry is queued for a Mac not connected. */
+      state: "pending" | "dispatched" | "paused_offline";
+      commandId: string;
+      retrying?: string;
+    }
+  | {
+      state: "completed";
+      commandId: string;
+      observation: BrowserObservation;
+      capture?: BrowserPageCapture;
+    }
+  | { state: "stopped"; observation: BrowserObservation | null }
+  | {
+      state: "paused_offline" | "paused_auth";
+      reason?: string;
+      observation: BrowserObservation;
+    }
+  | {
+      state: "failed";
+      code: string;
+      message: string;
+      observation: BrowserObservation;
+    };
+
+// eslint-disable-next-line complexity -- One read routes every browser outcome through the recovery policy.
 export async function readBrowserCommandResult(
   db: Database,
   namespace: PurchaseImportNamespace,
   input: { runId: string; operationId: string },
-) {
+  ports: BrowserPagePorts = productionBrowserPagePorts,
+): Promise<BrowserStepRead> {
   const scope = await loadRunScope(db, input.runId);
   if (!scope.public.vendorAccountId)
     throw new Error("This import run has no browser account");
-  const key = {
-    runId: runEntityId.parse(input.runId),
-    operationId: input.operationId,
+  const runId = runEntityId.parse(input.runId);
+  const key = { runId, operationId: input.operationId };
+  const stored = await readOperation(getDb(db), key);
+  const original = browserCommandRecord.safeParse(stored?.result);
+  if (!stored) return { state: "missing" as const };
+  if (!original.success) {
+    // A step issued in an earlier bridge protocol: no current Mac can run or
+    // answer it, and its operation id cannot be reissued, so the run stops
+    // for review instead of waiting on it.
+    await stopRunForOutdatedClient(db, {
+      runId: input.runId,
+      operationId: input.operationId,
+      failureCode: "browser_protocol_changed",
+      message:
+        "This step was issued before Cubby's browser protocol changed. Restart the run.",
+    });
+    return { state: "stopped" as const, observation: null };
+  }
+  const retries = original.data.retries ?? [];
+  const attemptKey = {
+    runId,
+    operationId: retries.at(-1) ?? input.operationId,
   };
-  const row = await readOperation(getDb(db), key);
-  const parsed = z
-    .object({ commandId: z.uuid(), command: browserBridgeRequest })
-    .safeParse(row?.result);
-  if (!parsed.success) return { state: "missing" as const };
-  const result = await namespace
-    .getByName(scope.public.vendorAccountId)
-    .result(parsed.data.commandId);
-  if (result?.outcome.status === "failed") {
-    const authRequired = result.outcome.code === "authentication_required";
-    // An outdated Mac app cannot complete any command until it is updated,
-    // and its result is already final, so a reconnect would wake nothing.
-    // Stop the run for review, naming the update; the member restarts it.
-    if (result.outcome.code === "client_update_required") {
-      await failOperation(
-        getDb(db),
-        key,
-        `${result.outcome.code}: ${result.outcome.message}`,
+  const attempt = retries.length
+    ? browserCommandRecord.parse(
+        (await readOperation(getDb(db), attemptKey))?.result,
+      )
+    : original.data;
+  const broker = namespace.getByName(scope.public.vendorAccountId);
+  const result =
+    attempt.serverResult ?? (await broker.result(attempt.commandId));
+  if (!result)
+    return { state: "pending" as const, commandId: attempt.commandId };
+  const outcome = result.outcome;
+  // Merge into the step's own record as it is now: a capture read earlier in
+  // this call may already have cached its page there.
+  const updateStep = async (patch: Partial<BrowserCommandRecord>) =>
+    setOperationResult(getDb(db), key, {
+      ...browserCommandRecord.parse(
+        (await readOperation(getDb(db), key))?.result,
+      ),
+      ...patch,
+    });
+  /** Issue the step again as a fresh operation and answer for it. */
+  const retry = async (
+    raiseWindow: boolean,
+    why: string,
+  ): Promise<BrowserStepRead> => {
+    const next = retries.length + 1;
+    const retryOperationId = `${input.operationId}:retry-${next}`;
+    if (raiseWindow)
+      await issueBrowserCommand(
+        db,
+        namespace,
+        {
+          runId: input.runId,
+          operationId: `${input.operationId}:raise-${next}`,
+          operation: { type: "window", action: "raise" },
+        },
+        ports,
       );
+    const reissued = await issueBrowserCommand(
+      db,
+      namespace,
+      {
+        runId: input.runId,
+        operationId: retryOperationId,
+        operation: attempt.command.operation,
+      },
+      ports,
+    );
+    await updateStep({ retries: [...retries, retryOperationId] });
+    await reportBrowserStep(
+      db,
+      runId,
+      `browser-retry:${retryOperationId}`,
+      `Retrying ${attempt.command.operation.type}${raiseWindow ? " after raising the window" : ""}: ${why}`,
+    );
+    // The server read the retried page itself: answer with that page.
+    if (reissued.state === "completed")
+      return readBrowserCommandResult(db, namespace, input, ports);
+    return {
+      state: reissued.state,
+      commandId: reissued.commandId,
+      retrying: why,
+    };
+  };
+  if (outcome.status === "failed") {
+    const policy = browserRecovery(outcome, retries.length);
+    // A step read again after the run paused on it (the member fixed the
+    // condition and the Mac reconnected) retries instead of pausing again.
+    const recovery: BrowserRecovery =
+      policy.action === "pause" &&
+      original.data.pausedAt === attemptKey.operationId
+        ? {
+            action: "retry",
+            raiseWindow: outcome.code === "screenshot_unavailable",
+          }
+        : policy;
+    const diagnostic = `${outcome.code}${outcome.screenshotGap ? ` (${outcome.screenshotGap})` : ""}: ${outcome.message} [${describeObservation(outcome.observation)}]`;
+    if (recovery.action === "stop_outdated_client") {
+      await failOperation(getDb(db), attemptKey, diagnostic);
       await stopRunForOutdatedClient(db, {
         runId: input.runId,
         operationId: input.operationId,
-        message: result.outcome.message,
+        message: outcome.message,
       });
-      return { state: "stopped" as const, result };
+      return { state: "stopped" as const, observation: outcome.observation };
     }
-    const paused =
-      authRequired ||
-      result.outcome.retryable ||
-      result.outcome.code === "deadline_exceeded" ||
-      result.outcome.code === "browser_unavailable";
-    if (paused) {
-      await getDb(db)
-        .update(runTable)
-        .set({
-          status: authRequired ? "paused_auth" : "paused_offline",
-          failureCode: result.outcome.code,
-          updatedAt: new Date(),
-        })
-        .where(eq(runTable.id, scope.public.runId));
-      await getDb(db)
-        .update(vendorAccount)
-        .set({
-          status: authRequired ? "paused_auth" : "paused_offline",
-          updatedAt: new Date(),
-        })
-        .where(
-          eq(
-            vendorAccount.id,
-            vendorAccountId.parse(scope.public.vendorAccountId),
-          ),
-        );
-      if (authRequired) {
-        await namespace
-          .getByName(scope.public.vendorAccountId)
-          .requestAuthentication(scope.public.runId);
-      }
+    if (recovery.action === "retry")
+      return retry(recovery.raiseWindow, diagnostic);
+    await failOperation(getDb(db), attemptKey, diagnostic);
+    if (recovery.action === "pause") {
+      await updateStep({ pausedAt: attemptKey.operationId });
+      await pauseForBrowser(db, scope, {
+        status: recovery.status,
+        failureCode: outcome.screenshotGap ?? outcome.code,
+        reason: recovery.reason,
+        eventId: `browser-pause:${attemptKey.operationId}`,
+      });
       return {
-        state: authRequired
-          ? ("paused_auth" as const)
-          : ("paused_offline" as const),
-        result,
+        state: recovery.status,
+        reason: recovery.reason,
+        observation: outcome.observation,
       };
     }
-    // A non-pausing failure (bad link, disallowed URL, capture unavailable,
-    // upload failed) is the command's terminal outcome. The agent sees it in
-    // the tool result; the operation row is where Activity and the transcript
-    // read it from.
-    await failOperation(
-      getDb(db),
-      key,
-      `${result.outcome.code}: ${result.outcome.message}`,
-    );
+    return {
+      state: "failed" as const,
+      code: outcome.code,
+      message: outcome.message,
+      observation: outcome.observation,
+    };
   }
-  return result
-    ? { state: "completed" as const, result }
-    : { state: "pending" as const, commandId: parsed.data.commandId };
+  if (attempt.command.operation.type !== "capture")
+    return {
+      state: "completed" as const,
+      commandId: attempt.commandId,
+      observation: outcome.observation,
+    };
+  const page = await materializeCapture(db, {
+    key: attemptKey,
+    runShortcode: scope.public.shortcode,
+    record: attempt,
+    result,
+    allowedHosts: scope.public.allowedHosts,
+    storage: ports.storage,
+  });
+  if (page.capture.authenticationRequired) {
+    // Read again after the member signed in and resumed: the cached page is
+    // still the sign-in form, so capture the step afresh.
+    if (original.data.pausedAt === attemptKey.operationId)
+      return retry(false, "capturing again after sign-in");
+    // The page asks for a password: the member signs in (1Password) in the
+    // raised window, and the run resumes once they confirm.
+    await updateStep({ pausedAt: attemptKey.operationId });
+    await pauseForBrowser(db, scope, {
+      status: "paused_auth",
+      failureCode: "authentication_required",
+      reason: `Sign in to ${new URL(page.capture.sourceURL).host} in Cubby's browser window, then resume the run.`,
+      eventId: `browser-auth:${attemptKey.operationId}`,
+    });
+    await broker.requestAuthentication(scope.public.runId);
+    return {
+      state: "paused_auth" as const,
+      observation: page.observation,
+    };
+  }
+  return {
+    state: "completed" as const,
+    commandId: attempt.commandId,
+    observation: page.observation,
+    capture: page.capture,
+  };
 }
 
 // eslint-disable-next-line complexity -- Evidence import validates every browser and target provenance branch at this boundary.
@@ -2380,6 +2715,7 @@ export async function importBrowserOrderEvidence(
     defaultTrade?: Trade;
     defaultProjectId?: string;
   },
+  ports: BrowserPagePorts = productionBrowserPagePorts,
 ) {
   const scope = await loadRunScope(db, input.runId);
   assertRunActive(scope.public.status);
@@ -2387,7 +2723,10 @@ export async function importBrowserOrderEvidence(
     throw new Error("Import run ownership is incomplete");
   const commandId = z.uuid().parse(input.commandId);
   const commandOperations = await getDb(db)
-    .select({ result: runOperation.result })
+    .select({
+      operationId: runOperation.operationId,
+      result: runOperation.result,
+    })
     .from(runOperation)
     .where(
       and(
@@ -2396,35 +2735,46 @@ export async function importBrowserOrderEvidence(
       ),
     );
   const commandRecord = commandOperations
-    .map(({ result }) =>
-      z
-        .object({
-          commandId: z.uuid(),
-          command: browserBridgeRequest,
-        })
-        .safeParse(result),
-    )
-    .find((parsed) => parsed.success && parsed.data.commandId === commandId);
-  if (!commandRecord?.success)
+    .map(({ operationId, result }) => ({
+      operationId,
+      parsed: browserCommandRecord.safeParse(result),
+    }))
+    .find(
+      ({ parsed }) => parsed.success && parsed.data.commandId === commandId,
+    );
+  if (!commandRecord?.parsed.success)
     throw new Error(
       "Browser evidence command was not issued by this import run",
     );
-  const result = await namespace
-    .getByName(scope.public.vendorAccountId)
-    .result(commandId);
+  const record = commandRecord.parsed.data;
+  const result =
+    record.serverResult ??
+    (await namespace.getByName(scope.public.vendorAccountId).result(commandId));
   if (result?.runID !== input.runId)
     throw new Error("Browser evidence belongs to a different import run");
   if (
     !result ||
     result.outcome.status !== "completed" ||
-    !result.outcome.capture
+    !result.outcome.snapshot
   )
     throw new Error("Browser evidence is not complete");
-  const capture = result.outcome.capture;
+  const page = await materializeCapture(db, {
+    key: {
+      runId: runEntityId.parse(input.runId),
+      operationId: commandRecord.operationId,
+    },
+    runShortcode: scope.public.shortcode,
+    record,
+    result,
+    allowedHosts: scope.public.allowedHosts,
+    storage: ports.storage,
+  });
+  const capture = page.capture;
+  const commandRecordData = record;
   if (scope.public.purpose !== "account_sync") {
     const evidenceScope =
-      commandRecord.data.command.operation.type === "capture"
-        ? commandRecord.data.command.operation.evidenceScope
+      commandRecordData.command.operation.type === "capture"
+        ? commandRecordData.command.operation.evidenceScope
         : undefined;
     if (!evidenceScope || evidenceScope.runId !== scope.public.shortcode)
       throw new Error(
@@ -2444,12 +2794,15 @@ export async function importBrowserOrderEvidence(
       throw new Error(
         "Browser evidence does not match a targeted import source",
       );
-    const evidenceIds = capture.evidence.flatMap((reference) => {
-      const parsed = z.uuid().safeParse(reference.id);
-      return parsed.success ? [parsed.data] : [];
-    });
-    if (evidenceIds.length === 0)
-      throw new Error("Targeted browser capture retained no run evidence");
+    // The page's DOM is always kept; a screenshot and its PDF join it when
+    // the window was capturable.
+    const evidenceIds = [
+      page.domEvidenceId,
+      ...capture.evidence.flatMap((reference) => {
+        const parsed = z.uuid().safeParse(reference.id);
+        return parsed.success ? [parsed.data] : [];
+      }),
+    ];
     await getDb(db)
       .update(runEvidence)
       .set({
@@ -2597,9 +2950,7 @@ export async function importBrowserOrderEvidence(
   const screenshot = capture.evidence.find(
     (item) => item.kind === "screenshot",
   );
-  const primary = capture.evidence.find(
-    (item) => item.kind === "rendered_pdf" || item.kind === "normalized_pdf",
-  );
+  const primary = capture.evidence.find((item) => item.kind === "rendered_pdf");
   const [{ extractPurchaseCapture }, { resolveOrThrow }] = await Promise.all([
     import("~/server/agents/purchase-import/extract"),
     import("~/server/repo/shortcode-resolver"),

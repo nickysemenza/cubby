@@ -225,7 +225,8 @@ seeds the sources:
   approves them; two Products must result.
 - `import-account-sync`: a browser-synced vendor account with one finished
   sync and a simulated Mac browser (the queue producer's `/browser-connect`)
-  answering its order-history page and one order by URL. The member starts the
+  answering its order-history page and one order by URL with a DOM snapshot,
+  as the thin Mac app does; the server derives each page. The member starts the
   next sync from the finished run; the agent walks the history, captures the
   order, and imports it.
 

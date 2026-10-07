@@ -1,6 +1,5 @@
 #if os(macOS)
     import ArgumentParser
-    import CoreGraphics
     import CubbyKit
     import Foundation
 
@@ -14,6 +13,16 @@
         )
 
         enum Action: String, ExpressibleByArgument { case connect, sync, resume, capture, execute }
+        enum Screenshot: String, ExpressibleByArgument {
+            case required, preferred, skip
+            var value: BrowserScreenshotPolicy.Mode {
+                switch self {
+                case .required: .required
+                case .preferred: .preferred
+                case .skip: .skip
+                }
+            }
+        }
         enum Choice: String, ExpressibleByArgument {
             case chrome, safari
             var value: BrowserChoice { self == .chrome ? .chrome : .safari }
@@ -33,10 +42,8 @@
             name: .customLong("device-id"), help: "Stable UUID for this replay directory; reuse it on resume."
         ) var deviceIDString: String?
         @Option(help: "Maximum bridge lifetime in seconds (1–600).") var duration: Int = 60
-        @Flag(
-            name: .customLong("enhanced-evidence"),
-            help: "Request screenshots when Screen Recording is already granted.") var enhancedEvidence =
-            false
+        @Option(help: "Capture screenshot mode: required, preferred, or skip.") var screenshot: Screenshot =
+            .preferred
         @Option(help: "HTTPS page to capture in a newly owned window.") var url: String?
         @Option(name: .customLong("allowed-host"), help: "Explicit allowed source host. Repeatable.")
         var allowedHosts: [String] = []
@@ -122,7 +129,7 @@
                             operation: .capture(
                                 .init(
                                     _type: .capture, allowedHosts: allowedHosts,
-                                    enhancedEvidence: enhancedEvidence,
+                                    screenshot: screenshot.value,
                                     recoveryURL: validated.absoluteString,
                                     evidenceScope: .init(runId: runID, targetId: targetID))))
                     }
@@ -156,11 +163,6 @@
                                 fileURL: directory.appending(path: accountPath).appending(path: "replay.json")
                             )
                         },
-                        capabilities: { enhanced in
-                            BrowserBridgeCapabilities(
-                                enhancedScreenshot: enhanced && CGPreflightScreenCaptureAccess(),
-                                renderedPDF: MacBrowserCommandExecutor.supportsRenderedPDF)
-                        },
                         observer: { event in
                             do {
                                 try printEvent(event)
@@ -172,12 +174,10 @@
                     do {
                         let requests: [BrowserBridgeSyncResponse]
                         if action == .connect {
-                            try await coordinator.connect(
-                                browser: target.browser, enhancedEvidence: enhancedEvidence)
+                            try await coordinator.connect(browser: target.browser)
                             requests = []
                         } else {
-                            requests = try await coordinator.syncNow(
-                                browser: target.browser, enhancedEvidence: enhancedEvidence)
+                            requests = try await coordinator.syncNow(browser: target.browser)
                             for request in requests { try printJSON(request) }
                         }
                         let deadline = Date.now.addingTimeInterval(Double(duration))
@@ -233,7 +233,7 @@
         private func printEvent(_ event: MacBrowserBridgeEvent) throws {
             switch event {
             case .accounts(let accounts): try printJSON(accounts)
-            case .result(_, let result): try printJSON(result)
+            case .result(_, let result, _): try printJSON(result)
             case .runCompleted(_, let completion): try printJSON(completion)
             case .fleetStatus(let status, let connected, let total):
                 try printJSON(

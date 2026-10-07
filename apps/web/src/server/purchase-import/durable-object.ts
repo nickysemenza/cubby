@@ -3,6 +3,7 @@ import type {
   WebSocket as CfWebSocket,
 } from "@cloudflare/workers-types";
 import {
+  BROWSER_BRIDGE_PROTOCOL,
   purchaseAgentEvent,
   type BrowserBridgeRequest,
 } from "@cubby/schemas/purchase-import";
@@ -25,7 +26,7 @@ declare const WebSocketPair: {
 };
 
 type SocketAttachment = {
-  protocolVersion: 2;
+  protocolVersion: typeof BROWSER_BRIDGE_PROTOCOL;
   ledgerPartyId: string;
   vendorAccountId: string;
   userId: string;
@@ -59,7 +60,7 @@ export class PurchaseImportDurableObject
     const server = pair[1];
     this.ctx.acceptWebSocket(server);
     server.serializeAttachment({
-      protocolVersion: 2,
+      protocolVersion: BROWSER_BRIDGE_PROTOCOL,
       ledgerPartyId,
       vendorAccountId,
       userId,
@@ -84,7 +85,7 @@ export class PurchaseImportDurableObject
   async cancel(requestId: string): Promise<void> {
     this.store.cancel(requestId);
     this.broadcastMessage({
-      protocolVersion: 2,
+      protocolVersion: BROWSER_BRIDGE_PROTOCOL,
       type: "cancel",
       commandID: requestId,
     });
@@ -104,7 +105,7 @@ export class PurchaseImportDurableObject
   async notifyRunCompleted(summary: RunCompletionSummary): Promise<void> {
     this.store.saveRunCompletion(summary);
     this.broadcastMessage({
-      protocolVersion: 2,
+      protocolVersion: BROWSER_BRIDGE_PROTOCOL,
       type: "run_completed",
       ...summary,
     });
@@ -112,7 +113,7 @@ export class PurchaseImportDurableObject
 
   async requestAuthentication(runID: string): Promise<void> {
     this.broadcastMessage({
-      protocolVersion: 2,
+      protocolVersion: BROWSER_BRIDGE_PROTOCOL,
       type: "raise_auth_window",
       runID,
     });
@@ -142,7 +143,7 @@ export class PurchaseImportDurableObject
         socket.send(
           JSON.stringify(
             bridgeServerMessage.parse({
-              protocolVersion: 2,
+              protocolVersion: BROWSER_BRIDGE_PROTOCOL,
               type: "run_completed",
               ...summary,
             }),
@@ -158,6 +159,20 @@ export class PurchaseImportDurableObject
           eventId: `browser-connected:${pending.id}`,
           connectionId: parsed.data.deviceID,
         });
+        return;
+      }
+      // Nothing to replay, but a run paused on a failed step (a permission
+      // the member just granted, a window brought back) resumes now.
+      const wake = this.store.nextWake();
+      if (wake) {
+        await this.publish({
+          version: 1,
+          type: "browser_connected",
+          runId: wake.runId,
+          eventId: `browser-connected:wake:${wake.runId}:${wake.generation}`,
+          connectionId: parsed.data.deviceID,
+        });
+        this.store.forgetWake(wake.runId, wake.generation);
       }
       return;
     }
@@ -167,6 +182,11 @@ export class PurchaseImportDurableObject
     }
     if (parsed.data.type === "result") {
       const claimed = this.store.claimResult(parsed.data.result);
+      if (claimed.command && claimed.newlyCompleted) {
+        if (parsed.data.result.outcome.status === "failed")
+          this.store.rememberWake(parsed.data.result.runID);
+        else this.store.forgetWake(parsed.data.result.runID);
+      }
       if (claimed.command && claimed.newlyCompleted) {
         // Publish before acknowledgement. If queue publication fails, the Mac
         // retains and replays its result; the stable event id makes that replay
@@ -182,7 +202,7 @@ export class PurchaseImportDurableObject
       socket.send(
         JSON.stringify(
           bridgeServerMessage.parse({
-            protocolVersion: 2,
+            protocolVersion: BROWSER_BRIDGE_PROTOCOL,
             type: "acknowledge",
             commandID: parsed.data.result.commandID,
           }),
@@ -230,7 +250,7 @@ export class PurchaseImportDurableObject
     socket.send(
       JSON.stringify(
         bridgeServerMessage.parse({
-          protocolVersion: 2,
+          protocolVersion: BROWSER_BRIDGE_PROTOCOL,
           type: "command",
           command,
         }),

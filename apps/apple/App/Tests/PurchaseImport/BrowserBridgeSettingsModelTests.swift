@@ -11,10 +11,8 @@ struct BrowserBridgeSettingsModelTests {
         var backfills: [BrowserBridgeBackfillRange?] = []
         var failure: (any Error)?
 
-        func connect(browser: BrowserChoice, enhancedEvidence: Bool) async throws {}
-        func syncNow(
-            browser: BrowserChoice, enhancedEvidence: Bool, backfill: BrowserBridgeBackfillRange?
-        ) async throws {
+        func connect(browser: BrowserChoice) async throws {}
+        func syncNow(browser: BrowserChoice, backfill: BrowserBridgeBackfillRange?) async throws {
             backfills.append(backfill)
             if let failure { throw failure }
         }
@@ -40,7 +38,7 @@ struct BrowserBridgeSettingsModelTests {
         let model = BrowserBridgeSettingsModel()
         model.install(controller: controller)
 
-        model.syncNow(browser: .chrome, enhancedEvidence: false)
+        model.syncNow(browser: .chrome)
         await settle(model)
 
         #expect(controller.backfills == [nil])
@@ -52,7 +50,7 @@ struct BrowserBridgeSettingsModelTests {
         let model = BrowserBridgeSettingsModel()
         model.install(controller: controller)
 
-        model.syncNow(browser: .chrome, enhancedEvidence: false, backfill: range)
+        model.syncNow(browser: .chrome, backfill: range)
         await settle(model)
 
         #expect(controller.backfills == [range])
@@ -65,7 +63,7 @@ struct BrowserBridgeSettingsModelTests {
         let model = BrowserBridgeSettingsModel()
         model.install(controller: controller)
 
-        model.syncNow(browser: .chrome, enhancedEvidence: false, backfill: range)
+        model.syncNow(browser: .chrome, backfill: range)
         await settle(model)
 
         #expect(model.error == "The account already has an active run.")

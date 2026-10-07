@@ -29,7 +29,6 @@ struct SettingsView: View {
     @State private var opensDeveloperToolsAfterDismissal = false
     #if os(macOS)
         @AppStorage("purchaseImport.browser") private var purchaseImportBrowser = BrowserChoice.chrome
-        @AppStorage("purchaseImport.enhancedEvidence") private var enhancedEvidence = false
         @State private var browserPermissions = MacBrowserPermissionSnapshot.current(browser: .chrome)
         @State private var backfillFrom = BrowserBridgeBackfillRange.defaultDates().from
         @State private var backfillTo = BrowserBridgeBackfillRange.defaultDates().to
@@ -182,14 +181,7 @@ struct SettingsView: View {
         #if os(macOS)
             .onChange(of: purchaseImportBrowser) { _, browser in
                 browserPermissions = .current(browser: browser)
-                model.browserBridge.reconnect(
-                    browser: browser, enhancedEvidence: enhancedEvidence)
-            }
-            .onChange(of: enhancedEvidence) { _, enabled in
-                if enabled { _ = MacBrowserPermissionSnapshot.requestScreenRecording() }
-                browserPermissions = .current(browser: purchaseImportBrowser)
-                model.browserBridge.reconnect(
-                    browser: purchaseImportBrowser, enhancedEvidence: enabled)
+                model.browserBridge.reconnect(browser: browser)
             }
             .onChange(of: scenePhase) { _, phase in
                 if phase == .active {
@@ -218,9 +210,7 @@ struct SettingsView: View {
                 }
                 Button("Import this range", systemImage: "clock.arrow.circlepath") {
                     guard let range = backfillRange else { return }
-                    model.browserBridge.syncNow(
-                        browser: purchaseImportBrowser, enhancedEvidence: enhancedEvidence,
-                        backfill: range)
+                    model.browserBridge.syncNow(browser: purchaseImportBrowser, backfill: range)
                 }
                 .disabled(
                     backfillRange == nil || !model.browserBridge.isConfigured
@@ -243,18 +233,13 @@ struct SettingsView: View {
                     Text(model.browserBridge.statusLabel)
                         .foregroundStyle(FieldGuideTokens.graphiteSecondary)
                 }
-                Toggle("Enhanced evidence capture", isOn: $enhancedEvidence)
-                    .accessibilityIdentifier("settings.purchaseImport.enhancedEvidence")
-                if enhancedEvidence {
-                    permissionRow(
-                        "Screen Recording", status: browserPermissions.screenRecording,
-                        pane: .screenRecording)
-                }
+                permissionRow(
+                    "Screen Recording", status: browserPermissions.screenRecording,
+                    pane: .screenRecording)
                 permissionRow(
                     "Browser control", status: browserPermissions.appleEvents, pane: .automation)
                 Button {
-                    model.browserBridge.syncNow(
-                        browser: purchaseImportBrowser, enhancedEvidence: enhancedEvidence)
+                    model.browserBridge.syncNow(browser: purchaseImportBrowser)
                 } label: {
                     if model.browserBridge.isSyncing {
                         Label("Syncing", systemImage: "arrow.triangle.2.circlepath")
@@ -267,8 +252,7 @@ struct SettingsView: View {
                 backfillControl
                 if model.browserBridge.status != .connected {
                     Button("Reconnect", systemImage: "arrow.trianglehead.clockwise") {
-                        model.browserBridge.reconnect(
-                            browser: purchaseImportBrowser, enhancedEvidence: enhancedEvidence)
+                        model.browserBridge.reconnect(browser: purchaseImportBrowser)
                     }
                     .disabled(!model.browserBridge.isConfigured || model.browserBridge.isSyncing)
                     .accessibilityIdentifier("settings.purchaseImport.reconnect")
@@ -287,6 +271,15 @@ struct SettingsView: View {
                                 .accessibilityIdentifier(
                                     "settings.purchaseImport.openSignIn.\(account.id)")
                             }
+                            if let lastCommand = account.lastCommand {
+                                Text(lastCommand)
+                                    .font(.fieldGuideLabel)
+                                    .foregroundStyle(FieldGuideTokens.graphiteSecondary)
+                                    .multilineTextAlignment(.trailing)
+                                    .lineLimit(2)
+                                    .accessibilityIdentifier(
+                                        "settings.purchaseImport.lastCommand.\(account.id)")
+                            }
                             if let error = account.error {
                                 Text(error)
                                     .font(.fieldGuideLabel)
@@ -303,7 +296,7 @@ struct SettingsView: View {
                 Eyebrow("Purchase imports")
             } footer: {
                 Text(
-                    "Cubby controls only its own browser window. Page content stays untrusted, and browser sessions never leave this Mac. Enhanced capture falls back to a Cubby-generated PDF when permissions are unavailable."
+                    "Cubby controls only its own browser window and sends the page's markup without form values; browser sessions never leave this Mac. Screenshots need Screen Recording; without it Cubby still sends the page and says why the screenshot is missing."
                 )
                 .font(.fieldGuideLabel)
                 .foregroundStyle(FieldGuideTokens.graphiteSecondary)
@@ -316,7 +309,13 @@ struct SettingsView: View {
         ) -> some View {
             LabeledContent(title) {
                 if status == .denied {
-                    Button(status.label) { MacBrowserPermissionSnapshot.openSettings(pane) }
+                    Button(status.label) {
+                        // The first request lists Cubby under Screen Recording so it can be allowed.
+                        if pane == .screenRecording {
+                            _ = MacBrowserPermissionSnapshot.requestScreenRecording()
+                        }
+                        MacBrowserPermissionSnapshot.openSettings(pane)
+                    }
                 } else {
                     Text(status.label).foregroundStyle(FieldGuideTokens.graphiteSecondary)
                 }

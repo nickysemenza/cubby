@@ -18,6 +18,7 @@ import {
   startOrResumeRun,
   type PurchaseImportNamespace,
 } from "../src/server/purchase-import/run-service";
+import { testBrowserPorts } from "../src/server/purchase-import/browser.fixtures";
 import { executeLeasedOperation } from "../src/server/runs/operation";
 import {
   buildKernelContext,
@@ -99,13 +100,18 @@ export async function createMacBrowserScenario(input: Input) {
       .getEnv();
     const broker = namespace.getByName(accountId);
     const results: Array<{ stage: string; state: string }> = [];
+    // DOM evidence stays in memory; the fixture retailer is reachable only
+    // through the Mac, so every capture exercises the real app.
+    const ports = testBrowserPorts();
     async function result(operationId: string) {
       return pollUntil(
         async () => {
-          const response = await readBrowserCommandResult(db, namespace, {
-            runId: run.id,
-            operationId,
-          });
+          const response = await readBrowserCommandResult(
+            db,
+            namespace,
+            { runId: run.id, operationId },
+            ports,
+          );
           return response.state === "pending" ? undefined : response;
         },
         {
@@ -115,16 +121,21 @@ export async function createMacBrowserScenario(input: Input) {
       );
     }
     async function capture(operationId: string, url: string) {
-      await issueBrowserCommand(db, namespace, {
-        runId: run.id,
-        operationId,
-        operation: {
-          type: "capture",
-          allowedHosts: ["shop.example.test"],
-          enhancedEvidence: false,
-          recoveryURL: url,
+      await issueBrowserCommand(
+        db,
+        namespace,
+        {
+          runId: run.id,
+          operationId,
+          operation: {
+            type: "capture",
+            allowedHosts: ["shop.example.test"],
+            screenshot: "preferred",
+            recoveryURL: url,
+          },
         },
-      });
+        ports,
+      );
       return result(operationId);
     }
     async function awaitNativeRetry(appDriver: MacImportDriver) {
@@ -244,8 +255,7 @@ export async function createMacBrowserScenario(input: Input) {
         const history = await capture("mac:history", input.retailer.historyURL);
         if (
           history.state !== "completed" ||
-          history.result.outcome.status !== "completed" ||
-          !history.result.outcome.capture?.readableText.includes("order-001")
+          !history.capture?.readableText.includes("order-001")
         )
           throw new Error(
             "Actual resumed Mac history capture is missing order-001",
@@ -257,10 +267,7 @@ export async function createMacBrowserScenario(input: Input) {
         );
         if (
           order.state !== "completed" ||
-          order.result.outcome.status !== "completed" ||
-          !order.result.outcome.capture?.readableText.includes(
-            "Black crew shirt",
-          )
+          !order.capture?.readableText.includes("Black crew shirt")
         )
           throw new Error(
             "Actual Mac order capture is missing the exact shirt variant",
@@ -272,16 +279,13 @@ export async function createMacBrowserScenario(input: Input) {
         );
         if (
           product.state !== "completed" ||
-          product.result.outcome.status !== "completed" ||
-          !product.result.outcome.capture?.readableText.includes(
-            "00012345678905",
-          )
+          !product.capture?.readableText.includes("00012345678905")
         )
           throw new Error(
             "Actual Mac exact product capture is missing GTIN evidence",
           );
-        const orderCapture = order.result.outcome.capture;
-        const productCapture = product.result.outcome.capture;
+        const orderCapture = order.capture;
+        const productCapture = product.capture;
         if (!orderCapture || !productCapture)
           throw new Error("Actual browser captures are unavailable");
         const evidence = path.join(

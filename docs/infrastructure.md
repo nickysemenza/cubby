@@ -318,6 +318,41 @@ web and Apple versions. Postgres import rows and the retained
 2026-10 merge of the agent into `cubby` also needs the separate
 `purchase-agent` Worker and its consumer back.
 
+### Browser bridge
+
+Signed-in vendor pages are read by the Mac app through one SQLite Durable
+Object per vendor account (`PurchaseImportDurableObject`,
+`server/purchase-import/durable-object.ts`), over a WebSocket speaking
+`BROWSER_BRIDGE_PROTOCOL` 3 (`packages/schemas/src/purchase-import.ts`). The
+Mac is a thin hand; the server reads and decides:
+
+- **Commands.** `navigate`, `scroll`, `capture` (with `screenshot:
+required | preferred | skip`), and `window` (`raise` / `background`). A
+  capture returns the page's trimmed DOM (deflated, with its checksum), any
+  screenshot or PDF evidence, and every result carries an observation (URL,
+  ready state, window state, Screen Recording permission). The Mac finds its
+  account window again after a relaunch by a tab marker.
+- **Reading.** The first read of a capture stores the DOM in R2 as
+  `RunEvidence` (`text/html`) and derives the page on the server
+  (`compact_browser_page` in `recipebridge`, `derivePageCapture`): text,
+  allowlisted links and images, JSON-LD identifiers, and a password field as
+  a sign-in. Improving the derivation needs no Mac release; bump
+  `PAGE_DERIVATION_REVISION`.
+- **Recovery** (`browserRecovery`). A failed step is retried once as a fresh
+  command, raising a minimized or off-screen window first. A fix only the
+  member can make (Screen Recording, Chrome's "Allow JavaScript from Apple
+  Events", Automation) pauses the run naming it; reading the step again after
+  resume retries it. Every retry, pause, and sign-in is a `browser` progress
+  line on the run.
+- **Wake on reconnect.** The broker remembers a run whose last step failed;
+  a reconnecting Mac with nothing to replay wakes it.
+- **Fetch first.** A product-enrichment capture with a URL is first fetched
+  by the server (`fetchPublicPage`); a refusal is recorded and the command
+  goes to the Mac.
+
+A protocol change bumps `MINIMUM_APPLE_CLIENT_VERSION` with the Mac's
+`MARKETING_VERSION`; an older Mac's commands stop the run for review.
+
 ### PostgreSQL and Hyperdrive
 
 Neon owns the PostgreSQL database. Production compute is autoscaling

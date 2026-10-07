@@ -2,6 +2,9 @@ import type {
   BrowserBridgeRequest,
   BrowserBridgeResult,
 } from "@cubby/schemas/purchase-import";
+import { BROWSER_BRIDGE_PROTOCOL } from "@cubby/schemas/purchase-import";
+
+import { completedCapture, testBrowserPorts } from "./browser.fixtures";
 
 /** Synthetic order-history pages and a fake browser bridge for worklist tests. */
 export const HOST = "shop.example.test";
@@ -19,7 +22,7 @@ export function fakeBroker() {
     result: async (): Promise<BrowserBridgeResult | null> =>
       issued && capture
         ? {
-            protocolVersion: 2,
+            protocolVersion: BROWSER_BRIDGE_PROTOCOL,
             commandID: issued.id,
             operationID: issued.operationId,
             runID: issued.runID,
@@ -35,6 +38,7 @@ export function fakeBroker() {
   };
   return {
     namespace: { getByName: () => broker },
+    ports: testBrowserPorts(),
     respondWith(outcome: BrowserBridgeResult["outcome"]) {
       capture = outcome;
     },
@@ -44,15 +48,10 @@ export function fakeBroker() {
 export const historyPage = (
   orders: ReadonlyArray<{ id: string; date: string }>,
   next: string | null,
-): BrowserBridgeResult["outcome"] => ({
-  status: "completed",
-  capture: {
-    sourceURL: `https://${HOST}/order-history`,
+) =>
+  completedCapture(`https://${HOST}/order-history`, {
     title: "Your Orders",
-    capturedAt: new Date().toISOString(),
-    captureVersion: 1,
-    variantMarkers: [],
-    readableText: orders
+    text: orders
       .map(
         (order) =>
           `Order placed ${order.date} Order # ${order.id} Total $12.00`,
@@ -60,14 +59,9 @@ export const historyPage = (
       .join("\n"),
     links: [
       ...orders.map((order) => ({
-        id: `link-${order.id}`,
         url: orderUrl(order.id),
         label: "View order details",
       })),
-      ...(next ? [{ id: "next", url: next, label: "Next →" }] : []),
+      ...(next ? [{ url: next, label: "Next →" }] : []),
     ],
-    images: [],
-    paymentEvidence: [],
-    evidence: [],
-  },
-});
+  });

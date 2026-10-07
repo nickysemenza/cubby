@@ -151,7 +151,7 @@ public enum BrowserBridgeDebugLog {
         case windowBackgroundFailed = "window.background_failed"
         case windowMinimized = "window.minimized"
         case windowMinimizeFailed = "window.minimize_failed"
-        case captureWindowCorrelated = "capture.window_correlated"
+        case windowRecovered = "window.recovered"
         case captureWindowCorrelationFailed = "capture.window_correlation_failed"
         case visualCaptureStarted = "capture.visual_started"
         case visualCaptureFinished = "capture.visual_finished"
@@ -228,16 +228,16 @@ public enum BrowserBridgeDebugLog {
     private static func operationKind(_ operation: BrowserBridgeOperation) -> String {
         switch operation {
         case .navigate: "navigate"
-        case .followCapturedLink: "follow_captured_link"
         case .scroll: "scroll"
         case .capture: "capture"
+        case .window(let payload): "window_\(payload.action.rawValue)"
         }
     }
 
     private static func operationHost(_ operation: BrowserBridgeOperation) -> String? {
         switch operation {
         case .navigate(let payload): URL(string: payload.url)?.host()?.lowercased()
-        case .followCapturedLink, .scroll: nil
+        case .scroll, .window: nil
         case .capture(let payload): URL(string: payload.recoveryURL ?? "")?.host()?.lowercased()
         }
     }
@@ -245,7 +245,7 @@ public enum BrowserBridgeDebugLog {
     private static func outcomeLabel(_ outcome: BrowserBridgeCommandOutcome) -> String {
         switch outcome {
         case .completed(let payload):
-            payload.capture == nil ? "completed" : "completed_with_capture"
+            payload.snapshot == nil ? "completed" : "completed_with_snapshot"
         case .failed(let payload):
             "failed:\(payload.code.rawValue):retryable=\(payload.retryable)"
         }

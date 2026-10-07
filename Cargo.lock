@@ -1219,11 +1219,13 @@ dependencies = [
  "js-sys",
  "recipe-scraper",
  "rstest",
+ "scraper",
  "serde",
  "serde-wasm-bindgen",
  "serde_json",
  "tracing",
  "tsify-next",
+ "url",
  "wasm-bindgen",
  "wasm-tracing",
 ]

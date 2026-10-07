@@ -1,4 +1,5 @@
 import {
+  BROWSER_BRIDGE_PROTOCOL,
   commitProductEnrichmentInput,
   commitPurchaseImportInput,
   validatePurchaseImportInput,
@@ -24,6 +25,7 @@ import {
   purchaseAgentTargetFingerprint,
 } from "~/server/mcp/purchase-agent-protocol";
 import type { ToolExtra } from "~/server/mcp/tools/tool-registration";
+import { observation } from "~/server/purchase-import/browser.fixtures";
 import {
   commitProductEnrichment,
   commitPurchaseImport,
@@ -240,7 +242,7 @@ describe("RunOperation rows written by earlier code", () => {
     // The row as `issueBrowserCommand` inserted it before the Worker died,
     // with a deadline no fresh command would carry.
     const command = {
-      protocolVersion: 2,
+      protocolVersion: BROWSER_BRIDGE_PROTOCOL,
       id: commandId,
       operationId,
       runID: run.id,
@@ -253,7 +255,7 @@ describe("RunOperation rows written by earlier code", () => {
       kind: "browser_command",
       inputFingerprint: await sha256Hex(
         JSON.stringify({
-          protocolVersion: 2,
+          protocolVersion: BROWSER_BRIDGE_PROTOCOL,
           id: commandId,
           operationId,
           runID: run.id,
@@ -479,7 +481,7 @@ describe("RunOperation rows written by earlier code", () => {
         issued = request;
       },
       result: async (): Promise<BrowserBridgeResult> => ({
-        protocolVersion: 2,
+        protocolVersion: BROWSER_BRIDGE_PROTOCOL,
         commandID: issued!.id,
         operationID: issued!.operationId,
         runID: run.id,
@@ -489,6 +491,8 @@ describe("RunOperation rows written by earlier code", () => {
           code: "disallowed_url",
           message: "Navigation left the vendor allowlist",
           retryable: false,
+          screenshotGap: null,
+          observation: observation(),
         },
       }),
       cancel: async () => undefined,
@@ -516,7 +520,9 @@ describe("RunOperation rows written by earlier code", () => {
 
     expect(await stored(run.id, operationId)).toMatchObject({
       state: "completed",
-      error: "disallowed_url: Navigation left the vendor allowlist",
+      error: expect.stringMatching(
+        /^disallowed_url: Navigation left the vendor allowlist \[/u,
+      ),
     });
   });
 

@@ -7,7 +7,7 @@ import { bridgeServerMessage, type BrowserBridgeResult } from "./contracts";
 import { PurchaseImportSqlStore } from "./sql-store";
 
 const command = {
-  protocolVersion: 2 as const,
+  protocolVersion: 3 as const,
   id: "894efe4d-8567-56db-9c06-e533b9945c6f",
   operationId: "browser-command:nav-001",
   runID: "df62c017-5669-4d6d-9f7e-088b6bcffc9f",
@@ -20,14 +20,25 @@ const command = {
 };
 
 const result: BrowserBridgeResult = {
-  protocolVersion: 2,
+  protocolVersion: 3,
   // Foundation's UUID Codable representation is uppercase while the web
   // command producer emits lowercase UUID strings.
   commandID: command.id.toUpperCase(),
   operationID: command.operationId,
   runID: command.runID,
   completedAt: "2026-09-19T21:50:00.000Z",
-  outcome: { status: "completed" },
+  outcome: {
+    status: "completed",
+    snapshot: null,
+    observation: {
+      url: null,
+      title: null,
+      readyState: null,
+      window: null,
+      screenRecording: "unknown",
+      durationMs: 0,
+    },
+  },
 };
 
 describe("purchase-import broker SQLite", () => {
@@ -54,6 +65,71 @@ describe("purchase-import broker SQLite", () => {
     });
   });
 
+  // A run paused on a failed step (a minimized window, a missing permission)
+  // once stayed paused after the Mac reconnected: nothing was left to replay,
+  // so nothing woke it. The broker now remembers it until a step succeeds.
+  it("remembers a run whose step failed until a later step succeeds", async () => {
+    const stub = env.DB_FRESHNESS.getByName(crypto.randomUUID());
+    await runInDurableObject(stub, (_instance, state) => {
+      const store = new PurchaseImportSqlStore(state.storage);
+      store.migrate();
+      store.rememberWake("run-a");
+      store.rememberWake("run-b");
+      store.forgetWake("run-b");
+      const wake = store.nextWake();
+      expect(wake?.runId).toBe("run-a");
+      // An unpublished wake survives for the next reconnect.
+      expect(store.nextWake()).toEqual(wake);
+      store.forgetWake("run-a", wake!.generation);
+      expect(store.nextWake()).toBeNull();
+    });
+  });
+
+  // A run paused on a step an older protocol finished has nothing to replay;
+  // the first start after the cut wakes it so the server stops it for review.
+  it("wakes the run of a finished older-protocol step on first migration", async () => {
+    const stub = env.DB_FRESHNESS.getByName(crypto.randomUUID());
+    await runInDurableObject(stub, (_instance, state) => {
+      state.storage.sql.exec(
+        "CREATE TABLE broker_command (request_id TEXT PRIMARY KEY, operation_id TEXT NOT NULL, run_id TEXT NOT NULL, request_json TEXT NOT NULL, state TEXT NOT NULL, result_json TEXT, created_at INTEGER NOT NULL, updated_at INTEGER NOT NULL)",
+      );
+      state.storage.sql.exec(
+        "INSERT INTO broker_command (request_id, operation_id, run_id, request_json, state, created_at, updated_at) VALUES (?, ?, ?, ?, 'completed', ?, ?)",
+        command.id,
+        command.operationId,
+        command.runID,
+        JSON.stringify({ ...command, protocolVersion: 2 }),
+        Date.now(),
+        Date.now(),
+      );
+      const store = new PurchaseImportSqlStore(state.storage);
+      store.migrate();
+      expect(store.nextWake()?.runId).toBe(command.runID);
+      store.forgetWake(command.runID);
+      store.migrate();
+      expect(store.nextWake()).toBeNull();
+    });
+  });
+
+  // The cut to protocol 3 cancels commands no current Mac can run; their run
+  // must still be woken so the server stops it for review.
+  it("wakes the run of a command from an older protocol it cancels", async () => {
+    const stub = env.DB_FRESHNESS.getByName(crypto.randomUUID());
+    await runInDurableObject(stub, (_instance, state) => {
+      const store = new PurchaseImportSqlStore(state.storage);
+      store.migrate();
+      state.storage.sql.exec(
+        "INSERT INTO broker_command (request_id, operation_id, run_id, request_json, state, created_at, updated_at) VALUES (?, ?, ?, ?, 'pending', 1, 1)",
+        command.id,
+        command.operationId,
+        command.runID,
+        JSON.stringify({ ...command, protocolVersion: 2 }),
+      );
+      expect(store.nextReplayable()).toBeNull();
+      expect(store.nextWake()?.runId).toBe(command.runID);
+    });
+  });
+
   it("acknowledges a browser result without replaying its completed command", async () => {
     const stub = env.PURCHASE_IMPORT.getByName(crypto.randomUUID());
     await stub.enqueue(command);
@@ -75,15 +151,11 @@ describe("purchase-import broker SQLite", () => {
 
     socket.send(
       JSON.stringify({
-        protocolVersion: 2,
+        protocolVersion: 3,
         type: "hello",
         deviceID: "11111111-1111-4111-8111-111111111111",
         browser: "chrome",
-        capabilities: {
-          fixedCaptureVersion: 1,
-          enhancedScreenshot: false,
-          renderedPDF: true,
-        },
+        capabilities: { snapshotVersion: 1, screenshot: true },
       }),
     );
     expect(await receiveMessage(socket)).toMatchObject({
@@ -91,9 +163,9 @@ describe("purchase-import broker SQLite", () => {
       command: { id: command.id },
     });
 
-    socket.send(JSON.stringify({ protocolVersion: 2, type: "result", result }));
+    socket.send(JSON.stringify({ protocolVersion: 3, type: "result", result }));
     expect(await receiveMessage(socket)).toEqual({
-      protocolVersion: 2,
+      protocolVersion: 3,
       type: "acknowledge",
       commandID: command.id,
     });

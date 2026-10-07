@@ -68,16 +68,30 @@ export default {
       const reply = () =>
         socket.send(
           JSON.stringify({
-            protocolVersion: 2,
+            protocolVersion: 3,
             type: "result",
             result: {
-              protocolVersion: 2,
+              protocolVersion: 3,
               commandID: command.id,
               operationID: command.operationId,
               runID: command.runID,
               completedAt: new Date().toISOString(),
+              // Navigate, scroll, and window commands carry no page.
               outcome: (target && input.outcomes?.[target]) ?? {
                 status: "completed",
+                snapshot: null,
+                observation: {
+                  url: target ?? null,
+                  title: null,
+                  readyState: "complete",
+                  window: {
+                    recovered: false,
+                    minimized: false,
+                    onScreen: true,
+                  },
+                  screenRecording: "granted",
+                  durationMs: 1,
+                },
               },
             },
           }),
@@ -87,15 +101,11 @@ export default {
     });
     socket.send(
       JSON.stringify({
-        protocolVersion: 2,
+        protocolVersion: 3,
         type: "hello",
         deviceID: "11111111-1111-4111-8111-111111111111",
         browser: "chrome",
-        capabilities: {
-          fixedCaptureVersion: 1,
-          enhancedScreenshot: false,
-          renderedPDF: true,
-        },
+        capabilities: { snapshotVersion: 1, screenshot: true },
       }),
     );
     return new Response(null, { status: 202 });

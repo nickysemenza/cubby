@@ -65,24 +65,29 @@ describe("account-sync order worklist", () => {
   async function listPage(
     runId: string,
     operationId: string,
-    outcome: BrowserBridgeResult["outcome"],
+    outcome: Promise<BrowserBridgeResult["outcome"]>,
   ) {
     const bridge = fakeBroker();
     const issued = await issueBrowserCommand(ctx.db, bridge.namespace, {
       runId,
       operationId,
       operation: {
-        type: "navigate",
-        url: `https://${HOST}/order-history`,
+        type: "capture",
         allowedHosts: [HOST],
+        screenshot: "preferred",
       },
     });
-    bridge.respondWith(outcome);
-    return importBrowserOrderEvidence(ctx.db, bridge.namespace, {
-      runId,
-      operationId: `${operationId}:import`,
-      commandId: issued.commandId,
-    });
+    bridge.respondWith(await outcome);
+    return importBrowserOrderEvidence(
+      ctx.db,
+      bridge.namespace,
+      {
+        runId,
+        operationId: `${operationId}:import`,
+        commandId: issued.commandId,
+      },
+      bridge.ports,
+    );
   }
 
   it("records a history page as a worklist, skips covered orders, and refuses to finish while one is pending", async () => {

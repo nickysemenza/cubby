@@ -1,8 +1,9 @@
 import { type ProductId, productShortcode } from "@cubby/schemas/identifiers";
-import type {
-  BrowserBridgeRequest,
-  BrowserBridgeResult,
-  BrowserStructuredProducts,
+import {
+  BROWSER_BRIDGE_PROTOCOL,
+  type BrowserBridgeRequest,
+  type BrowserBridgeResult,
+  type BrowserStructuredProducts,
 } from "@cubby/schemas/purchase-import";
 import { and, eq } from "drizzle-orm";
 import { withTestDb } from "tooling/test-setup";
@@ -26,6 +27,7 @@ import {
 } from "~/server/repo/repo.fixtures";
 import { insertWithShortcode } from "~/server/repo/shortcode-utils";
 
+import { completedCapture, testBrowserPorts } from "./browser.fixtures";
 import { CAPTURE_INTERIM_NOTE } from "./capture-interim-note";
 import {
   commitProductEnrichment,
@@ -597,7 +599,7 @@ describe("product enrichment worklist", () => {
         operation: {
           type: "capture",
           allowedHosts: ["seed.example.test"],
-          enhancedEvidence: false,
+          screenshot: "preferred",
         },
       });
       const command = issued.at(-1);
@@ -680,39 +682,30 @@ describe("product enrichment worklist", () => {
       })
       .returning({ id: runEvidence.id });
     results.set(commandId, {
-      protocolVersion: 2,
+      protocolVersion: BROWSER_BRIDGE_PROTOCOL,
       commandID: commandId,
       operationID: "browser-command:capture-late",
       runID: runId,
       completedAt: "2026-09-25T12:00:00.000Z",
-      outcome: {
-        status: "completed",
-        capture: {
-          sourceURL: "https://seed.example.test/products/basil",
-          title: "Basil packet",
-          capturedAt: "2026-09-25T12:00:00.000Z",
-          captureVersion: 3,
-          readableText: "Basil packet",
-          links: [],
-          images: [],
-          paymentEvidence: [],
-          evidence: [
-            {
-              id: evidence!.id,
-              kind: "rendered_pdf",
-              checksum: "e".repeat(64),
-              contentType: "application/pdf",
-            },
-          ],
-          variantMarkers: [],
-        },
-      },
+      outcome: await completedCapture(
+        "https://seed.example.test/products/basil",
+        { title: "Basil packet", text: "Basil packet" },
+        [
+          {
+            id: evidence!.id,
+            kind: "rendered_pdf",
+            checksum: "e".repeat(64),
+            contentType: "application/pdf",
+          },
+        ],
+      ),
     });
-    await importBrowserOrderEvidence(ctx.db, namespace, {
-      runId,
-      operationId: "evidence-late",
-      commandId,
-    });
+    await importBrowserOrderEvidence(
+      ctx.db,
+      namespace,
+      { runId, operationId: "evidence-late", commandId },
+      testBrowserPorts(),
+    );
     expect(await targetState(claimed.targetId)).toEqual({
       state: "skipped",
       outcome: "skipped",

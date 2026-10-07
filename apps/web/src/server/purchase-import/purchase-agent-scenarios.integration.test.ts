@@ -57,6 +57,7 @@ import {
 import { getRunLiveProgress } from "~/server/repo/run-progress";
 import { insertWithShortcode } from "~/server/repo/shortcode-utils";
 
+import { completedCapture } from "./browser.fixtures";
 import { startSelectedChargeRun } from "./charge-runs";
 import { learnPurchaseProductExternalId } from "./external-id-learning";
 import {
@@ -96,21 +97,8 @@ const PANTRY_SKU = "OATS-1KG";
 const orderUrl = (orderId: string) =>
   `https://${SHOP_HOST}/order-details?orderId=${orderId}`;
 
-const capturedOrder = (orderId: string, readableText: string) => ({
-  status: "completed",
-  capture: {
-    sourceURL: orderUrl(orderId),
-    title: `Order ${orderId}`,
-    capturedAt: "2026-09-25T12:00:00.000Z",
-    captureVersion: 1,
-    readableText,
-    links: [],
-    images: [],
-    paymentEvidence: [],
-    evidence: [],
-    variantMarkers: [],
-  },
-});
+const capturedOrder = (orderId: string, text: string) =>
+  completedCapture(orderUrl(orderId), { title: `Order ${orderId}`, text });
 
 const unreadableExtraction = (detail: string) => ({
   status: "unreadable",
@@ -430,7 +418,7 @@ describe("purchase-agent scripted scenarios", () => {
     });
     await scenario.dispatch(seeded.start);
     await connectAfterPause(seeded, {
-      [orderUrl("SCN10001")]: capturedOrder(
+      [orderUrl("SCN10001")]: await capturedOrder(
         "SCN10001",
         "Order SCN10001 placed September 20, 2026. Scenario rolled oats, 1 kg (SKU OATS-1KG) $12.00. Sales tax $1.00. Order total $13.00.",
       ),
@@ -548,11 +536,11 @@ describe("purchase-agent scripted scenarios", () => {
     await connectAfterPause(
       seeded,
       {
-        [orderUrl("SCN20001")]: capturedOrder(
+        [orderUrl("SCN20001")]: await capturedOrder(
           "SCN20001",
           "Order SCN20001 placed September 22, 2026. Scenario rolled oats, 1 kg (SKU OATS-1KG) $8.50. Shipping $1.50. Order total $10.00.",
         ),
-        [orderUrl("SCN20002")]: capturedOrder(
+        [orderUrl("SCN20002")]: await capturedOrder(
           "SCN20002",
           "Order SCN20002. Loading order details…",
         ),
@@ -779,7 +767,7 @@ describe("purchase-agent scripted scenarios", () => {
     await scenario.connectBrowser({
       ...seeded.browser,
       outcomes: {
-        [orderUrl("SCN40001")]: capturedOrder(
+        [orderUrl("SCN40001")]: await capturedOrder(
           "SCN40001",
           "Order SCN40001 placed September 23, 2026. Synthetic plant ties $4.00. Order total $4.00.",
         ),
@@ -955,7 +943,7 @@ describe("purchase-agent scripted scenarios", () => {
     });
     await scenario.dispatch(seeded.start);
     await connectAfterPause(seeded, {
-      [orderUrl("SCN60001")]: capturedOrder(
+      [orderUrl("SCN60001")]: await capturedOrder(
         "SCN60001",
         "Order SCN60001. Sign in to see your order.",
       ),
@@ -1809,19 +1797,25 @@ describe("purchase-agent scripted scenarios", () => {
       url: string,
       sku: string,
       variantGroup: boolean,
-    ) => ({
-      status: "completed",
-      capture: {
-        sourceURL: url,
-        canonicalUrl: url,
-        title: `Seed packet ${sku}`,
-        capturedAt: "2026-09-25T12:00:00.000Z",
-        captureVersion: 2,
-        readableText: `Seed packet ${sku}`,
-        links: [],
-        images: [],
-        paymentEvidence: [],
-        evidence: [
+    ) =>
+      completedCapture(
+        url,
+        {
+          title: `Seed packet ${sku}`,
+          text: `Seed packet ${sku}`,
+          canonicalUrl: url,
+          // The basil page's Product is the served ?variant=101; the dill
+          // page is a ProductGroup listing several packet sizes.
+          jsonLd: [
+            variantGroup
+              ? {
+                  "@type": "ProductGroup",
+                  hasVariant: [{ "@type": "Product", sku }],
+                }
+              : { "@type": "Product", sku },
+          ],
+        },
+        [
           {
             id: await retained(url),
             kind: "rendered_pdf",
@@ -1829,15 +1823,7 @@ describe("purchase-agent scripted scenarios", () => {
             contentType: "application/pdf",
           },
         ],
-        variantMarkers: [],
-        // The Mac resolved the Shopify offer for ?variant=101; the dill page
-        // lists several packet sizes and names no variant.
-        structuredProducts: {
-          products: [{ skus: [sku], mpns: [], gtins: [], productIds: [] }],
-          variantGroup,
-        },
-      },
-    });
+      );
     const outcomes = {
       [basilUrl]: await productPage(basilUrl, "BASIL-101", false),
       [dillUrl]: await productPage(dillUrl, "DILL-PKT", true),

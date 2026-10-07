@@ -4,7 +4,7 @@ import {
   initiateRunEvidenceUploadOut,
   type InitiateRunEvidenceUploadInput,
 } from "@cubby/schemas/purchase-import";
-import { and, desc, eq, inArray } from "drizzle-orm";
+import { and, desc, eq, inArray, ne } from "drizzle-orm";
 import { z } from "zod";
 
 import { env } from "~/env";
@@ -92,6 +92,9 @@ export async function loadRunEvidenceForExtraction(
       and(
         eq(runEvidence.runId, z.uuid().parse(runId)),
         eq(runTable.purpose, "purchase_validation"),
+        // A captured page's DOM is kept for the server's own reading; the
+        // extractor reads the member's document (an upload, PDF, or picture).
+        ne(runEvidence.mediaType, "text/html"),
       ),
     )
     .orderBy(desc(runEvidence.createdAt))
