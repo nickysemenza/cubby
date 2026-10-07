@@ -77,7 +77,9 @@ build_settings=(COMPILER_INDEX_STORE_ENABLE=NO)
 if [ "${GITHUB_ACTIONS:-}" = "true" ]; then
   # The macOS-26 hosted runner is Apple Silicon. Restrict the generic
   # Simulator build to its native slice; a release artifact still builds its
-  # supported architectures outside this PR gate.
+  # supported architectures outside this PR gate. project.yml's simulator
+  # EXCLUDED_ARCHS covers only the app's own targets: without ARCHS=arm64,
+  # every SPM package (CubbyAPI included) also compiles for x86_64.
   build_settings+=(SWIFT_ENABLE_BATCH_MODE=YES ARCHS=arm64 ONLY_ACTIVE_ARCH=YES CODE_SIGNING_ALLOWED=NO)
 fi
 
