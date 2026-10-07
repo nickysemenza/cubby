@@ -43,12 +43,8 @@ export const NATIVE_COMPONENT_ROOTS = [
   "BrowserBridgeResult",
   "BrowserBridgeRunCompletion",
   "BrowserBridgeServerMessage",
-  "BrowserCapturedImage",
-  "BrowserCapturedLink",
   "BrowserEvidenceReference",
   "BrowserEvidenceKind",
-  "BrowserPageCapture",
-  "BrowserPaymentEvidence",
   "BrowserChoice",
 ] as const;
 
