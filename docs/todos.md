@@ -653,7 +653,7 @@ Runs list and `imports_read.run_status` read one shared projection
 - 🟢 **Classification-declared field policies: remaining classifications.**
   A classification decides whether a field or link is expected, and whether
   it is allowed at all: a SpendingCategory with `productExpectation:
-not_allowed` (Restaurants) means an Expense neither expects nor may link a
+  not_allowed` (Restaurants) means an Expense neither expects nor may link a
   Product (strict refusal on every write path; #1685 and #1682). Decided
   shape: fixed classifications declare policies in the entity manifest
   (`capabilities.classificationPolicies`, keyed by classifier value);
@@ -847,10 +847,10 @@ consume the declarations.
   Compare recall against the OpenAI adapter with this eval set:
   `"plastic tarp"` → `blue plastic tarp` (product); `"drop cloth"` →
   `plastic drop cloth` (product); `"where are tarps"` → `tarps cloths
-blankets` (location); `"packout"` → `packout organizer` (product);
+  blankets` (location); `"packout"` → `packout organizer` (product);
   `"parchment"` → `parchment paper` (product); `"tarpaulin"` → `blue plastic
-tarp` (product); `"cling film"` → `plastic wrap` (product); `"adjustable
-spanner"` → `adjustable wrench` (product); `"wet dry vac"` → `shop vacuum`
+  tarp` (product); `"cling film"` → `plastic wrap` (product); `"adjustable
+  spanner"` → `adjustable wrench` (product); `"wet dry vac"` → `shop vacuum`
   (product); `"painters cover"` → `painters drop cloth` (product). Trap: rows
   are keyed on `(provider, model, dimensions)`, so `findRelatedSearchCandidates`
   must resolve the active `SemanticEmbeddingConfig` before embedding the query.
@@ -1149,7 +1149,7 @@ related active work can find its deferred follow-ups.
 
 - **Grocery cost basis.** Allow `productId` on `discount` rows (Whole Foods
   promos, Buy-Again are per line) and let `productQuantity` carry `{value,
-unit}` for measured lines (`0.5 lb @ $4/lb`), folding both into derived cost
+  unit}` for measured lines (`0.5 lb @ $4/lb`), folding both into derived cost
   basis without changing `SUM(Expense.cost)`. Promote when per-serving or
   per-unit cost numbers are actually used.
 

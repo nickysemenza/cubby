@@ -1147,7 +1147,7 @@ table each (ADR 0007):
   declaration; the write helpers are in `repo/entity-links.ts`. Every query
   names its `kind` and filters `deletedAt`.
 - `EntityExternalId(entityId/entityKind, source, kind, externalId, url,
-isPrimary)` holds every identifier an outside system gave an entity, and
+  isPrimary)` holds every identifier an outside system gave an entity, and
   `ExternalSource` registers the source slugs. Kinds and the entity kinds they
   attach to are declared in `EXTERNAL_ID_KINDS`
   (`packages/schemas/src/external-id.ts`): product identifiers (`asin`,
@@ -1277,7 +1277,7 @@ precedence rule.
    `extensions.ports.repository` at the export; the generator binds it to
    the kernel. Methods take the kernel context (`(ctx, …)`); the declared
    actions gate which ones the kernel exposes (`capabilities.lifecycle:
-"readOnly"` exposes get/list/search), and `delete` defaults to the
+   "readOnly"` exposes get/list/search), and `delete` defaults to the
    declared `lifecycle.delete` policy plus `deleteHooks`. The kernel owns the
    write transaction: a repository writes through `ctx.db` and never opens a
    transaction on another handle. A declared `capabilities.resolve` needs no

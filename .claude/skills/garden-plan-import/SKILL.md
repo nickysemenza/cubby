@@ -36,7 +36,7 @@ Location (bed/planter/area) ──< Planting >── Plant (cultivar/species; ga
 - A `Task` exists for every calendar row and every shopping-list line. A
   planting's `taskId` points at the Task that will do the sowing/transplant,
   so "what does this plan still ask of me" is always `entity_read.list task
-{filters:{projectId}}`.
+  {filters:{projectId}}`.
 - A Planting names its `Plant` (`plantId`), never free-text variety. A Plant
   is one cultivar ("Sun Gold F1") or, with no cultivar, the species
   ("Fenugreek"); its `gardenGuideKey` is the crop. Plant verdicts

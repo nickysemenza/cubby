@@ -92,7 +92,7 @@ detail reads its sightings from the child table.
 ## Consequences
 
 - New edges: `ImageSighting → Image` (cascade on delete), `ImageSighting →
-LedgerParty` (block delete, repoint on merge), `ImageSighting → Device`
+  LedgerParty` (block delete, repoint on merge), `ImageSighting → Device`
   (cascade on delete), `Image.capturedByPartyId → LedgerParty` (clear owner
   on delete, repoint on merge).
 - `Image.source` gains `screenshot`; every hand-typed union mirroring it
