@@ -286,6 +286,10 @@ export function runServicesFor(
           env.PURCHASE_IMPORT,
           runId,
         );
+        // The run ended while it was being claimed (an outdated Mac stopped
+        // it): report it stopped, which ends the agent's submission.
+        if ("kind" in claimed && claimed.kind === "stopped")
+          return { state: "stopped" as const, status: claimed.status };
         const claimedTarget = "startUrl" in claimed ? claimed.startUrl : null;
         return service.issueBrowserCommand(db, env.PURCHASE_IMPORT, {
           runId,
