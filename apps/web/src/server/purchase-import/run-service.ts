@@ -69,6 +69,7 @@ import {
 import type { Trade } from "@cubby/schemas/task-fields";
 import { vendorAccountCursor } from "@cubby/schemas/vendor-account-fields";
 import { vendorAgentHints } from "@cubby/schemas/vendor-import-fields";
+import { ACTIVE_RUN_STATUSES } from "@cubby/shared/client-constants";
 import { sha256Hex, sha256Uuid } from "@cubby/shared/sha256";
 import {
   and,
@@ -187,7 +188,6 @@ import { loadReceiptEvidenceForRun } from "./receipt-evidence";
 import { runCompletionNotice } from "./run-completion-notice";
 import { fetchPublicPage, type FetchPage } from "./server-page-fetch";
 import {
-  ACTIVE_RUN_STATUSES,
   CHARGE_HOLDING_STATUSES,
   accountSyncEligibility,
   readAccountSyncAdmission,
@@ -232,8 +232,6 @@ const targetWorkOrder = [
   asc(runTarget.createdAt),
   asc(runTarget.id),
 ] as const;
-
-export { ACTIVE_RUN_STATUSES, CHARGE_HOLDING_STATUSES } from "./sync-admission";
 
 /** An implicit start, restart, or retry must not work a charge run's account. */
 async function assertNoHoldingChargeRun(

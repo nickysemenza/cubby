@@ -4,6 +4,7 @@ import type {
   RunId,
   VendorAccountId,
 } from "@cubby/schemas/identifiers";
+import { ACTIVE_RUN_STATUSES } from "@cubby/shared/client-constants";
 import {
   type AnyColumn,
   and,
@@ -30,7 +31,6 @@ import { entityDisplayImagePresenceSql } from "~/server/repo/entity-display-imag
 import { browsingAccountFor, browsingAccounts } from "./browsing-account";
 import { productEnrichmentTarget } from "./product-enrichment-target";
 import {
-  ACTIVE_RUN_STATUSES,
   type PurchaseImportNamespace,
   startTargetedRun,
   type TargetedRunTarget,

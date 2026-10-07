@@ -1,5 +1,6 @@
 import { runShortcode, type VendorAccountId } from "@cubby/schemas/identifiers";
 import { runPurpose, runStatus } from "@cubby/schemas/run-fields";
+import { ACTIVE_RUN_STATUSES } from "@cubby/shared/client-constants";
 import { and, desc, eq, inArray, or, sql } from "drizzle-orm";
 
 import type { DrizzleClient, DrizzleTransaction } from "~/server/db";
@@ -16,12 +17,6 @@ export function accountSyncEligibility() {
   )}`;
 }
 
-export const ACTIVE_RUN_STATUSES = [
-  "running",
-  "paused_auth",
-  "paused_offline",
-  "paused_approval",
-] as const;
 /** A failed charge dispatch still owns the selected hunts. */
 export const CHARGE_HOLDING_STATUSES = [
   ...ACTIVE_RUN_STATUSES,
