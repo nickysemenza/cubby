@@ -2122,6 +2122,96 @@ export async function issueBrowserCommand(
   return { commandId, state: connected ? "dispatched" : "paused_offline" };
 }
 
+/**
+ * Ends a run whose Mac app the server's version gate refused: nothing the run
+ * asks of the browser can succeed until the member updates and restarts. It
+ * stops from any active status (a paused run included) and is a no-op once
+ * stopped, so a repeated read of the same result answers the same way. An
+ * account sync's import audit is attempted first, but its failure (or a
+ * paused run it refuses) cannot keep the run going; the finding says so.
+ */
+async function stopRunForOutdatedClient(
+  db: Database,
+  input: { runId: string; operationId: string; message: string },
+) {
+  const scope = await loadRunScope(db, input.runId);
+  const runId = runEntityId.parse(input.runId);
+  if (!ACTIVE_RUN_STATUSES.some((status) => status === scope.public.status))
+    return;
+  let auditGap: string | null = null;
+  let auditedAt: Date | undefined;
+  if (scope.public.purpose === "account_sync") {
+    try {
+      await auditAllImportBatches(db, {
+        runId: input.runId,
+        operationId: `${input.operationId}:required-audit`,
+      });
+      auditedAt = new Date();
+    } catch (error) {
+      auditGap = `Imported purchases were not audited: ${error instanceof Error ? error.message : String(error)}`;
+    }
+  }
+  const summary = [input.message, auditGap].filter(Boolean).join(" ");
+  const fingerprint = await sha256Hex(`client_update_required:${summary}`);
+  await withTransaction(db, async (tx) => {
+    const [stopped] = await tx
+      .update(runTable)
+      .set({
+        status: "needs_review",
+        failureCode: "client_update_required",
+        // A skipped audit keeps whatever audit stamp the run already had.
+        auditedAt: auditedAt ?? sql`${runTable.auditedAt}`,
+        endedAt: new Date(),
+        updatedAt: new Date(),
+      })
+      .where(
+        and(
+          eq(runTable.id, runId),
+          inArray(runTable.status, [...ACTIVE_RUN_STATUSES]),
+        ),
+      )
+      .returning({ id: runTable.id });
+    if (!stopped) return;
+    // The account was only offline because of this run; a sign-in pause
+    // stays, since that is the vendor's state, not the app's.
+    if (scope.public.vendorAccountId)
+      await tx
+        .update(vendorAccount)
+        .set({ status: "active", updatedAt: new Date() })
+        .where(
+          and(
+            eq(
+              vendorAccount.id,
+              vendorAccountId.parse(scope.public.vendorAccountId),
+            ),
+            eq(vendorAccount.status, "paused_offline"),
+          ),
+        );
+    if (scope.public.purpose !== "account_sync")
+      await tx
+        .update(runTarget)
+        .set({ state: "unresolved", outcome: null, updatedAt: new Date() })
+        .where(
+          and(
+            eq(runTarget.runId, runId),
+            inArray(runTarget.state, ["pending", "prepared", "needs_evidence"]),
+          ),
+        );
+    await tx
+      .insert(runFinding)
+      .values({
+        runId,
+        ledgerPartyId: scope.ledgerPartyId,
+        entityKind: "run",
+        entityId: runId,
+        kind: "other",
+        summary,
+        evidenceFingerprint: fingerprint,
+      })
+      .onConflictDoNothing();
+  });
+}
+
 export async function readBrowserCommandResult(
   db: Database,
   namespace: PurchaseImportNamespace,
@@ -2153,16 +2243,11 @@ export async function readBrowserCommandResult(
         key,
         `${result.outcome.code}: ${result.outcome.message}`,
       );
-      await stopRunForReview(db, {
+      await stopRunForOutdatedClient(db, {
         runId: input.runId,
         operationId: input.operationId,
-        kind: "other",
-        summary: result.outcome.message,
+        message: result.outcome.message,
       });
-      await getDb(db)
-        .update(runTable)
-        .set({ failureCode: result.outcome.code, updatedAt: new Date() })
-        .where(eq(runTable.id, scope.public.runId));
       return { state: "stopped" as const, result };
     }
     const paused =
