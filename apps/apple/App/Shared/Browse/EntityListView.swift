@@ -778,34 +778,22 @@ struct EntityListView: View {
                             }
                             Divider()
                         }
-                        if let visibleMeta {
-                            listSummary(meta: visibleMeta, shown: visibleRows.count)
-                                .padding(.horizontal, FieldGuideTokens.Space.md)
-                                .padding(.vertical, FieldGuideTokens.Space.xs)
-                                .frame(maxWidth: .infinity, alignment: .leading)
-                        }
-                        if model.isSearching ? (model.searchModel?.hasMore ?? false) : model.hasMore {
-                            loadMore(model)
-                                .frame(maxWidth: .infinity)
-                                .padding(.vertical, FieldGuideTokens.Space.sm)
-                        }
                     }
                 }
                 .accessibilityIdentifier("browse.\(key.rawValue).table")
             #endif
-            #if os(macOS)
-                if let visibleMeta {
-                    listSummary(meta: visibleMeta, shown: visibleRows.count)
-                        .padding(.horizontal, FieldGuideTokens.Space.md)
-                        .padding(.vertical, FieldGuideTokens.Space.xs)
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                }
-                if model.isSearching ? (model.searchModel?.hasMore ?? false) : model.hasMore {
-                    loadMore(model)
-                        .frame(maxWidth: .infinity)
-                        .padding(.vertical, FieldGuideTokens.Space.sm)
-                }
-            #endif
+            if let visibleMeta {
+                listSummary(meta: visibleMeta, shown: visibleRows.count)
+                    .padding(.horizontal, FieldGuideTokens.Space.md)
+                    .padding(.vertical, FieldGuideTokens.Space.xs)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .accessibilityIdentifier("browse.\(key.rawValue).table.summary")
+            }
+            if model.isSearching ? (model.searchModel?.hasMore ?? false) : model.hasMore {
+                loadMore(model)
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, FieldGuideTokens.Space.sm)
+            }
         }
     }
 

@@ -22,7 +22,7 @@ Cached Mac lists and freshly opened lists select their initial layout from the s
 
 Every entity offers List and Table alongside its declared shelf, timeline, or specialist views. Table uses the same manifest fields and display rules as web, with aligned column headers, column visibility controls, and server sorting only for declared sortable fields. Mac uses a native selectable table with resizable columns; iPhone keeps the columns in a horizontally scrolling table. Switching List and Table retains the loaded records, filters, search, and selection. A header sort restarts server pagination and replays an active search in the new order.
 
-The Mac root browser owns split selection even while its detail pane has related-record history. Nested entity lists push a detail onto their current navigation path. Values and source attribution in phone table cells wrap at accessibility text sizes.
+The Mac root browser owns split selection even while its detail pane has related-record history. Nested entity lists push a detail onto their current navigation path. Values and source attribution in phone table cells wrap at accessibility text sizes. Totals and paging controls stay within the viewport, outside the horizontally scrolling columns.
 
 ## Density and feedback
 

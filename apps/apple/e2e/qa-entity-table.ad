@@ -16,6 +16,7 @@ click "label=View"
 click "id=browse.product.view.table"
 wait "id=browse.product.table" 30000
 wait "id=browse.product.table.row.${PRODUCT_ID}" 60000
+wait "id=browse.product.table.summary" 30000
 wait "id=browse.product.sort.name" 30000
 click "id=browse.product.sort.name"
 wait "id=browse.product.sort.name value=Ascending" 30000
