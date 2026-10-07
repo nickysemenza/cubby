@@ -1,3 +1,5 @@
+import { createHash } from "node:crypto";
+
 import type { ActorContext } from "@cubby/schemas/context";
 import type { ProjectShortcode } from "@cubby/schemas/identifiers";
 import {
@@ -10,7 +12,6 @@ import {
   type mcpAttachFileInput,
 } from "@cubby/schemas/image";
 import { type AppErrorReason, parseShortcode } from "@cubby/shared";
-import { sha256Hex } from "@cubby/shared/sha256";
 import type { z } from "zod";
 
 import { imageUploadContract } from "~/contracts/image-upload.contract";
@@ -52,6 +53,13 @@ import {
   recordImageAnalysis,
 } from "./image-analysis.server";
 
+async function streamedSha256(response: Response): Promise<string> {
+  const hash = createHash("sha256");
+  if (response.body)
+    for await (const chunk of response.body) hash.update(chunk);
+  return hash.digest("hex");
+}
+
 export async function markImageUploadedWorkflow(
   db: Database,
   input: z.output<typeof getImageByIdSchema>,
@@ -70,7 +78,9 @@ export async function markImageUploadedWorkflow(
     throw new Error(
       `Uploaded object ${pending.key} is unavailable: ${stored.status}`,
     );
-  const sha256 = await sha256Hex(new Uint8Array(await stored.arrayBuffer()));
+  // Streamed: uploads reach 50 MiB, and buffering one would crowd the
+  // Worker's shared memory.
+  const sha256 = await streamedSha256(stored);
   const uploaded = await markImageUploaded(db, imageId, sha256);
   // Settings default disabled/paused, so rollout creates no automatic work
   // until the owner explicitly enables it. Durable jobs repair missed wakes.
