@@ -35,6 +35,8 @@ settings:
     SWIFT_STRICT_CONCURRENCY: complete
     SWIFT_APPROACHABLE_CONCURRENCY: YES
     SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY: YES
+    COMPILATION_CACHE_ENABLE_CACHING: YES
+    COMPILATION_CACHE_ENABLE_DIAGNOSTIC_REMARKS: YES
     # The xcframework and generated sources come from outside the Xcode build graph.
     ENABLE_USER_SCRIPT_SANDBOXING: NO
     # build-rust.sh produces Apple-silicon slices only (no x86_64 simulator), so a
