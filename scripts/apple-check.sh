@@ -85,7 +85,7 @@ if [ "${GITHUB_ACTIONS:-}" = "true" ]; then
   # Scope arm64 to the Simulator SDK: a global override cross-compiles
   # executable build plugins, which then cannot run on Intel hosts.
   # Release artifacts build their supported architectures outside this gate.
-  build_settings+=(SWIFT_ENABLE_BATCH_MODE=YES "ARCHS[sdk=iphonesimulator*]=arm64" ONLY_ACTIVE_ARCH=YES CODE_SIGNING_ALLOWED=NO)
+  build_settings+=(-xcconfig apps/apple/ci-simulator.xcconfig SWIFT_ENABLE_BATCH_MODE=YES ONLY_ACTIVE_ARCH=YES CODE_SIGNING_ALLOWED=NO)
 fi
 
 # CI-only: reuse the SPM clone directory .github/actions/setup-apple-tools

@@ -1,0 +1,3 @@
+// Cross-compile the simulator slice while keeping executable build plugins native.
+// Xcode parses SDK conditions here; command-line assignments split at the first =.
+ARCHS[sdk=iphonesimulator*] = arm64

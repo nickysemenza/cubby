@@ -151,7 +151,11 @@ The generated `CubbyAPI` target forwards `-gline-tables-only` directly to the
 Swift frontend, so the driver's default `-g` does not restore full debug type
 information. Handwritten Swift targets retain their normal debug information.
 
-The simulator architecture override is scoped to `sdk=iphonesimulator*`.
+The simulator architecture override is scoped to `sdk=iphonesimulator*` in
+`apps/apple/ci-simulator.xcconfig`, passed through Xcode's standard `-xcconfig`
+option. Conditional command-line assignments split at the first `=` and
+produce invalid architectures; the configuration file preserves the SDK condition.
+Its contents enter both the DerivedData key and simulator app certificate.
 Host executable build plugins keep their native architecture; a global
 `ARCHS=arm64` override makes the OpenAPI generator fail with “Bad CPU type in
 executable” on Intel hosts.

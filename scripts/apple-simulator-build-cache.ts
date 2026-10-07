@@ -24,8 +24,8 @@ export const hostedSimulatorBuildArgs = Object.freeze([
   "-skipPackagePluginValidation",
   "-skipMacroValidation",
   "SWIFT_ENABLE_BATCH_MODE=YES",
-  // Host build tools keep their native architecture, including on Intel CI.
-  "ARCHS[sdk=iphonesimulator*]=arm64",
+  "-xcconfig",
+  "apps/apple/ci-simulator.xcconfig",
   "ONLY_ACTIVE_ARCH=YES",
   "CODE_SIGNING_ALLOWED=NO",
   "COMPILER_INDEX_STORE_ENABLE=NO",
@@ -46,6 +46,7 @@ const requiredInputs = [
   "apps/apple/CubbyKit/Package.resolved",
   "apps/apple/project.yml",
   "apps/apple/packages.yml",
+  "apps/apple/ci-simulator.xcconfig",
   "apps/apple/Cubby.xcodeproj/project.pbxproj",
   packageWorkspacePath,
 ];
