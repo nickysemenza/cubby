@@ -947,7 +947,7 @@
             case .captureUnavailable: "The signed-in page could not be captured."
             case .uploadFailed: "The evidence file could not be staged."
             case .clientUpdateRequired:
-                "This Cubby for Mac is too old for the server. Update it; the run resumes when it reconnects."
+                "This Cubby for Mac is too old for the server. Update it, then restart the run."
             case .executionFailed: "The browser did not complete the requested operation."
             case .cancelled: "The browser command was cancelled."
             }

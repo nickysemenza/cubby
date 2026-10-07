@@ -856,9 +856,10 @@ describe("purchase import run admission", () => {
     });
   });
   // An outdated Mac once reported every capture as "The evidence file could
-  // not be staged" and the run failed the command. Updating the app is the
-  // fix, so the run waits for the updated app to reconnect instead.
-  it("pauses a run offline when the Mac app is too old for the server", async () => {
+  // not be staged", a retryable failure no retry fixed. Its command now fails
+  // naming the update, and the run is not parked waiting for a reconnect
+  // that could never wake it.
+  it("fails a browser command for an outdated Mac app with the update to make", async () => {
     const party = await createMember();
     const account = await createVendorAccount(party.id);
     const run = await startOrResumeRun(ctx.db, {
@@ -880,7 +881,7 @@ describe("purchase import run admission", () => {
         outcome: {
           status: "failed",
           code: "client_update_required",
-          message: "Update Cubby for Mac, then this run resumes.",
+          message: "Update Cubby for Mac, then restart this run.",
           retryable: false,
         },
       }),
@@ -906,18 +907,29 @@ describe("purchase import run admission", () => {
       operationId: "browser:outdated",
     });
 
-    expect(read.state).toBe("paused_offline");
-    const { run: runTable } = await import("~/server/db/schema");
-    const { eq } = await import("drizzle-orm");
+    expect(read.state).toBe("completed");
+    const { run: runTable, runOperation } = await import("~/server/db/schema");
+    const { and, eq } = await import("drizzle-orm");
     const { getDb } = await import("~/server/repo/database-helpers");
+    const [operation] = await getDb(ctx.db)
+      .select({ state: runOperation.state, error: runOperation.error })
+      .from(runOperation)
+      .where(
+        and(
+          eq(runOperation.runId, run.id),
+          eq(runOperation.operationId, "browser:outdated"),
+        ),
+      );
+    expect(operation).toEqual({
+      state: "failed",
+      error:
+        "client_update_required: Update Cubby for Mac, then restart this run.",
+    });
     const [row] = await getDb(ctx.db)
-      .select({ status: runTable.status, failureCode: runTable.failureCode })
+      .select({ status: runTable.status })
       .from(runTable)
       .where(eq(runTable.id, run.id));
-    expect(row).toEqual({
-      status: "paused_offline",
-      failureCode: "client_update_required",
-    });
+    expect(row?.status).not.toBe("paused_offline");
   });
   it("abandons a browser command nobody answered within the stale window", async () => {
     const party = await createMember();

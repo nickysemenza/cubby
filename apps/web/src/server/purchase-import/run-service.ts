@@ -2144,14 +2144,14 @@ export async function readBrowserCommandResult(
     .result(parsed.data.commandId);
   if (result?.outcome.status === "failed") {
     const authRequired = result.outcome.code === "authentication_required";
-    // An outdated Mac app waits like a disconnected one: the updated app
-    // reconnects and the run resumes, keeping the reason on the run.
+    // client_update_required is deliberately not a pause: its command result
+    // is already final, so a reconnect has nothing to wake. It fails like any
+    // terminal outcome, naming the update; the member restarts after it.
     const paused =
       authRequired ||
       result.outcome.retryable ||
       result.outcome.code === "deadline_exceeded" ||
-      result.outcome.code === "browser_unavailable" ||
-      result.outcome.code === "client_update_required";
+      result.outcome.code === "browser_unavailable";
     if (paused) {
       await getDb(db)
         .update(runTable)
