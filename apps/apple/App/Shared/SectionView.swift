@@ -11,6 +11,9 @@ struct SectionView: View {
             switch section {
             case .today: TodayView()
             case .activity: ActivityView()
+            #if os(macOS)
+                case .browserSync: BrowserSyncPane()
+            #endif
             case .capture: CaptureView()
             case .photos: PhotosRootView()
             case .browse: BrowseRootView()

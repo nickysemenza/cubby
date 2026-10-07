@@ -202,6 +202,8 @@
                 #expect(error.localizedDescription.contains("VACCT-AAAA: Finish selected work."))
                 #expect(error.localizedDescription.contains("VACCT-CCCC: This account is unavailable"))
                 #expect(error.localizedDescription.contains("submitted 1"))
+                let partial = try #require(error as? BrowserBridgeSyncFailure)
+                #expect(partial.submitted.map(\.runId) == ["RUN-EXAMPLE"])
             }
             #expect(await sync.submitted == ["VACCT-BBBB", "VACCT-BBBB"])
             await harness.coordinator.disconnect()

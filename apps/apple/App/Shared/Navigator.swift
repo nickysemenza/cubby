@@ -19,6 +19,9 @@ final class Navigator {
         get {
             switch section {
             case .today, .activity: .work
+            #if os(macOS)
+                case .browserSync: .work
+            #endif
             case .capture: .capture
             case .photos, .browse, .graph: .library
             case .search, .dev: .find

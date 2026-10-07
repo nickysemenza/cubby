@@ -26,6 +26,18 @@ public struct BrowserBridgeBackfillRange: Codable, Sendable, Hashable {
     }
 }
 
+/// A batch may submit runs before another account fails; callers retain both results and diagnostics.
+public struct BrowserBridgeSyncFailure: LocalizedError, Sendable {
+    public let message: String
+    public let submitted: [StartSyncOutput]
+    public var errorDescription: String? { message }
+
+    public init(message: String, submitted: [StartSyncOutput] = []) {
+        self.message = message
+        self.submitted = submitted
+    }
+}
+
 public protocol BrowserBridgeSyncRequesting: Sendable {
     func syncPlan() async throws -> SyncPlanOutput
     func requestSync(vendorAccountID: String, backfill: BrowserBridgeBackfillRange?) async throws

@@ -12,7 +12,7 @@ Use native `List`, `Form`, `Section`, `LabeledContent`, toolbars, sheets, menus,
 
 ## Navigation and generic records
 
-Mac has one main window and separate Settings. Catalog and Search use a grouped sidebar, selectable record list, adjacent complete detail, and an optional inspector. The inspector summarizes the already loaded row; the complete record and its actions remain in detail. Other workspaces use the main column. Keep menus, keyboard access, window restoration, selection, and related-record history.
+Mac has one main window and separate Settings. Catalog and Search use a grouped sidebar, selectable record list, adjacent complete detail, and an optional inspector. The inspector summarizes the already loaded row; the complete record and its actions remain in detail. Other workspaces use the main column. Browser Sync is a Mac workspace with a searchable, sortable account table: one row per account identity, retaining distinct accounts at the same vendor. Browser selection and permissions stay in Settings; sync, resume, sign-in, and history actions belong in the workspace. A single submitted sync opens its run console immediately; a batch opens Activity. Keep menus, keyboard access, window restoration, selection, and related-record history.
 
 iPhone keeps the Work, Capture, Library, and Find tabs with independent navigation stacks; iPad adapts to a sidebar. A pushed detail remains a complete route. Settings uses grouped native form sections. Preserve current search, filter, deep-link, and scroll behavior when switching presentation.
 

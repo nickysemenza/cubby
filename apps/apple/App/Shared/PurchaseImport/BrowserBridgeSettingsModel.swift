@@ -8,7 +8,7 @@ protocol BrowserBridgeControlling: AnyObject {
     func syncPlan() async throws -> SyncPlanOutput
     func syncNow(
         browser: BrowserChoice, accountID: String?, backfill: BrowserBridgeBackfillRange?
-    ) async throws
+    ) async throws -> [StartSyncOutput]
     func disconnect() async
     func raiseAuthenticationWindow(for accountID: String)
     func appDidBecomeActive()
@@ -57,11 +57,15 @@ final class BrowserBridgeSettingsModel {
     private(set) var syncPlans: [SyncPlanAccount] = []
     private(set) var syncPlanError: String?
     @ObservationIgnored private var syncPlanGeneration = UUID()
+    @ObservationIgnored private var syncGeneration = UUID()
     @ObservationIgnored private weak var controller: (any BrowserBridgeControlling)?
 
     var isConfigured: Bool { controller != nil }
 
     func install(controller: any BrowserBridgeControlling) {
+        syncGeneration = UUID()
+        isSyncing = false
+        syncStartedAt = nil
         self.controller = controller
         error = nil
     }
@@ -176,7 +180,9 @@ final class BrowserBridgeSettingsModel {
         do {
             let plans = try await controller.syncPlan().accounts
             guard syncPlanGeneration == generation else { return }
-            syncPlans = plans
+            // Account identity, not vendor name: one vendor may have multiple valid accounts.
+            var seen = Set<String>()
+            syncPlans = plans.filter { seen.insert($0.shortcode).inserted }
             syncPlanError = nil
         } catch {
             guard syncPlanGeneration == generation else { return }
@@ -186,23 +192,33 @@ final class BrowserBridgeSettingsModel {
     }
 
     func syncNow(
-        browser: BrowserChoice, accountID: String? = nil, backfill: BrowserBridgeBackfillRange? = nil
+        browser: BrowserChoice, accountID: String? = nil, backfill: BrowserBridgeBackfillRange? = nil,
+        onSubmitted: @escaping @MainActor ([StartSyncOutput]) -> Void = { _ in }
     ) {
         guard let controller, !isSyncing else { return }
+        let generation = UUID()
+        syncGeneration = generation
         isSyncing = true
         syncStartedAt = .now
         error = nil
         Task { [weak self] in
             do {
-                try await controller.syncNow(browser: browser, accountID: accountID, backfill: backfill)
-                guard let self else { return }
+                let runs = try await controller.syncNow(
+                    browser: browser, accountID: accountID, backfill: backfill)
+                guard let self, syncGeneration == generation else { return }
+                onSubmitted(runs)
                 await refreshSyncPlan()
+                guard syncGeneration == generation else { return }
                 lastCompletedAt = .now
                 isSyncing = false
                 syncStartedAt = nil
             } catch {
-                guard let self else { return }
+                guard let self, syncGeneration == generation else { return }
+                if let partial = error as? BrowserBridgeSyncFailure, !partial.submitted.isEmpty {
+                    onSubmitted(partial.submitted)
+                }
                 await refreshSyncPlan()
+                guard syncGeneration == generation else { return }
                 self.error = error.localizedDescription
                 isSyncing = false
                 syncStartedAt = nil
@@ -212,6 +228,9 @@ final class BrowserBridgeSettingsModel {
     }
 
     func disconnect() async {
+        syncGeneration = UUID()
+        isSyncing = false
+        syncStartedAt = nil
         await controller?.disconnect()
         syncPlanGeneration = UUID()
         syncPlanError = nil

@@ -44,7 +44,16 @@ conversation: it reaches Cubby through one Run's services and nothing else
    the server has issued a wake the agent has not received (the current
    dispatch generation, an approval decision, a Mac browser result): that
    event resumes the conversation.
-6. **UI.** The run page proxies the agent conversation through
+6. **UI.** The Mac Browser Sync sidebar pane lists browser-enabled accounts in
+   a searchable, sortable table, with live bridge status and the server sync
+   plan on the same row. Rows deduplicate by account shortcode, never by
+   vendor name. Sync and Resume open the returned run console before
+   refreshing the advisory plan; Sync all opens Activity when it submits
+   multiple runs. Partial batches retain submitted runs and raw failure/skip
+   diagnostics. Replacing or disconnecting the controller invalidates pending
+   sync navigation, so a late result cannot open a run on another server.
+   History import uses a per-account date-range popover. Settings retains
+   browser choice and permissions, with a link to the pane. The run page proxies the agent conversation through
    `agent-proxy.ts` to the run's agent Durable Object. Member controls go
    through `controlRun` and `recordRunControlEvent`.
 

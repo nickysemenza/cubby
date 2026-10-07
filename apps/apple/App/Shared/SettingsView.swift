@@ -12,6 +12,9 @@ struct SettingsView: View {
     @Environment(AppModel.self) private var model
     @Environment(\.dismiss) private var dismiss
     @Environment(\.scenePhase) private var scenePhase
+    #if os(macOS)
+        @Environment(\.openWindow) private var openWindow
+    #endif
     @State private var selectedServer = SettingsServer.production
     @State private var draftURL = ""
     @AppStorage("photoAnalysisWindow") private var photoAnalysisWindowRaw = PhotoAnalysisWindow.thisYear
@@ -30,17 +33,6 @@ struct SettingsView: View {
     #if os(macOS)
         @AppStorage("purchaseImport.browser") private var purchaseImportBrowser = BrowserChoice.chrome
         @State private var browserPermissions = MacBrowserPermissionSnapshot.current(browser: .chrome)
-        private struct BackfillDates {
-            var from: Date
-            var to: Date
-
-            init() {
-                let dates = BrowserBridgeBackfillRange.defaultDates()
-                from = dates.from
-                to = dates.to
-            }
-        }
-        @State private var backfillDates: [String: BackfillDates] = [:]
     #endif
 
     var body: some View {
@@ -168,9 +160,6 @@ struct SettingsView: View {
                 return
             }
             await loadReceiptHunts()
-            #if os(macOS)
-                await model.browserBridge.refreshSyncPlan()
-            #endif
         }
         .sheet(item: $selectedReceiptHunt) { hunt in
             if let context = hunt.searchContext {
@@ -204,38 +193,6 @@ struct SettingsView: View {
     }
 
     #if os(macOS)
-        /// Rare, interactive work: collapsed by default and defaulted to the last year so the
-        /// common case is one click.
-        private func backfillControl(accountID: String) -> some View {
-            let dates = Binding(
-                get: { backfillDates[accountID] ?? BackfillDates() },
-                set: { backfillDates[accountID] = $0 })
-            let range = BrowserBridgeBackfillRange(from: dates.wrappedValue.from, to: dates.wrappedValue.to)
-            return DisclosureGroup("Import order history…") {
-                DatePicker(
-                    "From", selection: dates.from, in: ...dates.wrappedValue.to, displayedComponents: .date
-                )
-                .accessibilityIdentifier("settings.purchaseImport.backfillFrom.\(accountID)")
-                DatePicker("To", selection: dates.to, in: ...Date.now, displayedComponents: .date)
-                    .accessibilityIdentifier("settings.purchaseImport.backfillTo.\(accountID)")
-                if range == nil {
-                    Text("The start date must be on or before the end date.")
-                        .foregroundStyle(FieldGuideTokens.destructive)
-                }
-                Button("Import this range", systemImage: "clock.arrow.circlepath") {
-                    guard let range else { return }
-                    model.browserBridge.syncNow(
-                        browser: purchaseImportBrowser, accountID: accountID, backfill: range)
-                }
-                .disabled(
-                    range == nil || !model.browserBridge.isConfigured
-                        || model.browserBridge.isSyncing
-                )
-                .accessibilityIdentifier("settings.purchaseImport.backfillStart.\(accountID)")
-            }
-            .accessibilityIdentifier("settings.purchaseImport.backfill.\(accountID)")
-        }
-
         private var purchaseImportSection: some View {
             Section {
                 Picker("Browser", selection: $purchaseImportBrowser) {
@@ -253,90 +210,12 @@ struct SettingsView: View {
                     pane: .screenRecording)
                 permissionRow(
                     "Browser control", status: browserPermissions.appleEvents, pane: .automation)
-                ForEach(model.browserBridge.syncPlans, id: \.shortcode) { plan in
-                    VStack(alignment: .leading, spacing: FieldGuideTokens.Space.xs) {
-                        HStack {
-                            Text("\(plan.vendorName) · \(plan.label)")
-                            Spacer()
-                            Button("Sync") {
-                                model.browserBridge.syncNow(
-                                    browser: purchaseImportBrowser, accountID: plan.shortcode)
-                            }
-                            .disabled(
-                                plan.disabledReason != nil || model.browserBridge.isSyncing
-                                    || !model.browserBridge.isConfigured
-                            )
-                            .accessibilityLabel("Sync \(plan.label)")
-                        }
-                        Text(plan.line)
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
-                            .fixedSize(horizontal: false, vertical: true)
-                        if plan.disabledReason == nil {
-                            switch plan.action {
-                            case .start, .firstSync:
-                                backfillControl(accountID: plan.shortcode)
-                            default: EmptyView()
-                            }
-                        }
-                    }
+                Button("Open Browser Sync", systemImage: "arrow.triangle.2.circlepath") {
+                    model.navigator.section = .browserSync
+                    openWindow(id: "main")
+                    dismiss()
                 }
-                Button(
-                    "Sync all (\(model.browserBridge.syncableAccountCount))", systemImage: "arrow.clockwise"
-                ) {
-                    model.browserBridge.syncNow(browser: purchaseImportBrowser)
-                }
-                .disabled(
-                    !model.browserBridge.isConfigured || model.browserBridge.isSyncing
-                )
-                .accessibilityIdentifier("settings.purchaseImport.syncNow")
-                Button("Refresh sync plan", systemImage: "arrow.clockwise") {
-                    Task { await model.browserBridge.refreshSyncPlan() }
-                }
-                .disabled(!model.browserBridge.isConfigured || model.browserBridge.isSyncing)
-                .accessibilityIdentifier("settings.purchaseImport.refreshSyncPlan")
-                if let error = model.browserBridge.syncPlanError {
-                    Text(error).foregroundStyle(FieldGuideTokens.destructive)
-                }
-                if model.browserBridge.status != .connected {
-                    Button("Reconnect", systemImage: "arrow.trianglehead.clockwise") {
-                        model.browserBridge.reconnect(browser: purchaseImportBrowser)
-                    }
-                    .disabled(!model.browserBridge.isConfigured || model.browserBridge.isSyncing)
-                    .accessibilityIdentifier("settings.purchaseImport.reconnect")
-                }
-                ForEach(model.browserBridge.accountStates) { account in
-                    LabeledContent(account.label) {
-                        VStack(alignment: .trailing, spacing: 4) {
-                            Text(account.statusLabel)
-                                .foregroundStyle(
-                                    account.needsAuthentication || account.error != nil
-                                        ? FieldGuideTokens.destructive : FieldGuideTokens.graphiteSecondary)
-                            if account.needsAuthentication {
-                                Button("Open sign-in") {
-                                    model.browserBridge.raiseAuthenticationWindow(accountID: account.id)
-                                }
-                                .accessibilityIdentifier(
-                                    "settings.purchaseImport.openSignIn.\(account.id)")
-                            }
-                            if let lastCommand = account.lastCommand {
-                                Text(lastCommand)
-                                    .font(.fieldGuideLabel)
-                                    .foregroundStyle(FieldGuideTokens.graphiteSecondary)
-                                    .multilineTextAlignment(.trailing)
-                                    .lineLimit(2)
-                                    .accessibilityIdentifier(
-                                        "settings.purchaseImport.lastCommand.\(account.id)")
-                            }
-                            if let error = account.error {
-                                Text(error)
-                                    .font(.fieldGuideLabel)
-                                    .foregroundStyle(FieldGuideTokens.destructive)
-                                    .multilineTextAlignment(.trailing)
-                            }
-                        }
-                    }
-                }
+                .accessibilityIdentifier("settings.purchaseImport.openPane")
                 if let error = model.browserBridge.error {
                     Text(error).foregroundStyle(FieldGuideTokens.destructive)
                 }
