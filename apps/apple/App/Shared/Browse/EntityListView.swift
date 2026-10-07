@@ -65,14 +65,17 @@ struct EntityListView: View {
     @State private var browsePresentation = BrowsePresentation.list
     @State private var hiddenTableColumns = Set<String>()
     private let initialFilters: EntityFilterState
+    private let usesBrowseSelection: Bool
 
     init(
         key: EntityKey, filters: EntityFilterState = EntityFilterState(),
         model: GenericEntityListModel? = nil,
-        presentation: BrowsePresentation = .list
+        presentation: BrowsePresentation = .list,
+        usesBrowseSelection: Bool = false
     ) {
         self.key = key
         self.initialFilters = filters
+        self.usesBrowseSelection = usesBrowseSelection
         // Reached via `.navigationDestination(for: Route.self)` (`Route.entityList`, a fresh
         // path entry per distinct `key`/`filters`) or, on macOS, `.id(key)`-scoped in
         // `RootSplitView` — both guarantee a full remount, never a stale `model` reused in place.
@@ -532,9 +535,10 @@ struct EntityListView: View {
 
     private var selection: Binding<RecordSelection?>? {
         #if os(macOS)
-            Binding(
-                get: { appModel.navigator.selectedRecords[.browse] },
-                set: { appModel.navigator.selectRecord($0, in: .browse) })
+            usesBrowseSelection
+                ? Binding(
+                    get: { appModel.navigator.selectedRecords[.browse] },
+                    set: { appModel.navigator.selectRecord($0, in: .browse) }) : nil
         #else
             nil
         #endif
@@ -543,9 +547,9 @@ struct EntityListView: View {
     #if os(macOS)
         private var tableSelection: Binding<String?> {
             Binding(
-                get: { isRootBrowseTable ? appModel.navigator.selectedRecords[.browse]?.id : nil },
+                get: { usesBrowseSelection ? appModel.navigator.selectedRecords[.browse]?.id : nil },
                 set: { id in
-                    if isRootBrowseTable {
+                    if usesBrowseSelection {
                         appModel.navigator.selectRecord(
                             id.map { RecordSelection(key: key, id: $0) }, in: .browse)
                     } else if let id {
@@ -553,12 +557,6 @@ struct EntityListView: View {
                             .append(.entityDetail(key, id: id))
                     }
                 })
-        }
-
-        private var isRootBrowseTable: Bool {
-            let navigator = appModel.navigator
-            return navigator.section == .browse && navigator.browseKey == key
-                && (navigator.paths[.browse] ?? []).isEmpty
         }
 
         private func tableSortOrder(_ model: GenericEntityListModel) -> Binding<[EntityRowFieldComparator]> {
@@ -831,11 +829,14 @@ struct EntityListView: View {
                     StatusChip(text: fact.value, color: color)
                 } else {
                     Text(fact.value)
-                        .lineLimit(1)
+                        .lineLimit(dynamicTypeSize.isAccessibilitySize ? nil : 1)
+                        .fixedSize(horizontal: false, vertical: true)
                         .foregroundStyle(FieldGuideTokens.graphiteSecondary)
                 }
                 if let source = fact.source {
-                    Text(source).font(.caption2).foregroundStyle(.secondary).lineLimit(1)
+                    Text(source).font(.caption2).foregroundStyle(.secondary)
+                        .lineLimit(dynamicTypeSize.isAccessibilitySize ? nil : 1)
+                        .fixedSize(horizontal: false, vertical: true)
                 }
                 if field.explanation != nil {
                     FieldExplanationLabel(
@@ -935,7 +936,7 @@ struct EntityListView: View {
 
     @ViewBuilder private func rowContent(_ row: EntityRow) -> some View {
         #if os(macOS)
-            if appModel.navigator.section == .browse && appModel.navigator.browseKey == key {
+            if usesBrowseSelection {
                 EntityRowView(key: key, row: row).tag(RecordSelection(key: key, id: row.id))
             } else {
                 NavigationLink(value: Route.entityDetail(key, id: row.id)) {
@@ -1202,4 +1203,9 @@ private struct EntityTablePreviewHost: View {
 
 #Preview("Generic table · injected product rows") {
     EntityTablePreviewHost()
+}
+
+#Preview("Generic table · accessibility") {
+    EntityTablePreviewHost()
+        .environment(\.dynamicTypeSize, .accessibility3)
 }
