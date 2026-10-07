@@ -534,15 +534,19 @@ const allowedBrowserHosts = z
   .array(z.string().trim().min(1).max(253))
   .min(1)
   .max(20);
+/**
+ * The bridge protocol. The Mac is a thin browser hand: it opens allowlisted
+ * URLs, scrolls, raises its window, and captures the page's trimmed DOM (and a
+ * screenshot when asked). It reports what it saw (`browserObservation`) and
+ * never interprets the page; the server derives every fact from the DOM.
+ */
+export const BROWSER_BRIDGE_PROTOCOL = 3;
+const bridgeProtocol = z.literal(BROWSER_BRIDGE_PROTOCOL);
+
 export const browserBridgeOperation = z.discriminatedUnion("type", [
   z.object({
     type: z.literal("navigate"),
     url: z.url(),
-    allowedHosts: allowedBrowserHosts,
-  }),
-  z.object({
-    type: z.literal("follow_captured_link"),
-    linkID: z.string().min(1).max(200),
     allowedHosts: allowedBrowserHosts,
   }),
   z.object({
@@ -552,21 +556,31 @@ export const browserBridgeOperation = z.discriminatedUnion("type", [
   z.object({
     type: z.literal("capture"),
     allowedHosts: allowedBrowserHosts,
-    enhancedEvidence: z.boolean(),
-    // A capture remains restart-safe without giving the client broader browser authority. The
-    // web service derives this URL from the run's claimed work; the Mac may use it only when its
-    // dedicated window disappeared across an app/browser restart.
+    /**
+     * `required`: the capture fails without one (purchase documents).
+     * `preferred`: take one when the window is capturable, otherwise report
+     * why and still return the DOM. `skip`: DOM only.
+     */
+    screenshot: z.enum(["required", "preferred", "skip"]),
+    // The web service derives this URL from the run's claimed work; the Mac
+    // uses it only when it cannot find its account window.
     recoveryURL: z.url().optional(),
     // Targeted browser evidence must retain the scope that authorizes its R2
-    // upload; account-sync captures intentionally omit it.
+    // upload; account-sync screenshots become purchase documents instead.
     evidenceScope: z
       .object({ runId: runShortcode, targetId: z.uuid() })
       .optional(),
   }),
+  z.object({
+    type: z.literal("window"),
+    // `raise` brings the account window forward (sign-in, a capture that
+    // needs it visible); `background` returns it behind the member's work.
+    action: z.enum(["raise", "background"]),
+  }),
 ]);
 export type BrowserBridgeOperation = z.infer<typeof browserBridgeOperation>;
 export const browserBridgeRequest = z.object({
-  protocolVersion: z.literal(2),
+  protocolVersion: bridgeProtocol,
   id: z.uuid(),
   operationId: z.string().trim().min(1).max(200),
   runID: z.string().trim().min(1).max(200),
@@ -575,11 +589,7 @@ export const browserBridgeRequest = z.object({
 });
 export type BrowserBridgeRequest = z.infer<typeof browserBridgeRequest>;
 
-export const browserEvidenceKind = z.enum([
-  "normalized_pdf",
-  "rendered_pdf",
-  "screenshot",
-]);
+export const browserEvidenceKind = z.enum(["rendered_pdf", "screenshot"]);
 export const browserEvidenceReference = z.object({
   id: z.string().min(1).max(500),
   kind: browserEvidenceKind,
@@ -627,6 +637,11 @@ export type BrowserStructuredProducts = z.infer<
   typeof browserStructuredProducts
 >;
 
+/**
+ * What the server derives from a captured DOM (`derivePageCapture`). It is
+ * never sent by the Mac: the derivation revision replaces the old Mac capture
+ * version, so improving it needs no Mac release and re-reads stored evidence.
+ */
 export const browserPageCapture = z.object({
   sourceURL: z.url(),
   canonicalUrl: z.url().nullish(),
@@ -650,38 +665,108 @@ export const browserPageCapture = z.object({
   images: z.array(browserCapturedImage).max(200),
   paymentEvidence: z.array(browserPaymentEvidence).max(100),
   evidence: z.array(browserEvidenceReference).max(10),
-  /** Optional: Mac clients older than capture version 2 do not send it. */
   structuredProducts: browserStructuredProducts.nullish(),
+  /** The page asks for a password: the vendor wants a sign-in. */
+  authenticationRequired: z.boolean().default(false),
 });
+export type BrowserPageCapture = z.infer<typeof browserPageCapture>;
+
+/** Why the Mac could not take a screenshot of its account window. */
+export const browserScreenshotGap = z.enum([
+  "window_not_found",
+  "window_minimized",
+  "window_off_screen",
+  "screen_recording_denied",
+  "capture_failed",
+  "upload_failed",
+]);
+
+/**
+ * What the Mac saw when it finished (or failed) a command. Every result
+ * carries one, so a stall always says why: the run log and the Runs UI read
+ * it, and the server's recovery policy acts on it.
+ */
+export const browserObservation = z.object({
+  url: z.url().nullable(),
+  title: z.string().max(500).nullable(),
+  readyState: z.enum(["loading", "interactive", "complete"]).nullable(),
+  window: z
+    .object({
+      /** Re-found by its tab marker after an app or browser relaunch. */
+      recovered: z.boolean(),
+      minimized: z.boolean().nullable(),
+      onScreen: z.boolean().nullable(),
+    })
+    .nullable(),
+  screenRecording: z.enum(["granted", "denied", "unknown"]),
+  durationMs: z.number().int().nonnegative(),
+});
+export type BrowserObservation = z.infer<typeof browserObservation>;
+
+/** Bytes the Mac sends inline: scripts, styles, SVG, and input values removed. */
+export const BROWSER_DOM_MAX_ENCODED = 1_000_000;
+export const browserPageSnapshot = z.object({
+  sourceURL: z.url(),
+  title: z.string().max(500),
+  capturedAt: z.iso.datetime(),
+  dom: z.object({
+    encoding: z.literal("deflate-raw+base64"),
+    data: z.string().min(1).max(BROWSER_DOM_MAX_ENCODED),
+    /** Uncompressed UTF-8 byte length. */
+    byteSize: z.number().int().positive(),
+    sha256: z.string().regex(/^[a-f0-9]{64}$/),
+    /** The trimmed DOM still exceeded the limit and lost its tail. */
+    truncated: z.boolean(),
+  }),
+  screenshot: z.discriminatedUnion("status", [
+    z.object({
+      status: z.literal("captured"),
+      evidence: z.array(browserEvidenceReference).min(1).max(4),
+    }),
+    z.object({ status: z.literal("skipped") }),
+    z.object({
+      status: z.literal("unavailable"),
+      reason: browserScreenshotGap,
+    }),
+  ]),
+});
+export type BrowserPageSnapshot = z.infer<typeof browserPageSnapshot>;
+
 export const browserBridgeFailureCode = z.enum([
   "cancelled",
   "deadline_exceeded",
   "invalid_command",
   "disallowed_url",
-  "unknown_link",
   "browser_unavailable",
   "browser_permission_denied",
-  "authentication_required",
-  "capture_unavailable",
+  /** Chrome refuses JavaScript from Apple Events (View > Developer). */
+  "javascript_disabled",
+  /** The page's DOM could not be read (navigation in flight, crashed tab). */
+  "page_unreadable",
+  /** A required screenshot could not be taken; `screenshotGap` says why. */
+  "screenshot_unavailable",
   "upload_failed",
-  "execution_failed",
   // The server's version gate refused this Mac build (HTTP 426).
   "client_update_required",
+  "execution_failed",
 ]);
 export const browserBridgeCommandOutcome = z.discriminatedUnion("status", [
   z.object({
     status: z.literal("completed"),
-    capture: browserPageCapture.nullable().optional(),
+    snapshot: browserPageSnapshot.nullable(),
+    observation: browserObservation,
   }),
   z.object({
     status: z.literal("failed"),
     code: browserBridgeFailureCode,
     message: z.string().max(2_000),
     retryable: z.boolean(),
+    screenshotGap: browserScreenshotGap.nullable(),
+    observation: browserObservation,
   }),
 ]);
 export const browserBridgeResult = z.object({
-  protocolVersion: z.literal(2),
+  protocolVersion: bridgeProtocol,
   // Foundation encodes UUID values uppercase. Normalize at the protocol
   // boundary because Durable Object SQLite command keys are lowercase text.
   commandID: z.uuid().toLowerCase(),
@@ -694,30 +779,30 @@ export type BrowserBridgeResult = z.infer<typeof browserBridgeResult>;
 
 export const browserChoice = z.enum(["chrome", "safari"]);
 export const browserBridgeCapabilities = z.object({
-  fixedCaptureVersion: z.number().int().positive(),
-  enhancedScreenshot: z.boolean(),
-  renderedPDF: z.boolean(),
+  /** The DOM trimming rules the Mac applies before it sends a snapshot. */
+  snapshotVersion: z.number().int().positive(),
+  screenshot: z.boolean(),
 });
 export const browserBridgeClientMessage = z.discriminatedUnion("type", [
   z.object({
-    protocolVersion: z.literal(2),
+    protocolVersion: bridgeProtocol,
     type: z.literal("hello"),
     deviceID: z.uuid(),
     browser: browserChoice,
     capabilities: browserBridgeCapabilities,
   }),
   z.object({
-    protocolVersion: z.literal(2),
+    protocolVersion: bridgeProtocol,
     type: z.literal("result"),
     result: browserBridgeResult,
   }),
   z.object({
-    protocolVersion: z.literal(2),
+    protocolVersion: bridgeProtocol,
     type: z.literal("pong"),
     timestamp: z.iso.datetime(),
   }),
   z.object({
-    protocolVersion: z.literal(2),
+    protocolVersion: bridgeProtocol,
     type: z.literal("run_completed_ack"),
     runID: z.uuid(),
   }),
@@ -747,32 +832,32 @@ export type BrowserBridgeRunCompletion = z.infer<
 >;
 export const browserBridgeServerMessage = z.discriminatedUnion("type", [
   z.object({
-    protocolVersion: z.literal(2),
+    protocolVersion: bridgeProtocol,
     type: z.literal("command"),
     command: browserBridgeRequest,
   }),
   z.object({
-    protocolVersion: z.literal(2),
+    protocolVersion: bridgeProtocol,
     type: z.literal("acknowledge"),
     commandID: z.uuid(),
   }),
   z.object({
-    protocolVersion: z.literal(2),
+    protocolVersion: bridgeProtocol,
     type: z.literal("cancel"),
     commandID: z.uuid(),
   }),
   z.object({
-    protocolVersion: z.literal(2),
+    protocolVersion: bridgeProtocol,
     type: z.literal("ping"),
     timestamp: z.iso.datetime(),
   }),
   z.object({
-    protocolVersion: z.literal(2),
+    protocolVersion: bridgeProtocol,
     type: z.literal("raise_auth_window"),
     runID: z.uuid(),
   }),
   z.object({
-    protocolVersion: z.literal(2),
+    protocolVersion: bridgeProtocol,
     type: z.literal("run_completed"),
     ...browserBridgeRunCompletion.shape,
   }),
