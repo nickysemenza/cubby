@@ -64,13 +64,7 @@ struct EntityListView: View {
     /// Filtering by the coverage registry keeps an entity-qualified slot from being mistaken
     /// for a built-in view during initial selection or picker changes.
     private var renderableViews: [ListView] {
-        descriptor.presentation.listViews.filter {
-            guard case .slot(let id, _, _) = $0 else { return true }
-            switch NativePresentationCoverage.listSlot(id) {
-            case .implemented, .generic: return true
-            case .ownedElsewhere, .unsupported: return false
-            }
-        }
+        NativePresentationCoverage.listViews(for: descriptor)
     }
 
     private var presentationChoices: [PresentationChoice] {
