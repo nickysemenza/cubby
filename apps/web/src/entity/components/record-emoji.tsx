@@ -20,7 +20,7 @@ export function RecordEmoji({
   size?: number;
   className?: string;
 }) {
-  const iconField = entityInspectorMetadata[entity].recordIconEntityField;
+  const iconField = entityInspectorMetadata[entity]?.recordIconEntityField;
   const iconData = z.record(z.string(), z.unknown()).catch({}).parse(record);
   const icon = entitySchema.safeParse(iconField ? iconData[iconField] : null);
   const legacy = Boolean(emoji && !recordEmojiInput.safeParse(emoji).success);

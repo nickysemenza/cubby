@@ -580,7 +580,9 @@ label** for composed presentation text. A reference normally projects
 before the conventional name and preserve the target's identity. Never put an
 identifier in a label projection. `defineEntity` checks label and detail-label
 paths against declared readable Zod fields at TypeScript compile time, including
-nested properties and array projections. The generator also rejects custom
+nested properties and array projections. Compile-only schema contracts use
+`*.typecheck.ts` entry points in Knip and run through the schema TypeScript
+check without being imported by the application. The generator also rejects custom
 `<stem>Label` / `<stem>DisplayLabel` companions without a declared label path.
 
 A reference may declare `multiple: true` and an ordered `scope` mapping. Each

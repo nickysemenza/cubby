@@ -53,7 +53,9 @@ tables only for matrices/debug/external content. `useTableColumnLayout` owns
 table order/pinning/visibility/sizing. Decorated cells render through
 `CellFrame`; don't append icons beside a cell value by hand. Rendered entity names are linked and
 readable: use `EntityRefLink` (all record links, one component with variants), a titled truncated link, or `createNameColumn`
-in RTable. Pages use the `Page` shell; detail bodies use `DetailSections`.
+in RTable. Audit history can retain retired entity kinds; icon lookup tolerates
+absent metadata and leaves those references unlinked. Pages use the `Page`
+shell; detail bodies use `DetailSections`.
 
 Column factories reuse module-level render components for selection controls:
 `flexRender` treats callbacks as React component types, so refreshing column

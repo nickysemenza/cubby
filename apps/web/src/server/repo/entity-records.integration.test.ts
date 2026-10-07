@@ -18,6 +18,7 @@ import {
   makeLocationInput,
   makeProductInput,
 } from "~/server/repo/repo.fixtures";
+import { insertWithShortcode } from "~/server/repo/shortcode-utils";
 import { ensureRun } from "~/server/runs/ensure-run";
 
 // Regressions: paging before sorting/filtering, payload updates confused with
@@ -170,7 +171,7 @@ describe("combined entity records", () => {
     });
   });
 
-  it("leaves unscored identities null and excludes them from numeric quality ranges", async () => {
+  it("scores Runs while leaving unscored identities outside numeric quality ranges", async () => {
     const runId = await ensureRun(ctx.db, ctx.actor, { purpose: "ai_suggest" });
     const [identity] = await getDb(ctx.db)
       .select({ shortcode: runTable.shortcode })
@@ -182,10 +183,39 @@ describe("combined entity records", () => {
       q: identity!.shortcode,
     });
     expect((await listEntityRecords(ctx.db, input)).items).toMatchObject([
-      { id: identity!.shortcode, quality: null, qualityStatus: null },
+      { id: identity!.shortcode, quality: 100, qualityStatus: "complete" },
     ]);
     expect(
-      await listEntityRecords(ctx.db, { ...input, qualityMin: 0 }),
+      await listEntityRecords(ctx.db, { ...input, qualityMin: 100 }),
+    ).toMatchObject({ items: [{ id: identity!.shortcode }], totalCount: 1 });
+    expect(
+      await listEntityRecords(ctx.db, { ...input, qualityMax: 99 }),
+    ).toMatchObject({ items: [], totalCount: 0 });
+
+    const party = await insertWithShortcode(ctx.db, "ledgerParty", {
+      name: "Roster member",
+      kind: "member",
+      userId: ctx.actor.userId,
+    });
+    const vendor = await insertWithShortcode(ctx.db, "vendor", {
+      name: "Roster vendor",
+    });
+    const account = await insertWithShortcode(ctx.db, "vendorAccount", {
+      label: "Roster account",
+      vendorId: vendor.id,
+      ledgerPartyId: party.id,
+    });
+    const unscoredInput = entityRecordsInputSchema.parse({
+      kind: "vendorAccount",
+      q: account.shortcode,
+    });
+    expect(
+      (await listEntityRecords(ctx.db, unscoredInput)).items,
+    ).toMatchObject([
+      { id: account.shortcode, quality: null, qualityStatus: null },
+    ]);
+    expect(
+      await listEntityRecords(ctx.db, { ...unscoredInput, qualityMin: 0 }),
     ).toMatchObject({ items: [], totalCount: 0 });
   });
 });
