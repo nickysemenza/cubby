@@ -16,16 +16,20 @@ import {
   cookbook,
   entityAttachment,
   image,
+  imageProcessingJob,
   run as runTable,
   runTarget,
   ledgerParty,
   user,
 } from "~/server/db/schema";
 import { markImageUploadedWorkflow } from "~/server/operations/image.server";
+import { updateImageProcessingSettings } from "~/server/repo/image-processing-maintenance";
 import {
   makeCookbookExtraction,
   insertEntityAttachments,
 } from "~/server/repo/repo.fixtures";
+import { inspectImageFile } from "~/server/services/image-integrity";
+import { verifyImageRows } from "~/server/services/image-verification.service";
 
 import { deleteCookbook, upsertCookbook } from "./cookbook";
 import {
@@ -46,7 +50,17 @@ import {
   imageList,
   getImageHashIndex,
   setImagePerceptualHashes,
+  updateImageIntegrity,
 } from "./image";
+
+/** Integration tests reach no R2: uploads are marked without verifying bytes. */
+const unverified = async () => [];
+const ONE_PIXEL_PNG = Uint8Array.from(
+  atob(
+    "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==",
+  ),
+  (character) => character.charCodeAt(0),
+);
 import { insertWithShortcode } from "./shortcode-utils";
 import { findOrCreateVendor } from "./vendor";
 
@@ -146,6 +160,53 @@ describe("image repository", () => {
     ).toEqual([newer.shortcode, older.shortcode]);
   });
 
+  // A standalone upload (a Mac browser screenshot) had no content hash, so
+  // with automatic processing on, scheduling refused it and every screenshot
+  // upload failed. The stored bytes are now verified before scheduling.
+  it("verifies a standalone upload before scheduling its automatic processing", async () => {
+    await updateImageProcessingSettings(ctx.db, {
+      enabled: true,
+      paused: true,
+    });
+    const pending = await createPendingImageRecord(ctx.db, {
+      key: `images/${crypto.randomUUID()}.png`,
+      filename: "browser-view.png",
+      contentType: "image/png",
+      size: ONE_PIXEL_PNG.byteLength,
+    });
+    await markImageUploadedWorkflow(
+      ctx.db,
+      getImageByIdSchema.parse({ id: pending.shortcode }),
+      (db, rows) =>
+        verifyImageRows(db, rows, {
+          updateImageIntegrity,
+          inspectImageFile,
+          getObject: async () =>
+            new Response(ONE_PIXEL_PNG, {
+              headers: { "content-type": "image/png" },
+            }),
+        }),
+    );
+    const [stored] = await getDb(ctx.db)
+      .select({ status: image.status, sha256: image.sha256 })
+      .from(image)
+      .where(eq(image.id, pending.id));
+    expect(stored).toMatchObject({
+      status: "UPLOADED",
+      sha256: expect.stringMatching(/^[a-f0-9]{64}$/u),
+    });
+    const jobs = await getDb(ctx.db)
+      .select({ kind: imageProcessingJob.kind })
+      .from(imageProcessingJob)
+      .where(
+        eq(imageProcessingJob.imageId, parseEntityId("image", pending.id)),
+      );
+    expect(jobs.map(({ kind }) => kind).sort()).toEqual([
+      "describe_image",
+      "subject_lift",
+    ]);
+  });
+
   it("resolves public image identity before marking an upload complete", async () => {
     const pending = await createPendingImageRecord(ctx.db, {
       key: `images/${crypto.randomUUID()}.jpg`,
@@ -154,12 +215,12 @@ describe("image repository", () => {
       size: 512,
     });
     const input = getImageByIdSchema.parse({ id: pending.shortcode });
-    expect(await markImageUploadedWorkflow(ctx.db, input)).toMatchObject({
-      status: "UPLOADED",
-    });
-    await expect(markImageUploadedWorkflow(ctx.db, input)).rejects.toThrow(
-      "Failed to update record",
-    );
+    expect(
+      await markImageUploadedWorkflow(ctx.db, input, unverified),
+    ).toMatchObject({ status: "UPLOADED" });
+    await expect(
+      markImageUploadedWorkflow(ctx.db, input, unverified),
+    ).rejects.toThrow("Failed to update record");
     const [stored] = await getDb(ctx.db)
       .select({ status: image.status })
       .from(image)
@@ -193,6 +254,7 @@ describe("image repository", () => {
     await markImageUploadedWorkflow(
       ctx.db,
       getImageByIdSchema.parse({ id: first.shortcode }),
+      unverified,
     );
 
     const result = await setImagePerceptualHashes(ctx.db, {

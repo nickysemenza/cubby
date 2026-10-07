@@ -10,6 +10,7 @@ import {
   type mcpAttachFileInput,
 } from "@cubby/schemas/image";
 import { type AppErrorReason, parseShortcode } from "@cubby/shared";
+import { createLogger } from "@cubby/worker-tracing";
 import type { z } from "zod";
 
 import { imageUploadContract } from "~/contracts/image-upload.contract";
@@ -43,25 +44,50 @@ import {
   initiateDocumentUpload,
   initiateImageUploadWithoutEntity,
 } from "~/server/services/image-storage.service";
+import {
+  verifyImageRows,
+  type ImageVerificationResult,
+  type ImageVerificationRow,
+} from "~/server/services/image-verification.service";
 
 import {
   readImageAnalysis,
   recordImageAnalysis,
 } from "./image-analysis.server";
 
+const log = createLogger("image-upload");
+
 export async function markImageUploadedWorkflow(
   db: Database,
   input: z.output<typeof getImageByIdSchema>,
+  // Testability seam only: production reads the stored bytes from R2.
+  verify: (
+    db: Database,
+    rows: ImageVerificationRow[],
+  ) => Promise<ImageVerificationResult[]> = verifyImageRows,
 ) {
   const imageId = await resolveOrThrow(db, "image", input.id);
   const uploaded = await markImageUploaded(db, imageId);
+  // Processing reads only verified bytes, so the upload is inspected (hash,
+  // type, dimensions) first. Without this a standalone upload had no hash and
+  // scheduling refused it, failing every Mac screenshot upload with a 500.
+  // `uploaded.id` is the public shortcode; verification writes by row id. The
+  // upload is already marked, so a failed R2 read skips automatic processing
+  // (logged) rather than failing a call the client cannot retry.
+  let verified: ImageVerificationResult | undefined;
+  try {
+    [verified] = await verify(db, [{ ...uploaded, id: imageId }]);
+  } catch (error) {
+    log.error("upload-verification-failed", { imageId, error });
+  }
   // Settings default disabled/paused, so rollout creates no automatic work
   // until the owner explicitly enables it. Durable jobs repair missed wakes.
-  await scheduleImageProcessingJobs(db, {
-    id: uploaded.id,
-    kinds: ["describe_image", "subject_lift"],
-    automatic: true,
-  });
+  if (verified?.storageStatus === "available")
+    await scheduleImageProcessingJobs(db, {
+      id: uploaded.id,
+      kinds: ["describe_image", "subject_lift"],
+      automatic: true,
+    });
   await publishImageMetadataExtraction(
     db,
     imageId,
