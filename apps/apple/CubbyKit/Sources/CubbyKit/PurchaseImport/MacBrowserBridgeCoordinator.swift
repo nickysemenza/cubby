@@ -107,7 +107,8 @@
             let eligible = Set(plan.accounts.filter { $0.disabledReason == nil }.map(\.shortcode))
             if let accountID, !eligible.contains(accountID) || accounts[accountID] == nil {
                 let reason = plan.accounts.first { $0.shortcode == accountID }?.disabledReason
-                throw SyncFailure(message: reason ?? "This account is unavailable for browser sync.")
+                throw BrowserBridgeSyncFailure(
+                    message: reason ?? "This account is unavailable for browser sync.")
             }
             for account in accounts.values.sorted(by: { $0.id < $1.id })
             where accountID == nil || account.id == accountID {
@@ -129,7 +130,7 @@
                 var message = "Browser Sync submitted \(submitted.count) requests."
                 if !skipped.isEmpty { message += " Skipped accounts: " + skipped.joined(separator: "; ") }
                 if !failures.isEmpty { message += " Failed accounts: " + failures.joined(separator: "; ") }
-                throw SyncFailure(message: message)
+                throw BrowserBridgeSyncFailure(message: message, submitted: submitted)
             }
             return submitted
         }
@@ -168,11 +169,6 @@
             }
             fleetOperation = Task { _ = try? await current.value }
             try await current.value
-        }
-
-        private struct SyncFailure: LocalizedError {
-            let message: String
-            var errorDescription: String? { message }
         }
 
         public func disconnect() async {

@@ -63,8 +63,8 @@ final class MacBrowserBridgeController: BrowserBridgeControlling {
 
     func syncNow(
         browser: BrowserChoice, accountID: String?, backfill: BrowserBridgeBackfillRange?
-    ) async throws {
-        _ = try await coordinator.syncNow(browser: browser, accountID: accountID, backfill: backfill)
+    ) async throws -> [StartSyncOutput] {
+        try await coordinator.syncNow(browser: browser, accountID: accountID, backfill: backfill)
     }
 
     func disconnect() async {
