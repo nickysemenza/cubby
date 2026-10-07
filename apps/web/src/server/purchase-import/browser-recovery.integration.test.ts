@@ -358,13 +358,15 @@ describe("the server's reading of browser steps", () => {
     expect(bridge.issued).toHaveLength(1);
   });
 
-  it("pauses for sign-in and raises the window when the page asks for a password", async () => {
+  it("pauses for sign-in, raises the window, and captures afresh once the member resumes", async () => {
     const runId = await accountSync();
-    const bridge = scriptedBroker(() =>
-      completedCapture(`https://${HOST}/signin`, {
-        title: "Sign in",
-        signIn: true,
-      }),
+    const bridge = scriptedBroker((_command, index) =>
+      index === 0
+        ? completedCapture(`https://${HOST}/signin`, {
+            title: "Sign in",
+            signIn: true,
+          })
+        : completedCapture(ORDERS, { title: "Your orders", text: "Order 42" }),
     );
     const ports = testBrowserPorts();
     await issueBrowserCommand(
@@ -373,19 +375,30 @@ describe("the server's reading of browser steps", () => {
       { runId, operationId: "capture:signin", operation: capture },
       ports,
     );
-    expect(
-      await readBrowserCommandResult(
+    const read = () =>
+      readBrowserCommandResult(
         ctx.db,
         bridge.namespace,
         { runId, operationId: "capture:signin" },
         ports,
-      ),
-    ).toMatchObject({ state: "paused_auth" });
+      );
+    expect(await read()).toMatchObject({ state: "paused_auth" });
     expect(await runStatus(runId)).toEqual({
       status: "paused_auth",
       failureCode: "authentication_required",
     });
     expect(bridge.authenticationRequests).toHaveLength(1);
+
+    // Signed in and resumed: the cached sign-in form is not the answer.
+    await getDb(ctx.db)
+      .update(runTable)
+      .set({ status: "running" })
+      .where(eq(runTable.id, runEntityId.parse(runId)));
+    expect(await read()).toMatchObject({ state: "dispatched" });
+    expect(await read()).toMatchObject({
+      state: "completed",
+      capture: { readableText: "Order 42" },
+    });
   });
 
   describe("a public product page", () => {
@@ -483,6 +496,17 @@ describe("the server's reading of browser steps", () => {
       expect(await progress(runId)).toEqual([
         `Read ${SEED} directly, without the Mac`,
       ]);
+      // A replayed issue (the agent resumed before memoizing it) keeps the
+      // server's read rather than sending the step to the Mac.
+      expect(
+        await issueBrowserCommand(
+          ctx.db,
+          bridge.namespace,
+          { runId, operationId: "capture:basil", operation: productCapture },
+          ports,
+        ),
+      ).toMatchObject({ state: "completed" });
+      expect(bridge.issued).toEqual([]);
     });
 
     it("falls back to the Mac's browser, saying why, when the vendor refuses the server", async () => {

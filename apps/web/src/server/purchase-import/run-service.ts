@@ -49,6 +49,8 @@ import {
   type BrowserBridgeOperation,
   type BrowserBridgeRequest,
   type BrowserBridgeRunCompletion,
+  type BrowserObservation,
+  type BrowserPageCapture,
   type RunTrigger,
   type RunPurpose,
 } from "@cubby/schemas/purchase-import";
@@ -158,6 +160,7 @@ import { loadPurchaseAuditBatch } from "./audit-batch";
 import { encodeSnapshotDom } from "./browser-page";
 import {
   browserCommandRecord,
+  type BrowserCommandRecord,
   browserRecovery,
   describeObservation,
   materializeCapture,
@@ -2219,11 +2222,15 @@ export async function issueBrowserCommand(
     recorded.inputFingerprint !== fingerprint
   )
     throw new Error("Operation id was replayed with different input");
-  const command = recorded
-    ? browserBridgeRequest.parse(
-        z.object({ command: browserBridgeRequest }).parse(recorded.result)
-          .command,
-      )
+  const recordedStep = recorded
+    ? browserCommandRecord.parse(recorded.result)
+    : undefined;
+  // A replayed step the server already read answers with that read; it never
+  // falls through to the Mac.
+  if (recordedStep?.serverResult)
+    return { commandId, state: "completed" as const };
+  const command = recordedStep
+    ? recordedStep.command
     : browserBridgeRequest.parse({
         protocolVersion: BROWSER_BRIDGE_PROTOCOL,
         id: commandId,
@@ -2294,13 +2301,18 @@ export async function issueBrowserCommand(
   }
   // A replay re-enqueues a command the broker already answered; its recorded
   // terminal failure (`readBrowserCommandResult`) is still the diagnostic.
+  // The replay keeps everything the step has learned since (its cached page,
+  // retries, and pause).
   await completeOperation(
     database,
     key,
-    { command, commandId },
+    { ...recordedStep, command, commandId },
     { keepError: true },
   );
-  return { commandId, state: connected ? "dispatched" : "paused_offline" };
+  return {
+    commandId,
+    state: connected ? ("dispatched" as const) : ("paused_offline" as const),
+  };
 }
 
 /**
@@ -2468,13 +2480,40 @@ async function pauseForBrowser(
  * member's fix, or fail). A step the server retried answers with its latest
  * attempt, so the agent keeps asking about the operation it issued.
  */
+type BrowserStepRead =
+  | { state: "missing" }
+  | {
+      /** `paused_offline` here: the retry is queued for a Mac not connected. */
+      state: "pending" | "dispatched" | "paused_offline";
+      commandId: string;
+      retrying?: string;
+    }
+  | {
+      state: "completed";
+      commandId: string;
+      observation: BrowserObservation;
+      capture?: BrowserPageCapture;
+    }
+  | { state: "stopped"; observation: BrowserObservation | null }
+  | {
+      state: "paused_offline" | "paused_auth";
+      reason?: string;
+      observation: BrowserObservation;
+    }
+  | {
+      state: "failed";
+      code: string;
+      message: string;
+      observation: BrowserObservation;
+    };
+
 // eslint-disable-next-line complexity -- One read routes every browser outcome through the recovery policy.
 export async function readBrowserCommandResult(
   db: Database,
   namespace: PurchaseImportNamespace,
   input: { runId: string; operationId: string },
   ports: BrowserPagePorts = productionBrowserPagePorts,
-) {
+): Promise<BrowserStepRead> {
   const scope = await loadRunScope(db, input.runId);
   if (!scope.public.vendorAccountId)
     throw new Error("This import run has no browser account");
@@ -2512,6 +2551,59 @@ export async function readBrowserCommandResult(
   if (!result)
     return { state: "pending" as const, commandId: attempt.commandId };
   const outcome = result.outcome;
+  // Merge into the step's own record as it is now: a capture read earlier in
+  // this call may already have cached its page there.
+  const updateStep = async (patch: Partial<BrowserCommandRecord>) =>
+    setOperationResult(getDb(db), key, {
+      ...browserCommandRecord.parse(
+        (await readOperation(getDb(db), key))?.result,
+      ),
+      ...patch,
+    });
+  /** Issue the step again as a fresh operation and answer for it. */
+  const retry = async (
+    raiseWindow: boolean,
+    why: string,
+  ): Promise<BrowserStepRead> => {
+    const next = retries.length + 1;
+    const retryOperationId = `${input.operationId}:retry-${next}`;
+    if (raiseWindow)
+      await issueBrowserCommand(
+        db,
+        namespace,
+        {
+          runId: input.runId,
+          operationId: `${input.operationId}:raise-${next}`,
+          operation: { type: "window", action: "raise" },
+        },
+        ports,
+      );
+    const reissued = await issueBrowserCommand(
+      db,
+      namespace,
+      {
+        runId: input.runId,
+        operationId: retryOperationId,
+        operation: attempt.command.operation,
+      },
+      ports,
+    );
+    await updateStep({ retries: [...retries, retryOperationId] });
+    await reportBrowserStep(
+      db,
+      runId,
+      `browser-retry:${retryOperationId}`,
+      `Retrying ${attempt.command.operation.type}${raiseWindow ? " after raising the window" : ""}: ${why}`,
+    );
+    // The server read the retried page itself: answer with that page.
+    if (reissued.state === "completed")
+      return readBrowserCommandResult(db, namespace, input, ports);
+    return {
+      state: reissued.state,
+      commandId: reissued.commandId,
+      retrying: why,
+    };
+  };
   if (outcome.status === "failed") {
     const policy = browserRecovery(outcome, retries.length);
     // A step read again after the run paused on it (the member fixed the
@@ -2534,55 +2626,11 @@ export async function readBrowserCommandResult(
       });
       return { state: "stopped" as const, observation: outcome.observation };
     }
-    if (recovery.action === "retry") {
-      const next = retries.length + 1;
-      const retryOperationId = `${input.operationId}:retry-${next}`;
-      if (recovery.raiseWindow)
-        await issueBrowserCommand(
-          db,
-          namespace,
-          {
-            runId: input.runId,
-            operationId: `${input.operationId}:raise-${next}`,
-            operation: { type: "window", action: "raise" },
-          },
-          ports,
-        );
-      const reissued = await issueBrowserCommand(
-        db,
-        namespace,
-        {
-          runId: input.runId,
-          operationId: retryOperationId,
-          operation: attempt.command.operation,
-        },
-        ports,
-      );
-      await setOperationResult(getDb(db), key, {
-        ...original.data,
-        retries: [...retries, retryOperationId],
-      });
-      await reportBrowserStep(
-        db,
-        runId,
-        `browser-retry:${retryOperationId}`,
-        `Retrying ${attempt.command.operation.type}${recovery.raiseWindow ? " after raising the window" : ""}: ${diagnostic}`,
-      );
-      // The server read the retried page itself: answer with that page.
-      if (reissued.state === "completed")
-        return readBrowserCommandResult(db, namespace, input, ports);
-      return {
-        state: reissued.state,
-        commandId: reissued.commandId,
-        retrying: diagnostic,
-      };
-    }
+    if (recovery.action === "retry")
+      return retry(recovery.raiseWindow, diagnostic);
     await failOperation(getDb(db), attemptKey, diagnostic);
     if (recovery.action === "pause") {
-      await setOperationResult(getDb(db), key, {
-        ...original.data,
-        pausedAt: attemptKey.operationId,
-      });
+      await updateStep({ pausedAt: attemptKey.operationId });
       await pauseForBrowser(db, scope, {
         status: recovery.status,
         failureCode: outcome.screenshotGap ?? outcome.code,
@@ -2617,8 +2665,13 @@ export async function readBrowserCommandResult(
     storage: ports.storage,
   });
   if (page.capture.authenticationRequired) {
+    // Read again after the member signed in and resumed: the cached page is
+    // still the sign-in form, so capture the step afresh.
+    if (original.data.pausedAt === attemptKey.operationId)
+      return retry(false, "capturing again after sign-in");
     // The page asks for a password: the member signs in (1Password) in the
     // raised window, and the run resumes once they confirm.
+    await updateStep({ pausedAt: attemptKey.operationId });
     await pauseForBrowser(db, scope, {
       status: "paused_auth",
       failureCode: "authentication_required",

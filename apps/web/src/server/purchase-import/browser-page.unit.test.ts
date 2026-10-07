@@ -41,6 +41,7 @@ describe("a captured page derived on the server", () => {
       allowedHosts: ["seeds.example.test"],
       requestedURL: null,
       evidence: [],
+      truncated: false,
     });
     expect(capture.captureVersion).toBe(PAGE_DERIVATION_REVISION);
     expect(capture.readableText).toBe(
@@ -72,6 +73,22 @@ describe("a captured page derived on the server", () => {
     expect(capture.authenticationRequired).toBe(false);
   });
 
+  // The Mac clips an oversized DOM's tail; a Product block before the cut
+  // must not read as the page's one exact Product.
+  it("treats a truncated page's structured data as incomplete", () => {
+    const capture = derivePageCapture({
+      html: page,
+      sourceURL: "https://seeds.example.test/account/orders/42",
+      title: "Order 42",
+      capturedAt: "2026-10-07T12:00:00.000Z",
+      allowedHosts: ["seeds.example.test"],
+      requestedURL: null,
+      evidence: [],
+      truncated: true,
+    });
+    expect(capture.structuredProducts?.variantGroup).toBe(true);
+  });
+
   it("reads a password field as a sign-in page and Amazon ASINs from the URLs", () => {
     const capture = derivePageCapture({
       html: '<html><body><form><input type="password"></form></body></html>',
@@ -81,6 +98,7 @@ describe("a captured page derived on the server", () => {
       allowedHosts: ["amazon.com"],
       requestedURL: "https://www.amazon.com/gp/product/B000000001",
       evidence: [],
+      truncated: false,
     });
     expect(capture.authenticationRequired).toBe(true);
     expect(capture.requestedAmazonAsin).toBe("B000000001");

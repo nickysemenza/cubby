@@ -31,40 +31,55 @@ const CHALLENGE = [
   /are you a human/iu,
 ];
 
-export const fetchPublicPage: FetchPage = async (url, allowedHosts) => {
-  const started = Date.now();
-  const blocked = (reason: string): ServerPageFetch => ({
-    status: "blocked",
-    reason,
-    durationMs: Date.now() - started,
-  });
-  try {
-    const response = await fetchExternalResponse(url, {
-      method: "GET",
-      timeoutMs: 15_000,
-      headers: {
-        accept: "text/html,application/xhtml+xml",
-        "accept-language": "en-US,en;q=0.9",
-      },
-    });
-    if (!response.ok) return blocked(`HTTP ${response.status}`);
-    // A redirect off the vendor's hosts is a sign-in or a different site.
-    if (!urlAllowed(response.url || url, allowedHosts))
-      return blocked("redirected off the vendor's site");
-    assertResponseContentType(response, ["text/html", "application/xhtml+xml"]);
-    const html = new TextDecoder().decode(
-      await readResponseWithLimit(response, MAX_EXTERNAL_HTML_BYTES),
-    );
-    const head = html.slice(0, 20_000);
-    if (html.length < 2_000 || CHALLENGE.some((marker) => marker.test(head)))
-      return blocked("challenge or empty page");
-    return {
-      status: "fetched",
-      url: response.url || url,
-      html,
+/** `fetcher` is the network; tests pass a scripted one. */
+export const publicPageFetcher =
+  (fetcher: typeof fetch = fetch): FetchPage =>
+  async (url, allowedHosts) => {
+    const started = Date.now();
+    const blocked = (reason: string): ServerPageFetch => ({
+      status: "blocked",
+      reason,
       durationMs: Date.now() - started,
-    };
-  } catch (error) {
-    return blocked(error instanceof Error ? error.message : String(error));
-  }
-};
+    });
+    // A redirect off the vendor's hosts is a sign-in or a different site, and
+    // the page is read at the URL it was served from (a redirect to another
+    // `?variant=` is a different variant).
+    let finalURL = url;
+    try {
+      const response = await fetchExternalResponse(url, {
+        fetcher,
+        method: "GET",
+        timeoutMs: 15_000,
+        headers: {
+          accept: "text/html,application/xhtml+xml",
+          "accept-language": "en-US,en;q=0.9",
+        },
+        onRedirect: (target) => {
+          if (!urlAllowed(target.href, allowedHosts))
+            throw new Error("redirected off the vendor's site");
+          finalURL = target.href;
+        },
+      });
+      if (!response.ok) return blocked(`HTTP ${response.status}`);
+      assertResponseContentType(response, [
+        "text/html",
+        "application/xhtml+xml",
+      ]);
+      const html = new TextDecoder().decode(
+        await readResponseWithLimit(response, MAX_EXTERNAL_HTML_BYTES),
+      );
+      const head = html.slice(0, 20_000);
+      if (html.length < 2_000 || CHALLENGE.some((marker) => marker.test(head)))
+        return blocked("challenge or empty page");
+      return {
+        status: "fetched",
+        url: finalURL,
+        html,
+        durationMs: Date.now() - started,
+      };
+    } catch (error) {
+      return blocked(error instanceof Error ? error.message : String(error));
+    }
+  };
+
+export const fetchPublicPage = publicPageFetcher();

@@ -103,6 +103,12 @@ export type ExternalFetchOptions = Omit<RequestInit, "fetcher"> & {
   fetcher?: typeof fetch;
   timeoutMs?: number;
   maxRedirects?: number;
+  /**
+   * Called with each redirect target before it is fetched; throw to refuse
+   * it. The returned Response has no `url`, so a caller that needs the final
+   * URL records the last target here.
+   */
+  onRedirect?: (url: URL) => void;
 };
 
 function responseWithDeadline(
@@ -195,6 +201,7 @@ export async function fetchExternalResponse(
     fetcher = fetch,
     timeoutMs = DEFAULT_TIMEOUT_MS,
     maxRedirects = DEFAULT_MAX_REDIRECTS,
+    onRedirect,
     ...init
   } = options;
   let current = validateExternalHttpUrl(value);
@@ -249,6 +256,7 @@ export async function fetchExternalResponse(
         );
       }
       current = validateExternalHttpUrl(new URL(location, current));
+      onRedirect?.(current);
     }
   } finally {
     if (!responseOwnsDeadline) cleanup();

@@ -110,6 +110,8 @@ export function derivePageCapture(input: {
   /** The URL the run asked for, which can differ from the served one. */
   requestedURL: string | null;
   evidence: BrowserPageCapture["evidence"];
+  /** The DOM lost its tail to the size limit: structured data may be cut. */
+  truncated: boolean;
 }): BrowserPageCapture {
   const page = wasm.compact_browser_page(input.html, input.sourceURL);
   const allowed = (url: string) => urlAllowed(url, input.allowedHosts);
@@ -154,7 +156,7 @@ export function derivePageCapture(input: {
     structuredProducts: structuredProductsFromJsonLd({
       pageURL: input.sourceURL,
       blocks: page.json_ld,
-      omitted: page.json_ld_omitted,
+      omitted: page.json_ld_omitted + (input.truncated ? 1 : 0),
     }),
     authenticationRequired: page.has_password_input,
   });

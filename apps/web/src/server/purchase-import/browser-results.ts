@@ -92,6 +92,7 @@ export async function materializeCapture(
       snapshot.screenshot.status === "captured"
         ? snapshot.screenshot.evidence
         : [],
+    truncated: snapshot.dom.truncated,
   });
   // One command's DOM has one evidence id and object key, so a read
   // interrupted after the upload, or two reads racing, store it once.
