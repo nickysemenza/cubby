@@ -46,7 +46,7 @@ import {
   loadRunDetail,
   startTargetedRun,
 } from "../run-service";
-import { startTargetedImport } from "../targeted-run";
+import { loadTargetedImportLaunch, startTargetedImport } from "../targeted-run";
 import { autoImportOrderMail, AUTO_IMPORTS_PER_VENDOR } from "./auto-import";
 import {
   loadOrderMailImportEvidence,
@@ -931,15 +931,16 @@ describe("saved confirmation imports", () => {
         ]);
       });
 
-      // A mail claim names no account; a run without one cannot browse.
-      it("starts a member's manual enrichment on the vendor's browsing account", async () => {
-        const { accountId, run, line } = await mailOnlyImport();
-        await enableBrowserSync(accountId);
+      // A mail claim imported before mail Purchases were linked to an account
+      // names none; a run without one cannot browse. The launch preview must
+      // name the account the start will use, not the claim's missing one, and
+      // never pick one when the Vendor's browsing account is not unique.
+      const legacyMailClaim = async () => {
+        const imported = await mailOnlyImport();
         const [claim] = await getDb(ctx.db)
           .select({ id: importSourceClaim.id })
           .from(importSourceClaim)
-          .where(eq(importSourceClaim.lastRunId, run.id));
-        // As imported before mail Purchases were linked to an account.
+          .where(eq(importSourceClaim.lastRunId, imported.run.id));
         await getDb(ctx.db)
           .update(importSourceClaim)
           .set({ vendorAccountId: null })
@@ -947,22 +948,73 @@ describe("saved confirmation imports", () => {
         await getDb(ctx.db)
           .update(purchase)
           .set({ vendorAccountId: null })
-          .where(eq(purchase.id, line.purchaseId!));
+          .where(eq(purchase.id, imported.line.purchaseId!));
         const [code] = await getDb(ctx.db)
           .select({ shortcode: product.shortcode })
           .from(product)
-          .where(eq(product.id, line.productId!));
-        await startTargetedImport(ctx.db, run.ledgerPartyId!, {
-          purpose: "product_enrichment",
-          targets: [
-            {
-              productId: code!.shortcode,
-              sourceId: claim!.id,
-            },
-          ],
+          .where(eq(product.id, imported.line.productId!));
+        const ledgerPartyId = imported.run.ledgerPartyId!;
+        return {
+          ...imported,
+          preview: async () =>
+            (
+              await loadTargetedImportLaunch(
+                ctx.db,
+                ledgerPartyId,
+                "product_enrichment",
+                code!.shortcode,
+              )
+            ).products[0],
+          start: () =>
+            startTargetedImport(ctx.db, ledgerPartyId, {
+              purpose: "product_enrichment",
+              targets: [{ productId: code!.shortcode, sourceId: claim!.id }],
+            }),
+        };
+      };
+
+      it("previews and starts a member's manual enrichment on the vendor's browsing account", async () => {
+        const { accountId, account, line, preview, start } =
+          await legacyMailClaim();
+        await enableBrowserSync(accountId);
+        expect(await preview()).toMatchObject({
+          selected: true,
+          vendorAccountId: account.shortcode,
+          vendorAccountLabel: "Synthetic seed account",
         });
+        await start();
         expect(await enrichmentTargets()).toMatchObject([
           { productId: line.productId, vendorAccountId: accountId },
+        ]);
+      });
+
+      it("previews no account when the vendor's browsing account is disabled or not unique", async () => {
+        const { accountId, run, line, preview, start } =
+          await legacyMailClaim();
+        expect(await preview()).toMatchObject({
+          selected: true,
+          vendorAccountId: null,
+          vendorAccountLabel: null,
+        });
+        await enableBrowserSync(accountId);
+        const otherMember = await insertWithShortcode(ctx.db, "ledgerParty", {
+          name: "Second synthetic member",
+          kind: "member",
+        });
+        await insertWithShortcode(ctx.db, "vendorAccount", {
+          label: "Second synthetic seed account",
+          vendorId: run.vendorId!,
+          ledgerPartyId: otherMember.id,
+          status: "active",
+          browserSyncEnabled: true,
+        });
+        expect(await preview()).toMatchObject({
+          vendorAccountId: null,
+          vendorAccountLabel: null,
+        });
+        await start();
+        expect(await enrichmentTargets()).toMatchObject([
+          { productId: line.productId, vendorAccountId: null },
         ]);
       });
 

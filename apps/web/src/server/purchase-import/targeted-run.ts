@@ -300,8 +300,8 @@ export async function loadTargetedImportLaunch(
       id: importSourceClaim.id,
       kind: importSourceClaim.kind,
       externalKey: importSourceClaim.externalKey,
-      vendorAccountShortcode: vendorAccount.shortcode,
-      vendorAccountLabel: vendorAccount.label,
+      vendorId: purchase.vendorId,
+      vendorAccountId: importSourceClaim.vendorAccountId,
     })
     .from(expense)
     .innerJoin(
@@ -315,16 +315,28 @@ export async function loadTargetedImportLaunch(
         eq(importSourceClaim.ledgerPartyId, ledgerPartyId),
       ),
     )
-    .leftJoin(
-      vendorAccount,
-      and(
-        eq(vendorAccount.id, importSourceClaim.vendorAccountId),
-        notDeleted(vendorAccount),
-      ),
-    )
     .where(and(eq(expense.productId, productId), notDeleted(expense)))
     .orderBy(desc(importSourceClaim.updatedAt))
     .limit(1);
+  // Name the account the start will browse with, not the claim's own.
+  const [accountId] = claim?.vendorId
+    ? await enrichmentAccountIds(db, [{ ...claim, vendorId: claim.vendorId }])
+    : [claim?.vendorAccountId ?? null];
+  const [account] = accountId
+    ? await getDb(db)
+        .select({
+          shortcode: vendorAccount.shortcode,
+          label: vendorAccount.label,
+        })
+        .from(vendorAccount)
+        .where(
+          and(
+            eq(vendorAccount.id, vendorAccountId.parse(accountId)),
+            notDeleted(vendorAccount),
+          ),
+        )
+        .limit(1)
+    : [];
   return {
     purpose,
     purchase: null,
@@ -335,10 +347,8 @@ export async function loadTargetedImportLaunch(
         selected: Boolean(claim),
         sourceId: claim?.id ?? null,
         sourceLabel: claim ? claimLabel(claim) : null,
-        vendorAccountId: accountShortcode.parse(
-          claim?.vendorAccountShortcode ?? null,
-        ),
-        vendorAccountLabel: claim?.vendorAccountLabel ?? null,
+        vendorAccountId: accountShortcode.parse(account?.shortcode ?? null),
+        vendorAccountLabel: account?.label ?? null,
         needsAccountChoice: false,
         accountChoices: [],
         reason: claim ? null : "No verified purchase source is available.",
@@ -489,6 +499,25 @@ async function enrichmentStartUrl(
   );
 }
 
+/**
+ * The account each claim's enrichment run browses with, shared by the launch
+ * preview and the start. A mail or receipt claim may name no account, or a
+ * mail-only one; the run browses with the Vendor's browsing account when
+ * there is one, otherwise the claim's own.
+ */
+async function enrichmentAccountIds(
+  db: Database,
+  claims: readonly { vendorId: VendorId; vendorAccountId: string | null }[],
+) {
+  const accounts = await browsingAccounts(
+    db,
+    claims.map((claim) => claim.vendorId),
+  );
+  return claims.map(
+    (claim) => browsingAccountFor(accounts, claim)?.id ?? claim.vendorAccountId,
+  );
+}
+
 async function startProductEnrichment(
   db: Database,
   ledgerPartyId: LedgerPartyId,
@@ -528,16 +557,13 @@ async function startProductEnrichment(
       };
     }),
   );
-  // A mail or receipt claim may name no account, or a mail-only one; the
-  // run browses with the Vendor's browsing account when there is one.
-  const accounts = await browsingAccounts(
+  const accountIds = await enrichmentAccountIds(
     db,
-    resolved.map((row) => row.claim.vendorId),
+    resolved.map((row) => row.claim),
   );
   const groups = new Map<string, typeof resolved>();
-  for (const row of resolved) {
-    const vendorAccountId =
-      browsingAccountFor(accounts, row.claim)?.id ?? row.claim.vendorAccountId;
+  for (const [index, row] of resolved.entries()) {
+    const vendorAccountId = accountIds[index] ?? null;
     row.claim = { ...row.claim, vendorAccountId };
     const key = `${row.claim.vendorId}:${vendorAccountId ?? "none"}`;
     groups.set(key, [...(groups.get(key) ?? []), row]);

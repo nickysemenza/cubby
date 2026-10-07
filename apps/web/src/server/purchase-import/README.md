@@ -68,6 +68,7 @@ conversation: it reaches Cubby through one Run's services and nothing else
 | Gmail order-mail pipeline (Workflow-backed Runs) | `gmail/` (`discovery.ts`, `search-job.ts`, `process.ts`)    |
 | Statement-charge hunts                           | `hunts.ts`, `charge-runs.ts`, `charge-hunt-state.ts`        |
 | Enriching imported Products (post-import, sweep) | `enrichment-sweep.ts`, `browsing-account.ts`                |
+| Manual enrichment's account (preview and start)  | `targeted-run.ts` (`enrichmentAccountIds`)                  |
 | Agent model, prompts, and MCP tools              | `server/purchase-agent/run-agent.ts`, `cubby-mcp.ts`        |
 | Scripted/workerd harness for the agent           | `apps/web/tooling/purchase-agent-workerd-harness.ts`        |
 | Its workerd runtime and `purchase-agent` profile | `apps/web/tooling/workerd-runtime.ts`, `workerd-harness.ts` |
