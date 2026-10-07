@@ -287,6 +287,24 @@ describe("purchase-import agent tool authority", () => {
     });
   });
 
+  // An outdated Mac app stops the run for review; the agent must not keep
+  // issuing commands that can only fail the same way.
+  it("ends the submission when a browser result stopped the run", async () => {
+    const services = () =>
+      fromAny<RunServices>({
+        readBrowserCommandResult: async () => ({ state: "stopped" }),
+      });
+    const result = await toolNamed(
+      "read_browser_command_result",
+      services,
+    ).execute(
+      validated("read_browser_command_result", { operationId: "op-1" }),
+      fakeApi([]),
+      BACKGROUND_CONTEXT,
+    );
+    expect(result.control?.terminate).toBe(true);
+  });
+
   // The model's ids are capped below the host's 256 so the longest prefix a
   // tool prepends still fits: every widest call must reach a service with an
   // input the host contract accepts.

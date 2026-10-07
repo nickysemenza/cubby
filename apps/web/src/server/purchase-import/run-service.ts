@@ -2144,9 +2144,27 @@ export async function readBrowserCommandResult(
     .result(parsed.data.commandId);
   if (result?.outcome.status === "failed") {
     const authRequired = result.outcome.code === "authentication_required";
-    // client_update_required is deliberately not a pause: its command result
-    // is already final, so a reconnect has nothing to wake. It fails like any
-    // terminal outcome, naming the update; the member restarts after it.
+    // An outdated Mac app cannot complete any command until it is updated,
+    // and its result is already final, so a reconnect would wake nothing.
+    // Stop the run for review, naming the update; the member restarts it.
+    if (result.outcome.code === "client_update_required") {
+      await failOperation(
+        getDb(db),
+        key,
+        `${result.outcome.code}: ${result.outcome.message}`,
+      );
+      await stopRunForReview(db, {
+        runId: input.runId,
+        operationId: input.operationId,
+        kind: "other",
+        summary: result.outcome.message,
+      });
+      await getDb(db)
+        .update(runTable)
+        .set({ failureCode: result.outcome.code, updatedAt: new Date() })
+        .where(eq(runTable.id, scope.public.runId));
+      return { state: "stopped" as const, result };
+    }
     const paused =
       authRequired ||
       result.outcome.retryable ||

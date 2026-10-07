@@ -28,6 +28,8 @@ function pendingResult(result: JsonValue): boolean {
       parsed.data.state === "pending" ||
       parsed.data.state === "dispatched" ||
       parsed.data.state === "paused_auth" ||
+      // The run ended for review (an outdated Mac app); nothing more to do.
+      parsed.data.state === "stopped" ||
       parsed.data.state === "paused_offline")
   );
 }

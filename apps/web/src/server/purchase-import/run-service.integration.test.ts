@@ -859,7 +859,7 @@ describe("purchase import run admission", () => {
   // not be staged", a retryable failure no retry fixed. Its command now fails
   // naming the update, and the run is not parked waiting for a reconnect
   // that could never wake it.
-  it("fails a browser command for an outdated Mac app with the update to make", async () => {
+  it("stops a run for review when the Mac app is too old for the server", async () => {
     const party = await createMember();
     const account = await createVendorAccount(party.id);
     const run = await startOrResumeRun(ctx.db, {
@@ -907,8 +907,14 @@ describe("purchase import run admission", () => {
       operationId: "browser:outdated",
     });
 
-    expect(read.state).toBe("completed");
-    const { run: runTable, runOperation } = await import("~/server/db/schema");
+    // "stopped" ends the agent's submission: no retry can succeed until the
+    // member updates the app and restarts the run.
+    expect(read.state).toBe("stopped");
+    const {
+      run: runTable,
+      runFinding,
+      runOperation,
+    } = await import("~/server/db/schema");
     const { and, eq } = await import("drizzle-orm");
     const { getDb } = await import("~/server/repo/database-helpers");
     const [operation] = await getDb(ctx.db)
@@ -926,10 +932,19 @@ describe("purchase import run admission", () => {
         "client_update_required: Update Cubby for Mac, then restart this run.",
     });
     const [row] = await getDb(ctx.db)
-      .select({ status: runTable.status })
+      .select({ status: runTable.status, failureCode: runTable.failureCode })
       .from(runTable)
       .where(eq(runTable.id, run.id));
-    expect(row?.status).not.toBe("paused_offline");
+    expect(row).toEqual({
+      status: "needs_review",
+      failureCode: "client_update_required",
+    });
+    expect(
+      await getDb(ctx.db)
+        .select({ summary: runFinding.summary })
+        .from(runFinding)
+        .where(eq(runFinding.runId, run.id)),
+    ).toEqual([{ summary: "Update Cubby for Mac, then restart this run." }]);
   });
   it("abandons a browser command nobody answered within the stale window", async () => {
     const party = await createMember();
