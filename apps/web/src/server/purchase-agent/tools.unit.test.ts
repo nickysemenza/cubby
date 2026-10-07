@@ -305,6 +305,22 @@ describe("purchase-import agent tool authority", () => {
     expect(result.control?.terminate).toBe(true);
   });
 
+  it("ends the submission when a claim finds the run already stopped", async () => {
+    const services = (): RunServices =>
+      fromPartial({
+        claimNextWork: async () => ({
+          kind: "stopped",
+          status: "needs_review",
+        }),
+      });
+    const result = await toolNamed("claim_next_import_work", services).execute(
+      validated("claim_next_import_work", { operationId: "op-1" }),
+      fakeApi([]),
+      BACKGROUND_CONTEXT,
+    );
+    expect(result.control?.terminate).toBe(true);
+  });
+
   // The model's ids are capped below the host's 256 so the longest prefix a
   // tool prepends still fits: every widest call must reach a service with an
   // input the host contract accepts.

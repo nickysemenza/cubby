@@ -1045,9 +1045,11 @@ describe("purchase import run admission", () => {
       requestAuthentication: async () => undefined,
     };
 
+    // The run ended while the claim waited: the claim reports it stopped,
+    // which ends the agent's submission, instead of throwing into a retry.
     await expect(
       claimNextImportWork(ctx.db, { getByName: () => broker }, run.id),
-    ).rejects.toThrow(/fenced/u);
+    ).resolves.toEqual({ kind: "stopped", status: "needs_review" });
     const [row] = await getDb(ctx.db)
       .select({ status: runTable.status, failureCode: runTable.failureCode })
       .from(runTable)

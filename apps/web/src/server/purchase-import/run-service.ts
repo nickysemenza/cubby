@@ -1719,8 +1719,20 @@ export async function claimNextImportWork(
         ),
       )
       .returning({ id: runTable.id });
-    if (!resumed)
+    if (!resumed) {
+      const [current] = await getDb(db)
+        .select({ status: runTable.status })
+        .from(runTable)
+        .where(eq(runTable.id, scope.public.runId));
+      // A run that ended meanwhile is a clean stop for the agent; a run some
+      // other path resumed first stays the error it was.
+      if (
+        current &&
+        !ACTIVE_RUN_STATUSES.some((status) => status === current.status)
+      )
+        return { kind: "stopped" as const, status: current.status };
       throw new Error("Import run is fenced: its status changed during claim");
+    }
   } else {
     assertRunActive(scope.public.status);
   }
