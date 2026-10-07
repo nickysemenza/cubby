@@ -51,6 +51,13 @@ cover paging and pending-search response fencing; the simulator journey covers
 the controls and navigation boundary. Its evidence uses the usual checksummed
 QA artifact bundle.
 
+Catalog targets below the viewport need explicit scroll steps; `--until` does
+not repeatedly scroll a lazily loaded catalog into view. An identifier may be
+shared by its row and child nodes, so narrow catalog clicks with the entity
+label. Inspect the current accessibility tree before adding role constraints:
+iOS menu choices are cells, while table headers and the Columns control are
+buttons. Use visible labels for menu choices.
+
 `pnpm test:e2e:sim -- --product-clarity --video` runs a focused synthetic Product
 presentation journey. It opens and closes the valuation explanation, checks the
 manual and expense-derived values, and verifies recorded movement, planned, and
