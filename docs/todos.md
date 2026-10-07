@@ -231,6 +231,12 @@ Runs list and `imports_read.run_status` read one shared projection
   outdated app (HTTP 426 from the client gate) as "update required" rather
   than a generic upload failure.
 
+- 🤔 **Recover a skipped import audit after an outdated-Mac stop.** When
+  an account sync stops because the Mac app is too old and its required
+  import audit also fails, the finding names the gap, but a restart audits
+  only the successor's writes. Carry the predecessor's unaudited purchases
+  into the successor's audit, or allow a terminal audit retry.
+
 - 🟢 **Stop and restart runs over MCP.** `imports_read.run_status` reads a
   Run; offer stop, retry, and restart beside it. Approve and reject stay
   human (`run.control` is omitted from MCP as `human_approval`), so this is a

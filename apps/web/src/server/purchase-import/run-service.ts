@@ -1707,10 +1707,32 @@ export async function claimNextImportWork(
       }
       return { kind: "paused_offline" as const };
     }
-    await getDb(db)
+    // Resume only from the status read above: a run stopped while this
+    // claim waited on the bridge (an outdated Mac) must stay stopped.
+    const [resumed] = await getDb(db)
       .update(runTable)
       .set({ status: "running", failureCode: null, updatedAt: new Date() })
-      .where(eq(runTable.id, scope.public.runId));
+      .where(
+        and(
+          eq(runTable.id, scope.public.runId),
+          eq(runTable.status, scope.public.status),
+        ),
+      )
+      .returning({ id: runTable.id });
+    if (!resumed) {
+      const [current] = await getDb(db)
+        .select({ status: runTable.status })
+        .from(runTable)
+        .where(eq(runTable.id, scope.public.runId));
+      // A run that ended meanwhile is a clean stop for the agent; a run some
+      // other path resumed first stays the error it was.
+      if (
+        current &&
+        !ACTIVE_RUN_STATUSES.some((status) => status === current.status)
+      )
+        return { kind: "stopped" as const, status: current.status };
+      throw new Error("Import run is fenced: its status changed during claim");
+    }
   } else {
     assertRunActive(scope.public.status);
   }
@@ -2166,6 +2188,96 @@ export async function issueBrowserCommand(
   return { commandId, state: connected ? "dispatched" : "paused_offline" };
 }
 
+/**
+ * Ends a run whose Mac app the server's version gate refused: nothing the run
+ * asks of the browser can succeed until the member updates and restarts. It
+ * stops from any active status (a paused run included) and is a no-op once
+ * stopped, so a repeated read of the same result answers the same way. An
+ * account sync's import audit is attempted first, but its failure (or a
+ * paused run it refuses) cannot keep the run going; the finding says so.
+ */
+async function stopRunForOutdatedClient(
+  db: Database,
+  input: { runId: string; operationId: string; message: string },
+) {
+  const scope = await loadRunScope(db, input.runId);
+  const runId = runEntityId.parse(input.runId);
+  if (!ACTIVE_RUN_STATUSES.some((status) => status === scope.public.status))
+    return;
+  let auditGap: string | null = null;
+  let auditedAt: Date | undefined;
+  if (scope.public.purpose === "account_sync") {
+    try {
+      await auditAllImportBatches(db, {
+        runId: input.runId,
+        operationId: `${input.operationId}:required-audit`,
+      });
+      auditedAt = new Date();
+    } catch (error) {
+      auditGap = `Imported purchases were not audited: ${error instanceof Error ? error.message : String(error)}`;
+    }
+  }
+  const summary = [input.message, auditGap].filter(Boolean).join(" ");
+  const fingerprint = await sha256Hex(`client_update_required:${summary}`);
+  await withTransaction(db, async (tx) => {
+    const [stopped] = await tx
+      .update(runTable)
+      .set({
+        status: "needs_review",
+        failureCode: "client_update_required",
+        // A skipped audit keeps whatever audit stamp the run already had.
+        auditedAt: auditedAt ?? sql`${runTable.auditedAt}`,
+        endedAt: new Date(),
+        updatedAt: new Date(),
+      })
+      .where(
+        and(
+          eq(runTable.id, runId),
+          inArray(runTable.status, [...ACTIVE_RUN_STATUSES]),
+        ),
+      )
+      .returning({ id: runTable.id });
+    if (!stopped) return;
+    // The account was only offline because of this run; a sign-in pause
+    // stays, since that is the vendor's state, not the app's.
+    if (scope.public.vendorAccountId)
+      await tx
+        .update(vendorAccount)
+        .set({ status: "active", updatedAt: new Date() })
+        .where(
+          and(
+            eq(
+              vendorAccount.id,
+              vendorAccountId.parse(scope.public.vendorAccountId),
+            ),
+            eq(vendorAccount.status, "paused_offline"),
+          ),
+        );
+    if (scope.public.purpose !== "account_sync")
+      await tx
+        .update(runTarget)
+        .set({ state: "unresolved", outcome: null, updatedAt: new Date() })
+        .where(
+          and(
+            eq(runTarget.runId, runId),
+            inArray(runTarget.state, ["pending", "prepared", "needs_evidence"]),
+          ),
+        );
+    await tx
+      .insert(runFinding)
+      .values({
+        runId,
+        ledgerPartyId: scope.ledgerPartyId,
+        entityKind: "run",
+        entityId: runId,
+        kind: "other",
+        summary,
+        evidenceFingerprint: fingerprint,
+      })
+      .onConflictDoNothing();
+  });
+}
+
 export async function readBrowserCommandResult(
   db: Database,
   namespace: PurchaseImportNamespace,
@@ -2188,6 +2300,22 @@ export async function readBrowserCommandResult(
     .result(parsed.data.commandId);
   if (result?.outcome.status === "failed") {
     const authRequired = result.outcome.code === "authentication_required";
+    // An outdated Mac app cannot complete any command until it is updated,
+    // and its result is already final, so a reconnect would wake nothing.
+    // Stop the run for review, naming the update; the member restarts it.
+    if (result.outcome.code === "client_update_required") {
+      await failOperation(
+        getDb(db),
+        key,
+        `${result.outcome.code}: ${result.outcome.message}`,
+      );
+      await stopRunForOutdatedClient(db, {
+        runId: input.runId,
+        operationId: input.operationId,
+        message: result.outcome.message,
+      });
+      return { state: "stopped" as const, result };
+    }
     const paused =
       authRequired ||
       result.outcome.retryable ||

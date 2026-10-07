@@ -15,6 +15,7 @@ import {
   expireStaleRuns,
   finishRun,
   issueBrowserCommand,
+  claimNextImportWork,
   readBrowserCommandResult,
   reconcileSettledRun,
   resumeAuthorizedRuns,
@@ -891,6 +892,171 @@ describe("purchase import run admission", () => {
     expect(operation).toEqual({
       state: "failed",
       error: "disallowed_url: Navigation left the vendor allowlist",
+    });
+  });
+  // An outdated Mac once reported every capture as "The evidence file could
+  // not be staged", a retryable failure no retry fixed. Its command now fails
+  // naming the update, and the run is not parked waiting for a reconnect
+  // that could never wake it.
+  // An outdated Mac once reported every capture as "The evidence file could
+  // not be staged", a retryable failure no retry fixed. The run now stops for
+  // review naming the update, from any active status, and a repeated read of
+  // the same result answers the same way. A paused run also proves the stop
+  // survives an import audit that cannot run (the audit refuses a paused run).
+  it.each(["running", "paused_offline"] as const)(
+    "stops a %s run for review when the Mac app is too old for the server",
+    async (status) => {
+      const party = await createMember();
+      const account = await createVendorAccount(party.id);
+      const run = await startOrResumeRun(ctx.db, {
+        ledgerPartyId: party.id,
+        vendorAccountId: account.id,
+        trigger: "manual",
+      });
+      let issued: BrowserBridgeRequest | undefined;
+      const broker = {
+        enqueue: async (command: BrowserBridgeRequest) => {
+          issued = command;
+        },
+        result: async (): Promise<BrowserBridgeResult> => ({
+          protocolVersion: 2,
+          commandID: issued!.id,
+          operationID: issued!.operationId,
+          runID: run.id,
+          completedAt: new Date().toISOString(),
+          outcome: {
+            status: "failed",
+            code: "client_update_required",
+            message: "Update Cubby for Mac, then restart this run.",
+            retryable: false,
+          },
+        }),
+        cancel: async () => undefined,
+        connected: async () => true,
+        pendingCommands: async () => [],
+        notifyRunCompleted: async () => undefined,
+        requestAuthentication: async () => undefined,
+      };
+      const namespace = { getByName: () => broker };
+      await issueBrowserCommand(ctx.db, namespace, {
+        runId: run.id,
+        operationId: "browser:outdated",
+        operation: {
+          type: "navigate",
+          url: "https://shop.example.test/orders",
+          allowedHosts: ["shop.example.test"],
+        },
+      });
+      const {
+        run: runTable,
+        runFinding,
+        runOperation,
+      } = await import("~/server/db/schema");
+      const { and, eq } = await import("drizzle-orm");
+      const { getDb } = await import("~/server/repo/database-helpers");
+      const { vendorAccount } = await import("~/server/db/schema");
+      await getDb(ctx.db)
+        .update(runTable)
+        .set({ status })
+        .where(eq(runTable.id, run.id));
+      if (status === "paused_offline")
+        await getDb(ctx.db)
+          .update(vendorAccount)
+          .set({ status: "paused_offline" })
+          .where(eq(vendorAccount.id, account.id));
+
+      const read = () =>
+        readBrowserCommandResult(ctx.db, namespace, {
+          runId: run.id,
+          operationId: "browser:outdated",
+        });
+      // "stopped" ends the agent's submission; a second read answers the same.
+      expect((await read()).state).toBe("stopped");
+      expect((await read()).state).toBe("stopped");
+
+      const [operation] = await getDb(ctx.db)
+        .select({ state: runOperation.state, error: runOperation.error })
+        .from(runOperation)
+        .where(
+          and(
+            eq(runOperation.runId, run.id),
+            eq(runOperation.operationId, "browser:outdated"),
+          ),
+        );
+      expect(operation).toEqual({
+        state: "failed",
+        error:
+          "client_update_required: Update Cubby for Mac, then restart this run.",
+      });
+      const [row] = await getDb(ctx.db)
+        .select({ status: runTable.status, failureCode: runTable.failureCode })
+        .from(runTable)
+        .where(eq(runTable.id, run.id));
+      expect(row).toEqual({
+        status: "needs_review",
+        failureCode: "client_update_required",
+      });
+      const [accountRow] = await getDb(ctx.db)
+        .select({ status: vendorAccount.status })
+        .from(vendorAccount)
+        .where(eq(vendorAccount.id, account.id));
+      expect(accountRow?.status).toBe("active");
+      expect(
+        await getDb(ctx.db)
+          .select({ summary: runFinding.summary })
+          .from(runFinding)
+          .where(eq(runFinding.runId, run.id)),
+      ).toEqual([{ summary: expect.stringContaining("Update Cubby for Mac") }]);
+    },
+  );
+  // A reconnect claim that read "paused_offline" must not resume a run that
+  // was stopped while it waited on the bridge (an outdated Mac's stop).
+  it("never resumes a run that stopped while the claim checked the bridge", async () => {
+    const party = await createMember();
+    const account = await createVendorAccount(party.id);
+    const run = await startOrResumeRun(ctx.db, {
+      ledgerPartyId: party.id,
+      vendorAccountId: account.id,
+      trigger: "manual",
+    });
+    const { run: runTable } = await import("~/server/db/schema");
+    const { eq } = await import("drizzle-orm");
+    const { getDb } = await import("~/server/repo/database-helpers");
+    await getDb(ctx.db)
+      .update(runTable)
+      .set({ status: "paused_offline" })
+      .where(eq(runTable.id, run.id));
+    const broker = {
+      enqueue: async () => undefined,
+      result: async () => null,
+      cancel: async () => undefined,
+      connected: async () => {
+        await getDb(ctx.db)
+          .update(runTable)
+          .set({
+            status: "needs_review",
+            failureCode: "client_update_required",
+          })
+          .where(eq(runTable.id, run.id));
+        return true;
+      },
+      pendingCommands: async () => [],
+      notifyRunCompleted: async () => undefined,
+      requestAuthentication: async () => undefined,
+    };
+
+    // The run ended while the claim waited: the claim reports it stopped,
+    // which ends the agent's submission, instead of throwing into a retry.
+    await expect(
+      claimNextImportWork(ctx.db, { getByName: () => broker }, run.id),
+    ).resolves.toEqual({ kind: "stopped", status: "needs_review" });
+    const [row] = await getDb(ctx.db)
+      .select({ status: runTable.status, failureCode: runTable.failureCode })
+      .from(runTable)
+      .where(eq(runTable.id, run.id));
+    expect(row).toEqual({
+      status: "needs_review",
+      failureCode: "client_update_required",
     });
   });
   it("abandons a browser command nobody answered within the stale window", async () => {

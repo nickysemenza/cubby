@@ -20,6 +20,9 @@ const browserCommandState = z.looseObject({
   state: z.string().optional(),
 });
 
+const claimStopped = (output: JsonValue) =>
+  z.object({ kind: z.literal("stopped") }).safeParse(output).success;
+
 function pendingResult(result: JsonValue): boolean {
   const parsed = browserCommandState.safeParse(result);
   return (
@@ -28,6 +31,8 @@ function pendingResult(result: JsonValue): boolean {
       parsed.data.state === "pending" ||
       parsed.data.state === "dispatched" ||
       parsed.data.state === "paused_auth" ||
+      // The run ended for review (an outdated Mac app); nothing more to do.
+      parsed.data.state === "stopped" ||
       parsed.data.state === "paused_offline")
   );
 }
@@ -153,12 +158,16 @@ export function purchaseImportTools(
     tool("claim_next_import_work", {
       description:
         "Claim and describe the run's next bounded work item. Use this before choosing saved mail, receipt or browser evidence work, and again after each committed item. For settlement_verification, verify the named existing Purchase against saved statement evidence, then finish or stop for review rather than claiming this item repeatedly. Otherwise continue until none.",
-      execute: async (args, api, context) =>
-        result(
-          await step(api, context, `claim-work:${args.operationId}`, () =>
-            services().claimNextWork(args),
-          ),
-        ),
+      execute: async (args, api, context) => {
+        const output = await step(
+          api,
+          context,
+          `claim-work:${args.operationId}`,
+          () => services().claimNextWork(args),
+        );
+        // The run ended (for example an outdated Mac stopped it): nothing to claim.
+        return result(output, claimStopped(output));
+      },
     }),
     tool("extract_receipt_evidence", {
       description:
