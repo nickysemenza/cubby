@@ -25,6 +25,7 @@ import {
   desc,
   getTableColumns,
   getTableName,
+  inArray,
   type InferSelectModel,
   or,
   type SQL,
@@ -157,8 +158,7 @@ const booleanPredicate = (
  * An id filter over a foreign-key column: the column is in the set of ids
  * whose public shortcode was requested. The referenced table is aliased so a
  * self-reference (a location's parent) never collides with the outer row,
- * and the outer column stays a Drizzle column so the relational list query
- * can re-alias it (see `list-smoke.integration.test.ts`).
+ * preserving the outer root-table column for both selection and count.
  */
 const referencePredicate = (
   entity: Entity,
@@ -299,27 +299,39 @@ interface ListRequest<Filters extends object> {
   projection?: ListProjection;
 }
 
-interface ListSpec<Row, Out> {
-  /**
-   * The row query. Omit for a flat `SELECT *` over the table; pass a
-   * relational `findMany` (or a projection) when hydration needs relations.
-   */
-  select?: (page: ListPage, projection: ListProjection) => Promise<Row[]>;
+interface ListHydration<Row, Out> {
   /** Rows → API items, batched over the page (quality, images, labels). */
   hydrate: (rows: Row[], projection: ListProjection) => Promise<Out[]> | Out[];
-  /** Pre-built where; defaults to `where(filters)` with no computed terms. */
   where?: SQL | undefined;
   resolveSort?: NonNullable<OrderByOpts>["resolve"];
   tieBreaker?: SQL;
-  /**
-   * Pre-built ordering that replaces the declared sort roster: a run's
-   * capture order, a group order ahead of the requested sort, or a picker's
-   * own roster. Defaults to `orderBy(sorts, { resolveSort, tieBreaker })`.
-   */
   orderBy?: SQL[];
-  /** For a row query whose `where` is bound to a relational-query alias. */
+  /** Joined lists can share a count/footer aggregate over their own FROM. */
   count?: () => Promise<number>;
 }
+
+type ListSpec<Row, Out> = ListHydration<Row, Out> &
+  (
+    | {
+        /**
+         * A plain-select projection with the same root FROM as count. Omit for
+         * stored columns. Relational queries belong in `load`, never here.
+         */
+        select?: (page: ListPage, projection: ListProjection) => Promise<Row[]>;
+        load?: never;
+      }
+    | {
+        select?: never;
+        /**
+         * Enrich only the selected IDs. The scaffold owns filtering, sorting and
+         * pagination in a plain FROM context, and restores page order afterward.
+         */
+        load: (
+          where: SQL,
+          projection: ListProjection,
+        ) => Promise<Array<Row & { id: string }>>;
+      }
+  );
 
 const searchableEntityNames = new Set<string>(searchableEntities);
 const isSearchableEntity = (entity: string): entity is SearchableEntity =>
@@ -458,17 +470,44 @@ export function listScaffold<
         limit: take,
         offset: skip,
       };
-      const selectRows =
-        spec.select ??
-        (async (clauses: ListPage) =>
-          // SAFETY: `SELECT *` over `table` returns exactly its inferred row.
-          (await unwrapDb(db)
-            .select()
-            .from(table as PgTable)
-            .where(clauses.where)
-            .orderBy(...clauses.orderBy)
-            .limit(clauses.limit)
-            .offset(clauses.offset)) as Row[]);
+      const load = spec.load;
+      const selectRows = load
+        ? async (
+            clauses: ListPage,
+            selected: ListProjection,
+          ): Promise<Row[]> => {
+            // SAFETY: T extends PgTable; this erases only the generic FROM constraint.
+            const ids = await unwrapDb(db)
+              .select({ id: sql<string>`${table.id}` })
+              .from(table as PgTable)
+              .where(clauses.where)
+              .orderBy(...clauses.orderBy)
+              .limit(clauses.limit)
+              .offset(clauses.offset);
+            if (ids.length === 0) return [];
+            const loaded = await load(
+              inArray(
+                table.id,
+                ids.map((row) => row.id),
+              ),
+              selected,
+            );
+            const byId = new Map(loaded.map((row) => [row.id, row]));
+            return ids.flatMap(({ id }) => {
+              const row = byId.get(id);
+              return row ? [row] : [];
+            });
+          }
+        : (spec.select ??
+          (async (clauses: ListPage) =>
+            // SAFETY: `SELECT *` over `table` returns exactly its inferred row.
+            (await unwrapDb(db)
+              .select()
+              .from(table as PgTable)
+              .where(clauses.where)
+              .orderBy(...clauses.orderBy)
+              .limit(clauses.limit)
+              .offset(clauses.offset)) as Row[]));
       return withListReadTracing(
         { entity, projection: projection.kind },
         async () => {
@@ -477,7 +516,8 @@ export function listScaffold<
             rows: () => selectRows(page, projection),
             count: spec.count ?? (() => countWhere(db, table, where)),
           });
-          if (request.readIntent === "count") return { data: [], count };
+          if (request.readIntent === "count" || data.length === 0)
+            return { data: [], count };
           return withListReadTracing({ rows: data.length }, async () => ({
             data: await spec.hydrate(data, projection),
             count,

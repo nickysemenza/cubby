@@ -221,7 +221,13 @@ export const countWhere = (
   table: PgTable,
   where?: SQL,
 ): Promise<number> =>
-  traceListCount(() => unwrapDb(db).$count(table, where), getTableName(table));
+  traceListCount(async () => {
+    const [row] = await unwrapDb(db)
+      .select({ count: sql<number>`count(*)::int` })
+      .from(table)
+      .where(where);
+    return row?.count ?? 0;
+  }, getTableName(table));
 
 /**
  * Build ORDER BY clauses from a normalized sort stack (see `normalizeSorts`).

@@ -836,9 +836,9 @@ export const plantingListRead = async (
     { filters, sorts, pagination, projection },
     {
       where,
-      select: (page, selected) =>
+      load: (where, selected) =>
         unwrapDb(db).query.planting.findMany({
-          ...page,
+          where,
           with: {
             plant:
               wantsListGroup(selected, "derived") ||
@@ -884,9 +884,8 @@ const gardenEntryScaffold = listScaffold("gardenEntry", gardenEntry);
  * A planting's journal always includes its direct live associations. A
  * whole-area entry joins only when it has no live planting associations and
  * was observed at the planting's current location within the planting's own
- * active window. The window is read once and inlined: a correlated subquery
- * would have to name the outer table, which the relational query aliases
- * differently from the plain count query that runs beside it.
+ * active window. The planting's location and window are resolved once for
+ * selection and count.
  */
 const journalPredicate = async (db: Database, plantingId: PlantingId) => {
   const row = await unwrapDb(db).query.planting.findFirst({
@@ -912,9 +911,6 @@ const journalPredicate = async (db: Database, plantingId: PlantingId) => {
     return inArray(gardenEntry.id, directEntryIds);
   }
 
-  // The relational list query aliases its outer GardenEntry table while the
-  // count query does not. Build self-contained id subqueries rather than a
-  // correlated predicate against that unstable outer alias.
   const wholeAreaEntry = alias(gardenEntry, "wholeAreaGardenEntry");
   const wholeAreaLink = alias(entityLink, "wholeAreaGardenEntryPlanting");
   const start =
@@ -965,9 +961,6 @@ export const gardenEntryListRead = async (
   const where = gardenEntryScaffold.where(filters, [
     buildGardenEntryWhere(),
     eqAnyRequested(gardenEntry.locationId, locationIds),
-    // Uncorrelated `IN` sub-select, not a correlated `EXISTS` — same alias
-    // trap `journalPredicate` documents above: the relational list query
-    // aliases its outer GardenEntry table while the count query does not.
     plantingIds && plantingIds.length > 0
       ? inArray(
           gardenEntry.id,
@@ -1002,9 +995,9 @@ export const gardenEntryListRead = async (
       // a `resolve` special-case, so it can't swallow a second user-requested
       // sort (see `buildOrderBy`'s doc comment).
       tieBreaker: desc(gardenEntry.createdAt),
-      select: (page, selected) =>
+      load: (where, selected) =>
         unwrapDb(db).query.gardenEntry.findMany({
-          ...page,
+          where,
           with: {
             location: { columns: { shortcode: true, name: true } },
             images: wantsListGroup(selected, "media")

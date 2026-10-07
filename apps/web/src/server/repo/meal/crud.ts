@@ -257,9 +257,9 @@ export const mealListRead = async (
       // dump every one of them into an arbitrarily-ordered NULL block. This
       // orders that block the way its visible label reads.
       tieBreaker: sql`${meal.date} desc`,
-      select: (page, selected) =>
+      load: (where, selected) =>
         getDb(db).query.meal.findMany({
-          ...page,
+          where,
           with: {
             recipes:
               wantsListGroup(selected, "relations") ||

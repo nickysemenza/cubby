@@ -33,7 +33,6 @@ import type { PurchaseDocumentKind } from "@cubby/schemas/purchase";
 import { runTargetState } from "@cubby/schemas/purchase-import";
 import type { SearchableEntityRef } from "@cubby/schemas/search";
 import {
-  aliasedTable,
   and,
   asc,
   count,
@@ -1158,58 +1157,17 @@ const cullablePendingImageWhere = (db: Database, cutoffDate: Date) =>
     not(anyForeignKeyImageReferenceCondition(db, image)),
   );
 
-/**
- * `imageList`'s scaffold: binds the manifest-declared `source`/
- * `captureAttribution`/`capturedAt` filters and the generated `dataStatus`/
- * `dataGap` filters and data-quality sort onto ONE canonical table
- * reference — `listImage`, not the plain `image` export.
- *
- * The Drizzle relational query API (`dbClient.query.image.findMany`, used
- * for rows below) resolves its FROM clause through the schema's own
- * registered alias for the `image` relation, which is the lowercase
- * `"image"` key — NOT the table's raw SQL name (`"Image"`, from `image`
- * unaliased). A WHERE/ORDER BY condition built against plain `image` renders
- * `"Image"."column"`, which Postgres rejects once the FROM clause has
- * aliased that same table to `"image"` ("missing FROM-clause entry" /
- * "perhaps you meant to reference the table alias 'image'"). `listImage =
- * aliasedTable(image, "image")` mimics that same alias, and — since
- * `aliasedTable` is also a valid `.from()` target for a plain select — the
- * count query below uses the SAME `listImage` reference too, so one
- * canonical table object is correct for both queries at once (no more
- * building the predicate twice against two different table spellings).
- */
-const listImage = aliasedTable(image, "image");
-const imageScaffold = listScaffold("image", listImage);
+const imageScaffold = listScaffold("image", image);
 
-/**
- * The `imageList` predicate. Exported so `getEntityCounts` can call
- * `buildImageWhere(db, {})` and get the list's REAL population rather than a
- * hand-restated copy that can drift from it.
- *
- * Routed through `listScaffold`'s `where` (like every other scaffolded list)
- * rather than a hand-built `and(...)`, which is a deliberate behavior change
- * versus the pre-scaffold code: the old `buildWhere` here started from an
- * EMPTY conditions array with NO soft-delete predicate at all, so
- * `imageList({})` would have returned soft-deleted images too.
- * `buildSearchConditions` (called inside the scaffold) supplies `notDeleted`
- * for free, closing that gap. Verified impact is ZERO rows today (0 of 5738
- * images have `deletedAt` set, since `deleteImages` hard-deletes rather than
- * soft-deletes) — `Image` is still declared `softDeletedAt()`, so this closes
- * a latent gap rather than changing any observable result.
- *
- * Async (unlike most `buildXWhere` in this repo) because `runId` and
- * `capturedByPartyId` are shortcode filters that must resolve through
- * `shortcode-resolver` rather than match a raw code in SQL (see
- * `docs/agents/domain-rules.md`). `getEntityCounts` already tolerates either
- * arity — see `CountWhere` in `~/server/repo/dashboard`.
- */
+/** Shared live-image predicate for lists and dashboard counts. Shortcode filters
+ * resolve asynchronously before contributing their root-table predicates. */
 export const buildImageWhere = async (
   db: Database,
   filters: ImageListFilters,
 ): Promise<SQL | undefined> => {
   let referencePresence: SQL | undefined;
   if (filters.referencePresenceFilter) {
-    const referenced = activeImageReferenceCondition(db, listImage);
+    const referenced = activeImageReferenceCondition(db, image);
     referencePresence =
       filters.referencePresenceFilter === "has" ? referenced : not(referenced);
   }
@@ -1229,7 +1187,7 @@ export const buildImageWhere = async (
             .from(runTarget)
             .where(
               and(
-                eq(runTarget.entityId, listImage.id),
+                eq(runTarget.entityId, image.id),
                 eqAnyRequested(runTarget.runId, runIds),
                 eqAny(runTarget.state, filters.targetState),
               ),
@@ -1244,10 +1202,10 @@ export const buildImageWhere = async (
     // subquery predicates stay hand-written here.
     referencePresence,
     importTargetCondition,
-    eqAnyRequested(listImage.capturedByPartyId, capturedByPartyIds),
-    imageProcessingIssueFilter(listImage, filters.processingIssue),
+    eqAnyRequested(image.capturedByPartyId, capturedByPartyIds),
+    imageProcessingIssueFilter(image, filters.processingIssue),
     filters.uploadedAgeHoursMin !== undefined
-      ? sql`${listImage.createdAt} < now() - (${filters.uploadedAgeHoursMin} * interval '1 hour')`
+      ? sql`${image.createdAt} < now() - (${filters.uploadedAgeHoursMin} * interval '1 hour')`
       : undefined,
   ]);
 };
@@ -1312,10 +1270,10 @@ export const imageList = async (
       : [
           sql`(
             SELECT "position" FROM "RunTarget"
-            WHERE "RunTarget"."entityId" = ${listImage.id}
+            WHERE "RunTarget"."entityId" = ${image.id}
               AND "RunTarget"."runId" = ANY(${uuidArrayParam(runIdsForOrder)})
           ) asc nulls last`,
-          asc(listImage.createdAt),
+          asc(image.createdAt),
         ];
 
   return imageScaffold.list(
@@ -1324,18 +1282,11 @@ export const imageList = async (
     {
       where: whereClause,
       orderBy: runOrder,
-      select: (page) =>
-        dbClient.query.image.findMany({ ...page, with: imageEntityRelations }),
-      // Not `countWhere`/`$count`: that helper renders `FROM` from the
-      // table's bare name, which for an `aliasedTable` is just the alias
-      // itself (`FROM "image"`, no real relation) rather than `FROM "Image"
-      // AS "image"`. A plain `.from(listImage)` renders the alias correctly.
-      count: () =>
-        dbClient
-          .select({ count: sql<number>`count(*)::int` })
-          .from(listImage)
-          .where(whereClause)
-          .then((rows) => rows[0]?.count ?? 0),
+      load: (where) =>
+        dbClient.query.image.findMany({
+          where,
+          with: imageEntityRelations,
+        }),
       hydrate: async (images) => {
         const imageShortcodes = images.map((item) => item.shortcode);
         const [

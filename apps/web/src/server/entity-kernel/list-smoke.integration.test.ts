@@ -1,15 +1,10 @@
 /**
- * Structural regression guard for the CUBBY-11R bug class, not a single fix.
+ * Structural regression guard for the historical dual-FROM alias bug class.
  *
- * Every kernel entity list pairs a Drizzle relational `findMany` rows query
- * (which aliases the root table to its lowercase name and rewrites Column
- * objects — but NOT `sql.raw` strings or nested PgSelect builders) with an
- * unaliased `$count`/plain-select over the SAME where clause. A predicate
- * that reaches the outer row by raw table name, or via a correlated
- * sub-select builder, compiles on one leg and throws `invalid reference to
- * FROM-clause entry for table "X"` (or the mirror `missing FROM-clause entry
- * for table "x"`) on the other — but only when that specific filter or sort
- * is actually used, so a new instance ships to production silently.
+ * Lists select/filter/sort/page and count in one plain root-table context.
+ * Relational graphs load only the selected IDs, preserving the page's order.
+ * A stale relational alias in a filter or sort still fails at PostgreSQL plan
+ * time; an unused filter can still silently return unrelated records.
  *
  * This file drives EVERY declared filter (one at a time) and EVERY declared
  * sort field, for EVERY kernel entity with a list operation, through the real
@@ -153,7 +148,7 @@ function buildFilterSample(
   return { ok: true, value: roundNumbers(wrapper.value) };
 }
 
-describe("entity list smoke — dual relational/count FROM-clause aliasing", () => {
+describe("entity list smoke — shared selection/count FROM context", () => {
   const ctx = withTestDb();
 
   it("resolves every declared filter and sort for every listable entity", async () => {

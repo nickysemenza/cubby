@@ -24,6 +24,7 @@ import {
   and,
   asc,
   eq,
+  getTableColumns,
   inArray,
   isNotNull,
   ne,
@@ -554,7 +555,7 @@ export const recipeListRead = async (
       return [
         sql.raw(
           `(SELECT c."name" FROM "Cookbook" c ` +
-            `WHERE c."id" = "recipe"."cookbookId" AND c."deletedAt" IS NULL) ` +
+            `WHERE c."id" = "Recipe"."cookbookId" AND c."deletedAt" IS NULL) ` +
             `${isAsc ? "asc" : "desc"} nulls last`,
         ),
       ];
@@ -589,21 +590,25 @@ export const recipeListRead = async (
       // List reads fetch flat rows and scalar counts; never full graphs. The
       // thumbnail comes from the display-image resolver, not an images join.
       select: (page, selected) =>
-        getDb(db).query.recipe.findMany({
-          ...page,
-          extras: {
+        getDb(db)
+          .select({
+            ...getTableColumns(recipe),
             mealCount: wantsListGroup(selected, "relations")
               ? sql<number | null>`${sql.raw(
-                  liveMealCountForRecipeSql('"recipe"."id"'),
+                  liveMealCountForRecipeSql('"Recipe"."id"'),
                 )}`.as("mealCount")
               : sql<number | null>`NULL::int`.as("mealCount"),
             sectionCount: wantsListGroup(selected, "derived")
               ? sql<number | null>`${sql.raw(
-                  liveSectionCountForRecipeSql('"recipe"."id"'),
+                  liveSectionCountForRecipeSql('"Recipe"."id"'),
                 )}`.as("sectionCount")
               : sql<number | null>`NULL::int`.as("sectionCount"),
-          },
-        }),
+          })
+          .from(recipe)
+          .where(page.where)
+          .orderBy(...page.orderBy)
+          .limit(page.limit)
+          .offset(page.offset),
       hydrate: (rows, selected) =>
         hydrateListRead(db, "recipe", rows, selected, {
           media: true,

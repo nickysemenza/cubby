@@ -26,7 +26,6 @@ import type { Database } from "~/server/db";
 import { product, task } from "~/server/db/schema";
 import { loadDataQualities } from "~/server/repo/data-quality/hydrate";
 import {
-  countWhere,
   eqAnyOrPresence,
   formatSearchTerm,
   getDb,
@@ -78,9 +77,8 @@ function buildTaskProjectCondition(
   projectId: TaskFilters["projectId"],
   projectIds: EntityId<"project">[],
   presence?: PresenceFilter,
-  taskAlias = "Task",
 ): SQL | undefined {
-  const effectiveProjectId = effectiveTaskProjectSql(taskAlias);
+  const effectiveProjectId = effectiveTaskProjectSql();
   const presenceCond =
     presence === "has"
       ? sql`${effectiveProjectId} IS NOT NULL`
@@ -161,14 +159,10 @@ const joinedNameSort = (
 
 const resolveTaskSort = (sort: SortParams) => {
   if (sort.orderBy === "projectId") {
-    return joinedNameSort(sort, "Project", effectiveTaskProjectSql("task"));
+    return joinedNameSort(sort, "Project", effectiveTaskProjectSql());
   }
   if (sort.orderBy === "subjectProductId") {
-    return joinedNameSort(
-      sort,
-      "Product",
-      effectiveTaskSubjectProductSql("task"),
-    );
+    return joinedNameSort(sort, "Product", effectiveTaskSubjectProductSql());
   }
   return null;
 };
@@ -176,12 +170,7 @@ const resolveTaskSort = (sort: SortParams) => {
 const taskScaffold = listScaffold("task", task);
 
 /** The complete WHERE for this entity's list. `getEntityCounts` calls it with `{}` — see repo/dashboard.ts. */
-export const buildTaskWhere = async (
-  db: Database,
-  filters: TaskFilters,
-  taskAlias = "Task",
-  resolved?: Awaited<ReturnType<typeof resolveTaskFilterReferences>>,
-) => {
+export const buildTaskWhere = async (db: Database, filters: TaskFilters) => {
   const dbClient = getDb(db);
   const {
     projectIds,
@@ -189,12 +178,11 @@ export const buildTaskWhere = async (
     parentTaskIds,
     scopedProjectIds,
     subjectProductIds,
-  } = resolved ?? (await resolveTaskFilterReferences(db, filters));
+  } = await resolveTaskFilterReferences(db, filters);
   const projectCondition = buildTaskProjectCondition(
     filters.projectId,
     projectIds,
     filters.projectPresenceFilter,
-    taskAlias,
   );
   const subjectProductCondition = () =>
     filters.subjectProductId &&
@@ -203,7 +191,7 @@ export const buildTaskWhere = async (
     !filters.subjectProductPresenceFilter
       ? sql`false`
       : (() => {
-          const effectiveSubject = effectiveTaskSubjectProductSql(taskAlias);
+          const effectiveSubject = effectiveTaskSubjectProductSql();
           const match =
             subjectProductIds.length > 0
               ? sql`${effectiveSubject} = ANY(${uuidArrayParam(subjectProductIds)})`
@@ -239,13 +227,13 @@ export const buildTaskWhere = async (
       );
     return or(
       formatSearchTerm(task.name, filters.search),
-      sql`${effectiveTaskSubjectProductSql(taskAlias)} IN ${subjectProductNameMatches}`,
+      sql`${effectiveTaskSubjectProductSql()} IN ${subjectProductNameMatches}`,
     );
   };
   const scopeCondition = () =>
     scopedProjectIds
       ? scopedProjectIds.length > 0
-        ? sql`${effectiveTaskProjectSql(taskAlias)} = ANY(${uuidArrayParam(scopedProjectIds)})`
+        ? sql`${effectiveTaskProjectSql()} = ANY(${uuidArrayParam(scopedProjectIds)})`
         : sql`false`
       : undefined;
   const dueConditions = () => [
@@ -284,7 +272,7 @@ export const buildTaskWhere = async (
     parentTaskCondition(),
     scopeCondition(),
     filters.trade
-      ? sql`${effectiveTaskTradeSql(taskAlias)} IN (${sql.join(
+      ? sql`${effectiveTaskTradeSql()} IN (${sql.join(
           [filters.trade].flat().map((value) => sql`${value}`),
           sql`, `,
         )})`
@@ -314,25 +302,20 @@ export const taskListRead = async (
   projection: ListProjection,
   readIntent: ListReadIntent = "page",
 ) => {
-  const resolved = await resolveTaskFilterReferences(db, filters);
-  const [whereClause, countWhereClause] = await Promise.all([
-    buildTaskWhere(db, filters, "task", resolved),
-    buildTaskWhere(db, filters, "Task", resolved),
-  ]);
+  const whereClause = await buildTaskWhere(db, filters);
   return taskScaffold.list(
     db,
     { filters, sorts, pagination, readIntent, projection },
     {
       where: whereClause,
-      count: () => countWhere(db, task, countWhereClause),
       resolveSort: resolveTaskSort,
-      select: (page) => {
+      load: (where) => {
         const declared = relations.task.withProject.with;
         const references =
           wantsListGroup(projection, "relations") ||
           wantsListGroup(projection, "derived");
         return getDb(db).query.task.findMany({
-          ...page,
+          where,
           with: {
             project: references ? declared.project : undefined,
             subjectProduct: references ? declared.subjectProduct : undefined,
