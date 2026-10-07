@@ -225,6 +225,11 @@ export const detailSlots = {
         default: m.VendorAccountOrderMail,
       })),
     ),
+    sync: slot(() =>
+      import("~/app/vendors/account-sync").then((m) => ({
+        default: m.VendorAccountSync,
+      })),
+    ),
     "charge-search": slot(() =>
       import("~/app/vendors/charge-search").then((m) => ({
         default: m.VendorAccountChargeSearch,

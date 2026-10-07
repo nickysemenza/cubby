@@ -309,7 +309,8 @@ struct RecordsBlockView: View {
     /// Exactly the finance verbs `native-coverage.ts` marks `implemented`
     /// (`NativeCoverageViewPathTests` asserts it); `verbButton` runs each.
     static let handledVerbs: Set<SectionActionID> = [
-        .searchCharges, .matchStatement, .receiveExpense, .splitExpense, .linkExpenses, .linkProducts,
+        .syncAccount, .searchCharges, .matchStatement, .receiveExpense, .splitExpense, .linkExpenses,
+        .linkProducts,
     ]
 
     private var offersSelection: Bool {
@@ -461,7 +462,7 @@ struct RecordsBlockView: View {
         }
         if let startedRun {
             NavigationLink(value: Route.entityDetail(.run, id: startedRun)) {
-                Label("View charge search", systemImage: "arrow.up.right.square")
+                Label("View run", systemImage: "arrow.up.right.square")
             }
         }
         let unsupported = records.verbs.compactMap { verb -> String? in
@@ -480,6 +481,12 @@ struct RecordsBlockView: View {
     @ViewBuilder
     private func verbButton(_ verb: ReportPresentation.Records.Verb) -> some View {
         switch verb.verb {
+        case .syncAccount:
+            Button(isSearching ? "Submitting…" : verb.label) {
+                Task { await syncAccount() }
+            }
+            .disabled(isSearching || verb.disabledReason != nil || host == nil)
+            .accessibilityIdentifier("section.syncAccount")
         case .searchCharges:
             Button {
                 Task { await searchCharges() }
@@ -576,6 +583,21 @@ struct RecordsBlockView: View {
     private func attachSaved() {
         appModel.recordEntityMutation(keys: [.purchase, .expense, .product])
         host?.onChanged()
+    }
+
+    private func syncAccount() async {
+        guard let host else { return }
+        isSearching = true
+        verbError = nil
+        defer { isSearching = false }
+        do {
+            startedRun = try await SectionActionRunner(client: appModel.client).syncAccount(
+                vendorAccountID: host.row.id, records: records)
+            appModel.recordEntityMutation(keys: [.vendorAccount, .run])
+        } catch {
+            Diagnostics.report(error, context: "Start account sync")
+            verbError = error.userMessage
+        }
     }
 
     private func searchCharges() async {

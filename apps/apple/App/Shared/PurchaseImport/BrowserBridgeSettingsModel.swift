@@ -5,7 +5,10 @@ import Observation
 @MainActor
 protocol BrowserBridgeControlling: AnyObject {
     func connect(browser: BrowserChoice) async throws
-    func syncNow(browser: BrowserChoice, backfill: BrowserBridgeBackfillRange?) async throws
+    func syncPlan() async throws -> SyncPlanOutput
+    func syncNow(
+        browser: BrowserChoice, accountID: String?, backfill: BrowserBridgeBackfillRange?
+    ) async throws
     func disconnect() async
     func raiseAuthenticationWindow(for accountID: String)
     func appDidBecomeActive()
@@ -51,6 +54,7 @@ final class BrowserBridgeSettingsModel {
     private(set) var accountCount = 0
     private(set) var accountStates: [BrowserBridgeAccountState] = []
     private(set) var error: String?
+    private(set) var syncPlans: [SyncPlanAccount] = []
     @ObservationIgnored private weak var controller: (any BrowserBridgeControlling)?
 
     var isConfigured: Bool { controller != nil }
@@ -147,20 +151,37 @@ final class BrowserBridgeSettingsModel {
         }
     }
 
-    func syncNow(browser: BrowserChoice, backfill: BrowserBridgeBackfillRange? = nil) {
+    var syncableAccountCount: Int { syncPlans.filter { $0.disabledReason == nil }.count }
+
+    func refreshSyncPlan() async {
+        guard let controller else { return }
+        do {
+            syncPlans = try await controller.syncPlan().accounts
+        } catch {
+            syncPlans = []
+            self.error = error.localizedDescription
+            Diagnostics.report(error, context: "purchaseImport.browser.syncPlan")
+        }
+    }
+
+    func syncNow(
+        browser: BrowserChoice, accountID: String? = nil, backfill: BrowserBridgeBackfillRange? = nil
+    ) {
         guard let controller, !isSyncing else { return }
         isSyncing = true
         syncStartedAt = .now
         error = nil
         Task { [weak self] in
             do {
-                try await controller.syncNow(browser: browser, backfill: backfill)
+                try await controller.syncNow(browser: browser, accountID: accountID, backfill: backfill)
                 guard let self else { return }
+                await refreshSyncPlan()
                 lastCompletedAt = .now
                 isSyncing = false
                 syncStartedAt = nil
             } catch {
                 guard let self else { return }
+                await refreshSyncPlan()
                 self.error = error.localizedDescription
                 isSyncing = false
                 syncStartedAt = nil
@@ -174,6 +195,7 @@ final class BrowserBridgeSettingsModel {
         status = .disconnected
         setAccountCounts(connected: 0, total: 0)
         accountStates = []
+        syncPlans = []
     }
 
     var statusLabel: String {

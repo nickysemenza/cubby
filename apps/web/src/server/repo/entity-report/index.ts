@@ -38,6 +38,7 @@ import {
 } from "./records";
 import type { RunReportSlot } from "./run";
 import { vendorAccountChargeSearchReport } from "./vendor-account-charge-search";
+import { vendorAccountSyncReport } from "./vendor-account-sync";
 
 const isRunSlot = (slot: string): slot is RunReportSlot =>
   slot.startsWith("run.");
@@ -105,6 +106,8 @@ const BUILDERS = {
   "purchase.project-allocation": purchaseProjectAllocationReport,
   "purchase.financial-settlement": purchaseFinancialSettlementReport,
   "expense.settlement": expenseSettlementReport,
+  "vendorAccount.sync": (db, id, _viewer, actor) =>
+    vendorAccountSyncReport(db, id, actor),
   "vendorAccount.charge-search": (db, id, _viewer, actor) =>
     vendorAccountChargeSearchReport(db, id, actor),
   "run.live-progress": runBuilder("run.live-progress"),

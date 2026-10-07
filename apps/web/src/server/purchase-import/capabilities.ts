@@ -110,6 +110,7 @@ const actionCapability = {
   "photo_run.propose_groups": "photo_commit",
   "photo_run.commit_group": "photo_commit",
   "run.start": "start_run",
+  "run.start_sync": "start_run",
   "run.start_charge_run": "start_run",
   "meal_recipe.add": "generic_mutation",
   "meal_recipe.update": "generic_mutation",

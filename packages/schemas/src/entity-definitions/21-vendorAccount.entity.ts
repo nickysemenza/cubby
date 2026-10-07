@@ -45,6 +45,7 @@ export default defineEntity({
     detail: {
       additionalSections: [
         { kind: "slot", id: "order-mail", title: "Order email" },
+        { kind: "slot", id: "sync", title: "Sync" },
         { kind: "slot", id: "charge-search", title: "Statement charges" },
       ],
     },

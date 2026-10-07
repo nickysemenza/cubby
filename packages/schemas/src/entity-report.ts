@@ -48,6 +48,7 @@ export const reportSlots = [
   "purchase.financial-settlement",
   "expense.settlement",
   "vendorAccount.charge-search",
+  "vendorAccount.sync",
   // A Run's detail: progress, approvals, findings, transcript, log, AI usage and changes.
   "run.live-progress",
   "run.import-stats",

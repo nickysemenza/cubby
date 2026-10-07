@@ -68,6 +68,13 @@ public struct SectionActionRunner: Sendable {
         return PurchaseProductLinkSession(purchaseID: purchaseID, client: client)
     }
 
+    public func syncAccount(
+        vendorAccountID: String, records: ReportPresentation.Records
+    ) async throws -> String {
+        try Self.canOpen(.syncAccount, in: records)
+        return try await client.startSync(.init(vendorAccountId: vendorAccountID)).runId
+    }
+
     /// `searchCharges`: one browser run for exactly the checked statement charges. Returns the
     /// new run's id. Nothing is sent unless the verb is offered, something is checked, and every
     /// checked row is one the server still allows.

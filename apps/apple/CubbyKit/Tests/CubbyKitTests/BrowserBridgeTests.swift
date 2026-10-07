@@ -30,9 +30,9 @@ struct BrowserBridgeTests {
 
     @Test("A sync request without a backfill range encodes only the account")
     func syncRequestOmitsAbsentBackfill() throws {
-        let data = try JSONEncoder().encode(BrowserBridgeSyncRequest(vendorAccount: "VACCT-4K7M"))
+        let data = try JSONEncoder().encode(StartSyncInput(vendorAccountId: "VACCT-4K7M"))
         let object = try #require(JSONSerialization.jsonObject(with: data) as? [String: Any])
-        #expect(object["vendorAccount"] as? String == "VACCT-4K7M")
+        #expect(object["vendorAccountId"] as? String == "VACCT-4K7M")
         #expect(object["backfill"] == nil)
     }
 
@@ -42,7 +42,7 @@ struct BrowserBridgeTests {
             BrowserBridgeBackfillRange(
                 from: Self.day(2025, 3, 9), to: Self.day(2026, 3, 9), calendar: Self.calendar))
         let data = try JSONEncoder().encode(
-            BrowserBridgeSyncRequest(vendorAccount: "VACCT-4K7M", backfill: range))
+            StartSyncInput(vendorAccountId: "VACCT-4K7M", backfill: .init(from: range.from, to: range.to)))
         let object = try #require(JSONSerialization.jsonObject(with: data) as? [String: Any])
         let backfill = try #require(object["backfill"] as? [String: String])
         #expect(backfill == ["from": "2025-03-09", "to": "2026-03-09"])
@@ -302,9 +302,9 @@ struct BrowserBridgeTests {
     @Test("Manual sync response preserves server identifier spelling")
     func manualSyncResponse() throws {
         let data = Data(#"{"runId":"RUN-EXAMPLE","resumed":true}"#.utf8)
-        let response = try JSONDecoder().decode(BrowserBridgeSyncResponse.self, from: data)
+        let response = try JSONDecoder().decode(StartSyncOutput.self, from: data)
 
-        #expect(response == BrowserBridgeSyncResponse(runID: "RUN-EXAMPLE", resumed: true))
+        #expect(response == StartSyncOutput(runId: "RUN-EXAMPLE", resumed: true))
         let encoded = try JSONEncoder().encode(response)
         let object = try #require(JSONSerialization.jsonObject(with: encoded) as? [String: Any])
         #expect(object["runId"] as? String == "RUN-EXAMPLE")

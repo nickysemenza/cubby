@@ -94,15 +94,23 @@
         }
 
         public func syncNow(
-            browser: BrowserChoice, backfill: BrowserBridgeBackfillRange? = nil
-        ) async throws -> [BrowserBridgeSyncResponse] {
+            browser: BrowserChoice, accountID: String? = nil, backfill: BrowserBridgeBackfillRange? = nil
+        ) async throws -> [StartSyncOutput] {
             BrowserBridgeDebugLog.emit(.syncRequested, browser: browser)
             // Refresh the roster and browser preference first so a newly added or paused account is
             // reflected in this manual run, then enqueue one server-owned run per eligible account.
             try await serialized { try await self.replaceConnections(browser: browser) }
             var failures: [String] = []
-            var submitted: [BrowserBridgeSyncResponse] = []
-            for account in accounts.values.sorted(by: { $0.id < $1.id }) {
+            var submitted: [StartSyncOutput] = []
+            let plan = try await syncClient.syncPlan()
+            let eligible = Set(plan.accounts.filter { $0.disabledReason == nil }.map(\.shortcode))
+            if let accountID, !eligible.contains(accountID) {
+                let reason = plan.accounts.first { $0.shortcode == accountID }?.disabledReason
+                throw SyncFailure(message: reason ?? "This account is unavailable for browser sync.")
+            }
+            for account in accounts.values.sorted(by: { $0.id < $1.id })
+            where eligible.contains(account.id) && (accountID == nil || account.id == accountID) {
+
                 do {
                     submitted.append(
                         try await syncClient.requestSync(vendorAccountID: account.id, backfill: backfill))
@@ -116,6 +124,10 @@
                         + failures.joined(separator: "; "))
             }
             return submitted
+        }
+
+        public func syncPlan() async throws -> SyncPlanOutput {
+            try await syncClient.syncPlan()
         }
 
         /// Re-lists browser-sync accounts and reconciles incrementally: a newly listed account gets

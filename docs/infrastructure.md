@@ -350,6 +350,15 @@ required | preferred | skip`), and `window` (`raise` / `background`). A
   by the server (`fetchPublicPage`); a refusal is recorded and the command
   goes to the Mac.
 
+Settings previews each browser-sync account with `run.syncPlan`: first sync, incremental since the
+newest-order cursor, resume (with the current run and progress), or blocked by other work. Each
+account has Sync and history-range controls; Sync all submits the available accounts shown in the
+plan. `run.startSync` starts or resumes one account and preserves explicit backfill ranges. The
+plan and transaction-locked start share admission rules, including selected charge searches whose
+dispatch failed. Vendor account detail shows the same plan and action through a generic report on
+web and Apple, with pointers to statement-charge search and Purchase targeted re-reads. Plans are
+advisory and refreshed when Settings opens and after submission; admission rechecks current work.
+
 A protocol change bumps `MINIMUM_APPLE_CLIENT_VERSION` with the Mac's
 `MARKETING_VERSION`; an older Mac's commands stop the run for review.
 

@@ -1,10 +1,11 @@
 import { z } from "zod";
-import { runPurpose } from "./run-fields";
+import { runStatus, runPurpose } from "./run-fields";
 
 import {
   productShortcode,
   purchaseShortcode,
   runShortcode,
+  vendorAccountShortcode,
 } from "./identifiers";
 
 export {
@@ -99,3 +100,43 @@ export const runSummary = z.object({
 export type RunSummary = z.infer<typeof runSummary>;
 
 export const runHistoryOut = z.object({ runs: z.array(runSummary) });
+
+/** Advisory sync decision; admission rechecks it under the account transaction. */
+export const accountSyncAction = z.discriminatedUnion("kind", [
+  z.object({ kind: z.literal("start"), since: z.iso.datetime() }),
+  z.object({ kind: z.literal("firstSync") }),
+  z.object({
+    kind: z.literal("resume"),
+    runId: runShortcode,
+    status: runStatus,
+    detail: z.string().nullable(),
+  }),
+  z.object({
+    kind: z.literal("blocked"),
+    runId: runShortcode,
+    purpose: runPurpose,
+  }),
+]);
+export const syncPlanInput = z.object({
+  vendorAccountId: vendorAccountShortcode.optional(),
+});
+export const syncPlanAccount = z.object({
+  shortcode: vendorAccountShortcode,
+  label: z.string(),
+  vendorName: z.string(),
+  action: accountSyncAction,
+  line: z.string(),
+  disabledReason: z.string().nullable(),
+});
+export const syncPlanOutput = z.object({ accounts: z.array(syncPlanAccount) });
+export const startSyncInput = z.object({
+  vendorAccountId: vendorAccountShortcode,
+  backfill: z.object({ from: z.iso.date(), to: z.iso.date() }).optional(),
+});
+export const startSyncOutput = z.object({
+  runId: runShortcode,
+  resumed: z.boolean(),
+});
+export type SyncPlanInput = z.infer<typeof syncPlanInput>;
+export type SyncPlanAccount = z.infer<typeof syncPlanAccount>;
+export type StartSyncInput = z.infer<typeof startSyncInput>;

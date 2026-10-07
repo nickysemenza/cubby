@@ -7,6 +7,10 @@ import { getPurchaseAgentQueue } from "~/server/cf-env";
 import { oauthRefreshToken, run as runTable } from "~/server/db/schema";
 import { implementOperationDomain } from "~/server/operation-domain.server";
 import {
+  loadSyncPlan,
+  startAccountSync,
+} from "~/server/purchase-import/account-sync";
+import {
   findActivePurchaseAgentGrant,
   PURCHASE_AGENT_OAUTH_CLIENT_ID,
 } from "~/server/purchase-import/agent-auth";
@@ -50,6 +54,15 @@ async function memberParty(context: AuthenticatedRequestContext) {
 }
 
 export const runHandlers = implementOperationDomain(runContract, {
+  syncPlan: async (context, input) =>
+    loadSyncPlan(context.db, (await memberParty(context)).id, input),
+  startSync: async (context, input) =>
+    startAccountSync(
+      context.db,
+      (await memberParty(context)).id,
+      input,
+      getPurchaseAgentQueue(),
+    ),
   workSnapshot: async (context, input) => {
     const run = await loadRunDetail(context.db, input.runId);
     return {

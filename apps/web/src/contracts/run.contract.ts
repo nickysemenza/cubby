@@ -16,6 +16,10 @@ import {
   preparePurchaseImportOut,
 } from "@cubby/schemas/purchase-import";
 import {
+  syncPlanInput,
+  syncPlanOutput,
+  startSyncInput,
+  startSyncOutput,
   runHistoryOut,
   targetedImportPurpose,
   targetedImportStartInput,
@@ -298,6 +302,18 @@ export type TargetedImportLaunch = z.infer<typeof targetedImportLaunch>;
 export { type TargetedImportStartInput, type TargetedImportStartOutput };
 
 export const runContract = defineContract("run", {
+  syncPlan: query({
+    native: "Preview each browser account sync before starting it",
+    input: syncPlanInput,
+    output: syncPlanOutput,
+    cache: { tags: [] },
+  }),
+  startSync: mutation({
+    native: "Start or resume one browser account sync or historical backfill",
+    input: startSyncInput,
+    output: startSyncOutput,
+    invalidates: ["runOnly", "vendor"],
+  }),
   workSnapshot: query({
     native: "Show durable live import progress in Apple apps",
     input: z.object({ runId: runShortcode }),

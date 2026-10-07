@@ -97,8 +97,9 @@
         }
 
         private struct NoSync: BrowserBridgeSyncRequesting {
+            func syncPlan() async throws -> SyncPlanOutput { .init(accounts: []) }
             func requestSync(vendorAccountID: String, backfill: BrowserBridgeBackfillRange?) async throws
-                -> BrowserBridgeSyncResponse
+                -> StartSyncOutput
             { throw URLError(.unsupportedURL) }
         }
 
