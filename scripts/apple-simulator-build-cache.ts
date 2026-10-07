@@ -24,7 +24,6 @@ export const hostedSimulatorBuildArgs = Object.freeze([
   "-skipPackagePluginValidation",
   "-skipMacroValidation",
   "SWIFT_ENABLE_BATCH_MODE=YES",
-  "ARCHS=arm64",
   "ONLY_ACTIVE_ARCH=YES",
   "CODE_SIGNING_ALLOWED=NO",
   "COMPILER_INDEX_STORE_ENABLE=NO",

@@ -70,15 +70,12 @@ fi
 # Same DerivedData as `pnpm apple`, so this build is incremental over the dev
 # loop's instead of a second full compile of CubbyKit.
 #
-# Keep the hosted Apple Silicon CI build on its native simulator slice while
-# explicitly exercising Xcode's batch compiler. Local builds retain Xcode's
-# default behavior.
+# Hosted CI explicitly exercises Xcode's batch compiler. Local builds retain
+# Xcode's default behavior. project.yml's simulator EXCLUDED_ARCHS already
+# limits the generic Simulator build to the arm64 FFI slice.
 build_settings=(COMPILER_INDEX_STORE_ENABLE=NO)
 if [ "${GITHUB_ACTIONS:-}" = "true" ]; then
-  # The macOS-26 hosted runner is Apple Silicon. Restrict the generic
-  # Simulator build to its native slice; a release artifact still builds its
-  # supported architectures outside this PR gate.
-  build_settings+=(SWIFT_ENABLE_BATCH_MODE=YES ARCHS=arm64 ONLY_ACTIVE_ARCH=YES CODE_SIGNING_ALLOWED=NO)
+  build_settings+=(SWIFT_ENABLE_BATCH_MODE=YES ONLY_ACTIVE_ARCH=YES CODE_SIGNING_ALLOWED=NO)
 fi
 
 # CI-only: reuse the SPM clone directory .github/actions/setup-apple-tools
