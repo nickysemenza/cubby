@@ -138,9 +138,6 @@
                             target: .installed(.chrome), accountID: accountID, evidenceUploader: NoUpload())
                     },
                     replayStoreFactory: { _ in EmptyReplayStore() },
-                    capabilities: { _ in
-                        BrowserBridgeCapabilities(enhancedScreenshot: false, renderedPDF: false)
-                    },
                     rosterRefreshTick: { [ticks] in try await ticks.tick() },
                     observer: { [unowned self] event in
                         switch event {
@@ -156,7 +153,7 @@
         func addedAccount() async throws {
             let harness = try Harness()
             harness.roster.set(["VACCT-AAAA"])
-            try await harness.coordinator.connect(browser: .chrome, enhancedEvidence: false)
+            try await harness.coordinator.connect(browser: .chrome)
             #expect(harness.openedExecutors == ["VACCT-AAAA"])
 
             harness.roster.set(["VACCT-AAAA", "VACCT-BBBB"])
@@ -178,7 +175,7 @@
         func removedAccount() async throws {
             let harness = try Harness()
             harness.roster.set(["VACCT-AAAA", "VACCT-BBBB"])
-            try await harness.coordinator.connect(browser: .chrome, enhancedEvidence: false)
+            try await harness.coordinator.connect(browser: .chrome)
 
             harness.roster.set(["VACCT-BBBB"])
             try await harness.coordinator.refreshRoster()
@@ -193,7 +190,7 @@
         func emptyThenListed() async throws {
             let harness = try Harness()
             await #expect(throws: MacBrowserBridgeCoordinator.Failure.self) {
-                try await harness.coordinator.connect(browser: .chrome, enhancedEvidence: false)
+                try await harness.coordinator.connect(browser: .chrome)
             }
             harness.roster.set(["VACCT-AAAA"])
             try await harness.coordinator.refreshRoster()
@@ -206,7 +203,7 @@
         func periodicRefresh() async throws {
             let harness = try Harness()
             await #expect(throws: MacBrowserBridgeCoordinator.Failure.self) {
-                try await harness.coordinator.connect(browser: .chrome, enhancedEvidence: false)
+                try await harness.coordinator.connect(browser: .chrome)
             }
             await Self.yield { harness.ticks.waits == 1 }
             harness.roster.set(["VACCT-AAAA"])
@@ -230,7 +227,7 @@
             harness.roster.set(["VACCT-AAAA"])
             harness.roster.gate()
             let connect = Task {
-                try await harness.coordinator.connect(browser: .chrome, enhancedEvidence: false)
+                try await harness.coordinator.connect(browser: .chrome)
             }
             await Self.yield { harness.roster.pendingCount == 1 }
             #expect(harness.roster.pendingCount == 1)

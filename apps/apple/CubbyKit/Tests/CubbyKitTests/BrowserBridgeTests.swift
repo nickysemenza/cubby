@@ -1,5 +1,4 @@
 import Foundation
-import JavaScriptCore
 import Testing
 
 @testable import CubbyKit
@@ -163,284 +162,13 @@ struct BrowserBridgeTests {
                 currentURL: target, targetURL: target, documentReadyState: "complete"))
     }
 
-    @Test("Capture metadata preserves variant identity and high-resolution image evidence")
-    func captureMetadataContract() throws {
-        let sourceURL = try #require(URL(string: "https://www.amazon.com/dp/B012345678"))
-        let canonicalURL = try #require(URL(string: "https://www.amazon.com/dp/B012345678"))
-        let imageURL = try #require(URL(string: "https://images.amazon.com/example.jpg"))
-        let highResolutionURL = try #require(URL(string: "https://images.amazon.com/example-hires.jpg"))
-        let image = BrowserCapturedImage(
-            url: imageURL, alt: "Example", naturalWidth: 1200, naturalHeight: 900,
-            highResolutionURL: highResolutionURL)
-        let capture = BrowserPageCapture(
-            sourceURL: sourceURL, title: "Example", capturedAt: .now, captureVersion: 1,
-            readableText: "Example", links: [], images: [image], canonicalURL: canonicalURL,
-            requestedAmazonASIN: "B012345678", servedAmazonASIN: "B012345678",
-            variantMarkers: ["Blue", "Large"])
-
-        #expect(capture.canonicalUrl == canonicalURL.absoluteString)
-        #expect(capture.requestedAmazonAsin == "B012345678")
-        #expect(capture.servedAmazonAsin == "B012345678")
-        #expect(capture.variantMarkers == ["Blue", "Large"])
-        #expect(capture.images == [image])
-        #expect(capture.images[0].naturalWidth == 1200)
-        #expect(capture.images[0].naturalHeight == 900)
-        #expect(capture.images[0].highResolutionUrl == highResolutionURL.absoluteString)
-    }
-
-    @Test("Structured product identifiers ride the capture and stay optional for older payloads")
-    func structuredProductsContract() throws {
-        let sourceURL = try #require(URL(string: "https://www.forgewear.example.test/p/tee-black-m"))
-        let structured = BrowserStructuredProducts(
-            products: [
-                BrowserStructuredProduct(
-                    skus: ["FW-TEE-BLK-M"], mpns: ["TEE-100"], gtins: ["036000291452"], productIds: [])
-            ], variantGroup: false)
-        let capture = BrowserPageCapture(
-            sourceURL: sourceURL, title: "Tee", capturedAt: .now, captureVersion: 2,
-            readableText: "Tee", links: [], images: [], structuredProducts: structured)
-        let encoded = try JSONEncoder().encode(capture)
-        let decoded = try JSONDecoder().decode(BrowserPageCapture.self, from: encoded)
-        #expect(decoded.structuredProducts == structured)
-
-        var legacy = try #require(
-            JSONSerialization.jsonObject(with: encoded) as? [String: Any])
-        legacy.removeValue(forKey: "structuredProducts")
-        let legacyData = try JSONSerialization.data(withJSONObject: legacy)
-        let legacyCapture = try JSONDecoder().decode(BrowserPageCapture.self, from: legacyData)
-        #expect(legacyCapture.structuredProducts == nil)
-    }
-
-    #if os(macOS)
-        @Test("The fixed capture payload maps schema.org Product data and tolerates its absence")
-        func fixedCapturePayloadStructuredProducts() throws {
-            let base = """
-                "url":"https://www.forgewear.example.test/p/tee","canonicalUrl":null,
-                "servedAmazonAsin":null,"variantMarkers":[],"title":"Tee","text":"Tee",
-                "links":[],"images":[],"authenticationRequired":false
-                """
-            let withData = """
-                {\(base),"structuredProducts":{"variantGroup":true,"products":[
-                {"skus":["A1"],"mpns":[],"gtins":["036000291452"],"productIds":["P1"]}]}}
-                """
-            let payload = try JSONDecoder().decode(
-                MacBrowserCommandExecutor.FixedCapturePayload.self, from: Data(withData.utf8))
-            let capture = try #require(payload.structuredProducts?.capture)
-            #expect(capture.variantGroup)
-            #expect(capture.products.first?.gtins == ["036000291452"])
-            #expect(capture.products.first?.productIds == ["P1"])
-
-            let without = try JSONDecoder().decode(
-                MacBrowserCommandExecutor.FixedCapturePayload.self, from: Data("{\(base)}".utf8))
-            #expect(without.structuredProducts == nil)
-        }
-
-        /// Runs the production ld+json walker in JavaScriptCore against a stub page.
-        private func walkStructuredProducts(pageURL: String, blocks: [String]) throws
-            -> BrowserStructuredProducts
-        {
-            let context = try #require(JSContext())
-            context.setObject(pageURL, forKeyedSubscript: "pageURL" as NSString)
-            context.setObject(blocks, forKeyedSubscript: "blocks" as NSString)
-            let result = context.evaluateScript(
-                """
-                var location = { href: pageURL };
-                var document = { querySelectorAll: () => blocks.map(text => ({ textContent: text })) };
-                JSON.stringify((\(MacBrowserCommandExecutor.structuredProductsScript))());
-                """)
-            #expect(context.exception == nil, "\(String(describing: context.exception))")
-            let json = try #require(result?.toString())
-            return try JSONDecoder().decode(
-                MacBrowserCommandExecutor.FixedCapturePayload.StructuredProducts.self,
-                from: Data(json.utf8)
-            ).capture
-        }
-
-        private static let shopifyTee = """
-            {"@context":"https://schema.org","@type":"Product","name":"Forgewear Tee",
-             "productID":"8800001","mpn":"TEE-100","sku":"FW-TEE-BLK-S","gtin13":"0036000291452",
-             "offers":[
-              {"@type":"Offer","sku":"FW-TEE-BLK-S","gtin13":"0036000291452","mpn":"TEE-100-S",
-               "url":"https://shop.forgewear.example.test/products/tee?variant=41000000000111"},
-              {"@type":"Offer","sku":"FW-TEE-BLK-M","gtin13":"0036000291469","mpn":"TEE-100-M",
-               "url":"https://shop.forgewear.example.test/products/tee?variant=41000000000222"}]}
-            """
-
-        @Test("A Shopify Product's single Offer contributes its identifiers")
-        func structuredProductsSingleOffer() throws {
-            let block = """
-                {"@context":"https://schema.org","@type":"Product","name":"Forgewear Mug","mpn":"MUG-1",
-                 "offers":{"@type":"Offer","sku":"FW-MUG-1","gtin12":"036000291452",
-                  "url":"https://shop.forgewear.example.test/products/mug?variant=41000000000333"}}
-                """
-            let captured = try walkStructuredProducts(
-                pageURL: "https://shop.forgewear.example.test/products/mug", blocks: [block])
-            #expect(
-                captured
-                    == BrowserStructuredProducts(
-                        products: [
-                            BrowserStructuredProduct(
-                                skus: ["FW-MUG-1"], mpns: ["MUG-1"], gtins: ["036000291452"],
-                                productIds: [])
-                        ], variantGroup: false))
-        }
-
-        @Test("Offers with identical identifiers merge into their Product")
-        func structuredProductsIdenticalOffers() throws {
-            let block = """
-                {"@context":"https://schema.org","@type":"Product","name":"Forgewear Mug",
-                 "offers":[
-                  {"@type":"Offer","sku":"FW-MUG-1","gtin12":"036000291452","price":"12.00",
-                   "url":"https://shop.forgewear.example.test/products/mug?variant=41000000000333"},
-                  {"@type":"Offer","sku":"FW-MUG-1","gtin12":"036000291452","price":"10.00",
-                   "url":"https://shop.forgewear.example.test/products/mug?variant=41000000000333"}]}
-                """
-            let captured = try walkStructuredProducts(
-                pageURL: "https://shop.forgewear.example.test/products/mug", blocks: [block])
-            #expect(
-                captured
-                    == BrowserStructuredProducts(
-                        products: [
-                            BrowserStructuredProduct(
-                                skus: ["FW-MUG-1"], mpns: [], gtins: ["036000291452"], productIds: [])
-                        ], variantGroup: false))
-        }
-
-        @Test("The served ?variant= selects exactly one Offer and drops default-variant identifiers")
-        func structuredProductsServedVariant() throws {
-            let captured = try walkStructuredProducts(
-                pageURL: "https://shop.forgewear.example.test/products/tee?variant=41000000000222",
-                blocks: [Self.shopifyTee])
-            #expect(
-                captured
-                    == BrowserStructuredProducts(
-                        products: [
-                            BrowserStructuredProduct(
-                                skus: ["FW-TEE-BLK-M"], mpns: ["TEE-100", "TEE-100-M"],
-                                gtins: ["0036000291469"], productIds: ["8800001"])
-                        ], variantGroup: false))
-        }
-
-        @Test("Differing Offers without a served variant are an ambiguous variant group")
-        func structuredProductsAmbiguousOffers() throws {
-            let captured = try walkStructuredProducts(
-                pageURL: "https://shop.forgewear.example.test/products/tee", blocks: [Self.shopifyTee])
-            #expect(captured.variantGroup)
-            let unmatched = try walkStructuredProducts(
-                pageURL: "https://shop.forgewear.example.test/products/tee?variant=41000000000999",
-                blocks: [Self.shopifyTee])
-            #expect(unmatched.variantGroup)
-        }
-
-        private static func offer(sku: String, variant: Int) -> String {
-            """
-            {"@type":"Offer","sku":"\(sku)",
-             "url":"https://shop.forgewear.example.test/products/tee?variant=\(variant)"}
-            """
-        }
-
-        @Test("An Offer beyond the offer cap fails closed instead of reading as exact")
-        func structuredProductsOfferCap() throws {
-            let offers =
-                (0..<100).map { _ in Self.offer(sku: "FW-SAME", variant: 1) }
-                + [Self.offer(sku: "FW-OTHER", variant: 2)]
-            let block = """
-                {"@context":"https://schema.org","@type":"Product","offers":[\(offers.joined(separator: ","))]}
-                """
-            let captured = try walkStructuredProducts(
-                pageURL: "https://shop.forgewear.example.test/products/tee", blocks: [block])
-            #expect(captured.variantGroup)
-        }
-
-        @Test("Offers never starve the graph walk, and an exhausted walk fails closed")
-        func structuredProductsNodeBudget() throws {
-            let filler = Array(repeating: #"{"@type":"WebPage"}"#, count: 398)
-            let offers = (0..<100).map { _ in Self.offer(sku: "FW-SAME", variant: 1) }
-            let first = #"{"@type":"Product","offers":["# + offers.joined(separator: ",") + "]}"
-            let second = #"{"@type":"Product","sku":"FW-SECOND"}"#
-            let graph =
-                #"{"@context":"https://schema.org","@graph":["#
-                + (filler + [first, second]).joined(separator: ",") + "]}"
-            let captured = try walkStructuredProducts(
-                pageURL: "https://shop.forgewear.example.test/products/tee", blocks: [graph])
-            #expect(captured.products.count == 2)
-
-            let overflow =
-                #"{"@context":"https://schema.org","@graph":["#
-                + (Array(repeating: #"{"@type":"WebPage"}"#, count: 600)
-                + [#"{"@type":"ProductGroup"}"#, second]).joined(separator: ",") + "]}"
-            let exhausted = try walkStructuredProducts(
-                pageURL: "https://shop.forgewear.example.test/products/tee", blocks: [overflow])
-            #expect(exhausted.variantGroup)
-        }
-
-        @Test("A single Offer naming another variant never merges with the Product's default")
-        func structuredProductsSingleConflictingOffer() throws {
-            let block = """
-                {"@context":"https://schema.org","@type":"Product","sku":"FW-DEFAULT-S",
-                 "offers":\(Self.offer(sku: "FW-OTHER-M", variant: 222))}
-                """
-            let servedS = try walkStructuredProducts(
-                pageURL: "https://shop.forgewear.example.test/products/tee?variant=111", blocks: [block])
-            #expect(servedS.variantGroup)
-            let servedM = try walkStructuredProducts(
-                pageURL: "https://shop.forgewear.example.test/products/tee?variant=222", blocks: [block])
-            #expect(!servedM.variantGroup)
-            #expect(servedM.products.map(\.skus) == [["FW-OTHER-M"]])
-        }
-
-        @Test("Only the query's single decoded variant parameter selects an Offer")
-        func structuredProductsVariantParsing() throws {
-            let base = "https://shop.forgewear.example.test/products/tee"
-            let fragment = try walkStructuredProducts(
-                pageURL: base + "#?variant=41000000000222", blocks: [Self.shopifyTee])
-            #expect(fragment.variantGroup)
-            let duplicate = try walkStructuredProducts(
-                pageURL: base + "?variant=41000000000111&variant=41000000000222",
-                blocks: [Self.shopifyTee])
-            #expect(duplicate.variantGroup)
-            let encoded = try walkStructuredProducts(
-                pageURL: base + "?vari%61nt=41000000000222#reviews", blocks: [Self.shopifyTee])
-            #expect(!encoded.variantGroup)
-            #expect(encoded.products.map(\.skus) == [["FW-TEE-BLK-M"]])
-        }
-
-        @Test("An identifier longer than the capture keeps fails closed instead of comparing a prefix")
-        func structuredProductsOverlongIdentifier() throws {
-            let prefix = String(repeating: "X", count: 100)
-            let block = """
-                {"@context":"https://schema.org","@type":"Product","sku":"\(prefix)S",
-                 "gtin13":"0036000291452","offers":\(Self.offer(sku: prefix + "M", variant: 222))}
-                """
-            let capture = try walkStructuredProducts(
-                pageURL: "https://shop.forgewear.example.test/products/tee?variant=222", blocks: [block])
-            #expect(capture.variantGroup)
-        }
-
-        @Test("A repeated or undecodable served variant never takes the agreement shortcut")
-        func structuredProductsInvalidServedVariant() throws {
-            let block = """
-                {"@context":"https://schema.org","@type":"Product","sku":"SYN-S",
-                 "offers":\(Self.offer(sku: "SYN-S", variant: 111))}
-                """
-            let base = "https://shop.forgewear.example.test/products/tee"
-            for query in ["?variant=111&variant=222", "?variant=%ZZ"] {
-                let capture = try walkStructuredProducts(pageURL: base + query, blocks: [block])
-                #expect(capture.variantGroup, "\(query)")
-            }
-            let absent = try walkStructuredProducts(pageURL: base, blocks: [block])
-            #expect(!absent.variantGroup)
-            #expect(absent.products.map(\.skus) == [["SYN-S"]])
-        }
-    #endif
-
     @Test("Completed results replay until acknowledged")
     func replayLifecycle() {
         let uuid = UUID(uuidString: "22222222-2222-2222-2222-222222222222")!
         let id = uuid.uuidString.lowercased()
         let result = BrowserBridgeCommandResult(
             commandID: uuid, runID: "RUN-EXAMPLE", operationID: "operation-example",
-            completedAt: Date(timeIntervalSince1970: 100), outcome: .completed(capture: nil))
+            completedAt: Date(timeIntervalSince1970: 100), outcome: .completed(snapshot: nil, observation: .unobserved))
         var ledger = BrowserBridgeReplayLedger()
 
         ledger.record(result)
@@ -480,7 +208,7 @@ struct BrowserBridgeTests {
         ledger.record(
             BrowserBridgeCommandResult(
                 commandID: uuid, runID: "RUN-EXAMPLE", operationID: "operation-example",
-                completedAt: .now, outcome: .completed(capture: nil)))
+                completedAt: .now, outcome: .completed(snapshot: nil, observation: .unobserved)))
 
         #expect(ledger.cancelled.contains(id))
         #expect(ledger.replayResult(for: id) == nil)
@@ -492,7 +220,7 @@ struct BrowserBridgeTests {
         let id = uuid.uuidString.lowercased()
         let cached = BrowserBridgeCommandResult(
             commandID: uuid, runID: "RUN-OLD", operationID: "operation-old", completedAt: .now,
-            outcome: .completed(capture: nil))
+            outcome: .completed(snapshot: nil, observation: .unobserved))
         var ledger = BrowserBridgeReplayLedger()
 
         ledger.record(cached)
@@ -559,7 +287,7 @@ struct BrowserBridgeTests {
     func staleNestedCommandProtocol() throws {
         let message = Data(
             #"""
-            {"protocolVersion":2,"type":"command","command":{"protocolVersion":1,"id":"11111111-1111-1111-1111-111111111111","runID":"RUN-EXAMPLE","operationId":"operation-example","deadline":"2027-01-15T00:00:00Z","operation":{"type":"scroll","pageCount":1}}}
+            {"protocolVersion":3,"type":"command","command":{"protocolVersion":2,"id":"11111111-1111-1111-1111-111111111111","runID":"RUN-EXAMPLE","operationId":"operation-example","deadline":"2027-01-15T00:00:00Z","operation":{"type":"scroll","pageCount":1}}}
             """#.utf8)
         #expect(throws: DecodingError.self) {
             try JSONDecoder.browserBridge.decode(BrowserBridgeServerMessage.self, from: message)
@@ -591,7 +319,7 @@ struct BrowserBridgeTests {
 
         let result = BrowserBridgeCommandResult(
             commandID: command.id, runID: command.runID, operationID: command.operationID,
-            completedAt: .now, outcome: .completed(capture: nil))
+            completedAt: .now, outcome: .completed(snapshot: nil, observation: .unobserved))
         let resultData = try JSONEncoder.browserBridge.encode(result)
         let resultObject = try #require(JSONSerialization.jsonObject(with: resultData) as? [String: Any])
         #expect(resultObject["operationID"] as? String == "operation-example")
@@ -615,11 +343,11 @@ struct BrowserBridgeTests {
 
     private static let operations: [BrowserBridgeOperation] = [
         .navigate(url: URL(string: "https://orders.example.com/order/1")!, allowedHosts: ["example.com"]),
-        .followCapturedLink(linkID: "opaque-link", allowedHosts: ["example.com"]),
         .scroll(pageCount: 2),
         .capture(
-            allowedHosts: ["example.com"], enhancedEvidence: true,
+            allowedHosts: ["example.com"], screenshot: .preferred,
             recoveryURL: URL(string: "https://orders.example.com/history")!),
+        .window(.raise),
     ]
 }
 

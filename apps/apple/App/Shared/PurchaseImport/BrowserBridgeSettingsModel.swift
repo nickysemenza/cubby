@@ -4,10 +4,8 @@ import Observation
 
 @MainActor
 protocol BrowserBridgeControlling: AnyObject {
-    func connect(browser: BrowserChoice, enhancedEvidence: Bool) async throws
-    func syncNow(
-        browser: BrowserChoice, enhancedEvidence: Bool, backfill: BrowserBridgeBackfillRange?
-    ) async throws
+    func connect(browser: BrowserChoice) async throws
+    func syncNow(browser: BrowserChoice, backfill: BrowserBridgeBackfillRange?) async throws
     func disconnect() async
     func raiseAuthenticationWindow(for accountID: String)
     func appDidBecomeActive()
@@ -21,6 +19,9 @@ struct BrowserBridgeAccountState: Identifiable, Equatable {
     var error: String?
     var needsAuthentication: Bool
     var lastCompletedRunID: String?
+    /// The last browser command and what the Mac observed, e.g. "capture · window minimized →
+    /// screenshot unavailable".
+    var lastCommand: String? = nil
 
     var statusLabel: String {
         if needsAuthentication { return "Sign-in required" }
@@ -101,6 +102,11 @@ final class BrowserBridgeSettingsModel {
         accountStates[index].error = message
     }
 
+    func setLastCommand(_ summary: String, accountID: String) {
+        guard let index = accountStates.firstIndex(where: { $0.id == accountID }) else { return }
+        accountStates[index].lastCommand = summary
+    }
+
     func markRunCompleted(accountID: String, runID: String) {
         guard let index = accountStates.firstIndex(where: { $0.id == accountID }) else { return }
         accountStates[index].needsAuthentication = false
@@ -120,20 +126,19 @@ final class BrowserBridgeSettingsModel {
     func connectConfigured() async {
         guard let controller else { return }
         do {
-            try await controller.connect(
-                browser: Self.persistedBrowser, enhancedEvidence: Self.persistedEnhancedEvidence)
+            try await controller.connect(browser: Self.persistedBrowser)
         } catch {
             self.error = error.localizedDescription
             Diagnostics.report(error, context: "purchaseImport.browser.connect")
         }
     }
 
-    func reconnect(browser: BrowserChoice, enhancedEvidence: Bool) {
+    func reconnect(browser: BrowserChoice) {
         guard let controller, !isSyncing else { return }
         error = nil
         Task { [weak self] in
             do {
-                try await controller.connect(browser: browser, enhancedEvidence: enhancedEvidence)
+                try await controller.connect(browser: browser)
             } catch {
                 guard let self else { return }
                 self.error = error.localizedDescription
@@ -142,17 +147,14 @@ final class BrowserBridgeSettingsModel {
         }
     }
 
-    func syncNow(
-        browser: BrowserChoice, enhancedEvidence: Bool, backfill: BrowserBridgeBackfillRange? = nil
-    ) {
+    func syncNow(browser: BrowserChoice, backfill: BrowserBridgeBackfillRange? = nil) {
         guard let controller, !isSyncing else { return }
         isSyncing = true
         syncStartedAt = .now
         error = nil
         Task { [weak self] in
             do {
-                try await controller.syncNow(
-                    browser: browser, enhancedEvidence: enhancedEvidence, backfill: backfill)
+                try await controller.syncNow(browser: browser, backfill: backfill)
                 guard let self else { return }
                 lastCompletedAt = .now
                 isSyncing = false
@@ -191,9 +193,5 @@ final class BrowserBridgeSettingsModel {
     private static var persistedBrowser: BrowserChoice {
         UserDefaults.standard.string(forKey: "purchaseImport.browser").flatMap(BrowserChoice.init)
             ?? .chrome
-    }
-
-    private static var persistedEnhancedEvidence: Bool {
-        UserDefaults.standard.bool(forKey: "purchaseImport.enhancedEvidence")
     }
 }

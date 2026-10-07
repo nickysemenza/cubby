@@ -1,12 +1,11 @@
 import Foundation
 
 public enum BrowserBridgeProtocol {
-    /// This value binds every websocket envelope and durable command/result. A v1 peer is
-    /// deliberately rejected during the coordinator cutover so cached work cannot cross runtimes.
-    public static let currentProtocolVersion = 2
-    public static let maximumReadableTextCharacters = 24 * 1_024
-    public static let maximumCapturedLinks = 200
-    public static let maximumCapturedImages = 200
+    /// This value binds every websocket envelope and durable command/result. An older peer is
+    /// deliberately rejected so cached work cannot cross protocol versions.
+    public static let currentProtocolVersion = 3
+    /// The DOM trimming rules of `MacBrowserCommandExecutor.snapshotScript`; bump it when they change.
+    public static let snapshotVersion = 1
 }
 
 // The wire payloads below are generated from @cubby/schemas through OpenAPI. This file adds only
@@ -31,7 +30,7 @@ extension BrowserBridgeFailureCode {
 
 extension BrowserBridgeRequest {
     public init(
-        protocolVersion: ProtocolVersionPayload = ._2, id: UUID, runID: String,
+        protocolVersion: ProtocolVersionPayload = ._3, id: UUID, runID: String,
         operationID: String, deadline: Date, operation: BrowserBridgeOperation
     ) {
         self.init(
@@ -50,80 +49,48 @@ extension BrowserBridgeOperation {
                 _type: .navigate, url: url.absoluteString, allowedHosts: allowedHosts.sorted()))
     }
 
-    public static func followCapturedLink(linkID: String, allowedHosts: Set<String>) -> Self {
-        .followCapturedLink(
-            BrowserBridgeOperationFollowCapturedLink(
-                _type: .followCapturedLink, linkID: linkID, allowedHosts: allowedHosts.sorted()))
-    }
-
     public static func scroll(pageCount: Int) -> Self {
         .scroll(BrowserBridgeOperationScroll(_type: .scroll, pageCount: pageCount))
     }
 
     public static func capture(
-        allowedHosts: Set<String>, enhancedEvidence: Bool, recoveryURL: URL? = nil
+        allowedHosts: Set<String>, screenshot: BrowserScreenshotPolicy.Mode, recoveryURL: URL? = nil
     ) -> Self {
         .capture(
             BrowserBridgeOperationCapture(
-                _type: .capture, allowedHosts: allowedHosts.sorted(),
-                enhancedEvidence: enhancedEvidence, recoveryURL: recoveryURL?.absoluteString))
+                _type: .capture, allowedHosts: allowedHosts.sorted(), screenshot: screenshot,
+                recoveryURL: recoveryURL?.absoluteString))
     }
-}
 
-extension BrowserCapturedLink {
-    public init(id: String, url: URL, label: String?) {
-        self.init(id: id, url: url.absoluteString, label: label)
-    }
-}
-
-extension BrowserCapturedImage {
-    public init(
-        url: URL, alt: String?, naturalWidth: Int? = nil, naturalHeight: Int? = nil,
-        highResolutionURL: URL? = nil
-    ) {
-        self.init(url: url.absoluteString, alt: alt)
-        self.naturalWidth = naturalWidth
-        self.naturalHeight = naturalHeight
-        highResolutionUrl = highResolutionURL?.absoluteString
-    }
-}
-
-extension BrowserPageCapture {
-    public init(
-        sourceURL: URL, title: String, capturedAt: Date, captureVersion: Int, readableText: String,
-        links: [BrowserCapturedLink], images: [BrowserCapturedImage],
-        paymentEvidence: [BrowserPaymentEvidence] = [], evidence: [BrowserEvidenceReference] = [],
-        canonicalURL: URL? = nil, requestedAmazonASIN: String? = nil,
-        servedAmazonASIN: String? = nil, variantMarkers: [String] = [],
-        structuredProducts: BrowserStructuredProducts? = nil
-    ) {
-        self.init(
-            sourceURL: sourceURL.absoluteString,
-            canonicalUrl: canonicalURL?.absoluteString,
-            requestedAmazonAsin: requestedAmazonASIN,
-            servedAmazonAsin: servedAmazonASIN,
-            variantMarkers: Array(variantMarkers.prefix(50)),
-            title: String(title.prefix(500)),
-            capturedAt: capturedAt, captureVersion: captureVersion,
-            readableText: String(readableText.prefix(BrowserBridgeProtocol.maximumReadableTextCharacters)),
-            links: Array(links.prefix(BrowserBridgeProtocol.maximumCapturedLinks)),
-            images: Array(images.prefix(BrowserBridgeProtocol.maximumCapturedImages)),
-            paymentEvidence: paymentEvidence, evidence: evidence,
-            structuredProducts: structuredProducts)
+    public static func window(_ action: BrowserBridgeOperationWindow.ActionPayload) -> Self {
+        .window(BrowserBridgeOperationWindow(_type: .window, action: action))
     }
 }
 
 extension BrowserBridgeCommandOutcome {
-    public static func completed(capture: BrowserPageCapture?) -> Self {
-        .completed(BrowserBridgeCommandOutcomeCompleted(status: .completed, capture: capture))
+    public static func completed(
+        snapshot: BrowserPageSnapshot?, observation: BrowserObservation
+    ) -> Self {
+        .completed(
+            BrowserBridgeCommandOutcomeCompleted(
+                status: .completed, snapshot: snapshot, observation: observation))
     }
 
     public static func failed(
-        code: BrowserBridgeFailureCode, message: String, retryable: Bool
+        code: BrowserBridgeFailureCode, message: String, retryable: Bool,
+        screenshotGap: BrowserScreenshotGap? = nil, observation: BrowserObservation
     ) -> Self {
         .failed(
             BrowserBridgeCommandOutcomeFailed(
-                status: .failed, code: code, message: message, retryable: retryable))
+                status: .failed, code: code, message: String(message.prefix(2_000)),
+                retryable: retryable, screenshotGap: screenshotGap, observation: observation))
+    }
+
+    public var observation: BrowserObservation {
+        switch self {
+        case .completed(let payload): payload.observation
+        case .failed(let payload): payload.observation
+        }
     }
 }
 
@@ -132,7 +99,7 @@ extension BrowserBridgeResult: Identifiable {
     public var commandUUID: UUID? { UUID(uuidString: commandID) }
 
     public init(
-        protocolVersion: ProtocolVersionPayload = ._2, commandID: UUID, runID: String,
+        protocolVersion: ProtocolVersionPayload = ._3, commandID: UUID, runID: String,
         operationID: String, completedAt: Date, outcome: BrowserBridgeCommandOutcome
     ) {
         self.init(
@@ -145,17 +112,16 @@ extension BrowserBridgeResult: Identifiable {
         outcome: BrowserBridgeCommandOutcome
     ) {
         self.init(
-            protocolVersion: ._2, commandID: commandID, operationID: operationID,
+            protocolVersion: ._3, commandID: commandID, operationID: operationID,
             runID: runID, completedAt: completedAt, outcome: outcome)
     }
 }
 
 extension BrowserBridgeCapabilities {
-    public init(enhancedScreenshot: Bool, renderedPDF: Bool) {
-        self.init(
-            fixedCaptureVersion: 1, enhancedScreenshot: enhancedScreenshot,
-            renderedPDF: renderedPDF)
-    }
+    /// Every Mac build can screenshot its window; whether macOS allows it right now is reported
+    /// per command in `BrowserObservation.screenRecording`.
+    public static let current = Self(
+        snapshotVersion: BrowserBridgeProtocol.snapshotVersion, screenshot: true)
 }
 
 extension BrowserBridgeClientMessage {
@@ -164,29 +130,55 @@ extension BrowserBridgeClientMessage {
     ) -> Self {
         .hello(
             BrowserBridgeClientMessageHello(
-                protocolVersion: ._2, _type: .hello,
+                protocolVersion: ._3, _type: .hello,
                 deviceID: deviceID.uuidString.lowercased(),
                 browser: browser == .chrome ? .chrome : .safari,
-                capabilities: .init(
-                    fixedCaptureVersion: capabilities.fixedCaptureVersion,
-                    enhancedScreenshot: capabilities.enhancedScreenshot,
-                    renderedPDF: capabilities.renderedPDF)))
+                capabilities: capabilities))
     }
 
     public static func pong(timestamp: Date) -> Self {
-        .pong(BrowserBridgeClientMessagePong(protocolVersion: ._2, _type: .pong, timestamp: timestamp))
+        .pong(BrowserBridgeClientMessagePong(protocolVersion: ._3, _type: .pong, timestamp: timestamp))
     }
 
     public static func result(_ result: BrowserBridgeCommandResult) -> Self {
         .result(
             BrowserBridgeClientMessageResult(
-                protocolVersion: ._2, _type: .result, result: result))
+                protocolVersion: ._3, _type: .result, result: result))
     }
 
     public static func runCompletedAcknowledged(runID: String) -> Self {
         .runCompletedAck(
             BrowserBridgeClientMessageRunCompletedAck(
-                protocolVersion: ._2, _type: .runCompletedAck, runID: runID))
+                protocolVersion: ._3, _type: .runCompletedAck, runID: runID))
+    }
+}
+
+/// The generated encoder omits a nil optional, but the contract's nullable result keys are
+/// required: the server rejects a result whose `snapshot`, `screenshotGap` or observation fields
+/// are absent rather than `null`. Restore those nulls at the socket boundary.
+public enum BrowserBridgeWire {
+    public static func encode(_ message: BrowserBridgeClientMessage) throws -> Data {
+        let data = try JSONEncoder.browserBridge.encode(message)
+        guard case .result = message,
+            var object = try JSONSerialization.jsonObject(with: data) as? [String: Any],
+            var result = object["result"] as? [String: Any],
+            var outcome = result["outcome"] as? [String: Any]
+        else { return data }
+        let nullable = outcome["status"] as? String == "completed" ? "snapshot" : "screenshotGap"
+        if outcome[nullable] == nil { outcome[nullable] = NSNull() }
+        if var observation = outcome["observation"] as? [String: Any] {
+            for key in ["url", "title", "readyState", "window"] where observation[key] == nil {
+                observation[key] = NSNull()
+            }
+            if var window = observation["window"] as? [String: Any] {
+                for key in ["minimized", "onScreen"] where window[key] == nil { window[key] = NSNull() }
+                observation["window"] = window
+            }
+            outcome["observation"] = observation
+        }
+        result["outcome"] = outcome
+        object["result"] = result
+        return try JSONSerialization.data(withJSONObject: object, options: [.sortedKeys])
     }
 }
 
@@ -202,13 +194,13 @@ extension BrowserBridgeServerMessage {
     public static func command(_ command: BrowserBridgeCommand) -> Self {
         .command(
             BrowserBridgeServerMessageCommand(
-                protocolVersion: ._2, _type: .command, command: command))
+                protocolVersion: ._3, _type: .command, command: command))
     }
 
     public static func raiseAuthWindow(runID: String) -> Self {
         .raiseAuthWindow(
             BrowserBridgeServerMessageRaiseAuthWindow(
-                protocolVersion: ._2, _type: .raiseAuthWindow, runID: runID))
+                protocolVersion: ._3, _type: .raiseAuthWindow, runID: runID))
     }
 
     public static func runCompleted(_ completion: BrowserBridgeRunCompletion) -> Self {
@@ -221,7 +213,7 @@ extension BrowserBridgeServerMessage {
             }
         return .runCompleted(
             BrowserBridgeServerMessageRunCompleted(
-                protocolVersion: ._2, _type: .runCompleted, runID: completion.runID,
+                protocolVersion: ._3, _type: .runCompleted, runID: completion.runID,
                 terminalStatus: terminalStatus, outcome: completion.outcome,
                 imported: completion.imported, updated: completion.updated,
                 skipped: completion.skipped, findingCount: completion.findingCount))

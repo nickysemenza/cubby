@@ -20,7 +20,7 @@
             // operational storage path; targeted validation/enrichment always carries `scope` and
             // therefore cannot create a shared Image or Document through this fallback.
             switch evidence.kind {
-            case .normalizedPdf, .renderedPdf:
+            case .renderedPdf:
                 return try await uploadPDF(evidence, runID: runID)
             case .screenshot:
                 return try await uploadScreenshot(evidence)

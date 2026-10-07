@@ -5,7 +5,7 @@
         case accounts([BrowserBridgeVendorAccount])
         case fleetStatus(BrowserBridgeConnectionStatus, connected: Int, total: Int)
         case accountStatus(accountID: String, status: BrowserBridgeConnectionStatus)
-        case result(accountID: String, result: BrowserBridgeCommandResult)
+        case result(accountID: String, result: BrowserBridgeCommandResult, operation: BrowserBridgeOperation)
         case authenticationRequired(accountID: String, runID: String)
         case runCompleted(accountID: String, completion: BrowserBridgeRunCompletion)
     }
@@ -29,7 +29,6 @@
         /// The browser preference of the last `connect`/`syncNow`; roster refreshes reuse it.
         private struct Connection: Equatable {
             let browser: BrowserChoice
-            let enhancedEvidence: Bool
         }
 
         private let baseURL: URL
@@ -39,7 +38,6 @@
         private let deviceID: UUID
         private let executorFactory: (BrowserChoice, String) throws -> MacBrowserCommandExecutor
         private let replayStoreFactory: (String) throws -> any BrowserBridgeReplayStoring
-        private let capabilities: (Bool) -> BrowserBridgeCapabilities
         private let rosterRefreshTick: @Sendable () async throws -> Void
         private let observer: (MacBrowserBridgeEvent) -> Void
         private var bridges: [String: URLSessionBrowserBridge] = [:]
@@ -64,7 +62,6 @@
             syncClient: any BrowserBridgeSyncRequesting,
             executorFactory: @escaping (BrowserChoice, String) throws -> MacBrowserCommandExecutor,
             replayStoreFactory: @escaping (String) throws -> any BrowserBridgeReplayStoring,
-            capabilities: @escaping (Bool) -> BrowserBridgeCapabilities,
             rosterRefreshTick: @escaping @Sendable () async throws -> Void = {
                 try await Task.sleep(for: .seconds(600))
             },
@@ -77,7 +74,6 @@
             self.syncClient = syncClient
             self.executorFactory = executorFactory
             self.replayStoreFactory = replayStoreFactory
-            self.capabilities = capabilities
             self.rosterRefreshTick = rosterRefreshTick
             self.observer = observer
         }
@@ -92,23 +88,18 @@
 
         /// Throws `noActiveAccounts` when nothing is listed, but stays configured: the periodic
         /// roster refresh connects an account the member enables for browser sync later.
-        public func connect(browser: BrowserChoice, enhancedEvidence: Bool) async throws {
+        public func connect(browser: BrowserChoice) async throws {
             BrowserBridgeDebugLog.emit(.connectRequested, browser: browser)
-            try await serialized {
-                try await self.replaceConnections(browser: browser, enhancedEvidence: enhancedEvidence)
-            }
+            try await serialized { try await self.replaceConnections(browser: browser) }
         }
 
         public func syncNow(
-            browser: BrowserChoice, enhancedEvidence: Bool,
-            backfill: BrowserBridgeBackfillRange? = nil
+            browser: BrowserChoice, backfill: BrowserBridgeBackfillRange? = nil
         ) async throws -> [BrowserBridgeSyncResponse] {
             BrowserBridgeDebugLog.emit(.syncRequested, browser: browser)
             // Refresh the roster and browser preference first so a newly added or paused account is
             // reflected in this manual run, then enqueue one server-owned run per eligible account.
-            try await serialized {
-                try await self.replaceConnections(browser: browser, enhancedEvidence: enhancedEvidence)
-            }
+            try await serialized { try await self.replaceConnections(browser: browser) }
             var failures: [String] = []
             var submitted: [BrowserBridgeSyncResponse] = []
             for account in accounts.values.sorted(by: { $0.id < $1.id }) {
@@ -195,7 +186,7 @@
             for bridge in current { await bridge.disconnect() }
         }
 
-        private func replaceConnections(browser: BrowserChoice, enhancedEvidence: Bool) async throws {
+        private func replaceConnections(browser: BrowserChoice) async throws {
             generation = UUID()
             let generation = self.generation
             let old = Array(bridges.values)
@@ -209,7 +200,7 @@
                 throw Failure.bearerSessionRequired
             }
             guard generation == self.generation else { return }
-            let connection = Connection(browser: browser, enhancedEvidence: enhancedEvidence)
+            let connection = Connection(browser: browser)
             self.connection = connection
             startRosterRefreshLoop()
             let listedAccounts = try await accountClient.browserBridgeVendorAccounts()
@@ -280,9 +271,10 @@
                 Task { @MainActor [weak self] in
                     self?.didChangeStatus(status, accountID: account.id, token: token)
                 }
-            } resultObserver: { [weak self] result in
+            } resultObserver: { [weak self] result, operation in
                 Task { @MainActor [weak self] in
-                    self?.didFinishResult(result, accountID: account.id, token: token)
+                    self?.didFinishResult(
+                        result, operation: operation, accountID: account.id, token: token)
                 }
             } authWindowObserver: { [weak self] runID in
                 Task { @MainActor [weak self] in
@@ -305,7 +297,7 @@
             await bridge.connect(
                 BrowserBridgeConnectionConfiguration(
                     url: url, deviceID: deviceID, browser: connection.browser,
-                    capabilities: capabilities(connection.enhancedEvidence)
+                    capabilities: .current
                 ) { [credentials] in
                     guard case .bearer(let token) = await credentials.current() else { return nil }
                     return token
@@ -339,13 +331,11 @@
         }
 
         private func didFinishResult(
-            _ result: BrowserBridgeCommandResult, accountID: String, token: UUID
+            _ result: BrowserBridgeCommandResult, operation: BrowserBridgeOperation,
+            accountID: String, token: UUID
         ) {
             guard bridgeTokens[accountID] == token else { return }
-            if case .failed(let payload) = result.outcome, payload.code == .authenticationRequired {
-                executors[accountID]?.raiseAuthenticationWindow()
-            }
-            observer(.result(accountID: accountID, result: result))
+            observer(.result(accountID: accountID, result: result, operation: operation))
         }
 
         private func didRequestAuthentication(runID: String, accountID: String, token: UUID) {
