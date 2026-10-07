@@ -19,6 +19,7 @@ struct SectionView: View {
             case .browse: BrowseRootView()
             case .search: SearchView()
             case .dev: DevView()
+            case .settings: SettingsView(isSidebarRoot: true)
             case .graph: GraphWorkspaceView()
             }
         }
@@ -43,6 +44,7 @@ struct SectionView: View {
                 case .capture: CaptureView()
                 case .library: LibraryHomeView()
                 case .find: SearchView()
+                case .settings: SettingsView(isSidebarRoot: true)
                 }
             }
             .navigationBarTitleDisplayMode(.inline)
@@ -79,6 +81,7 @@ struct RouteDestinationView: View {
         case .locationPhotoPass(let scope): LocationPhotoPassView(scope: scope)
         case .identify: IdentifyView()
         case .dev: DevView()
+        case .settings: SettingsView()
         }
     }
 }

@@ -9,19 +9,33 @@ import SwiftUI
 /// .active`, a static weak reference `CubbyApp.init` sets once, is the seam every command goes
 /// through instead (see that property's doc comment).
 struct CubbyCommands: Commands {
+    #if os(macOS)
+        @Environment(\.openWindow) private var openWindow
+    #endif
+
     @FocusedValue(\.nativeRefresh) private var refresh
 
     var body: some Commands {
+        #if os(macOS)
+            CommandGroup(replacing: .appSettings) {
+                Button("Settings…") {
+                    AppModel.active?.navigator.openSettings()
+                    openWindow(id: "main")
+                }
+                .keyboardShortcut(",", modifiers: .command)
+            }
+        #endif
         CommandGroup(after: .toolbar) {
             #if os(iOS)
-                ForEach(Array(PhoneTab.allCases.enumerated()), id: \.element) { index, tab in
+                ForEach(Array(PhoneTab.primary.enumerated()), id: \.element) { index, tab in
                     Button(tab.title) {
                         AppModel.active?.navigator.phoneTab = tab
                     }
                     .keyboardShortcut(KeyEquivalent(Character("\(index + 1)")), modifiers: .command)
                 }
             #else
-                ForEach(Array(AppSection.tabs.enumerated()), id: \.element) { index, section in
+                ForEach(Array(AppSection.tabs.filter { $0 != .settings }.enumerated()), id: \.element) {
+                    index, section in
                     Button(section.title) {
                         AppModel.active?.navigator.section = section
                     }

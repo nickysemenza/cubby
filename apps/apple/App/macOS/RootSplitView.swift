@@ -58,10 +58,15 @@ struct RootSplitView: View {
             )
         ) {
             Section("Cubby") {
-                ForEach(AppSection.tabs.filter { $0 != .dev }) { section in
+                ForEach(AppSection.tabs.filter { $0 != .dev && $0 != .settings }) { section in
                     Label(section.title, systemImage: section.symbol)
                         .tag(SidebarDestination.section(section))
                 }
+            }
+            Section {
+                Label(AppSection.settings.title, systemImage: AppSection.settings.symbol)
+                    .tag(SidebarDestination.section(.settings))
+                    .accessibilityIdentifier("sidebar.settings")
             }
             let workingActivities = model.backgroundActivity.visibleActivities
             if !workingActivities.isEmpty {

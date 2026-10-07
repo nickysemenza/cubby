@@ -29,12 +29,13 @@ enum Route: Hashable {
     case identify
     /// Dev is a pushed screen on iOS (see `AppSection.tabs`), reached via `Navigator.openDev()`.
     case dev
+    case settings
 }
 
 /// Stable iOS destinations. Their paths live on root sections so a deep link into a workflow
 /// selects a visible tab without replacing another tab's navigation history.
 enum PhoneTab: String, CaseIterable, Identifiable {
-    case work, capture, library, find
+    case work, capture, library, find, settings
 
     var id: String { rawValue }
 
@@ -44,6 +45,7 @@ enum PhoneTab: String, CaseIterable, Identifiable {
         case .capture: "Capture"
         case .library: "Library"
         case .find: "Find"
+        case .settings: "Settings"
         }
     }
 
@@ -53,8 +55,12 @@ enum PhoneTab: String, CaseIterable, Identifiable {
         case .capture: "barcode.viewfinder"
         case .library: "books.vertical"
         case .find: "magnifyingglass"
+        case .settings: "gearshape"
         }
     }
+
+    /// Settings is a sidebar destination; compact iPhone navigation keeps four primary tabs.
+    static var primary: [PhoneTab] { allCases.filter { $0 != .settings } }
 
     var rootSection: AppSection {
         switch self {
@@ -62,13 +68,14 @@ enum PhoneTab: String, CaseIterable, Identifiable {
         case .capture: .capture
         case .library: .browse
         case .find: .search
+        case .settings: .settings
         }
     }
 }
 
 /// Top-level sections. The Mac exposes all in its sidebar; iOS maps them into `PhoneTab`.
 enum AppSection: String, CaseIterable, Identifiable {
-    case today, activity, capture, photos, browse, search, graph, dev
+    case today, activity, capture, photos, browse, search, graph, dev, settings
     #if os(macOS)
         case browserSync
     #endif
@@ -87,6 +94,7 @@ enum AppSection: String, CaseIterable, Identifiable {
         case .browse: "Browse"
         case .search: "Search"
         case .dev: "Dev"
+        case .settings: "Settings"
         case .graph: "Graph"
         }
     }
@@ -103,6 +111,7 @@ enum AppSection: String, CaseIterable, Identifiable {
         case .browse: "square.grid.2x2"
         case .search: "magnifyingglass"
         case .dev: "wrench.and.screwdriver"
+        case .settings: "gearshape"
         case .graph: "point.3.connected.trianglepath.dotted"
         }
     }

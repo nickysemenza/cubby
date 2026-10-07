@@ -34,7 +34,22 @@ struct RootView: View {
             .frame(maxWidth: .infinity, maxHeight: .infinity)
             .background(FieldGuideTokens.canvas)
         case .signedOut:
-            LoginView()
+            #if os(macOS)
+                if model.navigator.section == .settings {
+                    NavigationStack {
+                        SettingsView(isSidebarRoot: true)
+                            .toolbar {
+                                ToolbarItem(placement: .navigation) {
+                                    Button("Sign in") { model.navigator.section = .today }
+                                }
+                            }
+                    }
+                } else {
+                    LoginView()
+                }
+            #else
+                LoginView()
+            #endif
         case .signedIn:
             Group {
                 #if os(iOS)
