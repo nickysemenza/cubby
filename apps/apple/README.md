@@ -177,24 +177,8 @@ list devices available`:
 
 ## TestFlight releases
 
-Normal merges to `main` wait for nightly publishing. `Apple TestFlight` checks
-current `main` at 10:17 UTC and publishes when native inputs changed since the
-last complete upload, or that upload is at least 30 days old. Use
-`gh workflow run apple-testflight.yaml --ref main` for an immediate fresh build.
-A compatibility-version bump also queues a release promptly.
-
-`packages/shared/src/apple-client-version.ts` supplies the marketing version
-and server minimum from one declaration. Bump it only when older app contracts
-become incompatible; build numbers come from CI. Release tags and manual edits
-to `project.yml` version settings are unnecessary.
-
-Each platform archives and uploads on its own runner. A partial failure leaves
-the successful upload in place; the next fresh run rebuilds both. Retry by manual
-dispatch, never by rerunning an old workflow. Uploads remain internal-only.
-Verify Apple processing and installation after publishing. After a long pause,
-GitHub may disable scheduling; re-enable the workflow and dispatch a fresh build.
-See [the release procedure](../../docs/ci.md#apple-testflight-release) for
-checkpoint behavior, signing, validation, and failure handling.
+See [release policy and manual dispatch](../../docs/ci.md#apple-testflight-release).
+Versions come from the shared compatibility declaration; release tags are unnecessary.
 
 ### One-time Apple and GitHub setup
 

@@ -346,72 +346,35 @@ production is the only deployed environment.
 
 ## Apple TestFlight release
 
-Normal merges to `main` do not publish a TestFlight build. The `Apple TestFlight`
-workflow checks current `main` nightly at 10:17 UTC and publishes when native
-inputs changed since the last complete upload, or that upload is at least 30
-days old. The same nightly check supplies the refresh; there is no separate
-monthly workflow. A manual dispatch always publishes current `main`:
+Normal merges to `main` wait for the nightly check at 10:17 UTC. It publishes
+current `main` when `full`/`apple` inputs changed since the last complete upload,
+or that upload is at least 30 days old. A changed
+`APPLE_CLIENT_COMPATIBILITY_VERSION` in `packages/shared/src/apple-client-version.ts`
+publishes promptly; comment-only edits do not. The shared value supplies both
+the generated `MARKETING_VERSION` and server minimum. Bump it for wire-breaking
+changes; compatible changes need only a new CI build number.
+
+For an immediate build or retry, dispatch a fresh run:
 
 ```sh
 gh workflow run apple-testflight.yaml --ref main
 ```
 
-A push changing `packages/shared/src/apple-client-version.ts` also queues a
-release. The planner compares the declaration at the triggering push’s before and after
-commits, independently of the current-main release target. Only a changed
-compatibility version publishes immediately;
-comment-only edits wait for the nightly check. That shared declaration supplies
-both `MARKETING_VERSION` through a generated Xcode configuration and the HTTP
-server's minimum accepted app version. Bump it for wire-breaking changes;
-compatible changes need only a fresh build number. Server deployment remains
-immediate, so installed apps can show update-required while the replacement
-build is being produced, processed, and installed.
+Publishing uses one pinned current-main commit, increasing build numbers, and
+one active workflow. Reruns are refused, including checkpoint-only retries.
+Each platform archives, verifies, and uploads on its own macOS runner. Only
+both uploads succeeding writes the `apple-testflight-uploaded` checkpoint;
+no-op and partial releases do not advance it. Missing or expired checkpoints
+rebuild. A partial failure's next fresh run rebuilds both platforms.
 
-The Linux planning step pins one current-main SHA for every downstream job.
-It reads the last `apple-testflight-uploaded` artifact from this release
-workflow, compares native inputs using the shared `full`/`apple` CI scope, and
-skips before generation or any macOS runner when nothing needs publishing.
-The checkpoint is written only after both platform uploads succeed and is
-retained for 90 days. A successful no-op run does not advance it. Missing or
-expired checkpoints cause a rebuild; malformed evidence and GitHub API failures
-fail with diagnostics. Changes are compared to the actual uploaded SHA, so a
-later docs or web merge cannot hide an earlier native change.
+Uploads are internal-only with automatic group distribution. Verify processing
+and installation in TestFlight after publishing: upload acceptance alone does
+not establish availability. Server deployment remains immediate, so breaking
+changes can leave an update-required period until the new app is installed.
 
-Both platforms share a build number derived from the release workflow's run
-number with a fixed migration offset. Publishing is limited to `main` and uses
-one concurrency group: the active run finishes and only the newest waiting
-request remains. Older reruns, including checkpoint-only reruns, are refused; retry with a fresh
-manual dispatch.
-An out-of-order older run is also refused once a higher-numbered main run has
-started or completed, including a partial release. This protects the Mac's
-requirement that build numbers keep increasing across marketing versions.
-
-One `macos-26` matrix leg per platform archives, verifies, exports, and uploads
-on the same runner. Each restores its exact target-specific distribution FFI
-cache, downloads the generated Swift and version configuration, prepares the
-project, and imports signing identities and profiles once. There is no third
-macOS upload job, archive transfer, or separate cache warmer. Distribution
-caches are still maintained by the publishing jobs; a cold release may take
-longer without background warming.
-
-The iOS and macOS uploads can finish independently. If one fails, the successful
-platform remains uploaded, the complete checkpoint is not advanced, and the
-next fresh release rebuilds both with a greater build number. Keep the existing
-archive checks for signing, privacy manifests, symbols, Mac category and
-installer identity, and embedded-extension metadata. Every export remains
-internal-only, with automatic distribution configured on the internal group.
-
-A successful upload is not proof that Apple processing completed or the build
-is installable. Check App Store Connect/TestFlight after the first release;
-Apple's processing notifications cover later failures. After diagnosis, use a
-fresh manual dispatch rather than rerunning an old build. Validate policy
-changes with the focused release-script tests and generated Xcode build
-settings; tags are no longer a smoke-test or publishing mechanism.
-
-GitHub can delay scheduled runs and disable a public repository's schedule
-after 60 days without repository activity. The 30-day refresh does not prevent
-that disabling. After a long pause, re-enable the workflow and manually dispatch
-a fresh build. Scheduling stays within GitHub Actions.
+After a long pause, manually re-enable scheduling and dispatch a fresh build.
+GitHub can disable public-repository schedules after 60 inactive days; the
+30-day refresh does not prevent this.
 
 ## Deployment
 

@@ -54,17 +54,10 @@ CubbyAPI plugin's OpenAPI inputs) → `xcodegen generate --spec apps/apple/proje
   not know and an installed build survives a server deploy that adds one. Request bodies
   stay closed. Never hand-add `additionalProperties: false` to an output, and never rely on
   the client to reject an unknown response key.
-- The server refuses a `cubby-apple` build below the shared compatibility version
-  with 426, `reason: CLIENT_UPDATE_REQUIRED`, before any operation runs;
-  `RequestTrace` latches it and `RootView` shows `UpdateRequiredView`. A
-  wire-breaking PR bumps `APPLE_CLIENT_COMPATIBILITY_VERSION` in
-  `packages/shared/src/apple-client-version.ts`. The existing generator emits
-  the same value as `MARKETING_VERSION`; never restate it in `project.yml` or
-  choose a release tag. Compatible changes wait for nightly TestFlight; only
-  compatibility bumps queue prompt publishing. Server deployment remains
-  immediate, so a breaking change can leave an update-required period while
-  the replacement app is built, processed, and installed. See
-  [release policy](../../docs/ci.md#apple-testflight-release).
+- The server refuses outdated `cubby-apple` builds with 426 and
+  `reason: CLIENT_UPDATE_REQUIRED`; `RequestTrace` latches it and `RootView`
+  shows `UpdateRequiredView`. Follow the shared version rule in root AGENTS.md
+  and [release policy](../../docs/ci.md#apple-testflight-release).
 - The generated client encodes every optional with `encodeIfPresent`, so a typed request body
   cannot carry `null`. A body the app composes as `JSONValue` (editor create/update, hero-action
   and finance operations) goes through `CubbyClient.sending(_:_:)`, which decodes it into the
