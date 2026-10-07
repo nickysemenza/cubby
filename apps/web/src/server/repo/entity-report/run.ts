@@ -1,3 +1,4 @@
+import { targetOutcomeSummary } from "@cubby/schemas/activity";
 import type { AiRunUsage } from "@cubby/schemas/ai";
 import type { AuditJsonValue, AuditLogListOut } from "@cubby/schemas/audit";
 import type {
@@ -6,6 +7,10 @@ import type {
   ReportCommand,
   ReportBlock,
 } from "@cubby/schemas/entity-report";
+import {
+  countRunTargets,
+  runTargetState,
+} from "@cubby/schemas/purchase-import";
 import { runStatus } from "@cubby/schemas/run-fields";
 import { TRADE_LABELS, tradeValues } from "@cubby/schemas/task-fields";
 import { AI_USAGE_TRANSPORT_LABELS } from "@cubby/schemas/telemetry";
@@ -168,14 +173,33 @@ const decision = (
   },
 });
 
-const importStats = (run: RunDetail): ReportBlock[] => [
-  counts([
-    ["Orders seen", run.ordersSeen],
-    ["Imported", run.imported],
-    ["Updated", run.updated],
-    ["Skipped", run.skipped],
-  ]),
-];
+const targetCounts = (run: RunDetail) =>
+  countRunTargets(
+    run.targets.map((target) => runTargetState.parse(target.state)),
+  );
+
+/** Counts in the unit the run works in: Products for enrichment, orders otherwise. */
+const importStats = (run: RunDetail): ReportBlock[] => {
+  if (run.purpose !== "product_enrichment")
+    return [
+      counts([
+        ["Orders seen", run.ordersSeen],
+        ["Imported", run.imported],
+        ["Updated", run.updated],
+        ["Skipped", run.skipped],
+      ]),
+    ];
+  const tally = targetCounts(run);
+  return [
+    counts([
+      ["Products", tally.total],
+      ["Enriched", tally.completed],
+      ["Skipped", tally.skipped],
+      ["Waiting on you", tally.blocked],
+      ["To go", tally.pending],
+    ]),
+  ];
+};
 
 function importProgress(run: RunDetail): ReportBlock[] {
   const latest = run.latestProgress;
@@ -392,7 +416,10 @@ const importTargets = (run: RunDetail): ReportBlock[] =>
   run.targets.length === 0 && run.evidence.length === 0
     ? []
     : [
-        note("The selected source and target are frozen for this run."),
+        note(
+          targetOutcomeSummary(targetCounts(run)) ??
+            "The selected source and target are frozen for this run.",
+        ),
         records(
           run.targets.map((target) =>
             row(target.id, {
@@ -414,7 +441,7 @@ const importTargets = (run: RunDetail): ReportBlock[] =>
                 : undefined,
             }),
           ),
-          { empty: "No explicit targets were recorded for this account sync." },
+          { empty: "No explicit targets were recorded for this run." },
         ),
       ];
 

@@ -69,6 +69,15 @@ export const runHandlers = implementOperationDomain(runContract, {
       targetsCompleted: run.targets.filter(
         (target) => target.state === "completed" || target.state === "skipped",
       ).length,
+      targets: run.targets.map((target) => ({
+        targetType: target.targetType,
+        targetShortcode: target.targetShortcode,
+        targetName: target.targetName,
+        state: target.state,
+        outcome: target.outcome,
+        warning: target.warning,
+        completedAt: target.completedAt,
+      })),
       progress: run.progress,
       operations: run.operations,
     };

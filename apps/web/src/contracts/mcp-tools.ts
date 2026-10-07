@@ -500,7 +500,7 @@ export const MCP_TOOLS = defineMcpTools({
 
   imports_read: {
     description:
-      "Import-run and enrichment reads: purchase-import operation status, vendor coverage, what a targeted or charge-search run would use, photo-run context and proposals, image processing, external-id collisions, and barcode lookup.",
+      "Import-run and enrichment reads: purchase-import operation status, one run's live status and target outcomes, vendor coverage, what a targeted or charge-search run would use, photo-run context and proposals, image processing, external-id collisions, and barcode lookup.",
     actions: {
       purchase_status: mcpAction({
         op: purchaseImportContract.ops.operationStatus,
@@ -511,6 +511,30 @@ export const MCP_TOOLS = defineMcpTools({
         op: vendorContract.ops.coverage,
         description:
           "Vendor identity, its latest live purchase date overall, and sorted unique non-null order IDs from an inclusive date range.",
+      }),
+      run_status: mcpAction({
+        op: runContract.ops.workSnapshot,
+        // A finding's row id and proposed fix are private handles for the
+        // member's review screen; an agent reads the finding and whether a
+        // fix exists.
+        project: (output) => ({
+          ...output,
+          findings: output.findings.map(
+            ({ id: _id, proposedFix, ...finding }) => ({
+              ...finding,
+              hasProposedFix: proposedFix !== null,
+            }),
+          ),
+        }),
+        output: runContract.ops.workSnapshot.output.extend({
+          findings: z.array(
+            runContract.ops.workSnapshot.output.shape.findings.element
+              .omit({ id: true, proposedFix: true })
+              .extend({ hasProposedFix: z.boolean() }),
+          ),
+        }),
+        description:
+          "One Run's live state: status, counts, findings, each target's outcome (`warning` holds a skip's reason), the agent's progress history, and its browser and write operations. Read this to follow a run instead of polling entity_read.",
       }),
       run_launch_preview: mcpAction({
         op: runContract.ops.targetedLaunch,

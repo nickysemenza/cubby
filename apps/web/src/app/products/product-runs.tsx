@@ -1,4 +1,5 @@
 import { parseShortcodeFor } from "@cubby/schemas/identifiers";
+import { RUN_PURPOSE_LABEL } from "@cubby/schemas/run-fields";
 import { CheckCircleIcon } from "@phosphor-icons/react/dist/csr/CheckCircle";
 import { CircleDashedIcon } from "@phosphor-icons/react/dist/csr/CircleDashed";
 import { useQuery } from "@tanstack/react-query";
@@ -168,7 +169,7 @@ function ProductRunSummary({ run }: { run: RunSummary }) {
           {run.vendorName ?? run.vendorAccountLabel ?? "Product enrichment"}
         </span>
         <span className="text-muted-foreground">
-          {run.purpose?.replaceAll("_", " ") ?? "product enrichment"} ·{" "}
+          {RUN_PURPOSE_LABEL[run.purpose ?? "product_enrichment"]} ·{" "}
           {run.status}
         </span>
       </div>

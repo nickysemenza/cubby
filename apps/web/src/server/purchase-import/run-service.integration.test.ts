@@ -10,6 +10,7 @@ import { executeLeasedOperation } from "~/server/runs/operation";
 
 import { dispatchRunEvent, recordRunDispatchAttempt } from "./dispatch";
 import {
+  AccountOccupiedError,
   controlRun,
   expireStaleRuns,
   finishRun,
@@ -51,6 +52,43 @@ describe("purchase import run admission", () => {
       ledgerPartyId,
     });
   };
+
+  // "Sync now" or a charge hunt on an account an enrichment or validation run
+  // holds must not resume that run as if it were the sync, nor poke its agent.
+  it("refuses an account sync while another kind of run holds the account", async () => {
+    const party = await createMember();
+    const account = await createVendorAccount(party.id);
+    const { insertWithShortcode } =
+      await import("~/server/repo/shortcode-utils");
+    const target = await insertWithShortcode(ctx.db, "purchase", {
+      vendorId: account.vendorId,
+      vendorAccountId: account.id,
+      orderId: "OCCUPIED-1",
+      date: "2026-09-01",
+    });
+    const validation = await startTargetedRun(ctx.db, {
+      ledgerPartyId: party.id,
+      purpose: "purchase_validation",
+      vendorId: account.vendorId,
+      vendorAccountId: account.id,
+      trigger: "manual",
+      targets: [
+        {
+          kind: "purchase",
+          purchaseId: target.id,
+          targetFingerprint: "a".repeat(64),
+        },
+      ],
+    });
+    if (!validation.created) throw new Error("Expected a validation run");
+    const sync = startOrResumeRun(ctx.db, {
+      ledgerPartyId: party.id,
+      vendorAccountId: account.id,
+      trigger: "manual",
+    });
+    await expect(sync).rejects.toBeInstanceOf(AccountOccupiedError);
+    await expect(sync).rejects.toThrow(validation.run.publicId);
+  });
 
   it("atomically admits one active run per vendor account", async () => {
     const party = await createMember();

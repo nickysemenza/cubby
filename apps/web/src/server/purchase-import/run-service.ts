@@ -1,4 +1,5 @@
 import { buildActorContext, type ActorContext } from "@cubby/schemas/context";
+import { entityRefKey } from "@cubby/schemas/entity";
 import {
   parseEntityId,
   imageId,
@@ -7,6 +8,7 @@ import {
   productId,
   purchaseId,
   userId,
+  parseEntityRef,
   runEntityId,
   vendorAccountId,
   type LedgerPartyId,
@@ -34,6 +36,7 @@ import {
 import {
   browserBridgeOperation,
   browserBridgeRequest,
+  browserBridgeRunCompletion,
   browserCapture,
   runShortcode,
   runPurpose,
@@ -41,6 +44,7 @@ import {
   runTargetState,
   runScope,
   type BrowserBridgeOperation,
+  type BrowserBridgeRunCompletion,
   type RunTrigger,
   type RunPurpose,
 } from "@cubby/schemas/purchase-import";
@@ -54,6 +58,7 @@ import {
   orderMailImportRunOrders,
   type RunInput,
   type RunRestartInput,
+  runWorkLabel,
 } from "@cubby/schemas/run-fields";
 import type { Trade } from "@cubby/schemas/task-fields";
 import { vendorAccountCursor } from "@cubby/schemas/vendor-account-fields";
@@ -146,6 +151,7 @@ import { getR2PublicUrl } from "~/server/utils/r2-public-url";
 import { WORKFLOW_RUN_PURPOSES } from "~/server/workflow-runs/contract";
 
 import { loadPurchaseAuditBatch } from "./audit-batch";
+import { CAPTURE_INTERIM_NOTE } from "./capture-interim-note";
 import {
   notHeldByChargeRun,
   unfinishedChargeRunOwns,
@@ -160,6 +166,7 @@ import {
 import { attachPendingOrderMailEvidence } from "./gmail/process";
 import { classifyOrderCapture } from "./order-list";
 import { loadReceiptEvidenceForRun } from "./receipt-evidence";
+import { runCompletionNotice } from "./run-completion-notice";
 import { importVendorOrder } from "./writer";
 
 /**
@@ -371,6 +378,29 @@ export async function startOrResumeRun(
         );
     }
     if (!chargeHunts) await assertNoHoldingChargeRun(tx, input.vendorAccountId);
+    // Only an account sync may be resumed here: an enrichment or validation
+    // run holding the account is other work, not this request's run.
+    const [otherWork] = await tx
+      .select({
+        shortcode: runTable.shortcode,
+        purpose: runTable.purpose,
+        input: runTable.input,
+        vendorId: runTable.vendorId,
+      })
+      .from(runTable)
+      .where(
+        and(
+          eq(runTable.vendorAccountId, input.vendorAccountId),
+          inArray(runTable.status, [...ACTIVE_RUN_STATUSES]),
+          ne(runTable.purpose, "account_sync"),
+        ),
+      )
+      .limit(1);
+    if (otherWork)
+      throw new AccountOccupiedError(
+        otherWork.shortcode,
+        runWorkLabel(otherWork).toLowerCase(),
+      );
     if (chargeHunts) {
       const [active] = await tx
         .select({ shortcode: runTable.shortcode })
@@ -1570,11 +1600,25 @@ async function deferQueuedChargeHunts(
 }
 
 /** An implicit start must not silently join a member's selected-charges run. */
-export class ActiveChargeRunError extends Error {
-  constructor(runShortcode: string) {
+/**
+ * The vendor account's one active run is doing other work, so this request
+ * cannot join it; the member finishes or stops that run first.
+ */
+export class AccountOccupiedError extends Error {
+  constructor(
+    readonly runShortcode: string,
+    work: string,
+  ) {
     super(
-      `Vendor account is running a selected charge search (${runShortcode}); finish or stop it first`,
+      `Vendor account is running ${work} (${runShortcode}); finish or stop it first`,
     );
+    this.name = "AccountOccupiedError";
+  }
+}
+
+export class ActiveChargeRunError extends AccountOccupiedError {
+  constructor(runShortcode: string) {
+    super(runShortcode, "a selected charge search");
     this.name = "ActiveChargeRunError";
   }
 }
@@ -2431,8 +2475,7 @@ export async function importBrowserOrderEvidence(
           scope.public.purpose === "purchase_validation"
             ? "semantic_drift"
             : null,
-        warning:
-          "Browser evidence captured; awaiting the purpose-specific comparison or bounded enrichment commit.",
+        warning: CAPTURE_INTERIM_NOTE,
         updatedAt: new Date(),
       })
       // A capture answered after its target was committed or skipped keeps
@@ -2954,7 +2997,13 @@ export async function stopRunForReview(
     if (scope.public.purpose !== "account_sync") {
       await tx
         .update(runTarget)
-        .set({ state: "unresolved", outcome: null, updatedAt: new Date() })
+        .set({
+          state: "unresolved",
+          outcome: null,
+          // A target left mid-capture says why the run stopped instead.
+          warning: sql`CASE WHEN ${runTarget.warning} = ${CAPTURE_INTERIM_NOTE} THEN ${summary} ELSE ${runTarget.warning} END`,
+          updatedAt: new Date(),
+        })
         .where(
           and(
             eq(runTarget.runId, runId),
@@ -3243,6 +3292,39 @@ async function accountSyncFinishStatus(db: Database, runId: RunId) {
   return (deferred?.value ?? 0) > 0 ? "needs_review" : "completed";
 }
 
+/** What the Mac is told when a run finishes, its notification included. */
+async function runCompletion(
+  db: Database,
+  runID: string,
+  run: Omit<
+    Parameters<typeof runCompletionNotice>[0],
+    "terminalStatus" | "findingCount" | "targetStates"
+  > & { status: string },
+  findingCount: number,
+): Promise<BrowserBridgeRunCompletion> {
+  const terminalStatus = browserBridgeRunCompletion.shape.terminalStatus.parse(
+    run.status,
+  );
+  const targets = await getDb(db)
+    .select({ state: runTarget.state })
+    .from(runTarget)
+    .where(eq(runTarget.runId, runEntityId.parse(runID)));
+  return {
+    runID,
+    terminalStatus,
+    imported: run.imported,
+    updated: run.updated,
+    skipped: run.skipped,
+    findingCount,
+    notice: runCompletionNotice({
+      ...run,
+      terminalStatus,
+      findingCount,
+      targetStates: targets.map((target) => runTargetState.parse(target.state)),
+    }),
+  };
+}
+
 /** A single-confirmation mail run finishes only once its order is committed. */
 async function assertSingleMailImported(db: Database, runId: RunId) {
   // A selected-orders run is gated by its pending candidates instead.
@@ -3377,8 +3459,13 @@ export async function finishRun(
       updated: runTable.updated,
       skipped: runTable.skipped,
       status: runTable.status,
+      purpose: runTable.purpose,
+      input: runTable.input,
+      vendorId: runTable.vendorId,
+      vendorName: vendor.name,
     })
     .from(runTable)
+    .leftJoin(vendor, eq(vendor.id, runTable.vendorId))
     .where(eq(runTable.id, runId))
     .limit(1);
   if (!run) throw new Error("Import run was not found");
@@ -3399,16 +3486,19 @@ export async function finishRun(
           vendorAccountId.parse(scope.public.vendorAccountId),
         ),
       );
-    await namespace.getByName(scope.public.vendorAccountId).notifyRunCompleted({
-      runID: input.runId,
-      terminalStatus: z
-        .enum(["completed", "needs_review", "failed", "dispatch_failed"])
-        .parse(run.status),
-      ...run,
-      findingCount: findingCount?.value ?? 0,
-    });
+    await namespace
+      .getByName(scope.public.vendorAccountId)
+      .notifyRunCompleted(
+        await runCompletion(db, input.runId, run, findingCount?.value ?? 0),
+      );
   }
-  return { ...run, findingCount: findingCount?.value ?? 0 };
+  return {
+    imported: run.imported,
+    updated: run.updated,
+    skipped: run.skipped,
+    status: run.status,
+    findingCount: findingCount?.value ?? 0,
+  };
 }
 
 /**  Called through the `PurchaseImportService` RPC namespace in cf-server.ts. */
@@ -3692,6 +3782,7 @@ export async function loadRunDetail(
       .select({
         id: runTarget.id,
         entityKind: runTarget.entityKind,
+        entityId: runTarget.entityId,
         entityCode: entityIdentity.shortcode,
         vendorAccountId: vendorAccount.shortcode,
         sourceKind: runTarget.sourceKind,
@@ -3733,6 +3824,12 @@ export async function loadRunDetail(
       ),
     selectRestartTargets(database, run.id),
   ]);
+  const { lookupEntityLabels } =
+    await import("~/server/repo/shortcode-resolver");
+  const targetNames = await lookupEntityLabels(
+    db,
+    targets.map((target) => parseEntityRef(target.entityKind, target.entityId)),
+  );
   const controller = (event: (typeof controlHistory)[number]) => ({
     name: event.name,
     ledgerParty: { id: event.ledgerPartyId, name: event.ledgerPartyName },
@@ -3821,9 +3918,11 @@ export async function loadRunDetail(
     targets: targets.map((target) => ({
       id: target.id,
       targetType: target.entityKind,
-      // Image targets have never carried a public code in the run detail.
-      targetShortcode: target.entityKind === "image" ? null : target.entityCode,
-      targetName: null,
+      // Image targets need their IMG- code too: photos often share a filename.
+      targetShortcode: target.entityCode,
+      targetName:
+        targetNames.get(entityRefKey(target.entityKind, target.entityId)) ??
+        null,
       sourceId: null,
       sourceLabel: target.sourceKind
         ? `${target.sourceKind}${target.sourceExternalKey ? ` · ${target.sourceExternalKey}` : ""}`

@@ -5,6 +5,7 @@
 import type {
   BrowserBridgeRequest,
   BrowserBridgeResult,
+  BrowserBridgeRunCompletion,
 } from "@cubby/schemas/purchase-import";
 
 export interface PurchaseImportDurableObjectRpc {
@@ -16,20 +17,6 @@ export interface PurchaseImportDurableObjectRpc {
   pendingCommands(
     runID: string,
   ): Promise<Array<{ requestId: string; createdAt: number }>>;
-  notifyRunCompleted(summary: {
-    runID: string;
-    terminalStatus: "completed" | "needs_review" | "failed" | "dispatch_failed";
-    outcome?:
-      | "replayed"
-      | "raw_evidence_drift"
-      | "semantic_drift"
-      | "enriched"
-      | "unavailable"
-      | "skipped";
-    imported: number;
-    updated: number;
-    skipped: number;
-    findingCount: number;
-  }): Promise<void>;
+  notifyRunCompleted(summary: BrowserBridgeRunCompletion): Promise<void>;
   requestAuthentication(runID: string): Promise<void>;
 }

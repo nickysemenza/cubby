@@ -1,6 +1,13 @@
 import { afterEach, expect, it, vi } from "vitest";
 
-import { type Journey, selectedJourneys } from "./journey";
+import { z } from "zod";
+
+import {
+  JourneyIds,
+  type Journey,
+  assertScreenRead,
+  selectedJourneys,
+} from "./journey";
 
 afterEach(() => vi.unstubAllEnvs());
 
@@ -29,4 +36,25 @@ it("keeps web-only journeys out of iOS runs", () => {
   ]);
   vi.stubEnv("TESTER_ARMY_JOURNEYS", "web-control");
   expect(() => selectedJourneys(catalog, "ios")).toThrow(/Web-only/u);
+});
+
+// A screen read decides a verdict, so it must fail on a wrong value, ignore
+// key order, and invert under `--wrong` so the corrupted run fails there.
+it("compares what the agent read exactly", () => {
+  const ids = new JourneyIds({}, "read");
+  const read = {
+    instruction: "the run's facts",
+    schema: z.object({ work: z.string(), changed: z.number() }),
+    expected: () => ({ work: "Product enrichment", changed: 1 }),
+  };
+  const same = { changed: 1, work: "Product enrichment" };
+  expect(() =>
+    assertScreenRead({ id: "read" }, read, same, ids, false),
+  ).not.toThrow();
+  expect(() =>
+    assertScreenRead({ id: "read" }, read, { ...same, changed: 2 }, ids, false),
+  ).toThrow(/Screen read failed/u);
+  expect(() => assertScreenRead({ id: "read" }, read, same, ids, true)).toThrow(
+    /unexpectedly matched/u,
+  );
 });

@@ -1,8 +1,10 @@
 import { z } from "zod";
 import { imageShortcode } from "./identifiers";
+import { entitySchema } from "./entity";
 import { imageDescriptionAnalysis } from "./image-processing";
 import { imageProcessingJobKind } from "./image-processing";
-import { runPurpose, runTrigger } from "./run-fields";
+import { imageUrlSummary } from "./image-summary";
+import { RUN_PURPOSE_LABEL, runPurpose, runTrigger } from "./run-fields";
 
 export const activityRunId = z.string().regex(/^(?:IPR|RUN)-[A-Z0-9]+$/u);
 export const activitySubmissionId = z.string().regex(/^IPS-[A-Z0-9]+$/u);
@@ -10,6 +12,13 @@ export const activityKind = z.enum([
   ...runPurpose.options,
   ...imageProcessingJobKind.options,
 ]);
+export type ActivityKind = z.infer<typeof activityKind>;
+/** The Runs list's name for each kind of work, for rows and the kind filter. */
+export const ACTIVITY_KIND_LABEL = {
+  ...RUN_PURPOSE_LABEL,
+  subject_lift: "Subject lift",
+  describe_image: "Image description",
+} as const satisfies Record<ActivityKind, string>;
 export const activityExecutor = z.object({
   kind: z.enum(["cloud", "device"]),
   deviceId: z.uuid().nullable(),
@@ -33,7 +42,36 @@ export const activityRun = z.object({
   ledgerPartyId: z.string().nullable(),
   subjectId: z.string().nullable(),
   subjectName: z.string(),
-  subjectHref: z.string().nullable(),
+  /** The subject's cover (a vendor's logo, an image job's own image). */
+  subjectImage: imageUrlSummary.nullable(),
+  /** What the run does, e.g. "Order mail import" for a mail-pass account sync. */
+  workLabel: z.string(),
+  /** The latest progress line an active or finished run reported. */
+  currentStep: z.string().nullable(),
+  /** Target outcomes; null for image jobs, which have no targets. */
+  targetCounts: z
+    .object({
+      total: z.int().nonnegative(),
+      completed: z.int().nonnegative(),
+      skipped: z.int().nonnegative(),
+      blocked: z.int().nonnegative(),
+      pending: z.int().nonnegative(),
+    })
+    .nullable(),
+  /** `targetCounts` as one line: "3/5 done · 1 skipped · 1 blocked". */
+  targetSummary: z.string().nullable(),
+  /** The first few targets in work order, named and pictured for the row. */
+  targetPreview: z.array(
+    z.object({
+      entity: entitySchema,
+      id: z.string(),
+      name: z.string().nullable(),
+      state: z.string(),
+      displayImage: imageUrlSummary.nullable(),
+    }),
+  ),
+  /** Distinct records this run's writes touched (its AuditLog rows). */
+  changedCount: z.int().nonnegative(),
   state: z.string(),
   active: z.boolean(),
   createdAt: z.iso.datetime(),
@@ -180,3 +218,18 @@ export const retryImageProcessingOutput = z.object({
   retried: z.int().nonnegative(),
   submissionId: activitySubmissionId.nullable(),
 });
+
+/** One line for every client; null when the run has no targets. */
+export function targetOutcomeSummary(
+  counts: ActivityRun["targetCounts"],
+): string | null {
+  if (!counts || counts.total === 0) return null;
+  return [
+    `${counts.completed}/${counts.total} done`,
+    counts.skipped ? `${counts.skipped} skipped` : null,
+    counts.blocked ? `${counts.blocked} blocked` : null,
+    counts.pending ? `${counts.pending} to go` : null,
+  ]
+    .filter(Boolean)
+    .join(" · ");
+}

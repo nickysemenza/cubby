@@ -10,7 +10,13 @@ import { beforeEach, describe, expect, it } from "vitest";
 import { z } from "zod";
 
 import { imageProcessingJob } from "~/server/db/image-processing-schema";
-import { aiUsage, image, run as runTable, runTarget } from "~/server/db/schema";
+import {
+  aiUsage,
+  image,
+  run as runTable,
+  runFinding,
+  runTarget,
+} from "~/server/db/schema";
 import { entityKernelContextSchema } from "~/server/entity-kernel";
 import { callMcpTool, kernelRequestContext } from "~/server/mcp/mcp-test-utils";
 import { createMcpServer } from "~/server/mcp/server";
@@ -80,6 +86,76 @@ describe("photo import finalize", () => {
       images: [],
       ledgerPartyId: expect.stringMatching(/^LPY-/),
     });
+  });
+
+  // An MCP client follows a run by its targets' outcomes: two photos that
+  // share a filename must stay distinguishable, and no storage uuid (a
+  // finding's row id) may cross the MCP boundary.
+  it("reports each target's outcome by its public code over MCP", async () => {
+    const run = await startRun();
+    const photos = [];
+    for (const position of [0, 1]) {
+      const photo = await createImageFixture(ctx.db, `status-${position}`, {
+        filename: "IMG_0001.jpg",
+        sha256: String(position + 4).repeat(64),
+      });
+      photos.push(photo);
+      await getDb(ctx.db)
+        .insert(runTarget)
+        .values({
+          runId: run.id,
+          entityKind: "image",
+          entityId: parseImageId.parse(photo.id),
+          position,
+          state: position === 0 ? "completed" : "skipped",
+          warning: position === 0 ? null : "Too blurry to identify",
+          targetFingerprint: String(position + 6).repeat(64),
+        });
+    }
+    const [party] = await getDb(ctx.db)
+      .select({ id: runTable.ledgerPartyId })
+      .from(runTable)
+      .where(eq(runTable.id, run.id));
+    await getDb(ctx.db)
+      .insert(runFinding)
+      .values({
+        runId: run.id,
+        ledgerPartyId: party!.id!,
+        entityId: run.id,
+        entityKind: "run",
+        kind: "synthetic_note",
+        summary: "Synthetic status finding",
+        evidenceFingerprint: "f".repeat(64),
+      });
+    const server = createMcpServer();
+    const entityKernel = entityKernelContextSchema.parse(
+      createTestRequestContext(ctx.db, {
+        auth: { userId: ctx.actor.userId },
+      }),
+    );
+    const response = await callMcpTool(
+      server,
+      "imports_read",
+      { action: "run_status", runId: run.publicId },
+      kernelRequestContext(entityKernel),
+      { entityKernel },
+    );
+
+    expect(response.isError).not.toBe(true);
+    expect(response.structuredContent).toMatchObject({
+      targets: [
+        { targetShortcode: photos[0]!.shortcode, state: "completed" },
+        {
+          targetShortcode: photos[1]!.shortcode,
+          state: "skipped",
+          warning: "Too blurry to identify",
+        },
+      ],
+      findings: [{ summary: "Synthetic status finding" }],
+    });
+    expect(JSON.stringify(response.structuredContent)).not.toMatch(
+      /[\da-f]{8}-[\da-f]{4}-[\da-f]{4}-[\da-f]{4}-[\da-f]{12}/iu,
+    );
   });
 
   // Every page stays in the coordinator's context for the rest of the run, so

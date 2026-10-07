@@ -1,4 +1,5 @@
 import { testUserId } from "@cubby/schemas/testing";
+import { generateShortcode } from "@cubby/shared";
 import type { Pool } from "pg";
 
 import { parseEntityId } from "@cubby/schemas/identifiers";
@@ -421,6 +422,80 @@ export async function seedJourneyWorld(
     run: restartRun.runId,
     vendor: restartVendor.shortcode,
   };
+
+  // A live Product enrichment run, as the Runs list shows it: one target
+  // enriched (with a write), one skipped, one still open, and a progress line.
+  const enrichmentRun = async (vendorName: string) => {
+    const enrichVendor = await insertWithShortcode(db, "vendor", {
+      name: vendorName,
+    });
+    const targets = [];
+    for (const name of JOURNEY_NAMES.enrichTargets)
+      targets.push(await product(`${name} (${vendorName})`));
+    const party = await pool.query<{
+      shortcode: string;
+      name: string;
+      kind: string;
+    }>('SELECT shortcode, name, kind FROM "LedgerParty" WHERE id = $1', [
+      memberId,
+    ]);
+    const actor = party.rows[0];
+    if (!actor) throw new Error("Synthetic member party is missing");
+    const shortcode = generateShortcode("run");
+    const inserted = await pool.query<{ id: string }>(
+      `INSERT INTO "Run" (shortcode, "ledgerPartyId", "actorUserId", "actorName", "actorEmail",
+         "actorLedgerPartyShortcode", "actorLedgerPartyName", "actorLedgerPartyKind",
+         purpose, trigger, status, "vendorId", "startedAt")
+       VALUES ($1, $2, $3, 'Synthetic member', 'member@example.test', $4, $5, $6,
+         'product_enrichment', 'scheduled', 'running', $7, now() - interval '5 minutes')
+       RETURNING id`,
+      [
+        shortcode,
+        memberId,
+        userId,
+        actor.shortcode,
+        actor.name,
+        actor.kind,
+        enrichVendor.id,
+      ],
+    );
+    const runUuid = inserted.rows[0]?.id;
+    if (!runUuid) throw new Error("Synthetic enrichment run was not saved");
+    const states = ["completed", "skipped", "pending"] as const;
+    for (const [position, target] of targets.entries())
+      await pool.query(
+        `INSERT INTO "RunTarget" ("runId", "entityKind", "entityId", position, state, outcome, warning, "targetFingerprint")
+         SELECT $1, 'product', p.id, $3, $4, $5, $6, $7 FROM "Product" p WHERE p.shortcode = $2`,
+        [
+          runUuid,
+          target.id,
+          position,
+          states[position],
+          position === 0 ? "enriched" : position === 1 ? "skipped" : null,
+          position === 1 ? JOURNEY_NAMES.enrichSkip : null,
+          String(position + 1).repeat(64),
+        ],
+      );
+    await pool.query(
+      `INSERT INTO "RunProgress" ("runId", "eventId", phase, detail) VALUES ($1, $2, 'reading', $3)`,
+      [runUuid, `synthetic-enrich-${shortcode}`, JOURNEY_NAMES.enrichStep],
+    );
+    await pool.query(
+      `INSERT INTO "AuditLog" ("runId", "entityKind", "entityId", action, changes, "userId", channel)
+       SELECT $1, 'product', p.id, 'update', '{"brand":{"from":null,"to":"Synthetic Seeds"}}'::jsonb, $3, 'system'
+         FROM "Product" p WHERE p.shortcode = $2`,
+      [runUuid, targets[0]?.id, userId],
+    );
+    return {
+      run: shortcode,
+      vendor: enrichVendor.shortcode,
+      enriched: targets[0]?.id ?? "",
+    };
+  };
+  seed["runs-list-facts"] = await enrichmentRun(JOURNEY_NAMES.enrichVendor);
+  seed["runs-list-phone"] = await enrichmentRun(
+    JOURNEY_NAMES.enrichPhoneVendor,
+  );
 
   return seed;
 }

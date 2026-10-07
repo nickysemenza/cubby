@@ -323,7 +323,8 @@ public actor URLSessionBrowserBridge {
             let completion = BrowserBridgeRunCompletion(
                 runID: payload.runID, terminalStatus: terminalStatus,
                 outcome: payload.outcome, imported: payload.imported, updated: payload.updated,
-                skipped: payload.skipped, findingCount: payload.findingCount)
+                skipped: payload.skipped, findingCount: payload.findingCount,
+                notice: payload.notice)
             BrowserBridgeDebugLog.emit(.runCompleted, runID: completion.runID)
             let isNew = ledger.recordRunCompletion(completion)
             try await replayStore.save(ledger)

@@ -34,7 +34,7 @@ import { dispatchRunEvent } from "./dispatch";
 import { matchProcessedOrderMail } from "./gmail/match";
 import { settleRetainedPaymentEvidence } from "./retained-settlement";
 import {
-  ActiveChargeRunError,
+  AccountOccupiedError,
   CHARGE_HOLDING_STATUSES,
   startOrResumeRun,
 } from "./run-service";
@@ -330,8 +330,10 @@ export async function dispatchImportHunts(
           trigger: "discovery",
         });
       } catch (error) {
-        // A selected-charges run began after the read above: leave the hunt.
-        if (!(error instanceof ActiveChargeRunError)) throw error;
+        // Another run holds the account (a selected-charges search that began
+        // after the read above, an enrichment or a validation): leave the
+        // hunt for a later pass.
+        if (!(error instanceof AccountOccupiedError)) throw error;
         selectedChargeAccounts.add(hunt.vendorAccountId);
         continue;
       }

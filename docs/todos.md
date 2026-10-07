@@ -158,6 +158,91 @@ See also the image operational passes at the end of this file.
 
 ---
 
+## Runs, enrichment & browser capture
+
+Runs are the household's unattended work: account syncs, mail passes, charge
+searches, Product enrichment, photo inventory. Today each is a separate Run
+linked only by restarts (`predecessorRunId`) and the records it wrote. The
+Runs list and `imports_read.run_status` read one shared projection
+(`server/repo/activity.ts`).
+
+- 🧱 **Run lineage.** Keep Run as the one unit of work; a Job or Step table
+  would duplicate status, actor, and the one-active-run-per-account fence,
+  and the pending work already lives in `RunOrderCandidate`, `ImportHunt`,
+  and open Products. Add `parentRunId` (the run whose work caused this one,
+  apart from `predecessorRunId`, the same work's next attempt), a `cause`
+  enum, and `attempt` to the Run declaration, and write them at every
+  starter. Give the discovery pass its own Run so every automatic child has
+  a parent, and group the Runs list by root. Historical rows stay null; do
+  not backfill lineage from AuditLog. Enum values reach production before
+  any writer uses them (two deploys).
+
+- 🧱 **An honest purpose for mail imports.** Order-mail imports are
+  vendor-less `account_sync` Runs told apart only by `input.kind`. Add a
+  `mail_import` purpose and relabel existing rows, updating the enrichment
+  sweep's import-provenance join, the run cap, and skill text that names
+  purposes in the same change. Production data change: confirm first.
+
+- 🟢 **Chain enrichment from run completion, on one path.** A finished
+  mail import or account sync triggers the enrichment sweep for its account
+  (after commit, never inside the finish transaction), replacing the sweep's
+  wait on an occupied account. Delete the inline enrichment of image-less
+  Products inside an account-sync claim (`run-service.ts`), so the sweep is
+  the only enrichment path. Only import completions trigger, so enrichment
+  cannot re-trigger itself.
+
+- 🟢 **Thin Mac capture, server-side extraction.** The Mac app should return
+  raw artifacts (final URL, raw JSON-LD, a DOM snapshot, PDF or screenshot)
+  instead of running page-specific extraction JavaScript. The server
+  extracts deterministically (Rust `recipebridge`/html5ever) and can
+  re-parse retained evidence when an extractor improves. Keep Chrome as the
+  browser: vendor sign-in goes through the household password manager.
+
+- 🤔 **Fetch public product pages first.** Try a plain server fetch for a
+  public product page and fall back to the Mac bridge when it is blocked.
+  Expect many vendors to refuse; record the block rate per vendor before
+  routing any vendor fetch-only.
+
+- 🟢 **Enrich the variant that was bought.** Seed and Shopify pages are often
+  variant groups, which the single-Product proof rule rightly skips. Open
+  the purchased variant (`?variant=` matched by SKU or price) and read its
+  per-variant barcode (Shopify's `.js` product JSON exposes them).
+
+- 🟢 **Sync order history before enriching mail-imported orders.** Order mail
+  rarely names the variant; the vendor's order page does. Enrichment
+  targets carry the order line (`sourceKind: order_line`) and its parent
+  run's evidence, and a commit whose variant disagrees with the ordered line
+  is refused.
+
+- 🤔 **Link enriched seeds to Plants.** Seed Products could set `growsPlantId`
+  and carry plant facts (days to maturity, spacing) from the vendor page.
+  Needs a decision on which facts live on Plant versus Product.
+
+- 🤔 **Provenance for already-filled fields.** Enrichment fills only empty
+  fields, so a verified value matching an existing one gains no provenance.
+  Decide whether a matching verified value records its source.
+
+- 🟢 **Live run status in the Mac app.** Show the current Run, its target,
+  and its latest step from the shared status projection, so the household
+  can tell whether Chrome is busy before touching it.
+
+- 🟢 **Mac capture preflight and update errors.** Check the screen-recording
+  permission before the first ScreenCaptureKit capture, and report an
+  outdated app (HTTP 426 from the client gate) as "update required" rather
+  than a generic upload failure.
+
+- 🟢 **Stop and restart runs over MCP.** `imports_read.run_status` reads a
+  Run; offer stop, retry, and restart beside it. Approve and reject stay
+  human (`run.control` is omitted from MCP as `human_approval`), so this is a
+  narrower operation, not that one exposed.
+
+- 🤔 **Model routing for capture.** Use Jev for constrained choices (variant
+  matching), Luna for reading unstructured pages, and Sol only to
+  orchestrate. Measure on the purchase decision evaluation before switching.
+
+- 🟢 **Generate native activity kind titles.** The Apple `kind.title` and
+  `kind.symbol` extensions restate `ACTIVITY_KIND_LABEL`; generate them.
+
 ## Ingredients, recipes & nutrition
 
 - 🧱 **Ingredient as the grocery hub.** Product is SKU-grade and Ingredient
