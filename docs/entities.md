@@ -17,6 +17,15 @@ For generic behavior shared across entities, follow
 generic renderer, declaration-to-renderer parity, then delete the per-entity
 twin.
 
+`presentation.recordIconEntityField` names a read-only projection containing an
+entity key. Generic web and Apple record surfaces resolve that entity's declared
+icon, falling back to the record's own entity icon for missing or unknown keys.
+Record emoji and real media keep their existing precedence; navigation still uses
+the entity's stable type icon. Runs project `iconEntity` on both ordinary entity
+reads and Activity reads: the subject's entity wins, AI work can use its ledger
+party, and otherwise the purpose selects the entity the work concerns. Status
+and execution device do not change identity. This projection is not stored.
+
 Declarations may import shared primitives and cycle-safe field modules. They
 must not import canonical schemas, generated artifacts, server implementations,
 or browser modules. Implementation references remain `{ module, export }` data.

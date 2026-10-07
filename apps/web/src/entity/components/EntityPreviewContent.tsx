@@ -127,6 +127,7 @@ export function manifestPreviewCard<E extends ManifestPreviewEntity>(
     icon: (
       <RecordEmoji
         entity={entity}
+        record={data}
         emoji={z.looseObject({ emoji: z.string().nullish() }).parse(data).emoji}
         size={14}
       />

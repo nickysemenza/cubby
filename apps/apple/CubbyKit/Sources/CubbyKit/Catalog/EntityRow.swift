@@ -44,6 +44,14 @@ public struct EntityRow: Identifiable, Sendable, Hashable {
 }
 
 extension EntityDescriptor {
+    public func recordSymbol(in row: EntityRow) -> String {
+        guard let field = recordIconEntityField,
+            let value = row.raw[field]?.stringValue,
+            let entity = EntityKey(rawValue: value)
+        else { return sfSymbol }
+        return EntityCatalog[entity].sfSymbol
+    }
+
     public func recordEmoji(in row: EntityRow) -> String? {
         recordEmojiField.flatMap { row.raw[$0]?.stringValue }
     }

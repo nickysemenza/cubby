@@ -1,5 +1,7 @@
 import { recordEmojiInput } from "@cubby/schemas/emoji";
-import type { Entity } from "@cubby/schemas/entity";
+import { entitySchema, type Entity } from "@cubby/schemas/entity";
+import { entityInspectorMetadata } from "@cubby/schemas/entity-manifest";
+import { z } from "zod";
 
 import { EntityIcon } from "~/entity/entities";
 import { cn } from "~/lib/utils";
@@ -8,14 +10,19 @@ import { cn } from "~/lib/utils";
 export function RecordEmoji({
   entity,
   emoji,
+  record,
   size = 14,
   className,
 }: {
   entity: Entity;
   emoji?: string | null;
+  record?: unknown;
   size?: number;
   className?: string;
 }) {
+  const iconField = entityInspectorMetadata[entity].recordIconEntityField;
+  const iconData = z.record(z.string(), z.unknown()).catch({}).parse(record);
+  const icon = entitySchema.safeParse(iconField ? iconData[iconField] : null);
   const legacy = Boolean(emoji && !recordEmojiInput.safeParse(emoji).success);
   return emoji ? (
     <span
@@ -30,7 +37,7 @@ export function RecordEmoji({
     </span>
   ) : (
     <EntityIcon
-      entity={entity}
+      entity={icon.success ? icon.data : entity}
       size={size}
       colored
       aria-hidden="true"

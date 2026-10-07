@@ -9,6 +9,7 @@ import {
   activityGroupsOutput,
   activityListOutput,
   activityRun,
+  activityIconEntity,
   activitySubmissionOutput,
   imageAnalysisHistoryOutput,
   type ActivityListInput,
@@ -182,15 +183,17 @@ function runProjection(): SQL {
       EXISTS(SELECT 1 FROM "RunOperation" o WHERE o."runId" = r.id) AS "hasDiagnostics",
       false AS "canRetry"
     FROM "Run" r
-    LEFT JOIN "Vendor" v ON v.id = r."vendorId" AND v."deletedAt" IS NULL
+    -- includes-deleted: historical subject identity survives tombstoning, as in ordinary Run reads.
+    LEFT JOIN "Vendor" v ON v.id = r."vendorId"
     LEFT JOIN "VendorAccount" account ON account.id = r."vendorAccountId" AND account."deletedAt" IS NULL
-    LEFT JOIN "LedgerParty" party ON party.id = r."ledgerPartyId" AND party."deletedAt" IS NULL
+    LEFT JOIN "LedgerParty" party ON party.id = r."ledgerPartyId"
     WHERE r."deletedAt" IS NULL
   `;
 }
 
 const runWire = activityRun
   .omit({
+    iconEntity: true,
     subjectImage: true,
     workLabel: true,
     currentStep: true,
@@ -323,6 +326,11 @@ async function presentActivityRuns(db: Database, rows: readonly RunWire[]) {
     const subject = row.subjectId ? parseShortcode(row.subjectId) : null;
     return activityRun.parse({
       ...row,
+      iconEntity: activityIconEntity({
+        kind: row.kind,
+        subjectId: row.subjectId,
+        ledgerPartyId: row.ledgerPartyId,
+      }),
       subjectImage: subject
         ? (subjectImages.get(entityRefKey(subject.type, row.subjectId!)) ??
           null)

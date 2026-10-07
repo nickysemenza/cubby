@@ -1,13 +1,30 @@
 import { render, screen } from "@testing-library/react";
 import { describe, expect, it } from "vitest";
 
+import { RecordEmoji } from "~/entity/components/record-emoji";
 import {
   RecordChartLabel,
   RecordChartTick,
   RecordMark,
 } from "~/entity/components/record-mark";
+import { EntityIcon } from "~/entity/entities";
 
 describe("RecordMark", () => {
+  it("uses a run's projected subject icon and safely falls back for an unknown entity", () => {
+    const expected = render(
+      <EntityIcon entity="product" size={14} colored aria-hidden="true" />,
+    );
+    const productGlyph = expected.container.innerHTML;
+    expected.unmount();
+    const mark = render(
+      <RecordEmoji entity="run" record={{ iconEntity: "product" }} />,
+    );
+    expect(mark.container.innerHTML).toBe(productGlyph);
+    mark.rerender(
+      <RecordEmoji entity="run" record={{ iconEntity: "unknown" }} />,
+    );
+    expect(mark.container.innerHTML).not.toBe(productGlyph);
+  });
   it("renders a configured emoji in a fixed decorative mark", () => {
     render(<RecordMark entity="project" emoji="🛠️" size={20} />);
 

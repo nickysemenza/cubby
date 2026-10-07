@@ -59,6 +59,9 @@ struct EntityHeroView<Actions: View>: View {
             HStack(alignment: .firstTextBaseline, spacing: FieldGuideTokens.Space.sm) {
                 if let emoji = descriptor.recordEmoji(in: row) {
                     Text(emoji).font(.fieldGuideDisplay).accessibilityHidden(true)
+                } else if descriptor.recordIconEntityField != nil {
+                    Image(systemName: descriptor.recordSymbol(in: row))
+                        .font(.fieldGuideTitle).accessibilityHidden(true)
                 }
                 Text(row.title)
                     .font(.fieldGuideDisplay)

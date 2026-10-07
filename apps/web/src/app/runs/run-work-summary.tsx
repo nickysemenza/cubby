@@ -2,14 +2,24 @@ import type { ActivityRun } from "@cubby/schemas/activity";
 import { parseShortcode } from "@cubby/shared";
 
 import { EntityRefLink } from "~/entity/components/entity-ref-link";
-import { isBrowserRoutedEntity } from "~/entity/entities";
+import { EntityIcon, isBrowserRoutedEntity } from "~/entity/entities";
 import { Row } from "~/ui/layout";
 
 /** The run's subject as a record link with its cover, or its bare name. */
 export function RunSubject({ run }: { run: ActivityRun }) {
   const parsed = run.subjectId ? parseShortcode(run.subjectId) : null;
   if (!parsed || !run.subjectId || !isBrowserRoutedEntity(parsed.type))
-    return <span className="truncate">{run.subjectName}</span>;
+    return (
+      <span className="inline-flex min-w-0 items-center gap-1.5">
+        <EntityIcon
+          entity={run.iconEntity}
+          size={14}
+          colored
+          aria-hidden="true"
+        />
+        <span className="truncate">{run.subjectName}</span>
+      </span>
+    );
   return (
     <EntityRefLink
       variant="chip"

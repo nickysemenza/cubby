@@ -1,3 +1,4 @@
+import { activityIconEntity } from "@cubby/schemas/activity";
 import { parseShortcodeFor } from "@cubby/schemas/identifiers";
 import type { PaginationParams, SortParams } from "@cubby/schemas/pagination";
 import type { RunFilters, RunOut } from "@cubby/schemas/run";
@@ -58,7 +59,7 @@ const hydrate = async (
     const account = at(accounts, row.vendorAccountId);
     const vendor = at(vendors, row.vendorId);
     const party = at(parties, row.ledgerPartyId);
-    return runOut.parse({
+    const projected = {
       ...row,
       id: parseShortcodeFor("run", row.shortcode),
       displayName: `${vendor?.name ?? party?.name ?? row.actorName} · ${runWorkLabel(row)}`,
@@ -74,6 +75,14 @@ const hydrate = async (
       ledgerPartyId: party?.id ?? null,
       ledgerPartyName: party?.name ?? null,
       predecessorRunId: at(predecessors, row.predecessorRunId)?.id ?? null,
+    };
+    return runOut.parse({
+      ...projected,
+      iconEntity: activityIconEntity({
+        kind: projected.purpose,
+        subjectId: projected.vendorId,
+        ledgerPartyId: projected.ledgerPartyId,
+      }),
     });
   });
 };

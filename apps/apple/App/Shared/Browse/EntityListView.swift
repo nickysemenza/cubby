@@ -687,17 +687,19 @@ struct EntityRowView: View {
                     .accessibilityHidden(true)
             } else if let imageURL = presentation.imageURL {
                 Thumb(
-                    url: imageURL, size: thumbnailSize, symbol: entitySymbol(for: key),
+                    url: imageURL, size: thumbnailSize, symbol: EntityCatalog[key].recordSymbol(in: row),
                     emoji: EntityCatalog[key].recordEmoji(in: row))
             } else if row.pendingFields.contains("displayImages") {
                 Thumb(
-                    url: nil, size: thumbnailSize, symbol: entitySymbol(for: key),
+                    url: nil, size: thumbnailSize, symbol: EntityCatalog[key].recordSymbol(in: row),
                     emoji: EntityCatalog[key].recordEmoji(in: row))
             }
             VStack(alignment: .leading, spacing: 2) {
                 HStack {
                     if presentation.imageURL == nil, let emoji = EntityCatalog[key].recordEmoji(in: row) {
                         Text(emoji).accessibilityHidden(true)
+                    } else if presentation.imageURL == nil, EntityCatalog[key].recordIconEntityField != nil {
+                        Image(systemName: EntityCatalog[key].recordSymbol(in: row)).accessibilityHidden(true)
                     }
                     Text(presentation.title)
                 }

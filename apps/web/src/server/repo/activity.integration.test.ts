@@ -20,6 +20,7 @@ import {
   runOperation,
   runProgress,
   runTarget,
+  vendor as vendorTable,
 } from "~/server/db/schema";
 import { ensureRun } from "~/server/runs/ensure-run";
 
@@ -41,6 +42,7 @@ import {
   createImageProcessingJob,
 } from "./image-processing";
 import { insertEntityAttachments } from "./repo.fixtures";
+import { getRunByShortcode } from "./run";
 import { insertWithShortcode } from "./shortcode-utils";
 
 describe("activity image processing projection", () => {
@@ -468,6 +470,18 @@ describe("unified Runs history", () => {
     expect(flat.items.filter((row) => row.recordType === "run")).toHaveLength(
       runPurpose.options.length,
     );
+    expect(
+      flat.items.find((row) => row.kind === "product_enrichment")?.iconEntity,
+    ).toBe("product");
+    expect(
+      flat.items.find((row) => row.kind === "photo_inventory")?.iconEntity,
+    ).toBe("inventory");
+    expect(
+      flat.items.find((row) => row.kind === "mail_search")?.iconEntity,
+    ).toBe("vendorAccount");
+    expect(
+      flat.items.find((row) => row.kind === "subject_lift")?.iconEntity,
+    ).toBe("image");
     expect(flat.items).toEqual(
       expect.arrayContaining([
         expect.objectContaining({
@@ -672,6 +686,7 @@ describe("unified Runs history", () => {
 
     const expected = {
       id: shortcode,
+      iconEntity: "vendor",
       workLabel: "Product enrichment",
       subjectId: vendor.shortcode,
       subjectImage: { url: expect.stringContaining(logo.key) },
@@ -712,6 +727,9 @@ describe("unified Runs history", () => {
     expect(list.items.find((row) => row.id === shortcode)).toMatchObject(
       expected,
     );
+    expect(await getRunByShortcode(ctx.db, shortcode)).toMatchObject({
+      iconEntity: expected.iconEntity,
+    });
     const groups = await listActivityGroups(ctx.db, null, {
       recordType: "run",
       kind: "product_enrichment",
@@ -725,6 +743,17 @@ describe("unified Runs history", () => {
     expect(
       (await activityDetail(ctx.db, null, { id: shortcode, limit: 5 })).run,
     ).toMatchObject(expected);
+    await getDb(ctx.db)
+      .update(vendorTable)
+      .set({ deletedAt: new Date() })
+      .where(eq(vendorTable.id, vendor.id));
+    expect((await getRunByShortcode(ctx.db, shortcode)).iconEntity).toBe(
+      "vendor",
+    );
+    expect(
+      (await activityDetail(ctx.db, null, { id: shortcode, limit: 5 })).run
+        .iconEntity,
+    ).toBe("vendor");
   });
 
   // The row names the targets the run works first: tied positions fall back

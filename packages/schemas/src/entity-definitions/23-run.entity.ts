@@ -39,6 +39,7 @@ export default defineEntity({
   identifiers: { brand: "RunId", shortcode: "RUN-" },
   presentation: {
     titleField: "displayName",
+    recordIconEntityField: "iconEntity",
     domain: "finance",
     description:
       "Runs: purchase-agent syncs, validations, enrichments, photo-inventory batches, Gmail searches and discovery, and grouped AI work.",
@@ -176,6 +177,11 @@ export default defineEntity({
   },
   model: {
     fields: [
+      {
+        key: "iconEntity",
+        kind: "text",
+        validation: readOnly(z.string()),
+      },
       {
         key: "displayName",
         kind: "text",
@@ -510,6 +516,7 @@ export default defineEntity({
     update: [],
     output: [
       "id",
+      "iconEntity",
       "displayName",
       "status",
       "purpose",

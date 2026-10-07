@@ -997,6 +997,8 @@ const buildMetadataSchemas = () => {
         })
         .strict(),
       recordEmojiField: fieldKey.nullable().optional().default(null),
+      /** Read projection naming the entity whose standard glyph represents this record. */
+      recordIconEntityField: fieldKey.nullable().optional().default(null),
       icons: z
         .object({
           /** A `@phosphor-icons/react` export name; the browser registry resolves it. */

@@ -5,6 +5,7 @@ import { ArrowUpRightIcon } from "@phosphor-icons/react/dist/csr/ArrowUpRight";
 import { Link } from "@tanstack/react-router";
 import type { ReactNode } from "react";
 
+import { RecordEmoji } from "~/entity/components/record-emoji";
 import { EntityIcon } from "~/entity/entities";
 import { cn } from "~/lib/utils";
 import { ErrorDisplay } from "~/ui/feedback/error-display";
@@ -111,9 +112,11 @@ const SHELF_CARD_DISPLAY_WIDTH = 240;
 function ShelfIdentityFallback({
   entity,
   compact,
+  record,
 }: {
   entity: Entity;
   compact: boolean;
+  record?: unknown;
 }) {
   return (
     <div
@@ -131,9 +134,10 @@ function ShelfIdentityFallback({
           compact ? "size-10 rounded-xl" : "size-16 rounded-2xl",
         )}
       >
-        <EntityIcon
+        <RecordEmoji
           entity={entity}
-          colored
+          record={record}
+          size={compact ? 20 : 32}
           className={compact ? "size-5" : "size-8"}
         />
       </span>
@@ -155,6 +159,7 @@ export function ShelfCard({
   title,
   subtitle,
   entity,
+  record,
   extraCount = 0,
   badgeSlot,
   compact = false,
@@ -171,6 +176,7 @@ export function ShelfCard({
   title: string;
   subtitle?: ReactNode;
   entity: Entity;
+  record?: unknown;
   extraCount?: number;
   /** Small overlay chip in the photo's top-left (e.g. a location-type icon). */
   badgeSlot?: ReactNode;
@@ -220,10 +226,18 @@ export function ShelfCard({
               displayWidth={compact ? 128 : SHELF_CARD_DISPLAY_WIDTH}
               className="absolute inset-0 h-full w-full object-cover"
               fallback={
-                <ShelfIdentityFallback entity={entity} compact={compact} />
+                <ShelfIdentityFallback
+                  entity={entity}
+                  compact={compact}
+                  record={record}
+                />
               }
               loadingFallback={
-                <ShelfIdentityFallback entity={entity} compact={compact} />
+                <ShelfIdentityFallback
+                  entity={entity}
+                  compact={compact}
+                  record={record}
+                />
               }
             />
           )}
