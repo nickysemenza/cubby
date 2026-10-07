@@ -819,7 +819,10 @@ struct EntityListView: View {
                 if let reference = EntityFieldValue.reference(in: row.raw, field: field, surface: "list") {
                     NavigationLink(value: Route.entityDetail(reference.entity, id: reference.id)) {
                         Text(fact.value).lineLimit(dynamicTypeSize.isAccessibilitySize ? nil : 1)
-                            .frame(minHeight: FieldGuideTokens.touchTarget)
+                            .frame(
+                                minWidth: FieldGuideTokens.touchTarget,
+                                minHeight: FieldGuideTokens.touchTarget, alignment: .leading
+                            )
                             .contentShape(Rectangle())
                     }
                     .buttonStyle(.borderless)
