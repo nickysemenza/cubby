@@ -151,6 +151,7 @@ import { getR2PublicUrl } from "~/server/utils/r2-public-url";
 import { WORKFLOW_RUN_PURPOSES } from "~/server/workflow-runs/contract";
 
 import { loadPurchaseAuditBatch } from "./audit-batch";
+import { CAPTURE_INTERIM_NOTE } from "./capture-interim-note";
 import {
   notHeldByChargeRun,
   unfinishedChargeRunOwns,
@@ -2358,8 +2359,7 @@ export async function importBrowserOrderEvidence(
           scope.public.purpose === "purchase_validation"
             ? "semantic_drift"
             : null,
-        warning:
-          "Browser evidence captured; awaiting the purpose-specific comparison or bounded enrichment commit.",
+        warning: CAPTURE_INTERIM_NOTE,
         updatedAt: new Date(),
       })
       // A capture answered after its target was committed or skipped keeps
@@ -2881,7 +2881,13 @@ export async function stopRunForReview(
     if (scope.public.purpose !== "account_sync") {
       await tx
         .update(runTarget)
-        .set({ state: "unresolved", outcome: null, updatedAt: new Date() })
+        .set({
+          state: "unresolved",
+          outcome: null,
+          // A target left mid-capture says why the run stopped instead.
+          warning: sql`CASE WHEN ${runTarget.warning} = ${CAPTURE_INTERIM_NOTE} THEN ${summary} ELSE ${runTarget.warning} END`,
+          updatedAt: new Date(),
+        })
         .where(
           and(
             eq(runTarget.runId, runId),
