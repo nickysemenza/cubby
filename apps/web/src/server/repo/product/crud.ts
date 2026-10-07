@@ -1169,12 +1169,17 @@ const readProductListPage = async (
     {
       where: whereClause,
       orderBy: orderByArray,
-      load: (where) =>
-        getDb(db).query.product.findMany({
-          where,
-          with: relationFields ? relations.product.listBase.with : undefined,
-          extras: selectedExtras,
-        }),
+      load:
+        projection.kind === "base"
+          ? undefined
+          : (where: SQL) =>
+              getDb(db).query.product.findMany({
+                where,
+                with: relationFields
+                  ? relations.product.listBase.with
+                  : undefined,
+                extras: selectedExtras,
+              }),
       // Each caller hydrates the page for its own projection.
       hydrate: (rows) => rows,
     },

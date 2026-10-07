@@ -75,7 +75,10 @@ existing block. Extend the generic path when it almost fits. See
   `updateAndReturn`, `withTransaction`, `formatSearchTerm`, `notDeleted`,
   `buildSearchConditions`, the shortcode resolver, `finalizeMerge`,
   policy-driven removal (`server/repo/removal/`).
-  List filtering, sorting, paging, and count share a plain root-table FROM.
+  List filtering, sorting, paging, and count share a plain root-table FROM,
+  including dashboard counts that reuse list predicates. Remove consuming alias
+  overrides together. Scalar projections omit `load` to retain their two-query
+  selection/count budget.
   `load(where, projection)` enriches selected IDs only; never pass list predicates
   or pagination into a relational query. The scaffold restores selected order.
 - Search fan-out: a record whose search text embeds another entity is one
