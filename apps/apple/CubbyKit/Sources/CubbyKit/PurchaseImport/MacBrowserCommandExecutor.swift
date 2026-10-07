@@ -32,6 +32,9 @@
             let url: String
             let title: String
             let readyState: String
+            /// The document the window showed before a navigation was requested; it carries the
+            /// flag `navigateOwnedWindow` set, which no newly loaded document has.
+            let leaving: Bool
         }
 
         struct WindowState: Equatable {
@@ -259,6 +262,9 @@
             let application = Self.appleScriptLiteral(targetBundleIdentifier)
             let target = Self.appleScriptLiteral(url.absoluteString)
             if try await resolveOwnedWindow(), let ownedWindowID {
+                // Mark the current document, so readiness never takes it for the page that
+                // replaces it (a slow response leaves it complete at its old URL).
+                _ = try? await runFixedJavaScript("window.__cubbyLeaving = true; true;")
                 let tab = browser == .safari ? "current tab" : "active tab"
                 _ = try await runAppleScript(
                     "tell application id \(application) to set URL of \(tab) of window id \(ownedWindowID) to \(target)",
@@ -578,17 +584,26 @@
         /// Setting a tab URL returns before the new document loads; a navigation still in flight
         /// after the wait is an unreadable page, which the server may retry.
         private func waitForPageReady(targetURL: URL?) async throws {
+            var lastURL: String?
+            var stableProbes = 0
             for _ in 0..<40 {
                 try Task.checkCancellation()
                 do {
                     let probe = try await probePage()
+                    stableProbes =
+                        !probe.leaving && probe.readyState == "complete" && probe.url == lastURL
+                        ? stableProbes + 1 : 0
+                    lastURL = probe.url
                     if BrowserCaptureNavigationPolicy.isReady(
                         currentURL: URL(string: probe.url), targetURL: targetURL,
-                        documentReadyState: probe.readyState)
+                        documentReadyState: probe.readyState, stableProbes: stableProbes,
+                        leavingPreviousDocument: probe.leaving)
                     {
                         return
                     }
-                } catch ExecutionFailure.executionFailed, ExecutionFailure.pageUnreadable {}
+                } catch ExecutionFailure.executionFailed, ExecutionFailure.pageUnreadable {
+                    stableProbes = 0
+                }
                 try await Task.sleep(for: .milliseconds(250))
             }
             throw ExecutionFailure.pageUnreadable
@@ -676,7 +691,7 @@
             return """
                 (() => {
                   if (window.name !== \(marker)) window.name = \(marker);
-                  return JSON.stringify({ url: location.href, title: document.title, readyState: document.readyState });
+                  return JSON.stringify({ url: location.href, title: document.title, readyState: document.readyState, leaving: window.__cubbyLeaving === true });
                 })();
                 """
         }

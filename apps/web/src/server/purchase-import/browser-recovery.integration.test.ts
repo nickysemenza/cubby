@@ -35,6 +35,7 @@ import {
   readBrowserCommandResult,
   startOrResumeRun,
   startTargetedRun,
+  stopRunForReview,
 } from "./run-service";
 
 // The Mac sends what it saw; the server reads the page, keeps its DOM as
@@ -399,6 +400,23 @@ describe("the server's reading of browser steps", () => {
       state: "completed",
       capture: { readableText: "Order 42" },
     });
+  });
+
+  // An agent whose browser step kept failing could not stop its paused run:
+  // the stop was refused, so it retried the same step for hours.
+  it("lets the agent stop a paused run for review", async () => {
+    const runId = await accountSync();
+    await getDb(ctx.db)
+      .update(runTable)
+      .set({ status: "paused_offline" })
+      .where(eq(runTable.id, runEntityId.parse(runId)));
+    await stopRunForReview(ctx.db, {
+      runId,
+      operationId: "stop:paused",
+      kind: "other",
+      summary: "The order history never loaded.",
+    });
+    expect(await runStatus(runId)).toMatchObject({ status: "needs_review" });
   });
 
   describe("a public product page", () => {

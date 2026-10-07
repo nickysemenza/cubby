@@ -162,6 +162,33 @@ struct BrowserBridgeTests {
                 currentURL: target, targetURL: target, documentReadyState: "complete"))
     }
 
+    // A vendor redirected the order page to its home page (served at `www.`); the Mac waited
+    // for the requested URL forever and reported the loaded page as unreadable.
+    @Test("Capture readiness accepts a redirect that settled")
+    func captureReadinessAfterRedirect() throws {
+        let landed = try #require(URL(string: "https://www.seeds.example.test/"))
+        let requested = try #require(URL(string: "https://seeds.example.test/account/orders"))
+        let settled = BrowserCaptureNavigationPolicy.settledProbes
+
+        #expect(
+            !BrowserCaptureNavigationPolicy.isReady(
+                currentURL: landed, targetURL: requested, documentReadyState: "complete",
+                stableProbes: settled - 1))
+        #expect(
+            BrowserCaptureNavigationPolicy.isReady(
+                currentURL: landed, targetURL: requested, documentReadyState: "complete",
+                stableProbes: settled))
+        #expect(
+            !BrowserCaptureNavigationPolicy.isReady(
+                currentURL: landed, targetURL: requested, documentReadyState: "interactive",
+                stableProbes: settled))
+        // A slow response leaves the previous page complete at its old URL: never settled.
+        #expect(
+            !BrowserCaptureNavigationPolicy.isReady(
+                currentURL: landed, targetURL: requested, documentReadyState: "complete",
+                stableProbes: settled, leavingPreviousDocument: true))
+    }
+
     @Test("Completed results replay until acknowledged")
     func replayLifecycle() {
         let uuid = UUID(uuidString: "22222222-2222-2222-2222-222222222222")!

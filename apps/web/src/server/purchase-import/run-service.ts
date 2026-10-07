@@ -3147,10 +3147,20 @@ export async function markHistoryExpired(
 
 export async function auditImportBatch(
   db: Database,
-  input: { runId: string; operationId: string; offset: number },
+  input: {
+    runId: string;
+    operationId: string;
+    offset: number;
+    /** A stop for review audits a paused run's writes before it ends. */
+    allowPaused?: boolean;
+  },
 ) {
   const scope = await loadRunScope(db, input.runId);
-  assertRunActive(scope.public.status);
+  if (
+    !input.allowPaused ||
+    !ACTIVE_RUN_STATUSES.some((status) => status === scope.public.status)
+  )
+    assertRunActive(scope.public.status);
   if (!scope.actorUserId) throw new Error("Import run actor is unavailable");
   const runId = runEntityId.parse(input.runId);
   const renderedBatch = await loadPurchaseAuditBatch(
@@ -3242,7 +3252,7 @@ export async function auditImportBatch(
 /** Server-side finalization guard: every run mutation is audited in pages of 25. */
 export async function auditAllImportBatches(
   db: Database,
-  input: { runId: string; operationId: string },
+  input: { runId: string; operationId: string; allowPaused?: boolean },
 ) {
   let offset = 0;
   let findings = 0;
@@ -3278,17 +3288,24 @@ export async function stopRunForReview(
       "other",
     ])
     .parse(input.kind);
+  // A paused run (its browser stuck on one step) is stopped too: refusing it
+  // once left an agent retrying the same step for hours.
+  if (
+    scope.public.status !== "needs_review" &&
+    !ACTIVE_RUN_STATUSES.some((status) => status === scope.public.status)
+  )
+    throw new Error(`Import run is fenced in status ${scope.public.status}`);
   const fingerprint = await sha256Hex(`${kind}:${summary}`);
-  if (scope.public.purpose === "account_sync") {
+  // A restart audits only its own writes, so the stopped run's imports are
+  // audited now, paused or not.
+  if (scope.public.purpose === "account_sync")
     await auditAllImportBatches(db, {
       runId: input.runId,
       operationId: `${input.operationId}:required-audit`,
+      allowPaused: true,
     });
-  }
   const auditedAt = new Date();
   return withTransaction(db, async (tx) => {
-    if (scope.public.status !== "needs_review")
-      assertRunActive(scope.public.status);
     const [finding] = await tx
       .insert(runFinding)
       .values({
