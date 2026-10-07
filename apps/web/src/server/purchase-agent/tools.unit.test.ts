@@ -290,8 +290,8 @@ describe("purchase-import agent tool authority", () => {
   // An outdated Mac app stops the run for review; the agent must not keep
   // issuing commands that can only fail the same way.
   it("ends the submission when a browser result stopped the run", async () => {
-    const services = () =>
-      fromAny({
+    const services = (): RunServices =>
+      fromPartial({
         readBrowserCommandResult: async () => ({ state: "stopped" }),
       });
     const result = await toolNamed(
