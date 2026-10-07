@@ -1,3 +1,5 @@
+import { createHash } from "node:crypto";
+
 import type { ActorContext } from "@cubby/schemas/context";
 import type { ProjectShortcode } from "@cubby/schemas/identifiers";
 import {
@@ -23,6 +25,7 @@ import { AppError, createAppError } from "~/server/errors/app-error";
 import { implementOperationDomain } from "~/server/operation-domain.server";
 import {
   attachExistingImageToEntity,
+  getImageById,
   getImageHashIndex,
   getImagesByProjectIds,
   markImageUploaded,
@@ -43,25 +46,51 @@ import {
   initiateDocumentUpload,
   initiateImageUploadWithoutEntity,
 } from "~/server/services/image-storage.service";
+import { getS3Object } from "~/server/utils/s3";
 
 import {
   readImageAnalysis,
   recordImageAnalysis,
 } from "./image-analysis.server";
 
+async function streamedSha256(response: Response): Promise<string> {
+  const hash = createHash("sha256");
+  if (response.body)
+    for await (const chunk of response.body) hash.update(chunk);
+  return hash.digest("hex");
+}
+
 export async function markImageUploadedWorkflow(
   db: Database,
   input: z.output<typeof getImageByIdSchema>,
+  // Testability seam only: production reads the object from R2.
+  readStored: (key: string) => Promise<Response> = getS3Object,
 ) {
   const imageId = await resolveOrThrow(db, "image", input.id);
-  const uploaded = await markImageUploaded(db, imageId);
+  const pending = await getImageById(db, imageId);
+  // Record the stored bytes' hash before marking the upload: processing reads
+  // only hashed images, and a standalone upload had none, so scheduling
+  // refused it and every Mac screenshot upload failed with a 500. A failed
+  // read leaves the image PENDING, so the client can retry. Dimensions are not
+  // compared here: Apple clients report EXIF-oriented ones.
+  const stored = await readStored(pending.key);
+  if (!stored.ok)
+    throw new Error(
+      `Uploaded object ${pending.key} is unavailable: ${stored.status}`,
+    );
+  // Streamed: uploads reach 50 MiB, and buffering one would crowd the
+  // Worker's shared memory.
+  const sha256 = await streamedSha256(stored);
+  const uploaded = await markImageUploaded(db, imageId, sha256);
   // Settings default disabled/paused, so rollout creates no automatic work
   // until the owner explicitly enables it. Durable jobs repair missed wakes.
-  await scheduleImageProcessingJobs(db, {
-    id: uploaded.id,
-    kinds: ["describe_image", "subject_lift"],
-    automatic: true,
-  });
+  // Documents (PDFs) finalize here too; image jobs read only images.
+  if (uploaded.contentType.startsWith("image/"))
+    await scheduleImageProcessingJobs(db, {
+      id: uploaded.id,
+      kinds: ["describe_image", "subject_lift"],
+      automatic: true,
+    });
   await publishImageMetadataExtraction(
     db,
     imageId,

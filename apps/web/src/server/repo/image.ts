@@ -1529,11 +1529,13 @@ export const updateImage = async (
 export const markImageUploaded = async (
   db: Database,
   imageId: string,
+  /** The stored bytes' SHA-256: processing reads only an upload with one. */
+  sha256: string,
 ): Promise<ImageWithEntity> => {
   await updateAndReturn(
     db,
     image,
-    { status: "UPLOADED" },
+    { status: "UPLOADED", sha256 },
     and(eq(image.id, imageId), eq(image.status, "PENDING"), notDeleted(image)),
   );
   return getImageById(db, imageId);

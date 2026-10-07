@@ -6,6 +6,7 @@ import {
 } from "@cubby/schemas/identifiers";
 import { getImageByIdSchema } from "@cubby/schemas/image";
 import { generateShortcode } from "@cubby/shared";
+import { sha256Hex } from "@cubby/shared/sha256";
 import { asc, eq, inArray } from "drizzle-orm";
 import { createRepoEntity } from "tooling/factories/repo";
 import { withTestDb } from "tooling/test-setup";
@@ -16,12 +17,14 @@ import {
   cookbook,
   entityAttachment,
   image,
+  imageProcessingJob,
   run as runTable,
   runTarget,
   ledgerParty,
   user,
 } from "~/server/db/schema";
 import { markImageUploadedWorkflow } from "~/server/operations/image.server";
+import { updateImageProcessingSettings } from "~/server/repo/image-processing-maintenance";
 import {
   makeCookbookExtraction,
   insertEntityAttachments,
@@ -47,6 +50,19 @@ import {
   getImageHashIndex,
   setImagePerceptualHashes,
 } from "./image";
+
+/** Integration tests reach no R2: the stored object is served from memory. */
+const stored = (bytes: Uint8Array, contentType: string) => async () =>
+  new Response(new Uint8Array(bytes), {
+    headers: { "content-type": contentType },
+  });
+const unverified = stored(new Uint8Array([1, 2, 3]), "image/jpeg");
+const ONE_PIXEL_PNG = Uint8Array.from(
+  atob(
+    "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==",
+  ),
+  (character) => character.charCodeAt(0),
+);
 import { insertWithShortcode } from "./shortcode-utils";
 import { findOrCreateVendor } from "./vendor";
 
@@ -146,6 +162,74 @@ describe("image repository", () => {
     ).toEqual([newer.shortcode, older.shortcode]);
   });
 
+  // A standalone upload (a Mac browser screenshot) had no content hash, so
+  // with automatic processing on, scheduling refused it and every screenshot
+  // upload failed. The stored bytes' hash is recorded as the upload is marked.
+  it("hashes a standalone upload before scheduling its automatic processing", async () => {
+    await updateImageProcessingSettings(ctx.db, {
+      enabled: true,
+      paused: true,
+    });
+    const pending = await createPendingImageRecord(ctx.db, {
+      key: `images/${crypto.randomUUID()}.png`,
+      filename: "browser-view.png",
+      contentType: "image/png",
+      size: ONE_PIXEL_PNG.byteLength,
+      // An EXIF-oriented size a client reports is never checked here.
+      width: 3000,
+      height: 4000,
+    });
+    await markImageUploadedWorkflow(
+      ctx.db,
+      getImageByIdSchema.parse({ id: pending.shortcode }),
+      stored(ONE_PIXEL_PNG, "image/png"),
+    );
+    const [row] = await getDb(ctx.db)
+      .select({
+        status: image.status,
+        sha256: image.sha256,
+        renderStatus: image.renderStatus,
+      })
+      .from(image)
+      .where(eq(image.id, pending.id));
+    expect(row).toMatchObject({
+      status: "UPLOADED",
+      sha256: await sha256Hex(ONE_PIXEL_PNG),
+    });
+    expect(row?.renderStatus).not.toBe("failed");
+    const jobs = await getDb(ctx.db)
+      .select({ kind: imageProcessingJob.kind })
+      .from(imageProcessingJob)
+      .where(
+        eq(imageProcessingJob.imageId, parseEntityId("image", pending.id)),
+      );
+    expect(jobs.map(({ kind }) => kind).sort()).toEqual([
+      "describe_image",
+      "subject_lift",
+    ]);
+  });
+
+  it("leaves an upload pending, for the client to retry, when its object cannot be read", async () => {
+    const pending = await createPendingImageRecord(ctx.db, {
+      key: `images/${crypto.randomUUID()}.jpg`,
+      filename: "missing.jpg",
+      contentType: "image/jpeg",
+      size: 3,
+    });
+    await expect(
+      markImageUploadedWorkflow(
+        ctx.db,
+        getImageByIdSchema.parse({ id: pending.shortcode }),
+        async () => new Response(null, { status: 503 }),
+      ),
+    ).rejects.toThrow("is unavailable: 503");
+    const [row] = await getDb(ctx.db)
+      .select({ status: image.status })
+      .from(image)
+      .where(eq(image.id, pending.id));
+    expect(row?.status).toBe("PENDING");
+  });
+
   it("resolves public image identity before marking an upload complete", async () => {
     const pending = await createPendingImageRecord(ctx.db, {
       key: `images/${crypto.randomUUID()}.jpg`,
@@ -154,12 +238,12 @@ describe("image repository", () => {
       size: 512,
     });
     const input = getImageByIdSchema.parse({ id: pending.shortcode });
-    expect(await markImageUploadedWorkflow(ctx.db, input)).toMatchObject({
-      status: "UPLOADED",
-    });
-    await expect(markImageUploadedWorkflow(ctx.db, input)).rejects.toThrow(
-      "Failed to update record",
-    );
+    expect(
+      await markImageUploadedWorkflow(ctx.db, input, unverified),
+    ).toMatchObject({ status: "UPLOADED" });
+    await expect(
+      markImageUploadedWorkflow(ctx.db, input, unverified),
+    ).rejects.toThrow("Failed to update record");
     const [stored] = await getDb(ctx.db)
       .select({ status: image.status })
       .from(image)
@@ -193,6 +277,7 @@ describe("image repository", () => {
     await markImageUploadedWorkflow(
       ctx.db,
       getImageByIdSchema.parse({ id: first.shortcode }),
+      unverified,
     );
 
     const result = await setImagePerceptualHashes(ctx.db, {
