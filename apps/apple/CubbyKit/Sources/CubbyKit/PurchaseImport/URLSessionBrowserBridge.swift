@@ -82,7 +82,7 @@ struct BrowserBridgeCommandTaskRegistry {
 
 public actor URLSessionBrowserBridge {
     public typealias StatusObserver = @Sendable (BrowserBridgeConnectionStatus) -> Void
-    public typealias ResultObserver = @Sendable (BrowserBridgeCommandResult) -> Void
+    public typealias ResultObserver = @Sendable (BrowserBridgeCommandResult, BrowserBridgeOperation) -> Void
     public typealias AuthWindowObserver = @Sendable (String) -> Void
     public typealias RunCompletionObserver = @Sendable (BrowserBridgeRunCompletion) -> Void
 
@@ -254,8 +254,8 @@ public actor URLSessionBrowserBridge {
                         outcome: .failed(
                             code: .invalidCommand,
                             message: "The browser command identifier was rebound to different work.",
-                            retryable: false))
-                    try await finish(rejection)
+                            retryable: false, observation: .unobserved))
+                    try await finish(rejection, operation: command.operation)
                     return
                 }
                 BrowserBridgeDebugLog.emit(.commandReplayed, command: command, outcome: result.outcome)
@@ -273,8 +273,8 @@ public actor URLSessionBrowserBridge {
                     completedAt: .now,
                     outcome: .failed(
                         code: .deadlineExceeded, message: "The browser command deadline elapsed.",
-                        retryable: false))
-                try await finish(result)
+                        retryable: false, observation: .unobserved))
+                try await finish(result, operation: command.operation)
                 return
             }
             let task = Task { [weak self] in
@@ -286,7 +286,7 @@ public actor URLSessionBrowserBridge {
                 let result = BrowserBridgeCommandResult(
                     commandID: command.id, runID: command.runID, operationID: command.operationID,
                     completedAt: .now, outcome: outcome)
-                await self.finishIgnoringSendFailure(result)
+                await self.finishIgnoringSendFailure(result, operation: command.operation)
             }
             commandTasks.attach(task, to: command.id)
         case .acknowledge(let payload):
@@ -333,9 +333,11 @@ public actor URLSessionBrowserBridge {
         }
     }
 
-    private func finishIgnoringSendFailure(_ result: BrowserBridgeCommandResult) async {
+    private func finishIgnoringSendFailure(
+        _ result: BrowserBridgeCommandResult, operation: BrowserBridgeOperation
+    ) async {
         do {
-            try await finish(result)
+            try await finish(result, operation: operation)
         } catch {
             BrowserBridgeDebugLog.emit(
                 .resultSendDeferred, commandID: result.commandUUID, runID: result.runID,
@@ -345,7 +347,9 @@ public actor URLSessionBrowserBridge {
         }
     }
 
-    private func finish(_ result: BrowserBridgeCommandResult) async throws {
+    private func finish(
+        _ result: BrowserBridgeCommandResult, operation: BrowserBridgeOperation
+    ) async throws {
         commandTasks.finish(result.commandID)
         guard !ledger.cancelled.contains(result.commandID) else { return }
         ledger.record(result)
@@ -353,7 +357,7 @@ public actor URLSessionBrowserBridge {
         BrowserBridgeDebugLog.emit(
             .resultPersisted, commandID: result.commandUUID, runID: result.runID,
             operationID: result.operationID, outcome: result.outcome)
-        resultObserver?(result)
+        resultObserver?(result, operation)
         guard let socket else { return }
         try await send(.result(result), on: socket)
         BrowserBridgeDebugLog.emit(
@@ -364,7 +368,7 @@ public actor URLSessionBrowserBridge {
     private func send(
         _ message: BrowserBridgeClientMessage, on socket: URLSessionWebSocketTask
     ) async throws {
-        let data = try JSONEncoder.browserBridge.encode(message)
+        let data = try BrowserBridgeWire.encode(message)
         try await socket.send(.data(data))
     }
 
