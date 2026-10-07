@@ -753,9 +753,12 @@ export const journeys: Journey[] = [
       {
         goal: "Read this run's Counts and its Targets and outcome sections.",
         check: {
+          // "Waiting on you" appears only as a Counts label, so the read
+          // below cannot be answered from the summary lines alone.
           visible: () => [
             "Reading product pages",
             "1/3 done · 1 skipped · 1 to go",
+            "Waiting on you",
           ],
         },
         read: {
