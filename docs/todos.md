@@ -315,9 +315,53 @@ Runs list and `imports_read.run_status` read one shared projection
   fields, so a verified value matching an existing one gains no provenance.
   Decide whether a matching verified value records its source.
 
-- 🟢 **Live run status in the Mac app.** Show the current Run, its target,
-  and its latest step from the shared status projection, so the household
-  can tell whether Chrome is busy before touching it.
+- 🤔 **Controlled-browser preview.** Show Cubby's Chrome window in a small
+  floating monitor that stays visible while browsing other records, like a
+  picture-in-picture view. Make it movable, resizable, collapsible, and dockable
+  beside Browser Sync or the run console without covering primary actions.
+  Support following the active run or pinning one account, with keyboard
+  actions to expand, switch runs, and raise or return from Chrome.
+  Include account, page title, domain, capture time, and a "Show browser" action.
+  Investigate reuse of the latest screenshot versus a low-rate local preview;
+  update only
+  while visible and never capture unrelated windows or bring Chrome forward
+  for a refresh. Distinguish a live view, a last capture, and an unavailable
+  preview with its reason. Preview frames become evidence only through the
+  existing run capture path. The [browser bridge](infrastructure.md#browser-bridge)
+  owns window identity and capture permissions.
+
+- 🟢 **Run activity strip with the next action.** Show the current Run,
+  target, latest step, time in that step, and completed/known target counts
+  from the shared status projection; avoid invented percentage progress.
+  Distinguish working, waiting, retrying, needs-member, and offline states,
+  including the last activity time and next retry when known.
+  Keep it visible beside the browser preview, link to the run console, and
+  show a direct sign-in or permission action when member attention is needed.
+  Coordinate with the run-attention notification item above.
+
+- 🤔 **Browser handoff and return.** Make the preview's "Show browser"
+  action a clear handoff for sign-in or inspecting a stuck page, with a return
+  to Cubby and visible confirmation that automation has resumed. Decide how
+  manual interaction suspends commands and resumes through the existing run
+  lifecycle before adding controls; preserve background operation by default.
+
+- 🟢 **Captured pages beside their results.** Add a bounded capture filmstrip
+  to the run console and open a selected page beside the order lines or Product
+  facts derived from it. Show capture time, source URL, and the changes it
+  supports, so a suspicious result can be checked without hunting through logs.
+  Reuse RunEvidence; distinguish captured evidence from the current preview.
+
+- 🟢 **Attention-first browser workspace.** Put accounts needing sign-in,
+  permissions, or review ahead of routine background work, with an explicit
+  reason and one action opening the exact owned window or relevant run detail.
+  Keep active, waiting, and finished work easy to filter as the vendor list
+  grows; show which run owns each window before switching the preview.
+
+- 🟢 **Results as browser work lands.** Show newly imported orders and
+  committed Product updates beside the preview, with covers, changed fields,
+  and links to the resulting records and captured sources. Keep proposed work
+  distinct from committed changes and end with a concise result summary,
+  including unresolved targets and the next useful action.
 
 - 🤔 **Recover a skipped import audit after an outdated-Mac stop.** When
   an account sync stops because the Mac app is too old and its required
