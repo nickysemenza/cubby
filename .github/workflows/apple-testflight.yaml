@@ -49,6 +49,7 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ github.token }}
           PUSH_BEFORE: ${{ github.event.before }}
+          PUSH_AFTER: ${{ github.event.after }}
         run: node scripts/apple-release.ts plan
       # Native changes since the uploaded commit, by CI's own full/apple lanes.
       - name: Classify changes since the last upload

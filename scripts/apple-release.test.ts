@@ -32,6 +32,7 @@ const checkpoint = (overrides: Partial<Checkpoint> = {}): Checkpoint => ({
 const facts = (overrides: Partial<Parameters<typeof decide>[0]> = {}) => ({
   event: "schedule",
   previousVersion: "3.1.0",
+  pushedVersion: "3.1.0",
   sha: MAIN,
   version: "3.1.0",
   checkpoint: checkpoint(),
@@ -135,10 +136,13 @@ test("missing history rebuilds instead of skipping", () => {
 });
 
 test("a compatibility bump publishes on push; a same-value edit waits for the nightly", () => {
-  assert.deepEqual(decide(facts({ event: "push", version: "3.2.0" })), {
-    action: "publish",
-    reason: "compatibility bump",
-  });
+  assert.deepEqual(
+    decide(facts({ event: "push", version: "3.2.0", pushedVersion: "3.2.0" })),
+    {
+      action: "publish",
+      reason: "compatibility bump",
+    },
+  );
   assert.deepEqual(decide(facts({ event: "push" })), {
     action: "skip",
     reason: "compatibility version unchanged",
@@ -155,6 +159,13 @@ test("same-value pushes skip even without upload history", () => {
       action: "skip",
       reason: "compatibility version unchanged",
     });
+});
+
+test("a later main version bump cannot turn a comment-only push into a release", () => {
+  assert.deepEqual(decide(facts({ event: "push", version: "3.2.0" })), {
+    action: "skip",
+    reason: "compatibility version unchanged",
+  });
 });
 
 test("the newest authentic checkpoint wins across pages; expired and foreign artifacts never count", async () => {

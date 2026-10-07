@@ -357,7 +357,8 @@ gh workflow run apple-testflight.yaml --ref main
 ```
 
 A push changing `packages/shared/src/apple-client-version.ts` also queues a
-release. The planner compares the declaration before and after the push. Only a changed
+release. The planner compares the declaration at the triggering push’s before and after
+commits, independently of the current-main release target. Only a changed
 compatibility version publishes immediately;
 comment-only edits wait for the nightly check. That shared declaration supplies
 both `MARKETING_VERSION` through a generated Xcode configuration and the HTTP

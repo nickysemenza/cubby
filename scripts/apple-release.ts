@@ -59,6 +59,7 @@ export function refuseUnsafeRun(run: { ref: string; runAttempt: number }) {
 export function decide(facts: {
   event: string;
   previousVersion?: string | null;
+  pushedVersion?: string | null;
   sha: string;
   version: string;
   checkpoint: Checkpoint | null;
@@ -69,9 +70,11 @@ export function decide(facts: {
   if (facts.event === "workflow_dispatch")
     return { action: "publish", reason: "manual request" };
   if (facts.event === "push") {
-    if (facts.previousVersion === undefined)
-      throw new Error("A push requires its previous compatibility version.");
-    return facts.version !== facts.previousVersion
+    if (facts.previousVersion === undefined || !facts.pushedVersion)
+      throw new Error(
+        "A push requires its before and after compatibility versions.",
+      );
+    return facts.pushedVersion !== facts.previousVersion
       ? { action: "publish", reason: "compatibility bump" }
       : { action: "skip", reason: "compatibility version unchanged" };
   }
@@ -250,7 +253,7 @@ const required = (name: string) => {
   return value;
 };
 
-const versionBeforePush = (cwd: string, before: string): string | null => {
+const versionAtCommit = (cwd: string, before: string): string | null => {
   if (!/^[0-9a-f]{40}$/u.test(before))
     throw new Error(`Invalid push base: ${before}`);
   if (before !== "0".repeat(40)) {
@@ -315,11 +318,14 @@ async function main(command: string | undefined) {
   }).trim();
   const event = local ? "schedule" : required("GITHUB_EVENT_NAME");
   const previousVersion =
-    event === "push" ? versionBeforePush(cwd, required("PUSH_BEFORE")) : null;
+    event === "push" ? versionAtCommit(cwd, required("PUSH_BEFORE")) : null;
+  const pushedVersion =
+    event === "push" ? versionAtCommit(cwd, required("PUSH_AFTER")) : null;
   const checkpoint = await findCheckpoint(github, workflow.id);
   const decision = decide({
     event,
     previousVersion,
+    pushedVersion,
     sha,
     version: APPLE_CLIENT_COMPATIBILITY_VERSION,
     checkpoint,
