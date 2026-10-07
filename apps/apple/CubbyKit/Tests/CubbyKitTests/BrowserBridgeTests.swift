@@ -182,6 +182,11 @@ struct BrowserBridgeTests {
             !BrowserCaptureNavigationPolicy.isReady(
                 currentURL: landed, targetURL: requested, documentReadyState: "interactive",
                 stableProbes: settled))
+        // A slow response leaves the previous page complete at its old URL: never settled.
+        #expect(
+            !BrowserCaptureNavigationPolicy.isReady(
+                currentURL: landed, targetURL: requested, documentReadyState: "complete",
+                stableProbes: settled, leavingPreviousDocument: true))
     }
 
     @Test("Completed results replay until acknowledged")

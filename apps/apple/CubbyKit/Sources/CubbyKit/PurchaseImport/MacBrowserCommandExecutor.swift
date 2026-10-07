@@ -32,6 +32,9 @@
             let url: String
             let title: String
             let readyState: String
+            /// The document the window showed before a navigation was requested; it carries the
+            /// flag `navigateOwnedWindow` set, which no newly loaded document has.
+            let leaving: Bool
         }
 
         struct WindowState: Equatable {
@@ -259,6 +262,9 @@
             let application = Self.appleScriptLiteral(targetBundleIdentifier)
             let target = Self.appleScriptLiteral(url.absoluteString)
             if try await resolveOwnedWindow(), let ownedWindowID {
+                // Mark the current document, so readiness never takes it for the page that
+                // replaces it (a slow response leaves it complete at its old URL).
+                _ = try? await runFixedJavaScript("window.__cubbyLeaving = true; true;")
                 let tab = browser == .safari ? "current tab" : "active tab"
                 _ = try await runAppleScript(
                     "tell application id \(application) to set URL of \(tab) of window id \(ownedWindowID) to \(target)",
@@ -585,11 +591,13 @@
                 do {
                     let probe = try await probePage()
                     stableProbes =
-                        probe.readyState == "complete" && probe.url == lastURL ? stableProbes + 1 : 0
+                        !probe.leaving && probe.readyState == "complete" && probe.url == lastURL
+                        ? stableProbes + 1 : 0
                     lastURL = probe.url
                     if BrowserCaptureNavigationPolicy.isReady(
                         currentURL: URL(string: probe.url), targetURL: targetURL,
-                        documentReadyState: probe.readyState, stableProbes: stableProbes)
+                        documentReadyState: probe.readyState, stableProbes: stableProbes,
+                        leavingPreviousDocument: probe.leaving)
                     {
                         return
                     }
@@ -683,7 +691,7 @@
             return """
                 (() => {
                   if (window.name !== \(marker)) window.name = \(marker);
-                  return JSON.stringify({ url: location.href, title: document.title, readyState: document.readyState });
+                  return JSON.stringify({ url: location.href, title: document.title, readyState: document.readyState, leaving: window.__cubbyLeaving === true });
                 })();
                 """
         }
