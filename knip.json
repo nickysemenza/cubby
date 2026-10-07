@@ -20,7 +20,6 @@
         "scripts/check-outward-text.ts!",
         "scripts/ci-flakes.ts!",
         "scripts/dev-db.ts!",
-        "scripts/stamp-source-mtimes.ts!",
         "scripts/apple-simulator-build-cache.ts!",
         "scripts/benchmark-apple-runner.ts!",
         "scripts/pristine-simulator-cache.ts!",

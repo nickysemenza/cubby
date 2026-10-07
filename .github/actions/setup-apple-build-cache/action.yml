@@ -27,9 +27,6 @@ runs:
       uses: ./.github/actions/toolchain-hash
       with:
         command: xcodebuild -version
-    - name: Ignore file-system inode changes in XCBuild
-      shell: bash
-      run: defaults write com.apple.dt.XCBuild IgnoreFileSystemDeviceInodeChanges -bool YES
     # App version/build settings affect products, not dependency module identity.
     - name: Hash the package graph
       id: packages

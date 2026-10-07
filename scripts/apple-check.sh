@@ -9,7 +9,7 @@
 #   ci    hosted `Apple simulator build` job: a generic-simulator build only, using the
 #         CI-cached SPM clone directory (-clonedSourcePackagesDirPath).
 #         CubbyKit's package tests run in parallel in `Apple host tests`
-#         (`swift test`) — running them on
+#         (the host-only CubbyKit-Package Xcode scheme) — running them on
 #         the iOS Simulator inside this build job cost about 6 minutes to
 #         boot plus ~10 minutes of CPU starvation on a hosted runner
 #         (measured 2026-09-21), so CI tests them on the host.
@@ -30,13 +30,6 @@ if ! xcode-select -p >/dev/null 2>&1; then
 fi
 
 apps/apple/scripts/prepare-project.sh
-
-# Hosted CI restores a cached DerivedData (ci.yaml); after xcodegen has
-# rewritten its outputs, give tracked sources blob-hash mtimes so unchanged
-# files match that build instead of recompiling (scripts/stamp-source-mtimes.ts).
-if [ "$mode" = "ci" ]; then
-  node scripts/stamp-source-mtimes.ts apps/apple
-fi
 
 # @State/@StateObject must never be seeded from an init parameter: a re-presented
 # `.sheet(item:)` can then show the previous item's stale state (apps/apple/AGENTS.md,

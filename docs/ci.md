@@ -120,14 +120,18 @@ Node dependencies: the Linux `Apple generated inputs` job runs `pnpm generate`
 and uploads the generated Swift inputs as the `apple-generated` artifact
 (`.github/actions/generate-apple-inputs`), which each restores directly with
 `actions/download-artifact` before building,
-and `scripts/stamp-source-mtimes.ts` gives those files content-derived mtimes
-like tracked sources so the restored build caches still apply. A skipped job still
-satisfies its required status check. The host job runs `swift test --package-path
-apps/apple/CubbyKit --force-resolved-versions` on the macOS host — no
-simulator — restoring/saving an exact-key cache of
-`apps/apple/CubbyKit/.build`, including compiled products and dependency
-checkouts, keyed on the Swift toolchain, package pins, CubbyKit sources, and
-the warning-check script. It then
+using ordinary checkout timestamps. A skipped job still
+satisfies its required status check. The host job runs the automatically generated
+`CubbyKit-Package` scheme with `xcodebuild test` on the ARM macOS host — no
+simulator. The aggregate package scheme includes all CubbyKit tests and the CLI
+product; the library-only `CubbyKit` scheme has no test action. The command uses
+`-onlyUsePackageVersionsFromResolvedFile` to keep the committed package pins.
+Its `xcode-host-v1` cache stores `apps/apple/CubbyKit/.build`, including the
+Xcode compilation cache and dependency checkouts under `.build/xcode` and the
+SwiftPM warning-generator products. Xcode's `Build` and `Logs` directories are
+excluded: tests rebuild products from cached compiler results rather than
+restoring timestamp-sensitive objects and test bundles. Keys include the Xcode
+toolchain, package pins, CubbyKit sources, and warning-check script. It then
 runs `apps/apple/scripts/check-openapi-warnings.sh`, which fails on any
 swift-openapi-generator warning (a schema the `CubbyAPI` build plugin would
 silently drop). A successful warning check records its content key inside
@@ -143,7 +147,7 @@ fail that gate. Aggregate checks use `!cancelled()` so whole-workflow
 cancellation can stop them while ordinary failed dependencies still reach their
 result checks. Release FFI warming waits for this gate on main.
 
-Each SDK keeps its own compiled-product cache. Parallel jobs use two macOS
+Each SDK keeps its own compilation cache. Parallel jobs use two macOS
 runner slots to avoid adding the host and simulator compile times after a
 cache miss or source change. A generated-schema change still recompiles the
 client for each SDK; neither cache reuse nor a five-minute ceiling is guaranteed.
@@ -155,12 +159,22 @@ Both macOS build commands use `/usr/bin/time -l` to report elapsed time, CPU
 time, and native resource counters in their job logs. These measurements help
 compare cold and cached builds without adding a profiling script or job.
 
-The Xcode project enables Apple's compilation cache and its hit/miss remarks.
-Its content-addressed results live in `DerivedData/CompilationCache.noindex`,
-inside the existing successful-build cache. This can replay compiler work when
+The Xcode project and host package-test command enable Apple's compilation cache
+and its hit/miss remarks. Content-addressed results live in
+`DerivedData/CompilationCache.noindex` for the simulator and
+`CubbyKit/.build/xcode/CompilationCache.noindex` for the host, inside their
+successful-build caches. This can replay compiler work when
 ordinary build products need rebuilding but the compiler inputs are unchanged;
-new source inputs still compile. It does not enable caching for the separate
-standalone `swift test` command. No extra runner or remote cache service is used.
+new source inputs still compile. Local `swift test` remains available and does
+not use this Xcode cache. No extra runner or remote cache service is used.
+
+A local ARM/Xcode 27 experiment on 2026-10-06 changed every native input's
+mtime without changing its contents, then removed the Xcode build products.
+The host's CAS-and-clones-only replay passed the same 661 tests in 37s
+(386/386 compiler-cache hits), versus 130s cold. The simulator build replay
+passed in 32s (227/227 hits), versus 161s cold. These demonstrate reuse without
+the deleted timestamp helper or XCBuild inode override; they do not establish
+hosted Xcode 26 job times or include GitHub cache transfer and runner queueing.
 
 The earlier simulator-test job ran `xcodebuild test` on a concrete simulator:
 first boot cost about 6 minutes plus roughly 10 minutes of CPU starvation
@@ -173,7 +187,7 @@ Graph" on every run), used by `Apple simulator build`. It is separate from the
 target-specific FFI output cache (`.github/actions/setup-apple-ffi`) and the
 host job's build cache described above. DerivedData keys explicitly exclude
 the host `.build` directory; its compiled products are not simulator source
-inputs. Host and simulator caches keep their existing toolchain and package
+inputs. Host and simulator caches have separate Xcode toolchain and package
 graph keys. Dependency declarations live in XcodeGen’s included
 `apps/apple/packages.yml`; app versions and build settings stay in the product
 key, so a version bump does not discard dependency precompiled modules. A
@@ -183,11 +197,11 @@ invalidates those modules. The simulator build certificate includes both specs.
 Compiled Apple caches are published only after successful work. GitHub cache
 entries are immutable: saving an interrupted compile under the final content
 key makes every exact hit repeat that unfinished work, and a successful build
-cannot repair the entry. The DerivedData `v6` and SwiftPM `v2` generations
-exclude earlier entries that could have been saved after cancellation or
-failure. A new generation pays one cold build; unchanged successful restores
+cannot repair the entry. Simulator DerivedData `v6` excludes earlier entries
+that could have been saved after cancellation or failure. Host `xcode-host-v1`
+starts separately from the retired standalone SwiftPM `v2` cache. A new generation pays one cold build; unchanged successful restores
 are the evidence for warm performance. Dependency clones remain advisory.
-A controlled same-head [cold build and warm rerun](https://github.com/nickysemenza/cubby/actions/runs/37418543352)
+With the previous timestamp-normalizing backend, a controlled same-head [cold build and warm rerun](https://github.com/nickysemenza/cubby/actions/runs/37418543352)
 on 2026-10-05 took 7:39 and 4:35 respectively in the Apple app job after the
 successful exact-key DerivedData restore. Swift compilation log entries fell
 from 1,380 to two. This verifies reuse for unchanged inputs; one controlled
