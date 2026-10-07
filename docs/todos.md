@@ -174,10 +174,13 @@ change the shape of the pipeline. The browser bridge contract is in
   at judgment points: reading an order, matching Products, choosing review.
   The purchase decision evaluation gates the switch.
 
-- 🟢 **Server-enforced run budgets.** Cap attempts per browser step and
-  wall-clock time per run, and stop for review when repeated steps produce
-  nothing new, with the last observation as the reason. Today only the agent
-  can give up, so a run whose step keeps failing retries until expiry.
+- 🟢 **Server-enforced run budgets.** `browserRecovery` already caps one
+  command at one retry, but the coordinator then issues the same logical step
+  under a new operation id, so a run loops for hours. Budget across the run
+  instead: repeated failures of the same step (same target and outcome) and
+  total active time, then stop for review with the last observation as the
+  reason. Time paused for the member (sign-in, a permission, the Mac offline)
+  does not count; those pauses already expire on their own.
 
 - 🧱 **Vendor capture profiles.** Record per Vendor what a sync learns once:
   the order-history URL, sign-in host, extra allowed hosts (for example a
@@ -202,10 +205,13 @@ change the shape of the pipeline. The browser bridge contract is in
   Today the reason appears only on the Runs page and in Mac Settings.
 
 - 🟢 **Re-read stored pages after a derivation change.** Captured DOMs are
-  kept as `RunEvidence` and stamped with `PAGE_DERIVATION_REVISION`. A
-  maintenance job should re-derive stored pages at an older revision and
-  report what changed, so a parser fix improves past evidence without a Mac
-  release.
+  kept as `RunEvidence` and stamped with `PAGE_DERIVATION_REVISION`, but the
+  derived page is cached on its operation row (`materializeCapture`) and
+  later reads return the cache. A maintenance job should re-derive pages at
+  an older revision, replace the cached page and evidence metadata, and
+  report which committed imports or enrichments the new reading would change
+  (re-running them stays a member decision). Done when no cached page is
+  below the current revision.
 
 - 🔭 **One order document for every source.** Browser captures, order mail,
   uploaded files, and receipt photos each reach extraction differently.
@@ -213,11 +219,15 @@ change the shape of the pipeline. The browser bridge contract is in
   structured identifiers, provenance) feeding one extractor and writer, so a
   fix to one path improves every path.
 
-- 🟢 **Live browser E2E on macOS.** No automated test drives the Mac app and a
-  real Chrome together, so the redirect-readiness bug reached production.
-  Run the fixture-retailer scenario (`tooling/mac-browser-import-scenario.ts`)
-  nightly on a macOS runner. Add a redirecting order page, an email-code
-  sign-in, and a slow navigation, and leave the E2E artifact described in
+- 🤔 **Live browser E2E on macOS.** No automated test drives the Mac app and a
+  real Chrome together, so the redirect-readiness bug reached production. The
+  fixture-retailer scenario (`tooling/mac-browser-import-scenario.ts`) is
+  local-only: it needs the project's Developer ID identity
+  (`mac-fixture-identity.ts`) and persistent Automation and Screen Recording
+  grants, which a hosted macOS runner lacks. Decide between a self-hosted Mac
+  runner and a harness that drops those prerequisites, then run it nightly
+  with a redirecting order page, an email-code sign-in, and a slow
+  navigation, leaving the E2E artifact described in
   [test tiers](agents/validation-tests.md).
 
 - 🟢 **Vendor-platform fixtures for page reading.** Keep synthetic DOM
