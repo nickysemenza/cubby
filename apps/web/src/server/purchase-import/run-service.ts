@@ -93,6 +93,7 @@ import type {
 } from "~/contracts/photo-import.contract";
 import type { RunDetail, RunLogEntry } from "~/contracts/run.contract";
 import { purchaseImportDebugEvent } from "~/lib/purchase-import-debug";
+import { wasm } from "~/lib/wasm";
 import type { Database, DrizzleClient, DrizzleTransaction } from "~/server/db";
 import {
   aiUsage,
@@ -2087,6 +2088,17 @@ async function readPageOnServer(
       input.runId,
       `server-read:${input.operationId}`,
       `${host} refused a direct read (${fetched.reason}); using the Mac's browser`,
+    );
+    return null;
+  }
+  // A sign-in form served to the server is not the page: the Mac's signed-in
+  // browser reads it (after a sign-in pause the retry must not land here).
+  if (wasm.compact_browser_page(fetched.html, fetched.url).has_password_input) {
+    await reportBrowserStep(
+      db,
+      input.runId,
+      `server-read:${input.operationId}`,
+      `${host} asked the server to sign in; using the Mac's browser`,
     );
     return null;
   }

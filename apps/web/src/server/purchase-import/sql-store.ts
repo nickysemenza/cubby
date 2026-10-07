@@ -47,9 +47,24 @@ export class PurchaseImportSqlStore {
     );
     // Runs whose last browser result failed: a reconnecting Mac wakes the
     // newest one, since a finished command has nothing to replay.
+    const wakesExisted =
+      this.storage.sql
+        .exec(
+          "SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'broker_wake'",
+        )
+        .toArray().length > 0;
     this.storage.sql.exec(
       "CREATE TABLE IF NOT EXISTS broker_wake (run_id TEXT PRIMARY KEY, updated_at INTEGER NOT NULL)",
     );
+    // Once, at the cut to protocol 3: a run whose last step was an older
+    // protocol's (even a finished one) is woken, so the server reads it and
+    // stops the run for review. Older than a command deadline, the run has
+    // already expired.
+    if (!wakesExisted)
+      this.storage.sql.exec(
+        "INSERT OR IGNORE INTO broker_wake (run_id, updated_at) SELECT run_id, MAX(updated_at) FROM broker_command WHERE json_extract(request_json, '$.protocolVersion') < 3 AND updated_at > ? GROUP BY run_id",
+        Date.now() - 25 * 60 * 60_000,
+      );
     this.storage.sql.exec(
       "CREATE TABLE IF NOT EXISTS broker_notification (run_id TEXT PRIMARY KEY, summary_json TEXT NOT NULL, acknowledged INTEGER NOT NULL DEFAULT 0, created_at INTEGER NOT NULL, updated_at INTEGER NOT NULL)",
     );

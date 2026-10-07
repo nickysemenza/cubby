@@ -509,6 +509,35 @@ describe("the server's reading of browser steps", () => {
       expect(bridge.issued).toEqual([]);
     });
 
+    // A sign-in form served to the server would pause the run, and the
+    // capture after the member signed in would be served it again.
+    it("sends a page the vendor answers with a sign-in form to the Mac", async () => {
+      const runId = await enrichment();
+      const bridge = scriptedBroker(() => null);
+      const ports = testBrowserPorts(async (url) => ({
+        status: "fetched",
+        url,
+        html: renderPage({
+          title: "Sign in",
+          text: "Sign in to continue. ".repeat(100),
+          signIn: true,
+        }),
+        durationMs: 5,
+      }));
+      expect(
+        await issueBrowserCommand(
+          ctx.db,
+          bridge.namespace,
+          { runId, operationId: "capture:gated", operation: productCapture },
+          ports,
+        ),
+      ).toMatchObject({ state: "dispatched" });
+      expect(bridge.issued).toHaveLength(1);
+      expect(await progress(runId)).toEqual([
+        `${SEED} asked the server to sign in; using the Mac's browser`,
+      ]);
+    });
+
     it("falls back to the Mac's browser, saying why, when the vendor refuses the server", async () => {
       const runId = await enrichment();
       const bridge = scriptedBroker(() => null);

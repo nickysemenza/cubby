@@ -85,6 +85,32 @@ describe("purchase-import broker SQLite", () => {
     });
   });
 
+  // A run paused on a step an older protocol finished has nothing to replay;
+  // the first start after the cut wakes it so the server stops it for review.
+  it("wakes the run of a finished older-protocol step on first migration", async () => {
+    const stub = env.DB_FRESHNESS.getByName(crypto.randomUUID());
+    await runInDurableObject(stub, (_instance, state) => {
+      state.storage.sql.exec(
+        "CREATE TABLE broker_command (request_id TEXT PRIMARY KEY, operation_id TEXT NOT NULL, run_id TEXT NOT NULL, request_json TEXT NOT NULL, state TEXT NOT NULL, result_json TEXT, created_at INTEGER NOT NULL, updated_at INTEGER NOT NULL)",
+      );
+      state.storage.sql.exec(
+        "INSERT INTO broker_command (request_id, operation_id, run_id, request_json, state, created_at, updated_at) VALUES (?, ?, ?, ?, 'completed', ?, ?)",
+        command.id,
+        command.operationId,
+        command.runID,
+        JSON.stringify({ ...command, protocolVersion: 2 }),
+        Date.now(),
+        Date.now(),
+      );
+      const store = new PurchaseImportSqlStore(state.storage);
+      store.migrate();
+      expect(store.nextWake()?.runId).toBe(command.runID);
+      store.forgetWake(command.runID);
+      store.migrate();
+      expect(store.nextWake()).toBeNull();
+    });
+  });
+
   // The cut to protocol 3 cancels commands no current Mac can run; their run
   // must still be woken so the server stops it for review.
   it("wakes the run of a command from an older protocol it cancels", async () => {
