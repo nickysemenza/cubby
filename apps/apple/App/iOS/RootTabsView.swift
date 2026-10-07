@@ -117,6 +117,7 @@ private struct LibraryRecentThumbnail: View {
 
 struct RootTabsView: View {
     @Environment(AppModel.self) private var model
+    @Environment(\.horizontalSizeClass) private var horizontalSizeClass
 
     var body: some View {
         let navigator = model.navigator
@@ -126,7 +127,7 @@ struct RootTabsView: View {
                 get: { navigator.phoneTab },
                 set: { navigator.phoneTab = $0 })
         ) {
-            ForEach(PhoneTab.allCases) { tab in
+            ForEach(PhoneTab.primary) { tab in
                 Tab(
                     tab.title, systemImage: tab.symbol, value: tab,
                     role: tab == .find ? .search : nil
@@ -136,8 +137,18 @@ struct RootTabsView: View {
                     }
                 }
             }
+            Tab("Settings", systemImage: PhoneTab.settings.symbol, value: PhoneTab.settings) {
+                NavigationStack(path: navigator.path(for: PhoneTab.settings)) {
+                    PhoneTabRootView(tab: .settings)
+                }
+            }
+            .tabPlacement(.sidebarOnly)
+            .hidden(horizontalSizeClass == .compact)
         }
         .tabViewStyle(.sidebarAdaptable)
+        .onChange(of: horizontalSizeClass, initial: true) { _, sizeClass in
+            if sizeClass == .compact { navigator.adaptSettingsToCompactNavigation() }
+        }
         .tabBarMinimizeBehavior(.onScrollDown)
         .backgroundActivityAccessory(isEnabled: hasActivity)
         // Today's shortcut tiles move the tab selection; without this they would have nothing to

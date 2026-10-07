@@ -7,6 +7,26 @@ import Testing
 @MainActor
 @Suite("Navigation")
 struct NavigationTests {
+    #if os(macOS)
+        @Test func openingSettingsPreservesBrowseContextAndReturnsToSettingsRoot() {
+            let navigator = Navigator()
+            navigator.macDestination = .entity(.product)
+            let selection = record(.product, "PRD-1")
+            navigator.selectedRecords[.browse] = selection
+            navigator.paths[.browse] = [.entityDetail(.product, id: "PRD-1")]
+
+            navigator.openSettings()
+            #expect(navigator.macDestination == .section(.settings))
+            navigator.paths[.settings] = [.dev]
+            navigator.openSettings()
+            #expect(navigator.paths[.settings] == [])
+
+            navigator.macDestination = .entity(.product)
+            #expect(navigator.selectedRecords[.browse] == selection)
+            #expect(navigator.paths[.browse] == [.entityDetail(.product, id: "PRD-1")])
+        }
+    #endif
+
     @Test func sidebarEntitySelectionOwnsBrowseDestination() {
         let navigator = Navigator()
         navigator.selectedRecords[.browse] = record(.location, "LOC-OLD")
@@ -192,6 +212,22 @@ struct NavigationTests {
     }
 
     #if os(iOS)
+        @Test func compactSettingsRetainsItsDetailAndOtherTabHistory() {
+            let navigator = Navigator()
+            navigator.paths[.today] = [.activityList]
+            navigator.paths[.browse] = [.photosLibrary]
+            navigator.phoneTab = .settings
+            navigator.paths[.settings] = [.dev]
+
+            navigator.adaptSettingsToCompactNavigation()
+
+            #expect(navigator.phoneTab == .work)
+            #expect(navigator.paths[.today] == [.activityList, .settings, .dev])
+            #expect(navigator.paths[.browse] == [.photosLibrary])
+            navigator.adaptSettingsToCompactNavigation()
+            #expect(navigator.paths[.today] == [.activityList, .settings, .dev])
+        }
+
         @Test func phoneTabsKeepIndependentNavigationPaths() {
             let navigator = Navigator()
             let work = navigator.path(for: PhoneTab.work)

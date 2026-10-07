@@ -25,6 +25,7 @@ final class Navigator {
             case .capture: .capture
             case .photos, .browse, .graph: .library
             case .search, .dev: .find
+            case .settings: .settings
             }
         }
         set { section = newValue.rootSection }
@@ -33,6 +34,16 @@ final class Navigator {
     func path(for tab: PhoneTab) -> Binding<[Route]> {
         path(for: tab.rootSection)
     }
+
+    #if os(iOS)
+        /// Sidebar-only Settings becomes a pushed screen when an iPad window narrows.
+        func adaptSettingsToCompactNavigation() {
+            guard section == .settings else { return }
+            paths[.today, default: []].append(contentsOf: [.settings] + paths[.settings, default: []])
+            paths[.settings] = []
+            section = .today
+        }
+    #endif
 
     func openGraph(root: EntityRef? = nil) {
         #if os(macOS)
@@ -174,6 +185,14 @@ final class Navigator {
             openActivity(.localActivity(id))
         }
     }
+
+    #if os(macOS)
+        func openSettings() {
+            launchLinkApplied = true
+            section = .settings
+            paths[.settings] = []
+        }
+    #endif
 
     /// Pushes Dev onto whatever section is currently showing on iOS, since it no longer has its
     /// own tab (`AppSection.tabs` excludes it there); on macOS, where it stays a sidebar row,

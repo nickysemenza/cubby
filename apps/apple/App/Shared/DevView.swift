@@ -26,6 +26,19 @@ struct DevView: View {
         return amounts.isEmpty ? "none" : amounts.joined(separator: ", ")
     }
 
+    private var settingsLabel: some View {
+        HStack(spacing: FieldGuideTokens.Space.md) {
+            Text("Settings").font(.fieldGuideBody)
+            Spacer()
+            Image(systemName: "chevron.right")
+                .font(.caption.weight(.semibold))
+                .foregroundStyle(FieldGuideTokens.graphiteSecondary)
+        }
+        .padding(.horizontal, FieldGuideTokens.Space.md)
+        .frame(minHeight: FieldGuideTokens.touchTarget)
+        .contentShape(Rectangle())
+    }
+
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: FieldGuideTokens.Space.xl) {
@@ -98,21 +111,21 @@ struct DevView: View {
                 VStack(alignment: .leading, spacing: FieldGuideTokens.Space.sm) {
                     Eyebrow("App")
                     Panel(padding: 0, spacing: 0) {
-                        NavigationLink {
-                            SettingsView()
-                        } label: {
-                            HStack(spacing: FieldGuideTokens.Space.md) {
-                                Text("Settings").font(.fieldGuideBody)
-                                Spacer()
-                                Image(systemName: "chevron.right")
-                                    .font(.caption.weight(.semibold))
-                                    .foregroundStyle(FieldGuideTokens.graphiteSecondary)
+                        #if os(macOS)
+                            Button {
+                                model.navigator.openSettings()
+                            } label: {
+                                settingsLabel
                             }
-                            .padding(.horizontal, FieldGuideTokens.Space.md)
-                            .frame(minHeight: FieldGuideTokens.touchTarget)
-                            .contentShape(Rectangle())
-                        }
-                        .buttonStyle(.plain)
+                            .buttonStyle(.plain)
+                        #else
+                            NavigationLink {
+                                SettingsView()
+                            } label: {
+                                settingsLabel
+                            }
+                            .buttonStyle(.plain)
+                        #endif
                         PanelDivider()
                         LabeledRow(label: "CubbyKit", value: CubbyKitInfo.version, mono: true)
                         PanelDivider()

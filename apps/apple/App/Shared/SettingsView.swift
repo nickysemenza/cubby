@@ -7,14 +7,12 @@ import SwiftUI
     import UIKit
 #endif
 
-/// Server and session preferences, presented in a separate Settings scene on macOS.
+/// Server and session preferences, shown in the sidebar pane or an iPhone navigation stack.
 struct SettingsView: View {
+    var isSidebarRoot = false
     @Environment(AppModel.self) private var model
     @Environment(\.dismiss) private var dismiss
     @Environment(\.scenePhase) private var scenePhase
-    #if os(macOS)
-        @Environment(\.openWindow) private var openWindow
-    #endif
     @State private var selectedServer = SettingsServer.production
     @State private var draftURL = ""
     @AppStorage("photoAnalysisWindow") private var photoAnalysisWindowRaw = PhotoAnalysisWindow.thisYear
@@ -95,7 +93,9 @@ struct SettingsView: View {
                     Button("Sign out", role: .destructive) {
                         Task {
                             await model.signOut()
-                            dismiss()
+                            #if os(iOS)
+                                dismiss()
+                            #endif
                         }
                     }
                     .frame(minHeight: FieldGuideTokens.touchTarget - 12)
@@ -112,11 +112,15 @@ struct SettingsView: View {
                 Section("Utilities") {
                     Button("Developer tools", systemImage: "wrench.and.screwdriver") {
                         #if os(iOS)
-                            opensDeveloperToolsAfterDismissal = true
+                            if isSidebarRoot {
+                                model.navigator.openDev()
+                            } else {
+                                opensDeveloperToolsAfterDismissal = true
+                                dismiss()
+                            }
                         #else
                             model.navigator.openDev()
                         #endif
-                        dismiss()
                     }
                     .accessibilityIdentifier("settings.developerTools")
                 }
@@ -177,7 +181,11 @@ struct SettingsView: View {
             await loadPhotoAnalysisSummary()
         }
         #if os(iOS)
-            .toolbar { ToolbarItem(placement: .confirmationAction) { Button("Done") { dismiss() } } }
+            .toolbar {
+                if !isSidebarRoot {
+                    ToolbarItem(placement: .confirmationAction) { Button("Done") { dismiss() } }
+                }
+            }
         #endif
         #if os(macOS)
             .onChange(of: purchaseImportBrowser) { _, browser in
@@ -212,8 +220,6 @@ struct SettingsView: View {
                     "Browser control", status: browserPermissions.appleEvents, pane: .automation)
                 Button("Open Browser Sync", systemImage: "arrow.triangle.2.circlepath") {
                     model.navigator.section = .browserSync
-                    openWindow(id: "main")
-                    dismiss()
                 }
                 .accessibilityIdentifier("settings.purchaseImport.openPane")
                 if let error = model.browserBridge.error {
