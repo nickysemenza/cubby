@@ -155,6 +155,13 @@ Both macOS build commands use `/usr/bin/time -l` to report elapsed time, CPU
 time, and native resource counters in their job logs. These measurements help
 compare cold and cached builds without adding a profiling script or job.
 
+The Xcode project enables Apple's compilation cache and its hit/miss remarks.
+Its content-addressed results live in `DerivedData/CompilationCache.noindex`,
+inside the existing successful-build cache. This can replay compiler work when
+ordinary build products need rebuilding but the compiler inputs are unchanged;
+new source inputs still compile. It does not enable caching for the separate
+standalone `swift test` command. No extra runner or remote cache service is used.
+
 The earlier simulator-test job ran `xcodebuild test` on a concrete simulator:
 first boot cost about 6 minutes plus roughly 10 minutes of CPU starvation
 (a 5s script took 2.6 minutes, and compilation doubled). Host tests and the
