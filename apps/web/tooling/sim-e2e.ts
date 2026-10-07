@@ -2027,8 +2027,6 @@ async function main(): Promise<void> {
         const buildStarted = performance.now();
         await run("pnpm", ["apple", "gen"]);
         const hosted = process.env.GITHUB_ACTIONS === "true";
-        if (hosted)
-          await run("node", ["scripts/stamp-source-mtimes.ts", "apps/apple"]);
         nativeBuildSourceVersion = nativeSourceFingerprint(true);
         currentNativeSourceVersion = () => nativeSourceFingerprint(true);
         const buildArgs = hosted
