@@ -291,7 +291,7 @@ describe("purchase-import agent tool authority", () => {
   // issuing commands that can only fail the same way.
   it("ends the submission when a browser result stopped the run", async () => {
     const services = () =>
-      fromAny<RunServices>({
+      fromAny({
         readBrowserCommandResult: async () => ({ state: "stopped" }),
       });
     const result = await toolNamed(
