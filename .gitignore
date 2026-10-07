@@ -137,6 +137,7 @@ artifacts/feature-routing-eval/
 /apps/apple/CubbyKit/Sources/CubbyAPI/openapi.json
 /apps/apple/CubbyKit/Sources/CubbyAPI/openapi-generator-config.yaml
 /apps/apple/App/Shared/Previews/Fixtures/
+/apps/apple/Generated/
 # UniFFI bindings, written by apps/apple/scripts/build-rust.sh.
 /apps/apple/CubbyKit/Sources/CubbyFFI/cubby_ffi.swift
 .neon

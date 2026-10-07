@@ -1,120 +1,115 @@
 name: Apple TestFlight
 
-# Pushing a vMAJOR.MINOR.PATCH tag at a commit on main is the release. The
-# `coordinates` job fails fast in seconds (ubuntu) before any macOS runner
-# starts. A failed release leaves its tag in place; re-run the failed jobs
-# (`gh run rerun --failed`) to retry at build <count>.2, or push a new tag.
-# No dry-run mode: every run uploads to App Store Connect.
-#
-# ci.yaml's warm-apple-ffi job pre-populates the FFI caches this workflow
-# restores.
+# Publishes current main to TestFlight; ordinary merges never publish. The
+# nightly run publishes when native inputs changed since the last complete
+# upload or that upload is 30 days old; a manual run always publishes; a push
+# that changes the compatibility version publishes immediately. The `plan`
+# job decides in seconds on Linux before any macOS runner or credential is
+# used (scripts/apple-release.ts). Retry with a fresh dispatch, never a rerun.
 on:
+  schedule:
+    - cron: "17 10 * * *"
+  workflow_dispatch:
   push:
-    tags: ["v*"]
+    branches: [main]
+    paths: [packages/shared/src/apple-client-version.ts]
 
+# One publisher at a time; a newer request waits in the single pending slot.
 concurrency:
-  group: ${{ github.workflow }}-${{ github.ref }}
+  group: ${{ github.workflow }}
   cancel-in-progress: false
 
 permissions:
   contents: read
+  # Prior upload checkpoints and newer runs of this workflow.
+  actions: read
 
 jobs:
-  coordinates:
-    name: Resolve release coordinates
+  plan:
+    name: Plan release
     runs-on: ubuntu-latest
     timeout-minutes: 5
     outputs:
-      version: ${{ steps.resolve.outputs.version }}
-      build: ${{ steps.resolve.outputs.build }}
+      publish: ${{ steps.plan.outputs.action == 'publish' || (steps.plan.outputs.action == 'compare' && (steps.paths.outputs.full == 'true' || steps.paths.outputs.apple == 'true')) }}
+      sha: ${{ steps.plan.outputs.sha }}
+      version: ${{ steps.plan.outputs.version }}
+      build: ${{ steps.plan.outputs.build }}
     steps:
+      # Current main when the run starts, with the history back to the last
+      # uploaded commit.
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
+          ref: main
           fetch-depth: 0
-
-      - name: Validate the tag and resolve coordinates
-        id: resolve
-        shell: bash
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7
+        with:
+          node-version-file: .nvmrc
+      - name: Decide
+        id: plan
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: node scripts/apple-release.ts plan
+      # Native changes since the uploaded commit, by CI's own full/apple lanes.
+      - name: Classify changes since the last upload
+        id: paths
+        if: steps.plan.outputs.action == 'compare'
+        uses: dorny/paths-filter@ceb8a2b8f2d89434be7ff52d3de7ec3738c5cc9d # v4
+        with:
+          base: ${{ steps.plan.outputs.base }}
+          ref: ${{ steps.plan.outputs.sha }}
+          filters: .github/ci-paths.yaml
+          predicate-quantifier: some-with-excludes
+      - name: Report
+        env:
+          ACTION: ${{ steps.plan.outputs.action }}
+          REASON: ${{ steps.plan.outputs.reason }}
+          FULL: ${{ steps.paths.outputs.full }}
+          APPLE: ${{ steps.paths.outputs.apple }}
         run: |
-          set -euo pipefail
-          version="${GITHUB_REF_NAME#v}"
-          [[ "$version" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]] || {
-            echo "::error::Release tag must be vMAJOR.MINOR.PATCH; got '${GITHUB_REF_NAME}'."
-            exit 1
-          }
+          if [[ "$ACTION" == compare ]]; then
+            echo "::notice::Native changes since the last upload: full=$FULL apple=$APPLE"
+          else
+            echo "::notice::$ACTION: $REASON"
+          fi
 
-          # The server refuses Apple builds older than this minimum with HTTP 426,
-          # so a release tagged below it would lock itself out.
-          minimum="$(sed -nE 's/^export const MINIMUM_APPLE_CLIENT_VERSION = "([0-9.]+)";$/\1/p' apps/web/src/server/apple-client-gate.ts)"
-          [[ -n "$minimum" ]] || {
-            echo "::error::Could not read MINIMUM_APPLE_CLIENT_VERSION from apps/web/src/server/apple-client-gate.ts."
-            exit 1
-          }
-          lowest="$(printf '%s\n%s\n' "$minimum" "$version" | sort -V | head -1)"
-          [[ "$lowest" == "$minimum" ]] || {
-            echo "::error::Release $version is below the server's minimum client version $minimum; tag v${minimum}.0 or higher."
-            exit 1
-          }
-
-          # Refresh origin/main explicitly so the ancestor check never trusts
-          # whatever the checkout happened to fetch.
-          git fetch --no-tags origin main
-          git merge-base --is-ancestor "$(git rev-parse 'HEAD^{commit}')" origin/main || {
-            echo "::error::Release tags must point at a commit on main."
-            exit 1
-          }
-
-          build="$(git rev-list --count HEAD).${GITHUB_RUN_ATTEMPT}"
-          {
-            echo "version=$version"
-            echo "build=$build"
-          } >> "$GITHUB_OUTPUT"
-
-  # The generated Swift (never committed), written on Linux so the macOS
-  # archive legs need no Node install.
+  # The generated Swift and project settings (never committed), written on
+  # Linux so the macOS legs need no dependency install.
   apple-generated:
     name: Apple generated inputs
-    needs: coordinates
+    needs: plan
+    if: needs.plan.outputs.publish == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          ref: ${{ needs.plan.outputs.sha }}
       - uses: ./.github/actions/generate-apple-inputs
 
-  # One matrix leg per platform so the Rust FFI build (the dominant cold-cache
-  # cost) only compiles the target that platform needs, and both archives run
-  # concurrently instead of the historical single serial job.
-  archive:
-    name: Archive ${{ matrix.platform }}
-    needs: [coordinates, apple-generated]
+  # One leg per platform archives, verifies, and uploads its own build, so
+  # the Rust FFI build compiles only the target that platform needs. A failed
+  # leg does not stop the other, but only both succeeding records an upload.
+  release:
+    name: Release ${{ matrix.platform }}
+    needs: [plan, apple-generated]
     runs-on: macos-26
-    timeout-minutes: 60
+    timeout-minutes: 75
     strategy:
       fail-fast: false
       matrix:
         platform: [ios, macos]
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          ref: ${{ needs.plan.outputs.sha }}
 
-      - name: Resolve platform coordinates
-        id: platform
-        shell: bash
-        run: |
-          set -euo pipefail
-          case '${{ matrix.platform }}' in
-            ios)
-              echo "ffi-target=device" >> "$GITHUB_OUTPUT"
-              echo "archive-dir=Cubby-iOS.xcarchive" >> "$GITHUB_OUTPUT"
-              ;;
-            macos)
-              echo "ffi-target=mac" >> "$GITHUB_OUTPUT"
-              echo "archive-dir=Cubby-macOS.xcarchive" >> "$GITHUB_OUTPUT"
-              ;;
-          esac
+      # `runner` isn't available in a job-level `env:` block.
+      - name: Resolve output directory
+        run: echo "TESTFLIGHT_OUTPUT_DIR=$RUNNER_TEMP/CubbyTestFlight" >> "$GITHUB_ENV"
 
       - uses: ./.github/actions/setup-apple-ffi
         with:
-          targets: ${{ steps.platform.outputs.ffi-target }}
+          targets: ${{ matrix.platform == 'ios' && 'device' || 'mac' }}
           profile: dist
 
       - uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131 # v7
@@ -127,22 +122,33 @@ jobs:
         with:
           sentry-cli: "true"
 
-      - uses: ./.github/actions/prepare-apple-release-project
+      - name: Generate the Xcode project
+        run: apps/apple/scripts/prepare-project.sh
 
-      # The Sentry dSYM upload archive phase reads this file directly; it is
-      # never passed to xcodebuild.
-      - name: Write temporary Sentry credentials
-        shell: bash
+      # The pre-upload guard in testflight.sh is a Node builtins-only script.
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7
+        with:
+          node-version-file: .nvmrc
+
+      # The Sentry dSYM upload archive phase reads ~/.sentryclirc directly;
+      # the App Store Connect key is read by xcodebuild -exportArchive.
+      - name: Write temporary service credentials
         env:
           SENTRY_AUTH_TOKEN: ${{ secrets.SENTRY_AUTH_TOKEN }}
+          API_KEY_P8: ${{ secrets.APP_STORE_CONNECT_API_KEY_P8 }}
+          API_KEY_ID: ${{ secrets.APP_STORE_CONNECT_KEY_ID }}
         run: |
           set -euo pipefail
-          [[ -n "$SENTRY_AUTH_TOKEN" ]] || {
-            echo "::error::SENTRY_AUTH_TOKEN is required."
+          [[ -n "$SENTRY_AUTH_TOKEN" && -n "$API_KEY_P8" && -n "$API_KEY_ID" ]] || {
+            echo "::error::SENTRY_AUTH_TOKEN and App Store Connect API credentials are required."
             exit 1
           }
           printf '[auth]\ntoken=%s\n' "$SENTRY_AUTH_TOKEN" > "$HOME/.sentryclirc"
           chmod 600 "$HOME/.sentryclirc"
+          api_key_path="$RUNNER_TEMP/AuthKey_${API_KEY_ID}.p8"
+          printf '%s' "$API_KEY_P8" > "$api_key_path"
+          chmod 600 "$api_key_path"
+          echo "ASC_API_KEY_PATH=$api_key_path" >> "$GITHUB_ENV"
 
       - uses: ./.github/actions/import-apple-signing
         with:
@@ -170,17 +176,16 @@ jobs:
           api-key-id: ${{ secrets.APP_STORE_CONNECT_KEY_ID }}
           api-private-key: ${{ secrets.APP_STORE_CONNECT_API_KEY_P8 }}
 
-      - name: Archive ${{ matrix.platform }}
-        shell: bash
+      - name: Archive, verify, and upload ${{ matrix.platform }}
         env:
-          MARKETING_VERSION: ${{ needs.coordinates.outputs.version }}
-          IOS_BUILD_NUMBER: ${{ needs.coordinates.outputs.build }}
-          MACOS_BUILD_NUMBER: ${{ needs.coordinates.outputs.build }}
-          IOS_PROFILES_JSON: ${{ matrix.platform == 'ios' && steps.profile.outputs.profiles || '' }}
+          RELEASE_VERSION: ${{ needs.plan.outputs.version }}
+          RELEASE_BUILD_NUMBER: ${{ needs.plan.outputs.build }}
+          PROFILES_JSON: ${{ steps.profile.outputs.profiles }}
           IOS_LIVE_ACTIVITY_PROFILES_JSON: ${{ steps.live-activity-profile.outputs.profiles }}
-          MACOS_PROFILES_JSON: ${{ matrix.platform == 'macos' && steps.profile.outputs.profiles || '' }}
-          TESTFLIGHT_OUTPUT_DIR: ${{ runner.temp }}/CubbyTestFlight
-        run: apps/apple/scripts/testflight.sh archive '${{ matrix.platform }}'
+          APP_STORE_CONNECT_KEY_ID: ${{ secrets.APP_STORE_CONNECT_KEY_ID }}
+          APP_STORE_CONNECT_ISSUER_ID: ${{ secrets.APP_STORE_CONNECT_ISSUER_ID }}
+          GITHUB_TOKEN: ${{ github.token }}
+        run: apps/apple/scripts/testflight.sh '${{ matrix.platform }}'
 
       # Dependency clones are advisory and can be reused after an archive
       # failure. This is not a compiled-output cache. A concurrent save of
@@ -193,146 +198,11 @@ jobs:
           path: apps/apple/SourcePackages
           key: ${{ steps.apple-tools.outputs.spm-clones-cache-key }}
 
-      # actions/upload-artifact zips its input and does not preserve the
-      # executable bit or symlinks, which would leave Cubby.app's main binary
-      # non-executable and its embedded framework symlinks flattened after
-      # download; tar the archive first so both survive the round trip.
-      - name: Package the archive for hand-off
-        shell: bash
-        run: |
-          set -euo pipefail
-          tar -C "${{ runner.temp }}/CubbyTestFlight" \
-            -cf "${{ runner.temp }}/CubbyTestFlight/${{ steps.platform.outputs.archive-dir }}.tar" \
-            "${{ steps.platform.outputs.archive-dir }}"
-
-      - name: Preserve the archive
-        if: always()
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
-        with:
-          name: Cubby-${{ matrix.platform }}-archive-${{ needs.coordinates.outputs.version }}-${{ github.run_attempt }}
-          path: ${{ runner.temp }}/CubbyTestFlight/${{ steps.platform.outputs.archive-dir }}.tar
-          if-no-files-found: error
-          retention-days: 3
-
-      - name: Remove temporary Sentry credentials
-        if: always()
-        shell: bash
-        run: rm -f "$HOME/.sentryclirc"
-
-  upload:
-    name: Export and upload
-    needs: [coordinates, archive]
-    runs-on: macos-26
-    timeout-minutes: 30
-    steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
-
-      # `runner` isn't available in a job-level `env:` block, so this is set
-      # via GITHUB_ENV instead, from the first step onward.
-      - name: Resolve output directory
-        shell: bash
-        run: echo "TESTFLIGHT_OUTPUT_DIR=${{ runner.temp }}/CubbyTestFlight" >> "$GITHUB_ENV"
-
-      - name: Download iOS archive
-        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
-        with:
-          name: Cubby-ios-archive-${{ needs.coordinates.outputs.version }}-${{ github.run_attempt }}
-          path: ${{ env.TESTFLIGHT_OUTPUT_DIR }}
-
-      - name: Download macOS archive
-        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
-        with:
-          name: Cubby-macos-archive-${{ needs.coordinates.outputs.version }}-${{ github.run_attempt }}
-          path: ${{ env.TESTFLIGHT_OUTPUT_DIR }}
-
-      # Reverses the archive job's tar packaging (see the comment there): it
-      # preserves the executable bit and symlinks that upload-artifact's zip
-      # would otherwise strip, so unpack back to the exact paths
-      # testflight.sh expects before exporting.
-      - name: Unpack archives
-        shell: bash
-        run: |
-          set -euo pipefail
-          tar -C "$TESTFLIGHT_OUTPUT_DIR" -xf "$TESTFLIGHT_OUTPUT_DIR/Cubby-iOS.xcarchive.tar"
-          tar -C "$TESTFLIGHT_OUTPUT_DIR" -xf "$TESTFLIGHT_OUTPUT_DIR/Cubby-macOS.xcarchive.tar"
-
-      - name: Write temporary App Store Connect credentials
-        shell: bash
-        env:
-          API_KEY_P8: ${{ secrets.APP_STORE_CONNECT_API_KEY_P8 }}
-          API_KEY_ID: ${{ secrets.APP_STORE_CONNECT_KEY_ID }}
-        run: |
-          set -euo pipefail
-          [[ -n "$API_KEY_P8" && -n "$API_KEY_ID" ]] || {
-            echo "::error::App Store Connect API credentials are required to publish."
-            exit 1
-          }
-          api_key_path="$RUNNER_TEMP/AuthKey_${API_KEY_ID}.p8"
-          printf '%s' "$API_KEY_P8" > "$api_key_path"
-          chmod 600 "$api_key_path"
-          echo "ASC_API_KEY_PATH=$api_key_path" >> "$GITHUB_ENV"
-
-      # xcodebuild -exportArchive re-signs, so the identities and profiles
-      # must be imported again here even though the archive job already
-      # verified them.
-      - uses: ./.github/actions/import-apple-signing
-        with:
-          p12-base64: ${{ secrets.APPLE_DISTRIBUTION_P12_BASE64 }}
-          p12-password: ${{ secrets.APPLE_DISTRIBUTION_P12_PASSWORD }}
-          verify-mac-installer: "true"
-
-      - name: Download iOS provisioning profile
-        id: ios-profile
-        uses: ./.github/actions/download-apple-profile
-        with:
-          profile-type: IOS_APP_STORE
-          issuer-id: ${{ secrets.APP_STORE_CONNECT_ISSUER_ID }}
-          api-key-id: ${{ secrets.APP_STORE_CONNECT_KEY_ID }}
-          api-private-key: ${{ secrets.APP_STORE_CONNECT_API_KEY_P8 }}
-
-      - name: Download Live Activity provisioning profile
-        id: live-activity-profile
-        uses: ./.github/actions/download-apple-profile
-        with:
-          bundle-id: com.nickysemenza.cubby.LiveActivity
-          profile-type: IOS_APP_STORE
-          issuer-id: ${{ secrets.APP_STORE_CONNECT_ISSUER_ID }}
-          api-key-id: ${{ secrets.APP_STORE_CONNECT_KEY_ID }}
-          api-private-key: ${{ secrets.APP_STORE_CONNECT_API_KEY_P8 }}
-
-      - name: Download macOS provisioning profile
-        id: macos-profile
-        uses: ./.github/actions/download-apple-profile
-        with:
-          profile-type: MAC_APP_STORE
-          issuer-id: ${{ secrets.APP_STORE_CONNECT_ISSUER_ID }}
-          api-key-id: ${{ secrets.APP_STORE_CONNECT_KEY_ID }}
-          api-private-key: ${{ secrets.APP_STORE_CONNECT_API_KEY_P8 }}
-
-      - name: Export iOS
-        shell: bash
-        env:
-          MARKETING_VERSION: ${{ needs.coordinates.outputs.version }}
-          IOS_PROFILES_JSON: ${{ steps.ios-profile.outputs.profiles }}
-          IOS_LIVE_ACTIVITY_PROFILES_JSON: ${{ steps.live-activity-profile.outputs.profiles }}
-          APP_STORE_CONNECT_KEY_ID: ${{ secrets.APP_STORE_CONNECT_KEY_ID }}
-          APP_STORE_CONNECT_ISSUER_ID: ${{ secrets.APP_STORE_CONNECT_ISSUER_ID }}
-        run: apps/apple/scripts/testflight.sh export ios
-
-      - name: Export macOS
-        shell: bash
-        env:
-          MARKETING_VERSION: ${{ needs.coordinates.outputs.version }}
-          MACOS_PROFILES_JSON: ${{ steps.macos-profile.outputs.profiles }}
-          APP_STORE_CONNECT_KEY_ID: ${{ secrets.APP_STORE_CONNECT_KEY_ID }}
-          APP_STORE_CONNECT_ISSUER_ID: ${{ secrets.APP_STORE_CONNECT_ISSUER_ID }}
-        run: apps/apple/scripts/testflight.sh export macos
-
       - name: Preserve exports and symbols
         if: always()
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
         with:
-          name: Cubby-${{ needs.coordinates.outputs.version }}-${{ github.run_attempt }}
+          name: Cubby-${{ matrix.platform }}-${{ needs.plan.outputs.build }}
           path: |
             ${{ env.TESTFLIGHT_OUTPUT_DIR }}/exports
             ${{ env.TESTFLIGHT_OUTPUT_DIR }}/ExportOptions-*.plist
@@ -343,6 +213,34 @@ jobs:
 
       - name: Remove temporary service credentials
         if: always()
-        shell: bash
         run: |
+          rm -f "$HOME/.sentryclirc"
           if [[ -n "${ASC_API_KEY_PATH:-}" ]]; then rm -f "$ASC_API_KEY_PATH"; fi
+
+  # Upload acceptance by App Store Connect for BOTH platforms, not TestFlight
+  # availability. scripts/apple-release.ts reads only this artifact, from this
+  # workflow's main runs, as the last complete upload.
+  checkpoint:
+    name: Record the upload
+    needs: [plan, release]
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Write the checkpoint
+        env:
+          SHA: ${{ needs.plan.outputs.sha }}
+          VERSION: ${{ needs.plan.outputs.version }}
+          BUILD: ${{ needs.plan.outputs.build }}
+        run: |
+          set -euo pipefail
+          jq -n --arg sha "$SHA" --arg version "$VERSION" --argjson build "$BUILD" \
+            --arg uploadedAt "$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
+            '{sha: $sha, version: $version, build: $build, uploadedAt: $uploadedAt}' \
+            > "$RUNNER_TEMP/checkpoint.json"
+          cat "$RUNNER_TEMP/checkpoint.json"
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        with:
+          name: apple-testflight-uploaded
+          path: ${{ runner.temp }}/checkpoint.json
+          if-no-files-found: error
+          retention-days: 90

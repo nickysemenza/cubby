@@ -364,8 +364,10 @@ advisory and refreshed when Settings opens, after connecting or roster changes, 
 and with Refresh sync plan. A read failure retains the last good plan and displays the error;
 Sync all fetches a fresh plan even when the preview count is zero. Admission rechecks current work.
 
-A protocol change bumps `MINIMUM_APPLE_CLIENT_VERSION` with the Mac's
-`MARKETING_VERSION`; an older Mac's commands stop the run for review.
+A protocol change bumps `APPLE_CLIENT_COMPATIBILITY_VERSION` in
+`packages/shared/src/apple-client-version.ts`, which supplies the server minimum
+and generated Apple marketing version; an older Mac's commands stop the run
+for review. See [release policy](ci.md#apple-testflight-release).
 
 ### PostgreSQL and Hyperdrive
 

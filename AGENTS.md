@@ -72,7 +72,9 @@ iOS/macOS, HTTP, MCP connections), so change contracts in place:
 - Change an API, RPC, MCP tool, manifest, or stored shape directly, update
   every client in the same change, and delete the old shape. A client running
   old code reloads, reconnects, or updates; a wire break for the native app
-  bumps `MINIMUM_APPLE_CLIENT_VERSION` (`apps/web/src/server/apple-client-gate.ts`).
+  bumps `APPLE_CLIENT_COMPATIBILITY_VERSION` in
+  `packages/shared/src/apple-client-version.ts` (shared by the server minimum
+  and generated Apple marketing version).
 - Household data is real: carry it through a migration that transforms it.
   Ask before deleting a database or resetting data.
 

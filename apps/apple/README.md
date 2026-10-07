@@ -177,19 +177,24 @@ list devices available`:
 
 ## TestFlight releases
 
-The `Apple TestFlight` GitHub Actions workflow runs when a `vMAJOR.MINOR.PATCH` tag is pushed at a
-commit on `main`. Every run uploads both the iOS and native macOS apps to the shared App Store
-Connect record; there is no dispatch or dry-run mode. The tag supplies `MARKETING_VERSION`, and
-both platforms share a `<commit-count>.<run-attempt>` build number. A failed run can be retried
-with `gh run rerun --failed`, which produces a fresh build number. A fix to release code uses the
-next version rather than moving the failed tag.
+Normal merges to `main` wait for nightly publishing. `Apple TestFlight` checks
+current `main` at 10:17 UTC and publishes when native inputs changed since the
+last complete upload, or that upload is at least 30 days old. Use
+`gh workflow run apple-testflight.yaml --ref main` for an immediate fresh build.
+A compatibility-version bump also queues a release promptly.
 
-The iOS and macOS archives build in parallel, then one downstream job exports and uploads both.
-Neither platform uploads unless both archives succeed. Every export sets
-`testFlightInternalTestingOnly`, so distribution is limited to internal household testers and
-cannot be promoted to external TestFlight or the public App Store. See
-[the release procedure](../../docs/ci.md#apple-testflight-release) for verification and failure
-handling.
+`packages/shared/src/apple-client-version.ts` supplies the marketing version
+and server minimum from one declaration. Bump it only when older app contracts
+become incompatible; build numbers come from CI. Release tags and manual edits
+to `project.yml` version settings are unnecessary.
+
+Each platform archives and uploads on its own runner. A partial failure leaves
+the successful upload in place; the next fresh run rebuilds both. Retry by manual
+dispatch, never by rerunning an old workflow. Uploads remain internal-only.
+Verify Apple processing and installation after publishing. After a long pause,
+GitHub may disable scheduling; re-enable the workflow and dispatch a fresh build.
+See [the release procedure](../../docs/ci.md#apple-testflight-release) for
+checkpoint behavior, signing, validation, and failure handling.
 
 ### One-time Apple and GitHub setup
 

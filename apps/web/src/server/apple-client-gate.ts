@@ -1,11 +1,8 @@
-/**
- * The oldest native app build the HTTP API still serves. Bump it in the same
- * PR that ships a wire-breaking change, and bump `MARKETING_VERSION` in
- * `apps/apple/project.yml` to at least this value (the unit test compares the
- * two). An older build would otherwise fail deep inside a generated decoder;
- * the gate turns that into one actionable message.
- */
-export const MINIMUM_APPLE_CLIENT_VERSION = "2.13";
+import { APPLE_CLIENT_COMPATIBILITY_VERSION } from "@cubby/shared/apple-client-version";
+
+// The oldest native app build the HTTP API still serves is the version this
+// checkout's app ships. An older build would otherwise fail deep inside a
+// generated decoder; the gate turns that into one actionable message.
 
 /**
  * `ClientIdentity.userAgent` in CubbyKit: `<product>/<version> (<platform>; <install>)`.
@@ -40,8 +37,8 @@ export function appleClientUpdateRequired(
   if (
     current === undefined ||
     !dottedVersion.test(current) ||
-    !isOlder(current, MINIMUM_APPLE_CLIENT_VERSION)
+    !isOlder(current, APPLE_CLIENT_COMPATIBILITY_VERSION)
   )
     return null;
-  return { current, minimum: MINIMUM_APPLE_CLIENT_VERSION };
+  return { current, minimum: APPLE_CLIENT_COMPATIBILITY_VERSION };
 }
