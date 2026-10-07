@@ -1,4 +1,6 @@
 import { z } from "zod";
+
+import { plainDate } from "./base-entity";
 import { runStatus, runPurpose } from "./run-fields";
 
 import {
@@ -131,7 +133,7 @@ export const syncPlanAccount = z.object({
 export const syncPlanOutput = z.object({ accounts: z.array(syncPlanAccount) });
 export const startSyncInput = z.object({
   vendorAccountId: vendorAccountShortcode,
-  backfill: z.object({ from: z.iso.date(), to: z.iso.date() }).optional(),
+  backfill: z.object({ from: plainDate, to: plainDate }).optional(),
 });
 export const startSyncOutput = z.object({
   runId: runShortcode,

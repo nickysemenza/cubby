@@ -55,6 +55,8 @@ public struct BrowserBridgeSyncClient: BrowserBridgeSyncRequesting {
         try await client.startSync(
             .init(
                 vendorAccountId: vendorAccountID,
-                backfill: backfill.map { .init(from: $0.from, to: $0.to) }))
+                backfill: backfill.map {
+                    .init(from: PlainDate(rawValue: $0.from), to: PlainDate(rawValue: $0.to))
+                }))
     }
 }
