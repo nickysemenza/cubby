@@ -226,10 +226,19 @@ Runs list and `imports_read.run_status` read one shared projection
   and its latest step from the shared status projection, so the household
   can tell whether Chrome is busy before touching it.
 
-- 🟢 **Mac capture preflight and update errors.** Check the screen-recording
-  permission before the first ScreenCaptureKit capture, and report an
-  outdated app (HTTP 426 from the client gate) as "update required" rather
-  than a generic upload failure.
+- 🟢 **Mac capture preflight and reasons.** Check the screen-recording
+  permission before the first ScreenCaptureKit capture, and send the Mac's
+  reason with a `capture_unavailable` result (permission, minimized or
+  off-screen window, no window); today one account's captures can keep
+  failing while another's succeed, with no reason in the run log
+  (`MacBrowserCommandExecutor.swift`, `captureBrowserScreenshot`).
+
+- 🟢 **Resume a run paused by a retryable capture failure.** A
+  `capture_unavailable` (or other retryable) result pauses the run offline
+  (`readBrowserCommandResult`), but its command is already final, so the
+  Mac's reconnect (`durable-object.ts`) wakes nothing and the run needs a
+  manual resume before offline expiry. Wake it on reconnect when its pause
+  came from a completed command, or retry the capture as a fresh operation.
 
 - 🤔 **Recover a skipped import audit after an outdated-Mac stop.** When
   an account sync stops because the Mac app is too old and its required
