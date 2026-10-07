@@ -265,12 +265,12 @@ export const buildProjectListQuery = async (
   ]);
 
   // Stop at explicit starts: descendants behind an override must not influence
-  // an ancestor's folded date. Raw aliases avoid Drizzle's root-alias rewrite.
+  // an ancestor's folded date.
   const effectiveStartSortSql = (direction: SortParams["direction"]) =>
     sql`(
       WITH RECURSIVE date_tree AS (
         SELECT p."id", p."startDate", 0 AS depth
-        FROM "Project" p WHERE p."id" = "project"."id" AND p."deletedAt" IS NULL
+        FROM "Project" p WHERE p."id" = "Project"."id" AND p."deletedAt" IS NULL
         UNION ALL
         SELECT child."id", child."startDate", parent.depth + 1
         FROM "Project" child JOIN date_tree parent ON child."parentProjectId" = parent."id"
@@ -369,7 +369,6 @@ export const projectListRead = async (
       {
         where: whereClause,
         orderBy: orderByArray,
-        select: (clauses) => getDb(db).query.project.findMany({ ...clauses }),
         hydrate: async (rows) => {
           if (projection.kind === "base")
             return projectListRows(

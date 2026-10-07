@@ -61,7 +61,8 @@ describe("progressive garden lists", () => {
     const corePlantings = await countTestDbQueries(() =>
       plantingListRead(ctx.db, {}, pagination, [], { kind: "base" }),
     );
-    expect(corePlantings.queryCount).toBe(2);
+    // Titles need the selected plant graph after the root selection/count reads.
+    expect(corePlantings.queryCount).toBe(3);
     expect(corePlantings.result.data[0]).toMatchObject({
       id: planted.id,
       displayName: fullPlantings.data[0]?.displayName,
@@ -75,7 +76,7 @@ describe("progressive garden lists", () => {
         groups: ["derived"],
       }),
     );
-    expect(harvest.queryCount).toBe(2);
+    expect(harvest.queryCount).toBe(3);
     expect(harvest.result.data[0]).toEqual({
       id: planted.id,
       expectedHarvestStart: fullPlantings.data[0]?.expectedHarvestStart,
@@ -90,7 +91,7 @@ describe("progressive garden lists", () => {
     const coreEntries = await countTestDbQueries(() =>
       gardenEntryListRead(ctx.db, {}, pagination, [], { kind: "base" }),
     );
-    expect(coreEntries.queryCount).toBe(2);
+    expect(coreEntries.queryCount).toBe(3);
     expect(coreEntries.result.data[0]).toMatchObject({
       id: entry.id,
       displayName: fullEntries.data[0]?.displayName,
@@ -104,7 +105,7 @@ describe("progressive garden lists", () => {
         groups: ["relations"],
       }),
     );
-    expect(references.queryCount).toBe(3);
+    expect(references.queryCount).toBe(4);
     expect(references.result.data[0]).toEqual({
       id: entry.id,
       locationId: bed.id,

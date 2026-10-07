@@ -862,17 +862,16 @@ export const locationListRead = async (
             sql.raw(
               `(SELECT count(*) FROM "InventoryEntry" ie ` +
                 `INNER JOIN "Product" p ON p."id" = ie."productId" AND p."deletedAt" IS NULL ` +
-                `WHERE ie."locationId" = "location"."id" AND ie."deletedAt" IS NULL ` +
+                `WHERE ie."locationId" = "Location"."id" AND ie."deletedAt" IS NULL ` +
                 `AND ie."placement" = 'stock') ${dirSql}`,
             ),
           ];
-        // Joined parent name — a correlated subquery keeps this a relational
-        // findMany. Soft-delete guarded, like the read path.
+        // Parent names exclude deleted locations, like the read path.
         if (s.orderBy === "parent")
           return [
             sql.raw(
               `(SELECT l."name" FROM "Location" l ` +
-                `WHERE l."id" = "location"."parentId" AND l."deletedAt" IS NULL) ${dirSql}`,
+                `WHERE l."id" = "Location"."parentId" AND l."deletedAt" IS NULL) ${dirSql}`,
             ),
           ];
         return null;
@@ -902,9 +901,9 @@ export const locationListRead = async (
     {
       where: whereClause,
       orderBy: orderByClause,
-      select: (clauses) =>
+      load: (where) =>
         getDb(db).query.location.findMany({
-          ...clauses,
+          where,
           extras: relations.location.list.extras,
           with: {
             parent: wantsListGroup(projection, "relations")
@@ -1174,19 +1173,6 @@ export const locationSearch = async (
       where: whereClause,
       // The picker's own sort roster, not the list's declared one.
       orderBy: buildOrderBy(location, sorts, [...locationPickerSortableFields]),
-      // No `...relations.location.list` — scalar columns only.
-      select: (page) =>
-        getDb(db).query.location.findMany({
-          ...page,
-          columns: {
-            id: true,
-            shortcode: true,
-            name: true,
-            type: true,
-            aliases: true,
-            productId: true,
-          },
-        }),
       hydrate: async (rows): Promise<LocationPickerItemOut[]> => {
         const ids = rows.map((row) => row.id);
         const [ancestorsById, coverById, productCoverById] = await Promise.all([

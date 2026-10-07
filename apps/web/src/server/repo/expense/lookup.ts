@@ -33,7 +33,7 @@ import {
   shortcodeSetCondition,
 } from "~/server/repo/database-helpers";
 import { withDisplayImages } from "~/server/repo/entity-display-image";
-import { type ListPage, listScaffold } from "~/server/repo/list";
+import { listScaffold } from "~/server/repo/list";
 import {
   loadListGroup,
   wantsListGroup,
@@ -64,27 +64,8 @@ import { dbExpenseToAPI } from "./helpers";
 
 const effectiveTrade = effectiveExpenseTradeSql('"Expense"');
 
-/**
- * Lift a predicate on the CHARGE into a predicate on the expense.
- *
- * An **uncorrelated `IN` sub-select**, deliberately NOT a correlated `EXISTS`.
- * `expenseList` runs through the relational query builder
- * (`query.expense.findMany`), which aliases the root table as `"expense"` but
- * does NOT rewrite column refs inside a sub-select — so a correlated
- * `EXISTS (… WHERE purchase.id = expense.purchaseId)` emits a dangling
- * `"Expense"."purchaseId"` that isn't in scope. Same trap as `idSetPresence` and
- * the non-recursive project date filters (see repo/project/dashboard-shared.ts).
- * Here `expense.purchaseId` is referenced from the OUTER query, where the alias
- * is applied correctly, and the sub-select stands alone.
- *
- * `notDeleted(purchase)` is mandatory: a soft-deleted Purchase is still a row, so
- * without it an expense whose charge was deleted would keep matching its old
- * vendor. Same class of bug as the one that made `findOrphanedProducts` miss 18
- * of 20 real hits (#428).
- *
- * Returns undefined when the caller's inner predicate is undefined, so an unset
- * filter contributes nothing rather than an always-true constraint.
- */
+/** Lift a Purchase predicate into the Expense selection. Deleted purchases must
+ * not let expenses match their former vendor or other charge attributes. */
 const chargeIdsWhere = (db: Database, inner: SQL) =>
   getDb(db)
     .select({ id: purchase.id })
@@ -99,31 +80,9 @@ export const chargeCondition = (
     ? undefined
     : inArray(expense.purchaseId, chargeIdsWhere(db, inner));
 
-/**
- * Effective-trade filter as an uncorrelated `IN` sub-select, for the same
- * reason as `chargeCondition` above: `effectiveExpenseTradeSql` spells its
- * outer-row references as raw `"Expense"."…"`, which the relational builder
- * cannot rewrite to its `"expense"` alias. Inside a standalone
- * `select … from "Expense"` the raw name binds to the sub-select's own FROM,
- * and the only outer reference is `expense.id`, a top-level column every
- * builder aliases correctly. (CUBBY-11R: the list leg threw
- * `invalid reference to FROM-clause entry for table "Expense"`.)
- *
- * An empty requested set is "no constraint", matching `eqAny`.
- */
-const tradeCondition = (
-  db: Database,
-  trades: ExpenseFilters["trade"],
-): SQL | undefined => {
+const tradeCondition = (trades: ExpenseFilters["trade"]): SQL | undefined => {
   const values = trades === undefined ? [] : [trades].flat();
-  if (values.length === 0) return undefined;
-  return inArray(
-    expense.id,
-    getDb(db)
-      .select({ id: expense.id })
-      .from(expense)
-      .where(and(notDeleted(expense), inArray(effectiveTrade, values))),
-  );
+  return values.length === 0 ? undefined : inArray(effectiveTrade, values);
 };
 
 /**
@@ -441,7 +400,7 @@ export const buildExpenseWhereClause = async (
       expense.productQuantity,
       filters.productQuantityPresenceFilter,
     ),
-    tradeCondition(db, filters.trade),
+    tradeCondition(filters.trade),
     // `orderId` presence can't be a column-null check any more: it's a column
     // on the CHARGE, and a row with a charge that has no order id is a
     // different state from a row with no charge at all. Both read as "no order
@@ -470,14 +429,14 @@ const resolveExpenseSort = (sort: SortParams) => {
 
   if (sort.orderBy === "spendingCategoryId")
     return [
-      sql`(SELECT string_agg(DISTINCT a."spendingCategoryName", ', ' ORDER BY a."spendingCategoryName") FROM (${expenseJointAllocationSql(sql`ARRAY["expense".id]`)}) a) ${sql.raw(dirSql)}`,
+      sql`(SELECT string_agg(DISTINCT a."spendingCategoryName", ', ' ORDER BY a."spendingCategoryName") FROM (${expenseJointAllocationSql(sql`ARRAY["Expense".id]`)}) a) ${sql.raw(dirSql)}`,
     ];
   if (sort.orderBy === "projectId") {
     const direction =
       sort.direction === "asc" ? sql`asc nulls last` : sql`desc nulls last`;
     return [
       sql`(SELECT p."name" FROM "Project" p
-          WHERE p."id" = ${effectiveExpenseProjectSql('"expense"')}
+          WHERE p."id" = ${effectiveExpenseProjectSql('"Expense"')}
             AND p."deletedAt" IS NULL) ${direction}`,
     ];
   }
@@ -486,7 +445,7 @@ const resolveExpenseSort = (sort: SortParams) => {
     return [
       sql.raw(
         `(SELECT pr."name" FROM "Product" pr ` +
-          `WHERE pr."id" = "expense"."productId" AND pr."deletedAt" IS NULL) ${dirSql}`,
+          `WHERE pr."id" = "Expense"."productId" AND pr."deletedAt" IS NULL) ${dirSql}`,
       ),
     ];
   }
@@ -498,7 +457,7 @@ const resolveExpenseSort = (sort: SortParams) => {
       sql.raw(
         `(SELECT v."name" FROM "Purchase" pu ` +
           `JOIN "Vendor" v ON v."id" = pu."vendorId" AND v."deletedAt" IS NULL ` +
-          `WHERE pu."id" = "expense"."purchaseId" AND pu."deletedAt" IS NULL) ${dirSql}`,
+          `WHERE pu."id" = "Expense"."purchaseId" AND pu."deletedAt" IS NULL) ${dirSql}`,
       ),
     ];
   }
@@ -507,7 +466,7 @@ const resolveExpenseSort = (sort: SortParams) => {
     return [
       sql.raw(
         `(SELECT pu."orderId" FROM "Purchase" pu ` +
-          `WHERE pu."id" = "expense"."purchaseId" AND pu."deletedAt" IS NULL) ${dirSql}`,
+          `WHERE pu."id" = "Expense"."purchaseId" AND pu."deletedAt" IS NULL) ${dirSql}`,
       ),
     ];
   }
@@ -530,7 +489,7 @@ export const expenseListRead = async (
     {
       where,
       resolveSort: resolveExpenseSort,
-      select: (listPage) => selectExpensePage(db, listPage, projection),
+      load: (where) => loadExpensePage(db, where, projection),
       hydrate: (rows) => hydrateExpenseRows(db, rows, projection),
     },
   );
@@ -542,9 +501,9 @@ export const expenseListRead = async (
   return { ...result, sums: { cost: sum?.cost ?? 0 } };
 };
 
-const selectExpensePage = (
+const loadExpensePage = (
   db: Database,
-  page: ListPage,
+  where: SQL,
   projection: ListProjection,
 ) => {
   const references = wantsListGroup(projection, "relations");
@@ -552,7 +511,7 @@ const selectExpensePage = (
   const media = wantsListGroup(projection, "media");
   const declared = relations.expense.withProject.with;
   return getDb(db).query.expense.findMany({
-    ...page,
+    where,
     extras: references || derived ? expenseInheritanceReadExtras() : undefined,
     with: {
       project: references || derived ? declared.project : undefined,
@@ -566,7 +525,7 @@ const selectExpensePage = (
 
 const hydrateExpenseRows = async (
   db: Database,
-  rows: Awaited<ReturnType<typeof selectExpensePage>>,
+  rows: Awaited<ReturnType<typeof loadExpensePage>>,
   projection: ListProjection,
 ) => {
   if (projection.kind === "base")

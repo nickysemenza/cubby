@@ -681,16 +681,6 @@ not_allowed` (Restaurants) means an Expense neither expects nor may link a
   Inherited classifications (Vendor → Purchase → Expense) resolve through
   their existing effective-value SQL before a refusal applies.
 
-- 🤔 **One FROM context per entity list.** Each list repo pairs a relational
-  `findMany` (root aliased) with an unaliased `$count`, so a predicate
-  referencing the outer row compiles on one leg and fails on the other — six
-  shipped occurrences (#456, #462, #481, #762, #785, CUBBY-11R), guarded by
-  `server/entity-kernel/list-smoke.integration.test.ts`. The count leg is
-  `listScaffold.list`'s default `countWhere` (`server/repo/list.ts`); Image
-  already reads both legs through one `aliasedTable` and overrides `count`;
-  Inventory overrides both legs with explicit joins. Decide: plain-select rows with
-  explicit joins, one shared `alias(table, name)`, or Drizzle relations v2.
-
 - 🤔 **Declarative "many, clamped to one" cardinality.** Image provenance
   chose a many-row `ImageSighting` child plus derived `one` Image fields over
   array relations with a runtime clamp. Revisit only when a second entity needs
@@ -906,12 +896,6 @@ spanner"` → `adjustable wrench` (product); `"wet dry vac"` → `shop vacuum`
   spawning subagents (about half), subagent share of context tokens (47%), and
   subagent output on Opus/Fable. Keep the rule if shares fell without slower or
   lower-quality sessions.
-
-- 🤔 **Spike Drizzle 1.0 RC for test factories.** `drizzle-orm@1.0` RC
-  exports `./zod` and `drizzle-seed` generates seeded rows; installed is
-  0.45.2. `server/db/create-shape-drift.unit.test.ts` records a decision
-  against drizzle-zod create shapes, so adoption reverses it; weigh against
-  `entity-definitions`. Do not bump drizzle outside the spike.
 
 - 🤔 **Offer a Docker path for local development.** `pnpm dev` and local test
   services need macOS with Apple `container` (`scripts/lib/apple-container.ts`).

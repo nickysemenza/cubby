@@ -310,3 +310,9 @@ literals, never Faker. E2E records the seed as a `faker-seed` annotation, and
 `testFaker()` prints it when the test fails. Retailer corpora, statement CSVs,
 costing and nutrition numbers, and scenario states stay literal. `build:cf`
 fails if Faker reaches the Worker bundle.
+
+Keep kernel fixtures declaration-backed. The
+[Drizzle v1 RC spike](../research/drizzle-v1-spike.md) confirmed that
+table-derived insert schemas omit virtual inputs and declaration-level defaults;
+`drizzle-seed` generates foreign keys and writes directly to tables. Those are
+storage-fixture capabilities, not replacements for `buildEntity`/`createEntity`.

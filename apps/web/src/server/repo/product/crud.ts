@@ -111,11 +111,8 @@ import { liveLinks } from "~/server/repo/entity-links";
 import { patchEntityRows } from "~/server/repo/entity-patch";
 import {
   productAcquisitionDateFilterSql,
-  productAcquisitionDateSql,
   productExpenseCountFilterSql,
-  productExpenseCountSql,
   productExpenseTotalFilterSql,
-  productExpenseTotalSql,
 } from "~/server/repo/expense-aggregate-sql";
 import { loadImageAnalysisSummaries } from "~/server/repo/image-analysis-summary";
 import { productHasDisplayableImageSql } from "~/server/repo/image-displayability";
@@ -243,7 +240,7 @@ const resolveProductSort = (sort: SortParams) => {
       sql.raw(
         `(SELECT min(l."name") FROM "InventoryEntry" ie ` +
           `JOIN "Location" l ON l."id" = ie."locationId" AND l."deletedAt" IS NULL ` +
-          `WHERE ie."productId" = "product"."id" AND ie."deletedAt" IS NULL) ${dirSql}`,
+          `WHERE ie."productId" = "Product"."id" AND ie."deletedAt" IS NULL) ${dirSql}`,
       ),
     ];
   }
@@ -251,37 +248,43 @@ const resolveProductSort = (sort: SortParams) => {
   if (sort.orderBy === "ingredient") {
     return [
       sql.raw(
-        `(SELECT i."name" FROM "Ingredient" i WHERE i."id" = "product"."ingredientId") ${dirSql}`,
+        `(SELECT i."name" FROM "Ingredient" i WHERE i."id" = "Product"."ingredientId") ${dirSql}`,
       ),
     ];
   }
 
   if (sort.orderBy === "expenseTotal") {
-    return [sql`${productExpenseTotalSql()} ${sql.raw(dirSql)}`];
+    return [
+      sql`${productExpenseTotalFilterSql(product.id)} ${sql.raw(dirSql)}`,
+    ];
   }
 
   if (sort.orderBy === "price") {
-    return [sql.raw(`${effectiveProductPriceSql()} ${dirSql}`)];
+    return [sql.raw(`${effectiveProductPriceSql('"Product"')} ${dirSql}`)];
   }
 
   // `expenses` is the COLUMN id; `expenseCount` is the row field. See the note
   // on the column in app/products/productlist.tsx for why the id is the half
   // that cannot move.
   if (sort.orderBy === "expenseCount") {
-    return [sql`${productExpenseCountSql()} ${sql.raw(dirSql)}`];
+    return [
+      sql`${productExpenseCountFilterSql(product.id)} ${sql.raw(dirSql)}`,
+    ];
   }
 
   if (sort.orderBy === "ledgerExpectedQuantity") {
-    return [sql.raw(`${expectedQuantitySql()} ${dirSql}`)];
+    return [sql.raw(`${expectedQuantitySql('"Product"')} ${dirSql}`)];
   }
 
   if (sort.orderBy === "quantityVariance") {
-    return [sql.raw(`${quantityVarianceSql()} ${dirSql}`)];
+    return [sql.raw(`${quantityVarianceSql('"Product"')} ${dirSql}`)];
   }
 
   if (sort.orderBy === "purchaseDate") {
     // Same fragment the cell renders (relations.ts) and both filters below use.
-    return [sql`${productAcquisitionDateSql()} ${sql.raw(dirSql)}`];
+    return [
+      sql`${productAcquisitionDateFilterSql(product.id)} ${sql.raw(dirSql)}`,
+    ];
   }
 
   // Every `related:` sort is the related-view registry's own joins, sort
@@ -298,7 +301,7 @@ const resolveProductSort = (sort: SortParams) => {
     return [
       sql`${relatedSortExpression(
         parsedRelationKey.data,
-        '"product"."id"',
+        '"Product"."id"',
       )} ${sql.raw(dirSql)}`,
     ];
   }
@@ -307,7 +310,7 @@ const resolveProductSort = (sort: SortParams) => {
     return [
       sql.raw(
         `(SELECT pei."externalId" FROM "EntityExternalId" pei ` +
-          `WHERE pei."entityId" = "product"."id" AND pei."source" = 'gtin' AND pei."deletedAt" IS NULL ` +
+          `WHERE pei."entityId" = "Product"."id" AND pei."source" = 'gtin' AND pei."deletedAt" IS NULL ` +
           `ORDER BY pei."isPrimary" DESC, pei."createdAt", pei."id" LIMIT 1) ${dirSql}`,
       ),
     ];
@@ -1166,12 +1169,17 @@ const readProductListPage = async (
     {
       where: whereClause,
       orderBy: orderByArray,
-      select: (clauses) =>
-        getDb(db).query.product.findMany({
-          ...clauses,
-          with: relationFields ? relations.product.listBase.with : undefined,
-          extras: selectedExtras,
-        }),
+      load:
+        projection.kind === "base"
+          ? undefined
+          : (where: SQL) =>
+              getDb(db).query.product.findMany({
+                where,
+                with: relationFields
+                  ? relations.product.listBase.with
+                  : undefined,
+                extras: selectedExtras,
+              }),
       // Each caller hydrates the page for its own projection.
       hydrate: (rows) => rows,
     },
@@ -1688,9 +1696,6 @@ export const productSearch = async (
     {
       where: whereClause,
       orderBy: productListOrderBy(sorts),
-      // No `...relations.product.full` — scalar columns only. The picker
-      // output schema omits relations that were not loaded.
-      select: (page) => getDb(db).query.product.findMany({ ...page }),
       hydrate: async (results) => {
         const categories = await loadCategorySummaries(db);
         const resultIds = results.map((result) => result.id);

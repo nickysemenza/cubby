@@ -573,14 +573,6 @@ const ingredientListImpl = async (
   const dbClient = getDb(db);
   const whereClause = await buildIngredientListWhere(db, filters);
 
-  // Build order by. `appearsInRecipes` and `product` are computed counts (not
-  // real columns), so a resolver sorts them via correlated subqueries. These
-  // MUST be written with sql.raw: the relational query builder
-  // (query.ingredient.findMany) rewrites every column reference in a custom
-  // orderBy to the root table's alias ("ingredient"), which mangles
-  // cross-table refs. A raw string is opaque to that rewriter, so we
-  // hand-qualify the inner tables and correlate to "ingredient"."id".
-  // Everything else goes through the generic buildOrderBy column path.
   const resolveIngredientSort = (s: SortParams): SQL[] | null => {
     const dirSql = s.direction === "asc" ? "asc nulls last" : "desc nulls last";
     if (s.orderBy === "appearsInRecipes")
@@ -588,14 +580,14 @@ const ingredientListImpl = async (
         // Shared with global search so the sort key matches the displayed
         // `appearsInRecipes.length` exactly (live recipes/sections/usages only).
         sql.raw(
-          `${liveRecipeCountForIngredientSql('"ingredient"."id"')} ${dirSql}`,
+          `${liveRecipeCountForIngredientSql('"Ingredient"."id"')} ${dirSql}`,
         ),
       ];
     if (s.orderBy === "product")
       return [
         sql.raw(
           `(SELECT count(*) FROM "Product" p ` +
-            `WHERE p."ingredientId" = "ingredient"."id" AND p."deletedAt" IS NULL) ${dirSql}`,
+            `WHERE p."ingredientId" = "Ingredient"."id" AND p."deletedAt" IS NULL) ${dirSql}`,
         ),
       ];
     return null;
@@ -603,24 +595,20 @@ const ingredientListImpl = async (
 
   if (readIntent === "ids") {
     const { take, skip } = ingredientScaffold.page(pagination);
-    // Routed through the relational builder, not a plain `.select().from()`,
-    // so the order resolves against the same `"ingredient"` alias a
-    // resolver sort hand-qualifies (see `resolveIngredientSort` above) — a
-    // plain select has no alias, so a resolver sort would throw
-    // `missing FROM-clause entry for table "ingredient"`.
-    const rows = await dbClient.query.ingredient.findMany({
-      columns: { shortcode: true },
-      where: whereClause,
-      orderBy: ingredientScaffold.orderBy(
-        sorts,
-        { resolve: resolveIngredientSort },
-        filters,
-      ),
-      // One look-ahead row tells the bulk scan whether another page exists,
-      // avoiding a count query it would otherwise discard.
-      limit: take + 1,
-      offset: skip,
-    });
+    const rows = await dbClient
+      .select({ shortcode: ingredient.shortcode })
+      .from(ingredient)
+      .where(whereClause)
+      .orderBy(
+        ...ingredientScaffold.orderBy(
+          sorts,
+          { resolve: resolveIngredientSort },
+          filters,
+        ),
+      )
+      // One look-ahead row avoids a count query for the bulk scan.
+      .limit(take + 1)
+      .offset(skip);
     const data = rows.map((row) => ({ id: row.shortcode }));
     return { data: data.slice(0, take), hasMore: data.length > take };
   }
@@ -650,9 +638,9 @@ const ingredientListImpl = async (
     {
       where: whereClause,
       resolveSort: resolveIngredientSort,
-      select: (page) =>
+      load: (where) =>
         dbClient.query.ingredient.findMany({
-          ...page,
+          where,
           with: {
             product: wantsListGroup(projection, "relations")
               ? leanRelations.with.product
