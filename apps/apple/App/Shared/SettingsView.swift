@@ -30,8 +30,17 @@ struct SettingsView: View {
     #if os(macOS)
         @AppStorage("purchaseImport.browser") private var purchaseImportBrowser = BrowserChoice.chrome
         @State private var browserPermissions = MacBrowserPermissionSnapshot.current(browser: .chrome)
-        @State private var backfillFrom = BrowserBridgeBackfillRange.defaultDates().from
-        @State private var backfillTo = BrowserBridgeBackfillRange.defaultDates().to
+        private struct BackfillDates {
+            var from: Date
+            var to: Date
+
+            init() {
+                let dates = BrowserBridgeBackfillRange.defaultDates()
+                from = dates.from
+                to = dates.to
+            }
+        }
+        @State private var backfillDates: [String: BackfillDates] = [:]
     #endif
 
     var body: some View {
@@ -195,29 +204,31 @@ struct SettingsView: View {
     }
 
     #if os(macOS)
-        private var backfillRange: BrowserBridgeBackfillRange? {
-            BrowserBridgeBackfillRange(from: backfillFrom, to: backfillTo)
-        }
-
         /// Rare, interactive work: collapsed by default and defaulted to the last year so the
         /// common case is one click.
         private func backfillControl(accountID: String) -> some View {
-            DisclosureGroup("Import order history…") {
-                DatePicker("From", selection: $backfillFrom, in: ...backfillTo, displayedComponents: .date)
-                    .accessibilityIdentifier("settings.purchaseImport.backfillFrom.\(accountID)")
-                DatePicker("To", selection: $backfillTo, in: ...Date.now, displayedComponents: .date)
+            let dates = Binding(
+                get: { backfillDates[accountID] ?? BackfillDates() },
+                set: { backfillDates[accountID] = $0 })
+            let range = BrowserBridgeBackfillRange(from: dates.wrappedValue.from, to: dates.wrappedValue.to)
+            return DisclosureGroup("Import order history…") {
+                DatePicker(
+                    "From", selection: dates.from, in: ...dates.wrappedValue.to, displayedComponents: .date
+                )
+                .accessibilityIdentifier("settings.purchaseImport.backfillFrom.\(accountID)")
+                DatePicker("To", selection: dates.to, in: ...Date.now, displayedComponents: .date)
                     .accessibilityIdentifier("settings.purchaseImport.backfillTo.\(accountID)")
-                if backfillRange == nil {
+                if range == nil {
                     Text("The start date must be on or before the end date.")
                         .foregroundStyle(FieldGuideTokens.destructive)
                 }
                 Button("Import this range", systemImage: "clock.arrow.circlepath") {
-                    guard let range = backfillRange else { return }
+                    guard let range else { return }
                     model.browserBridge.syncNow(
                         browser: purchaseImportBrowser, accountID: accountID, backfill: range)
                 }
                 .disabled(
-                    backfillRange == nil || !model.browserBridge.isConfigured
+                    range == nil || !model.browserBridge.isConfigured
                         || model.browserBridge.isSyncing
                 )
                 .accessibilityIdentifier("settings.purchaseImport.backfillStart.\(accountID)")
@@ -262,7 +273,11 @@ struct SettingsView: View {
                             .foregroundStyle(.secondary)
                             .fixedSize(horizontal: false, vertical: true)
                         if plan.disabledReason == nil {
-                            backfillControl(accountID: plan.shortcode)
+                            switch plan.action {
+                            case .start, .firstSync:
+                                backfillControl(accountID: plan.shortcode)
+                            default: EmptyView()
+                            }
                         }
                     }
                 }
@@ -273,9 +288,16 @@ struct SettingsView: View {
                 }
                 .disabled(
                     !model.browserBridge.isConfigured || model.browserBridge.isSyncing
-                        || model.browserBridge.syncableAccountCount == 0
                 )
                 .accessibilityIdentifier("settings.purchaseImport.syncNow")
+                Button("Refresh sync plan", systemImage: "arrow.clockwise") {
+                    Task { await model.browserBridge.refreshSyncPlan() }
+                }
+                .disabled(!model.browserBridge.isConfigured || model.browserBridge.isSyncing)
+                .accessibilityIdentifier("settings.purchaseImport.refreshSyncPlan")
+                if let error = model.browserBridge.syncPlanError {
+                    Text(error).foregroundStyle(FieldGuideTokens.destructive)
+                }
                 if model.browserBridge.status != .connected {
                     Button("Reconnect", systemImage: "arrow.trianglehead.clockwise") {
                         model.browserBridge.reconnect(browser: purchaseImportBrowser)

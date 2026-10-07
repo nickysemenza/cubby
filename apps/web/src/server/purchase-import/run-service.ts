@@ -189,6 +189,7 @@ import { fetchPublicPage, type FetchPage } from "./server-page-fetch";
 import {
   ACTIVE_RUN_STATUSES,
   CHARGE_HOLDING_STATUSES,
+  accountSyncEligibility,
   readAccountSyncAdmission,
 } from "./sync-admission";
 import { importVendorOrder } from "./writer";
@@ -335,6 +336,7 @@ export async function startOrResumeRun(
         id: vendorAccount.id,
         vendorId: vendorAccount.vendorId,
         browserSyncEnabled: vendorAccount.browserSyncEnabled,
+        syncEligible: accountSyncEligibility(),
         actorUserId: ledgerParty.userId,
         actorName: user.name,
         actorEmail: user.email,
@@ -343,6 +345,7 @@ export async function startOrResumeRun(
         actorLedgerPartyKind: ledgerParty.kind,
       })
       .from(vendorAccount)
+      .leftJoin(vendor, eq(vendor.id, vendorAccount.vendorId))
       .innerJoin(
         ledgerParty,
         and(
@@ -364,6 +367,10 @@ export async function startOrResumeRun(
       throw new Error("Vendor account is not owned by an authenticated member");
     if (!scope.browserSyncEnabled)
       throw new Error("Browser sync is not enabled for this Vendor account");
+    if (!scope.syncEligible)
+      throw new Error(
+        "Browser sync requires an active, paused_auth, or paused_offline account with a non-deleted Vendor",
+      );
     if (backfill) {
       // A backfill never joins a different active run: resuming an
       // incremental sync or another range would silently drop the request.

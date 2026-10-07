@@ -3,7 +3,18 @@ import { runPurpose, runStatus } from "@cubby/schemas/run-fields";
 import { and, desc, eq, inArray, or, sql } from "drizzle-orm";
 
 import type { DrizzleClient, DrizzleTransaction } from "~/server/db";
-import { run } from "~/server/db/schema";
+import { run, vendor, vendorAccount } from "~/server/db/schema";
+import { notDeleted } from "~/server/repo/database-helpers";
+
+/** Both the plan and locked start require a live, enabled account and Vendor. */
+export function accountSyncEligibility() {
+  return sql<boolean>`${and(
+    eq(vendorAccount.browserSyncEnabled, true),
+    inArray(vendorAccount.status, ["active", "paused_auth", "paused_offline"]),
+    notDeleted(vendorAccount),
+    notDeleted(vendor),
+  )}`;
+}
 
 export const ACTIVE_RUN_STATUSES = [
   "running",

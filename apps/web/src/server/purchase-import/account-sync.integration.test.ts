@@ -1,9 +1,9 @@
 import type { PurchaseAgentEvent } from "@cubby/schemas/purchase-import";
-import { eq } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
 import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 
-import { run, runProgress, vendorAccount } from "~/server/db/schema";
+import { run, runProgress, vendor, vendorAccount } from "~/server/db/schema";
 import { getDb } from "~/server/repo/database-helpers";
 import { insertWithShortcode } from "~/server/repo/shortcode-utils";
 
@@ -13,7 +13,8 @@ import { readAccountSyncAdmission } from "./sync-admission";
 
 // Failure modes: a missing cursor is mistaken for incremental work; another purpose or a failed
 // charge dispatch is resumed; plan leaks another member's account; targeted sync starts more than
-// one account; a repeat creates a second run; backfill loses its explicit date range.
+// one account; a repeat creates a second run; backfill loses its explicit date range;
+// a disabled account or deleted Vendor starts work and silently reactivates the account.
 describe("account sync planning and start", () => {
   const ctx = withTestDb();
   const fixture = async () => {
@@ -38,7 +39,7 @@ describe("account sync planning and start", () => {
         events.push(event);
       },
     };
-    return { party, account, queue, events };
+    return { party, vendor, account, queue, events };
   };
 
   it("plans first and incremental syncs, then resumes the same admitted run with its progress", async () => {
@@ -150,6 +151,62 @@ describe("account sync planning and start", () => {
         queue,
       ),
     ).rejects.toThrow(held.shortcode);
+    expect(events).toEqual([]);
+  });
+
+  it("refuses disabled accounts and deleted Vendors without creating runs or resetting status", async () => {
+    const { party, vendor: shop, account, queue, events } = await fixture();
+    const client = getDb(ctx.db);
+    await client
+      .update(vendorAccount)
+      .set({ status: "disabled" })
+      .where(eq(vendorAccount.id, account.id));
+    expect((await loadSyncPlan(ctx.db, party.id, {})).accounts).toEqual([]);
+    await expect(
+      startAccountSync(
+        ctx.db,
+        party.id,
+        { vendorAccountId: account.shortcode },
+        queue,
+      ),
+    ).rejects.toThrow("Browser sync requires");
+    expect(
+      await client
+        .select()
+        .from(run)
+        .where(eq(run.vendorAccountId, account.id)),
+    ).toEqual([]);
+    expect(
+      await client
+        .select({ status: vendorAccount.status })
+        .from(vendorAccount)
+        .where(eq(vendorAccount.id, account.id)),
+    ).toEqual([{ status: "disabled" }]);
+    await client
+      .update(vendorAccount)
+      .set({ status: "active" })
+      .where(eq(vendorAccount.id, account.id));
+    await client
+      .update(vendor)
+      .set({ deletedAt: new Date() })
+      .where(eq(vendor.id, shop.id));
+    expect((await loadSyncPlan(ctx.db, party.id, {})).accounts).toEqual([]);
+    await expect(
+      startAccountSync(
+        ctx.db,
+        party.id,
+        { vendorAccountId: account.shortcode },
+        queue,
+      ),
+    ).rejects.toThrow("Browser sync requires");
+    expect(
+      await client
+        .select()
+        .from(run)
+        .where(
+          and(eq(run.vendorAccountId, account.id), eq(run.status, "running")),
+        ),
+    ).toEqual([]);
     expect(events).toEqual([]);
   });
 

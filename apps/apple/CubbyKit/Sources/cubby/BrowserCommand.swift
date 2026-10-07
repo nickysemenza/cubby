@@ -176,7 +176,8 @@
                             try await coordinator.connect(browser: target.browser)
                             requests = []
                         } else {
-                            requests = try await coordinator.syncNow(browser: target.browser)
+                            requests = try await coordinator.syncNow(
+                                browser: target.browser, accountID: accountID)
                             for request in requests { try printJSON(request) }
                         }
                         let deadline = Date.now.addingTimeInterval(Double(duration))

@@ -101,16 +101,23 @@
             // reflected in this manual run, then enqueue one server-owned run per eligible account.
             try await serialized { try await self.replaceConnections(browser: browser) }
             var failures: [String] = []
+            var skipped: [String] = []
             var submitted: [StartSyncOutput] = []
             let plan = try await syncClient.syncPlan()
             let eligible = Set(plan.accounts.filter { $0.disabledReason == nil }.map(\.shortcode))
-            if let accountID, !eligible.contains(accountID) {
+            if let accountID, !eligible.contains(accountID) || accounts[accountID] == nil {
                 let reason = plan.accounts.first { $0.shortcode == accountID }?.disabledReason
                 throw SyncFailure(message: reason ?? "This account is unavailable for browser sync.")
             }
             for account in accounts.values.sorted(by: { $0.id < $1.id })
-            where eligible.contains(account.id) && (accountID == nil || account.id == accountID) {
-
+            where accountID == nil || account.id == accountID {
+                guard eligible.contains(account.id) else {
+                    let reason =
+                        plan.accounts.first { $0.shortcode == account.id }?.disabledReason
+                        ?? "This account is unavailable for browser sync."
+                    skipped.append("\(account.id): \(reason)")
+                    continue
+                }
                 do {
                     submitted.append(
                         try await syncClient.requestSync(vendorAccountID: account.id, backfill: backfill))
@@ -118,10 +125,11 @@
                     failures.append("\(account.id): \(error.localizedDescription)")
                 }
             }
-            if !failures.isEmpty {
-                throw SyncFailure(
-                    message: "Browser Sync submitted \(submitted.count) requests; failed accounts: "
-                        + failures.joined(separator: "; "))
+            if !failures.isEmpty || !skipped.isEmpty {
+                var message = "Browser Sync submitted \(submitted.count) requests."
+                if !skipped.isEmpty { message += " Skipped accounts: " + skipped.joined(separator: "; ") }
+                if !failures.isEmpty { message += " Failed accounts: " + failures.joined(separator: "; ") }
+                throw SyncFailure(message: message)
             }
             return submitted
         }

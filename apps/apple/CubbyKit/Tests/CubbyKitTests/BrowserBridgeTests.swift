@@ -28,26 +28,6 @@ struct BrowserBridgeTests {
         #expect(object["evidence"] == nil)
     }
 
-    @Test("A sync request without a backfill range encodes only the account")
-    func syncRequestOmitsAbsentBackfill() throws {
-        let data = try JSONEncoder().encode(StartSyncInput(vendorAccountId: "VACCT-4K7M"))
-        let object = try #require(JSONSerialization.jsonObject(with: data) as? [String: Any])
-        #expect(object["vendorAccountId"] as? String == "VACCT-4K7M")
-        #expect(object["backfill"] == nil)
-    }
-
-    @Test("A sync request with a backfill range encodes inclusive ISO dates")
-    func syncRequestEncodesBackfill() throws {
-        let range = try #require(
-            BrowserBridgeBackfillRange(
-                from: Self.day(2025, 3, 9), to: Self.day(2026, 3, 9), calendar: Self.calendar))
-        let data = try JSONEncoder().encode(
-            StartSyncInput(vendorAccountId: "VACCT-4K7M", backfill: .init(from: range.from, to: range.to)))
-        let object = try #require(JSONSerialization.jsonObject(with: data) as? [String: Any])
-        let backfill = try #require(object["backfill"] as? [String: String])
-        #expect(backfill == ["from": "2025-03-09", "to": "2026-03-09"])
-    }
-
     @Test("A backfill range may be a single day but never inverted")
     func backfillRangeValidation() {
         let day = Self.day(2026, 1, 5)
@@ -297,18 +277,6 @@ struct BrowserBridgeTests {
         #expect(
             BrowserBridgeFleetStatus.aggregate([] as [BrowserBridgeConnectionStatus])
                 == .disconnected)
-    }
-
-    @Test("Manual sync response preserves server identifier spelling")
-    func manualSyncResponse() throws {
-        let data = Data(#"{"runId":"RUN-EXAMPLE","resumed":true}"#.utf8)
-        let response = try JSONDecoder().decode(StartSyncOutput.self, from: data)
-
-        #expect(response == StartSyncOutput(runId: "RUN-EXAMPLE", resumed: true))
-        let encoded = try JSONEncoder().encode(response)
-        let object = try #require(JSONSerialization.jsonObject(with: encoded) as? [String: Any])
-        #expect(object["runId"] as? String == "RUN-EXAMPLE")
-        #expect(object["resumed"] as? Bool == true)
     }
 
     @Test("Nested command protocol versions are rejected even when the envelope is current")

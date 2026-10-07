@@ -7,7 +7,7 @@ import {
 } from "@cubby/schemas/run";
 import { runWorkLabel } from "@cubby/schemas/run-fields";
 import { vendorAccountCursor } from "@cubby/schemas/vendor-account-fields";
-import { and, desc, eq, inArray } from "drizzle-orm";
+import { and, desc, eq } from "drizzle-orm";
 
 import type { Database } from "~/server/db";
 import {
@@ -22,7 +22,10 @@ import { resolveOrThrow } from "~/server/repo/shortcode-resolver";
 
 import { dispatchRunEvent } from "./dispatch";
 import { startOrResumeRun } from "./run-service";
-import { readAccountSyncAdmission } from "./sync-admission";
+import {
+  accountSyncEligibility,
+  readAccountSyncAdmission,
+} from "./sync-admission";
 
 export async function loadSyncPlan(
   db: Database,
@@ -53,13 +56,7 @@ export async function loadSyncPlan(
     .where(
       and(
         eq(vendorAccount.ledgerPartyId, partyId),
-        eq(vendorAccount.browserSyncEnabled, true),
-        notDeleted(vendorAccount),
-        inArray(vendorAccount.status, [
-          "active",
-          "paused_auth",
-          "paused_offline",
-        ]),
+        accountSyncEligibility(),
         input.vendorAccountId
           ? eq(vendorAccount.shortcode, input.vendorAccountId)
           : undefined,
