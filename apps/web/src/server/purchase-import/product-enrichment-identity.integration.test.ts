@@ -319,6 +319,36 @@ describe("product enrichment structured identifier proof", () => {
     expect(await identifiersOf(target.id)).toEqual([]);
   });
 
+  it("explains a retailer source mismatch so the same retained capture can be committed after correction", async () => {
+    const { target, commit } = await fixture();
+    await expect(
+      commit([
+        {
+          source: "forge-wear",
+          kind: "retailer_sku",
+          externalId: "FW-TEE-BLK-M",
+        },
+      ]),
+    ).rejects.toThrow(
+      "source is not the page vendor; expected source: forgewear",
+    );
+    expect(await identifiersOf(target.id)).toEqual([]);
+    await commit([
+      {
+        source: "forgewear",
+        kind: "retailer_sku",
+        externalId: "FW-TEE-BLK-M",
+      },
+    ]);
+    expect(await identifiersOf(target.id)).toMatchObject([
+      {
+        source: "forgewear",
+        kind: "retailer_sku",
+        externalId: "FW-TEE-BLK-M",
+      },
+    ]);
+  });
+
   it("refuses a ProductGroup page and an old capture with no structured data", async () => {
     const group = await fixture({ ...single, variantGroup: true });
     await expect(

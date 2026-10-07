@@ -33,7 +33,12 @@ conversation: it reaches Cubby through one Run's services and nothing else
    agent then calls `readBrowserCommandResult`.
    An enrichment run works its targets in one order (`targetWorkOrder`):
    a capture is retained for the target the agent last claimed, and
-   `product_enrichment.skip` closes a target no page proves.
+   `product_enrichment.skip` closes a target no page proves. Identifier commit
+   refusals include the failed proof guard. A retailer source mismatch reports
+   the host-derived source slugs the importer accepts; correct the source and
+   retry with the same target's retained evidence before treating the Product
+   as unprovable. Wrong-target evidence, off-vendor URLs, missing structured
+   data and ambiguous variants remain refused.
 5. **Writes and finish.** `importOrderEvidence` routes to `writer.ts` and
    `import-orders.ts`, which are deterministic and stock-neutral.
    `finishRun`, `stopForReview` and `markRunFailed` set the terminal state.
