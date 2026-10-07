@@ -158,6 +158,96 @@ See also the image operational passes at the end of this file.
 
 ---
 
+## Import pipeline architecture
+
+How browser, mail, file, and photo imports, account syncs, and enrichment
+should work end to end. Area-specific items stay in their sections; these
+change the shape of the pipeline. The browser bridge contract is in
+[infrastructure](infrastructure.md#browser-bridge).
+
+- 🔭 **Code drives the sync; the model only judges.** An account sync is a
+  fixed loop: open order history, list orders, capture each, extract, write,
+  page on. Today the coordinator model drives every step, so a stuck capture
+  costs model time on every retry (one sync spent minutes of model time over
+  hours, re-issuing the same capture). Make the walk a server workflow
+  (`readBrowserCommandResult` already owns recovery) and call the model only
+  at judgment points: reading an order, matching Products, choosing review.
+  The purchase decision evaluation gates the switch.
+
+- 🟢 **Server-enforced run budgets.** Cap attempts per browser step and
+  wall-clock time per run, and stop for review when repeated steps produce
+  nothing new, with the last observation as the reason. Today only the agent
+  can give up, so a run whose step keeps failing retries until expiry.
+
+- 🧱 **Vendor capture profiles.** Record per Vendor what a sync learns once:
+  the order-history URL, sign-in host, extra allowed hosts (for example a
+  hosted customer-account domain), and pagination shape, so later runs go
+  straight there instead of guessing from the home page. Learned values
+  are proposed for review, never silently trusted.
+
+- 🤔 **Sign-in detection beyond password fields.** `derivePageCapture`
+  flags sign-in only when the page has a password input; email-code logins and
+  redirects to a hosted sign-in domain read as an ordinary page. Combine a
+  model classification of the page with code checks (a host change, a known
+  sign-in path) before pausing for sign-in.
+
+- 🤔 **Check hosted customer accounts.** Verify whether a vendor's order
+  history lives on a hosted account domain outside its `browserDomains`
+  (Shopify's newer customer accounts do); if so, the capture can never reach
+  it. This feeds vendor capture profiles.
+
+- 🟢 **Tell the member when a run needs them.** A pause for sign-in,
+  Screen Recording, or Chrome's Apple Events setting should post a macOS
+  notification naming the fix, with an action that raises Cubby's window.
+  Today the reason appears only on the Runs page and in Mac Settings.
+
+- 🟢 **Re-read stored pages after a derivation change.** Captured DOMs are
+  kept as `RunEvidence` and stamped with `PAGE_DERIVATION_REVISION`. A
+  maintenance job should re-derive stored pages at an older revision and
+  report what changed, so a parser fix improves past evidence without a Mac
+  release.
+
+- 🔭 **One order document for every source.** Browser captures, order mail,
+  uploaded files, and receipt photos each reach extraction differently.
+  Normalize each source into one order-document shape (text, links, images,
+  structured identifiers, provenance) feeding one extractor and writer, so a
+  fix to one path improves every path.
+
+- 🟢 **Live browser E2E on macOS.** No automated test drives the Mac app and a
+  real Chrome together, so the redirect-readiness bug reached production.
+  Run the fixture-retailer scenario (`tooling/mac-browser-import-scenario.ts`)
+  nightly on a macOS runner. Add a redirecting order page, an email-code
+  sign-in, and a slow navigation, and leave the E2E artifact described in
+  [test tiers](agents/validation-tests.md).
+
+- 🟢 **Vendor-platform fixtures for page reading.** Keep synthetic DOM
+  fixtures modeled on common storefront platforms (Shopify, WooCommerce,
+  BigCommerce, a marketplace) and assert what `derivePageCapture` and the
+  extractor read from each, including variant groups and truncation.
+
+- 🟢 **One-command Mac app install.** Build, sign, install to
+  `/Applications`, and relaunch with one command, so the installed app
+  matches `MINIMUM_APPLE_CLIENT_VERSION` and a protocol release is one step.
+  Today the household app runs from a Debug build folder.
+
+- 🟢 **Account status from the server.** Mac Settings shows "Connected" from
+  its own socket state. Show the server's view per account: browser sync on,
+  socket connected, the current run and its last step, and the last
+  successful sync.
+
+- 🟢 **Agent routes on generated contracts.** Move the remaining hand-written
+  `/api/import/agent/*` routes the Mac calls (accounts, debug events) onto RPC
+  contracts with generated Swift, as account sync is moving.
+
+- 🟢 **Keep debug events out of run operations.** Mac debug events are stored
+  as `__debug_event` operation rows, so one run's status read lists dozens of
+  them among its real steps. Give them their own bounded stream and keep run
+  operations to real work.
+
+- 🟢 **Show each run's cost and time.** The Runs page should show model time,
+  token cost, browser time, and retries per run, so an expensive or looping
+  run is visible at a glance.
+
 ## Runs, enrichment & browser capture
 
 Runs are the household's unattended work: account syncs, mail passes, charge
