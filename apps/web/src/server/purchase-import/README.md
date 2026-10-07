@@ -60,6 +60,14 @@ conversation: it reaches Cubby through one Run's services and nothing else
 
 ## Where to look
 
+Account history may display short numeric order numbers and opaque detail URLs.
+Page derivation reads ordinary anchors and single literal `location` navigation
+handlers without executing JavaScript. Clickable table rows use their first
+visible cell as the link label. The order classifier associates a hash-number
+label with an allowlisted `/orders/<target>` link and the date following it on
+the same captured row; a detail URL is not itself a history-page hint. Dynamic
+handlers need browser navigation rather than a guessed URL.
+
 | Need                                             | File                                                        |
 | ------------------------------------------------ | ----------------------------------------------------------- |
 | Queue event and bridge message shapes            | `packages/schemas/src/purchase-import.ts`                   |

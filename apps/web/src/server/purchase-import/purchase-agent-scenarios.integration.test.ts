@@ -57,7 +57,7 @@ import {
 import { getRunLiveProgress } from "~/server/repo/run-progress";
 import { insertWithShortcode } from "~/server/repo/shortcode-utils";
 
-import { completedCapture } from "./browser.fixtures";
+import { capturedHtml, completedCapture } from "./browser.fixtures";
 import { startSelectedChargeRun } from "./charge-runs";
 import { learnPurchaseProductExternalId } from "./external-id-learning";
 import {
@@ -387,6 +387,78 @@ describe("purchase-agent scripted scenarios", () => {
     await waitForStatus(seeded.run.id, "paused_offline");
     await scenario?.connectBrowser({ ...seeded.browser, outcomes, delayMs });
   };
+
+  it("account sync: follows a clickable account listing to its short-numbered order and commits the purchase", async () => {
+    const seeded = await seedAccountSync([]);
+    const accountUrl = `https://${SHOP_HOST}/account`;
+    const detailUrl = `https://${SHOP_HOST}/account/orders/opaque-token`;
+    scenario = await startScenarioHarness(ctx.databaseUrl, {
+      steps: [
+        call("listing-browser", "issue_browser_command", {
+          command: { kind: "capture_order", target: accountUrl },
+        }),
+        awaitEvent("browser_connected", "browser_result"),
+        call("resume", "claim_next_import_work"),
+        awaitBrowserResult("listing-browser"),
+        call("listing-import", "import_browser_order_evidence", {
+          commandId: from("listing-browser", "commandId"),
+        }),
+        { check: "listing-import", includes: "order_list" },
+        call("claim-order", "claim_next_import_work"),
+        { check: "claim-order", includes: detailUrl },
+        call("detail-browser", "issue_browser_command", {
+          command: { kind: "capture_order", target: detailUrl },
+        }),
+        awaitBrowserResult("detail-browser"),
+        call("detail-import", "import_browser_order_evidence", {
+          commandId: from("detail-browser", "commandId"),
+          defaultTrade: "other",
+        }),
+        settlementRead("settlement-account"),
+        call("claim-done", "claim_next_import_work"),
+        { check: "claim-done", includes: "none" },
+        call("finish-account", "finish_import_run"),
+      ],
+      extractions: [
+        {
+          match: "54321",
+          output: readyExtraction("54321", "2026-09-12T12:00:00.000Z", [
+            {
+              title: "Scenario rolled oats, 1 kg",
+              amount: 12,
+              lineKind: "principal",
+              sku: PANTRY_SKU,
+            },
+          ]),
+        },
+      ],
+    });
+    await scenario.dispatch(seeded.start);
+    await connectAfterPause(seeded, {
+      [accountUrl]: await capturedHtml({
+        sourceURL: accountUrl,
+        title: "Account",
+        html: `<html><body><h1>Your account</h1><p>View all your orders</p><table><tr onclick="window.location.href = '${detailUrl}'"><td>#54321</td><td>September 12, 2026</td><td>$12.00</td></tr></table></body></html>`,
+      }),
+      [detailUrl]: await completedCapture(detailUrl, {
+        title: "Order #54321",
+        text: "Order #54321 placed September 12, 2026. Scenario rolled oats, 1 kg (SKU OATS-1KG) $12.00. Order total $12.00.",
+      }),
+    });
+    await waitForStatus(seeded.run.id, "completed");
+    const graph = await purchaseGraph(seeded.vendor.id);
+    expect(graph.purchases).toMatchObject([{ orderId: "54321" }]);
+    expect(graph.expenses).toMatchObject([
+      { cost: 12, productId: seeded.pantryProductId },
+    ]);
+    expect(graph.claims).toHaveLength(1);
+    expect(await scenario.gatewayCalls()).toEqual(
+      expect.arrayContaining([
+        { feature: "purchase-import-extraction", matched: "54321" },
+      ]),
+    );
+    expect(await scenario.violations()).toEqual([]);
+  });
 
   it("account sync: captures one order through the browser broker, imports it, verifies settlement, and completes", async () => {
     const seeded = await seedAccountSync([

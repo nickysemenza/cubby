@@ -23,9 +23,11 @@ const AMAZON_ORDER_ID_SEGMENT = /^\d{3}-\d{7}-\d{7}$/;
 // (no /i flag) so lowercase prose after "Order placed ..." can never be
 // captured as an id.
 const LABELLED_ORDER_ID =
-  /\b[Oo]rder\s*(?:#|[Nn]umber)?\s*:?\s*#?\b([A-Z0-9]{6,20})\b/g;
+  /\b[Oo]rder\s*(?:#|[Nn]umber)?\s*:?\s*#?\b([A-Z0-9]{6,20})\b(?!-)/g;
+const SHORT_LABELLED_ORDER_ID =
+  /\b[Oo]rder\s*(?:#|[Nn]umber)\s*:?\s*#?\b(\d{1,5})\b(?!-)/g;
 const ORDER_ID_QUERY_KEYS = ["orderID", "orderId", "order_id"];
-const HISTORY_URL_HINT = /order-history|\/orders\b/i;
+const HISTORY_URL_HINT = /order-history|\/orders\/?$/i;
 const HISTORY_TEXT_HINT = /your orders|order history/i;
 const NEXT_LINK_TEXT = /^\s*(next|older|more orders|›|→)/i;
 const PAGE_QUERY_KEYS = ["startIndex", "page"];
@@ -143,7 +145,11 @@ function orderIdFromUrl(url: URL): string | null {
 
 function collectIdsFromText(text: string): Map<string, number> {
   const positions = new Map<string, number>();
-  for (const pattern of [AMAZON_ORDER_ID, LABELLED_ORDER_ID]) {
+  for (const pattern of [
+    AMAZON_ORDER_ID,
+    LABELLED_ORDER_ID,
+    SHORT_LABELLED_ORDER_ID,
+  ]) {
     pattern.lastIndex = 0;
     for (const match of text.matchAll(pattern)) {
       const id = match[1] ?? match[0];
@@ -170,18 +176,41 @@ function collectOrderIds(
 ) {
   const idPositions = collectIdsFromText(capture.text);
   const idToUrl = new Map<string, string>();
+  const rowDates = new Map<string, string | null>();
 
   for (const link of capture.links) {
     const linkUrl = parseUrl(link.href);
-    if (!linkUrl) continue;
-    const id = orderIdFromUrl(linkUrl);
+    if (!linkUrl || !hostMatches(linkUrl.hostname, allowedHosts)) continue;
+    const label = link.text.trim();
+    // A bare hash number counts only on an order-detail link, never a
+    // product fragment or a number elsewhere in the captured page.
+    const linkedNumber = /\/orders\/[^/]+\/?$/i.test(linkUrl.pathname)
+      ? /^#(\d{1,20})$/.exec(label)?.[1]
+      : undefined;
+    const id = orderIdFromUrl(linkUrl) ?? linkedNumber;
     if (!id) continue;
-    if (!idPositions.has(id)) idPositions.set(id, -1);
-    if (!idToUrl.has(id) && hostMatches(linkUrl.hostname, allowedHosts)) {
+    const position = linkedNumber
+      ? (new RegExp(`#${linkedNumber}(?![A-Z0-9])`, "i").exec(capture.text)
+          ?.index ?? -1)
+      : -1;
+    if (!idPositions.has(id)) idPositions.set(id, position);
+    if (linkedNumber && position >= 0) {
+      const rowEnd = capture.text.indexOf("\n", position);
+      rowDates.set(
+        id,
+        parseDateSnippet(
+          capture.text.slice(
+            position + label.length,
+            rowEnd < 0 ? undefined : rowEnd,
+          ),
+        ),
+      );
+    }
+    if (!idToUrl.has(id)) {
       idToUrl.set(id, link.href);
     }
   }
-  return { idPositions, idToUrl };
+  return { idPositions, idToUrl, rowDates };
 }
 
 function looksLikeHistoryPage(
@@ -201,11 +230,13 @@ function buildOrderList(
   idPositions: Map<string, number>,
   idToUrl: Map<string, string>,
   text: string,
+  rowDates: Map<string, string | null>,
 ): OrderListCandidate[] {
   return distinctIds.map((orderId) => {
     const position = idPositions.get(orderId) ?? -1;
-    const orderedAt =
-      position >= 0
+    const orderedAt = rowDates.has(orderId)
+      ? (rowDates.get(orderId) ?? null)
+      : position >= 0
         ? parseDateSnippet(text.slice(Math.max(0, position - 200), position))
         : null;
     return { orderId, orderUrl: idToUrl.get(orderId) ?? null, orderedAt };
@@ -240,7 +271,7 @@ export function classifyOrderCapture(
   const currentUrl = parseUrl(capture.url);
   const urlOrderId = currentUrl ? orderIdFromUrl(currentUrl) : null;
 
-  const { idPositions, idToUrl } = collectOrderIds(
+  const { idPositions, idToUrl, rowDates } = collectOrderIds(
     capture,
     options.allowedHosts,
   );
@@ -260,7 +291,13 @@ export function classifyOrderCapture(
   // exactly 1 id on a page that looks like a history/list page.
   return {
     kind: "order_list",
-    orders: buildOrderList(distinctIds, idPositions, idToUrl, capture.text),
+    orders: buildOrderList(
+      distinctIds,
+      idPositions,
+      idToUrl,
+      capture.text,
+      rowDates,
+    ),
     nextPageUrl: findNextPageUrl(capture, currentUrl, options.allowedHosts),
   };
 }

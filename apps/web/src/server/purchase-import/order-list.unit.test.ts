@@ -18,6 +18,93 @@ function capture(overrides: Partial<BrowserCapture>): BrowserCapture {
 }
 
 describe("classifyOrderCapture", () => {
+  it("does not borrow the date of a longer numeric order or turn promotional counts into orders", () => {
+    expect(
+      classifyOrderCapture(
+        capture({
+          url: "https://shop.example.test/account",
+          title: "Account",
+          text: "View all your orders\n#54321 September 12, 2026\n#5432 September 14, 2026",
+          links: [
+            {
+              id: "short",
+              href: "https://shop.example.test/account/orders/opaque",
+              text: "#5432",
+            },
+          ],
+        }),
+        { allowedHosts: ALLOWED_HOSTS },
+      ),
+    ).toMatchObject({
+      kind: "order_list",
+      orders: [{ orderId: "5432", orderedAt: "2026-09-14" }],
+    });
+    expect(
+      classifyOrderCapture(
+        capture({
+          url: "https://shop.example.test/account/orders/opaque",
+          title: "Order #54321",
+          text: "Order #54321 September 12, 2026. Order 2 or more items for free shipping.",
+        }),
+        { allowedHosts: ALLOWED_HOSTS },
+      ),
+    ).toEqual({ kind: "order" });
+  });
+
+  it("uses short linked order labels and the following date in an account row", () => {
+    const result = classifyOrderCapture(
+      capture({
+        url: "https://shop.example.test/account",
+        title: "Account",
+        text: "View all your orders\nOrder Date Total\n#54321 September 12, 2026 $12.00\n#54322 September 14, 2026 $18.00",
+        links: [
+          {
+            id: "one",
+            href: "https://shop.example.test/account/orders/opaque-one",
+            text: "#54321",
+          },
+          {
+            id: "two",
+            href: "https://shop.example.test/account/orders/opaque-two",
+            text: "#54322",
+          },
+          {
+            id: "foreign",
+            href: "https://other.example.test/account/orders/opaque-three",
+            text: "#54323",
+          },
+        ],
+      }),
+      { allowedHosts: ALLOWED_HOSTS },
+    );
+    expect(result).toEqual({
+      kind: "order_list",
+      nextPageUrl: null,
+      orders: [
+        {
+          orderId: "54321",
+          orderUrl: "https://shop.example.test/account/orders/opaque-one",
+          orderedAt: "2026-09-12",
+        },
+        {
+          orderId: "54322",
+          orderUrl: "https://shop.example.test/account/orders/opaque-two",
+          orderedAt: "2026-09-14",
+        },
+      ],
+    });
+    expect(
+      classifyOrderCapture(
+        capture({
+          url: "https://shop.example.test/account/orders/opaque-one",
+          title: "Order #54321",
+          text: "Order #54321 September 12, 2026 Total $12.00",
+        }),
+        { allowedHosts: ALLOWED_HOSTS },
+      ),
+    ).toEqual({ kind: "order" });
+  });
+
   it("classifies an Amazon-style history page with dated orders and a next link", () => {
     const cap = capture({
       url: "https://shop.example.test/order-history?startIndex=0",

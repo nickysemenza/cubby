@@ -15,7 +15,7 @@ import { structuredProductsFromJsonLd } from "./structured-products";
  * changes: it is recorded on every capture (the field the Mac's own capture
  * version used to fill) and decides which stored pages a re-read refreshes.
  */
-export const PAGE_DERIVATION_REVISION = 5;
+export const PAGE_DERIVATION_REVISION = 6;
 
 const MAX_READABLE_TEXT = 24 * 1_024;
 const MAX_LINKS = 200;

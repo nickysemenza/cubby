@@ -12,6 +12,7 @@ import {
 import { getDb } from "~/server/repo/database-helpers";
 import { insertWithShortcode } from "~/server/repo/shortcode-utils";
 
+import { capturedHtml } from "./browser.fixtures";
 import {
   fakeBroker,
   historyPage,
@@ -27,6 +28,8 @@ import {
 } from "./run-service";
 
 describe("account-sync order worklist", () => {
+  // Account tables can use short display numbers and literal row navigation;
+  // treating the listing as a purchase loses the detail page and its items.
   const ctx = withTestDb();
 
   async function seedAccount(
@@ -89,6 +92,37 @@ describe("account-sync order worklist", () => {
       bridge.ports,
     );
   }
+
+  it("claims the detail URL from a captured account table with short order numbers", async () => {
+    const { run } = await seedAccount();
+    const detailUrl = `https://${HOST}/account/orders/opaque-token`;
+    const listed = await listPage(
+      run.id,
+      "walk:account",
+      capturedHtml({
+        sourceURL: `https://${HOST}/account`,
+        title: "Account",
+        html: `<html><body><h1>Your account</h1><p>View all your orders</p>
+        <table><thead><tr><th>Order</th><th>Date</th><th>Total</th></tr></thead>
+        <tbody><tr onclick="window.location.href = '${detailUrl}'">
+        <td><span>#54321</span></td><td>September 12, 2026</td><td>$12.00</td>
+        </tr></tbody></table></body></html>`,
+      }),
+    );
+    expect(listed).toMatchObject({
+      kind: "order_list",
+      ordersSeen: 1,
+      pending: 1,
+    });
+    await expect(
+      claimNextImportWork(ctx.db, fakeBroker().namespace, run.id),
+    ).resolves.toMatchObject({
+      kind: "order",
+      orderId: "54321",
+      orderUrl: detailUrl,
+      orderedAt: "2026-09-12",
+    });
+  });
 
   it("records a history page as a worklist, skips covered orders, and refuses to finish while one is pending", async () => {
     const { vendor, account, run } = await seedAccount();

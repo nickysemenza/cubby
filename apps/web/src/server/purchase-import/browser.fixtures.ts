@@ -83,7 +83,7 @@ export function renderPage(page: SyntheticPage): string {
 }
 
 /** A completed capture of raw `html`, as the Mac would send it. */
-async function capturedHtml(input: {
+export async function capturedHtml(input: {
   sourceURL: string;
   title: string;
   html: string;
