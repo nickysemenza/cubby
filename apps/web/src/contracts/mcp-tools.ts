@@ -536,6 +536,11 @@ export const MCP_TOOLS = defineMcpTools({
         description:
           "One Run's live state: status, counts, findings, each target's outcome (`warning` holds a skip's reason), the agent's progress history, and its browser and write operations. Read this to follow a run instead of polling entity_read.",
       }),
+      sync_plan: mcpAction({
+        op: runContract.ops.syncPlan,
+        description:
+          "Preview browser sync for the current member's enabled accounts, optionally one Vendor account. Shows first sync, incremental cursor, resumable work with progress, or the run blocking sync. Advisory: starting rechecks admission.",
+      }),
       run_launch_preview: mcpAction({
         op: runContract.ops.targetedLaunch,
         description:
@@ -781,6 +786,12 @@ export const MCP_TOOLS = defineMcpTools({
         openWorld: true,
         description:
           'Start a targeted run. `purpose: "product_enrichment"` with `targets` (each a Product shortcode and the `sourceId` from imports_read.run_launch_preview; the run browses with the Vendor\'s browsing account) verifies identity facts and images from the Vendor\'s pages; targets are grouped into one run per Vendor account. `purpose: "purchase_validation"` with a `purchaseId` and a `sourceId` (a source id from imports_read.run_launch_preview, or `sourceId: null` when none is chosen) re-reads one Purchase\'s order against its source. Returns one entry per run: `created: true` with `run` (id, status) for a new run, or `created: false` with `blockingRun` when that Vendor account already has an active run — nothing is queued then; poll or wait for the blocking run and start again. Repeating a start while its run is active returns that run as `blockingRun`; a start with no Vendor account is blocked by an active run of the same purpose on the same target.',
+      }),
+      start_sync: mcpAction({
+        op: runContract.ops.startSync,
+        openWorld: true,
+        description:
+          "Start or resume browser sync for one owned, enabled Vendor account. Optional backfill supplies inclusive from/to calendar dates. Returns runId and resumed. Other purposes and selected charge searches block admission.",
       }),
       start_charge_run: mcpAction({
         op: vendorContract.ops.startChargeRun,

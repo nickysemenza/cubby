@@ -33,11 +33,8 @@ import {
 import { dispatchRunEvent } from "./dispatch";
 import { matchProcessedOrderMail } from "./gmail/match";
 import { settleRetainedPaymentEvidence } from "./retained-settlement";
-import {
-  AccountOccupiedError,
-  CHARGE_HOLDING_STATUSES,
-  startOrResumeRun,
-} from "./run-service";
+import { AccountOccupiedError, startOrResumeRun } from "./run-service";
+import { CHARGE_HOLDING_STATUSES } from "./sync-admission";
 
 const normalizeMerchant = (value: string) =>
   value.trim().toLowerCase().replaceAll(/\s+/g, " ");

@@ -150,8 +150,7 @@
                         accountClient: SelectedAccounts(
                             client: URLSessionBrowserBridgeVendorAccountClient(
                                 baseURL: baseURL, credentials: context.credentials), accountID: accountID),
-                        syncClient: URLSessionBrowserBridgeSyncClient(
-                            baseURL: baseURL, credentials: context.credentials),
+                        syncClient: BrowserBridgeSyncClient(client: context.client),
                         executorFactory: { _, accountID in
                             try MacBrowserCommandExecutor(
                                 target: target, accountID: accountID, evidenceUploader: uploader)
@@ -172,25 +171,26 @@
                             } catch { CLI.printError(error.localizedDescription) }
                         })
                     do {
-                        let requests: [BrowserBridgeSyncResponse]
+                        let requests: [StartSyncOutput]
                         if action == .connect {
                             try await coordinator.connect(browser: target.browser)
                             requests = []
                         } else {
-                            requests = try await coordinator.syncNow(browser: target.browser)
+                            requests = try await coordinator.syncNow(
+                                browser: target.browser, accountID: accountID)
                             for request in requests { try printJSON(request) }
                         }
                         let deadline = Date.now.addingTimeInterval(Double(duration))
                         while Date.now < deadline {
                             try await Task.sleep(for: .milliseconds(100))
-                            if !requests.isEmpty, requests.allSatisfy({ completed[$0.runID] != nil }) {
+                            if !requests.isEmpty, requests.allSatisfy({ completed[$0.runId] != nil }) {
                                 break
                             }
                         }
                         let status = coordinator.currentStatus
                         await coordinator.disconnect()
                         if !requests.isEmpty {
-                            guard requests.allSatisfy({ completed[$0.runID]?.isSuccessful == true }) else {
+                            guard requests.allSatisfy({ completed[$0.runId]?.isSuccessful == true }) else {
                                 throw CLIError.message(
                                     "Requested browser runs did not all complete successfully within the bound; inspect the emitted review/authentication outcomes."
                                 )

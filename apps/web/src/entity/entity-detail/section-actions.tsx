@@ -61,6 +61,11 @@ const sectionActions = {
     ),
   },
   vendorAccount: {
+    syncAccount: action(() =>
+      import("~/app/vendors/account-sync").then((m) => ({
+        default: m.SyncAccountAction,
+      })),
+    ),
     searchCharges: action(() =>
       import("~/app/vendors/charge-search").then((m) => ({
         default: m.SearchChargesAction,

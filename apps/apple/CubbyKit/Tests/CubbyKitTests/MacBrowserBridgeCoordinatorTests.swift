@@ -97,8 +97,9 @@
         }
 
         private struct NoSync: BrowserBridgeSyncRequesting {
+            func syncPlan() async throws -> SyncPlanOutput { .init(accounts: []) }
             func requestSync(vendorAccountID: String, backfill: BrowserBridgeBackfillRange?) async throws
-                -> BrowserBridgeSyncResponse
+                -> StartSyncOutput
             { throw URLError(.unsupportedURL) }
         }
 
@@ -125,13 +126,13 @@
 
             let ticks = Ticks()
 
-            init() throws {
+            init(syncClient: any BrowserBridgeSyncRequesting = NoSync()) throws {
                 let store = InMemorySessionTokenStore()
                 try store.save(.bearer("tok"), for: "127.0.0.1:9")
                 coordinator = MacBrowserBridgeCoordinator(
                     baseURL: URL(string: "http://127.0.0.1:9")!,
                     credentials: CredentialProvider(host: "127.0.0.1:9", store: store),
-                    deviceID: UUID(), accountClient: roster, syncClient: NoSync(),
+                    deviceID: UUID(), accountClient: roster, syncClient: syncClient,
                     executorFactory: { [unowned self] _, accountID in
                         openedExecutors.append(accountID)
                         return try MacBrowserCommandExecutor(
@@ -147,6 +148,63 @@
                         }
                     })
             }
+        }
+
+        private actor SyncRequests: BrowserBridgeSyncRequesting {
+            let plan: SyncPlanOutput
+            private(set) var submitted: [String] = []
+
+            init() throws {
+                // Failure modes: a selected blocked account silently succeeds; Sync all drops
+                // blocked or omitted accounts; selecting one eligible account submits others.
+                plan = try JSONDecoder().decode(
+                    SyncPlanOutput.self,
+                    from: Data(
+                        #"""
+                        {"accounts":[
+                          {"shortcode":"VACCT-AAAA","label":"Blocked","vendorName":"Example shop",
+                           "action":{"kind":"blocked","runId":"RUN-EXAMPLE","purpose":"product_enrichment"},
+                           "line":"Finish selected work.","disabledReason":"Finish selected work."},
+                          {"shortcode":"VACCT-BBBB","label":"Eligible","vendorName":"Example shop",
+                           "action":{"kind":"firstSync"},"line":"First sync.","disabledReason":null}
+                        ]}
+                        """#.utf8))
+            }
+
+            func syncPlan() async throws -> SyncPlanOutput { plan }
+            func requestSync(vendorAccountID: String, backfill: BrowserBridgeBackfillRange?) async throws
+                -> StartSyncOutput
+            {
+                submitted.append(vendorAccountID)
+                return .init(runId: "RUN-EXAMPLE", resumed: false)
+            }
+        }
+
+        @Test("Selected sync refuses blocked accounts; Sync all submits eligible work and reports every skip")
+        func syncAdmission() async throws {
+            let sync = try SyncRequests()
+            let harness = try Harness(syncClient: sync)
+            harness.roster.set(["VACCT-AAAA", "VACCT-BBBB", "VACCT-CCCC"])
+            do {
+                _ = try await harness.coordinator.syncNow(browser: .chrome, accountID: "VACCT-AAAA")
+                Issue.record("Selected blocked account succeeded")
+            } catch {
+                #expect(error.localizedDescription.contains("Finish selected work."))
+            }
+            #expect(await sync.submitted.isEmpty)
+            let selected = try await harness.coordinator.syncNow(browser: .chrome, accountID: "VACCT-BBBB")
+            #expect(selected.count == 1)
+            #expect(await sync.submitted == ["VACCT-BBBB"])
+            do {
+                _ = try await harness.coordinator.syncNow(browser: .chrome)
+                Issue.record("Sync all silently skipped accounts")
+            } catch {
+                #expect(error.localizedDescription.contains("VACCT-AAAA: Finish selected work."))
+                #expect(error.localizedDescription.contains("VACCT-CCCC: This account is unavailable"))
+                #expect(error.localizedDescription.contains("submitted 1"))
+            }
+            #expect(await sync.submitted == ["VACCT-BBBB", "VACCT-BBBB"])
+            await harness.coordinator.disconnect()
         }
 
         @Test("A newly listed account gets a bridge without reconnecting existing ones")

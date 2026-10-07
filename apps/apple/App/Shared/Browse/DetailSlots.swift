@@ -47,6 +47,7 @@ enum DetailSlotRegistry {
         .purchaseProjectAllocation: { reportSlot(.purchase_projectAllocation, $0) },
         .purchaseFinancialSettlement: { reportSlot(.purchase_financialSettlement, $0) },
         .expenseSettlement: { reportSlot(.expense_settlement, $0) },
+        .vendorAccountSync: { reportSlot(.vendorAccount_sync, $0) },
         .vendorAccountChargeSearch: { reportSlot(.vendorAccount_chargeSearch, $0) },
         .ledgerPartyWardrobe: { AnyView(WardrobeDetailSlot(ownerID: $0.id, ownerName: $0.title)) },
         .vendorOrderMail: { AnyView(OrderMailDetailSlot(scope: .vendor($0.id, nil))) },

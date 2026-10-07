@@ -10,9 +10,19 @@ struct BrowserBridgeSettingsModelTests {
     private final class StubController: BrowserBridgeControlling {
         var backfills: [BrowserBridgeBackfillRange?] = []
         var failure: (any Error)?
+        var selectedAccountIDs: [String?] = []
+        var planReads = 0
+
+        func syncPlan() async throws -> SyncPlanOutput {
+            planReads += 1
+            return .init(accounts: [])
+        }
 
         func connect(browser: BrowserChoice) async throws {}
-        func syncNow(browser: BrowserChoice, backfill: BrowserBridgeBackfillRange?) async throws {
+        func syncNow(
+            browser: BrowserChoice, accountID: String?, backfill: BrowserBridgeBackfillRange?
+        ) async throws {
+            selectedAccountIDs.append(accountID)
             backfills.append(backfill)
             if let failure { throw failure }
         }
@@ -42,6 +52,8 @@ struct BrowserBridgeSettingsModelTests {
         await settle(model)
 
         #expect(controller.backfills == [nil])
+        #expect(controller.selectedAccountIDs == [nil])
+        #expect(controller.planReads == 1)
         #expect(model.error == nil)
     }
 
@@ -50,10 +62,12 @@ struct BrowserBridgeSettingsModelTests {
         let model = BrowserBridgeSettingsModel()
         model.install(controller: controller)
 
-        model.syncNow(browser: .chrome, backfill: range)
+        model.syncNow(browser: .chrome, accountID: "VACCT-4K7M", backfill: range)
         await settle(model)
 
         #expect(controller.backfills == [range])
+        #expect(controller.selectedAccountIDs == ["VACCT-4K7M"])
+        #expect(controller.planReads == 1)
         #expect(!model.isSyncing)
     }
 

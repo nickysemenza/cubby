@@ -69,6 +69,7 @@ import {
 import type { Trade } from "@cubby/schemas/task-fields";
 import { vendorAccountCursor } from "@cubby/schemas/vendor-account-fields";
 import { vendorAgentHints } from "@cubby/schemas/vendor-import-fields";
+import { ACTIVE_RUN_STATUSES } from "@cubby/shared/client-constants";
 import { sha256Hex, sha256Uuid } from "@cubby/shared/sha256";
 import {
   and,
@@ -186,6 +187,11 @@ import { classifyOrderCapture } from "./order-list";
 import { loadReceiptEvidenceForRun } from "./receipt-evidence";
 import { runCompletionNotice } from "./run-completion-notice";
 import { fetchPublicPage, type FetchPage } from "./server-page-fetch";
+import {
+  CHARGE_HOLDING_STATUSES,
+  accountSyncEligibility,
+  readAccountSyncAdmission,
+} from "./sync-admission";
 import { importVendorOrder } from "./writer";
 
 /**
@@ -225,19 +231,6 @@ const targetWorkOrder = [
   asc(runTarget.position),
   asc(runTarget.createdAt),
   asc(runTarget.id),
-] as const;
-
-export const ACTIVE_RUN_STATUSES = [
-  "running",
-  "paused_auth",
-  "paused_offline",
-  "paused_approval",
-] as const;
-
-/** Statuses in which a charge run holds its hunts (a failed dispatch is retried). */
-export const CHARGE_HOLDING_STATUSES = [
-  ...ACTIVE_RUN_STATUSES,
-  "dispatch_failed",
 ] as const;
 
 /** An implicit start, restart, or retry must not work a charge run's account. */
@@ -341,6 +334,7 @@ export async function startOrResumeRun(
         id: vendorAccount.id,
         vendorId: vendorAccount.vendorId,
         browserSyncEnabled: vendorAccount.browserSyncEnabled,
+        syncEligible: accountSyncEligibility(),
         actorUserId: ledgerParty.userId,
         actorName: user.name,
         actorEmail: user.email,
@@ -349,6 +343,7 @@ export async function startOrResumeRun(
         actorLedgerPartyKind: ledgerParty.kind,
       })
       .from(vendorAccount)
+      .leftJoin(vendor, eq(vendor.id, vendorAccount.vendorId))
       .innerJoin(
         ledgerParty,
         and(
@@ -370,6 +365,10 @@ export async function startOrResumeRun(
       throw new Error("Vendor account is not owned by an authenticated member");
     if (!scope.browserSyncEnabled)
       throw new Error("Browser sync is not enabled for this Vendor account");
+    if (!scope.syncEligible)
+      throw new Error(
+        "Browser sync requires an active, paused_auth, or paused_offline account with a non-deleted Vendor",
+      );
     if (backfill) {
       // A backfill never joins a different active run: resuming an
       // incremental sync or another range would silently drop the request.
@@ -396,30 +395,18 @@ export async function startOrResumeRun(
           "Vendor account already has an active import run; finish or stop it before starting this backfill",
         );
     }
-    if (!chargeHunts) await assertNoHoldingChargeRun(tx, input.vendorAccountId);
-    // Only an account sync may be resumed here: an enrichment or validation
-    // run holding the account is other work, not this request's run.
-    const [otherWork] = await tx
-      .select({
-        shortcode: runTable.shortcode,
-        purpose: runTable.purpose,
-        input: runTable.input,
-        vendorId: runTable.vendorId,
-      })
-      .from(runTable)
-      .where(
-        and(
-          eq(runTable.vendorAccountId, input.vendorAccountId),
-          inArray(runTable.status, [...ACTIVE_RUN_STATUSES]),
-          ne(runTable.purpose, "account_sync"),
-        ),
-      )
-      .limit(1);
-    if (otherWork)
-      throw new AccountOccupiedError(
-        otherWork.shortcode,
-        runWorkLabel(otherWork).toLowerCase(),
-      );
+    const admission = await readAccountSyncAdmission(tx, input.vendorAccountId);
+    if (admission?.kind === "blocked") {
+      if (admission.isChargeSearch) {
+        if (!chargeHunts)
+          throw new ActiveChargeRunError(admission.run.shortcode);
+      } else {
+        throw new AccountOccupiedError(
+          admission.run.shortcode,
+          runWorkLabel(admission.run).toLowerCase(),
+        );
+      }
+    }
     if (chargeHunts) {
       const [active] = await tx
         .select({ shortcode: runTable.shortcode })

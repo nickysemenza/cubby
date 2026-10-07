@@ -26,86 +26,37 @@ public struct BrowserBridgeBackfillRange: Codable, Sendable, Hashable {
     }
 }
 
-public struct BrowserBridgeSyncRequest: Codable, Sendable, Hashable {
-    public let vendorAccount: String
-    /// Encoded only when present (synthesized `encodeIfPresent`), so a plain sync keeps its body.
-    public let backfill: BrowserBridgeBackfillRange?
-
-    public init(vendorAccount: String, backfill: BrowserBridgeBackfillRange? = nil) {
-        self.vendorAccount = vendorAccount
-        self.backfill = backfill
-    }
-}
-
-public struct BrowserBridgeSyncResponse: Codable, Sendable, Hashable {
-    public let runID: String
-    public let resumed: Bool
-
-    public init(runID: String, resumed: Bool) {
-        self.runID = runID
-        self.resumed = resumed
-    }
-
-    private enum CodingKeys: String, CodingKey {
-        case runID = "runId"
-        case resumed
-    }
-}
-
 public protocol BrowserBridgeSyncRequesting: Sendable {
+    func syncPlan() async throws -> SyncPlanOutput
     func requestSync(vendorAccountID: String, backfill: BrowserBridgeBackfillRange?) async throws
-        -> BrowserBridgeSyncResponse
+        -> StartSyncOutput
 }
 
 extension BrowserBridgeSyncRequesting {
-    public func requestSync(vendorAccountID: String) async throws -> BrowserBridgeSyncResponse {
+    public func requestSync(vendorAccountID: String) async throws -> StartSyncOutput {
         try await requestSync(vendorAccountID: vendorAccountID, backfill: nil)
     }
 }
 
-public actor URLSessionBrowserBridgeSyncClient: BrowserBridgeSyncRequesting {
-    public struct Failure: LocalizedError, Sendable {
-        public let status: Int
-        public let message: String
+public struct BrowserBridgeSyncClient: BrowserBridgeSyncRequesting {
+    private let client: CubbyClient
 
-        public var errorDescription: String? { message }
-
-        public init(status: Int, message: String) {
-            self.status = status
-            self.message = message
-        }
+    public init(client: CubbyClient) {
+        self.client = client
     }
 
-    private struct ErrorBody: Decodable { let error: String }
-
-    private let baseURL: URL
-    private let credentials: CredentialProvider
-    private let session: URLSession
-
-    public init(
-        baseURL: URL, credentials: CredentialProvider, session: URLSession = .cubbyShared
-    ) {
-        self.baseURL = baseURL
-        self.credentials = credentials
-        self.session = session
+    public func syncPlan() async throws -> SyncPlanOutput {
+        try await client.syncPlan(.init())
     }
 
     public func requestSync(vendorAccountID: String, backfill: BrowserBridgeBackfillRange?)
-        async throws -> BrowserBridgeSyncResponse
+        async throws -> StartSyncOutput
     {
-        var request = try await AuthenticatedSocketSupport.agentRequest(
-            baseURL: baseURL, path: "/api/import/agent/sync", credentials: credentials,
-            jsonBody: try JSONEncoder().encode(
-                BrowserBridgeSyncRequest(vendorAccount: vendorAccountID, backfill: backfill)))
-        request.timeoutInterval = 30
-        let (data, response) = try await session.data(for: request)
-        let status = (response as? HTTPURLResponse)?.statusCode ?? 0
-        guard (200..<300).contains(status) else {
-            let message =
-                (try? JSONDecoder().decode(ErrorBody.self, from: data).error)
-                ?? "Browser sync failed with HTTP \(status)."
-            throw Failure(status: status, message: message)
-        }
-        return try JSONDecoder().decode(BrowserBridgeSyncResponse.self, from: data)
+        try await client.startSync(
+            .init(
+                vendorAccountId: vendorAccountID,
+                backfill: backfill.map {
+                    .init(from: PlainDate(rawValue: $0.from), to: PlainDate(rawValue: $0.to))
+                }))
     }
 }

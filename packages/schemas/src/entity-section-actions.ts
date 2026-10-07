@@ -11,6 +11,8 @@ export const SECTION_ACTION_IDS = [
   "matchStatement",
   /** Start one browser run for the selected statement charges. */
   "searchCharges",
+  /** Start or resume the account browser sync. */
+  "syncAccount",
   /** Put what the expense bought on a shelf. */
   "receiveExpense",
   /** File the expense's parts under its purchase. */

@@ -743,6 +743,14 @@ extension JSONValue {
  * hand-written in `CubbyClient.swift`.
  */
 const CLIENT_PASSTHROUGH_METHODS = {
+  "run.syncPlan": {
+    method: "syncPlan",
+    doc: "Preview the member browser account syncs.",
+  },
+  "run.startSync": {
+    method: "startSync",
+    doc: "Start or resume one account sync or explicit history range.",
+  },
   "chatgpt.authorizationHost": {
     method: "chatGptAuthorizationHost",
     doc: null,

@@ -409,6 +409,8 @@ export const ripple = {
     ["financialTransaction"],
     ["problems"],
   ]),
+  /** Account status and last run move when a sync starts. */
+  vendorAccountOnly: exactRippleTags([["vendorAccount"]]),
   vendor: rippleTags([
     FIELD_SUGGESTIONS,
     ["project"],

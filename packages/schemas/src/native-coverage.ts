@@ -273,6 +273,7 @@ export const nativeCoverage = {
       "purchase.financial-settlement",
       "expense.settlement",
       "vendorAccount.charge-search",
+      "vendorAccount.sync",
       // A run's progress, approvals, findings, transcript, log, usage and changes: the same report
       // view draws the server's `records` rows, polls (one batched read) while the run is live,
       // and runs the commands the server offers (approve, reject, apply, dismiss, retry) only
@@ -315,6 +316,7 @@ export const nativeCoverage = {
     ...implemented([
       "matchStatement",
       "searchCharges",
+      "syncAccount",
       "receiveExpense",
       "splitExpense",
       "linkExpenses",

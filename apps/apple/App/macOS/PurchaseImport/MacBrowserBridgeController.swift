@@ -15,7 +15,7 @@ final class MacBrowserBridgeController: BrowserBridgeControlling {
     private lazy var coordinator = MacBrowserBridgeCoordinator(
         baseURL: baseURL, credentials: credentials, deviceID: AppInstallationID.current,
         accountClient: URLSessionBrowserBridgeVendorAccountClient(baseURL: baseURL, credentials: credentials),
-        syncClient: URLSessionBrowserBridgeSyncClient(baseURL: baseURL, credentials: credentials),
+        syncClient: BrowserBridgeSyncClient(client: client),
         executorFactory: { [baseURL, client] browser, accountID in
             try MacBrowserCommandExecutor(
                 target: Self.executionTarget(browser: browser, baseURL: baseURL),
@@ -57,8 +57,14 @@ final class MacBrowserBridgeController: BrowserBridgeControlling {
         }
     }
 
-    func syncNow(browser: BrowserChoice, backfill: BrowserBridgeBackfillRange?) async throws {
-        _ = try await coordinator.syncNow(browser: browser, backfill: backfill)
+    func syncPlan() async throws -> SyncPlanOutput {
+        try await coordinator.syncPlan()
+    }
+
+    func syncNow(
+        browser: BrowserChoice, accountID: String?, backfill: BrowserBridgeBackfillRange?
+    ) async throws {
+        _ = try await coordinator.syncNow(browser: browser, accountID: accountID, backfill: backfill)
     }
 
     func disconnect() async {

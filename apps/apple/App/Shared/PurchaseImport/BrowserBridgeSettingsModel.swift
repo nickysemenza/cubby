@@ -5,7 +5,10 @@ import Observation
 @MainActor
 protocol BrowserBridgeControlling: AnyObject {
     func connect(browser: BrowserChoice) async throws
-    func syncNow(browser: BrowserChoice, backfill: BrowserBridgeBackfillRange?) async throws
+    func syncPlan() async throws -> SyncPlanOutput
+    func syncNow(
+        browser: BrowserChoice, accountID: String?, backfill: BrowserBridgeBackfillRange?
+    ) async throws
     func disconnect() async
     func raiseAuthenticationWindow(for accountID: String)
     func appDidBecomeActive()
@@ -51,6 +54,9 @@ final class BrowserBridgeSettingsModel {
     private(set) var accountCount = 0
     private(set) var accountStates: [BrowserBridgeAccountState] = []
     private(set) var error: String?
+    private(set) var syncPlans: [SyncPlanAccount] = []
+    private(set) var syncPlanError: String?
+    @ObservationIgnored private var syncPlanGeneration = UUID()
     @ObservationIgnored private weak var controller: (any BrowserBridgeControlling)?
 
     var isConfigured: Bool { controller != nil }
@@ -72,6 +78,11 @@ final class BrowserBridgeSettingsModel {
     /// A roster refresh republishes the list while existing bridges stay connected, so an
     /// account that is still listed keeps its connection, error and sign-in state.
     func setAccounts(_ accounts: [BrowserBridgeVendorAccount]) {
+        let rosterChanged =
+            Set(accounts.map(\.id)) != Set(accountStates.map(\.id))
+            || accounts.contains { account in
+                accountStates.first { $0.id == account.id }?.label != account.label
+            }
         let existing = Dictionary(uniqueKeysWithValues: accountStates.map { ($0.id, $0) })
         accountStates = accounts.sorted { $0.label.localizedStandardCompare($1.label) == .orderedAscending }
             .map { account in
@@ -83,6 +94,13 @@ final class BrowserBridgeSettingsModel {
                 state.label = account.label
                 return state
             }
+        if rosterChanged {
+            let generation = syncPlanGeneration
+            Task { [weak self] in
+                guard let self, syncPlanGeneration == generation else { return }
+                await refreshSyncPlan()
+            }
+        }
     }
 
     func setAccountStatus(_ status: BrowserBridgeConnectionStatus, accountID: String) {
@@ -127,6 +145,7 @@ final class BrowserBridgeSettingsModel {
         guard let controller else { return }
         do {
             try await controller.connect(browser: Self.persistedBrowser)
+            await refreshSyncPlan()
         } catch {
             self.error = error.localizedDescription
             Diagnostics.report(error, context: "purchaseImport.browser.connect")
@@ -139,6 +158,7 @@ final class BrowserBridgeSettingsModel {
         Task { [weak self] in
             do {
                 try await controller.connect(browser: browser)
+                await self?.refreshSyncPlan()
             } catch {
                 guard let self else { return }
                 self.error = error.localizedDescription
@@ -147,20 +167,42 @@ final class BrowserBridgeSettingsModel {
         }
     }
 
-    func syncNow(browser: BrowserChoice, backfill: BrowserBridgeBackfillRange? = nil) {
+    var syncableAccountCount: Int { syncPlans.filter { $0.disabledReason == nil }.count }
+
+    func refreshSyncPlan() async {
+        guard let controller else { return }
+        let generation = UUID()
+        syncPlanGeneration = generation
+        do {
+            let plans = try await controller.syncPlan().accounts
+            guard syncPlanGeneration == generation else { return }
+            syncPlans = plans
+            syncPlanError = nil
+        } catch {
+            guard syncPlanGeneration == generation else { return }
+            syncPlanError = error.localizedDescription
+            Diagnostics.report(error, context: "purchaseImport.browser.syncPlan")
+        }
+    }
+
+    func syncNow(
+        browser: BrowserChoice, accountID: String? = nil, backfill: BrowserBridgeBackfillRange? = nil
+    ) {
         guard let controller, !isSyncing else { return }
         isSyncing = true
         syncStartedAt = .now
         error = nil
         Task { [weak self] in
             do {
-                try await controller.syncNow(browser: browser, backfill: backfill)
+                try await controller.syncNow(browser: browser, accountID: accountID, backfill: backfill)
                 guard let self else { return }
+                await refreshSyncPlan()
                 lastCompletedAt = .now
                 isSyncing = false
                 syncStartedAt = nil
             } catch {
                 guard let self else { return }
+                await refreshSyncPlan()
                 self.error = error.localizedDescription
                 isSyncing = false
                 syncStartedAt = nil
@@ -171,9 +213,12 @@ final class BrowserBridgeSettingsModel {
 
     func disconnect() async {
         await controller?.disconnect()
+        syncPlanGeneration = UUID()
+        syncPlanError = nil
         status = .disconnected
         setAccountCounts(connected: 0, total: 0)
         accountStates = []
+        syncPlans = []
     }
 
     var statusLabel: String {

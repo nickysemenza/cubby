@@ -41,6 +41,7 @@ export type RippleKey =
   | "relatednessProduct"
   | "projectOnly"
   | "runOnly"
+  | "vendorAccountOnly"
   | "memberLogins"
   | "productOnly"
   | "recommendationPlacement"
