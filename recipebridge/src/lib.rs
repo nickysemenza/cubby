@@ -44,6 +44,7 @@ mod food_calculation;
 mod food_mappings;
 mod isbn;
 mod needs;
+mod page;
 mod parse;
 mod reconcile;
 mod scaling;
@@ -59,6 +60,7 @@ pub use food_calculation::*;
 pub use food_mappings::*;
 pub use isbn::*;
 pub use needs::*;
+pub use page::*;
 pub use parse::*;
 pub use scaling::*;
 

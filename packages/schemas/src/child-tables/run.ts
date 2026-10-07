@@ -190,7 +190,11 @@ export const runChildren = [
       },
     ],
   }),
-  /** Immutable R2-backed evidence scoped to a run target, never a shared Image. */
+  /**
+   * Immutable R2-backed evidence of a run, never a shared Image. A targeted
+   * run's evidence names its target; an account sync's captured pages (the
+   * DOM the Mac sent) belong to the run alone.
+   */
   defineChildTable({
     name: "RunEvidence",
     exportName: "runEvidence",
@@ -210,7 +214,6 @@ export const runChildren = [
       {
         key: "targetId",
         kind: "uuid",
-        notNull: true,
         reference: { table: "runTarget", column: "id" },
       },
       { key: "kind", kind: "text", notNull: true },
