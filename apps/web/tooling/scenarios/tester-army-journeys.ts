@@ -493,6 +493,9 @@ export async function seedJourneyWorld(
     };
   };
   seed["runs-list-facts"] = await enrichmentRun(JOURNEY_NAMES.enrichVendor);
+  seed["run-detail-enrichment"] = await enrichmentRun(
+    JOURNEY_NAMES.enrichDetailVendor,
+  );
   seed["runs-list-phone"] = await enrichmentRun(
     JOURNEY_NAMES.enrichPhoneVendor,
   );

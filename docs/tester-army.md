@@ -34,7 +34,9 @@ account into a browser-synced one (its Vendor becomes an online account);
 reading a finished mail import's Restart inputs (Vendor and order id); a
 Run console journey (live progress, resolving a finding); and the Runs list
 showing a live enrichment run's work label, target summary, latest step,
-named targets and changed count, on desktop and at a phone width. The Run console debug log is not cursor-paged in
+named targets and changed count, on desktop and at a phone width; and an
+enrichment run's page counting Products (never orders) and naming its
+targets. The Run console debug log is not cursor-paged in
 the app (it caps at 2,000 events), so paging is not asserted. Three coupled
 import journeys follow (see below).
 

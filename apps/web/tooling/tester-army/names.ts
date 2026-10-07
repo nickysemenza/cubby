@@ -16,6 +16,7 @@ export const JOURNEY_NAMES = {
   restartOrderId: "SYN-RESTART-7",
   enrichVendor: "Synthetic Enrichment Seeds",
   enrichPhoneVendor: "Synthetic Pocket Seeds",
+  enrichDetailVendor: "Synthetic Ledger Seeds",
   enrichTargets: [
     "Synthetic Nasturtium Seed Packet",
     "Synthetic Tomato Seed Mix",

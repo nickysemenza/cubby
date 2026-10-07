@@ -25,6 +25,15 @@ const runFacts = z.object({
   names: z.array(z.string()),
 });
 
+const runPageFacts = z.object({
+  products: z.number(),
+  enriched: z.number(),
+  skipped: z.number(),
+  waitingOnYou: z.number(),
+  toGo: z.number(),
+  names: z.array(z.string()),
+});
+
 /** Reading a run never changes it: still running, targets as seeded. */
 const runUntouched = (key: string): DbCheck => ({
   label: "reading the run leaves it and its targets as they were",
@@ -732,6 +741,43 @@ export const journeys: Journey[] = [
       },
     ],
     visible: () => [],
+    db: [runUntouched("run")],
+  },
+  {
+    id: "run-detail-enrichment",
+    title: "an enrichment run's page counts Products and names its targets",
+    // The run page's report sections and agent glance are web layouts.
+    webOnly: true,
+    start: "run",
+    steps: [
+      {
+        goal: "Read this run's Counts and its Targets and outcome sections.",
+        check: {
+          visible: () => [
+            "Reading product pages",
+            "1/3 done · 1 skipped · 1 to go",
+          ],
+        },
+        read: {
+          instruction:
+            "From the run's Counts section: the number shown for Products, Enriched, Skipped, Waiting on you, and To go; and from Targets and outcome, the target record names in order.",
+          schema: runPageFacts,
+          expected: () => ({
+            products: 3,
+            enriched: 1,
+            skipped: 1,
+            waitingOnYou: 0,
+            toGo: 1,
+            names: JOURNEY_NAMES.enrichTargets.map(
+              (name) => `${name} (${JOURNEY_NAMES.enrichDetailVendor})`,
+            ),
+          }),
+        },
+      },
+    ],
+    // An enrichment run never counts orders.
+    visible: () => [],
+    absent: () => ["Orders seen"],
     db: [runUntouched("run")],
   },
   {
