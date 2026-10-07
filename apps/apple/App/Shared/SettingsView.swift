@@ -311,7 +311,9 @@ struct SettingsView: View {
                 if status == .denied {
                     Button(status.label) {
                         // The first request lists Cubby under Screen Recording so it can be allowed.
-                        if pane == .screenRecording { _ = MacBrowserPermissionSnapshot.requestScreenRecording() }
+                        if pane == .screenRecording {
+                            _ = MacBrowserPermissionSnapshot.requestScreenRecording()
+                        }
                         MacBrowserPermissionSnapshot.openSettings(pane)
                     }
                 } else {

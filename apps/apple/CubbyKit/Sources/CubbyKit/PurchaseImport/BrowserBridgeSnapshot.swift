@@ -198,7 +198,8 @@ public enum BrowserBridgeCommandSummary {
         case .failed(let payload):
             if let page = page(payload.observation.url) { parts.append(page) }
             if let gap = payload.screenshotGap {
-                parts.append("\(label(gap)) → \(payload.code == .uploadFailed ? "upload failed" : "screenshot unavailable")")
+                let consequence = payload.code == .uploadFailed ? "upload failed" : "screenshot unavailable"
+                parts.append("\(label(gap)) → \(consequence)")
             } else {
                 parts.append("failed: \(label(payload.code))")
             }

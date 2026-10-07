@@ -11,7 +11,7 @@ struct BrowserSnapshotTests {
     @Test("A DOM snapshot inflates back to the exact UTF-8 bytes it describes")
     func domRoundTrip() throws {
         let html =
-            "<!doctype html><html><head><title>Row 7 Seeds · Orders</title></head><body><p>Café crème — ✓</p></body></html>"
+            "<!doctype html><html><head><title>Example Seeds · Orders</title></head><body><p>Café crème — ✓</p></body></html>"
         let dom = try BrowserDOMEncoding.encode(html: html)
 
         let bytes = Data(html.utf8)
@@ -115,14 +115,16 @@ struct BrowserSnapshotTests {
         let javascriptOff = ExecutionFailure.appleScript(
             errorNumber: 12,
             message:
-                "Executing JavaScript through AppleScript is turned off. To turn it on, from the menu bar, go to View > Developer > Allow JavaScript from Apple Events.")
+                "Executing JavaScript through AppleScript is turned off. To turn it on, from the menu bar, "
+                + "go to View > Developer > Allow JavaScript from Apple Events.")
         #expect(javascriptOff.code == .javascriptDisabled)
         #expect(!javascriptOff.retryable)
 
         let safariOff = ExecutionFailure.appleScript(
             errorNumber: 8,
             message:
-                "You must enable the 'Allow JavaScript from Apple Events' option in Safari's Develop menu to use 'do JavaScript'.")
+                "You must enable the 'Allow JavaScript from Apple Events' option in Safari's Develop menu "
+                + "to use 'do JavaScript'.")
         #expect(safariOff.code == .javascriptDisabled)
 
         let denied = ExecutionFailure.appleScript(errorNumber: -1743, message: nil)
@@ -191,20 +193,20 @@ struct BrowserSnapshotTests {
     func commandSummary() throws {
         let navigate = BrowserBridgeCommandSummary.line(
             operation: .navigate(
-                url: try #require(URL(string: "https://row7seeds.example/orders")),
-                allowedHosts: ["row7seeds.example"]),
+                url: try #require(URL(string: "https://seeds.example.test/orders")),
+                allowedHosts: ["seeds.example.test"]),
             outcome: .completed(
                 snapshot: nil,
                 observation: BrowserObservation(
-                    url: "https://row7seeds.example/orders?page=2", title: "Orders",
+                    url: "https://seeds.example.test/orders?page=2", title: "Orders",
                     readyState: .complete, window: .init(recovered: false, minimized: false),
                     screenRecording: .granted, durationMs: 40)))
-        #expect(navigate == "navigate · row7seeds.example/orders · complete")
+        #expect(navigate == "navigate · seeds.example.test/orders · complete")
 
         let captureFailed = BrowserBridgeCommandSummary.line(
             operation: .capture(
                 BrowserBridgeOperationCapture(
-                    _type: .capture, allowedHosts: ["row7seeds.example"], screenshot: .required)),
+                    _type: .capture, allowedHosts: ["seeds.example.test"], screenshot: .required)),
             outcome: .failed(
                 code: .screenshotUnavailable, message: "", retryable: true,
                 screenshotGap: .windowMinimized, observation: .unobserved))
@@ -223,13 +225,22 @@ struct BrowserSnapshotTests {
         @Test("An adopted window's capture ID comes from its bounds, then its title, never a guess")
         func captureWindowMatching() throws {
             let state = try #require(
-                MacBrowserCommandExecutor.parseWindowState("false|100,50,1300,850|Orders | Row 7"))
-            #expect(state.title == "Orders | Row 7")
+                MacBrowserCommandExecutor.parseWindowState("false|100,50,1300,850|Orders | Example Seeds"))
+            #expect(state.title == "Orders | Example Seeds")
             #expect(state.bounds == CGRect(x: 100, y: 50, width: 1200, height: 800))
 
-            let account = (id: CGWindowID(41), frame: CGRect(x: 100.5, y: 50, width: 1200, height: 800), title: String?("Orders | Row 7"))
-            let other = (id: CGWindowID(42), frame: CGRect(x: 0, y: 0, width: 900, height: 700), title: String?("Mail"))
-            let twin = (id: CGWindowID(43), frame: CGRect(x: 100, y: 50, width: 1200, height: 800), title: String?("Notes"))
+            let account = (
+                id: CGWindowID(41), frame: CGRect(x: 100.5, y: 50, width: 1200, height: 800),
+                title: String?("Orders | Example Seeds")
+            )
+            let other = (
+                id: CGWindowID(42), frame: CGRect(x: 0, y: 0, width: 900, height: 700),
+                title: String?("Mail")
+            )
+            let twin = (
+                id: CGWindowID(43), frame: CGRect(x: 100, y: 50, width: 1200, height: 800),
+                title: String?("Notes")
+            )
 
             #expect(
                 MacBrowserCommandExecutor.matchCaptureWindow(

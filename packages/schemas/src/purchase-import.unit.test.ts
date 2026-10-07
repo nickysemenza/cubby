@@ -172,7 +172,7 @@ describe("purchase import contracts", () => {
 
   it("preserves the bounded recovery URL for a restart-safe capture", () => {
     const request = browserBridgeRequest.parse({
-      protocolVersion: 2,
+      protocolVersion: 3,
       id: crypto.randomUUID(),
       operationId: "capture-after-restart",
       runID: crypto.randomUUID(),
@@ -180,7 +180,7 @@ describe("purchase import contracts", () => {
       operation: {
         type: "capture",
         allowedHosts: ["orders.example.test"],
-        enhancedEvidence: false,
+        screenshot: "preferred",
         recoveryURL: "https://orders.example.test/history",
       },
     });

@@ -390,7 +390,8 @@
             guard edges.count == 4 else { return nil }
             return WindowState(
                 minimized: parts[0] == "true",
-                bounds: CGRect(x: edges[0], y: edges[1], width: edges[2] - edges[0], height: edges[3] - edges[1]),
+                bounds: CGRect(
+                    x: edges[0], y: edges[1], width: edges[2] - edges[0], height: edges[3] - edges[1]),
                 title: String(parts[2]))
         }
 
@@ -755,7 +756,9 @@
                     messageType: action, errorCode: number)
                 throw AppleScriptFailure(
                     failure: failure,
-                    diagnostic: "AppleScript \(action) error \(number.map(String.init) ?? "?"): \(message ?? "no message")")
+                    diagnostic:
+                        "AppleScript \(action) error \(number.map(String.init) ?? "?"): "
+                        + (message ?? "no message"))
             }
             BrowserBridgeDebugLog.emit(.appleEventFinished, messageType: action)
             return result.stringValue ?? String(result.int32Value)

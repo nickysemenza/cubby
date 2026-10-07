@@ -168,7 +168,8 @@ struct BrowserBridgeTests {
         let id = uuid.uuidString.lowercased()
         let result = BrowserBridgeCommandResult(
             commandID: uuid, runID: "RUN-EXAMPLE", operationID: "operation-example",
-            completedAt: Date(timeIntervalSince1970: 100), outcome: .completed(snapshot: nil, observation: .unobserved))
+            completedAt: Date(timeIntervalSince1970: 100),
+            outcome: .completed(snapshot: nil, observation: .unobserved))
         var ledger = BrowserBridgeReplayLedger()
 
         ledger.record(result)
