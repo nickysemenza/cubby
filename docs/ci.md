@@ -151,6 +151,11 @@ The generated `CubbyAPI` target forwards `-gline-tables-only` directly to the
 Swift frontend, so the driver's default `-g` does not restore full debug type
 information. Handwritten Swift targets retain their normal debug information.
 
+The simulator architecture override is scoped to `sdk=iphonesimulator*`.
+Host executable build plugins keep their native architecture; a global
+`ARCHS=arm64` override makes the OpenAPI generator fail with “Bad CPU type in
+executable” on Intel hosts.
+
 Both macOS build commands use `/usr/bin/time -l` to report elapsed time, CPU
 time, and native resource counters in their job logs. These measurements help
 compare cold and cached builds without adding a profiling script or job.

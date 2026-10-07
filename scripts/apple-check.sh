@@ -82,10 +82,10 @@ fi
 # Xcode's default behavior.
 build_settings=(COMPILER_INDEX_STORE_ENABLE=NO)
 if [ "${GITHUB_ACTIONS:-}" = "true" ]; then
-  # Keep the generic simulator gate on the supported arm64 FFI slice.
-  # The Intel build host cross-compiles it; release artifacts build their
-  # supported architectures outside this PR gate.
-  build_settings+=(SWIFT_ENABLE_BATCH_MODE=YES ARCHS=arm64 ONLY_ACTIVE_ARCH=YES CODE_SIGNING_ALLOWED=NO)
+  # Scope arm64 to the Simulator SDK: a global override cross-compiles
+  # executable build plugins, which then cannot run on Intel hosts.
+  # Release artifacts build their supported architectures outside this gate.
+  build_settings+=(SWIFT_ENABLE_BATCH_MODE=YES "ARCHS[sdk=iphonesimulator*]=arm64" ONLY_ACTIVE_ARCH=YES CODE_SIGNING_ALLOWED=NO)
 fi
 
 # CI-only: reuse the SPM clone directory .github/actions/setup-apple-tools

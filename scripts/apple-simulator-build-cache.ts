@@ -24,7 +24,8 @@ export const hostedSimulatorBuildArgs = Object.freeze([
   "-skipPackagePluginValidation",
   "-skipMacroValidation",
   "SWIFT_ENABLE_BATCH_MODE=YES",
-  "ARCHS=arm64",
+  // Host build tools keep their native architecture, including on Intel CI.
+  "ARCHS[sdk=iphonesimulator*]=arm64",
   "ONLY_ACTIVE_ARCH=YES",
   "CODE_SIGNING_ALLOWED=NO",
   "COMPILER_INDEX_STORE_ENABLE=NO",
