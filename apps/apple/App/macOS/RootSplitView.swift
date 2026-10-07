@@ -145,7 +145,7 @@ struct RootSplitView: View {
 
 /// In-memory browsing state outlives the split view's changing column content. RootView resets
 /// this owner when its client changes, so pages and queries never cross server/session boundaries.
-private final class NativeBrowserSession {
+final class NativeBrowserSession {
     let search: SearchModel
     private let client: CubbyClient
     private var lists: [EntityKey: GenericEntityListModel] = [:]
@@ -157,7 +157,10 @@ private final class NativeBrowserSession {
 
     func list(for key: EntityKey) -> GenericEntityListModel {
         if let existing = lists[key] { return existing }
-        let model = GenericEntityListModel(descriptor: EntityCatalog[key], client: client)
+        let descriptor = EntityCatalog[key]
+        let model = GenericEntityListModel(
+            descriptor: descriptor, client: client,
+            view: NativePresentationCoverage.listViews(for: descriptor).first ?? .table)
         lists[key] = model
         return model
     }

@@ -18,6 +18,8 @@ iPhone keeps the Work, Capture, Library, and Find tabs with independent navigati
 
 `EntityCatalog` and the entity manifest own names, icons, domain, image, fields, sections, relationships, list views, and available actions. A generic renderer uses those declarations for every entity. Specialist import, photo, fieldwork, and editor screens remain in declared slots or their owned flows. `NativePresentationCoverage` prevents unsupported renderers and actions from appearing operational; their existing web disclosure remains visible where needed.
 
+Cached Mac lists and freshly opened lists select their initial layout from the same native coverage filter. If no declared layout can render natively, use the generic table; retain the cached model when switching sidebar sections.
+
 ## Density and feedback
 
 Mac list rows prioritize comparison and native selection; iPhone rows use a readable primary line and concise supporting facts. A photo, summary, or inspector never pushes the next action off the useful first screen without purpose. At accessibility text sizes, columns and metrics wrap or stack. Preserve keyboard and VoiceOver labels, Reduce Motion, and Reduce Transparency.

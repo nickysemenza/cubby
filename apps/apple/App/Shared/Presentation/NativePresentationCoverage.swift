@@ -40,6 +40,16 @@ enum NativePresentationCoverage {
         coverage.listSlot[id] ?? .unsupported("Unknown native list slot.")
     }
 
+    static func listViews(for descriptor: EntityDescriptor) -> [ListView] {
+        descriptor.presentation.listViews.filter {
+            guard case .slot(let id, _, _) = $0 else { return true }
+            switch listSlot(id) {
+            case .implemented, .generic: return true
+            case .ownedElsewhere, .unsupported: return false
+            }
+        }
+    }
+
     static func unsupportedControl(_ field: FieldDescriptor) -> String? {
         guard let renderer = field.controlRenderer else { return nil }
         guard case .unsupported(let reason) = control(renderer) else { return nil }

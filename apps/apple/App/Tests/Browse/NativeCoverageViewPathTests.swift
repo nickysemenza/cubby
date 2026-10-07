@@ -10,6 +10,19 @@ import Testing
 @Suite("Native coverage view paths")
 @MainActor
 struct NativeCoverageViewPathTests {
+    #if os(macOS)
+        @Test func cachedRunListUsesNativeLayoutAndPreservesItsSession() {
+            let client = CubbyClient(
+                baseURL: URL(string: "https://example.invalid")!,
+                credentials: CredentialProvider(
+                    host: "example.invalid", store: InMemorySessionTokenStore()))
+            let session = NativeBrowserSession(client: client)
+            let runs = session.list(for: .run)
+            #expect(runs.view == .shelf)
+            #expect(session.list(for: .run) === runs)
+        }
+    #endif
+
     private func ids<ID: RawRepresentable & CaseIterable>(
         _ type: ID.Type, where predicate: (String) -> Bool
     ) -> Set<ID> where ID.RawValue == String {
