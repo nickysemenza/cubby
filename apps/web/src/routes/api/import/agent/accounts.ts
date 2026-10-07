@@ -35,8 +35,11 @@ export const Route = createFileRoute("/api/import/agent/accounts")({
               notDeleted(ledgerParty),
             ),
           )
+          // Only accounts with browser sync get a bridge: a mail-only account
+          // listed here showed as connected and failed every "Sync now".
           .where(
             and(
+              eq(vendorAccount.browserSyncEnabled, true),
               inArray(vendorAccount.status, [
                 "active",
                 "paused_auth",

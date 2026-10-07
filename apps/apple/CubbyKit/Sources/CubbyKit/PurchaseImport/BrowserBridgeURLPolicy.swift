@@ -44,10 +44,20 @@ public enum BrowserCaptureNavigationPolicy {
     /// Setting a browser tab URL returns before the new document necessarily starts loading. A
     /// stale document can therefore still report `complete`; require both the requested URL and
     /// the new document's ready state before capture associates evidence with that target.
+    ///
+    /// A vendor may redirect the request (another host spelling, a sign-in page, its home page),
+    /// so the page never reaches the target URL. A complete document that has held the same URL
+    /// for `settledProbes` consecutive probes is where the navigation landed; the server reads
+    /// the served URL and decides what that page means.
     public static func isReady(
-        currentURL: URL?, targetURL: URL?, documentReadyState: String
+        currentURL: URL?, targetURL: URL?, documentReadyState: String, stableProbes: Int = 0
     ) -> Bool {
         guard documentReadyState == "complete" else { return false }
         return !shouldNavigate(currentURL: currentURL, targetURL: targetURL)
+            || stableProbes >= settledProbes
     }
+
+    /// Two seconds of probes: long enough that a navigation still starting is not mistaken for
+    /// the old document settling.
+    public static let settledProbes = 8
 }

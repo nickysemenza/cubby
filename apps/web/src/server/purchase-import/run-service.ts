@@ -3278,17 +3278,26 @@ export async function stopRunForReview(
       "other",
     ])
     .parse(input.kind);
+  // A paused run (its browser stuck on one step) is stopped too: refusing it
+  // once left an agent retrying the same step for hours.
+  if (
+    scope.public.status !== "needs_review" &&
+    !ACTIVE_RUN_STATUSES.some((status) => status === scope.public.status)
+  )
+    throw new Error(`Import run is fenced in status ${scope.public.status}`);
   const fingerprint = await sha256Hex(`${kind}:${summary}`);
-  if (scope.public.purpose === "account_sync") {
+  // The import audit reads a running run's writes; a paused run is audited
+  // when restarted, so stopping it records the audit as skipped.
+  const audited =
+    scope.public.purpose === "account_sync" &&
+    scope.public.status === "running";
+  if (audited)
     await auditAllImportBatches(db, {
       runId: input.runId,
       operationId: `${input.operationId}:required-audit`,
     });
-  }
-  const auditedAt = new Date();
+  const auditedAt = audited ? new Date() : undefined;
   return withTransaction(db, async (tx) => {
-    if (scope.public.status !== "needs_review")
-      assertRunActive(scope.public.status);
     const [finding] = await tx
       .insert(runFinding)
       .values({
@@ -3378,7 +3387,7 @@ export async function stopRunForReview(
       .update(runTable)
       .set({
         status: "needs_review",
-        auditedAt,
+        auditedAt: auditedAt ?? sql`${runTable.auditedAt}`,
         endedAt: new Date(),
         updatedAt: new Date(),
       })

@@ -578,17 +578,24 @@
         /// Setting a tab URL returns before the new document loads; a navigation still in flight
         /// after the wait is an unreadable page, which the server may retry.
         private func waitForPageReady(targetURL: URL?) async throws {
+            var lastURL: String?
+            var stableProbes = 0
             for _ in 0..<40 {
                 try Task.checkCancellation()
                 do {
                     let probe = try await probePage()
+                    stableProbes =
+                        probe.readyState == "complete" && probe.url == lastURL ? stableProbes + 1 : 0
+                    lastURL = probe.url
                     if BrowserCaptureNavigationPolicy.isReady(
                         currentURL: URL(string: probe.url), targetURL: targetURL,
-                        documentReadyState: probe.readyState)
+                        documentReadyState: probe.readyState, stableProbes: stableProbes)
                     {
                         return
                     }
-                } catch ExecutionFailure.executionFailed, ExecutionFailure.pageUnreadable {}
+                } catch ExecutionFailure.executionFailed, ExecutionFailure.pageUnreadable {
+                    stableProbes = 0
+                }
                 try await Task.sleep(for: .milliseconds(250))
             }
             throw ExecutionFailure.pageUnreadable
