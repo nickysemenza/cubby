@@ -76,7 +76,7 @@ struct EntityShelfView: View {
             subtitle: subtitleOverride?(row) ?? subtitle(for: row),
             identifier: row.id,
             imageURL: row.imageURL,
-            symbol: descriptor.sfSymbol,
+            symbol: descriptor.recordSymbol(in: row),
             emoji: descriptor.recordEmoji(in: row),
             density: density,
             selected: isSelected(row),
@@ -214,6 +214,27 @@ struct EntityCard: View {
         .fieldGuideScreen()
         .navigationTitle("Products")
     }
+}
+
+#Preview("Run identity icons", traits: .modifier(SignedInPreview())) {
+    let descriptor = EntityCatalog[.run]
+    let rows = ["vendor", "purchase", "product", "inventory", "image", "run"].enumerated().compactMap {
+        index, entity in
+        descriptor.row(from: [
+            "id": .string("RUN-PREVIEW\(index)"),
+            "displayName": .string("Sample \(entity) work"),
+            "iconEntity": .string(entity),
+            "purpose": "background", "status": "completed",
+        ])
+    }
+    NavigationStack {
+        ScrollView {
+            EntityShelfView(descriptor: descriptor, rows: rows, density: .cards)
+        }
+        .fieldGuideScreen()
+        .navigationTitle("Runs")
+    }
+    .frame(width: 900, height: 650)
 }
 
 #Preview("Compact · accessibility", traits: .modifier(SignedInPreview())) {

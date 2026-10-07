@@ -778,7 +778,8 @@ private func formattedDueDate(_ raw: String) -> String {
                 runs: [
                     ActivityRun(
                         id: "RUN-4K7M", recordType: .run, kind: .photoInventory, subjectName: "Photo import",
-                        workLabel: "Photo inventory", targetPreview: [], changedCount: 0,
+                        iconEntity: .inventory, workLabel: "Photo inventory", targetPreview: [],
+                        changedCount: 0,
                         state: "running", active: true, createdAt: .now,
                         attempts: 1, executors: [], hasDiagnostics: false, canRetry: false)
                 ],
@@ -884,7 +885,8 @@ private func formattedDueDate(_ raw: String) -> String {
                         ActivityRun(
                             id: "RUN-4K7M", recordType: .run, kind: .photoInventory,
                             subjectName: "Photo import",
-                            workLabel: "Photo inventory", targetPreview: [], changedCount: 0,
+                            iconEntity: .inventory, workLabel: "Photo inventory", targetPreview: [],
+                            changedCount: 0,
                             state: "running", active: true, createdAt: .now,
                             attempts: 1, executors: [], hasDiagnostics: false, canRetry: false)
                     ]))

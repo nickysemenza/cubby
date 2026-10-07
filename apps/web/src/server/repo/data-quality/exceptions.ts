@@ -18,11 +18,12 @@ import type { Database } from "~/server/db";
 import { dataExceptionRecord } from "~/server/db/schema";
 import { createAppError } from "~/server/errors/app-error";
 import { computeChanges, logAuditEntry } from "~/server/repo/audit-log";
-import { notDeleted, withTransaction } from "~/server/repo/database-helpers";
+import { withTransaction } from "~/server/repo/database-helpers";
 import { resolveOrThrow } from "~/server/repo/shortcode-resolver";
 
 import { exceptionReasonsFor } from "./exception-reasons";
 import { loadDataQualities } from "./hydrate";
+import { liveQualityRow } from "./registry";
 import { entryFor, fingerprintSql, gapCondition } from "./sql";
 
 const probeRow = z.object({
@@ -84,7 +85,7 @@ const mutateException = async (
   ${fingerprintSql(entityKind, input.check, table)} AS "fingerprint",
   ${gapCondition(entityKind, input.check, table)} AS "applies"
 FROM ${table}
-WHERE ${table.id} = ${id} AND ${notDeleted(table)}
+WHERE ${table.id} = ${id} AND ${liveQualityRow(table)}
 LIMIT 1
 FOR UPDATE`);
     const currentRow = probeRow.safeParse(probe.rows[0]);

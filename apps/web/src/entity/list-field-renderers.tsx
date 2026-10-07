@@ -115,7 +115,7 @@ type ScoredListEntity = {
  * that carries the 0–100 score. Its id is also the sort field, so the
  * column header sorts by score (asc = weakest row first — the worklist).
  */
-const qualityRow = z.object({ dataQuality: dataQuality.optional() });
+const qualityRow = z.object({ dataQuality: dataQuality.nullish() });
 const dataQualityRenderer = <TRow extends object>(
   helper: CubbyColumnHelper<TRow>,
   scored = true,
@@ -145,11 +145,24 @@ const dataQualityRenderer = <TRow extends object>(
         }),
         cell: (info) => {
           const quality = qualityOf(info.row.original);
-          return <DataQualityValue quality={quality} scored={scored} />;
+          return (
+            <DataQualityValue
+              quality={quality ?? undefined}
+              scored={scored && quality !== null}
+            />
+          );
         },
       }),
     );
   });
+
+const unscoredCoverage = <
+  E extends Exclude<ListEntity, ScoredListEntity>,
+>() => ({
+  "data-quality": implemented<ListRenderer<E>>((helper) =>
+    dataQualityRenderer(helper, false),
+  ),
+});
 
 const scoredCoverage = <E extends ScoredListEntity>() => ({
   "data-quality": implemented<ListRenderer<E>>((helper) =>
@@ -275,21 +288,9 @@ export const listRendererCoverage = {
   ledgerParty: scoredCoverage<"ledgerParty">(),
   ledgerTransfer: scoredCoverage<"ledgerTransfer">(),
   device: scoredCoverage<"device">(),
-  spendingCategory: {
-    "data-quality": implemented<ListRenderer<"spendingCategory">>((helper) =>
-      dataQualityRenderer(helper, false),
-    ),
-  },
-  vendorAccount: {
-    "data-quality": implemented<ListRenderer<"vendorAccount">>((helper) =>
-      dataQualityRenderer(helper, false),
-    ),
-  },
-  run: {
-    "data-quality": implemented<ListRenderer<"run">>((helper) =>
-      dataQualityRenderer(helper, false),
-    ),
-  },
+  spendingCategory: scoredCoverage<"spendingCategory">(),
+  vendorAccount: unscoredCoverage<"vendorAccount">(),
+  run: scoredCoverage<"run">(),
   "usda-food": {
     "data-quality": implemented<
       ClientListRenderer<ClientListRows["usda-food"]>

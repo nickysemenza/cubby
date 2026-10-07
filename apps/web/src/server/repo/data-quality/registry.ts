@@ -1,13 +1,17 @@
 import type { DataCheckOf, ScoredEntity } from "@cubby/schemas/data-quality";
-import type { AnyColumn, SQL } from "drizzle-orm";
+import { sql, type AnyColumn, type SQL } from "drizzle-orm";
 import type { PgTable } from "drizzle-orm/pg-core";
 
 /** The columns every scored table exposes to the generic SQL and hydration. */
 export type ScoredTable = PgTable & {
   id: AnyColumn;
   shortcode: AnyColumn;
-  deletedAt: AnyColumn;
+  deletedAt?: AnyColumn;
 };
+
+/** Immutable records have no tombstone column. */
+export const liveQualityRow = (t: ScoredTable): SQL =>
+  t.deletedAt ? sql`${t.deletedAt} IS NULL` : sql`TRUE`;
 
 /**
  * One check's SQL, written once against `t` — the entity's own table or an

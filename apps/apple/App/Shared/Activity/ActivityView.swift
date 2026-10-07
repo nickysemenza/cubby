@@ -410,12 +410,17 @@ private struct ActivityRunRow: View {
 
     var body: some View {
         HStack(alignment: .top, spacing: 12) {
-            Image(systemName: run.kind.symbol)
+            Image(systemName: EntityCatalog[run.iconEntity].sfSymbol)
                 .foregroundStyle(run.active ? FieldGuideTokens.interaction : Color.secondary)
                 .frame(width: 22)
+                .accessibilityHidden(true)
             VStack(alignment: .leading, spacing: 4) {
                 Text(run.subjectName).font(.headline)
-                EntityQualityFact(key: .run, id: run.id, raw: .null)
+                if run.recordType == .run {
+                    EntityQualityFact(key: .run, id: run.id, raw: (try? JSONValue(encoding: run)) ?? .null)
+                } else {
+                    Text("Not assessed").font(.caption).foregroundStyle(.secondary)
+                }
                 HStack(spacing: 6) {
                     Text(run.workLabel)
                     Text("·")
@@ -745,20 +750,6 @@ extension ActivityKind {
         }
     }
 
-    var symbol: String {
-        switch self {
-        case .accountSync, .purchaseValidation: "cart"
-        case .productEnrichment: "sparkles"
-        case .photoInventory: "photo.on.rectangle"
-        case .describeImage: "text.below.photo"
-        case .subjectLift: "person.crop.rectangle"
-        case .aiSuggest: "sparkles"
-        case .background: "arrow.triangle.2.circlepath"
-        case .fileImport: "square.and.arrow.down"
-        case .mailSearch: "envelope.badge"
-        case .mailDiscovery: "envelope.arrow.triangle.branch"
-        }
-    }
 }
 
 #Preview(traits: .modifier(SignedInPreview())) {

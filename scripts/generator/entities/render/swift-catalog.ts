@@ -531,6 +531,7 @@ const entityJSON = (
     sfSymbol: entity.inspector.icons.sfSymbol,
     emoji: entity.inspector.icons.emoji,
     recordEmojiField: entity.inspector.recordEmojiField,
+    recordIconEntityField: entity.inspector.recordIconEntityField,
     searchable,
     primarySearch,
     timeline: entity.timeline,

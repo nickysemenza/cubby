@@ -17,6 +17,15 @@ For generic behavior shared across entities, follow
 generic renderer, declaration-to-renderer parity, then delete the per-entity
 twin.
 
+`presentation.recordIconEntityField` names a read-only projection containing an
+entity key. Generic web and Apple record surfaces resolve that entity's declared
+icon, falling back to the record's own entity icon for missing or unknown keys.
+Record emoji and real media keep their existing precedence; navigation still uses
+the entity's stable type icon. Runs project `iconEntity` on both ordinary entity
+reads and Activity reads: the subject's entity wins, AI work can use its ledger
+party, and otherwise the purpose selects the entity the work concerns. Status
+and execution device do not change identity. This projection is not stored.
+
 Declarations may import shared primitives and cycle-safe field modules. They
 must not import canonical schemas, generated artifacts, server implementations,
 or browser modules. Implementation references remain `{ module, export }` data.
@@ -564,6 +573,18 @@ defaults. Declaration inputs use `display.columnIdOverride` and
 order. The compiled manifest retains `columnId`, `detailOrder` (title first,
 then model order), and `listOrder`.
 
+Use **reference name** for the human name of a linked record and **display
+label** for composed presentation text. A reference normally projects
+`<stem>Name` or a nested record's `name`. A custom display label must declare
+`display.labelPath`; both web and native reference renderers read that path
+before the conventional name and preserve the target's identity. Never put an
+identifier in a label projection. `defineEntity` checks label and detail-label
+paths against declared readable Zod fields at TypeScript compile time, including
+nested properties and array projections. Compile-only schema contracts use
+`*.typecheck.ts` entry points in Knip and run through the schema TypeScript
+check without being imported by the application. The generator also rejects custom
+`<stem>Label` / `<stem>DisplayLabel` companions without a declared label path.
+
 A reference may declare `multiple: true` and an ordered `scope` mapping. Each
 scope item maps a sibling form `sourceField` to a filter `targetField` on the
 referenced entity. The compiler verifies both ends and generated editors wait
@@ -943,6 +964,22 @@ Moving existing storage into declarations must preserve the Drizzle catalog
 and emit no migration.
 
 ## Data quality
+
+Run uses the shared quality score, filters, sorting, and explanation. Its
+progressive list declares quality and media enrichment groups, so base identity
+arrives first and web and native request scores through the shared loader. Its
+checks assess recorded actor attribution, a consistent timeline, and terminal
+target outcomes for completed validation, product enrichment, and photo
+inventory runs. A skipped or unavailable target needs a recorded reason.
+Running or paused work does not need finished targets; account sync can
+legitimately discover no orders. Execution status remains separate from
+quality of the recorded facts. Activity feed rows hydrate the same Run quality,
+including the main Runs page and native activity rows; image-processing jobs
+carry null quality and remain unassessed. Scored and unscored web renderer
+coverage is type-checked against the generated list shape. Browser captures are required by the specific
+commit contract, so their absence is not a universal Run quality defect.
+Immutable scored entities without soft deletion use the same evaluator with
+no tombstone predicate.
 
 `capabilities.dataQuality` on an entity definition
 (`entityDataQualityMetadataSchema` in

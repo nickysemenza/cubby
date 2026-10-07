@@ -134,6 +134,7 @@ export function EntityShelf<TRow extends { id: string }>({
         return (
           <ShelfCard
             key={row.id}
+            record={record}
             to={entities[entity].routes.detail}
             params={
               entity === "usda-food"

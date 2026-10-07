@@ -441,6 +441,16 @@ export const compilePresentation = (
   const { detail, list, spans } = presentation;
   const emojiField = presentation.recordEmojiField;
   checkRecordEmoji(presentation, facts, context);
+  if (presentation.recordIconEntityField) {
+    const field = lookup.read(
+      presentation.recordIconEntityField,
+      "recordIconEntityField",
+    );
+    if (field.kind !== "text")
+      throw new EntityDeclarationError(
+        `${context}.recordIconEntityField requires a readable text field.`,
+      );
+  }
   const edit = {
     ...presentation.edit,
     sections: compileEditSections(

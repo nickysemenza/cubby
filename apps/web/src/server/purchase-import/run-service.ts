@@ -4152,6 +4152,7 @@ export async function loadRunDetail(
         entityId: runTarget.entityId,
         entityCode: entityIdentity.shortcode,
         vendorAccountId: vendorAccount.shortcode,
+        vendorAccountLabel: vendorAccount.label,
         sourceKind: runTarget.sourceKind,
         sourceExternalKey: runTarget.sourceExternalKey,
         state: runTarget.state,
@@ -4294,7 +4295,7 @@ export async function loadRunDetail(
       sourceLabel: target.sourceKind
         ? `${target.sourceKind}${target.sourceExternalKey ? ` · ${target.sourceExternalKey}` : ""}`
         : null,
-      vendorAccountLabel: target.vendorAccountId,
+      vendorAccountLabel: target.vendorAccountLabel,
       state: target.state,
       fingerprint: target.targetFingerprint,
       outcome: target.outcome,

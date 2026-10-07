@@ -279,6 +279,7 @@ export const manifestWire = {
       sfSymbol: "string",
       emoji: "string",
       recordEmojiField: "string~",
+      recordIconEntityField: "string~",
       searchable: "boolean",
       primarySearch: "PrimarySearchDescriptor~",
       timeline: "EntityTimelineMode~",

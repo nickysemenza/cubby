@@ -19,7 +19,12 @@ import { alias } from "drizzle-orm/pg-core";
 import { z } from "zod";
 
 import { type DataQualityEntries, dataQualityEntries } from "./entries";
-import type { CheckBinding, EntityChecks, ScoredTable } from "./registry";
+import {
+  liveQualityRow,
+  type CheckBinding,
+  type EntityChecks,
+  type ScoredTable,
+} from "./registry";
 
 /**
  * Every builder here returns ONE parenthesized group. Callers embed these
@@ -286,7 +291,7 @@ export const relatedGapCondition = (
   const from = sql.raw(`"${getTableName(targetTable)}" "${RELATED_ALIAS}"`);
   return group(sql`EXISTS (
   SELECT 1 FROM ${from}
-  WHERE ${related.deletedAt} IS NULL
+  WHERE ${liveQualityRow(related)}
     AND ${link(t, sql`${related.id}`)}
     AND ${gapCondition(target, check, related)}
 )`);

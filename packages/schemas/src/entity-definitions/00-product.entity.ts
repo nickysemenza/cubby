@@ -25,7 +25,7 @@ import {
   productPricingOut,
 } from "@cubby/schemas/product-fields";
 import { unitMappingInput } from "@cubby/schemas/unitmapping";
-import { fdcId } from "@cubby/usda";
+import { fdcId, foodSummary } from "@cubby/usda";
 import { FILTER_ANY, FILTER_NONE } from "../filter-sentinel-fields.js";
 import { z } from "zod";
 import { productCategorySummary } from "../product-category-fields";
@@ -1309,6 +1309,11 @@ export default defineEntity({
             { path: "fdc_id", label: "Explicit FDC identifier" },
             { path: "primaryGtin", label: "Primary normalized barcode" },
           ],
+        },
+        validation: {
+          read: foodSummary.nullable(),
+          create: null,
+          update: null,
         },
       },
       {

@@ -777,6 +777,7 @@ export default defineEntity({
         display: {
           list: true,
           detail: true,
+          labelPath: "purchaseDisplayLabel",
         },
         validation: {
           read: purchaseShortcode.nullable(),

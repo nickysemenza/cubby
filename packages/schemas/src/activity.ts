@@ -1,6 +1,8 @@
 import { z } from "zod";
+import { dataQuality } from "./data-quality";
+import { parseShortcode } from "@cubby/shared";
 import { imageShortcode } from "./identifiers";
-import { entitySchema } from "./entity";
+import { entitySchema, type Entity } from "./entity";
 import { imageDescriptionAnalysis } from "./image-processing";
 import { imageProcessingJobKind } from "./image-processing";
 import { imageUrlSummary } from "./image-summary";
@@ -13,6 +15,36 @@ export const activityKind = z.enum([
   ...imageProcessingJobKind.options,
 ]);
 export type ActivityKind = z.infer<typeof activityKind>;
+
+const activityIconFallback = {
+  account_sync: "vendor",
+  purchase_validation: "purchase",
+  product_enrichment: "product",
+  photo_inventory: "inventory",
+  ai_suggest: "run",
+  background: "run",
+  file_import: "purchase",
+  mail_search: "vendorAccount",
+  mail_discovery: "vendorAccount",
+  subject_lift: "image",
+  describe_image: "image",
+} satisfies Record<ActivityKind, Entity>;
+
+/** Identity stays independent of run status and execution device. */
+export function activityIconEntity(input: {
+  kind: ActivityKind;
+  subjectId?: string | null;
+  ledgerPartyId?: string | null;
+}): Entity {
+  const subjectId =
+    input.subjectId ??
+    (input.kind === "ai_suggest" || input.kind === "background"
+      ? input.ledgerPartyId
+      : null);
+  const subject = subjectId ? parseShortcode(subjectId) : null;
+  const entity = entitySchema.safeParse(subject?.type);
+  return entity.success ? entity.data : activityIconFallback[input.kind];
+}
 /** The Runs list's name for each kind of work, for rows and the kind filter. */
 export const ACTIVITY_KIND_LABEL = {
   ...RUN_PURPOSE_LABEL,
@@ -42,6 +74,9 @@ export const activityRun = z.object({
   ledgerPartyId: z.string().nullable(),
   subjectId: z.string().nullable(),
   subjectName: z.string(),
+  iconEntity: entitySchema,
+  /** Shared Run quality; image-processing jobs are not scored entities. */
+  dataQuality: dataQuality.nullable(),
   /** The subject's cover (a vendor's logo, an image job's own image). */
   subjectImage: imageUrlSummary.nullable(),
   /** What the run does, e.g. "Order mail import" for a mail-pass account sync. */

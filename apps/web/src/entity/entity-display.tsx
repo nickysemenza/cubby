@@ -1616,7 +1616,7 @@ export function createEntityDisplayColumns<TRecord extends object>(
       // A declared `labelPath` is text the server composed for the cell; the
       // field's own value, when it has one, stays the sort value.
       const labelPath = field.display.labelPath;
-      if (labelPath !== null) {
+      if (labelPath !== null && field.reference === null) {
         const labelOf = (record: TRecord) => readLabel(record, labelPath);
         add(
           helper.accessor(

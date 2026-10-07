@@ -657,6 +657,7 @@ export function GenericEntityDetail<E extends GenericDetailEntity>({
           <span className="inline-flex items-baseline gap-2">
             <RecordEmoji
               entity={entity}
+              record={record}
               emoji={
                 z.looseObject({ emoji: z.string().nullish() }).parse(record)
                   .emoji

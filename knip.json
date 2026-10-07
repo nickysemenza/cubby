@@ -152,6 +152,7 @@
       "entry": [
         "src/index.ts!",
         "src/**/*.test.ts!",
+        "src/**/*.typecheck.ts!",
         "src/entity-definitions/*.entity.ts!"
       ],
       "project": ["src/**/*.ts!"]

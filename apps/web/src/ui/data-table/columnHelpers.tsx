@@ -2,7 +2,10 @@ import type { Amount } from "@cubby/schemas/codec";
 import type { DisplayImageSummary } from "@cubby/schemas/display-images";
 import type { Entity, EntityRef } from "@cubby/schemas/entity";
 import type { EntityFieldProvenance } from "@cubby/schemas/entity-fields";
-import type { ShortcodeEntity } from "@cubby/schemas/entity-manifest";
+import {
+  entityInspectorMetadata,
+  type ShortcodeEntity,
+} from "@cubby/schemas/entity-manifest";
 import { parseShortcodeFor } from "@cubby/schemas/identifiers";
 import { isDisplayableImageFile } from "@cubby/schemas/image";
 import { locationType, type LocationType } from "@cubby/schemas/location";
@@ -258,11 +261,16 @@ export function createNameColumn<T extends BaseRow>(
       const recordEmoji = z
         .object({ emoji: z.string().nullable().optional() })
         .parse(info.row.original).emoji;
-      const prefix = recordEmoji ? (
-        <RecordEmoji entity={entity} emoji={recordEmoji} />
-      ) : (
-        options?.namePrefix?.(info.row.original)
-      );
+      const prefix =
+        recordEmoji || entityInspectorMetadata[entity].recordIconEntityField ? (
+          <RecordEmoji
+            entity={entity}
+            emoji={recordEmoji}
+            record={info.row.original}
+          />
+        ) : (
+          options?.namePrefix?.(info.row.original)
+        );
       const link = rowLink(info.row.original);
       // A row that names nothing openable still has to be readable, so the
       // unlinked branch keeps the truncation and the full-name tooltip.

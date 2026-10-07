@@ -39,6 +39,7 @@ export default defineEntity({
   identifiers: { brand: "RunId", shortcode: "RUN-" },
   presentation: {
     titleField: "displayName",
+    recordIconEntityField: "iconEntity",
     domain: "finance",
     description:
       "Runs: purchase-agent syncs, validations, enrichments, photo-inventory batches, Gmail searches and discovery, and grouped AI work.",
@@ -112,7 +113,7 @@ export default defineEntity({
     },
     list: {
       // Display images borrow from the vendor; they load as list media.
-      read: { media: ["displayImages"] },
+      read: { media: ["displayImages"], quality: ["dataQuality"] },
       savedViews: [
         {
           id: "imports",
@@ -176,6 +177,11 @@ export default defineEntity({
   },
   model: {
     fields: [
+      {
+        key: "iconEntity",
+        kind: "text",
+        validation: readOnly(z.string()),
+      },
       {
         key: "displayName",
         kind: "text",
@@ -248,6 +254,7 @@ export default defineEntity({
         display: {
           list: true,
           detail: true,
+          labelPath: "vendorAccountLabel",
         },
         validation: readOnly(vendorAccountShortcode.nullable()),
       },
@@ -510,6 +517,7 @@ export default defineEntity({
     update: [],
     output: [
       "id",
+      "iconEntity",
       "displayName",
       "status",
       "purpose",
@@ -870,6 +878,39 @@ export default defineEntity({
     merge: false,
     // The run service and import writers own every write.
     lifecycle: "readOnly",
+    dataQuality: {
+      checks: [
+        {
+          id: "run_attribution",
+          facet: "provenance",
+          kind: "defect",
+          weight: 1,
+          scoreCap: 49,
+          label: "Actor attribution",
+          message: "The run has no recorded actor name.",
+        },
+        {
+          id: "run_timeline",
+          facet: "integrity",
+          kind: "defect",
+          weight: 1,
+          scoreCap: 49,
+          label: "Run timeline",
+          message:
+            "The run ends before it starts or its terminal status has no end time.",
+        },
+        {
+          id: "run_target_outcomes",
+          facet: "integrity",
+          kind: "defect",
+          weight: 3,
+          scoreCap: 49,
+          label: "Target outcomes",
+          message:
+            "A completed targeted run has no targets or has an unfinished or unexplained target outcome.",
+        },
+      ],
+    },
   },
   extensions: {
     ports: {

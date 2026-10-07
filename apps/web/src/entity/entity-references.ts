@@ -2,9 +2,11 @@ import type { EntityFieldModel } from "@cubby/schemas/entity-fields";
 import { fieldResolutionsSchema } from "@cubby/schemas/field-resolution";
 import { z } from "zod";
 
+import { readPathValue } from "./read-path";
+
 type ReferenceField = Pick<
   EntityFieldModel["fields"][number],
-  "key" | "readKey" | "reference"
+  "key" | "readKey" | "reference" | "display"
 >;
 
 const referenceObject = z.object({
@@ -97,7 +99,14 @@ const storedReference = <TRecord extends object>(
   const carriesStoredTarget = raw === id;
   const nested = readRecordField(record, base, z.unknown());
   const nestedName =
-    readRecordField(record, `${base}Name`, z.string().nullish()) ?? null;
+    (field.display.labelPath === null
+      ? null
+      : z
+          .string()
+          .nullish()
+          .parse(readPathValue(record, field.display.labelPath))) ??
+    readRecordField(record, `${base}Name`, z.string().nullish()) ??
+    null;
   return {
     entity: field.reference.entity,
     items: singleItem(
@@ -112,7 +121,8 @@ const storedReference = <TRecord extends object>(
  * The linked record(s) a reference field names. A projection carries the
  * shortcode under the field's `readKey` (`projectId`), or nests the target
  * under the key minus `Id` (`parent`, `product`); the label comes from
- * `<key minus Id>Name` (`vendorName`), then the nested record's `name`, then
+ * declared `display.labelPath`, then `<key minus Id>Name` (`vendorName`),
+ * then the nested record's `name`, then
  * the shortcode itself. Kept free of React so the editor request builders
  * the eager route chunks load can seed from it.
  */
@@ -127,7 +137,14 @@ export function readReferenceField<TRecord extends object>(
   const nested = readRecordField(record, base, z.unknown());
   if (z.number().safeParse(nested).success) return null;
   const nestedName =
-    readRecordField(record, `${base}Name`, z.string().nullish()) ?? null;
+    (field.display.labelPath === null
+      ? null
+      : z
+          .string()
+          .nullish()
+          .parse(readPathValue(record, field.display.labelPath))) ??
+    readRecordField(record, `${base}Name`, z.string().nullish()) ??
+    null;
   const raw =
     field.readKey === null
       ? undefined
