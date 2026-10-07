@@ -205,6 +205,70 @@ fn high_resolution(element: &ElementRef, base: Option<&Url>) -> Option<String> {
         .and_then(|(raw, _)| resolve(base, raw))
 }
 
+/// The one quoted string literal at the start of `source` (no escapes, so the
+/// value is exactly what a reader sees) and what follows it.
+fn string_literal(source: &str) -> Option<(&str, &str)> {
+    let quote = source.chars().next().filter(|c| matches!(c, '\'' | '"'))?;
+    let (value, rest) = source[1..].split_once(quote)?;
+    (!value.contains('\\')).then_some((value, rest))
+}
+
+/// The target of an `onclick` that is exactly one navigation to a string
+/// literal — `[window.|document.]location[.href] = '…'` or
+/// `[window.|document.]location.assign|replace('…')`, with an optional
+/// trailing `;`. Never evaluates script: any expression, variable, extra
+/// statement, or escape rejects the handler; `resolve` then rejects non-HTTP
+/// schemes.
+fn literal_navigation(handler: &str) -> Option<&str> {
+    let handler = handler.trim();
+    let handler = handler.strip_suffix(';').unwrap_or(handler).trim_end();
+    let handler = handler
+        .strip_prefix("window.")
+        .or_else(|| handler.strip_prefix("document."))
+        .unwrap_or(handler);
+    let rest = handler.strip_prefix("location")?;
+    if let Some(call) = rest
+        .strip_prefix(".assign")
+        .or_else(|| rest.strip_prefix(".replace"))
+    {
+        let argument = call.trim_start().strip_prefix('(')?.trim_start();
+        let (value, after) = string_literal(argument)?;
+        return (after.trim() == ")").then_some(value);
+    }
+    let rest = rest.strip_prefix(".href").unwrap_or(rest);
+    let value = rest.trim_start().strip_prefix('=')?.trim_start();
+    let (value, after) = string_literal(value)?;
+    after.trim().is_empty().then_some(value)
+}
+
+/// What a reader sees in an element, collapsed to one line.
+fn visible_text(element: ElementRef) -> String {
+    let mut out = String::new();
+    push_text(element, &mut out);
+    collapse(&out)
+}
+
+/// A clickable element's label. A table row reads as its first visible cell
+/// (an order number, say), not every column run together.
+fn link_label(element: ElementRef) -> String {
+    let label = if element.value().name() == "tr" {
+        element
+            .children()
+            .filter_map(ElementRef::wrap)
+            .filter(|cell| matches!(cell.value().name(), "td" | "th"))
+            .map(visible_text)
+            .find(|text| !text.is_empty())
+            .unwrap_or_default()
+    } else {
+        collapse(&element.text().collect::<String>())
+    };
+    if label.is_empty() {
+        collapse(element.value().attr("aria-label").unwrap_or_default())
+    } else {
+        label
+    }
+}
+
 fn image_source<'a>(element: &'a ElementRef<'a>) -> Option<&'a str> {
     let value = element.value();
     value
@@ -251,17 +315,21 @@ pub fn compact_browser_page(html: &str, url: &str) -> WCompactPage {
                 .and_then(|href| resolve(base, href))
         });
 
-    let links = select(&document, "a[href]")
+    // Scripted pages navigate from `onclick` rows and buttons with no anchor
+    // once the snapshot drops `<noscript>`; a literal target counts as a link.
+    let links = select(&document, "a[href], [onclick]")
         .into_iter()
-        .filter_map(|anchor| {
-            let href = resolve(base, anchor.value().attr("href")?)?;
-            let label = collapse(&anchor.text().collect::<String>());
-            let text = if label.is_empty() {
-                collapse(anchor.value().attr("aria-label").unwrap_or_default())
-            } else {
-                label
-            };
-            Some(WPageLink { href, text })
+        .filter_map(|element| {
+            let value = element.value();
+            let href = value
+                .attr("href")
+                .filter(|_| value.name() == "a")
+                .and_then(|href| resolve(base, href))
+                .or_else(|| resolve(base, literal_navigation(value.attr("onclick")?)?))?;
+            Some(WPageLink {
+                href,
+                text: link_label(element),
+            })
         })
         .take(MAX_LINKS)
         .collect();
@@ -400,6 +468,77 @@ mod tests {
         assert_eq!(page.json_ld_omitted, 0);
         assert!(page.has_password_input);
         assert_eq!(page.variant_markers, vec!["1 g".to_string()]);
+    }
+
+    // Regression: an account history table navigates by row `onclick`, with no
+    // anchor left once the snapshot strips `<noscript>`; the row's first cell
+    // (the order number) labels it, not the whole row.
+    #[test]
+    fn keeps_literal_onclick_navigation_targets_labeled_by_first_cell() {
+        let page = compact_browser_page(
+            r#"<html><body><table><tbody>
+<tr onclick="window.location.href = 'https://shop.example.test/account/orders/opaque-token'"><td><span>#54321</span></td><td>Jan 2, 2026</td></tr>
+<tr onclick='location.href="/account/orders/second-token";'><td aria-hidden="true">x</td><td>#54322</td><td>Jan 3, 2026</td></tr>
+</tbody></table>
+<div role="button" onclick="document.location.assign('/account/orders/third-token')">View order</div>
+<a href="javascript:void(0)" onclick="window.location.replace('/account/orders/fourth-token')" aria-label="Fourth order"></a>
+</body></html>"#,
+            "https://shop.example.test/account/orders",
+        );
+        assert_eq!(
+            page.links,
+            vec![
+                WPageLink {
+                    href: "https://shop.example.test/account/orders/opaque-token".into(),
+                    text: "#54321".into()
+                },
+                WPageLink {
+                    href: "https://shop.example.test/account/orders/second-token".into(),
+                    text: "#54322".into()
+                },
+                WPageLink {
+                    href: "https://shop.example.test/account/orders/third-token".into(),
+                    text: "View order".into()
+                },
+                WPageLink {
+                    href: "https://shop.example.test/account/orders/fourth-token".into(),
+                    text: "Fourth order".into()
+                },
+            ]
+        );
+    }
+
+    #[test]
+    fn ignores_onclick_handlers_that_are_not_one_literal_navigation() {
+        let rejected = [
+            "window.location.href = '/orders/' + id",
+            "window.location.href = base",
+            "window.location.href = `/orders/${id}`",
+            "window.location.href = '/a'; track()",
+            "track(); window.location.href = '/a'",
+            "window.location.href == '/a'",
+            "window.location.href = '/a\\'b'",
+            "window.location.href = 'javascript:alert(1)'",
+            "window.location.href = 'JavaScript:alert(1)'",
+            "window.location.href = 'data:text/html,x'",
+            "window.location.href = 'mailto:a@example.test'",
+            "window.location.href = '/a'.concat('b')",
+            "window.location.assign('/a', '/b')",
+            "window.open('/a')",
+            "evil.location.href = '/a'",
+            "x.href = '/a'",
+            "window.location.href = ''",
+        ];
+        for handler in rejected {
+            let page = compact_browser_page(
+                &format!(
+                    r#"<html><body><table><tr onclick="{}"><td>#1</td></tr></table></body></html>"#,
+                    handler.replace('"', "&quot;")
+                ),
+                "https://shop.example.test/account/orders",
+            );
+            assert_eq!(page.links, vec![], "accepted {handler:?}");
+        }
     }
 
     #[test]
