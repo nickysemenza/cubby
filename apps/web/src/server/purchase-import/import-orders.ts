@@ -1320,10 +1320,15 @@ async function commitEnrichmentIdentifier(
           input.allowedHosts,
           owner,
         )
-      : { proven: false as const };
+      : {
+          proven: false as const,
+          reason: evidence
+            ? `retained capture metadata is invalid: ${observed.error.message}`
+            : "no browser_capture evidence belongs to this run and target with that evidenceId",
+        };
   if (!proof.proven)
     throw new Error(
-      "Product identifier was not proven by this target's retained evidence",
+      `Product identifier was not proven by this target's retained evidence: ${proof.reason}`,
     );
   try {
     await learnPurchaseProductExternalId(tx, {

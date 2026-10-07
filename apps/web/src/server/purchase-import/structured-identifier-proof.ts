@@ -99,7 +99,10 @@ function sourceOwnsIdentifier(
   ]);
   return domainSlugs.has(identifier.source)
     ? { proven: true }
-    : { proven: false, reason: "source is not the page vendor" };
+    : {
+        proven: false,
+        reason: `source is not the page vendor; expected source: ${[...domainSlugs].join(", ")}`,
+      };
 }
 
 /**

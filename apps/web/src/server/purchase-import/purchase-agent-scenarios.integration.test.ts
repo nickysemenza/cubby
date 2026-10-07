@@ -1913,6 +1913,26 @@ describe("purchase-agent scripted scenarios", () => {
           commandId: from("capture-basil", "commandId"),
         }),
         call("claim-basil-evidence", "claim_next_import_work"),
+        mcp("commit-basil-wrong-source", "product_enrichment", runId, {
+          action: "commit",
+          productId: from("claim-basil", "productId"),
+          targetFingerprint: from("claim-basil", "targetFingerprint"),
+          changes: {
+            identifiers: [
+              {
+                evidenceId: from("claim-basil-evidence", "evidence.0.id"),
+                source: "scenario-seed-shop",
+                kind: "retailer_sku",
+                externalId: "BASIL-101",
+                url: basilUrl,
+              },
+            ],
+          },
+        }),
+        {
+          check: "commit-basil-wrong-source",
+          includes: "source is not the page vendor; expected source: seed",
+        },
         mcp("commit-basil", "product_enrichment", runId, {
           action: "commit",
           productId: from("claim-basil", "productId"),
