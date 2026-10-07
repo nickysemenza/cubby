@@ -275,6 +275,7 @@ export const manifestWire = {
       basePath: "string",
       shortcodePrefix: "string~",
       titleField: "string",
+      sortFields: "[string]",
       domain: "WayfindingDomain~",
       sfSymbol: "string",
       emoji: "string",

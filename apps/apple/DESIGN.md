@@ -18,11 +18,15 @@ iPhone keeps the Work, Capture, Library, and Find tabs with independent navigati
 
 `EntityCatalog` and the entity manifest own names, icons, domain, image, fields, sections, relationships, list views, and available actions. A generic renderer uses those declarations for every entity. Specialist import, photo, fieldwork, and editor screens remain in declared slots or their owned flows. `NativePresentationCoverage` prevents unsupported renderers and actions from appearing operational; their existing web disclosure remains visible where needed.
 
-Cached Mac lists and freshly opened lists select their initial layout from the same native coverage filter. If no declared layout can render natively, use the generic table; retain the cached model when switching sidebar sections.
+Cached Mac lists and freshly opened lists select their initial layout from the same native coverage filter. If no declared layout can render natively, use the generic List presentation; retain the cached model when switching sidebar sections.
+
+Every entity offers List and Table alongside its declared shelf, timeline, or specialist views. Table uses the same manifest fields and display rules as web, with aligned column headers, column visibility controls, and server sorting only for declared sortable fields. Mac uses a native selectable table with resizable columns; iPhone keeps the columns in a horizontally scrolling table. Switching List and Table retains the loaded records, filters, search, and selection. A header sort restarts server pagination and replays an active search in the new order.
 
 ## Density and feedback
 
 Mac list rows prioritize comparison and native selection; iPhone rows use a readable primary line and concise supporting facts. A photo, summary, or inspector never pushes the next action off the useful first screen without purpose. At accessibility text sizes, columns and metrics wrap or stack. Preserve keyboard and VoiceOver labels, Reduce Motion, and Reduce Transparency.
+
+Entity List rows keep one primary title line and a concise supporting band at standard text sizes, using smaller thumbnails and inline status and explanation controls. Accessibility text sizes allow those facts to wrap, and phone rows and controls retain 44-point touch targets. Data-quality explanations, source attribution, and deferred-detail loading or failure remain available in the compact presentation.
 
 Today uses its real task, meal, activity, problem, and nutrition sources. Attention is identified by the data and a readable label; the citron mark is supporting emphasis. Loading is labelled (`LoadingIndicator`), and same-context refresh retains loaded data. A failed load offers Retry through one of two shared views: `LoadFailureView` when a screen or sheet body never loaded, `InlineLoadFailure` (warning symbol and tone) when a section or slot fails beside loaded content. A refused write (an editor save, an accepted suggestion) is not a failed load: `ActionFailureNotice` shows "Couldn't save" and the raw server message above the preserved input, with Retry only while that same mutation can still be resent; where the failed action's own control remains, it omits Retry. Determinate progress (photo preparation) and named write or check progress ("Checking booking…") keep their own `ProgressView`. In-flight writes keep their existing dismissal rules.
 

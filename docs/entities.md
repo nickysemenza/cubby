@@ -769,6 +769,10 @@ hand-lists its own sort roster. The compiler enforces
 roster narrows the `/api/v1` list route (`sort` refined to `fields`, `groupBy`
 an enum of `groupable`, or of `fields` when `groupable` is empty), so a
 `groupable` entry must stay an identifier the Swift generator can name.
+The native `EntityDescriptor.sortFields` is emitted from that same roster;
+generic table headers enable server sorting only for those column ids. Native
+sort changes restart pagination and replay the active search with its current
+filters, rather than sorting only the already loaded page.
 
 Declare object-valued outputs as `json`, and render relations and structured
 values through explicit overrides. A logo object is not a text field. Fields

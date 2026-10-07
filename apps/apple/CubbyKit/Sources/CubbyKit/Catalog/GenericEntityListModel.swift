@@ -77,6 +77,8 @@ public final class GenericEntityListModel {
     public private(set) var nextPageError: String?
     /// The active filters; `apply(filters:)` replaces them and restarts from page 1.
     public private(set) var filters: EntityFilterState
+    /// Server order for the complete result, shared by base and search pagination.
+    public private(set) var sort: String?
     /// The selected declared view; `select(view:)` loads the timeline when it is `.timeline`.
     public private(set) var view: ListView
     public private(set) var timeline: EntityTimelineOut?
@@ -112,7 +114,6 @@ public final class GenericEntityListModel {
 
     private let client: CubbyClient
     private let pageSize: Int
-    private let sort: String?
     private let progressive: Bool
     private let searchDebounceNanoseconds: UInt64
     private var source: EntityListPageSource?
@@ -240,13 +241,29 @@ public final class GenericEntityListModel {
     public func apply(filters newFilters: EntityFilterState) async {
         guard newFilters != filters else { return }
         filters = newFilters
+        await refreshQuery()
+    }
+
+    /// Sortable fields come from the same declaration the server validates. Injected page
+    /// sources own their ordering and cannot be reordered through the declared list route.
+    public func apply(sort newSort: String?) async {
+        guard source == nil, newSort != sort else { return }
+        if let newSort {
+            let field = newSort.hasPrefix("-") ? String(newSort.dropFirst()) : newSort
+            guard descriptor.sortFields.contains(field) else { return }
+        }
+        sort = newSort
+        await refreshQuery()
+    }
+
+    private func refreshQuery() async {
         meta = nil
         coreRows = rows
         enrichment.invalidate()
         if source == nil {
             searchModel?.setLoader(
                 Self.searchLoader(
-                    descriptor: descriptor, client: client, filters: newFilters,
+                    descriptor: descriptor, client: client, filters: filters,
                     pageSize: pageSize, sort: sort,
                     progressive: progressive && Self.supportsProgressiveSearch(view)))
         }

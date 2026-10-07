@@ -44,6 +44,13 @@ photo group and its Product, and exactly the selected location and two plantings
 ends it) for manual driving. Scroll to a target by counting from `scroll bottom`, not with
 `--until` on a lazily loaded detail page.
 
+`pnpm test:e2e:sim -- --qa --journey qa-entity-table --video` checks the generic
+Product List/Table switch, sortable headers, column visibility, and record
+navigation against the same synthetic QA world. The focused sort-model tests
+cover paging and pending-search response fencing; the simulator journey covers
+the controls and navigation boundary. Its evidence uses the usual checksummed
+QA artifact bundle.
+
 `pnpm test:e2e:sim -- --product-clarity --video` runs a focused synthetic Product
 presentation journey. It opens and closes the valuation explanation, checks the
 manual and expense-derived values, and verifies recorded movement, planned, and

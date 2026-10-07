@@ -1,0 +1,35 @@
+context platform=ios timeout=240000
+
+# The same loaded entity can switch between compact rows and aligned columns,
+# change server ordering and column visibility, then navigate to its record.
+open com.nickysemenza.cubby
+wait "role=Button label=Library" 240000
+click "role=Button label=Library"
+wait text "Browse catalog" 30000
+click "label=\"Browse catalog\""
+wait "id=browse.catalog.product" 30000
+click "id=browse.catalog.product"
+wait "id=browse.product.list" 60000
+wait "id=browse.product.row.${PRODUCT_ID}" 60000
+click "label=\"List controls\""
+click "label=View"
+click "id=browse.product.view.table"
+wait "id=browse.product.table" 30000
+wait "id=browse.product.table.row.${PRODUCT_ID}" 60000
+wait "id=browse.product.sort.name" 30000
+click "id=browse.product.sort.name"
+wait "id=browse.product.sort.name value=Ascending" 30000
+wait "id=browse.product.table.row.${PRODUCT_ID}" 60000
+click "id=browse.product.sort.name"
+wait "id=browse.product.sort.name value=Descending" 30000
+wait "id=browse.product.table.row.${PRODUCT_ID}" 60000
+click "id=browse.product.columns"
+click "id=browse.product.column.manufacturer"
+click "id=browse.product.columns"
+click "id=browse.product.column.manufacturer"
+click "label=\"List controls\""
+click "label=View"
+click "id=browse.product.view.list"
+wait "id=browse.product.row.${PRODUCT_ID}" 30000
+click "id=browse.product.row.${PRODUCT_ID}"
+wait text "Synthetic Flour" 60000
