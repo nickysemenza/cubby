@@ -10,7 +10,7 @@ import {
   type mcpAttachFileInput,
 } from "@cubby/schemas/image";
 import { type AppErrorReason, parseShortcode } from "@cubby/shared";
-import { createLogger } from "@cubby/worker-tracing";
+import { sha256Hex } from "@cubby/shared/sha256";
 import type { z } from "zod";
 
 import { imageUploadContract } from "~/contracts/image-upload.contract";
@@ -24,6 +24,7 @@ import { AppError, createAppError } from "~/server/errors/app-error";
 import { implementOperationDomain } from "~/server/operation-domain.server";
 import {
   attachExistingImageToEntity,
+  getImageById,
   getImageHashIndex,
   getImagesByProjectIds,
   markImageUploaded,
@@ -44,45 +45,37 @@ import {
   initiateDocumentUpload,
   initiateImageUploadWithoutEntity,
 } from "~/server/services/image-storage.service";
-import {
-  verifyImageRows,
-  type ImageVerificationResult,
-  type ImageVerificationRow,
-} from "~/server/services/image-verification.service";
+import { getS3Object } from "~/server/utils/s3";
 
 import {
   readImageAnalysis,
   recordImageAnalysis,
 } from "./image-analysis.server";
 
-const log = createLogger("image-upload");
-
 export async function markImageUploadedWorkflow(
   db: Database,
   input: z.output<typeof getImageByIdSchema>,
-  // Testability seam only: production reads the stored bytes from R2.
-  verify: (
-    db: Database,
-    rows: ImageVerificationRow[],
-  ) => Promise<ImageVerificationResult[]> = verifyImageRows,
+  // Testability seam only: production reads the object from R2.
+  readStored: (key: string) => Promise<Response> = getS3Object,
 ) {
   const imageId = await resolveOrThrow(db, "image", input.id);
-  const uploaded = await markImageUploaded(db, imageId);
-  // Processing reads only verified bytes, so the upload is inspected (hash,
-  // type, dimensions) first. Without this a standalone upload had no hash and
-  // scheduling refused it, failing every Mac screenshot upload with a 500.
-  // `uploaded.id` is the public shortcode; verification writes by row id. The
-  // upload is already marked, so a failed R2 read skips automatic processing
-  // (logged) rather than failing a call the client cannot retry.
-  let verified: ImageVerificationResult | undefined;
-  try {
-    [verified] = await verify(db, [{ ...uploaded, id: imageId }]);
-  } catch (error) {
-    log.error("upload-verification-failed", { imageId, error });
-  }
+  const pending = await getImageById(db, imageId);
+  // Record the stored bytes' hash before marking the upload: processing reads
+  // only hashed images, and a standalone upload had none, so scheduling
+  // refused it and every Mac screenshot upload failed with a 500. A failed
+  // read leaves the image PENDING, so the client can retry. Dimensions are not
+  // compared here: Apple clients report EXIF-oriented ones.
+  const stored = await readStored(pending.key);
+  if (!stored.ok)
+    throw new Error(
+      `Uploaded object ${pending.key} is unavailable: ${stored.status}`,
+    );
+  const sha256 = await sha256Hex(new Uint8Array(await stored.arrayBuffer()));
+  const uploaded = await markImageUploaded(db, imageId, sha256);
   // Settings default disabled/paused, so rollout creates no automatic work
   // until the owner explicitly enables it. Durable jobs repair missed wakes.
-  if (verified?.storageStatus === "available")
+  // Documents (PDFs) finalize here too; image jobs read only images.
+  if (uploaded.contentType.startsWith("image/"))
     await scheduleImageProcessingJobs(db, {
       id: uploaded.id,
       kinds: ["describe_image", "subject_lift"],
