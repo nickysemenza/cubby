@@ -18,6 +18,7 @@ import {
   startOrResumeRun,
   type PurchaseImportNamespace,
 } from "../src/server/purchase-import/run-service";
+import { testBrowserPorts } from "../src/server/purchase-import/browser.fixtures";
 import { executeLeasedOperation } from "../src/server/runs/operation";
 import {
   buildKernelContext,

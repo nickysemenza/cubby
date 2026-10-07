@@ -83,7 +83,7 @@ export function renderPage(page: SyntheticPage): string {
 }
 
 /** A completed capture of raw `html`, as the Mac would send it. */
-export async function capturedHtml(input: {
+async function capturedHtml(input: {
   sourceURL: string;
   title: string;
   html: string;
@@ -134,7 +134,7 @@ export function failedCommand(
 }
 
 /** Evidence storage that keeps objects in memory (R2 is out of reach). */
-export function memoryEvidenceStorage() {
+function memoryEvidenceStorage() {
   const objects = new Map<string, { bytes: Uint8Array; contentType: string }>();
   const storage: BrowserEvidenceStorage = {
     put: async (key, bytes, contentType) => {

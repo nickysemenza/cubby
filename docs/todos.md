@@ -191,17 +191,10 @@ Runs list and `imports_read.run_status` read one shared projection
   the only enrichment path. Only import completions trigger, so enrichment
   cannot re-trigger itself.
 
-- 🟢 **Thin Mac capture, server-side extraction.** The Mac app should return
-  raw artifacts (final URL, raw JSON-LD, a DOM snapshot, PDF or screenshot)
-  instead of running page-specific extraction JavaScript. The server
-  extracts deterministically (Rust `recipebridge`/html5ever) and can
-  re-parse retained evidence when an extractor improves. Keep Chrome as the
-  browser: vendor sign-in goes through the household password manager.
-
-- 🤔 **Fetch public product pages first.** Try a plain server fetch for a
-  public product page and fall back to the Mac bridge when it is blocked.
-  Expect many vendors to refuse; record the block rate per vendor before
-  routing any vendor fetch-only.
+- 🤔 **Route vendors by their fetch-first record.** Enrichment captures try
+  a server fetch first and record each refusal as a run progress line
+  (`readPageOnServer`). Tally refusals per vendor before skipping the fetch
+  for vendors that always refuse, or routing any vendor fetch-only.
 
 - 🟢 **Enrich the variant that was bought.** Seed and Shopify pages are often
   variant groups, which the single-Product proof rule rightly skips. Open
@@ -225,20 +218,6 @@ Runs list and `imports_read.run_status` read one shared projection
 - 🟢 **Live run status in the Mac app.** Show the current Run, its target,
   and its latest step from the shared status projection, so the household
   can tell whether Chrome is busy before touching it.
-
-- 🟢 **Mac capture preflight and reasons.** Check the screen-recording
-  permission before the first ScreenCaptureKit capture, and send the Mac's
-  reason with a `capture_unavailable` result (permission, minimized or
-  off-screen window, no window); today one account's captures can keep
-  failing while another's succeed, with no reason in the run log
-  (`MacBrowserCommandExecutor.swift`, `captureBrowserScreenshot`).
-
-- 🟢 **Resume a run paused by a retryable capture failure.** A
-  `capture_unavailable` (or other retryable) result pauses the run offline
-  (`readBrowserCommandResult`), but its command is already final, so the
-  Mac's reconnect (`durable-object.ts`) wakes nothing and the run needs a
-  manual resume before offline expiry. Wake it on reconnect when its pause
-  came from a completed command, or retry the capture as a fresh operation.
 
 - 🤔 **Recover a skipped import audit after an outdated-Mac stop.** When
   an account sync stops because the Mac app is too old and its required

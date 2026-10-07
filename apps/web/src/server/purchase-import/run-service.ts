@@ -2550,6 +2550,9 @@ export async function readBrowserCommandResult(
         `browser-retry:${retryOperationId}`,
         `Retrying ${attempt.command.operation.type}${recovery.raiseWindow ? " after raising the window" : ""}: ${diagnostic}`,
       );
+      // The server read the retried page itself: answer with that page.
+      if (reissued.state === "completed")
+        return readBrowserCommandResult(db, namespace, input, ports);
       return {
         state: reissued.state,
         commandId: reissued.commandId,
@@ -2865,16 +2868,6 @@ export async function importBrowserOrderEvidence(
     (item) => item.kind === "screenshot",
   );
   const primary = capture.evidence.find((item) => item.kind === "rendered_pdf");
-  // A Purchase's document is the page as the member saw it. A capture whose
-  // window was not capturable still read the order list above, but an order
-  // page needs its picture: the agent asks again with `capture_screenshot`.
-  if (!screenshot || !primary)
-    return {
-      kind: "needs_screenshot" as const,
-      detail:
-        "This order page was captured without a screenshot; capture it again with capture_screenshot.",
-      observation: page.observation,
-    };
   const [{ extractPurchaseCapture }, { resolveOrThrow }] = await Promise.all([
     import("~/server/agents/purchase-import/extract"),
     import("~/server/repo/shortcode-resolver"),

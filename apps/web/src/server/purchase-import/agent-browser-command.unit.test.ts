@@ -13,7 +13,7 @@ describe("purchase-agent browser commands", () => {
     ).toEqual({
       type: "capture",
       allowedHosts: ["orders.example.test"],
-      enhancedEvidence: false,
+      screenshot: "preferred",
       recoveryURL: "https://orders.example.test/history",
     });
   });
@@ -30,7 +30,7 @@ describe("purchase-agent browser commands", () => {
       ),
     ).toMatchObject({
       type: "capture",
-      enhancedEvidence: true,
+      screenshot: "required",
       recoveryURL: "https://orders.example.test/order/123",
     });
   });

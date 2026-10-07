@@ -242,7 +242,7 @@ describe("RunOperation rows written by earlier code", () => {
     // The row as `issueBrowserCommand` inserted it before the Worker died,
     // with a deadline no fresh command would carry.
     const command = {
-      protocolVersion: 2,
+      protocolVersion: BROWSER_BRIDGE_PROTOCOL,
       id: commandId,
       operationId,
       runID: run.id,

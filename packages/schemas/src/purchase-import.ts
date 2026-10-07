@@ -686,18 +686,24 @@ export const browserScreenshotGap = z.enum([
  * carries one, so a stall always says why: the run log and the Runs UI read
  * it, and the server's recovery policy acts on it.
  */
+// Swift's generated client omits nil keys, so every nullable key here also
+// accepts absence and reads it as null.
 export const browserObservation = z.object({
-  url: z.url().nullable(),
-  title: z.string().max(500).nullable(),
-  readyState: z.enum(["loading", "interactive", "complete"]).nullable(),
+  url: z.url().nullable().default(null),
+  title: z.string().max(500).nullable().default(null),
+  readyState: z
+    .enum(["loading", "interactive", "complete"])
+    .nullable()
+    .default(null),
   window: z
     .object({
       /** Re-found by its tab marker after an app or browser relaunch. */
       recovered: z.boolean(),
-      minimized: z.boolean().nullable(),
-      onScreen: z.boolean().nullable(),
+      minimized: z.boolean().nullable().default(null),
+      onScreen: z.boolean().nullable().default(null),
     })
-    .nullable(),
+    .nullable()
+    .default(null),
   screenRecording: z.enum(["granted", "denied", "unknown"]),
   durationMs: z.number().int().nonnegative(),
 });
@@ -753,7 +759,7 @@ export const browserBridgeFailureCode = z.enum([
 export const browserBridgeCommandOutcome = z.discriminatedUnion("status", [
   z.object({
     status: z.literal("completed"),
-    snapshot: browserPageSnapshot.nullable(),
+    snapshot: browserPageSnapshot.nullable().default(null),
     observation: browserObservation,
   }),
   z.object({
@@ -761,7 +767,7 @@ export const browserBridgeCommandOutcome = z.discriminatedUnion("status", [
     code: browserBridgeFailureCode,
     message: z.string().max(2_000),
     retryable: z.boolean(),
-    screenshotGap: browserScreenshotGap.nullable(),
+    screenshotGap: browserScreenshotGap.nullable().default(null),
     observation: browserObservation,
   }),
 ]);

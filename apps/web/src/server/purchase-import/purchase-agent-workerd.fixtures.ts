@@ -252,7 +252,12 @@ export async function startScenarioHarness(
   scenario: ScriptedScenario,
 ) {
   const { runtime, prepared: controls } = await openWorkerdRuntime(
-    { profile: "purchase-agent", database: { borrowed: databaseUrl } },
+    {
+      profile: "purchase-agent",
+      database: { borrowed: databaseUrl },
+      // The server stores each captured page's DOM as run evidence.
+      objectStorage: {},
+    },
     async ({ harness }) => {
       const controls = scenarioControls(harness);
       await controls.configure(scenario);

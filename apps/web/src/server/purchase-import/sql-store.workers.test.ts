@@ -65,6 +65,22 @@ describe("purchase-import broker SQLite", () => {
     });
   });
 
+  // A run paused on a failed step (a minimized window, a missing permission)
+  // once stayed paused after the Mac reconnected: nothing was left to replay,
+  // so nothing woke it. The broker now remembers it until a step succeeds.
+  it("remembers a run whose step failed until a later step succeeds", async () => {
+    const stub = env.DB_FRESHNESS.getByName(crypto.randomUUID());
+    await runInDurableObject(stub, (_instance, state) => {
+      const store = new PurchaseImportSqlStore(state.storage);
+      store.migrate();
+      store.rememberWake("run-a");
+      store.rememberWake("run-b");
+      store.forgetWake("run-b");
+      expect(store.takeWake()).toBe("run-a");
+      expect(store.takeWake()).toBeNull();
+    });
+  });
+
   it("acknowledges a browser result without replaying its completed command", async () => {
     const stub = env.PURCHASE_IMPORT.getByName(crypto.randomUUID());
     await stub.enqueue(command);
@@ -90,11 +106,7 @@ describe("purchase-import broker SQLite", () => {
         type: "hello",
         deviceID: "11111111-1111-4111-8111-111111111111",
         browser: "chrome",
-        capabilities: {
-          fixedCaptureVersion: 1,
-          enhancedScreenshot: false,
-          renderedPDF: true,
-        },
+        capabilities: { snapshotVersion: 1, screenshot: true },
       }),
     );
     expect(await receiveMessage(socket)).toMatchObject({

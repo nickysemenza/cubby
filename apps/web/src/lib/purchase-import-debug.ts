@@ -41,7 +41,13 @@ export const purchaseImportDebugEvent = z.object({
   commandId: z.uuid().nullable().optional(),
   operationId: z.string().min(1).max(200).nullable().optional(),
   operationKind: z
-    .enum(["navigate", "follow_captured_link", "scroll", "capture"])
+    .enum([
+      "navigate",
+      "scroll",
+      "capture",
+      "window_raise",
+      "window_background",
+    ])
     .nullable()
     .optional(),
   host: z.hostname().nullable().optional(),

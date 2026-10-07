@@ -117,6 +117,11 @@ export class PurchaseImportSqlStore {
     );
   }
 
+  /** A later step of the run went through: it is no longer stuck. */
+  forgetWake(runId: string): void {
+    this.storage.sql.exec("DELETE FROM broker_wake WHERE run_id = ?", runId);
+  }
+
   /** The newest run to wake, removed so one reconnect wakes it once. */
   takeWake(): string | null {
     const row = this.storage.sql

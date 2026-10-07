@@ -31,7 +31,7 @@ export const productionBrowserEvidenceStorage: BrowserEvidenceStorage = {
 };
 
 /** A capture as the server read it, cached on its command's operation row. */
-export const materializedPage = z.object({
+const materializedPage = z.object({
   capture: browserPageCapture,
   domEvidenceId: z.uuid(),
   observation: browserObservation,
@@ -147,7 +147,7 @@ export type BrowserRecovery =
   | { action: "fail" };
 
 /** Automatic retries a single browser step gets before it pauses. */
-export const MAX_BROWSER_RETRIES = 1;
+const MAX_BROWSER_RETRIES = 1;
 
 const SCREEN_RECORDING_FIX =
   "Allow Cubby to record the screen (System Settings > Privacy & Security > Screen & System Audio Recording), then reopen Cubby.";

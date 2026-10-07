@@ -180,12 +180,11 @@ export class PurchaseImportDurableObject
     }
     if (parsed.data.type === "result") {
       const claimed = this.store.claimResult(parsed.data.result);
-      if (
-        claimed.command &&
-        claimed.newlyCompleted &&
-        parsed.data.result.outcome.status === "failed"
-      )
-        this.store.rememberWake(parsed.data.result.runID);
+      if (claimed.command && claimed.newlyCompleted) {
+        if (parsed.data.result.outcome.status === "failed")
+          this.store.rememberWake(parsed.data.result.runID);
+        else this.store.forgetWake(parsed.data.result.runID);
+      }
       if (claimed.command && claimed.newlyCompleted) {
         // Publish before acknowledgement. If queue publication fails, the Mac
         // retains and replays its result; the stable event id makes that replay

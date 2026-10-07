@@ -3,15 +3,11 @@ import { describe, expect, it } from "vitest";
 import { decodeBrowserBridgeMessage } from "./contracts";
 
 const hello = {
-  protocolVersion: 2,
+  protocolVersion: 3,
   type: "hello",
   deviceID: "11111111-1111-4111-8111-111111111111",
   browser: "chrome",
-  capabilities: {
-    fixedCaptureVersion: 1,
-    enhancedScreenshot: true,
-    renderedPDF: true,
-  },
+  capabilities: { snapshotVersion: 1, screenshot: true },
 };
 
 describe("decodeBrowserBridgeMessage", () => {
@@ -31,40 +27,46 @@ describe("decodeBrowserBridgeMessage", () => {
   it("rejects the replaced protocol generation", () => {
     expect(
       decodeBrowserBridgeMessage(
-        JSON.stringify({ ...hello, protocolVersion: 1 }),
+        JSON.stringify({ ...hello, protocolVersion: 2 }),
       ).success,
     ).toBe(false);
   });
 
-  it("accepts optional capture fields omitted by Swift Codable", () => {
-    const result = {
-      protocolVersion: 2,
-      type: "result",
+  // Swift's generated client omits nil keys rather than sending null; a
+  // result missing them must still parse, reading each as null.
+  it("reads nullable keys Swift Codable omitted as null", () => {
+    const decoded = decodeBrowserBridgeMessage(
+      JSON.stringify({
+        protocolVersion: 3,
+        type: "result",
+        result: {
+          protocolVersion: 3,
+          commandID: "22222222-2222-4222-8222-222222222222",
+          operationID: "browser-command:capture-001",
+          runID: "33333333-3333-4333-8333-333333333333",
+          completedAt: "2026-09-20T15:00:00Z",
+          outcome: {
+            status: "failed",
+            code: "browser_unavailable",
+            message: "Chrome is not running",
+            retryable: true,
+            observation: { screenRecording: "unknown", durationMs: 12 },
+          },
+        },
+      }),
+    );
+    expect(decoded.data).toMatchObject({
       result: {
-        protocolVersion: 2,
-        commandID: "22222222-2222-4222-8222-222222222222",
-        operationID: "browser-command:capture-001",
-        runID: "33333333-3333-4333-8333-333333333333",
-        completedAt: "2026-09-20T15:00:00Z",
         outcome: {
-          status: "completed",
-          capture: {
-            sourceURL: "https://example.com/orders",
-            title: "Orders",
-            capturedAt: "2026-09-20T15:00:00Z",
-            captureVersion: 1,
-            readableText: "Order history",
-            links: [{ id: "link-1", url: "https://example.com/orders/1" }],
-            images: [{ url: "https://example.com/order.png" }],
-            paymentEvidence: [{}],
-            evidence: [],
+          screenshotGap: null,
+          observation: {
+            url: null,
+            title: null,
+            readyState: null,
+            window: null,
           },
         },
       },
-    };
-
-    expect(decodeBrowserBridgeMessage(JSON.stringify(result)).success).toBe(
-      true,
-    );
+    });
   });
 });

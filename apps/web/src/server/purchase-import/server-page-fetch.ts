@@ -12,7 +12,7 @@ import { urlAllowed } from "./browser-page";
  * (bot walls, sign-in redirects), so a refusal is an expected answer, not an
  * error: the caller falls back to the Mac's signed-in browser and records why.
  */
-export type ServerPageFetch =
+type ServerPageFetch =
   | { status: "fetched"; url: string; html: string; durationMs: number }
   | { status: "blocked"; reason: string; durationMs: number };
 
