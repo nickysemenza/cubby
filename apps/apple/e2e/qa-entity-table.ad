@@ -7,6 +7,7 @@ wait "role=Button label=Library" 240000
 click "role=Button label=Library"
 wait text "Browse catalog" 30000
 click "label=\"Browse catalog\""
+scroll down 0.5 --until "id=browse.catalog.product"
 wait "id=browse.catalog.product" 30000
 click "id=browse.catalog.product"
 wait "id=browse.product.list" 60000
