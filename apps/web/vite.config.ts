@@ -64,6 +64,15 @@ const resolveR2PublicUrl = (localOrigin: string | undefined) =>
 
 const clientCodeSplittingGroups = [
   {
+    name: "phosphor-icons",
+    test: /[\\/]@phosphor-icons[\\/]react[\\/]/,
+    entriesAware: true,
+    entriesAwareMergeThreshold: 16384,
+    maxSize: 131072,
+    minShareCount: 2,
+    includeDependenciesRecursively: false,
+  },
+  {
     name: "es-toolkit",
     test: /[\\/]es-toolkit[\\/]/,
     entriesAware: true,
@@ -293,9 +302,11 @@ export default defineConfig(async ({ command }) => {
     resolve: { tsconfigPaths: true },
     // Consolidate the CLIENT build's request fan-out. Default Rolldown splitting
     // gives each route its own chunk (correct, keep) but also hoists every shared
-    // leaf module into its own chunk. Phosphor's per-icon imports stay on the
-    // default graph: grouping the whole library made a 612KB shared chunk,
-    // while the default split added only a handful of requests in the build.
+    // leaf module into its own chunk. Shared Phosphor modules use an entry-aware
+    // group with a 16KiB merge threshold and 128KiB source-size budget. Excluding
+    // recursive dependencies keeps React and app modules out of the icon group;
+    // minShareCount leaves route-only icons on their existing lazy boundaries.
+    // Grouping the whole icon library instead made a 612KB shared chunk.
     // `experimentalMinChunkSize` does NOT fix this (it won't merge a chunk
     // shared across async boundaries), so we coalesce selected packages with
     // Rolldown's native code-splitting groups instead.
@@ -309,6 +320,8 @@ export default defineConfig(async ({ command }) => {
     // cycle once authenticated routes shared entity-schema dependencies.
     // React stays on the default graph too: its entry-aware group merged a
     // Base UI timeout singleton into a cyclic chunk, crashing hydration.
+    // Grouping UI primitives alongside icons with strictExecutionOrder also
+    // stalled /products hydration (no uncaught exception); discard that combination.
     //   - @base-ui was tried and reverted: its grouped chunk is 243KB (80KB gzip)
     //     but the landing page only uses ~7KB of it, so grouping would drag
     //     lazy-route dialog/sheet code into first paint. Lazy-only deps (@nivo,
