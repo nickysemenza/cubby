@@ -1,5 +1,4 @@
 import AppKit
-import CoreGraphics
 import CubbyKit
 import Foundation
 
@@ -26,11 +25,6 @@ final class MacBrowserBridgeController: BrowserBridgeControlling {
             try FileBrowserBridgeReplayStore.applicationSupport(
                 namespace: "\(CubbyBaseURL.host(of: baseURL))-\(accountID)")
         },
-        capabilities: { enhancedEvidence in
-            BrowserBridgeCapabilities(
-                enhancedScreenshot: enhancedEvidence && CGPreflightScreenCaptureAccess(),
-                renderedPDF: MacBrowserCommandExecutor.supportsRenderedPDF)
-        },
         observer: { [weak self] event in self?.project(event) })
 
     init(
@@ -54,20 +48,17 @@ final class MacBrowserBridgeController: BrowserBridgeControlling {
         #endif
     }
 
-    func connect(browser: BrowserChoice, enhancedEvidence: Bool) async throws {
+    func connect(browser: BrowserChoice) async throws {
         do {
-            try await coordinator.connect(browser: browser, enhancedEvidence: enhancedEvidence)
+            try await coordinator.connect(browser: browser)
         } catch MacBrowserBridgeCoordinator.Failure.noActiveAccounts {
             // Not an error: Settings shows the empty roster and the coordinator's periodic refresh
             // connects an account once the member enables browser sync for it.
         }
     }
 
-    func syncNow(
-        browser: BrowserChoice, enhancedEvidence: Bool, backfill: BrowserBridgeBackfillRange?
-    ) async throws {
-        _ = try await coordinator.syncNow(
-            browser: browser, enhancedEvidence: enhancedEvidence, backfill: backfill)
+    func syncNow(browser: BrowserChoice, backfill: BrowserBridgeBackfillRange?) async throws {
+        _ = try await coordinator.syncNow(browser: browser, backfill: backfill)
     }
 
     func disconnect() async {
@@ -111,16 +102,15 @@ final class MacBrowserBridgeController: BrowserBridgeControlling {
             if status == .connected {
                 Task { [notifier] in await notifier.notifyDelayedOfflineIfNeeded(accountID: accountID) }
             }
-        case .result(let accountID, let result):
+        case .result(let accountID, let result, let operation):
+            settings?.setLastCommand(
+                BrowserBridgeCommandSummary.line(operation: operation, outcome: result.outcome),
+                accountID: accountID)
             switch result.outcome {
             case .completed:
                 settings?.setAccountError(nil, accountID: accountID)
             case .failed(let failure):
-                if failure.code == .authenticationRequired {
-                    settings?.requireAuthentication(accountID: accountID, message: failure.message)
-                } else {
-                    settings?.setAccountError(failure.message, accountID: accountID)
-                }
+                settings?.setAccountError(failure.message, accountID: accountID)
             }
         case .authenticationRequired(let accountID, let runID):
             settings?.requireAuthentication(
