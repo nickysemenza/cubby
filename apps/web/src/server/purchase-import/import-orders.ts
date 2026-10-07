@@ -89,6 +89,7 @@ import {
 } from "~/server/services/image-storage.service";
 
 import { assertRunCapability } from "./capabilities";
+import { CAPTURE_INTERIM_NOTE } from "./capture-interim-note";
 import { sweepImportedPurchases } from "./enrichment-sweep";
 import {
   learnPurchaseProductExternalId,
@@ -407,6 +408,9 @@ async function loadPreparation(
     lines: lines.filter((line) => line.preparedOrderId === order.id),
   }));
 }
+
+/** Drops the capture's interim note on commit; any other note stays. */
+const clearCaptureNote = sql`CASE WHEN ${runTarget.warning} = ${CAPTURE_INTERIM_NOTE} THEN NULL ELSE ${runTarget.warning} END`;
 
 export async function preparePurchaseImport(
   db: Database,
@@ -1705,8 +1709,7 @@ export async function commitProductEnrichment(
               .set({
                 state: "completed",
                 outcome: "enriched",
-                // The capture's interim note no longer describes the target.
-                warning: null,
+                warning: clearCaptureNote,
                 completedAt: new Date(),
                 updatedAt: new Date(),
               })
@@ -1923,7 +1926,7 @@ export async function overwriteProductEnrichment(
       .set({
         state: "completed",
         outcome: "enriched",
-        warning: null,
+        warning: clearCaptureNote,
         completedAt: new Date(),
         updatedAt: new Date(),
       })

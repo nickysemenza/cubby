@@ -26,6 +26,7 @@ import {
 } from "~/server/repo/repo.fixtures";
 import { insertWithShortcode } from "~/server/repo/shortcode-utils";
 
+import { CAPTURE_INTERIM_NOTE } from "./capture-interim-note";
 import {
   commitProductEnrichment,
   skipProductEnrichment,
@@ -38,6 +39,7 @@ import {
   importBrowserOrderEvidence,
   issueBrowserCommand,
   startTargetedRun,
+  stopRunForReview,
 } from "./run-service";
 
 const single: BrowserStructuredProducts = {
@@ -233,7 +235,7 @@ describe("product enrichment structured identifier proof", () => {
       .update(runTarget)
       .set({
         state: "prepared",
-        warning: "Browser evidence captured; awaiting the commit.",
+        warning: CAPTURE_INTERIM_NOTE,
       })
       .where(eq(runTarget.runId, runId));
     await commit([
@@ -249,6 +251,51 @@ describe("product enrichment structured identifier proof", () => {
         .from(runTarget)
         .where(eq(runTarget.runId, runId)),
     ).toEqual([{ state: "completed", outcome: "enriched", warning: null }]);
+  });
+
+  // A run stopped for review left its unfinished targets "awaiting the
+  // commit"; they now say why the run stopped.
+  it("replaces the capture's interim note with the stop reason", async () => {
+    const { runId } = await fixture();
+    await getDb(ctx.db)
+      .update(runTarget)
+      .set({ state: "prepared", warning: CAPTURE_INTERIM_NOTE })
+      .where(eq(runTarget.runId, runId));
+    await stopRunForReview(ctx.db, {
+      runId,
+      operationId: "stop-for-review",
+      kind: "other",
+      summary: "The vendor page asks for a sign-in.",
+    });
+    expect(
+      await getDb(ctx.db)
+        .select({ state: runTarget.state, warning: runTarget.warning })
+        .from(runTarget)
+        .where(eq(runTarget.runId, runId)),
+    ).toEqual([
+      { state: "unresolved", warning: "The vendor page asks for a sign-in." },
+    ]);
+  });
+
+  // Only the capture's own interim note is cleared; any other note on the
+  // target (a reason someone wrote) survives the commit.
+  it("keeps a target's other note when the target is enriched", async () => {
+    const { runId, commit } = await fixture();
+    await getDb(ctx.db)
+      .update(runTarget)
+      .set({ warning: "Size printed on the packet differs from the order." })
+      .where(eq(runTarget.runId, runId));
+    await commit([
+      { source: "forgewear", kind: "retailer_sku", externalId: "fw-tee-blk-m" },
+    ]);
+    expect(
+      await getDb(ctx.db)
+        .select({ warning: runTarget.warning })
+        .from(runTarget)
+        .where(eq(runTarget.runId, runId)),
+    ).toEqual([
+      { warning: "Size printed on the packet differs from the order." },
+    ]);
   });
 
   it("refuses an identifier the page does not show (a sibling variant) without partial writes", async () => {
