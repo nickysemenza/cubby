@@ -48,6 +48,7 @@ jobs:
         id: plan
         env:
           GITHUB_TOKEN: ${{ github.token }}
+          PUSH_BEFORE: ${{ github.event.before }}
         run: node scripts/apple-release.ts plan
       # Native changes since the uploaded commit, by CI's own full/apple lanes.
       - name: Classify changes since the last upload
@@ -233,6 +234,11 @@ jobs:
           BUILD: ${{ needs.plan.outputs.build }}
         run: |
           set -euo pipefail
+          # A failed checkpoint job can be rerun without the guarded upload jobs.
+          [[ "$GITHUB_RUN_ATTEMPT" == 1 ]] || {
+            echo "::error::Checkpoint reruns are refused; dispatch a fresh release."
+            exit 1
+          }
           jq -n --arg sha "$SHA" --arg version "$VERSION" --argjson build "$BUILD" \
             --arg uploadedAt "$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
             '{sha: $sha, version: $version, build: $build, uploadedAt: $uploadedAt}' \

@@ -357,7 +357,8 @@ gh workflow run apple-testflight.yaml --ref main
 ```
 
 A push changing `packages/shared/src/apple-client-version.ts` also queues a
-release. Only a changed compatibility version publishes immediately;
+release. The planner compares the declaration before and after the push. Only a changed
+compatibility version publishes immediately;
 comment-only edits wait for the nightly check. That shared declaration supplies
 both `MARKETING_VERSION` through a generated Xcode configuration and the HTTP
 server's minimum accepted app version. Bump it for wire-breaking changes;
@@ -378,7 +379,8 @@ later docs or web merge cannot hide an earlier native change.
 Both platforms share a build number derived from the release workflow's run
 number with a fixed migration offset. Publishing is limited to `main` and uses
 one concurrency group: the active run finishes and only the newest waiting
-request remains. Older reruns are refused; retry with a fresh manual dispatch.
+request remains. Older reruns, including checkpoint-only reruns, are refused; retry with a fresh
+manual dispatch.
 An out-of-order older run is also refused once a higher-numbered main run has
 started or completed, including a partial release. This protects the Mac's
 requirement that build numbers keep increasing across marketing versions.

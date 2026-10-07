@@ -31,6 +31,7 @@ const checkpoint = (overrides: Partial<Checkpoint> = {}): Checkpoint => ({
 });
 const facts = (overrides: Partial<Parameters<typeof decide>[0]> = {}) => ({
   event: "schedule",
+  previousVersion: "3.1.0",
   sha: MAIN,
   version: "3.1.0",
   checkpoint: checkpoint(),
@@ -146,6 +147,14 @@ test("a compatibility bump publishes on push; a same-value edit waits for the ni
     action: "publish",
     reason: "compatibility bump",
   });
+});
+
+test("same-value pushes skip even without upload history", () => {
+  for (const overrides of [{ checkpoint: null }, { baselineAvailable: false }])
+    assert.deepEqual(decide(facts({ event: "push", ...overrides })), {
+      action: "skip",
+      reason: "compatibility version unchanged",
+    });
 });
 
 test("the newest authentic checkpoint wins across pages; expired and foreign artifacts never count", async () => {

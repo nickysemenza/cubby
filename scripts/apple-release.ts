@@ -58,6 +58,7 @@ export function refuseUnsafeRun(run: { ref: string; runAttempt: number }) {
 
 export function decide(facts: {
   event: string;
+  previousVersion?: string | null;
   sha: string;
   version: string;
   checkpoint: Checkpoint | null;
@@ -67,14 +68,17 @@ export function decide(facts: {
   const { checkpoint } = facts;
   if (facts.event === "workflow_dispatch")
     return { action: "publish", reason: "manual request" };
+  if (facts.event === "push") {
+    if (facts.previousVersion === undefined)
+      throw new Error("A push requires its previous compatibility version.");
+    return facts.version !== facts.previousVersion
+      ? { action: "publish", reason: "compatibility bump" }
+      : { action: "skip", reason: "compatibility version unchanged" };
+  }
   if (checkpoint === null || !facts.baselineAvailable)
     return { action: "publish", reason: "missing upload checkpoint" };
   if (facts.version !== checkpoint.version)
     return { action: "publish", reason: "compatibility bump" };
-  // The push trigger exists only for the compatibility declaration; native
-  // changes it carries wait for the nightly run.
-  if (facts.event === "push")
-    return { action: "skip", reason: "compatibility version unchanged" };
   const age = facts.now.getTime() - Date.parse(checkpoint.uploadedAt);
   if (age >= REFRESH_DAYS * 86_400_000)
     return { action: "publish", reason: "30-day refresh" };
@@ -246,6 +250,35 @@ const required = (name: string) => {
   return value;
 };
 
+const versionBeforePush = (cwd: string, before: string): string | null => {
+  if (!/^[0-9a-f]{40}$/u.test(before))
+    throw new Error(`Invalid push base: ${before}`);
+  if (before !== "0".repeat(40)) {
+    const versionPath = "packages/shared/src/apple-client-version.ts";
+    const existed = execFileSync(
+      "git",
+      ["-C", cwd, "ls-tree", "--name-only", before, "--", versionPath],
+      { encoding: "utf8" },
+    ).trim();
+    // The migration adds this declaration; its first push is a version change.
+    if (existed) {
+      const source = execFileSync(
+        "git",
+        ["-C", cwd, "show", `${before}:${versionPath}`],
+        { encoding: "utf8" },
+      );
+      const match =
+        /export const APPLE_CLIENT_COMPATIBILITY_VERSION = "(\d+\.\d+\.\d+)";/u.exec(
+          source,
+        );
+      if (!match)
+        throw new Error(`Cannot read compatibility version at ${before}`);
+      return match[1]!;
+    }
+  }
+  return null;
+};
+
 async function main(command: string | undefined) {
   if (command !== "plan" && command !== "guard")
     throw new Error("usage: node scripts/apple-release.ts plan|guard");
@@ -280,9 +313,13 @@ async function main(command: string | undefined) {
   const sha = execFileSync("git", ["-C", cwd, "rev-parse", "HEAD"], {
     encoding: "utf8",
   }).trim();
+  const event = local ? "schedule" : required("GITHUB_EVENT_NAME");
+  const previousVersion =
+    event === "push" ? versionBeforePush(cwd, required("PUSH_BEFORE")) : null;
   const checkpoint = await findCheckpoint(github, workflow.id);
   const decision = decide({
-    event: local ? "schedule" : required("GITHUB_EVENT_NAME"),
+    event,
+    previousVersion,
     sha,
     version: APPLE_CLIENT_COMPATIBILITY_VERSION,
     checkpoint,
