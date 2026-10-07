@@ -269,11 +269,10 @@ describe("import run slots", () => {
       wrapper: harness.wrapper,
     });
 
+    expect(await screen.findByText("1/1 done")).toBeInTheDocument();
     expect(
-      await screen.findByText(
-        "The selected source and target are frozen for this run.",
-      ),
-    ).toBeInTheDocument();
+      screen.getByRole("link", { name: /Fixture purchase/u }),
+    ).toHaveAttribute("href", expect.stringContaining("PUR-ABCDE12345"));
     expect(screen.getByText("Outcome: replayed")).toBeInTheDocument();
     expect(
       await screen.findByText(/This terminal run is view-only/),

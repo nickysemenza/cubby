@@ -206,6 +206,9 @@ export async function attachPendingOrderMailEvidence(
   return attachedCount;
 }
 
+const unknownSenderSummary = (sender: string) =>
+  `Purchase mail from ${sender} does not match a known vendor. Create or update the vendor's order-email sender list.`;
+
 // This is the ordered mail pipeline: classify, match a hunt, attach evidence,
 // then derive event findings. Keeping that sequence visible prevents cursor
 // advancement from outrunning a partially processed message.
@@ -316,7 +319,19 @@ export async function processOrderMails(
           ),
         )
         .limit(1);
-      if (!existing) {
+      if (!existing && runId) {
+        // The discovery or search pass that read this mail owns the finding.
+        await database.insert(runFinding).values({
+          runId,
+          ledgerPartyId: mail.ledgerPartyId,
+          entityKind: "run",
+          entityId: runId,
+          kind: "unclassified_vendor",
+          summary: unknownSenderSummary(mail.sender),
+          evidenceFingerprint: fingerprint,
+        });
+      } else if (!existing) {
+        // Processing outside any pass still needs a Run to hold the finding.
         const [actorSnapshot] = await database
           .select({
             actorUserId: ledgerParty.userId,
@@ -362,7 +377,7 @@ export async function processOrderMails(
             entityKind: "run",
             entityId: runId,
             kind: "unclassified_vendor",
-            summary: `Purchase mail from ${mail.sender} does not match a known vendor. Create or update the vendor's order-email sender list.`,
+            summary: unknownSenderSummary(mail.sender),
             evidenceFingerprint: fingerprint,
           });
         });

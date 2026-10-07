@@ -1,3 +1,4 @@
+import { targetOutcomeSummary } from "@cubby/schemas/activity";
 import {
   agentConversationSchema,
   agentPromptSchema,
@@ -5,7 +6,12 @@ import {
   type AgentConversationPart,
   type AgentConversationSettlement,
 } from "@cubby/schemas/agent-conversation";
+import { entitySchema } from "@cubby/schemas/entity";
 import { agentImportRunPurpose } from "@cubby/schemas/import-run-agent";
+import {
+  countRunTargets,
+  runTargetState,
+} from "@cubby/schemas/purchase-import";
 import {
   initiateRunEvidenceUploadInput,
   validationDiff,
@@ -39,6 +45,8 @@ import {
   PhotoRunGroupingAction,
 } from "~/app/runs/photo-run-detail";
 import type { RunDetail } from "~/contracts/run.contract";
+import { EntityRefLink } from "~/entity/components/entity-ref-link";
+import { isBrowserRoutedEntity } from "~/entity/entities";
 import { DetailAction } from "~/entity/entity-detail/detail-action-bar";
 import { EntityReportSlot } from "~/entity/entity-detail/report-slot";
 import { ripple } from "~/integrations/tanstack-query/cache-tags";
@@ -366,17 +374,50 @@ function agentWorkHeadline(
   isPhotoRun: boolean,
   proposedGroups?: number,
 ): string {
+  const enrichment = run.purpose === "product_enrichment";
   if (run.status === "completed")
-    return isPhotoRun ? "Photo review complete" : "Purchase import complete";
+    return isPhotoRun
+      ? "Photo review complete"
+      : enrichment
+        ? "Product enrichment complete"
+        : "Purchase import complete";
   if (run.status === "paused_auth") return "Waiting for retailer sign-in";
   if (run.status === "paused_approval") return "Waiting for your approval";
   if (run.status === "failed" || run.status === "dispatch_failed")
     return "Agent work stopped";
   if (isPhotoRun && proposedGroups)
     return `${proposedGroups} item ${proposedGroups === 1 ? "group is" : "groups are"} ready for review`;
-  return isPhotoRun
-    ? "Preparing photo groups"
+  if (isPhotoRun) return "Preparing photo groups";
+  return enrichment
+    ? "Reading product pages"
     : "Working through purchase evidence";
+}
+
+/** The line under the headline, in the unit the run works in. */
+function agentWorkDetail(run: RunDetail, settledGroups?: number) {
+  if (run.purpose === "photo_inventory") {
+    const photos = run.targets.filter(
+      (target) => target.targetType === "image",
+    ).length;
+    return `${photos} ${photos === 1 ? "photo" : "photos"} received${settledGroups ? ` · ${settledGroups} groups settled` : ""}`;
+  }
+  if (run.purpose === "product_enrichment")
+    return productWorkDetail(run.targets);
+  return `${run.ordersSeen} ${run.ordersSeen === 1 ? "order" : "orders"} seen · ${run.imported} imported · ${run.updated} updated`;
+}
+
+/** "3 products · 1 enriched · 1 skipped". */
+function productWorkDetail(targets: RunDetail["targets"]) {
+  const count = (outcome: string) =>
+    targets.filter((target) => target.outcome === outcome).length;
+  return [
+    `${targets.length} ${targets.length === 1 ? "product" : "products"}`,
+    `${count("enriched")} enriched`,
+    count("skipped") ? `${count("skipped")} skipped` : null,
+    count("unavailable") ? `${count("unavailable")} unavailable` : null,
+  ]
+    .filter(Boolean)
+    .join(" · ");
 }
 
 function AgentWorkOverview({
@@ -408,12 +449,7 @@ function AgentWorkOverview({
     ? plannedPhotoWorkSteps(work, run.status, proposedGroups ?? 0)
     : [];
   const headline = agentWorkHeadline(run, isPhotoRun, proposedGroups);
-  const photoCount = run.targets.filter(
-    (target) => target.targetType === "image",
-  ).length;
-  const detail = isPhotoRun
-    ? `${photoCount} ${photoCount === 1 ? "photo" : "photos"} received${settledGroups ? ` · ${settledGroups} groups settled` : ""}`
-    : `${run.ordersSeen} ${run.ordersSeen === 1 ? "order" : "orders"} seen · ${run.imported} imported · ${run.updated} updated`;
+  const detail = agentWorkDetail(run, settledGroups);
   const wallMs = Math.max(
     0,
     (run.endedAt ? Date.parse(run.endedAt) : Date.now()) -
@@ -1224,15 +1260,41 @@ function TargetDiff({
   );
 }
 
+/** A target named and linked to its record; a bare kind when it has no code. */
+function TargetName({ target }: { target: RunDetail["targets"][number] }) {
+  const entity = entitySchema.safeParse(target.targetType);
+  if (
+    !target.targetShortcode ||
+    !entity.success ||
+    !isBrowserRoutedEntity(entity.data)
+  )
+    return <span className="font-medium">{target.targetType}</span>;
+  return (
+    <EntityRefLink
+      variant="chip"
+      entity={entity.data}
+      id={target.targetShortcode}
+      name={target.targetName}
+      wrap
+    />
+  );
+}
+
 /** Run detail slot: the frozen source and target of each account-sync target. */
 export function RunImportTargets({ record }: { record: RunOut }) {
   return (
     <ImportRunSlot record={record} visible={hasTargetsOrEvidence}>
       {(run) => (
         <RunRecordList
-          description="The selected source and target are frozen for this run."
+          description={
+            targetOutcomeSummary(
+              countRunTargets(
+                run.targets.map((target) => runTargetState.parse(target.state)),
+              ),
+            ) ?? "The selected source and target are frozen for this run."
+          }
           items={run.targets}
-          empty="No explicit targets were recorded for this account sync."
+          empty="No explicit targets were recorded for this run."
           render={(target) => ({
             key: target.id,
             body: (
@@ -1241,11 +1303,7 @@ export function RunImportTargets({ record }: { record: RunOut }) {
                   <Badge variant={statusBadgeVariant(target.state)}>
                     {target.state}
                   </Badge>
-                  <span className="font-medium">
-                    {target.targetName ??
-                      target.targetShortcode ??
-                      target.targetType}
-                  </span>
+                  <TargetName target={target} />
                 </Row>
                 <p className="text-xs text-muted-foreground">
                   {target.sourceLabel ?? "No source selected"}

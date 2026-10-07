@@ -2,7 +2,7 @@ import { parseShortcodeFor } from "@cubby/schemas/identifiers";
 import type { PaginationParams, SortParams } from "@cubby/schemas/pagination";
 import type { RunFilters, RunOut } from "@cubby/schemas/run";
 import { runOut } from "@cubby/schemas/run";
-import { runPurpose, type RunPurpose } from "@cubby/schemas/run-fields";
+import { runWorkLabel } from "@cubby/schemas/run-fields";
 import { and, eq } from "drizzle-orm";
 
 import { formatDuration } from "~/lib/format-duration";
@@ -23,18 +23,6 @@ import { lookupEntityReferences } from "~/server/repo/shortcode-resolver";
  * `purchase-import/run-service.ts`; this file only projects the row.
  */
 type RunRow = typeof runTable.$inferSelect;
-
-const PURPOSE_LABEL = {
-  account_sync: "Account sync",
-  purchase_validation: "Purchase validation",
-  product_enrichment: "Product enrichment",
-  photo_inventory: "Photo inventory",
-  ai_suggest: "AI suggestions",
-  background: "Background",
-  file_import: "File import",
-  mail_search: "Mail search",
-  mail_discovery: "Mail discovery",
-} satisfies Record<RunPurpose, string>;
 
 // includes-deleted: a run is immutable history, so it keeps naming the
 // account, vendor and party it ran for after they are tombstoned.
@@ -73,7 +61,7 @@ const hydrate = async (
     return runOut.parse({
       ...row,
       id: parseShortcodeFor("run", row.shortcode),
-      displayName: `${vendor?.name ?? party?.name ?? row.actorName} · ${PURPOSE_LABEL[runPurpose.parse(row.purpose)]}`,
+      displayName: `${vendor?.name ?? party?.name ?? row.actorName} · ${runWorkLabel(row)}`,
       wallTime: row.endedAt
         ? formatDuration(
             Math.max(0, row.endedAt.getTime() - row.startedAt.getTime()),

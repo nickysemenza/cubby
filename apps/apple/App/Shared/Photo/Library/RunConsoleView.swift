@@ -206,7 +206,7 @@ struct RunPhotoBatchSlot: View {
                 startedAt: .now.addingTimeInterval(-12), endedAt: nil,
                 coordinatorModel: "gpt-6-sol", agentModelMs: 4_200,
                 ordersSeen: 0, imported: 0, updated: 0, skipped: 0, findings: [],
-                targetsTotal: 2, targetsCompleted: 0,
+                targetsTotal: 2, targetsCompleted: 0, targets: [],
                 progress: [
                     .init(phase: "grouping", detail: "Identified one shirt and its label", createdAt: .now)
                 ],

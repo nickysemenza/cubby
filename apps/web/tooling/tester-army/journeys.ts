@@ -1,3 +1,5 @@
+import { z } from "zod";
+
 import { JOURNEY_NAMES, LIVE_IMPORT } from "./names";
 import type { DbCheck, Journey, JourneyIds, RunWait } from "./journey";
 
@@ -15,6 +17,25 @@ const stock = `SELECT l.name AS location, ie."amountValue"::float8 AS amount, co
    WHERE p.shortcode = $1 AND ie."deletedAt" IS NULL`;
 
 const only = (key: string) => (ids: JourneyIds) => [ids.get(key)];
+
+const runFacts = z.object({
+  work: z.string(),
+  targets: z.string(),
+  changed: z.number(),
+  names: z.array(z.string()),
+});
+
+/** Reading a run never changes it: still running, targets as seeded. */
+const runUntouched = (key: string): DbCheck => ({
+  label: "reading the run leaves it and its targets as they were",
+  sql: `SELECT r.status, array_agg(t.state ORDER BY t.position) AS states
+          FROM "Run" r JOIN "RunTarget" t ON t."runId" = r.id
+         WHERE r.shortcode = $1 GROUP BY r.status`,
+  params: only(key),
+  rows: () => [
+    { status: "running", states: ["completed", "skipped", "pending"] },
+  ],
+});
 
 const expensePurchase = (key: string): DbCheck => ({
   label: "expense belongs to the expected purchase",
@@ -653,6 +674,65 @@ export const journeys: Journey[] = [
         rows: () => [{ status: "dismissed", resolved: true }],
       },
     ],
+  },
+  {
+    id: "runs-list-facts",
+    title:
+      "the Runs list says what an enrichment run is doing and what it touched",
+    webOnly: true,
+    open: () => ({ web: "/runs" }),
+    steps: [
+      {
+        goal: `In the Runs list, find the Product enrichment run whose subject is "${JOURNEY_NAMES.enrichVendor}" and click its Progress cell so its details panel opens beside the list. Stay on the list page.`,
+        check: {
+          // "Product enrichment" also names a hidden Work filter option; the
+          // screen read below checks the label instead.
+          visible: () => [
+            "1/3 done · 1 skipped · 1 to go",
+            JOURNEY_NAMES.enrichStep,
+          ],
+        },
+        read: {
+          instruction:
+            "From the open run's details: its work label, its target summary line, how many records it changed (a number), and the names of the target records it lists, in order.",
+          schema: runFacts,
+          expected: () => ({
+            work: "Product enrichment",
+            targets: "1/3 done · 1 skipped · 1 to go",
+            changed: 1,
+            names: JOURNEY_NAMES.enrichTargets.map(
+              (name) => `${name} (${JOURNEY_NAMES.enrichVendor})`,
+            ),
+          }),
+        },
+      },
+      {
+        goal: `Open the target record "${JOURNEY_NAMES.enrichTargets[0]} (${JOURNEY_NAMES.enrichVendor})" from that run.`,
+      },
+    ],
+    visible: () => [
+      `${JOURNEY_NAMES.enrichTargets[0]} (${JOURNEY_NAMES.enrichVendor})`,
+    ],
+    db: [runUntouched("run")],
+  },
+  {
+    id: "runs-list-phone",
+    title: "on a phone, the Runs list still shows an enrichment run's progress",
+    webOnly: true,
+    viewport: { width: 390, height: 844 },
+    open: () => ({ web: "/runs" }),
+    steps: [
+      {
+        goal: `Find the Product enrichment run for "${JOURNEY_NAMES.enrichPhoneVendor}" in the Runs list without opening it.`,
+        check: { visible: () => ["1/3 done · 1 skipped · 1 to go"] },
+      },
+      {
+        goal: "Open that run.",
+        check: { visible: () => [JOURNEY_NAMES.enrichStep] },
+      },
+    ],
+    visible: () => [],
+    db: [runUntouched("run")],
   },
   {
     id: "vendor-account-browser-sync",

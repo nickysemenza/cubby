@@ -53,6 +53,33 @@ export const runTargetState = z.enum([
 ]);
 export type RunTargetState = z.infer<typeof runTargetState>;
 
+/**
+ * How every client counts a run's targets: done, skipped (the member need not
+ * act), blocked (waiting on the member or on evidence), or still to do.
+ */
+export const RUN_TARGET_BUCKET = {
+  pending: "pending",
+  prepared: "pending",
+  completed: "completed",
+  skipped: "skipped",
+  unavailable: "skipped",
+  unresolved: "blocked",
+  needs_evidence: "blocked",
+} as const satisfies Record<
+  RunTargetState,
+  "completed" | "skipped" | "blocked" | "pending"
+>;
+export type RunTargetBucket = (typeof RUN_TARGET_BUCKET)[RunTargetState];
+
+export function countRunTargets(states: readonly RunTargetState[]) {
+  const counts = { total: 0, completed: 0, skipped: 0, blocked: 0, pending: 0 };
+  for (const state of states) {
+    counts.total += 1;
+    counts[RUN_TARGET_BUCKET[state]] += 1;
+  }
+  return counts;
+}
+
 export const runTargetOutcome = z.enum([
   "replayed",
   "raw_evidence_drift",
@@ -707,7 +734,15 @@ export const browserBridgeRunCompletion = z.object({
   updated: z.number().int().nonnegative(),
   skipped: z.number().int().nonnegative(),
   findingCount: z.number().int().nonnegative(),
+  /**
+   * The notification, written by the server in the unit the run worked in.
+   * Absent only on completions a bridge stored before the server wrote one.
+   */
+  notice: z.object({ title: z.string(), body: z.string() }).optional(),
 });
+export type BrowserBridgeRunCompletion = z.infer<
+  typeof browserBridgeRunCompletion
+>;
 export const browserBridgeServerMessage = z.discriminatedUnion("type", [
   z.object({
     protocolVersion: z.literal(2),

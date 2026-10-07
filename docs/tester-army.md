@@ -31,10 +31,21 @@ line and product tag/collection editing; purchase validation; expense split
 (cents conserved, unknown cost refused); attach expenses (move confirmation) and
 products; task board lanes and moving a card; turning a mail-only vendor
 account into a browser-synced one (its Vendor becomes an online account);
-reading a finished mail import's Restart inputs (Vendor and order id); and a
-Run console journey (live progress, resolving a finding). The Run console debug log is not cursor-paged in
+reading a finished mail import's Restart inputs (Vendor and order id); a
+Run console journey (live progress, resolving a finding); and the Runs list
+showing a live enrichment run's work label, target summary, latest step,
+named targets and changed count, on desktop and at a phone width. The Run console debug log is not cursor-paged in
 the app (it caps at 2,000 events), so paging is not asserted. Three coupled
 import journeys follow (see below).
+
+A step can also `read` the screen: `agent.extract` returns structured data
+validated by a Zod schema, and the harness compares it exactly (key order
+aside) with what the seed implies. Use it for dense surfaces, where one
+visible string cannot show that every fact is right. Under `--wrong` a read
+must fail when it matches. A journey's `viewport` fixes the web viewport
+before it opens its page, so the same catalog covers phone layouts. Prefer
+exact text that appears once: a label that also names a hidden `<option>`
+matches the hidden node first.
 
 ## Failure modes and acceptance
 

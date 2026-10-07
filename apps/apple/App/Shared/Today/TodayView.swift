@@ -299,7 +299,7 @@ struct TodayContent: View {
                             VStack(alignment: .leading, spacing: 2) {
                                 Text(run.subjectName).font(.headline)
                                 Text(
-                                    "\(run.kind.title) · \(run.state.replacingOccurrences(of: "_", with: " ").capitalized)"
+                                    "\(run.workLabel) · \(run.state.replacingOccurrences(of: "_", with: " ").capitalized)"
                                 )
                                 .font(.caption).foregroundStyle(.secondary)
                             }
@@ -778,6 +778,7 @@ private func formattedDueDate(_ raw: String) -> String {
                 runs: [
                     ActivityRun(
                         id: "RUN-4K7M", recordType: .run, kind: .photoInventory, subjectName: "Photo import",
+                        workLabel: "Photo inventory", targetPreview: [], changedCount: 0,
                         state: "running", active: true, createdAt: .now,
                         attempts: 1, executors: [], hasDiagnostics: false, canRetry: false)
                 ],
@@ -883,6 +884,7 @@ private func formattedDueDate(_ raw: String) -> String {
                         ActivityRun(
                             id: "RUN-4K7M", recordType: .run, kind: .photoInventory,
                             subjectName: "Photo import",
+                            workLabel: "Photo inventory", targetPreview: [], changedCount: 0,
                             state: "running", active: true, createdAt: .now,
                             attempts: 1, executors: [], hasDiagnostics: false, canRetry: false)
                     ]))

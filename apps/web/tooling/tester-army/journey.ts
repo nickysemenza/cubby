@@ -1,4 +1,5 @@
 import { readFileSync } from "node:fs";
+import { isDeepStrictEqual } from "node:util";
 import { Pool } from "pg";
 import { z } from "zod";
 import { pollUntil } from "@cubby/shared/retry";
@@ -62,6 +63,17 @@ export type StepCheck = {
   db?: DbCheck[];
 };
 
+/**
+ * Structured data the agent reads off the screen (`agent.extract`), compared
+ * exactly with what the seed implies. It checks that a dense surface says the
+ * right thing, which a single visible string cannot.
+ */
+export type ScreenRead = {
+  instruction: string;
+  schema: z.ZodType<Json>;
+  expected: (ids: JourneyIds) => Json;
+};
+
 export type JourneyStep = {
   /** Holds the step until background work has written these rows. */
   ready?: DbCheck;
@@ -69,6 +81,8 @@ export type JourneyStep = {
   awaitRun?: RunWait;
   goal: string;
   check?: StepCheck;
+  /** Read back from the screen once the step ends. */
+  read?: ScreenRead;
   /** Replaces `goal` for one engine when the labels differ. */
   web?: string;
   ios?: string;
@@ -86,6 +100,8 @@ export type Journey = {
   webOnly?: true;
   /** Extra agent context for this journey's steps. */
   context?: string;
+  /** Web viewport for the whole journey, for example a phone width. */
+  viewport?: { width: number; height: number };
   /** Attempt deadline when the journey waits on a live run. */
   timeoutMs?: number;
   /** Key of the seeded entity code the journey opens first. */
@@ -341,4 +357,20 @@ export async function awaitRun(
   } finally {
     await pool.end();
   }
+}
+
+/** Fails unless what the agent read equals the expectation (or, with `wrong`, unless it does not). */
+export function assertScreenRead(
+  journey: { id: string },
+  read: ScreenRead,
+  actual: Json,
+  ids: JourneyIds,
+  wrong: boolean,
+) {
+  const expected = read.expected(ids);
+  // Key order is not a difference; any value or element order is.
+  if (isDeepStrictEqual(actual, expected) !== wrong) return;
+  throw new Error(
+    `Screen read ${wrong ? "unexpectedly matched" : "failed"} (${journey.id}: ${read.instruction}). expected ${JSON.stringify(expected)} actual ${JSON.stringify(actual)}`,
+  );
 }

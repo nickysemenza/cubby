@@ -76,7 +76,8 @@ test("Runs browse flat and grouped work with a responsive inspector, while Activ
   await gotoAuthenticatedPage(page, `/runs?subjectId=${sample.imageId}`);
   const table = page.getByRole("table", { name: "Runs and image jobs" });
   await expect(table).toContainText(sample.filename);
-  await expect(table).toContainText("Image job");
+  // The Work column names image jobs by their kind.
+  await expect(table).toContainText("Subject lift");
   await page.getByRole("button", { name: "Group by run" }).click();
   await expect(
     page.getByRole("button", { name: `Expand jobs for ${sample.runId}` }),
@@ -84,8 +85,8 @@ test("Runs browse flat and grouped work with a responsive inspector, while Activ
   await page
     .getByRole("button", { name: `Expand jobs for ${sample.runId}` })
     .click();
-  await expect(table).toContainText("describe image");
-  await expect(table).toContainText("subject lift");
+  await expect(table).toContainText("Image description");
+  await expect(table).toContainText("Subject lift");
   await gotoAuthenticatedPage(page, `/runs?selected=${sample.jobId}`);
   await expect(
     page.getByRole("button", { name: "Copy diagnostics", exact: true }).first(),

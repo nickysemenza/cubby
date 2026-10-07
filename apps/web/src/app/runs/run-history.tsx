@@ -1,4 +1,5 @@
 import {
+  ACTIVITY_KIND_LABEL,
   activityKind,
   type ActivityRun,
   type ActivityListInput,
@@ -15,6 +16,7 @@ import {
 } from "react";
 
 import { ActivityRunDetail } from "~/app/activity/activity-run-detail";
+import { RunSubject, RunTargetChips } from "~/app/runs/run-work-summary";
 import { createEntityDisplayColumns } from "~/entity/entity-display";
 import { cursorQueryOptions } from "~/integrations/tanstack-query/cursor-query-options";
 import { activity } from "~/integrations/tanstack-query/generated/catalog.gen";
@@ -248,14 +250,16 @@ export function RunHistory({
         add(
           helper.accessor("subjectName", {
             header: "Subject",
-            size: 270,
+            size: 240,
             meta: {
               entityColumnRole: "identity",
               surplus: true,
               mobile: { slot: "title", priority: 1 },
             },
-            cell: ({ row, getValue }) => (
-              <div className={row.original.depth ? "pl-6" : ""}>
+            cell: ({ row }) => (
+              <div
+                className={`flex min-w-0 items-center gap-1 ${row.original.depth ? "pl-6" : ""}`}
+              >
                 {grouped &&
                 row.original.recordType === "run" &&
                 (row.original.childCount ?? 0) > 0 ? (
@@ -273,7 +277,7 @@ export function RunHistory({
                     {row.original.childCount}
                   </Button>
                 ) : null}
-                {getValue()}
+                <RunSubject run={row.original} />
                 {row.original.contextOnly ? (
                   <Badge variant="outline" className="ml-2">
                     Context
@@ -294,22 +298,6 @@ export function RunHistory({
           }),
         );
         add(
-          helper.accessor("recordType", {
-            header: "Type",
-            size: 100,
-            cell: ({ getValue }) =>
-              getValue() === "run" ? "Run" : "Image job",
-          }),
-        );
-        add(
-          helper.accessor("kind", {
-            header: "Work",
-            size: 150,
-            cell: ({ getValue }) => label(getValue()),
-            meta: { mobile: { slot: "meta", priority: 10 } },
-          }),
-        );
-        add(
           helper.accessor("state", {
             header: "State",
             size: 110,
@@ -317,6 +305,54 @@ export function RunHistory({
               <Badge variant="secondary">{label(getValue())}</Badge>
             ),
             meta: { mobile: { slot: "meta", priority: 20 } },
+          }),
+        );
+        add(
+          helper.accessor("workLabel", {
+            header: "Work",
+            size: 170,
+            meta: { mobile: { slot: "meta", priority: 10 } },
+          }),
+        );
+        add(
+          helper.accessor("targetSummary", {
+            header: "Progress",
+            size: 340,
+            enableSorting: false,
+            cell: ({ row }) => {
+              const summary = row.original.targetSummary;
+              const step = row.original.active
+                ? row.original.currentStep
+                : null;
+              return (
+                <span
+                  className="block truncate"
+                  title={row.original.currentStep ?? undefined}
+                >
+                  <span className="tabular-nums">{summary ?? "—"}</span>
+                  {step ? (
+                    <span className="text-muted-foreground"> · {step}</span>
+                  ) : null}
+                </span>
+              );
+            },
+            meta: { mobile: { slot: "meta", priority: 30 } },
+          }),
+        );
+        add(
+          helper.accessor("targetPreview", {
+            header: "Targets",
+            size: 300,
+            enableSorting: false,
+            cell: ({ row }) => <RunTargetChips run={row.original} />,
+          }),
+        );
+        add(
+          helper.accessor("changedCount", {
+            header: "Changed",
+            size: 80,
+            cell: ({ getValue }) => getValue() || "—",
+            meta: { mono: true, numeric: true },
           }),
         );
         add(
@@ -459,7 +495,7 @@ export function RunHistory({
           <option value="">All work</option>
           {kinds.map((kind) => (
             <option key={kind} value={kind}>
-              {label(kind)}
+              {ACTIVITY_KIND_LABEL[kind]}
             </option>
           ))}
         </NativeSelect>

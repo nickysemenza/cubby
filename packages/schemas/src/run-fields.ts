@@ -281,3 +281,45 @@ export type RunInput =
   | OrderBackfillRunInput
   | z.infer<typeof chargeHuntRunInput>;
 export type RunProgress = MailSearchRunProgress | MailDiscoveryRunProgress;
+
+/** The label of each run purpose; `runWorkLabel` names one run's actual work. */
+export const RUN_PURPOSE_LABEL = {
+  account_sync: "Account sync",
+  purchase_validation: "Purchase validation",
+  product_enrichment: "Product enrichment",
+  photo_inventory: "Photo inventory",
+  ai_suggest: "AI suggestions",
+  background: "Background",
+  file_import: "File import",
+  mail_search: "Mail search",
+  mail_discovery: "Mail discovery",
+} as const satisfies Record<z.infer<typeof runPurpose>, string>;
+
+/**
+ * What one run actually does, for every surface that names it (lists,
+ * detail titles, MCP, the Mac, notifications). An `account_sync` run is
+ * several kinds of work told apart by its input: mail imports, selected
+ * charge searches and history backfills share the purpose with a plain
+ * order-history sync, and a vendor-less run with no input only holds a
+ * finding about mail from an unknown sender.
+ */
+export function runWorkLabel(run: {
+  purpose: string;
+  input: unknown;
+  vendorId?: string | null;
+}): string {
+  const purpose = runPurpose.safeParse(run.purpose);
+  if (!purpose.success) return run.purpose;
+  if (purpose.data !== "account_sync") return RUN_PURPOSE_LABEL[purpose.data];
+  const kind = z.object({ kind: z.string() }).safeParse(run.input);
+  switch (kind.success ? kind.data.kind : null) {
+    case "order_mail_import":
+      return "Order mail import";
+    case "charge_hunts":
+      return "Charge search";
+    case "order_backfill":
+      return "Order history backfill";
+    default:
+      return run.vendorId ? "Order history sync" : "Unknown sender review";
+  }
+}

@@ -21,7 +21,13 @@ import { describe, expect, it, vi } from "vitest";
 
 import type { Database } from "~/server/db";
 import { account } from "~/server/db/auth.schema";
-import { mailboxCursor, orderMail, run, runProgress } from "~/server/db/schema";
+import {
+  mailboxCursor,
+  orderMail,
+  run,
+  runFinding,
+  runProgress,
+} from "~/server/db/schema";
 import { getDb } from "~/server/repo/database-helpers";
 import { insertWithShortcode } from "~/server/repo/shortcode-utils";
 import type { WorkflowLauncher } from "~/server/workflow-runs/launcher";
@@ -408,5 +414,35 @@ describe("scheduled Gmail discovery", () => {
         (row) => row.id,
       ),
     ).toEqual([kept.params.runId]);
+  });
+
+  // A pass that filed a finding (mail from an unknown sender) owns it, so
+  // pruning must keep the pass rather than lose the finding or fail.
+  it("keeps an old routine pass that holds a finding", async () => {
+    const party = await seedMember();
+    const pass = await startOne();
+    const passId = runEntityId.parse(pass.params.runId);
+    await getDb(ctx.db)
+      .insert(runFinding)
+      .values({
+        runId: passId,
+        ledgerPartyId: party.id,
+        entityKind: "run",
+        entityId: passId,
+        kind: "unclassified_vendor",
+        summary:
+          "Purchase mail from news@relay.example does not match a known vendor.",
+        evidenceFingerprint: "f".repeat(64),
+      });
+    await getDb(ctx.db)
+      .update(run)
+      .set({
+        status: "completed",
+        routine: true,
+        endedAt: new Date(Date.now() - 40 * 86_400_000),
+      })
+      .where(eq(run.id, passId));
+
+    expect(await pruneRoutineRuns(ctx.db)).toBe(0);
   });
 });
