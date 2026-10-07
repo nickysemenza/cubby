@@ -855,6 +855,70 @@ describe("purchase import run admission", () => {
       error: "disallowed_url: Navigation left the vendor allowlist",
     });
   });
+  // An outdated Mac once reported every capture as "The evidence file could
+  // not be staged" and the run failed the command. Updating the app is the
+  // fix, so the run waits for the updated app to reconnect instead.
+  it("pauses a run offline when the Mac app is too old for the server", async () => {
+    const party = await createMember();
+    const account = await createVendorAccount(party.id);
+    const run = await startOrResumeRun(ctx.db, {
+      ledgerPartyId: party.id,
+      vendorAccountId: account.id,
+      trigger: "manual",
+    });
+    let issued: BrowserBridgeRequest | undefined;
+    const broker = {
+      enqueue: async (command: BrowserBridgeRequest) => {
+        issued = command;
+      },
+      result: async (): Promise<BrowserBridgeResult> => ({
+        protocolVersion: 2,
+        commandID: issued!.id,
+        operationID: issued!.operationId,
+        runID: run.id,
+        completedAt: new Date().toISOString(),
+        outcome: {
+          status: "failed",
+          code: "client_update_required",
+          message: "Update Cubby for Mac, then this run resumes.",
+          retryable: false,
+        },
+      }),
+      cancel: async () => undefined,
+      connected: async () => true,
+      pendingCommands: async () => [],
+      notifyRunCompleted: async () => undefined,
+      requestAuthentication: async () => undefined,
+    };
+    const namespace = { getByName: () => broker };
+    await issueBrowserCommand(ctx.db, namespace, {
+      runId: run.id,
+      operationId: "browser:outdated",
+      operation: {
+        type: "navigate",
+        url: "https://shop.example.test/orders",
+        allowedHosts: ["shop.example.test"],
+      },
+    });
+
+    const read = await readBrowserCommandResult(ctx.db, namespace, {
+      runId: run.id,
+      operationId: "browser:outdated",
+    });
+
+    expect(read.state).toBe("paused_offline");
+    const { run: runTable } = await import("~/server/db/schema");
+    const { eq } = await import("drizzle-orm");
+    const { getDb } = await import("~/server/repo/database-helpers");
+    const [row] = await getDb(ctx.db)
+      .select({ status: runTable.status, failureCode: runTable.failureCode })
+      .from(runTable)
+      .where(eq(runTable.id, run.id));
+    expect(row).toEqual({
+      status: "paused_offline",
+      failureCode: "client_update_required",
+    });
+  });
   it("abandons a browser command nobody answered within the stale window", async () => {
     const party = await createMember();
     const account = await createVendorAccount(party.id);

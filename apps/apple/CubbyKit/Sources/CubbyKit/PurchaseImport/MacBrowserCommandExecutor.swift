@@ -446,7 +446,7 @@
                             normalized, runID: command.runID, scope: evidenceScope)
                     ]
                 } catch {
-                    throw ExecutionFailure.uploadFailed
+                    throw ExecutionFailure.uploading(error)
                 }
                 return BrowserPageCapture(
                     sourceURL: sourceURL, title: payload.title, capturedAt: capturedAt,
@@ -490,7 +490,7 @@
                 BrowserBridgeDebugLog.emit(.visualCaptureFinished, command: command)
             } catch {
                 BrowserBridgeDebugLog.emit(.visualCaptureFailed, command: command, error: error)
-                throw ExecutionFailure.uploadFailed
+                throw ExecutionFailure.uploading(error)
             }
             return BrowserPageCapture(
                 sourceURL: sourceURL, title: payload.title, capturedAt: capturedAt,
@@ -886,7 +886,7 @@
         }
     }
 
-    private enum ExecutionFailure: Error, LocalizedError, Sendable {
+    enum ExecutionFailure: Error, LocalizedError, Sendable {
         case invalidCommand
         case unknownLink
         case browserUnavailable
@@ -895,8 +895,16 @@
         case authenticationRequired
         case captureUnavailable
         case uploadFailed
+        case clientUpdateRequired
         case executionFailed
         case cancelled
+
+        /// An upload refused by the server's version gate is an outdated app, not a staging
+        /// failure: retrying cannot help until the app updates.
+        static func uploading(_ error: any Error) -> Self {
+            (error as? CubbyAPIError)?.isClientUpdateRequired == true
+                ? .clientUpdateRequired : .uploadFailed
+        }
 
         var errorDescription: String? { message }
 
@@ -909,6 +917,7 @@
             case .authenticationRequired: .authenticationRequired
             case .captureUnavailable: .captureUnavailable
             case .uploadFailed: .uploadFailed
+            case .clientUpdateRequired: .clientUpdateRequired
             case .executionFailed: .executionFailed
             case .cancelled: .cancelled
             }
@@ -920,7 +929,7 @@
                 .executionFailed:
                 true
             case .invalidCommand, .unknownLink, .authenticationRequired,
-                .javascriptAutomationDisabled,
+                .javascriptAutomationDisabled, .clientUpdateRequired,
                 .cancelled:
                 false
             }
@@ -937,6 +946,8 @@
             case .authenticationRequired: "The vendor needs you to sign in in Cubby's browser window."
             case .captureUnavailable: "The signed-in page could not be captured."
             case .uploadFailed: "The evidence file could not be staged."
+            case .clientUpdateRequired:
+                "This Cubby for Mac is too old for the server. Update it; the run resumes when it reconnects."
             case .executionFailed: "The browser did not complete the requested operation."
             case .cancelled: "The browser command was cancelled."
             }

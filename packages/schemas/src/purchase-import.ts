@@ -638,6 +638,8 @@ export const browserBridgeFailureCode = z.enum([
   "capture_unavailable",
   "upload_failed",
   "execution_failed",
+  // The server's version gate refused this Mac build (HTTP 426).
+  "client_update_required",
 ]);
 export const browserBridgeCommandOutcome = z.discriminatedUnion("status", [
   z.object({
