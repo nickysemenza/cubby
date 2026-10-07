@@ -1705,6 +1705,8 @@ export async function commitProductEnrichment(
               .set({
                 state: "completed",
                 outcome: "enriched",
+                // The capture's interim note no longer describes the target.
+                warning: null,
                 completedAt: new Date(),
                 updatedAt: new Date(),
               })
@@ -1921,6 +1923,7 @@ export async function overwriteProductEnrichment(
       .set({
         state: "completed",
         outcome: "enriched",
+        warning: null,
         completedAt: new Date(),
         updatedAt: new Date(),
       })

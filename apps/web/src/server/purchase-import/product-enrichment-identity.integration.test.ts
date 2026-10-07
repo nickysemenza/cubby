@@ -224,6 +224,33 @@ describe("product enrichment structured identifier proof", () => {
     ]);
   });
 
+  // A finished run showed every enriched target still "awaiting the
+  // purpose-specific comparison": the capture's interim note outlived the
+  // commit, and the Runs list renders a target's warning as one.
+  it("clears the capture's interim note when the target is enriched", async () => {
+    const { runId, commit } = await fixture();
+    await getDb(ctx.db)
+      .update(runTarget)
+      .set({
+        state: "prepared",
+        warning: "Browser evidence captured; awaiting the commit.",
+      })
+      .where(eq(runTarget.runId, runId));
+    await commit([
+      { source: "forgewear", kind: "retailer_sku", externalId: "fw-tee-blk-m" },
+    ]);
+    expect(
+      await getDb(ctx.db)
+        .select({
+          state: runTarget.state,
+          outcome: runTarget.outcome,
+          warning: runTarget.warning,
+        })
+        .from(runTarget)
+        .where(eq(runTarget.runId, runId)),
+    ).toEqual([{ state: "completed", outcome: "enriched", warning: null }]);
+  });
+
   it("refuses an identifier the page does not show (a sibling variant) without partial writes", async () => {
     const { target, commit } = await fixture();
     await expect(
