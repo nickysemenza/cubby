@@ -178,8 +178,9 @@ change the shape of the pipeline. The browser bridge contract is in
   command at one retry, but the coordinator then issues the same logical step
   under a new operation id, so a run loops for hours. Budget across the run
   instead: repeated failures of the same step (same target and outcome) and
-  total wall-clock time, then stop for review with the last observation as
-  the reason.
+  total active time, then stop for review with the last observation as the
+  reason. Time paused for the member (sign-in, a permission, the Mac offline)
+  does not count; those pauses already expire on their own.
 
 - 🧱 **Vendor capture profiles.** Record per Vendor what a sync learns once:
   the order-history URL, sign-in host, extra allowed hosts (for example a
