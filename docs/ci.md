@@ -175,6 +175,9 @@ The host's CAS-and-clones-only replay passed the same 661 tests in 37s
 passed in 32s (227/227 hits), versus 161s cold. These demonstrate reuse without
 the deleted timestamp helper or XCBuild inode override; they do not establish
 hosted Xcode 26 job times or include GitHub cache transfer and runner queueing.
+Manual native E2E installation (`apps/web/tooling/sim-e2e.ts`) uses the same
+ordinary input timestamps. Removing a shared build helper requires checking
+those manual callers as well as the required workflow.
 
 The earlier simulator-test job ran `xcodebuild test` on a concrete simulator:
 first boot cost about 6 minutes plus roughly 10 minutes of CPU starvation
