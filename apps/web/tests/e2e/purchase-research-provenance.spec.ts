@@ -259,6 +259,7 @@ test("imports an original, automatically verifies the exact Product with visible
   );
   await gotoAuthenticatedPage(page, `/purchases/${bought.shortcode}`);
   await page
+    .getByRole("table", { name: "Products", exact: true })
     .getByRole("link", { name: orderedTitle, exact: true })
     .and(page.locator(`[href='/products/${item.shortcode}']`))
     .click();
