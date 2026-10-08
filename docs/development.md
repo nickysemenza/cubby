@@ -79,6 +79,18 @@ The `usda-api` D1 database does not use the web migration
 workflow. Apply remote D1 migrations before deploying code that depends on
 them.
 
+### Neon cache diagnostics
+
+The migration series installs the `neon` extension when the host provides it;
+local pgvector Postgres skips it with a notice. It exposes compute-wide cache
+statistics without changing application tables. Use Neon MCP
+`inspect_database` with `check: "lfc-hit-rate"` or `check: "working-set"`, or
+run `neon inspect db lfc-hit-rate` / `neon inspect db working-set` against the
+intended production branch. These measure cache efficiency and the hot working
+set, not a complete breakdown of process RAM. Statistics reset when compute
+restarts; interpret them after representative traffic. See the
+[Neon extension documentation](https://neon.com/docs/extensions/neon).
+
 ## Worktrees and test services
 
 - Fresh worktrees run `pnpm agent:setup`: a frozen install, then a WASM build
