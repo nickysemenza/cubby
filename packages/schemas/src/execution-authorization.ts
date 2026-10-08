@@ -47,31 +47,46 @@ const backfill = z.strictObject({
 });
 
 /** One immutable, member-approved root snapshot, stored only by the host. */
-export const executionAuthorizationInput = z
-  .strictObject({
-    kind: z.literal("execution_authorization"),
-    version: z.literal(1),
-    owner: executionAuthorizationOwner,
-    scope: z.discriminatedUnion("kind", [pilot, continuous, backfill]),
-    meteredBudget: z.strictObject({
-      period: z.enum(["lifetime", "utc_calendar_month"]),
-      limitMicroUSD: microUSD,
-    }),
-    expiresAt: z.iso.datetime(),
-  })
-  .superRefine((input, context) => {
-    const expected =
-      input.scope.kind === "continuous" ? "utc_calendar_month" : "lifetime";
-    if (input.meteredBudget.period !== expected)
-      context.addIssue({
-        code: "custom",
-        path: ["meteredBudget", "period"],
-        message: `This approval scope requires a ${expected} metered budget.`,
-      });
-  });
+const executionAuthorizationSnapshot = z.strictObject({
+  kind: z.literal("execution_authorization"),
+  version: z.literal(1),
+  owner: executionAuthorizationOwner,
+  scope: z.discriminatedUnion("kind", [pilot, continuous, backfill]),
+  meteredBudget: z.strictObject({
+    period: z.enum(["lifetime", "utc_calendar_month"]),
+    limitMicroUSD: microUSD,
+  }),
+  expiresAt: z.iso.datetime(),
+});
+
+const validateBudgetPeriod = (
+  input: Pick<
+    z.infer<typeof executionAuthorizationSnapshot>,
+    "scope" | "meteredBudget"
+  >,
+  context: z.RefinementCtx,
+) => {
+  const expected =
+    input.scope.kind === "continuous" ? "utc_calendar_month" : "lifetime";
+  if (input.meteredBudget.period !== expected)
+    context.addIssue({
+      code: "custom",
+      path: ["meteredBudget", "period"],
+      message: `This approval scope requires a ${expected} metered budget.`,
+    });
+};
+
+export const executionAuthorizationInput =
+  executionAuthorizationSnapshot.superRefine(validateBudgetPeriod);
 export type ExecutionAuthorizationInput = z.infer<
   typeof executionAuthorizationInput
 >;
+
+/** Human request: the authenticated host supplies the immutable owner/version. */
+export const executionAuthorizationApprovalInput =
+  executionAuthorizationSnapshot
+    .omit({ kind: true, version: true, owner: true })
+    .superRefine(validateBudgetPeriod);
 
 /** Authority is independent of causal parent or retry predecessor lineage. */
 export const executionAuthorizationRef = z.strictObject({

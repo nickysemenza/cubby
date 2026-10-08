@@ -1,5 +1,10 @@
 import { aiRunUsageInput, aiRunUsageOut } from "@cubby/schemas/ai";
 import {
+  executionAuthorizationApprovalInput,
+  executionAuthorizationRef,
+  executionAuthorizationRequestedScope,
+} from "@cubby/schemas/execution-authorization";
+import {
   anyShortcodeSchema,
   runShortcode,
   imageShortcode,
@@ -7,6 +12,7 @@ import {
   purchaseShortcode,
   vendorAccountShortcode,
 } from "@cubby/schemas/identifiers";
+import { mailboxDiscoveryStartOutput } from "@cubby/schemas/mailbox-research";
 import { runTargetDeviceWorkState } from "@cubby/schemas/photo-import-run";
 import {
   proposedImportFix,
@@ -306,6 +312,33 @@ export type TargetedImportLaunch = z.infer<typeof targetedImportLaunch>;
 export { type TargetedImportStartInput, type TargetedImportStartOutput };
 
 export const runContract = defineContract("run", {
+  executionMailboxes: query({
+    native: "Select a connected owned mailbox for an execution approval",
+    mcp: { omit: "human_approval" },
+    input: z.strictObject({}),
+    output: z.object({
+      mailboxes: z.array(
+        executionAuthorizationRequestedScope.pick({ mailboxId: true }),
+      ),
+    }),
+    cache: { tags: [] },
+  }),
+  approveExecution: mutation({
+    native:
+      "Approve exact mailbox discovery scope, limits, metered budget and expiry",
+    mcp: { omit: "human_approval" },
+    input: executionAuthorizationApprovalInput,
+    output: executionAuthorizationRef,
+    invalidates: ["runOnly"],
+  }),
+  discoverMail: mutation({
+    native:
+      "Start discovery for one owned mailbox under its current execution approvals",
+    mcp: { omit: "human_approval" },
+    input: executionAuthorizationRequestedScope.pick({ mailboxId: true }),
+    output: mailboxDiscoveryStartOutput,
+    invalidates: ["runOnly"],
+  }),
   syncPlan: query({
     native: "Preview each browser account sync before starting it",
     input: syncPlanInput,

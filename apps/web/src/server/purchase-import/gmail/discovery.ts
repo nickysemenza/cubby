@@ -10,6 +10,7 @@ import {
   mailboxDiscoveryProgress,
   type MailboxDiscoveryProgress,
   type MailboxCoverage,
+  type MailboxDiscoveryStartOutput,
 } from "@cubby/schemas/mailbox-research";
 import { and, eq, lt, sql } from "drizzle-orm";
 
@@ -208,11 +209,28 @@ const pauseAuthorization = async (
 
 export async function startMailDiscovery(
   db: Database,
-  options: { launcher?: WorkflowLauncher } = {},
-): Promise<{ started: number; running: number }> {
+  options: {
+    launcher?: WorkflowLauncher;
+    target?: Pick<GmailSyncTarget, "ledgerPartyId" | "userId" | "mailboxId">;
+  } = {},
+): Promise<MailboxDiscoveryStartOutput> {
   let started = 0;
   let running = 0;
-  for (const target of await listGmailSyncTargets(db)) {
+  const targets = await listGmailSyncTargets(db);
+  const requested = options.target;
+  const selected = requested
+    ? targets.filter(
+        (target) =>
+          target.ledgerPartyId === requested.ledgerPartyId &&
+          target.userId === requested.userId &&
+          target.mailboxId === requested.mailboxId,
+      )
+    : targets;
+  if (requested && selected.length === 0)
+    throw new Error(
+      "Selected discovery mailbox is not connected to this member.",
+    );
+  for (const target of selected) {
     const allowance = await nextDiscoveryAllowance(db, target);
     if (!allowance) continue;
     let runId;

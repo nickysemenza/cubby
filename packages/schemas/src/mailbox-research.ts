@@ -10,6 +10,13 @@ export const mailboxClassification = z.enum([
   "uncertain",
 ]);
 export type MailboxClassification = z.infer<typeof mailboxClassification>;
+export const mailboxDiscoveryStartOutput = z.object({
+  started: z.number().int().nonnegative(),
+  running: z.number().int().nonnegative(),
+});
+export type MailboxDiscoveryStartOutput = z.infer<
+  typeof mailboxDiscoveryStartOutput
+>;
 export const mailboxMessageStatus = z.enum([
   "pending",
   "researching",

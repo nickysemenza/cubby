@@ -21,7 +21,27 @@ Product claim. Descendants and retries copy the host-issued
 predecessor. The latest approval for each member, mailbox and scope kind cannot
 fall back to an older allowance after revocation or invalidation. A blocked
 pilot, backfill or continuous scope does not block another scope or mailbox.
-Approval roots have no coordinator or leased jobs.
+Approval roots never start a coordinator or lease jobs. The Run's required model
+metadata does not initiate execution.
+
+The authenticated `run.executionMailboxes` query lists only the acting member's
+connected Google mailboxes. The human-only `run.approveExecution` operation
+requires an exact mailbox scope, pilot candidate/Product limits when applicable,
+metered cap and period, and future expiry. The host supplies the login and linked
+live member LedgerParty; issuance rechecks the connected owned mailbox and
+commits the immutable completed approval root through its own durable database
+transaction. These declarations feed HTTP and native clients; MCP cannot issue
+approvals. Each submission creates a fresh authorization. After interruption,
+read back the existing approval root rather than blindly retrying or reissuing
+the request. Targeted pilot and continuous new-mail approvals grant no
+full-history permission; that always requires a separate backfill approval.
+
+After approval, the authenticated human-only `run.discoverMail` operation starts
+discovery for one selected connected owned mailbox. It reuses current immutable
+allowances and the scheduled discovery policy; the caller cannot supply or widen
+scope, and launch does not reissue approval or start global catch-up work. An
+already running discovery returns `running: 1` without another Workflow launch.
+Scheduled global discovery continues to visit all connected member mailboxes.
 
 Paid decision inference reserves the exact catalog model's full billing bound
 before each physical transmission, including retries. Unknown pricing or token
