@@ -110,6 +110,8 @@ remain covered by `apps/web/tests/e2e/photo-group-review.spec.ts`.
    reuse the server and database, seed a new synthetic product, and rebuild the
    CLI only when Swift sources changed. Restart after web or Rust FFI changes.
 2. Edit a SwiftUI view and render its nearest `#Preview` through Xcode MCP.
+   Entity row previews need `SignedInPreview` even with plain-data fixtures:
+   their lazy field explanations read `AppModel` from the environment.
    `PreviewFixtures` contain synthetic, wire-shaped states and intentionally
    block network reads. Add focused states such as empty, loading, error, dark,
    and large text when they expose the change. The generated fixture JSON comes

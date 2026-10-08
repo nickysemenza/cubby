@@ -1106,7 +1106,7 @@ struct EntityRowView: View {
     }
 }
 
-#Preview("Compact rows · image") {
+#Preview("Compact rows · image", traits: .modifier(SignedInPreview())) {
     List {
         EntityRowView(
             key: .product,
@@ -1117,7 +1117,7 @@ struct EntityRowView: View {
     .fieldGuideScreen()
 }
 
-#Preview("Rows") {
+#Preview("Rows", traits: .modifier(SignedInPreview())) {
     NavigationStack {
         List {
             ForEach(PreviewFixtures.sampleRows) { row in
@@ -1132,7 +1132,7 @@ struct EntityRowView: View {
     }
 }
 
-#Preview("Compact rows · accessibility") {
+#Preview("Compact rows · accessibility", traits: .modifier(SignedInPreview())) {
     NavigationStack {
         List {
             EntityRowView(
