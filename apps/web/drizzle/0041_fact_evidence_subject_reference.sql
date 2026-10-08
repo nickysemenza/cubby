@@ -1,1 +1,0 @@
-ALTER TABLE "RunFactEvidence" ADD CONSTRAINT "RunFactEvidence_entity_fk" FOREIGN KEY ("entityId","entityKind") REFERENCES "public"."Entity"("id","kind") ON DELETE no action ON UPDATE no action;

@@ -1,2 +1,0 @@
-DROP INDEX "PurchasePaymentEvidence_source_index_key";--> statement-breakpoint
-CREATE UNIQUE INDEX "PurchasePaymentEvidence_source_purchase_index_key" ON "PurchasePaymentEvidence" USING btree ("sourceClaimId","purchaseId","evidenceIndex");

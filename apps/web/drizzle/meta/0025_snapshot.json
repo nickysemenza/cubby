@@ -1,5 +1,5 @@
 {
-  "id": "6b786844-1bbe-40aa-a160-12d658bc3183",
+  "id": "cf4fb5fe-3043-4d7a-be3b-ca421d6065c2",
   "prevId": "407cd59b-8126-47c1-bca0-e66b16fa2434",
   "version": "7",
   "dialect": "postgresql",
@@ -8999,6 +8999,12 @@
           "primaryKey": false,
           "notNull": true
         },
+        "canonicalClaimId": {
+          "name": "canonicalClaimId",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": false
+        },
         "firstRunId": {
           "name": "firstRunId",
           "type": "uuid",
@@ -9053,6 +9059,21 @@
           "concurrently": false,
           "method": "btree",
           "with": {}
+        },
+        "ImportSourceClaim_canonical_idx": {
+          "name": "ImportSourceClaim_canonical_idx",
+          "columns": [
+            {
+              "expression": "canonicalClaimId",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
         }
       },
       "foreignKeys": {
@@ -9075,6 +9096,19 @@
           "tableTo": "VendorAccount",
           "columnsFrom": [
             "vendorAccountId"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        },
+        "ImportSourceClaim_canonicalClaimId_ImportSourceClaim_id_fk": {
+          "name": "ImportSourceClaim_canonicalClaimId_ImportSourceClaim_id_fk",
+          "tableFrom": "ImportSourceClaim",
+          "tableTo": "ImportSourceClaim",
+          "columnsFrom": [
+            "canonicalClaimId"
           ],
           "columnsTo": [
             "id"
@@ -9116,6 +9150,10 @@
         "ImportSourceClaim_kind_check": {
           "name": "ImportSourceClaim_kind_check",
           "value": "\"ImportSourceClaim\".\"kind\" IN ('browser_order', 'mail_message', 'mail_attachment', 'receipt_photo', 'vendor_export')"
+        },
+        "ImportSourceClaim_canonical_self_check": {
+          "name": "ImportSourceClaim_canonical_self_check",
+          "value": "\"ImportSourceClaim\".\"canonicalClaimId\" IS NULL OR \"ImportSourceClaim\".\"canonicalClaimId\" <> \"ImportSourceClaim\".\"id\""
         }
       },
       "isRLSEnabled": false
@@ -9160,6 +9198,12 @@
           "type": "text",
           "primaryKey": false,
           "notNull": true
+        },
+        "originalOrder": {
+          "name": "originalOrder",
+          "type": "jsonb",
+          "primaryKey": false,
+          "notNull": false
         },
         "createdAt": {
           "name": "createdAt",
@@ -9246,6 +9290,113 @@
       "uniqueConstraints": {},
       "policies": {},
       "checkConstraints": {},
+      "isRLSEnabled": false
+    },
+    "public.ImportSourceProduct": {
+      "name": "ImportSourceProduct",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true,
+          "default": "gen_random_uuid()"
+        },
+        "sourceOrderId": {
+          "name": "sourceOrderId",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "lineIndex": {
+          "name": "lineIndex",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "productId": {
+          "name": "productId",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        }
+      },
+      "indexes": {
+        "ImportSourceProduct_sourceOrder_line_key": {
+          "name": "ImportSourceProduct_sourceOrder_line_key",
+          "columns": [
+            {
+              "expression": "sourceOrderId",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "lineIndex",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": true,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "ImportSourceProduct_product_idx": {
+          "name": "ImportSourceProduct_product_idx",
+          "columns": [
+            {
+              "expression": "productId",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {
+        "ImportSourceProduct_sourceOrderId_ImportSourceOrder_id_fk": {
+          "name": "ImportSourceProduct_sourceOrderId_ImportSourceOrder_id_fk",
+          "tableFrom": "ImportSourceProduct",
+          "tableTo": "ImportSourceOrder",
+          "columnsFrom": [
+            "sourceOrderId"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        },
+        "ImportSourceProduct_productId_Product_id_fk": {
+          "name": "ImportSourceProduct_productId_Product_id_fk",
+          "tableFrom": "ImportSourceProduct",
+          "tableTo": "Product",
+          "columnsFrom": [
+            "productId"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {
+        "ImportSourceProduct_lineIndex_check": {
+          "name": "ImportSourceProduct_lineIndex_check",
+          "value": "\"ImportSourceProduct\".\"lineIndex\" >= 0"
+        }
+      },
       "isRLSEnabled": false
     },
     "public.Ingredient": {
@@ -10608,6 +10759,12 @@
           "primaryKey": false,
           "notNull": false
         },
+        "runId": {
+          "name": "runId",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": false
+        },
         "createdAt": {
           "name": "createdAt",
           "type": "timestamp",
@@ -10705,6 +10862,19 @@
           "tableTo": "OrderMail",
           "columnsFrom": [
             "orderMailId"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        },
+        "MailboxMessage_runId_Run_id_fk": {
+          "name": "MailboxMessage_runId_Run_id_fk",
+          "tableFrom": "MailboxMessage",
+          "tableTo": "Run",
+          "columnsFrom": [
+            "runId"
           ],
           "columnsTo": [
             "id"
@@ -11592,7 +11762,7 @@
           "name": "receivedAt",
           "type": "timestamp",
           "primaryKey": false,
-          "notNull": true
+          "notNull": false
         },
         "rawChecksum": {
           "name": "rawChecksum",
@@ -14434,11 +14604,17 @@
         }
       },
       "indexes": {
-        "PurchasePaymentEvidence_source_index_key": {
-          "name": "PurchasePaymentEvidence_source_index_key",
+        "PurchasePaymentEvidence_source_purchase_index_key": {
+          "name": "PurchasePaymentEvidence_source_purchase_index_key",
           "columns": [
             {
               "expression": "sourceClaimId",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "purchaseId",
               "isExpression": false,
               "asc": true,
               "nulls": "last"
@@ -15080,6 +15256,320 @@
       "checkConstraints": {},
       "isRLSEnabled": false
     },
+    "public.ResearchRetention": {
+      "name": "ResearchRetention",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "runId": {
+          "name": "runId",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "workRef": {
+          "name": "workRef",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "ledgerPartyId": {
+          "name": "ledgerPartyId",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "orderMailId": {
+          "name": "orderMailId",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "mailboxId": {
+          "name": "mailboxId",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "messageId": {
+          "name": "messageId",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "checksum": {
+          "name": "checksum",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "phase": {
+          "name": "phase",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "plan": {
+          "name": "plan",
+          "type": "jsonb",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "createdAt": {
+          "name": "createdAt",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "updatedAt": {
+          "name": "updatedAt",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "completedAt": {
+          "name": "completedAt",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": false
+        }
+      },
+      "indexes": {
+        "ResearchRetention_source_checksum_key": {
+          "name": "ResearchRetention_source_checksum_key",
+          "columns": [
+            {
+              "expression": "ledgerPartyId",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "orderMailId",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "checksum",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": true,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "ResearchRetention_phase_idx": {
+          "name": "ResearchRetention_phase_idx",
+          "columns": [
+            {
+              "expression": "phase",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {
+        "ResearchRetention_runId_Run_id_fk": {
+          "name": "ResearchRetention_runId_Run_id_fk",
+          "tableFrom": "ResearchRetention",
+          "tableTo": "Run",
+          "columnsFrom": [
+            "runId"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        },
+        "ResearchRetention_workRef_RunTarget_id_fk": {
+          "name": "ResearchRetention_workRef_RunTarget_id_fk",
+          "tableFrom": "ResearchRetention",
+          "tableTo": "RunTarget",
+          "columnsFrom": [
+            "workRef"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        },
+        "ResearchRetention_ledgerPartyId_LedgerParty_id_fk": {
+          "name": "ResearchRetention_ledgerPartyId_LedgerParty_id_fk",
+          "tableFrom": "ResearchRetention",
+          "tableTo": "LedgerParty",
+          "columnsFrom": [
+            "ledgerPartyId"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {
+        "ResearchRetention_phase_check": {
+          "name": "ResearchRetention_phase_check",
+          "value": "\"ResearchRetention\".\"phase\" IN ('fenced', 'objects_deleted', 'coordinators_destroyed', 'completed')"
+        }
+      },
+      "isRLSEnabled": false
+    },
+    "public.ResearchSourceExposure": {
+      "name": "ResearchSourceExposure",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true,
+          "default": "gen_random_uuid()"
+        },
+        "runId": {
+          "name": "runId",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "ledgerPartyId": {
+          "name": "ledgerPartyId",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "orderMailId": {
+          "name": "orderMailId",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "checksum": {
+          "name": "checksum",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "createdAt": {
+          "name": "createdAt",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {
+        "ResearchSourceExposure_run_source_key": {
+          "name": "ResearchSourceExposure_run_source_key",
+          "columns": [
+            {
+              "expression": "runId",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "orderMailId",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "checksum",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": true,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "ResearchSourceExposure_source_idx": {
+          "name": "ResearchSourceExposure_source_idx",
+          "columns": [
+            {
+              "expression": "ledgerPartyId",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "orderMailId",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "checksum",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {
+        "ResearchSourceExposure_runId_Run_id_fk": {
+          "name": "ResearchSourceExposure_runId_Run_id_fk",
+          "tableFrom": "ResearchSourceExposure",
+          "tableTo": "Run",
+          "columnsFrom": [
+            "runId"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        },
+        "ResearchSourceExposure_ledgerPartyId_LedgerParty_id_fk": {
+          "name": "ResearchSourceExposure_ledgerPartyId_LedgerParty_id_fk",
+          "tableFrom": "ResearchSourceExposure",
+          "tableTo": "LedgerParty",
+          "columnsFrom": [
+            "ledgerPartyId"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    },
     "public.Run": {
       "name": "Run",
       "schema": "",
@@ -15134,6 +15624,24 @@
           "primaryKey": false,
           "notNull": true
         },
+        "cause": {
+          "name": "cause",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "attempt": {
+          "name": "attempt",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "parentRunId": {
+          "name": "parentRunId",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": false
+        },
         "status": {
           "name": "status",
           "type": "text",
@@ -15179,6 +15687,18 @@
         "endedAt": {
           "name": "endedAt",
           "type": "timestamp",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "retiredAt": {
+          "name": "retiredAt",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "retirementReason": {
+          "name": "retirementReason",
+          "type": "text",
           "primaryKey": false,
           "notNull": false
         },
@@ -15409,6 +15929,27 @@
           "method": "btree",
           "with": {}
         },
+        "Run_parent_started_idx": {
+          "name": "Run_parent_started_idx",
+          "columns": [
+            {
+              "expression": "parentRunId",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "startedAt",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
         "Run_vendorAccount_started_idx": {
           "name": "Run_vendorAccount_started_idx",
           "columns": [
@@ -15486,6 +16027,12 @@
               "isExpression": false,
               "asc": true,
               "nulls": "last"
+            },
+            {
+              "expression": "COALESCE(\"input\"->>'mailboxId', '')",
+              "asc": true,
+              "isExpression": true,
+              "nulls": "last"
             }
           ],
           "isUnique": true,
@@ -15528,6 +16075,19 @@
           "tableTo": "Vendor",
           "columnsFrom": [
             "vendorId"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        },
+        "Run_parentRunId_Run_id_fk": {
+          "name": "Run_parentRunId_Run_id_fk",
+          "tableFrom": "Run",
+          "tableTo": "Run",
+          "columnsFrom": [
+            "parentRunId"
           ],
           "columnsTo": [
             "id"
@@ -15587,7 +16147,7 @@
         },
         "Run_import_party_check": {
           "name": "Run_import_party_check",
-          "value": "\"Run\".\"purpose\" NOT IN ('account_sync', 'purchase_validation', 'product_enrichment', 'photo_inventory', 'mail_discovery') OR (\"Run\".\"ledgerPartyId\" IS NOT NULL AND \"Run\".\"actorLedgerPartyShortcode\" IS NOT NULL)"
+          "value": "\"Run\".\"purpose\" NOT IN ('account_sync', 'mail_import', 'purchase_validation', 'product_enrichment', 'photo_inventory', 'mail_discovery') OR (\"Run\".\"ledgerPartyId\" IS NOT NULL AND \"Run\".\"actorLedgerPartyShortcode\" IS NOT NULL)"
         },
         "Run_channel_check": {
           "name": "Run_channel_check",
@@ -15599,7 +16159,15 @@
         },
         "Run_purpose_check": {
           "name": "Run_purpose_check",
-          "value": "\"Run\".\"purpose\" IN ('account_sync', 'purchase_validation', 'product_enrichment', 'photo_inventory', 'ai_suggest', 'background', 'file_import', 'mail_search', 'mail_discovery')"
+          "value": "\"Run\".\"purpose\" IN ('account_sync', 'mail_import', 'purchase_validation', 'product_enrichment', 'photo_inventory', 'ai_suggest', 'background', 'file_import', 'mail_search', 'mail_discovery')"
+        },
+        "Run_cause_check": {
+          "name": "Run_cause_check",
+          "value": "\"Run\".\"cause\" IN ('member_request', 'scheduled', 'source_discovered', 'import_completed', 'evidence_changed', 'retry')"
+        },
+        "Run_attempt_positive": {
+          "name": "Run_attempt_positive",
+          "value": "\"Run\".\"attempt\" IS NULL OR \"Run\".\"attempt\" > 0"
         },
         "Run_photo_inventory_no_vendor_check": {
           "name": "Run_photo_inventory_no_vendor_check",
@@ -16051,7 +16619,7 @@
       "checkConstraints": {
         "RunEvidence_kind_check": {
           "name": "RunEvidence_kind_check",
-          "value": "\"RunEvidence\".\"kind\" IN ('browser_capture', 'web_page', 'mail_message', 'gmail_attachment', 'manual_upload')"
+          "value": "\"RunEvidence\".\"kind\" IN ('browser_capture', 'web_page', 'mail_message', 'gmail_attachment', 'manual_upload', 'upload_evidence')"
         }
       },
       "isRLSEnabled": false
@@ -16079,6 +16647,18 @@
           "primaryKey": false,
           "notNull": true
         },
+        "entityKind": {
+          "name": "entityKind",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "entityId": {
+          "name": "entityId",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
         "fieldPath": {
           "name": "fieldPath",
           "type": "text",
@@ -16101,7 +16681,13 @@
           "name": "support",
           "type": "jsonb",
           "primaryKey": false,
-          "notNull": true
+          "notNull": false
+        },
+        "supportRetiredAt": {
+          "name": "supportRetiredAt",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": false
         },
         "createdAt": {
           "name": "createdAt",
@@ -16128,6 +16714,18 @@
               "nulls": "last"
             },
             {
+              "expression": "entityKind",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "entityId",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
               "expression": "fieldPath",
               "isExpression": false,
               "asc": true,
@@ -16141,6 +16739,27 @@
             }
           ],
           "isUnique": true,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "RunFactEvidence_subject_idx": {
+          "name": "RunFactEvidence_subject_idx",
+          "columns": [
+            {
+              "expression": "entityKind",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "entityId",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
           "concurrently": false,
           "method": "btree",
           "with": {}
@@ -16172,12 +16791,36 @@
           ],
           "onDelete": "no action",
           "onUpdate": "no action"
+        },
+        "RunFactEvidence_entity_fk": {
+          "name": "RunFactEvidence_entity_fk",
+          "tableFrom": "RunFactEvidence",
+          "tableTo": "Entity",
+          "columnsFrom": [
+            "entityId",
+            "entityKind"
+          ],
+          "columnsTo": [
+            "id",
+            "kind"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
         }
       },
       "compositePrimaryKeys": {},
       "uniqueConstraints": {},
       "policies": {},
-      "checkConstraints": {},
+      "checkConstraints": {
+        "RunFactEvidence_entityKind_check": {
+          "name": "RunFactEvidence_entityKind_check",
+          "value": "\"RunFactEvidence\".\"entityKind\" IN ('purchase', 'product', 'image', 'run')"
+        },
+        "RunFactEvidence_support_retirement_check": {
+          "name": "RunFactEvidence_support_retirement_check",
+          "value": "(\"RunFactEvidence\".\"support\" IS NOT NULL AND \"RunFactEvidence\".\"supportRetiredAt\" IS NULL) OR (\"RunFactEvidence\".\"support\" IS NULL AND \"RunFactEvidence\".\"supportRetiredAt\" IS NOT NULL)"
+        }
+      },
       "isRLSEnabled": false
     },
     "public.RunFinding": {
@@ -16856,6 +17499,13 @@
           "primaryKey": false,
           "notNull": true
         },
+        "workKey": {
+          "name": "workKey",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "''"
+        },
         "entityKind": {
           "name": "entityKind",
           "type": "text",
@@ -17042,6 +17692,12 @@
               "isExpression": false,
               "asc": true,
               "nulls": "last"
+            },
+            {
+              "expression": "workKey",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
             }
           ],
           "isUnique": true,
@@ -17112,7 +17768,7 @@
       "checkConstraints": {
         "RunTarget_entityKind_check": {
           "name": "RunTarget_entityKind_check",
-          "value": "\"RunTarget\".\"entityKind\" IN ('purchase', 'product', 'image')"
+          "value": "\"RunTarget\".\"entityKind\" IN ('purchase', 'product', 'image', 'run')"
         },
         "RunTarget_state_check": {
           "name": "RunTarget_state_check",
@@ -17120,7 +17776,7 @@
         },
         "RunTarget_outcome_check": {
           "name": "RunTarget_outcome_check",
-          "value": "\"RunTarget\".\"outcome\" IS NULL OR \"RunTarget\".\"outcome\" IN ('replayed', 'raw_evidence_drift', 'semantic_drift', 'enriched', 'unavailable', 'skipped', 'attached')"
+          "value": "\"RunTarget\".\"outcome\" IS NULL OR \"RunTarget\".\"outcome\" IN ('replayed', 'raw_evidence_drift', 'semantic_drift', 'enriched', 'unavailable', 'skipped', 'attached', 'verified', 'partially_verified', 'researched_with_gaps', 'ambiguous', 'temporarily_blocked', 'no_source_found', 'unrelated')"
         },
         "RunTarget_deviceWorkState_check": {
           "name": "RunTarget_deviceWorkState_check",

@@ -15,7 +15,7 @@ import { insertWithShortcode } from "~/server/repo/shortcode-utils";
 import { ensureRun } from "~/server/runs/ensure-run";
 
 const migration = readFileSync(
-  join(import.meta.dirname, "../../../drizzle/0035_source_product_history.sql"),
+  join(import.meta.dirname, "../../../drizzle/0025_purchase_research.sql"),
   "utf8",
 );
 // Exercise the data transform against the migrated schema, including historical
@@ -88,7 +88,11 @@ describe("original order Product history migration", () => {
       for (const statement of migration
         .split("--> statement-breakpoint")
         .map((part) => part.replace(/^(\s*--[^\n]*(?:\n|$))+/u, "").trim())
-        .filter((part) => /^(DO|INSERT|UPDATE)\b/u.test(part)))
+        .filter(
+          (part) =>
+            /^(DO|INSERT|UPDATE)\b/u.test(part) &&
+            part.includes("'productLines'"),
+        ))
         await tx.execute(sql.raw(statement));
     });
   };

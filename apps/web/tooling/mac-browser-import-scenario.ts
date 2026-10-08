@@ -4,6 +4,7 @@ import { researchObjectivesRunInput } from "@cubby/schemas/run-fields";
 import { testUserId } from "@cubby/schemas/testing";
 import { pollUntil } from "@cubby/shared/retry";
 import { sha256Hex } from "@cubby/shared/sha256";
+import { scrubCredentialValues } from "@cubby/worker-tracing/scrub-error-message";
 import { eq } from "drizzle-orm";
 import { writeFileSync } from "node:fs";
 import path from "node:path";
@@ -31,6 +32,7 @@ import {
 } from "../src/server/repo/member-login";
 import { resolveOrThrow } from "../src/server/repo/shortcode-resolver";
 import { buildEntity } from "./factories/build";
+import { scrubErrorMessage } from "../src/lib/error-diagnostics";
 import { MacImportDriver } from "./mac-import-driver";
 import type { createMacRetailerFixture } from "./mac-retailer-fixture";
 import { from, type ScriptStep } from "./purchase-agent-script";
@@ -128,13 +130,19 @@ export async function createMacBrowserScenario(input: Input) {
       { check: "native-auth-history", includes: "waiting" },
       { gate: "native-history-ready" },
       observe("native-order-navigate", { kind: "navigate", url: orderURL }),
+      { check: "native-order-navigate", includes: "waiting" },
+      { gate: "native-order-navigation-ready" },
       observe("native-order-read", { kind: "read" }),
+      { check: "native-order-read", includes: "waiting" },
       { gate: "native-order-ready" },
       observe("native-product-navigate", {
         kind: "navigate",
         url: productURL,
       }),
+      { check: "native-product-navigate", includes: "waiting" },
+      { gate: "native-product-navigation-ready" },
       observe("native-product-read", { kind: "read" }),
+      { check: "native-product-read", includes: "waiting" },
       { gate: "native-product-ready" },
     ];
     await controls.configure({
@@ -198,10 +206,11 @@ export async function createMacBrowserScenario(input: Input) {
       screenshots: number;
       durablyDelivered: true;
     }> = [];
-    async function capturedRead(
+    async function retainedCommand(
       stage: string,
       sourceURL: string,
       gate: string,
+      kind: "read" | "navigate",
     ) {
       const record = await pollUntil(
         async () => {
@@ -209,7 +218,9 @@ export async function createMacBrowserScenario(input: Input) {
           if (!emitted.includes(`gate:${gate}`)) return undefined;
           return (await commands()).find(
             (item) =>
-              item.command.operation.type === "read" &&
+              item.command.operation.type === kind &&
+              (item.command.operation.type !== "navigate" ||
+                item.command.operation.url === sourceURL) &&
               item.page?.research.observation.servedURL === sourceURL &&
               !item.page.research.observation.authenticationRequired &&
               item.observationDelivered,
@@ -220,41 +231,68 @@ export async function createMacBrowserScenario(input: Input) {
           timeoutMs: 30_000,
         },
       ).catch(async (error) => {
-        const peer = input.runtime.harness.getWorker("cubby-queue-producer");
-        const conversation = await peer.fetch(
-          "https://queue.test/coordinator-fetch",
-          {
-            method: "POST",
-            headers: { "content-type": "application/json" },
-            body: JSON.stringify({
-              agentId: importRunAgentIdentity(run.id, "account_sync"),
-            }),
-          },
-        );
-        const file = path.join(input.artifacts, "native-browser-failure.json");
-        writeFileSync(
-          file,
-          JSON.stringify(
-            {
-              synthetic: true,
-              stage,
-              emitted: await controls.emitted(),
-              violations: await controls.violations(),
-              commands: (await commands()).map((item) => ({
+        const collect = async <T>(name: string, read: () => Promise<T>) => {
+          try {
+            return { name, result: await read() };
+          } catch (cause) {
+            return {
+              name,
+              error: scrubErrorMessage(
+                cause instanceof Error ? cause.message : String(cause),
+              ),
+            };
+          }
+        };
+        try {
+          const sources = await Promise.all([
+            collect("emitted", () => controls.emitted()),
+            collect("violations", () => controls.violations()),
+            collect("commands", async () =>
+              (await commands()).map((item) => ({
                 action: item.command.operation.type,
                 observationDelivered: item.observationDelivered,
                 servedURL: item.page?.research.observation.servedURL,
                 authenticationRequired:
                   item.page?.research.observation.authenticationRequired,
               })),
-              conversationStatus: conversation.status,
-              conversation: await conversation.text(),
-            },
-            null,
-            2,
-          ) + "\n",
-        );
-        browserDriver.evidence.push(file);
+            ),
+            collect("conversation", async () => {
+              const peer = input.runtime.harness.getWorker(
+                "cubby-queue-producer",
+              );
+              const response = await peer.fetch(
+                "https://queue.test/coordinator-fetch",
+                {
+                  method: "POST",
+                  headers: { "content-type": "application/json" },
+                  body: JSON.stringify({
+                    agentId: importRunAgentIdentity(run.id, "account_sync"),
+                  }),
+                },
+              );
+              return {
+                status: response.status,
+                body: scrubCredentialValues(await response.text()),
+              };
+            }),
+          ]);
+          const file = path.join(
+            input.artifacts,
+            "native-browser-failure.json",
+          );
+          writeFileSync(
+            file,
+            JSON.stringify({ synthetic: true, stage, sources }, null, 2) + "\n",
+          );
+          browserDriver.evidence.push(file);
+        } catch (cause) {
+          console.error(
+            "[mac-browser-import-scenario] Diagnostic collection failed:",
+            scrubErrorMessage(
+              cause instanceof Error ? cause.message : String(cause),
+            ),
+          );
+        }
         throw error;
       });
       if (
@@ -266,6 +304,14 @@ export async function createMacBrowserScenario(input: Input) {
         throw new Error(
           "Actual Mac retained observation changed its Run, task, or account binding.",
         );
+      return { ...record, page: record.page };
+    }
+    async function capturedRead(
+      stage: string,
+      sourceURL: string,
+      gate: string,
+    ) {
+      const record = await retainedCommand(stage, sourceURL, gate, "read");
       const [original] = await database
         .select()
         .from(runEvidence)
@@ -385,6 +431,13 @@ export async function createMacBrowserScenario(input: Input) {
             "Native Sync did not recover the same admitted Run/history objective.",
           );
         await controls.release("native-history-ready");
+        await retainedCommand(
+          "order navigation",
+          orderURL,
+          "native-order-navigation-ready",
+          "navigate",
+        );
+        await controls.release("native-order-navigation-ready");
         const orderCapture = await capturedRead(
           "order detail",
           orderURL,
@@ -398,6 +451,13 @@ export async function createMacBrowserScenario(input: Input) {
             "Actual Mac order original is missing its shirt or stated money.",
           );
         await controls.release("native-order-ready");
+        await retainedCommand(
+          "Product navigation",
+          productURL,
+          "native-product-navigation-ready",
+          "navigate",
+        );
+        await controls.release("native-product-navigation-ready");
         const productCapture = await capturedRead(
           "exact Product variant",
           productURL,

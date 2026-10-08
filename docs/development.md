@@ -179,8 +179,8 @@ its preservation checks are a prerequisite, not production readback evidence.
    Leave compatible work paused. Wait out the last possible direct R2 upload
    grant (300 seconds for legacy Run evidence), accounting for uploads already
    started and any other issued upload grants before declaring objects stable.
-4. After approval of the exact migration chain and preservation/readback plan,
-   apply it with all holds in place. Interrupted legacy research becomes
+4. After approval of `0025_purchase_research` and the preservation/readback plan,
+   apply this single rewrite migration with all holds in place. Interrupted legacy research becomes
    `needs_review`; retain its inputs, targets, operations and diagnostics.
    Read back signed money totals, stock, photos, associations and decisions,
    plus the migration/schema state.

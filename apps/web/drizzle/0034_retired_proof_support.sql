@@ -1,3 +1,0 @@
-ALTER TABLE "RunFactEvidence" ALTER COLUMN "support" DROP NOT NULL;--> statement-breakpoint
-ALTER TABLE "RunFactEvidence" ADD COLUMN "supportRetiredAt" timestamp;--> statement-breakpoint
-ALTER TABLE "RunFactEvidence" ADD CONSTRAINT "RunFactEvidence_support_retirement_check" CHECK (("RunFactEvidence"."support" IS NOT NULL AND "RunFactEvidence"."supportRetiredAt" IS NULL) OR ("RunFactEvidence"."support" IS NULL AND "RunFactEvidence"."supportRetiredAt" IS NOT NULL));

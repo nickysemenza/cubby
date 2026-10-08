@@ -1,2 +1,0 @@
-ALTER TABLE "RunEvidence" DROP CONSTRAINT "RunEvidence_kind_check";--> statement-breakpoint
-ALTER TABLE "RunEvidence" ADD CONSTRAINT "RunEvidence_kind_check" CHECK ("RunEvidence"."kind" IN ('browser_capture', 'web_page', 'mail_message', 'gmail_attachment', 'manual_upload', 'upload_evidence'));

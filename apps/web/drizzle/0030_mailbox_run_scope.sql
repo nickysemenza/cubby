@@ -1,2 +1,0 @@
-DROP INDEX "Run_one_active_mail_discovery";--> statement-breakpoint
-CREATE UNIQUE INDEX "Run_one_active_mail_discovery" ON "Run" USING btree ("ledgerPartyId",COALESCE("input"->>'mailboxId', '')) WHERE "Run"."purpose" = 'mail_discovery' AND "Run"."status" = 'running';

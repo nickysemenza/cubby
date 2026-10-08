@@ -57,7 +57,7 @@ if (currentMainLength !== 25)
 // decisions is a failure; interrupted legacy work must stop occupying admission.
 describe("purchase research populated-history cutover", () => {
   const ctx = withTestDb();
-  it("preserves household history through the whole journal and fences interrupted legacy work without reopening it", async () => {
+  it("preserves populated main through one rewrite migration and fences interrupted legacy work without reopening it", async () => {
     const f = await productResearchFixture(ctx.db, ctx.actor, {
       complete: true,
     });
@@ -216,6 +216,7 @@ describe("purchase research populated-history cutover", () => {
       const migrations = readMigrationFiles({
         migrationsFolder: MIGRATIONS_FOLDER,
       });
+      expect(migrations).toHaveLength(currentMainLength + 1);
       await client.query("BEGIN");
       try {
         await client.query(

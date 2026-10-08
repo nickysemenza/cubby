@@ -1,4 +1,0 @@
-ALTER TABLE "ImportSourceClaim" ADD COLUMN "canonicalClaimId" uuid;--> statement-breakpoint
-ALTER TABLE "ImportSourceClaim" ADD CONSTRAINT "ImportSourceClaim_canonicalClaimId_ImportSourceClaim_id_fk" FOREIGN KEY ("canonicalClaimId") REFERENCES "public"."ImportSourceClaim"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
-CREATE INDEX "ImportSourceClaim_canonical_idx" ON "ImportSourceClaim" USING btree ("canonicalClaimId");--> statement-breakpoint
-ALTER TABLE "ImportSourceClaim" ADD CONSTRAINT "ImportSourceClaim_canonical_self_check" CHECK ("ImportSourceClaim"."canonicalClaimId" IS NULL OR "ImportSourceClaim"."canonicalClaimId" <> "ImportSourceClaim"."id");
