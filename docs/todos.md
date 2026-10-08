@@ -916,6 +916,20 @@ consume the declarations.
 
 ## Dev tooling, tests & CI
 
+- 🤔 **Replace long scrolling scripts with focused headless, preview and
+  Tester Army coverage.** Put import, provenance, money, ownership and recovery
+  assertions through the existing headless/native service boundaries; use
+  declaration-backed fixtures and previews for presentation states. Keep a
+  small Tester Army journey for real app navigation and visible supported
+  outcomes. Preserve each named regression in the stronger replacement before
+  deleting its old script; previews alone do not prove navigation or writes.
+  Reuse fingerprint-verified native builds and warm isolated runtimes, and
+  share the current T3 device launcher/session rather than preparing competing
+  drivers. Measure setup and scenario time separately; keep exact revision,
+  replay, results and evidence checksums. Owners: `apps/apple/ITERATION.md`,
+  `apps/web/tooling/sim-e2e.ts`, `apps/web/tooling/tester-army/`, shared preview
+  fixtures.
+
 - 🤔 **Stop the simulator build from dirtying the checkout.** Every
   `test:e2e:sim` lane's Xcode build rewrites the tracked
   `apps/apple/CubbyKit/Package.resolved` (adding the app-only Nuke pin), so
