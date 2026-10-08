@@ -1,4 +1,5 @@
 import { parseShortcodeFor } from "@cubby/schemas/identifiers";
+import { importRunAgentIdentity } from "@cubby/schemas/import-run-agent";
 import { researchObjectivesRunInput } from "@cubby/schemas/run-fields";
 import { testUserId } from "@cubby/schemas/testing";
 import { pollUntil } from "@cubby/shared/retry";
@@ -218,7 +219,44 @@ export async function createMacBrowserScenario(input: Input) {
           label: `Actual Mac retained ${stage} and durable SDK acknowledgement`,
           timeoutMs: 30_000,
         },
-      );
+      ).catch(async (error) => {
+        const peer = input.runtime.harness.getWorker("cubby-queue-producer");
+        const conversation = await peer.fetch(
+          "https://queue.test/coordinator-fetch",
+          {
+            method: "POST",
+            headers: { "content-type": "application/json" },
+            body: JSON.stringify({
+              agentId: importRunAgentIdentity(run.id, "account_sync"),
+            }),
+          },
+        );
+        const file = path.join(input.artifacts, "native-browser-failure.json");
+        writeFileSync(
+          file,
+          JSON.stringify(
+            {
+              synthetic: true,
+              stage,
+              emitted: await controls.emitted(),
+              violations: await controls.violations(),
+              commands: (await commands()).map((item) => ({
+                action: item.command.operation.type,
+                observationDelivered: item.observationDelivered,
+                servedURL: item.page?.research.observation.servedURL,
+                authenticationRequired:
+                  item.page?.research.observation.authenticationRequired,
+              })),
+              conversationStatus: conversation.status,
+              conversation: await conversation.text(),
+            },
+            null,
+            2,
+          ) + "\n",
+        );
+        browserDriver.evidence.push(file);
+        throw error;
+      });
       if (
         !record.page ||
         record.workRef !== workRef ||
