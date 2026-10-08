@@ -89,7 +89,9 @@ mail can create the Purchase first without losing its shipped event; an
 unspecified event remains `other`, rather than asserting order placement.
 The source checksum, mailbox exclusion, member ownership and exact predecessor
 are checked again under source locks before the predecessor Run lock. Another
-Run's source cannot transfer implicitly. One canonical successor is replayed
+Run's source cannot transfer implicitly. A retry leaves sources with their valid
+current owners and admits only originals the predecessor still owns; those
+already covered elsewhere do not block its remaining work. One canonical successor is replayed
 across controls, preserving its frozen scope and cancelled or removed state.
 New attempts preserve the real causal parent and leave unknown historical
 attempt numbers null. Admission and dispatch are separate: queue publication

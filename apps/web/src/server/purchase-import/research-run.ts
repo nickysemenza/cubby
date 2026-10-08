@@ -164,10 +164,9 @@ async function retainedMailResearchOwners(
         throw new Error(
           "Mail research ownership does not match its retained source.",
         );
-      if (input.predecessor)
-        throw new Error(
-          "Mail continuation cannot transfer another Run's source.",
-        );
+      // A valid current owner keeps this source; the predecessor can still
+      // continue its remaining originals without transferring this one.
+      if (input.predecessor) continue;
       owned.set(owner.id, owner);
     } else fresh.push(source);
   }

@@ -31,7 +31,8 @@ import { researchServiceFor } from "./research-service";
 import { controlRun } from "./run-service";
 
 // Public control -> current research Next: a retry must not require a Vendor or
-// Mac, replay settled work, copy stale admission, or lose source ownership.
+// Mac, replay settled work, copy stale admission, lose source ownership, or let
+// work already owned elsewhere block retrying the remaining original sources.
 describe("research continuation", () => {
   const ctx = withTestDb();
   it.each([
@@ -412,142 +413,189 @@ describe("research continuation", () => {
       work: { kind: "product", product: { productRef: unfinished.id } },
     });
   });
-  it("retries only unresolved mail through a fresh admitted Run and preserves its history", async () => {
-    const party = await insertWithShortcode(ctx.db, "ledgerParty", {
-      name: "Example continuation member",
-      kind: "member",
-      userId: ctx.actor.userId,
-    });
-    const sources = [];
-    for (const messageId of ["example-confirmation", "example-shipping"]) {
-      const bodyText = `${messageId}: Example order status`;
-      const [mail] = await getDb(ctx.db)
-        .insert(orderMail)
-        .values({
-          ledgerPartyId: party.id,
-          mailboxId: "synthetic-continuation-mailbox",
-          messageId,
-          sender: "orders@unknown-shop.example",
-          subject: "Example order",
-          receivedAt: new Date("2026-09-01T18:00:00Z"),
-          rawChecksum: await sha256Hex(bodyText),
-          content: { snippet: null, bodyText, bodyHtml: null },
-        })
-        .returning();
-      if (!mail) throw new Error("Synthetic retained mail missing");
-      sources.push(mail);
-      await getDb(ctx.db).insert(mailboxMessage).values({
-        ledgerPartyId: party.id,
-        mailboxId: mail.mailboxId,
-        messageId,
-        checksum: mail.rawChecksum,
-        classification: "related",
-        classificationVersion: "synthetic-v1",
-        status: "pending",
-        orderMailId: mail.id,
-      });
-    }
-    const [settled, unfinished] = sources;
-    if (!settled || !unfinished) throw new Error("Synthetic mail missing");
-    const [started] = await startMailResearch(
-      ctx.db,
-      {
-        ledgerPartyId: party.id,
+  it.each([false, true])(
+    "retries unresolved mail without transferring sources owned elsewhere (%s)",
+    async (sourceMoved) => {
+      const party = await insertWithShortcode(ctx.db, "ledgerParty", {
+        name: "Example continuation member",
+        kind: "member",
         userId: ctx.actor.userId,
-        mailboxId: unfinished.mailboxId,
-        messageIds: sources.map((source) => source.id),
-      },
-      { send: async () => {} },
-    );
-    if (!started) throw new Error("Synthetic research Run missing");
-    const originalId = runEntityId.parse(started.runId);
-    await getDb(ctx.db)
-      .update(runTarget)
-      .set({ state: "completed", outcome: "verified", completedAt: new Date() })
-      .where(
-        and(eq(runTarget.runId, originalId), eq(runTarget.workKey, settled.id)),
-      );
-    await getDb(ctx.db)
-      .update(runTarget)
-      .set({
-        state: "unresolved",
-        outcome: "ambiguous",
-        completedAt: new Date(),
-      })
-      .where(
-        and(
-          eq(runTarget.runId, originalId),
-          eq(runTarget.workKey, unfinished.id),
-        ),
-      );
-    await getDb(ctx.db)
-      .update(run)
-      .set({ status: "needs_review", endedAt: new Date() })
-      .where(eq(run.id, originalId));
-    const [original] = await getDb(ctx.db)
-      .select()
-      .from(run)
-      .where(eq(run.id, originalId));
-    if (!original) throw new Error("Synthetic predecessor missing");
-    const originalTargets = await getDb(ctx.db)
-      .select()
-      .from(runTarget)
-      .where(eq(runTarget.runId, originalId));
-    const control = {
-      runPublicId: original.shortcode,
-      action: "retry" as const,
-    };
-    const result = await controlRun(ctx.db, ctx.actor, control);
-    if (!("successorRunId" in result) || !result.successorRunId)
-      throw new Error("Research successor missing");
-    const successorId = runEntityId.parse(result.successorRunId);
-    const [successor] = await getDb(ctx.db)
-      .select()
-      .from(run)
-      .where(eq(run.id, successorId));
-    expect(successor).toMatchObject({
-      purpose: "mail_import",
-      ledgerPartyId: party.id,
-      actorUserId: ctx.actor.userId,
-      vendorId: null,
-      vendorAccountId: null,
-      predecessorRunId: originalId,
-      parentRunId: original.parentRunId,
-      attempt: 2,
-      cause: "retry",
-    });
-    expect(mailResearchRunInput.parse(successor?.input).sources).toEqual([
-      { orderMailId: unfinished.id, checksum: unfinished.rawChecksum },
-    ]);
-    expect(
-      await researchServiceFor(
+      });
+      const sources = [];
+      for (const messageId of ["example-confirmation", "example-shipping"]) {
+        const bodyText = `${messageId}: Example order status`;
+        const [mail] = await getDb(ctx.db)
+          .insert(orderMail)
+          .values({
+            ledgerPartyId: party.id,
+            mailboxId: "synthetic-continuation-mailbox",
+            messageId,
+            sender: "orders@unknown-shop.example",
+            subject: "Example order",
+            receivedAt: new Date("2026-09-01T18:00:00Z"),
+            rawChecksum: await sha256Hex(bodyText),
+            content: { snippet: null, bodyText, bodyHtml: null },
+          })
+          .returning();
+        if (!mail) throw new Error("Synthetic retained mail missing");
+        sources.push(mail);
+        await getDb(ctx.db).insert(mailboxMessage).values({
+          ledgerPartyId: party.id,
+          mailboxId: mail.mailboxId,
+          messageId,
+          checksum: mail.rawChecksum,
+          classification: "related",
+          classificationVersion: "synthetic-v1",
+          status: "pending",
+          orderMailId: mail.id,
+        });
+      }
+      const [settled, unfinished] = sources;
+      if (!settled || !unfinished) throw new Error("Synthetic mail missing");
+      const [started] = await startMailResearch(
         ctx.db,
-        fromPartial<Env>({}),
-        successorId,
-      ).researchNext({}, crypto.randomUUID()),
-    ).toMatchObject({
-      status: "working",
-      work: { kind: "mail", sources: [{ messageRef: unfinished.id }] },
-    });
-    expect(
-      await getDb(ctx.db).select().from(run).where(eq(run.id, originalId)),
-    ).toEqual([original]);
-    expect(
+        {
+          ledgerPartyId: party.id,
+          userId: ctx.actor.userId,
+          mailboxId: unfinished.mailboxId,
+          messageIds: sources.map((source) => source.id),
+        },
+        { send: async () => {} },
+      );
+      if (!started) throw new Error("Synthetic research Run missing");
+      const originalId = runEntityId.parse(started.runId);
       await getDb(ctx.db)
+        .update(runTarget)
+        .set({
+          state: "completed",
+          outcome: "verified",
+          completedAt: new Date(),
+        })
+        .where(
+          and(
+            eq(runTarget.runId, originalId),
+            eq(runTarget.workKey, settled.id),
+          ),
+        );
+      await getDb(ctx.db)
+        .update(runTarget)
+        .set({
+          state: "unresolved",
+          outcome: "ambiguous",
+          completedAt: new Date(),
+        })
+        .where(
+          and(
+            eq(runTarget.runId, originalId),
+            eq(runTarget.workKey, unfinished.id),
+          ),
+        );
+      await getDb(ctx.db)
+        .update(run)
+        .set({ status: "needs_review", endedAt: new Date() })
+        .where(eq(run.id, originalId));
+      const [original] = await getDb(ctx.db)
+        .select()
+        .from(run)
+        .where(eq(run.id, originalId));
+      if (!original) throw new Error("Synthetic predecessor missing");
+      let otherOwner;
+      if (sourceMoved) {
+        await getDb(ctx.db)
+          .update(runTarget)
+          .set({ state: "unresolved", outcome: "ambiguous" })
+          .where(
+            and(
+              eq(runTarget.runId, originalId),
+              eq(runTarget.workKey, settled.id),
+            ),
+          );
+        otherOwner = await insertWithShortcode(ctx.db, "run", {
+          purpose: "mail_import",
+          trigger: "manual",
+          ledgerPartyId: party.id,
+          actorUserId: ctx.actor.userId,
+          actorName: original.actorName,
+          actorEmail: original.actorEmail,
+          actorLedgerPartyShortcode: original.actorLedgerPartyShortcode,
+          actorLedgerPartyName: original.actorLedgerPartyName,
+          actorLedgerPartyKind: original.actorLedgerPartyKind,
+          clientKey: "synthetic-independent-mail-owner",
+          predecessorRunId: null,
+          parentRunId: null,
+          status: "running",
+          input: mailResearchRunInput.parse({
+            kind: "mail_research",
+            sources: [
+              { orderMailId: settled.id, checksum: settled.rawChecksum },
+            ],
+          }),
+        });
+        await getDb(ctx.db)
+          .update(mailboxMessage)
+          .set({ runId: otherOwner.id, status: "researching" })
+          .where(eq(mailboxMessage.orderMailId, settled.id));
+      }
+      const originalTargets = await getDb(ctx.db)
         .select()
         .from(runTarget)
-        .where(eq(runTarget.runId, originalId)),
-    ).toEqual(originalTargets);
-    expect(await controlRun(ctx.db, ctx.actor, control)).toMatchObject({
-      successorRunId: successorId,
-      created: false,
-    });
-    const ledger = await getDb(ctx.db).select().from(mailboxMessage);
-    expect(
-      ledger.find((message) => message.orderMailId === unfinished.id),
-    ).toMatchObject({ runId: successorId, status: "researching" });
-    expect(
-      ledger.find((message) => message.orderMailId === settled.id)?.runId,
-    ).toBe(originalId);
-  });
+        .where(eq(runTarget.runId, originalId));
+      const control = {
+        runPublicId: original.shortcode,
+        action: "retry" as const,
+      };
+      const result = await controlRun(ctx.db, ctx.actor, control);
+      if (!("successorRunId" in result) || !result.successorRunId)
+        throw new Error("Research successor missing");
+      const successorId = runEntityId.parse(result.successorRunId);
+      const [successor] = await getDb(ctx.db)
+        .select()
+        .from(run)
+        .where(eq(run.id, successorId));
+      expect(successor).toMatchObject({
+        purpose: "mail_import",
+        ledgerPartyId: party.id,
+        actorUserId: ctx.actor.userId,
+        vendorId: null,
+        vendorAccountId: null,
+        predecessorRunId: originalId,
+        parentRunId: original.parentRunId,
+        attempt: 2,
+        cause: "retry",
+      });
+      expect(mailResearchRunInput.parse(successor?.input).sources).toEqual([
+        { orderMailId: unfinished.id, checksum: unfinished.rawChecksum },
+      ]);
+      expect(
+        await researchServiceFor(
+          ctx.db,
+          fromPartial<Env>({}),
+          successorId,
+        ).researchNext({}, crypto.randomUUID()),
+      ).toMatchObject({
+        status: "working",
+        work: { kind: "mail", sources: [{ messageRef: unfinished.id }] },
+      });
+      expect(
+        await getDb(ctx.db).select().from(run).where(eq(run.id, originalId)),
+      ).toEqual([original]);
+      expect(
+        await getDb(ctx.db)
+          .select()
+          .from(runTarget)
+          .where(eq(runTarget.runId, originalId)),
+      ).toEqual(originalTargets);
+      expect(await controlRun(ctx.db, ctx.actor, control)).toMatchObject({
+        successorRunId: successorId,
+        created: false,
+      });
+      const ledger = await getDb(ctx.db).select().from(mailboxMessage);
+      expect(
+        ledger.find((message) => message.orderMailId === unfinished.id),
+      ).toMatchObject({ runId: successorId, status: "researching" });
+      expect(
+        ledger.find((message) => message.orderMailId === settled.id)?.runId,
+      ).toBe(otherOwner?.id ?? originalId);
+    },
+  );
 });
