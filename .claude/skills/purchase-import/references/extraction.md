@@ -25,6 +25,12 @@ subject is not itemization. Preserve literal SKU, quantities, line amounts,
 adjustments, printed order date, currency, and total. A checkout card or order
 total does not establish payment; placement does not establish delivery.
 `receivedAt` is email receipt time, not an order date. Use null for absent fields.
+Set `orderedAt` to a source-printed calendar date as `YYYY-MM-DD` without
+inventing a time or timezone, or to an explicit ISO timestamp with its timezone
+when the source supplies one. Cubby preserves a calendar date as printed and
+converts an instant to the household-local day. An unknown order date remains
+null and cannot support nonzero Expense writes, even when the email has a receipt
+time.
 If itemization is absent, return unreadable or needs_review rather than inventing
 lines. For each line of a saved confirmation, copy the item's own product-page
 link into `productUrl`, its item image into `imageUrl`, and a printed SKU or item

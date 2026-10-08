@@ -4,6 +4,7 @@ import { productCategoryShortcode } from "./identifier-fields";
 import { externalIdKind, externalIdSource } from "./external-id";
 import { agentImportRunPurpose } from "./import-run-agent";
 import { acceptedResearchFact } from "./research-facts";
+import { plainDate } from "./base-entity";
 
 import { money } from "./money";
 import {
@@ -253,9 +254,16 @@ export const extractedPaymentEvidence = z.object({
 });
 export type ExtractedPaymentEvidence = z.infer<typeof extractedPaymentEvidence>;
 
+const extractedOrderDate = z
+  .union([plainDate.pipe(z.iso.date()), z.iso.datetime({ offset: true })])
+  .nullable()
+  .describe(
+    "Source-printed order date as YYYY-MM-DD, or an explicit ISO timestamp with timezone. Preserve a printed calendar day without inventing a time or timezone. Null when absent; email receipt time is not an order date.",
+  );
+
 export const extractedOrderCandidate = z.object({
   orderId: z.string().trim().min(1).max(300).nullable(),
-  orderedAt: z.iso.datetime().nullable(),
+  orderedAt: extractedOrderDate,
   merchant: z.string().trim().min(1).max(300).nullable(),
   currency: z.string().trim().length(3),
   printedGrandTotal: money.nullable(),
@@ -321,7 +329,7 @@ const extractedPaymentEvidenceModelOutput = z.object({
 
 const extractedOrderCandidateModelOutput = z.object({
   orderId: z.string().trim().min(1).max(300).nullable(),
-  orderedAt: z.iso.datetime().nullable(),
+  orderedAt: extractedOrderDate,
   merchant: z.string().trim().min(1).max(300).nullable(),
   currency: z.string().trim().length(3),
   printedGrandTotal: money.nullable(),

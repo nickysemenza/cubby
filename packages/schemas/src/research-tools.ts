@@ -63,15 +63,19 @@ const retainedCandidate = z.strictObject({
 });
 export const researchWorkResolve = z.strictObject({
   workRef,
-  status: z.enum([
-    "verified",
-    "partially_verified",
-    "researched_with_gaps",
-    "ambiguous",
-    "temporarily_blocked",
-    "no_source_found",
-    "unrelated",
-  ]),
+  status: z
+    .enum([
+      "verified",
+      "partially_verified",
+      "researched_with_gaps",
+      "ambiguous",
+      "temporarily_blocked",
+      "no_source_found",
+      "unrelated",
+    ])
+    .describe(
+      "Outcome of the assigned task. A mail task can be verified when its supported order or lifecycle event is committed and linked, while the Purchase still has unknown payment, delivery or catalog facts. Product verification requires the requested identity coverage.",
+    ),
   identity: z.strictObject({ evidenceIds: evidenceIds.default([]), reasoning }),
   facts: z.array(acceptedResearchFact).max(100).default([]),
   identifierClaims: z
@@ -134,7 +138,10 @@ export const researchWorkResolve = z.strictObject({
       evidenceIds,
       gaps: z.array(z.string().trim().min(1).max(2_000)).max(50),
     })
-    .optional(),
+    .optional()
+    .describe(
+      "Scope coverage for an assigned frozen account-history or explicit backfill objective. Omit for an individual mail or Product task; one source does not establish broader scope exhaustion.",
+    ),
   detail: z.string().trim().min(1).max(8_000),
 });
 export const researchMailSearch = z.strictObject({

@@ -16,6 +16,7 @@ import {
   entityLink,
   importSourceOrder,
   importSourceProduct,
+  inventoryEntry,
   product,
   purchase,
   runFinding,
@@ -44,6 +45,8 @@ import { importVendorOrder } from "./writer";
 // must retain their source binding and member visibility fences. A Product merge
 // must preserve the original variant; removing an editable Purchase link must
 // neither orphan nor permit deleting a Product still named by original evidence.
+// A printed calendar day must not shift through UTC parsing; a true instant uses
+// the household day, and a missing day cannot be supplied by the import time.
 describe("incomplete itemized purchase identity", () => {
   const ctx = withTestDb();
   async function scope() {
@@ -99,6 +102,79 @@ describe("incomplete itemized purchase identity", () => {
     };
     return { party, vendor, input };
   }
+
+  it.each([
+    { orderedAt: "2032-02-29", expectedDate: "2032-02-29" },
+    {
+      orderedAt: "2033-07-11T04:32:43.000Z",
+      expectedDate: "2033-07-10",
+    },
+    {
+      orderedAt: "2033-07-11T13:32:43+09:00",
+      expectedDate: "2033-07-10",
+    },
+    { orderedAt: null, expectedDate: null },
+  ])(
+    "preserves a source order day through itemized writing and stock-neutral replay ($orderedAt)",
+    async ({ orderedAt, expectedDate }) => {
+      const { input } = await scope();
+      const candidate = input.extraction.candidate!;
+      candidate.orderedAt = orderedAt;
+      candidate.printedGrandTotal = 24;
+      candidate.lines[0]!.quantity = 2;
+      candidate.allShipmentsDelivered = true;
+
+      const first = await importVendorOrder(ctx.db, input, ctx.actor.userId);
+      if (!first.purchaseId)
+        throw new Error("Synthetic dated Purchase missing");
+      const purchaseId = parseEntityId("purchase", first.purchaseId);
+      const [saved] = await getDb(ctx.db)
+        .select()
+        .from(purchase)
+        .where(eq(purchase.id, purchaseId));
+      expect(saved).toMatchObject({ date: expectedDate, statedTotal: 24 });
+      const items = await getDb(ctx.db).select().from(product);
+      expect(items).toHaveLength(1);
+      const lines = await getDb(ctx.db)
+        .select()
+        .from(expense)
+        .where(eq(expense.purchaseId, purchaseId));
+      expect(
+        lines.map(({ date, cost, lineKind, productId, productQuantity }) => ({
+          date,
+          cost,
+          lineKind,
+          productId,
+          productQuantity,
+        })),
+      ).toEqual(
+        expectedDate === null
+          ? []
+          : [
+              {
+                date: expectedDate,
+                cost: 24,
+                lineKind: "principal",
+                productId: items[0]!.id,
+                productQuantity: 2,
+              },
+            ],
+      );
+      expect(await getDb(ctx.db).select().from(inventoryEntry)).toEqual([]);
+
+      expect(
+        await importVendorOrder(ctx.db, input, ctx.actor.userId),
+      ).toMatchObject({ outcome: "replayed", purchaseId: first.purchaseId });
+      expect(await getDb(ctx.db).select().from(product)).toEqual(items);
+      expect(
+        await getDb(ctx.db)
+          .select()
+          .from(expense)
+          .where(eq(expense.purchaseId, purchaseId)),
+      ).toEqual(lines);
+      expect(await getDb(ctx.db).select().from(inventoryEntry)).toEqual([]);
+    },
+  );
 
   it.each(["new", "existing"] as const)(
     "retains a supported %s Product and original ordered context without an Expense, then admits cloud research",

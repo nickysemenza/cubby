@@ -19,4 +19,20 @@ mail can inform identity reasoning, while an order or email-link write must cite
 evidence authorized for the assigned primary task. Resolve other messages through
 their own assigned work; do not treat context mail as another writable original.
 
+The task's `purchaseContext` and resolution's public references include records
+already committed by this Run, even before search indexing catches up. Use their
+order, vendor and line context to investigate related mail; their presence alone
+does not prove a match. An `incomplete` context is bounded, not an exhaustive
+list. Link the primary message only when its retained evidence supports the
+selected Purchase. A printed order day is sufficient date evidence; do not
+invent a timestamp or copy the message's arrival time.
+
+For individual mail work, `verified` means its supported itemization or lifecycle
+event has been recorded and linked to the identified Purchase. The Purchase may
+still lack payment, delivery or catalog facts that this message does not supply;
+those remain unknown and Product research continues separately. Use an unresolved
+outcome when a supported action or identity remains unsettled. Scope `progress`
+belongs to an assigned account-history/backfill objective; omit it for individual
+mail and Product tasks. The host owns mailbox coverage and final accounting.
+
 For a literal identifier visible on a source without structured product data, submit `identifierClaims` with its retained `evidenceId`, identifier `kind`, exact `externalId`, and semantic `support`. Explain why the identifier names the selected Product or variant. The host derives the issuer from the retained source and verified manufacturer. Retained `identifierCandidates` remain useful when the host has already extracted candidates.

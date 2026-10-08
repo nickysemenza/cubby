@@ -2,7 +2,7 @@ import { parseEntityId } from "@cubby/schemas/identifiers";
 import type { PurchaseAgentEvent } from "@cubby/schemas/purchase-import";
 import { researchWorkResolve } from "@cubby/schemas/research-tools";
 import { fromPartial } from "@total-typescript/shoehorn";
-import { eq } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
 import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 import { z } from "zod";
@@ -217,12 +217,17 @@ describe("research host lifecycle", () => {
     expect(header?.status).toBe("running");
     expect(header?.endedAt).toBeNull();
   });
-  it("automatically researches supported imported Products after settlement and replays without duplicate child work", async () => {
-    const f = await admitted();
+  async function importPrimary(messageCount: number) {
+    const f = await admitted(messageCount);
     const [target] = await getDb(ctx.db)
       .select()
       .from(runTarget)
-      .where(eq(runTarget.runId, f.started.runId));
+      .where(
+        and(
+          eq(runTarget.runId, f.started.runId),
+          eq(runTarget.workKey, f.mail.id),
+        ),
+      );
     if (!target) throw new Error("Synthetic work missing");
     const observed = z
       .object({ evidenceId: z.uuid() })
@@ -295,11 +300,17 @@ describe("research host lifecycle", () => {
         }),
       },
     );
-    expect(imported.productIds).toHaveLength(1);
     const finished = await f.services.researchResolve(proposal, resolutionCall);
+    return { f, proposal, resolutionCall, imported, finished };
+  }
+  async function assertAutomaticChild(
+    f: Awaited<ReturnType<typeof admitted>>,
+    finished: Awaited<ReturnType<typeof importPrimary>>["finished"],
+    messageCount: number,
+  ) {
     expect(finished).toMatchObject({
       status: "done",
-      summary: { verified: 1 },
+      summary: { verified: messageCount },
     });
     expect(f.queued).toHaveLength(1);
     const [child] = await getDb(ctx.db)
@@ -325,10 +336,132 @@ describe("research host lifecycle", () => {
         product: { ingredientId: null, growsPlantId: null },
       },
     });
+    expect(f.queued).toHaveLength(1);
+  }
+  it("automatically researches supported imported Products after settlement and replays without duplicate child work", async () => {
+    const { f, proposal, resolutionCall, imported, finished } =
+      await importPrimary(1);
+    expect(imported.productIds).toHaveLength(1);
+    expect(finished).toMatchObject({
+      resolution: {
+        productRefs: [expect.stringMatching(/^PRD-/u)],
+        purchaseContext: {
+          purchases: [{ purchaseRef: expect.stringMatching(/^PUR-/u) }],
+        },
+      },
+    });
+    await assertAutomaticChild(f, finished, 1);
     expect(await f.services.researchResolve(proposal, resolutionCall)).toEqual(
       finished,
     );
     expect(f.queued).toHaveLength(1);
+  });
+  it("exposes owned committed Purchase context to related mail before search indexing and after task resume", async () => {
+    const { f, finished: first } = await importPrimary(2);
+    let finished = first;
+    expect(finished).toMatchObject({
+      resolution: {
+        productRefs: [expect.stringMatching(/^PRD-/u)],
+        purchaseContext: {
+          purchases: [{ purchaseRef: expect.stringMatching(/^PUR-/u) }],
+        },
+      },
+    });
+    expect(finished).toMatchObject({
+      status: "working",
+      work: {
+        kind: "mail",
+        purchaseContext: {
+          incomplete: false,
+          purchases: [
+            {
+              orderId: "EXAMPLE-100",
+              vendor: { name: "Example device seller" },
+              lines: [{ name: "Small device", cost: 24 }],
+            },
+          ],
+        },
+      },
+    });
+    const next = z
+      .object({
+        work: z.object({
+          workRef: z.uuid(),
+          sources: z.array(z.object({ messageRef: z.uuid() })),
+          purchaseContext: z.object({
+            purchases: z.array(z.object({ purchaseRef: z.string() })),
+          }),
+        }),
+      })
+      .parse(finished).work;
+    expect(
+      await f.services.researchFind(
+        { workRef: next.workRef, query: "EXAMPLE-100" },
+        crypto.randomUUID(),
+      ),
+    ).toMatchObject({ results: [] });
+    expect(
+      await f.services.researchNext({}, crypto.randomUUID()),
+    ).toMatchObject({ work: { purchaseContext: next.purchaseContext } });
+    expect(finished).not.toHaveProperty("resolution.purchaseIds");
+    expect(finished).not.toHaveProperty("resolution.productIds");
+    expect(finished).not.toHaveProperty("resolution.eventIds");
+    const shipment = z.object({ evidenceId: z.uuid() }).parse(
+      await f.services.researchMailRead(
+        {
+          workRef: next.workRef,
+          messageRef: next.sources[0]!.messageRef,
+        },
+        crypto.randomUUID(),
+      ),
+    );
+    const link = researchWorkResolve.parse({
+      workRef: next.workRef,
+      status: "verified",
+      identity: {
+        evidenceIds: [shipment.evidenceId],
+        reasoning:
+          "The retained related original establishes the same seller and order.",
+      },
+      emailLinks: [
+        {
+          purchaseRef: next.purchaseContext.purchases[0]!.purchaseRef,
+          evidenceIds: [shipment.evidenceId],
+          event: "shipped",
+          reasoning: "The primary original supports this order shipment.",
+        },
+      ],
+      detail: "Linked the related original without a second itemized purchase.",
+    });
+    const linkCall = crypto.randomUUID();
+    await resolveImportResearch(
+      ctx.db,
+      {
+        runId: f.started.runId,
+        workRef: next.workRef,
+        callId: linkCall,
+        proposal: link,
+      },
+      {
+        readEvidence: async (row) => {
+          const data = f.bytes.get(row.objectKey);
+          if (!data) throw new Error("Synthetic source bytes missing");
+          return new TextDecoder().decode(data);
+        },
+        assess: async () => ({
+          identityVerified: true,
+          acceptedFacts: [],
+          acceptedIdentifiers: [],
+          acceptedIdentifierClaims: [],
+          acceptedImages: [],
+          acceptedOrders: [],
+          acceptedEmailLinks: [0],
+          rejected: [],
+        }),
+      },
+    );
+    finished = await f.services.researchResolve(link, linkCall);
+    await assertAutomaticChild(f, finished, 2);
   });
   it("automatically retains mail observations under the explicit work without browser admission", async () => {
     const f = await admitted();
@@ -586,9 +719,19 @@ describe("research host lifecycle", () => {
         }),
       },
     );
+    const {
+      purchaseIds: _purchaseIds,
+      productIds: _productIds,
+      eventIds: _eventIds,
+      ...publicResult
+    } = result;
     expect(await f.services.researchResolve(proposal, callId)).toMatchObject({
       status: "done",
-      resolution: result,
+      resolution: {
+        ...publicResult,
+        purchaseContext: { purchases: [], incomplete: false },
+        productRefs: [],
+      },
     });
   });
   it("retains another Run's mail only as context without stealing its write ownership", async () => {

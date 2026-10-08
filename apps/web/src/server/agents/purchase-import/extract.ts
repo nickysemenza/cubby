@@ -35,7 +35,7 @@ import { gatewayFetch } from "~/server/ai/gateway";
 import { type AiMessage, runStructuredFeature } from "~/server/ai/run-feature";
 import { recordAiUsage } from "~/server/ai/usage";
 import type { Database } from "~/server/db";
-import { image, type orderMail } from "~/server/db/schema";
+import { image } from "~/server/db/schema";
 import { getDb, notDeleted } from "~/server/repo/database-helpers";
 import { cents } from "~/server/repo/money";
 import { ensureRun, systemActor } from "~/server/runs/ensure-run";
@@ -87,63 +87,6 @@ export const extractPurchaseCapture = async (
     },
     ports,
   );
-};
-
-export const extractPurchaseOrderMail = async (
-  args: {
-    db: Database;
-    runId: string;
-    orderId: string;
-    /** The Vendor's website and browser domains; a product link must be on one. */
-    productHosts: readonly string[];
-    mail: Pick<
-      typeof orderMail.$inferSelect,
-      "sender" | "subject" | "receivedAt" | "content"
-    >;
-  },
-  ports = { runStructured: runStructuredFeature },
-) => {
-  const content = JSON.stringify({
-    kind: "order_confirmation_email",
-    orderId: args.orderId,
-    sender: args.mail.sender,
-    subject: args.mail.subject,
-    receivedAt: args.mail.receivedAt,
-    content: args.mail.content,
-  });
-  if (content.length > 256 * 1024)
-    throw new Error(
-      "Saved order confirmation exceeds the extraction limit; review its itemized evidence.",
-    );
-  const request = {
-    systemPrompts: [
-      purchaseImportPromptText.extraction,
-      purchaseImportPromptText.extractionOutput,
-    ],
-    messages: [{ role: "user" as const, content }],
-  };
-  const extraction = await extractPurchaseText(
-    { db: args.db, runId: args.runId, request },
-    ports,
-  );
-  if (extraction.candidate && extraction.candidate.orderId !== args.orderId)
-    throw new Error(
-      "Extracted confirmation order id differs from its assigned order; review the saved email.",
-    );
-  // Only a placement confirmation is assigned here, and it is sent when the
-  // order is placed. Without this, a confirmation that prints no order date
-  // left `orderedAt` null and the writer dated the Purchase on import day.
-  if (
-    extraction.candidate &&
-    extraction.candidate.orderedAt === null &&
-    args.mail.receivedAt
-  )
-    extraction.candidate.orderedAt = args.mail.receivedAt.toISOString();
-  if (extraction.candidate)
-    extraction.candidate.lines = extraction.candidate.lines.map((line) =>
-      retainLiteralLineLinks(line, args.mail.content, args.productHosts),
-    );
-  return extraction;
 };
 
 /**

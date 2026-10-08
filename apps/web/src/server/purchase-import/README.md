@@ -182,6 +182,15 @@ and deployment/readback order are owned by the
    Run-bound environment and parses the shared contracts; `research-service.ts`
    owns task references, source retention and domain-service writes. The
    separate photo-inventory workflow retains its own tool environment.
+   Next mail work and resolution results include bounded current Purchase
+   context from this member's same-run committed source associations, using
+   public Purchase/Product references. Search-index lag cannot hide a record
+   just committed by this conversation. Context supplies investigation leads;
+   the primary retained source still has to support any proposed email link.
+   Printed order days remain calendar dates; only explicit timestamp evidence
+   is converted to the household-local day. Mail task verification records the
+   supported event even when unrelated payment/delivery/catalog facts remain
+   unknown. Broader scope coverage belongs to explicit research objectives.
 4. **Browser observations.** `research-browser-service.ts` binds commands and
    immutable retained observations to the explicit work reference. It enqueues
    on the per-account bridge Durable Object (`durable-object.ts`). The Mac

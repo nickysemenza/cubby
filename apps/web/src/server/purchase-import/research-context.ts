@@ -1,6 +1,11 @@
-import type { ProductId, LedgerPartyId } from "@cubby/schemas/identifiers";
+import type {
+  ProductId,
+  LedgerPartyId,
+  RunId,
+} from "@cubby/schemas/identifiers";
 import { acceptedSourceOrder } from "@cubby/schemas/purchase-import";
-import { and, eq, inArray, or, isNotNull } from "drizzle-orm";
+import { researchPurchaseContextBatch } from "@cubby/schemas/research-context";
+import { and, asc, eq, inArray, or, isNotNull } from "drizzle-orm";
 
 import type { Database } from "~/server/db";
 import {
@@ -10,12 +15,92 @@ import {
   importSourceOrder,
   importSourceProduct,
   purchase,
+  product,
   run,
   vendor,
 } from "~/server/db/schema";
 import { getDb, notDeleted } from "~/server/repo/database-helpers";
 
 import { loadImportSourceClaimRoots } from "./source-claim-family";
+
+/** Same-run source associations survive replay and precede asynchronous search indexing. */
+export async function loadRunPurchaseContext(
+  db: Database,
+  input: { runId: RunId; ledgerPartyId: LedgerPartyId },
+) {
+  const database = getDb(db);
+  const rows = await database
+    .selectDistinct({
+      purchaseId: purchase.id,
+      purchaseRef: purchase.shortcode,
+      orderId: purchase.orderId,
+      date: purchase.date,
+      statedTotal: purchase.statedTotal,
+      vendor: {
+        vendorRef: vendor.shortcode,
+        name: vendor.name,
+        website: vendor.website,
+      },
+    })
+    .from(importSourceOrder)
+    .innerJoin(
+      importSourceClaim,
+      eq(importSourceClaim.id, importSourceOrder.sourceClaimId),
+    )
+    .innerJoin(
+      purchase,
+      and(eq(purchase.id, importSourceOrder.purchaseId), notDeleted(purchase)),
+    )
+    .innerJoin(
+      vendor,
+      and(eq(vendor.id, purchase.vendorId), notDeleted(vendor)),
+    )
+    .where(
+      and(
+        eq(importSourceClaim.lastRunId, input.runId),
+        eq(importSourceClaim.ledgerPartyId, input.ledgerPartyId),
+      ),
+    )
+    .orderBy(asc(purchase.id))
+    .limit(51);
+  let incomplete = rows.length > 50;
+  const selected = rows.slice(0, 50);
+  const allLines = selected.length
+    ? await database
+        .select({
+          purchaseId: expense.purchaseId,
+          name: expense.name,
+          cost: expense.cost,
+          productQuantity: expense.productQuantity,
+          productRef: product.shortcode,
+        })
+        .from(expense)
+        .leftJoin(
+          product,
+          and(eq(product.id, expense.productId), notDeleted(product)),
+        )
+        .where(
+          and(
+            inArray(
+              expense.purchaseId,
+              selected.map((row) => row.purchaseId),
+            ),
+            notDeleted(expense),
+          ),
+        )
+        .orderBy(asc(expense.purchaseId), asc(expense.id))
+        .limit(1_001)
+    : [];
+  incomplete ||= allLines.length > 1_000;
+  const purchases = selected.map(({ purchaseId, ...header }) => {
+    const lines = allLines
+      .filter((line) => line.purchaseId === purchaseId)
+      .map(({ purchaseId: _purchaseId, ...line }) => line);
+    incomplete ||= lines.length > 20;
+    return { ...header, lines: lines.slice(0, 20) };
+  });
+  return researchPurchaseContextBatch.parse({ purchases, incomplete });
+}
 
 /** The purchased variant comes from accepted original evidence, independently of editable ledger labels. */
 export async function loadProductPurchaseContext(

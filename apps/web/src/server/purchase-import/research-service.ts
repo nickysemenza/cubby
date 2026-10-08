@@ -27,6 +27,7 @@ import {
   notDeleted,
   withTransaction,
 } from "~/server/repo/database-helpers";
+import { readCanonicalEntityIds } from "~/server/repo/entity-identity";
 import {
   claimRunExecution,
   ExecutionLimitError,
@@ -40,7 +41,10 @@ import {
   readPurchaseValidationOriginal,
 } from "./purchase-validation-research";
 import { readReceiptResearchOriginal } from "./receipt-evidence";
-import { loadProductPurchaseContext } from "./research-context";
+import {
+  loadProductPurchaseContext,
+  loadRunPurchaseContext,
+} from "./research-context";
 import { assertResearchWork } from "./research-evidence";
 import { assertResearchRunExecutable } from "./research-execution";
 import {
@@ -414,6 +418,13 @@ export function researchServiceFor(
               workRef: target.id,
               retainedObservation: browserTasks.retainedByWork.get(target.id),
               kind: "mail",
+              purchaseContext: await loadRunPurchaseContext(db, {
+                runId,
+                ledgerPartyId: parseEntityId(
+                  "ledgerParty",
+                  scope.ledgerPartyId!,
+                ),
+              }),
               sources: sources.filter(
                 (source) =>
                   !target.workKey || source.messageRef === target.workKey,
@@ -598,6 +609,47 @@ export function researchServiceFor(
         });
       }
       const next = await services.researchNext({}, `${callId}:next`);
+      if ("purchaseIds" in resolution) {
+        const {
+          purchaseIds: _purchaseIds,
+          productIds,
+          eventIds: _eventIds,
+          ...publicResolution
+        } = resolution;
+        const scope = await owner();
+        const productIdentities = await readCanonicalEntityIds(
+          db,
+          "product",
+          productIds,
+        );
+        const products = productIdentities.size
+          ? await database
+              .select({ productRef: product.shortcode })
+              .from(product)
+              .where(
+                and(
+                  inArray(
+                    product.id,
+                    [...productIdentities.values()].map((id) =>
+                      parseEntityId("product", id),
+                    ),
+                  ),
+                  notDeleted(product),
+                ),
+              )
+          : [];
+        return json({
+          ...next,
+          resolution: {
+            ...publicResolution,
+            purchaseContext: await loadRunPurchaseContext(db, {
+              runId,
+              ledgerPartyId: parseEntityId("ledgerParty", scope.ledgerPartyId!),
+            }),
+            productRefs: products.map((item) => item.productRef),
+          },
+        });
+      }
       return json({ ...next, resolution });
     },
     async researchObserve(raw, callId) {

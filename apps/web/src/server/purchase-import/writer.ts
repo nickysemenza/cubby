@@ -1,3 +1,4 @@
+import { plainDate } from "@cubby/schemas/base-entity";
 import { buildActorContext } from "@cubby/schemas/context";
 import {
   expenseLineKindValues,
@@ -91,14 +92,17 @@ export const PRODUCT_IDENTITY_RULES =
   "Choose an existing product only when the title, model, size, count, and variant identify the same sellable item. Choose none for a distinct or uncertain variant.";
 
 /**
- * The household-local day an order was placed (`orderedAt` is an instant).
+ * Preserve a printed calendar day; an instant uses the household-local day.
  * Evidence without a date preserves an existing date or leaves it unknown.
  */
 export const purchaseDateFor = (
   orderedAt: string | null,
   existingDate: string | null,
 ): string | null => {
-  if (orderedAt) return householdLocalDate(new Date(orderedAt));
+  if (orderedAt)
+    return plainDate.safeParse(orderedAt).success
+      ? orderedAt
+      : householdLocalDate(new Date(orderedAt));
   if (existingDate) return existingDate;
   return null;
 };
