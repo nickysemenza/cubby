@@ -33,5 +33,9 @@ click "label=\"List controls\""
 click "label=View"
 click "label=List"
 wait "id=browse.product.row.${PRODUCT_ID}" 30000
-click "role=Button id=browse.product.row.${PRODUCT_ID}"
-wait text "Synthetic Flour Bag" 60000
+click "label=\"List controls\""
+click "label=View"
+click "label=Table"
+wait "id=browse.product.table.row.${PRODUCT_ID}" 30000
+click "role=Button id=browse.product.table.row.${PRODUCT_ID}"
+wait "role=Button id=detail.product.edit" 60000
