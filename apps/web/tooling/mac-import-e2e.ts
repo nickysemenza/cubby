@@ -676,7 +676,7 @@ async function runNativeScenario(
       .min(1)
       .parse(
         (await driver.snapshot()).match(
-          /\[statictext\] "Synthetic table product 01" id=browse\.product\.table\.row\.(\S+)/,
+          /\[statictext\] "Synthetic table product 05" id=browse\.product\.table\.row\.(\S+)/,
         )?.[1],
       );
     await driver.click(
