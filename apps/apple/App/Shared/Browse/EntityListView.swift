@@ -142,6 +142,7 @@ struct EntityListView: View {
         #if os(iOS)
             .navigationBarTitleDisplayMode(.inline)
         #endif
+        .accessibilityElement(children: .contain)
         .accessibilityIdentifier("browse.\(key.rawValue).list")
         .modifier(
             EntityListSearchModifier(
@@ -680,6 +681,11 @@ struct EntityListView: View {
     private func tableView(_ model: GenericEntityListModel) -> some View {
         let visibleRows = model.isSearching ? (model.searchModel?.rows ?? []) : model.rows
         let visibleMeta = model.isSearching ? model.searchModel?.summaryMeta : model.summaryMeta
+        #if os(macOS)
+            // Native table cells are rehosted when sorting replaces the rows. Capture the
+            // owning model before that boundary so explanation views keep their dependency.
+            let cellAppModel = appModel
+        #endif
         VStack(spacing: 0) {
             tableControls(model)
             #if os(macOS)
@@ -707,6 +713,7 @@ struct EntityListView: View {
                                 Text(field.label), sortUsing: EntityRowFieldComparator(fieldKey: sortKey)
                             ) { row in
                                 tableCell(field, row: row)
+                                    .environment(cellAppModel)
                             }
                             .width(min: 180)
                             .customizationID(field.key)
@@ -714,6 +721,7 @@ struct EntityListView: View {
                         if sortKey(for: field) == nil {
                             TableColumn(Text(field.label)) { (row: EntityRow) in
                                 tableCell(field, row: row)
+                                    .environment(cellAppModel)
                             }
                             .width(min: 180)
                             .customizationID(field.key)

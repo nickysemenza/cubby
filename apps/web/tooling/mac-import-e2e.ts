@@ -73,9 +73,9 @@ const scenarioTitle = order
   : browserMode
     ? "Actual Mac CSV import and isolated HTTPS retailer browser capture/resume"
     : productClarity
-      ? "Actual sandboxed macOS Product explanation and financial relation evidence"
+      ? "Actual sandboxed macOS Product explanations, financial relations and native table"
       : "Actual sandboxed macOS app statement CSV file import";
-const fixtureVersion = order ? 2 : 1;
+const fixtureVersion = order || productClarity ? 2 : 1;
 const nonce = randomBytes(8).toString("hex");
 const databaseName = `cubby_sim_${nonce}`;
 const adminURL = "postgresql://postgres:password@localhost:55432/postgres";
@@ -117,6 +117,7 @@ const milestones = {
   valuationExplanationObserved: false,
   productPurchaseEvidenceObserved: false,
   purchaseProductEvidenceObserved: false,
+  entityTableObserved: false,
 };
 let verifiedLaunchedPID: number | undefined;
 let nativeProcessExpectation: MacProcessExpectation | undefined;
@@ -364,11 +365,16 @@ function saveArtifact(): void {
     cases: [
       {
         name: productClarity
-          ? "Mac valuation explanation and both financial relation directions"
+          ? "Mac valuation explanation, financial relations and sorted native table"
           : "Mac file selection, review, commit and database readback",
         status: (
           productClarity
-            ? milestones.purchaseProductEvidenceObserved
+            ? [
+                milestones.valuationExplanationObserved,
+                milestones.productPurchaseEvidenceObserved,
+                milestones.purchaseProductEvidenceObserved,
+                milestones.entityTableObserved,
+              ].every(Boolean)
             : milestones.databaseVerified
         )
           ? "passed"
@@ -580,11 +586,11 @@ async function runNativeScenario(
     await driver.openEntity(productId, appPath);
     await driver.wait("id=detail.product.edit");
     await driver.scrollTo(
-      `id=field.explanation.product.${productId}.price`,
+      `id=field.explanation.product.${productId}.price label="About Valuation price"`,
       "detail.product",
     );
     await driver.click(
-      `id=field.explanation.product.${productId}.price`,
+      `id=field.explanation.product.${productId}.price label="About Valuation price"`,
       "detail.product",
     );
     await driver.wait("id=field.explanation.popover");
@@ -639,6 +645,60 @@ async function runNativeScenario(
     await relationEvidence("product", productId);
     milestones.purchaseProductEvidenceObserved = true;
     await driver.screenshot("purchase-product-evidence");
+    phase = "entity-table-presentation";
+    await driver.openEntity(productId, appPath);
+    await driver.wait("id=detail.product.edit");
+    await driver.click("role=popupbutton id=browse.product.view.list");
+    await driver.click("id=browse.product.view.table");
+    await driver.wait("role=outline");
+    await driver.click("label=Name");
+    async function waitForFirstTableProduct(expected: string) {
+      await pollUntil(
+        async () => {
+          const snapshot = await driver.snapshot();
+          const first = snapshot.match(
+            /\[statictext\] "(Synthetic table product \d+)"/,
+          );
+          return first?.[1] === expected ? true : undefined;
+        },
+        { label: `native table first product ${expected}`, timeoutMs: 30000 },
+      );
+    }
+    await waitForFirstTableProduct("Synthetic table product 00");
+    await driver.click("label=Name");
+    await waitForFirstTableProduct("Synthetic table product 15");
+    await driver.scrollTo(
+      'label="Synthetic table product 00"',
+      "browse.product.list",
+    );
+    const manufacturerCount = (snapshot: string) =>
+      [...snapshot.matchAll(/\[statictext\] "Synthetic Works"/g)].length;
+    const hiddenManufacturerCount = manufacturerCount(await driver.snapshot());
+    await driver.click('label="Show or hide table columns"');
+    await driver.click("id=browse.product.column.manufacturer");
+    await driver.wait("label=Manufacturer");
+    await pollUntil(
+      async () =>
+        manufacturerCount(await driver.snapshot()) > hiddenManufacturerCount
+          ? true
+          : undefined,
+      { label: "native table manufacturer values rendered", timeoutMs: 30000 },
+    );
+    await driver.screenshot("entity-table");
+    await driver.click('label="Show or hide table columns"');
+    await driver.click("id=browse.product.column.manufacturer");
+    await driver.waitAbsent("label=Manufacturer");
+    await pollUntil(
+      async () =>
+        manufacturerCount(await driver.snapshot()) === hiddenManufacturerCount
+          ? true
+          : undefined,
+      { label: "native table manufacturer values hidden", timeoutMs: 30000 },
+    );
+    await driver.click("role=popupbutton id=browse.product.view.table");
+    await driver.click("id=browse.product.view.list");
+    await driver.wait("role=popupbutton id=browse.product.view.list");
+    milestones.entityTableObserved = true;
   } else if (order && composed) {
     await composed.run(order, csv);
     milestones.composedGraphVerified = true;
@@ -797,12 +857,23 @@ async function main(): Promise<void> {
       fixtureUserId,
     );
     if (productClarity) {
-      const { seedSimulatorPhotoActor, seedSimulatorProductClarity } =
-        await import("./scenarios/simulator");
+      const {
+        seedSimulatorPhotoActor,
+        seedSimulatorProductClarity,
+        seedSimulatorScenario,
+      } = await import("./scenarios/simulator");
       const pool = new Pool({ connectionString: databaseURL });
       try {
         await seedSimulatorPhotoActor(pool, fixtureUserId);
         productFixture = await seedSimulatorProductClarity(pool, fixtureUserId);
+        for (let index = 0; index < 16; index++) {
+          await seedSimulatorScenario(
+            pool,
+            fixtureUserId,
+            `Synthetic table product ${String(index).padStart(2, "0")}`,
+            40,
+          );
+        }
       } finally {
         await pool.end();
       }

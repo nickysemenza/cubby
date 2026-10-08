@@ -24,6 +24,8 @@ Every entity offers List and Table alongside its declared shelf, timeline, or sp
 
 The Mac root browser owns split selection even while its detail pane has related-record history. Nested entity lists push a detail onto their current navigation path. Values and source attribution in phone table cells wrap at accessibility text sizes. Totals and paging controls stay within the viewport, outside the horizontally scrolling columns.
 
+Native Mac table cells explicitly receive the owning AppModel so sorting and row reuse preserve field explanation dependencies. The browse screen contains its accessibility children, preserving the table, column control, and summary identifiers.
+
 ## Density and feedback
 
 Mac list rows prioritize comparison and native selection; iPhone rows use a readable primary line and concise supporting facts. A photo, summary, or inspector never pushes the next action off the useful first screen without purpose. At accessibility text sizes, columns and metrics wrap or stack. Preserve keyboard and VoiceOver labels, Reduce Motion, and Reduce Transparency.

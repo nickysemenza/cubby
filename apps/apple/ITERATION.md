@@ -78,7 +78,10 @@ UI automation has released the host.
 
 `pnpm --dir apps/web exec tsx tooling/mac-import-e2e.ts --product-clarity`
 checks the same synthetic valuation and financial relation evidence in the
-actual sandboxed Mac fixture app. It uses the existing isolated signing,
+actual sandboxed Mac fixture app, then switches to Table with multiple rows,
+asserts ascending and descending Name order, scrolls through reused cells,
+shows and hides the Manufacturer column, and returns to List. Sorting must
+retain the AppModel dependency of every field explanation cell. It uses the existing isolated signing,
 verified process, disposable database, and checksummed artifact paths; an
 unlocked Mac session with Accessibility permission is required. Run Mac and
 simulator UI lanes sequentially.
