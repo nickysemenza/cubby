@@ -72,8 +72,17 @@ appId: com.nickysemenza.cubby
       id: "relation.evidence.purchase.${PURCHASE_ID}.linked"
     direction: DOWN
     timeout: 30000
+- scrollUntilVisible:
+    element:
+      id: "relation.row.purchase.${PURCHASE_ID}"
+    direction: UP
+    timeout: 30000
 - tapOn:
     id: "relation.row.purchase.${PURCHASE_ID}"
+- extendedWaitUntil:
+    visible:
+      id: "detail.purchase.edit"
+    timeout: 30000
 - scrollUntilVisible:
     element:
       id: "relation.evidence.product.${PRODUCT_ID}.movement.acquired"

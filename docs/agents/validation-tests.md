@@ -223,8 +223,11 @@ boundary so an exception before the scenario callback still records the failure
 phase, scrubbed diagnostic, available build identity, and evidence checksums.
 
 Native runners keep their build, process, simulator,
-watchdog, scenario and artifact boundaries outside the runtime. Their
-`leaseNamedDatabase` backend in `test-database-lease.ts` creates and migrates
+watchdog, scenario and artifact boundaries outside the runtime. Native
+relation journeys scroll the navigation row back into view after inspecting
+its badges, then wait for the destination detail marker before inspecting
+inverse evidence. A successful tap alone does not establish navigation.
+Their `leaseNamedDatabase` backend in `test-database-lease.ts` creates and migrates
 only `cubby_sim_<16 hex>` names on the guarded loopback admin server at port 55432. Normal close verifies the database was dropped; `retention: "retain"`
 explicitly leaves it available for debugging. Failed acquisition always drops
 the database it created, including in retain mode; a name collision never
