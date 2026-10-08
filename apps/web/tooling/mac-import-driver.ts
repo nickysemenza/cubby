@@ -469,6 +469,20 @@ export class MacImportDriver {
       throw new Error(
         `Expected one finite actionable native target: ${selector} (${matches.length})`,
       );
+    const buttonScope = containerID ?? this.buttonContainer(node);
+    if (
+      buttonScope &&
+      role(node) === "button" &&
+      node.identifier &&
+      this.presentationAction("press", buttonScope, node.identifier)
+    ) {
+      this.record(
+        ["owned-AX-press", selector],
+        0,
+        JSON.stringify({ containerID: buttonScope, ownedPID: this.pid }),
+      );
+      return this.observe(surface);
+    }
     this.guardForeground();
     const x = node.rect.x + node.rect.width / 2,
       y = node.rect.y + node.rect.height / 2;
@@ -518,25 +532,18 @@ export class MacImportDriver {
       0,
       JSON.stringify({ x, y, text: hit.text, ownedPID: this.pid }),
     );
-    const buttonScope = containerID ?? this.buttonContainer(node);
-    const pressed =
-      buttonScope && role(node) === "button" && node.identifier
-        ? this.presentationAction("press", buttonScope, node.identifier)
-        : false;
-    if (!pressed) {
-      this.invoke(
-        [
-          "press",
-          "--x",
-          String(x),
-          "--y",
-          String(y),
-          "--bundle-id",
-          this.bundleID!,
-        ],
-        z.object({}).passthrough(),
-      );
-    }
+    this.invoke(
+      [
+        "press",
+        "--x",
+        String(x),
+        "--y",
+        String(y),
+        "--bundle-id",
+        this.bundleID!,
+      ],
+      z.object({}).passthrough(),
+    );
     return this.observe(surface);
   }
 
