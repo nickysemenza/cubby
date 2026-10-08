@@ -78,7 +78,7 @@ appId: com.nickysemenza.cubby
     direction: UP
     timeout: 30000
 - tapOn:
-    id: "relation.row.purchase.${PURCHASE_ID}"
+    id: "entity.row.title.purchase.${PURCHASE_ID}"
 - extendedWaitUntil:
     visible:
       id: "detail.purchase.edit"

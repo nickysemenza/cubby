@@ -1110,6 +1110,7 @@ struct EntityRowView: View {
                         Image(systemName: EntityCatalog[key].recordSymbol(in: row)).accessibilityHidden(true)
                     }
                     Text(presentation.title)
+                        .accessibilityIdentifier("entity.row.title.\(key.rawValue).\(row.id)")
                 }
                 .font(.body.weight(.semibold))
                 .foregroundStyle(FieldGuideTokens.graphite)
