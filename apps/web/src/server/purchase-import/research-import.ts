@@ -1368,7 +1368,7 @@ export async function resolveImportResearch(
                 chosen.id,
                 imported.outputFingerprint,
               );
-              await linkMail(source, chosen, "placed", order);
+              await linkMail(source, chosen, order.event, order);
             }
             // Assessment indices name the original proposal, never this filtered roster.
             acceptedPurchases.set(assessment.acceptedOrders[index]!, chosen);

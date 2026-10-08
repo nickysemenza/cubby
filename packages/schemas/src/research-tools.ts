@@ -18,6 +18,14 @@ const evidenceIds = z.array(retainedEvidenceId).max(100);
 const primaryEvidenceIds = evidenceIds.describe(
   "Retained evidence IDs authorized for this task's primary source. Related context sources can inform identity reasoning, but cannot authorize orders or email-link writes for another primary task.",
 );
+const mailEvent = z.enum([
+  "confirmation",
+  "shipped",
+  "delivered",
+  "cancelled",
+  "refunded",
+  "other",
+]);
 const observationRef = {
   observationId: z.uuid(),
   ref: z.string().min(1).max(100),
@@ -102,6 +110,11 @@ export const researchWorkResolve = z.strictObject({
           })
           .optional(),
         purchaseRef: purchaseShortcode.optional(),
+        event: mailEvent
+          .default("other")
+          .describe(
+            "The lifecycle event established by the cited primary mail, including when this order creates its Purchase first. Use other when the source establishes no specific mail event.",
+          ),
         evidenceIds: primaryEvidenceIds,
         reasoning,
         candidate: extractedOrderCandidate,
@@ -120,14 +133,7 @@ export const researchWorkResolve = z.strictObject({
         purchaseRef: purchaseShortcode,
         evidenceIds: primaryEvidenceIds,
         reasoning,
-        event: z.enum([
-          "confirmation",
-          "shipped",
-          "delivered",
-          "cancelled",
-          "refunded",
-          "other",
-        ]),
+        event: mailEvent,
       }),
     )
     .max(100)

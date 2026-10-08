@@ -18,7 +18,9 @@ retains barcode semantics. Images must represent the purchased variant. A
 collection's single supported member does not verify its other members.
 
 Assess proposed order itemization, dates, totals and vendor identity against
-their original sources. Do not invent missing values. Services, digital goods,
+their original sources. Assess each order's proposed mail `event` as well as
+events on links to existing Purchases; a shipping-first import must establish
+shipping in its cited original. Do not invent missing values. Services, digital goods,
 food and subscriptions are purchases without necessarily being physical
 Products. An identified order without itemization can remain incomplete.
 Purchase purpose facts must cite their original proposal's `orderIndex` and

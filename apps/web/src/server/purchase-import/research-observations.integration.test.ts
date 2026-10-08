@@ -121,6 +121,54 @@ describe("retained research observations", () => {
     capturedAt: "2026-10-07T12:00:00Z",
   };
 
+  it("reads receipt facts after oversized mail styles without changing retained originals", async () => {
+    const s = await scope();
+    const bodyHtml = `<html><head><style>/*${"synthetic layout padding ".repeat(2_000)}*/</style></head><body><p>Order SYNTHETIC-410. Green shirt, size M. Total USD 24.00.</p><a href="https://shop.example.test/orders/synthetic-410">Order details</a></body></html>`;
+    for (const [index, bodyText] of [
+      null,
+      "Plain-text receipt: shipping on September 15.",
+    ].entries()) {
+      const content = JSON.stringify({
+        sender: "orders@shop.example.test",
+        subject: "Synthetic order confirmation",
+        content: {
+          headers: {},
+          snippet: null,
+          bodyHtml,
+          bodyText,
+        },
+      });
+      const input = {
+        runId: s.runId,
+        workRef: s.first.id,
+        callId: `read:mail-layout-${index}`,
+        kind: "mail_message" as const,
+        sourceMetadata: { sourceURL: null },
+        content,
+      };
+      const result = await retainResearchObservation(ctx.db, input, s.ports);
+      expect(result.observation.readableText).toContain("Green shirt, size M");
+      expect(result.observation.readableText).toContain("Total USD 24.00");
+      expect(result.observation.readableText).toContain(
+        "https://shop.example.test/orders/synthetic-410",
+      );
+      expect(JSON.parse(result.observation.readableText)).toMatchObject({
+        content: { bodyText },
+      });
+      expect(result.observation.textTruncated).toBe(false);
+      expect(result.observation.readableText).not.toContain(
+        "synthetic layout padding",
+      );
+      const original = [...s.objects.values()].find(
+        (bytes) => new TextDecoder().decode(bytes) === content,
+      );
+      expect(original).toBeDefined();
+      expect(await retainResearchObservation(ctx.db, input, s.ports)).toEqual(
+        result,
+      );
+    }
+  });
+
   it("does not upload bytes before a durable manifest insert rejected by PostgreSQL", async () => {
     const s = await scope();
     await getDb(ctx.db).execute(sql`

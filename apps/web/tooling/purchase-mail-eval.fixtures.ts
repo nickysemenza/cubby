@@ -25,24 +25,27 @@ export const mailEvalOriginals = [
   },
 ] as const;
 
-export const mailEvalMessages = mailEvalOriginals.map((original) => ({
-  id: original.id,
-  threadId: "synthetic-live-order-thread",
-  historyId: "100",
-  labelIds: [],
-  internalDate: String(Date.parse(original.receivedAt)),
-  payload: {
-    mimeType: "text/plain",
-    headers: [
-      { name: "From", value: "orders@maker.example.test" },
-      { name: "Subject", value: original.subject },
-    ],
-    body: {
-      data: btoa(original.content)
-        .replaceAll("+", "-")
-        .replaceAll("/", "_")
-        .replace(/=+$/u, ""),
-      size: new TextEncoder().encode(original.content).byteLength,
+export const mailEvalMessages = mailEvalOriginals.map((original) => {
+  const html = `<html><head><style>/*${"synthetic email layout ".repeat(2_000)}*/</style></head><body><p>${original.content}</p></body></html>`;
+  return {
+    id: original.id,
+    threadId: "synthetic-live-order-thread",
+    historyId: "100",
+    labelIds: [],
+    internalDate: String(Date.parse(original.receivedAt)),
+    payload: {
+      mimeType: "text/html",
+      headers: [
+        { name: "From", value: "orders@maker.example.test" },
+        { name: "Subject", value: original.subject },
+      ],
+      body: {
+        data: btoa(html)
+          .replaceAll("+", "-")
+          .replaceAll("/", "_")
+          .replace(/=+$/u, ""),
+        size: new TextEncoder().encode(html).byteLength,
+      },
     },
-  },
-}));
+  };
+});

@@ -4,6 +4,7 @@ import {
   normalizeGtin,
 } from "@cubby/schemas/external-id";
 import { runEntityId } from "@cubby/schemas/identifiers";
+import { retainedMailContent } from "@cubby/schemas/mailbox-research";
 import {
   researchSourceMetadata,
   retainedResearchObservation,
@@ -226,6 +227,32 @@ async function imageCandidates(
   return images;
 }
 
+const mailEnvelope = z.looseObject({ content: retainedMailContent });
+
+/** Present MIME bodies before layout bytes consume the bounded model view. */
+function readableMail(content: string) {
+  const readable = mailAttachmentReadableContent(content);
+  let original;
+  try {
+    original = JSON.parse(readable);
+  } catch {
+    return readable;
+  }
+  const parsed = mailEnvelope.safeParse(original);
+  if (!parsed.success) return readable;
+  const { bodyHtml, ...body } = parsed.data.content;
+  const html = bodyHtml ? wasm.compact_browser_page(bodyHtml, "") : null;
+  return JSON.stringify({
+    ...parsed.data,
+    content: {
+      ...body,
+      htmlText: html?.text ?? null,
+      links:
+        html?.links.map(({ href, text }) => ({ url: href, label: text })) ?? [],
+    },
+  });
+}
+
 function pageObservation(
   input: z.output<typeof retentionInput>,
   page: CompactedResearchPage | null,
@@ -238,7 +265,7 @@ function pageObservation(
   const text =
     page?.text ??
     (["mail_message", "upload_evidence"].includes(input.kind)
-      ? mailAttachmentReadableContent(input.content)
+      ? readableMail(input.content)
       : input.content);
   return {
     sourceURL,

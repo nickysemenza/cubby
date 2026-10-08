@@ -252,7 +252,7 @@ describe("bounded real Gmail purchase and Product research", () => {
           "all measured closed-set Jev decisions scripted",
         ],
         limits: [
-          "one synthetic seller/order and two text originals",
+          "one synthetic seller/order and two HTML originals with oversized layout styles",
           "text-only inference; no positive image acceptance",
           "missing image coverage must remain explicit",
           "no live household data or production",

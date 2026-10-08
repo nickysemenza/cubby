@@ -84,6 +84,9 @@ Order and email-link resolution operands use `evidenceIds`, the same retained
 observation references used by facts and identity judgments. A mail `messageRef`
 is an acquisition selector, not evidence. Context observations can support
 identity reasoning; the assigned primary source still bounds write authority.
+Order proposals and links use the same source-supported mail event. Shipping
+mail can create the Purchase first without losing its shipped event; an
+unspecified event remains `other`, rather than asserting order placement.
 The source checksum, mailbox exclusion, member ownership and exact predecessor
 are checked again under source locks before the predecessor Run lock. Another
 Run's source cannot transfer implicitly. One canonical successor is replayed
@@ -211,6 +214,11 @@ and deployment/readback order are owned by the
    is converted to the household-local day. Mail task verification records the
    supported event even when unrelated payment/delivery/catalog facts remain
    unknown. Broader scope coverage belongs to explicit research objectives.
+   Retained mail observations present plain text and compact visible HTML with
+   source links before applying the model-view size limit. Layout/CSS bytes never
+   crowd receipt facts out of that view. The immutable original MIME content and
+   checksum remain unchanged for support assessment and replay; attachment bytes
+   still use the original binary assessment path.
 4. **Browser observations.** `research-browser-service.ts` binds commands and
    immutable retained observations to the explicit work reference. It enqueues
    on the per-account bridge Durable Object (`durable-object.ts`). The Mac

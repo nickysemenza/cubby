@@ -3,7 +3,7 @@
  * evidence writes; replay duplicates expenses; services fabricate Products;
  * refund links change money; human decisions are overwritten; another Run's
  * source is completed; validation drops accepted facts or lacks the target's
- * recorded state; refused canonical writes report success. Semantic support is
+ * recorded state; shipping-first import loses its lifecycle event; refused canonical writes report success. Semantic support is
  * injected, storage and writes are real. */
 import { MAILBOX_RESEARCH_VERSION } from "@cubby/schemas/mailbox-research";
 import {
@@ -267,6 +267,50 @@ describe("supported retained-mail research writes", () => {
     if (!evidence) throw new Error("Validation original is missing.");
     return { runId, target, evidence };
   }
+  it("records the supported shipping event when its original creates the Purchase first", async () => {
+    const f = await fixture(
+      "Synthetic order ORDER-ONE has shipped: annual service, USD 10.",
+    );
+    const proposal = researchWorkResolve.parse({
+      ...f.proposal,
+      orders: [{ ...f.proposal.orders[0]!, event: "shipped" }],
+    });
+    const result = await resolveImportResearch(
+      ctx.db,
+      {
+        runId: f.run.id,
+        workRef: f.target.id,
+        callId: "synthetic-shipping-first",
+        proposal,
+      },
+      {
+        ...f.ports,
+        assess: async () => ({
+          ...(await f.ports.assess()),
+          acceptedOrders: [0],
+        }),
+      },
+    );
+    expect(result.status).toBe("verified");
+    const events = await getDb(ctx.db).select().from(orderMailEvent);
+    expect(events.map(({ event }) => event)).toEqual(["shipped"]);
+    const links = await getDb(ctx.db).select().from(orderMailCandidateDecision);
+    expect(
+      links.map(({ eventId, purchaseId, evidenceChecksum }) => ({
+        eventId,
+        purchaseId,
+        evidenceChecksum,
+      })),
+    ).toEqual([
+      {
+        eventId: events[0]!.id,
+        purchaseId: result.purchaseIds[0],
+        evidenceChecksum: f.mail.rawChecksum,
+      },
+    ]);
+    const lines = await getDb(ctx.db).select().from(expense);
+    expect(lines.map(({ cost }) => Number(cost))).toEqual([10]);
+  });
   it("attaches only the assessed original while refusing implicit same-order mail links and attachments", async () => {
     const f = await fixture();
     const [otherMail] = await getDb(ctx.db)
