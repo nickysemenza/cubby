@@ -24,7 +24,7 @@ Every entity offers List and Table alongside its declared shelf, timeline, or sp
 
 The Mac root browser owns split selection even while its detail pane has related-record history. Nested entity lists push a detail onto their current navigation path. Values and source attribution in phone table cells wrap at accessibility text sizes. Totals and paging controls stay within the viewport, outside the horizontally scrolling columns.
 
-Native Mac table cells explicitly receive the owning AppModel so sorting and row reuse preserve field explanation dependencies. The browse screen contains its accessibility children, preserving the table, column control, and summary identifiers.
+Native Mac table cells explicitly receive the owning AppModel so sorting and row reuse preserve field explanation dependencies. Reference cells in the root split browser open through its detail navigator; nested tables use their enclosing navigation stack. The browse screen contains its accessibility children, preserving the table, column control, and summary identifiers.
 
 ## Density and feedback
 

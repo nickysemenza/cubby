@@ -668,9 +668,28 @@ async function runNativeScenario(
     await driver.click("label=Name");
     await waitForFirstTableProduct("Synthetic table product 15");
     await driver.scrollTo(
-      'label="Synthetic table product 00"',
+      'label="Synthetic table product 01"',
       "browse.product.list",
     );
+    const reusedRowId = z
+      .string()
+      .min(1)
+      .parse(
+        (await driver.snapshot()).match(
+          /\[statictext\] "Synthetic table product 01" id=browse\.product\.table\.row\.(\S+)/,
+        )?.[1],
+      );
+    await driver.click(
+      `id=field.explanation.product.${reusedRowId}.dataQuality label="Quality: About Quality"`,
+    );
+    await driver.wait("id=field.explanation.popover");
+    await driver.wait('contains="Score calculation"');
+    await driver.screenshot("table-explanation");
+    await driver.click(
+      "id=field.explanation.close",
+      "field.explanation.popover",
+    );
+    await driver.waitAbsent("id=field.explanation.popover");
     const manufacturerCount = (snapshot: string) =>
       [...snapshot.matchAll(/\[statictext\] "Synthetic Works"/g)].length;
     const hiddenManufacturerCount = manufacturerCount(await driver.snapshot());
@@ -695,6 +714,14 @@ async function runNativeScenario(
           : undefined,
       { label: "native table manufacturer values hidden", timeoutMs: 30000 },
     );
+    for (const field of ["dataQuality", "acquisitionOrigin"]) {
+      await driver.click('label="Show or hide table columns"');
+      await driver.click(`id=browse.product.column.${field}`);
+    }
+    await driver.click(
+      `id=browse.product.table.reference.${reusedRowId}.categoryId`,
+    );
+    await driver.wait("id=detail.productCategory.edit");
     await driver.click("role=popupbutton id=browse.product.view.table");
     await driver.click("id=browse.product.view.list");
     await driver.wait("role=popupbutton id=browse.product.view.list");

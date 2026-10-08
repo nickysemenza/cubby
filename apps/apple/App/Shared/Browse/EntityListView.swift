@@ -806,6 +806,28 @@ struct EntityListView: View {
     }
 
     @ViewBuilder
+    private func tableReference(_ reference: EntityFieldValue.Reference, value: String) -> some View {
+        let label = Text(value)
+            .lineLimit(dynamicTypeSize.isAccessibilitySize ? nil : 1)
+            .frame(
+                minWidth: FieldGuideTokens.touchTarget,
+                minHeight: FieldGuideTokens.touchTarget, alignment: .leading
+            )
+            .contentShape(Rectangle())
+        if usesBrowseSelection {
+            Button {
+                appModel.navigator.openRecord(.init(key: reference.entity, id: reference.id))
+            } label: {
+                label
+            }
+        } else {
+            NavigationLink(value: Route.entityDetail(reference.entity, id: reference.id)) {
+                label
+            }
+        }
+    }
+
+    @ViewBuilder
     private func tableCell(_ field: FieldDescriptor, row: EntityRow) -> some View {
         let fact = EntityRowPresentation.resolve(
             descriptor: descriptor, row: row, columns: [field.key]
@@ -813,15 +835,10 @@ struct EntityListView: View {
         if let fact {
             HStack(spacing: FieldGuideTokens.Space.xs) {
                 if let reference = EntityFieldValue.reference(in: row.raw, field: field, surface: "list") {
-                    NavigationLink(value: Route.entityDetail(reference.entity, id: reference.id)) {
-                        Text(fact.value).lineLimit(dynamicTypeSize.isAccessibilitySize ? nil : 1)
-                            .frame(
-                                minWidth: FieldGuideTokens.touchTarget,
-                                minHeight: FieldGuideTokens.touchTarget, alignment: .leading
-                            )
-                            .contentShape(Rectangle())
-                    }
-                    .buttonStyle(.borderless)
+                    tableReference(reference, value: fact.value)
+                        .buttonStyle(.borderless)
+                        .accessibilityIdentifier(
+                            "browse.\(key.rawValue).table.reference.\(row.id).\(field.key)")
                 } else if let color = FieldGuideMetrics.optionColor(
                     EntityFieldValue.optionColor(in: row.raw, field: field, surface: "list"))
                 {
