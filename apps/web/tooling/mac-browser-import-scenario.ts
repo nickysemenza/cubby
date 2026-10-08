@@ -267,8 +267,8 @@ export async function createMacBrowserScenario(input: Input) {
       },
       evidence: browserDriver.evidence,
       async run(appDriver: MacImportDriver) {
-        await appDriver.openSettings();
-        await appDriver.click("id=settings.purchaseImport.reconnect");
+        await appDriver.openBrowserSync();
+        await appDriver.click('label="Reconnect" role=Button', "main");
         try {
           await pollUntil(
             async () => ((await broker.connected()) ? true : undefined),
@@ -321,13 +321,9 @@ export async function createMacBrowserScenario(input: Input) {
           throw new Error(
             "Signed-out research lost task binding or falsely acknowledged a useful observation.",
           );
-        await appDriver.openSettings();
-        await appDriver.wait(
-          `id=settings.purchaseImport.openSignIn.${account.id}`,
-        );
-        await appDriver.click(
-          `id=settings.purchaseImport.openSignIn.${account.id}`,
-        );
+        await appDriver.openBrowserSync();
+        await appDriver.wait('label="Open sign-in" role=Button');
+        await appDriver.click('label="Open sign-in" role=Button', "main");
         await browserDriver.open(input.retailer.bundleID, input.retailer.pid);
         await browserDriver.wait(
           'label="Sign in to fixture retailer" role=Button',
@@ -335,7 +331,7 @@ export async function createMacBrowserScenario(input: Input) {
         await browserDriver.click('label="Sign in to fixture retailer"');
         await browserDriver.wait('text="Your orders"');
         await browserDriver.screenshot("retailer-signed-in");
-        await appDriver.click("id=settings.purchaseImport.syncNow");
+        await appDriver.click("id=browserSync.syncAll");
         const history = await capturedRead(
           "authenticated history",
           input.retailer.historyURL,

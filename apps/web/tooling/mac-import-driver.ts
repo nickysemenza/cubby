@@ -697,13 +697,11 @@ export class MacImportDriver {
     return this.action(["snapshot", "-i"]);
   }
   async click(selector: string, containerID?: string): Promise<string> {
-    const settings = selector.startsWith("id=settings.");
-    const scope =
-      containerID ??
-      (settings ? "com_apple_SwiftUI_Settings_window" : undefined);
-    if (settings)
-      await this.scrollTo(selector, "com_apple_SwiftUI_Settings_window");
-    return this.action(["click", selector, ...(scope ? [scope] : [])]);
+    return this.action([
+      "click",
+      selector,
+      ...(containerID ? [containerID] : []),
+    ]);
   }
   async wait(selector: string): Promise<string> {
     const started = Date.now();
@@ -817,9 +815,14 @@ export class MacImportDriver {
       JSON.stringify({ ownedPID: this.pid, windowID }),
     );
   }
-  async clickSidebar(label: "Browse" | "Photos"): Promise<void> {
-    // CubbyCommands binds Photos/Browse to the fourth/fifth AppSection tabs.
-    this.nativeShortcut(label === "Photos" ? 21 : 23, label);
+  async clickSidebar(
+    label: "Browse" | "Photos" | "Browser Sync",
+  ): Promise<void> {
+    // CubbyCommands binds these destinations to AppSection tabs four, five and nine.
+    this.nativeShortcut(
+      label === "Photos" ? 21 : label === "Browse" ? 23 : 25,
+      label,
+    );
     await this.wait(`label="${label}" role=window`);
     // View commands can change the main destination while Settings remains key.
     // Raise the owned main window before invoking a file importer or sheet.
@@ -884,12 +887,10 @@ export class MacImportDriver {
     await this.action(["type", "\n"]);
     await this.click('label="Open" role=Button');
   }
-  async openSettings(): Promise<void> {
-    // SwiftUI Settings can expose AXWindow without supporting AXRaise.
-    // The registered command also brings an existing Settings window forward.
-    this.nativeShortcut(43, "Settings");
-    await this.wait('label="Settings" role=window');
-    await this.wait("id=settings.purchaseImport.syncNow");
+  async openBrowserSync(): Promise<void> {
+    await this.clickSidebar("Browser Sync");
+    await this.wait("id=browserSync.accounts");
+    await this.wait("id=browserSync.syncAll");
   }
   async importStatement(file: string): Promise<void> {
     await this.click("id=statement.csv.chooseFile");
