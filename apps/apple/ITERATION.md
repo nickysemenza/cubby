@@ -55,8 +55,11 @@ Catalog targets below the viewport need explicit scroll steps; `--until` does
 not repeatedly scroll a lazily loaded catalog into view. An identifier may be
 shared by its row and child nodes, so narrow catalog clicks with the entity
 label. Inspect the current accessibility tree before adding role constraints:
-iOS menu choices are cells, while table headers and the Columns control are
-buttons. Use visible labels for menu choices.
+iOS View choices are cells, column toggles and table headers are buttons, and
+the Columns control is a popup button. Use visible labels for menu choices.
+Assert table rows, headers, and
+visible totals rather than an unexposed layout container; the Columns popup
+is observable by its accessibility label.
 
 `pnpm test:e2e:sim -- --product-clarity --video` runs a focused synthetic Product
 presentation journey. It opens and closes the valuation explanation, checks the
