@@ -527,6 +527,7 @@ const entityJSON = (
     basePath: entity.route.basePath,
     shortcodePrefix: entity.shortcode ?? null,
     titleField: entity.inspector.titleField,
+    sortFields: [...(entity.fieldModel.sort?.fields ?? [])],
     domain: entity.inspector.domain,
     sfSymbol: entity.inspector.icons.sfSymbol,
     emoji: entity.inspector.icons.emoji,

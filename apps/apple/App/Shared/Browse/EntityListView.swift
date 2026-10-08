@@ -1,5 +1,21 @@
 import CubbyKit
+import Foundation
 import SwiftUI
+
+private struct EntityRowFieldComparator: SortComparator {
+    let fieldKey: String
+    var order: SortOrder = .forward
+
+    func compare(_ lhs: EntityRow, _ rhs: EntityRow) -> ComparisonResult {
+        // Table emits header descriptors; the server orders the complete paginated result.
+        .orderedSame
+    }
+}
+
+enum BrowsePresentation: String {
+    case list
+    case table
+}
 
 private struct EntityListSearchModifier: ViewModifier {
     let enabled: Bool
@@ -32,6 +48,7 @@ struct EntityListView: View {
         let symbol: String
         let view: ListView
         let density: ListPresentationChoice?
+        let browsePresentation: BrowsePresentation?
     }
 
     let key: EntityKey
@@ -45,18 +62,27 @@ struct EntityListView: View {
     @State private var retainedSearchText = ""
     @State private var clearingSearchExplicitly = false
     @State private var cardDensity = ListPresentationChoice.cards
+    @State private var browsePresentation = BrowsePresentation.list
+    @State private var hiddenTableColumns = Set<String>()
     private let initialFilters: EntityFilterState
+    private let usesBrowseSelection: Bool
 
     init(
         key: EntityKey, filters: EntityFilterState = EntityFilterState(),
-        model: GenericEntityListModel? = nil
+        model: GenericEntityListModel? = nil,
+        presentation: BrowsePresentation = .list,
+        usesBrowseSelection: Bool = false
     ) {
         self.key = key
         self.initialFilters = filters
+        self.usesBrowseSelection = usesBrowseSelection
         // Reached via `.navigationDestination(for: Route.self)` (`Route.entityList`, a fresh
         // path entry per distinct `key`/`filters`) or, on macOS, `.id(key)`-scoped in
         // `RootSplitView` — both guarantee a full remount, never a stale `model` reused in place.
         _model = State(initialValue: model)  // state-init-ok
+        _browsePresentation = State(initialValue: presentation)  // state-init-ok: route-scoped lifetime
+        _hiddenTableColumns = State(  // state-init-ok: manifest defaults for this route's entity
+            initialValue: Set(EntityCatalog[key].fields.filter(\.listHidden).map(\.key)))
     }
 
     private var descriptor: EntityDescriptor { EntityCatalog[key] }
@@ -68,38 +94,39 @@ struct EntityListView: View {
     }
 
     private var presentationChoices: [PresentationChoice] {
-        let shared = renderableViews.filter { $0 == .table } + renderableViews.filter { $0 == .shelf }
+        let shared = renderableViews.filter { $0 == .shelf }
         let specialist = renderableViews.filter { $0 != .table && $0 != .shelf }
-        return (shared + specialist).flatMap { view -> [PresentationChoice] in
-            switch view {
-            case .table:
-                [
-                    PresentationChoice(
-                        id: ListPresentationChoice.list.rawValue,
-                        label: ListPresentationChoice.list.label,
-                        symbol: ListPresentationChoice.list.symbol, view: view,
-                        density: nil)
-                ]
-            case .shelf:
-                [ListPresentationChoice.cards, .compact].map { density in
-                    PresentationChoice(
-                        id: density.rawValue, label: density.label, symbol: density.symbol,
-                        view: view, density: density)
-                }
-            case .timeline:
-                [
-                    PresentationChoice(
-                        id: view.id, label: view.label, symbol: "calendar.day.timeline.left",
-                        view: view, density: nil)
-                ]
-            case .slot:
-                [
-                    PresentationChoice(
-                        id: view.id, label: view.label, symbol: "rectangle.dashed", view: view,
-                        density: nil)
-                ]
-            }
+        let browse = [BrowsePresentation.list, .table].map { presentation in
+            PresentationChoice(
+                id: presentation.rawValue,
+                label: presentation == .list ? "List" : "Table",
+                symbol: presentation == .list ? "list.bullet" : "tablecells",
+                view: .table, density: nil, browsePresentation: presentation)
         }
+        return browse
+            + (shared + specialist).flatMap { view -> [PresentationChoice] in
+                switch view {
+                case .table: []
+                case .shelf:
+                    [ListPresentationChoice.cards, .compact].map { density in
+                        PresentationChoice(
+                            id: density.rawValue, label: density.label, symbol: density.symbol,
+                            view: view, density: density, browsePresentation: nil)
+                    }
+                case .timeline:
+                    [
+                        PresentationChoice(
+                            id: view.id, label: view.label, symbol: "calendar.day.timeline.left",
+                            view: view, density: nil, browsePresentation: nil)
+                    ]
+                case .slot:
+                    [
+                        PresentationChoice(
+                            id: view.id, label: view.label, symbol: "rectangle.dashed", view: view,
+                            density: nil, browsePresentation: nil)
+                    ]
+                }
+            }
     }
 
     var body: some View {
@@ -115,6 +142,7 @@ struct EntityListView: View {
         #if os(iOS)
             .navigationBarTitleDisplayMode(.inline)
         #endif
+        .accessibilityElement(children: .contain)
         .accessibilityIdentifier("browse.\(key.rawValue).list")
         .modifier(
             EntityListSearchModifier(
@@ -251,6 +279,7 @@ struct EntityListView: View {
                     } label: {
                         Label(choice.label, systemImage: choice.symbol)
                     }
+                    .accessibilityIdentifier("browse.\(key.rawValue).view.\(choice.id)")
                 }
             }
         }
@@ -325,7 +354,7 @@ struct EntityListView: View {
         let selection = Binding(
             get: {
                 switch model.view {
-                case .table: ListPresentationChoice.list.rawValue
+                case .table: browsePresentation.rawValue
                 case .shelf: cardDensity.rawValue
                 case .timeline, .slot: model.view.id
                 }
@@ -334,7 +363,11 @@ struct EntityListView: View {
         ViewThatFits(in: .horizontal) {
             if !dynamicTypeSize.isAccessibilitySize && presentationChoices.count <= 3 {
                 Picker("View", selection: selection) {
-                    ForEach(presentationChoices) { choice in Text(choice.label).tag(choice.id) }
+                    ForEach(presentationChoices) { choice in
+                        Text(choice.label)
+                            .tag(choice.id)
+                            .accessibilityIdentifier("browse.\(key.rawValue).view.\(choice.id)")
+                    }
                 }
                 .pickerStyle(.segmented)
                 .fixedSize(horizontal: true, vertical: false)
@@ -342,7 +375,9 @@ struct EntityListView: View {
             }
             Picker("View", selection: selection) {
                 ForEach(presentationChoices) { choice in
-                    Label(choice.label, systemImage: choice.symbol).tag(choice.id)
+                    Label(choice.label, systemImage: choice.symbol)
+                        .tag(choice.id)
+                        .accessibilityIdentifier("browse.\(key.rawValue).view.\(choice.id)")
                 }
             }
             .pickerStyle(.menu)
@@ -353,6 +388,9 @@ struct EntityListView: View {
     private func selectPresentation(_ id: String, model: GenericEntityListModel) {
         guard let choice = presentationChoices.first(where: { $0.id == id }) else { return }
         if let density = choice.density { cardDensity = density }
+        if let browsePresentation = choice.browsePresentation {
+            self.browsePresentation = browsePresentation
+        }
         Task { await model.select(view: choice.view) }
     }
 
@@ -394,6 +432,8 @@ struct EntityListView: View {
             }
         } else if model.view == .shelf {
             cardGrid(model, rows: model.rows, meta: model.summaryMeta)
+        } else if model.view == .table && browsePresentation == .table {
+            tableView(model)
         } else {
             rowList(model)
         }
@@ -420,6 +460,8 @@ struct EntityListView: View {
                 }
             } else if model.view == .shelf {
                 cardGrid(model, rows: search.rows, meta: search.summaryMeta)
+            } else if model.view == .table && browsePresentation == .table {
+                tableView(model)
             } else {
                 rowList(model)
             }
@@ -494,17 +536,337 @@ struct EntityListView: View {
 
     private var selection: Binding<RecordSelection?>? {
         #if os(macOS)
-            Binding(
-                get: { appModel.navigator.selectedRecords[.browse] },
-                set: { appModel.navigator.selectRecord($0, in: .browse) })
+            usesBrowseSelection
+                ? Binding(
+                    get: { appModel.navigator.selectedRecords[.browse] },
+                    set: { appModel.navigator.selectRecord($0, in: .browse) }) : nil
         #else
             nil
         #endif
     }
 
+    #if os(macOS)
+        private var tableSelection: Binding<String?> {
+            Binding(
+                get: { usesBrowseSelection ? appModel.navigator.selectedRecords[.browse]?.id : nil },
+                set: { id in
+                    if usesBrowseSelection {
+                        appModel.navigator.selectRecord(
+                            id.map { RecordSelection(key: key, id: $0) }, in: .browse)
+                    } else if let id {
+                        appModel.navigator.paths[appModel.navigator.section, default: []]
+                            .append(.entityDetail(key, id: id))
+                    }
+                })
+        }
+
+        private func tableSortOrder(_ model: GenericEntityListModel) -> Binding<[EntityRowFieldComparator]> {
+            Binding(
+                get: {
+                    guard let sort = model.sort else { return [] }
+                    let descending = sort.hasPrefix("-")
+                    return [
+                        EntityRowFieldComparator(
+                            fieldKey: descending ? String(sort.dropFirst()) : sort,
+                            order: descending ? .reverse : .forward)
+                    ]
+                },
+                set: { order in
+                    guard let comparator = order.first,
+                        descriptor.sortFields.contains(comparator.fieldKey)
+                    else { return }
+                    let sort = comparator.order == .forward ? comparator.fieldKey : "-\(comparator.fieldKey)"
+                    Task { await model.apply(sort: sort) }
+                })
+        }
+    #endif
+
     @ViewBuilder
     private func rowList(_ model: GenericEntityListModel) -> some View {
         List(selection: selection) { rows(model) }.listStyle(.plain)
+    }
+
+    private var tableFields: [FieldDescriptor] {
+        allTableFields.filter { !hiddenTableColumns.contains($0.key) }
+    }
+
+    private var allTableFields: [FieldDescriptor] {
+        descriptor.fields
+            .filter {
+                $0.showInList && $0.key != "id" && $0.key != descriptor.titleField
+                    && ($0.kind != .json || $0.listRenderer != nil || $0.labelPath != nil
+                        || $0.format != nil || $0.reference != nil)
+            }
+            .sorted {
+                let left = ($0.listOrder ?? .max, $0.key)
+                let right = ($1.listOrder ?? .max, $1.key)
+                return left < right
+            }
+    }
+
+    private func sortKey(for field: FieldDescriptor) -> String? {
+        let key = field.columnId ?? field.key
+        return descriptor.sortFields.contains(key) ? key : nil
+    }
+
+    private func sortHeading(_ title: String, key: String?, model: GenericEntityListModel) -> some View {
+        Button {
+            guard let key else { return }
+            let current = model.sort
+            let nextSort = current == key ? "-\(key)" : key
+            Task { await model.apply(sort: nextSort) }
+        } label: {
+            HStack(spacing: 4) {
+                Text(title)
+                if let key, model.sort == key || model.sort == "-\(key)" {
+                    Image(systemName: model.sort == key ? "arrow.up" : "arrow.down")
+                        .font(.caption2)
+                }
+            }
+            .font(.caption.weight(.semibold))
+            .foregroundStyle(.secondary)
+            .frame(minWidth: FieldGuideTokens.touchTarget, minHeight: FieldGuideTokens.touchTarget)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .disabled(key == nil)
+        .accessibilityLabel(key == nil ? title : "Sort by \(title)")
+        .accessibilityValue(
+            key.map { model.sort == $0 ? "Ascending" : model.sort == "-\($0)" ? "Descending" : "Not sorted" }
+                ?? ""
+        )
+        .accessibilityIdentifier(key.map { "browse.\(self.key.rawValue).sort.\($0)" } ?? "")
+    }
+
+    private func tableControls(_ model: GenericEntityListModel) -> some View {
+        HStack {
+            if hasBanner(model) { banner(model) }
+            Spacer()
+            Menu("Columns", systemImage: "tablecells") {
+                ForEach(allTableFields, id: \.key) { field in
+                    Toggle(
+                        field.label,
+                        isOn: Binding(
+                            get: { !hiddenTableColumns.contains(field.key) },
+                            set: { visible in
+                                if visible {
+                                    hiddenTableColumns.remove(field.key)
+                                } else {
+                                    hiddenTableColumns.insert(field.key)
+                                }
+                            })
+                    )
+                    .accessibilityIdentifier("browse.\(key.rawValue).column.\(field.key)")
+                }
+            }
+            .accessibilityLabel("Show or hide table columns")
+            .accessibilityIdentifier("browse.\(key.rawValue).columns")
+        }
+        .padding(.horizontal, FieldGuideTokens.Space.md)
+        .padding(.vertical, FieldGuideTokens.Space.xs)
+    }
+
+    private var tableTitleLabel: String {
+        descriptor.fields.first(where: { $0.key == descriptor.titleField })?.label ?? descriptor.singular
+    }
+
+    private func tableTitle(_ row: EntityRow) -> some View {
+        Text(row.title)
+            .font(.body.weight(.semibold))
+            .lineLimit(dynamicTypeSize.isAccessibilitySize ? nil : 1)
+            .accessibilityIdentifier("browse.\(key.rawValue).table.row.\(row.id)")
+    }
+
+    @ViewBuilder
+    private func tableView(_ model: GenericEntityListModel) -> some View {
+        let visibleRows = model.isSearching ? (model.searchModel?.rows ?? []) : model.rows
+        let visibleMeta = model.isSearching ? model.searchModel?.summaryMeta : model.summaryMeta
+        #if os(macOS)
+            // Native table cells are rehosted when sorting replaces the rows. Capture the
+            // owning model before that boundary so explanation views keep their dependency.
+            let cellAppModel = appModel
+        #endif
+        VStack(spacing: 0) {
+            tableControls(model)
+            #if os(macOS)
+                Table(visibleRows, selection: tableSelection, sortOrder: tableSortOrder(model)) {
+                    if descriptor.sortFields.contains(descriptor.titleField) {
+                        TableColumn(
+                            Text(tableTitleLabel),
+                            sortUsing: EntityRowFieldComparator(fieldKey: descriptor.titleField)
+                        ) { row in
+                            tableTitle(row)
+                        }
+                        .width(min: 240)
+                        .customizationID("title")
+                    }
+                    if !descriptor.sortFields.contains(descriptor.titleField) {
+                        TableColumn(Text(tableTitleLabel)) { (row: EntityRow) in
+                            tableTitle(row)
+                        }
+                        .width(min: 240)
+                        .customizationID("title")
+                    }
+                    TableColumnForEach(tableFields, id: \.key) { field in
+                        if let sortKey = sortKey(for: field) {
+                            TableColumn(
+                                Text(field.label), sortUsing: EntityRowFieldComparator(fieldKey: sortKey)
+                            ) { row in
+                                tableCell(field, row: row)
+                                    .environment(cellAppModel)
+                            }
+                            .width(min: 180)
+                            .customizationID(field.key)
+                        }
+                        if sortKey(for: field) == nil {
+                            TableColumn(Text(field.label)) { (row: EntityRow) in
+                                tableCell(field, row: row)
+                                    .environment(cellAppModel)
+                            }
+                            .width(min: 180)
+                            .customizationID(field.key)
+                        }
+                    }
+                }
+                .contextMenu(forSelectionType: String.self) { records in
+                    if let id = records.first {
+                        Button("Copy link", systemImage: "link") {
+                            Clipboard.copy(appModel.webURL(for: key, id: id).absoluteString)
+                        }
+                        Button("Copy shortcode", systemImage: "number") { Clipboard.copy(id) }
+                        ShareLink(item: appModel.webURL(for: key, id: id))
+                    }
+                }
+                .accessibilityIdentifier("browse.\(key.rawValue).table")
+            #else
+                ScrollView([.horizontal, .vertical]) {
+                    LazyVStack(alignment: .leading, spacing: 0) {
+                        HStack(spacing: 0) {
+                            sortHeading(
+                                tableTitleLabel,
+                                key: descriptor.sortFields.contains(descriptor.titleField)
+                                    ? descriptor.titleField : nil, model: model
+                            )
+                            .frame(width: 240, alignment: .leading)
+                            ForEach(tableFields, id: \.key) { field in
+                                sortHeading(field.label, key: sortKey(for: field), model: model)
+                                    .frame(width: 180, alignment: .leading)
+                            }
+                        }
+                        .padding(.horizontal, FieldGuideTokens.Space.md)
+                        .padding(.vertical, FieldGuideTokens.Space.sm)
+                        .background(.quaternary.opacity(0.5))
+                        ForEach(visibleRows) { row in
+                            HStack(spacing: 0) {
+                                NavigationLink(value: Route.entityDetail(key, id: row.id)) {
+                                    Text(row.title)
+                                        .font(.body.weight(.medium))
+                                        .lineLimit(dynamicTypeSize.isAccessibilitySize ? nil : 2)
+                                        .frame(width: 240, alignment: .leading)
+                                        .frame(minHeight: FieldGuideTokens.touchTarget)
+                                        .contentShape(Rectangle())
+                                        .accessibilityIdentifier(
+                                            "browse.\(key.rawValue).table.row.\(row.id)")
+                                }
+                                .buttonStyle(.plain)
+                                ForEach(tableFields, id: \.key) { field in
+                                    tableCell(field, row: row)
+                                        .frame(width: 180, alignment: .leading)
+                                }
+                            }
+                            .padding(.horizontal, FieldGuideTokens.Space.md)
+                            .frame(minHeight: 48)
+                            .contentShape(Rectangle())
+                            .contextMenu {
+                                Button("Copy link", systemImage: "link") {
+                                    Clipboard.copy(appModel.webURL(for: key, id: row.id).absoluteString)
+                                }
+                                Button("Copy shortcode", systemImage: "number") { Clipboard.copy(row.id) }
+                                ShareLink(item: appModel.webURL(for: key, id: row.id))
+                            }
+                            Divider()
+                        }
+                    }
+                }
+                .accessibilityIdentifier("browse.\(key.rawValue).table")
+            #endif
+            if let visibleMeta {
+                listSummary(meta: visibleMeta, shown: visibleRows.count)
+                    .padding(.horizontal, FieldGuideTokens.Space.md)
+                    .padding(.vertical, FieldGuideTokens.Space.xs)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .accessibilityIdentifier("browse.\(key.rawValue).table.summary")
+            }
+            if model.isSearching ? (model.searchModel?.hasMore ?? false) : model.hasMore {
+                loadMore(model)
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, FieldGuideTokens.Space.sm)
+            }
+        }
+    }
+
+    @ViewBuilder
+    private func tableReference(_ reference: EntityFieldValue.Reference, value: String) -> some View {
+        let label = Text(value)
+            .lineLimit(dynamicTypeSize.isAccessibilitySize ? nil : 1)
+            .frame(
+                minWidth: FieldGuideTokens.touchTarget,
+                minHeight: FieldGuideTokens.touchTarget, alignment: .leading
+            )
+            .contentShape(Rectangle())
+        if usesBrowseSelection {
+            Button {
+                appModel.navigator.openRecord(.init(key: reference.entity, id: reference.id))
+            } label: {
+                label
+            }
+        } else {
+            NavigationLink(value: Route.entityDetail(reference.entity, id: reference.id)) {
+                label
+            }
+        }
+    }
+
+    @ViewBuilder
+    private func tableCell(_ field: FieldDescriptor, row: EntityRow) -> some View {
+        let fact = EntityRowPresentation.resolve(
+            descriptor: descriptor, row: row, columns: [field.key]
+        ).facts.first(where: { $0.id == field.key })
+        if let fact {
+            HStack(spacing: FieldGuideTokens.Space.xs) {
+                if let reference = EntityFieldValue.reference(in: row.raw, field: field, surface: "list") {
+                    tableReference(reference, value: fact.value)
+                        .buttonStyle(.borderless)
+                        .accessibilityIdentifier(
+                            "browse.\(key.rawValue).table.reference.\(row.id).\(field.key)")
+                } else if let color = FieldGuideMetrics.optionColor(
+                    EntityFieldValue.optionColor(in: row.raw, field: field, surface: "list"))
+                {
+                    StatusChip(text: fact.value, color: color)
+                } else {
+                    Text(fact.value)
+                        .lineLimit(dynamicTypeSize.isAccessibilitySize ? nil : 1)
+                        .fixedSize(horizontal: false, vertical: true)
+                        .foregroundStyle(FieldGuideTokens.graphiteSecondary)
+                }
+                if let source = fact.source {
+                    Text(source).font(.caption2).foregroundStyle(.secondary)
+                        .lineLimit(dynamicTypeSize.isAccessibilitySize ? nil : 1)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+                if field.explanation != nil {
+                    FieldExplanationLabel(
+                        field: field, subject: EntityRef(entity: key, id: row.id),
+                        labelOverride: "About \(field.label)", surface: "list")
+                }
+            }
+        } else if row.pendingFields.contains(field.key) {
+            Text("Loading…").foregroundStyle(.secondary).lineLimit(1)
+        } else if row.failedFields.contains(field.key) {
+            Text("Unavailable").foregroundStyle(.secondary).lineLimit(1)
+        } else {
+            Text("—").foregroundStyle(.tertiary)
+        }
     }
 
     @ViewBuilder
@@ -590,7 +952,7 @@ struct EntityListView: View {
 
     @ViewBuilder private func rowContent(_ row: EntityRow) -> some View {
         #if os(macOS)
-            if appModel.navigator.section == .browse && appModel.navigator.browseKey == key {
+            if usesBrowseSelection {
                 EntityRowView(key: key, row: row).tag(RecordSelection(key: key, id: row.id))
             } else {
                 NavigationLink(value: Route.entityDetail(key, id: row.id)) {
@@ -638,6 +1000,7 @@ struct EntityRowView: View {
     /// Preview-only image injection keeps the production row on the shared URL-backed Thumb
     /// while allowing previews to exercise the real image geometry and clipping.
     var previewImage: Image? = nil
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
 
     private var presentation: EntityRowPresentation {
         EntityRowPresentation.resolve(
@@ -646,27 +1009,78 @@ struct EntityRowView: View {
 
     private var thumbnailSize: CGFloat {
         #if os(iOS)
-            48
+            36
         #else
-            44
+            36
         #endif
     }
 
-    private var explanationFacts: [EntityRowPresentation.Fact] {
-        presentation.facts.filter {
-            $0.id != "dataQuality" && EntityCatalog[key].field($0.id)?.explanation != nil
-        }
-    }
-
-    private var explanationControls: some View {
-        ForEach(explanationFacts, id: \.id) { fact in
-            if let field = EntityCatalog[key].field(fact.id) {
+    @ViewBuilder
+    private func factView(_ fact: EntityRowPresentation.Fact) -> some View {
+        let field = EntityCatalog[key].field(fact.id)
+        HStack(spacing: FieldGuideTokens.Space.xs) {
+            if fact.id == "dataQuality", let field {
                 FieldExplanationLabel(
                     field: field, subject: EntityRef(entity: key, id: row.id),
-                    labelOverride: fact.label, surface: "list"
-                )
-                .font(.caption)
+                    labelOverride: fact.value, surface: "list")
+            } else if let field,
+                let color = FieldGuideMetrics.optionColor(
+                    EntityFieldValue.optionColor(in: row.raw, field: field, surface: "list"))
+            {
+                StatusChip(
+                    text: "\(fact.label ?? field.label): \(fact.value)", color: color)
+            } else {
+                Text("\(fact.label ?? field?.label ?? fact.id): \(fact.value)")
+                    .font(.caption)
+                    .foregroundStyle(FieldGuideTokens.graphiteSecondary)
             }
+            if let source = fact.source {
+                Text("(\(source))")
+                    .font(.caption2)
+                    .foregroundStyle(.secondary)
+            }
+            if let field, field.explanation != nil, fact.id != "dataQuality" {
+                FieldExplanationLabel(
+                    field: field, subject: EntityRef(entity: key, id: row.id),
+                    labelOverride: "About \(field.label)", surface: "list")
+            }
+        }
+        .fixedSize(horizontal: false, vertical: true)
+    }
+
+    @ViewBuilder
+    private var supportingBand: some View {
+        if presentation.facts.isEmpty && row.pendingFields.isEmpty && row.failedFields.isEmpty && !photoMode {
+            EmptyView()
+        } else if dynamicTypeSize.isAccessibilitySize {
+            VStack(alignment: .leading, spacing: FieldGuideTokens.Space.xs) {
+                ForEach(presentation.facts) { fact in factView(fact) }
+                if !row.pendingFields.isEmpty {
+                    Text("Loading details…").font(.caption).foregroundStyle(.secondary)
+                } else if !row.failedFields.isEmpty {
+                    Text("Some details unavailable").font(.caption).foregroundStyle(.secondary)
+                }
+                if photoMode {
+                    Text(presentation.shortcode).font(.caption2.monospaced())
+                }
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+        } else {
+            ScrollView(.horizontal) {
+                HStack(spacing: FieldGuideTokens.Space.sm) {
+                    ForEach(presentation.facts) { fact in factView(fact) }
+                    if !row.pendingFields.isEmpty {
+                        Text("Loading details…").font(.caption).foregroundStyle(.secondary)
+                    } else if !row.failedFields.isEmpty {
+                        Text("Some details unavailable").font(.caption).foregroundStyle(.secondary)
+                    }
+                    if photoMode {
+                        Text(presentation.shortcode).font(.caption2.monospaced())
+                    }
+                }
+                .frame(minHeight: FieldGuideTokens.touchTarget)
+            }
+            .scrollIndicators(.hidden)
         }
     }
 
@@ -699,78 +1113,13 @@ struct EntityRowView: View {
                 }
                 .font(.body.weight(.semibold))
                 .foregroundStyle(FieldGuideTokens.graphite)
-                .lineLimit(2)
-                if let quality = presentation.facts.first(where: { $0.id == "dataQuality" }),
-                    let field = EntityCatalog[key].field("dataQuality")
-                {
-                    FieldExplanationLabel(
-                        field: field, subject: EntityRef(entity: key, id: row.id),
-                        labelOverride: quality.value, surface: "list"
-                    )
-                    .font(.caption.weight(.medium))
-                }
-                let coloredFacts = presentation.facts.filter { fact in
-                    guard let field = EntityCatalog[key].field(fact.id) else { return false }
-                    return FieldGuideMetrics.optionColor(
-                        EntityFieldValue.optionColor(in: row.raw, field: field, surface: "list")) != nil
-                }
-                ForEach(coloredFacts) { fact in
-                    if let field = EntityCatalog[key].field(fact.id) {
-                        HStack(spacing: FieldGuideTokens.Space.xs) {
-                            if let label = fact.label { Text(label).font(.caption) }
-                            StatusChip(
-                                text: fact.value,
-                                color: FieldGuideMetrics.optionColor(
-                                    EntityFieldValue.optionColor(in: row.raw, field: field, surface: "list")))
-                            if let source = fact.source {
-                                Text(source).font(.caption).foregroundStyle(.secondary)
-                            }
-                        }
-                    }
-                }
-                let factLine = presentation.facts.filter({
-                    $0.id != "dataQuality" && !coloredFacts.contains($0)
-                }).map({ fact in
-                    let value = fact.source.map { "\(fact.value) (\($0))" } ?? fact.value
-                    return fact.label.map { "\($0): \(value)" } ?? value
-                }).joined(separator: " · ")
-                if !factLine.isEmpty {
-                    Text(factLine)
-                        .font(.caption)
-                        .foregroundStyle(FieldGuideTokens.graphiteSecondary)
-                        .lineLimit(2)
-                }
-                if !explanationFacts.isEmpty {
-                    ViewThatFits(in: .horizontal) {
-                        HStack(spacing: FieldGuideTokens.Space.sm) {
-                            explanationControls
-                        }
-                        .fixedSize(horizontal: true, vertical: false)
-                        VStack(alignment: .leading, spacing: 0) {
-                            explanationControls
-                        }
-                    }
-                }
-                if !row.pendingFields.isEmpty {
-                    Text("Loading details…")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                } else if !row.failedFields.isEmpty {
-                    Text("Some details unavailable")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                }
-                if photoMode {
-                    Text(presentation.shortcode)
-                        .font(.caption2.monospaced())
-                        .foregroundStyle(FieldGuideTokens.graphiteSecondary)
-                        .lineLimit(1)
-                }
+                .lineLimit(dynamicTypeSize.isAccessibilitySize ? nil : 1)
+                supportingBand
             }
             Spacer(minLength: FieldGuideTokens.Space.sm)
         }
         .padding(.vertical, FieldGuideTokens.Space.xs)
-        .frame(minHeight: 56, alignment: .center)
+        .frame(minHeight: 48, alignment: .center)
         .contentShape(Rectangle())
         .accessibilityElement(children: .contain)
         .accessibilityLabel(
@@ -782,7 +1131,7 @@ struct EntityRowView: View {
     }
 }
 
-#Preview("Compact rows · image") {
+#Preview("Compact rows · image", traits: .modifier(SignedInPreview())) {
     List {
         EntityRowView(
             key: .product,
@@ -793,7 +1142,7 @@ struct EntityRowView: View {
     .fieldGuideScreen()
 }
 
-#Preview("Rows") {
+#Preview("Rows", traits: .modifier(SignedInPreview())) {
     NavigationStack {
         List {
             ForEach(PreviewFixtures.sampleRows) { row in
@@ -808,7 +1157,7 @@ struct EntityRowView: View {
     }
 }
 
-#Preview("Compact rows · accessibility") {
+#Preview("Compact rows · accessibility", traits: .modifier(SignedInPreview())) {
     NavigationStack {
         List {
             EntityRowView(
@@ -829,4 +1178,50 @@ struct EntityRowView: View {
         .preferredColorScheme(.dark)
         .environment(\.dynamicTypeSize, .accessibility3)
     }
+}
+
+@MainActor
+private struct EntityTablePreviewHost: View {
+    @State private var appModel: AppModel
+    @State private var model: GenericEntityListModel
+
+    init() {
+        let appModel = PreviewFixtures.signedInModel()
+        let rows = [
+            PreviewFixtures.sampleDetailRow,
+            EntityRow(
+                id: "PRD-9999", title: "Carbon Steel Wok", subtitle: nil, imageURL: nil,
+                raw: [
+                    "id": "PRD-9999", "name": "Carbon Steel Wok",
+                    "manufacturer": "Sample Maker", "categoryId": "CAT-4444",
+                    "category": ["id": "CAT-4444", "name": "Cookware"],
+                ]),
+        ]
+        let source = EntityListPageSource(id: "synthetic-table-preview") { page in
+            ListPage(
+                items: rows,
+                meta: ListPageMeta(pageIndex: page, pageSize: 50, totalCount: rows.count))
+        }
+        _appModel = State(initialValue: appModel)  // state-init-ok: constant synthetic preview fixture
+        _model = State(  // state-init-ok: constant synthetic preview fixture
+            initialValue: GenericEntityListModel(
+                descriptor: EntityCatalog[.product], client: appModel.client, source: source,
+                view: .table))
+    }
+
+    var body: some View {
+        NavigationStack {
+            EntityListView(key: .product, model: model, presentation: .table)
+        }
+        .environment(appModel)
+    }
+}
+
+#Preview("Generic table · injected product rows") {
+    EntityTablePreviewHost()
+}
+
+#Preview("Generic table · accessibility") {
+    EntityTablePreviewHost()
+        .environment(\.dynamicTypeSize, .accessibility3)
 }

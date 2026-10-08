@@ -44,6 +44,30 @@ photo group and its Product, and exactly the selected location and two plantings
 ends it) for manual driving. Scroll to a target by counting from `scroll bottom`, not with
 `--until` on a lazily loaded detail page.
 
+`pnpm test:e2e:sim -- --qa --journey qa-entity-table --video` checks the generic
+Product List/Table switch, sortable headers, column visibility, and record
+navigation against the same synthetic QA world. The focused sort-model tests
+cover paging and pending-search response fencing; the simulator journey covers
+the controls and navigation boundary. Its evidence uses the usual checksummed
+QA artifact bundle.
+
+Catalog targets below the viewport need explicit scroll steps; `--until` does
+not repeatedly scroll a lazily loaded catalog into view. An identifier may be
+shared by its row and child nodes, so narrow catalog clicks with the entity
+label. Inspect the current accessibility tree before adding role constraints:
+iOS View choices are cells, column toggles and table headers are buttons, and
+the Columns control is a popup button. Use visible labels for menu choices.
+Assert table rows, headers, and
+visible totals rather than an unexposed layout container; the Columns popup
+is observable by its accessibility label.
+After opening a record, assert its detail Edit control. A title-only assertion
+can pass while the list stays visible behind a field explanation.
+
+For Mac `TableColumn`, apply `width` before `customizationID`; the latter
+returns opaque `TableColumnContent`, which has no `width` modifier. Validate
+native column modifiers with the full Mac build, including sorted and plain
+columns.
+
 `pnpm test:e2e:sim -- --product-clarity --video` runs a focused synthetic Product
 presentation journey. It opens and closes the valuation explanation, checks the
 manual and expense-derived values, and verifies recorded movement, planned, and
@@ -54,7 +78,11 @@ UI automation has released the host.
 
 `pnpm --dir apps/web exec tsx tooling/mac-import-e2e.ts --product-clarity`
 checks the same synthetic valuation and financial relation evidence in the
-actual sandboxed Mac fixture app. It uses the existing isolated signing,
+actual sandboxed Mac fixture app, then switches to Table with multiple rows,
+asserts ascending and descending Name order, scrolls through reused cells,
+opens a table Quality explanation, shows and hides Manufacturer values,
+opens a category reference in the detail pane, and returns to List. Sorting must
+retain the AppModel dependency of every field explanation cell. It uses the existing isolated signing,
 verified process, disposable database, and checksummed artifact paths; an
 unlocked Mac session with Accessibility permission is required. Run Mac and
 simulator UI lanes sequentially.
@@ -86,6 +114,8 @@ remain covered by `apps/web/tests/e2e/photo-group-review.spec.ts`.
    reuse the server and database, seed a new synthetic product, and rebuild the
    CLI only when Swift sources changed. Restart after web or Rust FFI changes.
 2. Edit a SwiftUI view and render its nearest `#Preview` through Xcode MCP.
+   Entity row previews need `SignedInPreview` even with plain-data fixtures:
+   their lazy field explanations read `AppModel` from the environment.
    `PreviewFixtures` contain synthetic, wire-shaped states and intentionally
    block network reads. Add focused states such as empty, loading, error, dark,
    and large text when they expose the change. The generated fixture JSON comes

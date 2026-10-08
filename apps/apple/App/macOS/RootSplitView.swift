@@ -123,7 +123,7 @@ struct RootSplitView: View {
         } else if model.navigator.section == .search, let browsing {
             SearchView(search: browsing.search)
         } else if let key = model.navigator.browseKey, let browsing {
-            EntityListView(key: key, model: browsing.list(for: key)).id(key)
+            EntityListView(key: key, model: browsing.list(for: key), usesBrowseSelection: true).id(key)
         } else {
             BrowseRootView()
         }

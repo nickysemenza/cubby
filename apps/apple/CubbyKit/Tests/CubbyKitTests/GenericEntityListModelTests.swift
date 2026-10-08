@@ -30,6 +30,74 @@ struct GenericEntityListModelTests {
         )
     }
 
+    /// A header sort must restart server paging, retain filters, and use the same order for
+    /// subsequent pages. Sorting just the loaded rows gives the wrong global order.
+    @Test func sortRestartsPagingAndRetainsFilters() async throws {
+        defer { ListStub.handler.withLock { $0 = nil } }
+        let requests = Mutex<[[URLQueryItem]]>([])
+        let first = try productPage(id: "PRD-2345", name: "First", page: 1, total: 2)
+        let second = try productPage(id: "PRD-3456", name: "Second", page: 2, total: 2)
+        ListStub.handler.withLock { handler in
+            handler = { request in
+                let items = URLComponents(url: request.url!, resolvingAgainstBaseURL: false)?.queryItems ?? []
+                requests.withLock { $0.append(items) }
+                return (200, Self.page(in: request) == 1 ? first : second)
+            }
+        }
+        let model = GenericEntityListModel(
+            descriptor: EntityCatalog[.product], client: try makeClient(), pageSize: 1,
+            filters: EntityFilterState(["upcFilter": .single("000000000000")]), progressive: false)
+        await model.loadInitial()
+        await model.loadNextPage()
+        await model.apply(sort: "undeclaredField")
+        #expect(model.page == 2)
+        #expect(requests.withLock { $0.count } == 2)
+        await model.apply(sort: "-name")
+        #expect(model.page == 1)
+        #expect(model.rows.map(\.id) == ["PRD-2345"])
+        await model.loadNextPage()
+        let sortedRequests = requests.withLock { Array($0.dropFirst(2)) }
+        #expect(sortedRequests.count == 2)
+        #expect(
+            sortedRequests.allSatisfy { items in
+                items.contains(URLQueryItem(name: "sort", value: "-name"))
+                    && items.contains(URLQueryItem(name: "upcFilter", value: "000000000000"))
+            })
+        #expect(model.rows.map(\.id) == ["PRD-2345", "PRD-3456"])
+    }
+
+    /// A pending search in the previous order must not replace the newly sorted result.
+    @Test func sortReplaysPendingSearchInTheNewOrder() async throws {
+        defer { ListStub.handler.withLock { $0 = nil } }
+        let search = try #require(EntityCatalog[.product].primarySearch)
+        let staleStarted = Mutex(false)
+        let base = try productPage(id: "PRD-2345", name: "Base", page: 1, total: 1)
+        let stale = try productPage(id: "PRD-3456", name: "Old order", page: 1, total: 1)
+        let sorted = try productPage(id: "PRD-4567", name: "New order", page: 1, total: 1)
+        ListStub.handler.withLock { handler in
+            handler = { request in
+                let items = URLComponents(url: request.url!, resolvingAgainstBaseURL: false)?.queryItems ?? []
+                guard items.contains(URLQueryItem(name: search.key, value: "sample")) else {
+                    return (200, base)
+                }
+                if items.contains(URLQueryItem(name: "sort", value: "-name")) { return (200, sorted) }
+                staleStarted.withLock { $0 = true }
+                Thread.sleep(forTimeInterval: 0.08)
+                return (200, stale)
+            }
+        }
+        let model = GenericEntityListModel(
+            descriptor: EntityCatalog[.product], client: try makeClient(), progressive: false)
+        await model.loadInitial()
+        model.setSearchQuery("sample")
+        #expect(await waitUntil { staleStarted.withLock { $0 } })
+        await model.apply(sort: "-name")
+        let searchModel = try #require(model.searchModel)
+        #expect(await waitUntil { searchModel.phase == .loaded })
+        #expect(searchModel.query == "sample")
+        #expect(searchModel.rows.map(\.id) == ["PRD-4567"])
+    }
+
     @Test func loadsProductsIntoRows() async throws {
         defer { ListStub.handler.withLock { $0 = nil } }
         let payload = try Fixtures.data(named: "products-list.json")

@@ -1,0 +1,41 @@
+context platform=ios timeout=240000
+
+# The same loaded entity can switch between compact rows and aligned columns,
+# change server ordering and column visibility, then navigate to its record.
+open com.nickysemenza.cubby
+wait "role=Button label=Library" 240000
+click "role=Button label=Library"
+wait text "Browse catalog" 30000
+click "label=\"Browse catalog\""
+scroll down 0.8
+scroll down 0.8
+wait "id=browse.catalog.product" 30000
+click "id=browse.catalog.product label=Products"
+wait "id=browse.product.list" 60000
+wait "id=browse.product.row.${PRODUCT_ID}" 60000
+click "label=\"List controls\""
+click "label=View"
+click "label=Table"
+wait "id=browse.product.table.row.${PRODUCT_ID}" 60000
+wait text "1 total · 1 shown" 30000
+wait "id=browse.product.sort.name" 30000
+click "role=Button id=browse.product.sort.name"
+wait "id=browse.product.sort.name value=Ascending" 30000
+wait "id=browse.product.table.row.${PRODUCT_ID}" 60000
+click "role=Button id=browse.product.sort.name"
+wait "id=browse.product.sort.name value=Descending" 30000
+wait "id=browse.product.table.row.${PRODUCT_ID}" 60000
+click "label=\"Show or hide table columns\""
+click "label=Manufacturer"
+click "label=\"Show or hide table columns\""
+click "label=Manufacturer"
+click "label=\"List controls\""
+click "label=View"
+click "label=List"
+wait "id=browse.product.row.${PRODUCT_ID}" 30000
+click "label=\"List controls\""
+click "label=View"
+click "label=Table"
+wait "id=browse.product.table.row.${PRODUCT_ID}" 30000
+click "role=Button id=browse.product.table.row.${PRODUCT_ID}"
+wait "role=Button id=detail.product.edit" 60000
