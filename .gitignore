@@ -122,6 +122,7 @@ artifacts/photo-review/
 artifacts/agent-model-eval/
 artifacts/purchase-decision-eval/
 artifacts/purchase-research-eval/
+artifacts/purchase-mail-research-eval/
 artifacts/purchase-research-lifecycle/
 artifacts/purchase-research-retention-workerd/
 artifacts/purchase-research-workerd/

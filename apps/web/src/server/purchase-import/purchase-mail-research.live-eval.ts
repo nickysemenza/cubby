@@ -293,8 +293,8 @@ describe("bounded real Gmail purchase and Product research", () => {
             accountId: mailEvalMailboxId,
             providerId: "google",
             userId: ctx.actor.userId,
-            accessToken: "synthetic-mail-eval-access",
-            refreshToken: "synthetic-mail-eval-refresh",
+            accessToken: "synthetic-mail-access",
+            refreshToken: "synthetic-mail-refresh",
             scope: GMAIL_READONLY_SCOPE,
             accessTokenExpiresAt: new Date(Date.now() + 3_600_000),
           });
