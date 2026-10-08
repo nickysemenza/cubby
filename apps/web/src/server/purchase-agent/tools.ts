@@ -200,6 +200,7 @@ function tool<N extends ToolName>(
 export function purchaseImportTools(
   services: () => RunServices,
   retainOutput?: (output: JsonValue) => Promise<void>,
+  beforeEffect?: () => Promise<void>,
 ): ToolRegistration[] {
   const run = <N extends keyof typeof purchaseAgentToolInputs>(
     name: N,
@@ -213,6 +214,7 @@ export function purchaseImportTools(
     tool(name, {
       description,
       execute: async (args, api, context) => {
+        await beforeEffect?.();
         const stored = await api.memo<{ value: string }>(
           "host-call-id",
           context,

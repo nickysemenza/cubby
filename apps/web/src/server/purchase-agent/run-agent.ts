@@ -29,6 +29,7 @@ import {
   LiveDoc,
   ROOT_CONVERSATION_ID,
   type EntryRecord,
+  type Storage,
 } from "@earendil-works/pi-durable";
 import * as Sentry from "@sentry/cloudflare";
 import { Agent } from "agents";
@@ -51,7 +52,11 @@ import type {
 } from "./environment";
 import { workflowForRun } from "./import-run-workflows";
 import { RunSettlement } from "./run-settlement";
-import { renderSignal, resumeResearchSignal } from "./signals";
+import {
+  renderSignal,
+  resumeResearchSignal,
+  type AgentSignal,
+} from "./signals";
 import { photoInventoryTools, purchaseImportTools } from "./tools";
 
 const log = createLogger("purchase-agent");
@@ -114,6 +119,7 @@ export class PurchaseImportRunAgent
   private requestTransport: AiUsageTransport = "unknown";
   /** The current request's last gateway response, for its usage row. */
   private requestGateway: GatewayResponseInfo | undefined;
+  private piStorage: Storage | undefined;
 
   readonly harness = new PiHarness({
     harness: (input) => this.openPi(input),
@@ -142,6 +148,9 @@ export class PurchaseImportRunAgent
     );
     this.ctx.storage.sql.exec(
       "CREATE TABLE IF NOT EXISTS cubby_settlements (operation_id TEXT PRIMARY KEY, outcome TEXT NOT NULL, reason TEXT)",
+    );
+    this.ctx.storage.sql.exec(
+      "CREATE TABLE IF NOT EXISTS cubby_browser_deliveries (request_id TEXT PRIMARY KEY, signal TEXT NOT NULL)",
     );
     this.lifecycle.use(this.harness).use(this.settlement);
   }
@@ -188,6 +197,7 @@ export class PurchaseImportRunAgent
   // ---- pi ---------------------------------------------------------------
 
   private async openPi({ storage, context: open }: PiHarnessContext) {
+    this.piStorage = storage;
     const models = createModels();
     const identity = this.identity();
     for (const provider of cubbyAgentProviders({
@@ -237,11 +247,13 @@ export class PurchaseImportRunAgent
           : purchaseImportTools(
               () => this.services(),
               (output) => this.retainResearchMode(output),
+              () => this.acknowledgeAdmittedObservations(),
             )
         ).filter((tool) => agentTools.has(tool.name)),
         hooks: [
           hook(GenerationTask, {
-            beforeRequest: () => {
+            beforeRequest: async () => {
+              await this.acknowledgeAdmittedObservations();
               this.requestStartedAt = Date.now();
               this.requestTransport = "unknown";
               this.requestGateway = undefined;
@@ -321,6 +333,37 @@ export class PurchaseImportRunAgent
 
   // ---- entry points -----------------------------------------------------
 
+  /** SDK admission is the receipt authority, including cold tool recovery. */
+  private async acknowledgeAdmittedObservations(): Promise<void> {
+    const storage = this.piStorage;
+    if (!storage) return;
+    const deliveries = this.ctx.storage.sql
+      .exec<{ request_id: string; signal: string }>(
+        "SELECT request_id, signal FROM cubby_browser_deliveries ORDER BY rowid",
+      )
+      .toArray();
+    for (const delivery of deliveries) {
+      const admitted = await storage.submissionByRequest(
+        ROOT_CONVERSATION_ID,
+        delivery.request_id,
+        context,
+      );
+      if (!admitted) continue;
+      const signal: AgentSignal = z
+        .object({
+          type: z.string(),
+          attributes: z.record(z.string(), z.string()).optional(),
+          body: z.string(),
+        })
+        .parse(JSON.parse(delivery.signal));
+      await this.services().researchAcknowledge(signal);
+      this.ctx.storage.sql.exec(
+        "DELETE FROM cubby_browser_deliveries WHERE request_id = ?",
+        delivery.request_id,
+      );
+    }
+  }
+
   /** A queue event for this Run: admit it once, keyed by its operation id. */
   async dispatch(input: DispatchInput): Promise<{ accepted: boolean }> {
     const identity = runIdentity.parse(input.identity);
@@ -359,12 +402,31 @@ export class PurchaseImportRunAgent
         this.writeState(STATE_KEYS.latestSubmission, input.operationId);
     }
     if (!signal) return { accepted: true };
+    if (
+      identity.purpose !== "photo_inventory" &&
+      input.signal.type === "purchase-import.browser_result"
+    ) {
+      const serialized = JSON.stringify(input.signal);
+      this.ctx.storage.sql.exec(
+        "INSERT OR IGNORE INTO cubby_browser_deliveries (request_id, signal) VALUES (?, ?)",
+        input.operationId,
+        serialized,
+      );
+      const retained = this.ctx.storage.sql
+        .exec<{ signal: string }>(
+          "SELECT signal FROM cubby_browser_deliveries WHERE request_id = ?",
+          input.operationId,
+        )
+        .one();
+      if (retained.signal !== serialized)
+        throw new Error("Browser delivery request is bound to another signal");
+    }
     const receipt = await this.harness.submit(renderSignal(signal), {
       operationId: input.operationId,
       whenBusy: "steer",
     });
     if (identity.purpose !== "photo_inventory")
-      await this.services().researchAcknowledge(input.signal);
+      await this.acknowledgeAdmittedObservations();
     if (
       receipt.accepted ||
       this.readState(STATE_KEYS.latestSubmission) === receipt.operationId

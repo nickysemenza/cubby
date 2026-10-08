@@ -198,13 +198,15 @@ and deployment/readback order are owned by the
    `browser_result`, and reconnect publishes `browser_connected`. The host
    supplies retained page content and actionable references directly to the
    conversation. The model does not issue/read/bind commands or invent sources.
-   Delivery stays pending until the durable harness accepts its signal. An
-   action on that exact retained observation may race the host acknowledgement:
-   it proceeds only with matching evidence, observation and concrete account
-   references plus normal control validation. This does not acknowledge the
-   signal, release another command, or let an implicit read/navigation discard
-   an undelivered observation. Stale, foreign, disabled and authentication
-   controls remain refused.
+   Delivery stays pending until the durable harness accepts its signal. The
+   coordinator retains the signal/request binding in SQLite and checks pi's
+   committed submission before acknowledging it. Every model request and mounted
+   tool effect reconciles admitted deliveries first, including cold tool recovery;
+   a failed submission cannot acknowledge its page. Failed ACKs retain the binding
+   for replay. The browser service still refuses implicit reads/navigation while
+   delivery is pending; an explicitly retained control must match the same
+   evidence, observation and concrete account. Stale, foreign, disabled and
+   authentication controls remain refused.
    A broker delivery fenced by cancellation is acknowledged without submitting
    a model turn. Transport acceptance does not authorize retention or writes;
    duplicate late deliveries preserve the cancelled Run and its domain state.
