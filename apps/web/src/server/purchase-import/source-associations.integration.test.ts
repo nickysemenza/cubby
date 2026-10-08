@@ -130,7 +130,7 @@ describe("targeted source-order associations", () => {
           purchaseId: fixture.first.shortcode,
           sourceId,
         }),
-      ).rejects.toThrow("Choose a current replayable source");
+      ).rejects.toThrow("Selected validation source is not owned");
     }
   });
 
@@ -150,6 +150,10 @@ describe("targeted source-order associations", () => {
       trade: "other",
       lineKind: "principal",
     });
+    await getDb(ctx.db)
+      .update(importSourceOrder)
+      .set({ checksum: fixture.claim.checksum })
+      .where(eq(importSourceOrder.id, fixture.secondAssociation.id));
     const launch = await loadTargetedImportLaunch(
       ctx.db,
       fixture.party.id,

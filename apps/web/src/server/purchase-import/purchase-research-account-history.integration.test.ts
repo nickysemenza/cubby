@@ -18,7 +18,19 @@ import {
   type ScriptValue,
 } from "tooling/purchase-agent-script";
 import { withTestDb } from "tooling/test-setup";
-import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import {
+  HOLD_WORKERD_HARNESS_TIMEOUT_MS,
+  holdWorkerdHarness,
+} from "tooling/workerd-harness";
+import {
+  afterAll,
+  afterEach,
+  beforeAll,
+  beforeEach,
+  describe,
+  expect,
+  it,
+} from "vitest";
 import { z } from "zod";
 
 import {
@@ -144,6 +156,11 @@ const steps: ScriptStep[] = [
 
 describe("research account-history clickable numeric row", () => {
   const ctx = withTestDb();
+  let releaseHarness: (() => void) | undefined;
+  beforeAll(async () => {
+    releaseHarness = await holdWorkerdHarness();
+  }, HOLD_WORKERD_HARNESS_TIMEOUT_MS);
+  afterAll(() => releaseHarness?.());
   let runtime: ScenarioHarness | undefined;
   let started: E2ERunIdentity;
   let status = "failed";

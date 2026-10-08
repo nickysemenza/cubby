@@ -58,6 +58,8 @@ import {
   expenseAttribution,
   financialTransactionAllocation,
   image,
+  importSourceOrder,
+  importSourceProduct,
   ledgerSourceClaim,
   orderMailCandidateDecision,
   product,
@@ -2377,6 +2379,18 @@ export const deletePurchases = (
       beforeDelete: (inner) =>
         preservePurchaseItemAttribution(inner, ids, null),
       overrides: {
+        "ImportSourceOrder.purchaseId": async (inner) => {
+          const orders = inner
+            .select({ id: importSourceOrder.id })
+            .from(importSourceOrder)
+            .where(inArray(importSourceOrder.purchaseId, ids));
+          await inner
+            .delete(importSourceProduct)
+            .where(inArray(importSourceProduct.sourceOrderId, orders));
+          await inner
+            .delete(importSourceOrder)
+            .where(inArray(importSourceOrder.purchaseId, ids));
+        },
         // Drop ALL slices of every affected transaction, not just this
         // purchase's: a partial allocation set is not a legal state, whereas
         // zero is ("unlinked evidence"), so a split transaction reverts

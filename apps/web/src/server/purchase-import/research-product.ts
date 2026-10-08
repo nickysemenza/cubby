@@ -75,10 +75,7 @@ import {
   readResearchCanonicalProjection,
   researchMemberPath,
 } from "./research-projection";
-import {
-  assessResearchProposal,
-  type ResearchAssessor,
-} from "./research-support";
+import type { ResearchAssessor } from "./research-support";
 import { recordRunWrites } from "./run-audit";
 
 const productResearchResult = z.object({
@@ -571,7 +568,9 @@ export async function resolveProductResearch(
       const assessed = researchAssessment.parse(
         ports.assess
           ? await ports.assess(assessmentInput)
-          : await assessResearchProposal({
+          : await (
+              await import("./research-support")
+            ).assessResearchProposal({
               ...assessmentInput,
               db,
               runId: input.runId,

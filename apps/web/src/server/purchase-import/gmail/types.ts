@@ -143,15 +143,3 @@ export type GmailNormalizedMessage = {
   mail: GmailOrderMail;
   attachments: readonly GmailOrderMailAttachment[];
 };
-
-export type GmailBootstrapInput = {
-  knownSenders: readonly string[];
-  earliestUnresolvedHuntAt?: Date | null;
-  now?: Date;
-  lookbackDays?: number;
-};
-
-export type GmailBootstrapPlan = {
-  knownSenderQueries: readonly string[];
-  unknownOrderQuery: string;
-};

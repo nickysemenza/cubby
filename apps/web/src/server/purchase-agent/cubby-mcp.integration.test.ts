@@ -38,7 +38,7 @@ describe("purchase agent Cubby MCP client", () => {
       actorLedgerPartyKind: party.kind,
       trigger: "manual",
       agentSessionId: "synthetic-agent-mcp-run",
-      purpose: runPurpose.parse("purchase_validation"),
+      purpose: runPurpose.parse("photo_inventory"),
       status: "running",
     });
     const requests: Request[] = [];
@@ -63,7 +63,7 @@ describe("purchase agent Cubby MCP client", () => {
       },
     });
     const extension = cubbyMcpExtension(
-      purchaseAgentToolCatalog("purchase_validation"),
+      purchaseAgentToolCatalog("photo_inventory"),
       () => services,
     );
     const call = (name: string, args: Parameters<Execute>[0]) => {
@@ -80,22 +80,21 @@ describe("purchase agent Cubby MCP client", () => {
 
     // A mounted read answers.
     const read = await call("entity_read", {
-      action: "list",
-      entity: "vendor",
+      action: "resolve",
+      entity: "product",
+      names: ["Synthetic nonexistent material"],
     });
     expect(read.isError).toBe(false);
 
-    // A commit outside the run's purpose is refused by the delegation gate,
+    // An action outside the run's purpose is refused by the delegation gate,
     // which only sees the run when the caller context survives the transport.
-    const commit = await call("purchase_import", {
-      action: "commit",
-      _runExecution: { runId: run.id, operationId: "commit:synthetic" },
-      prepareOperationId: "prepare:synthetic",
-      resolutions: [],
+    const refused = await call("entity_read", {
+      action: "list",
+      entity: "vendor",
     });
-    expect(commit.isError).toBe(true);
-    expect(JSON.stringify(commit.content)).toContain(
-      "forbids commit_purchase_import",
+    expect(refused.isError).toBe(true);
+    expect(JSON.stringify(refused.content)).toContain(
+      "does not mount entity_read.list",
     );
 
     // Every exchange is modern-era: no `initialize` handshake, and each

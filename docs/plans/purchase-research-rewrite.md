@@ -146,8 +146,9 @@ Mailbox acquisition has bounded pages and durable checkpoints. Persist the
 baseline for incremental catch-up before history enumeration; keep broad
 backfill coverage, scoped-query coverage, and Gmail history position distinct.
 Catch up new mail while old history is still scanning. An expired history
-cursor triggers recoverable enumeration and deduplication, not a recent-only
-fallback. Apply Spam/Trash eligibility to fetched messages and label changes
+cursor reports a recoverable error and preserves checkpoints. Recovery
+enumeration needs separately authorized historical discovery; new-mail discovery
+never silently starts a full-history scan. Apply Spam/Trash eligibility to fetched messages and label changes
 as well as listing queries. Deleted messages and revoked authentication have
 explicit outcomes; a classifier outage is not an unrelated-mail verdict.
 Verify acquisition and model-provider logging/cache retention settings before

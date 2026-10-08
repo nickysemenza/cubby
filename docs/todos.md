@@ -26,6 +26,13 @@ history is the archive. Permanent product constraints live in the
 
 ## Images & photos
 
+- 🟢 **Deduplicate research images across re-imports.** A repeated import or
+  enrichment can attach the same representative picture more than once. Reuse
+  shared image/attachment identity and content hashes across changed source URLs,
+  and keep provenance for every observation without duplicating the gallery.
+  Preserve member photos, chosen cover order, and genuinely different variants;
+  define safe cleanup of existing duplicates before changing household records.
+
 - 🧱 **Full capture metadata from the Photos library.** The library match path
   (`LibraryMetadataSync` → `image.recordSightings`) already backfills
   `capturedAt` and location for every strong perceptual-hash match across the
@@ -657,6 +664,17 @@ each Run wrote. The Runs list and `imports_read.run_status` read one shared proj
 ---
 
 ## Entity platform & data model
+
+- 🧱 **Audit for deletion and consolidation after the research rewrite.** Review
+  the whole codebase, including database tables, import/browser execution, review
+  surfaces, and tests. Identify unused functionality, duplicate services and
+  policies, redundant persisted state, and code that can move into shared
+  declarations or maintained Markdown skills. The model should own adaptive
+  investigation and semantic interpretation; justify each code layer by evidence
+  retention, recovery/replay, ownership, or safe domain writes. Prefer existing
+  Expense/domain services over a second accounting framework. Propose concrete
+  deletions and table consolidation with preserved invariants and data-transforming
+  migrations; measure the resulting code and schema reduction.
 
 - 🟢 **Classification-declared field policies: remaining classifications.**
   A classification decides whether a field or link is expected, and whether

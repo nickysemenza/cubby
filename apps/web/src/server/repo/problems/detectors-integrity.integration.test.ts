@@ -296,7 +296,11 @@ const mkRun = async (
   values: Partial<
     Pick<
       typeof runTable.$inferInsert,
-      "ledgerPartyId" | "vendorAccountId" | "vendorId" | "predecessorRunId"
+      | "ledgerPartyId"
+      | "vendorAccountId"
+      | "vendorId"
+      | "predecessorRunId"
+      | "parentRunId"
     >
   > = {},
 ) => {
@@ -326,6 +330,7 @@ const mkRun = async (
     vendorAccountId: values.vendorAccountId,
     vendorId: values.vendorId,
     predecessorRunId: values.predecessorRunId,
+    parentRunId: values.parentRunId,
     trigger: "manual",
   });
 };
@@ -699,7 +704,7 @@ const SOURCE_FACTORIES = {
 
   "ResearchSourceExposure.ledgerPartyId": async (db, targetId) => {
     const partyId = parseEntityId("ledgerParty", targetId);
-    const scope = await mkRun(db, { ledgerPartyId: partyId });
+    const scope = await mkRun(db);
     return insertAndReturn(db, researchSourceExposure, {
       runId: scope.id,
       ledgerPartyId: partyId,
@@ -710,7 +715,7 @@ const SOURCE_FACTORIES = {
 
   "ResearchRetention.ledgerPartyId": async (db, targetId) => {
     const partyId = parseEntityId("ledgerParty", targetId);
-    const scope = await mkRun(db, { ledgerPartyId: partyId });
+    const scope = await mkRun(db);
     const work = await mkRunTarget(db, {
       runId: scope.id,
       entityId: scope.id,
@@ -1585,6 +1590,11 @@ const SOURCE_FACTORIES = {
       date: "2024-01-15",
     });
   },
+
+  "Run.parentRunId": (db, targetId) =>
+    mkRun(db, {
+      parentRunId: parseEntityId("run", targetId),
+    }),
 
   "Run.predecessorRunId": (db, targetId) =>
     mkRun(db, {

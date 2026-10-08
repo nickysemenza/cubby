@@ -15,6 +15,7 @@ import { insertWithShortcode } from "~/server/repo/shortcode-utils";
 
 import { preparePurchaseImport } from "./import-orders";
 import { startOrResumeRun } from "./run-service";
+import { readImportSourceClaimFamily } from "./source-claim-family";
 import { importVendorOrder } from "./writer";
 
 // A canonical source must replay its historical associations before any write;
@@ -303,6 +304,63 @@ describe("canonical source claim families", () => {
       /duplicate.*source.*order|source.*order.*ambiguous/iu,
     );
   });
+
+  it.each(["foreign_alias", "incoming_alias"] as const)(
+    "retains the entire source graph when reading a family with a %s",
+    async (problem) => {
+      const f = await world();
+      await f.canonicalize();
+      let externalKey = canonicalKey;
+      if (problem === "foreign_alias") {
+        const other = await insertWithShortcode(ctx.db, "ledgerParty", {
+          name: "Other synthetic source owner",
+          kind: "member",
+        });
+        await f.db
+          .update(importSourceClaim)
+          .set({ ledgerPartyId: other.id })
+          .where(eq(importSourceClaim.id, f.secondAlias.id));
+      } else {
+        externalKey = "synthetic:incoming-source-alias";
+        await f.db.insert(importSourceClaim).values({
+          ledgerPartyId: f.party.id,
+          kind: f.root.kind,
+          externalKey,
+          canonicalClaimId: f.firstAlias.id,
+          checksum: f.root.checksum,
+          firstRunId: f.root.firstRunId,
+          lastRunId: f.root.lastRunId,
+        });
+      }
+      const before = {
+        claims: await f.db.select().from(importSourceClaim),
+        orders: await f.db.select().from(importSourceOrder),
+        payments: await f.db.select().from(purchasePaymentEvidence),
+        expenses: await f.db.select().from(expense),
+      };
+      await expect(
+        readImportSourceClaimFamily(f.db, {
+          ledgerPartyId: f.party.id,
+          kind: f.root.kind,
+          externalKey,
+        }),
+      ).rejects.toThrow(
+        problem === "foreign_alias"
+          ? "crosses member ownership"
+          : "invalid canonical owner",
+      );
+      expect(await f.db.select().from(importSourceClaim)).toEqual(
+        before.claims,
+      );
+      expect(await f.db.select().from(importSourceOrder)).toEqual(
+        before.orders,
+      );
+      expect(await f.db.select().from(purchasePaymentEvidence)).toEqual(
+        before.payments,
+      );
+      expect(await f.db.select().from(expense)).toEqual(before.expenses);
+    },
+  );
 
   it("refuses an unmapped historical Gmail order key with a null canonical pointer as a writable identity", async () => {
     const f = await world();

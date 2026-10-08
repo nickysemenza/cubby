@@ -60,7 +60,7 @@ export async function runVendorMailSearch(
   }
 }
 
-export const MAIL_DISCOVERY_PAGES_PER_PASS = 12;
+const MAIL_DISCOVERY_PAGES_PER_PASS = 12;
 export interface MailDiscoveryWork {
   begin(): Promise<{ kind: "stopped" } | { kind: "page"; index: number }>;
   list(

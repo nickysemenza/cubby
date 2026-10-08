@@ -547,10 +547,16 @@ describe("scheduled Gmail discovery", () => {
     );
     expect(result.purchaseIds).toHaveLength(1);
     expect(attachedSources).toEqual([original.id]);
+    const {
+      purchaseIds: _purchaseIds,
+      productIds: _productIds,
+      eventIds: _eventIds,
+      ...publicResolution
+    } = result;
     expect(await services.researchResolve(proposal, callId)).toMatchObject({
       status: "done",
       summary: { researchedWithGaps: 1 },
-      resolution: result,
+      resolution: publicResolution,
     });
     expect(await getDb(ctx.db).select().from(purchase)).toMatchObject([
       { orderId: "SYNTHETIC-UNCERTAIN-ORDER", date: null, statedTotal: null },

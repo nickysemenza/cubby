@@ -3,11 +3,23 @@ import { describe, expect, it } from "vitest";
 import { decodeBrowserBridgeMessage } from "./contracts";
 
 const hello = {
-  protocolVersion: 3,
+  protocolVersion: 4,
   type: "hello",
   deviceID: "11111111-1111-4111-8111-111111111111",
   browser: "chrome",
-  capabilities: { snapshotVersion: 1, screenshot: true },
+  capabilities: {
+    snapshotVersion: 1,
+    screenshot: true,
+    actions: [
+      "navigate",
+      "read",
+      "click",
+      "type",
+      "select",
+      "scroll",
+      "window",
+    ],
+  },
 };
 
 describe("decodeBrowserBridgeMessage", () => {
@@ -27,7 +39,7 @@ describe("decodeBrowserBridgeMessage", () => {
   it("rejects the replaced protocol generation", () => {
     expect(
       decodeBrowserBridgeMessage(
-        JSON.stringify({ ...hello, protocolVersion: 2 }),
+        JSON.stringify({ ...hello, protocolVersion: 3 }),
       ).success,
     ).toBe(false);
   });
@@ -37,10 +49,10 @@ describe("decodeBrowserBridgeMessage", () => {
   it("reads nullable keys Swift Codable omitted as null", () => {
     const decoded = decodeBrowserBridgeMessage(
       JSON.stringify({
-        protocolVersion: 3,
+        protocolVersion: 4,
         type: "result",
         result: {
-          protocolVersion: 3,
+          protocolVersion: 4,
           commandID: "22222222-2222-4222-8222-222222222222",
           operationID: "browser-command:capture-001",
           runID: "33333333-3333-4333-8333-333333333333",

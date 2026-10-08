@@ -8,7 +8,7 @@ import { purchaseValidationResearchRunInput } from "@cubby/schemas/run-fields";
 import { readResponseWithLimit } from "@cubby/shared/external-fetch";
 import { sha256Hex } from "@cubby/shared/sha256";
 import { signJWT, verifyJWT } from "better-auth/crypto";
-import { and, desc, eq, inArray, isNull, ne } from "drizzle-orm";
+import { and, eq, inArray, isNull } from "drizzle-orm";
 import { z } from "zod";
 
 import { env } from "~/env";
@@ -21,12 +21,7 @@ import {
   runEvidence,
   runTarget,
 } from "~/server/db/schema";
-import {
-  getDb,
-  notDeleted,
-  withTransaction,
-} from "~/server/repo/database-helpers";
-import { getR2PublicUrl } from "~/server/utils/r2-public-url";
+import { notDeleted, withTransaction } from "~/server/repo/database-helpers";
 
 import {
   productionBrowserEvidenceStorage,
@@ -236,37 +231,4 @@ export async function receiveRunEvidenceUpload(
         .where(eq(runEvidence.id, owned.evidence.id));
     return new Response(null, { status: 204 });
   });
-}
-
-export async function loadRunEvidenceForExtraction(
-  db: Database,
-  runId: string,
-) {
-  const [evidence] = await getDb(db)
-    .select({
-      id: runEvidence.id,
-      objectKey: runEvidence.objectKey,
-      checksum: runEvidence.checksum,
-      mediaType: runEvidence.mediaType,
-      targetId: runEvidence.targetId,
-      sourceKind: runTarget.sourceKind,
-      sourceExternalKey: runTarget.sourceExternalKey,
-    })
-    .from(runEvidence)
-    .innerJoin(runTable, eq(runTable.id, runEvidence.runId))
-    .innerJoin(runTarget, eq(runTarget.id, runEvidence.targetId))
-    .where(
-      and(
-        eq(runEvidence.runId, z.uuid().parse(runId)),
-        eq(runTable.purpose, "purchase_validation"),
-        // A captured page's DOM is kept for the server's own reading; the
-        // extractor reads the member's document (an upload, PDF, or picture).
-        ne(runEvidence.mediaType, "text/html"),
-      ),
-    )
-    .orderBy(desc(runEvidence.createdAt))
-    .limit(1);
-  return evidence
-    ? { ...evidence, evidenceUrl: getR2PublicUrl(evidence.objectKey) }
-    : null;
 }

@@ -408,6 +408,63 @@ describe("activity image processing projection", () => {
 describe("unified Runs history", () => {
   const ctx = withTestDb();
 
+  it("presents Run-scoped research targets in lists, groups, and details", async () => {
+    const coordinatorId = await ensureRun(ctx.db, ctx.actor, {
+      purpose: "background",
+    });
+    const subjectId = await ensureRun(ctx.db, ctx.actor, {
+      purpose: "background",
+    });
+    const subjects = await getDb(ctx.db)
+      .select({ id: runTable.id, shortcode: runTable.shortcode })
+      .from(runTable)
+      .where(eq(runTable.id, subjectId));
+    const coordinators = await getDb(ctx.db)
+      .select({ shortcode: runTable.shortcode })
+      .from(runTable)
+      .where(eq(runTable.id, coordinatorId));
+    await getDb(ctx.db)
+      .insert(runTarget)
+      .values({
+        runId: coordinatorId,
+        entityKind: "run",
+        entityId: subjectId,
+        state: "pending",
+        targetFingerprint: "a".repeat(64),
+      });
+    const expected = {
+      id: coordinators[0]!.shortcode,
+      targetPreview: [
+        { entity: "run", id: subjects[0]!.shortcode, state: "pending" },
+      ],
+    };
+    const input = {
+      recordType: "run" as const,
+      kind: "background" as const,
+      executor: "all" as const,
+      sort: "newest" as const,
+      limit: 20,
+    };
+    expect(
+      (await listActivity(ctx.db, null, input)).items.find(
+        (row) => row.id === expected.id,
+      ),
+    ).toMatchObject(expected);
+    expect(
+      (await listActivityGroups(ctx.db, null, input)).items.find(
+        (group) => group.root.id === expected.id,
+      )?.root,
+    ).toMatchObject(expected);
+    expect(
+      (
+        await activityDetail(ctx.db, null, {
+          id: coordinators[0]!.shortcode,
+          limit: 5,
+        })
+      ).run,
+    ).toMatchObject(expected);
+  });
+
   it("lists every Run purpose and keeps linked and standalone image jobs distinct", async () => {
     const party = await insertWithShortcode(ctx.db, "ledgerParty", {
       name: "History member",

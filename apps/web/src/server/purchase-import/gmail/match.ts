@@ -25,7 +25,7 @@ interface HuntWindow {
  * hunt's direction: refund events only for a credit, other events only for a
  * charge, so a refund is never summed into a charge.
  */
-export async function orderAmountsInHuntWindow(db: Database, hunt: HuntWindow) {
+async function orderAmountsInHuntWindow(db: Database, hunt: HuntWindow) {
   const events = await getDb(db)
     .select({ orderId: orderMailEvent.orderId, amount: orderMailEvent.amount })
     .from(orderMailEvent)
@@ -56,7 +56,7 @@ export async function orderAmountsInHuntWindow(db: Database, hunt: HuntWindow) {
   return [...byOrder].map(([id, amount]) => ({ id, amount }));
 }
 
-export const uniqueOrderSubsetIds = (
+const uniqueOrderSubsetIds = (
   huntAmount: number,
   orders: { id: string; amount: number }[],
 ) =>

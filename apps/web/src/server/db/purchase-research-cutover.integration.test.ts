@@ -1,14 +1,6 @@
-import { readFileSync } from "node:fs";
-import { join } from "node:path";
-
 import { orderMailImportRunInput } from "@cubby/schemas/run-fields";
 import { sha256Hex } from "@cubby/shared/sha256";
-import { eq, sql } from "drizzle-orm";
-import { readMigrationFiles } from "drizzle-orm/migrator";
-import { drizzle } from "drizzle-orm/node-postgres";
-import { Client } from "pg";
-import { migrateDatabase, MIGRATIONS_FOLDER } from "tooling/db-migrate";
-import { leaseDatabase } from "tooling/test-database-lease";
+import { eq } from "drizzle-orm";
 import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 import { z } from "zod";
@@ -33,24 +25,13 @@ import {
 import { insertWithShortcode } from "~/server/repo/shortcode-utils";
 import { ensureRun } from "~/server/runs/ensure-run";
 
+import {
+  identifier,
+  openMainCutover,
+  saveTables,
+} from "./purchase-research-cutover.fixtures";
+
 const record = z.record(z.string(), z.json());
-type SavedTable = { name: string; rows: z.infer<typeof record>[] };
-const identifier = (name: string) => `"${name.replaceAll('"', '""')}"`;
-const journal = z
-  .object({ entries: z.array(z.object({ tag: z.string(), when: z.number() })) })
-  .parse(
-    JSON.parse(
-      readFileSync(join(MIGRATIONS_FOLDER, "meta/_journal.json"), "utf8"),
-    ),
-  );
-const currentMainLength =
-  journal.entries.findIndex(
-    (entry) => entry.tag === "0024_neon_cache_diagnostics",
-  ) + 1;
-if (currentMainLength !== 25)
-  throw new Error(
-    "Cutover rehearsal must start from current main's migration prefix.",
-  );
 
 // Rehearse the actual deploy migrator from populated pre-rewrite tables, not
 // isolated UPDATE fragments. Losing signed spend, stock, photos, links or settled
@@ -184,98 +165,17 @@ describe("purchase research populated-history cutover", () => {
       status: "completed",
     });
 
-    const tables = (
-      await db.execute<{ name: string }>(
-        sql`SELECT tablename AS name FROM pg_tables WHERE schemaname = 'public' ORDER BY tablename`,
-      )
-    ).rows;
-    const saved: SavedTable[] = [];
-    for (const { name } of tables) {
-      const rows = (
-        await db.execute<{ data: z.infer<typeof record> }>(
-          sql.raw(`SELECT to_jsonb(t) AS data FROM ${identifier(name)} t`),
-        )
-      ).rows.map((row) => record.parse(row.data));
-      if (rows.length) saved.push({ name, rows });
-    }
-
-    // The lease is an isolated local test database; no ambient database URL is
-    // accepted. Its schema is rebuilt from main to exercise every real DDL step.
-    const { lease, prepared: client } = await leaseDatabase(
-      "vitest",
-      async (target) => {
-        const connection = new Client({ connectionString: target.databaseUrl });
-        await connection.connect();
-        return connection;
-      },
+    const saved = await saveTables(ctx.db);
+    const { client, before, close } = await openMainCutover(saved, (table) =>
+      table.name === "ImportSourceClaim"
+        ? table.rows.map((row) => ({
+            ...row,
+            purchaseId: f.order.id,
+            outputFingerprint: "c".repeat(64),
+          }))
+        : table.rows,
     );
     try {
-      await client.query("DROP SCHEMA public CASCADE");
-      await client.query("DROP SCHEMA drizzle CASCADE");
-      await client.query("CREATE SCHEMA public");
-      const migrations = readMigrationFiles({
-        migrationsFolder: MIGRATIONS_FOLDER,
-      });
-      expect(migrations).toHaveLength(currentMainLength + 1);
-      await client.query("BEGIN");
-      try {
-        await client.query(
-          "CREATE SCHEMA drizzle; CREATE TABLE drizzle.__drizzle_migrations (id SERIAL PRIMARY KEY, hash text NOT NULL, created_at bigint)",
-        );
-        for (const migration of migrations.slice(0, currentMainLength)) {
-          for (const statement of migration.sql) await client.query(statement);
-          await client.query(
-            "INSERT INTO drizzle.__drizzle_migrations (hash, created_at) VALUES ($1, $2)",
-            [migration.hash, migration.folderMillis],
-          );
-        }
-        await client.query("COMMIT");
-      } catch (error) {
-        await client.query("ROLLBACK");
-        throw error;
-      }
-      const existing = new Set(
-        (
-          await client.query<{ name: string }>(
-            "SELECT tablename AS name FROM pg_tables WHERE schemaname='public'",
-          )
-        ).rows.map((row) => row.name),
-      );
-      // Fixture-only restoration preserves actual service-created records while
-      // omitting fields/tables introduced by this unpublished rewrite.
-      await client.query("SET session_replication_role = replica");
-      try {
-        for (const table of saved) {
-          if (!existing.has(table.name)) continue;
-          const rows =
-            table.name === "ImportSourceClaim"
-              ? table.rows.map((row) => ({
-                  ...row,
-                  purchaseId: f.order.id,
-                  outputFingerprint: "c".repeat(64),
-                }))
-              : table.rows;
-          for (const row of rows)
-            await client.query(
-              `INSERT INTO ${identifier(table.name)} SELECT * FROM jsonb_populate_record(NULL::${identifier(table.name)}, $1::jsonb)`,
-              [JSON.stringify(row)],
-            );
-        }
-      } finally {
-        await client.query("SET session_replication_role = origin");
-      }
-      const before: SavedTable[] = [];
-      for (const table of saved.filter((table) => existing.has(table.name)))
-        before.push({
-          name: table.name,
-          rows: (
-            await client.query<{ data: z.infer<typeof record> }>(
-              `SELECT to_jsonb(t) AS data FROM ${identifier(table.name)} t`,
-            )
-          ).rows.map((row) => record.parse(row.data)),
-        });
-      await migrateDatabase(drizzle(client));
-      await migrateDatabase(drizzle(client));
       for (const table of before) {
         const after = (
           await client.query<{ data: z.infer<typeof record> }>(
@@ -364,8 +264,7 @@ describe("purchase research populated-history cutover", () => {
         ).rows,
       ).toEqual([{ status: "completed" }]);
     } finally {
-      await client.end();
-      await lease.close();
+      await close();
     }
   }, 60_000);
 });

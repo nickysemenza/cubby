@@ -301,7 +301,7 @@ describe("authenticated member execution approval", () => {
     await insertWithShortcode(ctx.db, "ledgerParty", {
       name: "Synthetic foreign discovery member",
       kind: "member",
-      userId: foreign!.userId,
+      userId: userId.parse(foreign!.userId),
     });
     await getDb(ctx.db).insert(account).values({
       id: crypto.randomUUID(),
@@ -319,9 +319,18 @@ describe("authenticated member execution approval", () => {
     setCfEnv(
       fromPartial<Env>({
         MAIL_DISCOVERY: {
-          create: async ({ id, params }) => {
-            launched.push(params!);
-            return fromPartial<WorkflowInstance>({ id: id! });
+          create: async (options: {
+            id?: string;
+            params?: WorkflowRunParams;
+          }) => {
+            if (!options?.id || !options.params)
+              throw new Error(
+                "Synthetic Workflow launch requires id and params",
+              );
+            launched.push(options.params);
+            return fromPartial<
+              Awaited<ReturnType<Env["MAIL_DISCOVERY"]["create"]>>
+            >({ id: options.id });
           },
         },
       }),

@@ -1,4 +1,4 @@
-import { runEntityId, type RunId } from "@cubby/schemas/identifiers";
+import { runEntityId } from "@cubby/schemas/identifiers";
 import {
   browserCapture,
   type BrowserCapture,
@@ -20,15 +20,12 @@ import {
 import { and, eq } from "drizzle-orm";
 import { z } from "zod";
 
-import { env } from "~/env";
-import { localGoogleProviderOrigin } from "~/lib/e2e-google-provider";
 import type { UnparsedError } from "~/lib/error-utils";
 import { cachedCall } from "~/server/ai/adapters";
 import {
   PURCHASE_IMPORT_AUDIT_FEATURE,
   PURCHASE_IMPORT_EXTRACTION_FEATURE,
   PURCHASE_IMPORT_RECEIPT_FEATURE,
-  PURCHASE_IMPORT_MAIL_FEATURE,
   PURCHASE_IMPORT_REPAIR_FEATURE,
 } from "~/server/ai/features";
 import { gatewayFetch } from "~/server/ai/gateway";
@@ -38,7 +35,6 @@ import type { Database } from "~/server/db";
 import { image } from "~/server/db/schema";
 import { getDb, notDeleted } from "~/server/repo/database-helpers";
 import { cents } from "~/server/repo/money";
-import { ensureRun, systemActor } from "~/server/runs/ensure-run";
 import { getR2PublicUrl } from "~/server/utils/r2-public-url";
 
 import { purchaseImportPromptText } from "./prompt-text.gen";
@@ -491,18 +487,6 @@ export const extractPurchaseEvidence = async (args: {
     ),
   );
 
-export const extractPurchaseReceipt = (args: {
-  db: Database;
-  runId: string;
-  imageUrl: string;
-}) =>
-  extractPurchaseEvidence({
-    db: args.db,
-    runId: args.runId,
-    evidenceUrl: args.imageUrl,
-    mediaType: "image/jpeg",
-  });
-
 export const orderMailRequest = (args: {
   sender: string;
   subject: string;
@@ -512,50 +496,3 @@ export const orderMailRequest = (args: {
   systemPrompts: [purchaseImportPromptText.orderMail],
   messages: [{ role: "user" as const, content: JSON.stringify(args) }],
 });
-
-export const classifyOrderMail = async (args: {
-  db: Database;
-  runId?: RunId;
-  messageId: string;
-  sender: string;
-  subject: string;
-  receivedAt: string;
-  content: unknown;
-}) => {
-  const localProvider = localGoogleProviderOrigin(
-    env.E2E_AUTH_TEST_MODE,
-    env.E2E_GOOGLE_PROVIDER_URL,
-  );
-  if (localProvider) {
-    const response = await fetch(`${localProvider}/model/classify-mail`, {
-      method: "POST",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify({
-        sender: args.sender,
-        subject: args.subject,
-        receivedAt: args.receivedAt,
-        content: args.content,
-      }),
-    });
-    if (!response.ok)
-      throw new Error(
-        `Local mail classifier provider: HTTP ${response.status}`,
-      );
-    return PURCHASE_IMPORT_MAIL_FEATURE.schema.parse(await response.json());
-  }
-  // No purchase-import run exists yet at this point — an inbound mail poll
-  // has no user behind it, so this books under the system actor.
-  const runId =
-    args.runId ??
-    (await ensureRun(args.db, systemActor(), { purpose: "background" }));
-  return runStructuredFeature(
-    PURCHASE_IMPORT_MAIL_FEATURE,
-    orderMailRequest(args),
-    {
-      db: args.db,
-      runId,
-      operation: "purchaseImport.classifyMail",
-      job: { kind: "purchase_import_mail", id: args.messageId },
-    },
-  );
-};

@@ -75,7 +75,8 @@ extension ReportServing {
 
 extension CubbyClient: ReportServing {
     public func decideMail(_ input: OrderMailDecisionInput) async throws {
-        try await decideOrderMail(eventID: input.eventId, purchaseID: input.purchaseId,
+        try await decideOrderMail(
+            eventID: input.eventId, purchaseID: input.purchaseId,
             link: input.decision == .linked, evidenceChecksum: input.evidenceChecksum)
     }
     public func researchMail(_ input: OrderMailImportInput) async throws -> OrderMailImportOut {
@@ -408,18 +409,25 @@ public final class ReportSlotModel {
             guard let purchaseID = form?.text("purchaseId") ?? decision.purchaseId else {
                 throw ReportActionError.incompleteAnswers
             }
-            try await service.decideMail(.init(eventId: decision.eventId, purchaseId: purchaseID,
-                decision: decision.decision == .linked ? .linked : .dismissed,
-                evidenceChecksum: decision.evidenceChecksum))
+            try await service.decideMail(
+                .init(
+                    eventId: decision.eventId, purchaseId: purchaseID,
+                    decision: decision.decision == .linked ? .linked : .dismissed,
+                    evidenceChecksum: decision.evidenceChecksum))
             return .done("Updated the email relationship")
         case .researchOrderMail(let original):
-            let result = try await service.researchMail(.init(eventId: original.eventId,
-                evidenceChecksum: original.evidenceChecksum))
+            let result = try await service.researchMail(
+                .init(
+                    eventId: original.eventId,
+                    evidenceChecksum: original.evidenceChecksum))
             if result.runIds.count == 1, let runID = result.runIds.first { return .openedRun(runID) }
             return .done("Research Runs: " + result.runIds.joined(separator: ", "))
         case .researchVendorPurchases(let vendor):
-            let result = try await service.startResearch(.accountSync(.init(purpose: .accountSync,
-                vendorId: vendor.vendorId)))
+            let result = try await service.startResearch(
+                .accountSync(
+                    .init(
+                        purpose: .accountSync,
+                        vendorId: vendor.vendorId)))
             let runs = result.runs.compactMap { $0.run?.id ?? $0.blockingRun?.id }
             if runs.count == 1, let runID = runs.first { return .openedRun(runID) }
             return .done("Research Runs: " + runs.joined(separator: ", "))

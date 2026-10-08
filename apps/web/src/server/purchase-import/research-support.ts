@@ -26,33 +26,40 @@ export type ResearchAssessor = (
   input: ResearchAssessmentInput,
 ) => Promise<z.input<typeof researchAssessment>>;
 
+/** Build the complete retained-original request for production and interactive probes. */
+export async function researchAssessmentRequest(
+  input: ResearchAssessmentInput,
+) {
+  const originals = await attachmentAssessmentContext(input.observations);
+  return {
+    systemPrompts: [supportRules],
+    messages: [
+      {
+        role: "user" as const,
+        content: [
+          {
+            type: "text" as const,
+            content: JSON.stringify({
+              context: input.context,
+              observations: originals.observations,
+              proposal: input.proposal,
+            }),
+          },
+          ...originals.parts,
+        ],
+      },
+    ],
+  };
+}
+
 /** The same retained-source contract serves mail linking and catalog research. */
 export async function assessResearchProposal(
   input: ResearchAssessmentInput & { db: Database; runId: string },
 ): Promise<ResearchAssessment> {
-  const originals = await attachmentAssessmentContext(input.observations);
   return researchAssessment.parse(
     await runStructuredFeature(
       RESEARCH_SUPPORT_FEATURE,
-      {
-        systemPrompts: [supportRules],
-        messages: [
-          {
-            role: "user",
-            content: [
-              {
-                type: "text",
-                content: JSON.stringify({
-                  context: input.context,
-                  observations: originals.observations,
-                  proposal: input.proposal,
-                }),
-              },
-              ...originals.parts,
-            ],
-          },
-        ],
-      },
+      await researchAssessmentRequest(input),
       {
         db: input.db,
         runId: runEntityId.parse(input.runId),

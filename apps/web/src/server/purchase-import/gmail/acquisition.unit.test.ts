@@ -1,5 +1,5 @@
 /** Plausible failures: gather-all blocks progress; scoped completion skips archives;
- * history advances before the last page; expired history resumes only recent mail;
+ * history advances before the last page; expired history silently authorizes a scan;
  * scans starve newly arriving mail; unrelated or unreadable mail is archived. */
 import { describe, expect, it, vi } from "vitest";
 
@@ -94,7 +94,7 @@ describe("durable Gmail page acquisition", () => {
       provider,
       "google-subject",
       page.nextCoverage,
-      "all_history",
+      "new_mail",
     );
     expect(recent.messageIds).toEqual(["new"]);
     expect(recent.nextCoverage.scoped[0]?.pageToken).toBe("page-two");
@@ -123,7 +123,7 @@ describe("durable Gmail page acquisition", () => {
       provider,
       "google-subject",
       scoped.nextCoverage,
-      "all_history",
+      "new_mail",
     );
     await listGmailPage(
       provider,
@@ -138,30 +138,50 @@ describe("durable Gmail page acquisition", () => {
   });
 
   it("checkpoints history page tokens without advancing its start until all history pages are processed", async () => {
-    const provider = gmail({
-      listHistory: async () => ({
-        historyId: "120",
-        nextPageToken: "history-two",
-      }),
-    });
+    const listHistory = vi
+      .fn<GmailProvider["listHistory"]>()
+      .mockResolvedValueOnce({ historyId: "120", nextPageToken: "history-two" })
+      .mockResolvedValueOnce({ historyId: "119" });
+    const provider = gmail({ listHistory });
     const coverage = await initializeMailboxCoverage(provider, []);
     coverage.nextLane = "history";
     const page = await listGmailPage(
       provider,
       "google-subject",
       coverage,
-      "all_history",
+      "new_mail",
     );
     expect(page.nextCoverage.history).toEqual({
       historyId: "100",
       pageToken: "history-two",
       targetHistoryId: "120",
     });
+    const completed = await listGmailPage(
+      provider,
+      "google-subject",
+      page.nextCoverage,
+      "new_mail",
+    );
+    expect(listHistory.mock.calls[1]?.[0]).toEqual({
+      startHistoryId: "100",
+      maxResults: 25,
+      pageToken: "history-two",
+    });
+    expect(completed.nextCoverage.history).toEqual({
+      historyId: "120",
+      pageToken: null,
+      targetHistoryId: null,
+    });
   });
 
-  it("an expired history cursor recovers via full enumeration, preserving scoped positions", async () => {
+  it("an expired history cursor preserves scoped positions and requires separately authorized enumeration", async () => {
+    const listMessages = vi.fn(async () => ({
+      messages: [{ id: "archived" }],
+    }));
+    const getProfile = vi.fn(async () => ({ historyId: "200" }));
     const provider = gmail({
-      getProfile: async () => ({ historyId: "200" }),
+      listMessages,
+      getProfile,
       listHistory: async () => {
         throw new GmailApiError({ status: 404, message: "expired" });
       },
@@ -170,20 +190,30 @@ describe("durable Gmail page acquisition", () => {
       { key: "vendor", query: "forge" },
     ]);
     coverage.nextLane = "history";
+    coverage.scoped[0]!.pageToken = "scoped-page";
     coverage.broad = { pageToken: "old-page", completed: true };
-    const page = await listGmailPage(
+    const checkpoint = structuredClone(coverage);
+    await expect(
+      listGmailPage(provider, "google-subject", coverage, "new_mail"),
+    ).rejects.toThrow("expired");
+    expect(listMessages).not.toHaveBeenCalled();
+    expect(getProfile).toHaveBeenCalledOnce();
+    expect(coverage).toEqual(checkpoint);
+
+    const scan = await listGmailPage(
       provider,
       "google-subject",
       coverage,
       "all_history",
     );
-    expect(page.messageIds).toEqual([]);
-    expect(page.nextCoverage.broad).toEqual({
-      pageToken: null,
-      completed: false,
+    expect(scan.messageIds).toEqual(["archived"]);
+    expect(listMessages).toHaveBeenCalledWith({
+      query: "(forge) -in:spam -in:trash",
+      maxResults: 25,
+      pageToken: "scoped-page",
     });
-    expect(page.nextCoverage.baselineHistoryId).toBe("200");
-    expect(page.nextCoverage.scoped).toEqual(coverage.scoped);
+    expect(scan.nextCoverage.broad).toEqual(checkpoint.broad);
+    expect(scan.nextCoverage.history).toEqual(checkpoint.history);
   });
   it("adds new scoped objectives while preserving broad and existing scoped checkpoints", async () => {
     const coverage = await initializeMailboxCoverage(gmail(), [

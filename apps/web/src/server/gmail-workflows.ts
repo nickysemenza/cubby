@@ -88,21 +88,29 @@ export class MailDiscoveryWorkflow
         setCfEnv(this.env);
         const params = event.payload;
         const withDb = stepDb(this.env, "mail-discovery");
-        const [{ runMailDiscovery }, discovery] = await Promise.all([
+        const [
+          { runMailDiscovery },
+          {
+            beginMailDiscovery,
+            listMailDiscovery,
+            saveMailDiscoveryBatch,
+            finishMailDiscovery,
+            continueMailDiscovery,
+            failMailDiscovery,
+          },
+        ] = await Promise.all([
           import("~/server/purchase-import/gmail/mail-workflows"),
           import("~/server/purchase-import/gmail/discovery"),
         ]);
         await runMailDiscovery(durableSteps(step), {
-          begin: () => withDb((db) => discovery.beginMailDiscovery(db, params)),
-          list: () => withDb((db) => discovery.listMailDiscovery(db, params)),
+          begin: () => withDb((db) => beginMailDiscovery(db, params)),
+          list: () => withDb((db) => listMailDiscovery(db, params)),
           batch: (index) =>
-            withDb((db) => discovery.saveMailDiscoveryBatch(db, params, index)),
-          finish: () =>
-            withDb((db) => discovery.finishMailDiscovery(db, params)),
-          continue: () =>
-            withDb((db) => discovery.continueMailDiscovery(db, params)),
+            withDb((db) => saveMailDiscoveryBatch(db, params, index)),
+          finish: () => withDb((db) => finishMailDiscovery(db, params)),
+          continue: () => withDb((db) => continueMailDiscovery(db, params)),
           fail: (stepError) =>
-            withDb((db) => discovery.failMailDiscovery(db, params, stepError)),
+            withDb((db) => failMailDiscovery(db, params, stepError)),
         });
         return { runId: params.runId };
       },

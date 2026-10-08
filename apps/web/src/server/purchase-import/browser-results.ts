@@ -4,7 +4,6 @@ import {
   browserObservation,
   browserPageCapture,
   type BrowserBridgeResult,
-  type BrowserObservation,
 } from "@cubby/schemas/purchase-import";
 import { retainedResearchObservation } from "@cubby/schemas/research";
 import {
@@ -279,20 +278,4 @@ export function browserRecovery(
       reason: outcome.message,
     };
   return { action: "fail" };
-}
-
-/** A short, human line for what the Mac saw, for logs and the Runs UI. */
-export function describeObservation(observation: BrowserObservation): string {
-  const where = observation.url ? new URL(observation.url).host : "no page";
-  const window = observation.window;
-  const windowState = !window
-    ? "window not found"
-    : window.minimized
-      ? "window minimized"
-      : window.onScreen === false
-        ? "window off screen"
-        : window.recovered
-          ? "window recovered"
-          : "window ready";
-  return [where, observation.readyState ?? "unknown", windowState].join(" · ");
 }

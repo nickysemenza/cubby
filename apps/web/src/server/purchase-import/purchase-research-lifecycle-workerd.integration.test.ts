@@ -14,7 +14,19 @@ import {
 import { sanitizeWorkerdLogs } from "tooling/e2e-workerd-logs";
 import { from, type ScriptStep } from "tooling/purchase-agent-script";
 import { withTestDb } from "tooling/test-setup";
-import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import {
+  HOLD_WORKERD_HARNESS_TIMEOUT_MS,
+  holdWorkerdHarness,
+} from "tooling/workerd-harness";
+import {
+  afterAll,
+  afterEach,
+  beforeAll,
+  beforeEach,
+  describe,
+  expect,
+  it,
+} from "vitest";
 import { z } from "zod";
 
 import { scrubErrorMessage } from "~/lib/error-diagnostics";
@@ -74,6 +86,11 @@ const brokerState = z.object({
 
 describe("current research authorization and cancellation through the built Worker", () => {
   const ctx = withTestDb();
+  let releaseHarness: (() => void) | undefined;
+  beforeAll(async () => {
+    releaseHarness = await holdWorkerdHarness();
+  }, HOLD_WORKERD_HARNESS_TIMEOUT_MS);
+  afterAll(() => releaseHarness?.());
   let runtime: ScenarioHarness | undefined;
   let started: E2ERunIdentity;
   let status = "failed";

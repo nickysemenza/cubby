@@ -46,7 +46,7 @@ export const step = (
   args: Record<string, ScriptValue> = {},
 ): ScriptStep => ({ call: id, tool, args });
 // This reads the host's model-visible retained observation, never broker state.
-export const observed = (field: string): ScriptValue => ({
+const observed = (field: string): ScriptValue => ({
   $signal: "research_observation",
   path: field,
 });

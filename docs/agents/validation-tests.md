@@ -88,6 +88,9 @@ and generated-file edits until the runner reports terminal completion. Send
 its live handle to every writer and release the hold after cleanup. A test-only
 edit also changes the build fingerprint; a rejected build supplies no scenario
 evidence.
+Workerd suites acquire the machine-wide harness lock in `beforeAll` using
+`HOLD_WORKERD_HARNESS_TIMEOUT_MS`, then release it in `afterAll`. Queue waits
+belong to setup and must not consume a scenario's behavioral timeout.
 Use the shared E2E identity and bundle for source provenance. Do not add a
 second recorder that buffers the entire Git diff: a large breaking change can
 overflow the subprocess buffer before the scenario and its cleanup begin, and
@@ -421,3 +424,17 @@ Keep kernel fixtures declaration-backed. The
 table-derived insert schemas omit virtual inputs and declaration-level defaults;
 `drizzle-seed` generates foreign keys and writes directly to tables. Those are
 storage-fixture capabilities, not replacements for `buildEntity`/`createEntity`.
+
+Migration regressions rehearse the committed journal from the actual deployed
+prefix through the canonical migration using a leased local database and
+`migrateDatabase`. Consolidation retires filename-based or intermediate-schema
+fixtures only after the named invariant is retained at the real domain
+write/readback boundary. `purchase-research-cutover.fixtures.ts` shares the
+main-to-0025 rehearsal; mail-source identity tests cover proved/unproved/collision
+graphs, source-claim-family tests own invalid alias-family refusal, and
+fact-evidence-subject tests own canonical Product/Purchase proof and idempotent
+preservation.
+
+Provider discovery scenarios grant historical backfill and continuous new-mail
+catchup independently. A backfill continuation never authorizes a history pass;
+assert that each continuation retains its own execution authorization.

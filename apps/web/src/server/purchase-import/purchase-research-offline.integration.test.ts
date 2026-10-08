@@ -15,7 +15,19 @@ import {
   type ScriptValue,
 } from "tooling/purchase-agent-script";
 import { withTestDb } from "tooling/test-setup";
-import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import {
+  HOLD_WORKERD_HARNESS_TIMEOUT_MS,
+  holdWorkerdHarness,
+} from "tooling/workerd-harness";
+import {
+  afterAll,
+  afterEach,
+  beforeAll,
+  beforeEach,
+  describe,
+  expect,
+  it,
+} from "vitest";
 
 import {
   product,
@@ -135,6 +147,11 @@ const steps: ScriptStep[] = [
 
 describe("research continues with the Mac offline", () => {
   const ctx = withTestDb();
+  let releaseHarness: (() => void) | undefined;
+  beforeAll(async () => {
+    releaseHarness = await holdWorkerdHarness();
+  }, HOLD_WORKERD_HARNESS_TIMEOUT_MS);
+  afterAll(() => releaseHarness?.());
   const factsForRun = (id: typeof run.$inferSelect.id) =>
     getDb(ctx.db)
       .select(getTableColumns(runFactEvidence))
@@ -241,6 +258,7 @@ describe("research continues with the Mac offline", () => {
           makeProductInput({
             name: source.title,
             manufacturer: "Example Works",
+            model: "",
           }),
           ctx.actor,
         ),

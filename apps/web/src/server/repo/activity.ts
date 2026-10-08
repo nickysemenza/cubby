@@ -21,7 +21,7 @@ import {
   imageDescriptionResult,
 } from "@cubby/schemas/image-processing";
 import { RUN_TARGET_BUCKET } from "@cubby/schemas/purchase-import";
-import { runWorkLabel } from "@cubby/schemas/run-fields";
+import { runTargetEntityKind, runWorkLabel } from "@cubby/schemas/run-fields";
 import { parseShortcode } from "@cubby/shared";
 import { and, desc, eq, sql, type SQL } from "drizzle-orm";
 import { z } from "zod";
@@ -240,7 +240,7 @@ const runFactsRow = z.object({
   targetCounts: activityRun.shape.targetCounts.unwrap(),
   targets: z.array(
     z.object({
-      entityKind: z.enum(["purchase", "product", "image"]),
+      entityKind: runTargetEntityKind,
       entityId: z.string(),
       shortcode: z.string(),
       state: z.string(),

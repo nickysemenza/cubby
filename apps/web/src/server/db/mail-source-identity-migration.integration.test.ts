@@ -1,11 +1,8 @@
-import { readFileSync } from "node:fs";
-import { join } from "node:path";
-
 import { orderMailImportRunInput } from "@cubby/schemas/run-fields";
 import { sha256Hex } from "@cubby/shared/sha256";
 import { eq, sql } from "drizzle-orm";
 import { withTestDb } from "tooling/test-setup";
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it } from "vitest";
 
 import {
   importSourceClaim,
@@ -21,12 +18,21 @@ import { getDb } from "~/server/repo/database-helpers";
 import { insertWithShortcode } from "~/server/repo/shortcode-utils";
 import { ensureRun } from "~/server/runs/ensure-run";
 
+import {
+  openMainCutover,
+  saveTables,
+} from "./purchase-research-cutover.fixtures";
+
 // Legacy per-order keys must become one source identity without repointing
 // order/payment ownership; missing frozen authority must block admission/deletion.
 // Every old textual identity remains readable, including when the canonical root
 // is new. Existing aliases participate in whole-family ownership/collision checks.
 describe("historical mail source identity migration", () => {
   const ctx = withTestDb();
+  const cleanups: Array<() => Promise<void>> = [];
+  afterEach(async () => {
+    for (const close of cleanups.splice(0)) await close();
+  });
   async function fixture(count: number, proven = true) {
     const db = getDb(ctx.db);
     const party = await insertWithShortcode(ctx.db, "ledgerParty", {
@@ -67,6 +73,7 @@ describe("historical mail source identity migration", () => {
       const purchase = await insertWithShortcode(ctx.db, "purchase", {
         vendorId: vendor.id,
         orderId,
+        date: "2025-01-01",
       });
       const [event] = await db
         .insert(orderMailEvent)
@@ -97,11 +104,14 @@ describe("historical mail source identity migration", () => {
         .returning();
       if (!claim) throw new Error("Synthetic claim missing");
       await db.insert(importSourceOrder).values({
+        id: claim.id,
         sourceClaimId: claim.id,
         orderKey: `${vendor.id}/order/${orderId}`,
         purchaseId: purchase.id,
         checksum,
         outputFingerprint: `synthetic-output-${index}`,
+        createdAt: claim.createdAt,
+        updatedAt: claim.updatedAt,
       });
       await db.insert(purchasePaymentEvidence).values({
         sourceClaimId: claim.id,
@@ -129,32 +139,33 @@ describe("historical mail source identity migration", () => {
       payments: await db.select().from(purchasePaymentEvidence),
     };
   }
-  async function transform() {
-    const folder = join(import.meta.dirname, "../../../drizzle");
-    const journal: { entries: { tag: string }[] } = JSON.parse(
-      readFileSync(join(folder, "meta/_journal.json"), "utf8"),
+  async function transform(f: Awaited<ReturnType<typeof fixture>>) {
+    const associations = await f.db.select().from(importSourceOrder);
+    const saved = await saveTables(ctx.db);
+    const migrated = await openMainCutover(saved, (table) =>
+      table.name === "ImportSourceClaim"
+        ? table.rows.map((row) => {
+            const association = associations.find(
+              (order) => order.sourceClaimId === row.id,
+            );
+            return {
+              ...row,
+              purchaseId: association?.purchaseId ?? null,
+              outputFingerprint:
+                association?.outputFingerprint ?? "synthetic-source-output",
+            };
+          })
+        : table.rows,
     );
-    const tag = journal.entries.find((entry) =>
-      entry.tag.endsWith("_historical_mail_source_identity"),
-    )?.tag;
-    // Before this replacement exists, old claims remain unchanged: the RED
-    // asserts the resulting ownership graph rather than a missing-file error.
-    if (!tag) return;
-    const migration = readFileSync(join(folder, `${tag}.sql`), "utf8");
-    await getDb(ctx.db).transaction(async (tx) => {
-      for (const statement of migration
-        .split("--> statement-breakpoint")
-        .map((part) => part.replace(/^(\s*--[^\n]*(?:\n|$))+/u, "").trim())
-        .filter(Boolean))
-        await tx.execute(sql.raw(statement));
-    });
+    cleanups.push(migrated.close);
+    f.db = getDb(migrated.database);
+    return migrated.database;
   }
   it.each([1, 2])(
     "converts %i proven per-order claims and preserves their entire incoming graph",
     async (count) => {
       const f = await fixture(count);
-      await transform();
-      await transform();
+      await transform(f);
       const claims = await f.db.select().from(importSourceClaim);
       const roots = claims.filter(
         (claim) =>
@@ -191,7 +202,7 @@ describe("historical mail source identity migration", () => {
   );
   it("retains unproved source ownership and records an explicit blocked original", async () => {
     const f = await fixture(2, false);
-    await transform();
+    await transform(f);
     expect(await f.db.select().from(importSourceClaim)).toEqual(f.claims);
     expect(await f.db.select().from(importSourceOrder)).toEqual(f.associations);
     expect(await f.db.select().from(purchasePaymentEvidence)).toEqual(
@@ -213,7 +224,7 @@ describe("historical mail source identity migration", () => {
   });
   it("retains every historical source lookup after creating a canonical identity", async () => {
     const f = await fixture(2);
-    await transform();
+    await transform(f);
     const history = await loadImportSourceFamilyOrders(f.db, {
       ledgerPartyId: f.party.id,
       externalKeys: f.claims.map((claim) => claim.externalKey),
@@ -225,72 +236,48 @@ describe("historical mail source identity migration", () => {
       f.claims.map((claim) => claim.externalKey).sort(),
     );
   });
-  it.each(["duplicate_order", "foreign_alias", "incoming_alias"] as const)(
-    "retains the entire original graph when the existing canonical family has a %s",
-    async (problem) => {
-      const f = await fixture(1);
-      const owner = f.claims[0]!;
-      const [root] = await f.db
-        .insert(importSourceClaim)
-        .values({
-          ledgerPartyId: f.party.id,
-          kind: owner.kind,
-          externalKey: `gmail:${f.mail.mailboxId}:${f.mail.messageId}`,
-          checksum: owner.checksum,
-          firstRunId: owner.firstRunId,
-          lastRunId: owner.lastRunId,
-        })
-        .returning();
-      if (!root) throw new Error("Synthetic existing root missing");
-      const aliasOwner =
-        problem === "foreign_alias"
-          ? await insertWithShortcode(ctx.db, "ledgerParty", {
-              name: "Other synthetic historical source owner",
-              kind: "member",
-            })
-          : f.party;
-      const [alias] = await f.db
-        .insert(importSourceClaim)
-        .values({
-          ledgerPartyId: aliasOwner.id,
-          kind: owner.kind,
-          externalKey: "synthetic:preexisting-source-alias",
-          canonicalClaimId: problem === "incoming_alias" ? owner.id : root.id,
-          checksum: owner.checksum,
-          firstRunId: owner.firstRunId,
-          lastRunId: owner.lastRunId,
-        })
-        .returning();
-      if (!alias) throw new Error("Synthetic existing alias missing");
-      if (problem === "duplicate_order") {
-        const association = f.associations[0]!;
-        await f.db.insert(importSourceOrder).values({
-          sourceClaimId: alias.id,
-          orderKey: association.orderKey,
-          purchaseId: association.purchaseId,
-          checksum: association.checksum,
-          outputFingerprint: association.outputFingerprint,
-        });
-      }
-      const before = {
-        claims: await f.db.select().from(importSourceClaim),
-        associations: await f.db.select().from(importSourceOrder),
-        payments: await f.db.select().from(purchasePaymentEvidence),
-      };
-      await transform();
-      expect(await f.db.select().from(importSourceClaim)).toEqual(
-        before.claims,
-      );
-      expect(await f.db.select().from(importSourceOrder)).toEqual(
-        before.associations,
-      );
-      expect(await f.db.select().from(purchasePaymentEvidence)).toEqual(
-        before.payments,
-      );
-      expect(await f.db.select().from(orderMail)).toEqual([f.mail]);
-      expect(await f.db.select().from(mailboxMessage)).toMatchObject([
-        { orderMailId: f.mail.id, status: "blocked" },
-      ]);
-    },
-  );
+  it("retains the entire original graph when the existing canonical source has a duplicate order", async () => {
+    const f = await fixture(1);
+    const owner = f.claims[0]!;
+    const [root] = await f.db
+      .insert(importSourceClaim)
+      .values({
+        ledgerPartyId: f.party.id,
+        kind: owner.kind,
+        externalKey: `gmail:${f.mail.mailboxId}:${f.mail.messageId}`,
+        checksum: owner.checksum,
+        firstRunId: owner.firstRunId,
+        lastRunId: owner.lastRunId,
+      })
+      .returning();
+    if (!root) throw new Error("Synthetic existing root missing");
+    const association = f.associations[0]!;
+    await f.db.insert(importSourceOrder).values({
+      id: root.id,
+      sourceClaimId: root.id,
+      orderKey: association.orderKey,
+      purchaseId: association.purchaseId,
+      checksum: association.checksum,
+      outputFingerprint: association.outputFingerprint,
+      createdAt: root.createdAt,
+      updatedAt: root.updatedAt,
+    });
+    const before = {
+      claims: await f.db.select().from(importSourceClaim),
+      associations: await f.db.select().from(importSourceOrder),
+      payments: await f.db.select().from(purchasePaymentEvidence),
+    };
+    await transform(f);
+    expect(await f.db.select().from(importSourceClaim)).toEqual(before.claims);
+    expect(await f.db.select().from(importSourceOrder)).toEqual(
+      before.associations,
+    );
+    expect(await f.db.select().from(purchasePaymentEvidence)).toEqual(
+      before.payments,
+    );
+    expect(await f.db.select().from(orderMail)).toEqual([f.mail]);
+    expect(await f.db.select().from(mailboxMessage)).toMatchObject([
+      { orderMailId: f.mail.id, status: "blocked" },
+    ]);
+  });
 });

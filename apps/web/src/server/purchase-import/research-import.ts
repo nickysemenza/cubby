@@ -80,10 +80,7 @@ import {
   withResearchSourceAdmission,
 } from "./research-retention";
 import { loadMailResearchSources } from "./research-run";
-import {
-  assessResearchProposal,
-  type ResearchAssessor,
-} from "./research-support";
+import type { ResearchAssessor } from "./research-support";
 import { lockPartySettlement } from "./retained-settlement";
 import {
   loadImportSourceFamilyOrders,
@@ -927,7 +924,9 @@ export async function resolveImportResearch(
       const assessment = researchAssessment.parse(
         ports.assess
           ? await ports.assess(assessmentInput)
-          : await assessResearchProposal({
+          : await (
+              await import("./research-support")
+            ).assessResearchProposal({
               db,
               runId: scope.id,
               ...assessmentInput,

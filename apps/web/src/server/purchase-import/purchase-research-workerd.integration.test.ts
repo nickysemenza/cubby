@@ -42,6 +42,7 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { z } from "zod";
 
 import { scrubErrorMessage } from "~/lib/error-diagnostics";
+import type { UnparsedError } from "~/lib/error-utils";
 import { GMAIL_READONLY_SCOPE } from "~/lib/google-auth-constants";
 import { toWire } from "~/lib/http-api/wire";
 import { account as googleAccount } from "~/server/db/auth.schema";
@@ -126,6 +127,9 @@ describe("purchase research through the built Worker", () => {
     approval:
       | Awaited<ReturnType<typeof issueExecutionAuthorization>>
       | undefined;
+    continuousApproval:
+      | Awaited<ReturnType<typeof issueExecutionAuthorization>>
+      | undefined;
     importRun: typeof runTable.$inferSelect | undefined;
     child: typeof runTable.$inferSelect;
     evidence: object[];
@@ -135,12 +139,18 @@ describe("purchase research through the built Worker", () => {
       partyId,
       mailboxId,
       approval,
+      continuousApproval,
       importRun,
       child,
       evidence,
     } = input;
     const database = getDb(ctx.db);
-    if (!runtime.googleProvider || !approval || !importRun)
+    if (
+      !runtime.googleProvider ||
+      !approval ||
+      !continuousApproval ||
+      !importRun?.parentRunId
+    )
       throw new Error("Provider authority or retained Run missing.");
     await waitFor(
       async () => {
@@ -156,12 +166,7 @@ describe("purchase research through the built Worker", () => {
         const [discovery] = await database
           .select()
           .from(runTable)
-          .where(
-            and(
-              eq(runTable.purpose, "mail_discovery"),
-              eq(runTable.ledgerPartyId, partyId),
-            ),
-          );
+          .where(eq(runTable.id, importRun.parentRunId!));
         return (
           cursor?.coverage?.broad.completed === true &&
           discovery?.status === "completed"
@@ -173,12 +178,7 @@ describe("purchase research through the built Worker", () => {
     const [discovery] = await database
       .select()
       .from(runTable)
-      .where(
-        and(
-          eq(runTable.purpose, "mail_discovery"),
-          eq(runTable.ledgerPartyId, partyId),
-        ),
-      );
+      .where(eq(runTable.id, importRun.parentRunId));
     if (!discovery) throw new Error("Actual discovery Workflow Run missing.");
     expect(
       mailboxDiscoveryInput.parse(discovery.input).executionAuthorization,
@@ -225,6 +225,24 @@ describe("purchase research through the built Worker", () => {
     expect(originals[0]?.originalOrder?.checksum).toBe(
       retained[0]!.rawChecksum,
     );
+    await waitFor(
+      async () =>
+        runtime
+          .googleProvider!.requests()
+          .some(
+            (request) =>
+              request.path.endsWith("/history") &&
+              request.query.startHistoryId === "100",
+          ),
+      "Separately authorized continuous discovery did not reach the saved history baseline.",
+    );
+    const [historyRun] = await database
+      .select()
+      .from(runTable)
+      .where(eq(runTable.clientKey, `mailbox-continuation:${discovery.id}`));
+    expect(
+      mailboxDiscoveryInput.parse(historyRun?.input).executionAuthorization,
+    ).toEqual(continuousApproval);
     const requests = runtime.googleProvider.requests();
     const baselineIndex = requests.findIndex((request) =>
       request.path.endsWith("/profile"),
@@ -343,6 +361,9 @@ describe("purchase research through the built Worker", () => {
       const mailboxId =
         mode === "provider" ? "synthetic-google-user" : "synthetic-mailbox";
       let retainedMailId: string | undefined;
+      let continuousApproval:
+        | Awaited<ReturnType<typeof issueExecutionAuthorization>>
+        | undefined;
       let approval:
         | Awaited<ReturnType<typeof issueExecutionAuthorization>>
         | undefined;
@@ -392,6 +413,21 @@ describe("purchase research through the built Worker", () => {
             owner: { userId: ctx.actor.userId, ledgerPartyId: party.id },
             scope: { kind: "backfill", mailboxId, discovery: "all_history" },
             meteredBudget: { period: "lifetime", limitMicroUSD: 1_000_000 },
+            expiresAt: new Date(Date.now() + 3_600_000).toISOString(),
+          }),
+        );
+        continuousApproval = await issueExecutionAuthorization(
+          ctx.db,
+          ctx.actor,
+          executionAuthorizationInput.parse({
+            kind: "execution_authorization",
+            version: 1,
+            owner: { userId: ctx.actor.userId, ledgerPartyId: party.id },
+            scope: { kind: "continuous", mailboxId, discovery: "new_mail" },
+            meteredBudget: {
+              period: "utc_calendar_month",
+              limitMicroUSD: 1_000_000,
+            },
             expiresAt: new Date(Date.now() + 3_600_000).toISOString(),
           }),
         );
@@ -662,7 +698,41 @@ describe("purchase research through the built Worker", () => {
                 },
                 "Provider acquisition did not automatically enqueue mail research.",
                 30_000,
-              );
+              ).catch(async (error: UnparsedError) => {
+                evidence.push({
+                  acquisitionFailure: scrubErrorMessage(
+                    error instanceof Error ? error.message : String(error),
+                  ),
+                });
+                try {
+                  const discoveryRuns = await database
+                    .select({ id: runTable.id })
+                    .from(runTable)
+                    .where(
+                      and(
+                        eq(runTable.purpose, "mail_discovery"),
+                        eq(runTable.ledgerPartyId, party.id),
+                      ),
+                    );
+                  evidence.push({
+                    gateway: await controls.gatewayCalls(),
+                    discovery: await Promise.all(
+                      discoveryRuns.map(({ id }) =>
+                        workerdDiagnostic(ctx.db, id, runtime.harness),
+                      ),
+                    ),
+                  });
+                } catch (diagnosticError) {
+                  evidence.push({
+                    acquisitionDiagnosticFailure: scrubErrorMessage(
+                      diagnosticError instanceof Error
+                        ? diagnosticError.message
+                        : String(diagnosticError),
+                    ),
+                  });
+                }
+                throw error;
+              });
               const [mailRun] = await database
                 .select()
                 .from(runTable)
@@ -733,6 +803,7 @@ describe("purchase research through the built Worker", () => {
                   partyId: party.id,
                   mailboxId,
                   approval,
+                  continuousApproval,
                   importRun,
                   child,
                   evidence,

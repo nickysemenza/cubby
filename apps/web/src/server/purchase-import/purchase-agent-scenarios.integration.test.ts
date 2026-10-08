@@ -1167,7 +1167,7 @@ describe("current purchase-agent system boundaries", () => {
         }),
         {
           check: `charge-${index}-resolve`,
-          includes: isAmbiguous ? "ambiguous" : "no_source_found",
+          includes: isAmbiguous ? "researched_with_gaps" : "no_source_found",
         },
       ];
     });

@@ -257,7 +257,7 @@ const merchantRules = z.object({
   vendors: z.array(z.object({ shortcode: z.string(), name: z.string() })),
 });
 
-export { targetedImportPurpose, type TargetedImportPurpose };
+export type { TargetedImportPurpose };
 
 const targetedImportSource = z.object({
   id: z.string().min(1),

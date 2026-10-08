@@ -1,3 +1,4 @@
+import { productResearchRunInput } from "@cubby/schemas/run-fields";
 import { fromPartial } from "@total-typescript/shoehorn";
 import { eq } from "drizzle-orm";
 import { withTestDb } from "tooling/test-setup";
@@ -76,10 +77,23 @@ describe("research host service authority", () => {
         runId: owned.id,
         entityKind: "product",
         entityId: item.id,
+        workKey: item.id,
         targetFingerprint: "a".repeat(64),
       })
       .returning();
     if (!target) throw new Error("Synthetic target missing");
+    await getDb(ctx.db)
+      .update(run)
+      .set({
+        input: productResearchRunInput.parse({
+          kind: "product_research",
+          instructionRevision: 1,
+          products: [
+            { productId: item.id, contextFingerprint: "a".repeat(64) },
+          ],
+        }),
+      })
+      .where(eq(run.id, owned.id));
     expect(
       await host.researchWebSearch(
         { workRef: target.id, query: "Small device exact model" },
