@@ -15,7 +15,7 @@ wait "id=browse.product.list" 60000
 wait "id=browse.product.row.${PRODUCT_ID}" 60000
 click "label=\"List controls\""
 click "label=View"
-click "role=Cell label=Table"
+click "label=Table"
 wait "id=browse.product.table" 30000
 wait "id=browse.product.table.row.${PRODUCT_ID}" 60000
 wait "id=browse.product.table.summary" 30000
@@ -27,12 +27,12 @@ click "role=Button id=browse.product.sort.name"
 wait "id=browse.product.sort.name value=Descending" 30000
 wait "id=browse.product.table.row.${PRODUCT_ID}" 60000
 click "role=Button id=browse.product.columns"
-click "role=Cell label=Manufacturer"
+click "label=Manufacturer"
 click "role=Button id=browse.product.columns"
-click "role=Cell label=Manufacturer"
+click "label=Manufacturer"
 click "label=\"List controls\""
 click "label=View"
-click "role=Cell label=List"
+click "label=List"
 wait "id=browse.product.row.${PRODUCT_ID}" 30000
 click "role=Button id=browse.product.row.${PRODUCT_ID}"
-wait text "Synthetic Flour" 60000
+wait text "Synthetic Flour Bag" 60000
