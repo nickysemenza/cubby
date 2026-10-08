@@ -490,7 +490,7 @@ describe("scheduled Gmail discovery", () => {
       orders: [
         {
           vendor: { name: "Synthetic uncertain merchant" },
-          sourceRefs: [observed.evidenceId],
+          evidenceIds: [observed.evidenceId],
           reasoning:
             "The unfamiliar original explicitly identifies this actual order.",
           candidate: {

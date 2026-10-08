@@ -444,7 +444,7 @@ describe("Purchase validation research", () => {
       orders: [
         {
           purchaseRef: f.order.shortcode,
-          sourceRefs: [original.evidenceId],
+          evidenceIds: [original.evidenceId],
           reasoning:
             "The original supplies the selected acquisition's itemization.",
           candidate: {

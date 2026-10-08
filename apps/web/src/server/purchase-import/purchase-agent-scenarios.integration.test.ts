@@ -637,7 +637,7 @@ describe("current purchase-agent system boundaries", () => {
               {
                 purchaseRef: targetPurchase.shortcode,
                 vendorRef: vendor.shortcode,
-                sourceRefs: [
+                evidenceIds: [
                   from(
                     "validation-observed",
                     "work.retainedObservation.evidenceId",
@@ -886,7 +886,7 @@ describe("current purchase-agent system boundaries", () => {
               orders: [
                 {
                   vendorRef: vendor.shortcode,
-                  sourceRefs: [from(`partial-${index}-read`, "evidenceId")],
+                  evidenceIds: [from(`partial-${index}-read`, "evidenceId")],
                   defaultTrade: "other",
                   reasoning:
                     "SERVICE-1 identifies one annual service, quantity 1, USD 9.00.",

@@ -5,12 +5,19 @@ import {
   extractedOrderCandidate,
   preparedProductResolution,
 } from "./purchase-import";
-import { acceptedResearchFact, researchClaimSupport } from "./research";
+import {
+  acceptedResearchFact,
+  researchClaimSupport,
+  retainedEvidenceId,
+} from "./research";
 import { tradeSchema } from "./task-fields";
 
 const workRef = z.uuid();
 const reasoning = z.string().trim().min(1).max(8_000);
-const evidenceIds = z.array(z.uuid()).max(100);
+const evidenceIds = z.array(retainedEvidenceId).max(100);
+const primaryEvidenceIds = evidenceIds.describe(
+  "Retained evidence IDs authorized for this task's primary source. Related context sources can inform identity reasoning, but cannot authorize orders or email-link writes for another primary task.",
+);
 const observationRef = {
   observationId: z.uuid(),
   ref: z.string().min(1).max(100),
@@ -70,7 +77,7 @@ export const researchWorkResolve = z.strictObject({
   identifierClaims: z
     .array(
       z.strictObject({
-        evidenceId: z.uuid(),
+        evidenceId: retainedEvidenceId,
         kind: externalIdKind,
         externalId: z.string().trim().min(1).max(500),
         support: researchClaimSupport,
@@ -91,7 +98,7 @@ export const researchWorkResolve = z.strictObject({
           })
           .optional(),
         purchaseRef: purchaseShortcode.optional(),
-        sourceRefs: evidenceIds,
+        evidenceIds: primaryEvidenceIds,
         reasoning,
         candidate: extractedOrderCandidate,
         productResolutions: z
@@ -107,7 +114,7 @@ export const researchWorkResolve = z.strictObject({
     .array(
       z.strictObject({
         purchaseRef: purchaseShortcode,
-        sourceRefs: evidenceIds,
+        evidenceIds: primaryEvidenceIds,
         reasoning,
         event: z.enum([
           "confirmation",
@@ -138,7 +145,13 @@ export const researchMailSearch = z.strictObject({
 });
 export const researchMailRead = z.strictObject({
   workRef,
-  messageRef: z.string().min(1).max(500),
+  messageRef: z
+    .string()
+    .min(1)
+    .max(500)
+    .describe(
+      "A mail acquisition selector from assigned sources or mail search. Pass it to mail_read; cite the returned evidenceId in resolutions, never this messageRef.",
+    ),
   attachmentRef: z.uuid().optional(),
 });
 export const RESEARCH_ATTACHMENT_MAX_BYTES = 3 * 1024 * 1024;

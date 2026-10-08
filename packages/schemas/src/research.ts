@@ -98,6 +98,7 @@ export type RetainedResearchObservation = z.infer<
 >;
 
 export {
+  retainedEvidenceId,
   researchClaimSupport,
   acceptedResearchFact,
   type ResearchClaimSupport,

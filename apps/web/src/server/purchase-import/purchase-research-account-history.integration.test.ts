@@ -80,7 +80,7 @@ const proposal = researchWorkResolve.parse({
         name: "Synthetic History Shop",
         website: "https://history.example.test",
       },
-      sourceRefs: ["11111111-1111-4111-8111-111111111111"],
+      evidenceIds: ["11111111-1111-4111-8111-111111111111"],
       reasoning:
         "Numeric order 54321 names the annual maintenance service, date and USD 12 total in its retained detail.",
       candidate: {
@@ -136,7 +136,7 @@ const steps: ScriptStep[] = [
     identity: { ...proposal.identity, evidenceIds: [observed("evidenceId")] },
     orders: proposal.orders.map((order) => ({
       ...order,
-      sourceRefs: [observed("evidenceId")],
+      evidenceIds: [observed("evidenceId")],
     })),
     progress: { ...proposal.progress!, evidenceIds: [observed("evidenceId")] },
   }),

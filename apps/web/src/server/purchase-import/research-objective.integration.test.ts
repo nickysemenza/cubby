@@ -216,7 +216,7 @@ describe("durable research objective admission", () => {
         orders: [
           {
             vendorRef: vendor.shortcode,
-            sourceRefs: [evidence.id],
+            evidenceIds: [evidence.id],
             reasoning:
               "The retained original identifies this service; date is absent; price and quantity are printed.",
             candidate: {
@@ -1206,7 +1206,7 @@ describe("durable research objective admission", () => {
         {
           ...previousOrder,
           purchaseRef: existingPurchase.shortcode,
-          sourceRefs: [evidence.id],
+          evidenceIds: [evidence.id],
           candidate: {
             ...previousOrder.candidate,
             printedGrandTotal: 12,

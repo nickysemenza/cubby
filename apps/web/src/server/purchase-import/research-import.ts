@@ -730,7 +730,7 @@ async function loadImportSupportContext(
   for (const order of proposal.orders) {
     const locator = await acceptedOrderLocator(order.candidate);
     for (const source of sources.filter((source) =>
-      order.sourceRefs.includes(source.evidenceId),
+      order.evidenceIds.includes(source.evidenceId),
     ))
       keys.push(
         orderSourceIdentity(source, order.candidate, locator).externalKey,
@@ -896,8 +896,8 @@ export async function resolveImportResearch(
       const evidenceIds = [
         ...new Set([
           ...proposal.identity.evidenceIds,
-          ...proposal.orders.flatMap((order) => order.sourceRefs),
-          ...proposal.emailLinks.flatMap((link) => link.sourceRefs),
+          ...proposal.orders.flatMap((order) => order.evidenceIds),
+          ...proposal.emailLinks.flatMap((link) => link.evidenceIds),
           ...proposal.facts.map((fact) => fact.evidenceId),
           ...(proposal.progress?.evidenceIds ?? []),
         ]),
@@ -990,8 +990,8 @@ export async function resolveImportResearch(
         (!source.mail || source.mail.id === target.workKey);
       for (const operand of [...orders, ...links])
         if (
-          operand.sourceRefs.length === 0 ||
-          operand.sourceRefs.some(
+          operand.evidenceIds.length === 0 ||
+          operand.evidenceIds.some(
             (ref) =>
               !sources.some(
                 (source) =>
@@ -1090,7 +1090,7 @@ export async function resolveImportResearch(
               ...orders.flatMap((order, index) =>
                 currentSources
                   .filter((source) =>
-                    order.sourceRefs.includes(source.evidenceId),
+                    order.evidenceIds.includes(source.evidenceId),
                   )
                   .map((source) =>
                     orderSourceIdentity(
@@ -1103,7 +1103,7 @@ export async function resolveImportResearch(
               ...links.flatMap((link) =>
                 currentSources
                   .filter((source) =>
-                    link.sourceRefs.includes(source.evidenceId),
+                    link.evidenceIds.includes(source.evidenceId),
                   )
                   .map((source) => source.original),
               ),
@@ -1222,7 +1222,7 @@ export async function resolveImportResearch(
         };
         if (scope.purpose !== "purchase_validation") {
           for (const [index, order] of orders.entries()) {
-            const selectedSources = sourcesFor(order.sourceRefs);
+            const selectedSources = sourcesFor(order.evidenceIds);
             let chosen = order.purchaseRef
               ? context.purchases.find(
                   (row) => row.shortcode === order.purchaseRef,
@@ -1398,7 +1398,7 @@ export async function resolveImportResearch(
               .for("update");
             if (!chosen?.vendorId)
               throw new Error("Supported lifecycle Purchase has no Vendor.");
-            for (const source of sourcesFor(link.sourceRefs)) {
+            for (const source of sourcesFor(link.evidenceIds)) {
               if (preserveDecision(source, chosen)) {
                 refused = true;
                 continue;

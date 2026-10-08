@@ -70,7 +70,7 @@ export const mailSteps: ScriptStep[] = [
           name: "Example Works",
           website: "https://maker.example.test",
         },
-        sourceRefs: [from("mail-read", "evidenceId")],
+        evidenceIds: [from("mail-read", "evidenceId")],
         reasoning:
           "SYNTHETIC-410 has one item, known date, quantity and total in this original.",
         candidate: {

@@ -322,7 +322,7 @@ test("imports an original, automatically verifies the exact Product with visible
         emailLinks: [
           {
             purchaseRef: bought.shortcode,
-            sourceRefs: [from("shipment-read", "evidenceId")],
+            evidenceIds: [from("shipment-read", "evidenceId")],
             reasoning:
               "The original shipment updates the existing SYNTHETIC-410 order and supplies its tracking reference.",
             event: "shipped",

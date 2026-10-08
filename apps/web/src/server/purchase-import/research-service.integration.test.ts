@@ -242,7 +242,7 @@ describe("research host lifecycle", () => {
       orders: [
         {
           vendor: { name: "Example device seller" },
-          sourceRefs: [observed.evidenceId],
+          evidenceIds: [observed.evidenceId],
           reasoning: "The original receipt gives this item and total.",
           candidate: {
             orderId: "EXAMPLE-100",

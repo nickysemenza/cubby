@@ -248,7 +248,7 @@ describe("apply a reviewed purchase-validation diff", () => {
             {
               purchaseRef: livePurchase.shortcode,
               vendorRef: vendor.shortcode,
-              sourceRefs: [retained.evidenceId],
+              evidenceIds: [retained.evidenceId],
               reasoning:
                 "The retained original supports these exact order lines.",
               candidate,

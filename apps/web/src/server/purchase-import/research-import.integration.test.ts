@@ -202,7 +202,7 @@ describe("supported retained-mail research writes", () => {
       },
       orders: ["ORDER-ONE", "ORDER-TWO"].map((id, index) => ({
         vendorRef: vendor.shortcode,
-        sourceRefs: [evidence.id],
+        evidenceIds: [evidence.id],
         reasoning:
           "The original states this distinct annual service and total.",
         candidate: candidate(id, 10 + index * 10),
@@ -1047,7 +1047,7 @@ describe("supported retained-mail research writes", () => {
         emailLinks: [
           {
             purchaseRef: existing.shortcode,
-            sourceRefs: [f.evidence.id],
+            evidenceIds: [f.evidence.id],
             reasoning:
               "The supported notice is a lifecycle update for this exact service.",
             event: "refunded",
@@ -1199,7 +1199,7 @@ describe("supported retained-mail research writes", () => {
         {
           ...proposedOrder,
           purchaseRef: targetPurchase.shortcode,
-          sourceRefs: [validation.evidence.id],
+          evidenceIds: [validation.evidence.id],
         },
       ],
     });
@@ -1556,7 +1556,7 @@ describe("supported retained-mail research writes", () => {
       ...f.proposal,
       orders: f.proposal.orders.map((order) => ({
         ...order,
-        sourceRefs: [additional.evidence.id],
+        evidenceIds: [additional.evidence.id],
       })),
     });
     await expect(

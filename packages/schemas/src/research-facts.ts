@@ -1,5 +1,11 @@
 import { z } from "zod";
 
+export const retainedEvidenceId = z
+  .uuid()
+  .describe(
+    "An evidenceId returned by a retained observation for this workRef. Read the source before citing it. messageRef, browser observationId, attachment references and original IDs are not evidence IDs.",
+  );
+
 /** Quoted text is an observation; semantic reasoning binds it to the ordered identity. */
 export const researchClaimSupport = z.object({
   observation: z.string().trim().min(1),
@@ -15,7 +21,7 @@ export const researchClaimSupport = z.object({
 export type ResearchClaimSupport = z.infer<typeof researchClaimSupport>;
 
 export const acceptedResearchFact = z.object({
-  evidenceId: z.uuid(),
+  evidenceId: retainedEvidenceId,
   /** Mail facts bind to an original order operand; the host supplies its committed subject. */
   orderIndex: z.number().int().nonnegative().optional(),
   fieldPath: z

@@ -213,7 +213,7 @@ describe("research public existing-Product admission", () => {
       orders: [
         {
           vendorRef: seller.shortcode,
-          sourceRefs: [observed.evidenceId],
+          evidenceIds: [observed.evidenceId],
           reasoning: "Original identifies COPPER-XL and ASIN B0SYNTHXL1.",
           candidate,
           productResolutions: [
@@ -334,7 +334,7 @@ describe("research public existing-Product admission", () => {
         identity: { ...proposal.identity, evidenceIds: [read.evidenceId] },
         orders: proposal.orders.map((order) => ({
           ...order,
-          sourceRefs: [read.evidenceId],
+          evidenceIds: [read.evidenceId],
         })),
       }),
     };
@@ -976,7 +976,7 @@ describe("research public existing-Product admission", () => {
       identity: { ...f.proposal.identity, evidenceIds: [read.evidenceId] },
       orders: [blueOrder, copperOrder].map((order) => ({
         ...order,
-        sourceRefs: [read.evidenceId],
+        evidenceIds: [read.evidenceId],
       })),
     });
     supportedAssessment(undefined, [0, 1]);
@@ -1100,7 +1100,7 @@ describe("research public existing-Product admission", () => {
           {
             ...f.proposal.orders[0],
             purchaseRef: order.shortcode,
-            sourceRefs: [original.evidenceId],
+            evidenceIds: [original.evidenceId],
             candidate: extractedOrderCandidate.parse({
               ...f.candidate,
               orderId: null,

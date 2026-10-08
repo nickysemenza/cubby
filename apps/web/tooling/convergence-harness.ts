@@ -273,7 +273,7 @@ export async function ingestGmailEvidence(
       emailLinks: [
         {
           purchaseRef,
-          sourceRefs: [observed.evidenceId],
+          evidenceIds: [observed.evidenceId],
           event: "confirmation",
           reasoning:
             "The retained order ID, retailer and total uniquely match this Purchase.",

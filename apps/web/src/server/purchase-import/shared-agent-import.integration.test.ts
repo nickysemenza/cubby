@@ -464,7 +464,7 @@ describe("shared purchase-import prepare and commit", () => {
               {
                 purchaseRef: existingPurchase.shortcode,
                 vendorRef: vendor.shortcode,
-                sourceRefs: [retained.evidenceId],
+                evidenceIds: [retained.evidenceId],
                 defaultTrade: "other",
                 reasoning:
                   "The original supports the exact stated currency and total.",

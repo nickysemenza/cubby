@@ -52,7 +52,7 @@ const researchOrder = (
     orders: [
       {
         vendorRef: vendor.shortcode,
-        sourceRefs: [from(`${prefix}-read`, "evidenceId")],
+        evidenceIds: [from(`${prefix}-read`, "evidenceId")],
         reasoning: `The original supports ${orderId}, one herb packet and its printed five-dollar total.`,
         candidate: {
           orderId,
