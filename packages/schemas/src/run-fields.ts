@@ -1,4 +1,7 @@
 import { z } from "zod";
+import { RUN_PURPOSE_LABEL, runPurpose } from "./activity-fields";
+export { RUN_PURPOSE_LABEL, runPurpose } from "./activity-fields";
+export type { RunPurpose } from "./activity-fields";
 import type { ExecutionAuthorizationInput } from "./execution-authorization.js";
 import { executionAuthorizationRef } from "./execution-authorization.js";
 import { plainDate } from "./base-entity.js";
@@ -92,21 +95,6 @@ export const runControlAction = z.enum([
   "no_evidence_available",
 ]);
 export type RunControlAction = z.infer<typeof runControlAction>;
-export const runPurpose = z.enum([
-  "account_sync",
-  "mail_import",
-  "purchase_validation",
-  "product_enrichment",
-  "photo_inventory",
-  // Every AI call belongs to a run; these purposes group work that is not an
-  // import. Their lifetime is set by `trigger` (`ephemeral` or not).
-  "ai_suggest",
-  "background",
-  "file_import",
-  "mail_search",
-  "mail_discovery",
-]);
-export type RunPurpose = z.infer<typeof runPurpose>;
 /** Why a new immutable attempt was admitted; historical lineage remains unknown. */
 export const runCause = z.enum([
   "member_request",
@@ -407,20 +395,6 @@ export type RunInput =
   | OrderBackfillRunInput
   | z.infer<typeof chargeHuntRunInput>;
 export type RunProgress = MailSearchRunProgress | MailDiscoveryRunProgress;
-
-/** The label of each run purpose; `runWorkLabel` names one run's actual work. */
-export const RUN_PURPOSE_LABEL = {
-  account_sync: "Account sync",
-  mail_import: "Purchase research",
-  purchase_validation: "Purchase validation",
-  product_enrichment: "Product enrichment",
-  photo_inventory: "Photo inventory",
-  ai_suggest: "AI suggestions",
-  background: "Background",
-  file_import: "File import",
-  mail_search: "Mail search",
-  mail_discovery: "Mail discovery",
-} as const satisfies Record<z.infer<typeof runPurpose>, string>;
 
 /**
  * What one run actually does, for every surface that names it (lists,

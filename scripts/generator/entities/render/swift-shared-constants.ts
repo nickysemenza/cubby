@@ -11,7 +11,7 @@ import {
   TASK_BOARD_UNTITLED_PROJECT_LABEL,
 } from "../../../../packages/shared/src/client-constants.ts";
 import { APPLE_CLIENT_COMPATIBILITY_VERSION } from "../../../../packages/shared/src/apple-client-version.ts";
-import { ACTIVITY_KIND_LABEL } from "../../../../packages/schemas/src/activity.ts";
+import { ACTIVITY_KIND_LABEL } from "../../../../packages/schemas/src/activity-fields.ts";
 import {
   WAYFINDING_DOMAINS,
   WAYFINDING_DOMAIN_PRESENTATION,
