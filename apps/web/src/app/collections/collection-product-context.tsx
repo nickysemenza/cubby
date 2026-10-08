@@ -155,9 +155,13 @@ export function ProductPurchasesPopover({
                 {!purchaseLabelUsedVendor(purchase) && purchase.vendorName
                   ? `${purchase.vendorName} · `
                   : ""}
-                <time dateTime={purchase.date}>
-                  {formatCalendarDay(purchase.date, "dateShort")}
-                </time>
+                {purchase.date === null ? (
+                  <span>Date unknown</span>
+                ) : (
+                  <time dateTime={purchase.date}>
+                    {formatCalendarDay(purchase.date, "dateShort")}
+                  </time>
+                )}
               </p>
               {purchase.trades.length ? (
                 <div className="mt-2 flex flex-wrap gap-1">

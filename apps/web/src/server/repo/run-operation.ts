@@ -10,12 +10,12 @@
  * canonicalize it and never add `kind` to the identity.
  */
 import { type RunId, runEntityId } from "@cubby/schemas/identifiers";
-import { and, eq, inArray } from "drizzle-orm";
+import { and, asc, eq, inArray } from "drizzle-orm";
 import type { z } from "zod";
 
 import type { purchaseImportDebugEvent } from "~/lib/purchase-import-debug";
 import type { DrizzleClient, DrizzleTransaction } from "~/server/db";
-import { runOperation } from "~/server/db/schema";
+import { researchRetention, run, runOperation } from "~/server/db/schema";
 
 type Client = DrizzleClient | DrizzleTransaction;
 
@@ -35,12 +35,29 @@ const matchesKey = (key: OperationKey) =>
 /** A `failed` row keeps a bounded diagnostic. */
 const boundedError = (message: string) => message.slice(0, 2_000);
 
+async function lockOperationRun(client: Client, key: OperationKey) {
+  const [scope] = await client
+    .select({ retiredAt: run.retiredAt })
+    .from(run)
+    .where(eq(run.id, key.runId))
+    .for("update");
+  return scope?.retiredAt !== null && scope?.retiredAt !== undefined;
+}
+
 /** The recorded row for `key`; `forUpdate` locks it for the enclosing transaction. */
 export async function readOperation(
   client: Client,
   key: OperationKey,
   options: { forUpdate?: boolean } = {},
 ) {
+  const [scope] = await client
+    .select({ retiredAt: run.retiredAt })
+    .from(run)
+    .where(eq(run.id, key.runId));
+  if (scope?.retiredAt)
+    throw new Error(
+      "Research coordinator permanently retired: unrelated_source.",
+    );
   const query = client
     .select({
       kind: runOperation.kind,
@@ -82,23 +99,37 @@ export async function insertOperation(
 ) {
   const list = Array.isArray(rows) ? rows : [rows];
   if (list.length === 0) return 0;
-  const insert = client.insert(runOperation).values(
-    list.map((row) => ({
-      runId: row.runId,
-      operationId: row.operationId,
-      kind: row.kind,
-      inputFingerprint: row.inputFingerprint,
-      state: row.state ?? "started",
-      result: row.result,
-      error: row.error === undefined ? undefined : boundedError(row.error),
-      executor: row.executor,
-      completedAt: row.state === "completed" ? new Date() : undefined,
-    })),
-  );
-  const inserted = await (
-    options.ifAbsent ? insert.onConflictDoNothing() : insert
-  ).returning({ id: runOperation.id });
-  return inserted.length;
+  return client.transaction(async (tx) => {
+    const scopes = await tx
+      .select({ retiredAt: run.retiredAt })
+      .from(run)
+      .where(inArray(run.id, [...new Set(list.map((row) => row.runId))]))
+      .orderBy(asc(run.id))
+      .for("update");
+    if (scopes.some((scope) => scope.retiredAt !== null)) {
+      if (options.ifAbsent) return 0;
+      throw new Error(
+        "Research coordinator permanently retired: unrelated_source.",
+      );
+    }
+    const insert = tx.insert(runOperation).values(
+      list.map((row) => ({
+        runId: row.runId,
+        operationId: row.operationId,
+        kind: row.kind,
+        inputFingerprint: row.inputFingerprint,
+        state: row.state ?? "started",
+        result: row.result,
+        error: row.error === undefined ? undefined : boundedError(row.error),
+        executor: row.executor,
+        completedAt: row.state === "completed" ? new Date() : undefined,
+      })),
+    );
+    const inserted = await (
+      options.ifAbsent ? insert.onConflictDoNothing() : insert
+    ).returning({ id: runOperation.id });
+    return inserted.length;
+  });
 }
 
 type PurchaseImportDebugEvent = z.output<typeof purchaseImportDebugEvent>;
@@ -170,18 +201,43 @@ export async function completeOperation(
   client: Client,
   key: OperationKey,
   result: OperationResult,
-  options: { keepError?: boolean } = {},
+  options: { keepError?: boolean; retirementReceiptId?: string } = {},
 ) {
-  await client
-    .update(runOperation)
-    .set({
-      state: "completed",
-      result,
-      error: options.keepError ? undefined : null,
-      completedAt: new Date(),
-      updatedAt: new Date(),
-    })
-    .where(matchesKey(key));
+  await client.transaction(async (tx) => {
+    if (await lockOperationRun(tx, key)) {
+      const [permit] = options.retirementReceiptId
+        ? await tx
+            .select({ receipt: researchRetention, kind: runOperation.kind })
+            .from(researchRetention)
+            .innerJoin(runOperation, matchesKey(key))
+            .where(
+              and(
+                eq(researchRetention.id, options.retirementReceiptId),
+                eq(researchRetention.runId, key.runId),
+              ),
+            )
+        : [];
+      if (
+        !permit ||
+        permit.kind !== "research_resolve_import" ||
+        permit.receipt.plan.originOperationId !== key.operationId ||
+        permit.receipt.phase !== "fenced"
+      )
+        throw new Error(
+          "Research coordinator permanently retired: unrelated_source.",
+        );
+    }
+    await tx
+      .update(runOperation)
+      .set({
+        state: "completed",
+        result,
+        error: options.keepError ? undefined : null,
+        completedAt: new Date(),
+        updatedAt: new Date(),
+      })
+      .where(matchesKey(key));
+  });
 }
 
 /** Replace the stored result without changing state (an approval decision). */
@@ -190,10 +246,13 @@ export async function setOperationResult(
   key: OperationKey,
   result: OperationResult,
 ) {
-  await client
-    .update(runOperation)
-    .set({ result, updatedAt: new Date() })
-    .where(matchesKey(key));
+  await client.transaction(async (tx) => {
+    if (await lockOperationRun(tx, key)) return;
+    await tx
+      .update(runOperation)
+      .set({ result, updatedAt: new Date() })
+      .where(matchesKey(key));
+  });
 }
 
 /** Mark the operation `failed` with a bounded diagnostic. */
@@ -202,14 +261,17 @@ export async function failOperation(
   key: OperationKey,
   error: string,
 ) {
-  await client
-    .update(runOperation)
-    .set({
-      state: "failed",
-      error: boundedError(error),
-      updatedAt: new Date(),
-    })
-    .where(matchesKey(key));
+  await client.transaction(async (tx) => {
+    if (await lockOperationRun(tx, key)) return;
+    await tx
+      .update(runOperation)
+      .set({
+        state: "failed",
+        error: boundedError(error),
+        updatedAt: new Date(),
+      })
+      .where(matchesKey(key));
+  });
 }
 
 /** Fail every operation of a Run that is still in flight or awaiting approval. */

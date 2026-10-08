@@ -1,4 +1,5 @@
 import type { DetailSlotId } from "@cubby/schemas/entity-manifest";
+import type { ReportSlot } from "@cubby/schemas/entity-report";
 import type { RunOut } from "@cubby/schemas/run";
 import type { RunPurpose } from "@cubby/schemas/run-fields";
 import {
@@ -61,6 +62,16 @@ const slot = <E extends GenericDetailEntity>(
 ): PresentationCoverage<DetailSlot<E>> =>
   implemented(
     applies ? { component: lazy(load), applies } : { component: lazy(load) },
+  );
+
+/** Reports share one renderer on every entity; only the declared slot changes. */
+const reportSlot = <E extends GenericDetailEntity>(report: ReportSlot) =>
+  slot<E>(() =>
+    import("./report-slot").then(({ EntityReportSlot }) => ({
+      default: ({ record }: { record: DetailRecordOf<E> }) => (
+        <EntityReportSlot slot={report} id={record.id} record={record} />
+      ),
+    })),
   );
 
 /**
@@ -213,18 +224,10 @@ export const detailSlots = {
         default: m.VendorClassification,
       })),
     ),
-    "order-mail": slot(() =>
-      import("~/app/vendors/order-mail-worklist").then((m) => ({
-        default: m.VendorOrderMail,
-      })),
-    ),
+    "order-mail": reportSlot<"vendor">("vendor.order-mail"),
   },
   vendorAccount: {
-    "order-mail": slot(() =>
-      import("~/app/vendors/order-mail-worklist").then((m) => ({
-        default: m.VendorAccountOrderMail,
-      })),
-    ),
+    "order-mail": reportSlot<"vendorAccount">("vendorAccount.order-mail"),
     sync: slot(() =>
       import("~/app/vendors/account-sync").then((m) => ({
         default: m.VendorAccountSync,
@@ -237,11 +240,7 @@ export const detailSlots = {
     ),
   },
   purchase: {
-    "order-mail": slot(() =>
-      import("~/app/purchases/slots").then((m) => ({
-        default: m.PurchaseOrderMail,
-      })),
-    ),
+    "order-mail": reportSlot<"purchase">("purchase.order-mail"),
     runs: slot(() =>
       import("~/app/purchases/slots").then((m) => ({
         default: m.Runs,
@@ -301,13 +300,7 @@ export const detailSlots = {
     "import-purchases": runReportSlot("import-purchases", isImportRun),
     "import-approvals": runReportSlot("import-approvals", isImportRun),
     "import-findings": runReportSlot("import-findings", isImportRun),
-    "import-targets": slot(
-      () =>
-        import("~/app/purchases/purchase-import-run-detail").then((m) => ({
-          default: m.RunImportTargets,
-        })),
-      isImportRun,
-    ),
+    "import-targets": runReportSlot("import-targets", isImportRun),
     "import-evidence": runReportSlot("import-evidence", isImportRun),
     "import-prepared-orders": runReportSlot(
       "import-prepared-orders",

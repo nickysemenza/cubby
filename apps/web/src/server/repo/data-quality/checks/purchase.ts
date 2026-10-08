@@ -36,8 +36,9 @@ const hasPrimaryDocument = (t: Purchase) =>
 const hasItemization = (t: Purchase) =>
   purchaseHasItemizationSql(getTableName(t));
 const expectsOrderId = (t: Purchase) => sql`EXISTS (
-  SELECT 1 FROM "ImportSourceClaim" dq_order_source
-  WHERE dq_order_source."purchaseId" = ${t.id} AND dq_order_source.kind = 'browser_order'
+  SELECT 1 FROM "ImportSourceOrder" dq_order
+  JOIN "ImportSourceClaim" dq_order_source ON dq_order_source.id = dq_order."sourceClaimId"
+  WHERE dq_order."purchaseId" = ${t.id} AND dq_order_source.kind = 'browser_order'
 )`;
 
 const hasExpenses = (t: Purchase) => sql`EXISTS (

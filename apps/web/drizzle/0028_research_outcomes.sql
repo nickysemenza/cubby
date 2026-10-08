@@ -1,0 +1,6 @@
+ALTER TABLE "Run" DROP CONSTRAINT "Run_import_party_check";--> statement-breakpoint
+ALTER TABLE "Run" DROP CONSTRAINT "Run_purpose_check";--> statement-breakpoint
+ALTER TABLE "RunTarget" DROP CONSTRAINT "RunTarget_outcome_check";--> statement-breakpoint
+ALTER TABLE "Run" ADD CONSTRAINT "Run_import_party_check" CHECK ("Run"."purpose" NOT IN ('account_sync', 'mail_import', 'purchase_validation', 'product_enrichment', 'photo_inventory', 'mail_discovery') OR ("Run"."ledgerPartyId" IS NOT NULL AND "Run"."actorLedgerPartyShortcode" IS NOT NULL));--> statement-breakpoint
+ALTER TABLE "Run" ADD CONSTRAINT "Run_purpose_check" CHECK ("Run"."purpose" IN ('account_sync', 'mail_import', 'purchase_validation', 'product_enrichment', 'photo_inventory', 'ai_suggest', 'background', 'file_import', 'mail_search', 'mail_discovery'));--> statement-breakpoint
+ALTER TABLE "RunTarget" ADD CONSTRAINT "RunTarget_outcome_check" CHECK ("RunTarget"."outcome" IS NULL OR "RunTarget"."outcome" IN ('replayed', 'raw_evidence_drift', 'semantic_drift', 'enriched', 'unavailable', 'skipped', 'attached', 'verified', 'partially_verified', 'researched_with_gaps', 'ambiguous', 'temporarily_blocked', 'no_source_found', 'unrelated'));

@@ -1,34 +1,45 @@
 import { parseShortcodeFor } from "@cubby/schemas/identifiers";
+import { researchObjectivesRunInput } from "@cubby/schemas/run-fields";
 import { testUserId } from "@cubby/schemas/testing";
+import { pollUntil } from "@cubby/shared/retry";
+import { sha256Hex } from "@cubby/shared/sha256";
+import { eq } from "drizzle-orm";
 import { writeFileSync } from "node:fs";
 import path from "node:path";
-import { pollUntil } from "@cubby/shared/retry";
 import { Pool } from "pg";
-import { z } from "zod";
+
+import {
+  run as runTable,
+  runEvidence,
+  runOperation,
+  runTarget,
+} from "../src/server/db/schema";
+import {
+  browserCommandRecord,
+  productionBrowserEvidenceStorage,
+} from "../src/server/purchase-import/browser-results";
+import type { ResearchBrowserEnvironment } from "../src/server/purchase-import/research-browser-service";
+import { dispatchRunEvent } from "../src/server/purchase-import/dispatch";
+import { authorizePurchaseAgent } from "../src/server/purchase-import/purchase-agent-workerd.fixtures";
+import { startOrResumeRun } from "../src/server/purchase-import/run-service";
+import type { PurchaseAgentQueueProducer } from "../src/server/purchase-agent-queue-types";
+import { getDb } from "../src/server/repo/database-helpers";
 import {
   currentMemberLedgerParty,
   setMemberLoginParty,
 } from "../src/server/repo/member-login";
 import { resolveOrThrow } from "../src/server/repo/shortcode-resolver";
-import {
-  claimNextImportWork,
-  issueBrowserCommand,
-  readBrowserCommandResult,
-  loadRunScope,
-  startOrResumeRun,
-  type PurchaseImportNamespace,
-} from "../src/server/purchase-import/run-service";
-import { testBrowserPorts } from "../src/server/purchase-import/browser.fixtures";
-import { executeLeasedOperation } from "../src/server/runs/operation";
+import { buildEntity } from "./factories/build";
+import { MacImportDriver } from "./mac-import-driver";
+import type { createMacRetailerFixture } from "./mac-retailer-fixture";
+import { from, type ScriptStep } from "./purchase-agent-script";
+import { scenarioControls } from "./purchase-agent-workerd-harness";
 import {
   buildKernelContext,
   buildScenarioDatabase,
   createFixtureWithContext,
 } from "./scenarios/context";
-import { MacImportDriver } from "./mac-import-driver";
-import type { createMacRetailerFixture } from "./mac-retailer-fixture";
 import type { WorkerdRuntime } from "./workerd-runtime";
-import { buildEntity } from "./factories/build";
 
 type Input = {
   runtime: WorkerdRuntime;
@@ -39,10 +50,20 @@ type Input = {
   retailer: Awaited<ReturnType<typeof createMacRetailerFixture>>;
 };
 
-/** Fixture setup creates only auth/vendor/run prerequisites; every capture crosses the real broker. */
+const observe = (
+  call: string,
+  action: Extract<ScriptStep, { call: string }>["args"],
+): ScriptStep => ({
+  call,
+  tool: "work_observe",
+  args: { workRef: from("native-next", "work.workRef"), action },
+});
+
+/** Only external decisions are scripted; actual native snapshots cross the real coordinator and SDK. */
 export async function createMacBrowserScenario(input: Input) {
   const pool = new Pool({ connectionString: input.runtime.databaseUrl });
   const db = buildScenarioDatabase(pool);
+  const database = getDb(db);
   const kernel = buildKernelContext(db, testUserId(input.userId));
   const browserDriver = new MacImportDriver(
     input.repoRoot,
@@ -87,106 +108,152 @@ export async function createMacBrowserScenario(input: Input) {
         vendorId: vendor.id,
         ledgerPartyId: member.shortcode,
         browser: "chrome",
+        browserSyncEnabled: true,
+        status: "active",
       }),
     );
     const accountId = await resolveOrThrow(db, "vendorAccount", account.id);
+    await authorizePurchaseAgent(db, kernel.auth.userId);
+    const controls = scenarioControls(input.runtime.harness);
+    const orderURL = `${input.retailer.origin}/orders/order-001`;
+    const productURL = `${input.retailer.origin}/products/black-crew-shirt`;
+    const steps: ScriptStep[] = [
+      { gate: "native-start-ready" },
+      { call: "native-next", tool: "work_next", args: {} },
+      observe("native-auth-history", {
+        kind: "navigate",
+        url: input.retailer.historyURL,
+      }),
+      { check: "native-auth-history", includes: "waiting" },
+      { gate: "native-history-ready" },
+      observe("native-order-navigate", { kind: "navigate", url: orderURL }),
+      observe("native-order-read", { kind: "read" }),
+      { gate: "native-order-ready" },
+      observe("native-product-navigate", {
+        kind: "navigate",
+        url: productURL,
+      }),
+      observe("native-product-read", { kind: "read" }),
+      { gate: "native-product-ready" },
+    ];
+    await controls.configure({
+      // Composed photo review supplies its decisions through the owning services;
+      // another purpose must not consume this account-history script.
+      steps: [{ gate: "native-external-review" }],
+      purposeSteps: { account_sync: steps },
+    });
     const run = await startOrResumeRun(db, {
       ledgerPartyId: member.id,
       vendorAccountId: accountId,
       trigger: "manual",
     });
-    const { PURCHASE_IMPORT: namespace } = await input.runtime.harness
-      .getWorker<{ PURCHASE_IMPORT: PurchaseImportNamespace }>()
+    const env = await input.runtime.harness
+      .getWorker<{
+        PURCHASE_IMPORT: ResearchBrowserEnvironment["PURCHASE_IMPORT"];
+        PURCHASE_AGENT_QUEUE: PurchaseAgentQueueProducer;
+      }>()
       .getEnv();
-    const broker = namespace.getByName(accountId);
-    const results: Array<{ stage: string; state: string }> = [];
-    // DOM evidence stays in memory; the fixture retailer is reachable only
-    // through the Mac, so every capture exercises the real app.
-    const ports = testBrowserPorts();
-    async function result(operationId: string) {
-      return pollUntil(
+    const broker = env.PURCHASE_IMPORT.getByName(accountId);
+    const scope = async () => {
+      const [owned] = await database
+        .select()
+        .from(runTable)
+        .where(eq(runTable.id, run.id));
+      if (!owned) throw new Error("Native research Run is missing.");
+      return owned;
+    };
+    const frozenInput = (await scope()).input;
+    const frozen = researchObjectivesRunInput.parse(frozenInput);
+    if (
+      frozen.objectives.length !== 1 ||
+      frozen.objectives[0]?.kind !== "account_history" ||
+      frozen.objectives[0].vendorAccountId !== accountId
+    )
+      throw new Error(
+        "Native research did not admit its exact owned account-history objective.",
+      );
+    const [target] = await database
+      .select()
+      .from(runTarget)
+      .where(eq(runTarget.runId, run.id));
+    if (!target || target.entityKind !== "run" || target.entityId !== run.id)
+      throw new Error(
+        "Native account research target identity is unavailable.",
+      );
+    const workRef = target.id;
+    const commands = async () =>
+      (
+        await database
+          .select()
+          .from(runOperation)
+          .where(eq(runOperation.runId, run.id))
+      ).flatMap((row) => {
+        const parsed = browserCommandRecord.safeParse(row.result);
+        return parsed.success ? [parsed.data] : [];
+      });
+    const stages: Array<{
+      stage: string;
+      checksum: string;
+      screenshots: number;
+      durablyDelivered: true;
+    }> = [];
+    async function capturedRead(
+      stage: string,
+      sourceURL: string,
+      gate: string,
+    ) {
+      const record = await pollUntil(
         async () => {
-          const response = await readBrowserCommandResult(
-            db,
-            namespace,
-            { runId: run.id, operationId },
-            ports,
+          const emitted = await controls.emitted();
+          if (!emitted.includes(`gate:${gate}`)) return undefined;
+          return (await commands()).find(
+            (item) =>
+              item.command.operation.type === "read" &&
+              item.page?.research.observation.servedURL === sourceURL &&
+              !item.page.research.observation.authenticationRequired &&
+              item.observationDelivered,
           );
-          return response.state === "pending" ? undefined : response;
         },
         {
-          label: `Actual Mac broker result ${operationId}`,
+          label: `Actual Mac retained ${stage} and durable SDK acknowledgement`,
           timeoutMs: 30_000,
         },
       );
-    }
-    async function capture(operationId: string, url: string) {
-      await issueBrowserCommand(
-        db,
-        namespace,
-        {
-          runId: run.id,
-          operationId,
-          operation: {
-            type: "capture",
-            allowedHosts: ["shop.example.test"],
-            screenshot: "preferred",
-            recoveryURL: url,
-          },
-        },
-        ports,
-      );
-      return result(operationId);
-    }
-    async function awaitNativeRetry(appDriver: MacImportDriver) {
-      const continuation = input.runtime.harness.getWorker(
-        "native-import-continuation",
-      );
-      const deliveries = z.object({
-        retryEvents: z.array(
-          z.object({ runId: z.string(), eventId: z.string() }),
-        ),
-      });
-      try {
-        const retry = await pollUntil(
-          async () => {
-            const { retryEvents } = deliveries.parse(
-              await (
-                await continuation.fetch("https://continuation.test/")
-              ).json(),
-            );
-            return retryEvents.find((event) => event.runId === run.id);
-          },
-          { label: "Native Sync retry delivery", timeoutMs: 30_000 },
-        );
-        // The coordinator's decision on a retry: claim the run's next work,
-        // as its `claim_next_import_work` tool does.
-        const operationId = `native-resume:${retry.eventId}`;
-        await executeLeasedOperation(
-          db,
-          {
-            runId: run.id,
-            operationId,
-            kind: "claim_next_work",
-            payload: { runId: run.id, operationId },
-          },
-          () => claimNextImportWork(db, namespace, run.id),
-        );
-        await pollUntil(
-          async () =>
-            (await loadRunScope(db, run.id)).public.status === "running"
-              ? true
-              : undefined,
-          { label: "Native Sync resume", timeoutMs: 30_000 },
-        );
-        return [retry];
-      } catch (error) {
-        await appDriver.snapshot();
+      if (
+        !record.page ||
+        record.workRef !== workRef ||
+        record.brokerAccountId !== accountId ||
+        record.command.runID !== run.id
+      )
         throw new Error(
-          `Native Sync now did not resume the original fixture run (status ${(await loadRunScope(db, run.id)).public.status})`,
-          { cause: error },
+          "Actual Mac retained observation changed its Run, task, or account binding.",
         );
-      }
+      const [original] = await database
+        .select()
+        .from(runEvidence)
+        .where(eq(runEvidence.id, record.page.domEvidenceId));
+      if (
+        !original ||
+        original.runId !== run.id ||
+        original.targetId !== workRef ||
+        (await sha256Hex(
+          await productionBrowserEvidenceStorage.get(original.objectKey),
+        )) !== original.checksum
+      )
+        throw new Error(
+          "Actual Mac retained original bytes do not match their task/checksum.",
+        );
+      if (!record.page.capture.evidence.length)
+        throw new Error(
+          `Actual Mac ${stage} did not retain its screenshot document.`,
+        );
+      stages.push({
+        stage,
+        checksum: original.checksum,
+        screenshots: record.page.capture.evidence.length,
+        durablyDelivered: true,
+      });
+      return record.page.capture;
     }
     return {
       context: {
@@ -222,19 +289,37 @@ export async function createMacBrowserScenario(input: Input) {
           appDriver.evidence.push(file);
           throw new Error(
             "Actual Mac app did not connect to the fixture broker",
-            {
-              cause: error,
-            },
+            { cause: error },
           );
         }
-        const before = await capture(
-          "mac:authentication",
-          input.retailer.historyURL,
+        if (!run.dispatchEventId)
+          throw new Error("Native research dispatch identity is missing.");
+        await dispatchRunEvent(db, env.PURCHASE_AGENT_QUEUE, {
+          version: 1,
+          type: "start_or_resume",
+          runId: run.id,
+          purpose: "account_sync",
+          eventId: run.dispatchEventId,
+        });
+        await controls.release("native-start-ready");
+        await pollUntil(
+          async () =>
+            (await scope()).status === "paused_auth" ? true : undefined,
+          {
+            label: "Actual signed-out native research auth pause",
+            timeoutMs: 30_000,
+          },
         );
-        results.push({ stage: "signed-out capture", state: before.state });
-        if (before.state !== "paused_auth")
+        const signedOut = (await commands()).find(
+          (item) => item.page?.research.observation.authenticationRequired,
+        );
+        if (
+          !signedOut ||
+          signedOut.workRef !== target.id ||
+          signedOut.observationDelivered
+        )
           throw new Error(
-            `Signed-out Mac capture did not pause authentication: ${before.state}`,
+            "Signed-out research lost task binding or falsely acknowledged a useful observation.",
           );
         await appDriver.openSettings();
         await appDriver.wait(
@@ -251,64 +336,85 @@ export async function createMacBrowserScenario(input: Input) {
         await browserDriver.wait('text="Your orders"');
         await browserDriver.screenshot("retailer-signed-in");
         await appDriver.click("id=settings.purchaseImport.syncNow");
-        const resumedEvents = await awaitNativeRetry(appDriver);
-        const history = await capture("mac:history", input.retailer.historyURL);
+        const history = await capturedRead(
+          "authenticated history",
+          input.retailer.historyURL,
+          "native-history-ready",
+        );
+        const resumed = await scope();
         if (
-          history.state !== "completed" ||
-          !history.capture?.readableText.includes("order-001")
+          resumed.status !== "running" ||
+          JSON.stringify(resumed.input) !== JSON.stringify(frozenInput) ||
+          !history.readableText.includes("order-001")
         )
           throw new Error(
-            "Actual resumed Mac history capture is missing order-001",
+            "Native Sync did not recover the same admitted Run/history objective.",
           );
-        results.push({ stage: "resumed original run", state: history.state });
-        const order = await capture(
-          "mac:order",
-          `${input.retailer.origin}/orders/order-001`,
+        await controls.release("native-history-ready");
+        const orderCapture = await capturedRead(
+          "order detail",
+          orderURL,
+          "native-order-ready",
         );
         if (
-          order.state !== "completed" ||
-          !order.capture?.readableText.includes("Black crew shirt")
+          !orderCapture.readableText.includes("Black crew shirt") ||
+          !orderCapture.readableText.includes("Total $29.99")
         )
           throw new Error(
-            "Actual Mac order capture is missing the exact shirt variant",
+            "Actual Mac order original is missing its shirt or stated money.",
           );
-        results.push({ stage: "order capture", state: order.state });
-        const product = await capture(
-          "mac:product",
-          `${input.retailer.origin}/products/black-crew-shirt`,
+        await controls.release("native-order-ready");
+        const productCapture = await capturedRead(
+          "exact Product variant",
+          productURL,
+          "native-product-ready",
         );
         if (
-          product.state !== "completed" ||
-          !product.capture?.readableText.includes("00012345678905")
+          !productCapture.readableText.includes("00012345678905") ||
+          !productCapture.readableText.includes("Exact color Black") ||
+          !productCapture.readableText.includes("Size M")
         )
           throw new Error(
-            "Actual Mac exact product capture is missing GTIN evidence",
+            "Actual Mac Product original is missing the exact black size-M variant/GTIN.",
           );
-        const orderCapture = order.capture;
-        const productCapture = product.capture;
-        if (!orderCapture || !productCapture)
-          throw new Error("Actual browser captures are unavailable");
-        const evidence = path.join(
-          input.artifacts,
-          "native-browser-results.json",
-        );
+        const [currentTarget] = await database
+          .select()
+          .from(runTarget)
+          .where(eq(runTarget.id, target.id));
+        if (
+          !currentTarget ||
+          currentTarget.workKey !== target.workKey ||
+          currentTarget.state !== target.state
+        )
+          throw new Error(
+            "Native auth recovery changed or prematurely settled its admitted task.",
+          );
+        const violations = await controls.violations();
+        if (violations.length)
+          throw new Error(
+            `Native scripted research boundary refused: ${JSON.stringify(violations)}`,
+          );
+        const file = path.join(input.artifacts, "native-browser-results.json");
         writeFileSync(
-          evidence,
+          file,
           JSON.stringify(
             {
-              stages: results,
+              stages,
               originalRunResumed: true,
-              nativeSyncRetryDelivered: resumedEvents.some(
-                (event) => event.runId === run.id,
-              ),
-              coordinatorDecision: "deterministic claim_next_import_work",
+              originalTaskPreserved: true,
+              coordinatorDecision:
+                "typed work_next/work_observe; real researchResume and SDK receipt",
               browserIsolated: true,
+              simulatedBrowserConnected: false,
+              limits: [
+                "External research choices scripted; economic and stock assertions belong to the composed native receipt journey",
+              ],
             },
             null,
             2,
           ) + "\n",
         );
-        appDriver.evidence.push(evidence);
+        appDriver.evidence.push(file);
         return { orderCapture, productCapture };
       },
       async close() {

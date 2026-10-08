@@ -115,11 +115,13 @@ const responsesContentPart = z.looseObject({
   type: z.string(),
   image_url: z.string().optional(),
 });
+const responsesContent = z.union([z.string(), z.array(responsesContentPart)]);
 /** The part of a Responses request this rewrite touches; the rest passes through. */
 const responsesRequest = z.looseObject({
   input: z.array(
     z.looseObject({
-      content: z.union([z.string(), z.array(responsesContentPart)]).optional(),
+      content: responsesContent.optional(),
+      output: responsesContent.optional(),
     }),
   ),
 });
@@ -140,6 +142,12 @@ function pdfAsInputFile(part: ResponsesContentPart) {
     : part;
 }
 
+function normalizePdfParts(
+  content: z.infer<typeof responsesContent> | undefined,
+) {
+  return Array.isArray(content) ? content.map(pdfAsInputFile) : content;
+}
+
 function withPdfInputFiles(fetchFn: typeof fetch): typeof fetch {
   return (input, init) => {
     const body = init?.body;
@@ -150,11 +158,11 @@ function withPdfInputFiles(fetchFn: typeof fetch): typeof fetch {
       ...init,
       body: JSON.stringify({
         ...request,
-        input: request.input.map((item) =>
-          Array.isArray(item.content)
-            ? { ...item, content: item.content.map(pdfAsInputFile) }
-            : item,
-        ),
+        input: request.input.map((item) => ({
+          ...item,
+          content: normalizePdfParts(item.content),
+          output: normalizePdfParts(item.output),
+        })),
       }),
     });
   };

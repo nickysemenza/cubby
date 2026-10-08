@@ -25,7 +25,6 @@ import { money, moneyNullable } from "./money";
 import {
   costTypeSchema,
   expenseOut,
-  plainDate,
   PRODUCT_QUANTITY_DESCRIPTION,
   tradeSchema,
 } from "./project";
@@ -685,7 +684,7 @@ export const purchaseProductsOut = z.array(purchaseProductOut);
 export const productPurchaseOut = z.object({
   purchaseId: purchaseShortcode,
   displayLabel: z.string().nullable(),
-  date: plainDate,
+  date: generatedPurchaseFieldSchemas.read.date,
   vendorName: z.string().nullable(),
   orderId: z.string().nullable(),
   source: purchaseProductSource,

@@ -24,13 +24,56 @@ import {
   nextImageSortOrder,
   notDeleted,
 } from "~/server/repo/database-helpers";
-import { ensureExternalSources } from "~/server/repo/entity-external-ids";
+import {
+  ensureExternalSources,
+  lockExternalIdentifierParents,
+} from "~/server/repo/entity-external-ids";
 import { detachImagesFromEntity } from "~/server/repo/image";
 import { unitMappingColumns } from "~/server/repo/product/unit-mappings";
 import {
   resolveAllPresent,
   resolveLiveShortcodes,
 } from "~/server/repo/shortcode-resolver";
+
+type GalleryAttachment = Pick<
+  typeof entityAttachment.$inferSelect,
+  "imageId" | "purpose" | "sortOrder"
+>;
+
+export async function productGallerySnapshot(
+  tx: DrizzleTransaction,
+  productId: ProductId,
+) {
+  return tx
+    .select({
+      imageId: entityAttachment.imageId,
+      purpose: entityAttachment.purpose,
+      sortOrder: entityAttachment.sortOrder,
+    })
+    .from(entityAttachment)
+    .where(
+      and(
+        eq(entityAttachment.entityKind, "product"),
+        eq(entityAttachment.entityId, productId),
+        notDeleted(entityAttachment),
+      ),
+    )
+    .orderBy(asc(entityAttachment.sortOrder), asc(entityAttachment.createdAt));
+}
+
+/** An explicit gallery request records intent even when the member reselects the current cover. */
+export function productGalleryIntent(
+  before: readonly GalleryAttachment[],
+  after: readonly GalleryAttachment[],
+) {
+  const snapshot = (rows: readonly GalleryAttachment[]) =>
+    rows.map(({ imageId, purpose, sortOrder }) => ({
+      imageId,
+      purpose,
+      sortOrder,
+    }));
+  return { imageOrder: { from: snapshot(before), to: snapshot(after) } };
+}
 
 /**
  * Reject a canonical "1 each <-> $X" price mapping in unit mappings.
@@ -133,6 +176,9 @@ export async function ensureSlotPrimaries(
   productId: ProductId,
   slots: Iterable<{ source: string; kind: string }>,
 ): Promise<void> {
+  await lockExternalIdentifierParents(tx, [
+    { entityId: productId, entityKind: "product" },
+  ]);
   const seen = new Set<string>();
   for (const slot of slots) {
     const source = slot.source.trim().toLowerCase();
@@ -283,6 +329,9 @@ export async function syncPrimaryGtin(
   productId: ProductId,
   raw: string | null,
 ): Promise<void> {
+  await lockExternalIdentifierParents(tx, [
+    { entityId: productId, entityKind: "product" },
+  ]);
   const value = raw === null ? null : requireCanonicalGtin(raw);
   const live = await tx.query.entityExternalId.findMany({
     where: and(
@@ -361,6 +410,9 @@ export async function syncProductExternalIds(
   productId: ProductId,
   externalIds: ExternalIdInput[],
 ): Promise<void> {
+  await lockExternalIdentifierParents(tx, [
+    { entityId: productId, entityKind: "product" },
+  ]);
   const existingExternalIds = await tx.query.entityExternalId.findMany({
     where: and(
       eq(entityExternalId.entityId, productId),

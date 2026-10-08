@@ -30,6 +30,8 @@ export interface WorkerdRuntimeOptions {
   objectStorage?:
     | { borrowed: NonNullable<WorkerdHarnessOptions["objectStorage"]> }
     | {
+        /** Public identity of a local bucket; a browser peer supplies its asset transport. */
+        publicUrl?: string;
         publish?: (
           url: string,
         ) => Promise<{ origin: string; close(): Promise<void> }>;
@@ -92,7 +94,7 @@ export async function openWorkerdRuntime<T>(
     } else if (options.objectStorage) {
       const storage = await createE2EObjectStorage();
       cleanup.push("object storage", storage.close);
-      let publicUrl = storage.url;
+      let publicUrl = options.objectStorage.publicUrl ?? storage.url;
       if (options.objectStorage.publish) {
         const published = await options.objectStorage.publish(storage.url);
         cleanup.push("public object storage", published.close);

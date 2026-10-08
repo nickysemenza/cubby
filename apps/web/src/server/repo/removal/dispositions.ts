@@ -32,6 +32,7 @@ import {
   type ImageShortcode,
   parseEntityRef,
 } from "@cubby/schemas/identifiers";
+import { runTargetEntityKind } from "@cubby/schemas/run-fields";
 import {
   and,
   getTableColumns,
@@ -49,7 +50,11 @@ import {
   INCOMING_EDGES,
   type IncomingEdge,
 } from "~/server/db/entity-incoming-edges";
-import { entityAttachment, runTarget } from "~/server/db/schema";
+import {
+  entityAttachment,
+  runFactEvidence,
+  runTarget,
+} from "~/server/db/schema";
 import { createAppError, createBlockedError } from "~/server/errors/app-error";
 import { logAuditEntries } from "~/server/repo/audit-log";
 import { notDeleted, withTransactionOn } from "~/server/repo/database-helpers";
@@ -57,7 +62,10 @@ import { parseLinkEdgeKey, repointLinkEnd } from "~/server/repo/entity-links";
 import { countByTarget, impact } from "~/server/repo/impact";
 import type { RemovableEntity } from "~/server/repo/removal/core";
 import { type ChildCascade, removeEntity } from "~/server/repo/removal/entity";
-import { mergeRunTargets } from "~/server/repo/run-target-merge";
+import {
+  mergeResearchFactSubjects,
+  mergeRunTargets,
+} from "~/server/repo/run-target-merge";
 import {
   lookupShortcodes,
   resolveAllOrThrow,
@@ -490,14 +498,27 @@ export const applyMergePolicy = async <E extends RemovableEntity>(
       repointed[edge.key] = moved.moved;
       continue;
     }
+    if (edge.table === runFactEvidence && edge.property === "entityId") {
+      await mergeResearchFactSubjects(
+        tx,
+        runTargetEntityKind.parse(args.entity),
+        args.keepId,
+        args.loserIds,
+      );
+      continue;
+    }
     if (edge.disposition.effect !== "repoint")
       throw new Error(
         `${edge.key}: a ${edge.disposition.effect} merge edge needs an override`,
       );
-    // A run can already target the survivor, and the unique `(runId,
-    // entityId)` index makes a bulk repoint unsafe: keep the canonical target.
+    // Fold exact task slots before repointing their subject.
     if (edge.table === runTarget) {
-      await mergeRunTargets(tx, args.keepId, args.loserIds);
+      await mergeRunTargets(
+        tx,
+        runTargetEntityKind.parse(args.entity),
+        args.keepId,
+        args.loserIds,
+      );
       continue;
     }
     const rows = await tx

@@ -133,7 +133,11 @@ export const extractPurchaseOrderMail = async (
   // Only a placement confirmation is assigned here, and it is sent when the
   // order is placed. Without this, a confirmation that prints no order date
   // left `orderedAt` null and the writer dated the Purchase on import day.
-  if (extraction.candidate && extraction.candidate.orderedAt === null)
+  if (
+    extraction.candidate &&
+    extraction.candidate.orderedAt === null &&
+    args.mail.receivedAt
+  )
     extraction.candidate.orderedAt = args.mail.receivedAt.toISOString();
   if (extraction.candidate)
     extraction.candidate.lines = extraction.candidate.lines.map((line) =>

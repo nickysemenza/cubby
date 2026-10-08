@@ -8,6 +8,7 @@ import { displayGtin } from "@cubby/schemas/external-id";
 import { productShortcode } from "@cubby/schemas/identifiers";
 import { duplicateProductIdentitySchema } from "@cubby/schemas/problems";
 import { productListItemOut } from "@cubby/schemas/product";
+import { purchaseListItemOut } from "@cubby/schemas/purchase";
 import { ArrowsLeftRightIcon } from "@phosphor-icons/react/dist/csr/ArrowsLeftRight";
 import { BarcodeIcon } from "@phosphor-icons/react/dist/csr/Barcode";
 import { BookOpenIcon } from "@phosphor-icons/react/dist/csr/BookOpen";
@@ -71,15 +72,17 @@ interface VendorMergeRow extends MergeDisplayRow {
   spend: number;
 }
 
-interface PurchaseMergeRow extends MergeDisplayRow {
-  date: string;
-  displayLabel: string | null;
-  expenseCount: number;
-  expenseTotal: number;
-  orderId: string | null;
-  vendorId: string;
-  vendorName: string | null;
-}
+const purchaseMergeRowSchema = purchaseListItemOut.pick({
+  id: true,
+  date: true,
+  displayLabel: true,
+  expenseCount: true,
+  expenseTotal: true,
+  orderId: true,
+  vendorId: true,
+  vendorName: true,
+});
+type PurchaseMergeRow = z.output<typeof purchaseMergeRowSchema>;
 
 const isNamedMergeRow = (row: MergeDisplayRow): row is NamedMergeRow =>
   "name" in row && typeof row.name === "string";
@@ -97,20 +100,7 @@ const isVendorMergeRow = (row: MergeDisplayRow): row is VendorMergeRow =>
   typeof row.spend === "number";
 
 const isPurchaseMergeRow = (row: MergeDisplayRow): row is PurchaseMergeRow =>
-  "vendorId" in row &&
-  typeof row.vendorId === "string" &&
-  "orderId" in row &&
-  (typeof row.orderId === "string" || row.orderId === null) &&
-  "displayLabel" in row &&
-  (typeof row.displayLabel === "string" || row.displayLabel === null) &&
-  "vendorName" in row &&
-  (typeof row.vendorName === "string" || row.vendorName === null) &&
-  "date" in row &&
-  typeof row.date === "string" &&
-  "expenseCount" in row &&
-  typeof row.expenseCount === "number" &&
-  "expenseTotal" in row &&
-  typeof row.expenseTotal === "number";
+  purchaseMergeRowSchema.safeParse(row).success;
 
 /**
  * The four inks an entity can wear. `accent` feeds the `--page-accent` /

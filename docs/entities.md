@@ -301,6 +301,22 @@ A report may say the record is `live` (clients poll; there is no realtime transp
 shows several slots of one record (a Run) polls one `entityReport.getMany`, so the server loads the
 record once per poll.
 
+**Email evidence.** Vendor, Vendor Account, and Purchase detail use the same
+server-composed records report. Accepted source associations and explicit
+member decisions establish relationships; a nullable mail Vendor hint or
+matching order number alone does not link a Purchase. One original may support
+several Vendors. Reports preserve the original Gmail link, known date, accepted
+source checksums, reviewed decisions, and the actual research Run outcome.
+Changed originals remain distinguishable from previously reviewed evidence;
+missing timestamps stay unknown. Research command results show Run links only
+while their event and reviewed checksum still match the current operand; earlier
+Run links come from retained source provenance. Shared commands carry the current checksum,
+and the write rechecks source ownership and retention before changing a link.
+Declared command inputs are collected by the same generic form on web and
+native. Vendor purchase research starts the shared Run objective without a
+website, sender, Vendor Account, or Mac prerequisite; progress belongs to that
+Run rather than a separate mail workbench.
+
 **Report choices.** A `records` row may carry a `choice` (a decision the person makes) and the block
 a `form` (its own choices, the progress wording, a `disabledReason` and the one command the answers
 unlock). The server words every label, ranks the `suggestions` (a prepared line's Product
@@ -1111,7 +1127,16 @@ refusal stays authoritative.
 Merge is keeper-wins. Declared edges are repointed, only explicitly mergeable
 fields combine, and uniqueness or workflow collisions reject the operation.
 Entity-specific merge code remains only for irreducible transaction and
-collision rules.
+collision rules. Accepted research proof follows its canonical Product or
+Purchase subject independently of the source task. A merge folds only identical
+proof identities and preserves independent retained evidence and actual support.
+Colliding Run targets fold only within the same Run, entity kind, and frozen
+work key; evidence and proof references move before the absorbed task is removed.
+Purchase and Run soft deletion retain proof against their tombstones. Product
+proof remains retaining history and blocks deletion; an Image hard deletion
+removes its proof before its worklist target and detaches retained original
+evidence to the owning Run. These history references do not claim ownership of
+an Image.
 
 ## Identity, attachments, and the physical graph
 

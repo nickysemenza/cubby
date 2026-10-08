@@ -172,6 +172,11 @@ import {
 } from "./purchase-evidence-policy";
 
 export const PURCHASE_DELETE_EDGE_POLICY = {
+  "RunFactEvidence.entityId": {
+    code: "preserve-accepted-research-history",
+    effect: "preserve",
+    description: "Accepted field proofs retain the deleted Purchase tombstone.",
+  },
   "ImportPreparedOrder.targetPurchaseId": {
     code: "preserve-prepared-target",
     effect: "preserve",
@@ -190,11 +195,11 @@ export const PURCHASE_DELETE_EDGE_POLICY = {
     description:
       "Targeted validation history keeps the deleted purchase tombstone.",
   },
-  "ImportSourceClaim.purchaseId": {
-    code: "clear-import-claim",
-    effect: "detach",
+  "ImportSourceOrder.purchaseId": {
+    code: "clear-import-order",
+    effect: "hard-delete",
     description:
-      "Source claims stay as replay records but stop pointing at the deleted purchase, so the source can be imported again.",
+      "The source remains retained while this order association is removed, so only this order can be imported again.",
   },
   "PurchasePaymentEvidence.purchaseId": {
     code: "delete-payment-evidence",
@@ -229,6 +234,12 @@ export const PURCHASE_DELETE_EDGE_POLICY = {
 } as const satisfies IncomingEdgePolicy<"purchase", OperationDisposition>;
 
 export const PURCHASE_MERGE_EDGE_POLICY = {
+  "RunFactEvidence.entityId": {
+    code: "move-dedupe-canonical-research-proof",
+    effect: "move-dedupe",
+    description:
+      "Accepted proofs follow the surviving Purchase; exact proof identities fold while independent retained originals remain.",
+  },
   "ImportPreparedOrder.targetPurchaseId": {
     code: "preserve-prepared-target",
     effect: "preserve",
@@ -246,7 +257,7 @@ export const PURCHASE_MERGE_EDGE_POLICY = {
     effect: "repoint",
     description: "Targeted validation history follows the surviving purchase.",
   },
-  "ImportSourceClaim.purchaseId": {
+  "ImportSourceOrder.purchaseId": {
     code: "repoint-import-claim",
     effect: "repoint",
     description: "Source claims follow the surviving purchase.",
@@ -404,7 +415,18 @@ const purchaseColumns = {
   documentCount: purchaseDocumentCount,
 } as const;
 
-type PurchaseRow = {
+type PurchaseRow = Pick<
+  typeof purchase.$inferSelect,
+  | "id"
+  | "shortcode"
+  | "orderId"
+  | "displayLabel"
+  | "date"
+  | "statedTotal"
+  | "notes"
+  | "createdAt"
+  | "updatedAt"
+> & {
   coverage: PurchaseOut["coverage"];
   fieldResolutions: PurchaseOut["fieldResolutions"];
   spendingCategoryOrigin: string;
@@ -414,15 +436,6 @@ type PurchaseRow = {
   itemizationEvidence: boolean;
   defaultProjectShortcode: string | null;
   defaultTrade: PurchaseOut["defaultTrade"];
-  id: PurchaseId;
-  shortcode: string;
-  orderId: string | null;
-  displayLabel: string | null;
-  date: string;
-  statedTotal: number | null;
-  notes: string | null;
-  createdAt: Date;
-  updatedAt: Date;
   vendorName: string | null;
   vendorShortcode: string;
   vendorAccountShortcode: string | null;
@@ -1145,13 +1158,16 @@ const resolvePurchaseCategoryUpdate = async (
 
 const reviewedPurchaseCategoryOrigin = (
   value: PurchaseUpdateData["spendingCategoryId"],
-): "manual" | undefined => (value === undefined ? undefined : "manual");
+  sourceOrigin?: "source",
+): "manual" | "source" | undefined =>
+  value === undefined ? undefined : (sourceOrigin ?? "manual");
 
 export const updatePurchase = async (
   db: Database,
   shortcode: PurchaseShortcode,
   data: PurchaseUpdateData,
   actor: ActorContext,
+  options: { spendingCategoryOrigin?: "source" } = {},
 ): Promise<{
   output: PurchaseOut;
   entityId: PurchaseId;
@@ -1241,6 +1257,7 @@ export const updatePurchase = async (
         ),
         spendingCategoryOrigin: reviewedPurchaseCategoryOrigin(
           data.spendingCategoryId,
+          options.spendingCategoryOrigin,
         ),
         evidenceExpectation: data.evidenceExpectation,
         itemizationEvidence: data.itemizationEvidence,

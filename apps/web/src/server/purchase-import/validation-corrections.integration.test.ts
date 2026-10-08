@@ -2,8 +2,9 @@ import type { ProductId, PurchaseId } from "@cubby/schemas/identifiers";
 import {
   applyValidationCorrectionsInput,
   validationDiff,
-  validatePurchaseImportInput,
 } from "@cubby/schemas/purchase-import";
+import { researchWorkResolve } from "@cubby/schemas/research-tools";
+import { fromPartial } from "@total-typescript/shoehorn";
 import { and, eq, isNull } from "drizzle-orm";
 import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
@@ -15,8 +16,8 @@ import {
   ledgerParty,
   product,
   purchase,
-  run as runTable,
   runOperation,
+  runEvidence,
   runTarget,
 } from "~/server/db/schema";
 import { getDb } from "~/server/repo/database-helpers";
@@ -26,8 +27,10 @@ import {
 } from "~/server/repo/repo.fixtures";
 import { insertWithShortcode } from "~/server/repo/shortcode-utils";
 
-import { preparePurchaseImport, validatePurchaseImport } from "./import-orders";
-import { startTargetedRun } from "./run-service";
+import { admitPurchaseValidationResearch } from "./purchase-validation-research";
+import { resolveImportResearch } from "./research-import";
+import { retainResearchObservation } from "./research-observations";
+import { researchServiceFor } from "./research-service";
 import { applyValidationCorrections } from "./validation-corrections";
 
 /*
@@ -173,112 +176,133 @@ describe("apply a reviewed purchase-validation diff", () => {
         .returning({ id: financialTransactionAllocation.id });
       allocationId = allocation!.id;
     }
-    const started = await startTargetedRun(ctx.db, {
+    const started = await admitPurchaseValidationResearch(ctx.db, {
       ledgerPartyId: party.id,
-      purpose: "purchase_validation",
-      vendorId: vendor.id,
-      vendorAccountId: null,
-      trigger: "manual",
-      targets: [
-        {
-          kind: "purchase",
-          purchaseId: livePurchase.id,
-          sourceKind: "browser_order",
-          sourceExternalKey: `validation:${orderId}`,
-          targetFingerprint: checksum("c"),
-          evidenceFingerprint: checksum("a"),
-        },
-      ],
+      userId: ctx.actor.userId,
+      purchaseIds: [livePurchase.id],
     });
     if (!started.created) throw new Error("Validation run was blocked");
-    await preparePurchaseImport(
+    const [work] = await getDb(ctx.db)
+      .select()
+      .from(runTarget)
+      .where(eq(runTarget.runId, started.row.id));
+    if (!work) throw new Error("Current validation task missing");
+    const candidate = {
+      orderId,
+      orderedAt: "2026-09-20T12:00:00.000Z",
+      merchant: vendor.name,
+      currency: options.currency ?? "USD",
+      printedGrandTotal: options.planStatedTotal ?? 10,
+      lines: options.plan.map((line) => ({
+        title: line.title,
+        amount: line.amount,
+        lineKind: line.lineKind ?? "principal",
+        quantity:
+          (line.lineKind ?? "principal") === "principal"
+            ? (line.quantity ?? 1)
+            : undefined,
+      })),
+      payments: [],
+      allShipmentsDelivered: false,
+    };
+    const sourceText = `<pre>${JSON.stringify(candidate)}</pre>`;
+    const retained = await retainResearchObservation(
       ctx.db,
       {
-        _runExecution: {
-          runId: started.run.id,
-          operationId: `prepare:${n}`,
-          itemOperationIds: [`item:${n}`],
+        runId: started.row.id,
+        workRef: work.id,
+        callId: `original:${n}`,
+        kind: "web_page",
+        sourceMetadata: {
+          sourceURL: `https://shop.example.test/orders/${orderId}`,
         },
-        orders: [
-          {
-            stableOrderId: `order-${n}`,
-            itemOperationId: `item:${n}`,
-            source: {
-              kind: "browser_order",
-              externalKey: `validation:${orderId}`,
-              checksum: options.sourceChecksum ?? checksum("a"),
-            },
-            evidenceChecksum: checksum("b"),
-            extractionRevision: "validation@1",
-            extraction: {
-              status: "ready",
-              candidate: {
-                orderId,
-                orderedAt: "2026-09-20T12:00:00.000Z",
-                merchant: "Example",
-                currency: options.currency ?? "USD",
-                printedGrandTotal: options.planStatedTotal ?? 10,
-                lines: options.plan.map((line) => ({
-                  title: line.title,
-                  amount: line.amount,
-                  lineKind: line.lineKind ?? "principal",
-                  quantity:
-                    (line.lineKind ?? "principal") === "principal"
-                      ? (line.quantity ?? 1)
-                      : undefined,
-                })),
-                payments: [],
-                allShipmentsDelivered: true,
-              },
-            },
-            lineIds: options.plan.map((_, i) => `line-${n}-${i}`),
-            primaryDocumentImageId: null,
-            screenshotImageId: null,
-          },
-        ],
+        content: sourceText,
       },
-      ctx.actor,
+      {
+        keyPrefix: "synthetic/validation",
+        storage: {
+          put: async () => {},
+          get: async () => sourceText,
+        },
+      },
     );
-    const validation = await validatePurchaseImport(
+    if (options.sourceChecksum)
+      await getDb(ctx.db)
+        .update(runEvidence)
+        .set({ checksum: options.sourceChecksum })
+        .where(eq(runEvidence.id, retained.evidenceId));
+    const validation = await resolveImportResearch(
       ctx.db,
-      validatePurchaseImportInput.parse({
-        _runExecution: { runId: started.run.id, operationId: `validate:${n}` },
-        prepareOperationId: `prepare:${n}`,
-        resolutions: options.plan.flatMap((line, i) =>
-          (line.lineKind ?? "principal") === "principal"
-            ? [
-                {
-                  stableOrderId: `order-${n}`,
-                  stableLineId: `line-${n}-${i}`,
-                  resolution: line.expenseOnly
-                    ? { kind: "expense_only" }
-                    : {
-                        kind: "existing",
-                        productId: line.product ?? baseRow!.shortcode,
+      {
+        runId: started.row.id,
+        workRef: work.id,
+        callId: `validate:${n}`,
+        proposal: researchWorkResolve.parse({
+          workRef: work.id,
+          status: "verified",
+          identity: {
+            evidenceIds: [retained.evidenceId],
+            reasoning: "The original names this exact recorded order.",
+          },
+          orders: [
+            {
+              purchaseRef: livePurchase.shortcode,
+              vendorRef: vendor.shortcode,
+              sourceRefs: [retained.evidenceId],
+              reasoning:
+                "The retained original supports these exact order lines.",
+              candidate,
+              defaultTrade: "other",
+              productResolutions: options.plan.flatMap((line, lineIndex) =>
+                (line.lineKind ?? "principal") === "principal"
+                  ? [
+                      {
+                        lineIndex,
+                        ...(line.expenseOnly
+                          ? { kind: "expense_only" }
+                          : {
+                              kind: "existing",
+                              productId: line.product ?? baseRow!.shortcode,
+                            }),
                       },
-                },
-              ]
-            : [],
-        ),
-      }),
-      ctx.actor,
+                    ]
+                  : [],
+              ),
+            },
+          ],
+          detail:
+            "Compared the retained order to the current recorded Purchase.",
+        }),
+      },
+      {
+        readEvidence: async () => sourceText,
+        assess: async () => ({
+          identityVerified: true,
+          acceptedOrders: [0],
+          acceptedEmailLinks: [],
+          acceptedFacts: [],
+          acceptedIdentifiers: [],
+          acceptedIdentifierClaims: [],
+          acceptedImages: [],
+          rejected: [],
+        }),
+      },
     );
-    // The run is finalized by the agent in production; the apply gate needs a
-    // finished run, so mirror that terminal state here.
-    await getDb(ctx.db)
-      .update(runTable)
-      .set({ status: "needs_review" })
-      .where(eq(runTable.id, started.run.id));
+    await researchServiceFor(
+      ctx.db,
+      fromPartial<Env>({}),
+      started.row.id,
+    ).researchNext({}, `settle:${n}`);
     const [target] = await getDb(ctx.db)
       .select({ id: runTarget.id, diff: runTarget.diff })
       .from(runTarget)
-      .where(eq(runTarget.runId, started.run.id));
+      .where(eq(runTarget.runId, started.row.id));
     return {
       n,
       party,
       livePurchase,
       liveExpenses,
-      run: started.run,
+      run: started.row,
       validation,
       allocationId,
       targetDiff: () =>
@@ -300,7 +324,7 @@ describe("apply a reviewed purchase-validation diff", () => {
           await applyValidationCorrections(
             ctx.db,
             applyValidationCorrectionsInput.parse({
-              runId: started.run.publicId,
+              runId: started.row.shortcode,
               purchaseId: livePurchase.shortcode,
               operationId,
               correctionIds: ids,
@@ -344,7 +368,7 @@ describe("apply a reviewed purchase-validation diff", () => {
       ],
       planStatedTotal: 15,
     });
-    expect(drift.validation.targets[0]?.outcome).toBe("semantic_drift");
+    expect(drift.validation.status).toBe("researched_with_gaps");
     expect(drift.diff.version).toBe(2);
     const kinds = drift.diff.corrections.map((c) => c.kind).sort();
     expect(kinds).toEqual([
@@ -359,20 +383,17 @@ describe("apply a reviewed purchase-validation diff", () => {
       plan: [{ title: "Widget", amount: 10 }],
       currency: "EUR",
     });
-    expect(foreign.validation.targets[0]?.outcome).toBe("semantic_drift");
+    expect(foreign.validation.status).toBe("researched_with_gaps");
     expect(foreign.diff.corrections).toEqual([]);
     expect(foreign.diff.notes.length).toBeGreaterThan(0);
 
-    const raw = await scenario({
-      live: [{ name: "Widget", cost: 10 }],
-      plan: [{ title: "Widget", amount: 10 }],
-      sourceChecksum: checksum("d"),
-    });
-    expect(raw.validation.targets[0]).toMatchObject({
-      outcome: "raw_evidence_drift",
-      diff: null,
-    });
-    expect((await raw.targetDiff()).diff).toBeNull();
+    await expect(
+      scenario({
+        live: [{ name: "Widget", cost: 10 }],
+        plan: [{ title: "Widget", amount: 10 }],
+        sourceChecksum: checksum("d"),
+      }),
+    ).rejects.toThrow(/checksum|retained.*changed/u);
   });
 
   it("applies a partial selection atomically, leaves settlement untouched, and finishes in a second pass", async () => {

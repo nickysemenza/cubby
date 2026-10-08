@@ -1,3 +1,6 @@
+import { z } from "zod";
+import { fromPartial } from "@total-typescript/shoehorn";
+import { researchServiceFor } from "~/server/purchase-import/research-service";
 import type { Page } from "@playwright/test";
 import { preparePurchaseImportInput } from "@cubby/schemas/purchase-import";
 import type { Database } from "~/server/db";
@@ -45,6 +48,18 @@ export async function prepareCapturedRetailerOrder(input: {
     trigger: "manual",
   });
   const namespace = await runtime.browserNamespace();
+  const services = researchServiceFor(
+    db,
+    fromPartial<Env>({ R2_KEY_PREFIX: "synthetic/retailer" }),
+    run.id,
+    { queue: { send: async () => {} } },
+  );
+  const next = z
+    .object({
+      status: z.literal("working"),
+      work: z.object({ workRef: z.uuid() }),
+    })
+    .parse(await services.researchNext({}, `retailer-next:${token}`));
   const peer = await connectRetailerBrowserPeer({
     page,
     db,
@@ -53,6 +68,7 @@ export async function prepareCapturedRetailerOrder(input: {
     accountCode: input.accountCode,
     accountId: input.vendorAccountId,
     runId: run.id,
+    workRef: next.work.workRef,
     retailerPages: input.retailerPages,
   });
   const ids = syntheticOrderIds(token);

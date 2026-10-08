@@ -191,6 +191,38 @@ it("keeps the model, gateway route, operation, and provider cause on a failed ca
 });
 
 describe("runStructuredFeature", () => {
+  it("passes transient inline receipt bytes to the provider without fetching a URL", async () => {
+    const { calls, ports } = fakePorts([
+      respondWith(PRODUCT_IDENTIFICATION_FIXTURE),
+    ]);
+    await runStructuredFeature(
+      PRODUCT_IDENTIFICATION_FEATURE,
+      {
+        systemPrompts: ["Read receipt evidence."],
+        messages: [
+          {
+            role: "user",
+            content: [
+              {
+                type: "document",
+                source: {
+                  type: "inline",
+                  value: "JVBERi0xLjQ=",
+                  mimeType: "application/pdf",
+                },
+              },
+            ],
+          },
+        ],
+      },
+      { runId, operation: "mailbox-relevance" },
+      ports,
+    );
+    expect(calls[0]?.context.messages[0]?.content).toEqual([
+      { type: "image", data: "JVBERi0xLjQ=", mimeType: "application/pdf" },
+    ]);
+  });
+
   it("maps the fast tier to OpenAI Responses options and forces the respond tool", async () => {
     const { calls, ports } = fakePorts([
       respondWith(PRODUCT_IDENTIFICATION_FIXTURE),

@@ -582,6 +582,7 @@ public actor CubbyClient {
     ) -> Operations.Activity_list.Input.Query.KindPayload {
         switch kind {
         case .accountSync: .accountSync
+        case .mailImport: .mailImport
         case .purchaseValidation: .purchaseValidation
         case .productEnrichment: .productEnrichment
         case .photoInventory: .photoInventory

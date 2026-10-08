@@ -28,6 +28,7 @@ import {
   type ImageDescriptionResult,
   imageDescriptionResult,
 } from "@cubby/schemas/image-processing";
+import { mailboxRelevanceDecision } from "@cubby/schemas/mailbox-research";
 import {
   type ImportAuditModelOutput,
   type ImportExtractionModelOutput,
@@ -42,6 +43,7 @@ import {
   type RecipeFlowArtifact,
   recipeFlowArtifactSchema,
 } from "@cubby/schemas/recipe-flow";
+import { researchAssessment } from "@cubby/schemas/research-assessment";
 import {
   type AiModel,
   DECISION_MODEL,
@@ -70,6 +72,8 @@ const MODEL_FOR_TIER = {
 } as const satisfies Record<AiTier, AiModel | SupportedEmbeddingModel>;
 
 interface AiFeatureShared {
+  /** False retains usage metadata without archiving source prompts or replies. */
+  collectPayload?: boolean;
   /** AI Gateway dashboard label, and the `AiUsage`/`AiAnalysis` feature key. */
   feature: string;
   /** Bumped when the prompt changes, to invalidate stored AiAnalysis rows. */
@@ -92,7 +96,7 @@ type AiChatFeatureTier = {
 };
 
 /** The decision tier has no output to cap and no reasoning dial. */
-type AiDecisionFeatureTier = { tier: "decision" };
+type AiDecisionFeatureTier = { tier: "decision"; sample?: boolean };
 
 type AiFeatureTier = AiChatFeatureTier | AiDecisionFeatureTier;
 type AiEmbeddingFeatureTier = { tier: "embedding" };
@@ -191,6 +195,37 @@ export const SETTLEMENT_CANDIDATE_RANK_FEATURE = defineFeature({
   cache: true,
   promptVersion: "2026-10-02.1",
 }) satisfies AiDecisionFeature;
+
+export const MAILBOX_TRIAGE_FEATURE = defineFeature({
+  feature: "mailbox-triage",
+  promptVersion: "2026-10-07.1",
+  cache: false,
+  tier: "decision",
+  sample: false,
+  collectPayload: false,
+});
+
+export const MAILBOX_RELEVANCE_FEATURE = defineFeature({
+  feature: "mailbox-relevance",
+  promptVersion: "2026-10-07.1",
+  cache: false,
+  collectPayload: false,
+  tier: "fast",
+  effort: "medium",
+  maxTokens: 1500,
+  schema: mailboxRelevanceDecision,
+});
+
+export const RESEARCH_SUPPORT_FEATURE = defineFeature({
+  feature: "research-source-support",
+  promptVersion: "2026-10-07.1",
+  cache: false,
+  collectPayload: false,
+  tier: "quality",
+  effort: "high",
+  maxTokens: 6_000,
+  schema: researchAssessment,
+});
 
 export const PURCHASE_IMPORT_PRODUCT_IDENTITY_FEATURE = defineFeature({
   feature: "product-line-identity",
@@ -409,6 +444,9 @@ export const ENTITY_EMBEDDING_FEATURE = defineFeature({
 
 /** Every declared feature, for the registry assertions in the unit test. */
 export const AI_FEATURES = [
+  RESEARCH_SUPPORT_FEATURE,
+  MAILBOX_TRIAGE_FEATURE,
+  MAILBOX_RELEVANCE_FEATURE,
   USDA_FOOD_SUGGEST_FEATURE,
   INGREDIENT_MERGE_FEATURE,
   FIELD_SUGGESTION_FEATURE,

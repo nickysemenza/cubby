@@ -28,6 +28,7 @@ import type { Trade } from "@cubby/schemas/project";
 import { setCollectionTag } from "@cubby/shared/collection-tag";
 import { sql, and, asc, eq, inArray, isNotNull } from "drizzle-orm";
 
+import { comparePlainDatesDescending } from "~/lib/household-date";
 import type { Database } from "~/server/db";
 import {
   entityLink,
@@ -244,7 +245,7 @@ const loadPurchasesByProductId = async (
       productId,
       [...purchases.values()].sort(
         (left, right) =>
-          right.date.localeCompare(left.date) ||
+          comparePlainDatesDescending(left.date, right.date) ||
           left.id.localeCompare(right.id),
       ),
     ]),

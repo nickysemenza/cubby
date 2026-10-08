@@ -9,7 +9,9 @@ import {
 } from "../identifier-fields.js";
 import {
   RUN_PURPOSE_LABEL,
+  runCause,
   runPurpose,
+  runRetirementReason,
   runStatus,
   runTrigger,
 } from "../run-fields.js";
@@ -107,6 +109,9 @@ export default defineEntity({
             "decisionRevision",
             "dispatchAttempts",
             "predecessorRunId",
+            "parentRunId",
+            "cause",
+            "attempt",
           ],
         },
       ],
@@ -119,12 +124,13 @@ export default defineEntity({
           id: "imports",
           label: "Imports",
           description:
-            "Account syncs, validations, enrichments, photo batches, Gmail searches and mailbox discovery",
+            "Account syncs, mail imports, validations, enrichments, photo batches, Gmail searches and mailbox discovery",
           filters: [
             {
               id: "purpose",
               value: [
                 "account_sync",
+                "mail_import",
                 "purchase_validation",
                 "product_enrichment",
                 "photo_inventory",
@@ -299,6 +305,26 @@ export default defineEntity({
         validation: readOnly(z.date().nullable()),
       },
       {
+        key: "retiredAt",
+        kind: "timestamp",
+        nullable: true,
+        display: { detail: true, format: "timestamp" },
+        validation: readOnly(z.date().nullable()),
+      },
+      {
+        key: "retirementReason",
+        kind: "enum",
+        nullable: true,
+        control: {
+          kind: "select",
+          options: [
+            { value: "unrelated_source", label: "Unrelated source removed" },
+          ],
+        },
+        display: { detail: true },
+        validation: readOnly(runRetirementReason.nullable()),
+      },
+      {
         key: "wallTime",
         kind: "text",
         display: { detail: true },
@@ -417,6 +443,35 @@ export default defineEntity({
         validation: readOnly(runShortcode.nullable()),
       },
       {
+        key: "parentRunId",
+        kind: "identifier",
+        nullable: true,
+        reference: { entity: "run" },
+        display: { detail: true },
+        validation: readOnly(runShortcode.nullable()),
+      },
+      {
+        key: "cause",
+        kind: "enum",
+        nullable: true,
+        display: { detail: true },
+        control: {
+          kind: "select",
+          options: runCause.options.map((value) => ({
+            value,
+            label: value.replaceAll("_", " "),
+          })),
+        },
+        validation: readOnly(runCause.nullable()),
+      },
+      {
+        key: "attempt",
+        kind: "number",
+        nullable: true,
+        display: { detail: true },
+        validation: readOnly(z.number().int().positive().nullable()),
+      },
+      {
         key: "vendorAccountLabel",
         kind: "text",
         nullable: true,
@@ -478,6 +533,9 @@ export default defineEntity({
         specialized: "enum:purpose",
       },
       { key: "trigger", specialized: "enum:trigger" },
+      { key: "cause", specialized: "enum:cause" },
+      "attempt",
+      { key: "parentRunId", reference: "run" },
       {
         key: "status",
         defaultValue: "running",
@@ -498,6 +556,8 @@ export default defineEntity({
       { key: "decisionRevision", defaultValue: 1 },
       { key: "startedAt", defaultOverride: "now" },
       "endedAt",
+      "retiredAt",
+      "retirementReason",
       { key: "ordersSeen", defaultValue: 0 },
       { key: "imported", defaultValue: 0 },
       { key: "updated", defaultValue: 0 },
@@ -529,6 +589,8 @@ export default defineEntity({
       "actorName",
       "startedAt",
       "endedAt",
+      "retiredAt",
+      "retirementReason",
       "wallTime",
       "ordersSeen",
       "imported",
@@ -545,6 +607,9 @@ export default defineEntity({
       "coordinatorStartedAt",
       "auditedAt",
       "predecessorRunId",
+      "parentRunId",
+      "cause",
+      "attempt",
       "vendorAccountLabel",
       "vendorName",
       "ledgerPartyName",
@@ -639,6 +704,7 @@ export default defineEntity({
         name: "Run_party_started_idx",
         on: ["ledgerPartyId", { column: "startedAt", desc: true }],
       },
+      { name: "Run_parent_started_idx", on: ["parentRunId", "startedAt"] },
       {
         name: "Run_vendorAccount_started_idx",
         on: ["vendorAccountId", { column: "startedAt", desc: true }],
@@ -666,7 +732,7 @@ export default defineEntity({
         // One scheduled pass per mailbox at a time: an overlapping cron and
         // app-open trigger lose the insert instead of both walking the cursor.
         name: "Run_one_active_mail_discovery",
-        on: ["ledgerPartyId"],
+        on: ["ledgerPartyId", { sql: "COALESCE({input}->>'mailboxId', '')" }],
         unique: true,
         where: "{purpose} = 'mail_discovery' AND {status} = 'running'",
       },
@@ -675,7 +741,7 @@ export default defineEntity({
       { column: "trigger" },
       {
         name: "Run_import_party_check",
-        sql: "{purpose} NOT IN ('account_sync', 'purchase_validation', 'product_enrichment', 'photo_inventory', 'mail_discovery') OR ({ledgerPartyId} IS NOT NULL AND {actorLedgerPartyShortcode} IS NOT NULL)",
+        sql: "{purpose} NOT IN ('account_sync', 'mail_import', 'purchase_validation', 'product_enrichment', 'photo_inventory', 'mail_discovery') OR ({ledgerPartyId} IS NOT NULL AND {actorLedgerPartyShortcode} IS NOT NULL)",
       },
       {
         column: "channel",
@@ -683,6 +749,11 @@ export default defineEntity({
       },
       { column: "status" },
       { column: "purpose" },
+      { column: "cause" },
+      {
+        name: "Run_attempt_positive",
+        sql: "{attempt} IS NULL OR {attempt} > 0",
+      },
       {
         name: "Run_photo_inventory_no_vendor_check",
         sql: "{purpose} <> 'photo_inventory' OR {vendorAccountId} IS NULL",
@@ -795,6 +866,15 @@ export default defineEntity({
         deriveSchema: true,
         stored: true,
       },
+      {
+        columnId: "parentRunId",
+        kind: "idMulti",
+        placeholder: "Filter by parent Run...",
+        brandRef: { entity: "run" },
+        urlOnly: true,
+        deriveSchema: true,
+        stored: true,
+      },
     ],
   },
   relations: [
@@ -850,6 +930,32 @@ export default defineEntity({
       },
       inverse: {
         steps: [{ edge: "Run.predecessorRunId", direction: "incoming" }],
+      },
+    },
+    {
+      key: "parent",
+      label: "Parent Run",
+      target: "run",
+      cardinality: "one",
+      provenance: {
+        kind: "local-path",
+        steps: [{ edge: "Run.parentRunId", direction: "outgoing" }],
+      },
+      inverse: {
+        steps: [{ edge: "Run.parentRunId", direction: "incoming" }],
+      },
+    },
+    {
+      key: "children",
+      label: "Child Runs",
+      target: "run",
+      cardinality: "many",
+      provenance: {
+        kind: "local-path",
+        steps: [{ edge: "Run.parentRunId", direction: "incoming" }],
+      },
+      inverse: {
+        steps: [{ edge: "Run.parentRunId", direction: "outgoing" }],
       },
     },
     {

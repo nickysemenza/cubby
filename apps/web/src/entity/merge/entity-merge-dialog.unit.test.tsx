@@ -148,6 +148,62 @@ describe("EntityMergeDialog impact preview", () => {
 });
 
 describe("EntityMergeDialog generic kernel merge", () => {
+  it("keeps an undated Purchase selectable instead of filtering it from merge candidates", async () => {
+    const keeper = {
+      id: testShortcode("purchase", "PUR-4K7M"),
+      vendorId: testShortcode("vendor", "VND-4K7M"),
+      vendorName: "Synthetic supplier",
+      date: "2026-03-01",
+      orderId: "KNOWN-ORDER",
+      displayLabel: null,
+      expenseCount: 1,
+      expenseTotal: 20,
+    };
+    const candidate = {
+      ...keeper,
+      id: testShortcode("purchase", "PUR-4K7N"),
+      date: null,
+      orderId: "UNDATED-ORDER",
+      expenseCount: 0,
+      expenseTotal: 0,
+    };
+    const config = entities.purchase.mergeable;
+    if (!config?.candidateQuery)
+      throw new Error("Purchase candidate query missing");
+    const queryClient = new QueryClient({
+      defaultOptions: { queries: { staleTime: Infinity, retry: false } },
+    });
+    queryClient.setQueryData(config.candidateQuery(keeper).queryKey, {
+      items: [candidate],
+    });
+    const onConfirm = vi.fn();
+    renderWithClient(
+      <EntityMergeDialog
+        entity="purchase"
+        open
+        onOpenChange={() => {}}
+        onConfirm={onConfirm}
+        isPending={false}
+        keeper={keeper}
+        impactPreviewOperations={{
+          connections: entityGraph.connections.withTransport(() =>
+            Promise.resolve({
+              id: candidate.id,
+              kind: "purchase",
+              redirectedFrom: null,
+              groups: [],
+            }),
+          ),
+        }}
+      />,
+      queryClient,
+    );
+    expect(await screen.findByText("UNDATED-ORDER")).toBeVisible();
+    fireEvent.click(screen.getByRole("checkbox"));
+    fireEvent.click(screen.getByRole("button", { name: /^Merge/ }));
+    expect(onConfirm).toHaveBeenCalledWith(keeper.id, [candidate.id]);
+  });
+
   it("offers a ranked merge for a kernel-merged entity without its own config", async () => {
     const onConfirm = vi.fn();
     const rows = [

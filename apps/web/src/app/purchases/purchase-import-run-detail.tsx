@@ -1,4 +1,3 @@
-import { targetOutcomeSummary } from "@cubby/schemas/activity";
 import {
   agentConversationSchema,
   agentPromptSchema,
@@ -6,17 +5,10 @@ import {
   type AgentConversationPart,
   type AgentConversationSettlement,
 } from "@cubby/schemas/agent-conversation";
-import { entitySchema } from "@cubby/schemas/entity";
 import { agentImportRunPurpose } from "@cubby/schemas/import-run-agent";
-import {
-  countRunTargets,
-  runTargetState,
-} from "@cubby/schemas/purchase-import";
-import {
-  initiateRunEvidenceUploadInput,
-  validationDiff,
-} from "@cubby/schemas/purchase-import";
+import { initiateRunEvidenceUploadInput } from "@cubby/schemas/purchase-import";
 import type { RunOut } from "@cubby/schemas/run";
+import { humanize } from "@cubby/shared";
 import { sha256Hex } from "@cubby/shared/sha256";
 import { ArrowSquareOutIcon } from "@phosphor-icons/react/dist/csr/ArrowSquareOut";
 import { CheckCircleIcon } from "@phosphor-icons/react/dist/csr/CheckCircle";
@@ -45,8 +37,6 @@ import {
   PhotoRunGroupingAction,
 } from "~/app/runs/photo-run-detail";
 import type { RunDetail } from "~/contracts/run.contract";
-import { EntityRefLink } from "~/entity/components/entity-ref-link";
-import { isBrowserRoutedEntity } from "~/entity/entities";
 import { DetailAction } from "~/entity/entity-detail/detail-action-bar";
 import { EntityReportSlot } from "~/entity/entity-detail/report-slot";
 import { ripple } from "~/integrations/tanstack-query/cache-tags";
@@ -59,7 +49,7 @@ import { putPresignedObject } from "~/lib/presigned-upload";
 import { formatCurrency } from "~/lib/utils";
 import { useSectionVisible } from "~/ui/data-table/detail-page";
 import { Row, Section, Stack } from "~/ui/layout";
-import { Badge, type BadgeVariant } from "~/ui/primitives/badge";
+import { Badge } from "~/ui/primitives/badge";
 import { Button } from "~/ui/primitives/button";
 import { StatusText } from "~/ui/primitives/status-text";
 import {
@@ -80,7 +70,6 @@ import {
   summarizePhotoDescriptions,
   type AgentWorkItem,
 } from "./agent-work-summary";
-import { ValidationCorrectionsReview } from "./validation-corrections-review";
 
 const ACTIVE_RUN_STATUSES = new Set([
   "running",
@@ -96,14 +85,6 @@ const TERMINAL_RUN_STATUSES = new Set([
   "needs_review",
   "dispatch_failed",
 ]);
-
-const statusBadgeVariant = (status: string): BadgeVariant => {
-  if (status === "completed") return "positive";
-  if (status === "failed" || status === "cancelled" || status === "aborted")
-    return "destructive";
-  if (status.startsWith("paused")) return "warning";
-  return "secondary";
-};
 
 const EMPTY_AGENT_SNAPSHOT: AgentConversationObservationSnapshot = {
   phase: "connecting",
@@ -269,13 +250,29 @@ function RunControls({ run }: { run: RunDetail }) {
 /** Where this run came from, what replaced it, and the inputs a restart copies. */
 function RunLineageAndInputs({ run }: { run: RunDetail }) {
   const links = [
-    ["Started from", run.predecessorRunPublicId],
+    ["Parent run", run.parentRunId],
+    ["Retry of", run.predecessorRunPublicId],
     ["Restarted as", run.successorRunPublicId],
   ] as const;
-  if (!run.restartInputs && !links.some(([, publicId]) => publicId))
+  if (
+    !run.restartInputs &&
+    !run.cause &&
+    !run.attempt &&
+    !links.some(([, publicId]) => publicId)
+  )
     return null;
   return (
     <Stack gap="sm">
+      {run.cause || run.attempt ? (
+        <p className="text-xs text-muted-foreground">
+          {[
+            run.cause ? humanize(run.cause) : null,
+            run.attempt ? `Attempt ${run.attempt}` : null,
+          ]
+            .filter(Boolean)
+            .join(" · ")}
+        </p>
+      ) : null}
       {links.map(([label, publicId]) =>
         publicId ? (
           <RunLink key={label} label={label} publicId={publicId} />
@@ -322,7 +319,7 @@ function ManualEvidenceUpload({ run }: { run: RunDetail }) {
         filename: file.name,
         sourceMetadata: { filename: file.name },
       });
-      // A presigned object-store PUT, not a Cubby endpoint.
+      // The guarded upload endpoint verifies the persisted manifest and live Run.
       try {
         await putPresignedObject(staged.uploadUrl, bytes, contentType);
       } catch {
@@ -337,7 +334,7 @@ function ManualEvidenceUpload({ run }: { run: RunDetail }) {
   });
   if (
     run.purpose !== "purchase_validation" ||
-    run.status !== "dispatch_failed" ||
+    !["running", "dispatch_failed"].includes(run.status) ||
     !target
   )
     return null;
@@ -402,22 +399,8 @@ function agentWorkDetail(run: RunDetail, settledGroups?: number) {
     return `${photos} ${photos === 1 ? "photo" : "photos"} received${settledGroups ? ` · ${settledGroups} groups settled` : ""}`;
   }
   if (run.purpose === "product_enrichment")
-    return productWorkDetail(run.targets);
+    return `${run.targets.length} ${run.targets.length === 1 ? "product" : "products"} selected · Research results below`;
   return `${run.ordersSeen} ${run.ordersSeen === 1 ? "order" : "orders"} seen · ${run.imported} imported · ${run.updated} updated`;
-}
-
-/** "3 products · 1 enriched · 1 skipped". */
-function productWorkDetail(targets: RunDetail["targets"]) {
-  const count = (outcome: string) =>
-    targets.filter((target) => target.outcome === outcome).length;
-  return [
-    `${targets.length} ${targets.length === 1 ? "product" : "products"}`,
-    `${count("enriched")} enriched`,
-    count("skipped") ? `${count("skipped")} skipped` : null,
-    count("unavailable") ? `${count("unavailable")} unavailable` : null,
-  ]
-    .filter(Boolean)
-    .join(" · ");
 }
 
 function AgentWorkOverview({
@@ -1067,41 +1050,6 @@ function ToolValue({ label, value }: { label: string; value: unknown }) {
   );
 }
 
-/** One titled list of run records, or its empty copy. */
-function RunRecordList<T>({
-  description,
-  items,
-  empty,
-  render,
-}: {
-  description?: string;
-  items: readonly T[];
-  empty: string;
-  render: (item: T) => { key: string; body: ReactNode };
-}) {
-  return (
-    <Section description={description}>
-      {items.length ? (
-        <Stack gap="sm">
-          {items.map((item) => {
-            const row = render(item);
-            return (
-              <article
-                key={row.key}
-                className="grid gap-1 border-b border-border pb-2 text-sm last:border-0 last:pb-0"
-              >
-                {row.body}
-              </article>
-            );
-          })}
-        </Stack>
-      ) : (
-        <StatusText>{empty}</StatusText>
-      )}
-    </Section>
-  );
-}
-
 /**
  * The run's live read (agent transcript, operations, evidence), polled while
  * the run is active. Every run slot shares it through this one query key.
@@ -1148,8 +1096,6 @@ function RunGate({
 
 const isActiveRun = (run: RunDetail) => ACTIVE_RUN_STATUSES.has(run.status);
 const isStoppedRun = (run: RunDetail) => !isActiveRun(run);
-const hasTargetsOrEvidence = (run: RunDetail) =>
-  run.targets.length > 0 || run.evidence.length > 0;
 
 /** Whether the controls slot has anything to offer for this run's state. */
 function hasRunControls(run: RunDetail): boolean {
@@ -1228,104 +1174,6 @@ export function RunImportAgentStopped({ record }: { record: RunOut }) {
 }
 
 /**
- * A validation target's difference. A v2 diff is a reviewable before/after
- * table; a diff recorded before corrections existed stays raw JSON.
- */
-function TargetDiff({
-  runId,
-  target,
-}: {
-  runId: RunDetail["publicId"];
-  target: RunDetail["targets"][number];
-}) {
-  if (target.diff === null) return null;
-  const parsed = validationDiff.safeParse(target.diff);
-  if (parsed.success && target.targetShortcode)
-    return (
-      <ValidationCorrectionsReview
-        // A refreshed diff starts a fresh selection and operation id.
-        key={`${parsed.data.corrections.map((item) => `${item.id}:${item.fingerprint}`).join("|")}#${parsed.data.notes.length}`}
-        runId={runId}
-        purchaseId={target.targetShortcode}
-        diff={parsed.data}
-      />
-    );
-  return (
-    <details className="border border-border bg-muted/30 p-2 text-xs">
-      <summary className="cursor-pointer font-medium">
-        Review semantic difference
-      </summary>
-      <ToolValue label="Difference" value={target.diff} />
-    </details>
-  );
-}
-
-/** A target named and linked to its record; a bare kind when it has no code. */
-function TargetName({ target }: { target: RunDetail["targets"][number] }) {
-  const entity = entitySchema.safeParse(target.targetType);
-  if (
-    !target.targetShortcode ||
-    !entity.success ||
-    !isBrowserRoutedEntity(entity.data)
-  )
-    return <span className="font-medium">{target.targetType}</span>;
-  return (
-    <EntityRefLink
-      variant="chip"
-      entity={entity.data}
-      id={target.targetShortcode}
-      name={target.targetName}
-      wrap
-    />
-  );
-}
-
-/** Run detail slot: the frozen source and target of each account-sync target. */
-export function RunImportTargets({ record }: { record: RunOut }) {
-  return (
-    <ImportRunSlot record={record} visible={hasTargetsOrEvidence}>
-      {(run) => (
-        <RunRecordList
-          description={
-            targetOutcomeSummary(
-              countRunTargets(
-                run.targets.map((target) => runTargetState.parse(target.state)),
-              ),
-            ) ?? "The selected source and target are frozen for this run."
-          }
-          items={run.targets}
-          empty="No explicit targets were recorded for this run."
-          render={(target) => ({
-            key: target.id,
-            body: (
-              <>
-                <Row wrap gap="sm" align="center">
-                  <Badge variant={statusBadgeVariant(target.state)}>
-                    {target.state}
-                  </Badge>
-                  <TargetName target={target} />
-                </Row>
-                <p className="text-xs text-muted-foreground">
-                  {target.sourceLabel ?? "No source selected"}
-                  {target.vendorAccountLabel
-                    ? ` · ${target.vendorAccountLabel}`
-                    : ""}
-                </p>
-                {target.outcome ? <p>Outcome: {target.outcome}</p> : null}
-                {target.warning ? (
-                  <StatusText tone="warning">{target.warning}</StatusText>
-                ) : null}
-                <TargetDiff runId={run.publicId} target={target} />
-              </>
-            ),
-          })}
-        />
-      )}
-    </ImportRunSlot>
-  );
-}
-
-/**
  * Run detail slot for an agent-proposed photo review.
  */
 export function RunPhotoBatch({ record }: { record: RunOut }) {
@@ -1374,6 +1222,7 @@ function RunLink({ label, publicId }: { label: string; publicId: string }) {
       <a
         className="inline-flex items-center gap-1 font-mono text-xs text-primary hover:underline"
         href={runHref(publicId)}
+        aria-label={`${label} ${publicId}`}
       >
         {publicId}
         <ArrowSquareOutIcon className="size-3" />

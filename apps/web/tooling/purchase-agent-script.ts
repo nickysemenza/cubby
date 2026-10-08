@@ -12,6 +12,7 @@ export type ScriptValue =
   | ScriptValue[]
   | { $from: string; path: string }
   | { $runId: true }
+  | { $signal: string; path: string }
   | { [key: string]: ScriptValue };
 
 export type ScriptStep =

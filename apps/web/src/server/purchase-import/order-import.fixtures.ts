@@ -12,7 +12,6 @@ import {
   makeProductInput,
 } from "~/server/repo/repo.fixtures";
 
-import type { OrderMailEvidencePorts } from "./gmail/process";
 import { commitPurchaseImport, preparePurchaseImport } from "./import-orders";
 import { startOrResumeRun } from "./run-service";
 
@@ -39,7 +38,6 @@ export async function importOrderHistory(
     /** One hex digit; a new digit is a source refresh of the same order. */
     revision: string;
   },
-  mailEvidencePorts?: OrderMailEvidencePorts,
 ) {
   const run = await startOrResumeRun(db, {
     ledgerPartyId: parseEntityId("ledgerParty", input.ledgerPartyId),
@@ -127,7 +125,6 @@ export async function importOrderHistory(
       resolutions,
     }),
     actor,
-    mailEvidencePorts,
   );
   return result.items[0];
 }

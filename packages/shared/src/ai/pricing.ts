@@ -2,6 +2,7 @@ import {
   type CostTier,
   Models,
   type ModelCost,
+  type Model,
   type ProviderMap,
 } from "@opencode-ai/models";
 
@@ -14,13 +15,15 @@ import { AI_MODELS, type AiModelId, type AiProvider } from "./models";
  * Cubby declares no rates: each declared model is priced by the catalog row
  * under its `catalogProvider` and exact id, and a model the catalog does not
  * price stays unpriced (`null`), never free. Pricing is usage telemetry, so a
- * catalog failure leaves rows unpriced and never blocks a model call.
+ * catalog failure leaves telemetry unpriced. Paid admission quotes separately
+ * refuse unknown prices or token bounds rather than authorizing an unknown cost.
  */
 
 /** One declared model's stored vendor and its catalog price, if any. */
 interface AiModelPrice {
   provider: AiProvider;
   cost: ModelCost | null;
+  limit: Model["limit"] | null;
 }
 
 /** Each declared model's row under its own catalog provider; no fallback. */
@@ -28,9 +31,124 @@ export function projectAiModelPricing(providers: ProviderMap) {
   return mapRecord(recordKeys(AI_MODELS), (id): AiModelPrice => ({
     provider: AI_MODELS[id].provider,
     cost: providers[AI_MODELS[id].catalogProvider]?.models[id]?.cost ?? null,
+    limit: providers[AI_MODELS[id].catalogProvider]?.models[id]?.limit ?? null,
   }));
 }
 export type AiModelPricing = Readonly<ReturnType<typeof projectAiModelPricing>>;
+
+function decisionTokenBounds(limit: Model["limit"]) {
+  if (
+    !Number.isSafeInteger(limit.context) ||
+    limit.context < 1 ||
+    (limit.input !== undefined &&
+      (!Number.isSafeInteger(limit.input) || limit.input < 1)) ||
+    !Number.isSafeInteger(limit.output) ||
+    limit.output < 0
+  )
+    return null;
+  return {
+    input: Math.max(limit.context, limit.input ?? limit.context),
+    output: limit.output,
+  };
+}
+
+function decisionQuoteRates(cost: ModelCost, inputWindow: number) {
+  const tiers = cost.tiers ?? [];
+  if (
+    tiers.some(
+      (rate) =>
+        rate.tier.type !== "context" ||
+        !Number.isSafeInteger(rate.tier.size) ||
+        rate.tier.size < 0,
+    )
+  )
+    return null;
+  const rates = [
+    cost,
+    ...tiers.filter((rate) => rate.tier.size <= inputWindow),
+    ...(inputWindow >= 200_000 && cost.context_over_200k
+      ? [cost.context_over_200k]
+      : []),
+  ];
+  const rateValues = rates.flatMap((rate) =>
+    [
+      rate.input,
+      rate.output,
+      rate.reasoning,
+      rate.cache_read,
+      rate.cache_write,
+      rate.input_audio,
+      rate.output_audio,
+    ].filter((value) => value !== undefined),
+  );
+  if (rateValues.some((rate) => !Number.isFinite(rate) || rate < 0))
+    return null;
+  return {
+    input: Math.max(
+      ...rates.flatMap((rate) => [
+        rate.input,
+        rate.cache_read ?? 0,
+        rate.cache_write ?? 0,
+      ]),
+    ),
+    output: Math.max(
+      ...rates.flatMap((rate) => [rate.output, rate.reasoning ?? 0]),
+    ),
+  };
+}
+
+/**
+ * A conservative reservation for the exact declared decision model. Every
+ * question may bill a full input/context window independently; byte lengths
+ * and expected cache hits are not billing bounds. Explicit zero output rates
+ * are valid for input-only decision models.
+ */
+export function quoteAiDecisionRequest(
+  pricing: AiModelPricing | null,
+  request: { provider: string; model: string; questionCount: number },
+) {
+  if (
+    !pricing ||
+    !Object.hasOwn(AI_MODELS, request.model) ||
+    !Number.isSafeInteger(request.questionCount) ||
+    request.questionCount < 1
+  )
+    return null;
+  // SAFETY: the own-key check names exactly one declared model.
+  const model = request.model as AiModelId;
+  const declaration = AI_MODELS[model];
+  const price = pricing[model];
+  if (
+    declaration.role !== "decision" ||
+    price?.provider !== request.provider ||
+    !price.cost ||
+    !price.limit
+  )
+    return null;
+  const bounds = decisionTokenBounds(price.limit);
+  if (!bounds) return null;
+  const rates = decisionQuoteRates(price.cost, bounds.input);
+  if (!rates) return null;
+  const inputTokens = bounds.input * request.questionCount;
+  const outputTokens =
+    rates.output === 0 ? 0 : bounds.output * request.questionCount;
+  const maxCostUsd =
+    (inputTokens * rates.input + outputTokens * rates.output) / 1_000_000;
+  if (
+    !Number.isSafeInteger(inputTokens) ||
+    !Number.isSafeInteger(outputTokens) ||
+    !Number.isFinite(maxCostUsd) ||
+    maxCostUsd < 0
+  )
+    return null;
+  return {
+    provider: price.provider,
+    model,
+    inputTokens,
+    outputTokens,
+    maxCostUsd,
+  };
+}
 
 export interface AiTokenUsage {
   inputTokens?: number | null;

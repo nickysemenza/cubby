@@ -84,6 +84,7 @@ export interface GatewayControls {
   skipCache?: boolean;
   cacheTtl?: number;
   requestTimeoutMs?: number;
+  collectPayload?: boolean;
 }
 
 /** {@link GatewayControls} scoped to one gateway, as `AI.run` takes them. */
@@ -97,6 +98,7 @@ export interface GatewayControlHeaders {
   "cf-aig-skip-cache"?: string;
   "cf-aig-cache-ttl"?: string;
   "cf-aig-request-timeout"?: string;
+  "cf-aig-collect-log-payload"?: string;
 }
 
 /** The documented `cf-aig-*` headers for the controls a caller chose. */
@@ -112,6 +114,8 @@ export function gatewayControlHeaders(
     headers["cf-aig-cache-ttl"] = String(controls.cacheTtl);
   if (controls.requestTimeoutMs !== undefined)
     headers["cf-aig-request-timeout"] = String(controls.requestTimeoutMs);
+  if (controls.collectPayload !== undefined)
+    headers["cf-aig-collect-log-payload"] = String(controls.collectPayload);
   return headers;
 }
 
@@ -274,6 +278,10 @@ export interface GatewayFetchRoutes extends GatewayResponseObservers {
     | undefined;
   /** The household plan, tried first for `openai/responses`. */
   chatGpt?: ChatGptInference;
+  /** A disconnected subscription must wait instead of using a paid chat route. */
+  subscriptionRequired?: boolean;
+  /** Admission completes before each actual paid or synthetic-peer transmission. */
+  beforePaidRequest?: (request: GatewayFetchRequest) => Promise<void>;
   requestTimeoutMs?: number;
   /** Rewrites the provider body on every route that decodes it. */
   rewriteQuery?: (query: GatewayQuery) => GatewayQuery;
@@ -310,6 +318,7 @@ export function gatewayFetchThrough(routes: GatewayFetchRoutes): typeof fetch {
 
     const testPeer = routes.testPeer?.();
     if (testPeer) {
+      await routes.beforePaidRequest?.(request);
       routes.onTransport?.("gateway");
       return observe(await testPeer(request));
     }
@@ -325,6 +334,11 @@ export function gatewayFetchThrough(routes: GatewayFetchRoutes): typeof fetch {
       });
       if (subscription) return observe(subscription);
     }
+    if (routes.subscriptionRequired)
+      throw new Error(
+        "Required ChatGPT subscription is unavailable; reconnect before retrying.",
+      );
+    await routes.beforePaidRequest?.(request);
     routes.onTransport?.("gateway");
     return observe(await routes.gateway(request));
   };

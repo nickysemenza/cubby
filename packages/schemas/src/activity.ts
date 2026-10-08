@@ -18,6 +18,7 @@ export type ActivityKind = z.infer<typeof activityKind>;
 
 const activityIconFallback = {
   account_sync: "vendor",
+  mail_import: "purchase",
   purchase_validation: "purchase",
   product_enrichment: "product",
   photo_inventory: "inventory",

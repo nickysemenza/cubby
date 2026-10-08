@@ -50,7 +50,13 @@ struct NearbyReceiptSearchView: View {
 
     private var summary: some View {
         Section {
-            LabeledContent("Date") { Text(context.transactionDate, format: .dateTime.month().day()) }
+            LabeledContent("Date") {
+                if let date = context.transactionDate {
+                    Text(date, format: .dateTime.month().day())
+                } else {
+                    Text("Unknown")
+                }
+            }
             if let merchant = context.merchant { LabeledContent("Merchant", value: merchant) }
             if let cents = context.amountInCents {
                 LabeledContent("Amount") {
@@ -59,7 +65,9 @@ struct NearbyReceiptSearchView: View {
             }
         } footer: {
             Text(
-                "Search runs on this device within three days of the charge. Nothing uploads until you select a photo and choose Use photo."
+                context.transactionDate == nil
+                    ? "The charge has no known transaction date. Choose a receipt photo manually. Nothing uploads until you select a photo and choose Use photo."
+                    : "Search runs on this device within three days of the charge. Nothing uploads until you select a photo and choose Use photo."
             )
         }
     }
@@ -68,14 +76,18 @@ struct NearbyReceiptSearchView: View {
         Section("Nearby photos") {
             switch model.phase {
             case .idle:
-                Button("Find nearby photos", systemImage: "photo.badge.magnifyingglass") {
-                    Task {
-                        await appModel.preparePhotoSubsystem()
-                        model.startSearch(
-                            context: context, analysisStore: appModel.photoAnalysisStore)
+                if context.transactionDate == nil {
+                    Text("Choose a photo manually below; the transaction date is unknown.")
+                } else {
+                    Button("Find nearby photos", systemImage: "photo.badge.magnifyingglass") {
+                        Task {
+                            await appModel.preparePhotoSubsystem()
+                            model.startSearch(
+                                context: context, analysisStore: appModel.photoAnalysisStore)
+                        }
                     }
+                    .accessibilityIdentifier("receiptPhoto.findNearby")
                 }
-                .accessibilityIdentifier("receiptPhoto.findNearby")
             case .searching(let completed, let total):
                 ProgressView(
                     "Checking \(completed) of \(total)", value: Double(completed),
@@ -92,7 +104,9 @@ struct NearbyReceiptSearchView: View {
                 ContentUnavailableView(
                     "Use the photo picker", systemImage: "photo.on.rectangle",
                     description: Text(
-                        "Whole-library access is unavailable. The system picker below can share one photo without granting broader access."
+                        context.transactionDate == nil
+                            ? "The transaction date is unknown. Choose a receipt photo manually below."
+                            : "Whole-library access is unavailable. The system picker below can share one photo without granting broader access."
                     ))
             case .failed:
                 ContentUnavailableView("Search unavailable", systemImage: "exclamationmark.triangle")

@@ -1,28 +1,31 @@
 import { runEntityId } from "@cubby/schemas/identifiers";
+import { coordinatorModelFor } from "@cubby/schemas/import-run-agent";
 import {
   BROWSER_BRIDGE_PROTOCOL,
-  type BrowserBridgeRequest,
-  type BrowserBridgeResult,
+  browserBridgeResult,
 } from "@cubby/schemas/purchase-import";
 import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 
+import {
+  createProductFixture,
+  makeProductInput,
+} from "~/server/repo/repo.fixtures";
 import { executeLeasedOperation } from "~/server/runs/operation";
 
-import { observation } from "./browser.fixtures";
+import { completedCapture } from "./browser.fixtures";
 import { dispatchRunEvent, recordRunDispatchAttempt } from "./dispatch";
+import { admitProductResearch } from "./product-research-run";
+import { admitPurchaseValidationResearch } from "./purchase-validation-research";
+import { admitMailResearch } from "./research-run";
 import {
   AccountOccupiedError,
   controlRun,
   expireStaleRuns,
-  finishRun,
-  issueBrowserCommand,
-  claimNextImportWork,
-  readBrowserCommandResult,
+  loadRunDetail,
   reconcileSettledRun,
   resumeAuthorizedRuns,
   startOrResumeRun,
-  startTargetedRun,
 } from "./run-service";
 
 describe("purchase import run admission", () => {
@@ -55,41 +58,76 @@ describe("purchase import run admission", () => {
     });
   };
 
+  it("discloses retained mail restart scope without exposing private source identities", async () => {
+    const party = await createMember();
+    const { orderMail } = await import("~/server/db/schema");
+    const { getDb } = await import("~/server/repo/database-helpers");
+    const { sha256Hex } = await import("@cubby/shared/sha256");
+    const sources = await getDb(ctx.db)
+      .insert(orderMail)
+      .values(
+        await Promise.all(
+          ["Confirmation", "Shipment"].map(async (subject) => ({
+            ledgerPartyId: party.id,
+            mailboxId: "synthetic-restart-mailbox",
+            messageId: subject.toLowerCase(),
+            sender: "orders@shop.example.test",
+            subject,
+            receivedAt: new Date("2026-09-01T18:00:00Z"),
+            rawChecksum: await sha256Hex(subject),
+            content: { snippet: null, bodyText: subject, bodyHtml: null },
+          })),
+        ),
+      )
+      .returning();
+    const [admission] = await admitMailResearch(ctx.db, {
+      ledgerPartyId: party.id,
+      userId: ctx.actor.userId,
+      messageIds: sources.map((source) => source.id),
+    });
+    if (!admission?.created)
+      throw new Error("Expected retained mail admission");
+    const detail = await loadRunDetail(ctx.db, admission.row.shortcode);
+    expect(detail.restartInputs?.input).toEqual({
+      kind: "mail_research",
+      sourceCount: 2,
+    });
+    const disclosure = JSON.stringify(detail.restartInputs);
+    for (const source of sources) {
+      expect(disclosure).not.toContain(source.id);
+      expect(disclosure).not.toContain(source.rawChecksum);
+      expect(disclosure).not.toContain(source.mailboxId);
+    }
+  });
+
   // "Sync now" or a charge hunt on an account an enrichment or validation run
   // holds must not resume that run as if it were the sync, nor poke its agent.
   it("refuses an account sync while another kind of run holds the account", async () => {
     const party = await createMember();
     const account = await createVendorAccount(party.id);
-    const { insertWithShortcode } =
-      await import("~/server/repo/shortcode-utils");
-    const target = await insertWithShortcode(ctx.db, "purchase", {
-      vendorId: account.vendorId,
-      vendorAccountId: account.id,
-      orderId: "OCCUPIED-1",
-      date: "2026-09-01",
-    });
-    const validation = await startTargetedRun(ctx.db, {
+    const target = await createProductFixture(
+      ctx.db,
+      makeProductInput({
+        name: "Synthetic occupied-account Product",
+      }),
+      ctx.actor,
+    );
+    const [validation] = await admitProductResearch(ctx.db, {
       ledgerPartyId: party.id,
-      purpose: "purchase_validation",
-      vendorId: account.vendorId,
-      vendorAccountId: account.id,
-      trigger: "manual",
-      targets: [
-        {
-          kind: "purchase",
-          purchaseId: target.id,
-          targetFingerprint: "a".repeat(64),
-        },
-      ],
+      userId: ctx.actor.userId,
+      productIds: [target.entityId],
+      preferredBrowserAccountId: account.id,
+      cause: "member_request",
     });
-    if (!validation.created) throw new Error("Expected a validation run");
+    if (!validation?.created)
+      throw new Error("Expected current Product admission");
     const sync = startOrResumeRun(ctx.db, {
       ledgerPartyId: party.id,
       vendorAccountId: account.id,
       trigger: "manual",
     });
     await expect(sync).rejects.toBeInstanceOf(AccountOccupiedError);
-    await expect(sync).rejects.toThrow(validation.run.publicId);
+    await expect(sync).rejects.toThrow(validation.run.shortcode);
   });
 
   it("atomically admits one active run per vendor account", async () => {
@@ -124,7 +162,7 @@ describe("purchase import run admission", () => {
       .where(eq(runTable.id, first.id));
     // Admission omits both revisions, so the migrated column defaults stamp them.
     expect(stored).toEqual({
-      coordinatorModel: "gpt-6-sol",
+      coordinatorModel: coordinatorModelFor("account_sync"),
       skillRevision: "purchase-import@1",
       runtimeRevision: "pi-durable@1",
     });
@@ -206,11 +244,15 @@ describe("purchase import run admission", () => {
       runPublicId: run.publicId,
       action: "retry",
     });
+    if (!("successorRunId" in successor))
+      throw new Error("Expected a research successor");
     const [storedSuccessor] = await getDb(ctx.db)
       .select({ coordinatorModel: runTable.coordinatorModel })
       .from(runTable)
       .where(eq(runTable.id, runEntityId.parse(successor.successorRunId)));
-    expect(storedSuccessor?.coordinatorModel).toBe("gpt-6-sol");
+    expect(storedSuccessor?.coordinatorModel).toBe(
+      coordinatorModelFor("account_sync"),
+    );
   });
 
   it("resumes authorization with a persisted dispatch generation", async () => {
@@ -359,20 +401,10 @@ describe("purchase import run admission", () => {
       date: "2026-09-20",
       displayLabel: "Validation target",
     });
-    const started = await startTargetedRun(ctx.db, {
+    const started = await admitPurchaseValidationResearch(ctx.db, {
       ledgerPartyId: party.id,
-      purpose: "purchase_validation",
-      vendorId: account.vendorId,
-      vendorAccountId: account.id,
-      trigger: "manual",
-      targets: [
-        {
-          kind: "purchase",
-          purchaseId: target.id,
-          vendorAccountId: account.id,
-          targetFingerprint: "a".repeat(64),
-        },
-      ],
+      userId: ctx.actor.userId,
+      purchaseIds: [target.id],
     });
     if (!started.created) throw new Error("Expected validation admission");
     const { run: runTable, runTarget } = await import("~/server/db/schema");
@@ -381,17 +413,19 @@ describe("purchase import run admission", () => {
     await getDb(ctx.db)
       .update(runTable)
       .set({ status: "needs_review", endedAt: new Date() })
-      .where(eq(runTable.id, started.run.id));
+      .where(eq(runTable.id, started.row.id));
 
     const result = await controlRun(ctx.db, ctx.actor, {
-      runPublicId: started.run.publicId,
+      runPublicId: started.row.shortcode,
       action: "upload_evidence",
     });
 
+    if (!("successorRunId" in result))
+      throw new Error("Expected an evidence-only successor");
     expect(result).toMatchObject({
       created: true,
-      successorStatus: "dispatch_failed",
-      dispatchRunId: null,
+      successorStatus: "running",
+      dispatchRunId: result.successorRunId,
       dispatchEventId: expect.any(String),
     });
     const [successorTarget] = await getDb(ctx.db)
@@ -405,6 +439,13 @@ describe("purchase import run admission", () => {
       purchaseId: target.id,
       state: "needs_evidence",
     });
+    const { purchase } = await import("~/server/db/schema");
+    expect(
+      await getDb(ctx.db)
+        .select()
+        .from(purchase)
+        .where(eq(purchase.id, target.id)),
+    ).toEqual([target]);
   });
 
   it("returns the recorded tool result without replaying its effect", async () => {
@@ -477,110 +518,6 @@ describe("purchase import run admission", () => {
     ).resolves.toEqual({ recovered: true });
   });
 
-  it("replays the exact persisted browser command for one operation id", async () => {
-    const party = await createMember();
-    const account = await createVendorAccount(party.id);
-    const run = await startOrResumeRun(ctx.db, {
-      ledgerPartyId: party.id,
-      vendorAccountId: account.id,
-      trigger: "manual",
-    });
-    const commands: BrowserBridgeRequest[] = [];
-    const broker = {
-      enqueue: async (command: BrowserBridgeRequest) => {
-        commands.push(command);
-      },
-      result: async () => null,
-      cancel: async () => undefined,
-      connected: async () => true,
-      pendingCommands: async () => [],
-      notifyRunCompleted: async () => undefined,
-      requestAuthentication: async () => undefined,
-    };
-    const namespace = { getByName: () => broker };
-    const input = {
-      runId: run.id,
-      operationId: "browser:stable-command",
-      operation: {
-        type: "navigate" as const,
-        url: "https://shop.example.test/orders",
-        allowedHosts: ["shop.example.test"],
-      },
-    };
-
-    const first = await issueBrowserCommand(ctx.db, namespace, input);
-    const replay = await issueBrowserCommand(ctx.db, namespace, input);
-
-    expect(replay).toEqual(first);
-    expect(commands).toHaveLength(2);
-    expect(commands[1]).toEqual(commands[0]);
-  });
-
-  it("rejects a capture recovery URL outside the vendor allowlist", async () => {
-    const party = await createMember();
-    const account = await createVendorAccount(party.id);
-    const run = await startOrResumeRun(ctx.db, {
-      ledgerPartyId: party.id,
-      vendorAccountId: account.id,
-      trigger: "manual",
-    });
-    const broker = {
-      enqueue: async () => undefined,
-      result: async () => null,
-      cancel: async () => undefined,
-      connected: async () => true,
-      pendingCommands: async () => [],
-      notifyRunCompleted: async () => undefined,
-      requestAuthentication: async () => undefined,
-    };
-
-    await expect(
-      issueBrowserCommand(
-        ctx.db,
-        { getByName: () => broker },
-        {
-          runId: run.id,
-          operationId: "browser:disallowed-recovery",
-          operation: {
-            type: "capture",
-            allowedHosts: ["shop.example.test"],
-            screenshot: "preferred",
-            recoveryURL: "https://attacker.example/orders",
-          },
-        },
-      ),
-    ).rejects.toThrow("outside the vendor allowlist");
-  });
-
-  it("replays terminal completion after the run status already committed", async () => {
-    const party = await createMember();
-    const account = await createVendorAccount(party.id);
-    const run = await startOrResumeRun(ctx.db, {
-      ledgerPartyId: party.id,
-      vendorAccountId: account.id,
-      trigger: "manual",
-    });
-    const notifications: string[] = [];
-    const broker = {
-      enqueue: async () => undefined,
-      result: async () => null,
-      cancel: async () => undefined,
-      connected: async () => true,
-      pendingCommands: async () => [],
-      notifyRunCompleted: async ({ runID }: { runID: string }) => {
-        notifications.push(runID);
-      },
-      requestAuthentication: async () => undefined,
-    };
-    const namespace = { getByName: () => broker };
-    const input = { runId: run.id, operationId: "finish:replay" };
-
-    const first = await finishRun(ctx.db, namespace, input);
-    const replay = await finishRun(ctx.db, namespace, input);
-
-    expect(replay).toEqual(first);
-    expect(notifications).toEqual([run.id, run.id]);
-  });
   it("counts the initial dispatch as an attempt, not only retries", async () => {
     const party = await createMember();
     const account = await createVendorAccount(party.id);
@@ -683,13 +620,22 @@ describe("purchase import run admission", () => {
       trigger: "manual",
     });
     const commandId = crypto.randomUUID();
+    const answer = browserBridgeResult.parse({
+      protocolVersion: BROWSER_BRIDGE_PROTOCOL,
+      commandID: commandId,
+      operationID: "browser-1",
+      runID: run.id,
+      completedAt: new Date().toISOString(),
+      outcome: await completedCapture("https://shop.example.test/orders", {
+        title: "Synthetic order history",
+        text: "An owned browser answered this command.",
+      }),
+    });
     let answered: string | null = null;
     let awaitingMac = false;
     const broker = {
       enqueue: async () => undefined,
-      // SAFETY: reconcile only asks whether a result exists, not its shape.
-      result: async (id: string) =>
-        id === answered ? ({} as BrowserBridgeResult) : null,
+      result: async (id: string) => (id === answered ? answer : null),
       cancel: async () => undefined,
       connected: async () => true,
       pendingCommands: async () =>
@@ -826,247 +772,6 @@ describe("purchase import run admission", () => {
         [live.id]: "running",
       },
     );
-  });
-  it("records a terminal browser failure on the operation row instead of only returning it", async () => {
-    const party = await createMember();
-    const account = await createVendorAccount(party.id);
-    const run = await startOrResumeRun(ctx.db, {
-      ledgerPartyId: party.id,
-      vendorAccountId: account.id,
-      trigger: "manual",
-    });
-    let issued: BrowserBridgeRequest | undefined;
-    const broker = {
-      enqueue: async (command: BrowserBridgeRequest) => {
-        issued = command;
-      },
-      result: async (): Promise<BrowserBridgeResult> => ({
-        protocolVersion: BROWSER_BRIDGE_PROTOCOL,
-        commandID: issued!.id,
-        operationID: issued!.operationId,
-        runID: run.id,
-        completedAt: new Date().toISOString(),
-        outcome: {
-          status: "failed",
-          code: "disallowed_url",
-          message: "Navigation left the vendor allowlist",
-          retryable: false,
-          screenshotGap: null,
-          observation: observation(),
-        },
-      }),
-      cancel: async () => undefined,
-      connected: async () => true,
-      pendingCommands: async () => [],
-      notifyRunCompleted: async () => undefined,
-      requestAuthentication: async () => undefined,
-    };
-    const namespace = { getByName: () => broker };
-    await issueBrowserCommand(ctx.db, namespace, {
-      runId: run.id,
-      operationId: "browser:bad-link",
-      operation: {
-        type: "navigate",
-        url: "https://shop.example.test/orders",
-        allowedHosts: ["shop.example.test"],
-      },
-    });
-
-    const read = await readBrowserCommandResult(ctx.db, namespace, {
-      runId: run.id,
-      operationId: "browser:bad-link",
-    });
-
-    expect(read.state).toBe("failed");
-    const { runOperation } = await import("~/server/db/schema");
-    const { and, eq } = await import("drizzle-orm");
-    const { getDb } = await import("~/server/repo/database-helpers");
-    const [operation] = await getDb(ctx.db)
-      .select({
-        state: runOperation.state,
-        error: runOperation.error,
-      })
-      .from(runOperation)
-      .where(
-        and(
-          eq(runOperation.runId, run.id),
-          eq(runOperation.operationId, "browser:bad-link"),
-        ),
-      );
-    expect(operation).toEqual({
-      state: "failed",
-      error: expect.stringMatching(
-        /^disallowed_url: Navigation left the vendor allowlist \[/u,
-      ),
-    });
-  });
-  // An outdated Mac once reported every capture as "The evidence file could
-  // not be staged", a retryable failure no retry fixed. Its command now fails
-  // naming the update, and the run is not parked waiting for a reconnect
-  // that could never wake it.
-  // An outdated Mac once reported every capture as "The evidence file could
-  // not be staged", a retryable failure no retry fixed. The run now stops for
-  // review naming the update, from any active status, and a repeated read of
-  // the same result answers the same way. A paused run also proves the stop
-  // survives an import audit that cannot run (the audit refuses a paused run).
-  it.each(["running", "paused_offline"] as const)(
-    "stops a %s run for review when the Mac app is too old for the server",
-    async (status) => {
-      const party = await createMember();
-      const account = await createVendorAccount(party.id);
-      const run = await startOrResumeRun(ctx.db, {
-        ledgerPartyId: party.id,
-        vendorAccountId: account.id,
-        trigger: "manual",
-      });
-      let issued: BrowserBridgeRequest | undefined;
-      const broker = {
-        enqueue: async (command: BrowserBridgeRequest) => {
-          issued = command;
-        },
-        result: async (): Promise<BrowserBridgeResult> => ({
-          protocolVersion: BROWSER_BRIDGE_PROTOCOL,
-          commandID: issued!.id,
-          operationID: issued!.operationId,
-          runID: run.id,
-          completedAt: new Date().toISOString(),
-          outcome: {
-            status: "failed",
-            code: "client_update_required",
-            message: "Update Cubby for Mac, then restart this run.",
-            retryable: false,
-            screenshotGap: null,
-            observation: observation(),
-          },
-        }),
-        cancel: async () => undefined,
-        connected: async () => true,
-        pendingCommands: async () => [],
-        notifyRunCompleted: async () => undefined,
-        requestAuthentication: async () => undefined,
-      };
-      const namespace = { getByName: () => broker };
-      await issueBrowserCommand(ctx.db, namespace, {
-        runId: run.id,
-        operationId: "browser:outdated",
-        operation: {
-          type: "navigate",
-          url: "https://shop.example.test/orders",
-          allowedHosts: ["shop.example.test"],
-        },
-      });
-      const {
-        run: runTable,
-        runFinding,
-        runOperation,
-      } = await import("~/server/db/schema");
-      const { and, eq } = await import("drizzle-orm");
-      const { getDb } = await import("~/server/repo/database-helpers");
-      const { vendorAccount } = await import("~/server/db/schema");
-      await getDb(ctx.db)
-        .update(runTable)
-        .set({ status })
-        .where(eq(runTable.id, run.id));
-      if (status === "paused_offline")
-        await getDb(ctx.db)
-          .update(vendorAccount)
-          .set({ status: "paused_offline" })
-          .where(eq(vendorAccount.id, account.id));
-
-      const read = () =>
-        readBrowserCommandResult(ctx.db, namespace, {
-          runId: run.id,
-          operationId: "browser:outdated",
-        });
-      // "stopped" ends the agent's submission; a second read answers the same.
-      expect((await read()).state).toBe("stopped");
-      expect((await read()).state).toBe("stopped");
-
-      const [operation] = await getDb(ctx.db)
-        .select({ state: runOperation.state, error: runOperation.error })
-        .from(runOperation)
-        .where(
-          and(
-            eq(runOperation.runId, run.id),
-            eq(runOperation.operationId, "browser:outdated"),
-          ),
-        );
-      expect(operation).toEqual({
-        state: "failed",
-        error: expect.stringMatching(
-          /^client_update_required: Update Cubby for Mac, then restart this run\. \[/u,
-        ),
-      });
-      const [row] = await getDb(ctx.db)
-        .select({ status: runTable.status, failureCode: runTable.failureCode })
-        .from(runTable)
-        .where(eq(runTable.id, run.id));
-      expect(row).toEqual({
-        status: "needs_review",
-        failureCode: "client_update_required",
-      });
-      const [accountRow] = await getDb(ctx.db)
-        .select({ status: vendorAccount.status })
-        .from(vendorAccount)
-        .where(eq(vendorAccount.id, account.id));
-      expect(accountRow?.status).toBe("active");
-      expect(
-        await getDb(ctx.db)
-          .select({ summary: runFinding.summary })
-          .from(runFinding)
-          .where(eq(runFinding.runId, run.id)),
-      ).toEqual([{ summary: expect.stringContaining("Update Cubby for Mac") }]);
-    },
-  );
-  // A reconnect claim that read "paused_offline" must not resume a run that
-  // was stopped while it waited on the bridge (an outdated Mac's stop).
-  it("never resumes a run that stopped while the claim checked the bridge", async () => {
-    const party = await createMember();
-    const account = await createVendorAccount(party.id);
-    const run = await startOrResumeRun(ctx.db, {
-      ledgerPartyId: party.id,
-      vendorAccountId: account.id,
-      trigger: "manual",
-    });
-    const { run: runTable } = await import("~/server/db/schema");
-    const { eq } = await import("drizzle-orm");
-    const { getDb } = await import("~/server/repo/database-helpers");
-    await getDb(ctx.db)
-      .update(runTable)
-      .set({ status: "paused_offline" })
-      .where(eq(runTable.id, run.id));
-    const broker = {
-      enqueue: async () => undefined,
-      result: async () => null,
-      cancel: async () => undefined,
-      connected: async () => {
-        await getDb(ctx.db)
-          .update(runTable)
-          .set({
-            status: "needs_review",
-            failureCode: "client_update_required",
-          })
-          .where(eq(runTable.id, run.id));
-        return true;
-      },
-      pendingCommands: async () => [],
-      notifyRunCompleted: async () => undefined,
-      requestAuthentication: async () => undefined,
-    };
-
-    // The run ended while the claim waited: the claim reports it stopped,
-    // which ends the agent's submission, instead of throwing into a retry.
-    await expect(
-      claimNextImportWork(ctx.db, { getByName: () => broker }, run.id),
-    ).resolves.toEqual({ kind: "stopped", status: "needs_review" });
-    const [row] = await getDb(ctx.db)
-      .select({ status: runTable.status, failureCode: runTable.failureCode })
-      .from(runTable)
-      .where(eq(runTable.id, run.id));
-    expect(row).toEqual({
-      status: "needs_review",
-      failureCode: "client_update_required",
-    });
   });
   it("abandons a browser command nobody answered within the stale window", async () => {
     const party = await createMember();

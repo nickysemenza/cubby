@@ -10,6 +10,7 @@ import {
   createAiModelPricing,
   estimateAiUsageCost,
   projectAiModelPricing,
+  quoteAiDecisionRequest as quote,
 } from "./pricing";
 
 /** A synthetic models.dev `api.json`; rates are illustrative, not current. */
@@ -87,10 +88,21 @@ function catalog(): ProviderMap {
 describe("projectAiModelPricing", () => {
   const pricing = projectAiModelPricing(catalog());
 
+  it("retains exact catalog token limits for a full-context decision reservation", () => {
+    const providers = catalog();
+    const decision = providers["cloudflare-ai-gateway"]?.models["typesafe/jev"];
+    if (!decision) throw new Error("Synthetic decision catalog row missing.");
+    decision.limit = { context: 10_000, input: 9_000, output: 0 };
+    expect(projectAiModelPricing(providers)["typesafe/jev"]).toMatchObject({
+      limit: { context: 10_000, input: 9_000, output: 0 },
+    });
+  });
+
   it("selects each model under its declared catalog provider, keeping the stored vendor", () => {
     expect(pricing["typesafe/jev"]).toEqual({
       provider: "typesafe",
       cost: { input: 0.042, output: 0, cache_read: 0 },
+      limit: { context: 1_000_000, output: 100_000 },
     });
     expect(pricing["@cf/cloudflare/clef"]?.provider).toBe("cloudflare");
   });
@@ -99,12 +111,100 @@ describe("projectAiModelPricing", () => {
     expect(pricing["claude-opus-5-5"]).toEqual({
       provider: "anthropic",
       cost: null,
+      limit: null,
     });
     expect(
       estimateAiUsageCost(pricing, "anthropic", "claude-opus-5-5", {
         inputTokens: 1000,
       }),
     ).toBeNull();
+  });
+});
+
+// Reservations cannot use JSON bytes as billed tokens, underprice repeated
+// questions/cache classes, or treat a missing catalog bound as a free call.
+describe("quoteAiDecisionRequest", () => {
+  function decisionCatalog() {
+    const providers = catalog();
+    const decision = providers["cloudflare-ai-gateway"]?.models["typesafe/jev"];
+    if (!decision) throw new Error("Synthetic decision catalog row missing.");
+    decision.limit = { context: 10_000, input: 9_000, output: 0 };
+    decision.cost = {
+      input: 2,
+      output: 0,
+      cache_read: 6,
+      tiers: [
+        {
+          input: 4,
+          output: 0,
+          cache_write: 7,
+          tier: { type: "context", size: 8_000 },
+        },
+      ],
+    };
+    return { providers, decision };
+  }
+  const request = {
+    provider: "typesafe",
+    model: "typesafe/jev",
+    questionCount: 3,
+  };
+
+  it("bounds every question at full context and the highest applicable token rate, including explicit zero output", () => {
+    const { providers } = decisionCatalog();
+    expect(quote(projectAiModelPricing(providers), request)).toEqual({
+      provider: "typesafe",
+      model: "typesafe/jev",
+      inputTokens: 30_000,
+      outputTokens: 0,
+      maxCostUsd: 0.21,
+    });
+  });
+
+  it("also reserves bounded output at the highest applicable completion or reasoning rate", () => {
+    const { providers, decision } = decisionCatalog();
+    decision.limit.output = 2_000;
+    decision.cost = { input: 2, output: 4, reasoning: 9 };
+    expect(
+      quote(projectAiModelPricing(providers), { ...request, questionCount: 2 }),
+    ).toEqual({
+      provider: "typesafe",
+      model: "typesafe/jev",
+      inputTokens: 20_000,
+      outputTokens: 4_000,
+      maxCostUsd: 0.076,
+    });
+  });
+
+  it("refuses unsupported models, mismatched providers, missing catalog rows, and invalid question counts", () => {
+    const { providers } = decisionCatalog();
+    const pricing = projectAiModelPricing(providers);
+    expect(quote(pricing, { ...request, model: "gpt-6-sol" })).toBeNull();
+    expect(
+      quote(pricing, { ...request, model: "unknown-decision" }),
+    ).toBeNull();
+    expect(quote(pricing, { ...request, provider: "cloudflare" })).toBeNull();
+    expect(quote(null, request)).toBeNull();
+    for (const questionCount of [0, -1, 1.5, Number.POSITIVE_INFINITY])
+      expect(quote(pricing, { ...request, questionCount })).toBeNull();
+  });
+
+  it("refuses nonfinite/negative rates and absent or invalid finite token bounds", () => {
+    const { providers, decision } = decisionCatalog();
+    decision.limit.context = 0;
+    expect(quote(projectAiModelPricing(providers), request)).toBeNull();
+    decision.limit.context = 10_000;
+    decision.limit.input = Number.POSITIVE_INFINITY;
+    expect(quote(projectAiModelPricing(providers), request)).toBeNull();
+    decision.limit.input = 9_000;
+    decision.cost = { input: Number.NaN, output: 0 };
+    expect(quote(projectAiModelPricing(providers), request)).toBeNull();
+    decision.cost = { input: 2, output: 0, cache_write: -1 };
+    expect(quote(projectAiModelPricing(providers), request)).toBeNull();
+    delete decision.cost;
+    expect(quote(projectAiModelPricing(providers), request)).toBeNull();
+    delete providers["cloudflare-ai-gateway"]!.models["typesafe/jev"];
+    expect(quote(projectAiModelPricing(providers), request)).toBeNull();
   });
 });
 

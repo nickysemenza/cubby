@@ -93,11 +93,14 @@ export class MailDiscoveryWorkflow
           import("~/server/purchase-import/gmail/discovery"),
         ]);
         await runMailDiscovery(durableSteps(step), {
+          begin: () => withDb((db) => discovery.beginMailDiscovery(db, params)),
           list: () => withDb((db) => discovery.listMailDiscovery(db, params)),
           batch: (index) =>
             withDb((db) => discovery.saveMailDiscoveryBatch(db, params, index)),
           finish: () =>
             withDb((db) => discovery.finishMailDiscovery(db, params)),
+          continue: () =>
+            withDb((db) => discovery.continueMailDiscovery(db, params)),
           fail: (stepError) =>
             withDb((db) => discovery.failMailDiscovery(db, params, stepError)),
         });

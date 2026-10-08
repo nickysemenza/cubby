@@ -1,4 +1,6 @@
 import { parseShortcodeFor } from "@cubby/schemas/identifiers";
+import { acceptedResearchFact } from "@cubby/schemas/research";
+import { eq } from "drizzle-orm";
 import {
   taxonomyId,
   taxonomyShortcode,
@@ -7,10 +9,18 @@ import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 
 import {
+  product,
+  runEvidence,
+  runFactEvidence,
+  runTarget,
+} from "~/server/db/schema";
+import {
   entityKernelContextSchema,
   executeEntity,
 } from "~/server/entity-kernel";
 import { explainField } from "~/server/operations/field-explanation.server";
+import { recordAcceptedFactEvidence } from "~/server/purchase-import/fact-verification";
+import { getDb, withTransaction } from "~/server/repo/database-helpers";
 import { createExpense } from "~/server/repo/expense/crud";
 import { createInventoryEntry } from "~/server/repo/inventory/crud";
 import { createLedgerParty } from "~/server/repo/ledger-party";
@@ -31,6 +41,119 @@ describe("derived field explanations against canonical records", () => {
     entityKernelContextSchema.parse(
       createTestRequestContext(ctx.db, { auth: { userId: ctx.actor.userId } }),
     );
+
+  it("shows retained verification for an existing model, exposes retired rationale as a proof gap, and hides stale values", async () => {
+    const item = await createProductFixture(
+      ctx.db,
+      makeProductInput({
+        name: "Example verified product",
+        manufacturer: "Example Works",
+        model: "Q-17",
+      }),
+      ctx.actor,
+    );
+    const party = await insertWithShortcode(ctx.db, "ledgerParty", {
+      name: "Example verification member",
+      kind: "member",
+      userId: ctx.actor.userId,
+    });
+    const run = await insertWithShortcode(ctx.db, "run", {
+      purpose: "product_enrichment",
+      trigger: "manual",
+      ledgerPartyId: party.id,
+      actorUserId: ctx.actor.userId,
+      actorName: "Example verification member",
+      actorEmail: "verification@example.test",
+      actorLedgerPartyShortcode: party.shortcode,
+    });
+    const [target] = await getDb(ctx.db)
+      .insert(runTarget)
+      .values({
+        runId: run.id,
+        entityId: item.entityId,
+        entityKind: "product",
+        targetFingerprint: "example-model-target",
+      })
+      .returning();
+    if (!target) throw new Error("Expected verification target");
+    const [evidence] = await getDb(ctx.db)
+      .insert(runEvidence)
+      .values({
+        runId: run.id,
+        targetId: target.id,
+        kind: "browser_capture",
+        objectKey: `synthetic-field-explanation/${crypto.randomUUID()}`,
+        checksum: "a".repeat(64),
+        mediaType: "text/html",
+        sourceMetadata: {
+          url: "https://shop.example.test/q17",
+          title: "Example product specifications",
+        },
+      })
+      .returning();
+    if (!evidence) throw new Error("Expected verification evidence");
+    await withTransaction(ctx.db, (tx) =>
+      recordAcceptedFactEvidence(tx, {
+        runId: run.id,
+        targetId: target.id,
+        claims: [
+          acceptedResearchFact.parse({
+            evidenceId: evidence.id,
+            fieldPath: "model",
+            value: "Q-17",
+            support: {
+              observation: "Model Q-17, small",
+              reasoning:
+                "The source identifies the ordered small Q-17 variant.",
+            },
+          }),
+        ],
+      }),
+    );
+    const explain = () =>
+      explainField(context(), {
+        entityKind: "product",
+        entityId: item.id,
+        field: "model",
+        surface: "detail",
+      });
+    const matching = await explain();
+    expect(matching.verifications).toMatchObject([
+      {
+        run: { entityKind: "run", entityId: run.shortcode },
+        subject: { entityKind: "product", entityId: item.id },
+        fieldPath: "model",
+        value: "Q-17",
+        support: {
+          observation: "Model Q-17, small",
+          reasoning: "The source identifies the ordered small Q-17 variant.",
+        },
+        source: { url: "https://shop.example.test/q17" },
+      },
+    ]);
+    const retiredAt = new Date("2026-10-07T17:00:00.000Z");
+    await getDb(ctx.db)
+      .update(runFactEvidence)
+      .set({ support: null, supportRetiredAt: retiredAt })
+      .where(eq(runFactEvidence.targetId, target.id));
+    const retired = await explain();
+    expect(retired.verifications).toMatchObject([
+      {
+        value: "Q-17",
+        support: null,
+        supportRetiredAt: retiredAt.toISOString(),
+        source: { url: "https://shop.example.test/q17" },
+      },
+    ]);
+    expect(retired.interpretation?.caveats.join(" ")).toMatch(
+      /rationale.*retired.*fresh verification/i,
+    );
+    await getDb(ctx.db)
+      .update(product)
+      .set({ model: "Q-18" })
+      .where(eq(product.id, item.entityId));
+    expect((await explain()).verifications).toEqual([]);
+  });
 
   // Lazy explanations must expose the same winning ancestor and fallback as
   // canonical reads, even when an Expense override hides that mapping.

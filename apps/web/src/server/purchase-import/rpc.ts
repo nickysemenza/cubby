@@ -9,6 +9,11 @@ import type {
 } from "@cubby/schemas/purchase-import";
 
 export interface PurchaseImportDurableObjectRpc {
+  /** Erases transport payloads; true only after every recorded recipient device confirms cache erasure. */
+  forgetRun(input: {
+    runId: string;
+    receiptId: string;
+  }): Promise<{ forgotten: boolean }>;
   enqueue(command: BrowserBridgeRequest): Promise<void>;
   result(requestId: string): Promise<BrowserBridgeResult | null>;
   cancel(requestId: string): Promise<void>;

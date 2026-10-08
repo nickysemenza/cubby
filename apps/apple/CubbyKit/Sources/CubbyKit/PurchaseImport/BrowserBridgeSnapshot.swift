@@ -67,7 +67,7 @@ public enum BrowserScreenshotResolution: Sendable, Equatable {
 }
 
 public enum BrowserScreenshotPolicy {
-    public typealias Mode = BrowserBridgeOperationCapture.ScreenshotPayload
+    public typealias Mode = BrowserBridgeOperationRead.ScreenshotPayload
 
     /// `required` fails without a screenshot; `preferred` still returns the DOM and says why;
     /// `skip` never looks at the window.
@@ -98,6 +98,9 @@ enum ExecutionFailure: Error, LocalizedError, Sendable, Equatable {
     case permissionDenied
     case javascriptDisabled
     case pageUnreadable
+    case staleObservation
+    case actionUnavailable
+    case actionOutcomeUnknown
     case screenshotUnavailable(BrowserScreenshotGap)
     case uploadFailed
     case clientUpdateRequired
@@ -134,6 +137,9 @@ enum ExecutionFailure: Error, LocalizedError, Sendable, Equatable {
         case .permissionDenied: .browserPermissionDenied
         case .javascriptDisabled: .javascriptDisabled
         case .pageUnreadable: .pageUnreadable
+        case .staleObservation: .staleObservation
+        case .actionUnavailable: .actionUnavailable
+        case .actionOutcomeUnknown: .actionOutcomeUnknown
         case .screenshotUnavailable(let gap): gap == .uploadFailed ? .uploadFailed : .screenshotUnavailable
         case .uploadFailed: .uploadFailed
         case .clientUpdateRequired: .clientUpdateRequired
@@ -154,6 +160,7 @@ enum ExecutionFailure: Error, LocalizedError, Sendable, Equatable {
             .uploadFailed, .executionFailed:
             true
         case .invalidCommand, .javascriptDisabled, .clientUpdateRequired, .cancelled,
+            .staleObservation, .actionUnavailable, .actionOutcomeUnknown,
             .deadlineExceeded:
             false
         }
@@ -167,6 +174,10 @@ enum ExecutionFailure: Error, LocalizedError, Sendable, Equatable {
         case .javascriptDisabled:
             "Allow JavaScript from Apple Events: in Chrome, View > Developer; in Safari, the Develop menu."
         case .pageUnreadable: "The page's DOM could not be read; it may still be loading."
+        case .staleObservation: "The observed page changed. Read it again before acting."
+        case .actionUnavailable: "The observed control cannot perform that action. Read the page again."
+        case .actionOutcomeUnknown:
+            "The action may have completed. Read and reconcile the page before acting again."
         case .screenshotUnavailable(let gap):
             "The screenshot could not be taken: \(BrowserBridgeCommandSummary.label(gap))."
         case .uploadFailed: "The evidence file could not be staged."
@@ -222,7 +233,10 @@ public enum BrowserBridgeCommandSummary {
         switch operation {
         case .navigate: "navigate"
         case .scroll: "scroll"
-        case .capture: "capture"
+        case .read: "read"
+        case .click: "click"
+        case ._type: "type"
+        case .select: "select"
         case .window(let payload): "window \(payload.action.rawValue)"
         }
     }

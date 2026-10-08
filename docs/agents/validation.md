@@ -19,6 +19,10 @@ relative to `apps/web`. For PostgreSQL contracts use `pnpm test:postgres
 src/...`. Read a failed run's ending and
 `apps/web/.vitest-failures.txt` before deciding what to change; do not rerun an
 unchanged tier to rediscover its failures.
+Forward named-case flags directly, for example `pnpm test:postgres src/...
+-t 'case name'`; adding `--` here reaches Vitest as a literal separator and
+does not apply the intended filter. Likewise, use `pnpm db:generate
+--name=description` without an extra separator.
 
 Before a PR, run only what CI cannot: `pnpm test:e2e:local` for the
 local-only native/simulator lanes (one lane: `pnpm test:e2e:sim -- <flags>`; `-- --help` lists
@@ -32,6 +36,9 @@ only focused tests and returns its result, command, duration, relevant output,
 and limits. Reuse valid results at handoff; choose checks for the changed behavior
 rather than running a blanket `pnpm check` or affected suite. Keep expensive
 local gates sequential.
+Wait for a build runner's terminal success before starting a dependent prebuilt
+Worker or browser check. A yielded session is still running; a completed client
+bundle alone does not establish a finished Worker build and provenance stamp.
 
 ## Commit, push, and merge
 

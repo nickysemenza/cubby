@@ -25,7 +25,10 @@ async function handler(input: {
       runPublicId: input.params.publicId,
       action: "cancel",
     });
-    if (cancellation.cancelledBrowserCommandIds) {
+    if (
+      "cancelledBrowserCommandIds" in cancellation &&
+      cancellation.cancelledBrowserCommandIds
+    ) {
       const scope = await loadRunScopeByShortcode(
         context.db,
         input.params.publicId,

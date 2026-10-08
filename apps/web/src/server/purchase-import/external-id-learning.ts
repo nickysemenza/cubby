@@ -5,7 +5,10 @@ import { and, eq } from "drizzle-orm";
 import type { DrizzleTransaction } from "~/server/db";
 import { entityExternalId } from "~/server/db/schema";
 import { notDeleted } from "~/server/repo/database-helpers";
-import { ensureExternalSources } from "~/server/repo/entity-external-ids";
+import {
+  ensureExternalSources,
+  lockExternalIdentifierParents,
+} from "~/server/repo/entity-external-ids";
 
 export class PurchaseProductExternalIdCollisionError extends Error {
   readonly source: string;
@@ -47,6 +50,9 @@ export async function learnPurchaseProductExternalId(
     url?: string | null;
   },
 ): Promise<"learned" | "already_present"> {
+  await lockExternalIdentifierParents(tx, [
+    { entityId: input.productId, entityKind: "product" },
+  ]);
   const source = input.source.trim().toLowerCase();
   const existing = await tx.query.entityExternalId.findFirst({
     where: and(

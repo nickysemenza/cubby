@@ -514,6 +514,49 @@ struct FieldExplanationLabel: View {
                             ladderRow(source, winner: winner)
                         }
                     }
+                    if !resolved.verifications.isEmpty {
+                        Divider()
+                        explanationSectionLabel("Verified against sources")
+                        ForEach(resolved.verifications, id: \.key) { verification in
+                            VStack(alignment: .leading, spacing: FieldGuideTokens.Space.xs) {
+                                if let entity = EntityKey(rawValue: verification.run.entityKind.rawValue) {
+                                    NavigationLink(
+                                        verification.run.entityId,
+                                        value: Route.entityDetail(entity, id: verification.run.entityId))
+                                }
+                                Text(verification.verifiedAt.formatted(date: .abbreviated, time: .shortened))
+                                    .font(.caption).foregroundStyle(.secondary)
+                                Text(field.label).font(.caption.weight(.medium)).foregroundStyle(.secondary)
+                                if let value = try? JSONValue(encoding: verification.value) {
+                                    ExplanationEvidenceValue(value: value, hidesByteIdentity: true)
+                                }
+                                if let support = verification.support {
+                                    Text(support.reasoning).font(.callout)
+                                    Text("“\(support.observation)”").font(.callout).foregroundStyle(
+                                        .secondary)
+                                    if let variant = support.selectedVariant {
+                                        Text("Selected variant: \(variant.identity)").font(
+                                            .callout.weight(.medium))
+                                        if let attributes = try? JSONValue(encoding: variant.attributes) {
+                                            ExplanationEvidenceValue(value: attributes)
+                                        }
+                                        Text(variant.reasoning).font(.callout)
+                                    }
+                                }
+                                if let source = verification.source.url, let url = URL(string: source) {
+                                    Link(verification.source.label, destination: url)
+                                } else {
+                                    Text(verification.source.label).font(.caption).foregroundStyle(.secondary)
+                                }
+                                if let entity = EntityKey(rawValue: verification.subject.entityKind.rawValue)
+                                {
+                                    NavigationLink(
+                                        verification.subject.entityId,
+                                        value: Route.entityDetail(entity, id: verification.subject.entityId))
+                                }
+                            }
+                        }
+                    }
                     if !resolved.sources.isEmpty {
                         Divider()
                         explanationSectionLabel("Evidence")
@@ -700,6 +743,7 @@ struct FieldExplanationLabel: View {
 private struct ExplanationEvidenceValue: View {
     let value: JSONValue
     var property: String? = nil
+    var hidesByteIdentity = false
 
     var body: some View { content(value) }
 
@@ -714,6 +758,9 @@ private struct ExplanationEvidenceValue: View {
         case .string(let value):
             if let entity = EntityCatalog.descriptor(forShortcode: value) {
                 return AnyView(NavigationLink(value, value: Route.entityDetail(entity.key, id: value)))
+            }
+            if let url = URL(string: value), ["http", "https"].contains(url.scheme?.lowercased() ?? "") {
+                return AnyView(Link(value, destination: url))
             }
             return AnyView(Text(value.replacingOccurrences(of: "_", with: " ")).textSelection(.enabled))
         case .array(let values):
@@ -734,7 +781,10 @@ private struct ExplanationEvidenceValue: View {
                             value: Route.entityDetail(entity.key, id: identifier))
                     }
                     ForEach(
-                        values.keys.filter { entity == nil || ($0 != "id" && $0 != "name") }.sorted(),
+                        values.keys.filter {
+                            (!hidesByteIdentity || $0 != "contentHash")
+                                && (entity == nil || ($0 != "id" && $0 != "name"))
+                        }.sorted(),
                         id: \.self
                     ) { key in
                         if let item = values[key] {
@@ -755,8 +805,17 @@ private struct ExplanationEvidenceValue: View {
 
 }
 
-#Preview("Structured explanation evidence") {
-    ExplanationEvidenceValue(value: .object(["amount": .number(15), "complete": .bool(true)]))
+#Preview("Verified member evidence") {
+    NavigationStack {
+        ExplanationEvidenceValue(
+            value: .object([
+                "imageId": .string("IMG-4K7M"),
+                "sourceAssetUrl": .string("https://maker.example.test/blue.jpg"),
+                "contentHash": .string(String(repeating: "a", count: 64)),
+            ]), hidesByteIdentity: true
+        )
+        .padding()
+    }
 }
 
 // MARK: - Relation

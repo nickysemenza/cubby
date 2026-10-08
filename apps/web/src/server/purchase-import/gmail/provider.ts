@@ -34,6 +34,7 @@ export const gmailOAuthConfigured = (): boolean => {
 export async function gmailProviderForUser(
   db: Database,
   userId: UserId | string,
+  expectedMailboxId?: string,
 ): Promise<GmailProvider> {
   const worker = getGmailOAuthCredentials();
   const clientId = worker?.clientId ?? env.GOOGLE_CLIENT_ID;
@@ -41,7 +42,7 @@ export async function gmailProviderForUser(
   if (!clientId || !clientSecret)
     throw new Error("Google OAuth is not configured for Gmail.");
   return createGmailProviderFactory({
-    store: createBetterAuthGmailAccountStore(db),
+    store: createBetterAuthGmailAccountStore(db, expectedMailboxId),
     clientId,
     clientSecret,
     ...localGmailEndpoints(),

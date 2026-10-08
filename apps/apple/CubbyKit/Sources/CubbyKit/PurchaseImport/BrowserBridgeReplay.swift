@@ -7,17 +7,28 @@ public struct BrowserBridgeReplayLedger: Codable, Equatable, Sendable {
     /// completion but before it observes the acknowledgement; replaying this idempotent ack is
     /// safer than notifying the person twice or starting a successor run.
     public private(set) var completedRuns: [String: BrowserBridgeRunCompletion]
+    /// Identity-only uncertain results are durable before an interactive side effect begins.
+    /// The ledger never stores the action's typed text or other form input.
+    public private(set) var startedActions: [String: BrowserBridgeCommandResult]
+    /// Identity-only fences and acknowledgements survive reconnects and cold launches.
+    public private(set) var retiredRuns: [String: Set<String>]
 
     public init(
         completed: [String: BrowserBridgeCommandResult] = [:], cancelled: Set<String> = [],
-        completedRuns: [String: BrowserBridgeRunCompletion] = [:]
+        completedRuns: [String: BrowserBridgeRunCompletion] = [:],
+        startedActions: [String: BrowserBridgeCommandResult] = [:],
+        retiredRuns: [String: Set<String>] = [:]
     ) {
         self.completed = completed
         self.cancelled = cancelled
         self.completedRuns = completedRuns
+        self.startedActions = startedActions
+        self.retiredRuns = retiredRuns
     }
 
-    private enum CodingKeys: String, CodingKey { case completed, cancelled, completedRuns }
+    private enum CodingKeys: String, CodingKey {
+        case completed, cancelled, completedRuns, startedActions, retiredRuns
+    }
 
     public init(from decoder: any Decoder) throws {
         let values = try decoder.container(keyedBy: CodingKeys.self)
@@ -26,30 +37,62 @@ public struct BrowserBridgeReplayLedger: Codable, Equatable, Sendable {
                 [String: BrowserBridgeCommandResult].self, forKey: .completed) ?? [:],
             cancelled: try values.decodeIfPresent(Set<String>.self, forKey: .cancelled) ?? [],
             completedRuns: try values.decodeIfPresent(
-                [String: BrowserBridgeRunCompletion].self, forKey: .completedRuns) ?? [:])
+                [String: BrowserBridgeRunCompletion].self, forKey: .completedRuns) ?? [:],
+            startedActions: try values.decodeIfPresent(
+                [String: BrowserBridgeCommandResult].self, forKey: .startedActions) ?? [:],
+            retiredRuns: try values.decodeIfPresent(
+                [String: Set<String>].self, forKey: .retiredRuns) ?? [:])
+    }
+
+    public mutating func forget(runID: String, retirementID: String) {
+        retiredRuns[runID, default: []].insert(retirementID)
+        completed = completed.filter { $0.value.runID != runID }
+        startedActions = startedActions.filter { $0.value.runID != runID }
+        completedRuns.removeValue(forKey: runID)
     }
 
     public mutating func record(_ result: BrowserBridgeCommandResult) {
-        guard !cancelled.contains(result.commandID) else { return }
+        guard retiredRuns[result.runID] == nil, !cancelled.contains(result.commandID),
+            completed[result.commandID] == nil
+        else { return }
+        startedActions.removeValue(forKey: result.commandID)
         completed[result.commandID] = result
+    }
+
+    public mutating func beginInteractive(_ command: BrowserBridgeCommand) {
+        guard retiredRuns[command.runID] == nil, startedActions[command.id] == nil,
+            completed[command.id] == nil,
+            !cancelled.contains(command.id)
+        else { return }
+        startedActions[command.id] = BrowserBridgeCommandResult(
+            commandID: command.id, runID: command.runID, operationID: command.operationID,
+            completedAt: .now,
+            outcome: .failed(
+                code: .actionOutcomeUnknown,
+                message:
+                    "The browser action started without a durable completion. Read and reconcile the page before acting again.",
+                retryable: false, observation: .unobserved))
+    }
+
+    public func interruptedResult(for commandID: String) -> BrowserBridgeCommandResult? {
+        startedActions[commandID]
+    }
+
+    /// Only after relaunch: a live command keeps executing through transient socket disconnects.
+    public mutating func recoverInterruptedActions() {
+        for result in startedActions.values { record(result) }
     }
 
     public mutating func acknowledge(_ commandID: String) {
         completed.removeValue(forKey: commandID)
         cancelled.remove(commandID)
+        startedActions.removeValue(forKey: commandID)
     }
 
     public mutating func cancel(_ commandID: String) {
         completed.removeValue(forKey: commandID)
         cancelled.insert(commandID)
-    }
-
-    /// Drops an incompatible cached result before recording a protocol rejection for the current
-    /// command identifier. This is distinct from a server cancellation, which must fence late
-    /// completion writes.
-    public mutating func discardReplayResult(for commandID: String) {
-        completed.removeValue(forKey: commandID)
-        cancelled.remove(commandID)
+        startedActions.removeValue(forKey: commandID)
     }
 
     public func replayResult(for commandID: String) -> BrowserBridgeCommandResult? {
@@ -60,6 +103,7 @@ public struct BrowserBridgeReplayLedger: Codable, Equatable, Sendable {
     /// that edge to create a local notification exactly once while acknowledgements continue to
     /// replay across reconnects.
     public mutating func recordRunCompletion(_ completion: BrowserBridgeRunCompletion) -> Bool {
+        guard retiredRuns[completion.runID] == nil else { return false }
         let isNew = completedRuns[completion.runID] == nil
         completedRuns[completion.runID] = completion
         return isNew
@@ -74,6 +118,16 @@ public struct BrowserBridgeReplayLedger: Codable, Equatable, Sendable {
 
     public var runCompletionsForAcknowledgement: [BrowserBridgeRunCompletion] {
         completedRuns.values.sorted { $0.runID < $1.runID }
+    }
+
+    /// Every reconnect repeats erasure before persisting the fence used to acknowledge disposal.
+    func prepareForReplay(
+        store: any BrowserBridgeReplayStoring, executor: any BrowserCommandExecuting
+    ) async throws {
+        for runID in retiredRuns.keys.sorted() {
+            try await executor.forget(runID: runID)
+        }
+        try await store.save(self)
     }
 }
 
@@ -98,16 +152,12 @@ public actor FileBrowserBridgeReplayStore: BrowserBridgeReplayStoring {
     }
 
     public func load() throws -> BrowserBridgeReplayLedger {
-        do {
-            return try AtomicCodableReplayFile.load(
+        var ledger =
+            try AtomicCodableReplayFile.load(
                 BrowserBridgeReplayLedger.self, from: fileURL, decoder: .browserBridge)
-                ?? BrowserBridgeReplayLedger()
-        } catch is DecodingError {
-            // A result from an older protocol cannot be replayed to the current broker, which
-            // rejects its version; start this account's ledger cleanly.
-            try? FileManager.default.removeItem(at: fileURL)
-            return BrowserBridgeReplayLedger()
-        }
+            ?? BrowserBridgeReplayLedger()
+        ledger.recoverInterruptedActions()
+        return ledger
     }
 
     public func save(_ ledger: BrowserBridgeReplayLedger) throws {

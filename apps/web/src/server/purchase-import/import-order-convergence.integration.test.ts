@@ -164,7 +164,10 @@ async function createConvergenceHarness(
     return productCode;
   };
 
-  const gmail = () => ingestGmailEvidence(db, member.id, names);
+  let researchMail: Awaited<ReturnType<typeof ingestGmailEvidence>> | undefined;
+  const gmail = async () => {
+    researchMail = await ingestGmailEvidence(db, member.id, names);
+  };
 
   async function retailer() {
     const run = await startOrResumeRun(db, {
@@ -374,6 +377,8 @@ async function createConvergenceHarness(
         ),
       );
     if (!purchase) throw new Error("Imported settlement evidence missing");
+    if (!researchMail) throw new Error("Retained mail research missing");
+    await researchMail(purchase.shortcode);
     // Exact-order mail links itself to the Purchase without a member click,
     // whichever of the mail and the Purchase arrived first.
     const worklist = await listVendorOrderMail(db, { vendorId: vendor.id });

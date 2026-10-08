@@ -166,15 +166,13 @@ struct SettingsView: View {
             await loadReceiptHunts()
         }
         .sheet(item: $selectedReceiptHunt) { hunt in
-            if let context = hunt.searchContext {
-                NavigationStack {
-                    NearbyReceiptSearchView(
-                        context: context,
-                        onConfirm: { file, context in
-                            try await model.client.submitConfirmedReceipt(file, huntID: context.huntID)
-                            await loadReceiptHunts()
-                        })
-                }
+            NavigationStack {
+                NearbyReceiptSearchView(
+                    context: hunt.searchContext,
+                    onConfirm: { file, context in
+                        try await model.client.submitConfirmedReceipt(file, huntID: context.huntID)
+                        await loadReceiptHunts()
+                    })
             }
         }
         .photoAnalysisLifecycle(ready: photosReady, model: model, paused: photoAnalysisPaused) {
@@ -265,7 +263,7 @@ struct SettingsView: View {
                     HStack {
                         VStack(alignment: .leading) {
                             Text(hunt.merchant ?? "Unidentified purchase")
-                            Text(hunt.transactionDate)
+                            Text(hunt.transactionDate ?? "Date unknown")
                                 .font(.fieldGuideLabel)
                                 .foregroundStyle(FieldGuideTokens.graphiteSecondary)
                         }

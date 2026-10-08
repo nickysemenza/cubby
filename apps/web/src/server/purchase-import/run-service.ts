@@ -34,43 +34,28 @@ import {
   commitPurchaseImportOut,
 } from "@cubby/schemas/purchase-import";
 import {
-  BROWSER_BRIDGE_PROTOCOL,
-  BROWSER_DOM_MAX_ENCODED,
-  browserBridgeOperation,
-  browserBridgeRequest,
-  browserBridgeResult,
-  browserBridgeRunCompletion,
-  browserCapture,
   runShortcode,
   runPurpose,
   runTrigger,
   runTargetState,
   runScope,
-  type BrowserBridgeOperation,
-  type BrowserBridgeRequest,
-  type BrowserBridgeRunCompletion,
-  type BrowserObservation,
-  type BrowserPageCapture,
   type RunTrigger,
-  type RunPurpose,
 } from "@cubby/schemas/purchase-import";
 import type { PurchaseAgentEvent } from "@cubby/schemas/purchase-import";
 import {
+  purchaseValidationResearchRunInput,
   CHARGE_HUNT_STATE,
-  chargeHuntOutcomeOf,
   chargeHuntRunInput,
+  researchObjectivesRunInput,
+  mailResearchRunInput,
   orderBackfillRunInput,
   orderMailImportRunInput,
   orderMailImportRunOrders,
-  type RunInput,
   type RunRestartInput,
   runWorkLabel,
 } from "@cubby/schemas/run-fields";
-import type { Trade } from "@cubby/schemas/task-fields";
-import { vendorAccountCursor } from "@cubby/schemas/vendor-account-fields";
-import { vendorAgentHints } from "@cubby/schemas/vendor-import-fields";
 import { ACTIVE_RUN_STATUSES } from "@cubby/shared/client-constants";
-import { sha256Hex, sha256Uuid } from "@cubby/shared/sha256";
+import { sha256Hex } from "@cubby/shared/sha256";
 import {
   and,
   asc,
@@ -94,23 +79,17 @@ import type {
 } from "~/contracts/photo-import.contract";
 import type { RunDetail, RunLogEntry } from "~/contracts/run.contract";
 import { purchaseImportDebugEvent } from "~/lib/purchase-import-debug";
-import { wasm } from "~/lib/wasm";
 import type { Database, DrizzleClient, DrizzleTransaction } from "~/server/db";
 import {
   aiUsage,
   auditLog,
-  entityAttachment,
-  entityExternalId,
   entityIdentity,
-  financialTransaction,
-  financialTransactionAllocation,
   image,
   importHunt,
   importPreparedLine,
   importPreparedOrder,
   ledgerParty,
   photoGroupProposal,
-  product,
   purchase,
   run as runTable,
   runApproval,
@@ -118,7 +97,6 @@ import {
   runEvidence,
   runFinding,
   runOperation,
-  runOrderCandidate,
   runProgress,
   runTarget,
   user,
@@ -136,11 +114,9 @@ import { persistImageProcessingSubmission } from "~/server/repo/image-processing
 import { withPhotoImportTransaction } from "~/server/repo/photo-import";
 import { getRunByShortcode } from "~/server/repo/run";
 import {
-  completeOperation,
   DEBUG_EVENT_KIND,
   failOperation,
   failOperationsForRun,
-  insertOperation,
   readOperation,
   setOperationResult,
 } from "~/server/repo/run-operation";
@@ -155,44 +131,20 @@ import {
   type PhotoImportCommitPorts,
 } from "~/server/services/photo-import-commit.service";
 import { finalizeImportedImages } from "~/server/services/photo-import-finalize.service";
-import { getR2PublicUrl } from "~/server/utils/r2-public-url";
 import { WORKFLOW_RUN_PURPOSES } from "~/server/workflow-runs/contract";
 
 import { loadPurchaseAuditBatch } from "./audit-batch";
-import { encodeSnapshotDom } from "./browser-page";
-import {
-  browserCommandRecord,
-  type BrowserCommandRecord,
-  browserRecovery,
-  describeObservation,
-  materializeCapture,
-  productionBrowserEvidenceStorage,
-  type BrowserEvidenceStorage,
-  type BrowserRecovery,
-} from "./browser-results";
 import { CAPTURE_INTERIM_NOTE } from "./capture-interim-note";
-import {
-  notHeldByChargeRun,
-  unfinishedChargeRunOwns,
-} from "./charge-hunt-state";
+import { notHeldByChargeRun } from "./charge-hunt-state";
 import type { PurchaseImportDurableObjectRpc } from "./contracts";
 import { resolveRunFinding } from "./findings";
-import {
-  loadOrderMailImportEvidence,
-  markOrderMailCandidateImported,
-  orderMailImportedPurchase,
-} from "./gmail/import";
-import { attachPendingOrderMailEvidence } from "./gmail/process";
-import { classifyOrderCapture } from "./order-list";
-import { loadReceiptEvidenceForRun } from "./receipt-evidence";
-import { runCompletionNotice } from "./run-completion-notice";
-import { fetchPublicPage, type FetchPage } from "./server-page-fetch";
+import { continueResearchRun } from "./research-continuation";
+import { PRIVATE_RESEARCH_OPERATION_KINDS } from "./research-operation-visibility";
 import {
   CHARGE_HOLDING_STATUSES,
   accountSyncEligibility,
   readAccountSyncAdmission,
 } from "./sync-admission";
-import { importVendorOrder } from "./writer";
 
 /**
  * The target rows "Start new run with same inputs" copies, with the public
@@ -207,6 +159,7 @@ function selectRestartTargets(
     .select({
       entityId: runTarget.entityId,
       entityKind: runTarget.entityKind,
+      workKey: runTarget.workKey,
       position: runTarget.position,
       vendorAccountId: runTarget.vendorAccountId,
       sourceKind: runTarget.sourceKind,
@@ -222,17 +175,6 @@ function selectRestartTargets(
     .orderBy(asc(runTarget.position), asc(runTarget.createdAt));
 }
 
-/**
- * The order a targeted run works its targets. Claiming and a capture's
- * evidence scope must agree on it: targets inserted together share
- * `createdAt`, so the id breaks the tie deterministically.
- */
-const targetWorkOrder = [
-  asc(runTarget.position),
-  asc(runTarget.createdAt),
-  asc(runTarget.id),
-] as const;
-
 /** An implicit start, restart, or retry must not work a charge run's account. */
 async function assertNoHoldingChargeRun(
   tx: DrizzleTransaction,
@@ -246,7 +188,7 @@ async function assertNoHoldingChargeRun(
       and(
         eq(runTable.vendorAccountId, accountId),
         inArray(runTable.status, [...CHARGE_HOLDING_STATUSES]),
-        sql`${runTable.input}->>'kind' = 'charge_hunts'`,
+        chargeResearchRunPredicate(runTable.input),
         exceptRunId ? ne(runTable.id, exceptRunId) : undefined,
       ),
     )
@@ -254,45 +196,23 @@ async function assertNoHoldingChargeRun(
   if (held) throw new ActiveChargeRunError(held.shortcode);
 }
 
-export type TargetedRunTarget =
-  | {
-      kind: "purchase";
-      purchaseId: string;
-      vendorAccountId?: string | null;
-      sourceKind?: string | null;
-      sourceExternalKey?: string | null;
-      targetFingerprint: string;
-      evidenceFingerprint?: string | null;
-    }
-  | {
-      kind: "product";
-      productId: string;
-      vendorAccountId?: string | null;
-      sourceKind?: string | null;
-      sourceExternalKey?: string | null;
-      targetFingerprint: string;
-      evidenceFingerprint?: string | null;
-    };
-
-export type StartTargetedRunInput = {
-  ledgerPartyId: LedgerPartyId;
-  purpose: Exclude<RunPurpose, "account_sync">;
-  vendorId: VendorId;
-  vendorAccountId?: VendorAccountId | null;
-  trigger: RunTrigger;
-  predecessorRunId?: string;
-  input?: RunInput;
-  targets: TargetedRunTarget[];
-};
+import {
+  admitResearchObjectiveTargets,
+  assertAccountBackfillAdmission,
+  freezeAccountResearchObjectives,
+  researchChargeHuntIds,
+  chargeResearchRunPredicate,
+} from "./research-objective";
 
 const OFFLINE_EXPIRY_MS = 24 * 60 * 60_000;
 
-const operationUuid = async (runId: string, operationId: string) => {
-  return z.uuid().parse(await sha256Uuid(`${runId}:${operationId}`));
-};
-
 export type PurchaseImportNamespace = {
-  getByName(name: string): PurchaseImportDurableObjectRpc;
+  getByName(
+    name: string,
+  ): Pick<
+    PurchaseImportDurableObjectRpc,
+    "result" | "pendingCommands" | "cancel"
+  >;
 };
 
 export async function startOrResumeRun(
@@ -369,32 +289,7 @@ export async function startOrResumeRun(
       throw new Error(
         "Browser sync requires an active, paused_auth, or paused_offline account with a non-deleted Vendor",
       );
-    if (backfill) {
-      // A backfill never joins a different active run: resuming an
-      // incremental sync or another range would silently drop the request.
-      const [active] = await tx
-        .select({ input: runTable.input })
-        .from(runTable)
-        .where(
-          and(
-            eq(runTable.vendorAccountId, input.vendorAccountId),
-            inArray(runTable.status, [...ACTIVE_RUN_STATUSES]),
-          ),
-        )
-        .limit(1);
-      const activeRange = orderBackfillRunInput.safeParse(active?.input);
-      if (
-        active &&
-        !(
-          activeRange.success &&
-          activeRange.data.from === backfill.from &&
-          activeRange.data.to === backfill.to
-        )
-      )
-        throw new Error(
-          "Vendor account already has an active import run; finish or stop it before starting this backfill",
-        );
-    }
+    await assertAccountBackfillAdmission(tx, input.vendorAccountId, backfill);
     const admission = await readAccountSyncAdmission(tx, input.vendorAccountId);
     if (admission?.kind === "blocked") {
       if (admission.isChargeSearch) {
@@ -423,6 +318,12 @@ export async function startOrResumeRun(
           `Vendor account already has an active import run (${active.shortcode}); finish or stop it before searching for selected charges`,
         );
     }
+    const frozenObjectives = await freezeAccountResearchObjectives(tx, {
+      ledgerPartyId: input.ledgerPartyId,
+      vendorAccountId: input.vendorAccountId,
+      range: backfill ? { from: backfill.from, to: backfill.to } : null,
+      chargeHuntIds: chargeHunts?.huntIds ?? null,
+    });
     const result = await findOrCreateWithShortcode(tx, "run", {
       where: and(
         eq(runTable.vendorAccountId, input.vendorAccountId),
@@ -445,7 +346,14 @@ export async function startOrResumeRun(
             ? runEntityId.parse(input.predecessorRunId)
             : null,
           trigger,
-          input: backfill ?? chargeHunts,
+          input: frozenObjectives,
+          cause:
+            trigger === "discovery"
+              ? "source_discovered"
+              : trigger === "scheduled"
+                ? "scheduled"
+                : "member_request",
+          attempt: 1,
           coordinatorModel: coordinatorModelFor("account_sync"),
           agentSessionId: importRunAgentIdentity(id, "account_sync"),
           dispatchEventId: crypto.randomUUID(),
@@ -459,6 +367,10 @@ export async function startOrResumeRun(
       dispatchEventId: result.row.dispatchEventId,
     };
     if (!result.created) return { ...run, created: false };
+    await admitResearchObjectiveTargets(tx, {
+      runId: result.row.id,
+      objectives: frozenObjectives,
+    });
     await tx
       .update(vendorAccount)
       .set({ status: "active", updatedAt: new Date() })
@@ -502,22 +414,6 @@ async function lockProductsFindHeld(
   return held;
 }
 
-/** A new run admits only the Products no active run holds. */
-async function withoutHeldProducts(
-  tx: DrizzleTransaction,
-  targets: TargetedRunTarget[],
-) {
-  const held = await lockProductsFindHeld(
-    tx,
-    targets.flatMap((target) =>
-      target.kind === "product" ? [productId.parse(target.productId)] : [],
-    ),
-  );
-  return targets.filter(
-    (target) => target.kind !== "product" || !held.has(target.productId),
-  );
-}
-
 /** A member's restart or retry refuses rather than drop a held Product. */
 async function assertProductsUnheld(
   tx: DrizzleTransaction,
@@ -532,183 +428,6 @@ async function assertProductsUnheld(
     );
 }
 
-/**
- * Creates an explicit validation/enrichment run. Unlike account sync, an
- * occupied account is a refusal, never a silently persisted waiting job.
- */
-export async function startTargetedRun(
-  db: Database,
-  input: StartTargetedRunInput,
-  options: {
-    /**
-     * Narrow the targets inside the admission transaction, after the account
-     * lock: a caller that chose them from an earlier read rechecks them here.
-     * No target left admits nothing.
-     */
-    admit?: (
-      tx: DrizzleTransaction,
-      targets: TargetedRunTarget[],
-    ) => Promise<TargetedRunTarget[]>;
-  } = {},
-) {
-  const purpose = runPurpose.parse(input.purpose);
-  if (purpose === "account_sync")
-    throw new Error("Targeted import runs require a targeted purpose");
-  const trigger = runTrigger.parse(input.trigger);
-  if (input.targets.length === 0)
-    throw new Error("A targeted import run requires at least one target");
-  const targetIds = input.targets.map((target) =>
-    z
-      .uuid()
-      .parse(target.kind === "purchase" ? target.purchaseId : target.productId),
-  );
-  const targetKeys = input.targets.map(
-    (target, index) => `${target.kind}:${targetIds[index]}`,
-  );
-  if (new Set(targetKeys).size !== targetKeys.length)
-    throw new Error("A targeted import run cannot contain duplicate targets");
-
-  return withTransaction(db, async (tx) => {
-    const blocking = tx
-      .select({
-        id: runTable.id,
-        publicId: runTable.shortcode,
-        status: runTable.status,
-      })
-      .from(runTable);
-    if (input.vendorAccountId) {
-      await tx.execute(
-        sql`SELECT pg_advisory_xact_lock(hashtext(${input.vendorAccountId}))`,
-      );
-      const [blockingRun] = await blocking
-        .where(
-          and(
-            eq(runTable.vendorAccountId, input.vendorAccountId),
-            inArray(runTable.status, [...ACTIVE_RUN_STATUSES]),
-          ),
-        )
-        .limit(1);
-      if (blockingRun) return { created: false as const, blockingRun };
-    } else {
-      // No account lock serializes an accountless start, so a retried start
-      // (a lost response) would dispatch a second run: an active run of this
-      // purpose already holding one of these targets blocks it instead.
-      for (const key of [...targetKeys].sort())
-        await tx.execute(sql`SELECT pg_advisory_xact_lock(hashtext(${key}))`);
-      const [blockingRun] = await blocking
-        .innerJoin(runTarget, eq(runTarget.runId, runTable.id))
-        .where(
-          and(
-            eq(runTable.purpose, purpose),
-            inArray(runTable.status, [...ACTIVE_RUN_STATUSES]),
-            inArray(runTarget.entityId, targetIds),
-          ),
-        )
-        .limit(1);
-      if (blockingRun) return { created: false as const, blockingRun };
-    }
-    const unheld =
-      purpose === "product_enrichment"
-        ? await withoutHeldProducts(tx, input.targets)
-        : input.targets;
-    const targets = options.admit ? await options.admit(tx, unheld) : unheld;
-    if (targets.length === 0)
-      return { created: false as const, blockingRun: null };
-
-    const [actor] = await tx
-      .select({
-        actorUserId: ledgerParty.userId,
-        actorName: user.name,
-        actorEmail: user.email,
-        actorLedgerPartyShortcode: ledgerParty.shortcode,
-        actorLedgerPartyName: ledgerParty.name,
-        actorLedgerPartyKind: ledgerParty.kind,
-      })
-      .from(ledgerParty)
-      .innerJoin(user, eq(user.id, ledgerParty.userId))
-      .where(
-        and(eq(ledgerParty.id, input.ledgerPartyId), notDeleted(ledgerParty)),
-      )
-      .limit(1);
-    if (!actor?.actorUserId)
-      throw new Error("Targeted import actor is not available");
-
-    if (input.vendorAccountId) {
-      const [account] = await tx
-        .select({ id: vendorAccount.id, vendorId: vendorAccount.vendorId })
-        .from(vendorAccount)
-        .where(
-          and(
-            eq(vendorAccount.id, input.vendorAccountId),
-            eq(vendorAccount.ledgerPartyId, input.ledgerPartyId),
-            eq(vendorAccount.vendorId, input.vendorId),
-            notDeleted(vendorAccount),
-          ),
-        )
-        .limit(1);
-      if (!account)
-        throw new Error(
-          "Vendor account is not owned by this member and vendor",
-        );
-    }
-
-    const id = runEntityId.parse(crypto.randomUUID());
-    const eventId = crypto.randomUUID();
-    const run = await insertWithShortcode(tx, "run", {
-      id,
-      ledgerPartyId: input.ledgerPartyId,
-      actorUserId: actor.actorUserId,
-      actorName: actor.actorName,
-      actorEmail: actor.actorEmail,
-      actorLedgerPartyShortcode: actor.actorLedgerPartyShortcode,
-      actorLedgerPartyName: actor.actorLedgerPartyName,
-      actorLedgerPartyKind: actor.actorLedgerPartyKind,
-      vendorId: input.vendorId,
-      vendorAccountId: input.vendorAccountId ?? null,
-      predecessorRunId: input.predecessorRunId
-        ? runEntityId.parse(input.predecessorRunId)
-        : null,
-      purpose,
-      trigger,
-      input: input.input ?? null,
-      dispatchEventId: eventId,
-      coordinatorModel: coordinatorModelFor(purpose),
-      agentSessionId: importRunAgentIdentity(
-        id,
-        agentImportRunPurpose.parse(purpose),
-      ),
-    });
-    await tx.insert(runTarget).values(
-      targets.map((target) => ({
-        runId: id,
-        entityKind: target.kind,
-        entityId:
-          target.kind === "purchase"
-            ? purchaseId.parse(target.purchaseId)
-            : productId.parse(target.productId),
-        vendorAccountId: target.vendorAccountId
-          ? vendorAccountId.parse(target.vendorAccountId)
-          : (input.vendorAccountId ?? null),
-        sourceKind: target.sourceKind ?? null,
-        sourceExternalKey: target.sourceExternalKey ?? null,
-        state: runTargetState.enum.pending,
-        targetFingerprint: target.targetFingerprint,
-        evidenceFingerprint: target.evidenceFingerprint ?? null,
-      })),
-    );
-    return {
-      created: true as const,
-      run: {
-        id: run.id,
-        publicId: run.shortcode,
-        status: run.status,
-        purpose: run.purpose,
-        dispatchEventId: run.dispatchEventId,
-      },
-    };
-  });
-}
-
 export type StartPhotoInventoryRunInput = {
   /** The household member the photos belong to; defaults to the creator's own party. */
   ledgerPartyId?: LedgerPartyId;
@@ -719,7 +438,7 @@ export type StartPhotoInventoryRunInput = {
 /**
  * A photo-inventory run has no vendor and no upfront targets: the native app
  * bulk-uploads photos into it via `stage`/`finalize`, an agent works the
- * queue afterward. Unlike `startTargetedRun`, the owning `ledgerParty`
+ * queue afterward. The owning `ledgerParty`
  * and the creating actor can differ (a member photographing a shared or
  * another member's belongings), so the actor snapshot is always the
  * *creator's* own identity, resolved independently of the chosen owner.
@@ -1264,7 +983,12 @@ async function unreceivedWake(
   db: Database,
   scope: Awaited<ReturnType<typeof loadRunScope>>,
   received: ReadonlySet<string>,
-  broker: ReturnType<PurchaseImportNamespace["getByName"]> | undefined,
+  browsers: Awaited<
+    ReturnType<
+      typeof import("./research-browser-service").researchBrowserSettlement
+    >
+  >,
+  brokers: Map<string, ReturnType<PurchaseImportNamespace["getByName"]>>,
 ): Promise<boolean> {
   const runId = scope.public.runId;
   if (
@@ -1285,25 +1009,12 @@ async function unreceivedWake(
     const decision = APPROVAL_WAKE_DECISION.get(state);
     if (!received.has(`approval:${id}:${decision}`)) return true;
   }
-  if (!broker) return false;
-  const commands = await getDb(db)
-    .select({ result: runOperation.result })
-    .from(runOperation)
-    .where(
-      and(
-        eq(runOperation.runId, runId),
-        eq(runOperation.kind, "browser_command"),
-      ),
-    );
-  for (const { result } of commands) {
-    const command = z.object({ commandId: z.uuid() }).safeParse(result);
-    if (!command.success) continue;
-    const { commandId } = command.data;
+  for (const { commandId, accountId } of browsers.commands) {
     // An answered command's result event resumes the conversation; until
     // the agent has received it, that answer is still in flight.
     if (
       !received.has(`browser-result:${commandId}`) &&
-      (await broker.result(commandId))
+      (await brokers.get(accountId)?.result(commandId))
     )
       return true;
   }
@@ -1344,18 +1055,33 @@ export async function reconcileSettledRun(
   const scope = await loadRunScope(db, input.runId);
   if (scope.public.status !== "running")
     return { reconciled: false as const, status: scope.public.status };
-  const broker = scope.public.vendorAccountId
-    ? namespace.getByName(scope.public.vendorAccountId)
-    : undefined;
+  const { researchBrowserSettlement } =
+    await import("./research-browser-service");
+  const browsers =
+    scope.public.purpose === "photo_inventory"
+      ? { accounts: [], commands: [], deliveryPending: false }
+      : await researchBrowserSettlement(db, scope.public.runId);
+  const brokers = new Map(
+    browsers.accounts.map((id) => [id, namespace.getByName(id)]),
+  );
   // Snapshot unanswered commands before looking for answered ones, so a Mac
   // answer landing between the two reads is seen as an undelivered wake.
-  const pending = broker
-    ? await broker.pendingCommands(scope.public.runId)
-    : [];
+  const pending = (
+    await Promise.all(
+      [...brokers].map(async ([accountId, broker]) =>
+        (await broker.pendingCommands(scope.public.runId)).map((command) => ({
+          ...command,
+          accountId,
+        })),
+      ),
+    )
+  ).flat();
   if (
     input.receivedEventIds &&
-    (await unreceivedWake(db, scope, input.receivedEventIds, broker))
+    (await unreceivedWake(db, scope, input.receivedEventIds, browsers, brokers))
   )
+    return { reconciled: false as const, status: "running" as const };
+  if (browsers.deliveryPending)
     return { reconciled: false as const, status: "running" as const };
   // A command still awaiting the Mac will resume the conversation with its
   // result; the sweep's cutoff abandons only commands nobody answered.
@@ -1423,11 +1149,12 @@ export async function reconcileSettledRun(
     if (awaitingPhotoReview)
       return { reconciled: false as const, status: "running" as const };
   }
-  if (broker) {
+  if (pending.length) {
     // A command the Mac never answered within the stale window is not work
     // in flight; it is the reason the run stalled. Its 25-hour deadline is
     // the bridge's replay bound, not a promise anyone is still keeping.
-    for (const command of pending) await broker.cancel(command.requestId);
+    for (const command of pending)
+      await brokers.get(command.accountId)?.cancel(command.requestId);
   }
   await stopRunForReview(db, {
     runId: input.runId,
@@ -1500,45 +1227,6 @@ const assertRunActive = (status: string) => {
     throw new Error(`Import run is fenced in status ${status}`);
 };
 
-async function settleAllocatedBrowserHunt(
-  db: Database,
-  accountId: VendorAccountId,
-): Promise<void> {
-  const [queuedHunt] = await getDb(db)
-    .select({
-      id: importHunt.id,
-      transactionId: importHunt.financialTransactionId,
-    })
-    .from(importHunt)
-    .where(
-      and(
-        eq(importHunt.vendorAccountId, accountId),
-        eq(importHunt.state, "browser_queued"),
-      ),
-    )
-    .orderBy(asc(importHunt.updatedAt))
-    .limit(1);
-  if (!queuedHunt) return;
-  const [allocation] = await getDb(db)
-    .select({ id: financialTransactionAllocation.id })
-    .from(financialTransactionAllocation)
-    .where(
-      and(
-        eq(
-          financialTransactionAllocation.transactionId,
-          queuedHunt.transactionId,
-        ),
-        notDeleted(financialTransactionAllocation),
-      ),
-    )
-    .limit(1);
-  if (!allocation) return;
-  await getDb(db)
-    .update(importHunt)
-    .set({ state: "resolved", updatedAt: new Date() })
-    .where(eq(importHunt.id, queuedHunt.id));
-}
-
 /** The hunts a charge-search run was assigned, or null for every other run. */
 async function runChargeHuntIds(
   db: Database,
@@ -1549,33 +1237,7 @@ async function runChargeHuntIds(
     .from(runTable)
     .where(eq(runTable.id, runEntityId.parse(runId)))
     .limit(1);
-  const parsed = chargeHuntRunInput.safeParse(row?.input);
-  return parsed.success ? parsed.data.huntIds : null;
-}
-
-/**
- * A selected hunt whose charge is now allocated has nothing left to find,
- * whichever path allocated it (this run's commit, retained evidence, or a
- * member). Only a queued hunt moves; a recorded outcome stays.
- */
-async function resolveAllocatedChargeHunts(
-  db: Database,
-  huntIds: readonly string[],
-) {
-  await getDb(db)
-    .update(importHunt)
-    .set({ state: CHARGE_HUNT_STATE.resolved, updatedAt: new Date() })
-    .where(
-      and(
-        inArray(importHunt.id, [...huntIds]),
-        eq(importHunt.state, CHARGE_HUNT_STATE.queued),
-        sql`EXISTS (
-          SELECT 1 FROM "FinancialTransactionAllocation" a
-          WHERE a."transactionId" = ${importHunt.financialTransactionId}
-            AND a."deletedAt" IS NULL
-        )`,
-      ),
-    );
+  return researchChargeHuntIds(row?.input);
 }
 
 /**
@@ -1629,1507 +1291,41 @@ export class ActiveChargeRunError extends AccountOccupiedError {
   }
 }
 
-// eslint-disable-next-line complexity -- Purpose-specific work selection is an explicit authority boundary.
-export async function claimNextImportWork(
-  db: Database,
-  namespace: PurchaseImportNamespace,
-  runId: string,
-) {
+/** Photo coordination reads only its explicit pending image targets. */
+export async function claimPhotoInventoryWork(db: Database, runId: string) {
   const scope = await loadRunScope(db, runId);
+  if (scope.public.purpose !== "photo_inventory")
+    throw new Error("Photo work selection requires a photo inventory run");
   if (scope.public.status === "paused_approval")
     return { kind: "paused_approval" as const };
-  const mail = await loadOrderMailImportEvidence(db, scope.public.runId, {
-    allowComplete: true,
-  });
-  if (mail) {
-    assertRunActive(scope.public.status);
-    const purchaseId = await orderMailImportedPurchase(db, mail);
-    // A selected order another run already imported is settled work here.
-    if (purchaseId && mail.selected)
-      await markOrderMailCandidateImported(
-        db,
-        scope.public.runId,
-        mail.orderId,
-      );
-    return purchaseId
-      ? {
-          kind: "settlement_verification" as const,
-          purchaseId,
-          orderId: mail.orderId,
-        }
-      : {
-          kind: "mail_evidence" as const,
-          orderId: mail.orderId,
-          evidenceChecksum: mail.evidenceChecksum,
-        };
-  }
-  const receipt = await loadReceiptEvidenceForRun(db, scope.public.runId);
-  if (receipt) {
-    assertRunActive(scope.public.status);
-    return {
-      kind: "receipt_evidence" as const,
-      huntId: receipt.huntId,
-      imageId: receipt.imageId,
-      evidenceChecksum: receipt.evidenceChecksum,
-    };
-  }
-
-  if (
-    scope.public.status === "paused_auth" ||
-    scope.public.status === "paused_offline"
-  ) {
-    if (!scope.public.vendorAccountId)
-      return scope.public.status === "paused_auth"
-        ? { kind: "paused_auth" as const }
-        : { kind: "paused_offline" as const };
-    const connected = await namespace
-      .getByName(scope.public.vendorAccountId)
-      .connected();
-    if (!connected) {
-      if (
-        scope.public.status === "paused_offline" &&
-        Date.now() - scope.runUpdatedAt.getTime() >= OFFLINE_EXPIRY_MS
-      ) {
-        await getDb(db)
-          .update(runTable)
-          .set({
-            status: "failed",
-            failureCode: "offline_expired",
-            endedAt: new Date(),
-            updatedAt: new Date(),
-          })
-          .where(
-            and(
-              eq(runTable.id, scope.public.runId),
-              eq(runTable.status, "paused_offline"),
-            ),
-          );
-        await deferQueuedChargeHunts(
-          db,
-          scope.public.runId,
-          "Run expired while offline",
-        );
-        return { kind: "failed" as const, failureCode: "offline_expired" };
-      }
-      return { kind: "paused_offline" as const };
-    }
-    // Resume only from the status read above: a run stopped while this
-    // claim waited on the bridge (an outdated Mac) must stay stopped.
-    const [resumed] = await getDb(db)
-      .update(runTable)
-      .set({ status: "running", failureCode: null, updatedAt: new Date() })
-      .where(
-        and(
-          eq(runTable.id, scope.public.runId),
-          eq(runTable.status, scope.public.status),
-        ),
-      )
-      .returning({ id: runTable.id });
-    if (!resumed) {
-      const [current] = await getDb(db)
-        .select({ status: runTable.status })
-        .from(runTable)
-        .where(eq(runTable.id, scope.public.runId));
-      // A run that ended meanwhile is a clean stop for the agent; a run some
-      // other path resumed first stays the error it was.
-      if (
-        current &&
-        !ACTIVE_RUN_STATUSES.some((status) => status === current.status)
-      )
-        return { kind: "stopped" as const, status: current.status };
-      throw new Error("Import run is fenced: its status changed during claim");
-    }
-  } else {
-    assertRunActive(scope.public.status);
-  }
-  if (scope.public.purpose === "purchase_validation") {
-    const [target] = await getDb(db)
-      .select({
-        targetId: runTarget.id,
-        purchaseId: purchase.shortcode,
-        orderId: purchase.orderId,
-        sourceKind: runTarget.sourceKind,
-        sourceExternalKey: runTarget.sourceExternalKey,
-        state: runTarget.state,
-      })
-      .from(runTarget)
-      .innerJoin(
-        purchase,
-        and(eq(purchase.id, runTarget.entityId), notDeleted(purchase)),
-      )
-      .where(
-        and(
-          eq(runTarget.runId, scope.public.runId),
-          inArray(runTarget.state, ["pending", "prepared", "needs_evidence"]),
-        ),
-      )
-      .orderBy(...targetWorkOrder)
-      .limit(1);
-    if (target) {
-      const [evidence] = await getDb(db)
-        .select({ id: runEvidence.id })
-        .from(runEvidence)
-        .where(
-          and(
-            eq(runEvidence.runId, scope.public.runId),
-            eq(runEvidence.targetId, target.targetId),
-          ),
-        )
-        .limit(1);
-      return {
-        kind: "purchase_validation" as const,
-        ...target,
-        hasBrowserAccount: Boolean(scope.public.vendorAccountId),
-        hasRunEvidence: Boolean(evidence),
-      };
-    }
-    return { kind: "none" as const };
-  }
-  if (scope.public.purpose === "product_enrichment") {
-    const [target] = await getDb(db)
-      .select({
-        targetId: runTarget.id,
-        productId: product.shortcode,
-        productName: product.name,
-        targetFingerprint: runTarget.targetFingerprint,
-        startUrl: runTarget.sourceExternalKey,
-      })
-      .from(runTarget)
-      .innerJoin(
-        product,
-        and(eq(product.id, runTarget.entityId), notDeleted(product)),
-      )
-      .where(
-        and(
-          eq(runTarget.runId, scope.public.runId),
-          inArray(runTarget.state, ["pending", "prepared"]),
-        ),
-      )
-      .orderBy(...targetWorkOrder)
-      .limit(1);
-    if (!target) return { kind: "none" as const };
-    const evidence = await getDb(db)
-      .select({
-        id: runEvidence.id,
-        kind: runEvidence.kind,
-        checksum: runEvidence.checksum,
-        mediaType: runEvidence.mediaType,
-        sourceMetadata: runEvidence.sourceMetadata,
-      })
-      .from(runEvidence)
-      .where(eq(runEvidence.targetId, target.targetId))
-      .orderBy(desc(runEvidence.createdAt));
-    return {
-      kind: "product_enrichment" as const,
-      ...target,
-      evidence,
-      hasBrowserAccount: Boolean(scope.public.vendorAccountId),
-    };
-  }
-  // A photo-inventory run is vendor-less by construction; it must never fall
-  // through to the account-sync branch below.
-  if (scope.public.purpose === "photo_inventory") {
-    const [run] = await getDb(db)
-      .select({ notes: runTable.notes })
-      .from(runTable)
-      .where(eq(runTable.id, scope.public.runId))
-      .limit(1);
-    const [pending] = await getDb(db)
-      .select({ count: count() })
-      .from(runTarget)
-      .where(
-        and(
-          eq(runTarget.runId, scope.public.runId),
-          eq(runTarget.entityKind, "image"),
-          eq(runTarget.state, "pending"),
-        ),
-      );
-    return pending?.count
-      ? {
-          kind: "photo_inventory" as const,
-          runId: scope.public.shortcode,
-          pendingImages: pending.count,
-          notes: run?.notes ?? null,
-        }
-      : { kind: "none" as const };
-  }
-  if (!scope.public.vendorAccountId || !scope.vendorId)
-    return { kind: "none" as const };
-  // A charge-search run works exactly its selected hunts and never walks
-  // order history, so unselected hunts and unrelated orders stay out of it.
-  const chargeHuntIds = await runChargeHuntIds(db, scope.public.runId);
-  if (chargeHuntIds) await resolveAllocatedChargeHunts(db, chargeHuntIds);
-  const [hunt] = await getDb(db)
-    .select({
-      id: importHunt.id,
-      orderIds: importHunt.matchedOrderIds,
-      amount: financialTransaction.amount,
-      dateFrom: importHunt.dateFrom,
-      dateTo: importHunt.dateTo,
-    })
-    .from(importHunt)
-    .innerJoin(
-      financialTransaction,
-      eq(financialTransaction.id, importHunt.financialTransactionId),
-    )
-    .where(
-      and(
-        eq(importHunt.vendorAccountId, scope.public.vendorAccountId),
-        eq(importHunt.state, "browser_queued"),
-        chargeHuntIds
-          ? inArray(importHunt.id, chargeHuntIds)
-          : notHeldByChargeRun,
-      ),
-    )
-    .orderBy(
-      // Selected charges are searched oldest first, so a restart is stable.
-      ...(chargeHuntIds
-        ? [asc(importHunt.dateFrom), asc(importHunt.id)]
-        : [asc(importHunt.updatedAt)]),
-    )
-    .limit(1);
-  const hints = vendorAgentHints.parse(scope.public.navigationHints);
-  const startUrl = hints.ordersListUrl ?? scope.website;
-  if (hunt && startUrl) return { kind: "hunt" as const, startUrl, ...hunt };
-  // Listed orders come before enrichment and before walking further pages:
-  // the worklist is what a listing produced, and finishing while one is
-  // pending is refused.
-  const [order] = await getDb(db)
-    .select({
-      orderId: runOrderCandidate.orderId,
-      orderUrl: runOrderCandidate.orderUrl,
-      orderedAt: runOrderCandidate.orderedAt,
-    })
-    .from(runOrderCandidate)
-    .where(
-      and(
-        eq(runOrderCandidate.runId, scope.public.runId),
-        eq(runOrderCandidate.state, "pending"),
-      ),
-    )
-    .orderBy(desc(runOrderCandidate.orderedAt), asc(runOrderCandidate.listedAt))
-    .limit(1);
-  if (order) return { kind: "order" as const, ...order };
-  const enrichment = await getDb(db)
-    .selectDistinct({
-      productId: product.id,
-      productName: product.name,
-      startUrl: entityExternalId.url,
-    })
-    .from(auditLog)
-    .innerJoin(
-      product,
-      and(eq(product.id, auditLog.entityId), notDeleted(product)),
-    )
-    .innerJoin(
-      entityExternalId,
-      and(
-        eq(entityExternalId.entityId, product.id),
-        isNotNull(entityExternalId.url),
-        notDeleted(entityExternalId),
-      ),
-    )
-    .leftJoin(
-      entityAttachment,
-      and(
-        eq(entityAttachment.entityId, product.id),
-        notDeleted(entityAttachment),
-      ),
-    )
-    .where(
-      and(
-        eq(auditLog.runId, scope.public.runId),
-        eq(auditLog.entityKind, "product"),
-        isNull(entityAttachment.id),
-      ),
-    )
-    .limit(1);
-  if (enrichment[0]?.startUrl)
-    return { kind: "product_enrichment" as const, ...enrichment[0] };
-  if (chargeHuntIds) return { kind: "none" as const };
-  const [scanFinished] = await getDb(db)
-    .select({ id: runOperation.id })
-    .from(runOperation)
-    .where(
-      and(
-        eq(runOperation.runId, scope.public.runId),
-        eq(runOperation.kind, "mark_history_expired"),
-        eq(runOperation.state, "completed"),
-      ),
-    )
-    .limit(1);
-  if (scanFinished) return { kind: "none" as const };
-  const [history] = await getDb(db)
-    .select({
-      cursorUrl: runTable.historyCursorUrl,
-      exhaustedAt: runTable.historyExhaustedAt,
-    })
+  if (scope.public.status === "paused_auth")
+    return { kind: "paused_auth" as const };
+  if (scope.public.status === "paused_offline")
+    return { kind: "paused_offline" as const };
+  assertRunActive(scope.public.status);
+  const [run] = await getDb(db)
+    .select({ notes: runTable.notes })
     .from(runTable)
     .where(eq(runTable.id, scope.public.runId))
     .limit(1);
-  if (history?.exhaustedAt) return { kind: "none" as const };
-  const walkFrom = history?.cursorUrl ?? startUrl;
-  if (!walkFrom) return { kind: "none" as const };
-  const backfill = await runBackfillRange(db, scope.public.runId);
-  return backfill
+  const [pending] = await getDb(db)
+    .select({ count: count() })
+    .from(runTarget)
+    .where(
+      and(
+        eq(runTarget.runId, scope.public.runId),
+        eq(runTarget.entityKind, "image"),
+        eq(runTarget.state, "pending"),
+      ),
+    );
+  return pending?.count
     ? {
-        kind: "cursor_walk" as const,
-        startUrl: walkFrom,
-        backfill: { from: backfill.from, to: backfill.to },
+        kind: "photo_inventory" as const,
+        runId: scope.public.shortcode,
+        pendingImages: pending.count,
+        notes: run?.notes ?? null,
       }
-    : { kind: "cursor_walk" as const, startUrl: walkFrom };
-}
-
-/** The explicit date range of a backfill run, or null for any other run. */
-async function runBackfillRange(db: Database, runId: string) {
-  const [row] = await getDb(db)
-    .select({ input: runTable.input })
-    .from(runTable)
-    .where(eq(runTable.id, runEntityId.parse(runId)))
-    .limit(1);
-  const parsed = orderBackfillRunInput.safeParse(row?.input);
-  return parsed.success ? parsed.data : null;
-}
-
-/**
- * Record an order-history page as worklist rows. An order the vendor already
- * has a Purchase for is `covered`; the rest are `pending`. `ordersSeen` counts
- * the listing, not commits — the agent's "95 on the page, 12 imported" gap was
- * invisible while the writer owned that counter.
- */
-async function recordOrderListing(
-  db: Database,
-  input: {
-    runId: RunId;
-    vendorId: VendorId;
-    orders: ReadonlyArray<{
-      orderId: string;
-      orderUrl: string | null;
-      orderedAt: string | null;
-    }>;
-  },
-) {
-  if (input.orders.length > 0) {
-    const covered = new Set(
-      (
-        await getDb(db)
-          .select({ orderId: purchase.orderId })
-          .from(purchase)
-          .where(
-            and(
-              eq(purchase.vendorId, input.vendorId),
-              inArray(
-                purchase.orderId,
-                input.orders.map((order) => order.orderId),
-              ),
-              notDeleted(purchase),
-            ),
-          )
-      ).map((row) => row.orderId),
-    );
-    await getDb(db)
-      .insert(runOrderCandidate)
-      .values(
-        input.orders.map((order) => ({
-          runId: input.runId,
-          orderId: order.orderId,
-          orderUrl: order.orderUrl,
-          orderedAt: order.orderedAt,
-          state: covered.has(order.orderId) ? "covered" : "pending",
-        })),
-      )
-      .onConflictDoNothing();
-  }
-  const [seen] = await getDb(db)
-    .select({ value: count() })
-    .from(runOrderCandidate)
-    .where(eq(runOrderCandidate.runId, input.runId));
-  await getDb(db)
-    .update(runTable)
-    .set({ ordersSeen: seen?.value ?? 0, updatedAt: new Date() })
-    .where(eq(runTable.id, input.runId));
-  return seen?.value ?? 0;
-}
-
-/**
- * Try a public page without the Mac. A fetched page becomes the command's
- * result (DOM only; enrichment reads no screenshot); a refusal is reported on
- * the run and the caller sends the command to the Mac instead.
- */
-async function readPageOnServer(
-  db: Database,
-  input: {
-    runId: RunId;
-    operationId: string;
-    command: BrowserBridgeRequest;
-    url: string;
-    allowedHosts: readonly string[];
-    fetchPage: FetchPage;
-  },
-) {
-  const fetched = await input.fetchPage(input.url, input.allowedHosts);
-  const host = new URL(input.url).host;
-  if (fetched.status === "blocked") {
-    await reportBrowserStep(
-      db,
-      input.runId,
-      `server-read:${input.operationId}`,
-      `${host} refused a direct read (${fetched.reason}); using the Mac's browser`,
-    );
-    return null;
-  }
-  // A sign-in form served to the server is not the page: the Mac's signed-in
-  // browser reads it (after a sign-in pause the retry must not land here).
-  if (wasm.compact_browser_page(fetched.html, fetched.url).has_password_input) {
-    await reportBrowserStep(
-      db,
-      input.runId,
-      `server-read:${input.operationId}`,
-      `${host} asked the server to sign in; using the Mac's browser`,
-    );
-    return null;
-  }
-  const dom = await encodeSnapshotDom(fetched.html);
-  if (dom.data.length > BROWSER_DOM_MAX_ENCODED) {
-    await reportBrowserStep(
-      db,
-      input.runId,
-      `server-read:${input.operationId}`,
-      `${host} page is too large to read directly; using the Mac's browser`,
-    );
-    return null;
-  }
-  const completedAt = new Date().toISOString();
-  await reportBrowserStep(
-    db,
-    input.runId,
-    `server-read:${input.operationId}`,
-    `Read ${host} directly, without the Mac`,
-  );
-  return browserBridgeResult.parse({
-    protocolVersion: BROWSER_BRIDGE_PROTOCOL,
-    commandID: input.command.id,
-    operationID: input.command.operationId,
-    runID: input.command.runID,
-    completedAt,
-    outcome: {
-      status: "completed",
-      snapshot: {
-        sourceURL: fetched.url,
-        title: "",
-        capturedAt: completedAt,
-        dom,
-        screenshot: { status: "skipped" },
-      },
-      observation: {
-        url: fetched.url,
-        title: null,
-        readyState: "complete",
-        window: null,
-        screenRecording: "unknown",
-        durationMs: fetched.durationMs,
-      },
-    },
-  });
-}
-
-// eslint-disable-next-line complexity -- Browser commands are fenced by purpose, target, and allowlisted operation type here.
-export async function issueBrowserCommand(
-  db: Database,
-  namespace: PurchaseImportNamespace,
-  input: {
-    runId: string;
-    operationId: string;
-    operation: BrowserBridgeOperation;
-  },
-  ports: BrowserPagePorts = productionBrowserPagePorts,
-) {
-  const scope = await loadRunScope(db, input.runId);
-  assertRunActive(scope.public.status);
-  if (!scope.public.vendorAccountId)
-    throw new Error("This import run has no browser account");
-  const operation = browserBridgeOperation.parse(input.operation);
-  const allowedHosts = scope.public.allowedHosts;
-  const [captureTarget] =
-    operation.type === "capture" && scope.public.purpose !== "account_sync"
-      ? await getDb(db)
-          .select({ id: runTarget.id })
-          .from(runTarget)
-          .where(
-            and(
-              eq(runTarget.runId, runEntityId.parse(input.runId)),
-              inArray(runTarget.state, [
-                "pending",
-                "prepared",
-                "needs_evidence",
-              ]),
-            ),
-          )
-          .orderBy(...targetWorkOrder)
-          .limit(1)
-      : [];
-  if (
-    operation.type === "capture" &&
-    scope.public.purpose !== "account_sync" &&
-    !captureTarget
-  )
-    throw new Error("Targeted browser capture has no eligible explicit target");
-  const scopedOperation =
-    operation.type === "navigate"
-      ? { ...operation, allowedHosts }
-      : operation.type === "capture"
-        ? {
-            ...operation,
-            allowedHosts,
-            evidenceScope: captureTarget
-              ? {
-                  runId: scope.public.shortcode,
-                  targetId: captureTarget.id,
-                }
-              : undefined,
-          }
-        : operation;
-  const boundedNavigationURL =
-    scopedOperation.type === "navigate"
-      ? scopedOperation.url
-      : scopedOperation.type === "capture"
-        ? scopedOperation.recoveryURL
-        : undefined;
-  if (boundedNavigationURL) {
-    const host = new URL(boundedNavigationURL).hostname.toLowerCase();
-    if (!allowedHosts.includes(host))
-      throw new Error("Navigation URL is outside the vendor allowlist");
-  }
-  const commandId = await operationUuid(input.runId, input.operationId);
-  const fingerprint = await sha256Hex(
-    JSON.stringify({
-      protocolVersion: BROWSER_BRIDGE_PROTOCOL,
-      id: commandId,
-      operationId: input.operationId,
-      runID: input.runId,
-      operation: scopedOperation,
-    }),
-  );
-  const database = getDb(db);
-  const key = {
-    runId: runEntityId.parse(input.runId),
-    operationId: input.operationId,
-  };
-  const recorded = await readOperation(database, key);
-  if (
-    recorded?.inputFingerprint !== undefined &&
-    recorded.inputFingerprint !== fingerprint
-  )
-    throw new Error("Operation id was replayed with different input");
-  const recordedStep = recorded
-    ? browserCommandRecord.parse(recorded.result)
-    : undefined;
-  // A replayed step the server already read answers with that read; it never
-  // falls through to the Mac.
-  if (recordedStep?.serverResult)
-    return { commandId, state: "completed" as const };
-  const command = recordedStep
-    ? recordedStep.command
-    : browserBridgeRequest.parse({
-        protocolVersion: BROWSER_BRIDGE_PROTOCOL,
-        id: commandId,
-        operationId: input.operationId,
-        runID: input.runId,
-        // The web-owned offline detector fires at 24 hours. Keep a queued
-        // command valid slightly beyond that window so reconnect can replay it.
-        deadline: new Date(Date.now() + 25 * 60 * 60_000).toISOString(),
-        operation: scopedOperation,
-      });
-  // A public product page is read without the Mac when the vendor allows it;
-  // a refusal falls back to the signed-in browser and says why.
-  const serverRead =
-    !recorded &&
-    scope.public.purpose === "product_enrichment" &&
-    scopedOperation.type === "capture" &&
-    scopedOperation.recoveryURL
-      ? await readPageOnServer(db, {
-          runId: runEntityId.parse(input.runId),
-          operationId: input.operationId,
-          command,
-          url: scopedOperation.recoveryURL,
-          allowedHosts,
-          fetchPage: ports.fetchPage,
-        })
-      : null;
-  if (serverRead) {
-    await insertOperation(database, {
-      ...key,
-      kind: "browser_command",
-      inputFingerprint: fingerprint,
-      result: { command, commandId, serverResult: serverRead },
-    });
-    await completeOperation(database, key, {
-      command,
-      commandId,
-      serverResult: serverRead,
-    });
-    return { commandId, state: "completed" as const };
-  }
-  if (!recorded) {
-    await insertOperation(database, {
-      ...key,
-      kind: "browser_command",
-      inputFingerprint: fingerprint,
-      result: { command, commandId },
-    });
-  }
-  const broker = namespace.getByName(scope.public.vendorAccountId);
-  const connected = await broker.connected();
-  await broker.enqueue(command);
-  if (!connected) {
-    await Promise.all([
-      database
-        .update(runTable)
-        .set({ status: "paused_offline", updatedAt: new Date() })
-        .where(eq(runTable.id, runEntityId.parse(input.runId))),
-      database
-        .update(vendorAccount)
-        .set({ status: "paused_offline", updatedAt: new Date() })
-        .where(
-          eq(
-            vendorAccount.id,
-            vendorAccountId.parse(scope.public.vendorAccountId),
-          ),
-        ),
-    ]);
-  }
-  // A replay re-enqueues a command the broker already answered; its recorded
-  // terminal failure (`readBrowserCommandResult`) is still the diagnostic.
-  // The replay keeps everything the step has learned since (its cached page,
-  // retries, and pause).
-  await completeOperation(
-    database,
-    key,
-    { ...recordedStep, command, commandId },
-    { keepError: true },
-  );
-  return {
-    commandId,
-    state: connected ? ("dispatched" as const) : ("paused_offline" as const),
-  };
-}
-
-/**
- * Ends a run whose Mac app the server's version gate refused: nothing the run
- * asks of the browser can succeed until the member updates and restarts. It
- * stops from any active status (a paused run included) and is a no-op once
- * stopped, so a repeated read of the same result answers the same way. An
- * account sync's import audit is attempted first, but its failure (or a
- * paused run it refuses) cannot keep the run going; the finding says so.
- */
-async function stopRunForOutdatedClient(
-  db: Database,
-  input: {
-    runId: string;
-    operationId: string;
-    message: string;
-    failureCode?: string;
-  },
-) {
-  const failureCode = input.failureCode ?? "client_update_required";
-  const scope = await loadRunScope(db, input.runId);
-  const runId = runEntityId.parse(input.runId);
-  if (!ACTIVE_RUN_STATUSES.some((status) => status === scope.public.status))
-    return;
-  let auditGap: string | null = null;
-  let auditedAt: Date | undefined;
-  if (scope.public.purpose === "account_sync") {
-    try {
-      await auditAllImportBatches(db, {
-        runId: input.runId,
-        operationId: `${input.operationId}:required-audit`,
-      });
-      auditedAt = new Date();
-    } catch (error) {
-      auditGap = `Imported purchases were not audited: ${error instanceof Error ? error.message : String(error)}`;
-    }
-  }
-  const summary = [input.message, auditGap].filter(Boolean).join(" ");
-  const fingerprint = await sha256Hex(`${failureCode}:${summary}`);
-  await withTransaction(db, async (tx) => {
-    const [stopped] = await tx
-      .update(runTable)
-      .set({
-        status: "needs_review",
-        failureCode,
-        // A skipped audit keeps whatever audit stamp the run already had.
-        auditedAt: auditedAt ?? sql`${runTable.auditedAt}`,
-        endedAt: new Date(),
-        updatedAt: new Date(),
-      })
-      .where(
-        and(
-          eq(runTable.id, runId),
-          inArray(runTable.status, [...ACTIVE_RUN_STATUSES]),
-        ),
-      )
-      .returning({ id: runTable.id });
-    if (!stopped) return;
-    // The account was only offline because of this run; a sign-in pause
-    // stays, since that is the vendor's state, not the app's.
-    if (scope.public.vendorAccountId)
-      await tx
-        .update(vendorAccount)
-        .set({ status: "active", updatedAt: new Date() })
-        .where(
-          and(
-            eq(
-              vendorAccount.id,
-              vendorAccountId.parse(scope.public.vendorAccountId),
-            ),
-            eq(vendorAccount.status, "paused_offline"),
-          ),
-        );
-    if (scope.public.purpose !== "account_sync")
-      await tx
-        .update(runTarget)
-        .set({ state: "unresolved", outcome: null, updatedAt: new Date() })
-        .where(
-          and(
-            eq(runTarget.runId, runId),
-            inArray(runTarget.state, ["pending", "prepared", "needs_evidence"]),
-          ),
-        );
-    await tx
-      .insert(runFinding)
-      .values({
-        runId,
-        ledgerPartyId: scope.ledgerPartyId,
-        entityKind: "run",
-        entityId: runId,
-        kind: "other",
-        summary,
-        evidenceFingerprint: fingerprint,
-      })
-      .onConflictDoNothing();
-  });
-}
-
-/**
- * Where the server keeps a captured page's DOM, and how it reads a public
- * page itself; tests pass their own.
- */
-export type BrowserPagePorts = {
-  storage: BrowserEvidenceStorage;
-  fetchPage: FetchPage;
-};
-const productionBrowserPagePorts: BrowserPagePorts = {
-  storage: productionBrowserEvidenceStorage,
-  fetchPage: fetchPublicPage,
-};
-
-/** A line on the run's live progress, so the Runs UI says what happened. */
-async function reportBrowserStep(
-  db: Database,
-  runId: RunId,
-  eventId: string,
-  detail: string,
-) {
-  await getDb(db)
-    .insert(runProgress)
-    .values({ runId, eventId, phase: "browser", detail })
-    .onConflictDoNothing();
-}
-
-/**
- * Pause the run (and its account) for a condition the member can fix, with
- * the fix as the run's latest progress line.
- */
-async function pauseForBrowser(
-  db: Database,
-  scope: Awaited<ReturnType<typeof loadRunScope>>,
-  input: {
-    status: "paused_offline" | "paused_auth";
-    failureCode: string;
-    reason: string;
-    eventId: string;
-  },
-) {
-  await getDb(db)
-    .update(runTable)
-    .set({
-      status: input.status,
-      failureCode: input.failureCode,
-      updatedAt: new Date(),
-    })
-    .where(eq(runTable.id, scope.public.runId));
-  if (scope.public.vendorAccountId)
-    await getDb(db)
-      .update(vendorAccount)
-      .set({ status: input.status, updatedAt: new Date() })
-      .where(
-        eq(
-          vendorAccount.id,
-          vendorAccountId.parse(scope.public.vendorAccountId),
-        ),
-      );
-  await reportBrowserStep(db, scope.public.runId, input.eventId, input.reason);
-}
-
-/**
- * The agent's read of a browser step. The Mac only reports what it saw; this
- * decides what that means: a capture is derived from its DOM (and kept as
- * evidence), a sign-in page pauses the run and raises the window, and a
- * failure follows `browserRecovery` (retry as a fresh command, pause with the
- * member's fix, or fail). A step the server retried answers with its latest
- * attempt, so the agent keeps asking about the operation it issued.
- */
-type BrowserStepRead =
-  | { state: "missing" }
-  | {
-      /** `paused_offline` here: the retry is queued for a Mac not connected. */
-      state: "pending" | "dispatched" | "paused_offline";
-      commandId: string;
-      retrying?: string;
-    }
-  | {
-      state: "completed";
-      commandId: string;
-      observation: BrowserObservation;
-      capture?: BrowserPageCapture;
-    }
-  | { state: "stopped"; observation: BrowserObservation | null }
-  | {
-      state: "paused_offline" | "paused_auth";
-      reason?: string;
-      observation: BrowserObservation;
-    }
-  | {
-      state: "failed";
-      code: string;
-      message: string;
-      observation: BrowserObservation;
-    };
-
-// eslint-disable-next-line complexity -- One read routes every browser outcome through the recovery policy.
-export async function readBrowserCommandResult(
-  db: Database,
-  namespace: PurchaseImportNamespace,
-  input: { runId: string; operationId: string },
-  ports: BrowserPagePorts = productionBrowserPagePorts,
-): Promise<BrowserStepRead> {
-  const scope = await loadRunScope(db, input.runId);
-  if (!scope.public.vendorAccountId)
-    throw new Error("This import run has no browser account");
-  const runId = runEntityId.parse(input.runId);
-  const key = { runId, operationId: input.operationId };
-  const stored = await readOperation(getDb(db), key);
-  const original = browserCommandRecord.safeParse(stored?.result);
-  if (!stored) return { state: "missing" as const };
-  if (!original.success) {
-    // A step issued in an earlier bridge protocol: no current Mac can run or
-    // answer it, and its operation id cannot be reissued, so the run stops
-    // for review instead of waiting on it.
-    await stopRunForOutdatedClient(db, {
-      runId: input.runId,
-      operationId: input.operationId,
-      failureCode: "browser_protocol_changed",
-      message:
-        "This step was issued before Cubby's browser protocol changed. Restart the run.",
-    });
-    return { state: "stopped" as const, observation: null };
-  }
-  const retries = original.data.retries ?? [];
-  const attemptKey = {
-    runId,
-    operationId: retries.at(-1) ?? input.operationId,
-  };
-  const attempt = retries.length
-    ? browserCommandRecord.parse(
-        (await readOperation(getDb(db), attemptKey))?.result,
-      )
-    : original.data;
-  const broker = namespace.getByName(scope.public.vendorAccountId);
-  const result =
-    attempt.serverResult ?? (await broker.result(attempt.commandId));
-  if (!result)
-    return { state: "pending" as const, commandId: attempt.commandId };
-  const outcome = result.outcome;
-  // Merge into the step's own record as it is now: a capture read earlier in
-  // this call may already have cached its page there.
-  const updateStep = async (patch: Partial<BrowserCommandRecord>) =>
-    setOperationResult(getDb(db), key, {
-      ...browserCommandRecord.parse(
-        (await readOperation(getDb(db), key))?.result,
-      ),
-      ...patch,
-    });
-  /** Issue the step again as a fresh operation and answer for it. */
-  const retry = async (
-    raiseWindow: boolean,
-    why: string,
-  ): Promise<BrowserStepRead> => {
-    const next = retries.length + 1;
-    const retryOperationId = `${input.operationId}:retry-${next}`;
-    if (raiseWindow)
-      await issueBrowserCommand(
-        db,
-        namespace,
-        {
-          runId: input.runId,
-          operationId: `${input.operationId}:raise-${next}`,
-          operation: { type: "window", action: "raise" },
-        },
-        ports,
-      );
-    const reissued = await issueBrowserCommand(
-      db,
-      namespace,
-      {
-        runId: input.runId,
-        operationId: retryOperationId,
-        operation: attempt.command.operation,
-      },
-      ports,
-    );
-    await updateStep({ retries: [...retries, retryOperationId] });
-    await reportBrowserStep(
-      db,
-      runId,
-      `browser-retry:${retryOperationId}`,
-      `Retrying ${attempt.command.operation.type}${raiseWindow ? " after raising the window" : ""}: ${why}`,
-    );
-    // The server read the retried page itself: answer with that page.
-    if (reissued.state === "completed")
-      return readBrowserCommandResult(db, namespace, input, ports);
-    return {
-      state: reissued.state,
-      commandId: reissued.commandId,
-      retrying: why,
-    };
-  };
-  if (outcome.status === "failed") {
-    const policy = browserRecovery(outcome, retries.length);
-    // A step read again after the run paused on it (the member fixed the
-    // condition and the Mac reconnected) retries instead of pausing again.
-    const recovery: BrowserRecovery =
-      policy.action === "pause" &&
-      original.data.pausedAt === attemptKey.operationId
-        ? {
-            action: "retry",
-            raiseWindow: outcome.code === "screenshot_unavailable",
-          }
-        : policy;
-    const diagnostic = `${outcome.code}${outcome.screenshotGap ? ` (${outcome.screenshotGap})` : ""}: ${outcome.message} [${describeObservation(outcome.observation)}]`;
-    if (recovery.action === "stop_outdated_client") {
-      await failOperation(getDb(db), attemptKey, diagnostic);
-      await stopRunForOutdatedClient(db, {
-        runId: input.runId,
-        operationId: input.operationId,
-        message: outcome.message,
-      });
-      return { state: "stopped" as const, observation: outcome.observation };
-    }
-    if (recovery.action === "retry")
-      return retry(recovery.raiseWindow, diagnostic);
-    await failOperation(getDb(db), attemptKey, diagnostic);
-    if (recovery.action === "pause") {
-      await updateStep({ pausedAt: attemptKey.operationId });
-      await pauseForBrowser(db, scope, {
-        status: recovery.status,
-        failureCode: outcome.screenshotGap ?? outcome.code,
-        reason: recovery.reason,
-        eventId: `browser-pause:${attemptKey.operationId}`,
-      });
-      return {
-        state: recovery.status,
-        reason: recovery.reason,
-        observation: outcome.observation,
-      };
-    }
-    return {
-      state: "failed" as const,
-      code: outcome.code,
-      message: outcome.message,
-      observation: outcome.observation,
-    };
-  }
-  if (attempt.command.operation.type !== "capture")
-    return {
-      state: "completed" as const,
-      commandId: attempt.commandId,
-      observation: outcome.observation,
-    };
-  const page = await materializeCapture(db, {
-    key: attemptKey,
-    runShortcode: scope.public.shortcode,
-    record: attempt,
-    result,
-    allowedHosts: scope.public.allowedHosts,
-    storage: ports.storage,
-  });
-  if (page.capture.authenticationRequired) {
-    // Read again after the member signed in and resumed: the cached page is
-    // still the sign-in form, so capture the step afresh.
-    if (original.data.pausedAt === attemptKey.operationId)
-      return retry(false, "capturing again after sign-in");
-    // The page asks for a password: the member signs in (1Password) in the
-    // raised window, and the run resumes once they confirm.
-    await updateStep({ pausedAt: attemptKey.operationId });
-    await pauseForBrowser(db, scope, {
-      status: "paused_auth",
-      failureCode: "authentication_required",
-      reason: `Sign in to ${new URL(page.capture.sourceURL).host} in Cubby's browser window, then resume the run.`,
-      eventId: `browser-auth:${attemptKey.operationId}`,
-    });
-    await broker.requestAuthentication(scope.public.runId);
-    return {
-      state: "paused_auth" as const,
-      observation: page.observation,
-    };
-  }
-  return {
-    state: "completed" as const,
-    commandId: attempt.commandId,
-    observation: page.observation,
-    capture: page.capture,
-  };
-}
-
-// eslint-disable-next-line complexity -- Evidence import validates every browser and target provenance branch at this boundary.
-export async function importBrowserOrderEvidence(
-  db: Database,
-  namespace: PurchaseImportNamespace,
-  input: {
-    runId: string;
-    operationId: string;
-    commandId: string;
-    defaultTrade?: Trade;
-    defaultProjectId?: string;
-  },
-  ports: BrowserPagePorts = productionBrowserPagePorts,
-) {
-  const scope = await loadRunScope(db, input.runId);
-  assertRunActive(scope.public.status);
-  if (!scope.public.vendorAccountId || !scope.vendorId || !scope.actorUserId)
-    throw new Error("Import run ownership is incomplete");
-  const commandId = z.uuid().parse(input.commandId);
-  const commandOperations = await getDb(db)
-    .select({
-      operationId: runOperation.operationId,
-      result: runOperation.result,
-    })
-    .from(runOperation)
-    .where(
-      and(
-        eq(runOperation.runId, runEntityId.parse(input.runId)),
-        eq(runOperation.kind, "browser_command"),
-      ),
-    );
-  const commandRecord = commandOperations
-    .map(({ operationId, result }) => ({
-      operationId,
-      parsed: browserCommandRecord.safeParse(result),
-    }))
-    .find(
-      ({ parsed }) => parsed.success && parsed.data.commandId === commandId,
-    );
-  if (!commandRecord?.parsed.success)
-    throw new Error(
-      "Browser evidence command was not issued by this import run",
-    );
-  const record = commandRecord.parsed.data;
-  const result =
-    record.serverResult ??
-    (await namespace.getByName(scope.public.vendorAccountId).result(commandId));
-  if (result?.runID !== input.runId)
-    throw new Error("Browser evidence belongs to a different import run");
-  if (
-    !result ||
-    result.outcome.status !== "completed" ||
-    !result.outcome.snapshot
-  )
-    throw new Error("Browser evidence is not complete");
-  const page = await materializeCapture(db, {
-    key: {
-      runId: runEntityId.parse(input.runId),
-      operationId: commandRecord.operationId,
-    },
-    runShortcode: scope.public.shortcode,
-    record,
-    result,
-    allowedHosts: scope.public.allowedHosts,
-    storage: ports.storage,
-  });
-  const capture = page.capture;
-  const commandRecordData = record;
-  if (scope.public.purpose !== "account_sync") {
-    const evidenceScope =
-      commandRecordData.command.operation.type === "capture"
-        ? commandRecordData.command.operation.evidenceScope
-        : undefined;
-    if (!evidenceScope || evidenceScope.runId !== scope.public.shortcode)
-      throw new Error(
-        "Browser command has no matching targeted evidence scope",
-      );
-    const [target] = await getDb(db)
-      .select({ id: runTarget.id })
-      .from(runTarget)
-      .where(
-        and(
-          eq(runTarget.runId, runEntityId.parse(input.runId)),
-          eq(runTarget.id, evidenceScope.targetId),
-        ),
-      )
-      .limit(1);
-    if (!target)
-      throw new Error(
-        "Browser evidence does not match a targeted import source",
-      );
-    // The page's DOM is always kept; a screenshot and its PDF join it when
-    // the window was capturable.
-    const evidenceIds = [
-      page.domEvidenceId,
-      ...capture.evidence.flatMap((reference) => {
-        const parsed = z.uuid().safeParse(reference.id);
-        return parsed.success ? [parsed.data] : [];
-      }),
-    ];
-    await getDb(db)
-      .update(runEvidence)
-      .set({
-        sourceMetadata: {
-          canonicalUrl: capture.canonicalUrl ?? null,
-          requestedAmazonAsin: capture.requestedAmazonAsin ?? null,
-          servedAmazonAsin: capture.servedAmazonAsin ?? null,
-          sourceURL: capture.sourceURL,
-          structuredProducts: capture.structuredProducts ?? null,
-          variantMarkers: capture.variantMarkers,
-          images: capture.images.map((image) => ({
-            url: image.url,
-            naturalWidth: image.naturalWidth ?? null,
-            naturalHeight: image.naturalHeight ?? null,
-            highResolutionUrl: image.highResolutionUrl ?? null,
-          })),
-        },
-      })
-      .where(
-        and(
-          inArray(runEvidence.id, evidenceIds),
-          eq(runEvidence.runId, runEntityId.parse(input.runId)),
-          eq(runEvidence.targetId, target.id),
-          eq(runEvidence.kind, "browser_capture"),
-        ),
-      );
-    // Capturing is operational state only. Targeted validation deliberately
-    // never enters the import writer, and enrichment waits for its bounded,
-    // typed commit rather than attaching the first image the browser found.
-    await getDb(db)
-      .update(runTarget)
-      .set({
-        state: "prepared",
-        outcome:
-          scope.public.purpose === "purchase_validation"
-            ? "semantic_drift"
-            : null,
-        warning: CAPTURE_INTERIM_NOTE,
-        updatedAt: new Date(),
-      })
-      // A capture answered after its target was committed or skipped keeps
-      // its evidence but must not reopen the target.
-      .where(
-        and(
-          eq(runTarget.id, target.id),
-          inArray(runTarget.state, ["pending", "prepared", "needs_evidence"]),
-        ),
-      );
-    return {
-      kind: "targeted_evidence" as const,
-      targetId: target.id,
-    };
-  }
-  const captureInput = browserCapture.parse({
-    url: capture.sourceURL,
-    title: capture.title,
-    text: capture.readableText,
-    links: capture.links.map((link) => ({
-      id: link.id,
-      href: link.url,
-      text: link.label ?? "",
-    })),
-    images: capture.images.map((image) => ({
-      src: image.url,
-      alt: image.alt ?? "",
-    })),
-    capturedAt: capture.capturedAt,
-  });
-  const classified = classifyOrderCapture(captureInput, {
-    allowedHosts: scope.public.allowedHosts,
-  });
-  if (classified.kind === "order_list") {
-    // A page listing orders is a worklist, never an order: the single-order
-    // extractor read one as "unreadable" and the writer then refused it.
-    const cursor = scope.public.vendorAccountId
-      ? vendorAccountCursor.parse(
-          (
-            await getDb(db)
-              .select({ cursor: vendorAccount.cursor })
-              .from(vendorAccount)
-              .where(
-                eq(
-                  vendorAccount.id,
-                  vendorAccountId.parse(scope.public.vendorAccountId),
-                ),
-              )
-              .limit(1)
-          )[0]?.cursor,
-        )
-      : null;
-    const backfill = await runBackfillRange(db, input.runId);
-    // Stop paging once a whole page predates the walk's lower bound: the
-    // backfill range's start, otherwise the account cursor (everything older
-    // was covered by an earlier run). One older order on a page is not
-    // enough, because a vendor's history is not strictly date ordered.
-    const lowerBound =
-      backfill?.from ?? cursor?.newestOrderAt?.slice(0, 10) ?? null;
-    const reachedCursor =
-      lowerBound !== null &&
-      classified.orders.length > 0 &&
-      classified.orders.every(
-        (order) => order.orderedAt !== null && order.orderedAt < lowerBound,
-      );
-    // A backfill works only its range. An undated listing row stays: its
-    // detail page decides, and importing it is replay-safe.
-    const listedOrders = backfill
-      ? classified.orders.filter(
-          (order) =>
-            order.orderedAt === null ||
-            (order.orderedAt >= backfill.from &&
-              order.orderedAt <= backfill.to),
-        )
-      : classified.orders;
-    const seen = await recordOrderListing(db, {
-      runId: runEntityId.parse(input.runId),
-      vendorId: scope.vendorId,
-      orders: listedOrders,
-    });
-    const pending = await getDb(db)
-      .select({ value: count() })
-      .from(runOrderCandidate)
-      .where(
-        and(
-          eq(runOrderCandidate.runId, runEntityId.parse(input.runId)),
-          eq(runOrderCandidate.state, "pending"),
-        ),
-      );
-    const nextPageUrl = reachedCursor ? null : classified.nextPageUrl;
-    await getDb(db)
-      .update(runTable)
-      .set({
-        historyCursorUrl: nextPageUrl,
-        historyExhaustedAt: nextPageUrl ? null : new Date(),
-        updatedAt: new Date(),
-      })
-      .where(eq(runTable.id, runEntityId.parse(input.runId)));
-    return {
-      kind: "order_list" as const,
-      orders: listedOrders,
-      ordersSeen: seen,
-      pending: pending[0]?.value ?? 0,
-      nextPageUrl,
-    };
-  }
-  const screenshot = capture.evidence.find(
-    (item) => item.kind === "screenshot",
-  );
-  const primary = capture.evidence.find((item) => item.kind === "rendered_pdf");
-  const [{ extractPurchaseCapture }, { resolveOrThrow }] = await Promise.all([
-    import("~/server/agents/purchase-import/extract"),
-    import("~/server/repo/shortcode-resolver"),
-  ]);
-  const extraction = await extractPurchaseCapture({
-    db,
-    runId: input.runId,
-    capture: captureInput,
-    screenshotImageId: screenshot?.id,
-  });
-  if (extraction.status === "unreadable" && !extraction.candidate) {
-    // Nothing typed to write; the writer would only throw. The agent gets the
-    // extractor's reason and decides between another capture and review.
-    return {
-      kind: "unreadable" as const,
-      detail: extraction.detail,
-      classification: classified.kind,
-    };
-  }
-  const stableEvidence = {
-    sourceURL: capture.sourceURL,
-    title: capture.title,
-    readableText: capture.readableText,
-    links: capture.links.map(({ url, label }) => ({ url, label })),
-    images: capture.images.map(({ url, alt }) => ({ url, alt })),
-  };
-  const checksum = await sha256Hex(JSON.stringify(stableEvidence));
-  const writeResult = await importVendorOrder(
-    db,
-    {
-      runId: runEntityId.parse(input.runId),
-      ledgerPartyId: scope.ledgerPartyId,
-      vendorId: scope.vendorId,
-      vendorAccountId: scope.public.vendorAccountId,
-      source: {
-        kind: "browser_order",
-        externalKey: capture.sourceURL,
-        checksum,
-      },
-      extraction,
-      defaultTrade: input.defaultTrade,
-      defaultProjectId: input.defaultProjectId
-        ? await resolveOrThrow(db, "project", input.defaultProjectId)
-        : undefined,
-      primaryDocumentImageId: primary
-        ? await resolveOrThrow(db, "image", primary.id)
-        : null,
-      screenshotImageId: screenshot
-        ? await resolveOrThrow(db, "image", screenshot.id)
-        : null,
-    },
-    scope.actorUserId,
-  );
-  if (writeResult.purchaseId && extraction.candidate?.orderId) {
-    const [written] = await getDb(db)
-      .select({ shortcode: purchase.shortcode })
-      .from(purchase)
-      .where(eq(purchase.id, purchaseId.parse(writeResult.purchaseId)))
-      .limit(1);
-    if (written) {
-      await attachPendingOrderMailEvidence(db, {
-        ledgerPartyId: scope.ledgerPartyId,
-        vendorId: scope.vendorId,
-        orderId: extraction.candidate.orderId,
-        purchaseShortcode: written.shortcode,
-      });
-    }
-  }
-  if (extraction.candidate?.orderId) {
-    await getDb(db)
-      .update(runOrderCandidate)
-      .set({ state: "imported", updatedAt: new Date() })
-      .where(
-        and(
-          eq(runOrderCandidate.runId, runEntityId.parse(input.runId)),
-          eq(runOrderCandidate.orderId, extraction.candidate.orderId),
-          eq(runOrderCandidate.state, "pending"),
-        ),
-      );
-  }
-  await settleAllocatedBrowserHunt(
-    db,
-    vendorAccountId.parse(scope.public.vendorAccountId),
-  );
-  return { extraction, writeResult };
-}
-
-export async function saveNavigationHints(
-  db: Database,
-  input: {
-    runId: string;
-    operationId: string;
-    patch: unknown;
-  },
-) {
-  const scope = await loadRunScope(db, input.runId);
-  assertRunActive(scope.public.status);
-  if (scope.public.purpose !== "account_sync")
-    throw new Error(
-      "Targeted import runs cannot change shared navigation hints",
-    );
-  if (!scope.vendorId) throw new Error("Import run has no vendor");
-  const patch = vendorAgentHints.partial().parse(input.patch);
-  if (patch.ordersListUrl) {
-    const host = new URL(patch.ordersListUrl).hostname.toLowerCase();
-    if (!scope.public.allowedHosts.includes(host))
-      throw new Error("Navigation hints cannot expand browser authority");
-  }
-  const current = vendorAgentHints.parse(scope.public.navigationHints);
-  const next = vendorAgentHints.parse({ ...current, ...patch });
-  await getDb(db)
-    .update(vendor)
-    .set({ agentHints: next, updatedAt: new Date() })
-    .where(eq(vendor.id, scope.vendorId));
-  return next;
-}
-
-export async function markHistoryExpired(
-  db: Database,
-  input: {
-    runId: string;
-    operationId: string;
-    earliestAvailableOrderAt: string;
-  },
-) {
-  const scope = await loadRunScope(db, input.runId);
-  assertRunActive(scope.public.status);
-  if (scope.public.purpose !== "account_sync")
-    throw new Error("Targeted import runs cannot change account history state");
-  if (!scope.public.vendorAccountId || !scope.actorUserId)
-    throw new Error("Import run ownership is incomplete");
-  const earliest = z.iso.datetime().parse(input.earliestAvailableOrderAt);
-  const [account] = await getDb(db)
-    .select({ cursor: vendorAccount.cursor })
-    .from(vendorAccount)
-    .where(
-      eq(vendorAccount.id, vendorAccountId.parse(scope.public.vendorAccountId)),
-    )
-    .limit(1);
-  const cursor = vendorAccountCursor.parse(account?.cursor);
-  await getDb(db)
-    .update(vendorAccount)
-    .set({
-      cursor: { ...cursor, earliestAvailableOrderAt: earliest },
-      updatedAt: new Date(),
-    })
-    .where(
-      eq(vendorAccount.id, vendorAccountId.parse(scope.public.vendorAccountId)),
-    );
-
-  const rows = await getDb(db)
-    .select({ shortcode: purchase.shortcode })
-    .from(purchase)
-    .where(
-      and(
-        eq(
-          purchase.vendorAccountId,
-          vendorAccountId.parse(scope.public.vendorAccountId),
-        ),
-        sql`${purchase.date} < ${earliest.slice(0, 10)}`,
-        notDeleted(purchase),
-      ),
-    );
-  const { setDataException } =
-    await import("~/server/repo/data-quality/exceptions");
-  const actor = buildActorContext(scope.actorUserId, "mcp", {
-    runId: runEntityId.parse(input.runId),
-  });
-  let marked = 0;
-  for (const row of rows) {
-    for (const check of ["primary_document", "empty_expenses"] as const) {
-      try {
-        await setDataException(
-          db,
-          {
-            entityId: row.shortcode,
-            check,
-            reason: "history_expired",
-            note: `Vendor history begins ${earliest.slice(0, 10)}.`,
-          },
-          actor,
-        );
-        marked += 1;
-      } catch (error) {
-        if (
-          !(error instanceof Error && error.message.includes("not an active"))
-        )
-          throw error;
-      }
-    }
-  }
-  return { marked };
+    : { kind: "none" as const };
 }
 
 export async function auditImportBatch(
@@ -3396,478 +1592,6 @@ export async function stopRunForReview(
   });
 }
 
-/**
- * Leave one listed order for human review while the run continues with the
- * rest of its worklist. The order keeps a durable finding and becomes
- * `skipped`; a restart carries it forward as pending work.
- */
-export async function deferOrderForReview(
-  db: Database,
-  input: {
-    runId: string;
-    operationId: string;
-    orderId: string;
-    summary: string;
-  },
-) {
-  const scope = await loadRunScope(db, input.runId);
-  assertRunActive(scope.public.status);
-  if (scope.public.purpose !== "account_sync")
-    throw new Error("Only an account-sync run has an order worklist");
-  const runId = runEntityId.parse(input.runId);
-  const orderId = z.string().trim().min(1).max(200).parse(input.orderId);
-  const summary = z.string().trim().min(1).max(1_000).parse(input.summary);
-  const fingerprint = await sha256Hex(`deferred-order:${orderId}`);
-  return withTransaction(db, async (tx) => {
-    const [candidate] = await tx
-      .select({ state: runOrderCandidate.state })
-      .from(runOrderCandidate)
-      .where(
-        and(
-          eq(runOrderCandidate.runId, runId),
-          eq(runOrderCandidate.orderId, orderId),
-        ),
-      )
-      .limit(1)
-      .for("update");
-    if (!candidate || !["pending", "skipped"].includes(candidate.state))
-      throw new Error(
-        `Order ${orderId} is not a pending order on this run's worklist`,
-      );
-    await tx
-      .insert(runFinding)
-      .values({
-        runId,
-        ledgerPartyId: scope.ledgerPartyId,
-        entityKind: "run",
-        entityId: runId,
-        kind: "other",
-        summary: `Order ${orderId} needs review: ${summary}`,
-        evidenceFingerprint: fingerprint,
-      })
-      .onConflictDoNothing();
-    const [finding] = await tx
-      .select({ id: runFinding.id })
-      .from(runFinding)
-      .where(
-        and(
-          eq(runFinding.runId, runId),
-          eq(runFinding.entityKind, "run"),
-          eq(runFinding.entityId, runId),
-          eq(runFinding.evidenceFingerprint, fingerprint),
-          eq(runFinding.status, "open"),
-        ),
-      )
-      .limit(1);
-    await tx
-      .update(runOrderCandidate)
-      .set({ state: "skipped", updatedAt: new Date() })
-      .where(
-        and(
-          eq(runOrderCandidate.runId, runId),
-          eq(runOrderCandidate.orderId, orderId),
-        ),
-      );
-    return {
-      orderId,
-      state: "skipped" as const,
-      findingId: finding?.id ?? null,
-    };
-  });
-}
-
-/**
- * Record one selected charge hunt's outcome when its evidence did not settle
- * it, then let the run continue with the rest. A charge the server already
- * settled reads as resolved whatever the agent said, so a later allocation is
- * never overwritten by a stale "not found". `not_found` is searched-and-absent
- * (surfaced as an expected-order Problem); `needs_review` leaves one finding
- * naming the charge. Neither is resolved: the run ends in review and a restart
- * carries both forward.
- */
-export async function settleChargeHunt(
-  db: Database,
-  input: {
-    runId: string;
-    operationId: string;
-    huntId: string;
-    outcome: "not_found" | "needs_review";
-    summary: string;
-  },
-) {
-  const scope = await loadRunScope(db, input.runId);
-  assertRunActive(scope.public.status);
-  const huntIds = await runChargeHuntIds(db, input.runId);
-  if (!huntIds) throw new Error("Only a charge-search run has charge hunts");
-  const huntId = z.uuid().parse(input.huntId);
-  if (!huntIds.includes(huntId))
-    throw new Error(`Charge hunt ${huntId} is not on this run`);
-  const summary = z.string().trim().min(1).max(1_000).parse(input.summary);
-  const runId = runEntityId.parse(input.runId);
-  const fingerprint = await sha256Hex(`deferred-charge:${huntId}`);
-  return withTransaction(db, async (tx) => {
-    const [hunt] = await tx
-      .select({
-        state: importHunt.state,
-        charge: financialTransaction.shortcode,
-      })
-      .from(importHunt)
-      .innerJoin(
-        financialTransaction,
-        eq(financialTransaction.id, importHunt.financialTransactionId),
-      )
-      .where(eq(importHunt.id, huntId))
-      .limit(1)
-      .for("update", { of: importHunt });
-    if (!hunt) throw new Error(`Charge hunt ${huntId} was not found`);
-    // Decide on the allocation under the row lock, not before it.
-    await resolveAllocatedChargeHunts(databaseForTransaction(tx), [huntId]);
-    const [current] = await tx
-      .select({ state: importHunt.state })
-      .from(importHunt)
-      .where(eq(importHunt.id, huntId));
-    hunt.state = current?.state ?? hunt.state;
-    const state =
-      input.outcome === "not_found"
-        ? CHARGE_HUNT_STATE.notFound
-        : CHARGE_HUNT_STATE.deferred;
-    // Replays and already-recorded outcomes are answered, not rewritten.
-    if (hunt.state !== CHARGE_HUNT_STATE.queued)
-      return { huntId, outcome: chargeHuntOutcomeOf(hunt.state) };
-    await tx
-      .update(importHunt)
-      .set({ state, error: summary, updatedAt: new Date() })
-      .where(eq(importHunt.id, huntId));
-    if (input.outcome === "needs_review")
-      await tx
-        .insert(runFinding)
-        .values({
-          runId,
-          ledgerPartyId: scope.ledgerPartyId,
-          entityKind: "run",
-          entityId: runId,
-          kind: "other",
-          summary: `Charge ${hunt.charge} needs review: ${summary}`,
-          evidenceFingerprint: fingerprint,
-        })
-        .onConflictDoNothing();
-    return { huntId, outcome: chargeHuntOutcomeOf(state) };
-  });
-}
-
-/**
- * Move the account cursor forward to the newest order this run handled
- * (imported or already covered). Only forward: a run that walked an old page
- * never rewinds `newestOrderAt`, and `orderIdsOnNewestDate` disambiguates
- * same-day orders on the next listing.
- */
-async function advanceAccountCursor(
-  db: Database,
-  input: { runId: string; vendorAccountId: VendorAccountId },
-) {
-  // A backfill walks older history; only incremental runs own the
-  // newest-order cursor, which therefore never rewinds or jumps.
-  if (await runBackfillRange(db, input.runId)) return null;
-  // A charge search imports what it was pointed at, not a listing prefix.
-  if (await runChargeHuntIds(db, input.runId)) return null;
-  const handled = await getDb(db)
-    .select({
-      orderId: runOrderCandidate.orderId,
-      orderedAt: runOrderCandidate.orderedAt,
-    })
-    .from(runOrderCandidate)
-    .where(
-      and(
-        eq(runOrderCandidate.runId, input.runId),
-        inArray(runOrderCandidate.state, ["imported", "covered"]),
-        isNotNull(runOrderCandidate.orderedAt),
-      ),
-    );
-  const newest = handled.reduce<string | null>(
-    (acc, row) =>
-      row.orderedAt && (!acc || row.orderedAt > acc) ? row.orderedAt : acc,
-    null,
-  );
-  if (!newest) return null;
-  const [account] = await getDb(db)
-    .select({ cursor: vendorAccount.cursor })
-    .from(vendorAccount)
-    .where(eq(vendorAccount.id, input.vendorAccountId))
-    .limit(1);
-  const cursor = vendorAccountCursor.parse(account?.cursor);
-  const current = cursor.newestOrderAt?.slice(0, 10) ?? null;
-  if (current && newest < current) return cursor;
-  const sameDay = handled
-    .filter((row) => row.orderedAt === newest)
-    .map((row) => row.orderId);
-  const next = vendorAccountCursor.parse({
-    ...cursor,
-    newestOrderAt: `${newest}T00:00:00.000Z`,
-    orderIdsOnNewestDate:
-      current === newest
-        ? [...new Set([...cursor.orderIdsOnNewestDate, ...sameDay])].slice(
-            0,
-            500,
-          )
-        : sameDay.slice(0, 500),
-  });
-  await getDb(db)
-    .update(vendorAccount)
-    .set({ cursor: next, updatedAt: new Date() })
-    .where(eq(vendorAccount.id, input.vendorAccountId));
-  return next;
-}
-
-/**
- * A deferred order is not imported, so an account sync that deferred any
- * order must not read as a complete import; its finding names the order.
- */
-async function accountSyncFinishStatus(db: Database, runId: RunId) {
-  const huntIds = await runChargeHuntIds(db, runId);
-  if (huntIds) {
-    const [unresolved] = await getDb(db)
-      .select({ value: count() })
-      .from(importHunt)
-      .where(
-        and(
-          inArray(importHunt.id, huntIds),
-          sql`${importHunt.state} <> ${CHARGE_HUNT_STATE.resolved}`,
-        ),
-      );
-    const [skipped] = await getDb(db)
-      .select({ value: count() })
-      .from(runOrderCandidate)
-      .where(
-        and(
-          eq(runOrderCandidate.runId, runId),
-          eq(runOrderCandidate.state, "skipped"),
-        ),
-      );
-    return (unresolved?.value ?? 0) + (skipped?.value ?? 0) > 0
-      ? "needs_review"
-      : "completed";
-  }
-  const [deferred] = await getDb(db)
-    .select({ value: count() })
-    .from(runOrderCandidate)
-    .where(
-      and(
-        eq(runOrderCandidate.runId, runId),
-        eq(runOrderCandidate.state, "skipped"),
-      ),
-    );
-  return (deferred?.value ?? 0) > 0 ? "needs_review" : "completed";
-}
-
-/** What the Mac is told when a run finishes, its notification included. */
-async function runCompletion(
-  db: Database,
-  runID: string,
-  run: Omit<
-    Parameters<typeof runCompletionNotice>[0],
-    "terminalStatus" | "findingCount" | "targetStates"
-  > & { status: string },
-  findingCount: number,
-): Promise<BrowserBridgeRunCompletion> {
-  const terminalStatus = browserBridgeRunCompletion.shape.terminalStatus.parse(
-    run.status,
-  );
-  const targets = await getDb(db)
-    .select({ state: runTarget.state })
-    .from(runTarget)
-    .where(eq(runTarget.runId, runEntityId.parse(runID)));
-  return {
-    runID,
-    terminalStatus,
-    imported: run.imported,
-    updated: run.updated,
-    skipped: run.skipped,
-    findingCount,
-    notice: runCompletionNotice({
-      ...run,
-      terminalStatus,
-      findingCount,
-      targetStates: targets.map((target) => runTargetState.parse(target.state)),
-    }),
-  };
-}
-
-/** A single-confirmation mail run finishes only once its order is committed. */
-async function assertSingleMailImported(db: Database, runId: RunId) {
-  // A selected-orders run is gated by its pending candidates instead.
-  const mail = await loadOrderMailImportEvidence(db, runId, {
-    allowComplete: true,
-  });
-  if (mail && !mail.selected && !(await orderMailImportedPurchase(db, mail)))
-    throw new Error(
-      "Import run still has uncommitted order confirmation mail.",
-    );
-}
-
-export async function finishRun(
-  db: Database,
-  namespace: PurchaseImportNamespace,
-  input: { runId: string; operationId: string },
-) {
-  const scope = await loadRunScope(db, input.runId);
-  const runId = runEntityId.parse(input.runId);
-  if (scope.public.status !== "completed") {
-    assertRunActive(scope.public.status);
-    if (scope.public.purpose !== "account_sync") {
-      const targets = await getDb(db)
-        .select({ state: runTarget.state })
-        .from(runTarget)
-        .where(eq(runTarget.runId, runId));
-      if (targets.length === 0)
-        throw new Error("Targeted import run has no explicit targets");
-      const validation = scope.public.purpose === "purchase_validation";
-      const incomplete = targets.some(({ state }) =>
-        validation
-          ? !new Set(["completed", "unavailable"]).has(state)
-          : !new Set(["completed", "skipped", "unresolved"]).has(state),
-      );
-      if (incomplete)
-        throw new Error("Targeted import run has unresolved target work");
-      const hasUnresolved = targets.some(({ state }) => state === "unresolved");
-      const status = hasUnresolved ? "needs_review" : "completed";
-      // Targeted validation is deliberately read-only. Its audit is the
-      // completed comparison recorded on each target, not account-sync's
-      // mutating repair audit.
-      await getDb(db)
-        .update(runTable)
-        .set({
-          status,
-          auditedAt: new Date(),
-          endedAt: new Date(),
-          updatedAt: new Date(),
-        })
-        .where(and(eq(runTable.id, runId), eq(runTable.status, "running")));
-    } else {
-      await assertSingleMailImported(db, runId);
-      const chargeHuntIds = await runChargeHuntIds(db, runId);
-      if (chargeHuntIds) await resolveAllocatedChargeHunts(db, chargeHuntIds);
-      const [pendingHunt] = scope.public.vendorAccountId
-        ? await getDb(db)
-            .select({ id: importHunt.id })
-            .from(importHunt)
-            .where(
-              and(
-                eq(
-                  importHunt.vendorAccountId,
-                  vendorAccountId.parse(scope.public.vendorAccountId),
-                ),
-                eq(importHunt.state, "browser_queued"),
-                // A charge run answers only for its own selection.
-                chargeHuntIds
-                  ? inArray(importHunt.id, chargeHuntIds)
-                  : notHeldByChargeRun,
-              ),
-            )
-            .limit(1)
-        : [];
-      if (pendingHunt)
-        throw new Error("Import run still has unsettled browser hunt work");
-      const [pendingReceipt] = await getDb(db)
-        .select({ id: importHunt.id })
-        .from(importHunt)
-        .where(
-          and(
-            eq(importHunt.receiptRunId, runId),
-            eq(importHunt.state, "processing_receipt"),
-          ),
-        )
-        .limit(1);
-      if (pendingReceipt)
-        throw new Error("Import run still has unsettled receipt evidence");
-      const [pendingOrder] = await getDb(db)
-        .select({ value: count() })
-        .from(runOrderCandidate)
-        .where(
-          and(
-            eq(runOrderCandidate.runId, runId),
-            eq(runOrderCandidate.state, "pending"),
-          ),
-        );
-      if (pendingOrder && pendingOrder.value > 0)
-        throw new Error(
-          `Import run still has ${pendingOrder.value} listed order(s) to import or stop for review`,
-        );
-
-      await auditAllImportBatches(db, {
-        runId: input.runId,
-        operationId: `${input.operationId}:audit`,
-      });
-      const status = await accountSyncFinishStatus(db, runId);
-      const auditedAt = new Date();
-      await getDb(db)
-        .update(runTable)
-        .set({
-          status,
-          auditedAt,
-          endedAt: new Date(),
-          updatedAt: new Date(),
-        })
-        .where(
-          and(
-            eq(runTable.id, runId),
-            sql`${runTable.status} IN ('running', 'paused_auth', 'paused_offline')`,
-          ),
-        );
-      if (scope.public.vendorAccountId)
-        await advanceAccountCursor(db, {
-          runId,
-          vendorAccountId: vendorAccountId.parse(scope.public.vendorAccountId),
-        });
-    }
-  }
-  const [run] = await getDb(db)
-    .select({
-      imported: runTable.imported,
-      updated: runTable.updated,
-      skipped: runTable.skipped,
-      status: runTable.status,
-      purpose: runTable.purpose,
-      input: runTable.input,
-      vendorId: runTable.vendorId,
-      vendorName: vendor.name,
-    })
-    .from(runTable)
-    .leftJoin(vendor, eq(vendor.id, runTable.vendorId))
-    .where(eq(runTable.id, runId))
-    .limit(1);
-  if (!run) throw new Error("Import run was not found");
-  const [findingCount] = await getDb(db)
-    .select({ value: count() })
-    .from(runFinding)
-    .where(and(eq(runFinding.runId, runId), eq(runFinding.status, "open")));
-  if (scope.public.vendorAccountId) {
-    await getDb(db)
-      .update(vendorAccount)
-      .set({
-        status: "active",
-        updatedAt: new Date(),
-      })
-      .where(
-        eq(
-          vendorAccount.id,
-          vendorAccountId.parse(scope.public.vendorAccountId),
-        ),
-      );
-    await namespace
-      .getByName(scope.public.vendorAccountId)
-      .notifyRunCompleted(
-        await runCompletion(db, input.runId, run, findingCount?.value ?? 0),
-      );
-  }
-  return {
-    imported: run.imported,
-    updated: run.updated,
-    skipped: run.skipped,
-    status: run.status,
-    findingCount: findingCount?.value ?? 0,
-  };
-}
-
 /**  Called through the `PurchaseImportService` RPC namespace in cf-server.ts. */
 export async function markRunFailed(
   db: Database,
@@ -4001,7 +1725,35 @@ function projectPreparedOrders(
  * and operation payloads never cross this boundary.
  */
 /** What a restart copies from `Run.input`, by public values only. */
-function restartInputSummary(input: unknown): RunRestartInput | null {
+function restartInputSummary(
+  input: unknown,
+  vendorRef: string | null,
+): RunRestartInput | null {
+  const researchMail = mailResearchRunInput.safeParse(input);
+  if (researchMail.success)
+    return {
+      kind: researchMail.data.kind,
+      sourceCount: researchMail.data.sources.length,
+    };
+  const parsedObjectives = researchObjectivesRunInput.safeParse(input);
+  const objectives = parsedObjectives.success ? parsedObjectives.data : null;
+  if (objectives) {
+    const single =
+      objectives.objectives.length === 1 ? objectives.objectives[0] : null;
+    if (single?.kind === "vendor_purchases" && vendorRef)
+      return { ...single, vendorId: vendorRef };
+    const charges = objectives.objectives.flatMap((objective) =>
+      objective.kind === "charge_hunt" ? [objective.huntId] : [],
+    );
+    if (charges.length)
+      return { kind: "charge_hunts", chargeCount: charges.length };
+    const history = objectives.objectives.find(
+      (objective) => objective.kind === "account_history",
+    );
+    if (history?.kind === "account_history" && history.range)
+      return { kind: "order_backfill", ...history.range };
+    return null;
+  }
   const mail = orderMailImportRunInput.safeParse(input);
   if (mail.success)
     return {
@@ -4074,7 +1826,12 @@ export async function loadRunDetail(
         result: runOperation.result,
       })
       .from(runOperation)
-      .where(eq(runOperation.runId, run.id))
+      .where(
+        and(
+          eq(runOperation.runId, run.id),
+          notInArray(runOperation.kind, [...PRIVATE_RESEARCH_OPERATION_KINDS]),
+        ),
+      )
       .orderBy(asc(runOperation.startedAt)),
     database
       .select({
@@ -4198,6 +1955,14 @@ export async function loadRunDetail(
     db,
     targets.map((target) => parseEntityRef(target.entityKind, target.entityId)),
   );
+  const publicSourceKey = (
+    target: Pick<(typeof targets)[number], "sourceKind" | "sourceExternalKey">,
+  ) => {
+    if (target.sourceKind === "mail_message") return null;
+    return target.sourceKind === "vendor_purchases"
+      ? header.vendorId
+      : target.sourceExternalKey;
+  };
   const controller = (event: (typeof controlHistory)[number]) => ({
     name: event.name,
     ledgerParty: { id: event.ledgerPartyId, name: event.ledgerPartyName },
@@ -4211,6 +1976,9 @@ export async function loadRunDetail(
     status: header.status,
     purpose: header.purpose,
     trigger: header.trigger,
+    parentRunId: header.parentRunId,
+    cause: header.cause,
+    attempt: header.attempt,
     source: { kind: header.trigger, vendorName: header.vendorName },
     actor: {
       name: header.actorName,
@@ -4256,7 +2024,7 @@ export async function loadRunDetail(
           coordinatorModel: coordinatorModelFor(header.purpose),
           vendor: header.vendorId,
           vendorAccount: header.vendorAccountId,
-          input: restartInputSummary(run.input),
+          input: restartInputSummary(run.input, header.vendorId),
           notes: header.notes,
           skillRevision: header.skillRevision,
           runtimeRevision: header.runtimeRevision,
@@ -4268,7 +2036,7 @@ export async function loadRunDetail(
             product: target.entityKind === "product" ? target.entityCode : null,
             vendorAccount: target.vendorAccountCode,
             sourceKind: target.sourceKind,
-            sourceExternalKey: target.sourceExternalKey,
+            sourceExternalKey: publicSourceKey(target),
             targetFingerprint: target.targetFingerprint,
           })),
         }
@@ -4293,7 +2061,7 @@ export async function loadRunDetail(
         null,
       sourceId: null,
       sourceLabel: target.sourceKind
-        ? `${target.sourceKind}${target.sourceExternalKey ? ` · ${target.sourceExternalKey}` : ""}`
+        ? `${target.sourceKind}${publicSourceKey(target) ? ` · ${publicSourceKey(target)}` : ""}`
         : null,
       vendorAccountLabel: target.vendorAccountLabel,
       state: target.state,
@@ -4425,6 +2193,13 @@ export function approvalWakeEvent(
   control: Awaited<ReturnType<typeof controlRun>>,
 ): Extract<PurchaseAgentEvent, { type: "retry" }> | null {
   if (!("wakeRunId" in control) || !control.wakeRunId) return null;
+  if ("evidenceWakeId" in control)
+    return {
+      version: 1,
+      runId: control.wakeRunId,
+      eventId: `validation-original:${control.evidenceWakeId}`,
+      type: "retry",
+    };
   return {
     version: 1,
     runId: control.wakeRunId,
@@ -4459,7 +2234,12 @@ export async function loadRunLog(db: Database, shortcode: string) {
       startedAt: runOperation.startedAt,
     })
     .from(runOperation)
-    .where(eq(runOperation.runId, run.id))
+    .where(
+      and(
+        eq(runOperation.runId, run.id),
+        notInArray(runOperation.kind, [...PRIVATE_RESEARCH_OPERATION_KINDS]),
+      ),
+    )
     .orderBy(asc(runOperation.startedAt), asc(runOperation.id))
     .limit(MAX_LOG_ENTRIES + 1);
 
@@ -4588,8 +2368,72 @@ export async function recordRunControlEvent(
   return event;
 }
 
-// Every control action shares one locked run and controller-attribution record;
-// splitting the switch would weaken the cancellation and approval fences.
+// New attempts enter source admission; cancellation and approval mutate only
+// the named Run under its lock and retain controller attribution separately.
+async function wakeUploadedValidation(
+  db: Database,
+  actor: ActorContext,
+  runId: RunId,
+) {
+  return withTransaction(db, async (tx) => {
+    const [owned] = await tx
+      .select()
+      .from(runTable)
+      .where(
+        and(
+          eq(runTable.id, runId),
+          eq(runTable.actorUserId, actor.userId),
+          eq(runTable.purpose, "purchase_validation"),
+          eq(runTable.status, "running"),
+          isNull(runTable.retiredAt),
+          notDeleted(runTable),
+        ),
+      )
+      .for("update");
+    if (!owned)
+      throw new Error(
+        "Only live owned validation research can resume after an upload.",
+      );
+    const admitted = purchaseValidationResearchRunInput.parse(owned.input);
+    const originals = await tx
+      .select({ evidence: runEvidence, target: runTarget })
+      .from(runEvidence)
+      .innerJoin(
+        runTarget,
+        and(
+          eq(runTarget.id, runEvidence.targetId),
+          eq(runTarget.runId, runEvidence.runId),
+        ),
+      )
+      .where(
+        and(
+          eq(runEvidence.runId, owned.id),
+          eq(runEvidence.kind, "manual_upload"),
+          inArray(runTarget.state, ["pending", "prepared", "needs_evidence"]),
+        ),
+      )
+      .orderBy(desc(runEvidence.createdAt), desc(runEvidence.id));
+    const original = originals[0];
+    if (
+      !original ||
+      original.target.entityKind !== "purchase" ||
+      !admitted.purchases.some(
+        (item) => item.purchaseId === original.target.entityId,
+      ) ||
+      !z
+        .object({ researchUploadState: z.literal("uploaded") })
+        .safeParse(original.evidence.sourceMetadata).success
+    )
+      throw new Error("Manual evidence has not completed its verified upload.");
+    return {
+      publicId: owned.shortcode,
+      status: owned.status,
+      wakeRunId: owned.id,
+      evidenceWakeId: original.evidence.id,
+    };
+  });
+}
+
 export async function controlRun(
   db: Database,
   actor: ActorContext,
@@ -4620,35 +2464,46 @@ export async function controlRun(
   if (!controller)
     throw new Error("Purchase import run is not owned by this member");
   if (
-    input.action === "retry_dispatch" &&
-    scope.public.dispatchError === "Awaiting manual evidence upload"
+    [
+      "mail_import",
+      "product_enrichment",
+      "account_sync",
+      "purchase_validation",
+    ].includes(scope.public.purpose) &&
+    ["retry", "restart", "escalate_sol"].includes(input.action)
   ) {
-    const [evidence] = await getDb(db)
-      .select({
-        objectKey: runEvidence.objectKey,
-        checksum: runEvidence.checksum,
-        byteSize: runEvidence.byteSize,
-      })
-      .from(runEvidence)
-      .where(eq(runEvidence.runId, scope.public.runId))
-      .orderBy(desc(runEvidence.createdAt))
-      .limit(1);
-    if (!evidence) throw new Error("Manual evidence has not been uploaded");
-    const response = await fetch(getR2PublicUrl(evidence.objectKey));
-    if (!response.ok) throw new Error("Manual evidence bytes are unavailable");
-    const bytes = await response.arrayBuffer();
-    if (bytes.byteLength !== evidence.byteSize)
-      throw new Error("Manual evidence size does not match its upload record");
-    const checksum = await sha256Hex(bytes);
-    if (checksum !== evidence.checksum)
-      throw new Error(
-        "Manual evidence checksum does not match its upload record",
-      );
+    // Owning admission locks sources before the predecessor; do not enter the
+    // legacy Run-first mutation transaction before calling it.
+    return continueResearchRun(db, actor, {
+      predecessorRunId: scope.public.runId,
+      action: input.action === "restart" ? "restart" : "retry",
+    });
+  }
+  if (
+    scope.public.purpose === "purchase_validation" &&
+    ["upload_evidence", "no_evidence_available"].includes(input.action)
+  ) {
+    return continueResearchRun(db, actor, {
+      predecessorRunId: scope.public.runId,
+      action: "retry",
+      manualEvidenceUnavailable: input.action === "no_evidence_available",
+    });
+  }
+  if (
+    scope.public.purpose === "purchase_validation" &&
+    input.action === "retry_dispatch" &&
+    scope.public.coordinatorStartedAt
+  ) {
+    return wakeUploadedValidation(db, actor, scope.public.runId);
   }
   return withTransaction(
     db,
     // eslint-disable-next-line complexity
     async (tx) => {
+      if (scope.public.vendorAccountId)
+        await tx.execute(
+          sql`SELECT pg_advisory_xact_lock(hashtext(${scope.public.vendorAccountId}))`,
+        );
       const [locked] = await tx
         .select({
           status: runTable.status,
@@ -4679,6 +2534,8 @@ export async function controlRun(
         // whose foreign keys share-lock the Run, so a full lock could deadlock.
         .for("no key update");
       if (!locked) throw new Error("Purchase import run was not found");
+      if (locked.vendorAccountId !== scope.public.vendorAccountId)
+        throw new Error("Purchase import control account changed.");
       if (input.action === "restart") {
         if (
           !new Set([
@@ -4698,86 +2555,25 @@ export async function controlRun(
         ).map((target) => ({
           entityId: target.entityId,
           entityKind: target.entityKind,
+          workKey: target.workKey,
           position: target.position,
           vendorAccountId: target.vendorAccountId,
           sourceKind: target.sourceKind,
           sourceExternalKey: target.sourceExternalKey,
           targetFingerprint: target.targetFingerprint,
         }));
-        if (locked.purpose !== "account_sync" && sourceTargets.length === 0)
+        if (sourceTargets.length === 0)
           throw new Error("This run has no inputs to start again");
         if (
           locked.purpose === "photo_inventory" &&
           sourceTargets.some((target) => target.entityKind !== "image")
         )
           throw new Error("Photo run inputs are incomplete");
-        if (
-          locked.purpose === "account_sync" &&
-          !locked.vendorAccountId &&
-          !orderMailImportRunInput.safeParse(locked.input).success
-        )
-          throw new Error(
-            "This account run has no vendor account to start again",
-          );
-        const restartCharges = chargeHuntRunInput.safeParse(locked.input);
-        let carriedChargeHuntIds: string[] = [];
         if (locked.vendorAccountId) {
-          // Same admission fence as starting a run on this account.
-          await tx.execute(
-            sql`SELECT pg_advisory_xact_lock(hashtext(${locked.vendorAccountId}))`,
-          );
-          if (!restartCharges.success)
-            await assertNoHoldingChargeRun(tx, locked.vendorAccountId);
-        }
-        if (restartCharges.success && locked.vendorAccountId) {
-          const [active] = await tx
-            .select({ shortcode: runTable.shortcode })
-            .from(runTable)
-            .where(
-              and(
-                eq(runTable.vendorAccountId, locked.vendorAccountId),
-                inArray(runTable.status, [...CHARGE_HOLDING_STATUSES]),
-                ne(runTable.id, scope.public.runId),
-              ),
-            )
-            .limit(1);
-          if (active)
-            throw new Error(
-              `Vendor account already has an active import run (${active.shortcode}); finish or stop it before restarting`,
-            );
-          // Carry only unresolved charges that no other unfinished run holds.
-          const carried = await tx
-            .select({ id: importHunt.id })
-            .from(importHunt)
-            .where(
-              and(
-                inArray(importHunt.id, restartCharges.data.huntIds),
-                inArray(importHunt.state, [
-                  CHARGE_HUNT_STATE.queued,
-                  CHARGE_HUNT_STATE.deferred,
-                  CHARGE_HUNT_STATE.notFound,
-                ]),
-                sql`NOT ${unfinishedChargeRunOwns({
-                  exceptRunId: scope.public.runId,
-                  includeReview: true,
-                })}`,
-              ),
-            );
-          carriedChargeHuntIds = carried.map((hunt) => hunt.id);
-          if (carriedChargeHuntIds.length === 0)
-            throw new Error(
-              "This charge search has no unresolved charges to carry; select charges again",
-            );
+          await assertNoHoldingChargeRun(tx, locked.vendorAccountId);
         }
         const successorId = runEntityId.parse(crypto.randomUUID());
         const dispatchEventId = crypto.randomUUID();
-        // An unfinished backfill resumes from the history page it reached; a
-        // completed one, or an incremental sync, walks from the newest page.
-        const backfill = orderBackfillRunInput.safeParse(locked.input).success;
-        const resumeHistoryUrl =
-          backfill && locked.status !== "completed"
-            ? locked.historyCursorUrl
-            : null;
         const successor = await insertWithShortcode(tx, "run", {
           id: successorId,
           ledgerPartyId: locked.ledgerPartyId,
@@ -4791,15 +2587,9 @@ export async function controlRun(
           vendorId: locked.vendorId,
           predecessorRunId: scope.public.runId,
           purpose: locked.purpose,
-          trigger: backfill ? "backfill" : "manual",
+          trigger: "manual",
           notes: locked.notes,
-          input: restartCharges.success
-            ? chargeHuntRunInput.parse({
-                kind: "charge_hunts",
-                huntIds: carriedChargeHuntIds,
-              })
-            : locked.input,
-          historyCursorUrl: resumeHistoryUrl,
+          input: locked.input,
           coordinatorModel: coordinatorModelFor(locked.purpose),
           skillRevision: locked.skillRevision,
           runtimeRevision: locked.runtimeRevision,
@@ -4809,71 +2599,16 @@ export async function controlRun(
             agentImportRunPurpose.parse(locked.purpose),
           ),
         });
-        if (locked.purpose === "product_enrichment")
-          await assertProductsUnheld(
-            tx,
-            sourceTargets.flatMap((target) =>
-              target.entityKind === "product"
-                ? [productId.parse(target.entityId)]
-                : [],
-            ),
-            scope.public.runId,
-          );
         if (sourceTargets.length)
           await tx.insert(runTarget).values(
             sourceTargets.map((target) => ({
               ...target,
+              entityId:
+                target.entityKind === "run" ? successorId : target.entityId,
               runId: successorId,
               state: "pending" as const,
             })),
           );
-        if (locked.purpose === "account_sync") {
-          // Listed orders the predecessor never imported (still pending, or
-          // deferred for review) are the successor's first work, so resuming
-          // from a later history page cannot lose them.
-          const unfinished = await tx
-            .select({
-              orderId: runOrderCandidate.orderId,
-              orderUrl: runOrderCandidate.orderUrl,
-              orderedAt: runOrderCandidate.orderedAt,
-            })
-            .from(runOrderCandidate)
-            .where(
-              and(
-                eq(runOrderCandidate.runId, scope.public.runId),
-                inArray(runOrderCandidate.state, ["pending", "skipped"]),
-              ),
-            );
-          if (unfinished.length)
-            await tx.insert(runOrderCandidate).values(
-              unfinished.map((order) => ({
-                ...order,
-                runId: successorId,
-                state: "pending" as const,
-              })),
-            );
-          // Selected charges the predecessor never resolved (still queued,
-          // deferred, or not found) are searched again; a resolved one stays.
-          if (carriedChargeHuntIds.length > 0)
-            await tx
-              .update(importHunt)
-              .set({
-                state: CHARGE_HUNT_STATE.queued,
-                error: null,
-                attempts: sql`${importHunt.attempts} + 1`,
-                updatedAt: new Date(),
-              })
-              .where(
-                and(
-                  inArray(importHunt.id, carriedChargeHuntIds),
-                  inArray(importHunt.state, [
-                    CHARGE_HUNT_STATE.queued,
-                    CHARGE_HUNT_STATE.deferred,
-                    CHARGE_HUNT_STATE.notFound,
-                  ]),
-                ),
-              );
-        }
         return {
           publicId: input.runPublicId,
           status: locked.status,
@@ -4899,13 +2634,7 @@ export async function controlRun(
         controllerLedgerPartyKind: controller.ledgerPartyKind,
       });
       if (input.action === "retry_dispatch") {
-        if (
-          locked.vendorAccountId &&
-          !chargeHuntRunInput.safeParse(locked.input).success
-        ) {
-          await tx.execute(
-            sql`SELECT pg_advisory_xact_lock(hashtext(${locked.vendorAccountId}))`,
-          );
+        if (locked.vendorAccountId && !researchChargeHuntIds(locked.input)) {
           await assertNoHoldingChargeRun(tx, locked.vendorAccountId);
         }
         if (
@@ -4952,102 +2681,6 @@ export async function controlRun(
           dispatchEventId,
         };
       }
-      if (
-        input.action === "upload_evidence" ||
-        input.action === "no_evidence_available"
-      ) {
-        if (locked.purpose !== "purchase_validation")
-          throw new Error("Only purchase validation runs can request evidence");
-        if (
-          !new Set(["needs_review", "completed", "failed"]).has(locked.status)
-        )
-          throw new Error(
-            `Purchase import run is not terminal in ${locked.status}`,
-          );
-        const sourceTargets = await tx
-          .select({
-            entityId: runTarget.entityId,
-            entityKind: runTarget.entityKind,
-            vendorAccountId: runTarget.vendorAccountId,
-            sourceKind: runTarget.sourceKind,
-            sourceExternalKey: runTarget.sourceExternalKey,
-            targetFingerprint: runTarget.targetFingerprint,
-            evidenceFingerprint: runTarget.evidenceFingerprint,
-          })
-          .from(runTarget)
-          .where(eq(runTarget.runId, scope.public.runId));
-        if (sourceTargets.length === 0)
-          throw new Error("Purchase validation run has no explicit target");
-        if (sourceTargets.some((target) => target.entityKind !== "purchase"))
-          throw new Error("Purchase validation runs require Purchase targets");
-
-        const successorId = runEntityId.parse(crypto.randomUUID());
-        const isUnavailable = input.action === "no_evidence_available";
-        const dispatchEventId = isUnavailable ? null : crypto.randomUUID();
-        const successor = await insertWithShortcode(tx, "run", {
-          id: successorId,
-          ledgerPartyId: locked.ledgerPartyId,
-          actorUserId: locked.actorUserId,
-          actorName: locked.actorName,
-          actorEmail: locked.actorEmail,
-          actorLedgerPartyShortcode: locked.actorLedgerPartyShortcode,
-          actorLedgerPartyName: locked.actorLedgerPartyName,
-          actorLedgerPartyKind: locked.actorLedgerPartyKind,
-          vendorAccountId: locked.vendorAccountId,
-          vendorId: locked.vendorId,
-          predecessorRunId: scope.public.runId,
-          purpose: "purchase_validation",
-          trigger: "manual",
-          status: isUnavailable ? "needs_review" : "dispatch_failed",
-          coordinatorModel: coordinatorModelFor(locked.purpose),
-          dispatchEventId,
-          failureCode: isUnavailable ? "no_evidence_available" : null,
-          dispatchError: isUnavailable
-            ? null
-            : "Awaiting manual evidence upload",
-          endedAt: isUnavailable ? new Date() : null,
-          skillRevision: locked.skillRevision,
-          runtimeRevision: locked.runtimeRevision,
-          decisionRevision: locked.decisionRevision + 1,
-          agentSessionId: importRunAgentIdentity(
-            successorId,
-            "purchase_validation",
-          ),
-        });
-        await tx.insert(runTarget).values(
-          await Promise.all(
-            sourceTargets.map(async (target) => ({
-              runId: successorId,
-              entityId: target.entityId,
-              entityKind: target.entityKind,
-              vendorAccountId: target.vendorAccountId,
-              sourceKind: target.sourceKind,
-              sourceExternalKey: target.sourceExternalKey,
-              targetFingerprint: target.targetFingerprint,
-              state: isUnavailable ? "unavailable" : "needs_evidence",
-              outcome: isUnavailable ? "unavailable" : null,
-              evidenceFingerprint: isUnavailable
-                ? await sha256Hex(
-                    `unavailable:${target.evidenceFingerprint ?? target.targetFingerprint}`,
-                  )
-                : null,
-              completedAt: isUnavailable ? new Date() : null,
-            })),
-          ),
-        );
-        return {
-          publicId: input.runPublicId,
-          status: locked.status,
-          successorRunId: successorId,
-          successorRunPublicId: successor.shortcode,
-          successorStatus: successor.status,
-          dispatchRunId: null,
-          dispatchPublicId: successor.shortcode,
-          dispatchPurpose: "purchase_validation" as const,
-          dispatchEventId,
-          created: true,
-        };
-      }
       if (input.action === "retry" || input.action === "escalate_sol") {
         if (
           !new Set(["needs_review", "completed", "failed"]).has(locked.status)
@@ -5082,6 +2715,32 @@ export async function controlRun(
         }
         const successorId = runEntityId.parse(crypto.randomUUID());
         const dispatchEventId = crypto.randomUUID();
+        const unresolvedTargets = await tx
+          .select({
+            entityId: runTarget.entityId,
+            entityKind: runTarget.entityKind,
+            workKey: runTarget.workKey,
+            position: runTarget.position,
+            vendorAccountId: runTarget.vendorAccountId,
+            sourceKind: runTarget.sourceKind,
+            sourceExternalKey: runTarget.sourceExternalKey,
+            targetFingerprint: runTarget.targetFingerprint,
+          })
+          .from(runTarget)
+          .where(
+            and(
+              eq(runTarget.runId, scope.public.runId),
+              inArray(runTarget.state, [
+                "pending",
+                "prepared",
+                "unresolved",
+                "needs_evidence",
+                "unavailable",
+              ]),
+            ),
+          );
+        if (!unresolvedTargets.length)
+          throw new Error("Targeted import run has no unresolved targets");
         const successor = await insertWithShortcode(tx, "run", {
           id: successorId,
           ledgerPartyId: locked.ledgerPartyId,
@@ -5107,35 +2766,13 @@ export async function controlRun(
             agentImportRunPurpose.parse(locked.purpose),
           ),
         });
-        if (locked.purpose !== "account_sync") {
-          const unresolvedTargets = await tx
-            .select({
-              entityId: runTarget.entityId,
-              entityKind: runTarget.entityKind,
-              vendorAccountId: runTarget.vendorAccountId,
-              sourceKind: runTarget.sourceKind,
-              sourceExternalKey: runTarget.sourceExternalKey,
-              targetFingerprint: runTarget.targetFingerprint,
-            })
-            .from(runTarget)
-            .where(
-              and(
-                eq(runTarget.runId, scope.public.runId),
-                inArray(runTarget.state, [
-                  "pending",
-                  "prepared",
-                  "unresolved",
-                  "needs_evidence",
-                  "unavailable",
-                ]),
-              ),
-            );
-          if (unresolvedTargets.length === 0)
-            throw new Error("Targeted import run has no unresolved targets");
+        if (unresolvedTargets) {
           await tx.insert(runTarget).values(
             unresolvedTargets.map((target) => ({
               runId: successorId,
               ...target,
+              entityId:
+                target.entityKind === "run" ? successorId : target.entityId,
               state: "pending" as const,
             })),
           );
@@ -5148,16 +2785,6 @@ export async function controlRun(
               updatedAt: new Date(),
             })
             .where(eq(vendorAccount.id, successorVendorAccountId));
-        } else {
-          await tx
-            .update(importHunt)
-            .set({
-              receiptRunId: successorId,
-              state: "processing_receipt",
-              error: null,
-              updatedAt: new Date(),
-            })
-            .where(eq(importHunt.receiptRunId, scope.public.runId));
         }
         return {
           publicId: input.runPublicId,

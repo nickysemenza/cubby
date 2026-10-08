@@ -229,7 +229,10 @@ public enum BrowserBridgeDebugLog {
         switch operation {
         case .navigate: "navigate"
         case .scroll: "scroll"
-        case .capture: "capture"
+        case .read: "read"
+        case .click: "click"
+        case ._type: "type"
+        case .select: "select"
         case .window(let payload): "window_\(payload.action.rawValue)"
         }
     }
@@ -237,8 +240,8 @@ public enum BrowserBridgeDebugLog {
     private static func operationHost(_ operation: BrowserBridgeOperation) -> String? {
         switch operation {
         case .navigate(let payload): URL(string: payload.url)?.host()?.lowercased()
-        case .scroll, .window: nil
-        case .capture(let payload): URL(string: payload.recoveryURL ?? "")?.host()?.lowercased()
+        case .scroll, .window, .click, ._type, .select: nil
+        case .read(let payload): URL(string: payload.recoveryURL ?? "")?.host()?.lowercased()
         }
     }
 

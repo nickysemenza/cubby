@@ -44,7 +44,7 @@ export default defineEntity({
     icons: { phosphor: "Key", sfSymbol: "person.badge.key", emoji: "🔑" },
     detail: {
       additionalSections: [
-        { kind: "slot", id: "order-mail", title: "Order email" },
+        { kind: "slot", id: "order-mail", title: "Email evidence" },
         { kind: "slot", id: "sync", title: "Sync" },
         { kind: "slot", id: "charge-search", title: "Statement charges" },
       ],

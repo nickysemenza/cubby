@@ -1,19 +1,9 @@
 /**
- * Selected statement-charge runs against real PostgreSQL.
- *
- * Failure modes these scenarios guard:
- * - a charge outside the member's selection (another hunt of the same
- *   account) joins the selected run, by a claim or by `dispatchImportHunts`;
- * - a selection that includes a settled charge, a receipt-photo hunt, a charge
- *   already on an unfinished run, another member's account, or a busy account
- *   is partly accepted instead of refused whole;
- * - finishing succeeds while a selected hunt has no recorded outcome, or reads
- *   as a complete import while one is deferred or not found;
- * - an agent outcome for a charge the server already settled overwrites the
- *   settlement, or an outcome for a charge outside the run is accepted;
- * - a stop or restart loses unresolved selected charges, or re-queues a
- *   resolved one;
- * - a charge search moves the account's order-history cursor.
+ * Selected-charge admission refuses unsupported or foreign work atomically,
+ * serializes account ownership, survives stop/offline/failure/re-match, and
+ * keeps financial reconciliation separate from account-history cursors.
+ * Outcome/replay and late-allocation behavior is exercised by the real
+ * research scenario in purchase-agent-scenarios.integration.test.ts.
  */
 import type {
   FinancialAccountId,
@@ -25,6 +15,7 @@ import {
   vendorChargeHuntsInput,
 } from "@cubby/schemas/order-mail-review";
 import type { PurchaseAgentEvent } from "@cubby/schemas/purchase-import";
+import { researchObjectivesRunInput } from "@cubby/schemas/run-fields";
 import { vendorAccountCursor } from "@cubby/schemas/vendor-account-fields";
 import { eq } from "drizzle-orm";
 import { withTestDb } from "tooling/test-setup";
@@ -35,12 +26,10 @@ import {
   importHunt,
   merchantVendorRule,
   run as runTable,
-  runOrderCandidate,
-  runFinding,
+  runTarget,
   vendorAccount,
 } from "~/server/db/schema";
 import { getDb } from "~/server/repo/database-helpers";
-import { getRunLiveProgress } from "~/server/repo/run-progress";
 import { insertWithShortcode } from "~/server/repo/shortcode-utils";
 
 import { listChargeHunts, startSelectedChargeRun } from "./charge-runs";
@@ -49,21 +38,17 @@ import {
   dispatchImportHunts,
   MAIL_GRACE_MS,
 } from "./hunts";
-import { fakeBroker } from "./order-history.fixtures";
+import { researchWorklistFixture } from "./research-worklist.fixtures";
 import {
-  claimNextImportWork,
   controlRun,
   expireOfflineRuns,
   markRunFailed,
   startOrResumeRun,
-  finishRun,
-  settleChargeHunt,
   stopRunForReview,
 } from "./run-service";
 
 describe("selected statement-charge runs", () => {
   const ctx = withTestDb();
-  const broker = fakeBroker().namespace;
 
   let shops = 0;
 
@@ -200,13 +185,21 @@ describe("selected statement-charge runs", () => {
     const s = await threeCharges();
     const started = await start(s, [s.a, s.b]);
 
-    expect(started.run.input).toEqual({
-      kind: "charge_hunts",
-      huntIds: [
-        (await huntOf(s.a.shortcode)).id,
-        (await huntOf(s.b.shortcode)).id,
-      ],
-    });
+    const objectives = researchObjectivesRunInput.parse(
+      started.run.input,
+    ).objectives;
+    expect(objectives.map((objective) => objective.kind)).toEqual([
+      "charge_hunt",
+      "charge_hunt",
+    ]);
+    expect(
+      objectives.flatMap((objective) =>
+        objective.kind === "charge_hunt" ? [objective.huntId] : [],
+      ),
+    ).toEqual([
+      (await huntOf(s.a.shortcode)).id,
+      (await huntOf(s.b.shortcode)).id,
+    ]);
     expect(started.run.trigger).toBe("manual");
     expect(started.sent.map((event) => event.type)).toEqual([
       "start_or_resume",
@@ -228,13 +221,15 @@ describe("selected statement-charge runs", () => {
     expect(implicit.sent).toEqual([]);
     expect((await huntOf(s.c.shortcode)).state).toBe("pending_mail");
 
-    // Claims follow the selection, oldest charge first, and never the rest.
-    await expect(
-      claimNextImportWork(ctx.db, broker, started.run.id),
-    ).resolves.toMatchObject({
-      kind: "hunt",
-      id: (await huntOf(s.a.shortcode)).id,
-    });
+    const work = await researchWorklistFixture(
+      ctx.db,
+      started.run.id,
+    ).assigned();
+    expect(work).toMatchObject({ kind: "charge_hunt" });
+    expect([
+      (await huntOf(s.a.shortcode)).id,
+      (await huntOf(s.b.shortcode)).id,
+    ]).toContain(work.huntRef);
   });
 
   it("refuses a whole selection that includes anything unsearchable, changing nothing", async () => {
@@ -339,106 +334,6 @@ describe("selected statement-charge runs", () => {
     ]);
   });
 
-  it("records each charge's outcome, gates finishing on pending ones, and ends in review", async () => {
-    const s = await threeCharges();
-    const started = await start(s, [s.a, s.b, s.c]);
-    const runId = started.run.id;
-    const [a, b, c] = [
-      await huntOf(s.a.shortcode),
-      await huntOf(s.b.shortcode),
-      await huntOf(s.c.shortcode),
-    ];
-
-    await expect(
-      finishRun(ctx.db, broker, { runId, operationId: "finish:early" }),
-    ).rejects.toThrow("unsettled browser hunt work");
-
-    await expect(
-      claimNextImportWork(ctx.db, broker, runId),
-    ).resolves.toMatchObject({ kind: "hunt", id: a.id });
-    await expect(
-      settleChargeHunt(ctx.db, {
-        runId,
-        operationId: "settle:a",
-        huntId: a.id,
-        outcome: "not_found",
-        summary: "No order near this amount in the last month.",
-      }),
-    ).resolves.toEqual({ huntId: a.id, outcome: "not_found" });
-    // Replay-safe.
-    await expect(
-      settleChargeHunt(ctx.db, {
-        runId,
-        operationId: "settle:a",
-        huntId: a.id,
-        outcome: "not_found",
-        summary: "No order near this amount in the last month.",
-      }),
-    ).resolves.toEqual({ huntId: a.id, outcome: "not_found" });
-
-    await expect(
-      claimNextImportWork(ctx.db, broker, runId),
-    ).resolves.toMatchObject({ kind: "hunt", id: b.id });
-    await settleChargeHunt(ctx.db, {
-      runId,
-      operationId: "settle:b",
-      huntId: b.id,
-      outcome: "needs_review",
-      summary: "Two orders fit this amount and date.",
-    });
-
-    await expect(
-      claimNextImportWork(ctx.db, broker, runId),
-    ).resolves.toMatchObject({ kind: "hunt", id: c.id });
-    // The server settles this charge while the agent is still on it.
-    await allocate(s, s.c);
-    await expect(
-      settleChargeHunt(ctx.db, {
-        runId,
-        operationId: "settle:c",
-        huntId: c.id,
-        outcome: "not_found",
-        summary: "Stale agent claim.",
-      }),
-    ).resolves.toEqual({ huntId: c.id, outcome: "resolved" });
-    // An outcome for a hunt outside the run is refused.
-    const outsider = await seed("online_account", s);
-    const stray = await outsider.charge(99, "2026-09-05");
-    await discoverImportHunts(ctx.db);
-    await expect(
-      settleChargeHunt(ctx.db, {
-        runId,
-        operationId: "settle:stray",
-        huntId: (await huntOf(stray.shortcode)).id,
-        outcome: "not_found",
-        summary: "Not mine.",
-      }),
-    ).rejects.toThrow("is not on this run");
-
-    await expect(
-      claimNextImportWork(ctx.db, broker, runId),
-    ).resolves.toMatchObject({ kind: "none" });
-    const finished = await finishRun(ctx.db, broker, {
-      runId,
-      operationId: "finish:review",
-    });
-    // A deferred or missing charge is not a complete import.
-    expect(finished).toMatchObject({ status: "needs_review", findingCount: 1 });
-    const progress = await getRunLiveProgress(ctx.db, started.runId);
-    expect(progress?.charges).toEqual([
-      { chargeId: s.a.shortcode, outcome: "not_found" },
-      { chargeId: s.b.shortcode, outcome: "deferred" },
-      { chargeId: s.c.shortcode, outcome: "resolved" },
-    ]);
-    const findings = await getDb(ctx.db)
-      .select({ summary: runFinding.summary })
-      .from(runFinding)
-      .where(eq(runFinding.runId, runId));
-    expect(findings).toEqual([
-      { summary: expect.stringContaining(s.b.shortcode) },
-    ]);
-  });
-
   it("completes only when every selected charge settles, without moving the account cursor", async () => {
     const s = await threeCharges();
     const cursor = vendorAccountCursor.parse({
@@ -453,70 +348,24 @@ describe("selected statement-charge runs", () => {
       .where(eq(vendorAccount.id, s.account.id));
     const started = await start(s, [s.a]);
     await allocate(s, s.a);
-    await expect(
-      finishRun(ctx.db, broker, {
-        runId: started.run.id,
-        operationId: "finish:ok",
-      }),
-    ).resolves.toMatchObject({ status: "completed", findingCount: 0 });
+    const research = researchWorklistFixture(ctx.db, started.run.id);
+    const work = await research.assigned();
+    expect(await research.next()).toMatchObject({ status: "working" });
+    await research.resolve(work.workRef, { status: "verified" });
+    expect(await research.next()).toMatchObject({
+      status: "done",
+      summary: { unresolved: 0 },
+    });
+    const [completed] = await getDb(ctx.db)
+      .select()
+      .from(runTable)
+      .where(eq(runTable.id, started.run.id));
+    expect(completed?.status).toBe("completed");
     const [account] = await getDb(ctx.db)
       .select({ cursor: vendorAccount.cursor })
       .from(vendorAccount)
       .where(eq(vendorAccount.id, s.account.id));
     expect(account?.cursor).toEqual(cursor);
-  });
-
-  it("carries unresolved selected charges into a restart and keeps resolved ones", async () => {
-    const s = await threeCharges();
-    const started = await start(s, [s.a, s.b, s.c]);
-    const runId = started.run.id;
-    const [a, b] = [await huntOf(s.a.shortcode), await huntOf(s.b.shortcode)];
-    await settleChargeHunt(ctx.db, {
-      runId,
-      operationId: "s:a",
-      huntId: a.id,
-      outcome: "not_found",
-      summary: "Nothing found.",
-    });
-    await settleChargeHunt(ctx.db, {
-      runId,
-      operationId: "s:b",
-      huntId: b.id,
-      outcome: "needs_review",
-      summary: "Ambiguous.",
-    });
-    await allocate(s, s.c);
-    await finishRun(ctx.db, broker, { runId, operationId: "finish:review" });
-
-    // The unfinished run still owns its charges.
-    await expect(
-      startSelectedChargeRun(
-        ctx.db,
-        startInput(s.account, [s.a]),
-        ctx.actor,
-        queue().producer,
-      ),
-    ).rejects.toThrow("Already on run");
-
-    const restarted = await controlRun(ctx.db, ctx.actor, {
-      runPublicId: started.runId,
-      action: "restart",
-    });
-    const [successor] = await getDb(ctx.db)
-      .select({ input: runTable.input })
-      .from(runTable)
-      .where(eq(runTable.id, restarted.successorRunId!));
-    // Only the unresolved charges travel; the settled one stays with its run.
-    expect(successor?.input).toEqual({
-      kind: "charge_hunts",
-      huntIds: [a.id, b.id],
-    });
-    expect((await huntOf(s.a.shortcode)).state).toBe("browser_queued");
-    expect((await huntOf(s.b.shortcode)).state).toBe("browser_queued");
-    expect((await huntOf(s.c.shortcode)).state).toBe("resolved");
-    await expect(
-      claimNextImportWork(ctx.db, broker, restarted.successorRunId!),
-    ).resolves.toMatchObject({ kind: "hunt", id: a.id });
   });
 
   it("leaves unfinished selected charges for review when the run is stopped", async () => {
@@ -542,12 +391,14 @@ describe("selected statement-charge runs", () => {
       .set({ state: "browser_queued" })
       .where(eq(importHunt.id, (await huntOf(s.c.shortcode)).id));
     await allocate(s, s.a);
-    await expect(
-      finishRun(ctx.db, broker, {
-        runId: started.run.id,
-        operationId: "finish:orphan",
-      }),
-    ).resolves.toMatchObject({ status: "completed" });
+    const research = researchWorklistFixture(ctx.db, started.run.id);
+    const work = await research.assigned();
+    await research.resolve(work.workRef, { status: "verified" });
+    expect(await research.next()).toMatchObject({
+      status: "done",
+      summary: { unresolved: 0 },
+    });
+    expect((await huntOf(s.c.shortcode)).state).toBe("browser_queued");
   });
 
   it("leaves selected charges reselectable when the run is cancelled, fails, or expires offline", async () => {
@@ -631,8 +482,8 @@ describe("selected statement-charge runs", () => {
       .set({ status: "failed" })
       .where(eq(runTable.id, busy.id));
 
-    // Another unfinished charge run owns hunt A: a restart of the first run
-    // re-queues only B.
+    // Another unfinished Run owns hunt A. The successor must own only B;
+    // a preserved Hunt outcome is separate from its newly admitted task.
     const a = await huntOf(s.a.shortcode);
     const { id: _id, shortcode: _shortcode, ...template } = first.run;
     await insertWithShortcode(ctx.db, "run", {
@@ -642,36 +493,70 @@ describe("selected statement-charge runs", () => {
       dispatchEventId: null,
       agentSessionId: null,
       predecessorRunId: null,
-      input: { kind: "charge_hunts", huntIds: [a.id] },
+      input: researchObjectivesRunInput.parse({
+        kind: "research_objectives",
+        instructionRevision: 1,
+        objectives: researchObjectivesRunInput
+          .parse(first.run.input)
+          .objectives.filter(
+            (objective) =>
+              objective.kind === "charge_hunt" && objective.huntId === a.id,
+          ),
+      }),
     });
-    await controlRun(ctx.db, ctx.actor, {
+    const restarted = await controlRun(ctx.db, ctx.actor, {
       runPublicId: first.runId,
       action: "restart",
     });
-    expect((await huntOf(s.a.shortcode)).state).toBe("deferred_for_review");
-    expect((await huntOf(s.b.shortcode)).state).toBe("browser_queued");
-  });
-
-  it("ends in review when a deferred order candidate sits on an otherwise settled charge run", async () => {
-    const s = await threeCharges();
-    const started = await start(s, [s.a]);
-    await getDb(ctx.db).insert(runOrderCandidate).values({
-      runId: started.run.id,
-      orderId: "ORDER-SKIPPED",
-      state: "skipped",
+    if (!("successorRunId" in restarted) || !restarted.successorRunId)
+      throw new Error("Synthetic selected-charge successor missing");
+    const [successor] = await getDb(ctx.db)
+      .select()
+      .from(runTable)
+      .where(eq(runTable.id, restarted.successorRunId));
+    if (!successor) throw new Error("Synthetic selected-charge Run missing");
+    const b = await huntOf(s.b.shortcode);
+    expect(
+      researchObjectivesRunInput
+        .parse(successor.input)
+        .objectives.flatMap((objective) =>
+          objective.kind === "charge_hunt" ? [objective.huntId] : [],
+        ),
+    ).toEqual([b.id]);
+    const targets = await getDb(ctx.db)
+      .select()
+      .from(runTarget)
+      .where(eq(runTarget.runId, successor.id));
+    expect(targets).toMatchObject([
+      {
+        sourceExternalKey: b.id,
+        entityKind: "run",
+        entityId: successor.id,
+        state: "pending",
+      },
+    ]);
+    expect(targets).toHaveLength(1);
+    expect(
+      await researchWorklistFixture(ctx.db, successor.id).next(),
+    ).toMatchObject({
+      status: "working",
+      work: { kind: "charge_hunt", huntRef: b.id },
     });
-    await allocate(s, s.a);
-    await expect(
-      finishRun(ctx.db, broker, {
-        runId: started.run.id,
-        operationId: "finish:skipped",
-      }),
-    ).resolves.toMatchObject({ status: "needs_review" });
+    expect((await huntOf(s.a.shortcode)).state).toBe("deferred_for_review");
+    expect((await huntOf(s.b.shortcode)).state).toBe("deferred_for_review");
+    const listed = await listChargeHunts(
+      ctx.db,
+      vendorChargeHuntsInput.parse({ vendorAccountId: s.account.shortcode }),
+      ctx.actor,
+    );
+    expect(
+      listed.items.find((item) => item.transactionId === s.b.shortcode),
+    ).toMatchObject({ runId: successor.shortcode });
   });
 
   it("treats a dispatch_failed charge run as holding its hunts against implicit starts, restarts, and retries", async () => {
     const s = await threeCharges();
-    // A finished implicit run on the account that a member could restart.
+    // A finished account-history Run remains independently restartable.
     const implicit = await startOrResumeRun(ctx.db, {
       ledgerPartyId: s.party.id,
       vendorAccountId: s.account.id,
@@ -679,7 +564,7 @@ describe("selected statement-charge runs", () => {
     });
     await getDb(ctx.db)
       .update(runTable)
-      .set({ status: "dispatch_failed" })
+      .set({ status: "completed" })
       .where(eq(runTable.id, implicit.id));
     const [implicitRow] = await getDb(ctx.db)
       .select({ shortcode: runTable.shortcode })
@@ -691,6 +576,10 @@ describe("selected statement-charge runs", () => {
       .set({ status: "dispatch_failed" })
       .where(eq(runTable.id, charge.run.id));
 
+    await getDb(ctx.db)
+      .update(runTable)
+      .set({ status: "dispatch_failed" })
+      .where(eq(runTable.id, implicit.id));
     await expect(
       startOrResumeRun(ctx.db, {
         ledgerPartyId: s.party.id,
@@ -713,26 +602,41 @@ describe("selected statement-charge runs", () => {
         runPublicId: implicitRow!.shortcode,
         action: "restart",
       }),
-    ).rejects.toThrow("charge search");
+    ).rejects.toThrow("Objective account has newer active research.");
   });
 
   it("refuses to restart a charge run that has nothing left to carry", async () => {
     const s = await threeCharges();
     const started = await start(s, [s.a]);
     await allocate(s, s.a);
-    await finishRun(ctx.db, broker, {
-      runId: started.run.id,
-      operationId: "finish:done",
-    });
+    const research = researchWorklistFixture(ctx.db, started.run.id);
+    const work = await research.assigned();
+    await research.resolve(work.workRef, { status: "verified" });
+    expect(await research.next()).toMatchObject({ status: "done" });
+    const before = await getDb(ctx.db)
+      .select()
+      .from(runTable)
+      .where(eq(runTable.vendorAccountId, s.account.id));
+    const beforeHunt = await huntOf(s.a.shortcode);
     await expect(
       controlRun(ctx.db, ctx.actor, {
         runPublicId: started.runId,
         action: "restart",
       }),
-    ).rejects.toThrow("no unresolved charges");
+    ).rejects.toThrow(/objectives/);
+    const after = await getDb(ctx.db)
+      .select()
+      .from(runTable)
+      .where(eq(runTable.vendorAccountId, s.account.id));
+    expect(after).toEqual(before);
+    expect(
+      after.filter((scope) => scope.predecessorRunId === started.run.id),
+    ).toEqual([]);
+    expect(await huntOf(s.a.shortcode)).toEqual(beforeHunt);
+    expect(beforeHunt.state).toBe("resolved");
   });
 
-  it("lets an implicit run claim and finish a charge re-matched after its charge run parked in review", async () => {
+  it("dispatches re-matched charges as owned research after their selected run parked in review", async () => {
     const s = await threeCharges();
     const first = await start(s, [s.a]);
     await stopRunForReview(ctx.db, {
@@ -761,19 +665,24 @@ describe("selected statement-charge runs", () => {
     await expect(dispatchImportHunts(ctx.db, queue().producer)).resolves.toBe(
       1,
     );
-    const implicit = await startOrResumeRun(ctx.db, {
-      ledgerPartyId: s.party.id,
-      vendorAccountId: s.account.id,
-      trigger: "discovery",
+    const scopes = await getDb(ctx.db)
+      .select()
+      .from(runTable)
+      .where(eq(runTable.vendorAccountId, s.account.id));
+    const dispatched = scopes.find((scope) => scope.id !== first.run.id);
+    if (!dispatched) throw new Error("Synthetic dispatched charge Run missing");
+    const research = researchWorklistFixture(ctx.db, dispatched.id);
+    expect(await research.next()).toMatchObject({
+      status: "working",
+      work: { kind: "charge_hunt", huntRef: a.id },
     });
+    expect(await research.next()).toMatchObject({ status: "working" });
     await expect(
-      claimNextImportWork(ctx.db, broker, implicit.id),
-    ).resolves.toMatchObject({ kind: "hunt", id: a.id });
-    await expect(
-      finishRun(ctx.db, broker, {
-        runId: implicit.id,
-        operationId: "finish:implicit",
+      startOrResumeRun(ctx.db, {
+        ledgerPartyId: s.party.id,
+        vendorAccountId: s.account.id,
+        trigger: "discovery",
       }),
-    ).rejects.toThrow("unsettled browser hunt work");
+    ).rejects.toThrow("charge search");
   });
 });

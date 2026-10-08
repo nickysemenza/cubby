@@ -774,6 +774,11 @@ const buildMetadataSchemas = () => {
       output: z.array(nonEmptyString()),
       bulk: z.array(nonEmptyString()),
       audit: z.array(nonEmptyString()),
+      /** Evidence-backed research may fill these ordinary editable fields. */
+      research: z
+        .object({ fillFields: z.array(nonEmptyString()).min(1) })
+        .strict()
+        .optional(),
       sort: entityFieldModelSortMetadataSchema.optional(),
       intents: entityFieldModelIntentsMetadataSchema.optional(),
     })

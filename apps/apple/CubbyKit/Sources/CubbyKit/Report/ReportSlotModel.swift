@@ -1,3 +1,4 @@
+import CubbyAPI
 import Foundation
 import Observation
 
@@ -26,10 +27,22 @@ public protocol ReportServing: Sendable {
     func saveMealPreparation(_ input: SaveMealRecipePreparationInput) async throws
     /// `run.commitPrepared`: approve and import one prepared batch.
     func commitPrepared(_ input: RunCommitPreparedInput) async throws
+    func decideMail(_ input: OrderMailDecisionInput) async throws
+    func researchMail(_ input: OrderMailImportInput) async throws -> OrderMailImportOut
+    func startResearch(_ input: TargetedImportStartInput) async throws -> TargetedImportStartOutput
 }
 
 /// Commands a read-only fake need not implement; `CubbyClient` always does.
 extension ReportServing {
+    public func decideMail(_ input: OrderMailDecisionInput) async throws {
+        throw ReportActionError.unavailable("Not supported by this service.")
+    }
+    public func researchMail(_ input: OrderMailImportInput) async throws -> OrderMailImportOut {
+        throw ReportActionError.unavailable("Not supported by this service.")
+    }
+    public func startResearch(_ input: TargetedImportStartInput) async throws -> TargetedImportStartOutput {
+        throw ReportActionError.unavailable("Not supported by this service.")
+    }
     public func reparseLine(_ input: RecipeReparseLineInput) async throws -> RecipeReparseLineOutput {
         throw ReportActionError.unavailable("Not supported by this service.")
     }
@@ -61,6 +74,16 @@ extension ReportServing {
 }
 
 extension CubbyClient: ReportServing {
+    public func decideMail(_ input: OrderMailDecisionInput) async throws {
+        try await decideOrderMail(eventID: input.eventId, purchaseID: input.purchaseId,
+            link: input.decision == .linked, evidenceChecksum: input.evidenceChecksum)
+    }
+    public func researchMail(_ input: OrderMailImportInput) async throws -> OrderMailImportOut {
+        try await perform { try await api.vendor_importOrderMail(body: .json(input)).ok.body.json }
+    }
+    public func startResearch(_ input: TargetedImportStartInput) async throws -> TargetedImportStartOutput {
+        try await startTargetedRun(input)
+    }
     public func report(slot: ReportSlot, id: String, cursor: String?) async throws -> EntityReportOut {
         try await entityReport(slot: slot, id: id, cursor: cursor)
     }
@@ -381,6 +404,25 @@ public final class ReportSlotModel {
         progress: @MainActor (String) -> Void = { _ in }
     ) async throws -> ReportActionOutcome {
         switch request {
+        case .decideOrderMail(let decision):
+            guard let purchaseID = form?.text("purchaseId") ?? decision.purchaseId else {
+                throw ReportActionError.incompleteAnswers
+            }
+            try await service.decideMail(.init(eventId: decision.eventId, purchaseId: purchaseID,
+                decision: decision.decision == .linked ? .linked : .dismissed,
+                evidenceChecksum: decision.evidenceChecksum))
+            return .done("Updated the email relationship")
+        case .researchOrderMail(let original):
+            let result = try await service.researchMail(.init(eventId: original.eventId,
+                evidenceChecksum: original.evidenceChecksum))
+            if result.runIds.count == 1, let runID = result.runIds.first { return .openedRun(runID) }
+            return .done("Research Runs: " + result.runIds.joined(separator: ", "))
+        case .researchVendorPurchases(let vendor):
+            let result = try await service.startResearch(.accountSync(.init(purpose: .accountSync,
+                vendorId: vendor.vendorId)))
+            let runs = result.runs.compactMap { $0.run?.id ?? $0.blockingRun?.id }
+            if runs.count == 1, let runID = runs.first { return .openedRun(runID) }
+            return .done("Research Runs: " + runs.joined(separator: ", "))
         case .runControl(let control):
             let successor = try await service.controlRun(
                 .init(

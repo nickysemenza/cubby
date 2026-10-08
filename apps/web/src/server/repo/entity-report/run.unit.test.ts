@@ -33,6 +33,9 @@ const baseRun: RunDetail = {
   skipped: 1,
   failureCode: null,
   notes: null,
+  parentRunId: null,
+  cause: null,
+  attempt: null,
   predecessorRunPublicId: null,
   successorRunPublicId: null,
   restartInputs: null,
@@ -175,6 +178,76 @@ describe("import report blocks", () => {
       "purchase",
       "PUR-ABCDE12345",
     ]);
+  });
+
+  it("keeps finished research with gaps distinct from verified work and retains historical differences", () => {
+    const target: RunDetail["targets"][number] = {
+      id: "target-gap",
+      targetType: "product",
+      targetShortcode: "PRD-4K7M",
+      targetName: "Fixture blue widget",
+      sourceId: null,
+      sourceLabel: null,
+      vendorAccountLabel: null,
+      state: "completed",
+      fingerprint: null,
+      outcome: "researched_with_gaps",
+      warning: "No representative image found",
+      diff: { missing: ["images"] },
+      completedAt: "2026-10-07T16:00:00.000Z",
+    };
+    const blocks = importReportBlocks(
+      "run.import-targets",
+      run({ purpose: "product_enrichment", targets: [target] }),
+    );
+    expect(recordsOf(blocks).rows[0]).toMatchObject({
+      statuses: [{ label: "Researched with gaps", tone: "warning" }],
+      detail: {
+        label: "Recorded difference",
+        text: JSON.stringify(target.diff, null, 2),
+      },
+    });
+    expect(blocks).toContainEqual({
+      kind: "note",
+      text: "0/1 verified · 1 with gaps",
+    });
+    const stats = importReportBlocks(
+      "run.import-stats",
+      run({ purpose: "product_enrichment", targets: [target] }),
+    );
+    expect(JSON.stringify(stats)).toContain("With gaps");
+    expect(JSON.stringify(stats)).not.toContain("Enriched");
+  });
+
+  it("does not present a historical skipped Product as verified or completed successfully", () => {
+    const detail = run({
+      purpose: "product_enrichment",
+      targets: [
+        {
+          id: "historical-target",
+          targetType: "product",
+          targetShortcode: "PRD-4K7M",
+          targetName: "Fixture widget",
+          sourceId: null,
+          sourceLabel: null,
+          vendorAccountLabel: null,
+          state: "skipped",
+          fingerprint: null,
+          outcome: "skipped",
+          warning: null,
+          diff: null,
+          completedAt: "2026-10-07T16:00:00.000Z",
+        },
+      ],
+    });
+    const blocks = importReportBlocks("run.import-targets", detail);
+    expect(recordsOf(blocks).rows[0]?.statuses).toEqual([
+      { label: "Skipped", tone: "warning" },
+    ]);
+    expect(blocks).toContainEqual({
+      kind: "note",
+      text: "0/1 verified · 1 with gaps",
+    });
   });
 
   it("lists the run's evidence by filename", () => {
@@ -807,6 +880,30 @@ describe("liveProgressBlocks", () => {
         ? block.rows.flatMap((r) => r.commands ?? [])
         : [],
     );
+
+  it("shows durable mailbox pages and routing outcomes while discovery continues", () => {
+    const blocks = liveProgressBlocks(RUN_ID, {
+      ...progress,
+      gmail: null,
+      discovery: {
+        pagesDone: 3,
+        saved: 7,
+        deleted: 1,
+        excluded: 4,
+        unrelated: 12,
+        events: 20,
+        droppedEvents: 0,
+        routine: false,
+      },
+    });
+    const titles = blocks.flatMap((block) =>
+      block.kind === "records" ? block.rows.map((row) => row.title) : [],
+    );
+    expect(titles).toContain("3 mailbox pages processed");
+    expect(titles).toContain("12 messages unrelated to purchases");
+    expect(titles).toContain("4 Spam or Trash messages excluded");
+    expect(titles).toContain("7 messages saved");
+  });
 
   // Report composition must select the right Workflow and preserve retry attempts;
   // the browser cannot verify Cloudflare destinations without dashboard authentication.

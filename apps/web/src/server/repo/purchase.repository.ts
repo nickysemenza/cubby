@@ -41,7 +41,7 @@ export const purchaseRepository = defineRepository("purchase", {
     purchaseListRead(ctx.db, filters, sorts, pagination, "page", projection),
   listSummary: (ctx, filters) => purchaseListSummary(ctx.db, filters),
   create: asActor(createPurchase),
-  update: asActor(updatePurchase),
+  update: (ctx, id, data) => updatePurchase(ctx.db, id, data, ctx.actorContext),
   // The detached expenses and transactions re-project without the purchase.
   delete: async (ctx, ids) => {
     const detached = await deletePurchases(ctx.db, ids, ctx.actorContext);

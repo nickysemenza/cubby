@@ -3,7 +3,13 @@ import { and, eq } from "drizzle-orm";
 import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 
-import { run, runProgress, vendor, vendorAccount } from "~/server/db/schema";
+import {
+  run,
+  runProgress,
+  runTarget,
+  vendor,
+  vendorAccount,
+} from "~/server/db/schema";
 import { getDb } from "~/server/repo/database-helpers";
 import { insertWithShortcode } from "~/server/repo/shortcode-utils";
 
@@ -154,6 +160,70 @@ describe("account sync planning and start", () => {
     expect(events).toEqual([]);
   });
 
+  it.each(["paused_auth", "paused_offline"] as const)(
+    "native Sync resumes the original %s Run through its current dispatch generation without recapturing work",
+    async (status) => {
+      const { party, account, queue, events } = await fixture();
+      const admitted = await startOrResumeRun(ctx.db, {
+        ledgerPartyId: party.id,
+        vendorAccountId: account.id,
+        trigger: "manual",
+      });
+      const client = getDb(ctx.db);
+      const beforeTargets = await client
+        .select()
+        .from(runTarget)
+        .where(eq(runTarget.runId, admitted.id));
+      expect(beforeTargets).toHaveLength(1);
+      const [beforeRun] = await client
+        .select()
+        .from(run)
+        .where(eq(run.id, admitted.id));
+      await client
+        .update(run)
+        .set({ status, failureCode: "browser_transport_interrupted" })
+        .where(eq(run.id, admitted.id));
+      await client
+        .update(vendorAccount)
+        .set({ status })
+        .where(eq(vendorAccount.id, account.id));
+
+      expect(
+        await startAccountSync(
+          ctx.db,
+          party.id,
+          { vendorAccountId: account.shortcode },
+          queue,
+        ),
+      ).toEqual({ runId: admitted.publicId, resumed: true });
+      const [afterRun] = await client
+        .select()
+        .from(run)
+        .where(eq(run.id, admitted.id));
+      expect(afterRun).toMatchObject({
+        status: "running",
+        failureCode: null,
+        input: beforeRun?.input,
+      });
+      expect(afterRun?.dispatchEventId).not.toBe(beforeRun?.dispatchEventId);
+      expect(events).toEqual([
+        {
+          version: 1,
+          runId: admitted.id,
+          eventId: afterRun?.dispatchEventId,
+          type: "start_or_resume",
+        },
+      ]);
+      expect(
+        await client
+          .select()
+          .from(runTarget)
+          .where(eq(runTarget.runId, admitted.id)),
+      ).toEqual(beforeTargets);
+      expect(await client.select().from(run)).toHaveLength(1);
+    },
+  );
+
   it("refuses disabled accounts and deleted Vendors without creating runs or resetting status", async () => {
     const { party, vendor: shop, account, queue, events } = await fixture();
     const client = getDb(ctx.db);
@@ -258,7 +328,16 @@ describe("account sync planning and start", () => {
       .select()
       .from(run)
       .where(eq(run.shortcode, started.runId));
-    expect(stored?.input).toEqual({ kind: "order_backfill", ...backfill });
+    expect(stored?.input).toMatchObject({
+      kind: "research_objectives",
+      objectives: [
+        {
+          kind: "account_history",
+          vendorAccountId: account.id,
+          range: backfill,
+        },
+      ],
+    });
     expect(events).toHaveLength(1);
   });
 });

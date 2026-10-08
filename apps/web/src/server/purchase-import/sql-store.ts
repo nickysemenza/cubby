@@ -68,10 +68,149 @@ export class PurchaseImportSqlStore {
     this.storage.sql.exec(
       "CREATE TABLE IF NOT EXISTS broker_notification (run_id TEXT PRIMARY KEY, summary_json TEXT NOT NULL, acknowledged INTEGER NOT NULL DEFAULT 0, created_at INTEGER NOT NULL, updated_at INTEGER NOT NULL)",
     );
+    const recipientsExisted =
+      this.storage.sql
+        .exec(
+          "SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'broker_run_device'",
+        )
+        .toArray().length > 0;
+    this.storage.sql.exec(
+      "CREATE TABLE IF NOT EXISTS broker_run_device (run_id TEXT NOT NULL, device_id TEXT NOT NULL, acknowledged INTEGER NOT NULL DEFAULT 0, PRIMARY KEY (run_id, device_id))",
+    );
+    this.storage.sql.exec(
+      "CREATE TABLE IF NOT EXISTS broker_command_device (request_id TEXT NOT NULL, run_id TEXT NOT NULL, device_id TEXT NOT NULL, PRIMARY KEY (request_id, device_id))",
+    );
+    this.storage.sql.exec(
+      "CREATE TABLE IF NOT EXISTS broker_legacy_run (run_id TEXT PRIMARY KEY)",
+    );
+    this.storage.sql.exec(
+      "CREATE TABLE IF NOT EXISTS broker_retired_run (run_id TEXT PRIMARY KEY, receipt_id TEXT NOT NULL, legacy_unknown INTEGER NOT NULL, retired_at INTEGER NOT NULL)",
+    );
+    // Historic payload delivery did not record the receiving device. A new
+    // Mac cannot certify deletion of those offline replay caches.
+    if (!recipientsExisted) {
+      this.storage.sql.exec(
+        "INSERT OR IGNORE INTO broker_legacy_run (run_id) SELECT run_id FROM broker_command WHERE state != 'pending' UNION SELECT run_id FROM broker_notification",
+      );
+    }
+  }
+
+  isRetired(runId: string): boolean {
+    return (
+      this.storage.sql
+        .exec("SELECT 1 FROM broker_retired_run WHERE run_id = ?", runId)
+        .toArray().length > 0
+    );
+  }
+
+  /** Persist recipient identity before send; a crash may overcount, never miss delivered bytes. */
+  recordDelivery(requestId: string, deviceId: string): void {
+    const row = this.storage.sql
+      .exec<{ run_id: string }>(
+        "SELECT run_id FROM broker_command WHERE request_id = ?",
+        requestId,
+      )
+      .toArray()[0];
+    if (!row || this.isRetired(row.run_id))
+      throw new Error("Browser command is absent or retired");
+    this.storage.transactionSync(() => {
+      this.storage.sql.exec(
+        "INSERT OR IGNORE INTO broker_command_device (request_id, run_id, device_id) VALUES (?, ?, ?)",
+        requestId,
+        row.run_id,
+        deviceId,
+      );
+      this.recordRunDelivery(row.run_id, deviceId);
+    });
+  }
+
+  /** Completion notices can also hold generated text in native replay storage. */
+  recordRunDelivery(runId: string, deviceId: string): void {
+    if (this.isRetired(runId)) throw new Error("Browser Run is retired");
+    this.storage.sql.exec(
+      "INSERT OR IGNORE INTO broker_run_device (run_id, device_id) VALUES (?, ?)",
+      runId,
+      deviceId,
+    );
+  }
+
+  forgetRun(runId: string, receiptId: string) {
+    this.storage.transactionSync(() => {
+      const existing = this.storage.sql
+        .exec<{ receipt_id: string }>(
+          "SELECT receipt_id FROM broker_retired_run WHERE run_id = ?",
+          runId,
+        )
+        .toArray()[0];
+      // Independently authorized source receipts can depend on the same Run
+      // disposal. Keep its first receipt, device acknowledgements and unknown
+      // legacy recipients intact; later callers cannot reset physical erasure.
+      if (!existing) {
+        const unknown =
+          this.storage.sql
+            .exec(
+              "SELECT 1 FROM broker_legacy_run WHERE run_id = ? UNION SELECT 1 FROM broker_command c WHERE c.run_id = ? AND c.state IN ('sent','completed') AND NOT EXISTS (SELECT 1 FROM broker_command_device d WHERE d.request_id = c.request_id) LIMIT 1",
+              runId,
+              runId,
+            )
+            .toArray().length > 0;
+        this.storage.sql.exec(
+          "INSERT INTO broker_retired_run (run_id, receipt_id, legacy_unknown, retired_at) VALUES (?, ?, ?, ?)",
+          runId,
+          receiptId,
+          unknown ? 1 : 0,
+          Date.now(),
+        );
+      }
+      this.storage.sql.exec(
+        "DELETE FROM broker_command WHERE run_id = ?",
+        runId,
+      );
+      this.storage.sql.exec("DELETE FROM broker_wake WHERE run_id = ?", runId);
+      this.storage.sql.exec(
+        "DELETE FROM broker_notification WHERE run_id = ?",
+        runId,
+      );
+      this.storage.sql.exec(
+        "DELETE FROM broker_legacy_run WHERE run_id = ?",
+        runId,
+      );
+    });
+    const [row] = this.storage.sql
+      .exec<{ legacy_unknown: number; outstanding: number }>(
+        "SELECT legacy_unknown, (SELECT COUNT(*) FROM broker_run_device WHERE run_id = ? AND acknowledged = 0) AS outstanding FROM broker_retired_run WHERE run_id = ?",
+        runId,
+        runId,
+      )
+      .toArray();
+    return { forgotten: row?.legacy_unknown === 0 && row.outstanding === 0 };
+  }
+
+  pendingForgets(
+    deviceId: string,
+  ): Array<{ runId: string; receiptId: string }> {
+    return this.storage.sql
+      .exec<{ run_id: string; receipt_id: string }>(
+        "SELECT r.run_id, r.receipt_id FROM broker_retired_run r JOIN broker_run_device d ON d.run_id = r.run_id WHERE d.device_id = ? AND d.acknowledged = 0 ORDER BY r.retired_at, r.run_id",
+        deviceId,
+      )
+      .toArray()
+      .map((row) => ({ runId: row.run_id, receiptId: row.receipt_id }));
+  }
+
+  acknowledgeForget(runId: string, receiptId: string, deviceId: string): void {
+    this.storage.sql.exec(
+      "UPDATE broker_run_device SET acknowledged = 1 WHERE run_id = ? AND device_id = ? AND EXISTS (SELECT 1 FROM broker_retired_run r WHERE r.run_id = broker_run_device.run_id AND r.receipt_id = ?)",
+      runId,
+      deviceId,
+      receiptId,
+    );
   }
 
   enqueue(command: BrowserBridgeRequest): BrowserBridgeRequest {
     const parsed = browserBridgeRequest.parse(command);
+    if (this.isRetired(parsed.runID))
+      throw new Error("Browser Run is permanently retired");
     const existing = this.storage.sql
       .exec<{ request_json: string }>(
         "SELECT request_json FROM broker_command WHERE request_id = ? OR (run_id = ? AND operation_id = ?) LIMIT 1",
@@ -127,6 +266,7 @@ export class PurchaseImportSqlStore {
 
   /** Remember a run whose browser step failed, for the next reconnect. */
   rememberWake(runId: string): void {
+    if (this.isRetired(runId)) return;
     this.storage.sql.exec(
       "INSERT INTO broker_wake (run_id, updated_at) VALUES (?, ?) ON CONFLICT(run_id) DO UPDATE SET updated_at = excluded.updated_at",
       runId,
@@ -244,6 +384,7 @@ export class PurchaseImportSqlStore {
   }
 
   saveRunCompletion(summary: RunCompletionSummary): void {
+    if (this.isRetired(summary.runID)) return;
     const now = Date.now();
     this.storage.sql.exec(
       "INSERT INTO broker_notification (run_id, summary_json, acknowledged, created_at, updated_at) VALUES (?, ?, 0, ?, ?) ON CONFLICT(run_id) DO UPDATE SET summary_json = excluded.summary_json, updated_at = excluded.updated_at",

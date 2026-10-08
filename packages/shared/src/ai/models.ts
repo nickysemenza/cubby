@@ -194,7 +194,9 @@ export type SupportedEmbeddingModel = z.infer<
   typeof supportedEmbeddingModelSchema
 >;
 
-const supportedDecisionModelSchema = z.enum(idsWhere({ role: "decision" }));
+export const supportedDecisionModelSchema = z.enum(
+  idsWhere({ role: "decision" }),
+);
 export type SupportedDecisionModel = z.infer<
   typeof supportedDecisionModelSchema
 >;

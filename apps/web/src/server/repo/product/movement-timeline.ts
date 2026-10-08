@@ -446,8 +446,15 @@ export async function getProductMovementTimeline(
   const provenanceMovementRows = unitemizedRows.flatMap((row) => {
     const productId = codeById.get(row.productId);
     if (!productId) return [];
-    if (input.from && row.purchaseDate < input.from) return [];
-    if (input.to && row.purchaseDate > input.to) return [];
+    if ((input.from || input.to) && row.purchaseDate === null) return [];
+    if (
+      input.from &&
+      row.purchaseDate !== null &&
+      row.purchaseDate < input.from
+    )
+      return [];
+    if (input.to && row.purchaseDate !== null && row.purchaseDate > input.to)
+      return [];
     const movement: ProductMovementLine = {
       expenseId: null,
       productId,
@@ -656,7 +663,7 @@ export function toEntityTimeline(
         KIND_LABEL[movement.kind],
         unitsLabel(movement),
         movement.chargedTo ? `Charged to ${movement.chargedTo.name}` : null,
-        group.date === null && group.purchase
+        group.date === null && group.purchase && group.purchase.date !== null
           ? `Purchase date ${group.purchase.date}`
           : null,
         movement.expenseDate !== null && movement.expenseDate !== group.date

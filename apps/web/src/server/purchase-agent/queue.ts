@@ -33,6 +33,14 @@ async function deliverEvent(
   Extract<DispatchOutcome, "dispatched" | "fenced" | "acknowledged_by_peer">
 > {
   const services = env.run(event.runId);
+  if (event.type === "research_retention") {
+    await services.authorizeResearchRetirement(event.receiptId);
+    const result = await services.processResearchRetention(event.receiptId);
+    if (!result.completed)
+      throw new Error("Research retirement cleanup is still pending.");
+    return "dispatched";
+  }
+  if ((await services.researchCoordinatorStatus()) !== "ready") return "fenced";
   // Only run-start deliveries participate in the dispatch generation fence.
   // Browser signals use their own stable command idempotency.
   if (

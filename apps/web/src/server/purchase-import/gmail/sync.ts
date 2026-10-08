@@ -1,21 +1,16 @@
-import { householdDaysAgo } from "~/lib/household-date";
+import type { ExecutionAuthorizationRequestedScope } from "@cubby/schemas/execution-authorization";
+import {
+  mailboxCoverage,
+  type MailboxCoverage,
+  type MailboxPage,
+  type MailboxScopedQuery,
+} from "@cubby/schemas/mailbox-research";
 
 import { normalizeHistoryPage } from "./normalize";
-import {
-  GmailApiError,
-  type GmailBootstrapInput,
-  type GmailBootstrapPlan,
-  type GmailOrderMailEvent,
-  type GmailProvider,
-} from "./types";
+import type { GmailProvider } from "./types";
 
-const historyNumber = (value: string): bigint | null => {
-  try {
-    return BigInt(value);
-  } catch {
-    return null;
-  }
-};
+export const GMAIL_PAGE_SIZE = 25;
+export const ELIGIBLE_MAIL_QUERY = "-in:spam -in:trash";
 
 /** The later of two Gmail history ids; a cursor never moves backwards. */
 export const maxHistoryId = (
@@ -24,159 +19,129 @@ export const maxHistoryId = (
 ): string | null => {
   if (!candidate) return current;
   if (!current) return candidate;
-  const left = historyNumber(current);
-  const right = historyNumber(candidate);
-  if (left !== null && right !== null)
-    return right > left ? candidate : current;
-  return candidate > current ? candidate : current;
-};
-
-/**
- * The plan is deliberately query-shaped, not Gmail-message-shaped. The
- * caller can persist it with the hunt that caused the sync and rerun it
- * without changing the source keys.
- */
-export const buildBootstrapPlan = ({
-  knownSenders,
-  earliestUnresolvedHuntAt = null,
-  now = new Date(),
-  lookbackDays = 30,
-}: GmailBootstrapInput): GmailBootstrapPlan => {
-  if (
-    !Number.isInteger(lookbackDays) ||
-    lookbackDays < 1 ||
-    lookbackDays > 365
-  ) {
-    throw new Error("Gmail bootstrap lookbackDays must be between 1 and 365");
+  try {
+    return BigInt(candidate) > BigInt(current) ? candidate : current;
+  } catch {
+    return candidate > current ? candidate : current;
   }
-  const uniqueSenders = [
-    ...new Set(
-      knownSenders
-        .map((sender) => sender.trim().toLowerCase())
-        .filter((sender) => sender.length > 0),
-    ),
-  ].sort();
-  // Gmail reads a bare `after:` date as Pacific midnight: a household day.
-  const knownStart = earliestUnresolvedHuntAt
-    ? householdDaysAgo(7, earliestUnresolvedHuntAt)
-    : householdDaysAgo(lookbackDays, now);
-  const unknownStart = householdDaysAgo(lookbackDays, now);
-  return {
-    knownSenderQueries: uniqueSenders.map(
-      (sender) => `from:${sender} after:${knownStart}`,
-    ),
-    unknownOrderQuery: `after:${unknownStart}`,
-  };
 };
 
-const sortedUnique = (values: Iterable<string>): string[] =>
-  [...new Set(values)].sort((a, b) => a.localeCompare(b));
-
-const listMessageIds = async (
+/** Persist this baseline before calling listGmailPage, including first connection. */
+export async function initializeMailboxCoverage(
   provider: GmailProvider,
-  query: string,
-  maxResults: number,
-): Promise<string[]> => {
-  const ids: string[] = [];
-  let pageToken: string | undefined;
-  do {
+  scopedQueries: readonly MailboxScopedQuery[],
+): Promise<MailboxCoverage> {
+  const profile = await provider.getProfile();
+  return mailboxCoverage.parse({
+    version: 1,
+    baselineHistoryId: profile.historyId,
+    broad: { pageToken: null, completed: false },
+    scoped: [
+      ...new Map(
+        scopedQueries.map((query) => [
+          query.key,
+          { ...query, pageToken: null, completed: false },
+        ]),
+      ).values(),
+    ],
+    history: {
+      historyId: profile.historyId,
+      pageToken: null,
+      targetHistoryId: null,
+    },
+    nextLane: "scan",
+  });
+}
+
+/** New targeted objectives do not reset broad or unchanged query coverage. */
+export function mergeMailboxQueries(
+  coverage: MailboxCoverage,
+  queries: readonly MailboxScopedQuery[],
+): MailboxCoverage {
+  const next = mailboxCoverage.parse(coverage);
+  const byKey = new Map(next.scoped.map((query) => [query.key, query]));
+  for (const query of queries) {
+    const prior = byKey.get(query.key);
+    if (!prior || prior.query !== query.query)
+      byKey.set(query.key, { ...query, pageToken: null, completed: false });
+  }
+  next.scoped = [...byKey.values()];
+  return next;
+}
+
+/** One provider page. The caller durably commits nextCoverage after processing it. */
+export async function listGmailPage(
+  provider: GmailProvider,
+  mailboxId: string,
+  startCoverage: MailboxCoverage,
+  discovery: ExecutionAuthorizationRequestedScope["discovery"] = "new_mail",
+): Promise<MailboxPage> {
+  if (!mailboxId.trim() || mailboxId === "me")
+    throw new Error("A stable Google account id is required");
+  const nextCoverage = mailboxCoverage.parse(startCoverage);
+  const scoped = nextCoverage.scoped.find((query) => !query.completed);
+  const scanPending =
+    Boolean(scoped) ||
+    (discovery === "all_history" && !nextCoverage.broad.completed);
+  if (discovery !== "new_mail") {
+    if (!scanPending)
+      return { messageIds: [], events: [], startCoverage, nextCoverage };
+    const position = scoped ?? nextCoverage.broad;
+    const query = scoped
+      ? `(${scoped.query}) ${ELIGIBLE_MAIL_QUERY}`
+      : ELIGIBLE_MAIL_QUERY;
     const request: Parameters<GmailProvider["listMessages"]>[0] = {
       query,
-      maxResults,
+      maxResults: GMAIL_PAGE_SIZE,
     };
-    if (pageToken) request.pageToken = pageToken;
+    if (position.pageToken) request.pageToken = position.pageToken;
     const page = await provider.listMessages(request);
-    for (const message of page.messages ?? []) {
-      if (message.id.trim()) ids.push(message.id);
-    }
-    pageToken = page.nextPageToken;
-  } while (pageToken);
-  return ids;
-};
-
-/**
- * What changed in a mailbox since `historyId`, as message ids and history
- * events only: no message body or attachment is fetched here, so listing a
- * large backlog costs ids, not bytes. A first sync (no cursor) or an expired
- * cursor (`history.list` 404) lists the bootstrap queries instead, from a
- * profile baseline captured before scanning so mail arriving mid-scan is
- * picked up by the next pass rather than skipped.
- */
-export type GmailChanges = {
-  mode: "bootstrap" | "full_resync" | "incremental";
-  /** Where the cursor moves once every listed message is processed. */
-  targetHistoryId: string | null;
-  messageIds: string[];
-  events: GmailOrderMailEvent[];
-};
-
-const listBootstrap = async (
-  provider: GmailProvider,
-  plan: GmailBootstrapPlan,
-  maxResults: number,
-  mode: "bootstrap" | "full_resync",
-): Promise<GmailChanges> => {
-  const profile = await provider.getProfile();
-  const ids: string[] = [];
-  for (const query of [...plan.knownSenderQueries, plan.unknownOrderQuery])
-    ids.push(...(await listMessageIds(provider, query, maxResults)));
-  return {
-    mode,
-    targetHistoryId: profile.historyId,
-    messageIds: sortedUnique(ids),
-    events: [],
-  };
-};
-
-export const listGmailChanges = async (
-  provider: GmailProvider,
-  options: {
-    mailboxId: string;
-    historyId: string | null;
-    bootstrap: GmailBootstrapInput;
-    maxResults?: number;
-  },
-): Promise<GmailChanges> => {
-  if (!options.mailboxId.trim())
-    throw new Error("Gmail mailbox id is required");
-  const maxResults = options.maxResults ?? 100;
-  if (!Number.isInteger(maxResults) || maxResults < 1 || maxResults > 500) {
-    throw new Error("Gmail maxResults must be between 1 and 500");
+    position.pageToken = page.nextPageToken ?? null;
+    position.completed = !page.nextPageToken;
+    nextCoverage.nextLane = "history";
+    return {
+      messageIds: [
+        ...new Set(
+          (page.messages ?? []).map((message) => message.id).filter(Boolean),
+        ),
+      ],
+      events: [],
+      startCoverage,
+      nextCoverage,
+    };
   }
-  const plan = buildBootstrapPlan(options.bootstrap);
-  if (!options.historyId)
-    return listBootstrap(provider, plan, maxResults, "bootstrap");
-
-  const events: GmailOrderMailEvent[] = [];
-  let observedHistoryId: string | null = options.historyId;
-  let pageToken: string | undefined;
-  try {
-    do {
-      const request: Parameters<GmailProvider["listHistory"]>[0] = {
-        startHistoryId: options.historyId,
-        maxResults,
-      };
-      if (pageToken) request.pageToken = pageToken;
-      const page = await provider.listHistory(request);
-      observedHistoryId = maxHistoryId(observedHistoryId, page.historyId);
-      events.push(...normalizeHistoryPage(options.mailboxId, page));
-      pageToken = page.nextPageToken;
-    } while (pageToken);
-  } catch (error) {
-    if (!(error instanceof GmailApiError) || error.status !== 404) throw error;
-    return listBootstrap(provider, plan, maxResults, "full_resync");
-  }
-  const uniqueEvents = [
-    ...new Map(events.map((event) => [event.sourceKey, event])).values(),
-  ].sort((a, b) => a.sourceKey.localeCompare(b.sourceKey));
-  return {
-    mode: "incremental",
-    targetHistoryId: observedHistoryId,
-    messageIds: sortedUnique(
-      uniqueEvents
-        .filter((event) => event.kind !== "message_deleted")
-        .map((event) => event.messageId),
-    ),
-    events: uniqueEvents,
+  const position = nextCoverage.history;
+  const request: Parameters<GmailProvider["listHistory"]>[0] = {
+    startHistoryId: position.historyId,
+    maxResults: GMAIL_PAGE_SIZE,
   };
-};
+  if (position.pageToken) request.pageToken = position.pageToken;
+  const page = await provider.listHistory(request);
+  position.targetHistoryId = maxHistoryId(
+    position.targetHistoryId ?? position.historyId,
+    page.historyId,
+  );
+  position.pageToken = page.nextPageToken ?? null;
+  if (!position.pageToken) {
+    position.historyId = position.targetHistoryId ?? position.historyId;
+    position.targetHistoryId = null;
+  }
+  // Finish a paginated history catch-up before continuing old history.
+  nextCoverage.nextLane = position.pageToken ? "history" : "scan";
+  const events = normalizeHistoryPage(mailboxId, page).map((event) => ({
+    ...event,
+    labelIds: [...event.labelIds],
+  }));
+  return {
+    messageIds: [
+      ...new Set(
+        events
+          .filter((event) => event.kind !== "message_deleted")
+          .map((event) => event.messageId),
+      ),
+    ],
+    events,
+    startCoverage,
+    nextCoverage,
+  };
+}

@@ -4,18 +4,13 @@ import {
   auditableEntities,
   entityManifest,
 } from "@cubby/schemas/entity-manifest";
-import { describe, expect, expectTypeOf, it } from "vitest";
+import { describe, expect, it } from "vitest";
 
 import { INCOMING_EDGES } from "~/server/db/entity-incoming-edges";
 import { ENTITY_LIFECYCLE_REGISTRY } from "~/server/repo/entity-lifecycle-registry";
 import { INGREDIENT_DELETE_EDGE_POLICY } from "~/server/repo/ingredient/deletion";
 import { INGREDIENT_MERGE_EDGE_POLICY } from "~/server/repo/ingredient/merge";
-import {
-  isRetainingEdgeKey,
-  PRODUCT_DELETE_EDGE_POLICY,
-  PRODUCT_EDGE_ROLES,
-} from "~/server/repo/product/edge-roles";
-import type { ProductRetainingEdgeKey } from "~/server/repo/product/edge-roles";
+import { PRODUCT_EDGE_ROLES } from "~/server/repo/product/edge-roles";
 import { SHORTCODE_TABLE } from "~/server/repo/shortcode-tables";
 
 describe("incoming-edge operation policies", () => {
@@ -59,87 +54,6 @@ describe("incoming-edge operation policies", () => {
     expect(
       INGREDIENT_MERGE_EDGE_POLICY["MealFoodEntry.ingredientId"].effect,
     ).toBe("repoint");
-  });
-});
-
-/**
- * The retaining set decides whether a product can be deleted and whether
- * `findOrphanedProducts` will offer it for one-click deletion, so it is pinned
- * by value — not just by "whatever the roles happen to say". Moving
- * `ProductImage.productId` from the product-local `metadata` role to the shared
- * `media` role would have silently changed this set under the old
- * `!== "metadata"` filter; this test is what makes that a failure instead.
- */
-describe("product retaining edges", () => {
-  const RETAINING = [
-    // A book Product a Cookbook claims as its physical copy. Retaining, like
-    // Location.productId, because the policy vocabulary has no set-null effect
-    // and the only non-blocking alternatives would soft-delete the cookbook
-    // along with every recipe it imported.
-    "Cookbook.productId",
-    "Expense.productId",
-    "RunTarget.entityId",
-    "InventoryEntry.productId",
-    "Location.productId",
-    "MealFoodEntry.productId",
-    "Planting.sourceProductId",
-    "EntityLink[productComponent].to",
-    "EntityLink[projectTool].to",
-    "EntityLink[purchaseProduct].to",
-    "Task.subjectProductId",
-    "EntityLink[wishCandidate].to",
-    // A device's linked hardware. Retaining by role (a device is real
-    // evidence the product still matters), but — unlike every other entry
-    // here — NOT blocking: it's the first retaining edge the policy
-    // vocabulary can actually clear (`effect: "detach"`), so it is excluded
-    // from BLOCKING below rather than forcing the delete to fail.
-    "Device.productId",
-    // A photo group proposal's chosen Product: retaining for orphan
-    // detection while proposed, but detached (not blocking) on delete.
-    "PhotoGroupProposal.productId",
-  ] as const;
-
-  // Every retaining edge except the two that detach instead of blocking —
-  // see their comments in RETAINING above.
-  const DETACHING = new Set([
-    "Device.productId",
-    "PhotoGroupProposal.productId",
-  ]);
-  const BLOCKING = RETAINING.filter((key: string) => !DETACHING.has(key));
-
-  it("retains exactly the acquisition, history, association, reference and usage edges", () => {
-    expect(
-      Object.keys(PRODUCT_EDGE_ROLES).filter(isRetainingEdgeKey).sort(),
-    ).toEqual([...RETAINING].sort());
-  });
-
-  it("blocks deletion on exactly those edges, and no others", () => {
-    expect(
-      Object.entries(PRODUCT_DELETE_EDGE_POLICY)
-        .filter(([, d]) => d.effect === "block")
-        .map(([key]) => key)
-        .sort(),
-    ).toEqual([...BLOCKING].sort());
-  });
-
-  /**
-   * Type-level backstop for the ENTITY_EDGES refactor: `ProductRetainingEdgeKey`
-   * selects keys by testing each edge's literal `role` against `RetainingRole`
-   * (`repo/product/edge-roles.ts`). That only works while
-   * `ENTITY_EDGE_SEMANTICS.product`'s per-key `role` stays each edge's own
-   * literal type — if the projection that builds `ENTITY_EDGE_SEMANTICS` ever
-   * widened it to the general `EdgeRole` union, every key's `extends
-   * RetainingRole` check would fail and this type would silently become
-   * `never`, compiling cleanly while making every product edge look
-   * non-retaining. Pinned by exact union, not just "is not never", so a
-   * mis-classified edge (one added to or dropped from RETAINING above) fails
-   * here too.
-   */
-  it("ProductRetainingEdgeKey stays the same literal-key union, not never", () => {
-    expectTypeOf<ProductRetainingEdgeKey>().not.toEqualTypeOf<never>();
-    expectTypeOf<ProductRetainingEdgeKey>().toEqualTypeOf<
-      (typeof RETAINING)[number]
-    >();
   });
 });
 

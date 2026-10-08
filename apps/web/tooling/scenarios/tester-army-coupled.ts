@@ -310,6 +310,7 @@ async function seedSavedConfirmation(
       .insert(orderMail)
       .values({
         ledgerPartyId: party,
+        mailboxId: "synthetic-coupled-mailbox",
         vendorId: vendor.id,
         messageId: `synthetic-live-${event}-${crypto.randomUUID()}`,
         sender: `orders@${source.host}`,

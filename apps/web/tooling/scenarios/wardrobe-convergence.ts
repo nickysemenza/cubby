@@ -28,10 +28,10 @@ import { unparsedStartOperationResultSchema } from "~/server/start-operation.con
 import { callMcpTool } from "~/server/mcp/mcp-test-utils";
 import { createMcpServer } from "~/server/mcp/server";
 import { financialAccount } from "~/server/db/schema";
-import {
-  startOrResumeRun,
-  startTargetedRun,
-} from "~/server/purchase-import/run-service";
+import { startOrResumeRun } from "~/server/purchase-import/run-service";
+import { admitProductResearch } from "~/server/purchase-import/product-research-run";
+import { researchServiceFor } from "~/server/purchase-import/research-service";
+import { fromPartial } from "@total-typescript/shoehorn";
 import { classifyOrderCapture } from "~/server/purchase-import/order-list";
 import { parseEntityId } from "@cubby/schemas/identifiers";
 import { productEnrichmentTarget } from "~/server/purchase-import/product-enrichment-target";
@@ -1260,31 +1260,20 @@ async function runProductEnrichmentCommitAndOverwrite(
   userId: string,
   purchaseProduct: { id: string; shortcode: string },
 ): Promise<void> {
-  const { memberId, vendorId } = await syntheticWardrobeMemberAndVendor(
-    pool,
-    userId,
-  );
+  const { memberId } = await syntheticWardrobeMemberAndVendor(pool, userId);
   const callPurchase = makeMcpCaller(kernel);
 
   const commitFingerprint = await productEnrichmentFingerprint(
     db,
     purchaseProduct.id,
   );
-  const commitRun = await startTargetedRun(db, {
+  const [commitRun] = await admitProductResearch(db, {
     ledgerPartyId: parseEntityId("ledgerParty", memberId),
-    purpose: "product_enrichment",
-    vendorId: parseEntityId("vendor", vendorId),
-    vendorAccountId: null,
-    trigger: "manual",
-    targets: [
-      {
-        kind: "product",
-        productId: purchaseProduct.id,
-        targetFingerprint: commitFingerprint,
-      },
-    ],
+    userId: testUserId(userId),
+    productIds: [parseEntityId("product", purchaseProduct.id)],
+    cause: "member_request",
   });
-  if (!commitRun.created)
+  if (!commitRun?.created)
     throw new Error("Product enrichment commit run was blocked");
   // Fill-only commits may only fill an empty field; the scenario's Product
   // already has a manufacturer from its import, so this fills `model`.
@@ -1333,21 +1322,18 @@ async function runProductEnrichmentCommitAndOverwrite(
     db,
     purchaseProduct.id,
   );
-  const overwriteRun = await startTargetedRun(db, {
+  await researchServiceFor(
+    db,
+    fromPartial<Env>({}),
+    commitRun.run.id,
+  ).researchNext({}, "settle:synthetic-wardrobe-enrichment");
+  const [overwriteRun] = await admitProductResearch(db, {
     ledgerPartyId: parseEntityId("ledgerParty", memberId),
-    purpose: "product_enrichment",
-    vendorId: parseEntityId("vendor", vendorId),
-    vendorAccountId: null,
-    trigger: "manual",
-    targets: [
-      {
-        kind: "product",
-        productId: purchaseProduct.id,
-        targetFingerprint: overwriteFingerprint,
-      },
-    ],
+    userId: testUserId(userId),
+    productIds: [parseEntityId("product", purchaseProduct.id)],
+    cause: "member_request",
   });
-  if (!overwriteRun.created)
+  if (!overwriteRun?.created)
     throw new Error("Product enrichment overwrite run was blocked");
   const overwritten = overwriteProductEnrichmentOut.parse(
     await callPurchase("product_enrichment.overwrite", {

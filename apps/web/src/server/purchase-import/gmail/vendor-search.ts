@@ -1,40 +1,38 @@
-import { householdDaysAgo } from "~/lib/household-date";
-
+import { ELIGIBLE_MAIL_QUERY, GMAIL_PAGE_SIZE } from "./sync";
 import type { GmailProvider } from "./types";
 import { vendorSearchTerms, type VendorMailIdentity } from "./vendor-identity";
 
-const PAGE_SIZE = 10;
-
-/**
- * One page of a vendor's Gmail search, as message ids only. The caller
- * fetches and saves the ones it has not classified yet, one at a time
- * (`ingestGmailMessages`), so a page never holds its messages' attachments.
- */
+/** Search terms prioritize evidence; they never exclude messages after fetching. */
 export async function listVendorMailPage(
   provider: GmailProvider,
   input: {
-    identity: VendorMailIdentity;
+    identity: VendorMailIdentity & { name?: string };
     after: string;
     pageToken: string | null;
   },
 ): Promise<{ messageIds: string[]; nextPageToken: string | null }> {
-  const terms = vendorSearchTerms(input.identity);
-  if (terms.length === 0)
-    throw new Error("Add a Vendor website to search Gmail for its order mail.");
-  const from = terms.map((term) => `from:${term}`).join(" ");
-  const query = `${terms.length > 1 ? `{${from}}` : from} after:${input.after}`;
-  const request: Parameters<GmailProvider["listMessages"]>[0] = {
+  const terms = [
+    ...new Set(
+      [input.identity.name, ...vendorSearchTerms(input.identity)].filter(
+        (term): term is string => Boolean(term?.trim()),
+      ),
+    ),
+  ];
+  if (!terms.length)
+    throw new Error("Add a Vendor name or website to search Gmail.");
+  const query = `{${terms.map((term) => `"${term.replaceAll('"', " ")}"`).join(" ")}}${input.after ? ` after:${input.after}` : ""} ${ELIGIBLE_MAIL_QUERY}`;
+  const parameters: Parameters<GmailProvider["listMessages"]>[0] = {
     query,
-    maxResults: PAGE_SIZE,
+    maxResults: GMAIL_PAGE_SIZE,
   };
-  if (input.pageToken) request.pageToken = input.pageToken;
-  const page = await provider.listMessages(request);
+  if (input.pageToken) parameters.pageToken = input.pageToken;
+  const page = await provider.listMessages(parameters);
   return {
-    messageIds: (page.messages ?? []).slice(0, PAGE_SIZE).map((ref) => ref.id),
+    messageIds: [
+      ...new Set((page.messages ?? []).map((ref) => ref.id).filter(Boolean)),
+    ],
     nextPageToken: page.nextPageToken ?? null,
   };
 }
-
-/** The default `after:` bound for a vendor search: a year of household days. */
-export const defaultVendorMailSearchAfter = (now = new Date()): string =>
-  householdDaysAgo(365, now).replaceAll("-", "/");
+/** An explicit requested scope may be bounded; the default includes retained history. */
+export const defaultVendorMailSearchAfter = (): string => "";

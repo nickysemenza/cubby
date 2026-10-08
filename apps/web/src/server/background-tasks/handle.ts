@@ -169,17 +169,10 @@ export async function handleBackgroundTask(
       return "succeeded";
     }
     case "purchase-import.enrichment-sweep": {
-      const [
-        { bridgeReachability, sweepPendingEnrichment },
-        { getPurchaseImportNamespace },
-      ] = await Promise.all([
-        import("~/server/purchase-import/enrichment-sweep"),
-        import("~/server/cf-env"),
-      ]);
-      const namespace = getPurchaseImportNamespace();
+      const { sweepPendingEnrichment } =
+        await import("~/server/purchase-import/enrichment-sweep");
       const { started } = await sweepPendingEnrichment(db, {
         vendorAccountIds: [task.vendorAccountId],
-        bridge: namespace ? bridgeReachability(namespace) : undefined,
       });
       return started.length ? "succeeded" : "skipped";
     }

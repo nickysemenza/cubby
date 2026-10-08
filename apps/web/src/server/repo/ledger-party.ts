@@ -96,6 +96,24 @@ export const LEDGER_PARTY_DELETE_EDGE_POLICY = {
     effect: "block",
     description: "Mailbox cursors retain their member scope.",
   },
+  "MailboxMessage.ledgerPartyId": {
+    code: "block-mailbox-messages",
+    effect: "block",
+    description:
+      "Mailbox classification and recovery metadata retain their member scope.",
+  },
+  "ResearchSourceExposure.ledgerPartyId": {
+    code: "block-research-exposure",
+    effect: "block",
+    description:
+      "Research source exposure retains its authenticated member scope.",
+  },
+  "ResearchRetention.ledgerPartyId": {
+    code: "block-research-retention",
+    effect: "block",
+    description:
+      "Research disposal authority retains its authenticated member scope.",
+  },
   "OrderMail.ledgerPartyId": {
     code: "block-order-mail",
     effect: "block",
@@ -198,6 +216,23 @@ export const LEDGER_PARTY_MERGE_EDGE_POLICY = {
     code: "block-mailbox-cursor",
     effect: "block",
     description: "Mailbox identity prevents member merges.",
+  },
+  "MailboxMessage.ledgerPartyId": {
+    code: "block-mailbox-messages",
+    effect: "block",
+    description:
+      "Mailbox classification and recovery metadata prevent member merges.",
+  },
+  "ResearchSourceExposure.ledgerPartyId": {
+    code: "block-research-exposure",
+    effect: "block",
+    description: "Authenticated research exposure prevents member merges.",
+  },
+  "ResearchRetention.ledgerPartyId": {
+    code: "block-research-retention",
+    effect: "block",
+    description:
+      "Authenticated research disposal authority prevents member merges.",
   },
   "OrderMail.ledgerPartyId": {
     code: "block-order-mail",

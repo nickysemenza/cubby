@@ -54,7 +54,7 @@ export default defineEntity({
           id: "spending-classification",
           title: "Spending classification",
         },
-        { kind: "slot", id: "order-mail", title: "Order email" },
+        { kind: "slot", id: "order-mail", title: "Email evidence" },
         {
           kind: "relation",
           id: "purchased-products",

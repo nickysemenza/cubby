@@ -1,6 +1,134 @@
 import { defineChildTable } from "../entity-definitions/child-definition.js";
+import { runEvidenceKind, runTargetEntityKind } from "../run-fields.js";
 
 export const runChildren = [
+  /** An exposure precedes even a source heading; no source content is copied here. */
+  defineChildTable({
+    name: "ResearchSourceExposure",
+    exportName: "researchSourceExposure",
+    columns: [
+      {
+        key: "id",
+        kind: "uuid",
+        primaryKey: true,
+        default: { sql: "gen_random_uuid()" },
+      },
+      {
+        key: "runId",
+        kind: "uuid",
+        notNull: true,
+        reference: { table: "run", column: "id" },
+      },
+      {
+        key: "ledgerPartyId",
+        kind: "uuid",
+        notNull: true,
+        type: "LedgerPartyId",
+        reference: { table: "ledgerParty", column: "id" },
+      },
+      // A source tombstone must survive deletion of its private original.
+      { key: "orderMailId", kind: "uuid", notNull: true },
+      { key: "checksum", kind: "text", notNull: true },
+      {
+        key: "createdAt",
+        kind: "timestamp",
+        notNull: true,
+        default: { now: true },
+      },
+    ],
+    types: [
+      { module: "@cubby/schemas/identifiers", exports: ["LedgerPartyId"] },
+    ],
+    indexes: [
+      {
+        name: "ResearchSourceExposure_run_source_key",
+        unique: true,
+        on: ["runId", "orderMailId", "checksum"],
+      },
+      {
+        name: "ResearchSourceExposure_source_idx",
+        on: ["ledgerPartyId", "orderMailId", "checksum"],
+      },
+    ],
+  }),
+  /** External receipt survives disposal of every contaminated coordinator. */
+  defineChildTable({
+    name: "ResearchRetention",
+    exportName: "researchRetention",
+    columns: [
+      { key: "id", kind: "uuid", primaryKey: true },
+      {
+        key: "runId",
+        kind: "uuid",
+        notNull: true,
+        reference: { table: "run", column: "id" },
+      },
+      {
+        key: "workRef",
+        kind: "uuid",
+        notNull: true,
+        reference: { table: "runTarget", column: "id" },
+      },
+      {
+        key: "ledgerPartyId",
+        kind: "uuid",
+        notNull: true,
+        type: "LedgerPartyId",
+        reference: { table: "ledgerParty", column: "id" },
+      },
+      { key: "orderMailId", kind: "uuid", notNull: true },
+      { key: "mailboxId", kind: "text", notNull: true },
+      { key: "messageId", kind: "text", notNull: true },
+      { key: "checksum", kind: "text", notNull: true },
+      {
+        key: "phase",
+        kind: "text",
+        notNull: true,
+        type: "ResearchRetentionPhase",
+      },
+      {
+        key: "plan",
+        kind: "jsonb",
+        notNull: true,
+        type: "ResearchRetentionPlan",
+      },
+      {
+        key: "createdAt",
+        kind: "timestamp",
+        notNull: true,
+        default: { now: true },
+      },
+      {
+        key: "updatedAt",
+        kind: "timestamp",
+        notNull: true,
+        default: { now: true },
+        onUpdateNow: true,
+      },
+      { key: "completedAt", kind: "timestamp" },
+    ],
+    types: [
+      { module: "@cubby/schemas/identifiers", exports: ["LedgerPartyId"] },
+      {
+        module: "@cubby/schemas/run-fields",
+        exports: ["ResearchRetentionPhase", "ResearchRetentionPlan"],
+      },
+    ],
+    indexes: [
+      {
+        name: "ResearchRetention_source_checksum_key",
+        unique: true,
+        on: ["ledgerPartyId", "orderMailId", "checksum"],
+      },
+      { name: "ResearchRetention_phase_idx", on: ["phase"] },
+    ],
+    checks: [
+      {
+        name: "ResearchRetention_phase_check",
+        sql: "{phase} IN ('fenced', 'objects_deleted', 'coordinators_destroyed', 'completed')",
+      },
+    ],
+  }),
   /**
    * Explicit no-op-validation/enrichment targets; the Run's writes are
    * AuditLog rows carrying its `runId`. A target names a purchase, product or image by `entityRef`;
@@ -24,11 +152,13 @@ export const runChildren = [
         reference: { table: "run", column: "id" },
       },
       { key: "entityId", kind: "uuid", notNull: true },
+      /** Distinct source work can address the same entity without sharing a task. */
+      { key: "workKey", kind: "text", notNull: true, default: "" },
       {
         key: "entityKind",
         kind: "text",
         notNull: true,
-        type: '"purchase" | "product" | "image"',
+        type: "RunTargetEntityKind",
       },
       /** Picker order within a photo-inventory run; the tiebreak when capture times collide. */
       { key: "position", kind: "integer" },
@@ -82,6 +212,10 @@ export const runChildren = [
     ],
     types: [
       {
+        module: "@cubby/schemas/run-fields",
+        exports: ["RunTargetEntityKind"],
+      },
+      {
         module: "@cubby/schemas/photo-import-run",
         exports: ["RunTargetDeviceWorkState"],
       },
@@ -99,13 +233,13 @@ export const runChildren = [
       {
         name: "RunTarget_run_entity_key",
         unique: true,
-        on: ["runId", "entityId"],
+        on: ["runId", "entityId", "workKey"],
       },
     ],
     checks: [
       {
         name: "RunTarget_entityKind_check",
-        sql: "{entityKind} IN ('purchase', 'product', 'image')",
+        sql: "{entityKind} IN ('purchase', 'product', 'image', 'run')",
       },
       {
         name: "RunTarget_state_check",
@@ -113,7 +247,7 @@ export const runChildren = [
       },
       {
         name: "RunTarget_outcome_check",
-        sql: "{outcome} IS NULL OR {outcome} IN ('replayed', 'raw_evidence_drift', 'semantic_drift', 'enriched', 'unavailable', 'skipped', 'attached')",
+        sql: "{outcome} IS NULL OR {outcome} IN ('replayed', 'raw_evidence_drift', 'semantic_drift', 'enriched', 'unavailable', 'skipped', 'attached', 'verified', 'partially_verified', 'researched_with_gaps', 'ambiguous', 'temporarily_blocked', 'no_source_found', 'unrelated')",
       },
       {
         name: "RunTarget_deviceWorkState_check",
@@ -245,7 +379,7 @@ export const runChildren = [
     checks: [
       {
         name: "RunEvidence_kind_check",
-        sql: "{kind} IN ('browser_capture', 'gmail_attachment', 'manual_upload')",
+        sql: `{kind} IN (${runEvidenceKind.options.map((kind) => `'${kind}'`).join(", ")})`,
       },
     ],
   }),
@@ -276,10 +410,9 @@ export const runChildren = [
       { key: "externalKey", kind: "text", notNull: true },
       { key: "checksum", kind: "text", notNull: true },
       {
-        key: "purchaseId",
+        key: "canonicalClaimId",
         kind: "uuid",
-        type: "PurchaseId",
-        reference: { table: "purchase", column: "id" },
+        reference: { table: "importSourceClaim", column: "id" },
       },
       {
         key: "firstRunId",
@@ -293,7 +426,6 @@ export const runChildren = [
         notNull: true,
         reference: { table: "run", column: "id" },
       },
-      { key: "outputFingerprint", kind: "text", notNull: true },
       {
         key: "createdAt",
         kind: "timestamp",
@@ -311,7 +443,7 @@ export const runChildren = [
     types: [
       {
         module: "@cubby/schemas/identifiers",
-        exports: ["LedgerPartyId", "PurchaseId"],
+        exports: ["LedgerPartyId"],
       },
     ],
     indexes: [
@@ -320,12 +452,166 @@ export const runChildren = [
         unique: true,
         on: ["ledgerPartyId", "kind", "externalKey"],
       },
-      { name: "ImportSourceClaim_purchase_idx", on: ["purchaseId"] },
+      { name: "ImportSourceClaim_canonical_idx", on: ["canonicalClaimId"] },
     ],
     checks: [
       {
         name: "ImportSourceClaim_kind_check",
         sql: "{kind} IN ('browser_order', 'mail_message', 'mail_attachment', 'receipt_photo', 'vendor_export')",
+      },
+      {
+        name: "ImportSourceClaim_canonical_self_check",
+        sql: "{canonicalClaimId} IS NULL OR {canonicalClaimId} <> {id}",
+      },
+    ],
+  }),
+  /** Each order supported by a source has its own replay and ownership fence. */
+  defineChildTable({
+    name: "ImportSourceOrder",
+    exportName: "importSourceOrder",
+    columns: [
+      {
+        key: "id",
+        kind: "uuid",
+        primaryKey: true,
+        default: { sql: "gen_random_uuid()" },
+      },
+      {
+        key: "sourceClaimId",
+        kind: "uuid",
+        notNull: true,
+        reference: { table: "importSourceClaim", column: "id" },
+      },
+      { key: "orderKey", kind: "text", notNull: true },
+      {
+        key: "purchaseId",
+        kind: "uuid",
+        notNull: true,
+        type: "PurchaseId",
+        reference: { table: "purchase", column: "id" },
+      },
+      { key: "checksum", kind: "text", notNull: true },
+      { key: "outputFingerprint", kind: "text", notNull: true },
+      { key: "originalOrder", kind: "jsonb", type: "AcceptedSourceOrder" },
+      {
+        key: "createdAt",
+        kind: "timestamp",
+        notNull: true,
+        default: { now: true },
+      },
+      {
+        key: "updatedAt",
+        kind: "timestamp",
+        notNull: true,
+        default: { now: true },
+        onUpdateNow: true,
+      },
+    ],
+    types: [
+      { module: "@cubby/schemas/identifiers", exports: ["PurchaseId"] },
+      {
+        module: "@cubby/schemas/purchase-import",
+        exports: ["AcceptedSourceOrder"],
+      },
+    ],
+    indexes: [
+      {
+        name: "ImportSourceOrder_source_order_key",
+        unique: true,
+        on: ["sourceClaimId", "orderKey"],
+      },
+      { name: "ImportSourceOrder_purchase_idx", on: ["purchaseId"] },
+    ],
+  }),
+  /** Accepted facts retain evidence even when the existing value was already correct. */
+  defineChildTable({
+    name: "RunFactEvidence",
+    exportName: "runFactEvidence",
+    columns: [
+      {
+        key: "id",
+        kind: "uuid",
+        primaryKey: true,
+        default: { sql: "gen_random_uuid()" },
+      },
+      {
+        key: "targetId",
+        kind: "uuid",
+        notNull: true,
+        reference: { table: "runTarget", column: "id" },
+      },
+      {
+        key: "evidenceId",
+        kind: "uuid",
+        notNull: true,
+        reference: { table: "runEvidence", column: "id" },
+      },
+      {
+        key: "entityKind",
+        kind: "text",
+        notNull: true,
+        type: "RunTargetEntityKind",
+      },
+      { key: "entityId", kind: "uuid", notNull: true },
+      { key: "fieldPath", kind: "text", notNull: true },
+      {
+        key: "value",
+        kind: "jsonb",
+        notNull: true,
+        type: 'AcceptedResearchFact["value"]',
+      },
+      { key: "valueFingerprint", kind: "text", notNull: true },
+      {
+        key: "support",
+        kind: "jsonb",
+        type: "ResearchClaimSupport",
+      },
+      { key: "supportRetiredAt", kind: "timestamp" },
+      {
+        key: "createdAt",
+        kind: "timestamp",
+        notNull: true,
+        default: { now: true },
+      },
+    ],
+    types: [
+      { module: "@cubby/schemas/run-fields", exports: ["RunTargetEntityKind"] },
+      {
+        module: "@cubby/schemas/research",
+        exports: ["ResearchClaimSupport", "AcceptedResearchFact"],
+      },
+    ],
+    indexes: [
+      {
+        name: "RunFactEvidence_claim_key",
+        unique: true,
+        on: [
+          "targetId",
+          "evidenceId",
+          "entityKind",
+          "entityId",
+          "fieldPath",
+          "valueFingerprint",
+        ],
+      },
+      { name: "RunFactEvidence_subject_idx", on: ["entityKind", "entityId"] },
+    ],
+    checks: [
+      {
+        name: "RunFactEvidence_entityKind_check",
+        sql: `{entityKind} IN (${runTargetEntityKind.options.map((kind) => `'${kind}'`).join(", ")})`,
+      },
+      {
+        name: "RunFactEvidence_support_retirement_check",
+        sql: "({support} IS NOT NULL AND {supportRetiredAt} IS NULL) OR ({support} IS NULL AND {supportRetiredAt} IS NOT NULL)",
+      },
+    ],
+    foreignKeys: [
+      {
+        name: "RunFactEvidence_entity_fk",
+        columns: ["entityId", "entityKind"],
+        table: "entityIdentity",
+        references: ["id", "kind"],
       },
     ],
   }),

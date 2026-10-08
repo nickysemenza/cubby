@@ -20,6 +20,7 @@
     "eval:agent-models": "NODE_ENV=test node ../../scripts/test-services.ts -- vitest run --project live-eval src/server/purchase-import/agent-model-eval.live-eval.ts",
     "eval:features": "NODE_ENV=test node ../../scripts/test-services.ts -- vitest run --project live-eval src/server/ai/feature-routing-eval.live-eval.ts",
     "eval:purchase-decisions": "NODE_ENV=test node ../../scripts/test-services.ts -- vitest run --project live-eval src/server/purchase-import/purchase-decision-eval.live-eval.ts",
+    "eval:purchase-mail": "NODE_ENV=test node ../../scripts/test-services.ts -- vitest run --project live-eval src/server/purchase-import/purchase-mail-research.live-eval.ts",
     "test:e2e:affected": "pnpm build:cf --ensure && pnpm test:e2e --only-changed=origin/main",
     "test:e2e:watch": "tsx tooling/build-cf.ts --ensure && NODE_ENV=test node ../../scripts/test-services.ts --warm -- concurrently -k -n build,test \"pnpm run build:cf:watch\" \"playwright test --ui\"",
     "test:e2e:ci:desktop": "NODE_ENV=test node ../../scripts/test-services.ts -- playwright test --project='Unauthenticated tests' --project='Authenticated tests'",

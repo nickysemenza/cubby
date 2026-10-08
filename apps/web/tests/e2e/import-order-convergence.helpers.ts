@@ -134,7 +134,10 @@ export async function createConvergenceHarness(
     return productCode;
   };
 
-  const gmail = () => ingestGmailEvidence(db, member!.id, names);
+  let researchMail: Awaited<ReturnType<typeof ingestGmailEvidence>> | undefined;
+  const gmail = async () => {
+    researchMail = await ingestGmailEvidence(db, member!.id, names);
+  };
 
   async function retailer() {
     // Source-order permutations enter at the importer; input-first journeys
@@ -394,6 +397,8 @@ export async function createConvergenceHarness(
       );
     if (!purchase || !transaction)
       throw new Error("Imported settlement evidence missing");
+    if (!researchMail) throw new Error("Retained mail research missing");
+    await researchMail(purchase.shortcode);
     await gotoAuthenticatedPage(page, `/vendors/${vendor.id}`);
     const mail = page
       .locator("#order-mail")

@@ -42,17 +42,23 @@ import {
 } from "~/server/db/schema";
 import { logAuditEntries } from "~/server/repo/audit-log";
 import { notDeleted, withTransaction } from "~/server/repo/database-helpers";
+import { databaseForTransaction } from "~/server/repo/database-helpers";
+import { runAfterCommit } from "~/server/repo/database-helpers/core";
 import { validateExpenseInheritance } from "~/server/repo/expense-inheritance";
 import { validateProductPolicy } from "~/server/repo/inheritance-validation";
 import { cents } from "~/server/repo/money";
 import { cascadeRemoval } from "~/server/repo/removal/core";
 import { insertWithShortcode } from "~/server/repo/shortcode-utils";
+import { recomputeRecipesForPriceAffectedProducts } from "~/server/services/expense-pricing.service";
+import type { RecipeCostingService } from "~/server/services/recipe-costing.service";
 
 import {
   aggregateReplacementApprovalFingerprint,
   loadAggregateReplacementSnapshot,
   redistributeReplacementAttributions,
 } from "./aggregate-replacement";
+import { applyPurchaseValidationFinding } from "./purchase-validation-research";
+import { applyResearchFieldCorrection } from "./research-field-corrections";
 import {
   existingExpenses,
   resolveLineProduct,
@@ -136,10 +142,12 @@ const assertFixTargetsFinding = (
   fix: ProposedImportFix,
 ) => {
   const targetMatches =
-    fix.kind === "relink_product"
-      ? finding.entityKind === "expense" && finding.entityId === fix.expenseId
-      : finding.entityKind === "purchase" &&
-        finding.entityId === fix.purchaseId;
+    fix.kind === "research_field_correction"
+      ? finding.entityKind === "product" && finding.entityId === fix.productId
+      : fix.kind === "relink_product"
+        ? finding.entityKind === "expense" && finding.entityId === fix.expenseId
+        : finding.entityKind === "purchase" &&
+          finding.entityId === fix.purchaseId;
   if (!targetMatches) {
     throw new Error(
       "The proposed fix no longer targets the finding's original record.",
@@ -197,7 +205,10 @@ const assertRunProvenance = async (
 
 async function applyFix(
   tx: DrizzleTransaction,
-  fix: ProposedImportFix,
+  fix: Exclude<
+    ProposedImportFix,
+    { kind: "validation_corrections" | "research_field_correction" }
+  >,
   actor: ActorContext,
   ledgerPartyId: string,
   runId: (typeof runFinding.$inferSelect)["runId"],
@@ -441,10 +452,31 @@ async function applyAggregateReplacement(
   ]);
 }
 
+/** Owner eligibility stays stable without blocking another Product writer's Finding FK. */
+async function assertFindingOwner(
+  tx: DrizzleTransaction,
+  actor: ActorContext,
+  ownerId: typeof runFinding.$inferSelect.ledgerPartyId,
+) {
+  const [owner] = await tx
+    .select({ id: ledgerParty.id })
+    .from(ledgerParty)
+    .where(
+      and(
+        eq(ledgerParty.id, ownerId),
+        eq(ledgerParty.userId, actor.userId),
+        notDeleted(ledgerParty),
+      ),
+    )
+    .for("share");
+  if (!owner) throw new Error("Import finding owner changed for this member.");
+}
+
 export async function resolveRunFinding(
   db: Database,
   rawInput: ResolveRunFindingInput,
   actor: ActorContext,
+  recipeCosting?: RecipeCostingService,
 ) {
   const input = resolveRunFindingInput.parse(rawInput);
   return withTransaction(db, async (tx) => {
@@ -469,7 +501,7 @@ export async function resolveRunFinding(
       )
       .where(eq(runFinding.id, input.id))
       .limit(1)
-      .for("update");
+      .for("update", { of: runFinding });
     if (!finding) {
       const [hunt] = await tx
         .select({ id: importHunt.id, state: importHunt.state })
@@ -500,6 +532,7 @@ export async function resolveRunFinding(
         status: "dismissed",
       });
     }
+    await assertFindingOwner(tx, actor, finding.ledgerPartyId);
     if (finding.status !== "open") {
       throw new Error("This import finding has already been resolved.");
     }
@@ -514,8 +547,35 @@ export async function resolveRunFinding(
           "Review the current replacement preview before applying it.",
         );
       assertFixTargetsFinding(finding, fix);
-      await assertRunProvenance(tx, finding);
-      await applyFix(tx, fix, actor, finding.ledgerPartyId, finding.runId);
+      if (fix.kind === "research_field_correction") {
+        await applyResearchFieldCorrection(
+          tx,
+          actor,
+          finding,
+          fix,
+          input.reviewedFingerprint,
+        );
+      } else if (fix.kind === "validation_corrections") {
+        const applied = await applyPurchaseValidationFinding(
+          databaseForTransaction(tx),
+          actor,
+          { ...finding, runId: runEntityId.nullable().parse(finding.runId) },
+          fix,
+          input.reviewedFingerprint,
+        );
+        if (recipeCosting)
+          await runAfterCommit(databaseForTransaction(tx), (committedDb) =>
+            recomputeRecipesForPriceAffectedProducts(
+              committedDb,
+              recipeCosting,
+              applied.priceAffectedProductIds,
+              "problems.resolve_validation_finding",
+            ).then(() => undefined),
+          );
+      } else {
+        await assertRunProvenance(tx, finding);
+        await applyFix(tx, fix, actor, finding.ledgerPartyId, finding.runId);
+      }
     }
     const status = input.action === "apply" ? "applied" : "dismissed";
     await tx

@@ -61,6 +61,7 @@ export const orderMailCandidate = z.object({
     "previous_decision",
   ]),
   decision: z.enum(["linked", "dismissed"]).nullable(),
+  evidenceChecksum: z.string().nullable(),
 });
 
 export const orderMailReviewItem = z.object({
@@ -68,8 +69,22 @@ export const orderMailReviewItem = z.object({
   threadId: z.string().nullable(),
   sender: z.string(),
   subject: z.string(),
-  receivedAt: z.iso.datetime(),
+  receivedAt: z.iso.datetime().nullable(),
   ledgerPartyId: ledgerPartyShortcode,
+  researchRun: z
+    .object({
+      id: runShortcode,
+      status: z.string(),
+      sourceStatus: z.string(),
+      evidenceChecksum: z.string(),
+    })
+    .nullable(),
+  associations: z.array(
+    z.object({
+      purchaseId: purchaseShortcode,
+      evidenceChecksum: z.string(),
+    }),
+  ),
   events: z.array(
     z.object({
       id: z.uuid(),
@@ -100,14 +115,14 @@ export const orderMailImportInput = orderMailDecisionInput.pick({
   evidenceChecksum: true,
 });
 export type OrderMailImportInput = z.infer<typeof orderMailImportInput>;
-/** Several saved confirmations of one member and Vendor, imported as one run. */
+/** Related retained sources from one member and connected mailbox. */
 export const orderMailImportSelectedInput = z.object({
   orders: z.array(orderMailImportInput).min(1).max(50),
 });
 export type OrderMailImportSelectedInput = z.infer<
   typeof orderMailImportSelectedInput
 >;
-export const orderMailImportOut = z.object({ runId: runShortcode });
+export const orderMailImportOut = z.object({ runIds: z.array(runShortcode) });
 
 export const purchaseOrderMailInput = z.object({
   purchaseId: purchaseShortcode,

@@ -7,8 +7,7 @@ import { AuditLogList } from "~/features/audit-log/audit-log-list";
 
 /**
  * A Run detail slot that is nothing but its server-composed report (`run.<id>` in
- * `reportSlots`): progress, approvals, findings, transcript, log, AI usage. (Targets keep their
- * web fill for the corrections review; changes keep the audit list's field diffs.) The record's status
+ * `reportSlots`): progress, targets, approvals, findings, transcript, log, AI usage. Changes keep the audit list's field diffs. The record's status
  * rides along so the page refreshes the Run when the report read a newer one.
  */
 const runReport =
@@ -25,6 +24,7 @@ export const runReportSlots = {
   "import-purchases": runReport("run.import-purchases"),
   "import-approvals": runReport("run.import-approvals"),
   "import-findings": runReport("run.import-findings"),
+  "import-targets": runReport("run.import-targets"),
   "import-evidence": runReport("run.import-evidence"),
   "import-prepared-orders": runReport("run.import-prepared-orders"),
   "import-timeline": runReport("run.import-timeline"),

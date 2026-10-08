@@ -6,13 +6,13 @@ import { describe, expect, it } from "vitest";
 
 import {
   entityExternalId,
+  externalSource,
   expense,
   product,
   productMatchCandidate,
   purchase,
 } from "~/server/db/schema";
 import { getDb, withTransaction } from "~/server/repo/database-helpers";
-import { ensureExternalSources } from "~/server/repo/entity-external-ids";
 import {
   createProductFixture,
   makeProductInput,
@@ -63,7 +63,11 @@ describe("purchase import identifier collisions", () => {
       ctx.actor,
     );
     await withTransaction(ctx.db, async (tx) => {
-      await ensureExternalSources(tx, ["amazon"]);
+      await tx.insert(externalSource).values({
+        slug: "amazon",
+        label: "Example registered catalog",
+        vendorId: vendor.id,
+      });
       await tx.insert(entityExternalId).values({
         entityId: owner.entityId,
         entityKind: "product" as const,

@@ -3,6 +3,16 @@ import { TZDate } from "@date-fns/tz";
 
 export { HOUSEHOLD_TIMEZONE };
 
+/** Known calendar days sort newest first; an unknown day has no dated position. */
+export function comparePlainDatesDescending(
+  left: string | null,
+  right: string | null,
+): number {
+  if (left === null) return right === null ? 0 : 1;
+  if (right === null) return -1;
+  return right.localeCompare(left);
+}
+
 /*
  * The one home for calendar days. Two kinds of value meet here:
  *

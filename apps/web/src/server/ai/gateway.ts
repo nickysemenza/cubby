@@ -11,6 +11,7 @@ import {
 import {
   type GatewayControls,
   type GatewayFetchRequest,
+  type GatewayFetchRoutes,
   gatewayControlHeaders,
   gatewayFetchThrough,
   gatewayProviderUrl,
@@ -42,8 +43,12 @@ const GATEWAY_MIN_CACHE_TTL_SECONDS = 60;
 const GATEWAY_MAX_CACHE_TTL_SECONDS = 30 * 24 * 60 * 60;
 
 /** Per-call gateway controls; `metadata` is what the dashboard filters on. */
-export interface GatewayCallOptions extends GatewayResponseObservers {
+export interface GatewayCallOptions
+  extends
+    GatewayResponseObservers,
+    Pick<GatewayFetchRoutes, "subscriptionRequired" | "beforePaidRequest"> {
   metadata: GatewayMetadata;
+  collectPayload?: boolean;
   skipCache?: boolean;
   /**
    * Cache this call's response for this many seconds (gateway bounds:
@@ -174,6 +179,7 @@ export function gatewayFetch(
     cacheTtl: validatedCacheTtlSeconds(opts.cacheTtlSeconds),
     metadata: outboundMetadata(opts.metadata),
     requestTimeoutMs: opts.requestTimeoutMs,
+    collectPayload: opts.collectPayload,
   };
   return gatewayFetchThrough({
     provider,
@@ -182,6 +188,8 @@ export function gatewayFetch(
     onTransport: opts.onTransport,
     requestTimeoutMs: opts.requestTimeoutMs,
     chatGpt: chatGptInference,
+    subscriptionRequired: opts.subscriptionRequired,
+    beforePaidRequest: opts.beforePaidRequest,
     testPeer: () => {
       const testGateway = getTestAiGateway();
       if (!testGateway) return undefined;

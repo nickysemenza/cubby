@@ -25,9 +25,12 @@ import {
   importHunt,
   importPreparedOrder,
   importSourceClaim,
+  importSourceOrder,
+  importSourceProduct,
   ledgerParty,
   ledgerSourceClaim,
   mailboxCursor,
+  mailboxMessage,
   mealFoodEntry,
   mealRecipe,
   mealRecipePortion,
@@ -45,6 +48,8 @@ import {
   runApproval,
   runControlEvent,
   runEvidence,
+  researchSourceExposure,
+  researchRetention,
   runFinding,
   runOperation,
   runOrderCandidate,
@@ -388,11 +393,7 @@ const mkImportSourceClaim = async (
   values: Partial<
     Pick<
       typeof importSourceClaim.$inferInsert,
-      | "ledgerPartyId"
-      | "vendorAccountId"
-      | "purchaseId"
-      | "firstRunId"
-      | "lastRunId"
+      "ledgerPartyId" | "vendorAccountId" | "firstRunId" | "lastRunId"
     >
   > = {},
 ) => {
@@ -401,13 +402,11 @@ const mkImportSourceClaim = async (
   return insertAndReturn(db, importSourceClaim, {
     ledgerPartyId: party,
     vendorAccountId: values.vendorAccountId,
-    purchaseId: values.purchaseId,
     kind: "browser_order",
     externalKey: uniq("source"),
     checksum: uniq("checksum"),
     firstRunId: values.firstRunId ?? run.id,
     lastRunId: values.lastRunId ?? run.id,
-    outputFingerprint: uniq("output"),
   });
 };
 
@@ -450,6 +449,7 @@ const mkOrderMail = async (
   return insertAndReturn(db, orderMail, {
     ledgerPartyId: party,
     vendorId: values.vendorId,
+    mailboxId: uniq("mailbox"),
     messageId: uniq("message"),
     sender: "orders@example.test",
     subject: "Liveness fixture order",
@@ -683,7 +683,59 @@ const SOURCE_FACTORIES = {
   "MailboxCursor.ledgerPartyId": (db, targetId) =>
     insertAndReturn(db, mailboxCursor, {
       ledgerPartyId: parseEntityId("ledgerParty", targetId),
+      mailboxId: uniq("mailbox"),
     }),
+
+  "MailboxMessage.ledgerPartyId": (db, targetId) =>
+    insertAndReturn(db, mailboxMessage, {
+      ledgerPartyId: parseEntityId("ledgerParty", targetId),
+      mailboxId: uniq("mailbox"),
+      messageId: uniq("message"),
+      checksum: uniq("checksum"),
+      classification: "related",
+      classificationVersion: "synthetic-v1",
+      status: "pending",
+    }),
+
+  "ResearchSourceExposure.ledgerPartyId": async (db, targetId) => {
+    const partyId = parseEntityId("ledgerParty", targetId);
+    const scope = await mkRun(db, { ledgerPartyId: partyId });
+    return insertAndReturn(db, researchSourceExposure, {
+      runId: scope.id,
+      ledgerPartyId: partyId,
+      orderMailId: crypto.randomUUID(),
+      checksum: uniq("synthetic-exposure-checksum"),
+    });
+  },
+
+  "ResearchRetention.ledgerPartyId": async (db, targetId) => {
+    const partyId = parseEntityId("ledgerParty", targetId);
+    const scope = await mkRun(db, { ledgerPartyId: partyId });
+    const work = await mkRunTarget(db, {
+      runId: scope.id,
+      entityId: scope.id,
+      entityKind: "run",
+    });
+    return insertAndReturn(db, researchRetention, {
+      id: crypto.randomUUID(),
+      runId: scope.id,
+      workRef: work.id,
+      ledgerPartyId: partyId,
+      orderMailId: crypto.randomUUID(),
+      mailboxId: uniq("synthetic-mailbox"),
+      messageId: uniq("synthetic-message"),
+      checksum: uniq("synthetic-retention-checksum"),
+      phase: "completed",
+      completedAt: new Date(),
+      plan: {
+        originOperationId: uniq("synthetic-retention-operation"),
+        objectKeys: [],
+        screenshotRefs: [],
+        retiredRunIds: [scope.id],
+        successors: [],
+      },
+    });
+  },
 
   "OrderMail.ledgerPartyId": (db, targetId) =>
     mkOrderMail(db, {
@@ -725,10 +777,16 @@ const SOURCE_FACTORIES = {
   "OrderMail.vendorId": (db, targetId) =>
     mkOrderMail(db, { vendorId: parseEntityId("vendor", targetId) }),
 
-  "ImportSourceClaim.purchaseId": (db, targetId) =>
-    mkImportSourceClaim(db, {
+  "ImportSourceOrder.purchaseId": async (db, targetId) => {
+    const claim = await mkImportSourceClaim(db);
+    return insertAndReturn(db, importSourceOrder, {
+      sourceClaimId: claim.id,
       purchaseId: parseEntityId("purchase", targetId),
-    }),
+      orderKey: uniq("source-order"),
+      checksum: claim.checksum,
+      outputFingerprint: uniq("output"),
+    });
+  },
 
   "PurchasePaymentEvidence.purchaseId": async (db, targetId) => {
     const claim = await mkImportSourceClaim(db);
@@ -1125,6 +1183,22 @@ const SOURCE_FACTORIES = {
       date: "2024-01-15",
       productId: parseEntityId("product", targetId),
     }),
+  "ImportSourceProduct.productId": async (db, targetId) => {
+    const claim = await mkImportSourceClaim(db);
+    const ordered = await mkPurchase(db);
+    const sourceOrder = await insertAndReturn(db, importSourceOrder, {
+      sourceClaimId: claim.id,
+      purchaseId: parseEntityId("purchase", ordered.id),
+      orderKey: uniq("original-order"),
+      checksum: claim.checksum,
+      outputFingerprint: uniq("original-output"),
+    });
+    return insertAndReturn(db, importSourceProduct, {
+      sourceOrderId: sourceOrder.id,
+      lineIndex: 0,
+      productId: parseEntityId("product", targetId),
+    });
+  },
 
   "Task.subjectProductId": (db, targetId) =>
     insertWithShortcode(db, "task", {
@@ -1563,6 +1637,20 @@ const SOURCE_FACTORIES = {
       kind: "liveness-fixture",
       inputFingerprint: uniq("input-fingerprint"),
     }),
+
+  "MailboxMessage.runId": async (db, targetId) => {
+    const party = await mkLedgerParty(db);
+    return insertAndReturn(db, mailboxMessage, {
+      ledgerPartyId: party.id,
+      runId: parseEntityId("run", targetId),
+      mailboxId: uniq("mailbox"),
+      messageId: uniq("message"),
+      checksum: uniq("checksum"),
+      classification: "related",
+      classificationVersion: "synthetic-v1",
+      status: "researching",
+    });
+  },
 
   "RunProgress.runId": (db, targetId) =>
     insertAndReturn(db, runProgress, {

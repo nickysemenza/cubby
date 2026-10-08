@@ -1,0 +1,656 @@
+import { parseEntityId } from "@cubby/schemas/identifiers";
+import type { PurchaseAgentEvent } from "@cubby/schemas/purchase-import";
+import { researchWorkResolve } from "@cubby/schemas/research-tools";
+import { fromPartial } from "@total-typescript/shoehorn";
+import { eq } from "drizzle-orm";
+import { withTestDb } from "tooling/test-setup";
+import { describe, expect, it } from "vitest";
+import { z } from "zod";
+
+import { runContract } from "~/contracts/run.contract";
+import {
+  mailboxMessage,
+  orderMail,
+  run,
+  runEvidence,
+  runOperation,
+  runTarget,
+} from "~/server/db/schema";
+import { getDb } from "~/server/repo/database-helpers";
+import { insertWithShortcode } from "~/server/repo/shortcode-utils";
+
+import { resolveImportResearch } from "./research-import";
+import { startMailResearch } from "./research-run";
+import { researchServiceFor } from "./research-service";
+import { loadRunDetail, loadRunLog } from "./run-service";
+
+// System boundaries: no Mac/known vendor prerequisite, automatic task-bound
+// source retention, completion with unresolved work never claiming success,
+// and legacy conversations never executing new tools or replaying old results.
+describe("research host lifecycle", () => {
+  const ctx = withTestDb();
+  async function admitted(messageCount = 1) {
+    const party = await insertWithShortcode(ctx.db, "ledgerParty", {
+      name: "Example cloud research member",
+      kind: "member",
+      userId: ctx.actor.userId,
+    });
+    const [mail] = await getDb(ctx.db)
+      .insert(orderMail)
+      .values({
+        ledgerPartyId: party.id,
+        mailboxId: "synthetic-cloud-mailbox",
+        messageId: "synthetic-cloud-message",
+        sender: "orders@unknown-shop.example",
+        subject: "Example receipt",
+        rawChecksum: "a".repeat(64),
+        receivedAt: new Date("2026-09-01T12:00:00Z"),
+        content: {
+          snippet: null,
+          bodyText: "Order EXAMPLE-100: one small device, total $24",
+          bodyHtml: null,
+        },
+      })
+      .returning();
+    if (!mail) throw new Error("Synthetic receipt missing");
+    await getDb(ctx.db).insert(mailboxMessage).values({
+      ledgerPartyId: party.id,
+      mailboxId: mail.mailboxId,
+      messageId: mail.messageId,
+      checksum: mail.rawChecksum,
+      classification: "related",
+      classificationVersion: "synthetic-v1",
+      status: "pending",
+      orderMailId: mail.id,
+    });
+    const messageIds = [mail.id];
+    for (let index = 1; index < messageCount; index++) {
+      const [other] = await getDb(ctx.db)
+        .insert(orderMail)
+        .values({
+          ...mail,
+          id: crypto.randomUUID(),
+          messageId: `synthetic-cloud-message-${index}`,
+        })
+        .returning();
+      if (!other) throw new Error("Synthetic selected receipt missing");
+      await getDb(ctx.db).insert(mailboxMessage).values({
+        ledgerPartyId: party.id,
+        mailboxId: other.mailboxId,
+        messageId: other.messageId,
+        checksum: other.rawChecksum,
+        classification: "related",
+        classificationVersion: "synthetic-v1",
+        status: "pending",
+        orderMailId: other.id,
+      });
+      messageIds.push(other.id);
+    }
+    const [started] = await startMailResearch(
+      ctx.db,
+      {
+        ledgerPartyId: party.id,
+        userId: ctx.actor.userId,
+        mailboxId: mail.mailboxId,
+        messageIds,
+      },
+      { send: async () => {} },
+    );
+    if (!started) throw new Error("Synthetic Run missing");
+    const bytes = new Map<string, Uint8Array>();
+    const queued: PurchaseAgentEvent[] = [];
+    const services = researchServiceFor(
+      ctx.db,
+      fromPartial<Env>({ R2_KEY_PREFIX: "synthetic/research" }),
+      started.runId,
+      {
+        queue: {
+          send: async (event: PurchaseAgentEvent) => {
+            queued.push(event);
+          },
+        },
+        observations: {
+          keyPrefix: "synthetic/research",
+          storage: {
+            put: async (key, data) => {
+              bytes.set(key, data);
+            },
+            get: async (key) => {
+              const data = bytes.get(key);
+              if (!data) throw new Error("Synthetic retained bytes missing");
+              return new TextDecoder().decode(data);
+            },
+          },
+        },
+      },
+    );
+    return { party, mail, started, services, bytes, queued };
+  }
+  it.each([
+    "missing inputs",
+    "legacy mail",
+    "legacy backfill",
+    "legacy charges",
+  ])("fences %s before empty work can be reported completed", async (kind) => {
+    const f = await admitted();
+    const input =
+      kind === "legacy mail"
+        ? {
+            kind: "order_mail_import" as const,
+            eventId: f.mail.id,
+            evidenceChecksum: f.mail.rawChecksum,
+            orderId: "EXAMPLE-100",
+          }
+        : kind === "legacy backfill"
+          ? {
+              kind: "order_backfill" as const,
+              from: "2025-01-01",
+              to: "2025-12-31",
+            }
+          : kind === "legacy charges"
+            ? { kind: "charge_hunts" as const, huntIds: [crypto.randomUUID()] }
+            : null;
+    await getDb(ctx.db)
+      .update(run)
+      .set({
+        input,
+        purpose:
+          kind === "missing inputs" ? "product_enrichment" : "account_sync",
+      })
+      .where(eq(run.id, parseEntityId("run", f.started.runId)));
+    await getDb(ctx.db)
+      .delete(runTarget)
+      .where(eq(runTarget.runId, f.started.runId));
+    const [before] = await getDb(ctx.db)
+      .select()
+      .from(run)
+      .where(eq(run.id, parseEntityId("run", f.started.runId)));
+    await expect(
+      f.services.researchNext({}, crypto.randomUUID()),
+    ).rejects.toThrow(/legacy.*fresh|requires.*new research/u);
+    expect(
+      await getDb(ctx.db)
+        .select()
+        .from(run)
+        .where(eq(run.id, parseEntityId("run", f.started.runId))),
+    ).toEqual([before]);
+    expect(
+      await getDb(ctx.db)
+        .select()
+        .from(runOperation)
+        .where(eq(runOperation.runId, f.started.runId)),
+    ).toEqual([]);
+    expect(f.queued).toEqual([]);
+  });
+  it("fences a legacy conversation before replaying a cached research response", async () => {
+    const f = await admitted();
+    const callId = crypto.randomUUID();
+    expect(await f.services.researchNext({}, callId)).toMatchObject({
+      status: "working",
+    });
+    await getDb(ctx.db)
+      .update(run)
+      .set({ input: null })
+      .where(eq(run.id, parseEntityId("run", f.started.runId)));
+    await expect(f.services.researchNext({}, callId)).rejects.toThrow(
+      /legacy.*fresh|requires.*new research/u,
+    );
+    const [header] = await getDb(ctx.db)
+      .select()
+      .from(run)
+      .where(eq(run.id, parseEntityId("run", f.started.runId)));
+    expect(header?.status).toBe("running");
+    expect(header?.input).toBeNull();
+  });
+  it("refuses current inputs whose task admission is missing instead of reporting success", async () => {
+    const f = await admitted();
+    await getDb(ctx.db)
+      .delete(runTarget)
+      .where(eq(runTarget.runId, f.started.runId));
+    await expect(
+      f.services.researchNext({}, crypto.randomUUID()),
+    ).rejects.toThrow(/admission.*incomplete/u);
+    const [header] = await getDb(ctx.db)
+      .select()
+      .from(run)
+      .where(eq(run.id, parseEntityId("run", f.started.runId)));
+    expect(header?.status).toBe("running");
+    expect(header?.endedAt).toBeNull();
+  });
+  it("automatically researches supported imported Products after settlement and replays without duplicate child work", async () => {
+    const f = await admitted();
+    const [target] = await getDb(ctx.db)
+      .select()
+      .from(runTarget)
+      .where(eq(runTarget.runId, f.started.runId));
+    if (!target) throw new Error("Synthetic work missing");
+    const observed = z
+      .object({ evidenceId: z.uuid() })
+      .parse(
+        await f.services.researchMailRead(
+          { workRef: target.id, messageRef: f.mail.id },
+          crypto.randomUUID(),
+        ),
+      );
+    const proposal = researchWorkResolve.parse({
+      workRef: target.id,
+      status: "verified",
+      identity: {
+        evidenceIds: [observed.evidenceId],
+        reasoning: "The original identifies the purchased small device.",
+      },
+      orders: [
+        {
+          vendor: { name: "Example device seller" },
+          sourceRefs: [observed.evidenceId],
+          reasoning: "The original receipt gives this item and total.",
+          candidate: {
+            orderId: "EXAMPLE-100",
+            orderedAt: "2026-09-01T12:00:00Z",
+            merchant: "Example device seller",
+            currency: "USD",
+            printedGrandTotal: 24,
+            lines: [
+              {
+                title: "Small device",
+                amount: 24,
+                quantity: 1,
+                lineKind: "principal",
+              },
+            ],
+            payments: [],
+            allShipmentsDelivered: false,
+          },
+          productResolutions: [{ kind: "new", lineIndex: 0 }],
+          defaultTrade: "other",
+        },
+      ],
+      detail:
+        "Imported the supported purchased item; catalog verification remains open.",
+    });
+    const resolutionCall = crypto.randomUUID();
+    const imported = await resolveImportResearch(
+      ctx.db,
+      {
+        runId: f.started.runId,
+        workRef: target.id,
+        callId: resolutionCall,
+        proposal,
+      },
+      {
+        readEvidence: async (row) => {
+          const data = f.bytes.get(row.objectKey);
+          if (!data) throw new Error("Synthetic source bytes missing");
+          return new TextDecoder().decode(data);
+        },
+        assess: async () => ({
+          identityVerified: true,
+          acceptedFacts: [],
+          acceptedIdentifiers: [],
+          acceptedIdentifierClaims: [],
+          acceptedImages: [],
+          acceptedOrders: [0],
+          acceptedEmailLinks: [],
+          rejected: [],
+        }),
+      },
+    );
+    expect(imported.productIds).toHaveLength(1);
+    const finished = await f.services.researchResolve(proposal, resolutionCall);
+    expect(finished).toMatchObject({
+      status: "done",
+      summary: { verified: 1 },
+    });
+    expect(f.queued).toHaveLength(1);
+    const [child] = await getDb(ctx.db)
+      .select()
+      .from(run)
+      .where(eq(run.parentRunId, parseEntityId("run", f.started.runId)));
+    expect(child).toMatchObject({
+      purpose: "product_enrichment",
+      cause: "import_completed",
+      status: "running",
+    });
+    if (!child) throw new Error("Synthetic Product research child missing");
+    expect(
+      await researchServiceFor(
+        ctx.db,
+        fromPartial<Env>({}),
+        child.id,
+      ).researchNext({}, crypto.randomUUID()),
+    ).toMatchObject({
+      status: "working",
+      work: {
+        kind: "product",
+        product: { ingredientId: null, growsPlantId: null },
+      },
+    });
+    expect(await f.services.researchResolve(proposal, resolutionCall)).toEqual(
+      finished,
+    );
+    expect(f.queued).toHaveLength(1);
+  });
+  it("automatically retains mail observations under the explicit work without browser admission", async () => {
+    const f = await admitted();
+    const work = await f.services.researchNext({}, crypto.randomUUID());
+    expect(work).toMatchObject({
+      status: "working",
+      work: { kind: "mail", sources: [{ messageRef: f.mail.id }] },
+    });
+    const [target] = await getDb(ctx.db)
+      .select()
+      .from(runTarget)
+      .where(eq(runTarget.runId, f.started.runId));
+    if (!target) throw new Error("Explicit work missing");
+    const callId = crypto.randomUUID();
+    const observation = await f.services.researchMailRead(
+      { workRef: target.id, messageRef: f.mail.id },
+      callId,
+    );
+    expect(
+      await f.services.researchMailRead(
+        { workRef: target.id, messageRef: f.mail.id },
+        callId,
+      ),
+    ).toEqual(observation);
+    const rows = await getDb(ctx.db)
+      .select()
+      .from(runEvidence)
+      .where(eq(runEvidence.runId, f.started.runId));
+    expect(rows).toHaveLength(1);
+    expect(rows[0]).toMatchObject({
+      targetId: target.id,
+      kind: "mail_message",
+      sourceMetadata: { orderMailId: f.mail.id, checksum: f.mail.rawChecksum },
+    });
+    expect(f.bytes.size).toBe(1);
+  });
+
+  it("uses bounded source-search transport while retaining task ownership without a Cloudflare AI binding", async () => {
+    const f = await admitted();
+    const [target] = await getDb(ctx.db)
+      .select()
+      .from(runTarget)
+      .where(eq(runTarget.runId, f.started.runId));
+    if (!target) throw new Error("Synthetic research target missing");
+    const service = researchServiceFor(
+      ctx.db,
+      fromPartial<Env>({}),
+      f.started.runId,
+      {
+        observations: {
+          search: async () =>
+            Response.json({
+              items: [
+                {
+                  url: "https://maker.example.test/small-device",
+                  title: "Small device",
+                  description: "Synthetic catalog source for investigation",
+                },
+              ],
+            }),
+        },
+      },
+    );
+    expect(
+      await service.researchWebSearch(
+        { workRef: target.id, query: "Small device exact model" },
+        crypto.randomUUID(),
+      ),
+    ).toMatchObject({
+      results: [
+        {
+          url: "https://maker.example.test/small-device",
+          title: "Small device",
+        },
+      ],
+    });
+  });
+  it("exposes mail work through the shared Run contract while hiding private provider scope and continuation state", async () => {
+    const f = await admitted();
+    const [header] = await getDb(ctx.db)
+      .select()
+      .from(run)
+      .where(eq(run.id, parseEntityId("run", f.started.runId)));
+    if (!header) throw new Error("Synthetic Run missing");
+    await getDb(ctx.db)
+      .insert(runOperation)
+      .values(
+        ["scope", "choice", "page", "continuation"].map((kind) => ({
+          runId: header.id,
+          operationId: `synthetic-private-${kind}`,
+          kind: `research_mail_${kind}`,
+          inputFingerprint: "b".repeat(64),
+          state: "completed" as const,
+          result: {
+            pageToken: "synthetic-provider-continuation",
+            accountRef: "synthetic-private-account",
+          },
+        })),
+      );
+    const detail = runContract.ops.work.output.parse(
+      await loadRunDetail(ctx.db, header.shortcode),
+    );
+    expect(detail.targets).toMatchObject([
+      { targetType: "run", state: "pending" },
+    ]);
+    expect(detail.operations).toEqual([]);
+    const logs = await loadRunLog(ctx.db, header.shortcode);
+    expect(
+      logs.entries.map((entry) => entry.operationKind).filter(Boolean),
+    ).toEqual([]);
+    expect(JSON.stringify({ detail, logs })).not.toContain(
+      "synthetic-provider-continuation",
+    );
+  });
+  it.each([
+    { outcome: "ambiguous", gapCount: 0 },
+    { outcome: "researched_with_gaps", gapCount: 1 },
+  ] as const)(
+    "automatically ends execution with unresolved $outcome accounting and no finish call",
+    async ({ outcome, gapCount }) => {
+      const f = await admitted();
+      await getDb(ctx.db)
+        .update(runTarget)
+        .set({
+          state: "unresolved",
+          outcome,
+          warning: "Research remains unresolved with no supported writes.",
+        })
+        .where(eq(runTarget.runId, f.started.runId));
+      expect(
+        await f.services.researchNext({}, crypto.randomUUID()),
+      ).toMatchObject({
+        status: "done",
+        summary: {
+          verified: 0,
+          partiallyVerified: 0,
+          researchedWithGaps: gapCount,
+          unresolved: 1,
+        },
+      });
+      const [saved] = await getDb(ctx.db)
+        .select()
+        .from(run)
+        .where(eq(run.id, parseEntityId("run", f.started.runId)));
+      expect(saved?.status).toBe("needs_review");
+      expect(saved?.endedAt).toBeInstanceOf(Date);
+    },
+  );
+  it("continues every selected mail after ambiguity and finishes with review accounting only after the last task", async () => {
+    const f = await admitted(2);
+    const targets = await getDb(ctx.db)
+      .select()
+      .from(runTarget)
+      .where(eq(runTarget.runId, f.started.runId))
+      .orderBy(runTarget.position);
+    expect(targets).toHaveLength(2);
+    const first = z
+      .object({
+        status: z.literal("working"),
+        work: z.object({ workRef: z.uuid() }),
+      })
+      .parse(await f.services.researchNext({}, crypto.randomUUID()));
+    expect(targets.map((target) => target.id)).toContain(first.work.workRef);
+    const second = targets.find((target) => target.id !== first.work.workRef);
+    if (!second) throw new Error("Synthetic second selected task missing");
+    const resolveAmbiguous = async (workRef: string) => {
+      const callId = crypto.randomUUID();
+      const proposal = {
+        workRef,
+        status: "ambiguous" as const,
+        identity: {
+          evidenceIds: [],
+          reasoning: "Two plausible order identities remain unresolved.",
+        },
+        detail: "Related purchase mail needs more identity evidence.",
+      };
+      await resolveImportResearch(
+        ctx.db,
+        { runId: f.started.runId, workRef, callId, proposal },
+        {
+          assess: async () => ({
+            identityVerified: false,
+            acceptedFacts: [],
+            acceptedIdentifiers: [],
+            acceptedImages: [],
+            acceptedOrders: [],
+            acceptedEmailLinks: [],
+            rejected: [],
+          }),
+        },
+      );
+      return f.services.researchResolve(proposal, callId);
+    };
+    expect(await resolveAmbiguous(first.work.workRef)).toMatchObject({
+      status: "working",
+      work: { workRef: second.id },
+    });
+    const [running] = await getDb(ctx.db)
+      .select()
+      .from(run)
+      .where(eq(run.id, parseEntityId("run", f.started.runId)));
+    expect(running?.status).toBe("running");
+    expect(running?.endedAt).toBeNull();
+    expect(await resolveAmbiguous(second.id)).toMatchObject({
+      status: "done",
+      summary: { verified: 0, unresolved: 2 },
+    });
+    const [saved] = await getDb(ctx.db)
+      .select()
+      .from(run)
+      .where(eq(run.id, parseEntityId("run", f.started.runId)));
+    expect(saved?.status).toBe("needs_review");
+    expect(saved?.endedAt).toBeInstanceOf(Date);
+    expect(
+      await getDb(ctx.db)
+        .select({ state: runTarget.state, outcome: runTarget.outcome })
+        .from(runTarget)
+        .where(eq(runTarget.runId, f.started.runId)),
+    ).toEqual([
+      { state: "unresolved", outcome: "ambiguous" },
+      { state: "unresolved", outcome: "ambiguous" },
+    ]);
+  });
+
+  it("replays a committed resolution through the host after its target settled", async () => {
+    const f = await admitted();
+    const [target] = await getDb(ctx.db)
+      .select()
+      .from(runTarget)
+      .where(eq(runTarget.runId, f.started.runId));
+    if (!target) throw new Error("Synthetic work missing");
+    const callId = crypto.randomUUID();
+    const proposal = {
+      workRef: target.id,
+      status: "no_source_found" as const,
+      identity: {
+        evidenceIds: [],
+        reasoning: "No supported matching receipt was found.",
+      },
+      detail: "The bounded investigation did not establish a purchase.",
+    };
+    const result = await resolveImportResearch(
+      ctx.db,
+      { runId: f.started.runId, workRef: target.id, callId, proposal },
+      {
+        assess: async () => ({
+          identityVerified: false,
+          acceptedFacts: [],
+          acceptedIdentifiers: [],
+          acceptedIdentifierClaims: [],
+          acceptedImages: [],
+          acceptedOrders: [],
+          acceptedEmailLinks: [],
+          rejected: [],
+        }),
+      },
+    );
+    expect(await f.services.researchResolve(proposal, callId)).toMatchObject({
+      status: "done",
+      resolution: result,
+    });
+  });
+  it("retains another Run's mail only as context without stealing its write ownership", async () => {
+    const f = await admitted();
+    const prior = await insertWithShortcode(ctx.db, "run", {
+      ledgerPartyId: f.party.id,
+      purpose: "mail_import",
+      trigger: "manual",
+      status: "running",
+      actorUserId: ctx.actor.userId,
+      actorName: f.party.name,
+      actorEmail: "synthetic-context@example.test",
+      actorLedgerPartyShortcode: f.party.shortcode,
+      actorLedgerPartyName: f.party.name,
+      actorLedgerPartyKind: f.party.kind,
+    });
+    const [mail] = await getDb(ctx.db)
+      .insert(orderMail)
+      .values({
+        ledgerPartyId: f.party.id,
+        mailboxId: f.mail.mailboxId,
+        messageId: "synthetic-other-run-message",
+        sender: f.mail.sender,
+        subject: "Related shipping context",
+        receivedAt: f.mail.receivedAt,
+        rawChecksum: "b".repeat(64),
+        content: f.mail.content,
+      })
+      .returning();
+    if (!mail) throw new Error("Synthetic context mail missing");
+    await getDb(ctx.db).insert(mailboxMessage).values({
+      ledgerPartyId: f.party.id,
+      mailboxId: mail.mailboxId,
+      messageId: mail.messageId,
+      checksum: mail.rawChecksum,
+      classification: "related",
+      classificationVersion: "synthetic-v1",
+      status: "researching",
+      orderMailId: mail.id,
+      runId: prior.id,
+    });
+    const [target] = await getDb(ctx.db)
+      .select()
+      .from(runTarget)
+      .where(eq(runTarget.runId, f.started.runId));
+    if (!target) throw new Error("Synthetic work missing");
+    await f.services.researchMailRead(
+      { workRef: target.id, messageRef: mail.id },
+      crypto.randomUUID(),
+    );
+    const [evidence] = await getDb(ctx.db)
+      .select()
+      .from(runEvidence)
+      .where(eq(runEvidence.runId, f.started.runId));
+    expect(evidence?.sourceMetadata).toMatchObject({
+      contextOnly: true,
+      orderMailId: mail.id,
+    });
+    const [message] = await getDb(ctx.db)
+      .select()
+      .from(mailboxMessage)
+      .where(eq(mailboxMessage.orderMailId, mail.id));
+    expect(message?.runId).toBe(prior.id);
+  });
+});

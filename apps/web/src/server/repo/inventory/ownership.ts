@@ -233,7 +233,8 @@ const collectSingleAcquisitions = (args: {
     const purchaseRow = row.purchaseId
       ? args.purchaseById.get(row.purchaseId)
       : undefined;
-    if (purchaseRow && purchaseRow.date > today()) continue;
+    if (purchaseRow && purchaseRow.date !== null && purchaseRow.date > today())
+      continue;
     addAcquisition(acquisitionsByProduct, row.productId, {
       // A removed Purchase no longer supplies a live Product-Purchase
       // relationship, while the Product-linked Expense remains canonical.

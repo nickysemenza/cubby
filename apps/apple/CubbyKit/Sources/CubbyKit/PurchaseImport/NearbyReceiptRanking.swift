@@ -2,12 +2,12 @@ import Foundation
 
 public struct NearbyReceiptSearchContext: Hashable, Sendable {
     public let huntID: String
-    public let transactionDate: Date
+    public let transactionDate: Date?
     public let merchant: String?
     public let amountInCents: Int?
 
     public init(
-        huntID: String, transactionDate: Date, merchant: String? = nil, amountInCents: Int? = nil
+        huntID: String, transactionDate: Date?, merchant: String? = nil, amountInCents: Int? = nil
     ) {
         self.huntID = huntID
         self.transactionDate = transactionDate
@@ -61,10 +61,11 @@ public enum NearbyReceiptRanker {
         _ candidates: [NearbyReceiptCandidateSignals], for context: NearbyReceiptSearchContext,
         calendar: Calendar = .current
     ) -> [NearbyReceiptCandidateScore] {
-        candidates.compactMap { candidate in
+        guard let transactionDate = context.transactionDate else { return [] }
+        return candidates.compactMap { candidate in
             guard
                 let days = calendar.dateComponents(
-                    [.day], from: calendar.startOfDay(for: context.transactionDate),
+                    [.day], from: calendar.startOfDay(for: transactionDate),
                     to: calendar.startOfDay(for: candidate.capturedAt)
                 ).day, abs(days) <= searchWindowDays
             else { return nil }

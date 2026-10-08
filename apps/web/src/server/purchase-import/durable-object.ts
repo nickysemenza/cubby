@@ -4,12 +4,19 @@ import type {
 } from "@cloudflare/workers-types";
 import {
   BROWSER_BRIDGE_PROTOCOL,
+  type browserBridgeClientMessage,
   purchaseAgentEvent,
   type BrowserBridgeRequest,
 } from "@cubby/schemas/purchase-import";
 import { createLogger } from "@cubby/worker-tracing";
 import { DurableObject } from "cloudflare:workers";
 import { z } from "zod";
+
+import {
+  assertNotInMaintenance,
+  isMaintenanceMode,
+  maintenanceResponse,
+} from "~/server/maintenance";
 
 import {
   bridgeServerMessage,
@@ -25,12 +32,14 @@ declare const WebSocketPair: {
   new (): { 0: WebSocket; 1: CfWebSocket };
 };
 
-type SocketAttachment = {
-  protocolVersion: typeof BROWSER_BRIDGE_PROTOCOL;
-  ledgerPartyId: string;
-  vendorAccountId: string;
-  userId: string;
-};
+const socketAttachment = z.object({
+  protocolVersion: z.literal(BROWSER_BRIDGE_PROTOCOL),
+  ledgerPartyId: z.string(),
+  vendorAccountId: z.string(),
+  userId: z.string(),
+  deviceID: z.uuid().toLowerCase().optional(),
+});
+type SocketAttachment = z.infer<typeof socketAttachment>;
 
 export class PurchaseImportDurableObject
   extends DurableObject<Env>
@@ -45,6 +54,7 @@ export class PurchaseImportDurableObject
   }
 
   async fetch(request: Request): Promise<Response> {
+    if (this.closeForMaintenance()) return maintenanceResponse(request);
     if (request.headers.get("upgrade")?.toLowerCase() !== "websocket")
       return new Response("WebSocket upgrade required", { status: 426 });
     const ledgerPartyId = request.headers.get("x-cubby-ledger-party-id");
@@ -74,8 +84,33 @@ export class PurchaseImportDurableObject
   }
 
   async enqueue(command: BrowserBridgeRequest): Promise<void> {
+    this.requireActive();
     const persisted = this.store.enqueue(command);
     this.broadcastNext(persisted.id);
+  }
+
+  async forgetRun(input: {
+    runId: string;
+    receiptId: string;
+  }): Promise<{ forgotten: boolean }> {
+    this.requireActive();
+    const parsed = z
+      .object({
+        runId: z.uuid().toLowerCase(),
+        receiptId: z.uuid().toLowerCase(),
+      })
+      .parse(input);
+    // External member-owned receipt authorizes physical erasure before any
+    // broker lookup. Never initialize the disposed coordinator to authorize it.
+    const { runServicesFor } = await import("./agent-services");
+    await runServicesFor(
+      this.env,
+      this.ctx,
+      parsed.runId,
+    ).authorizeResearchRetirement(parsed.receiptId);
+    const result = this.store.forgetRun(parsed.runId, parsed.receiptId);
+    for (const socket of this.ctx.getWebSockets()) this.sendForgets(socket);
+    return result;
   }
 
   async result(requestId: string): Promise<BrowserBridgeResult | null> {
@@ -83,6 +118,7 @@ export class PurchaseImportDurableObject
   }
 
   async cancel(requestId: string): Promise<void> {
+    this.requireActive();
     this.store.cancel(requestId);
     this.broadcastMessage({
       protocolVersion: BROWSER_BRIDGE_PROTOCOL,
@@ -93,7 +129,10 @@ export class PurchaseImportDurableObject
   }
 
   async connected(): Promise<boolean> {
-    return this.ctx.getWebSockets().length > 0;
+    if (this.closeForMaintenance()) return false;
+    return this.ctx
+      .getWebSockets()
+      .some((socket) => this.attachment(socket)?.deviceID !== undefined);
   }
 
   async pendingCommands(
@@ -103,15 +142,16 @@ export class PurchaseImportDurableObject
   }
 
   async notifyRunCompleted(summary: RunCompletionSummary): Promise<void> {
+    this.requireActive();
+    if (this.store.isRetired(summary.runID)) return;
     this.store.saveRunCompletion(summary);
-    this.broadcastMessage({
-      protocolVersion: BROWSER_BRIDGE_PROTOCOL,
-      type: "run_completed",
-      ...summary,
-    });
+    for (const socket of this.ctx.getWebSockets())
+      this.sendCompletion(socket, summary);
   }
 
   async requestAuthentication(runID: string): Promise<void> {
+    this.requireActive();
+    if (this.store.isRetired(runID)) return;
     this.broadcastMessage({
       protocolVersion: BROWSER_BRIDGE_PROTOCOL,
       type: "raise_auth_window",
@@ -123,6 +163,7 @@ export class PurchaseImportDurableObject
     socket: CfWebSocket,
     message: string | ArrayBuffer,
   ): Promise<void> {
+    if (this.closeForMaintenance()) return;
     const parsed = decodeBrowserBridgeMessage(message);
     if (!parsed.success) {
       log.error("invalid-message", {
@@ -134,22 +175,35 @@ export class PurchaseImportDurableObject
       socket.close(1008, "Invalid or obsolete bridge protocol");
       return;
     }
-    if (parsed.data.type === "hello") {
+    const attachment = this.attachment(socket);
+    if (!attachment) {
+      socket.close(1008, "Authenticated ownership context required");
+      return;
+    }
+    await this.processMessage(socket, parsed.data, attachment);
+  }
+
+  private async processMessage(
+    socket: CfWebSocket,
+    data: z.output<typeof browserBridgeClientMessage>,
+    attachment: SocketAttachment,
+  ): Promise<void> {
+    if (data.type === "hello") {
+      if (attachment.deviceID && attachment.deviceID !== data.deviceID) {
+        socket.close(1008, "Bridge device identity changed");
+        return;
+      }
+      socket.serializeAttachment({
+        ...attachment,
+        deviceID: data.deviceID,
+      } satisfies SocketAttachment);
       for (const other of this.ctx.getWebSockets()) {
         if (other !== socket) other.close(1000, "Replaced by newer connection");
       }
+      this.sendForgets(socket);
       this.sendNext(socket);
-      for (const summary of this.store.pendingRunCompletions()) {
-        socket.send(
-          JSON.stringify(
-            bridgeServerMessage.parse({
-              protocolVersion: BROWSER_BRIDGE_PROTOCOL,
-              type: "run_completed",
-              ...summary,
-            }),
-          ),
-        );
-      }
+      for (const summary of this.store.pendingRunCompletions())
+        this.sendCompletion(socket, summary);
       const pending = this.store.nextReplayable();
       if (pending) {
         await this.publish({
@@ -157,7 +211,7 @@ export class PurchaseImportDurableObject
           type: "browser_connected",
           runId: pending.runID,
           eventId: `browser-connected:${pending.id}`,
-          connectionId: parsed.data.deviceID,
+          connectionId: data.deviceID,
         });
         return;
       }
@@ -170,22 +224,30 @@ export class PurchaseImportDurableObject
           type: "browser_connected",
           runId: wake.runId,
           eventId: `browser-connected:wake:${wake.runId}:${wake.generation}`,
-          connectionId: parsed.data.deviceID,
+          connectionId: data.deviceID,
         });
         this.store.forgetWake(wake.runId, wake.generation);
       }
       return;
     }
-    if (parsed.data.type === "run_completed_ack") {
-      this.store.acknowledgeRunCompletion(parsed.data.runID);
+    if (!attachment.deviceID) {
+      socket.close(1008, "Bridge hello required");
       return;
     }
-    if (parsed.data.type === "result") {
-      const claimed = this.store.claimResult(parsed.data.result);
+    if (data.type === "forget_run_ack") {
+      this.acknowledgeForget(socket, data, attachment.deviceID);
+      return;
+    }
+    if (data.type === "run_completed_ack") {
+      this.store.acknowledgeRunCompletion(data.runID);
+      return;
+    }
+    if (data.type === "result") {
+      const claimed = this.store.claimResult(data.result);
       if (claimed.command && claimed.newlyCompleted) {
-        if (parsed.data.result.outcome.status === "failed")
-          this.store.rememberWake(parsed.data.result.runID);
-        else this.store.forgetWake(parsed.data.result.runID);
+        if (data.result.outcome.status === "failed")
+          this.store.rememberWake(data.result.runID);
+        else this.store.forgetWake(data.result.runID);
       }
       if (claimed.command && claimed.newlyCompleted) {
         // Publish before acknowledgement. If queue publication fails, the Mac
@@ -194,9 +256,9 @@ export class PurchaseImportDurableObject
         await this.publish({
           version: 1,
           type: "browser_result",
-          runId: parsed.data.result.runID,
-          eventId: `browser-result:${parsed.data.result.commandID}`,
-          commandId: parsed.data.result.commandID,
+          runId: data.result.runID,
+          eventId: `browser-result:${data.result.commandID}`,
+          commandId: data.result.commandID,
         });
       }
       socket.send(
@@ -204,11 +266,11 @@ export class PurchaseImportDurableObject
           bridgeServerMessage.parse({
             protocolVersion: BROWSER_BRIDGE_PROTOCOL,
             type: "acknowledge",
-            commandID: parsed.data.result.commandID,
+            commandID: data.result.commandID,
           }),
         ),
       );
-      this.sendNext(socket, parsed.data.result.commandID);
+      this.sendNext(socket, data.result.commandID);
     }
   }
 
@@ -226,12 +288,14 @@ export class PurchaseImportDurableObject
   }
 
   private broadcastNext(expectedId?: string): void {
+    if (this.closeForMaintenance()) return;
     const next = this.store.nextReplayable();
     if (!next || (expectedId && next.id !== expectedId)) return;
     for (const socket of this.ctx.getWebSockets()) this.send(socket, next);
   }
 
   private sendNext(socket: CfWebSocket, justCompletedId?: string): void {
+    if (this.closeForMaintenance()) return;
     const next = this.store.nextReplayable();
     if (!next) return;
     if (next.id === justCompletedId) {
@@ -247,6 +311,10 @@ export class PurchaseImportDurableObject
   }
 
   private send(socket: CfWebSocket, command: BrowserBridgeRequest): void {
+    if (this.closeForMaintenance()) return;
+    const device = this.attachment(socket)?.deviceID;
+    if (!device) return;
+    this.store.recordDelivery(command.id, device);
     socket.send(
       JSON.stringify(
         bridgeServerMessage.parse({
@@ -259,9 +327,76 @@ export class PurchaseImportDurableObject
     this.store.markSent(command.id);
   }
 
+  private closeForMaintenance(): boolean {
+    if (!isMaintenanceMode(this.env)) return false;
+    // No result ACK: the native client retains its bytes for reconnect/replay.
+    for (const socket of this.ctx.getWebSockets())
+      socket.close(1012, "Cubby maintenance; reconnect after cutover");
+    return true;
+  }
+
+  private requireActive(): void {
+    if (this.closeForMaintenance()) assertNotInMaintenance(this.env);
+  }
+
+  private acknowledgeForget(
+    socket: CfWebSocket,
+    message: Extract<
+      z.infer<typeof browserBridgeClientMessage>,
+      { type: "forget_run_ack" }
+    >,
+    deviceID: string,
+  ): void {
+    if (message.deviceID !== deviceID) {
+      socket.close(1008, "Erasure acknowledgement device mismatch");
+      return;
+    }
+    this.store.acknowledgeForget(message.runID, message.retirementID, deviceID);
+  }
+
+  private attachment(socket: CfWebSocket): SocketAttachment | null {
+    const parsed = socketAttachment.safeParse(socket.deserializeAttachment());
+    return parsed.success ? parsed.data : null;
+  }
+
+  private sendForgets(socket: CfWebSocket): void {
+    const device = this.attachment(socket)?.deviceID;
+    if (!device) return;
+    for (const pending of this.store.pendingForgets(device))
+      socket.send(
+        JSON.stringify(
+          bridgeServerMessage.parse({
+            protocolVersion: BROWSER_BRIDGE_PROTOCOL,
+            type: "forget_run",
+            runID: pending.runId,
+            retirementID: pending.receiptId,
+          }),
+        ),
+      );
+  }
+
+  private sendCompletion(
+    socket: CfWebSocket,
+    summary: RunCompletionSummary,
+  ): void {
+    const device = this.attachment(socket)?.deviceID;
+    if (!device || this.store.isRetired(summary.runID)) return;
+    this.store.recordRunDelivery(summary.runID, device);
+    socket.send(
+      JSON.stringify(
+        bridgeServerMessage.parse({
+          protocolVersion: BROWSER_BRIDGE_PROTOCOL,
+          type: "run_completed",
+          ...summary,
+        }),
+      ),
+    );
+  }
+
   private broadcastMessage(message: unknown): void {
     const encoded = JSON.stringify(bridgeServerMessage.parse(message));
-    for (const socket of this.ctx.getWebSockets()) socket.send(encoded);
+    for (const socket of this.ctx.getWebSockets())
+      if (this.attachment(socket)?.deviceID) socket.send(encoded);
   }
 
   private async publish(

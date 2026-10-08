@@ -66,6 +66,7 @@ import {
   expense,
   image,
   inventoryEntry,
+  importSourceProduct,
   location,
   mealFoodEntry,
   photoGroupProposal,
@@ -75,6 +76,7 @@ import {
   productConversionCoverage,
   productUnitMappings,
   runTarget,
+  runFactEvidence,
   task,
 } from "~/server/db/schema";
 import { createAppError } from "~/server/errors/app-error";
@@ -106,7 +108,10 @@ import {
   resolveEntityDisplayImageLists,
   resolveEntityDisplayImages,
 } from "~/server/repo/entity-display-image";
-import { ensureExternalSources } from "~/server/repo/entity-external-ids";
+import {
+  ensureExternalSources,
+  lockExternalIdentifierParents,
+} from "~/server/repo/entity-external-ids";
 import { liveLinks } from "~/server/repo/entity-links";
 import { patchEntityRows } from "~/server/repo/entity-patch";
 import {
@@ -224,6 +229,8 @@ import {
   syncPrimaryGtin,
   syncProductExternalIds,
   syncProductImages,
+  productGallerySnapshot,
+  productGalleryIntent,
   syncProductUnitMappings,
 } from "./update-helpers";
 
@@ -1949,6 +1956,9 @@ export const createProduct = async (
         categoryId,
         ingredientId: ingredientId ?? null,
       });
+      await lockExternalIdentifierParents(tx, [
+        { entityId: newProduct.id, entityKind: "product" },
+      ]);
 
       if (unitMappings && unitMappings.length > 0) {
         await tx.insert(productUnitMappings).values(
@@ -2194,6 +2204,9 @@ export const updateProduct = async (
 
   try {
     const updatedProduct = await withTransaction(db, async (tx) => {
+      await lockExternalIdentifierParents(tx, [
+        { entityId: id, entityKind: "product" },
+      ]);
       const beforeProduct = await tx.query.product.findFirst({
         where: and(eq(product.id, id), notDeleted(product)),
       });
@@ -2246,6 +2259,15 @@ export const updateProduct = async (
           "CONSTRAINT_VIOLATION",
           "Product classification conflicts with its identity evidence.",
         );
+      const galleryRequested = [
+        pendingImageIds,
+        pendingImagePurposes,
+        removeImageIds,
+        imageOrder,
+      ].some((value) => value !== undefined);
+      const beforeGallery = galleryRequested
+        ? await productGallerySnapshot(tx, id)
+        : [];
       detachedImageKeys = await syncProductImages(
         tx,
         id,
@@ -2278,11 +2300,17 @@ export const updateProduct = async (
         ),
       });
 
-      const changes = computeChanges(
+      const scalarChanges = computeChanges(
         { ...beforeProduct, externalIds: beforeExternalIds },
         { ...updated, externalIds: currentExternalIdRows },
         [...entityFieldModels.product.audit],
       );
+      const changes = galleryRequested
+        ? {
+            ...scalarChanges,
+            ...productGalleryIntent(beforeGallery, productImages),
+          }
+        : scalarChanges;
 
       if (changes) {
         await logAuditEntry(tx, actor, {
@@ -2388,6 +2416,9 @@ export const patchProductExternalIds = async (
 ): Promise<ProductTopLevelOut> =>
   await withTransaction(db, async (tx) => {
     await lockAndValidateForDelete(tx, product, [id], "Product");
+    await lockExternalIdentifierParents(tx, [
+      { entityId: id, entityKind: "product" },
+    ]);
     const before = await tx.query.product.findFirst({
       where: and(eq(product.id, id), notDeleted(product)),
     });
@@ -2705,6 +2736,25 @@ const liveLinksToProducts =
     ).map((row) => ({ productId: parseEntityId("product", row.productId) }));
 
 const PRODUCT_RETAINING_DEPENDENTS = {
+  "RunFactEvidence.entityId": async (tx, ids) => {
+    const rows = await tx
+      .select({ entityId: runFactEvidence.entityId })
+      .from(runFactEvidence)
+      .where(
+        and(
+          eq(runFactEvidence.entityKind, "product"),
+          inArray(runFactEvidence.entityId, ids),
+        ),
+      );
+    return rows.map(({ entityId }) => ({
+      productId: parseEntityId("product", entityId),
+    }));
+  },
+  "ImportSourceProduct.productId": (tx, ids) =>
+    tx
+      .select({ productId: importSourceProduct.productId })
+      .from(importSourceProduct)
+      .where(inArray(importSourceProduct.productId, ids)),
   "RunTarget.entityId": async (tx, ids) => {
     const rows = await tx.query.runTarget.findMany({
       where: inArray(runTarget.entityId, ids),
@@ -2838,6 +2888,11 @@ export const deleteProducts = (
       ids,
       actor,
       overrides: PRODUCT_BLOCK_GUARDS,
+      beforeDelete: (tx, ids) =>
+        lockExternalIdentifierParents(
+          tx,
+          ids.map((entityId) => ({ entityId, entityKind: "product" })),
+        ),
     });
     return { ...removal, ingredientIds };
   });

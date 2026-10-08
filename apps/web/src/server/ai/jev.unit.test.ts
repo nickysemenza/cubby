@@ -95,6 +95,34 @@ describe("runJevChoice", () => {
     },
   );
 
+  it("keeps a declared routing model pinned when trial sampling would choose Clef", async () => {
+    vi.stubEnv("AI_GATEWAY_API_KEY", "dev-token");
+    vi.spyOn(Math, "random").mockReturnValue(0.75);
+    vi.resetModules();
+    const { runJevChoice: route } = await import("./jev");
+    const sent: RequestInit[] = [];
+    vi.stubGlobal("fetch", (_url: string, init: RequestInit) => {
+      sent.push(init);
+      return Promise.resolve(
+        new Response(
+          JSON.stringify({
+            state: "Completed",
+            result: answerFor("c0", { c0: 0.95, none: 0.05 }),
+          }),
+        ),
+      );
+    });
+    await route({
+      ...base,
+      feature: { ...base.feature, sample: false, collectPayload: false },
+      choices: ["purchase-related"],
+    });
+    expect(sentModel(sent[0])).toBe("typesafe/jev");
+    expect(
+      new Headers(sent[0]?.headers).get("cf-aig-collect-log-payload"),
+    ).toBe("false");
+  });
+
   it.each([
     { status: 429, retryAfter: null, attempts: 3 },
     { status: 429, retryAfter: "invalid", attempts: 3 },

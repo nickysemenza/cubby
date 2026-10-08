@@ -136,7 +136,10 @@
                     executorFactory: { [unowned self] _, accountID in
                         openedExecutors.append(accountID)
                         return try MacBrowserCommandExecutor(
-                            target: .installed(.chrome), accountID: accountID, evidenceUploader: NoUpload())
+                            target: .installed(.chrome), accountID: accountID, evidenceUploader: NoUpload(),
+                            captureStore: .init(
+                                rootDirectory: FileManager.default.temporaryDirectory
+                                    .appendingPathComponent(UUID().uuidString)))
                     },
                     replayStoreFactory: { _ in EmptyReplayStore() },
                     rosterRefreshTick: { [ticks] in try await ticks.tick() },

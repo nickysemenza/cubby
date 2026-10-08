@@ -11,6 +11,7 @@ import { runPurpose } from "./run-fields";
 /** Purposes currently coordinated by the durable import-run agent. */
 export const agentImportRunPurpose = runPurpose.extract([
   "account_sync",
+  "mail_import",
   "purchase_validation",
   "product_enrichment",
   "photo_inventory",
@@ -21,6 +22,7 @@ export type AgentImportRunPurpose = z.infer<typeof agentImportRunPurpose>;
 // Object storage. Existing conversations must retain their original identity.
 const instancePrefix = {
   account_sync: "import-run",
+  mail_import: "import-run",
   purchase_validation: "import-run",
   product_enrichment: "import-run",
   photo_inventory: "photo-inventory",
@@ -47,22 +49,21 @@ export function importRunIdFromAgentIdentity(
 }
 
 /** The purchase agent's own tools (apps/web/src/server/purchase-agent/tools.ts). */
-const IMPORT_RUN_AGENT_TOOLS = [
-  "claim_next_import_work",
-  "extract_receipt_evidence",
-  "extract_run_evidence",
-  "issue_browser_command",
-  "read_browser_command_result",
-  "import_browser_order_evidence",
-  "report_agent_progress",
-  "save_navigation_hints",
-  "mark_history_expired",
-  "finish_import_run",
-  "stop_import_run_for_review",
-  "defer_order_for_review",
-  "settle_charge_hunt",
+const RESEARCH_AGENT_TOOLS = [
+  "work_next",
+  "work_observe",
+  "work_resolve",
+  "mail_search",
+  "mail_read",
+  "web_search",
+  "web_read",
+  "cubby_find",
 ] as const;
-export type ImportRunAgentToolName = (typeof IMPORT_RUN_AGENT_TOOLS)[number];
+export type ImportRunAgentToolName =
+  | (typeof RESEARCH_AGENT_TOOLS)[number]
+  | "claim_next_import_work"
+  | "report_agent_progress"
+  | "stop_import_run_for_review";
 
 const PHOTO_MCP_ACTIONS = [
   "imports_read.photo_context",
@@ -73,44 +74,6 @@ const PHOTO_MCP_ACTIONS = [
   "search.similar",
   "photo_run.propose_groups",
   "product_enrichment.patch_external_ids",
-] as const satisfies readonly CubbyMcpToolAction[];
-
-// Actions purchase runs called in production plus those the purchase-import
-// and product-enrichment skills (mounted on every purchase run) name.
-const PURCHASE_MCP_ACTIONS = [
-  "entity_read.get",
-  "entity_read.list",
-  "entity_read.search",
-  "entity_read.relations",
-  "entity_read.resolve",
-  "entity.create",
-  "entity.update",
-  "entity.delete",
-  "entity.merge",
-  "entity.bulkUpdate",
-  "entity.link",
-  "entity.unlink",
-  "entity.commands",
-  "search.global",
-  "search.similar",
-  "finance_read.statement_rows",
-  "finance_read.imports",
-  "finance_read.drift",
-  "finance_read.preview_import",
-  "statement_rows.record",
-  "statement_rows.update",
-  "imports_read.purchase_status",
-  "imports_read.vendor_coverage",
-  "imports_read.external_id_collisions",
-  "imports_read.upc_lookup",
-  "purchase_import.prepare",
-  "purchase_import.validate",
-  "purchase_import.commit",
-  "purchase_import.confirm_vendor",
-  "product_enrichment.propose_match",
-  "product_enrichment.patch_external_ids",
-  "product_enrichment.verify_images",
-  "image.schedule_processing",
 ] as const satisfies readonly CubbyMcpToolAction[];
 
 /** The tools the coordinator mounts for a set of actions: it mounts by tool name. */
@@ -138,34 +101,19 @@ export type ImportRunAgentConfig = {
 };
 
 const purchaseAgent = {
-  model: "gpt-6-sol",
-  effort: "high",
-  agentTools: IMPORT_RUN_AGENT_TOOLS,
-  mcpActions: PURCHASE_MCP_ACTIONS,
-  mcpTools: toolsOf(PURCHASE_MCP_ACTIONS),
+  model: "gpt-6-luna",
+  effort: "medium",
+  agentTools: RESEARCH_AGENT_TOOLS,
+  mcpActions: [],
+  mcpTools: [],
 } satisfies ImportRunAgentConfig;
-
-// Enrichment runs also commit what they verified; `enrichment_commit` is
-// granted to the product_enrichment purpose only (server capability gate).
-const ENRICHMENT_MCP_ACTIONS = [
-  ...PURCHASE_MCP_ACTIONS,
-  "product_enrichment.commit",
-  "product_enrichment.skip",
-  "product_enrichment.overwrite",
-] as const satisfies readonly CubbyMcpToolAction[];
-
 const enrichmentAgent = {
   ...purchaseAgent,
-  mcpActions: ENRICHMENT_MCP_ACTIONS,
-  mcpTools: toolsOf(ENRICHMENT_MCP_ACTIONS),
+  model: "gpt-6-sol",
+  effort: "high",
 } satisfies ImportRunAgentConfig;
 
-/**
- * Model, effort, and tools per agent run purpose. Photo grouping moved to Luna
- * after the live eval (`pnpm --dir apps/web eval:agent-models`) matched Sol on
- * every case at a fraction of the cost; purchase runs stay on Sol until the
- * same eval covers them.
- */
+/** Purpose-specific research authority; photo inventory retains its legacy surface. */
 export const importRunAgentManifest = {
   photo_inventory: {
     model: "gpt-6-luna",
@@ -179,6 +127,7 @@ export const importRunAgentManifest = {
     mcpTools: toolsOf(PHOTO_MCP_ACTIONS),
   },
   account_sync: purchaseAgent,
+  mail_import: purchaseAgent,
   purchase_validation: purchaseAgent,
   product_enrichment: enrichmentAgent,
 } as const satisfies Record<AgentImportRunPurpose, ImportRunAgentConfig>;

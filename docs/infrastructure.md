@@ -98,18 +98,21 @@ The Run row is the record; an instance is one attempt at it, named
 - `reconcileWorkflowRuns` in catch-up fails a Run whose instance ended
   without its failure step, and one saved but never launched. The purchase
   agent's stale-run expiry skips these purposes.
-- At most one `mail_discovery` Run per member is `running`
+- At most one `mail_discovery` Run per mailbox is `running`
   (`Run_one_active_mail_discovery`), so an overlapping cron and app-open
-  trigger start one pass. A pass freezes its message batches and history
-  events on the Run, saves ten messages per step with each attachment
-  streamed to R2 on its own, and moves the mailbox cursor last, only from the
-  position the pass started at. Each batch step also starts an order import
-  (`trigger: discovery`) for every new confirmation it saved: a known Vendor,
-  no Purchase or member decision for the order, no live run owning it, at most
-  five per Vendor per pass (`gmail/auto-import.ts`). An order-like message
-  from an unknown, non-shared sender domain is classified, and a placed order
-  creates its Vendor first (`gmail/vendor-bootstrap.ts`). A replayed step reuses
-  the runs it started.
+  trigger start one pass. Each Run freezes its execution authorization and
+  acquisition page. Pilot and historical grants cover targeted queries and
+  broad history scans; continuous monthly grants cover incremental Gmail
+  history. These allowances remain independent. Known Vendor and unmatched
+  transaction queries run first; broad scans exclude Spam and Trash.
+  Jev routes unrelated, related, and uncertain mail. Unrelated mail keeps a
+  minimal scan record; related and uncertain mail retain content and streamed
+  attachments for the researcher. Research admission uses batches of up to
+  fifty retained messages, including unfamiliar vendors and lifecycle mail.
+  The researcher proposes supported records and links through the shared
+  evidence-backed writer. Durable page replay reuses admitted work, and the
+  mailbox cursor moves only after retention and admission finish. See
+  `gmail/discovery.ts`, `gmail/sync.ts`, and `gmail/ingest.ts`.
 - A completed scheduled pass that saved no message and recorded no history
   event is `routine`; the Runs list hides routine Runs by default.
 
@@ -210,16 +213,18 @@ request: the exported Durable Object is a shell that loads
 loads the consumer when a `cubby-purchase-agent` batch arrives
 (`apps/web/scripts/check-server-closure.ts` budgets both paths).
 
-The agent supplies Cubby's typed tools (`server/purchase-agent/tools.ts`,
-replay-safe, each effect memoized per operation id; their parameters are the
-host contracts narrowed in `purchaseAgentToolInputs`), mounts the purpose's
-Cubby MCP tools as `mcp__cubby__<tool>` from the same compiled catalog
-the MCP server lists to it (`server/mcp/agent-tool-catalog.ts`, so the first
-dispatch lists nothing), and adds the purpose's skill plus product enrichment
-from `.claude/skills/`. Queue events and the finish nudge reach the model as
-`<signal type="…">` user text (`signals.ts`); the nudge
-(`<signal type="run_not_finished">`) is sent once per stretch of new tool
-rounds when the model stops without a terminal tool. A Lifecycle job per
+Purchase research mounts the focused typed tools in
+`server/purchase-agent/tools.ts`, narrowed by the shared purpose manifest.
+`work_next`, mail/web/browser observations and `work_resolve` expose research;
+the host owns task-scoped retention, stable operation identities, writes and
+completion accounting. It consumes broker results before sending the model a
+retained `research_observation` signal. Waiting ends the submission and a later
+queue event resumes the persisted conversation. Instructions come from the
+shared purchase and Product research workflows under `.claude/skills/`; they
+do not ask the model to claim/bind commands, report mechanical progress or
+finish the Run. Photo inventory retains its separate purpose-scoped MCP catalog
+and skills. Queue signals use `<signal type="…">` user text (`signals.ts`).
+A Lifecycle job per
 submission reports its settlement: `done` goes to `reconcileSettledRun`, an
 unanswered submission to `markRunFailed` (`agent_failed` / `agent_aborted`).
 The run page reads the conversation through `agent-proxy.ts` as the
@@ -278,26 +283,36 @@ Three suites exercise the real agent in the workerd harness's
 `cubby` Worker with a scripted model and gateway, driven through
 `apps/web/tooling/purchase-agent-workerd-harness.ts`).
 `apps/web/src/server/purchase-import/purchase-agent-scenarios.integration.test.ts`
-(PostgreSQL tier) scripts only the coordinator model and the web Worker's
-extractor/audit model, and asserts the database graph, run status, findings,
+(PostgreSQL tier) scripts only the researcher and support-assessment models,
+and asserts the database graph, run status, findings,
 approvals, and replay fences of whole purchase journeys; it proves
 orchestration, not model judgment.
 `apps/web/tests/e2e/purchase-import-run.spec.ts` drives the same harness
-through the browser: a vendor page's saved order mail is imported (one
+through the browser: the generic Vendor report's saved order mail is imported (one
 confirmation, a stale-evidence refusal, and a selected batch), the live Run
 page streams the conversation while a script `gate` holds the model
 mid-run, and the committed Purchase is read back from the page and the
-database. A script reads the run id from the coordinator's instructions
-(`currentRunId`), as a real model does, because the browser creates the run. The opt-in, billed decision eval runs live
-candidate models on 32 synthetic Product-identity, line-role, reversal,
-settlement, and incomplete-evidence cases and scores each outcome correct,
-unsafe, or reviewable miss, with latency and token cost. The web Worker is the
+database. The researcher receives server-issued task references from `work_next`;
+the browser follows the admitted Run link returned by the report command.
+The purchase-decision acceptance eval runs synthetic retained-source cases
+through the same researcher, support assessment and domain services using
+the public local ChatGPT subscription SDK, with no paid fallback. That SDK
+owns credential lookup and refresh. Request and deadline guards are hard;
+subscription inference strips `max_output_tokens`, so preflight reservations
+use the live catalog's maximum output and report actual usage separately.
+The adapter accepts supported text, function-call/result and encrypted-reasoning
+Responses shapes, including the production subscription's `additional_tools`
+declaration and empty reasoning-content replay; unsupported or multimodal requests refuse. Other explicitly
+paid eval callers retain their existing billing path. Evaluation usage retains
+up to eight credential-scrubbed HTTP, transport, or stream failure diagnostics,
+bounded to 2,000 characters each; request bodies and headers are not recorded.
+The web Worker is the
 harness's primary Worker, so the evals queue the agent through the
 `cubby-queue-producer` Worker, never through `listen()`'s URL:
 
 ```bash
 pnpm --dir apps/web eval:purchase-decisions
-# AGENT_EVAL_CANDIDATES=gpt-6-sol:high PURCHASE_EVAL_CASES=identity-exact-variant-sku
+# Select a synthetic case with PURCHASE_EVAL_CASES=ordinary-product.
 ```
 
 Neither uses an authenticated household session or production data.
@@ -312,43 +327,47 @@ stale build fails with the exact rebuild command. A suite holds the harness
 across its tests with `holdWorkerdHarness()` in `beforeAll`, so the wait and
 any rebuild never count against a test timeout.
 
-Rollback: pause the `cubby-purchase-agent` consumer and deploy the previous
-web and Apple versions. Postgres import rows and the retained
-`PurchaseImportDurableObject` namespace remain compatible; a rollback past the
-2026-10 merge of the agent into `cubby` also needs the separate
-`purchase-agent` Worker and its consumer back.
+The research cutover changes stored and wire contracts. Use the approved
+quiescence, preservation and deployment sequence in
+[the rewrite plan](plans/purchase-research-rewrite.md); deploying an old
+Worker against the migrated database is not a rollback. Retain the immutable
+quiescence and replacement builds and verify the data readback before reopening
+consumers.
 
 ### Browser bridge
 
 Signed-in vendor pages are read by the Mac app through one SQLite Durable
 Object per vendor account (`PurchaseImportDurableObject`,
 `server/purchase-import/durable-object.ts`), over a WebSocket speaking
-`BROWSER_BRIDGE_PROTOCOL` 3 (`packages/schemas/src/purchase-import.ts`). The
+`BROWSER_BRIDGE_PROTOCOL` 4 (`packages/schemas/src/purchase-import.ts`). The
 Mac is a thin hand; the server reads and decides:
 
-- **Commands.** `navigate`, `scroll`, `capture` (with `screenshot:
+- **Commands.** `navigate`, `click`, `type`, `select`, `scroll`, `read` (with `screenshot:
   required | preferred | skip`), and `window` (`raise` / `background`). A
   capture returns the page's trimmed DOM (deflated, with its checksum), any
   screenshot or PDF evidence, and every result carries an observation (URL,
   ready state, window state, Screen Recording permission). The Mac finds its
   account window again after a relaunch by a tab marker.
-- **Reading.** The first read of a capture stores the DOM in R2 as
+- **Retention.** `work_observe` binds each command to a server-issued work
+  reference. The host stores the capture DOM in R2 as
   `RunEvidence` (`text/html`) and derives the page on the server
   (`compact_browser_page` in `recipebridge`, `derivePageCapture`): text,
   allowlisted links and images, JSON-LD identifiers, and a password field as
   a sign-in. Improving the derivation needs no Mac release; bump
   `PAGE_DERIVATION_REVISION`.
-- **Recovery** (`browserRecovery`). A failed step is retried once as a fresh
-  command, raising a minimized or off-screen window first. A fix only the
+- **Recovery** (`research-browser-service.ts`). A recoverable failed step is
+  retried once under the same work reference, raising a minimized or off-screen
+  window first. A fix only the
   member can make (Screen Recording, Chrome's "Allow JavaScript from Apple
-  Events", Automation) pauses the run naming it; reading the step again after
-  resume retries it. Every retry, pause, and sign-in is a `browser` progress
+  Events", Automation) pauses the run naming it; an authenticated resume
+  continues the retained command. Every retry, pause, and sign-in is a `browser` progress
   line on the run.
 - **Wake on reconnect.** The broker remembers a run whose last step failed;
   a reconnecting Mac with nothing to replay wakes it.
-- **Fetch first.** A product-enrichment capture with a URL is first fetched
-  by the server (`fetchPublicPage`); a refusal is recorded and the command
-  goes to the Mac.
+- **Cloud research.** `web_read` retains public-page observations without the
+  Mac. Browser observations use the authenticated Mac when cloud research
+  cannot supply the needed page or interaction. Offline browser work stays
+  queued while other server-capable tasks continue.
 
 Settings previews each browser-sync account with `run.syncPlan`: first sync, incremental since the
 newest-order cursor, resume (with the current run and progress), or blocked by other work. Each

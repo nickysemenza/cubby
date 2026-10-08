@@ -15,6 +15,11 @@ import {
 } from "./identifiers";
 import { mealScale, mealYieldGrams } from "./meal-shared";
 import { runControlAction } from "./run-fields";
+import {
+  orderMailDecisionInput,
+  orderMailImportInput,
+} from "./order-mail-review";
+import { purchaseShortcode, vendorShortcode } from "./identifier-fields";
 
 /**
  * The generic read a detail slot draws on every client. The server composes
@@ -42,6 +47,9 @@ export const reportSlots = [
   "cookbook.import-progress",
   "image.associations",
   "purchase.runs",
+  "purchase.order-mail",
+  "vendor.order-mail",
+  "vendorAccount.order-mail",
   "location.ai-description",
   "purchase.reconciliation",
   "purchase.project-allocation",
@@ -218,6 +226,15 @@ const reportNote = z.object({
  * native; web acts on the tap as it always has. Null means one tap acts on both.
  */
 export const reportCommandRequest = z.discriminatedUnion("kind", [
+  orderMailDecisionInput.extend({
+    kind: z.literal("decide-order-mail"),
+    purchaseId: purchaseShortcode.nullable(),
+  }),
+  orderMailImportInput.extend({ kind: z.literal("research-order-mail") }),
+  z.object({
+    kind: z.literal("research-vendor-purchases"),
+    vendorId: vendorShortcode,
+  }),
   z.object({
     kind: z.literal("run-control"),
     runId: runShortcode,

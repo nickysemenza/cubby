@@ -50,6 +50,43 @@ export const isShortcodeEntity = (entity: string): entity is ShortcodeEntity =>
 
 const canonical = alias(entityIdentity, "canonical");
 
+/** Project server-owned frozen UUIDs through the existing merge spine; never redirect a mutation code. */
+export async function readCanonicalEntityIds(
+  db: Database | DrizzleTransaction,
+  kind: ShortcodeEntity,
+  ids: readonly string[],
+): Promise<Map<string, string>> {
+  if (!ids.length) return new Map();
+  const rows = await unwrapDb(db)
+    .select({
+      id: entityIdentity.id,
+      deletedAt: entityIdentity.deletedAt,
+      mergedIntoId: entityIdentity.mergedIntoId,
+      canonicalId: canonical.id,
+      canonicalKind: canonical.kind,
+      canonicalDeletedAt: canonical.deletedAt,
+      canonicalMergedIntoId: canonical.mergedIntoId,
+    })
+    .from(entityIdentity)
+    .leftJoin(canonical, eq(canonical.id, entityIdentity.mergedIntoId))
+    .where(
+      and(eq(entityIdentity.kind, kind), inArray(entityIdentity.id, [...ids])),
+    );
+  const result = new Map<string, string>();
+  for (const row of rows) {
+    if (row.mergedIntoId === null) {
+      if (row.deletedAt === null) result.set(row.id, row.id);
+    } else if (
+      row.canonicalId !== null &&
+      row.canonicalKind === kind &&
+      row.canonicalDeletedAt === null &&
+      row.canonicalMergedIntoId === null
+    )
+      result.set(row.id, row.canonicalId);
+  }
+  return result;
+}
+
 /** Resolve a public code through `Entity`, following at most one redirect. */
 export async function resolveEntityIdentity(
   db: Database | DrizzleTransaction,

@@ -2,6 +2,7 @@ import {
   type AiTokenUsage,
   createAiModelPricing,
   estimateAiUsageCost,
+  quoteAiDecisionRequest,
 } from "@cubby/shared/ai/pricing";
 import { createLogger } from "@cubby/worker-tracing";
 
@@ -29,4 +30,11 @@ export async function estimateAiUsageCostUsd(
   usage: AiTokenUsage,
 ): Promise<number | null> {
   return estimateAiUsageCost(await pricing.current(), provider, model, usage);
+}
+
+/** Unknown prices or full billing bounds cannot authorize metered inference. */
+export async function quoteAiDecisionRequestUsd(
+  request: Parameters<typeof quoteAiDecisionRequest>[1],
+) {
+  return quoteAiDecisionRequest(await pricing.current(), request);
 }

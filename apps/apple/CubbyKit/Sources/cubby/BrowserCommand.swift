@@ -105,7 +105,8 @@
                         throw CLIError.message("Capture/execute requires --vendor-account.")
                     }
                     let executor = try MacBrowserCommandExecutor(
-                        target: target, accountID: accountID, evidenceUploader: uploader)
+                        target: target, accountID: accountID, evidenceUploader: uploader,
+                        captureStore: .caches(namespace: "\(context.host)-\(accountID)"))
                     let command: BrowserBridgeCommand
                     if action == .execute {
                         guard let commandFile else {
@@ -126,9 +127,9 @@
                         command = BrowserBridgeCommand(
                             id: UUID(), runID: runID, operationID: UUID().uuidString.lowercased(),
                             deadline: Date.now.addingTimeInterval(Double(duration)),
-                            operation: .capture(
+                            operation: .read(
                                 .init(
-                                    _type: .capture, allowedHosts: allowedHosts,
+                                    _type: .read, allowedHosts: allowedHosts,
                                     screenshot: screenshot.value,
                                     recoveryURL: validated.absoluteString,
                                     evidenceScope: .init(runId: runID, targetId: targetID))))
@@ -153,7 +154,8 @@
                         syncClient: BrowserBridgeSyncClient(client: context.client),
                         executorFactory: { _, accountID in
                             try MacBrowserCommandExecutor(
-                                target: target, accountID: accountID, evidenceUploader: uploader)
+                                target: target, accountID: accountID, evidenceUploader: uploader,
+                                captureStore: .caches(namespace: "\(context.host)-\(accountID)"))
                         },
                         replayStoreFactory: { accountID in
                             let accountPath = Data(accountID.utf8).base64EncodedString().replacingOccurrences(

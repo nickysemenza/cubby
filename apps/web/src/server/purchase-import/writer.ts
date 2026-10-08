@@ -16,6 +16,7 @@ import {
   type ImportWriterInput,
   type ImportWriterOutput,
   type ProposedImportFix,
+  type AcceptedSourceOrder,
 } from "@cubby/schemas/purchase-import";
 import { sha256Hex } from "@cubby/shared/sha256";
 import { and, eq, ilike, isNotNull, or, sql } from "drizzle-orm";
@@ -34,11 +35,10 @@ import {
   entityAttachment,
   expense,
   importSourceClaim,
+  importSourceOrder,
+  importSourceProduct,
   ledgerParty,
   ledgerSourceClaim,
-  orderMail,
-  orderMailAttachment,
-  orderMailEvent,
   product,
   purchase,
   purchasePaymentEvidence,
@@ -48,17 +48,20 @@ import {
 } from "~/server/db/schema";
 import { assertRunCapabilityById } from "~/server/purchase-import/capabilities";
 import {
+  databaseForTransaction,
   getDb,
   notDeleted,
   withTransaction,
 } from "~/server/repo/database-helpers";
 import { validateExpenseInheritance } from "~/server/repo/expense-inheritance";
 import { validateProductPolicy } from "~/server/repo/inheritance-validation";
+import { resolveProductIdentifierSource } from "~/server/repo/product-identifier-source";
 import { upsertAgentProductMatch } from "~/server/repo/product-match-candidate";
 import {
   externalIdKey,
   findProductsByExternalIds,
 } from "~/server/repo/product/find-by-external-ids";
+import { attachPurchaseProducts } from "~/server/repo/purchase-products";
 import { insertWithShortcode } from "~/server/repo/shortcode-utils";
 
 import {
@@ -70,13 +73,17 @@ import {
   learnPurchaseProductExternalId,
   PurchaseProductExternalIdCollisionError,
 } from "./external-id-learning";
-import { linkExactOrderMail } from "./gmail/exact-link";
 import { manufacturerPartRequests } from "./manufacturer-identity";
 import {
   lockPartySettlement,
   settlePurchaseFromRetainedPayments,
 } from "./retained-settlement";
 import { recordRunWrites } from "./run-audit";
+import {
+  lockImportSourceClaimFamily,
+  readSourceFamilyOrder,
+} from "./source-claim-family";
+import { sourceOrderKey } from "./source-order-key";
 import { decideLineWrite, type ExistingExpenseSnapshot } from "./writer-policy";
 
 const PURCHASE_EXTERNAL_ID_KIND = "retailer_sku" as const;
@@ -85,18 +92,15 @@ export const PRODUCT_IDENTITY_RULES =
 
 /**
  * The household-local day an order was placed (`orderedAt` is an instant).
- * Evidence without a date keeps an existing Purchase's own date; a new
- * Purchase is refused rather than dated on import day.
+ * Evidence without a date preserves an existing date or leaves it unknown.
  */
 export const purchaseDateFor = (
   orderedAt: string | null,
   existingDate: string | null,
-): string => {
+): string | null => {
   if (orderedAt) return householdLocalDate(new Date(orderedAt));
   if (existingDate) return existingDate;
-  throw new Error(
-    "The evidence states no order date. Record when the order was placed, or choose its existing Purchase, before importing.",
-  );
+  return null;
 };
 
 /**
@@ -109,14 +113,19 @@ export function buildPurchaseImportPlan(
   const candidate = extraction.candidate;
   const writeBlockReason = !candidate
     ? "unreadable"
-    : candidate.currency !== "USD"
-      ? "foreign_currency"
-      : extraction.status === "needs_review" &&
-          ["sum_mismatch", "foreign_currency", "missing_total"].includes(
-            extraction.reason,
-          )
-        ? extraction.reason
-        : null;
+    : candidate.orderedAt === null &&
+        candidate.lines.some((line) => line.amount !== 0)
+      ? "missing_date"
+      : candidate.printedGrandTotal === null
+        ? "missing_total"
+        : candidate.currency !== "USD"
+          ? "foreign_currency"
+          : extraction.status === "needs_review" &&
+              ["sum_mismatch", "foreign_currency", "missing_total"].includes(
+                extraction.reason,
+              )
+            ? extraction.reason
+            : null;
   return {
     orderId: candidate?.orderId ?? null,
     currency: candidate?.currency ?? null,
@@ -267,66 +276,6 @@ async function attachEvidence(
   }
 }
 
-async function attachPendingMailEvidence(
-  tx: DrizzleTransaction,
-  purchaseId: ReturnType<typeof parseEntityId<"purchase">>,
-  ledgerPartyId: ReturnType<typeof parseEntityId<"ledgerParty">>,
-  vendorId: ReturnType<typeof parseEntityId<"vendor">>,
-  orderId: string | null,
-) {
-  if (!orderId) return;
-  const attachments = await tx
-    .select({
-      imageId: orderMailAttachment.imageId,
-      filename: orderMailAttachment.filename,
-    })
-    .from(orderMailEvent)
-    .innerJoin(orderMail, eq(orderMail.id, orderMailEvent.orderMailId))
-    .innerJoin(
-      orderMailAttachment,
-      and(
-        eq(orderMailAttachment.orderMailId, orderMail.id),
-        isNotNull(orderMailAttachment.imageId),
-      ),
-    )
-    .where(
-      and(
-        eq(orderMail.ledgerPartyId, ledgerPartyId),
-        eq(orderMail.vendorId, vendorId),
-        eq(orderMailEvent.orderId, orderId),
-      ),
-    );
-  for (const attachment of attachments) {
-    if (!attachment.imageId) continue;
-    await tx
-      .insert(entityAttachment)
-      .values({
-        entityId: purchaseId,
-        entityKind: "purchase",
-        role: "attachment",
-        imageId: attachment.imageId,
-        documentKind: attachment.filename.toLowerCase().includes("receipt")
-          ? "receipt"
-          : "invoice",
-      })
-      .onConflictDoNothing();
-  }
-}
-
-export const externalSource = (
-  url: string | undefined,
-  vendorId: string,
-): string => {
-  if (!url) return `vendor-${vendorId}`;
-  const host = new URL(url).hostname.toLowerCase().replace(/^www\./u, "");
-  return (
-    host
-      .split(".")[0]
-      ?.replaceAll(/[^a-z0-9]+/gu, "-")
-      .replaceAll(/^-|-$/gu, "") || "vendor"
-  );
-};
-
 export const amazonAsin = (url: string | undefined): string | null => {
   if (!url) return null;
   const parsed = new URL(url);
@@ -353,12 +302,10 @@ const lineIdentifiers = (
 /** The same vendor SKU in one order must resolve to one Product decision. */
 export const lineExternalIdentity = (
   line: Pick<ExtractedPurchaseLine, "productUrl" | "sku">,
-  vendorId: string,
+  source: string,
 ): string | null => {
   const [first] = lineIdentifiers(line);
-  return first
-    ? `${externalSource(line.productUrl, vendorId)}:${first.kind}:${first.externalId}`
-    : null;
+  return first ? `${source}:${first.kind}:${first.externalId}` : null;
 };
 
 export type LineIdentityDecision = {
@@ -457,10 +404,18 @@ async function decideLineIdentities(
   const decisionsByExternalIdentity = new Map<string, LineIdentityDecision>();
   const candidate = input.extraction.candidate;
   if (!candidate) return [];
-  const exactRequests = candidate.lines.map((line) => [
+  const vendorId = parseEntityId("vendor", input.vendorId);
+  const sources = await Promise.all(
+    candidate.lines.map((line) =>
+      lineIdentifiers(line).length
+        ? resolveProductIdentifierSource(db, { url: line.productUrl, vendorId })
+        : Promise.resolve(""),
+    ),
+  );
+  const exactRequests = candidate.lines.map((line, index) => [
     ...lineIdentifiers(line).map((identifier) => ({
       ...identifier,
-      source: externalSource(line.productUrl, input.vendorId),
+      source: sources[index]!,
     })),
     ...manufacturerPartRequests(line),
   ]);
@@ -505,7 +460,7 @@ async function decideLineIdentities(
       });
       continue;
     }
-    const identity = lineExternalIdentity(line, input.vendorId);
+    const identity = lineExternalIdentity(line, sources[index]!);
     const decidedEarlier = identity
       ? decisionsByExternalIdentity.get(identity)
       : null;
@@ -698,8 +653,13 @@ export async function resolveLineProduct(
   // none, even when an earlier line with the same SKU resolved one.
   if (!decision.productId && !decision.promote && !decision.unresolvedReason)
     return null;
-  const source = externalSource(line.productUrl, vendorId);
-  const externalIdentity = lineExternalIdentity(line, vendorId);
+  const source = lineIdentifiers(line).length
+    ? await resolveProductIdentifierSource(tx, {
+        url: line.productUrl,
+        vendorId: parseEntityId("vendor", vendorId),
+      })
+    : "";
+  const externalIdentity = lineExternalIdentity(line, source);
   const resolvedEarlier = externalIdentity
     ? productsByExternalIdentity.get(externalIdentity)
     : null;
@@ -811,42 +771,178 @@ async function fileFinding(
   return existing.id;
 }
 
-async function writeClaim(
-  tx: DrizzleTransaction,
-  input: ImportWriterInput,
+export type ImportSourceAssociationInput = Pick<
+  ImportWriterInput,
+  | "ledgerPartyId"
+  | "runId"
+  | "vendorId"
+  | "vendorAccountId"
+  | "source"
+  | "orderLocator"
+> & {
+  orderId: NonNullable<ImportWriterInput["extraction"]["candidate"]>["orderId"];
+  originalOrder?: AcceptedSourceOrder;
+  productBindings?: ReadonlyArray<
+    Pick<typeof importSourceProduct.$inferInsert, "lineIndex" | "productId">
+  >;
+};
+
+async function recordOriginalProductBindings(
+  tx: Pick<DrizzleTransaction, "insert">,
+  sourceOrderId: typeof importSourceProduct.$inferInsert.sourceOrderId,
+  existingOriginal: AcceptedSourceOrder | null | undefined,
+  input: Pick<
+    ImportSourceAssociationInput,
+    "originalOrder" | "productBindings"
+  >,
+) {
+  // Bind the first accepted original, never a changed source's line positions.
+  // Existing bindings may already point at a merge survivor and stay immutable.
+  if (
+    existingOriginal ||
+    !input.originalOrder ||
+    !input.productBindings?.length
+  )
+    return;
+  for (const binding of input.productBindings) {
+    if (!input.originalOrder.extraction.candidate?.lines[binding.lineIndex])
+      throw new Error(
+        "Import Product binding does not name an original order line.",
+      );
+  }
+  await tx.insert(importSourceProduct).values(
+    input.productBindings.map((binding) => ({
+      sourceOrderId,
+      lineIndex: binding.lineIndex,
+      productId: binding.productId,
+    })),
+  );
+}
+
+/** Source ownership and accepted order identity are shared by imports and lifecycle links. */
+export async function recordImportSourceAssociation(
+  tx: Pick<DrizzleTransaction, "insert" | "select" | "update">,
+  input: ImportSourceAssociationInput,
   purchaseId: ReturnType<typeof parseEntityId<"purchase">>,
   outputFingerprint: string,
 ) {
   const partyId = parseEntityId("ledgerParty", input.ledgerPartyId);
-  await tx
-    .insert(importSourceClaim)
+  const [owned] = await tx
+    .select({ id: runTable.id })
+    .from(runTable)
+    .innerJoin(
+      ledgerParty,
+      and(
+        eq(ledgerParty.id, runTable.ledgerPartyId),
+        eq(ledgerParty.userId, runTable.actorUserId),
+        eq(ledgerParty.kind, "member"),
+        notDeleted(ledgerParty),
+      ),
+    )
+    .where(
+      and(
+        eq(runTable.id, runEntityId.parse(input.runId)),
+        eq(runTable.ledgerPartyId, partyId),
+      ),
+    )
+    .limit(1);
+  if (!owned)
+    throw new Error(
+      "Import source is not owned by this Run's authenticated member.",
+    );
+  const [target] = await tx
+    .select({ id: purchase.id })
+    .from(purchase)
+    .where(
+      and(
+        eq(purchase.id, purchaseId),
+        eq(purchase.vendorId, parseEntityId("vendor", input.vendorId)),
+        notDeleted(purchase),
+      ),
+    )
+    .limit(1);
+  if (!target)
+    throw new Error(
+      "Import source order does not match the supported Purchase vendor.",
+    );
+  if (input.vendorAccountId) {
+    const [ownedAccount] = await tx
+      .select({ id: vendorAccount.id })
+      .from(vendorAccount)
+      .where(
+        and(
+          eq(
+            vendorAccount.id,
+            parseEntityId("vendorAccount", input.vendorAccountId),
+          ),
+          eq(vendorAccount.ledgerPartyId, partyId),
+          eq(vendorAccount.vendorId, parseEntityId("vendor", input.vendorId)),
+          notDeleted(vendorAccount),
+        ),
+      )
+      .limit(1);
+    if (!ownedAccount)
+      throw new Error("Import source account is not owned by this member.");
+  }
+  const family = await lockImportSourceClaimFamily(tx, {
+    ledgerPartyId: partyId,
+    vendorAccountId: input.vendorAccountId
+      ? parseEntityId("vendorAccount", input.vendorAccountId)
+      : null,
+    kind: input.source.kind,
+    externalKey: input.source.externalKey,
+    checksum: input.source.checksum,
+    firstRunId: input.runId,
+    lastRunId: input.runId,
+  });
+  const orderKey = sourceOrderKey({
+    vendorId: input.vendorId,
+    orderId: input.orderId,
+    orderLocator: input.orderLocator,
+  });
+  const retained = await readSourceFamilyOrder(tx, family, orderKey, "update");
+  const existing = retained?.association;
+  const ownerId = retained?.claim.id ?? family.root.id;
+  if (existing && existing.purchaseId !== purchaseId)
+    throw new Error(
+      "This source order already belongs to a different Purchase.",
+    );
+  const [association] = await tx
+    .insert(importSourceOrder)
     .values({
-      ledgerPartyId: partyId,
-      vendorAccountId: input.vendorAccountId
-        ? parseEntityId("vendorAccount", input.vendorAccountId)
-        : null,
-      kind: input.source.kind,
-      externalKey: input.source.externalKey,
-      checksum: input.source.checksum,
+      sourceClaimId: ownerId,
+      orderKey,
       purchaseId,
-      firstRunId: input.runId,
-      lastRunId: input.runId,
+      checksum: input.source.checksum,
       outputFingerprint,
+      originalOrder: input.originalOrder ?? null,
     })
     .onConflictDoUpdate({
-      target: [
-        importSourceClaim.ledgerPartyId,
-        importSourceClaim.kind,
-        importSourceClaim.externalKey,
-      ],
+      target: [importSourceOrder.sourceClaimId, importSourceOrder.orderKey],
       set: {
         checksum: input.source.checksum,
-        purchaseId,
-        lastRunId: input.runId,
         outputFingerprint,
+        originalOrder: existing?.originalOrder ?? input.originalOrder ?? null,
         updatedAt: new Date(),
       },
-    });
+    })
+    .returning({ id: importSourceOrder.id });
+  if (!association) throw new Error("Import source order was not persisted");
+  await recordOriginalProductBindings(
+    tx,
+    association.id,
+    existing?.originalOrder,
+    input,
+  );
+  await tx
+    .update(importSourceClaim)
+    .set({
+      checksum: input.source.checksum,
+      lastRunId: input.runId,
+      updatedAt: new Date(),
+    })
+    .where(eq(importSourceClaim.id, ownerId));
+  return ownerId;
 }
 
 /**
@@ -866,17 +962,21 @@ export async function importVendorOrder(
   await assertRunCapabilityById(db, input.runId, "business_writer");
   await assertImportOwnership(db, input, actorUserId);
   const skipsLineWrites = semanticPlan.writeBlockReason !== null;
+  const identityOnly = ["missing_date", "missing_total"].includes(
+    semanticPlan.writeBlockReason ?? "",
+  );
   const explicitResolutions = input.productResolutions;
-  const identityDecisions = skipsLineWrites
-    ? []
-    : explicitResolutions
-      ? await explicitLineDecisions(
-          input.extraction.candidate?.lines ?? [],
-          explicitResolutions,
-          (index, line) =>
-            chooseLineStage(db, input.runId, index, line, "reversal"),
-        )
-      : await decideLineIdentities(db, input);
+  const identityDecisions =
+    skipsLineWrites && !identityOnly
+      ? []
+      : explicitResolutions
+        ? await explicitLineDecisions(
+            input.extraction.candidate?.lines ?? [],
+            explicitResolutions,
+            (index, line) =>
+              chooseLineStage(db, input.runId, index, line, "reversal"),
+          )
+        : await decideLineIdentities(db, input);
   // The callback is the transaction's explicit policy matrix; splitting it
   // would hide the all-or-nothing write boundary.
   // eslint-disable-next-line complexity
@@ -928,44 +1028,58 @@ export async function importVendorOrder(
     if (!ownedScope) {
       throw new Error("Import source is not owned by the authenticated member");
     }
-    const existingClaim = await tx.query.importSourceClaim.findFirst({
-      where: and(
-        eq(importSourceClaim.ledgerPartyId, partyId),
-        eq(importSourceClaim.kind, input.source.kind),
-        eq(importSourceClaim.externalKey, input.source.externalKey),
-      ),
+    const family = await lockImportSourceClaimFamily(tx, {
+      ledgerPartyId: partyId,
+      vendorAccountId: input.vendorAccountId
+        ? parseEntityId("vendorAccount", input.vendorAccountId)
+        : null,
+      kind: input.source.kind,
+      externalKey: input.source.externalKey,
+      checksum: input.source.checksum,
+      firstRunId: input.runId,
+      lastRunId: input.runId,
     });
-    if (
-      input.targetPurchaseId &&
-      existingClaim?.purchaseId &&
-      input.targetPurchaseId !== existingClaim.purchaseId
-    )
-      throw new Error("This source already belongs to a different Purchase.");
-    if (existingClaim && existingClaim.checksum === input.source.checksum) {
-      await tx
-        .update(importSourceClaim)
-        .set({ lastRunId: input.runId })
-        .where(eq(importSourceClaim.id, existingClaim.id));
-      return importWriterOutput.parse({
-        outcome: "replayed",
-        purchaseId: existingClaim.purchaseId,
-        findingIds: [],
-        outputFingerprint: existingClaim.outputFingerprint,
-      });
-    }
-    const isSourceRefresh = existingClaim !== undefined;
-
     const candidate = input.extraction.candidate;
     if (!candidate)
       throw new Error(
         "Unreadable imports require a typed candidate before writing",
       );
+    const orderKey = sourceOrderKey({
+      vendorId: input.vendorId,
+      orderId: candidate.orderId,
+      orderLocator: input.orderLocator,
+    });
+    const existingOrder = (
+      await readSourceFamilyOrder(tx, family, orderKey, "update")
+    )?.association;
+    if (
+      input.targetPurchaseId &&
+      existingOrder &&
+      input.targetPurchaseId !== existingOrder.purchaseId
+    )
+      throw new Error(
+        "This source order already belongs to a different Purchase.",
+      );
+    if (existingOrder && existingOrder.checksum === input.source.checksum) {
+      await tx
+        .update(importSourceClaim)
+        .set({ lastRunId: input.runId })
+        .where(eq(importSourceClaim.id, existingOrder.sourceClaimId));
+      return importWriterOutput.parse({
+        outcome: "replayed",
+        purchaseId: existingOrder.purchaseId,
+        findingIds: [],
+        outputFingerprint: existingOrder.outputFingerprint,
+      });
+    }
+    const isSourceRefresh = existingOrder !== undefined;
+
     const vendorId = parseEntityId("vendor", input.vendorId);
     const vendorAccountId = input.vendorAccountId
       ? parseEntityId("vendorAccount", input.vendorAccountId)
       : null;
     const ordered = await findPurchase(tx, vendorId, candidate.orderId);
-    const selectedId = input.targetPurchaseId ?? existingClaim?.purchaseId;
+    const selectedId = input.targetPurchaseId ?? existingOrder?.purchaseId;
     const chosen = selectedId
       ? await tx.query.purchase.findFirst({
           where: and(
@@ -979,7 +1093,9 @@ export async function importVendorOrder(
     if (
       chosen &&
       (chosen.vendorId !== vendorId ||
-        (chosen.orderId !== null && chosen.orderId !== candidate.orderId))
+        (chosen.orderId !== null &&
+          chosen.orderId !== candidate.orderId &&
+          !(candidate.orderId === null && input.targetPurchaseId)))
     )
       throw new Error(
         "The reviewed Purchase target has a different vendor or order identity.",
@@ -1013,6 +1129,7 @@ export async function importVendorOrder(
         .update(purchase)
         .set({
           orderId: target.orderId ?? candidate.orderId,
+          date: target.date ?? orderDate,
           vendorAccountId: target.vendorAccountId ?? vendorAccountId,
           defaultTrade: target.defaultTrade ?? input.defaultTrade,
           defaultProjectId:
@@ -1027,10 +1144,10 @@ export async function importVendorOrder(
         .where(eq(purchase.id, target.id));
     }
     const purchaseId = parseEntityId("purchase", target.id);
-    // Mail saved before this Purchase existed links now, without a click.
-    if (candidate.orderId)
-      await linkExactOrderMail(tx, { vendorId, orderId: candidate.orderId });
     const findingIds: string[] = [];
+    const productLines: NonNullable<
+      ImportSourceAssociationInput["productBindings"]
+    >[number][] = [];
     let replacementExpenseId: string | null = null;
     const rowMutations: Array<{
       targetKind: "expense" | "product";
@@ -1040,13 +1157,6 @@ export async function importVendorOrder(
     }> = [];
 
     await attachEvidence(tx, purchaseId, input);
-    await attachPendingMailEvidence(
-      tx,
-      purchaseId,
-      partyId,
-      vendorId,
-      candidate.orderId,
-    );
 
     const reviewReason =
       input.extraction.status === "needs_review"
@@ -1056,8 +1166,60 @@ export async function importVendorOrder(
       input.extraction.status === "needs_review"
         ? input.extraction.detail
         : "Imported order requires review.";
-    const lines = candidate.lines;
-    if (reviewReason === "sum_mismatch" || reviewReason === "missing_total") {
+    // An identified Purchase retains its original candidate before incomplete
+    // pricing or dates can support canonical Expense rows.
+    const lines = identityOnly ? [] : candidate.lines;
+    if (identityOnly) {
+      // A changed source preserves its first accepted snapshot; it cannot mint
+      // a new unbound Product while overwriting that immutable ordered context.
+      if (!isSourceRefresh) {
+        const productsByExternalIdentity = new Map<string, string>();
+        for (const [lineIndex, line] of candidate.lines.entries()) {
+          const identity = identityDecisions[lineIndex];
+          if (!identity || identity.lineKind !== "principal") continue;
+          const productId = await resolveLineProduct(
+            tx,
+            line,
+            identity,
+            input.vendorId,
+            productsByExternalIdentity,
+            (createdId) =>
+              rowMutations.push({
+                targetKind: "product",
+                targetId: createdId,
+                mutationKind: "create",
+                fields: ["name", "externalIds"],
+              }),
+          );
+          if (productId) productLines.push({ lineIndex, productId });
+          if (identity.unresolvedReason)
+            findingIds.push(
+              await fileFinding(
+                tx,
+                input,
+                purchaseId,
+                "product_unresolved",
+                `Product resolution is required for “${line.title}”: ${identity.unresolvedReason}`,
+                null,
+              ),
+            );
+          if (identity.variantDoubt)
+            findingIds.push(
+              await fileFinding(
+                tx,
+                input,
+                purchaseId,
+                "variant_doubt",
+                `The existing match for “${line.title}” does not establish its exact ordered variant. Review the distinct Product before merging.`,
+                null,
+              ),
+            );
+        }
+      }
+    } else if (
+      reviewReason === "sum_mismatch" ||
+      reviewReason === "missing_total"
+    ) {
       if (candidate.printedGrandTotal !== null) {
         const current = await existingExpenses(tx, purchaseId);
         if (current.length === 0) {
@@ -1109,6 +1271,23 @@ export async function importVendorOrder(
       const current = await existingExpenses(tx, purchaseId);
       const decision = decideLineWrite(current, lines);
       if (decision.kind === "conflict") {
+        // A fresh accepted original can support existing Product lines without
+        // repeating financial lines or changing the first source snapshot.
+        for (const resolution of explicitResolutions ?? []) {
+          if (
+            resolution.kind === "existing" &&
+            candidate.lines[resolution.lineIndex]?.lineKind === "principal" &&
+            current.some(
+              (line) =>
+                line.lineKind === "principal" &&
+                line.productId === resolution.productId,
+            )
+          )
+            productLines.push({
+              lineIndex: resolution.lineIndex,
+              productId: parseEntityId("product", resolution.productId),
+            });
+        }
         findingIds.push(
           await fileFinding(
             tx,
@@ -1168,6 +1347,7 @@ export async function importVendorOrder(
               }),
           );
           const quantity = receiptProductQuantity(productId, line, identity);
+          if (productId) productLines.push({ lineIndex, productId });
           const inserted = await insertWithShortcode(tx, "expense", {
             purchaseId,
             name: line.title,
@@ -1316,28 +1496,43 @@ export async function importVendorOrder(
         primaryDocumentImageId: input.primaryDocumentImageId,
       }),
     );
-    await writeClaim(tx, input, purchaseId, claimFingerprint);
-    const claim = await tx.query.importSourceClaim.findFirst({
-      where: and(
-        eq(
-          importSourceClaim.ledgerPartyId,
-          parseEntityId("ledgerParty", input.ledgerPartyId),
-        ),
-        eq(importSourceClaim.kind, input.source.kind),
-        eq(importSourceClaim.externalKey, input.source.externalKey),
-      ),
-    });
-    if (!claim) throw new Error("Import source claim was not persisted");
-
+    const sourceClaimId = await recordImportSourceAssociation(
+      tx,
+      {
+        ...input,
+        orderId: candidate.orderId,
+        originalOrder: {
+          checksum: input.source.checksum,
+          extraction: input.extraction,
+        },
+        productBindings: productLines,
+      },
+      purchaseId,
+      claimFingerprint,
+    );
+    if (identityOnly && productLines.length)
+      await attachPurchaseProducts(
+        databaseForTransaction(tx),
+        purchaseId,
+        productLines.map((line) => parseEntityId("product", line.productId)),
+        buildActorContext(userIdSchema.parse(actorUserId), "mcp", {
+          runId: runEntityId.parse(input.runId),
+        }),
+      );
     if (isSourceRefresh) {
       await tx
         .delete(purchasePaymentEvidence)
-        .where(eq(purchasePaymentEvidence.sourceClaimId, claim.id));
+        .where(
+          and(
+            eq(purchasePaymentEvidence.sourceClaimId, sourceClaimId),
+            eq(purchasePaymentEvidence.purchaseId, purchaseId),
+          ),
+        );
     }
     for (const [evidenceIndex, payment] of candidate.payments.entries()) {
       await tx.insert(purchasePaymentEvidence).values({
         purchaseId,
-        sourceClaimId: claim.id,
+        sourceClaimId,
         amount: payment.amount,
         chargedAt: payment.chargedAt ? new Date(payment.chargedAt) : null,
         cardLastFour: payment.cardLastFour,

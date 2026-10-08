@@ -1,6 +1,6 @@
 import { collectionSlugPattern } from "@cubby/shared/collection-tag";
 import { z } from "zod";
-import { plainDate } from "./base-entity";
+import { generatedPurchaseFieldSchemas } from "./generated/entity-field-schemas.purchase.gen";
 import {
   locationShortcode,
   ledgerPartyShortcode,
@@ -54,7 +54,7 @@ export const collectionProductPurchaseOut = z.object({
   id: purchaseShortcode,
   orderId: z.string().nullable(),
   displayLabel: z.string().nullable(),
-  date: plainDate,
+  date: generatedPurchaseFieldSchemas.read.date,
   vendorName: z.string().nullable(),
   trades: z.array(tradeSchema),
 });

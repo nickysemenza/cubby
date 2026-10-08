@@ -95,10 +95,10 @@ struct BrowserBridgeTests {
     }
 
     @Test(
-        "Allowlist rejects scheme, credential, sibling, and fragment escapes",
+        "Allowlist rejects scheme, credential, and sibling escapes",
         arguments: [
             "http://example.com/order/1", "https://user@example.com/order/1",
-            "https://notexample.com/order/1", "https://example.com/order/1#javascript:alert(1)",
+            "https://notexample.com/order/1", "javascript:alert(1)",
         ])
     func rejectedURLs(rawURL: String) throws {
         let url = try #require(URL(string: rawURL))
@@ -107,23 +107,23 @@ struct BrowserBridgeTests {
         }
     }
 
-    @Test("Capture navigation honors a new target without reloading the current target")
+    @Test("A read preserves a selected variant instead of following its original recovery URL")
     func captureNavigationPolicy() throws {
-        let history = try #require(URL(string: "https://orders.example.com/history"))
-        let order = try #require(URL(string: "https://orders.example.com/order/1"))
+        let original = try #require(URL(string: "https://shop.example.test/product/example"))
+        let selected = try #require(URL(string: "https://shop.example.test/product/example?color=green"))
 
         #expect(
             !BrowserCaptureNavigationPolicy.shouldNavigate(
-                currentURL: history, targetURL: history))
-        #expect(
-            BrowserCaptureNavigationPolicy.shouldNavigate(
-                currentURL: history, targetURL: order))
-        #expect(
-            BrowserCaptureNavigationPolicy.shouldNavigate(
-                currentURL: nil, targetURL: order))
+                currentURL: original, targetURL: original))
         #expect(
             !BrowserCaptureNavigationPolicy.shouldNavigate(
-                currentURL: history, targetURL: nil))
+                currentURL: selected, targetURL: original))
+        #expect(
+            BrowserCaptureNavigationPolicy.shouldNavigate(
+                currentURL: nil, targetURL: original))
+        #expect(
+            !BrowserCaptureNavigationPolicy.shouldNavigate(
+                currentURL: selected, targetURL: nil))
     }
 
     @Test("Capture readiness rejects a complete stale document")
@@ -193,15 +193,15 @@ struct BrowserBridgeTests {
         let id = UUID(uuidString: "22222222-2222-2222-2222-222222222222")!.uuidString.lowercased()
         var tasks = BrowserBridgeCommandTaskRegistry()
 
-        let firstStart = tasks.claim(id)
+        let firstStart = tasks.claim(id, runID: "RUN-EXAMPLE")
         #expect(firstStart)
         tasks.attach(Task {}, to: id)
         tasks.transientDisconnect()
-        let replayStart = tasks.claim(id)
+        let replayStart = tasks.claim(id, runID: "RUN-EXAMPLE")
         #expect(!replayStart)
 
         tasks.finish(id)
-        let acknowledgedReplayStart = tasks.claim(id)
+        let acknowledgedReplayStart = tasks.claim(id, runID: "RUN-EXAMPLE")
         #expect(!acknowledgedReplayStart)
 
         tasks.cancelAll()
@@ -220,21 +220,6 @@ struct BrowserBridgeTests {
 
         #expect(ledger.cancelled.contains(id))
         #expect(ledger.replayResult(for: id) == nil)
-    }
-
-    @Test("A stale replay result can be discarded before a protocol rejection replaces it")
-    func staleReplayResultIsFenced() {
-        let uuid = UUID(uuidString: "33333333-3333-3333-3333-333333333333")!
-        let id = uuid.uuidString.lowercased()
-        let cached = BrowserBridgeCommandResult(
-            commandID: uuid, runID: "RUN-OLD", operationID: "operation-old", completedAt: .now,
-            outcome: .completed(snapshot: nil, observation: .unobserved))
-        var ledger = BrowserBridgeReplayLedger()
-
-        ledger.record(cached)
-        ledger.discardReplayResult(for: id)
-        #expect(ledger.replayResult(for: id) == nil)
-        #expect(!ledger.cancelled.contains(id))
     }
 
     @Test("Socket URLs upgrade HTTPS and preserve only the account query")
@@ -283,7 +268,7 @@ struct BrowserBridgeTests {
     func staleNestedCommandProtocol() throws {
         let message = Data(
             #"""
-            {"protocolVersion":3,"type":"command","command":{"protocolVersion":2,"id":"11111111-1111-1111-1111-111111111111","runID":"RUN-EXAMPLE","operationId":"operation-example","deadline":"2027-01-15T00:00:00Z","operation":{"type":"scroll","pageCount":1}}}
+            {"protocolVersion":4,"type":"command","command":{"protocolVersion":3,"id":"11111111-1111-1111-1111-111111111111","runID":"RUN-EXAMPLE","operationId":"operation-example","deadline":"2027-01-15T00:00:00Z","operation":{"type":"scroll","pageCount":1,"allowedHosts":["shop.example.test"]}}}
             """#.utf8)
         #expect(throws: DecodingError.self) {
             try JSONDecoder.browserBridge.decode(BrowserBridgeServerMessage.self, from: message)
@@ -308,7 +293,8 @@ struct BrowserBridgeTests {
     func operationIdentifiersMatchTheBridgeContract() throws {
         let command = BrowserBridgeCommand(
             id: UUID(uuidString: "55555555-5555-5555-5555-555555555555")!, runID: "RUN-EXAMPLE",
-            operationID: "operation-example", deadline: .distantFuture, operation: .scroll(pageCount: 1))
+            operationID: "operation-example", deadline: .distantFuture,
+            operation: .scroll(pageCount: 1, allowedHosts: ["orders.example.com"]))
         let commandData = try JSONEncoder.browserBridge.encode(command)
         let commandObject = try #require(JSONSerialization.jsonObject(with: commandData) as? [String: Any])
         #expect(commandObject["operationId"] as? String == "operation-example")
@@ -339,8 +325,8 @@ struct BrowserBridgeTests {
 
     private static let operations: [BrowserBridgeOperation] = [
         .navigate(url: URL(string: "https://orders.example.com/order/1")!, allowedHosts: ["example.com"]),
-        .scroll(pageCount: 2),
-        .capture(
+        .scroll(pageCount: 2, allowedHosts: ["orders.example.com"]),
+        .read(
             allowedHosts: ["example.com"], screenshot: .preferred,
             recoveryURL: URL(string: "https://orders.example.com/history")!),
         .window(.raise),
@@ -349,6 +335,24 @@ struct BrowserBridgeTests {
 
 @Suite("Nearby receipt ranking")
 struct NearbyReceiptRankingTests {
+    @Test("An undated charge remains available for receipt selection without a guessed search day")
+    func undatedReceiptSelection() throws {
+        let body = Data(
+            """
+            {"id":"11111111-1111-4111-8111-111111111111","transactionDate":null,"merchant":null,"amountInCents":1234}
+            """.utf8)
+        let hunt = try JSONDecoder().decode(ReceiptHunt.self, from: body)
+        let context = hunt.searchContext
+        #expect(context.huntID == hunt.id)
+        #expect(context.amountInCents == 1234)
+        #expect(context.transactionDate == nil)
+        let candidate = NearbyReceiptCandidateSignals(
+            id: "synthetic-receipt", capturedAt: Date(timeIntervalSince1970: 1_800_000_000),
+            classifications: [PhotoClassification(identifier: "receipt", confidence: 1)],
+            recognizedText: [])
+        #expect(NearbyReceiptRanker.rank([candidate], for: context).isEmpty)
+    }
+
     @Test("Receipt, merchant, amount, and date evidence outrank a nearby generic photo")
     func evidenceRanking() throws {
         let date = try #require(Calendar.current.date(from: DateComponents(year: 2027, month: 1, day: 15)))

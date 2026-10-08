@@ -78,7 +78,9 @@ interface AiTextPart {
 }
 export interface AiImagePart {
   type: "image";
-  source: { type: "url"; value: string; mimeType?: string };
+  source:
+    | { type: "url"; value: string; mimeType?: string }
+    | { type: "inline"; value: string; mimeType: string };
 }
 /** A document (e.g. a PDF receipt). Resolved the same way as an image — see
  * {@link resolveImageContent} — since pi-ai's `Message` has no document
@@ -86,7 +88,7 @@ export interface AiImagePart {
  * rewrites the resulting PDF image block into the Responses `input_file`. */
 interface AiDocumentPart {
   type: "document";
-  source: { type: "url"; value: string; mimeType: string };
+  source: { type: "url" | "inline"; value: string; mimeType: string };
 }
 type AiContentPart = AiTextPart | AiImagePart | AiDocumentPart;
 /** Every message `runStructuredFeature` sends is a single-turn user prompt —
@@ -105,7 +107,10 @@ export interface AiChatRequest {
 }
 
 /** What one call site supplies about *this* call. */
-export interface AiRunContext<T = unknown> {
+export interface AiRunContext<T = unknown> extends Pick<
+  GatewayCallOptions,
+  "subscriptionRequired" | "beforePaidRequest"
+> {
   /**
    * Where the `AiUsage` row is written. Omit to run without usage accounting
    * (the eval harness and smoke paths that have no database).
@@ -235,7 +240,7 @@ export interface StructuredRunPlan {
 }
 
 export function planStructuredRun<T = unknown>(
-  spec: Pick<AiChatFeature, "feature" | "model" | "cache">,
+  spec: Pick<AiChatFeature, "feature" | "model" | "cache" | "collectPayload">,
   ctx: AiRunContext<T>,
 ): StructuredRunPlan {
   const metadata: GatewayMetadata = {
@@ -247,9 +252,14 @@ export function planStructuredRun<T = unknown>(
 
   return {
     model: spec.model,
-    call: spec.cache
-      ? cachedCall({ metadata, force: ctx.force })
-      : { metadata, skipCache: true },
+    call: {
+      ...(spec.cache
+        ? cachedCall({ metadata, force: ctx.force })
+        : { metadata, skipCache: true }),
+      collectPayload: spec.collectPayload,
+      subscriptionRequired: ctx.subscriptionRequired,
+      beforePaidRequest: ctx.beforePaidRequest,
+    },
   };
 }
 
@@ -329,6 +339,28 @@ const MAX_AI_IMAGE_BYTES = 20 * 1024 * 1024;
 async function resolveImageContent(
   part: AiImagePart | AiDocumentPart,
 ): Promise<ImageContent> {
+  if (part.source.type === "inline") {
+    if (
+      part.source.value.length > Math.ceil(MAX_AI_IMAGE_BYTES / 3) * 4 ||
+      !/^[A-Za-z0-9+/]*={0,2}$/.test(part.source.value)
+    )
+      throw new Error(
+        "Inline AI input exceeds the byte bound or is not base64.",
+      );
+    const bytes = Buffer.from(part.source.value, "base64");
+    if (
+      bytes.byteLength > MAX_AI_IMAGE_BYTES ||
+      bytes.toString("base64") !== part.source.value
+    )
+      throw new Error(
+        "Inline AI input exceeds the byte bound or has invalid base64 encoding.",
+      );
+    return {
+      type: "image",
+      data: part.source.value,
+      mimeType: part.source.mimeType,
+    };
+  }
   const response = await fetchExternalResponse(part.source.value);
   if (!response.ok) {
     throw new Error(

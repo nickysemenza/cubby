@@ -35,6 +35,7 @@ import { and, asc, desc, eq, inArray } from "drizzle-orm";
 import { alias } from "drizzle-orm/pg-core";
 import { uniq, uniqBy } from "es-toolkit";
 
+import { comparePlainDatesDescending } from "~/lib/household-date";
 import type { Database, DrizzleClient, DrizzleTransaction } from "~/server/db";
 import {
   entityLink,
@@ -368,7 +369,7 @@ async function loadMostRecentPurchaseByProductId(
       productId: parseEntityId("product", row.productId),
     })),
     ...expenseRows,
-  ].sort((a, b) => b.date.localeCompare(a.date));
+  ].sort((a, b) => comparePlainDatesDescending(a.date, b.date));
 
   const byProduct = new Map<ProductId, KitMembershipPurchaseOut>();
   for (const row of rows) {

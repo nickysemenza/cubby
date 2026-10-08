@@ -3,6 +3,7 @@ import type {
   ScriptStep,
   ScriptValue,
 } from "../../../tooling/purchase-agent-script";
+import { parseSignal } from "../../../src/server/purchase-agent/signals";
 
 type ResponsesFunctionCall = {
   type: "function_call";
@@ -13,6 +14,8 @@ type ResponsesFunctionCall = {
 };
 
 let script: ScriptStep[] | undefined;
+let purposeScripts: Record<string, ScriptStep[]> = {};
+let sourceScripts: NonNullable<ScriptConfiguration["sourceSteps"]> = [];
 let violations: string[] = [];
 /** Each emitted step, in order: what the real import-run agent was told to do. */
 let emitted: string[] = [];
@@ -68,7 +71,64 @@ type InputItem = {
   type?: string;
   call_id?: string;
   output?: unknown;
+  content?: string | Array<{ text?: string }>;
 };
+
+/** Read only the tagged messages a researcher actually sees in its transcript. */
+function signals(input: InputItem[]) {
+  return input
+    .flatMap((item) =>
+      typeof item.content === "string"
+        ? [item.content]
+        : (item.content ?? []).flatMap((part) =>
+            part.text ? [part.text] : [],
+          ),
+    )
+    .flatMap((text) => {
+      const signal = parseSignal(text);
+      return signal ? [signal] : [];
+    });
+}
+
+function selectedScript(input: InputItem[]) {
+  for (const source of sourceScripts) {
+    const observed = outputCandidates(toolOutput(input, source.call));
+    if (
+      observed.some((candidate) => {
+        const text = readPath(candidate, source.path);
+        return typeof text === "string" && text.includes(source.includes);
+      })
+    )
+      return source.steps;
+  }
+  for (const signal of signals(input)) {
+    if (signal.type !== "purchase-import.start_or_resume") continue;
+    const event = JSON.parse(signal.body) as { purpose?: string };
+    if (event.purpose && purposeScripts[event.purpose])
+      return purposeScripts[event.purpose]!;
+  }
+  return script!;
+}
+
+type ScriptConfiguration = {
+  steps: ScriptStep[];
+  purposeSteps?: Record<string, ScriptStep[]>;
+  /** Branch only on a retained source the real researcher has already read. */
+  sourceSteps?: Array<{
+    call: string;
+    path: string;
+    includes: string;
+    steps: ScriptStep[];
+  }>;
+};
+function configureScript(configured: ScriptConfiguration) {
+  script = configured.steps;
+  purposeScripts = configured.purposeSteps ?? {};
+  sourceScripts = configured.sourceSteps ?? [];
+  violations = [];
+  emitted = [];
+  released = new Set();
+}
 
 /** Every JSON reading of a tool output: agent text, MCP content, structured content. */
 function outputCandidates(value: unknown, depth = 0): unknown[] {
@@ -144,6 +204,18 @@ function resolveValue(
     violations.push(`${stepId}: ${value.$from}.${path} was not in its output`);
     return null;
   }
+  if ("$signal" in value && typeof value.$signal === "string") {
+    const path = typeof value.path === "string" ? value.path : "";
+    for (const signal of signals(input).reverse()) {
+      if (signal.type !== value.$signal) continue;
+      const found = readPath(JSON.parse(signal.body), path);
+      if (found !== undefined) return found;
+    }
+    violations.push(
+      `${stepId}: ${value.$signal}.${path} was not in its visible signal`,
+    );
+    return null;
+  }
   return Object.fromEntries(
     Object.entries(value).map(([key, item]) => [
       key,
@@ -205,10 +277,7 @@ export default {
   async fetch(request: Request) {
     const url = new URL(request.url);
     if (url.pathname === "/configure" && request.method === "POST") {
-      script = ((await request.json()) as { steps: ScriptStep[] }).steps;
-      violations = [];
-      emitted = [];
-      released = new Set();
+      configureScript((await request.json()) as ScriptConfiguration);
       return new Response(null, { status: 204 });
     }
     if (url.pathname === "/release" && request.method === "POST") {
@@ -223,9 +292,10 @@ export default {
 
     const body = (await request.json()) as { input?: InputItem[] };
     const input = body.input ?? [];
+    const steps = selectedScript(input);
     const requestBody = JSON.stringify(body);
     const browserCalls = new Set(
-      script.flatMap((step) =>
+      steps.flatMap((step) =>
         "call" in step && step.tool === "issue_browser_command"
           ? [step.call]
           : [],
@@ -234,7 +304,7 @@ export default {
     const violation = finishNudgeViolation(input, browserCalls);
     if (violation) violations.push(violation);
 
-    for (const step of script) {
+    for (const step of steps) {
       if ("call" in step) {
         if (issued(requestBody, step.call)) continue;
         emitted.push(step.call);

@@ -7,9 +7,8 @@
     import ScreenCaptureKit
     import UniformTypeIdentifiers
 
-    /// A thin browser hand: it opens allowlisted URLs, scrolls, raises or backgrounds its account
-    /// window, and captures the trimmed DOM plus an optional screenshot. It never interprets the
-    /// page; the server derives every fact from the DOM. Every outcome carries what it observed.
+    /// Executes fixed actions against an account's owned browser window and returns its observed
+    /// DOM, controls and selected state. The server interprets source evidence and chooses actions.
     @MainActor
     public final class MacBrowserCommandExecutor: BrowserCommandExecuting {
         private struct BrowserScreenshot {
@@ -23,9 +22,12 @@
         }
 
         private struct PageSnapshotPayload: Decodable {
+            let observationId: String
             let url: String
             let title: String
             let html: String
+            let actions: BrowserPageSnapshot.ActionsPayload
+            let actionsTruncated: Bool
         }
 
         private struct PageProbe: Decodable {
@@ -50,6 +52,7 @@
         /// makes every window lifecycle event attributable without ever logging page content or URLs.
         private let accountID: String
         private let evidenceUploader: any BrowserEvidenceUploading
+        private let captureStore: BrowserCaptureFileStore
         private let appleScript: SerializedAppleScriptExecutor
         private var ownedWindowID: Int?
         private var ownedCaptureWindowID: CGWindowID?
@@ -58,10 +61,13 @@
         private var cancelled: Set<UUID> = []
         /// The raw error behind the current command's failure (AppleScript, upload), for its message.
         private var failureDiagnostic: String?
+        private var diagnosticRunID: String?
+        private var retiredRuns: Set<String> = []
+        private var actionableObservation: (id: String, runID: String)?
 
         public init(
             target: MacBrowserExecutionTarget, accountID: String,
-            evidenceUploader: any BrowserEvidenceUploading
+            evidenceUploader: any BrowserEvidenceUploading, captureStore: BrowserCaptureFileStore
         ) throws {
             try target.verifyOwnership()
             self.target = target
@@ -69,16 +75,26 @@
             targetBundleIdentifier = target.bundleIdentifier
             self.accountID = accountID
             self.evidenceUploader = evidenceUploader
+            self.captureStore = captureStore
             appleScript = SerializedAppleScriptExecutor(target: target)
         }
 
         /// `window.name` survives reloads and same-tab navigation and is readable through Apple
         /// Events, so it identifies the account's window across Cubby and browser relaunches. Cubby
         /// re-asserts it on every probe because some browsers clear it on cross-site navigation.
-        var windowMarker: String { "cubby:account:\(accountID)" }
+        var windowMarker: String {
+            "cubby:account:\(accountID)"
+        }
 
         public func cancel(commandID: UUID) {
             cancelled.insert(commandID)
+        }
+
+        public func forget(runID: String) async throws {
+            retiredRuns.insert(runID)
+            if actionableObservation?.runID == runID { actionableObservation = nil }
+            if diagnosticRunID == runID { failureDiagnostic = nil }
+            try await captureStore.forget(runID: runID)
         }
 
         public func raiseAuthenticationWindow() {
@@ -89,7 +105,8 @@
                     try await raiseOwnedWindow()
                 } catch {
                     BrowserBridgeDebugLog.emit(
-                        .windowRaiseFailed, browser: browser, accountID: accountID, error: error)
+                        .windowRaiseFailed, browser: browser, accountID: accountID, error: error
+                    )
                 }
             }
         }
@@ -103,10 +120,12 @@
                 do {
                     _ = try await appleScript.execute(script, action: "minimize_window")
                     BrowserBridgeDebugLog.emit(
-                        .windowMinimized, browser: browser, accountID: accountID)
+                        .windowMinimized, browser: browser, accountID: accountID
+                    )
                 } catch {
                     BrowserBridgeDebugLog.emit(
-                        .windowMinimizeFailed, browser: browser, accountID: accountID, error: error)
+                        .windowMinimizeFailed, browser: browser, accountID: accountID, error: error
+                    )
                 }
             }
         }
@@ -115,18 +134,19 @@
             let clock = ContinuousClock()
             let started = clock.now
             failureDiagnostic = nil
+            diagnosticRunID = command.runID
             let result: Result<BrowserPageSnapshot?, any Error>
             do {
-                result = .success(try await perform(command))
+                result = try .success(await perform(command))
             } catch {
                 result = .failure(error)
             }
             let durationMs = Int(started.duration(to: clock.now) / .milliseconds(1))
             let observation = await observe(durationMs: max(0, durationMs))
             switch result {
-            case .success(let snapshot):
+            case let .success(snapshot):
                 return .completed(snapshot: snapshot, observation: observation)
-            case .failure(let error):
+            case let .failure(error):
                 return failedOutcome(error, observation: observation)
             }
         }
@@ -138,11 +158,13 @@
             case let failure as BrowserBridgeURLPolicy.Failure:
                 return .failed(
                     code: .disallowedURL, message: failure.message, retryable: false,
-                    observation: observation)
+                    observation: observation
+                )
             case let failure as MacBrowserExecutionTarget.Failure:
                 return .failed(
                     code: .browserUnavailable, message: failure.localizedDescription, retryable: false,
-                    observation: observation)
+                    observation: observation
+                )
             case is CancellationError:
                 return failedOutcome(ExecutionFailure.cancelled, observation: observation)
             case let failure as ExecutionFailure:
@@ -150,50 +172,143 @@
                     .joined(separator: " ")
                 return .failed(
                     code: failure.code, message: message, retryable: failure.retryable,
-                    screenshotGap: failure.screenshotGap, observation: observation)
+                    screenshotGap: failure.screenshotGap, observation: observation
+                )
             default:
                 return .failed(
                     code: .executionFailed, message: String(describing: error), retryable: true,
-                    observation: observation)
+                    observation: observation
+                )
             }
         }
 
         private func perform(_ command: BrowserBridgeCommand) async throws -> BrowserPageSnapshot? {
+            guard !retiredRuns.contains(command.runID) else { throw ExecutionFailure.cancelled }
             guard command.deadline > .now else { throw ExecutionFailure.deadlineExceeded }
             guard let commandID = command.commandUUID else { throw ExecutionFailure.invalidCommand }
             guard cancelled.remove(commandID) == nil else { throw ExecutionFailure.cancelled }
             try target.verifyOwnership()
             switch command.operation {
-            case .navigate(let payload):
+            case let .navigate(payload):
                 guard let url = URL(string: payload.url) else { throw ExecutionFailure.invalidCommand }
                 let validated = try BrowserBridgeURLPolicy.validate(
-                    url, allowedHosts: Set(payload.allowedHosts))
+                    url, allowedHosts: Set(payload.allowedHosts)
+                )
                 try await navigateOwnedWindow(to: validated)
-                return nil
-            case .scroll(let payload):
-                guard (1...10).contains(payload.pageCount) else { throw ExecutionFailure.invalidCommand }
+                return try await automaticSnapshot(allowedHosts: payload.allowedHosts, command: command)
+            case let .scroll(payload):
+                let script = try Self.scrollScript(pageCount: payload.pageCount)
                 try await requireOwnedWindow()
-                _ = try await runFixedJavaScript(
-                    "window.scrollBy(0, window.innerHeight * \(payload.pageCount)); true;")
+                try await validateCurrentPage(allowedHosts: payload.allowedHosts)
+                _ = try await runFixedJavaScript(script)
                 await returnOwnedWindowToBackground()
-                return nil
-            case .window(let payload):
+                return try await automaticSnapshot(allowedHosts: payload.allowedHosts, command: command)
+            case let .window(payload):
                 try await requireOwnedWindow()
                 switch payload.action {
                 case .raise: try await raiseOwnedWindow()
                 case .background: try await backgroundOwnedWindow()
                 }
                 return nil
-            case .capture(let payload):
+            case let .read(payload):
                 let snapshot = try await capture(payload, command: command)
                 await returnOwnedWindowToBackground()
                 return snapshot
+            case let .click(payload):
+                return try await interact(
+                    kind: "click", observationID: payload.observationId, ref: payload.ref,
+                    allowedHosts: payload.allowedHosts, command: command
+                )
+            case let ._type(payload):
+                return try await interact(
+                    kind: "type", observationID: payload.observationId, ref: payload.ref,
+                    allowedHosts: payload.allowedHosts, command: command,
+                    text: payload.text, submit: payload.submit
+                )
+            case let .select(payload):
+                return try await interact(
+                    kind: "select", observationID: payload.observationId, ref: payload.ref,
+                    allowedHosts: payload.allowedHosts, command: command, optionRef: payload.optionRef
+                )
+            }
+        }
+
+        private func validateCurrentPage(allowedHosts: [String]) async throws {
+            let probe = try await probePage()
+            guard let url = URL(string: probe.url) else { throw ExecutionFailure.pageUnreadable }
+            _ = try BrowserBridgeURLPolicy.validate(url, allowedHosts: Set(allowedHosts))
+        }
+
+        private func automaticSnapshot(allowedHosts: [String], command: BrowserBridgeCommand)
+            async throws -> BrowserPageSnapshot
+        {
+            try await capture(
+                .init(_type: .read, allowedHosts: allowedHosts, screenshot: .skip), command: command
+            )
+        }
+
+        private func interact(
+            kind: String, observationID: String, ref: String, allowedHosts: [String],
+            command: BrowserBridgeCommand, text: String = "", submit: Bool = false,
+            optionRef: String? = nil
+        ) async throws -> BrowserPageSnapshot {
+            try await requireOwnedWindow()
+            guard let observed = actionableObservation, observed.id == observationID,
+                observed.runID == command.runID
+            else { throw ExecutionFailure.staleObservation }
+            try await validateCurrentPage(allowedHosts: allowedHosts)
+            guard command.deadline > .now else { throw ExecutionFailure.deadlineExceeded }
+            try Task.checkCancellation()
+            actionableObservation = nil
+            struct ActionReply: Decodable { let status: String; let code: String? }
+            let raw: String
+            do {
+                raw = try await runFixedJavaScript(
+                    BrowserActionScript.perform(
+                        kind: kind, observationId: observationID, ref: ref, allowedHosts: allowedHosts,
+                        text: text, submit: submit, optionRef: optionRef
+                    )
+                )
+            } catch {
+                if let failure = error as? ExecutionFailure,
+                    [.permissionDenied, .javascriptDisabled, .browserUnavailable].contains(failure)
+                {
+                    throw failure
+                }
+                if error is MacBrowserExecutionTarget.Failure {
+                    throw error
+                }
+                // Apple Events may have applied the action before losing their reply.
+                failureDiagnostic = [failureDiagnostic, String(describing: error)]
+                    .compactMap(\.self).joined(separator: " ")
+                throw ExecutionFailure.actionOutcomeUnknown
+            }
+            guard let reply = try? JSONDecoder().decode(ActionReply.self, from: Data(raw.utf8)) else {
+                throw ExecutionFailure.actionOutcomeUnknown
+            }
+            guard reply.status == "completed" else {
+                switch reply.code {
+                case "stale_observation": throw ExecutionFailure.staleObservation
+                case "disallowed_url": throw BrowserBridgeURLPolicy.Failure.hostNotAllowed
+                default: throw ExecutionFailure.actionUnavailable
+                }
+            }
+            do {
+                let snapshot = try await automaticSnapshot(allowedHosts: allowedHosts, command: command)
+                await returnOwnedWindowToBackground()
+                return snapshot
+            } catch {
+                // A successful action with an unreadable resulting page is not safe to replay.
+                failureDiagnostic = String(describing: error)
+                throw ExecutionFailure.actionOutcomeUnknown
             }
         }
 
         // MARK: Owned window
 
-        private var minimizedProperty: String { browser == .safari ? "miniaturized" : "minimized" }
+        private var minimizedProperty: String {
+            browser == .safari ? "miniaturized" : "minimized"
+        }
 
         private var isBrowserRunning: Bool {
             !NSRunningApplication.runningApplications(withBundleIdentifier: targetBundleIdentifier)
@@ -205,7 +320,9 @@
         @discardableResult
         private func resolveOwnedWindow() async throws -> Bool {
             if let ownedWindowID {
-                if isBrowserRunning, try await windowExists(ownedWindowID) { return true }
+                if isBrowserRunning, try await windowExists(ownedWindowID) {
+                    return true
+                }
                 forgetOwnedWindow()
             }
             guard isBrowserRunning, let found = try await findMarkedWindow() else { return false }
@@ -220,6 +337,7 @@
         }
 
         private func forgetOwnedWindow() {
+            actionableObservation = nil
             ownedWindowID = nil
             ownedCaptureWindowID = nil
             windowRecovered = false
@@ -254,10 +372,12 @@
 
         private func setWindowMarker() async throws {
             _ = try await runFixedJavaScript(
-                "window.name = \(Self.javaScriptLiteral(windowMarker)); true;")
+                "window.name = \(Self.javaScriptLiteral(windowMarker)); true;"
+            )
         }
 
         private func navigateOwnedWindow(to url: URL) async throws {
+            actionableObservation = nil
             let foregroundApplicationBeforeBrowserWork = NSWorkspace.shared.frontmostApplication
             let application = Self.appleScriptLiteral(targetBundleIdentifier)
             let target = Self.appleScriptLiteral(url.absoluteString)
@@ -268,14 +388,15 @@
                 let tab = browser == .safari ? "current tab" : "active tab"
                 _ = try await runAppleScript(
                     "tell application id \(application) to set URL of \(tab) of window id \(ownedWindowID) to \(target)",
-                    action: "navigate")
+                    action: "navigate"
+                )
             } else {
                 let windowID: Int
                 switch browser {
                 case .safari:
                     let script =
                         "tell application id \(application)\nmake new document with properties {URL:\(target)}\nreturn id of front window\nend tell"
-                    guard let id = Int(try await runAppleScript(script, action: "navigate")) else {
+                    guard let id = try Int(await runAppleScript(script, action: "navigate")) else {
                         throw ExecutionFailure.browserUnavailable
                     }
                     windowID = id
@@ -283,7 +404,8 @@
                     windowID = try await createChromeWindow()
                     _ = try await runAppleScript(
                         "tell application id \(application) to set URL of active tab of window id \(windowID) to \(target)",
-                        action: "navigate")
+                        action: "navigate"
+                    )
                 }
                 forgetOwnedWindow()
                 ownedWindowID = windowID
@@ -313,8 +435,12 @@
             for _ in 0..<40 {
                 try await Task.sleep(for: .milliseconds(250))
                 let candidates = try await chromeWindowIDs().subtracting(previous)
-                if candidates.count == 1, let windowID = candidates.first { return windowID }
-                if candidates.count > 1 { throw ExecutionFailure.browserUnavailable }
+                if candidates.count == 1, let windowID = candidates.first {
+                    return windowID
+                }
+                if candidates.count > 1 {
+                    throw ExecutionFailure.browserUnavailable
+                }
             }
             throw ExecutionFailure.executionFailed
         }
@@ -370,7 +496,8 @@
                 try await backgroundOwnedWindow()
             } catch {
                 BrowserBridgeDebugLog.emit(
-                    .windowBackgroundFailed, browser: browser, accountID: accountID, error: error)
+                    .windowBackgroundFailed, browser: browser, accountID: accountID, error: error
+                )
             }
         }
 
@@ -397,8 +524,10 @@
             return WindowState(
                 minimized: parts[0] == "true",
                 bounds: CGRect(
-                    x: edges[0], y: edges[1], width: edges[2] - edges[0], height: edges[3] - edges[1]),
-                title: String(parts[2]))
+                    x: edges[0], y: edges[1], width: edges[2] - edges[0], height: edges[3] - edges[1]
+                ),
+                title: String(parts[2])
+            )
         }
 
         /// ScreenCaptureKit uses CGWindowIDs, while browser Apple Events expose a different window
@@ -415,15 +544,20 @@
                     && abs($0.frame.width - state.bounds.width) <= tolerance
                     && abs($0.frame.height - state.bounds.height) <= tolerance
             }
-            if byFrame.count == 1 { return byFrame[0].id }
-            if let previous, byFrame.contains(where: { $0.id == previous }) { return previous }
+            if byFrame.count == 1 {
+                return byFrame[0].id
+            }
+            if let previous, byFrame.contains(where: { $0.id == previous }) {
+                return previous
+            }
             let byTitle = byFrame.filter { $0.title == state.title }
             return byTitle.count == 1 ? byTitle[0].id : nil
         }
 
         private func captureWindow(state: WindowState) async throws -> SCWindow? {
             let content = try await SCShareableContent.excludingDesktopWindows(
-                false, onScreenWindowsOnly: false)
+                false, onScreenWindowsOnly: false
+            )
             let bundleIdentifier = targetBundleIdentifier
             let windows = content.windows.filter {
                 $0.owningApplication?.bundleIdentifier == bundleIdentifier && $0.windowLayer == 0
@@ -431,10 +565,12 @@
             guard
                 let id = Self.matchCaptureWindow(
                     state: state, candidates: windows.map { ($0.windowID, $0.frame, $0.title) },
-                    previous: ownedCaptureWindowID)
+                    previous: ownedCaptureWindowID
+                )
             else {
                 BrowserBridgeDebugLog.emit(
-                    .captureWindowCorrelationFailed, browser: browser, count: windows.count)
+                    .captureWindowCorrelationFailed, browser: browser, count: windows.count
+                )
                 return nil
             }
             ownedCaptureWindowID = id
@@ -444,35 +580,33 @@
         // MARK: Capture
 
         private func capture(
-            _ payload: BrowserBridgeOperationCapture, command: BrowserBridgeCommand
+            _ payload: BrowserBridgeOperationRead, command: BrowserBridgeCommand
         ) async throws -> BrowserPageSnapshot {
             let allowedHosts = Set(payload.allowedHosts)
             let recoveryURL = try payload.recoveryURL.map { raw in
                 guard let url = URL(string: raw) else { throw ExecutionFailure.invalidCommand }
                 return try BrowserBridgeURLPolicy.validate(url, allowedHosts: allowedHosts)
             }
-            if try await resolveOwnedWindow() {
-                // Never reload an owned window already at the target: a replayed capture would
-                // otherwise become a refresh loop.
-                if let recoveryURL {
-                    let current = try? await probePage()
-                    if BrowserCaptureNavigationPolicy.shouldNavigate(
-                        currentURL: current.flatMap { URL(string: $0.url) }, targetURL: recoveryURL)
-                    {
-                        try await navigateOwnedWindow(to: recoveryURL)
-                    }
-                }
-            } else {
-                guard let recoveryURL else { throw ExecutionFailure.browserUnavailable }
+            var navigationTarget: URL?
+            if try !(await resolveOwnedWindow()) {
+                guard BrowserCaptureNavigationPolicy.shouldNavigate(currentURL: nil, targetURL: recoveryURL),
+                    let recoveryURL
+                else { throw ExecutionFailure.browserUnavailable }
                 try await navigateOwnedWindow(to: recoveryURL)
+                navigationTarget = recoveryURL
             }
-            try await waitForPageReady(targetURL: recoveryURL)
-            let raw = try await runFixedJavaScript(Self.snapshotScript)
+            if case let .navigate(navigation) = command.operation {
+                navigationTarget = URL(string: navigation.url)
+            }
+            try await waitForPageReady(targetURL: navigationTarget, deadline: command.deadline)
+            let observationID = UUID().uuidString.lowercased()
+            let raw = try await runFixedJavaScript(BrowserActionScript.observation(id: observationID))
             try Task.checkCancellation()
             guard let page = try? JSONDecoder().decode(PageSnapshotPayload.self, from: Data(raw.utf8)),
                 let sourceURL = URL(string: page.url)
             else { throw ExecutionFailure.pageUnreadable }
             _ = try BrowserBridgeURLPolicy.validate(sourceURL, allowedHosts: allowedHosts)
+            guard page.observationId == observationID else { throw ExecutionFailure.pageUnreadable }
             let dom = try BrowserDOMEncoding.encode(html: page.html)
             guard let commandID = command.commandUUID, cancelled.remove(commandID) == nil else {
                 throw ExecutionFailure.cancelled
@@ -484,58 +618,78 @@
                     command: command,
                     scope: payload.evidenceScope.map {
                         BrowserEvidenceUploadScope(runID: $0.runId, targetID: $0.targetId)
-                    })
+                    }
+                )
             let screenshot = try BrowserScreenshotPolicy.resolve(
-                mode: payload.screenshot, attempt: attempt)
+                mode: payload.screenshot, attempt: attempt
+            )
+            try Task.checkCancellation()
+            guard !retiredRuns.contains(command.runID) else { throw ExecutionFailure.cancelled }
+            actionableObservation = (observationID, command.runID)
             return BrowserPageSnapshot(
-                sourceURL: page.url, title: String(page.title.prefix(500)), capturedAt: .now, dom: dom,
-                screenshot: screenshot.payload)
+                observationId: observationID, sourceURL: page.url, servedURL: page.url,
+                actions: page.actions, actionsTruncated: page.actionsTruncated,
+                title: String(page.title.prefix(500)), capturedAt: .now, dom: dom,
+                screenshot: screenshot.payload
+            )
         }
 
         private func screenshotAttempt(
             command: BrowserBridgeCommand, scope: BrowserEvidenceUploadScope?
         ) async throws -> BrowserScreenshotAttempt {
             BrowserBridgeDebugLog.emit(.visualCaptureStarted, command: command)
+            guard let commandID = command.commandUUID else { throw ExecutionFailure.invalidCommand }
+            let directory = try captureStore.captureDirectory(runID: command.runID, commandID: commandID)
+            defer {
+                do { try captureStore.removeCommand(runID: command.runID, commandID: commandID) } catch {
+                    BrowserBridgeDebugLog.emit(.visualCaptureFailed, command: command, error: error)
+                }
+            }
             let screenshot: BrowserScreenshot
-            switch await takeScreenshot() {
-            case .taken(let value): screenshot = value
-            case .gap(let gap):
+            switch await takeScreenshot(to: directory.appendingPathComponent("capture.png")) {
+            case let .taken(value): screenshot = value
+            case let .gap(gap):
                 BrowserBridgeDebugLog.emit(
-                    .visualCaptureFailed, command: command, messageType: gap.rawValue)
+                    .visualCaptureFailed, command: command, messageType: gap.rawValue
+                )
                 return .gap(gap)
             }
-            defer { try? FileManager.default.removeItem(at: screenshot.evidence.url) }
             let rendered: BrowserLocalEvidence
             do {
-                rendered = try RenderedBrowserEvidencePDF.makeFile(from: screenshot.image)
+                rendered = try RenderedBrowserEvidencePDF.makeFile(
+                    from: screenshot.image, to: directory.appendingPathComponent("rendered.pdf"))
             } catch {
                 BrowserBridgeDebugLog.emit(.visualCaptureFailed, command: command, error: error)
                 return .gap(.captureFailed)
             }
-            defer { try? FileManager.default.removeItem(at: rendered.url) }
             do {
                 var references: [BrowserEvidenceReference] = []
                 for evidence in [screenshot.evidence, rendered] {
-                    references.append(
-                        try await evidenceUploader.upload(evidence, runID: command.runID, scope: scope))
+                    try references.append(
+                        await evidenceUploader.upload(evidence, runID: command.runID, scope: scope)
+                    )
                 }
                 BrowserBridgeDebugLog.emit(.visualCaptureFinished, command: command)
                 return .captured(references)
             } catch {
                 BrowserBridgeDebugLog.emit(.visualCaptureFailed, command: command, error: error)
                 let failure = ExecutionFailure.uploading(error)
-                if failure == .clientUpdateRequired { throw failure }
+                if failure == .clientUpdateRequired {
+                    throw failure
+                }
                 failureDiagnostic = String(describing: error)
                 return .gap(.uploadFailed)
             }
         }
 
-        private func takeScreenshot() async -> ScreenshotTake {
+        private func takeScreenshot(to url: URL) async -> ScreenshotTake {
             guard CGPreflightScreenCaptureAccess() else { return .gap(.screenRecordingDenied) }
             guard let ownedWindowID, let state = try? await windowState(ownedWindowID) else {
                 return .gap(.windowNotFound)
             }
-            if state.minimized { return .gap(.windowMinimized) }
+            if state.minimized {
+                return .gap(.windowMinimized)
+            }
             let window: SCWindow
             do {
                 guard let found = try await captureWindow(state: state) else {
@@ -547,13 +701,13 @@
             }
             guard window.isOnScreen else { return .gap(.windowOffScreen) }
             do {
-                return .taken(try await screenshot(of: window))
+                return try .taken(await screenshot(of: window, to: url))
             } catch {
                 return .gap(.captureFailed)
             }
         }
 
-        private func screenshot(of window: SCWindow) async throws -> BrowserScreenshot {
+        private func screenshot(of window: SCWindow, to url: URL) async throws -> BrowserScreenshot {
             let filter = SCContentFilter(desktopIndependentWindow: window)
             let configuration = SCStreamConfiguration()
             configuration.width = max(1, Int(window.frame.width * 2))
@@ -561,32 +715,35 @@
             configuration.showsCursor = false
             configuration.ignoreShadowsSingleWindow = false
             let image = try await SCScreenshotManager.captureImage(
-                contentFilter: filter, configuration: configuration)
+                contentFilter: filter, configuration: configuration
+            )
+            // Reconnect/retirement can cancel a suspended capture before it writes local bytes.
+            try Task.checkCancellation()
             let data = NSMutableData()
             guard
                 let destination = CGImageDestinationCreateWithData(
-                    data, UTType.png.identifier as CFString, 1, nil)
+                    data, UTType.png.identifier as CFString, 1, nil
+                )
             else { throw ExecutionFailure.executionFailed }
             CGImageDestinationAddImage(destination, image, nil)
             guard CGImageDestinationFinalize(destination) else { throw ExecutionFailure.executionFailed }
-            let directory = FileManager.default.temporaryDirectory.appendingPathComponent(
-                "CubbyBrowserEvidence", isDirectory: true)
-            try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
-            let url = directory.appendingPathComponent("browser-view-\(UUID().uuidString).png")
             try (data as Data).write(to: url, options: .atomic)
             return BrowserScreenshot(
                 evidence: BrowserLocalEvidence(
                     url: url, kind: .screenshot, checksum: (data as Data).sha256Hex,
-                    contentType: "image/png"),
-                image: image)
+                    contentType: "image/png"
+                ),
+                image: image
+            )
         }
 
         /// Setting a tab URL returns before the new document loads; a navigation still in flight
         /// after the wait is an unreadable page, which the server may retry.
-        private func waitForPageReady(targetURL: URL?) async throws {
+        private func waitForPageReady(targetURL: URL?, deadline: Date) async throws {
             var lastURL: String?
             var stableProbes = 0
             for _ in 0..<40 {
+                guard deadline > .now else { throw ExecutionFailure.deadlineExceeded }
                 try Task.checkCancellation()
                 do {
                     let probe = try await probePage()
@@ -594,10 +751,12 @@
                         !probe.leaving && probe.readyState == "complete" && probe.url == lastURL
                         ? stableProbes + 1 : 0
                     lastURL = probe.url
-                    if BrowserCaptureNavigationPolicy.isReady(
-                        currentURL: URL(string: probe.url), targetURL: targetURL,
-                        documentReadyState: probe.readyState, stableProbes: stableProbes,
-                        leavingPreviousDocument: probe.leaving)
+                    if stableProbes >= BrowserCaptureNavigationPolicy.settledProbes,
+                        BrowserCaptureNavigationPolicy.isReady(
+                            currentURL: URL(string: probe.url), targetURL: targetURL,
+                            documentReadyState: probe.readyState, stableProbes: stableProbes,
+                            leavingPreviousDocument: probe.leaving
+                        )
                     {
                         return
                     }
@@ -627,7 +786,8 @@
                 let state = try? await windowState(ownedWindowID)
             else {
                 return BrowserObservation(
-                    window: nil, screenRecording: screenRecording, durationMs: durationMs)
+                    window: nil, screenRecording: screenRecording, durationMs: durationMs
+                )
             }
             let probe = try? await probePage()
             var onScreen: Bool?
@@ -643,7 +803,8 @@
                     BrowserObservation.ReadyStatePayload(rawValue: $0.readyState)
                 },
                 window: .init(recovered: windowRecovered, minimized: state.minimized, onScreen: onScreen),
-                screenRecording: screenRecording, durationMs: durationMs)
+                screenRecording: screenRecording, durationMs: durationMs
+            )
         }
 
         // MARK: Apple Events
@@ -668,7 +829,8 @@
         ) async throws -> String {
             do {
                 return try await appleScript.execute(
-                    script, action: action, timeoutSeconds: timeoutSeconds)
+                    script, action: action, timeoutSeconds: timeoutSeconds
+                )
             } catch let error as AppleScriptFailure {
                 failureDiagnostic = error.diagnostic
                 throw error.failure
@@ -696,31 +858,17 @@
                 """
         }
 
-        /// Fixed, with no page-derived input. Trims what the server never reads (scripts other
-        /// than ld+json, styles, SVG, frames, comments) and every form value, so typed text and
-        /// credentials never leave the Mac; password inputs keep their `type` for sign-in detection.
-        static let snapshotScript = #"""
-            (() => {
-              const root = document.documentElement.cloneNode(true);
-              root.querySelectorAll(
-                'script:not([type="application/ld+json" i]), style, svg, noscript, template, iframe, link[rel~="stylesheet" i], link[rel~="preload" i]'
-              ).forEach(node => node.remove());
-              const walker = document.createTreeWalker(root, NodeFilter.SHOW_COMMENT);
-              const comments = [];
-              while (walker.nextNode()) comments.push(walker.currentNode);
-              comments.forEach(node => node.remove());
-              root.querySelectorAll(
-                'input:not([type="submit" i]):not([type="button" i]):not([type="reset" i]):not([type="image" i])'
-              ).forEach(input => input.removeAttribute('value'));
-              root.querySelectorAll('textarea').forEach(area => { area.textContent = ''; });
-              return JSON.stringify({
-                url: location.href,
-                title: document.title,
-                readyState: document.readyState,
-                html: '<!doctype html>' + root.outerHTML
-              });
-            })();
-            """#
+        /// Synthetic tests exercise the same fixed observation script as the native executor.
+        static var snapshotScript: String {
+            BrowserActionScript.observation(id: UUID().uuidString.lowercased())
+        }
+
+        static func scrollScript(pageCount: Int) throws -> String {
+            guard (-10 ... -1).contains(pageCount) || (1...10).contains(pageCount) else {
+                throw ExecutionFailure.invalidCommand
+            }
+            return "window.scrollBy(0, window.innerHeight * \(pageCount)); true;"
+        }
     }
 
     /// An Apple Event failure: the bridge code it maps to plus the raw AppleScript error.
@@ -744,17 +892,20 @@
             let target = NSAppleEventDescriptor(bundleIdentifier: self.target.bundleIdentifier)
             guard let descriptor = target.aeDesc else { throw ExecutionFailure.browserUnavailable }
             let permission = AEDeterminePermissionToAutomateTarget(
-                descriptor, typeWildCard, typeWildCard, true)
+                descriptor, typeWildCard, typeWildCard, true
+            )
             if permission == errAEEventNotPermitted || permission == errAEEventWouldRequireUserConsent {
                 BrowserBridgeDebugLog.emit(.appleEventRejected, messageType: action)
                 throw AppleScriptFailure(
                     failure: .permissionDenied,
-                    diagnostic: "AEDeterminePermissionToAutomateTarget returned \(permission).")
+                    diagnostic: "AEDeterminePermissionToAutomateTarget returned \(permission)."
+                )
             }
             guard permission == noErr else {
                 throw AppleScriptFailure(
                     failure: .browserUnavailable,
-                    diagnostic: "AEDeterminePermissionToAutomateTarget returned \(permission).")
+                    diagnostic: "AEDeterminePermissionToAutomateTarget returned \(permission)."
+                )
             }
             let bounded = "with timeout of \(timeoutSeconds) seconds\n\(source)\nend timeout"
             guard let script = NSAppleScript(source: bounded) else {
@@ -768,26 +919,27 @@
                 let failure = ExecutionFailure.appleScript(errorNumber: number, message: message)
                 BrowserBridgeDebugLog.emit(
                     failure == .executionFailed ? .appleEventFailed : .appleEventRejected,
-                    messageType: action, errorCode: number)
+                    messageType: action, errorCode: number
+                )
                 throw AppleScriptFailure(
                     failure: failure,
                     diagnostic:
                         "AppleScript \(action) error \(number.map(String.init) ?? "?"): "
-                        + (message ?? "no message"))
+                        + (message ?? "no message")
+                )
             }
             BrowserBridgeDebugLog.emit(.appleEventFinished, messageType: action)
             return result.stringValue ?? String(result.int32Value)
         }
     }
 
-    extension BrowserBridgeURLPolicy.Failure {
-        fileprivate var message: String {
+    fileprivate extension BrowserBridgeURLPolicy.Failure {
+        var message: String {
             switch self {
             case .httpsRequired: "Only HTTPS browser URLs are allowed."
             case .credentialsForbidden: "Browser URLs cannot contain credentials."
             case .hostMissing: "The browser URL has no host."
             case .hostNotAllowed: "The browser URL is outside the Vendor allowlist."
-            case .fragmentForbidden: "Browser URL fragments are not allowed."
             }
         }
     }

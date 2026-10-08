@@ -22,13 +22,13 @@ description, source page) for human review — see [product
 identity](product-identity.md) for the exact-id-vs-descriptive rule.
 Enrichment itself never merges without that human confirmation.
 
-In a targeted run's commit, a non-Amazon catalog image is verified only when the
-same single-Product vendor page proves an identifier the Product already has or
-is committing, and the image URL and dimensions appear in that capture. If the
-page lists several variants, capture the exact variant's page or leave the
-Product for review. A commit that finds a proven identifier owned by another
-Product still succeeds for the rest; read `skippedIdentifiers` and let a human
-resolve the proposed pair.
+For a hosted research resolution, cite the retained exact-variant observation
+and its server-issued image candidate. Establish the purchased item → selected
+variant → representative asset connection. Structured data may help, but a
+visible selected variant can supply that connection. A group-level image alone
+does not prove the ordered variant. The host rechecks current facts, dimensions,
+integrity, identifier ownership and image order before accepting writes. Inspect
+per-claim refusals and preserve the proposed pair when an identifier collides.
 
 For identifier-only work, each `product_enrichment.patch_external_ids` item upserts one precise
 source/kind slot and removes only an explicitly obsolete value with its exact

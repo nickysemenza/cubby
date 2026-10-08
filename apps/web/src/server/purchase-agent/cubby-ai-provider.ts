@@ -6,6 +6,7 @@ import {
 import {
   type ChatGptInference,
   type GatewayQuery,
+  type GatewayFetchRoutes,
   gatewayFetchThrough,
   type GatewayResponseInfo,
   requestUrl,
@@ -57,7 +58,10 @@ const COORDINATOR_CALL = {
   operation: "agent.generation",
 } satisfies AiGatewayCallMetadata;
 
-interface AgentFetchOptions {
+interface AgentFetchOptions extends Pick<
+  GatewayFetchRoutes,
+  "subscriptionRequired" | "beforePaidRequest"
+> {
   gateway: () => AgentGateway;
   testModel?: TestModel;
   subscription?: ChatGptInference;
@@ -83,6 +87,8 @@ export function createCubbyGatewayFetch(
     provider: route,
     rewriteQuery: (body) => withSequentialToolCalls(route, body),
     chatGpt: options.subscription,
+    subscriptionRequired: options.subscriptionRequired,
+    beforePaidRequest: options.beforePaidRequest,
     onTransport: options.onTransport,
     onResponse: options.onResponse,
     testPeer: () =>
@@ -103,6 +109,8 @@ export function createCubbyGatewayFetch(
       const gateway = options.gateway();
       return runUniversalGateway(gateway, route, request, {
         id: gateway.id,
+        skipCache: true,
+        collectPayload: false,
         metadata: aiGatewayMetadataSchema.parse({
           ...COORDINATOR_CALL,
           environment: gateway.environment,

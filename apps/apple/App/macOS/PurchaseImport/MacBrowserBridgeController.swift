@@ -19,7 +19,8 @@ final class MacBrowserBridgeController: BrowserBridgeControlling {
         executorFactory: { [baseURL, client] browser, accountID in
             try MacBrowserCommandExecutor(
                 target: Self.executionTarget(browser: browser, baseURL: baseURL),
-                accountID: accountID, evidenceUploader: CubbyBrowserEvidenceUploader(client: client))
+                accountID: accountID, evidenceUploader: CubbyBrowserEvidenceUploader(client: client),
+                captureStore: .caches(namespace: "\(CubbyBaseURL.host(of: baseURL))-\(accountID)"))
         },
         replayStoreFactory: { [baseURL] accountID in
             try FileBrowserBridgeReplayStore.applicationSupport(

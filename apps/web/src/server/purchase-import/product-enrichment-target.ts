@@ -24,6 +24,8 @@ export async function productEnrichmentTarget(
       manufacturer: product.manufacturer,
       categoryId: product.categoryId,
       model: product.model,
+      ingredientId: product.ingredientId,
+      growsPlantId: product.growsPlantId,
       updatedAt: product.updatedAt,
     })
     .from(product)

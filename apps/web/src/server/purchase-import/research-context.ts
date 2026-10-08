@@ -1,0 +1,150 @@
+import type { ProductId, LedgerPartyId } from "@cubby/schemas/identifiers";
+import { acceptedSourceOrder } from "@cubby/schemas/purchase-import";
+import { and, eq, inArray, or, isNotNull } from "drizzle-orm";
+
+import type { Database } from "~/server/db";
+import {
+  expense,
+  importPreparedOrder,
+  importSourceClaim,
+  importSourceOrder,
+  importSourceProduct,
+  purchase,
+  run,
+  vendor,
+} from "~/server/db/schema";
+import { getDb, notDeleted } from "~/server/repo/database-helpers";
+
+import { loadImportSourceClaimRoots } from "./source-claim-family";
+
+/** The purchased variant comes from accepted original evidence, independently of editable ledger labels. */
+export async function loadProductPurchaseContext(
+  db: Database,
+  input: { productId: ProductId; ledgerPartyId: LedgerPartyId },
+) {
+  const database = getDb(db);
+  const orders = await database
+    .select({
+      // Drizzle uses the first selected column to recognize a missing joined
+      // row. A nullable category must not hide an existing purchase line.
+      line: {
+        id: expense.id,
+        name: expense.name,
+        url: expense.url,
+        productQuantity: expense.productQuantity,
+      },
+      purchase,
+      vendor: { name: vendor.name, website: vendor.website },
+      source: importSourceClaim,
+      association: importSourceOrder,
+      originalLineIndex: importSourceProduct.lineIndex,
+    })
+    .from(importSourceOrder)
+    .leftJoin(
+      importSourceProduct,
+      and(
+        eq(importSourceProduct.sourceOrderId, importSourceOrder.id),
+        eq(importSourceProduct.productId, input.productId),
+      ),
+    )
+    .innerJoin(
+      purchase,
+      and(eq(purchase.id, importSourceOrder.purchaseId), notDeleted(purchase)),
+    )
+    .leftJoin(
+      expense,
+      and(
+        eq(expense.purchaseId, purchase.id),
+        eq(expense.productId, input.productId),
+        notDeleted(expense),
+      ),
+    )
+    .innerJoin(
+      vendor,
+      and(eq(vendor.id, purchase.vendorId), notDeleted(vendor)),
+    )
+    .innerJoin(
+      importSourceClaim,
+      and(
+        eq(importSourceClaim.id, importSourceOrder.sourceClaimId),
+        eq(importSourceClaim.ledgerPartyId, input.ledgerPartyId),
+      ),
+    )
+    .where(or(isNotNull(expense.id), isNotNull(importSourceProduct.id)))
+    .limit(30);
+  const roots = await loadImportSourceClaimRoots(
+    database,
+    orders.map((row) => row.source),
+  );
+  const keys = [
+    ...new Set([
+      ...orders.map((row) => row.source.externalKey),
+      ...[...roots.values()].map((source) => source.externalKey),
+    ]),
+  ];
+  const prepared = keys.length
+    ? await database
+        .select({
+          sourceKey: importPreparedOrder.sourceExternalKey,
+          sourceKind: importPreparedOrder.sourceKind,
+          checksum: importPreparedOrder.sourceChecksum,
+          extraction: importPreparedOrder.extraction,
+        })
+        .from(importPreparedOrder)
+        .innerJoin(
+          run,
+          and(
+            eq(run.id, importPreparedOrder.runId),
+            eq(run.ledgerPartyId, input.ledgerPartyId),
+            notDeleted(run),
+          ),
+        )
+        .where(inArray(importPreparedOrder.sourceExternalKey, keys))
+    : [];
+  return orders.map((row) => {
+    const root = roots.get(row.source.id);
+    if (!root) throw new Error("Retained Product source root is missing.");
+    const original = row.association.originalOrder
+      ? acceptedSourceOrder.parse(row.association.originalOrder)
+      : null;
+    return {
+      orderedLine:
+        row.originalLineIndex !== null
+          ? (original?.extraction.candidate?.lines[row.originalLineIndex] ??
+            null)
+          : null,
+      currentLine: row.line
+        ? {
+            name: row.line.name,
+            url: row.line.url,
+            quantity: row.line.productQuantity,
+          }
+        : null,
+      order: {
+        purchaseRef: row.purchase.shortcode,
+        orderId: row.purchase.orderId,
+        date: row.purchase.date,
+        statedTotal: row.purchase.statedTotal,
+      },
+      vendor: row.vendor,
+      source: {
+        kind: row.source.kind,
+        sourceRef: row.association.id,
+        externalKey: root.externalKey,
+        checksum: original?.checksum ?? row.association.checksum,
+        currentChecksum: root.checksum,
+      },
+      originalExtractions: original
+        ? [original.extraction]
+        : prepared
+            .filter(
+              (source) =>
+                (source.sourceKey === row.source.externalKey ||
+                  source.sourceKey === root.externalKey) &&
+                source.sourceKind === row.source.kind &&
+                source.checksum === row.association.checksum,
+            )
+            .map((source) => source.extraction),
+    };
+  });
+}

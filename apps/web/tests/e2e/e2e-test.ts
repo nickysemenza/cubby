@@ -16,6 +16,7 @@ type WorkerFixtures = {
   e2eRuntime: E2EWorkerRuntime;
   /** Which queues and peers the Worker runs (`WORKERD_PROFILES`). */
   workerdProfile: WorkerdProfile;
+  objectStoragePublicUrl: string | undefined;
 };
 
 /** `CUBBY_E2E_VIDEO=1` records every test in the run; specs pace demos on it. */
@@ -27,12 +28,14 @@ const test = base.extend<TestFixtures, WorkerFixtures>({
   // browser, database, and Worker harness. Recording is chosen per run here.
   video: [recordingVideo ? "on" : "off", { scope: "worker" }],
   workerdProfile: ["offline", { scope: "worker", option: true }],
+  objectStoragePublicUrl: [undefined, { scope: "worker", option: true }],
   e2eRuntime: [
-    async ({ workerdProfile }, provide, workerInfo) => {
+    async ({ workerdProfile, objectStoragePublicUrl }, provide, workerInfo) => {
       const runtime = await createE2EWorkerRuntime({
         authenticated: workerInfo.project.metadata.authenticated === true,
         parallelIndex: workerInfo.parallelIndex,
         profile: workerdProfile,
+        objectStorage: { publicUrl: objectStoragePublicUrl },
       });
       try {
         await provide(runtime);

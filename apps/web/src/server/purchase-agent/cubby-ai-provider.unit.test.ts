@@ -30,6 +30,25 @@ const completedResponse = (headers: Record<string, string> = {}) =>
   );
 
 describe("createCubbyGatewayFetch", () => {
+  it("stops subscription-required research when the plan is disconnected", async () => {
+    const run = vi.fn(async () => completedResponse());
+    const options = {
+      gateway: () => gateway(run),
+      subscription: async () => null,
+      subscriptionRequired: true,
+    };
+    await expect(
+      createCubbyGatewayFetch("openai", options)(
+        "https://api.openai.com/v1/responses",
+        {
+          method: "POST",
+          body: JSON.stringify({ model: "gpt-6-sol", input: [] }),
+        },
+      ),
+    ).rejects.toThrow(/Required ChatGPT subscription/);
+    expect(run).not.toHaveBeenCalled();
+  });
+
   // Subscription responses must not acquire API prices in the persisted pi
   // transcript, and a subsequent paid response must retain its API price.
   it("normalizes subscription costs before forwarding terminal events", async () => {
@@ -180,6 +199,8 @@ describe("createCubbyGatewayFetch", () => {
       {
         gateway: {
           id: "cubby",
+          skipCache: true,
+          collectPayload: false,
           // Regression: the run id and a jobKind duplicating the feature
           // once rode here; the Run's usage rows keep its attribution.
           metadata: {
