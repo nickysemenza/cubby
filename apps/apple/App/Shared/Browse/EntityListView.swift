@@ -691,15 +691,15 @@ struct EntityListView: View {
                         ) { row in
                             tableTitle(row)
                         }
-                        .customizationID("title")
                         .width(min: 240)
+                        .customizationID("title")
                     }
                     if !descriptor.sortFields.contains(descriptor.titleField) {
                         TableColumn(Text(tableTitleLabel)) { (row: EntityRow) in
                             tableTitle(row)
                         }
-                        .customizationID("title")
                         .width(min: 240)
+                        .customizationID("title")
                     }
                     TableColumnForEach(tableFields, id: \.key) { field in
                         if let sortKey = sortKey(for: field) {
@@ -708,15 +708,15 @@ struct EntityListView: View {
                             ) { row in
                                 tableCell(field, row: row)
                             }
-                            .customizationID(field.key)
                             .width(min: 180)
+                            .customizationID(field.key)
                         }
                         if sortKey(for: field) == nil {
                             TableColumn(Text(field.label)) { (row: EntityRow) in
                                 tableCell(field, row: row)
                             }
-                            .customizationID(field.key)
                             .width(min: 180)
+                            .customizationID(field.key)
                         }
                     }
                 }

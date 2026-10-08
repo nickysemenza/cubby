@@ -63,6 +63,11 @@ is observable by its accessibility label.
 After opening a record, assert its detail Edit control. A title-only assertion
 can pass while the list stays visible behind a field explanation.
 
+For Mac `TableColumn`, apply `width` before `customizationID`; the latter
+returns opaque `TableColumnContent`, which has no `width` modifier. Validate
+native column modifiers with the full Mac build, including sorted and plain
+columns.
+
 `pnpm test:e2e:sim -- --product-clarity --video` runs a focused synthetic Product
 presentation journey. It opens and closes the valuation explanation, checks the
 manual and expense-derived values, and verifies recorded movement, planned, and
