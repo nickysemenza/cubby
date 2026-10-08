@@ -695,7 +695,7 @@ async function runNativeScenario(
     const hiddenManufacturerCount = manufacturerCount(await driver.snapshot());
     await driver.click('label="Show or hide table columns"');
     await driver.click("id=browse.product.column.manufacturer");
-    await driver.wait("label=Manufacturer");
+    await driver.wait("role=button label=Manufacturer");
     await pollUntil(
       async () =>
         manufacturerCount(await driver.snapshot()) > hiddenManufacturerCount
@@ -706,7 +706,7 @@ async function runNativeScenario(
     await driver.screenshot("entity-table");
     await driver.click('label="Show or hide table columns"');
     await driver.click("id=browse.product.column.manufacturer");
-    await driver.waitAbsent("label=Manufacturer");
+    await driver.waitAbsent("role=button label=Manufacturer");
     await pollUntil(
       async () =>
         manufacturerCount(await driver.snapshot()) === hiddenManufacturerCount
