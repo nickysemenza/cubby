@@ -1,9 +1,9 @@
+import { type SmartCollectionSummary } from "@cubby/schemas/collection";
 import {
   type SmartCollectionDefinition,
   type SmartCollectionKey,
   type SmartCollectionRule,
-  type SmartCollectionSummary,
-} from "@cubby/schemas/collection";
+} from "@cubby/schemas/collection-fields";
 import { TRADE_LABELS, tradeSchema, tradeValues } from "@cubby/schemas/project";
 import { ArrowCounterClockwiseIcon } from "@phosphor-icons/react/dist/csr/ArrowCounterClockwise";
 import { CaretDownIcon } from "@phosphor-icons/react/dist/csr/CaretDown";
@@ -13,7 +13,7 @@ import { TrashIcon } from "@phosphor-icons/react/dist/csr/Trash";
 import { useQuery } from "@tanstack/react-query";
 import { useId, useState } from "react";
 
-import { collection as collectionOperations } from "~/integrations/tanstack-query/generated/catalog.gen";
+import { collection as collectionOperations } from "~/integrations/tanstack-query/generated/collection.gen";
 import { Stack } from "~/ui/layout";
 import { Badge } from "~/ui/primitives/badge";
 import { Button } from "~/ui/primitives/button";

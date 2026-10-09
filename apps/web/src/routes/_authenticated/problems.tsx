@@ -2,7 +2,7 @@ import { GitMergeIcon } from "@phosphor-icons/react/dist/csr/GitMerge";
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { lazy, Suspense } from "react";
 
-import { problems } from "~/integrations/tanstack-query/generated/catalog.gen";
+import { problems } from "~/integrations/tanstack-query/generated/problems.gen";
 import { pageTitle } from "~/lib/page-title";
 import { SimpleLoading } from "~/ui/feedback/loading-skeletons";
 import { Stack } from "~/ui/layout";

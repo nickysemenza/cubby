@@ -81,7 +81,7 @@ import {
   type ListProjection,
   wantsListGroup,
 } from "~/server/repo/list-projection";
-import { getCategoryFeature } from "~/server/repo/product-category";
+import { getCategoryFeature } from "~/server/repo/product-category-feature";
 import {
   resolveAllOrThrow,
   resolveFilterIds,

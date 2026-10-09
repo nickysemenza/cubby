@@ -10,7 +10,7 @@ import {
   entityDisplayImageKey,
   useEntityDisplayImages,
 } from "~/entity/entity-media/entity-display-images";
-import { recipe } from "~/integrations/tanstack-query/generated/catalog.gen";
+import { recipe } from "~/integrations/tanstack-query/generated/recipe.gen";
 import { cn } from "~/lib/utils";
 import { useHydrated } from "~/ui/hooks/useHydrated";
 import { Row, Stack } from "~/ui/layout";

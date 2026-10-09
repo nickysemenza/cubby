@@ -422,3 +422,25 @@ export const mutationEvents = <E extends MutationSideEffectEntity>(
     entity: ENTITY_REF_BUILDER[entity](id),
     source,
   }));
+
+/** Refresh docs and semantic work after an analysis/correction changes text. */
+export async function refreshDirectImageOwnerSearchDocuments(
+  db: Database,
+  imageId: string,
+): Promise<void> {
+  const refs = await findDirectImageSearchOwnerRefs(db, imageId);
+  await refreshCapturedImageSearchOwnerRefs(
+    db,
+    refs,
+    "image-processing.search-text",
+  );
+}
+
+/** Refresh image owners captured before an attachment edge is removed. */
+export async function refreshCapturedImageSearchOwnerRefs(
+  db: Database,
+  refs: SearchableEntityRef[],
+  source: string,
+): Promise<void> {
+  await refreshDerivedSearchRefs(db, refs, source);
+}

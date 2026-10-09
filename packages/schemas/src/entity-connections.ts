@@ -2,7 +2,7 @@ import { z } from "zod";
 
 import { entitySchema } from "./entity-core";
 import { edgeRoleSchema, operationDispositionSchema } from "./entity-integrity";
-import { shortcodeEntities } from "./entity-manifest";
+import { shortcodeEntities } from "./entity-index";
 import { anyShortcodeSchema, nonEmptyTuple } from "./identifier-fields";
 
 /**

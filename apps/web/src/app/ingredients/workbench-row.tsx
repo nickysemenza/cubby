@@ -5,7 +5,7 @@ import { CheckIcon } from "@phosphor-icons/react/dist/csr/Check";
 import { useQuery } from "@tanstack/react-query";
 
 import { RecipeUsagesTable } from "~/features/recipes/recipe-usages-table";
-import { ingredient } from "~/integrations/tanstack-query/generated/catalog.gen";
+import { ingredient } from "~/integrations/tanstack-query/generated/ingredient.gen";
 import { UsdaFoodSearchField } from "~/ui/combobox/with-usda-food-search";
 import { Row, Stack } from "~/ui/layout";
 import { Button } from "~/ui/primitives/button";

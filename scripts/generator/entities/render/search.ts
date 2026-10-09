@@ -141,11 +141,7 @@ export const renderSearchArtifacts = (
         throw new EntityDeclarationError(
           `${entity.key} list search keys collide: ${keys.filter((key, index) => keys.indexOf(key) !== index).join(", ")}.`,
         );
-      return (
-        `${JSON.stringify(entity.key)}:{\n` +
-        `schema:z.object({\n${fields.join("\n")}\n...tableSearchFields,\n${dialog ? "create:createSearchField,\n" : ""}${viewField}${slotFields}${slotFields ? "\n" : ""}${timelineFields}}),\n` +
-        `defaults:{${keys.map((key) => `${JSON.stringify(key)}:undefined`).join(",")}},\n},`
-      );
+      return `${JSON.stringify(entity.key)}:searchEntry({\n${fields.join("\n")}\n...tableSearchFields,\n${dialog ? "create:createSearchField,\n" : ""}${viewField}${slotFields}${slotFields ? "\n" : ""}${timelineFields}}),`;
     })
     .join("\n");
   return [
@@ -153,12 +149,34 @@ export const renderSearchArtifacts = (
       relativePath: "apps/web/src/entity/generated/entity-search.gen.ts",
       source:
         generatedHeader +
-        'import type { Entity } from "@cubby/schemas/entity";\n' +
         `${imports}\n` +
         'import { z } from "zod";\n\n' +
         'import { tableSearchFields } from "~/ui/data-table/table-search";\n' +
-        'import { FILTER_ANY, FILTER_NONE } from "~/entity/filters";\n' +
+        'import { FILTER_ANY, FILTER_NONE } from "@cubby/schemas/filter-sentinel-fields";\n' +
         'import { urlEnumListParam, urlPlainDateParam, urlShortcodeListParam, urlShortcodeParam, urlStringParam } from "~/lib/search-params";\n\n' +
+        "// A nullable filter also accepts the presence sentinels the filter UI writes.\n" +
+        "const PRESENCE_SENTINELS = [FILTER_ANY, FILTER_NONE] as const;\n" +
+        "const withPresenceSentinels = <T extends z.ZodType<string>>(schema: T) =>\n" +
+        "  z.union([schema, z.literal(FILTER_ANY), z.literal(FILTER_NONE)]);\n" +
+        "// `?create=true` opens the capture dialog; a real boolean, not a string.\n" +
+        "const createSearchField = z.boolean().optional().catch(undefined);\n" +
+        "// `stripSearchParams` strips only the keys it is given, so `defaults`\n" +
+        "// names every schema key.\n" +
+        "const searchEntry = <const Shape extends z.ZodRawShape>(shape: Shape) => ({\n" +
+        "  schema: z.object(shape),\n" +
+        "  // SAFETY: built from exactly `shape`'s own keys, each mapped to undefined.\n" +
+        "  defaults: Object.fromEntries(Object.keys(shape).map((key) => [key, undefined])) as { [Key in keyof Shape]: undefined },\n" +
+        "});\n\n" +
+        `export const entitySearch = {\n${entries}\n};\n`,
+    },
+    {
+      // Apart from `entity-search.gen.ts`, which every list route's search
+      // validation loads with the app entry; only filter assembly reads this.
+      relativePath:
+        "apps/web/src/entity/generated/entity-filter-url-keys.gen.ts",
+      source:
+        generatedHeader +
+        'import type { Entity } from "@cubby/schemas/entity";\n\n' +
         renderRecord({
           name: "entityFilterUrlKeyRoster",
           entries: Object.fromEntries(
@@ -179,14 +197,7 @@ export const renderSearchArtifacts = (
         "\n" +
         "/** The URL keys an entity accepts for its canonical filter assembly. */\n" +
         "export const entityFilterUrlKeys = (entity: Entity): readonly string[] =>\n" +
-        "  entityFilterUrlKeyRoster[entity] ?? [];\n\n" +
-        "// A nullable filter also accepts the presence sentinels the filter UI writes.\n" +
-        "const PRESENCE_SENTINELS = [FILTER_ANY, FILTER_NONE] as const;\n" +
-        "const withPresenceSentinels = <T extends z.ZodType<string>>(schema: T) =>\n" +
-        "  z.union([schema, z.literal(FILTER_ANY), z.literal(FILTER_NONE)]);\n" +
-        "// `?create=true` opens the capture dialog; a real boolean, not a string.\n" +
-        "const createSearchField = z.boolean().optional().catch(undefined);\n\n" +
-        `export const entitySearch = {\n${entries}\n};\n`,
+        "  entityFilterUrlKeyRoster[entity] ?? [];\n",
     },
   ];
 };

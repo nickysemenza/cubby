@@ -1,10 +1,10 @@
 import type { Entity } from "@cubby/schemas/entity";
-import { allEntities } from "@cubby/schemas/entity-manifest";
 import {
-  entitySummary,
-  type WayfindingDomain,
   WAYFINDING_DOMAIN_PRESENTATION,
-} from "@cubby/schemas/entity-summary";
+  type WayfindingDomain,
+  allEntities,
+  entityIndex,
+} from "@cubby/schemas/entity-index";
 
 /** The stable wayfinding families used by the Field Guide shell. */
 export type { WayfindingDomain };
@@ -15,7 +15,7 @@ export type { WayfindingDomain };
  * workbench routes (`/calendar`) that belong to no entity.
  */
 const entitiesOn = (domain: WayfindingDomain): readonly Entity[] =>
-  allEntities.filter((entity) => entitySummary[entity].domain === domain);
+  allEntities.filter((entity) => entityIndex[entity].domain === domain);
 
 export type DomainWayfinding = {
   id: WayfindingDomain;
@@ -123,7 +123,7 @@ export function domainForRoute(pathname: string): WayfindingDomain | null {
 
 /** Product classification intentionally resolves to Pantry. */
 export function domainForEntity(entity: Entity): WayfindingDomain | null {
-  return entitySummary[entity].domain;
+  return entityIndex[entity].domain;
 }
 
 export function domainWayfinding(domain: WayfindingDomain): DomainWayfinding {

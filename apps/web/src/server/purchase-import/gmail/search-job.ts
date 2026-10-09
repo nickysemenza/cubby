@@ -25,6 +25,7 @@ import {
   runFailureText,
 } from "~/server/workflow-runs/lifecycle";
 
+import { searchVendorOrderMail } from "./search";
 import { resolveVendorMailSearchTarget } from "./targets";
 import { vendorSearchTerms } from "./vendor-identity";
 import { defaultVendorMailSearchAfter } from "./vendor-search";
@@ -230,7 +231,7 @@ export async function scanVendorMailPage(
   params: WorkflowRunParams,
   page: number,
   options: {
-    search?: typeof import("./search").searchVendorOrderMail;
+    search?: typeof searchVendorOrderMail;
     reportError?: typeof reportServerError;
     now?: () => Date;
   } = {},
@@ -293,12 +294,9 @@ export async function scanVendorMailPage(
     });
   };
   await recordProgress("running", `Searching Gmail page ${page + 1}`);
-  let result: Awaited<
-    ReturnType<typeof import("./search").searchVendorOrderMail>
-  >;
+  let result: Awaited<ReturnType<typeof searchVendorOrderMail>>;
   try {
-    const search =
-      options.search ?? (await import("./search")).searchVendorOrderMail;
+    const search = options.search ?? searchVendorOrderMail;
     const ownerVendorId = job.vendorId;
     if (!ownerVendorId)
       throw new Error("Vendor for Gmail search no longer exists");

@@ -3,7 +3,7 @@ import { useQuery } from "@tanstack/react-query";
 import { useMemo, useState } from "react";
 import { z } from "zod";
 
-import { mcp } from "~/integrations/tanstack-query/generated/catalog.gen";
+import { mcp } from "~/integrations/tanstack-query/generated/mcp.gen";
 import { SimpleLoading } from "~/ui/feedback/loading-skeletons";
 import { Row, Stack } from "~/ui/layout";
 import { Badge } from "~/ui/primitives/badge";

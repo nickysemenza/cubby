@@ -3,7 +3,7 @@ import { useQuery } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
 import { useId } from "react";
 
-import { location } from "~/integrations/tanstack-query/generated/catalog.gen";
+import { location } from "~/integrations/tanstack-query/generated/location.gen";
 import { formatCurrency } from "~/lib/utils";
 import { Row } from "~/ui/layout";
 import { CardActionLink, DashboardCard } from "~/ui/layout/dashboard-card";

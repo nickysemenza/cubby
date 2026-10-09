@@ -7,7 +7,7 @@ import {
   type UnitMapping,
 } from "@cubby/schemas/unitmapping";
 import type { UsdaFoodListRow } from "@cubby/schemas/usda";
-import { UNSPECIFIED_MANUFACTURER } from "@cubby/shared";
+import { UNSPECIFIED_MANUFACTURER } from "@cubby/shared/constants";
 import type { FoodSummary } from "@cubby/usda";
 
 import { getHoverableMeasureUnitIcon } from "~/features/inventory/format-amount";

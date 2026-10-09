@@ -1,17 +1,16 @@
 import type { DurableObjectState } from "@cloudflare/workers-types";
 import type { ChatGptAuthorization } from "@cubby/schemas/chatgpt";
 import type { GatewayQuery } from "@cubby/shared/ai/gateway-request";
-import { DurableObject } from "cloudflare:workers";
 
 import { ChatGptInferenceRequests, type ChatGptInferenceOptions } from "./rpc";
 import { ChatGptSession } from "./session";
 
-export class ChatGptPlanDurableObject extends DurableObject<Env> {
+/** `ChatGptPlanDurableObject`'s implementation (`server/worker-entrypoints.ts`). */
+export class ChatGptPlanObject {
   private readonly session: ChatGptSession;
   private readonly requests: ChatGptInferenceRequests;
 
-  constructor(ctx: DurableObjectState, env: Env) {
-    super(ctx, env);
+  constructor(ctx: DurableObjectState) {
     this.session = new ChatGptSession({
       get: (key) => ctx.storage.get(key),
       put: (key, value) => ctx.storage.put(key, value),

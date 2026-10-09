@@ -29,7 +29,7 @@ import { tradeOptions } from "~/app/projects/trade-options";
 import { entityDetailLink } from "~/entity/entities";
 import { fieldEnumOptions } from "~/entity/enum-field-display";
 import { FieldSuggestionApply } from "~/features/ai/field-suggestion-apply";
-import { purchase } from "~/integrations/tanstack-query/generated/catalog.gen";
+import { purchase } from "~/integrations/tanstack-query/generated/purchase.gen";
 import { countLabel } from "~/lib/pluralize";
 import { formatCurrency } from "~/lib/utils";
 import { EntityPicker } from "~/ui/combobox/entity-picker";

@@ -3,6 +3,7 @@ import { createFileRoute, stripSearchParams } from "@tanstack/react-router";
 import { z } from "zod";
 
 import { AuthEntryFrame } from "~/app/auth/auth-entry-frame";
+import { AuthUIProvider } from "~/app/auth/auth-ui-provider";
 import { pageTitle } from "~/lib/page-title";
 import { urlStringParam } from "~/lib/search-params";
 import { cn } from "~/lib/utils";
@@ -48,10 +49,11 @@ function AuthPage() {
           the Gmail permission.
         </p>
       ) : null}
-      <AuthView pathname={authView} />
+      <AuthUIProvider>
+        <AuthView pathname={authView} />
+      </AuthUIProvider>
       {/* Statically false in every build, so the link never reaches a
-          production bundle (enforced by scripts/check-client-bundle.ts). The
-          route itself exists only in tooling/dev/worker.ts. */}
+          production bundle. The route itself exists only in tooling/dev/worker.ts. */}
       {import.meta.env.DEV && authView === "sign-in" ? (
         <a
           href={`/__dev/login?${new URLSearchParams({ next: redirect ?? "/" })}`}

@@ -5,7 +5,7 @@ import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import {
   entityIntegrity,
   integrityProblems,
-} from "~/integrations/tanstack-query/generated/catalog.gen";
+} from "~/integrations/tanstack-query/generated/entity-integrity.gen";
 import { createBrowserTestHarness } from "~/lib/test/browser-harness";
 
 import {

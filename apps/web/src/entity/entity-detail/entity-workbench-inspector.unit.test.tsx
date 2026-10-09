@@ -5,10 +5,8 @@ import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
 import { entityPreviewQueryOptions } from "~/entity/entity-query";
-import {
-  entityGraph,
-  recommendations,
-} from "~/integrations/tanstack-query/generated/catalog.gen";
+import { entityGraph } from "~/integrations/tanstack-query/generated/entity-graph.gen";
+import { recommendations } from "~/integrations/tanstack-query/generated/recommendations.gen";
 import { createBrowserTestHarness } from "~/lib/test/browser-harness";
 
 import { EntityWorkbenchInspector } from "./entity-workbench-inspector";

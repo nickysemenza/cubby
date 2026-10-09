@@ -12,15 +12,15 @@ import {
 import type { SpanAttr } from "@cubby/worker-tracing";
 import { and, eq } from "drizzle-orm";
 
-import { env } from "~/env";
 import { auth as betterAuth } from "~/lib/auth";
-import type { NotionClient } from "~/server/clients/notion";
-import type { USDAClient } from "~/server/clients/usda";
+import {
+  buildCrudServices,
+  deferredRequestServices,
+} from "~/server/crud-services";
 import { readDatabaseFreshness } from "~/server/database-freshness/client";
 import type { Database } from "~/server/db";
 import { boundedStaleDb, db } from "~/server/db";
 import { device } from "~/server/db/schema";
-import { deferredService } from "~/server/deferred-service";
 import { createAppError } from "~/server/errors/app-error";
 import {
   decideReadConsistency,
@@ -29,90 +29,8 @@ import {
 import { currentMemberLedgerParty } from "~/server/repo/current-member-party";
 import { getDb } from "~/server/repo/database-helpers/core";
 import { notDeleted } from "~/server/repo/database-helpers/query";
-import type { AvailabilityService } from "~/server/services/availability.service";
-import type { RecipeCostingService } from "~/server/services/recipe-costing.service";
-import { createUpcLookupService } from "~/server/services/upc";
-import type { USDAService } from "~/server/services/usda.service";
 import { annotateActiveSpan } from "~/server/tracing";
-import type { UsdaReleaseRpc } from "~/server/usda-release/rpc";
 import type { RequestOrigin } from "~/server/workload";
-
-const deferredRecipeCosting = (
-  load: () => Promise<RecipeCostingService>,
-  database: Database,
-): RecipeCostingService =>
-  deferredService(load, (loaded) => ({
-    database,
-    bindTo: (selected, publish) =>
-      deferredRecipeCosting(
-        async () => (await loaded()).bindTo(selected, publish),
-        selected,
-      ),
-  }));
-
-const deferredRequestServices = (
-  database: Database,
-  usdaClient: USDAClient,
-) => {
-  let pending:
-    | Promise<import("./request-services").RequestServices>
-    | undefined;
-  const loaded = () =>
-    (pending ??= import("./request-services").then((module) =>
-      module.buildRequestServices(database, usdaClient),
-    ));
-  return {
-    usdaService: deferredService<USDAService>(
-      async () => (await loaded()).usdaService,
-      () => ({}),
-    ),
-    services: {
-      availability: deferredService<AvailabilityService>(
-        async () => (await loaded()).services.availability,
-        () => ({}),
-      ),
-      recipeCosting: deferredRecipeCosting(
-        async () => (await loaded()).services.recipeCosting,
-        database,
-      ),
-    },
-  };
-};
-
-export const buildCrudServices = (
-  database: Database,
-  opts?: { usdaRelease?: UsdaReleaseRpc },
-) => {
-  // Built on first use: each client's SDK would otherwise load into every
-  // request, and most requests never call Notion or USDA.
-  const notionApiKey = env.NOTION_API_KEY;
-  const notionClient = notionApiKey
-    ? deferredService<NotionClient>(
-        async () =>
-          new (await import("~/server/clients/notion")).NotionClient(
-            notionApiKey,
-          ),
-        () => ({}),
-      )
-    : null;
-  const usdaClient = deferredService<USDAClient>(
-    async () =>
-      new (await import("~/server/clients/usda")).USDAClient(
-        opts?.usdaRelease ??
-          (await import("~/server/usda-release/client")).requestUsdaRelease(),
-      ),
-    () => ({}),
-  );
-  const upcLookupClient = createUpcLookupService(database);
-
-  return {
-    db: database,
-    notionClient,
-    usdaClient,
-    upcLookupClient,
-    ...deferredRequestServices(database, usdaClient),
-  };
-};
 
 export type RequestActor = {
   userId: UserId;

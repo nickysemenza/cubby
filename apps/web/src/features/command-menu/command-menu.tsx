@@ -3,7 +3,7 @@ import type {
   SearchDestination,
   SearchResultGroup,
 } from "@cubby/schemas/search";
-import { type ParsedShortcode, parseShortcode } from "@cubby/shared";
+import { type ParsedShortcode, parseShortcode } from "@cubby/shared/shortcode";
 import { EqualsIcon } from "@phosphor-icons/react/dist/csr/Equals";
 import { GearIcon } from "@phosphor-icons/react/dist/csr/Gear";
 import { MagnifyingGlassIcon } from "@phosphor-icons/react/dist/csr/MagnifyingGlass";

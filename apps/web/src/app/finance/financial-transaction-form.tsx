@@ -18,7 +18,7 @@ import {
   requiredFieldModel,
 } from "~/entity/editing/entity-primitive-fields";
 import { entities, entityDetailParams } from "~/entity/entities";
-import { financialTransaction } from "~/integrations/tanstack-query/generated/catalog.gen";
+import { financialTransaction } from "~/integrations/tanstack-query/generated/finance.gen";
 import { referenceEntitySearch } from "~/ui/combobox/reference-entity-search";
 import { EntityValueField } from "~/ui/form-utils/entity-value-field";
 import { Row, Stack } from "~/ui/layout";
@@ -28,10 +28,9 @@ const AccountSearch = referenceEntitySearch("financialAccount");
 const PurchaseSearch = referenceEntitySearch("purchase");
 const SpendingCategorySearch = referenceEntitySearch("spendingCategory");
 
-const financialTransactionSourceRefsField = requiredFieldModel(
-  "financialTransaction",
-  "sourceRefs",
-);
+// Read on render: the financial-transaction model loads with its dialog.
+const financialTransactionSourceRefsField = () =>
+  requiredFieldModel("financialTransaction", "sourceRefs");
 
 export const financialTransactionFormSchema = z
   .object({
@@ -216,7 +215,7 @@ export function FinancialTransactionFormFields({
       />
       {renderIntentField({
         entity: "financialTransaction",
-        field: financialTransactionSourceRefsField,
+        field: financialTransactionSourceRefsField(),
         // SAFETY: `renderIntentField` is shared across every entity's form
         // and so takes the broad `UseFormReturn<FieldValues>` RHF uses
         // internally; this form's own values (`FinancialTransactionFormValues`)

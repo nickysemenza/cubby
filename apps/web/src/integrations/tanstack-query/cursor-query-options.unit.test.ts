@@ -3,7 +3,7 @@ import { describe, expect, it } from "vitest";
 import { z } from "zod";
 
 import { defineContract, query } from "~/contracts/define";
-import { auditLog } from "~/integrations/tanstack-query/generated/catalog.gen";
+import { auditLog } from "~/integrations/tanstack-query/generated/audit-log.gen";
 
 import { cursorQueryOptions } from "./cursor-query-options";
 import { defineOperationDomain } from "./operation-catalog";

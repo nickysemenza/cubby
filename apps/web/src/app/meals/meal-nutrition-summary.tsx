@@ -14,7 +14,7 @@ import { useState } from "react";
 import { toast } from "sonner";
 
 import { entityDetailLink } from "~/entity/entities";
-import { meal } from "~/integrations/tanstack-query/generated/catalog.gen";
+import { meal } from "~/integrations/tanstack-query/generated/meal.gen";
 import { getErrorMessage } from "~/lib/error-utils";
 import {
   compactEstimateText,

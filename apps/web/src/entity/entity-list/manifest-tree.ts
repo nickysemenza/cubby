@@ -1,8 +1,7 @@
 import type { Entity } from "@cubby/schemas/entity";
-import { entityFieldModels } from "@cubby/schemas/entity-fields";
-import { entitySummary } from "@cubby/schemas/entity-summary";
 import { z } from "zod";
 
+import { entityFieldModel, entitySummaryOf } from "~/entity/entity-model";
 import type {
   BaseListRow,
   EntityListTreeConfig,
@@ -53,9 +52,9 @@ export function manifestTree(
 ): EntityListTreeConfig<TreeRow<BaseListRow>, BaseListRow> | null {
   const cached = manifestTrees.get(entity);
   if (cached !== undefined) return cached;
-  const declared = entitySummary[entity].list.tree;
+  const declared = entitySummaryOf(entity).list.tree;
   const readKey = declared
-    ? entityFieldModels[entity].fields.find(
+    ? entityFieldModel(entity).fields.find(
         (field) => field.key === declared.parentField,
       )?.readKey
     : null;

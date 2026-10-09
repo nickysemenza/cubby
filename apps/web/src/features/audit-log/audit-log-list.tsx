@@ -7,7 +7,7 @@ import { uniqBy } from "es-toolkit";
 import { useMemo } from "react";
 
 import { cursorQueryOptions } from "~/integrations/tanstack-query/cursor-query-options";
-import { auditLog } from "~/integrations/tanstack-query/generated/catalog.gen";
+import { auditLog } from "~/integrations/tanstack-query/generated/audit-log.gen";
 import { authClient } from "~/lib/auth-client";
 import { getErrorMessage } from "~/lib/error-utils";
 import { useHydrated } from "~/ui/hooks/useHydrated";

@@ -1,6 +1,7 @@
 import { z } from "zod";
 
-import { gardenGuideKeys, plantingGuides } from "./garden-guides";
+import { type GardenCropKey } from "./garden-fields";
+import { plantingGuides } from "./garden-guides";
 
 /**
  * Household growing practice per crop: how a crop is started, how often it is
@@ -16,50 +17,6 @@ import { gardenGuideKeys, plantingGuides } from "./garden-guides";
  * and trees bought as plants have no maturity. Cultivar packet figures
  * belong on the Plant, never here.
  */
-
-/** Crops with practice but no citable source window yet. */
-export const gardenPracticeOnlyKeys = [
-  "asian-greens",
-  "broccoli-raab",
-  "cilantro",
-  "dill",
-  "parsley",
-  "sorrel",
-  "shiso",
-  "tomatillo",
-  "epazote",
-  "fenugreek",
-  "scallion",
-  "bean-yardlong",
-  "saffron",
-  "celery-leaf",
-  "alyssum",
-  "nasturtium",
-  "marigold",
-  "mint",
-  "thyme",
-  "oregano",
-  "mexican-oregano",
-  "chives",
-  "garlic-chives",
-  "rau-ram",
-  "hoja-santa",
-  "strawberry",
-  "passion-fruit",
-  "citrus",
-  "curry-leaf",
-  "sichuan-pepper",
-  "plum",
-  "poppy",
-] as const;
-
-/** Every crop key a Plant may carry: source guide keys plus practice-only keys. */
-export const gardenCropKeys = [
-  ...gardenGuideKeys,
-  ...gardenPracticeOnlyKeys,
-] as const;
-export const gardenCropKey = z.enum(gardenCropKeys);
-export type GardenCropKey = z.infer<typeof gardenCropKey>;
 
 export const gardenStart = z.enum(["direct", "tray", "indoor", "bought"]);
 export type GardenStart = z.infer<typeof gardenStart>;

@@ -6,7 +6,7 @@ import { useMutation } from "@tanstack/react-query";
 import { useEffect, useEffectEvent, useRef } from "react";
 import { toast } from "sonner";
 
-import { meal as mealOperations } from "~/integrations/tanstack-query/generated/catalog.gen";
+import { meal as mealOperations } from "~/integrations/tanstack-query/generated/meal.gen";
 import { showErrorToast } from "~/ui/feedback/error-details";
 import { SimpleLoading } from "~/ui/feedback/loading-skeletons";
 import { ResponsiveDialog } from "~/ui/primitives/responsive-dialog";

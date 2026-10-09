@@ -28,7 +28,6 @@ import { amount as amountSchema, type Amount } from "@cubby/schemas/codec";
 import type { CellData } from "@tanstack/react-table";
 import { z } from "zod";
 
-import { parsePlainDateInput } from "~/lib/plain-date-input";
 import { wasm } from "~/lib/wasm";
 
 import { tryFormatAmount } from "../../features/inventory/format-amount";
@@ -138,6 +137,9 @@ export function dateCellData<TData>(
     applyPaste: save
       ? async (row, { json, text }) => {
           const raw = pastedString({ json, text });
+          // Paste-only: chrono-node loads when a date cell receives a paste.
+          const { parsePlainDateInput } =
+            await import("~/lib/plain-date-input");
           const parsed = parsePlainDateInput(raw);
           if (!parsed.ok) throw new Error(parsed.error);
           await save(row, parsed.value);

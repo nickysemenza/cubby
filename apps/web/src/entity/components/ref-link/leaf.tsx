@@ -1,5 +1,5 @@
 import type { AuditEntityKind } from "@cubby/schemas/audit";
-import type { BrowserRoutedEntity } from "@cubby/schemas/entity-manifest";
+import { type BrowserRoutedEntity } from "@cubby/schemas/entity-index";
 import type { ImageUrlSummary } from "@cubby/schemas/image-summary";
 import { FunnelIcon } from "@phosphor-icons/react/dist/csr/Funnel";
 import { Link, type LinkProps } from "@tanstack/react-router";

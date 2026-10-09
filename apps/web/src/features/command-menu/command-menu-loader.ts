@@ -1,19 +1,21 @@
-import { createCachedLoader } from "~/lib/lazy-preload";
 import { recordCommandSearch } from "~/lib/perf/perf-store";
 
-/** Stable command-menu chunk loader shared by the app shell and nav controls. */
-const importCommandMenu = createCachedLoader(async () => {
-  const startedAt = performance.now();
-  const module = await import("./command-menu");
-  recordCommandSearch({
-    phase: "chunk-preload",
-    durationMs: performance.now() - startedAt,
-    resultCount: 0,
-    scoped: false,
-    queryLength: 0,
-  });
-  return module;
-});
+let commandMenuModule: Promise<typeof import("./command-menu")> | undefined;
+
+/** One chunk load shared by the app shell and nav controls, timed once. */
+const importCommandMenu = () =>
+  (commandMenuModule ??= (async () => {
+    const startedAt = performance.now();
+    const module = await import("./command-menu");
+    recordCommandSearch({
+      phase: "chunk-preload",
+      durationMs: performance.now() - startedAt,
+      resultCount: 0,
+      scoped: false,
+      queryLength: 0,
+    });
+    return module;
+  })());
 
 let openStartedAt: number | undefined;
 

@@ -1,7 +1,7 @@
 import type { ReportSlot } from "@cubby/schemas/entity-report";
 import type { RunOut } from "@cubby/schemas/run";
 
-import type { DetailSlotComponent } from "~/entity/entity-detail/detail-slots";
+import type { DetailSlotComponent } from "~/entity/entity-detail/detail-hooks";
 import { EntityReportSlot } from "~/entity/entity-detail/report-slot";
 import { AuditLogList } from "~/features/audit-log/audit-log-list";
 

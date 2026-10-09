@@ -1,6 +1,6 @@
 import { tradeSchema } from "./task-fields";
 import { productCategoryShortcode } from "./identifier-fields";
-import { inventoryPlacementValues } from "@cubby/shared";
+import { inventoryPlacementValues } from "@cubby/shared/category-theme";
 import { fdcId } from "@cubby/usda";
 import { z } from "zod";
 import type { GeneratedEntitySortField } from "./generated/entity-sort.gen";
@@ -59,8 +59,8 @@ export { positiveAmount } from "./codec";
  * placement, not about a product type — the same 150-pack of wire nuts is
  * stock in the garage and consumed in the wall.
  */
-export { inventoryPlacementValues } from "@cubby/shared";
-export type { InventoryPlacement } from "@cubby/shared";
+export { inventoryPlacementValues } from "@cubby/shared/category-theme";
+export type { InventoryPlacement } from "@cubby/shared/category-theme";
 export const inventoryPlacement = cycleSafeInventoryPlacement;
 export { inventoryValuation } from "./inventory-fields";
 

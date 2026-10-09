@@ -1,8 +1,5 @@
-import {
-  type ShortcodeType,
-  shortcodeSchema,
-  UNRESOLVABLE_ENTITY_FILTER,
-} from "@cubby/shared";
+import { UNRESOLVABLE_ENTITY_FILTER } from "@cubby/shared/filter";
+import { type ShortcodeType, shortcodeSchema } from "@cubby/shared/shortcode";
 import { z } from "zod";
 
 /**

@@ -343,7 +343,10 @@ export const imageProcessingChildren = [
       { key: "completedAt", kind: "timestamp" },
     ],
     types: [
-      { module: "@cubby/schemas/activity", exports: ["ActivityExecutor"] },
+      {
+        module: "@cubby/schemas/activity-fields",
+        exports: ["ActivityExecutor"],
+      },
     ],
     indexes: [
       {

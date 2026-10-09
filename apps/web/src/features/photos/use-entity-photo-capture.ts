@@ -1,3 +1,4 @@
+import { entityImageOf } from "@cubby/schemas/entity";
 /**
  * Capture a gallery entity's photo straight from the camera, with no entity
  * form in the way. The one place the upload→attach→cover sequence lives: any
@@ -47,9 +48,7 @@
  * files keep their pick order instead of each one briefly becoming the cover
  * in turn.
  */
-
-import { entityImageOf } from "@cubby/schemas/entity";
-import type { GalleryEntity } from "@cubby/schemas/entity-manifest";
+import { type GalleryEntity } from "@cubby/schemas/entity-index";
 import type { ImageShortcode } from "@cubby/schemas/identifiers";
 import {
   ALLOWED_IMAGE_TYPES,
@@ -66,7 +65,7 @@ import {
 } from "~/entity/entity-contracts";
 import { type EntityMutationTransport } from "~/entity/entity-mutation-command";
 import { ripple } from "~/integrations/tanstack-query/cache-tags";
-import { imageUpload } from "~/integrations/tanstack-query/generated/catalog.gen";
+import { imageUpload } from "~/integrations/tanstack-query/generated/image-upload.gen";
 import { invalidateOperationTags } from "~/integrations/tanstack-query/operation-cache";
 import {
   PresignedUploadError,

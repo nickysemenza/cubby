@@ -107,8 +107,8 @@ const STATE_KEYS = {
  * and crash recovery; this class supplies Cubby's tools, the run's identity,
  * the conversation projection the run page reads, and settlement reports.
  *
- * The exported Durable Object (`server/purchase-import/agent-host.ts`) loads
- * this module on first use and constructs it with the narrowed environment;
+ * Its host (`server/purchase-import/agent-host.ts`) constructs it with the
+ * narrowed environment;
  * nothing here reads the Worker's `env`.
  */
 export class PurchaseImportRunAgent

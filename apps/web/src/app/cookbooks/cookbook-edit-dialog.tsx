@@ -1,7 +1,7 @@
 import type { CookbookSummary } from "@cubby/schemas/recipe";
 import { useState } from "react";
 
-import { cookbook as cookbookOperations } from "~/integrations/tanstack-query/generated/catalog.gen";
+import { cookbook as cookbookOperations } from "~/integrations/tanstack-query/generated/cookbook.gen";
 import { getErrorMessage } from "~/lib/error-utils";
 import { ChipsInput } from "~/ui/forms/chips-input";
 import { useActionMutation } from "~/ui/hooks/useActionMutation";

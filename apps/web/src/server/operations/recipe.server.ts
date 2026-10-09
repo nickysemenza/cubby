@@ -68,6 +68,7 @@ import {
 
 import * as imports from "./recipe-import.server";
 import { patchRecipeLine } from "./recipe-line-patch";
+import { reparseRecipeLine } from "./recipe-line-reparse";
 
 const recipeShortcodes = bindShortcodeResolver("recipe");
 const cookbookShortcodes = bindShortcodeResolver("cookbook");
@@ -458,10 +459,7 @@ export const recipeHandlers = implementOperationDomain(recipeContract, {
     imports.reprocessCookbookChunkWorkflow(context, input),
   importCookbookRecipesOnce: (context, input) =>
     imports.importCookbookChunkWorkflow(context, input),
-  reparseLine: async (context, input) => {
-    const { reparseRecipeLine } = await import("./recipe-line-reparse");
-    return reparseRecipeLine(context, input);
-  },
+  reparseLine: (context, input) => reparseRecipeLine(context, input),
   patchLine: async (context, input) => {
     const patched = await patchRecipeLine(context, input);
     return {

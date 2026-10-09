@@ -114,6 +114,18 @@ const clientCodeSplittingGroups = [
     entriesAwareMergeThreshold: 65536,
   },
   {
+    // Leaf app UI: these modules import only React, class utilities and
+    // single CSR icons, never other app code, so grouping them cannot form an
+    // initialization cycle. Keep non-leaf primitives (Base UI wrappers,
+    // dialogs) out — grouping those stalled /products hydration.
+    name: "ui-atoms",
+    test: /[\\/]apps[\\/]web[\\/]src[\\/](?:ui[\\/]primitives[\\/](?:alert|bulk-progress-bar|description|eyebrow|icon-tile|input-group|kbd|label|native-select|none-value|progress|section-rule|skeleton|spinner|status-text|table|textarea|toggle)|ui[\\/]hooks[\\/](?:focus-on-mount|infinite-page-utils|useContainerDimensions|useHydrated|useLongPress|useMobile)|ui[\\/]layout[\\/](?:muted-box|page-wrapper)|lib[\\/]page-title)\.tsx?$/,
+    entriesAware: true,
+    entriesAwareMergeThreshold: 32768,
+    minShareCount: 2,
+    includeDependenciesRecursively: false,
+  },
+  {
     name: "small-runtime-utils",
     test: /[\\/]clsx[\\/]|[\\/]goober[\\/]|[\\/]pluralize[\\/]/,
     entriesAware: true,
@@ -424,10 +436,14 @@ export default defineConfig(async ({ command }) => {
         },
         router: {
           codeSplittingOptions: {
-            // Keep the route component and its recovery UI in one request. Data
-            // loaders and pending UI remain in their existing eager boundaries.
+            // Keep the route component and its recovery UI in one request, and
+            // split each loader into its own chunk: an eager loader pulled its
+            // whole data-layer graph (filter bindings, entity schemas) into the
+            // app entry for all ~130 routes. SSR preloads the matched route's
+            // loader chunk, and intent preloading covers client navigation.
             defaultBehavior: [
               ["component", "errorComponent", "notFoundComponent"],
+              ["loader"],
             ],
           },
           // Colocated unit tests (e.g. projects.index.unit.test.ts, which imports

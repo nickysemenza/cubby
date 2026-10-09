@@ -4,8 +4,8 @@ import { fireEvent, render, screen } from "@testing-library/react";
 import type { ReactNode } from "react";
 import { describe, expect, it, vi } from "vitest";
 
-import { entities } from "~/entity/entities";
-import { entityGraph } from "~/integrations/tanstack-query/generated/catalog.gen";
+import { mergeConfigFor } from "~/entity/merge/merge-configs";
+import { entityGraph } from "~/integrations/tanstack-query/generated/entity-graph.gen";
 
 import { EntityMergeDialog } from "./entity-merge-dialog";
 
@@ -107,7 +107,7 @@ describe("EntityMergeDialog impact preview", () => {
       spend: 40,
     };
 
-    const config = entities.vendor.mergeable;
+    const config = mergeConfigFor("vendor");
     if (!config?.candidateQuery) {
       throw new Error("vendor merge config must declare a candidateQuery");
     }
@@ -167,7 +167,7 @@ describe("EntityMergeDialog generic kernel merge", () => {
       expenseCount: 0,
       expenseTotal: 0,
     };
-    const config = entities.purchase.mergeable;
+    const config = mergeConfigFor("purchase");
     if (!config?.candidateQuery)
       throw new Error("Purchase candidate query missing");
     const queryClient = new QueryClient({

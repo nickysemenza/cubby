@@ -7,7 +7,7 @@ import {
 } from "./product-category-fields";
 import { productCategoryShortcode } from "./identifier-fields";
 import { productTopLevelOut } from "./product-output-fields";
-import { inventoryPlacementValues } from "@cubby/shared";
+import { inventoryPlacementValues } from "@cubby/shared/category-theme";
 import { upc } from "@cubby/shared/upc";
 import { foodSummary, foodSummaryCompact } from "@cubby/usda";
 import { z } from "zod";

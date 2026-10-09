@@ -1,10 +1,10 @@
-import { entityFieldModels } from "@cubby/schemas/entity-fields";
 import type { DetailRendererId } from "@cubby/schemas/entity-manifest";
 
 import type {
   DetailRecordOf,
   GenericDetailEntity,
 } from "~/entity/entity-detail/detail-record";
+import { entityFieldModel } from "~/entity/entity-model";
 
 import type { DetailFieldRenderer } from "../entity-display";
 import {
@@ -158,7 +158,7 @@ export const detailFieldRenderersFor = (
   entity: GenericDetailEntity,
 ): Readonly<Record<string, DetailFieldRenderer<never>>> | undefined => {
   const coverage = detailCoverageFor(entity);
-  const entries = entityFieldModels[entity].fields.flatMap((field) => {
+  const entries = entityFieldModel(entity).fields.flatMap((field) => {
     const renderer = field.display.renderer?.detail;
     if (renderer === null || renderer === undefined) return [];
     const disposition = coverage?.[renderer];

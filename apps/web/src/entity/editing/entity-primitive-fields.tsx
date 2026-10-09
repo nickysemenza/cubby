@@ -4,9 +4,8 @@ import type {
   CompiledEntityPresentation,
 } from "@cubby/schemas/entity-definitions/definition";
 import { generatedEntityEditIntents } from "@cubby/schemas/entity-edit-intents";
-import { entityFieldModels } from "@cubby/schemas/entity-fields";
+import type { entityFieldModels } from "@cubby/schemas/entity-fields";
 import type { ControlRendererId } from "@cubby/schemas/entity-manifest";
-import { entitySummary } from "@cubby/schemas/entity-summary";
 import { resolveExpenseLineKind } from "@cubby/schemas/expense-line-kind";
 import {
   type ComponentType,
@@ -27,6 +26,7 @@ import {
   SourceAliasesField,
   SourceRefsField,
 } from "~/app/finance/financial-form-fields";
+import { entityFieldModel, entitySummaryOf } from "~/entity/entity-model";
 import { FieldProvenance } from "~/entity/field-provenance";
 import {
   generic,
@@ -488,14 +488,14 @@ export function EntityPrimitiveFields({
 }) {
   const form = useFormContext<FieldValues>();
   const idPrefix = useId();
-  const model = entityFieldModels[entity];
+  const model = entityFieldModel(entity);
   const editable: readonly string[] =
     mode === "create" ? model.create : model.update;
   const sectionFields =
     section === undefined
       ? undefined
       : new Set<string>(
-          entitySummary[entity].edit.sections.find(
+          entitySummaryOf(entity).edit.sections.find(
             (candidate) => candidate.id === section,
           )?.fields,
         );
@@ -725,7 +725,7 @@ export function requiredFieldModel(
   entity: Entity,
   key: string,
 ): PrimitiveFieldModel {
-  const field = entityFieldModels[entity].fields.find(
+  const field = entityFieldModel(entity).fields.find(
     (candidate) => candidate.key === key,
   );
   if (!field) {
@@ -1041,7 +1041,7 @@ export function EntityIntentFields({
 }) {
   const form = useFormContext<FieldValues>();
   const idPrefix = useId();
-  const model = entityFieldModels[entity];
+  const model = entityFieldModel(entity);
   // SAFETY: `generatedEntityEditIntents` only declares the entities that
   // opted into standard editing (`EditableEntity`, a subset of `Entity`);
   // callers only ever pass one of those, but this component's `entity` prop
@@ -1058,7 +1058,7 @@ export function EntityIntentFields({
   // union, each entity's literal `hiddenWhen` narrows only through the
   // schema-level type, so read it through that annotation.
   const hiddenWhen: CompiledEntityPresentation["edit"]["hiddenWhen"] =
-    entitySummary[entity].edit.hiddenWhen;
+    entitySummaryOf(entity).edit.hiddenWhen;
   const hiddenWhenFields = useMemo(
     () => hiddenWhen.map((rule) => rule.field),
     [hiddenWhen],
@@ -1123,7 +1123,7 @@ export function EntityIntentFields({
     [scopedFieldKeys, scopedValues],
   );
   const declaredSections: readonly CompiledEditSection[] =
-    entitySummary[entity].edit.sections;
+    entitySummaryOf(entity).edit.sections;
   // `fields` already reflects this render's `hiddenWhen`/`projectIsAllocated`
   // state, so the grouping has to be recomputed with it every render — no
   // `useMemo` (a stale memo would leave a newly (in)visible field in the

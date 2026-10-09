@@ -1,8 +1,6 @@
 import { entityManifest } from "@cubby/schemas/entity-manifest";
-import {
-  relatedViewPath,
-  relatedViewRegistry,
-} from "@cubby/schemas/related-view";
+import { relatedViewRegistry } from "@cubby/schemas/related-view";
+import { relatedViewPath } from "@cubby/schemas/related-view-path";
 import { describe, expect, it } from "vitest";
 
 import { compileTraversal } from "./traversal";

@@ -1,4 +1,4 @@
-import { parseShortcodeFor, type RunId } from "@cubby/schemas/identifiers";
+import { parseShortcodeFor } from "@cubby/schemas/identifiers";
 import {
   imageProcessingHello,
   pullCompanionImageProcessingInput,
@@ -18,7 +18,6 @@ import {
 } from "@cubby/shared/external-fetch";
 import { z } from "zod";
 
-import { publishBackgroundTasks } from "~/server/background-tasks/publish";
 import type { Database } from "~/server/db";
 import { completeCloudImageDescription } from "~/server/image-processing/cloud-description";
 import {
@@ -40,8 +39,6 @@ import { retryFailedImageProcessingJobs } from "~/server/repo/image-processing";
 import {
   completeImageProcessingJob,
   getLeasedImageProcessingOutputKey,
-  claimImageProcessingOrphans,
-  finalizeImageProcessingOrphans,
   getLeasedImageProcessingJobContext,
 } from "~/server/repo/image-processing";
 import {
@@ -52,76 +49,15 @@ import {
   recordImageProcessingEvent,
   createImageProcessingSubmission,
 } from "~/server/repo/image-processing-history";
-import { readImageProcessingSettings } from "~/server/repo/image-processing-maintenance";
-import {
-  persistImageProcessingSubmission,
-  persistAppleImageDescriptionSubmission,
-} from "~/server/repo/image-processing-submission";
-import { refreshDirectImageOwnerSearchDocuments } from "~/server/repo/search-document";
+import { readImageProcessingSettings } from "~/server/repo/image-processing-settings";
+import { persistAppleImageDescriptionSubmission } from "~/server/repo/image-processing-submission";
 import { resolveOrThrow } from "~/server/repo/shortcode-resolver";
 import { imageDescriptionInputFingerprint } from "~/server/services/image-description.service";
 import { inspectImageFile } from "~/server/services/image-integrity";
+import { publishImageProcessingWakeups } from "~/server/services/image-processing-wakeups";
 import { hasMeaningfulPngTransparency } from "~/server/services/image-transparency";
-import {
-  deleteS3Object,
-  getS3Object,
-  imageAnalysisKey,
-} from "~/server/utils/s3";
-
-const IMAGE_PROCESSING_WAKEUP_SOURCE = "image-processing";
-
-/**
- * Persist both jobs before publishing their lightweight wakeups. The caller
- * never waits for a companion: durable rows repair a missed publication.
- */
-export async function scheduleImageProcessingJobs(
-  db: Database,
-  input: {
-    id: string;
-    kinds: readonly ImageProcessingJobKind[];
-    publish?: boolean;
-    automatic?: boolean;
-    submission?: { id: string; publicId: string };
-    /** The Run that requested this scheduling, when the caller has one. */
-    runId?: RunId | null;
-  },
-): Promise<{ jobIds: string[]; submissionId?: string }> {
-  const settings = await readImageProcessingSettings(db);
-  if (input.automatic && !settings.enabled) return { jobIds: [] };
-  const scheduled = await persistImageProcessingSubmission(db, input);
-  if (input.publish !== false && !settings.paused)
-    await publishImageProcessingWakeups(db, scheduled.jobIds);
-  return scheduled;
-}
-
-/** Queue payloads only wake durable rows, so repeats and repairs are harmless. */
-export async function publishImageProcessingWakeups(
-  db: Database,
-  jobIds: readonly string[],
-): Promise<void> {
-  const settings = await readImageProcessingSettings(db);
-  if (settings.paused || jobIds.length === 0) return;
-  await publishBackgroundTasks(
-    db,
-    [...new Set(jobIds)].map((jobId) => ({
-      kind: "image-processing.wakeup" as const,
-      requestedAt: new Date().toISOString(),
-      jobId,
-    })),
-    { source: IMAGE_PROCESSING_WAKEUP_SOURCE },
-  );
-}
-
-/** Remove only orphan outputs whose signed upload window has elapsed. */
-export async function cleanupExpiredImageProcessingOrphans(
-  db: Database,
-  limit: number,
-): Promise<number> {
-  const keys = await claimImageProcessingOrphans(db, limit);
-  await Promise.all(keys.map((key) => deleteS3Object(key)));
-  await finalizeImageProcessingOrphans(db, keys);
-  return keys.length;
-}
+import { refreshDirectImageOwnerSearchDocuments } from "~/server/services/mutation-side-effects";
+import { getS3Object, imageAnalysisKey } from "~/server/utils/s3";
 
 /** Explicit, authorized sample evaluation; it never changes the cloud preference. */
 export async function scheduleAppleImageDescriptionEvaluation(

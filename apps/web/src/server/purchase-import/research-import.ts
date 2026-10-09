@@ -949,7 +949,9 @@ export async function resolveImportResearch(
       const assessment = researchAssessment.parse(
         ports.assess
           ? await ports.assess(assessmentInput)
-          : await (
+          : // The model assessor and its skill-rules prompt load only when a
+            // proposal needs assessment.
+            await (
               await import("./research-support")
             ).assessResearchProposal({
               db,

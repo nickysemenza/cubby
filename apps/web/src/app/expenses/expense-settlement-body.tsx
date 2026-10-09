@@ -1,4 +1,4 @@
-import type { DetailSlotComponent } from "~/entity/entity-detail/detail-slots";
+import type { DetailSlotComponent } from "~/entity/entity-detail/detail-hooks";
 import { EntityReportSlot } from "~/entity/entity-detail/report-slot";
 import { Description } from "~/ui/primitives/description";
 

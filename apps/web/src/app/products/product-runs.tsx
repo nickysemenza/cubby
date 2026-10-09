@@ -6,11 +6,11 @@ import { useQuery } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
 
 import type { RunSummary } from "~/contracts/run.contract";
-import { DetailAction } from "~/entity/entity-detail/detail-action-bar";
-import type { DetailSlotComponent } from "~/entity/entity-detail/detail-slots";
+import { DetailAction } from "~/entity/entity-detail/detail-action-context";
+import type { DetailSlotComponent } from "~/entity/entity-detail/detail-hooks";
 import { entityListFor } from "~/entity/entity-list";
 import { ProductRelatednessActions } from "~/entity/relatedness/relatedness-rail";
-import { run as runOperations } from "~/integrations/tanstack-query/generated/catalog.gen";
+import { run as runOperations } from "~/integrations/tanstack-query/generated/run.gen";
 import { formatInstant } from "~/lib/date-format";
 import { purchaseLabel } from "~/lib/purchase-label";
 import { Stack } from "~/ui/layout";
@@ -189,7 +189,7 @@ function ProductRunSummary({ run }: { run: RunSummary }) {
   );
 }
 
-export const ProductEnrichmentAction: DetailSlotComponent<"product"> = ({
+const ProductEnrichmentAction: DetailSlotComponent<"product"> = ({
   record: product,
 }) => (
   <TargetedImportLaunchButton

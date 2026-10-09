@@ -1,7 +1,7 @@
 import { useQuery } from "@tanstack/react-query";
 import { type Control, Controller } from "react-hook-form";
 
-import { cookbook } from "~/integrations/tanstack-query/generated/catalog.gen";
+import { cookbook } from "~/integrations/tanstack-query/generated/cookbook.gen";
 import { NativeSelect } from "~/ui/primitives/native-select";
 
 import { FormFieldGroup } from "../../../ui/forms/form-field-group";

@@ -1,5 +1,6 @@
-import { entityFieldModels } from "@cubby/schemas/entity-fields";
-import type { BrowserRoutedEntity } from "@cubby/schemas/entity-manifest";
+import { type BrowserRoutedEntity } from "@cubby/schemas/entity-index";
+
+import { entityFieldModel } from "~/entity/entity-model";
 
 export function listColumnReadFields(
   entity: BrowserRoutedEntity,
@@ -7,7 +8,7 @@ export function listColumnReadFields(
 ): string[] {
   if (columnId === "image" || columnId === "images")
     return ["displayImages", "images"];
-  const field = entityFieldModels[entity].fields.find(
+  const field = entityFieldModel(entity).fields.find(
     (candidate) => (candidate.display.columnId ?? candidate.key) === columnId,
   );
   if (!field) return [columnId];

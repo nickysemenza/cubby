@@ -1,4 +1,4 @@
-import { getErrorMessage } from "@cubby/shared";
+import { getErrorMessage } from "@cubby/shared/error-utils";
 import { isEqual } from "es-toolkit";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { FieldValues, Path, UseFormReturn } from "react-hook-form";

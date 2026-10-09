@@ -10,11 +10,9 @@ import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import type { z } from "zod";
 
-import {
-  entityMutation,
-  ai,
-  meal,
-} from "~/integrations/tanstack-query/generated/catalog.gen";
+import { ai } from "~/integrations/tanstack-query/generated/ai.gen";
+import { entityMutation } from "~/integrations/tanstack-query/generated/entity-mutation.gen";
+import { meal } from "~/integrations/tanstack-query/generated/meal.gen";
 import { createBrowserTestHarness } from "~/lib/test/browser-harness";
 import { entityBrowserMutationCommandSchema } from "~/server/entity-kernel/contracts";
 

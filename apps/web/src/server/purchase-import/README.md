@@ -301,8 +301,9 @@ and deployment/readback order are owned by the
 2. **Coordinator.** The Worker's queue handler (`cf-server.ts`) loads
    `server/purchase-agent/queue.ts` (`consumePurchaseAgentQueue`), which wakes
    the per-Run `PurchaseImportRunAgent` Durable Object. Its exported shell
-   (`agent-host.ts`) loads the agent (`server/purchase-agent/run-agent.ts`) on
-   first use and forwards `dispatch`. Queue events reach the model as
+   (`server/worker-entrypoints.ts`) loads the host (`agent-host.ts`), which
+   constructs the agent (`server/purchase-agent/run-agent.ts`), on first use
+   and forwards `dispatch`. Queue events reach the model as
    `<signal type="…">` user text (`signals.ts`).
 3. **Tools call Run services.** The researcher receives the focused tools in
    `server/purchase-agent/tools.ts`: next work, observations, mail, public web

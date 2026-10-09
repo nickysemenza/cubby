@@ -22,10 +22,8 @@ import {
   ScheduleGrid,
   type ScheduleRow,
 } from "~/features/schedule/schedule-grid";
-import {
-  entityReport,
-  project,
-} from "~/integrations/tanstack-query/generated/catalog.gen";
+import { entityReport } from "~/integrations/tanstack-query/generated/entity-report.gen";
+import { project } from "~/integrations/tanstack-query/generated/project.gen";
 import { getErrorMessage } from "~/lib/error-utils";
 import { flattenUniquePageItems } from "~/ui/hooks/infinite-page-utils";
 import { useLoadAllPages } from "~/ui/hooks/useAllEntityRecords";

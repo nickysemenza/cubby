@@ -60,6 +60,16 @@
   "r2_buckets": [
     { "binding": "USDA_RELEASES", "bucket_name": "cubby-usda-releases-test" },
   ],
+  // Synthetic values for `src/env.ts`, which validates at module load: the
+  // Durable Object implementations reach it through their static graphs.
+  "vars": {
+    "R2_ACCESS_KEY_ID": "synthetic-access",
+    "R2_SECRET_ACCESS_KEY": "synthetic-secret",
+    "R2_ENDPOINT": "https://objects.example.test",
+    "R2_BUCKET_NAME": "synthetic-bucket",
+    "R2_PUBLIC_URL": "https://images.example.test",
+    "BETTER_AUTH_SECRET": "synthetic-calendar-test-auth",
+  },
   "queues": {
     "producers": [
       {

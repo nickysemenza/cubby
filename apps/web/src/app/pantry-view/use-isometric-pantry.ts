@@ -4,7 +4,7 @@ import type React from "react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import { entities, entityDetailParams } from "~/entity/entities";
-import { location } from "~/integrations/tanstack-query/generated/catalog.gen";
+import { location } from "~/integrations/tanstack-query/generated/location.gen";
 
 import { useAllInventoryItems } from "../../features/inventory/use-all-inventory-items";
 import {

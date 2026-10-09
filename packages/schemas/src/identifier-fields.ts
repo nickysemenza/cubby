@@ -1,6 +1,8 @@
 import { z } from "zod";
-import { SHORTCODE_TYPES, capitalize, mapRecord } from "@cubby/shared";
-import type { ShortcodeType as ShortcodeEntity } from "@cubby/shared";
+import { mapRecord } from "@cubby/shared/record";
+import { SHORTCODE_TYPES } from "@cubby/shared/shortcode";
+import { capitalize } from "@cubby/shared/text-case";
+import type { ShortcodeType as ShortcodeEntity } from "@cubby/shared/shortcode";
 
 export const id = z.uuid().describe("entity identifier");
 
@@ -240,7 +242,7 @@ export {
   gardenEntryShortcode,
   deviceShortcode,
   plantShortcode,
-} from "@cubby/shared";
+} from "@cubby/shared/shortcode";
 export type {
   CookbookShortcode,
   ExpenseShortcode,
@@ -267,6 +269,6 @@ export type {
   WishShortcode,
   DeviceShortcode,
   PlantShortcode,
-} from "@cubby/shared";
+} from "@cubby/shared/shortcode";
 
 export type SpendingCategoryId = EntityId<"spendingCategory">;

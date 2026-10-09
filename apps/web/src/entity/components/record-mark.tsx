@@ -1,11 +1,13 @@
 import type { Entity } from "@cubby/schemas/entity";
-import { shortcodeEntities } from "@cubby/schemas/entity-manifest";
-import type { ShortcodeEntity } from "@cubby/schemas/entity-manifest";
+import {
+  type ShortcodeEntity,
+  shortcodeEntities,
+} from "@cubby/schemas/entity-index";
 import { useQuery } from "@tanstack/react-query";
 import type { ReactNode } from "react";
 import { useMemo } from "react";
 
-import { entityFilterOptions } from "~/integrations/tanstack-query/generated/catalog.gen";
+import { entityFilterOptions } from "~/integrations/tanstack-query/generated/entity-filter-options.gen";
 import { useEntityOptions } from "~/ui/hooks/useEntityOptions";
 
 import { RecordEmoji } from "./record-emoji";

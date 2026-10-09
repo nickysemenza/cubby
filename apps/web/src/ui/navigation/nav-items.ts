@@ -1,4 +1,4 @@
-import type { BrowserRoutedEntity } from "@cubby/schemas/entity-manifest";
+import { type BrowserRoutedEntity } from "@cubby/schemas/entity-index";
 import { DatabaseIcon } from "@phosphor-icons/react/dist/csr/Database";
 import { DotsThreeIcon } from "@phosphor-icons/react/dist/csr/DotsThree";
 import { FileTextIcon } from "@phosphor-icons/react/dist/csr/FileText";

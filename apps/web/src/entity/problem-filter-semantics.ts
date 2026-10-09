@@ -16,7 +16,7 @@ import {
   type FilterSpecCore,
   filterUrlKey,
 } from "./filters";
-import { entityFilterUrlKeys } from "./generated/entity-search.gen";
+import { entityFilterUrlKeys } from "./generated/entity-filter-url-keys.gen";
 import type { FilterAssembly } from "./problem-query";
 
 /** Every scored entity with a list surface exposes the generated quality-gap filter. */

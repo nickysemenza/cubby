@@ -6,7 +6,7 @@ import { useQuery } from "@tanstack/react-query";
 import { uniq } from "es-toolkit";
 import { useMemo, useRef, useState } from "react";
 
-import { problems as problemOperations } from "~/integrations/tanstack-query/generated/catalog.gen";
+import { problems as problemOperations } from "~/integrations/tanstack-query/generated/problems.gen";
 import { ErrorDisplay } from "~/ui/feedback/error-display";
 import { SimpleLoading } from "~/ui/feedback/loading-skeletons";
 import { useHydratedLoading } from "~/ui/hooks/useHydrated";

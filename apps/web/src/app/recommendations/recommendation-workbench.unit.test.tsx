@@ -3,10 +3,8 @@ import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
 import { entityMutationOptionsFactory } from "~/entity/entity-contracts";
-import {
-  entityMedia,
-  recommendations,
-} from "~/integrations/tanstack-query/generated/catalog.gen";
+import { entityMedia } from "~/integrations/tanstack-query/generated/entity-media.gen";
+import { recommendations } from "~/integrations/tanstack-query/generated/recommendations.gen";
 import { createBrowserTestHarness } from "~/lib/test/browser-harness";
 import type { EntityBrowserMutationInput } from "~/server/entity-kernel/contracts";
 

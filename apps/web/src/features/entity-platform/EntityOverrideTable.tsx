@@ -1,5 +1,5 @@
 import { type Entity, entitySchema } from "@cubby/schemas/entity";
-import { allEntities } from "@cubby/schemas/entity-manifest";
+import { allEntities } from "@cubby/schemas/entity-index";
 import { useMemo, useState } from "react";
 
 import { cn } from "~/lib/utils";

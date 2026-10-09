@@ -15,7 +15,7 @@ import type { SearchProviderProps } from "~/ui/combobox/with-search-hook";
 import {
   BulkEditDialogBody,
   type BulkEditDraft,
-} from "./bulk-edit-entity-action";
+} from "./bulk-edit-dialog-body";
 
 /**
  * Fakes the search-backed picker for every reference field in this file's

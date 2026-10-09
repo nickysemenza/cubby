@@ -67,7 +67,7 @@ import {
   effectiveExpenseTradeSql,
 } from "~/server/repo/expense-inheritance";
 import { foldAssociation } from "~/server/repo/merge/collisions";
-import { getCategoryFeature } from "~/server/repo/product-category";
+import { getCategoryFeature } from "~/server/repo/product-category-feature";
 import {
   categoryFeatureInSql,
   categoryFeatureSql,

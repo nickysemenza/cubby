@@ -4,9 +4,9 @@ import { runInDurableObject } from "cloudflare:test";
 import { env } from "cloudflare:workers";
 import { describe, expect, it, vi } from "vitest";
 
-import { PurchaseImportRunAgent } from "./agent-host";
+import { PurchaseImportRunAgentHost } from "./agent-host";
 import { runServicesFor } from "./agent-services";
-import { PurchaseImportDurableObject } from "./durable-object";
+import { PurchaseImportObject } from "./durable-object";
 import { PurchaseImportSqlStore } from "./sql-store";
 
 declare const WebSocketPair: {
@@ -41,7 +41,7 @@ describe("purchase research migration quiescence", () => {
     vi.stubGlobal("__GIT_COMMIT__", "synthetic-maintenance-test");
     const stub = env.DB_FRESHNESS.getByName(`import-run:${runId}`);
     await runInDurableObject(stub, async (_instance, state) => {
-      const host = new PurchaseImportRunAgent(state, maintenanceEnv);
+      const host = new PurchaseImportRunAgentHost(state, maintenanceEnv);
       const response = await host.fetch(
         new Request("https://example.test/api/research"),
       );
@@ -58,7 +58,7 @@ describe("purchase research migration quiescence", () => {
     await runInDurableObject(stub, async (_instance, state) => {
       await state.storage.put("synthetic-conversation", { turn: 4 });
       const before = Date.now();
-      const host = new PurchaseImportRunAgent(state, maintenanceEnv);
+      const host = new PurchaseImportRunAgentHost(state, maintenanceEnv);
       await host.alarm();
       expect(await state.storage.get("synthetic-conversation")).toEqual({
         turn: 4,
@@ -76,7 +76,7 @@ describe("purchase research migration quiescence", () => {
       `import-run:${crypto.randomUUID()}`,
     );
     await runInDurableObject(stub, async (_instance, state) => {
-      const host = new PurchaseImportRunAgent(state, maintenanceEnv);
+      const host = new PurchaseImportRunAgentHost(state, maintenanceEnv);
       await expect(
         host.dispatch({
           identity: { runId, purpose: "product_enrichment" },
@@ -100,7 +100,7 @@ describe("purchase research migration quiescence", () => {
   it("refuses new browser connections and commands without changing retained work", async () => {
     const stub = env.DB_FRESHNESS.getByName(crypto.randomUUID());
     await runInDurableObject(stub, async (_instance, state) => {
-      const broker = new PurchaseImportDurableObject(state, maintenanceEnv);
+      const broker = new PurchaseImportObject(state, maintenanceEnv);
       const response = await broker.fetch(
         new Request("https://example.test/browser"),
       );
@@ -125,7 +125,7 @@ describe("purchase research migration quiescence", () => {
   it("closes an existing browser without accepting or acknowledging its retained result", async () => {
     const stub = env.DB_FRESHNESS.getByName(crypto.randomUUID());
     await runInDurableObject(stub, async (_instance, state) => {
-      const broker = new PurchaseImportDurableObject(state, maintenanceEnv);
+      const broker = new PurchaseImportObject(state, maintenanceEnv);
       const store = new PurchaseImportSqlStore(state.storage);
       const command = {
         protocolVersion: 4 as const,

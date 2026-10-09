@@ -1,9 +1,9 @@
 import type {
   SearchDestination,
   SearchResultGroup,
-  SearchType,
 } from "@cubby/schemas/search";
 import { searchableEntities } from "@cubby/schemas/search";
+import type { SearchType } from "@cubby/schemas/search-fields";
 import { MagnifyingGlassIcon } from "@phosphor-icons/react/dist/csr/MagnifyingGlass";
 import { useDebouncedValue } from "@tanstack/react-pacer";
 import { keepPreviousData, useQuery } from "@tanstack/react-query";
@@ -20,7 +20,7 @@ import {
 
 import { MobileCard } from "~/entity/components/mobile-card";
 import { entities } from "~/entity/entities";
-import { search } from "~/integrations/tanstack-query/generated/catalog.gen";
+import { search } from "~/integrations/tanstack-query/generated/search.gen";
 import { cn } from "~/lib/utils";
 import { ErrorDisplay } from "~/ui/feedback/error-display";
 import { MobileCardSkeletonList } from "~/ui/feedback/mobile-card-skeleton";

@@ -11,7 +11,7 @@ import {
   entityMergeMutationOptions,
 } from "~/entity/entity-mutation";
 import { EntityMergeDialog } from "~/entity/merge/entity-merge-dialog";
-import { vendor } from "~/integrations/tanstack-query/generated/catalog.gen";
+import { vendor } from "~/integrations/tanstack-query/generated/vendor.gen";
 import { formatCurrency } from "~/lib/utils";
 import {
   useActionMutation,
@@ -138,7 +138,7 @@ export function DuplicateVendorMergeFix({
 /**
  * Fold a cluster of duplicate product rows (same maker part number, split
  * across retailers) into one, via the shared {@link EntityMergeDialog} —
- * `entities.tsx`'s `product.mergeable` config (keeperMode "ranked") supplies
+ * `merge/merge-configs.tsx`'s `product` config (keeperMode "ranked") supplies
  * the picker copy and row rendering. Unlike {@link DuplicateVendorMergeFix},
  * the detector (`findDuplicateProductIdentities`) has no canonical row to
  * default to — every member is an equally plausible keeper — so ranked mode's

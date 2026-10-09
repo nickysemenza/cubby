@@ -6,7 +6,7 @@ import { useEffect, useId, useRef, useState } from "react";
 import { toast } from "sonner";
 
 import { ripple } from "~/integrations/tanstack-query/cache-tags";
-import { imageUpload } from "~/integrations/tanstack-query/generated/catalog.gen";
+import { imageUpload } from "~/integrations/tanstack-query/generated/image-upload.gen";
 import { invalidateOperationTags } from "~/integrations/tanstack-query/operation-cache";
 import { FileDropField } from "~/ui/file-upload/FileDropField";
 import { useActionMutation } from "~/ui/hooks/useActionMutation";

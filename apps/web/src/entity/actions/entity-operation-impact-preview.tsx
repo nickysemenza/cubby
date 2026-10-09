@@ -3,7 +3,7 @@ import type { OperationEffect } from "@cubby/schemas/entity-integrity";
 import { useQuery } from "@tanstack/react-query";
 import type { ReactNode } from "react";
 
-import { entityGraph } from "~/integrations/tanstack-query/generated/catalog.gen";
+import { entityGraph } from "~/integrations/tanstack-query/generated/entity-graph.gen";
 import { cn } from "~/lib/utils";
 import { ErrorDisplay } from "~/ui/feedback/error-display";
 import { Stack } from "~/ui/layout";

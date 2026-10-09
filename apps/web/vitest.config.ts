@@ -234,6 +234,7 @@ export default defineConfig({
             // exactly as safe as their old dedicated one, without a second
             // isolation startup tax.
             include: ["**/*.unit.test.ts"],
+            setupFiles: ["./tooling/entity-models-test-setup.ts"],
             exclude: [
               "**/node_modules/**",
               ...mcpContractTests,
@@ -288,7 +289,10 @@ export default defineConfig({
             name: "ui",
             environment: "jsdom",
             include: ["**/*.unit.test.tsx"],
-            setupFiles: ["./tooling/ui-test-setup.ts"],
+            setupFiles: [
+              "./tooling/ui-test-setup.ts",
+              "./tooling/entity-models-test-setup.ts",
+            ],
             // Global teardown restores DOM, storage, timers, mocks, globals,
             // and env between tests, so workers can share one jsdom graph.
             pool: "threads",
@@ -340,7 +344,10 @@ export default defineConfig({
           test: {
             name: "preview",
             include: ["**/*.preview.test.tsx"],
-            setupFiles: ["./tooling/preview-test-setup.ts"],
+            setupFiles: [
+              "./tooling/preview-test-setup.ts",
+              "./tooling/entity-models-test-setup.ts",
+            ],
             browser: {
               enabled: true,
               headless: true,

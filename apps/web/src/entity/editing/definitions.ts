@@ -1,11 +1,8 @@
 import type { Entity } from "@cubby/schemas/entity";
 import { generatedEntityEditIntents } from "@cubby/schemas/entity-edit-intents";
 import { entityFieldSchemaMaps } from "@cubby/schemas/entity-field-schema-maps";
-import {
-  entityFieldModels,
-  type EntityFieldModel,
-} from "@cubby/schemas/entity-fields";
-import { entityKeys, entitySummary } from "@cubby/schemas/entity-summary";
+import type { EntityFieldModel } from "@cubby/schemas/entity-fields";
+import { entityIndex, entityKeys } from "@cubby/schemas/entity-index";
 import {
   canClearExpenseDate,
   EXPENSE_DATE_REQUIRED_MESSAGE,
@@ -28,6 +25,7 @@ import type {
   EntityEditValue,
   EntityEditValueBag,
 } from "~/entity/editing/value-schema";
+import { entityFieldModel, entitySummaryOf } from "~/entity/entity-model";
 import { householdLocalDate } from "~/lib/household-date";
 import {
   isCanonicalPriceMapping,
@@ -105,7 +103,7 @@ function absentRecordIdentity(
 ) {
   return (
     Boolean(record) &&
-    entitySummary[entity].recordEmojiField === id &&
+    entityIndex[entity].recordEmojiField === id &&
     baseline === undefined &&
     value === null
   );
@@ -148,8 +146,8 @@ const multipleReferenceIdsFromRecord = <E extends EditableEntity>(
   const projection =
     direct.length > 0
       ? direct
-      : entityFieldModels[entity].fields
-          .filter(
+      : entityFieldModel(entity)
+          .fields.filter(
             (candidate) =>
               candidate.key !== field.key &&
               candidate.readKey !== null &&
@@ -336,10 +334,10 @@ const builderFor = <E extends EditableEntity>(
   // editor-only pseudo field, or a shorthand override target) is never
   // narrowed to this entity's own field-key union at the call sites below.
   const fieldModelByKey = new Map<string, EntityFieldModel["fields"][number]>(
-    entityFieldModels[entity].fields.map((field) => [field.key, field]),
+    entityFieldModel(entity).fields.map((field) => [field.key, field]),
   );
   const resolutionFieldByMode = new Map<string, string>();
-  for (const field of entityFieldModels[entity].fields) {
+  for (const field of entityFieldModel(entity).fields) {
     for (const [key, value] of Object.entries(field.resolution?.reset ?? {})) {
       if (value === "inherit") resolutionFieldByMode.set(key, field.key);
     }
@@ -542,7 +540,7 @@ const declaredIntentIssues = <E extends EditableEntity>(
       });
   }
   const spans: readonly { start: string; end: string }[] =
-    entitySummary[entity].spans;
+    entitySummaryOf(entity).spans;
   for (const { start, end } of spans) {
     if (!fields.includes(start) || !fields.includes(end)) continue;
     const from = z.string().min(1).safeParse(values[start]);
@@ -558,7 +556,7 @@ const declaredIntentIssues = <E extends EditableEntity>(
 };
 
 const fieldLabel = (entity: EditableEntity, key: string): string =>
-  entityFieldModels[entity].fields.find((field) => field.key === key)?.label ??
+  entityFieldModel(entity).fields.find((field) => field.key === key)?.label ??
   key;
 
 /**
@@ -1150,18 +1148,24 @@ const isEditableEntity = (entity: Entity): entity is EditableEntity =>
   Object.hasOwn(generatedEntityEditIntents, entity);
 const editableEntities = entityKeys.filter(isEditableEntity);
 
-// SAFETY: `editableEntities` is the declared-intents roster, which the
-// `EditableEntity` type is asserted to match (types.ts); each entry is built
-// for its own entity key, so the per-key correlation the loop erases holds.
-const generatedRegistry = Object.fromEntries(
-  editableEntities.map((entity) => [
-    entity,
-    buildEntityDefinition(entity, editHooks[entity]),
-  ]),
-) as EntityEditRegistry;
+// Each definition reads its entity's field model, which loads with the route
+// or edit dialog that needs it, so an entry is built on first access.
+const generatedRegistry = {};
+for (const entity of editableEntities) {
+  let definition: unknown;
+  Object.defineProperty(generatedRegistry, entity, {
+    enumerable: true,
+    get: () =>
+      (definition ??= buildEntityDefinition(entity, editHooks[entity])),
+  });
+}
 
 /**
  * One definition per standard editable entity, generated from its declared
  * `model.intents` plus its `editHooks` entry when it has one.
  */
-export const entityEditRegistry: EntityEditRegistry = generatedRegistry;
+export const entityEditRegistry =
+  // SAFETY: `editableEntities` is the declared-intents roster, which the
+  // `EditableEntity` type is asserted to match (types.ts); each getter builds
+  // its own entity key, so the per-key correlation the loop erases holds.
+  generatedRegistry as EntityEditRegistry;

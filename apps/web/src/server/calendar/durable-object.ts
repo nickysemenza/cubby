@@ -1,18 +1,21 @@
 import type { DurableObjectState } from "@cloudflare/workers-types";
 import { userId, type UserId } from "@cubby/schemas/identifiers";
 import { sha256Hex } from "@cubby/shared/sha256";
-import { DurableObject } from "cloudflare:workers";
 
 import { httpRouteTemplate } from "~/lib/http-route-template";
 import { runWithExecutionCtx, setCfEnv } from "~/server/cf-env";
 import { recordDatabaseWrite } from "~/server/database-freshness/client";
+import type { Database } from "~/server/db";
 import { withInvocationTrace } from "~/server/tracing";
 import { withTrace } from "~/server/tracing";
 
 import { authenticateCalendar } from "./caldav-auth";
+import { createCalDavHandler } from "./caldav-http";
+import { renderCalDavResource } from "./caldav-ics";
 import {
   CalDavError,
   type CalDavBackend,
+  type CalDavCollection,
   type CalDavWrite,
 } from "./caldav-types";
 import {
@@ -26,34 +29,35 @@ import {
 import type { IcsFeed } from "./ics";
 import { CalendarSqlStore } from "./sql-store";
 
+type CalendarPostgres = typeof import("./postgres-backend");
 type WriteResponse = Awaited<ReturnType<CalDavBackend["write"]>>;
 
 const DIRTY_DELAY_MS = 2_000;
 
-export class CalendarFeedDurableObject
-  extends DurableObject<Env>
-  implements CalendarFeedDurableObjectRpc
-{
+/** `CalendarFeedDurableObject`'s implementation (`server/worker-entrypoints.ts`). */
+export class CalendarFeedObject implements CalendarFeedDurableObjectRpc {
   private readonly store: CalendarSqlStore;
   private publicationTail: Promise<void> = Promise.resolve();
-  constructor(ctx: DurableObjectState, env: Env) {
-    super(ctx, env);
+  constructor(
+    private readonly ctx: DurableObjectState,
+    private readonly env: Env,
+  ) {
     this.store = new CalendarSqlStore(ctx.storage);
-    ctx.blockConcurrencyWhile(() =>
-      withTrace("caldav.initialize", async () => {
-        await this.store.migrate();
-        if (!this.store.meta().generation && env.APP_ORIGIN)
-          await this.markDirty("initialize", env.APP_ORIGIN);
-        // Clean cutover: old subscription credentials and documents are disposable.
-        await ctx.storage.delete([
-          "calendar:meta",
-          "calendar:dirty",
-          "calendar:feed:meals",
-          "calendar:feed:tasks",
-          "calendar:feed:all",
-        ]);
-      }),
-    );
+  }
+  initialize() {
+    return withTrace("caldav.initialize", async () => {
+      await this.store.migrate();
+      if (!this.store.meta().generation && this.env.APP_ORIGIN)
+        await this.markDirty("initialize", this.env.APP_ORIGIN);
+      // Clean cutover: old subscription credentials and documents are disposable.
+      await this.ctx.storage.delete([
+        "calendar:meta",
+        "calendar:dirty",
+        "calendar:feed:meals",
+        "calendar:feed:tasks",
+        "calendar:feed:all",
+      ]);
+    });
   }
   async fetch(request: Request) {
     return withTrace("caldav.request", async (span) => {
@@ -76,10 +80,6 @@ export class CalendarFeedDurableObject
         write: (input) =>
           this.serializePublication(() => this.write(input, origin)),
       };
-      const { createCalDavHandler } = await withTrace(
-        "caldav.importHandler",
-        () => import("./caldav-http"),
-      );
       const response = await withTrace("caldav.response", () =>
         createCalDavHandler(backend)(request),
       );
@@ -207,18 +207,20 @@ export class CalendarFeedDurableObject
     );
   }
   private async withDatabase<T>(
-    run: (db: import("~/server/db").Database) => Promise<T>,
+    run: (db: Database, postgres: CalendarPostgres) => Promise<T>,
     origin: string,
   ) {
     if (!this.env.HYPERDRIVE?.connectionString)
       throw new Error("Calendar PostgreSQL write backend is unavailable");
     setCfEnv(this.env);
-    const { db, withRequestDbClient } = await import("~/server/db");
+    // The repository graph (with the WASM recipe bridge) serves only refreshes
+    // and writes; CalDAV and feed reads answer from SQLite without it.
+    const postgres = await import("./postgres-backend");
     return runWithExecutionCtx(
       { waitUntil: (task) => this.ctx.waitUntil(task) },
       () =>
-        withRequestDbClient(this.env.HYPERDRIVE.connectionString, () =>
-          run(db),
+        postgres.withRequestDbClient(this.env.HYPERDRIVE.connectionString, () =>
+          run(postgres.db, postgres),
         ),
       origin,
     );
@@ -231,10 +233,7 @@ export class CalendarFeedDurableObject
       throw error;
     }
   }
-  async clearUncertainWrite(
-    collection: import("./caldav-types").CalDavCollection,
-    filename: string,
-  ) {
+  async clearUncertainWrite(collection: CalDavCollection, filename: string) {
     return this.serializePublication(async () => {
       this.store.clearUncertainWrite(collection, filename);
     });
@@ -244,43 +243,37 @@ export class CalendarFeedDurableObject
     return withTrace(
       "calendar.feed.refresh",
       async () => {
-        const { resources, snapshot } = await this.withDatabase(async (db) => {
-          const [
-            { loadCalDavProjection },
-            { buildCalendarSnapshot },
-            { renderCalDavResource },
-          ] = await Promise.all([
-            import("~/server/repo/calendar-caldav"),
-            import("./snapshot"),
-            import("./caldav-ics"),
-          ]);
-          const data = await loadCalDavProjection(db);
-          const identityByCode = new Map(
-            this.store
-              .identities()
-              .map((identity) => [identity.shortcode, identity]),
-          );
-          const resources = await Promise.all(
-            data.projections.map((projection) =>
-              renderCalDavResource(
-                projection,
-                identityByCode.get(projection.id) ?? {
-                  entity: projection.entity,
-                  shortcode: projection.id,
-                  filename: `${projection.id}.ics`,
-                  uid: `${projection.id}@${UID_DOMAIN}`,
-                },
-                origin,
+        const { resources, snapshot } = await this.withDatabase(
+          async (db, { buildCalendarSnapshot, loadCalDavProjection }) => {
+            const data = await loadCalDavProjection(db);
+            const identityByCode = new Map(
+              this.store
+                .identities()
+                .map((identity) => [identity.shortcode, identity]),
+            );
+            const resources = await Promise.all(
+              data.projections.map((projection) =>
+                renderCalDavResource(
+                  projection,
+                  identityByCode.get(projection.id) ?? {
+                    entity: projection.entity,
+                    shortcode: projection.id,
+                    filename: `${projection.id}.ics`,
+                    uid: `${projection.id}@${UID_DOMAIN}`,
+                  },
+                  origin,
+                ),
               ),
-            ),
-          );
-          const snapshot = await buildCalendarSnapshot(db, {
-            origin,
-            now: new Date(),
-            revision: this.store.meta().generation + 1,
-          });
-          return { resources, snapshot };
-        }, origin);
+            );
+            const snapshot = await buildCalendarSnapshot(db, {
+              origin,
+              now: new Date(),
+              revision: this.store.meta().generation + 1,
+            });
+            return { resources, snapshot };
+          },
+          origin,
+        );
         const revision = this.store.publish(
           resources,
           snapshot.documents,
@@ -297,11 +290,10 @@ export class CalendarFeedDurableObject
     );
   }
   private async execute(write: CalDavWrite, origin: string) {
-    return this.withDatabase(async (db) => {
-      const { executeCalDavWrite } =
-        await import("~/server/repo/calendar-caldav");
-      return executeCalDavWrite(db, write);
-    }, origin);
+    return this.withDatabase(
+      (db, { executeCalDavWrite }) => executeCalDavWrite(db, write),
+      origin,
+    );
   }
   private async write(
     input: Parameters<CalDavBackend["write"]>[0],

@@ -2,7 +2,7 @@ import { useSuspenseQuery } from "@tanstack/react-query";
 import { createFileRoute, notFound } from "@tanstack/react-router";
 
 import { USDAFoodDetail } from "~/features/usda/USDAFoodDetail";
-import { usdaFood } from "~/integrations/tanstack-query/generated/catalog.gen";
+import { usdaFood } from "~/integrations/tanstack-query/generated/usda.gen";
 import { pageTitle } from "~/lib/page-title";
 import { Page } from "~/ui/page/Page";
 import { Empty, EmptyDescription, EmptyTitle } from "~/ui/primitives/empty";

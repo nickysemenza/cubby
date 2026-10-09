@@ -1,4 +1,4 @@
-import { inventoryPlacementValues } from "@cubby/shared";
+import { inventoryPlacementValues } from "@cubby/shared/category-theme";
 import { z } from "zod";
 import { moneyNullable } from "./money";
 

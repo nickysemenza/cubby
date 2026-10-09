@@ -11,7 +11,7 @@ import { render, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import type { RunDetail } from "~/contracts/run.contract";
-import { photoImport } from "~/integrations/tanstack-query/generated/catalog.gen";
+import { photoImport } from "~/integrations/tanstack-query/generated/photo-import.gen";
 import { overrideStartDispatch } from "~/integrations/tanstack-query/start-transport";
 import { createBrowserTestHarness } from "~/lib/test/browser-harness";
 import type { UnparsedStartOperationData } from "~/server/start-operation.contract";

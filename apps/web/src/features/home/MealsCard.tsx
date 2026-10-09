@@ -7,7 +7,7 @@ import { useId } from "react";
 
 import { formatMealCost, mealListLabel } from "~/app/meals/meal-format";
 import { mealKindIcon, mealTypeIcon } from "~/app/meals/meal-options";
-import { meal } from "~/integrations/tanstack-query/generated/catalog.gen";
+import { meal } from "~/integrations/tanstack-query/generated/meal.gen";
 import { Row, Stack } from "~/ui/layout";
 import { Button } from "~/ui/primitives/button";
 import { Skeleton } from "~/ui/primitives/skeleton";

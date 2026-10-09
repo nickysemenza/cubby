@@ -1,4 +1,4 @@
-import { AppErrors } from "@cubby/shared";
+import { AppErrors } from "@cubby/shared/error-utils";
 import { describe, expect, it } from "vitest";
 import { shortcodeEntities } from "./entity-manifest";
 import { entitySummary } from "./generated/entity-summary.gen";

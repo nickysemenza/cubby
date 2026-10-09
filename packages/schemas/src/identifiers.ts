@@ -1,13 +1,9 @@
-import {
-  SHORTCODE_TYPES,
-  entityNotFoundReason,
-  mapRecord,
-} from "@cubby/shared";
-import type {
-  AppErrorReason,
-  ShortcodeType as ShortcodeEntity,
-} from "@cubby/shared";
-import { entitySummary } from "./generated/entity-summary.gen";
+import { entityNotFoundReason } from "@cubby/shared/error-utils";
+import { mapRecord } from "@cubby/shared/record";
+import { SHORTCODE_TYPES } from "@cubby/shared/shortcode";
+import type { AppErrorReason } from "@cubby/shared/error-utils";
+import type { ShortcodeType as ShortcodeEntity } from "@cubby/shared/shortcode";
+import { entityIndex } from "./generated/entity-index.gen";
 export * from "./identifier-fields";
 
 /**
@@ -35,7 +31,7 @@ export const ENTITY_NOT_FOUND_REASON = mapRecord(
  * casing when it leads (`"USDA Food"` → `"USDA food"`).
  */
 const sentenceCaseEntityLabel = (entity: ShortcodeEntity): string =>
-  entitySummary[entity].singular
+  entityIndex[entity].singular
     .split(" ")
     .map((word, index) => (index === 0 ? word : word.toLowerCase()))
     .join(" ");

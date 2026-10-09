@@ -20,7 +20,7 @@ import {
 } from "~/entity/entity-media/entity-display-images";
 import { EntityMergeDialog } from "~/entity/merge/entity-merge-dialog";
 import { ProductVariantEvidence } from "~/features/products/product-variant-evidence";
-import type { recommendations } from "~/integrations/tanstack-query/generated/catalog.gen";
+import type { recommendations } from "~/integrations/tanstack-query/generated/recommendations.gen";
 import { ErrorDisplay } from "~/ui/feedback/error-display";
 import { useActionMutation } from "~/ui/hooks/useActionMutation";
 import { Row, Stack } from "~/ui/layout";

@@ -1,6 +1,6 @@
 import type { AuditEntityKind } from "@cubby/schemas/audit";
 import type { Entity } from "@cubby/schemas/entity";
-import { entitySummary } from "@cubby/schemas/entity-summary";
+import { entityIndex } from "@cubby/schemas/entity-index";
 import {
   imageUrlSummary,
   type ImageUrlSummary,
@@ -121,8 +121,7 @@ export function ByIdRefLink({
             ? z
                 .string()
                 .catch("")
-                .parse(record.data[entitySummary[entityKind].titleField]) ||
-              null
+                .parse(record.data[entityIndex[entityKind].titleField]) || null
             : null
         }
         // Absent stays `undefined` so the chip falls back to the surrounding

@@ -5,7 +5,7 @@ import { basisValueOf } from "~/features/ai/field-suggestion";
 import { FieldSuggestionHint } from "~/features/ai/field-suggestion-hint";
 import { useFieldSuggestionContext } from "~/features/ai/field-suggestion-provider";
 import { useRowEnumSuggestion } from "~/features/ai/use-row-enum-suggestion";
-import { ai } from "~/integrations/tanstack-query/generated/catalog.gen";
+import { ai } from "~/integrations/tanstack-query/generated/ai.gen";
 
 /** A blank select — `ProductExternalIdsField`'s `emptyValue` — means "no kind
  * picked yet", so this fires on a freshly-added row, not just an edited one. */

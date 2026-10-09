@@ -1,7 +1,7 @@
 import { z } from "zod";
 import { amount, baseKind } from "./codec";
 import { money, moneyNullable } from "./money";
-import { shortcodeEntities, type ShortcodeEntity } from "./entity-manifest";
+import { shortcodeEntities, type ShortcodeEntity } from "./entity-index";
 import { entityConnectionItem } from "./entity-connections";
 import { referentialLivenessViolationSchema } from "./entity-integrity";
 import { financialReconciliationFields } from "./financial-reconciliation";

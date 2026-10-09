@@ -7,7 +7,7 @@ import { z } from "zod";
 
 import { fieldEnumOptions } from "~/entity/enum-field-display";
 import { FieldSuggestionProvider } from "~/features/ai/field-suggestion-provider";
-import { project } from "~/integrations/tanstack-query/generated/catalog.gen";
+import { project } from "~/integrations/tanstack-query/generated/project.gen";
 import { getErrorMessage } from "~/lib/error-utils";
 import {
   FormWrapper,

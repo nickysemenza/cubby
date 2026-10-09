@@ -35,7 +35,7 @@ import { entityDetailFor } from "~/entity/entity-detail";
 import type { DetailRecordOf } from "~/entity/entity-detail/detail-record";
 import { FieldSuggestionProvider } from "~/features/ai/field-suggestion-provider";
 import { AmountFieldGroup } from "~/features/inventory/amount-field-group";
-import { inventory as inventoryOperations } from "~/integrations/tanstack-query/generated/catalog.gen";
+import { inventory as inventoryOperations } from "~/integrations/tanstack-query/generated/inventory.gen";
 import { referenceEntitySearch } from "~/ui/combobox/reference-entity-search";
 import { WorkflowDialog } from "~/ui/dialogs/workflow-dialog";
 import { EntityValueField } from "~/ui/form-utils/entity-value-field";

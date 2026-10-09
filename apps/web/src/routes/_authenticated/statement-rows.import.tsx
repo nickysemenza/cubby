@@ -18,7 +18,7 @@ import {
   recordStatementBatch,
   statementCsvHeaders,
 } from "~/app/finance/statement-csv";
-import { statementRow } from "~/integrations/tanstack-query/generated/catalog.gen";
+import { statementRow } from "~/integrations/tanstack-query/generated/statement-row.gen";
 import { pageTitle } from "~/lib/page-title";
 import { statusTone } from "~/lib/status-tone";
 import { formatCount, formatCurrency } from "~/lib/utils";

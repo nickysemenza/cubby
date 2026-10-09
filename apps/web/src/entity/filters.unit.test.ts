@@ -1,12 +1,11 @@
-import { UNRESOLVABLE_ENTITY_FILTER } from "@cubby/shared";
+import { FILTER_ANY, FILTER_NONE } from "@cubby/schemas/filter-sentinel-fields";
+import { UNRESOLVABLE_ENTITY_FILTER } from "@cubby/shared/filter";
 import { describe, expect, it } from "vitest";
 import { z } from "zod";
 
 import {
   compileFilterCodec,
   buildFiltersFromManifest,
-  FILTER_ANY,
-  FILTER_NONE,
   type FilterSpecCore,
   type FilterSearch,
   type FilterValue,

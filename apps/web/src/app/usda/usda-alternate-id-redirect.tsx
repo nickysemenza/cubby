@@ -2,7 +2,7 @@ import { useQuery } from "@tanstack/react-query";
 import { useNavigate } from "@tanstack/react-router";
 import { useEffect } from "react";
 
-import { usdaFood } from "~/integrations/tanstack-query/generated/catalog.gen";
+import { usdaFood } from "~/integrations/tanstack-query/generated/usda.gen";
 import { Stack } from "~/ui/layout";
 import { Page } from "~/ui/page/Page";
 import { Empty, EmptyDescription, EmptyTitle } from "~/ui/primitives/empty";

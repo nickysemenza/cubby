@@ -5,10 +5,8 @@ import {
 } from "@cubby/schemas/problems";
 import { createLogger } from "@cubby/worker-tracing";
 import * as Sentry from "@sentry/tanstackstart-react";
-import { DurableObject } from "cloudflare:workers";
 
 import { runWithExecutionCtx, setCfEnv } from "~/server/cf-env";
-import type { findProblemCounts } from "~/server/services/problems.service";
 import { withInvocationTrace } from "~/server/tracing";
 
 import { databaseFreshness, type DatabaseFreshnessRpc } from "./state";
@@ -18,27 +16,23 @@ const log = createLogger("problems.counts");
 const REFRESH_DELAY_MS = 15 * 60_000;
 const MAX_SNAPSHOT_AGE_MS = 24 * 60 * 60_000;
 
-// SAFETY: this module's named export is declared locally and remains lazy so
-// workerd does not initialize the WASM-backed problem implementation at boot.
-const loadProblemCountsService = () =>
-  import("~/server/services/problems.service") as Promise<{
-    findProblemCounts: typeof findProblemCounts;
-  }>;
-
 type SnapshotRow = {
   counts_json: string;
   computed_at: number;
 };
 
-/** One timestamp per database environment, shared by every household client. */
-export class DatabaseFreshnessDurableObject
-  extends DurableObject<Env>
-  implements DatabaseFreshnessRpc
-{
+/**
+ * `DatabaseFreshnessDurableObject`'s implementation
+ * (`server/worker-entrypoints.ts`): one timestamp per database environment,
+ * shared by every household client.
+ */
+export class DatabaseFreshnessObject implements DatabaseFreshnessRpc {
   private refreshTail: Promise<void> = Promise.resolve();
 
-  constructor(ctx: DurableObjectState, env: Env) {
-    super(ctx, env);
+  constructor(
+    private readonly ctx: DurableObjectState,
+    private readonly env: Env,
+  ) {
     ctx.storage.sql.exec(
       "CREATE TABLE IF NOT EXISTS freshness (id INTEGER PRIMARY KEY CHECK (id = 1), last_write_at REAL NOT NULL)",
     );
@@ -213,18 +207,12 @@ export class DatabaseFreshnessDurableObject
       throw new Error("Problem-count PostgreSQL backend is unavailable");
     }
     setCfEnv(this.env);
-    const [{ db, withRequestDbClient }, { createUpcLookupService }, service] =
-      await Promise.all([
-        import("~/server/db"),
-        import("~/server/services/upc"),
-        loadProblemCountsService(),
-      ]);
+    // The WASM-backed detectors serve only this refresh; every write and
+    // freshness read reaches this object without loading them.
+    const { findProblemCountsWithClient } = await import("./problem-counts");
     return runWithExecutionCtx(
       { waitUntil: (task) => this.ctx.waitUntil(task) },
-      () =>
-        withRequestDbClient(connectionString, () =>
-          service.findProblemCounts(db, createUpcLookupService(db)),
-        ),
+      () => findProblemCountsWithClient(connectionString),
       this.env.APP_ORIGIN,
     );
   }

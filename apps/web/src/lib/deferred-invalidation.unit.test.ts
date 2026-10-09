@@ -2,7 +2,7 @@ import { QueryClient } from "@tanstack/react-query";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { ripple } from "~/integrations/tanstack-query/cache-tags";
-import { calendar } from "~/integrations/tanstack-query/generated/catalog.gen";
+import { calendar } from "~/integrations/tanstack-query/generated/calendar.gen";
 
 import {
   DEFERRED_INVALIDATION_DELAYS_MS,

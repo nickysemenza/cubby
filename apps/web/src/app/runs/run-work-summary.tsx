@@ -1,5 +1,5 @@
 import type { ActivityRun } from "@cubby/schemas/activity";
-import { parseShortcode } from "@cubby/shared";
+import { parseShortcode } from "@cubby/shared/shortcode";
 
 import { EntityRefLink } from "~/entity/components/entity-ref-link";
 import { EntityIcon, isBrowserRoutedEntity } from "~/entity/entities";

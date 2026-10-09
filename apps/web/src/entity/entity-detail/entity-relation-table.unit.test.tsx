@@ -4,7 +4,7 @@ import {
   productPurchaseOut,
 } from "@cubby/schemas/purchase";
 import { testShortcode } from "@cubby/schemas/testing";
-import { formatCategoryLabel } from "@cubby/shared";
+import { formatCategoryLabel } from "@cubby/shared/category-theme";
 import {
   fireEvent,
   render,
@@ -22,11 +22,9 @@ import {
   purchaseListItem,
   taskListItem,
 } from "~/entity/generated/entity-lists.gen";
-import {
-  entityList,
-  purchase as purchaseOperations,
-  product as productOperations,
-} from "~/integrations/tanstack-query/generated/catalog.gen";
+import { entityList } from "~/integrations/tanstack-query/generated/entity-list.gen";
+import { product as productOperations } from "~/integrations/tanstack-query/generated/product.gen";
+import { purchase as purchaseOperations } from "~/integrations/tanstack-query/generated/purchase.gen";
 import { createBrowserTestHarness } from "~/lib/test/browser-harness";
 import { mock } from "~/lib/test/mock-schema";
 

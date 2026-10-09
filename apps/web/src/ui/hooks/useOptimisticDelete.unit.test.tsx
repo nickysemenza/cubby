@@ -11,7 +11,7 @@ import type { ReactNode } from "react";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
 import type { EntityEditResult } from "~/entity/editing/types";
-import { entityGraph } from "~/integrations/tanstack-query/generated/catalog.gen";
+import { entityGraph } from "~/integrations/tanstack-query/generated/entity-graph.gen";
 import { createBrowserTestHarness } from "~/lib/test/browser-harness";
 
 import { useCubbyTable } from "../data-table/table-features";

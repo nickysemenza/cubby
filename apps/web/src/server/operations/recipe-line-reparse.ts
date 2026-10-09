@@ -1,6 +1,7 @@
 import type { RecipeShortcode } from "@cubby/schemas/identifiers";
 
 import { computeParseDrift } from "~/lib/parse-drift";
+import { wasm } from "~/lib/wasm";
 import {
   type EntityKernelContext,
   executeEntityAs,
@@ -46,9 +47,6 @@ export async function reparseRecipeLine(
       "CONSTRAINT_VIOLATION",
       "A sub-recipe line has no ingredient name to re-parse",
     );
-
-  // The parser is loaded here, not at the top: it stays off the Worker's first-request path.
-  const { wasm } = await import("~/lib/wasm");
   const drift = computeParseDrift(
     {
       knownNames: [line.ingredient.name, ...(line.ingredient.aliases ?? [])],

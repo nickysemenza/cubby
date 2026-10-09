@@ -1,6 +1,6 @@
-import { entityFieldModels } from "@cubby/schemas/entity-fields";
 import type { FieldValues, Path, UseFormReturn } from "react-hook-form";
 
+import { entityFieldModel } from "~/entity/entity-model";
 import { Button } from "~/ui/primitives/button";
 
 import { FieldSuggestionHint } from "./field-suggestion-hint";
@@ -43,9 +43,7 @@ export function AutoSuggestSlot<TFieldValues extends FieldValues>({
     disabled,
   });
   const definition = context
-    ? entityFieldModels[context.entity].fields.find(
-        (item) => item.key === field,
-      )
+    ? entityFieldModel(context.entity).fields.find((item) => item.key === field)
     : undefined;
   return (
     <>

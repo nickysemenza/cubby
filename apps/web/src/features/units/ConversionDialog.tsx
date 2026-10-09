@@ -4,11 +4,12 @@ import type { UnitMapping } from "@cubby/schemas/unitmapping";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { CalculatorIcon } from "@phosphor-icons/react/dist/csr/Calculator";
 import * as React from "react";
-import { useId, useState } from "react";
+import { type ComponentProps, useId, useState } from "react";
 import { useForm } from "react-hook-form";
 import { z } from "zod";
 
 import { AmountFieldGroup } from "~/features/inventory/amount-field-group";
+import { browserOnlyLazy } from "~/lib/browser-only-lazy";
 import type { BaseKind } from "~/lib/conversion-coverage";
 import { safeConvertAmount } from "~/lib/recipe-costing";
 import type { Result } from "~/lib/result-types";
@@ -35,8 +36,25 @@ import {
 
 import { ConversionCapabilitiesSummary } from "./conversion-capabilities-summary";
 import { kindIconFor } from "./kind-icons";
-import { UnitMappingGraph } from "./unit-mapping-graph";
+import type { UnitMappingGraph as UnitMappingGraphComponent } from "./unit-mapping-graph";
 import { UnitMappingsTable } from "./unitmappingstable";
+
+const GraphPlaceholder = () => (
+  <div className="h-[220px] animate-pulse border bg-muted/30" />
+);
+
+// Interaction-only: d3-force loads when the conversion dialog opens.
+const UnitMappingGraph = browserOnlyLazy<
+  ComponentProps<typeof UnitMappingGraphComponent>
+>(
+  import.meta.env.SSR
+    ? null
+    : () =>
+        import("./unit-mapping-graph").then((module) => ({
+          default: module.UnitMappingGraph,
+        })),
+  GraphPlaceholder,
+);
 
 const formSchema = z.object({
   amount: amount,

@@ -1,10 +1,12 @@
 import type { ReportBlock, ReportCommand } from "@cubby/schemas/entity-report";
 import { cookbookShortcode } from "@cubby/schemas/identifiers";
+import { COOKBOOK_COMMAND_CHUNK } from "@cubby/schemas/import-recipe";
 import { and, eq, sql } from "drizzle-orm";
 
 import { formatCurrency } from "~/lib/utils";
 import type { Database } from "~/server/db";
 import { cookbook } from "~/server/db/schema";
+import { getCookbookSourceCoverage } from "~/server/repo/cookbook";
 import { getDb, notDeleted } from "~/server/repo/database-helpers";
 import { resolveOrThrow } from "~/server/repo/shortcode-resolver";
 
@@ -132,11 +134,6 @@ export async function cookbookImportProgressReport(
 ): Promise<ReportBlock[]> {
   const id = await resolveOrThrow(db, "cookbook", code);
   const cookbookId = cookbookShortcode.parse(code);
-  const [{ getCookbookSourceCoverage }, { COOKBOOK_COMMAND_CHUNK }] =
-    await Promise.all([
-      import("~/server/repo/cookbook"),
-      import("@cubby/schemas/import-recipe"),
-    ]);
   let coverage;
   try {
     coverage = await getCookbookSourceCoverage(db, id);

@@ -1,9 +1,11 @@
-import { plantingGuides } from "@cubby/schemas/garden-guides";
 import {
   type GardenCropKey,
-  type GardenPracticeEntry,
   gardenCropKey,
   gardenCropKeys,
+} from "@cubby/schemas/garden-fields";
+import { plantingGuides } from "@cubby/schemas/garden-guides";
+import {
+  type GardenPracticeEntry,
   gardenPractice,
   gardenPracticeSources,
 } from "@cubby/schemas/garden-practice";

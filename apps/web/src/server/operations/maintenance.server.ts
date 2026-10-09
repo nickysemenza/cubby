@@ -5,11 +5,11 @@ import {
   imageProcessingMaintenanceSummary,
   updateImageProcessingSettings,
 } from "~/server/repo/image-processing-maintenance";
+import { requestCatchUp } from "~/server/services/app-open-catch-up.service";
 import {
   countAwaitingWork,
   settleAwaitingWork,
 } from "~/server/services/awaiting-work.service";
-import { requestCatchUp } from "~/server/services/catch-up.service";
 import { repairImageDimensions } from "~/server/services/image-dimension-repair.service";
 import { backfillImageMetadata } from "~/server/services/image-metadata-backfill.service";
 import { classifyImageProvenance } from "~/server/services/image-provenance-classify.service";

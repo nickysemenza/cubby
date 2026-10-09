@@ -41,7 +41,8 @@ import {
   notDeleted,
   withTransaction,
 } from "~/server/repo/database-helpers";
-import { refreshDirectImageOwnerSearchDocuments } from "~/server/repo/search-document";
+import { mayClaimImageProcessingJob } from "~/server/repo/image-processing-settings";
+import { refreshDirectImageOwnerSearchDocuments } from "~/server/services/mutation-side-effects";
 import { getR2PublicUrl } from "~/server/utils/r2-public-url";
 import {
   generateImageKey,
@@ -432,8 +433,6 @@ export async function claimImageProcessingJob(
   const leaseExpiresAt = sql`now() + ${input.leaseMs} * interval '1 millisecond'`;
   return await withTransaction(db, async (tx) => {
     // The policy is internal so a new caller cannot accidentally bypass pause.
-    const { mayClaimImageProcessingJob } =
-      await import("./image-processing-maintenance");
     if (!(await mayClaimImageProcessingJob(tx))) return null;
     const [candidate] = await tx
       .select({

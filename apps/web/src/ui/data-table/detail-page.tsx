@@ -1,5 +1,5 @@
 import type { Entity } from "@cubby/schemas/entity";
-import { isAuditableEntity } from "@cubby/schemas/entity-manifest";
+import { isAuditableEntity } from "@cubby/schemas/entity-index";
 import { CaretDownIcon } from "@phosphor-icons/react/dist/csr/CaretDown";
 import { CaretRightIcon } from "@phosphor-icons/react/dist/csr/CaretRight";
 import { ClockIcon } from "@phosphor-icons/react/dist/csr/Clock";

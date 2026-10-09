@@ -1,6 +1,6 @@
 import { useQuery } from "@tanstack/react-query";
 
-import { location } from "~/integrations/tanstack-query/generated/catalog.gen";
+import { location } from "~/integrations/tanstack-query/generated/location.gen";
 import { useHydrated } from "~/ui/hooks/useHydrated";
 
 /**

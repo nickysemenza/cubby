@@ -3,7 +3,7 @@ import type {
   productCreateManyInput,
   productMarkUsdaUnavailableManyInput,
 } from "@cubby/schemas/product";
-import { UNSPECIFIED_MANUFACTURER } from "@cubby/shared";
+import { UNSPECIFIED_MANUFACTURER } from "@cubby/shared/constants";
 import { SparkleIcon } from "@phosphor-icons/react/dist/csr/Sparkle";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
@@ -22,10 +22,8 @@ import { entityDetailFor } from "~/entity/entity-detail";
 import { EntityMergeDialog } from "~/entity/merge/entity-merge-dialog";
 import { confidenceColor } from "~/features/ai/ai-proposal-card";
 import { ripple } from "~/integrations/tanstack-query/cache-tags";
-import {
-  ai,
-  ingredient,
-} from "~/integrations/tanstack-query/generated/catalog.gen";
+import { ai } from "~/integrations/tanstack-query/generated/ai.gen";
+import { ingredient } from "~/integrations/tanstack-query/generated/ingredient.gen";
 import { getErrorMessage } from "~/lib/error-utils";
 import { savedWithBackgroundWork } from "~/lib/recompute-summary";
 import { cn } from "~/lib/utils";

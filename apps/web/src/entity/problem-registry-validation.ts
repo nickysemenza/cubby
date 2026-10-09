@@ -1,5 +1,5 @@
 import type { Entity } from "@cubby/schemas/entity";
-import { browserRoutedEntities } from "@cubby/schemas/entity-manifest";
+import { browserRoutedEntities } from "@cubby/schemas/entity-index";
 
 import { withProblemActionCapabilities } from "./problem-actions";
 import { compileProblemFilters } from "./problem-filter-semantics";

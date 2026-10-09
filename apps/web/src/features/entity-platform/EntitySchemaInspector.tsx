@@ -32,6 +32,7 @@ import {
   relationDetailStatus,
   relationStatusClass,
   schemaRow,
+  useSchemaSurfaceModels,
 } from "./entity-schema-model";
 
 const dash = <span className="text-muted-foreground/40">—</span>;
@@ -474,6 +475,7 @@ export function EntitySchemaPanel({
 /** The full schema page body: everything the panel shows, unabridged, plus
  * filters, detail sections, and saved views. */
 export function EntitySchemaDetail({ entity }: { entity: Entity }) {
+  useSchemaSurfaceModels();
   const metadata = metadataFor(entity);
   return (
     <div className="space-y-6">

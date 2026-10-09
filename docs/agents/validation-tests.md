@@ -453,8 +453,7 @@ assertion uses is an override shaped `${label} ${deterministicToken(...)}`
 (`uniqueName` in E2E); shortcodes come from `@cubby/shared` and UPCs are valid
 literals, never Faker. E2E records the seed as a `faker-seed` annotation, and
 `testFaker()` prints it when the test fails. Retailer corpora, statement CSVs,
-costing and nutrition numbers, and scenario states stay literal. `build:cf`
-fails if Faker reaches the Worker bundle.
+costing and nutrition numbers, and scenario states stay literal.
 
 Keep kernel fixtures declaration-backed. The
 [Drizzle v1 RC spike](../research/drizzle-v1-spike.md) confirmed that

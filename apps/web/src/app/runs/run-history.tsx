@@ -24,7 +24,7 @@ import { ActivityRunDetail } from "~/app/activity/activity-run-detail";
 import { RunSubject, RunTargetChips } from "~/app/runs/run-work-summary";
 import { createEntityDisplayColumns } from "~/entity/entity-display";
 import { cursorQueryOptions } from "~/integrations/tanstack-query/cursor-query-options";
-import { activity } from "~/integrations/tanstack-query/generated/catalog.gen";
+import { activity } from "~/integrations/tanstack-query/generated/activity.gen";
 import { formatInstant } from "~/lib/date-format";
 import { formatCurrency } from "~/lib/utils";
 import { useTableColumnLayout } from "~/ui/data-table/column-layout";

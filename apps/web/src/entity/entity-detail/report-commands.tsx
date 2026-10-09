@@ -16,13 +16,11 @@ import { z } from "zod";
 
 import { runHref } from "~/app/purchases/purchase-import-links";
 import { EntityRefLink } from "~/entity/components/entity-ref-link";
-import {
-  meal,
-  problems,
-  recipe,
-  run,
-  vendor,
-} from "~/integrations/tanstack-query/generated/catalog.gen";
+import { meal } from "~/integrations/tanstack-query/generated/meal.gen";
+import { problems } from "~/integrations/tanstack-query/generated/problems.gen";
+import { recipe } from "~/integrations/tanstack-query/generated/recipe.gen";
+import { run } from "~/integrations/tanstack-query/generated/run.gen";
+import { vendor } from "~/integrations/tanstack-query/generated/vendor.gen";
 import type { ComboboxItem } from "~/ui/combobox/combobox-types";
 import { EntityPicker } from "~/ui/combobox/entity-picker";
 import {

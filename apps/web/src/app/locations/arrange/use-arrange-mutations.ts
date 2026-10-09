@@ -6,10 +6,8 @@ import type { InfLocation } from "@cubby/schemas/location";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 
 import { ripple } from "~/integrations/tanstack-query/cache-tags";
-import {
-  inventory,
-  location,
-} from "~/integrations/tanstack-query/generated/catalog.gen";
+import { inventory } from "~/integrations/tanstack-query/generated/inventory.gen";
+import { location } from "~/integrations/tanstack-query/generated/location.gen";
 import { invalidateOperationTags } from "~/integrations/tanstack-query/operation-cache";
 import { showErrorToast } from "~/ui/feedback/error-details";
 

@@ -1,7 +1,7 @@
 import { useMutation } from "@tanstack/react-query";
 import { uniqBy } from "es-toolkit";
 
-import { ingredient } from "~/integrations/tanstack-query/generated/catalog.gen";
+import { ingredient } from "~/integrations/tanstack-query/generated/ingredient.gen";
 
 import type { IngredientMatch } from "./use-ingredient-matches";
 

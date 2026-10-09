@@ -1,4 +1,4 @@
-import { gardenCropKey } from "@cubby/schemas/garden-practice";
+import { gardenCropKey } from "@cubby/schemas/garden-fields";
 import { locationShortcode } from "@cubby/schemas/identifiers";
 import {
   createFileRoute,

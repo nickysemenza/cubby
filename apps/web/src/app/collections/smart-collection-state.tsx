@@ -5,7 +5,7 @@ import {
   type SmartCollectionDefinition,
   type SmartCollectionKey,
   type SmartCollectionRule,
-} from "@cubby/schemas/collection";
+} from "@cubby/schemas/collection-fields";
 import {
   createContext,
   type ReactNode,

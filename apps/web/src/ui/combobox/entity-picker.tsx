@@ -1,5 +1,5 @@
 import { Combobox as ComboboxPrimitive } from "@base-ui/react";
-import { parseShortcode } from "@cubby/shared";
+import { parseShortcode } from "@cubby/shared/shortcode";
 import { CheckIcon } from "@phosphor-icons/react/dist/csr/Check";
 import { XIcon } from "@phosphor-icons/react/dist/csr/X";
 import { useDebouncedValue } from "@tanstack/react-pacer";

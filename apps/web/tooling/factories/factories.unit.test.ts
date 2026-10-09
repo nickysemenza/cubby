@@ -1,4 +1,4 @@
-import { generateShortcode } from "@cubby/shared";
+import { generateShortcode } from "@cubby/shared/shortcode";
 import { describe, expect, it } from "vitest";
 
 import { buildEntity, CREATABLE_ENTITIES, type CreatableEntity } from "./build";

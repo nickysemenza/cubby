@@ -8,7 +8,7 @@ import {
   expenseVendorColumn,
 } from "~/app/projects/shared";
 import { entityMutationOptionsFactory } from "~/entity/entity-contracts";
-import { expense } from "~/integrations/tanstack-query/generated/catalog.gen";
+import { expense } from "~/integrations/tanstack-query/generated/expense.gen";
 import {
   createCubbyColumnCollection,
   createCubbyColumnHelper,

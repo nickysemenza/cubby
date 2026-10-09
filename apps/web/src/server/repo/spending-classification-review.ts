@@ -39,7 +39,10 @@ import {
   type ExpenseJointAllocationRow,
 } from "./expense-project-allocation";
 import { validateProductPolicy } from "./inheritance-validation";
-import { getCategoryFeature, resolveProductCategory } from "./product-category";
+import {
+  getCategoryFeature,
+  resolveProductCategory,
+} from "./product-category-feature";
 import { externalIdsContainIsbn } from "./product/update-helpers";
 import { resolveAllOrThrow, resolveOrThrow } from "./shortcode-resolver";
 import { lockLiveSpendingCategories } from "./spending-category";

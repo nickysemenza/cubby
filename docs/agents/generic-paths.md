@@ -33,7 +33,17 @@ existing block. Extend the generic path when it almost fits. See
   `@cubby/schemas/classification-field-policy` plus
   `server/repo/classification-field-policy.ts` — never a feature literal at a
   call site. See [entities](../entities.md#classification-field-policies).
-- Detail pages: generic detail with declared slots (`app/*/slots.tsx`).
+- Detail pages: generic detail with declared slots (`app/*/slots.tsx`), bound
+  per entity in `entity/clients/<entity>.detail.tsx` (`defineDetailHooks`:
+  slots, header actions, section and collection verbs) and list slots in
+  `entity/clients/<entity>.list.tsx`. No all-entities slot or verb registry.
+- Entity models in the browser: `@cubby/schemas/entity-index` for eager,
+  every-entity facts; `entityFieldModel` / `entitySummaryOf` /
+  `entityDescriptorOf` (`~/entity/entity-model`) for a loaded entity;
+  `EntityModelBoundary` or `useEntityModel(s)` before reading another entity's
+  model. Never a value import of `@cubby/schemas/entity-manifest`,
+  `entity-summary` or `entity-fields` outside server code
+  (`cubby/no-client-entity-aggregate`; [ADR 0009](../adr/0009-per-entity-client-manifests.md)).
 - Slot reports: a slot that is figures, series, a table or dated rows reads
   `entityReport.get` (`server/repo/entity-report/`; block kinds `stats`,
   `chart`, `table`, `schedule`, `note`, `records` in `packages/schemas/src/entity-report.ts`).
@@ -45,8 +55,8 @@ existing block. Extend the generic path when it almost fits. See
   record of its own (a ledger party) is a `records` row instead, with its kind
   as a neutral `statuses` chip (`badges` read as warnings). A `records` block is rows that are
   records of their own (label, thumbnail, badges, a record to open) with verbs
-  from `COLLECTION_ACTION_SCOPES`: web fills each verb in
-  `entity-detail/collection-actions.tsx`, native runs its plan in
+  from `COLLECTION_ACTION_SCOPES`: web fills each verb in the owning entity's
+  detail hook module (`collectionActions`), native runs its plan in
   `nativeCollectionActionPlans` through `HeroActionRunner`. Rows are worded in
   `server/repo/collection-items.ts`. The same block carries the finance slots: rows may be
   checkable (`key`, `disabledReason`), with a `footer` and finance `verbs`
@@ -177,9 +187,10 @@ existing block. Extend the generic path when it almost fits. See
   direct `setColumnOrder` / `setColumnPinning` / `column.pin` calls.
 - Formatting: `lib/utils` formatters (`formatCurrency`, `formatCount`,
   `formatPercent`, `roundTo`, compact variants) and the WASM amount formatter.
-  Currency, bare numbers, amounts, and the compact nutrition cell are one Rust
-  implementation (`recipebridge/src/display_format.rs`) shared with native via
-  UniFFI; add a rule there and to `golden-vectors/display-format.json`.
+  Native formats currency, bare numbers, amounts, and the compact nutrition
+  cell in Rust (`recipebridge/src/display_format.rs`, via UniFFI); the web
+  formats currency and the compact cell in TypeScript so WASM stays off page
+  load. Add a rule to `golden-vectors/display-format.json`, then both.
 - Search results: `features/search/search-utils.tsx` (routes, media, match
   text) and `features/search/product-family.tsx`, the one Product-family
   model (summary, child rows, destinations, keys, disclosure) behind both the

@@ -2,8 +2,7 @@ import type {
   FieldSuggestion,
   FieldSuggestionOutcome,
 } from "@cubby/schemas/ai";
-import { entityFieldModels } from "@cubby/schemas/entity-fields";
-import type { ShortcodeEntity } from "@cubby/schemas/entity-manifest";
+import { type ShortcodeEntity } from "@cubby/schemas/entity-index";
 import { resolveExpenseLineKind } from "@cubby/schemas/expense-line-kind";
 import {
   fieldResolutionsSchema,
@@ -24,6 +23,7 @@ import {
 import { useFormContext, useFormState, useWatch } from "react-hook-form";
 import { z } from "zod";
 
+import { entityFieldModel } from "~/entity/entity-model";
 import { ErrorDisplay } from "~/ui/feedback/error-display";
 import { Button } from "~/ui/primitives/button";
 
@@ -631,7 +631,7 @@ export function FieldSuggestionProvider({
         const latestDraft = form.getValues(path);
         const changedDuringApply =
           basisValueOf(latestDraft) !== basisValueOf(drafts.get(key));
-        const field = entityFieldModels[entity].fields.find(
+        const field = entityFieldModel(entity).fields.find(
           (item) => item.key === key,
         );
         form.resetField(path, {

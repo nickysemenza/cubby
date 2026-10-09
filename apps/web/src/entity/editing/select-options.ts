@@ -67,7 +67,10 @@ const ENTITY_SELECT_OPTIONS = {
   // before validation (`entities/editing/definitions.ts`).
   "expense.lineKind": [{ value: "auto", label: "Auto-detect from name" }],
   "location.type": locationTypeOptionsWithTheme,
-  "productCategory.feature": productCategoryFeatureOptions,
+  // A getter: the product-category model loads with its route, after import.
+  get "productCategory.feature"() {
+    return productCategoryFeatureOptions();
+  },
 } satisfies Readonly<Record<string, readonly EntitySelectOption[]>>;
 
 /**

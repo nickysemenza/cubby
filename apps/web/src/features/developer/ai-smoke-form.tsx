@@ -1,13 +1,13 @@
 import { fieldSuggestionsInput } from "@cubby/schemas/ai";
 import { aiSmokeInputs, type AiSmokeScenario } from "@cubby/schemas/ai-smoke";
-import { entityFieldModels } from "@cubby/schemas/entity-fields";
 import { projectKindValues } from "@cubby/schemas/project-fields";
 import { useQuery } from "@tanstack/react-query";
 import { useMemo, useState } from "react";
 import { z } from "zod";
 
 import { entityListFor } from "~/entity/entity-list";
-import { image } from "~/integrations/tanstack-query/generated/catalog.gen";
+import { useEntityModel } from "~/entity/entity-model";
+import { image } from "~/integrations/tanstack-query/generated/image.gen";
 import type { ComboboxItem } from "~/ui/combobox/combobox-types";
 import { EntityPicker } from "~/ui/combobox/entity-picker";
 import type { PickerSearchEntity } from "~/ui/combobox/entity-search-hooks";
@@ -275,7 +275,7 @@ function FieldSuggestionFields({
   const entity = fieldSuggestionsInput.shape.entity
     .catch("product")
     .parse(value.entity);
-  const model = entityFieldModels[entity];
+  const model = useEntityModel(entity).fields;
   const fields = model?.fields ?? [];
   const targets = fields.filter((field) => field.control?.suggest);
   const selected = z.array(z.string()).catch([]).parse(value.targets);

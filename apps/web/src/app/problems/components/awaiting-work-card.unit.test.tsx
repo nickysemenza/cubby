@@ -5,7 +5,7 @@ import type {
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
-import { maintenance } from "~/integrations/tanstack-query/generated/catalog.gen";
+import { maintenance } from "~/integrations/tanstack-query/generated/maintenance.gen";
 import { createBrowserTestHarness } from "~/lib/test/browser-harness";
 
 import {

@@ -1,6 +1,6 @@
 import { createHash } from "node:crypto";
 import { readFileSync } from "node:fs";
-import { generateShortcode } from "@cubby/shared";
+import { generateShortcode } from "@cubby/shared/shortcode";
 import {
   parseEntityId,
   parseShortcodeFor,

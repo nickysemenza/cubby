@@ -14,7 +14,7 @@ import { kernelActionName } from "~/contracts/mcp-define";
  * `integrations/tanstack-query/operation-overrides.ts`. The one server-facing
  * hint is a query's `readPolicy: "strong"` (see `QueryContract`), a
  * data-freshness requirement. That is what lets ONE declaration feed the browser
- * catalog (the generated `catalog.gen.ts`, which resolves the cache data and
+ * catalog (the generated `integrations/tanstack-query/generated/<module>.gen.ts`, which resolves the cache data and
  * defaults every query's tags to `[domain, member]`), the server implementers
  * (`implementOperationDomain` / `implementSubscriptionDomain`), the operation
  * registry generator (which imports these modules at build time), and the

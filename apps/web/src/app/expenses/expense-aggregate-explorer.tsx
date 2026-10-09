@@ -16,7 +16,7 @@ import type { CellData, SortingState } from "@tanstack/react-table";
 import { useId, useMemo, useState } from "react";
 import { toast } from "sonner";
 
-import { expense } from "~/integrations/tanstack-query/generated/catalog.gen";
+import { expense } from "~/integrations/tanstack-query/generated/expense.gen";
 import { copyText } from "~/lib/clipboard";
 import { cn, formatCount, formatCurrency, formatPercent } from "~/lib/utils";
 import { useTableColumnLayout } from "~/ui/data-table/column-layout";

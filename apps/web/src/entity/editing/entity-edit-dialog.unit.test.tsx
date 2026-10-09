@@ -1,10 +1,14 @@
 import { render, screen } from "@testing-library/react";
-import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { afterEach, beforeAll, beforeEach, describe, expect, it } from "vitest";
 
 import { createBrowserTestHarness } from "~/lib/test/browser-harness";
 
 import { EntityEditDialog } from "./entity-edit-dialog";
 import { entityEditBannerIssues } from "./entity-edit-dialog-content";
+
+// The editor loads lazily when a dialog opens; warm its module so each
+// `findBy*` waits only for render.
+beforeAll(() => import("./entity-edit-dialog-content"));
 
 let harness: ReturnType<typeof createBrowserTestHarness>;
 

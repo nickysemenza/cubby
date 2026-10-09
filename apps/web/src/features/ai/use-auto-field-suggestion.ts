@@ -1,5 +1,4 @@
 import type { FieldSuggestion } from "@cubby/schemas/ai";
-import { entityFieldModels } from "@cubby/schemas/entity-fields";
 import { useCallback, useEffect, useRef } from "react";
 import {
   type FieldValues,
@@ -10,6 +9,7 @@ import {
 } from "react-hook-form";
 import { z } from "zod";
 
+import { entityFieldModel } from "~/entity/entity-model";
 import { enumFieldLabel } from "~/entity/enum-field-display";
 import type { ComboboxItem } from "~/ui/combobox/combobox-types";
 
@@ -85,7 +85,7 @@ function requiresSuggestionReview(
   field: string,
 ) {
   return Boolean(
-    entityFieldModels[entity].fields.find((item) => item.key === field)?.control
+    entityFieldModel(entity).fields.find((item) => item.key === field)?.control
       ?.suggest?.reviewRequired,
   );
 }
@@ -415,7 +415,7 @@ export function useAutoFieldSuggestion<TFieldValues extends FieldValues>({
 
   return {
     currentLabel:
-      (entityFieldModels[context.entity].fields.find(
+      (entityFieldModel(context.entity).fields.find(
         (candidate) => candidate.key === field,
       )?.kind === "enum"
         ? enumFieldLabel(context.entity, field, basisValueOf(current))

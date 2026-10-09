@@ -1,13 +1,13 @@
-import type { BrowserRoutedEntity } from "@cubby/schemas/entity-manifest";
+import { type BrowserRoutedEntity } from "@cubby/schemas/entity-index";
 import { useDebouncedValue } from "@tanstack/react-pacer";
 import { useQueries } from "@tanstack/react-query";
-import { useCallback, useMemo, useState } from "react";
+import { useCallback, useMemo, useRef, useState } from "react";
 
 import {
   getEntityFilters,
   referenceFilterOptionsKey,
 } from "~/entity/filter-manifest";
-import { entityFilterOptions } from "~/integrations/tanstack-query/generated/catalog.gen";
+import { entityFilterOptions } from "~/integrations/tanstack-query/generated/entity-filter-options.gen";
 
 import type { RuntimeFilterOptions } from "./filter-option-types";
 
@@ -42,8 +42,23 @@ export function useDeferredReferenceFilterOptions(
       enabled: active[key] === true,
     })),
   });
+  // FilterBar re-activates an active filter after every commit. Comparing
+  // against the last request, not the updater's `current`, keeps that from
+  // enqueueing again: an update in a low-priority lane (a list hydrated at idle
+  // priority) is rebased from its base state on every urgent render, so the
+  // updater sees `{}` each time, returns a new object, and re-fires the effect
+  // (regression: /plantings?plantId=… re-rendered ~500×/s and a bulk-edit
+  // picker then hit React's maximum update depth).
+  const requested = useRef<Record<string, readonly string[]>>({});
   const activate = useCallback(
     (key: string, selectedIds: readonly string[] = []) => {
+      const previous = requested.current[key];
+      if (
+        previous?.length === selectedIds.length &&
+        previous.every((id, index) => id === selectedIds[index])
+      )
+        return;
+      requested.current = { ...requested.current, [key]: [...selectedIds] };
       setActive((current) =>
         current[key] ? current : { ...current, [key]: true },
       );

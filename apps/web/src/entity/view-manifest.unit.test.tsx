@@ -1,15 +1,11 @@
 import { entitySchema, type Entity } from "@cubby/schemas/entity";
+import { FILTER_ANY, FILTER_NONE } from "@cubby/schemas/filter-sentinel-fields";
 import { PROBLEM_CLASS } from "@cubby/schemas/problems";
 import { recipeSourceValues } from "@cubby/schemas/recipe";
 import { describe, expect, it } from "vitest";
 
 import { getEntityFilters } from "./filter-manifest";
-import {
-  buildFiltersFromManifest,
-  FILTER_ANY,
-  FILTER_NONE,
-  isMultiFilterKind,
-} from "./filters";
+import { buildFiltersFromManifest, isMultiFilterKind } from "./filters";
 import {
   compileProblemFilters,
   findUnexpandedRangeFilter,

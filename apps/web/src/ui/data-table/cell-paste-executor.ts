@@ -10,7 +10,7 @@
  * the summary message. Keeping them here makes the tricky bits unit-testable.
  */
 
-import type { getErrorMessage } from "@cubby/shared";
+import type { getErrorMessage } from "@cubby/shared/error-utils";
 import pMap from "p-map";
 
 import type { CellJsonValue } from "./cell-clipboard";

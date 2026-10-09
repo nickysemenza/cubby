@@ -4,7 +4,7 @@ import { useQuery } from "@tanstack/react-query";
 import { useMemo, useState } from "react";
 
 import { entityLabel } from "~/entity/entities";
-import { search } from "~/integrations/tanstack-query/generated/catalog.gen";
+import { search } from "~/integrations/tanstack-query/generated/search.gen";
 import { getAppErrorDetails } from "~/lib/error-utils";
 
 import { EntityPicker } from "../../ui/combobox/entity-picker";

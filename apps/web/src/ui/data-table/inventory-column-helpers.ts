@@ -1,5 +1,5 @@
 import type { Amount } from "@cubby/schemas/codec";
-import type { ShortcodeEntity } from "@cubby/schemas/entity-manifest";
+import { type ShortcodeEntity } from "@cubby/schemas/entity-index";
 import {
   parseShortcodeFor,
   type ShortcodeFor,

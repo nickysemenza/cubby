@@ -9,7 +9,7 @@ import { getRouteApi } from "@tanstack/react-router";
 import { useEffect, useMemo, useState } from "react";
 import { z } from "zod";
 
-import { task } from "~/integrations/tanstack-query/generated/catalog.gen";
+import { task } from "~/integrations/tanstack-query/generated/task.gen";
 import { ErrorDisplay } from "~/ui/feedback/error-display";
 import { useHydratedLoading } from "~/ui/hooks/useHydrated";
 import { Row, Stack } from "~/ui/layout";

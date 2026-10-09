@@ -3,8 +3,8 @@ import { useMutation } from "@tanstack/react-query";
 import { useEffect, useRef, type ReactNode } from "react";
 
 import type { RunDetail } from "~/contracts/run.contract";
-import { DetailAction } from "~/entity/entity-detail/detail-action-bar";
-import { photoImport } from "~/integrations/tanstack-query/generated/catalog.gen";
+import { DetailAction } from "~/entity/entity-detail/detail-action-context";
+import { photoImport } from "~/integrations/tanstack-query/generated/photo-import.gen";
 import { Stack } from "~/ui/layout";
 import { Button } from "~/ui/primitives/button";
 import { Card, CardContent, CardHeader, CardTitle } from "~/ui/primitives/card";

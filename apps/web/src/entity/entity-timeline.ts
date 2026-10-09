@@ -1,7 +1,7 @@
 import type { EntityTimelineOut } from "@cubby/schemas/entity-timeline";
 import { queryOptions } from "@tanstack/react-query";
 
-import { entityTimeline } from "~/integrations/tanstack-query/generated/catalog.gen";
+import { entityTimeline } from "~/integrations/tanstack-query/generated/entity-timeline.gen";
 import type { OperationQueryKey } from "~/integrations/tanstack-query/operation-catalog";
 
 import {

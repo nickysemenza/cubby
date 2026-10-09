@@ -2,14 +2,14 @@ import type {
   FieldSuggestion,
   FieldSuggestionOutcome,
 } from "@cubby/schemas/ai";
-import { entityFieldModels } from "@cubby/schemas/entity-fields";
-import type { ShortcodeEntity } from "@cubby/schemas/entity-manifest";
-import { parseShortcode } from "@cubby/shared";
+import { type ShortcodeEntity } from "@cubby/schemas/entity-index";
+import { parseShortcode } from "@cubby/shared/shortcode";
 import { useQuery } from "@tanstack/react-query";
 import { z } from "zod";
 
+import { entityFieldModel, type EntityModelOf } from "~/entity/entity-model";
 import { readReferenceField } from "~/entity/entity-references";
-import { ai } from "~/integrations/tanstack-query/generated/catalog.gen";
+import { ai } from "~/integrations/tanstack-query/generated/ai.gen";
 
 /**
  * User's call, snappy by design: every typing pause longer than this fires
@@ -21,8 +21,7 @@ import { ai } from "~/integrations/tanstack-query/generated/catalog.gen";
  */
 export const FIELD_SUGGEST_DEBOUNCE_MS = 100;
 
-type ManifestField =
-  (typeof entityFieldModels)[ShortcodeEntity]["fields"][number];
+type ManifestField = EntityModelOf<ShortcodeEntity>["fields"]["fields"][number];
 
 /** A manifest field whose `control.suggest` opts it into auto-suggestion. */
 interface SuggestTarget {
@@ -88,7 +87,7 @@ export function suggestTargetsFor(
   entity: ShortcodeEntity,
   fieldKeys?: readonly string[],
 ): SuggestTargets {
-  const fields = entityFieldModels[entity].fields;
+  const fields = entityFieldModel(entity).fields;
   const roster = fieldKeys ? new Set(fieldKeys) : null;
   const targets: SuggestTarget[] = [];
   const basisKeys = new Set<string>();
@@ -118,7 +117,7 @@ function fieldByKey(
   entity: ShortcodeEntity,
   key: string,
 ): ManifestField | undefined {
-  return entityFieldModels[entity].fields.find((field) => field.key === key);
+  return entityFieldModel(entity).fields.find((field) => field.key === key);
 }
 
 const basisIdSchema = z.object({ id: z.string() });

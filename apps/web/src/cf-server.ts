@@ -3,10 +3,19 @@
  * - `handler.fetch`: env bridging, maintenance mode, direct sockets, then
  *   TanStack Start.
  * - `handler.queue`: `cubby-purchase-agent` (the purchase agent's consumer,
- *   `server/purchase-agent/queue`), `cubby-telemetry`, then background tasks
- *   (`server/background-tasks/consume`).
- * - `handler.scheduled`: the one daily maintenance cron.
- * - Durable Object and Workflow re-exports, then the Sentry-wrapped default.
+ *   `server/purchase-import/agent-services`), `cubby-telemetry`, then
+ *   background tasks (`server/background-tasks/consume`).
+ * - `handler.scheduled`: the one daily maintenance cron
+ *   (`server/daily-maintenance`).
+ * - Durable Object and Workflow re-exports (`server/worker-entrypoints`), then
+ *   the Sentry-wrapped default.
+ *
+ * Workerd evaluates this module's static graph at isolate startup. What every
+ * request evaluates stays static here (the database, auth, and the freshness
+ * client every request context reads), so the first request does not pay for
+ * it: deferring them measurably slowed the first request. Every other handler
+ * loads its implementation with one `import()` on first use
+ * (`cubby/worker-lazy-import-boundary`).
  */
 import { AsyncLocalStorage } from "node:async_hooks";
 
@@ -36,8 +45,9 @@ import {
 } from "./lib/start-operation-observability";
 import type { BackgroundQueueBatch } from "./server/background-queue-types";
 import { runWithExecutionCtx, setCfEnv } from "./server/cf-env";
+import "./lib/auth";
 import { recordDatabaseWrite } from "./server/database-freshness/client";
-import { withRequestDb, withRequestDbClient } from "./server/db";
+import { db, withRequestDb, withRequestDbClient } from "./server/db";
 import {
   requestOperations,
   serverTimingHeader,
@@ -54,8 +64,6 @@ import {
 import { withUnhandledErrorBody } from "./server/errors/unhandled-error-body";
 import { isMaintenanceMode, maintenanceResponse } from "./server/maintenance";
 import type { PurchaseAgentQueueBatch } from "./server/purchase-agent/environment";
-import { purchaseAgentQueueEnvironment } from "./server/purchase-import/agent-host";
-import type { SearchDocumentCursor } from "./server/repo/search-document";
 import type { TelemetryQueueBatch } from "./server/telemetry-queue-types";
 import {
   type AppSpan,
@@ -90,6 +98,7 @@ const getHandler = () => {
   return handlerPromise;
 };
 
+// The HTTP API and browser-operation graphs load on their first request too.
 let httpApiPromise: Promise<typeof import("./server/http-api")>;
 let httpApiImportState = "uninitialized";
 const getHttpApi = () => {
@@ -166,7 +175,6 @@ console.error = (...args: unknown[]) => {
 
 const log = createLogger("cf-server");
 const cronLog = createLogger("cron");
-const scheduledLog = createLogger("scheduled");
 
 let fetchInvocationOrdinal = 0;
 
@@ -250,6 +258,7 @@ const handler = {
                   url.pathname === "/api/caldav" ||
                   url.pathname.startsWith("/api/caldav/")
                     ? withTrace("cf.caldav", async () => {
+                        // Calendar modules (ICS, CalDAV, xmldom) load per request, off Worker startup.
                         const response = await runWithExecutionCtx(
                           ctx,
                           async () =>
@@ -273,16 +282,10 @@ const handler = {
                       ? withTrace("cf.calendarFeed", async () => {
                           const response = await runWithExecutionCtx(
                             ctx,
-                            async () => {
-                              const [{ createCalendarFeedHandler }, calendar] =
-                                await Promise.all([
-                                  import("./server/calendar/feed"),
-                                  import("./server/calendar/client"),
-                                ]);
-                              return createCalendarFeedHandler(
-                                calendar.externalCalendarFeedStateFor,
-                              )({ request });
-                            },
+                            async () =>
+                              (
+                                await import("./server/calendar/client")
+                              ).handleCalendarFeedRequest(request),
                             url.origin,
                           );
                           span.setAttribute(
@@ -306,6 +309,7 @@ const handler = {
                               url.pathname === IMAGE_PROCESSING_SOCKET_PATH;
                             const purchaseImportSocket =
                               url.pathname === PURCHASE_IMPORT_SOCKET_PATH;
+                            // Socket routes reach auth and their services; each loads on its upgrade.
                             if (imageProcessingSocket || purchaseImportSocket) {
                               const response = await withTrace(
                                 imageProcessingSocket
@@ -567,15 +571,13 @@ const handler = {
     await withInvocationTrace(
       "cf.queue",
       async () => {
+        // Each queue is its own entry point: its consumer module loads on
+        // its first delivery, and the three graphs do not share an isolate's
+        // startup.
         if (batch.queue === "cubby-purchase-agent") {
-          // The agent's consumer holds no database client: each Run service it
-          // calls opens its own (`server/purchase-import/agent-services`).
-          const { consumePurchaseAgentQueue } =
-            await import("./server/purchase-agent/queue");
-          await consumePurchaseAgentQueue(
-            batch,
-            purchaseAgentQueueEnvironment(env, ctx),
-          );
+          const { consumePurchaseAgentBatch } =
+            await import("./server/purchase-import/agent-services");
+          await consumePurchaseAgentBatch(batch, env, ctx);
           return;
         }
 
@@ -583,23 +585,14 @@ const handler = {
         // client for the whole invocation; Hyperdrive still owns the origin DB pool.
         await withRequestDbClient(env.HYPERDRIVE.connectionString, async () => {
           if (batch.queue === "cubby-telemetry") {
-            const [{ db }, { processTelemetryQueueBatch }] = await Promise.all([
-              import("./server/db"),
-              import("./server/telemetry-queue"),
-            ]);
+            const { processTelemetryQueueBatch } =
+              await import("./server/telemetry-queue");
             await processTelemetryQueueBatch(db, batch);
             return;
           }
 
-          // Imported here, not at module scope: the consumer pulls
-          // @earendil-works/pi-ai + its lazy provider API modules +
-          // @anthropic-ai/sdk (~553 KiB, plus a second copy of zod) and only
-          // queue deliveries need it. A static import puts all of that on
-          // the module-init path of every fetch invocation too.
-          const [{ db }, { handleBackgroundQueueBatch }] = await Promise.all([
-            import("./server/db"),
-            import("./server/background-tasks/consume"),
-          ]);
+          const { handleBackgroundQueueBatch } =
+            await import("./server/background-tasks/consume");
           await handleBackgroundQueueBatch(db, batch, {
             captureException: (error) => {
               Sentry.captureException(error);
@@ -624,6 +617,7 @@ const handler = {
     );
   },
 
+  // The daily cron's jobs (`server/daily-maintenance`) load on its run.
   async scheduled(
     controller: { scheduledTime: number; cron: string },
     env: Env,
@@ -640,173 +634,10 @@ const handler = {
           throw new Error(`Unexpected cron trigger: ${controller.cron}`);
         await Sentry.withMonitor(
           "daily-maintenance",
-          async () => {
-            try {
-              await withRequestDbClient(
-                env.HYPERDRIVE.connectionString,
-                async () => {
-                  const [
-                    { db },
-                    { claimCatchUp, discoverPurchases, recoverMissedWork },
-                  ] = await Promise.all([
-                    import("./server/db"),
-                    import("./server/services/catch-up.service"),
-                  ]);
-                  const claimedAt = new Date();
-                  if (await claimCatchUp(db, claimedAt)) {
-                    const jobs = await Promise.allSettled([
-                      withTrace(
-                        "cf.scheduled.job",
-                        () => recoverMissedWork(db),
-                        {
-                          "cubby.scheduled.job": "recover-missed-work",
-                        },
-                      ),
-                      withTrace(
-                        "cf.scheduled.job",
-                        () => discoverPurchases(db),
-                        {
-                          "cubby.scheduled.job": "purchase-discovery",
-                        },
-                      ),
-                    ]);
-                    for (const job of jobs)
-                      if (job.status === "rejected")
-                        Sentry.captureException(job.reason);
-                  }
-                },
-              );
-            } catch (error) {
-              Sentry.captureException(error);
-            }
-            try {
-              await withTrace(
-                "cf.scheduled.job",
-                async () =>
-                  await (
-                    await (
-                      await import("./server/calendar/client")
-                    ).calendarFeedStateFor(env.APP_ORIGIN)
-                  ).refreshNow("cron.daily"),
-                { "cubby.scheduled.job": "calendar-feed" },
-              );
-            } catch (error) {
-              // Calendar keeps serving its previous atomic snapshot. Keep the
-              // independent assertion below running while surfacing the failure
-              // through both the errored child span and Sentry.
-              Sentry.captureException(error);
-            }
-            // The clock is a legitimate input for the calendar above. This job is
-            // not a repair: it only reads the markers that "Settle now" acts on
-            // and reports when they are non-zero, which is the evidence that a
-            // wakeup was lost — the cue to look, not a sweep that would hide it.
-            // (The vector-reconcile job below IS a repair — see its comment.)
-            try {
-              await withRequestDbClient(
-                env.HYPERDRIVE.connectionString,
-                async () => {
-                  const [{ db }, { countAwaitingWork }] = await Promise.all([
-                    import("./server/db"),
-                    import("./server/services/awaiting-work.service"),
-                  ]);
-                  await withTrace(
-                    "cf.scheduled.job",
-                    async (span) => {
-                      try {
-                        const awaiting = await countAwaitingWork(db);
-                        span.setAttributes({
-                          "cubby.awaiting.stale_recipe_totals":
-                            awaiting.staleRecipeTotals,
-                          "cubby.awaiting.unembedded_entities":
-                            awaiting.unembeddedEntities,
-                          "cubby.awaiting.pending_uploads":
-                            awaiting.pendingUploads,
-                        });
-                        scheduledLog.info("awaiting work", awaiting);
-                        if (
-                          awaiting.staleRecipeTotals > 0 ||
-                          awaiting.unembeddedEntities > 0 ||
-                          awaiting.pendingUploads > 0
-                        ) {
-                          Sentry.captureMessage(
-                            `Derived work is waiting: ${awaiting.staleRecipeTotals} stale recipe totals, ${awaiting.unembeddedEntities} unembedded entities, ${awaiting.pendingUploads} pending uploads`,
-                            "warning",
-                          );
-                        }
-                      } catch (error) {
-                        span.setError("Awaiting-work assertion failed");
-                        Sentry.captureException(error);
-                      }
-                    },
-                    { "cubby.scheduled.job": "awaiting-work-assertion" },
-                  );
-                },
-              );
-            } catch (error) {
-              Sentry.captureException(error);
-            }
-            // This job IS a repair, unlike the assert-only sibling above:
-            // Vectorize cannot join the Postgres transaction that soft-deletes
-            // `SearchDocument`/`EntityEmbedding` (`softDeleteEntitySearchArtifactsTx`),
-            // so a removed entity's vector otherwise lingers in Vectorize forever.
-            // `deleteByIds` is idempotent, so re-running or overlapping passes
-            // over the same refs are safe.
-            try {
-              await withTrace(
-                "cf.scheduled.job",
-                async (span) => {
-                  const { semanticEmbeddingsConfigured } =
-                    await import("./server/semantic/embeddings");
-                  if (!semanticEmbeddingsConfigured()) {
-                    span.setAttribute("cubby.vectorReconcile.skipped", true);
-                    return;
-                  }
-                  await withRequestDbClient(
-                    env.HYPERDRIVE.connectionString,
-                    async () => {
-                      const [
-                        { db },
-                        { selectRecentlySoftDeletedSearchRefs },
-                        { productionVectorStore },
-                      ] = await Promise.all([
-                        import("./server/db"),
-                        import("./server/repo/entity-embedding-cleanup"),
-                        import("./server/semantic/vector-store"),
-                      ]);
-                      const since = new Date(
-                        Date.now() - 7 * 24 * 60 * 60 * 1000,
-                      );
-                      let cursor: SearchDocumentCursor | undefined;
-                      let deletedCount = 0;
-                      do {
-                        const page = await selectRecentlySoftDeletedSearchRefs(
-                          db,
-                          {
-                            since,
-                            cursor,
-                          },
-                        );
-                        if (page.refs.length > 0) {
-                          await productionVectorStore.deleteByIds(page.refs);
-                          deletedCount += page.refs.length;
-                        }
-                        cursor = page.nextCursor ?? undefined;
-                      } while (cursor);
-                      span.setAttribute(
-                        "cubby.vectorReconcile.deletedCount",
-                        deletedCount,
-                      );
-                    },
-                  );
-                },
-                { "cubby.scheduled.job": "vector-reconcile" },
-              );
-            } catch (error) {
-              // Mirror the calendar job above: report and move on rather than
-              // failing the whole scheduled invocation over one job.
-              Sentry.captureException(error);
-            }
-          },
+          async () =>
+            (await import("./server/daily-maintenance")).runDailyMaintenance(
+              env,
+            ),
           {
             schedule: { type: "crontab", value: "0 12 * * *" },
             checkinMargin: 10,
@@ -829,18 +660,20 @@ const handler = {
 };
 
 // Named exports: `wrangler types` finds Durable Object classes by reading them.
+// Each is an entry shell that loads its implementation on its first event;
+// the response cache imports nothing heavy, so it is its own shell.
 export { AiResponseCacheDurableObject } from "./server/ai/response-cache-durable-object";
-export { ChatGptPlanDurableObject } from "./server/ai/chatgpt/durable-object";
-export { CalendarFeedDurableObject } from "./server/calendar/durable-object";
-export { DatabaseFreshnessDurableObject } from "./server/database-freshness/durable-object";
-export { ImageProcessingDurableObject } from "./server/image-processing/durable-object";
-export { PurchaseImportRunAgent } from "./server/purchase-import/agent-host";
-export { PurchaseImportDurableObject } from "./server/purchase-import/durable-object";
-export { UsdaReleaseDurableObject } from "./server/usda-release/durable-object";
-export { SearchIndexRepairWorkflow } from "./server/search-index-repair-workflow";
 export {
+  CalendarFeedDurableObject,
+  ChatGptPlanDurableObject,
+  DatabaseFreshnessDurableObject,
+  ImageProcessingDurableObject,
   MailDiscoveryWorkflow,
+  PurchaseImportDurableObject,
+  PurchaseImportRunAgent,
+  SearchIndexRepairWorkflow,
+  UsdaReleaseDurableObject,
   VendorMailSearchWorkflow,
-} from "./server/gmail-workflows";
+} from "./server/worker-entrypoints";
 
 export default Sentry.withSentry(workerSentryOptions, handler);

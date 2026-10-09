@@ -1,4 +1,4 @@
-import { humanize } from "@cubby/shared";
+import { humanize } from "@cubby/shared/text-case";
 import { DndContext, type DragEndEvent } from "@dnd-kit/core";
 import { restrictToHorizontalAxis } from "@dnd-kit/modifiers";
 import {

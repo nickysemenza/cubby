@@ -1,6 +1,6 @@
 import { z } from "zod";
 import { entitySchema, type Entity } from "./entity-core";
-import { imageEntities } from "./entity-manifest";
+import { imageEntities } from "./entity-index";
 import { nonEmptyTuple } from "./identifiers";
 
 export { entitySchema, type Entity } from "./entity-core";

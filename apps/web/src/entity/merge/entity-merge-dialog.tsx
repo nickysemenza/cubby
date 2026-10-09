@@ -1,4 +1,4 @@
-import type { BrowserRoutedEntity } from "@cubby/schemas/entity-manifest";
+import { type BrowserRoutedEntity } from "@cubby/schemas/entity-index";
 import type { productMergePreview } from "@cubby/schemas/recommendations";
 import { CheckIcon } from "@phosphor-icons/react/dist/csr/Check";
 import { skipToken, useQuery } from "@tanstack/react-query";
@@ -9,9 +9,9 @@ import {
   type ImpactPreviewOperations,
   MergeImpactPreview,
 } from "~/entity/actions/entity-operation-impact-preview";
-import { mergeConfigFor } from "~/entity/entities";
+import { mergeConfigFor } from "~/entity/merge/merge-configs";
 import type { MergeDisplayRow, MergeableConfig } from "~/entity/types";
-import { product } from "~/integrations/tanstack-query/generated/catalog.gen";
+import { product } from "~/integrations/tanstack-query/generated/product.gen";
 import { Row, Stack } from "~/ui/layout";
 import { Badge } from "~/ui/primitives/badge";
 import { Button } from "~/ui/primitives/button";

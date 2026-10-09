@@ -14,7 +14,7 @@ import { z } from "zod";
 import { env } from "~/env";
 import { APP_ORIGIN } from "~/lib/auth-constants";
 import { getExecutionCtx } from "~/server/cf-env";
-import type { Database } from "~/server/db";
+import { db, type Database } from "~/server/db";
 import {
   ledgerParty,
   run as runTable,
@@ -137,6 +137,10 @@ const uploadGrant = z.object({
   mediaType: initiateRunEvidenceUploadInput.shape.contentType,
   exp: z.number().int(),
 });
+
+/** The evidence upload route, on the request's database. */
+export const handleRunEvidenceUpload = (request: Request) =>
+  receiveRunEvidenceUpload(db, request);
 
 /** A delayed capability must pass the durable Run fence before every storage PUT. */
 export async function receiveRunEvidenceUpload(

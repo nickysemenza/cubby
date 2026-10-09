@@ -41,8 +41,7 @@ import {
 /**
  * Dev-only fixture preview, served by `tooling/dev/worker.ts` at
  * `/__dev/preview` and loaded straight from Vite. Nothing under `src/` imports
- * it, so production bundles never contain it or Faker; `check-client-bundle`
- * rejects any `/__dev/` route that leaks.
+ * it, so production bundles never contain it or Faker.
  */
 const { queryClient } = getContext();
 const STATE_LABELS = {
@@ -136,7 +135,7 @@ function PreviewPage() {
   const ListPage = useMemo(
     () =>
       listPage({
-        entity,
+        client: { entity, slots: {} },
         override: listOverrides[entity],
         operations: { list: previewListOperation(entity, state) },
       }),

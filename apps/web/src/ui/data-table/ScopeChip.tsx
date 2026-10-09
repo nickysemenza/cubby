@@ -1,4 +1,4 @@
-import { UNRESOLVABLE_ENTITY_FILTER } from "@cubby/shared";
+import { UNRESOLVABLE_ENTITY_FILTER } from "@cubby/shared/filter";
 import { XIcon } from "@phosphor-icons/react/dist/csr/X";
 
 import { Badge } from "~/ui/primitives/badge";

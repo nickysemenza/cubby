@@ -1,12 +1,10 @@
 import type { ConnectedRecordsOutput } from "@cubby/schemas/connected-records";
 import type { CompiledEntityPresentation } from "@cubby/schemas/entity-definitions/definition";
 import { generatedEntityEditIntents } from "@cubby/schemas/entity-edit-intents";
-import { entityFieldModels } from "@cubby/schemas/entity-fields";
 import {
-  entityManifest,
   type BrowserRoutedEntity,
-} from "@cubby/schemas/entity-manifest";
-import { entitySummary } from "@cubby/schemas/entity-summary";
+  entityIndex,
+} from "@cubby/schemas/entity-index";
 import { ArrowUpRightIcon } from "@phosphor-icons/react/dist/csr/ArrowUpRight";
 import { PlusIcon } from "@phosphor-icons/react/dist/csr/Plus";
 import { useQuery } from "@tanstack/react-query";
@@ -18,6 +16,7 @@ import {
   useContext,
   useMemo,
   useState,
+  Suspense,
 } from "react";
 
 import { EntityEditDialog } from "~/entity/editing/entity-edit-dialog";
@@ -33,16 +32,19 @@ import {
 import { createEntityDisplayColumns } from "~/entity/entity-display";
 import { entityListFor } from "~/entity/entity-list";
 import { EntityDisplayImagesProvider } from "~/entity/entity-media/entity-display-images";
+import {
+  EntityModelBoundary,
+  entityDescriptorOf,
+  entityFieldModel,
+} from "~/entity/entity-model";
 import { getEntityFilters } from "~/entity/filter-manifest";
 import { filterUrlKey } from "~/entity/filters";
 import {
   listEntities,
   type ListEntity,
 } from "~/entity/generated/entity-lists.gen";
-import {
-  entityGraph,
-  entityList,
-} from "~/integrations/tanstack-query/generated/catalog.gen";
+import { entityGraph } from "~/integrations/tanstack-query/generated/entity-graph.gen";
+import { entityList } from "~/integrations/tanstack-query/generated/entity-list.gen";
 import { ErrorDisplay } from "~/ui/feedback/error-display";
 import { useHydrated } from "~/ui/hooks/useHydrated";
 import { Button } from "~/ui/primitives/button";
@@ -129,7 +131,7 @@ function createSeedThrough(
   const intent = intents?.create.find((candidate) =>
     intents.fields[candidate]?.includes(field),
   );
-  const modelField = entityFieldModels[target].fields.find(
+  const modelField = entityFieldModel(target).fields.find(
     (candidate) => candidate.key === field,
   );
   return intent === undefined
@@ -157,7 +159,7 @@ export function planRelationSection(
     | "collapseWhenEmpty"
   >,
 ): RelationSectionPlan {
-  const relation = entityManifest[entity].relationships.find(
+  const relation = entityDescriptorOf(entity).relationships.find(
     (candidate) => candidate.key === section.relation,
   );
   if (relation === undefined)
@@ -191,7 +193,7 @@ export function planRelationSection(
     seed === null &&
     descriptor.referenceEntity !== undefined
   ) {
-    const referenceField = entityFieldModels[target].fields.find(
+    const referenceField = entityFieldModel(target).fields.find(
       (field) => field.reference?.entity === descriptor.referenceEntity,
     );
     if (referenceField !== undefined)
@@ -278,7 +280,7 @@ export function RelationSectionActions({
   title: string;
   createLabel?: string;
 }) {
-  const { singular } = entitySummary[plan.target];
+  const { singular } = entityIndex[plan.target];
   const { setCreating, dialog } = useRelationCreateDialog(plan, recordId);
 
   return (
@@ -525,7 +527,17 @@ export function EntityRelationTable(props: EntityRelationTableProps) {
   const hydrated = useHydrated();
   if (!hydrated)
     return <RelationStaticSkeleton rows={skeletonRowsFor(props.plan)} />;
-  return <LiveEntityRelationTable {...props} />;
+  // The route prefetches its relation targets; this waits for one that has
+  // not arrived yet instead of reading an unloaded model.
+  return (
+    <Suspense
+      fallback={<RelationStaticSkeleton rows={skeletonRowsFor(props.plan)} />}
+    >
+      <EntityModelBoundary entities={[props.plan.target]}>
+        <LiveEntityRelationTable {...props} />
+      </EntityModelBoundary>
+    </Suspense>
+  );
 }
 
 function LiveEntityRelationTable({
@@ -640,7 +652,7 @@ function LiveEntityRelationTable({
   const resolvedEmpty = !list.workbench.error && list.totalCount === 0;
   useSectionVisible(!(plan.hideWhenEmpty && resolvedEmpty));
   useSectionCollapsed(plan.collapseWhenEmpty && resolvedEmpty);
-  const { singular } = entitySummary[target];
+  const { singular } = entityIndex[target];
   const { pluralLabel } = entities[target];
 
   if (list.workbench.error) {

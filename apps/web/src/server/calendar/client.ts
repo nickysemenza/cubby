@@ -8,6 +8,7 @@ import { withTrace } from "~/server/tracing";
 
 import { calDavProtocolResponse } from "./caldav-protocol";
 import type { CalendarFeedState, CalendarCredentialState } from "./contracts";
+import { createCalendarFeedHandler } from "./feed";
 
 const log = createLogger("calendar-feed");
 
@@ -84,6 +85,11 @@ export async function externalCalendarFeedStateFor(
         namespace.getByName(new URL(origin).hostname),
       )
     : null;
+}
+
+/** The Worker entry's `GET /api/calendar/*` subscription feed. */
+export function handleCalendarFeedRequest(request: Request) {
+  return createCalendarFeedHandler(externalCalendarFeedStateFor)({ request });
 }
 
 export async function handleCalDavRequest(request: Request): Promise<Response> {

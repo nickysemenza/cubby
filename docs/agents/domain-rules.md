@@ -137,6 +137,18 @@ On workerd, wall clocks omit synchronous CPU: use CPU-time/sampling for WASM or
 JS hot paths. WASM hot-path tracing stays `trace, skip_all`; a global INFO
 subscriber accumulates in reused isolates.
 
+workerd evaluates the Worker entry's whole static import graph at isolate
+startup, so lazy loading happens only at entry points: `cf-server.ts`'s fetch
+routes, queue consumers and cron each `import()` their implementation, and
+each Durable Object and Workflow class is a shell in
+`server/worker-entrypoints.ts` that loads its implementation on its first
+event. What every request evaluates (database, auth, freshness client)
+stays in the entry's static graph, so the first request does not pay for it. Below a boundary, imports are static: break a cycle by extracting a
+leaf module, inject a test double as a parameter, and keep an `import()` only
+for a heavy library (AI SDK, WASM, agent runtime) that a minority of the
+boundary's paths reach, with a one-line reason. The `cubby/worker-lazy-import-boundary`
+lint rule holds the allowlist.
+
 ## MCP and observability traps
 
 Read [MCP operating patterns](mcp.md) for bounded reads, batch writes, file

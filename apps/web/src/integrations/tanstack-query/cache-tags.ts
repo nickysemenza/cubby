@@ -1,7 +1,5 @@
-import {
-  allEntities,
-  imageDisplayBindings,
-} from "@cubby/schemas/entity-manifest";
+import { allEntities } from "@cubby/schemas/entity-index";
+import { imageDisplayBindings } from "@cubby/schemas/image-policy";
 
 import type { RippleKey } from "~/contracts/cache-policy";
 

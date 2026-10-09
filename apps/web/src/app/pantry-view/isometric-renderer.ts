@@ -1,4 +1,4 @@
-import type { LocationType } from "@cubby/shared";
+import type { LocationType } from "@cubby/shared/location-type-theme";
 
 import {
   adjustLight,

@@ -13,7 +13,7 @@ import type { RowSelectionState, Updater } from "@tanstack/react-table";
 import { useMemo, useState } from "react";
 import type { z } from "zod";
 
-import { purchase as purchaseOperations } from "~/integrations/tanstack-query/generated/catalog.gen";
+import { purchase as purchaseOperations } from "~/integrations/tanstack-query/generated/purchase.gen";
 import { isUnspecifiedManufacturer } from "~/lib/manufacturer-utils";
 import { purchaseLabel } from "~/lib/purchase-label";
 import {

@@ -65,7 +65,12 @@ const packageModules = (
   );
   return (
     Object.entries(exports)
-      .filter(([subpath]) => !EXCLUDED_SUBPATHS.has(subpath))
+      // Pattern subpaths (`./entity-models/*`) are per-entity data modules
+      // with no schemas, and have no single file to import.
+      .filter(
+        ([subpath]) =>
+          !EXCLUDED_SUBPATHS.has(subpath) && !subpath.includes("*"),
+      )
       // Code-unit order, as `Object.keys(...).sort()` gave before the URLs
       // replaced bare specifiers: first-export-wins naming depends on it.
       .sort(([left], [right]) => (left < right ? -1 : left > right ? 1 : 0))

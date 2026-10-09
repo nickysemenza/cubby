@@ -5,8 +5,6 @@ import { describe, expect, it } from "vitest";
 import { actionVerbs } from "~/entity/actions/action-verbs";
 import { entityActionCatalogDescriptors } from "~/entity/actions/entity-actions";
 import type { GenericDetailEntity } from "~/entity/entity-detail/detail-record";
-import { detailSlots } from "~/entity/entity-detail/detail-slots";
-import { listSlotCoverage } from "~/entity/entity-list/list-slots";
 import { detailEntities } from "~/entity/generated/entity-details.gen";
 import { entityOverrideComparisons } from "~/entity/generated/entity-override-comparisons.gen";
 
@@ -42,7 +40,7 @@ const covers = (verb: string, entity: string, surfaces: readonly string[]) =>
   );
 
 describe("manifest registries", () => {
-  it("covers every declared renderer and slot with an explicit platform disposition", () => {
+  it("covers every declared renderer with an explicit platform disposition", () => {
     type Disposition = { kind: string; reason?: string };
     type NestedDispositionRegistry = Readonly<
       Record<string, Readonly<Record<string, Disposition>> | undefined>
@@ -84,22 +82,9 @@ describe("manifest registries", () => {
           );
         }
       }
-      for (const section of entitySummary[entity].detail.sections) {
-        if (section.kind === "slot") {
-          inspect(
-            `detail-slot:${entity}.${section.id}`,
-            nested(detailSlots, entity, section.id),
-          );
-        }
-      }
-      for (const view of entitySummary[entity].list.views) {
-        if (view !== "table" && view !== "shelf" && view !== "timeline") {
-          inspect(
-            `list-slot:${entity}.${view.id}`,
-            nested(listSlotCoverage, entity, view.id),
-          );
-        }
-      }
+      // Detail and list slot fills are exhaustive by type: `DetailHooks<E>`
+      // and `ListHooks<E>` key them by the declared slot ids, and the
+      // generator refuses a slot declaration without its hook module.
     }
 
     expect(missing).toEqual([]);

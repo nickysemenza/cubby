@@ -16,6 +16,7 @@ import type {
 } from "@cubby/schemas/maintenance";
 
 import { publishBackgroundTasks } from "~/server/background-tasks/publish";
+import { buildCrudServices } from "~/server/crud-services";
 import type { Database } from "~/server/db";
 import {
   countCullablePendingImages,
@@ -83,7 +84,6 @@ export async function countAwaitingWork(db: Database): Promise<AwaitingWork> {
 export async function settleAwaitingWork(
   db: Database,
 ): Promise<SettleAwaitingWorkOut> {
-  const { buildCrudServices } = await import("~/server/request-context");
   const { services } = buildCrudServices(db);
   const recipes = await services.recipeCosting.enqueueStaleQueued(
     await selectAllStaleRecipeIds(db),

@@ -1,4 +1,4 @@
-import type { BrowserRoutedEntity } from "@cubby/schemas/entity-manifest";
+import { type BrowserRoutedEntity } from "@cubby/schemas/entity-index";
 import type {
   RelatedPreviewGroup,
   RelatedViewDefinition,
@@ -9,7 +9,7 @@ import { type RefObject, useMemo, useRef } from "react";
 
 import { getSortableFields } from "~/entity/entities";
 import { manifestFilterConfig } from "~/entity/filter-manifest";
-import { relatedData } from "~/integrations/tanstack-query/generated/catalog.gen";
+import { relatedData } from "~/integrations/tanstack-query/generated/related-data.gen";
 
 import { RelatedPreviewCell } from "../data-table/related-preview-cell";
 import type {

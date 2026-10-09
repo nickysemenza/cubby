@@ -1,7 +1,7 @@
 import { useNavigate } from "@tanstack/react-router";
 import { useCallback } from "react";
 
-import { recipe } from "~/integrations/tanstack-query/generated/catalog.gen";
+import { recipe } from "~/integrations/tanstack-query/generated/recipe.gen";
 import { savedWithBackgroundWork } from "~/lib/recompute-summary";
 import { useActionMutation } from "~/ui/hooks/useActionMutation";
 

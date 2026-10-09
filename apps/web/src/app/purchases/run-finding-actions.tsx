@@ -2,7 +2,7 @@ import { Link } from "@tanstack/react-router";
 
 import type { RunDetail } from "~/contracts/run.contract";
 import { entityDetailLink } from "~/entity/entities";
-import { problems as problemOperations } from "~/integrations/tanstack-query/generated/catalog.gen";
+import { problems as problemOperations } from "~/integrations/tanstack-query/generated/problems.gen";
 import { formatCurrency } from "~/lib/utils";
 import { useActionMutation } from "~/ui/hooks/useActionMutation";
 import { Row, Stack } from "~/ui/layout";

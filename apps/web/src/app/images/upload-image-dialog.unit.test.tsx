@@ -4,7 +4,7 @@ import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { toast } from "sonner";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-import { imageUpload } from "~/integrations/tanstack-query/generated/catalog.gen";
+import { imageUpload } from "~/integrations/tanstack-query/generated/image-upload.gen";
 import { createBrowserTestHarness } from "~/lib/test/browser-harness";
 
 import { UploadImageDialog } from "./upload-image-dialog";

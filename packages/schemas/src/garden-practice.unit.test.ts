@@ -1,13 +1,12 @@
 import { describe, expect, it } from "vitest";
 
-import { gardenGuideKeys } from "./garden-guides";
+import { gardenGuideKeys } from "./garden-fields";
 import {
-  gardenCropKeys,
   gardenPractice,
   gardenPracticeEntry,
-  gardenPracticeOnlyKeys,
   gardenPracticeSources,
 } from "./garden-practice";
+import { gardenCropKeys, gardenPracticeOnlyKeys } from "./garden-fields";
 
 describe("garden practice", () => {
   it("covers every crop key and cites only listed sources or an explained estimate", () => {

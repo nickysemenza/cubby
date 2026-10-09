@@ -7,9 +7,8 @@ import {
   locationShortcode,
   productShortcode,
 } from "../identifier-fields.js";
-import { imageOut } from "./field-primitives.js";
+import { imageOut, locationIdentityProductOut } from "./field-primitives.js";
 import {
-  locationIdentityProductOut,
   locationType,
   locationValuation,
 } from "@cubby/schemas/location-fields";

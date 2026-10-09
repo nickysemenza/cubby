@@ -1,4 +1,4 @@
-import type { ProductCategory } from "@cubby/shared";
+import type { ProductCategory } from "@cubby/shared/category-theme";
 import { Link } from "@tanstack/react-router";
 
 import { EnumPill } from "~/ui/primitives/enum-pill";

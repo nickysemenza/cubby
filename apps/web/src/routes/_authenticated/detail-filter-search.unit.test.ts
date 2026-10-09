@@ -1,4 +1,4 @@
-import { UNRESOLVABLE_ENTITY_FILTER } from "@cubby/shared";
+import { UNRESOLVABLE_ENTITY_FILTER } from "@cubby/shared/filter";
 import { describe, expect, it } from "vitest";
 
 import { entitySearch } from "~/entity/generated/entity-search.gen";
@@ -174,15 +174,6 @@ describe("detail filter link route contracts", () => {
     expect(product.tags).toBeUndefined();
     expect(location.type).toBe("shelf");
     expect(task.status).toBe("in_progress");
-  });
-
-  it("names every schema key in defaults so stripSearchParams sees them all", () => {
-    for (const { schema, defaults } of Object.values(entitySearch)) {
-      expect(Object.keys(defaults)).toEqual(Object.keys(schema.shape));
-      expect(
-        Object.values(defaults).every((value) => value === undefined),
-      ).toBe(true);
-    }
   });
 
   it("keeps malformed filters safe without widening exact entity scopes", () => {

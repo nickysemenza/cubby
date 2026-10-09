@@ -28,6 +28,7 @@ import { productCreateInput } from "@cubby/schemas/product";
 import { and, count, eq, inArray, or, sql } from "drizzle-orm";
 import { z } from "zod";
 
+import { buildCrudServices } from "~/server/crud-services";
 import type { Database } from "~/server/db";
 import {
   auditLog,
@@ -50,7 +51,6 @@ import {
 } from "~/server/repo/inventory/crud";
 import { inventoryAmountSql } from "~/server/repo/inventory/helpers";
 import { resolveOrThrow } from "~/server/repo/shortcode-resolver";
-import { buildCrudServices } from "~/server/request-context";
 import { executeLeasedOperation } from "~/server/runs/operation";
 import { createProductWithSideEffects } from "~/server/services/product-orchestration.service";
 import { createProductWriteActions } from "~/server/services/product.service";

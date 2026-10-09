@@ -1,7 +1,7 @@
 import type { enrichmentProposalPrecomputeInput } from "@cubby/schemas/ai";
 import type { z } from "zod";
 
-import { aiStreams } from "~/integrations/tanstack-query/generated/catalog.gen";
+import { aiStreams } from "~/integrations/tanstack-query/generated/ai.gen";
 
 export const backfillLocationDescriptionsStream = (signal?: AbortSignal) =>
   aiStreams.backfillLocationDescriptions.open(undefined, { signal });

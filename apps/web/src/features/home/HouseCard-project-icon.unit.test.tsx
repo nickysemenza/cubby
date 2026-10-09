@@ -4,7 +4,7 @@ import { render, screen, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { z } from "zod";
 
-import { task } from "~/integrations/tanstack-query/generated/catalog.gen";
+import { task } from "~/integrations/tanstack-query/generated/task.gen";
 import { overrideStartDispatch } from "~/integrations/tanstack-query/start-transport";
 import { createBrowserTestHarness } from "~/lib/test/browser-harness";
 

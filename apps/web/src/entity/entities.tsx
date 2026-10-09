@@ -2,13 +2,8 @@ import type { Entity } from "@cubby/schemas/entity";
 import type {
   BrowserRoutedEntity,
   ShortcodeEntity,
-} from "@cubby/schemas/entity-manifest";
-import { entitySummary } from "@cubby/schemas/entity-summary";
-import { displayGtin } from "@cubby/schemas/external-id";
-import { productShortcode } from "@cubby/schemas/identifiers";
-import { duplicateProductIdentitySchema } from "@cubby/schemas/problems";
-import { productListItemOut } from "@cubby/schemas/product";
-import { purchaseListItemOut } from "@cubby/schemas/purchase";
+} from "@cubby/schemas/entity-index";
+import { entityIndex } from "@cubby/schemas/entity-index";
 import { ArrowsLeftRightIcon } from "@phosphor-icons/react/dist/csr/ArrowsLeftRight";
 import { BarcodeIcon } from "@phosphor-icons/react/dist/csr/Barcode";
 import { BookOpenIcon } from "@phosphor-icons/react/dist/csr/BookOpen";
@@ -33,11 +28,8 @@ import { StorefrontIcon } from "@phosphor-icons/react/dist/csr/Storefront";
 import { TagIcon } from "@phosphor-icons/react/dist/csr/Tag";
 import { UsersIcon } from "@phosphor-icons/react/dist/csr/Users";
 import type { Icon, IconProps } from "@phosphor-icons/react/lib";
-import { z } from "zod";
 
-import { entityListFor } from "~/entity/entity-list";
-import { purchaseLabel } from "~/lib/purchase-label";
-import { cn, formatCurrency } from "~/lib/utils";
+import { cn } from "~/lib/utils";
 import {
   domainForEntity,
   domainWayfinding,
@@ -45,62 +37,7 @@ import {
 
 import { generatedBrowserRoutes } from "./generated/entity-routes.gen";
 import { generatedSortRoster } from "./sortable-fields";
-import {
-  defineMergeableConfig,
-  type EntityColor,
-  type EntityDefinition,
-  type MergeableConfig,
-  type MergeDisplayRow,
-} from "./types";
-
-interface NamedMergeRow extends MergeDisplayRow {
-  name: string;
-}
-
-const productMergeRowSchema = z.union([
-  duplicateProductIdentitySchema.shape.products.element,
-  // List actions can run before the relations enrichment supplies the barcode.
-  productListItemOut
-    .pick({ id: true, name: true, primaryGtin: true })
-    .partial({ primaryGtin: true }),
-]);
-type ProductMergeRow = z.output<typeof productMergeRowSchema>;
-
-interface VendorMergeRow extends MergeDisplayRow {
-  name: string;
-  purchaseCount: number;
-  spend: number;
-}
-
-const purchaseMergeRowSchema = purchaseListItemOut.pick({
-  id: true,
-  date: true,
-  displayLabel: true,
-  expenseCount: true,
-  expenseTotal: true,
-  orderId: true,
-  vendorId: true,
-  vendorName: true,
-});
-type PurchaseMergeRow = z.output<typeof purchaseMergeRowSchema>;
-
-const isNamedMergeRow = (row: MergeDisplayRow): row is NamedMergeRow =>
-  "name" in row && typeof row.name === "string";
-
-const isProductMergeRow = (row: MergeDisplayRow): row is ProductMergeRow =>
-  productShortcode.safeParse(row.id).success &&
-  productMergeRowSchema.safeParse(row).success;
-
-const isVendorMergeRow = (row: MergeDisplayRow): row is VendorMergeRow =>
-  "name" in row &&
-  typeof row.name === "string" &&
-  "purchaseCount" in row &&
-  typeof row.purchaseCount === "number" &&
-  "spend" in row &&
-  typeof row.spend === "number";
-
-const isPurchaseMergeRow = (row: MergeDisplayRow): row is PurchaseMergeRow =>
-  purchaseMergeRowSchema.safeParse(row).success;
+import type { EntityColor, EntityDefinition } from "./types";
 
 /**
  * The four inks an entity can wear. `accent` feeds the `--page-accent` /
@@ -145,7 +82,7 @@ const INK = {
  * Stamps every definition with the display names its own key already implies.
  *
  * Both come straight from the entity's manifest literal (`names` in
- * `packages/schemas/src/entity-definitions/*.entity.ts`, surfaced as `entitySummary`),
+ * `packages/schemas/src/entity-definitions/*.entity.ts`, surfaced in the slim `entityIndex`),
  * so neither is spelled here and neither can disagree with the key it sits
  * under — `wish: { label: ... }` naming a vendor is no longer expressible.
  *
@@ -174,7 +111,7 @@ type EntityDefinitionSeed = Pick<
  * only these glyphs.
  */
 type DeclaredPhosphorIcon =
-  (typeof entitySummary)[BrowserRoutedEntity]["icons"]["phosphor"];
+  (typeof entityIndex)[BrowserRoutedEntity]["icons"]["phosphor"];
 const PHOSPHOR_ICONS = {
   BowlFood: BowlFoodIcon,
   ArrowsLeftRight: ArrowsLeftRightIcon,
@@ -201,7 +138,7 @@ const PHOSPHOR_ICONS = {
   Users: UsersIcon,
 } satisfies Record<DeclaredPhosphorIcon, Icon>;
 const isBrowserEntityKey = (value: string): value is BrowserRoutedEntity =>
-  Object.hasOwn(entitySummary, value);
+  Object.hasOwn(entityIndex, value);
 
 const withEntityNames = <
   const Definitions extends Record<BrowserRoutedEntity, EntityDefinitionSeed>,
@@ -209,8 +146,8 @@ const withEntityNames = <
   definitions: Definitions,
 ): {
   [Entity in keyof Definitions & BrowserRoutedEntity]: {
-    label: (typeof entitySummary)[Entity]["singular"];
-    pluralLabel: (typeof entitySummary)[Entity]["plural"];
+    label: (typeof entityIndex)[Entity]["singular"];
+    pluralLabel: (typeof entityIndex)[Entity]["plural"];
     phosphorIcon: Icon;
   } & Definitions[Entity];
 } =>
@@ -223,9 +160,9 @@ const withEntityNames = <
       return [
         entity,
         {
-          label: entitySummary[entity].singular,
-          pluralLabel: entitySummary[entity].plural,
-          phosphorIcon: PHOSPHOR_ICONS[entitySummary[entity].icons.phosphor],
+          label: entityIndex[entity].singular,
+          pluralLabel: entityIndex[entity].plural,
+          phosphorIcon: PHOSPHOR_ICONS[entityIndex[entity].icons.phosphor],
           ...definition,
         },
       ];
@@ -240,16 +177,6 @@ const entityDefinitions = withEntityNames({
     color: INK.slate,
     // The selected categories in list order; the first starts as keeper.
     // Confirming opens the historical spending review that applies the merge.
-    mergeable: defineMergeableConfig({
-      keeperMode: "ranked",
-      isRow: isNamedMergeRow,
-      rowLabel: (row) => <span className="truncate">{row.name}</span>,
-      copy: {
-        title: "Merge spending categories?",
-        description:
-          "References and child categories move to the kept category, and the others leave the roster. Review the historical spending impact next.",
-      },
-    }),
   },
   ingredient: {
     ...generatedBrowserRoutes.ingredient,
@@ -268,14 +195,6 @@ const entityDefinitions = withEntityNames({
     },
     // The caller supplies a duplicate group in a deterministic order; the
     // first ingredient starts as keeper, with a deliberate picker override.
-    mergeable: defineMergeableConfig({
-      keeperMode: "ranked",
-      isRow: isNamedMergeRow,
-      rowLabel: (row) => <span className="truncate">{row.name}</span>,
-      copy: {
-        title: "Merge ingredients?",
-      },
-    }),
   },
   product: {
     ...generatedBrowserRoutes.product,
@@ -288,34 +207,6 @@ const entityDefinitions = withEntityNames({
     },
     // The detector supplies duplicate rows in a stable order; the first starts
     // as keeper and the picker remains available for an intentional change.
-    mergeable: defineMergeableConfig({
-      keeperMode: "ranked",
-      isRow: isProductMergeRow,
-      rowLabel: (row) => <span className="truncate">{row.name}</span>,
-      rowStat: (row) => {
-        const gtins =
-          "gtins" in row ? row.gtins : row.primaryGtin ? [row.primaryGtin] : [];
-        return (
-          <>
-            {gtins.length > 0 && (
-              <span>UPC {gtins.map(displayGtin).join(", ")}</span>
-            )}
-            <span>
-              {"sources" in row
-                ? row.sources.length > 0
-                  ? row.sources.join(", ")
-                  : "no external ids"
-                : "Review external identities in the merge preview"}
-            </span>
-          </>
-        );
-      },
-      copy: {
-        title: "Merge products?",
-        description:
-          "These rows share the same manufacturer part number, split across retailers. Pick which one to keep — the rest merge into it.",
-      },
-    }),
   },
   recipe: {
     ...generatedBrowserRoutes.recipe,
@@ -375,27 +266,6 @@ const entityDefinitions = withEntityNames({
     // "fixed": the keeper is the vendor being viewed; candidates are every
     // OTHER vendor (mergeVendors has no cross-vendor refusal like
     // mergePurchases' vendor-match check — any two vendors can fold together).
-    mergeable: defineMergeableConfig({
-      keeperMode: "fixed",
-      isRow: isVendorMergeRow,
-      candidateQuery: () =>
-        entityListFor("vendor").listQueryPlan({
-          filters: {},
-          // Generous relative to the whole roster (~150 vendors), within
-          // MAX_PAGE_SIZE — every other vendor is a merge candidate.
-          pagination: { pageIndex: 0, pageSize: 200 },
-        }),
-      rowLabel: (row) => row.name,
-      rowStat: (row) =>
-        `${row.purchaseCount} purchase${row.purchaseCount === 1 ? "" : "s"} · ${formatCurrency(row.spend)}`,
-      copy: {
-        title: (keeperLabel) => <>Merge into {keeperLabel}</>,
-        description:
-          "Pick other vendors to fold in. Their purchases move onto this vendor — any purchases sharing an order id are folded together — and the folded vendors leave the roster. Website and notes carry over only where this vendor has none.",
-        emptyTitle: "Nothing to merge",
-        emptyDescription: "No other vendors are on file.",
-      },
-    }),
   },
   vendorAccount: {
     ...generatedBrowserRoutes.vendorAccount,
@@ -425,28 +295,6 @@ const entityDefinitions = withEntityNames({
     // OTHER purchase from the same vendor (mergePurchases refuses cross-vendor,
     // and separately refuses when both sides carry a non-null order id — that
     // refusal surfaces as the dialog's error toast, not pre-validated here).
-    mergeable: defineMergeableConfig({
-      keeperMode: "fixed",
-      isRow: isPurchaseMergeRow,
-      candidateQuery: (keeper) =>
-        entityListFor("purchase").listQueryPlan({
-          filters: { vendorId: keeper.vendorId },
-          // Generous relative to any one vendor's purchase count, within MAX_PAGE_SIZE.
-          pagination: { pageIndex: 0, pageSize: 200 },
-        }),
-      rowLabel: (row) => purchaseLabel(row),
-      rowStat: (row) =>
-        `${row.expenseCount} · ${formatCurrency(row.expenseTotal)}`,
-      copy: {
-        title: (keeperLabel) => <>Merge into {keeperLabel}</>,
-        description:
-          "Pick other purchases from the same vendor to fold in. Their expenses and documents move onto this purchase; the folded purchases are then deleted.",
-        emptyTitle: "Nothing to merge",
-        emptyDescription: "This vendor has no other purchases on file.",
-        caution:
-          "One purchase is one vendor order or receipt event, never a contract — a payment schedule stays as separate purchases. Merge only rows that are genuinely the same transaction.",
-      },
-    }),
   },
   expense: {
     ...generatedBrowserRoutes.expense,
@@ -515,28 +363,6 @@ export type EntityDetailRoute =
 
 /** Browser presentation exists only for entities with browser routes. */
 export const entities = entityDefinitions;
-
-/**
- * The merge dialog configuration for an entity: its own, or — for any entity
- * the kernel merges without a bespoke dialog — a ranked pick among the
- * selected rows by name. Null where the kernel serves no merge.
- */
-export const mergeConfigFor = (
-  entity: BrowserRoutedEntity,
-): MergeableConfig | null => {
-  const definition = entities[entity];
-  if ("mergeable" in definition && definition.mergeable)
-    return definition.mergeable;
-  if (!entitySummary[entity].merge) return null;
-  return defineMergeableConfig({
-    keeperMode: "ranked",
-    isRow: isNamedMergeRow,
-    rowLabel: (row) => <span className="truncate">{row.name}</span>,
-    copy: {
-      title: `Merge ${entitySummary[entity].plural.toLowerCase()}?`,
-    },
-  });
-};
 
 export const isBrowserRoutedEntity = (
   entity: Entity,

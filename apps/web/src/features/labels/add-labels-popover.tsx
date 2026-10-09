@@ -12,7 +12,7 @@ import { toast } from "sonner";
 import { entityDetailFor } from "~/entity/entity-detail";
 import { LocationPickerThumb } from "~/features/locations/location-picker-thumb";
 import { typeSupportsQrCode } from "~/features/locations/location-type-theme";
-import { location } from "~/integrations/tanstack-query/generated/catalog.gen";
+import { location } from "~/integrations/tanstack-query/generated/location.gen";
 import { Button } from "~/ui/primitives/button";
 import { Description } from "~/ui/primitives/description";
 import {

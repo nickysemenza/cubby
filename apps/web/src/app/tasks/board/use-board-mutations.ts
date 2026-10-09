@@ -15,7 +15,7 @@ import { useMutation, useQueryClient } from "@tanstack/react-query";
 import type { z } from "zod";
 
 import { entityMutationOptionsFactory } from "~/entity/entity-contracts";
-import { task } from "~/integrations/tanstack-query/generated/catalog.gen";
+import { task } from "~/integrations/tanstack-query/generated/task.gen";
 import { showErrorToast } from "~/ui/feedback/error-details";
 
 import type { TaskBoardPatch } from "./board-types";

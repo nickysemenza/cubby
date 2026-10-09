@@ -1,7 +1,5 @@
-import {
-  smartCollectionDetailOut,
-  type SmartCollectionDefinition,
-} from "@cubby/schemas/collection";
+import { smartCollectionDetailOut } from "@cubby/schemas/collection";
+import { type SmartCollectionDefinition } from "@cubby/schemas/collection-fields";
 import { parseShortcodeFor } from "@cubby/schemas/identifiers";
 import { eq } from "drizzle-orm";
 import { createRepoEntity } from "tooling/factories/repo";

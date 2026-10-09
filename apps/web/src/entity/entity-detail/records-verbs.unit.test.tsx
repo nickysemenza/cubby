@@ -2,11 +2,14 @@ import { SECTION_ACTION_IDS } from "@cubby/schemas/entity-section-actions";
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
+import { expenseDetailClient } from "~/entity/generated/clients/expense.detail.gen";
+import { purchaseDetailClient } from "~/entity/generated/clients/purchase.detail.gen";
+import { vendorAccountDetailClient } from "~/entity/generated/clients/vendorAccount.detail.gen";
 import { overrideStartDispatch } from "~/integrations/tanstack-query/start-transport";
 import { createBrowserTestHarness } from "~/lib/test/browser-harness";
 
+import { DetailHooksProvider } from "./detail-hooks";
 import { type RecordsBlock, RecordsBlockView } from "./records-block";
-import { sectionActionsFor } from "./section-actions";
 
 let harness: ReturnType<typeof createBrowserTestHarness>;
 let restoreDispatch: (() => void) | undefined;
@@ -70,11 +73,13 @@ describe("RecordsBlockView finance verbs", () => {
       throw new Error(`Unexpected operation ${operation}`);
     });
     render(
-      <RecordsBlockView
-        block={chargeSearch}
-        entity="vendorAccount"
-        record={{ id: "VACCT-4K7M" }}
-      />,
+      <DetailHooksProvider hooks={vendorAccountDetailClient.hooks}>
+        <RecordsBlockView
+          block={chargeSearch}
+          entity="vendorAccount"
+          record={{ id: "VACCT-4K7M" }}
+        />
+      </DetailHooksProvider>,
       { wrapper: harness.wrapper },
     );
 
@@ -112,25 +117,27 @@ describe("RecordsBlockView finance verbs", () => {
 
   it("states why a verb is unavailable instead of hiding it", async () => {
     render(
-      <RecordsBlockView
-        block={{
-          kind: "records",
-          rows: [],
-          empty: "No purchase recorded.",
-          actions: [],
-          verbs: [
-            {
-              id: "splitExpense",
-              label: "Split",
-              scope: "section",
-              disabledReason:
-                "Record this expense's vendor first — a split files its parts under the same purchase.",
-            },
-          ],
-        }}
-        entity="expense"
-        record={{ id: "EXP-2345" }}
-      />,
+      <DetailHooksProvider hooks={expenseDetailClient.hooks}>
+        <RecordsBlockView
+          block={{
+            kind: "records",
+            rows: [],
+            empty: "No purchase recorded.",
+            actions: [],
+            verbs: [
+              {
+                id: "splitExpense",
+                label: "Split",
+                scope: "section",
+                disabledReason:
+                  "Record this expense's vendor first — a split files its parts under the same purchase.",
+              },
+            ],
+          }}
+          entity="expense"
+          record={{ id: "EXP-2345" }}
+        />
+      </DetailHooksProvider>,
       { wrapper: harness.wrapper },
     );
     expect(screen.getByText("No purchase recorded.")).toBeInTheDocument();
@@ -144,11 +151,16 @@ describe("RecordsBlockView finance verbs", () => {
 });
 
 // A verb the server can offer with no web run would render as a dead button.
-describe("section action registry", () => {
-  it("implements every verb on some entity", () => {
-    const entities = ["purchase", "expense", "vendorAccount"];
+describe("section action hooks", () => {
+  it("implements every verb in some entity's detail client", () => {
+    const clients = [
+      purchaseDetailClient,
+      expenseDetailClient,
+      vendorAccountDetailClient,
+    ];
     const missing = SECTION_ACTION_IDS.filter(
-      (id) => !entities.some((entity) => id in sectionActionsFor(entity)),
+      (id) =>
+        !clients.some((client) => id in (client.hooks.sectionActions ?? {})),
     );
     expect(missing).toEqual([]);
   });

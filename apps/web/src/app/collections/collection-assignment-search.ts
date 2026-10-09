@@ -2,7 +2,7 @@ import {
   collectionMatrixMembership,
   collectionMatrixSort,
   collectionSlug,
-} from "@cubby/schemas/collection";
+} from "@cubby/schemas/collection-fields";
 import { z } from "zod";
 
 import { urlStringParam } from "~/lib/search-params";

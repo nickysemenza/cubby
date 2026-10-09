@@ -7,10 +7,8 @@ import { setCfEnv } from "~/server/cf-env";
 import { researchRetention, runTarget } from "~/server/db/schema";
 import { getDb } from "~/server/repo/database-helpers";
 import { insertWithShortcode } from "~/server/repo/shortcode-utils";
-import {
-  requestCatchUp,
-  recoverMissedWork,
-} from "~/server/services/catch-up.service";
+import { requestCatchUp } from "~/server/services/app-open-catch-up.service";
+import { recoverMissedWork } from "~/server/services/catch-up.service";
 
 describe("app-open catch-up", () => {
   const ctx = withTestDb();

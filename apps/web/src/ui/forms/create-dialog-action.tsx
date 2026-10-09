@@ -1,24 +1,11 @@
 import { PlusIcon } from "@phosphor-icons/react/dist/csr/Plus";
 import { useNavigate, useSearch } from "@tanstack/react-router";
-import type { ComponentProps } from "react";
-import { type ReactNode, Suspense, useState } from "react";
+import { type ReactNode, useState } from "react";
 import { z } from "zod";
 
-import type { EntityEditDialog as EntityEditDialogComponent } from "~/entity/editing/entity-edit-dialog";
+import { EntityEditDialog } from "~/entity/editing/entity-edit-dialog";
 import type { EntityEditDialogRequest } from "~/entity/editing/entity-edit-dialog";
-import { browserOnlyLazy } from "~/lib/browser-only-lazy";
 import { Button } from "~/ui/primitives/button";
-
-const EntityEditDialog = browserOnlyLazy<
-  ComponentProps<typeof EntityEditDialogComponent>
->(
-  import.meta.env.SSR
-    ? null
-    : () =>
-        import("~/entity/editing/entity-edit-dialog").then((module) => ({
-          default: module.EntityEditDialog,
-        })),
-);
 
 const routeSearchValueSchema = z.json();
 type RouteSearchValue = z.infer<typeof routeSearchValueSchema> | undefined;
@@ -89,11 +76,7 @@ export function CreateDialogAction({
         <PlusIcon />
         {children}
       </Button>
-      {open ? (
-        <Suspense fallback={null}>
-          <EntityEditDialog open onOpenChange={setOpen} request={request} />
-        </Suspense>
-      ) : null}
+      <EntityEditDialog open={open} onOpenChange={setOpen} request={request} />
     </>
   );
 }

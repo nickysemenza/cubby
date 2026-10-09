@@ -1,6 +1,6 @@
+import type { GardenCropKey } from "@cubby/schemas/garden-fields";
 import type { GardenGuideWindow } from "@cubby/schemas/garden-guide";
 import { plantingGuides } from "@cubby/schemas/garden-guides";
-import type { GardenCropKey } from "@cubby/schemas/garden-practice";
 import { gardenCropLabel } from "@cubby/schemas/garden-practice";
 import type { PlantingOut } from "@cubby/schemas/planting";
 

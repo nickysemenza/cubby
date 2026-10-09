@@ -1,6 +1,7 @@
 import { AccountView } from "@daveyplate/better-auth-ui";
 import { createFileRoute } from "@tanstack/react-router";
 
+import { AuthUIProvider } from "~/app/auth/auth-ui-provider";
 import { pageTitle } from "~/lib/page-title";
 
 export const Route = createFileRoute("/_authenticated/account/$accountView")({
@@ -10,5 +11,9 @@ export const Route = createFileRoute("/_authenticated/account/$accountView")({
 
 function AccountPage() {
   const { accountView } = Route.useParams();
-  return <AccountView pathname={accountView} />;
+  return (
+    <AuthUIProvider>
+      <AccountView pathname={accountView} />
+    </AuthUIProvider>
+  );
 }

@@ -22,7 +22,7 @@ import { z } from "zod";
 
 import { EntityWorkbenchInspector } from "~/entity/entity-detail/entity-workbench-inspector";
 import { tryFormatAmount } from "~/features/inventory/format-amount";
-import { project } from "~/integrations/tanstack-query/generated/catalog.gen";
+import { project } from "~/integrations/tanstack-query/generated/project.gen";
 import { cn, formatCurrency } from "~/lib/utils";
 import {
   GroupedFlow,

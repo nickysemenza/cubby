@@ -1,4 +1,7 @@
-import { collectionSlug, type CollectionSlug } from "@cubby/schemas/collection";
+import {
+  collectionSlug,
+  type CollectionSlug,
+} from "@cubby/schemas/collection-fields";
 import { collectionSlugsFromTags } from "@cubby/shared/collection-tag";
 
 export interface MembershipLocation {

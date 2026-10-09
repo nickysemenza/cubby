@@ -15,9 +15,9 @@ import {
 } from "./project";
 import { purchaseFilterFields } from "./purchase";
 import { recipeFilterFields } from "./recipe";
+import { relatedViewPath } from "./related-view-path";
 import {
   relatedFilterPrefix,
-  relatedViewPath,
   relatedSummaryInput,
   relatedSummaryOutput,
   relatedSummaryRelationKeys,

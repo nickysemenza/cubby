@@ -38,8 +38,7 @@ JSONL routes    →  cancellable workflow streams
   `gateway_call_usage`). Only the cookbook import loads
   `@cubby/recipebridge/cookbook` (the `recipebridge/cookbook` crate). Put a new
   Worker-only export behind one of those features; browser code must not call
-  it, which `wasm-browser-exports.unit.test.ts` enforces, and
-  `check-client-bundle.ts` checks each package lands in the right bundle.
+  it, which `wasm-browser-exports.unit.test.ts` enforces.
 - USDA data comes from one `USDA_RELEASE` SQLite Durable Object per USDA
   release in the web Worker, called over typed RPC
   ([ADR 0008](adr/0008-usda-release-durable-object.md)). The request-scoped
@@ -169,7 +168,7 @@ native PostgreSQL installation remain owned by their existing runners.
   or open `<origin>/__dev/login?next=/some/path`. Both sign in the seeded
   synthetic dev user (`apps/web/tooling/dev/state.ts`) through better-auth.
   The route exists only in the local dev Worker entry and the button only in
-  Vite dev builds; `check-client-bundle` rejects `/__dev/` in production output.
+  Vite dev builds.
 - On macOS, each database or browser test command owns a disposable Apple
   `container` PostgreSQL/IntegreSQL pair, cleaned up on exit.
   - `CUBBY_TEST_SERVICES=warm` reuses fixed-name containers.

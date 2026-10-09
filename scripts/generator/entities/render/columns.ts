@@ -221,4 +221,4 @@ export const storageColumnImports =
   'import type { RecipeStoredMeta, RecipeYield, StoredRecipeTotals } from "@cubby/schemas/recipe-shared";\n' +
   'import { recipeSourceValues } from "@cubby/schemas/recipe-shared";\n' +
   'import { inventoryOwnershipModeValues } from "@cubby/schemas/inventory-ownership";\n' +
-  'import { inventoryPlacementValues } from "@cubby/shared";\n';
+  'import { inventoryPlacementValues } from "@cubby/shared/category-theme";\n';

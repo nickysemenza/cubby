@@ -6,7 +6,7 @@ import {
 import type { FieldExplanationOutput } from "@cubby/schemas/field-explanation";
 import { useId, useState } from "react";
 
-import { dataQuality } from "~/integrations/tanstack-query/generated/catalog.gen";
+import { dataQuality } from "~/integrations/tanstack-query/generated/data-quality.gen";
 import { useActionMutation } from "~/ui/hooks/useActionMutation";
 import { Button } from "~/ui/primitives/button";
 import { Input } from "~/ui/primitives/input";

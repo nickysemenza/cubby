@@ -8,10 +8,8 @@ import { addDays, format, parseISO, subDays } from "date-fns";
 import { useState } from "react";
 import { toast } from "sonner";
 
-import {
-  entityFilterOptions,
-  meal as mealOperations,
-} from "~/integrations/tanstack-query/generated/catalog.gen";
+import { entityFilterOptions } from "~/integrations/tanstack-query/generated/entity-filter-options.gen";
+import { meal as mealOperations } from "~/integrations/tanstack-query/generated/meal.gen";
 
 import type {
   MealPreparationsView,

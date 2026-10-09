@@ -10,7 +10,7 @@ import { useMutation, useQuery } from "@tanstack/react-query";
 import { Link, useNavigate } from "@tanstack/react-router";
 import { useId, useState } from "react";
 
-import { collection } from "~/integrations/tanstack-query/generated/catalog.gen";
+import { collection } from "~/integrations/tanstack-query/generated/collection.gen";
 import { focusOnMount } from "~/ui/hooks/focus-on-mount";
 import { Stack } from "~/ui/layout";
 import { Button } from "~/ui/primitives/button";

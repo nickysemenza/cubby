@@ -1,10 +1,10 @@
 import { vendorAccountShortcode } from "@cubby/schemas/identifiers";
 import { Link } from "@tanstack/react-router";
 
-import type { DetailSlotComponent } from "~/entity/entity-detail/detail-slots";
+import type { DetailSlotComponent } from "~/entity/entity-detail/detail-hooks";
+import type { SectionActionComponent } from "~/entity/entity-detail/detail-hooks";
 import { EntityReportSlot } from "~/entity/entity-detail/report-slot";
-import type { SectionActionComponent } from "~/entity/entity-detail/section-actions";
-import { run } from "~/integrations/tanstack-query/generated/catalog.gen";
+import { run } from "~/integrations/tanstack-query/generated/run.gen";
 import { getErrorMessage } from "~/lib/error-utils";
 import { useActionMutation } from "~/ui/hooks/useActionMutation";
 import { Button } from "~/ui/primitives/button";

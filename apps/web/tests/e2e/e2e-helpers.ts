@@ -1,4 +1,4 @@
-import { SHORTCODE_BODY_PATTERN } from "@cubby/shared";
+import { SHORTCODE_BODY_PATTERN } from "@cubby/shared/shortcode";
 import {
   expect,
   type Locator,

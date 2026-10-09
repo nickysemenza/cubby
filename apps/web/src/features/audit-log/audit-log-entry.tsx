@@ -1,5 +1,5 @@
 import type { AuditJsonValue, AuditLogListOut } from "@cubby/schemas/audit";
-import { parseShortcode } from "@cubby/shared";
+import { parseShortcode } from "@cubby/shared/shortcode";
 import { CaretDownIcon } from "@phosphor-icons/react/dist/csr/CaretDown";
 import { CaretRightIcon } from "@phosphor-icons/react/dist/csr/CaretRight";
 import { RobotIcon } from "@phosphor-icons/react/dist/csr/Robot";

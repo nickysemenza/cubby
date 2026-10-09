@@ -4,7 +4,7 @@ import { unique } from "e2e";
 import { Pool } from "pg";
 import { z } from "zod";
 import { pollUntil } from "@cubby/shared/retry";
-import { parseShortcode } from "@cubby/shared";
+import { parseShortcode } from "@cubby/shared/shortcode";
 
 /**
  * A Tester Army journey is described once and executed by both engines.

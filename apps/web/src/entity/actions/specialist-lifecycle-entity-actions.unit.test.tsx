@@ -2,10 +2,8 @@ import { testShortcode } from "@cubby/schemas/testing";
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
-import {
-  recipe,
-  image,
-} from "~/integrations/tanstack-query/generated/catalog.gen";
+import { image } from "~/integrations/tanstack-query/generated/image.gen";
+import { recipe } from "~/integrations/tanstack-query/generated/recipe.gen";
 import { createBrowserTestHarness } from "~/lib/test/browser-harness";
 
 import type { EntityActionRow } from "./entity-actions";

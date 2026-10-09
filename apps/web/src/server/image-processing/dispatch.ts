@@ -19,7 +19,7 @@ import {
   reclaimExpiredImageProcessingLeases,
 } from "~/server/repo/image-processing";
 import { assignImageProcessingExecutor } from "~/server/repo/image-processing-history";
-import { readImageProcessingSettings } from "~/server/repo/image-processing-maintenance";
+import { readImageProcessingSettings } from "~/server/repo/image-processing-settings";
 import {
   generatePresignedDownloadUrl,
   generatePresignedUploadUrl,

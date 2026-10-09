@@ -3,7 +3,7 @@ import { useQuery } from "@tanstack/react-query";
 import pluralize from "pluralize";
 import type { ReactNode } from "react";
 
-import { maintenance } from "~/integrations/tanstack-query/generated/catalog.gen";
+import { maintenance } from "~/integrations/tanstack-query/generated/maintenance.gen";
 import { ErrorDisplay } from "~/ui/feedback/error-display";
 import { useActionMutation } from "~/ui/hooks/useActionMutation";
 import { Row, Stack } from "~/ui/layout";

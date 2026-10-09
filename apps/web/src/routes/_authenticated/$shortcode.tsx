@@ -10,7 +10,7 @@
  * The prefix alone names the entity; the detail route owns lookup and 404s.
  */
 
-import { parseShortcode } from "@cubby/shared";
+import { parseShortcode } from "@cubby/shared/shortcode";
 import {
   createFileRoute,
   Link,

@@ -9,7 +9,7 @@ import {
   ripple,
   type InvalidationTagSet,
 } from "~/integrations/tanstack-query/cache-tags";
-import { problems as problemOperations } from "~/integrations/tanstack-query/generated/catalog.gen";
+import { problems as problemOperations } from "~/integrations/tanstack-query/generated/problems.gen";
 import { invalidateOperationTags } from "~/integrations/tanstack-query/operation-cache";
 import { getErrorMessage } from "~/lib/error-utils";
 import { Row, Stack } from "~/ui/layout";

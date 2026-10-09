@@ -92,6 +92,7 @@ const callbackDependencies: CallbackDependencies = {
       userId,
     ),
   getQueue: getPurchaseAgentQueue,
+  // Loaded on request, like run-service above.
   recordDispatch: async (db, input) =>
     (
       await import("~/server/purchase-import/dispatch")

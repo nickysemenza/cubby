@@ -1,6 +1,6 @@
 import { infiniteQueryOptions, queryOptions } from "@tanstack/react-query";
 
-import { entityList } from "~/integrations/tanstack-query/generated/catalog.gen";
+import { entityList } from "~/integrations/tanstack-query/generated/entity-list.gen";
 import {
   infiniteOperationQueryKey,
   type OperationQueryKey,

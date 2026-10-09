@@ -5,8 +5,8 @@ import type {
   ProjectStatus,
   TaskStatus,
 } from "@cubby/schemas/project";
-import type { ProductCategory } from "@cubby/shared";
-import { getMiscDisplayName, isMiscProduct } from "@cubby/shared";
+import type { ProductCategory } from "@cubby/shared/category-theme";
+import { getMiscDisplayName, isMiscProduct } from "@cubby/shared/constants";
 import type { DataType } from "@cubby/usda";
 import type { ReactNode } from "react";
 import { match } from "ts-pattern";

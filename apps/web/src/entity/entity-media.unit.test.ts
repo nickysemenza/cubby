@@ -4,7 +4,7 @@ import { fromPartial } from "@total-typescript/shoehorn";
 import { describe, expect, it } from "vitest";
 
 import { entityRipple } from "~/integrations/tanstack-query/cache-tags";
-import { entityMedia } from "~/integrations/tanstack-query/generated/catalog.gen";
+import { entityMedia } from "~/integrations/tanstack-query/generated/entity-media.gen";
 import { matchesTags } from "~/integrations/tanstack-query/operation-cache";
 
 describe("entityMedia.displayImages cache coverage", () => {

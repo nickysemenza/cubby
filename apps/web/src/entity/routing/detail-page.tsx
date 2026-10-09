@@ -1,5 +1,7 @@
-import type { BrowserRoutedEntity } from "@cubby/schemas/entity-manifest";
-import { entitySummary } from "@cubby/schemas/entity-summary";
+import {
+  type BrowserRoutedEntity,
+  entityIndex,
+} from "@cubby/schemas/entity-index";
 import type { UseSuspenseQueryOptions } from "@tanstack/react-query";
 import { useSuspenseQuery } from "@tanstack/react-query";
 import { Link, notFound, useParams } from "@tanstack/react-router";
@@ -7,6 +9,10 @@ import type { ReactNode } from "react";
 import { z } from "zod";
 
 import { entities } from "~/entity/entities";
+import {
+  type DetailClient,
+  DetailHooksProvider,
+} from "~/entity/entity-detail/detail-hooks";
 import { type GenericDetailEntity } from "~/entity/entity-detail/detail-record";
 import { GenericEntityDetail } from "~/entity/entity-detail/generic-entity-detail";
 import { readRecordField } from "~/entity/entity-references";
@@ -31,7 +37,7 @@ import {
  * const VendorDetailPage = detailPage({ … });
  * const VendorNotFound = notFoundPage("vendor");
  * export const Route = createFileRoute("/_authenticated/vendors/$shortcode")({
- *   loader: …,                         // stays eager — it prefetches
+ *   loader: …,                         // split into its own loader chunk
  *   notFoundComponent: VendorNotFound, // split
  *   component: VendorDetailPage,       // split
  * });
@@ -66,8 +72,12 @@ type DetailRecord<TQuery extends DetailQueryFactory> = NonNullable<
 >;
 
 interface DetailPageOptions<TQuery extends DetailQueryFactory> {
-  /** The entity the route serves; the generated routes name it. */
-  entity?: BrowserRoutedEntity;
+  /**
+   * The entity's generated client module (`entity/generated/clients/<entity>.detail.gen.ts`):
+   * the route's component chunk imports it, so its model is registered and
+   * its slots and actions reach the page through `DetailHooksProvider`.
+   */
+  client?: DetailClient<GenericDetailEntity & BrowserRoutedEntity>;
   /**
    * The record's query — the same one the route's loader prefetches, so this
    * suspense read is always a cache hit.
@@ -79,13 +89,13 @@ interface DetailPageOptions<TQuery extends DetailQueryFactory> {
    * has to be fixed by the property above before this one is checked — order
    * it first and `data` degrades to the constraint's `unknown`.
    *
-   * Omitted by the generated routes: with `entity` set, the body is the
+   * Omitted by the generated routes: with `client` set, the body is the
    * generic detail page rendered from the manifest.
    */
   render?: (data: DetailRecord<TQuery>, shortcode: string) => ReactNode;
   /**
    * Document title for the loaded record; the shortcode is the fallback.
-   * Omitted by the generated routes: `entity`'s `titleField` is read.
+   * Omitted by the generated routes: the entity's `titleField` is read.
    */
   title?: (data: DetailRecord<TQuery>) => string | null | undefined;
 }
@@ -94,25 +104,29 @@ const recordTitle = z.string().nullish();
 
 /** The `$shortcode` detail body: suspense-read the loader's record, render it. */
 export function detailPage<TQuery extends DetailQueryFactory>({
-  entity,
+  client,
   query,
   render = (data, shortcode) => {
-    if (entity === undefined)
-      throw new Error("detailPage needs `render` or `entity`");
-    // SAFETY: a generated route pairs `entity` with that entity's own detail
+    if (client === undefined)
+      throw new Error("detailPage needs `render` or `client`");
+    // SAFETY: a generated route pairs `client` with that entity's own detail
     // query, so the loaded record is the entity's detail shape.
     return (
       <GenericEntityDetail
         key={shortcode}
-        entity={entity as GenericDetailEntity}
+        entity={client.entity}
         record={data as never}
       />
     );
   },
   title = (data) =>
-    entity === undefined
+    client === undefined
       ? undefined
-      : readRecordField(data, entitySummary[entity].titleField, recordTitle),
+      : readRecordField(
+          data,
+          entityIndex[client.entity].titleField,
+          recordTitle,
+        ),
 }: DetailPageOptions<TQuery>) {
   return function EntityDetailPage() {
     // `useParams({ strict: false })` because this component is built before any
@@ -136,7 +150,13 @@ export function detailPage<TQuery extends DetailQueryFactory>({
     // not-found transition rather than a blank successful detail page.
     if (!data) throw notFound();
 
-    return render(data, shortcode);
+    return client === undefined ? (
+      render(data, shortcode)
+    ) : (
+      <DetailHooksProvider hooks={client.hooks}>
+        {render(data, shortcode)}
+      </DetailHooksProvider>
+    );
   };
 }
 

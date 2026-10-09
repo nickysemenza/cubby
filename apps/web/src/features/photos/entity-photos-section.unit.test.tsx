@@ -10,7 +10,7 @@ import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import type { EntityMutationTransport } from "~/entity/entity-mutation-command";
-import { imageUpload } from "~/integrations/tanstack-query/generated/catalog.gen";
+import { imageUpload } from "~/integrations/tanstack-query/generated/image-upload.gen";
 import { createBrowserTestHarness } from "~/lib/test/browser-harness";
 import { mock } from "~/lib/test/mock-schema";
 import type { EntityBrowserMutationInput } from "~/server/entity-kernel/contracts";

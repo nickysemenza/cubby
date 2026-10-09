@@ -1,4 +1,4 @@
-import { capitalize } from "@cubby/shared";
+import { capitalize } from "@cubby/shared/text-case";
 import type { LinkProps } from "@tanstack/react-router";
 
 import { completeNavLeaves, findActiveTo } from "./nav-items";

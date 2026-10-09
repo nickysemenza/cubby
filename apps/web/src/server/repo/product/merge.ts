@@ -79,7 +79,7 @@ import {
 import {
   getCategoryFeature,
   resolveProductCategory,
-} from "~/server/repo/product-category";
+} from "~/server/repo/product-category-feature";
 import { repointProductMatchCandidatesTx } from "~/server/repo/product-match-candidate";
 import { unitMappingSides } from "~/server/repo/product/unit-mappings";
 import { cascadeRemoval } from "~/server/repo/removal/core";

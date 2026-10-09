@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { z } from "zod";
 
-import * as contracts from "~/contracts/index";
+import { allContracts } from "~/lib/test/all-contracts";
 import { mock } from "~/lib/test/mock-schema";
 
 import {
@@ -25,7 +25,7 @@ interface WireCase {
  */
 const cases = (() => {
   const seen = new Map<z.ZodType, WireCase>();
-  for (const contract of Object.values(contracts)) {
+  for (const contract of allContracts) {
     for (const [member, operation] of Object.entries(contract.ops)) {
       if (operation.kind === "subscription" || operation.http === false)
         continue;
@@ -256,7 +256,7 @@ const asRouterQuery = (search: URLSearchParams) => {
  * query projection normalises one-or-many filters to a list, so a bare value
  * in the sample is equivalent to the one-element list that comes back.
  */
-const flatQueries = Object.values(contracts).flatMap((contract) =>
+const flatQueries = allContracts.flatMap((contract) =>
   Object.entries(contract.ops).flatMap(([member, operation]) => {
     if (operation.kind !== "query" || operation.http === false) return [];
     const { input } = operation;

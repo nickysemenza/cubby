@@ -1,4 +1,4 @@
-import { getShortcodeUrl } from "@cubby/shared";
+import { getShortcodeUrl } from "@cubby/shared/shortcode";
 import QRCode from "qrcode";
 
 /**

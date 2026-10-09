@@ -13,7 +13,7 @@ import { useMutation } from "@tanstack/react-query";
 import { useId, useState } from "react";
 
 import { RecordEmoji } from "~/entity/components/record-emoji";
-import { spendingClassification } from "~/integrations/tanstack-query/generated/catalog.gen";
+import { spendingClassification } from "~/integrations/tanstack-query/generated/spending-classification.gen";
 import { formatCurrency } from "~/lib/utils";
 import type { ComboboxItem } from "~/ui/combobox/combobox-types";
 import { EntityReferencePicker } from "~/ui/combobox/entity-reference-picker";

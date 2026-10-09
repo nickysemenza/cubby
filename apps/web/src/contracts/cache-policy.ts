@@ -1,4 +1,4 @@
-import { allEntities } from "@cubby/schemas/entity-manifest";
+import { allEntities } from "@cubby/schemas/entity-index";
 
 /**
  * Cache policy vocabulary that contract members may name. Contracts carry

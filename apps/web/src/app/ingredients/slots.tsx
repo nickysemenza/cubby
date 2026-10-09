@@ -1,4 +1,4 @@
-import type { DetailSlotComponent } from "~/entity/entity-detail/detail-slots";
+import type { DetailSlotComponent } from "~/entity/entity-detail/detail-hooks";
 import { FullNutrientBreakdown } from "~/features/nutrition/FullNutrientBreakdown";
 import { NutrientDensityStats } from "~/features/nutrition/NutrientDensityStats";
 import { ProductNutritionLabel } from "~/features/nutrition/ProductNutritionLabel";

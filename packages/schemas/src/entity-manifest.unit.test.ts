@@ -1,4 +1,7 @@
-import { LEGACY_SHORTCODE_PREFIX, SHORTCODE_PREFIX } from "@cubby/shared";
+import {
+  LEGACY_SHORTCODE_PREFIX,
+  SHORTCODE_PREFIX,
+} from "@cubby/shared/shortcode";
 import { describe, expect, it } from "vitest";
 import { z } from "zod";
 import { type Entity, entitySchema } from "./entity";
@@ -8,7 +11,6 @@ import {
   countableEntities,
   embeddableEntities,
   entityDescriptor,
-  entityInspectorMetadata,
   type EntityDescriptor,
   entityManifest,
   entityReferences,
@@ -145,19 +147,6 @@ describe("entity manifest", () => {
     }
     for (const entity of allEntities) {
       expect(descriptor(entity)).not.toHaveProperty("legacyShortcodePrefix");
-    }
-  });
-
-  it("publishes client-safe inspector identity and reference metadata", () => {
-    expect(Object.keys(entityInspectorMetadata).sort()).toEqual(
-      [...allEntities].sort(),
-    );
-    for (const entity of allEntities) {
-      const metadata = entityInspectorMetadata[entity];
-      expect(metadata.shortcodePrefix).toBe(
-        descriptor(entity).shortcodePrefix ?? null,
-      );
-      expect(metadata.references).toEqual(entityReferences(entity));
     }
   });
 

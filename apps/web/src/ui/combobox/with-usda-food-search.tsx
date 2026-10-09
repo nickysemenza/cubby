@@ -7,10 +7,8 @@ import { toast } from "sonner";
 
 import { VerbButton } from "~/entity/actions/action-verb-ui";
 import { AiProposalCard, AiProvenance } from "~/features/ai/ai-proposal-card";
-import {
-  usdaFood,
-  ai,
-} from "~/integrations/tanstack-query/generated/catalog.gen";
+import { ai } from "~/integrations/tanstack-query/generated/ai.gen";
+import { usdaFood } from "~/integrations/tanstack-query/generated/usda.gen";
 import { parseUsdaFoodRef } from "~/lib/parse-usda-food-ref";
 import { showErrorToast } from "~/ui/feedback/error-details";
 import { FormFieldGroup } from "~/ui/forms/form-field-group";

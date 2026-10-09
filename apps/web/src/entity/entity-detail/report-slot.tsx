@@ -2,6 +2,7 @@ import { slotActionsOf } from "@cubby/schemas/entity-report";
 import type {
   EntityReportInput,
   ReportBlock,
+  ReportSlot,
 } from "@cubby/schemas/entity-report";
 import { ArrowSquareOutIcon } from "@phosphor-icons/react/dist/csr/ArrowSquareOut";
 import {
@@ -13,11 +14,10 @@ import {
 import { Link } from "@tanstack/react-router";
 import { type ReactNode, useEffect } from "react";
 
-import { RunAgentActions } from "~/app/purchases/purchase-import-run-detail";
 import { entityDetailLink } from "~/entity/entities";
 import { ripple } from "~/integrations/tanstack-query/cache-tags";
 import { cursorQueryOptions } from "~/integrations/tanstack-query/cursor-query-options";
-import { entityReport } from "~/integrations/tanstack-query/generated/catalog.gen";
+import { entityReport } from "~/integrations/tanstack-query/generated/entity-report.gen";
 import { invalidateOperationTags } from "~/integrations/tanstack-query/operation-cache";
 import { savedSentryEventId, sentryEventUrl } from "~/lib/error-diagnostics";
 import { cn, formatCurrency } from "~/lib/utils";
@@ -39,7 +39,9 @@ import {
 } from "~/ui/primitives/table";
 import { ShortcodeProse } from "~/ui/shortcode-prose";
 
-import { DetailAction, reportDetailActionsFor } from "./detail-action-bar";
+import { DetailAction, reportDetailActionsFor } from "./detail-action-context";
+import type { DetailSlot } from "./detail-hooks";
+import type { DetailRecordOf, GenericDetailEntity } from "./detail-record";
 import {
   RecordsBlockView,
   RecordsDetailActions,
@@ -522,19 +524,6 @@ export function ReportDetailActions({
   );
 }
 
-export const RunDetailActions: import("./detail-slots").DetailSlotComponent<
-  "run"
-> = ({ record }) => (
-  <>
-    <ReportDetailActions
-      slot="run.live-progress"
-      id={record.id}
-      status={record.status}
-    />
-    <RunAgentActions record={record} />
-    <RunSentryAction error={record.dispatchError} />
-  </>
-);
 export function RunSentryAction({
   error,
 }: {
@@ -554,28 +543,11 @@ export function RunSentryAction({
   ) : null;
 }
 
-export const PurchaseDetailActions: import("./detail-slots").DetailSlotComponent<
-  "purchase"
-> = ({ record }) => (
-  <>
-    <ReportDetailActions
-      slot="purchase.financial-settlement"
-      id={record.id}
-      record={record}
-    />
-    <ReportDetailActions
-      slot="purchase.reconciliation"
-      id={record.id}
-      record={record}
-    />
-  </>
-);
-export const ExpenseDetailActions: import("./detail-slots").DetailSlotComponent<
-  "expense"
-> = ({ record }) => (
-  <ReportDetailActions
-    slot="expense.settlement"
-    id={record.id}
-    record={record}
-  />
-);
+/** A slot that is nothing but its server-composed report: one renderer on every entity. */
+export const reportSlotFill = <E extends GenericDetailEntity>(
+  report: ReportSlot,
+): DetailSlot<E> => ({
+  component: ({ record }: { record: DetailRecordOf<E> }) => (
+    <EntityReportSlot slot={report} id={record.id} record={record} />
+  ),
+});

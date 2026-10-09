@@ -1,16 +1,10 @@
-import { SENTRY_DATA_COLLECTION } from "@cubby/worker-tracing/sentry-data-collection";
-import { CUBBY_SENTRY_DSN } from "@cubby/worker-tracing/sentry-dsn";
-import * as Sentry from "@sentry/tanstackstart-react";
 import { createRouter } from "@tanstack/react-router";
 import { setupRouterSsrQueryIntegration } from "@tanstack/react-router-ssr-query";
 
 import { installPreloadErrorRecovery } from "~/lib/deploy-recovery";
-import { isSupersededViewTransitionError } from "~/lib/error-utils";
 import { installJsProfiler } from "~/lib/perf/js-self-profile";
 import { installNavigationTracker } from "~/lib/perf/navigation-tracker";
-import { sentryEnvironment } from "~/lib/sentry-environment";
-import { SENTRY_IGNORED_ERRORS } from "~/lib/sentry-noise";
-import { scrubSentryEvent } from "~/lib/sentry-scrub";
+import { installClientSentry } from "~/lib/sentry-client";
 import { RouteErrorComponent } from "~/ui/route-error";
 import { RouteNotFound } from "~/ui/route-not-found";
 import { RoutePending } from "~/ui/route-pending";
@@ -46,64 +40,16 @@ export const getRouter = () => {
     defaultPendingMinMs: 150,
   });
 
-  // Initialize Sentry on client only. Dev keeps error reporting but drops
-  // tracing and console-breadcrumb capture — each turns a busy moment into a
-  // multi-second main-thread freeze in dev, because browser tracing builds an
-  // O(n²) span tree from React 19's dev per-render `performance.measure`
-  // entries (see below). Prod keeps both; its React build emits no such
-  // measures.
-  //
-  // Session Replay is deliberately NOT enabled. `replayIntegration()` bundles
-  // the full rrweb recorder into the eager entry chunk (~60 KiB gzip on every
-  // first paint, sign-in page included) — too steep for a single-user app.
-  // Errors and tracing don't depend on it.
   if (!router.isServer) {
     // Must be installed before a user can request a lazy route chunk. A tab
     // left open across a deploy gets one guarded reload onto the new build.
     installPreloadErrorRecovery();
 
-    const isProd = import.meta.env.PROD;
-    Sentry.init({
-      dsn: CUBBY_SENTRY_DSN,
-      // E2E uses the production bundle but installs this flag before client
-      // scripts run. Disabling the SDK here keeps test events out of Sentry
-      // without Playwright routing, which disables the browser HTTP cache.
-      enabled:
-        !("__CUBBY_E2E_DISABLE_SENTRY__" in window) &&
-        (!import.meta.env.CUBBY_LOCAL_RUNTIME ||
-          import.meta.env.CUBBY_LOCAL_TELEMETRY),
-      dataCollection: SENTRY_DATA_COLLECTION,
-      release: `cubby@${__GIT_COMMIT__}`,
-      environment: sentryEnvironment(
-        window.location.origin,
-        isProd ? "production" : "development",
-      ),
-      // Drop known-noise messages before send — free-plan quota hygiene.
-      ignoreErrors: SENTRY_IGNORED_ERRORS,
-      // Keep the scrubber as defense in depth for manually attached request
-      // data, even though the SDK no longer sends default PII.
-      beforeSend: (event, hint) => {
-        // Historical Safari cancellation from the removed View Transitions
-        // integration. Keep this exact; other AbortErrors stay actionable.
-        if (isSupersededViewTransitionError(hint.originalException)) {
-          return null;
-        }
-        return scrubSentryEvent(event);
-      },
-      // Request spans are owned by Cloudflare; Sentry captures errors only.
-      tracesSampler: () => 0,
-      integrations: [],
-      // Don't record console output as breadcrumbs in dev — capturing hundreds
-      // of warnings per second is the work that balloons into the freeze.
-      beforeBreadcrumb: isProd
-        ? undefined
-        : (breadcrumb) =>
-            breadcrumb.category === "console" ? null : breadcrumb,
-    });
+    installClientSentry();
     installNavigationTracker(router);
 
     // Dev-only on-demand CPU profiler: `await __jsProfile(5000)` in the console.
-    if (!isProd) installJsProfiler();
+    if (!import.meta.env.PROD) installJsProfiler();
   }
 
   setupRouterSsrQueryIntegration({

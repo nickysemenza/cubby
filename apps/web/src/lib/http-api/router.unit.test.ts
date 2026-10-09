@@ -1,10 +1,11 @@
 import { describe, expect, it } from "vitest";
 import { z } from "zod";
 
-import * as contracts from "~/contracts/index";
+import { aiContract } from "~/contracts/ai.contract";
 import { httpContract } from "~/lib/generated/http-contract.gen";
 import document from "~/lib/generated/http-openapi.gen.json";
 import { START_OPERATIONS } from "~/lib/generated/start-operation-registry.gen";
+import { allContracts } from "~/lib/test/all-contracts";
 
 import { httpMetadataSchema, rpcMutation, rpcQuery } from "./router";
 import { checkHttpRoutes, httpRoutes } from "./routes";
@@ -16,7 +17,7 @@ const rpc = routes.filter((route) => metadataOf(route).resource === undefined);
 
 describe("HTTP contract", () => {
   it("exposes every ordinary operation exactly once, queries as GET and mutations as POST", () => {
-    const expected = Object.values(contracts)
+    const expected = allContracts
       .flatMap((contract) =>
         Object.entries(contract.ops).flatMap(([member, operation]) =>
           operation.kind === "subscription" || operation.http === false
@@ -87,7 +88,7 @@ describe("HTTP contract", () => {
 
   it("rejects route collisions and reserved paths", () => {
     expect(() => checkHttpRoutes(httpContract)).not.toThrow();
-    const clash = rpcQuery("ai", "docs", contracts.aiContract.ops.usageSummary);
+    const clash = rpcQuery("ai", "docs", aiContract.ops.usageSummary);
     expect(() =>
       checkHttpRoutes({ a: { ...clash, path: "/api/v1/docs" } }),
     ).toThrow("Reserved");

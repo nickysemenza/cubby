@@ -1,9 +1,10 @@
 import type { EntityRef } from "@cubby/schemas/entity";
 import type { EntityFieldProvenance } from "@cubby/schemas/entity-fields";
-import { entityFieldModels } from "@cubby/schemas/entity-fields";
-import { parseShortcode } from "@cubby/shared";
+import { parseShortcode } from "@cubby/shared/shortcode";
 import type { CellData, RowData } from "@tanstack/react-table";
 import { z } from "zod";
+
+import { entityFieldModel, isEntityModelLoaded } from "~/entity/entity-model";
 
 import type { ColumnCellData } from "./cell-data";
 import type { CubbyDefaultTableLayout } from "./column-layout";
@@ -70,8 +71,9 @@ export const resolveColumnExplanation = <TData>(
     return "resolve" in explanation ? explanation.resolve(row) : explanation;
   const identity = z.object({ id: z.string() }).safeParse(row);
   const parsed = identity.success ? parseShortcode(identity.data.id) : null;
-  if (!parsed || !columnId) return undefined;
-  const field = entityFieldModels[parsed.type].fields.find(
+  if (!parsed || !columnId || !isEntityModelLoaded(parsed.type))
+    return undefined;
+  const field = entityFieldModel(parsed.type).fields.find(
     (candidate) =>
       candidate.key === columnId || candidate.key === `${columnId}Id`,
   );

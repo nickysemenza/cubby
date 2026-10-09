@@ -1,6 +1,6 @@
 import { entityImageOf, type ImageEntity } from "@cubby/schemas/entity";
-import type { ShortcodeEntity } from "@cubby/schemas/entity-manifest";
-import { getErrorMessage } from "@cubby/shared";
+import { type ShortcodeEntity } from "@cubby/schemas/entity-index";
+import { getErrorMessage } from "@cubby/shared/error-utils";
 import { isEqual } from "es-toolkit";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";

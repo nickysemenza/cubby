@@ -132,6 +132,10 @@ import type {
   DeriveImageCaptureCurrent as ImageCaptureStateRow,
   DeriveImageCaptureSighting as SightingCaptureRow,
 } from "~/server/services/image-capture-derivation";
+import {
+  refreshCapturedImageSearchOwnerRefs,
+  refreshDirectImageOwnerSearchDocuments,
+} from "~/server/services/mutation-side-effects";
 import { getR2PublicUrl } from "~/server/utils/r2-public-url";
 
 import { loadImageRepresentations } from "./image-processing";
@@ -139,11 +143,7 @@ import {
   imageProcessingIssueFilter,
   loadImageProcessingIssues,
 } from "./image-processing-issues";
-import {
-  findDirectImageSearchOwnerRefs,
-  refreshCapturedImageSearchOwnerRefs,
-  refreshDirectImageOwnerSearchDocuments,
-} from "./search-document";
+import { findDirectImageSearchOwnerRefs } from "./search-document";
 
 /** A gallery target's discriminator and branded private ID travel together. */
 export type AttachableImageRef = Extract<

@@ -1,7 +1,7 @@
 import type { ImageWithEntity } from "@cubby/schemas/image";
 import { useState } from "react";
 
-import { image as imageOperations } from "~/integrations/tanstack-query/generated/catalog.gen";
+import { image as imageOperations } from "~/integrations/tanstack-query/generated/image.gen";
 import { useImageUpdateMutation } from "~/ui/hooks/useUpdateMutation";
 import { DialogFormActions } from "~/ui/primitives/dialog-form-actions";
 import { Input } from "~/ui/primitives/input";

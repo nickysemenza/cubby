@@ -1,4 +1,4 @@
-import { shortcodeEntities } from "@cubby/schemas/entity-manifest";
+import { shortcodeEntities } from "@cubby/schemas/entity-index";
 import {
   imageShortcode,
   ledgerPartyShortcode,

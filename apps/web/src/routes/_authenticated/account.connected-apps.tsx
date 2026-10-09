@@ -3,7 +3,7 @@ import { createFileRoute } from "@tanstack/react-router";
 import { useState } from "react";
 
 import { OrphanedClientMaintenance } from "~/app/account/orphaned-client-maintenance";
-import { oauth } from "~/integrations/tanstack-query/generated/catalog.gen";
+import { oauth } from "~/integrations/tanstack-query/generated/connected-apps.gen";
 import { formatInstant } from "~/lib/date-format";
 import { pageTitle } from "~/lib/page-title";
 import { ErrorDisplay } from "~/ui/feedback/error-display";

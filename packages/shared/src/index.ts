@@ -37,17 +37,4 @@ export {
   getMiscDisplayName,
 } from "./constants";
 
-export {
-  ExternalFetchError,
-  MAX_EXTERNAL_HTML_BYTES,
-  MAX_EXTERNAL_IMAGE_BYTES,
-  assertResponseContentType,
-  fetchExternalResponse,
-  readResponseWithLimit,
-  responseBodyWithLimit,
-  sanitizeExternalUrl,
-  validateExternalHttpUrl,
-} from "./external-fetch";
-export type { ExternalFetchOptions } from "./external-fetch";
-
 export { isNonFoodCategory } from "./category-theme";

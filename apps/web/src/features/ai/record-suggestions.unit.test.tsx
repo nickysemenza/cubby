@@ -18,7 +18,7 @@ import { toast } from "sonner";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { createEntityMutationPort } from "~/entity/editing/use-entity-commands";
-import { ai } from "~/integrations/tanstack-query/generated/catalog.gen";
+import { ai } from "~/integrations/tanstack-query/generated/ai.gen";
 import { createBrowserTestHarness } from "~/lib/test/browser-harness";
 import { mock } from "~/lib/test/mock-schema";
 import type { EntityBrowserMutationInput } from "~/server/entity-kernel/contracts";

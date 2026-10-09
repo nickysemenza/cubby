@@ -1,5 +1,5 @@
 import type { Entity } from "@cubby/schemas/entity";
-import { shortcodeEntities } from "@cubby/schemas/entity-manifest";
+import { shortcodeEntities } from "@cubby/schemas/entity-index";
 import { DotsThreeIcon } from "@phosphor-icons/react/dist/csr/DotsThree";
 import type { ReactNode } from "react";
 import { createContext, Fragment, useContext, useMemo, useRef } from "react";

@@ -1,5 +1,7 @@
 import type { Entity } from "@cubby/schemas/entity";
-import { entityFieldModels } from "@cubby/schemas/entity-fields";
+import type { entityFieldModels } from "@cubby/schemas/entity-fields";
+
+import { entityFieldModel } from "~/entity/entity-model";
 
 export type EditMode = "create" | "edit";
 
@@ -23,7 +25,7 @@ export function entityFieldPresentation(
   fieldKey: string,
   mode: EditMode,
 ): EntityFieldPresentation {
-  const model = entityFieldModels[entity];
+  const model = entityFieldModel(entity);
   const field = model.fields.find((candidate) => candidate.key === fieldKey);
   if (!field || !field.control) {
     throw new Error(`Field ${entity}.${fieldKey} has no editor control`);

@@ -631,9 +631,57 @@ research acceptance.
   options only during a measured investigation (`directDomUpdates` no longer
   exists in the installed `@tanstack/react-virtual`).
 
-- ⏳ **Residual N+1 repair** when a fresh trace finds concrete fan-out;
-  **Sentry lazy initialization** if a fresh treemap shows Sentry on the
-  critical path.
+- ⏳ **Residual N+1 repair** when a fresh trace finds concrete fan-out.
+
+- 🟢 **Per-entity filter specs.** `entity-filter-bindings.gen.ts` (~137 kB
+  rendered, every entity) reaches each list and detail page through
+  `entity-list-ssr`/`list-columns` → `entity-display` → `filter-manifest`.
+  Generate one filter module per entity, register it from the entity's
+  list/detail client module (ADR 0009), pass it to `entityListLoader`, and
+  import it directly in `app/runs/list-slots.tsx` and
+  `app/calendar/calendar-filter-specs.ts`.
+- 🤔 **Per-entity list contract.** `entity-lists.gen.ts` and
+  `contracts/entity-list.contract.ts` (`listBase`/`listSummary`/
+  `listEnrichment` all-entity unions the browser parses) pull every entity's
+  schemas onto list pages (~600 kB rendered of entity declarations). Decide on
+  type-only browser carriers with server-side input/output parsing in
+  `server/entity-list-runtime.server.ts`; it affects OpenAPI (`native:`).
+- 🟢 **Other all-entities modules on list pages.** `entity-timelines.gen`
+  (via `generic-entity-list`), `entity-details.gen` (`list-scope-chips`),
+  `entity-mutation-results.gen` (`entity-mutation`),
+  `entity-field-schema-maps.gen` (`editing/definitions`), and the global
+  `entity-actions.tsx` registry, which loads every verb's dialog. Move each to
+  the per-entity client module or the slim entity index.
+- 🟢 **Leaf-module repoints inside `@cubby/schemas`.** `product.ts` →
+  `project.ts`/`recipe.ts`; `image.ts` → `purchase-import.ts`;
+  `field-primitives` → the Image declaration; `search`/`recipe` contracts →
+  `mcp.ts` → `meal.ts`; `columnHelpers`/`with-search-hook` →
+  `location.ts`/`product.ts`. Route-eager code already follows the leaf rule
+  in `docs/agents/web-runtime.md`; extend it to list-page code.
+- 🟢 **Interaction-only libraries still eager.** `@dnd-kit` (~110 kB rendered)
+  is in the server-rendered table header (`TableHeaderLayout`); `d3-force` is
+  reached statically from `enrichment-editor`/`workbench-editor-core` through
+  `isDisplayMapping`.
+- 🤔 **Fewer client chunks per page.** A list page loads ~340 chunks, ~half
+  under 4 kB. An entries-aware group over `contracts/*` plus the generated
+  catalog modules pulled route-only contracts into the entry (+0.66 MB gzip),
+  so consolidation needs a narrower grouping, measured with the full-page
+  closure rather than the entry alone.
+- 🟢 **Lint the browser's manual lazy loading.** Manual `import()`/`lazy()` in
+  browser code is for heavy or browser-only libraries, dev-only code, or
+  keeping code out of the Worker (`docs/agents/web-runtime.md`). Add an
+  allowlist rule like `cubby/worker-lazy-import-boundary` for `apps/web/src`
+  outside the server, with a reason per site.
+- 🟢 **Formatter parity at extreme magnitudes.** The web's TypeScript currency
+  and compact nutrition formatters match the shared golden vectors, but differ
+  from Rust past double precision: a 15-digit dollar amount rounds its cents
+  differently, and `compactNumberText(1e21)` prints exponent notation. Add
+  boundary vectors and align both sides.
+- 🟢 **Unit tests preload every entity model.**
+  `tooling/entity-models-test-setup.ts` registers all models, so a unit test
+  cannot catch a callback that reads a secondary entity's model before its
+  route loads it. Register only each test's declared entities; fresh-browser
+  E2E is the guard meanwhile.
 
 ---
 
@@ -1019,6 +1067,22 @@ are implemented. See [local development](local-development.md#fixture-previews-a
   dialect (~211 kB); `agents`' email feature pulls `mimetext` (~156 kB, stub it
   like `cfZodLocalesStub`); `vendor-identity` ships the full `tldts` suffix list
   (~259 kB). Check each with a `dist/server` size diff.
+
+- 🟢 **Finish the Worker's entry-point lazy boundaries.** Two cycles still
+  hide behind `import()` (`cubby/worker-lazy-import-boundary` allowlist):
+  extract the image-detach path from `repo/image.ts` so
+  `database-helpers/crud.ts` imports it statically, and inject the inline
+  transport in `background-tasks/publish.ts` instead of importing `./handle`.
+  Also drop `repo/image-processing.ts`'s dependency on
+  `mutation-side-effects` to shrink the search-document cycle.
+- 🤔 **Generated per-operation lazy tables.** The operation catalog emits ~430
+  `import()` sites and the per-entity list-read bindings stay lazy. Decide in
+  the generator whether they become static below the Worker entry shells;
+  measure startup CPU and cold first-request latency (neither may regress).
+- ⏳ **Watch the second cold API request.** Since auth and the freshness client
+  load at startup, a local second request to `/api/v1/products` took ~18 ms
+  instead of ~4 ms (likely deferred GC). Investigate if production traces
+  show it.
 
 ---
 

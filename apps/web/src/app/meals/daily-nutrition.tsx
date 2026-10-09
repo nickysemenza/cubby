@@ -16,7 +16,7 @@ import { addDays, format, parseISO } from "date-fns";
 import { useState } from "react";
 
 import { entityMutationOptionsFactory } from "~/entity/entity-contracts";
-import { meal } from "~/integrations/tanstack-query/generated/catalog.gen";
+import { meal } from "~/integrations/tanstack-query/generated/meal.gen";
 import { getErrorMessage } from "~/lib/error-utils";
 import { StaticPicker } from "~/ui/combobox/static-picker";
 import { DatePickerInput } from "~/ui/date-picker-input";

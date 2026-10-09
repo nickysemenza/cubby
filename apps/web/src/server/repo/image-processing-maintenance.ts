@@ -6,14 +6,20 @@ import {
 import { eq, sql } from "drizzle-orm";
 import { z } from "zod";
 
-import type { Database, DrizzleTransaction } from "~/server/db";
+import type { Database } from "~/server/db";
 import { appSettings } from "~/server/db/schema";
-import {
-  getDb,
-  unwrapDb,
-  withTransaction,
-} from "~/server/repo/database-helpers";
+import { getDb, withTransaction } from "~/server/repo/database-helpers";
 import { createImageProcessingSubmission } from "~/server/repo/image-processing-history";
+import {
+  IMAGE_PROCESSING_SETTINGS_DEFAULTS,
+  IMAGE_PROCESSING_SETTINGS_ID,
+  readImageProcessingSettings,
+} from "~/server/repo/image-processing-settings";
+import {
+  cleanupExpiredImageProcessingOrphans,
+  publishImageProcessingWakeups,
+  scheduleImageProcessingJobs,
+} from "~/server/services/image-processing-wakeups";
 
 import {
   reclaimExpiredImageProcessingLeases,
@@ -22,10 +28,6 @@ import {
   IMAGE_DESCRIPTION_PROCESSOR_REVISION,
   IMAGE_SUBJECT_LIFT_PROCESSOR_REVISION,
 } from "./image-processing";
-
-// A namespaced settings row, not an import session or a processing run.
-const SETTINGS_ID = "00000000-0000-4000-8000-000000000071";
-const DEFAULTS = { enabled: false, paused: true };
 
 const ALL_IMAGE_PROCESSING_KINDS: readonly ImageProcessingJobKind[] = [
   "describe_image",
@@ -36,33 +38,6 @@ const REVISION_BY_KIND = {
   subject_lift: IMAGE_SUBJECT_LIFT_PROCESSOR_REVISION,
 } satisfies Record<ImageProcessingJobKind, number>;
 
-export async function readImageProcessingSettings(
-  db: Database | DrizzleTransaction,
-  options?: { lock?: boolean },
-) {
-  const query = unwrapDb(db)
-    .select({ metadata: appSettings.metadata })
-    .from(appSettings)
-    .where(eq(appSettings.id, SETTINGS_ID));
-  const rows = options?.lock ? await query.for("update") : await query;
-  const row = rows[0];
-  return row?.metadata ? imageProcessingSettings.parse(row.metadata) : DEFAULTS;
-}
-
-/**
- * Serialize a lease against pause/resume updates. Creating the default row in
- * the same transaction gives even a fresh installation a concrete row lock.
- */
-export async function mayClaimImageProcessingJob(
-  tx: DrizzleTransaction,
-): Promise<boolean> {
-  await tx
-    .insert(appSettings)
-    .values({ id: SETTINGS_ID, metadata: DEFAULTS })
-    .onConflictDoNothing();
-  return !(await readImageProcessingSettings(tx, { lock: true })).paused;
-}
-
 export async function updateImageProcessingSettings(
   db: Database,
   settings: z.infer<typeof imageProcessingSettings>,
@@ -70,21 +45,22 @@ export async function updateImageProcessingSettings(
   await withTransaction(db, async (tx) => {
     await tx
       .insert(appSettings)
-      .values({ id: SETTINGS_ID, metadata: DEFAULTS })
+      .values({
+        id: IMAGE_PROCESSING_SETTINGS_ID,
+        metadata: IMAGE_PROCESSING_SETTINGS_DEFAULTS,
+      })
       .onConflictDoNothing();
     await tx
       .select({ id: appSettings.id })
       .from(appSettings)
-      .where(eq(appSettings.id, SETTINGS_ID))
+      .where(eq(appSettings.id, IMAGE_PROCESSING_SETTINGS_ID))
       .for("update");
     await tx
       .update(appSettings)
       .set({ metadata: settings })
-      .where(eq(appSettings.id, SETTINGS_ID));
+      .where(eq(appSettings.id, IMAGE_PROCESSING_SETTINGS_ID));
   });
   if (!settings.paused) {
-    const { publishImageProcessingWakeups } =
-      await import("~/server/services/image-processing.service");
     await reclaimExpiredImageProcessingLeases(db);
     await publishImageProcessingWakeups(
       db,
@@ -136,8 +112,6 @@ export async function backfillImageProcessing(
   },
 ) {
   const kinds = input.kinds ?? ALL_IMAGE_PROCESSING_KINDS;
-  const { scheduleImageProcessingJobs, publishImageProcessingWakeups } =
-    await import("~/server/services/image-processing.service");
   const settings = await readImageProcessingSettings(db);
   if (settings.paused) return { scheduled: 0, paused: true };
   const submission = await createImageProcessingSubmission(db);
@@ -228,10 +202,6 @@ export async function pruneExecutorlessWaitingAttempts(
 }
 
 export async function repairImageProcessingWork(db: Database) {
-  const {
-    cleanupExpiredImageProcessingOrphans,
-    publishImageProcessingWakeups,
-  } = await import("~/server/services/image-processing.service");
   await cleanupExpiredImageProcessingOrphans(db, 100);
   await pruneExecutorlessWaitingAttempts(db, 500);
   if ((await readImageProcessingSettings(db)).paused) return;

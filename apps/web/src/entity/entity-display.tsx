@@ -1,15 +1,11 @@
 import { amount as amountSchema } from "@cubby/schemas/codec";
 import type { Entity, EntityRef } from "@cubby/schemas/entity";
+import type { EntityFieldModel } from "@cubby/schemas/entity-fields";
 import {
-  entityFieldModels,
-  type EntityFieldModel,
-} from "@cubby/schemas/entity-fields";
-import {
-  entityManifest,
   type BrowserRoutedEntity,
-} from "@cubby/schemas/entity-manifest";
+  entityIndex,
+} from "@cubby/schemas/entity-index";
 import { generatedEntitySort } from "@cubby/schemas/entity-sort";
-import { entitySummary } from "@cubby/schemas/entity-summary";
 import prettyBytes from "pretty-bytes";
 import type { ReactNode } from "react";
 import { z } from "zod";
@@ -17,6 +13,11 @@ import { z } from "zod";
 import { EntityRefLink } from "~/entity/components/entity-ref-link";
 import { ReferencePreview } from "~/entity/components/reference-preview";
 import { EntityDisplayImagesProvider } from "~/entity/entity-media/entity-display-images";
+import {
+  entityDescriptorOf,
+  entityFieldModel,
+  entitySummaryOf,
+} from "~/entity/entity-model";
 import { getEntityFilters } from "~/entity/filter-manifest";
 import { filterUrlKey } from "~/entity/filters";
 import { RecordFieldSuggestion } from "~/features/ai/record-suggestions";
@@ -111,7 +112,7 @@ function renderProseValue(value: ScalarDisplayValue, surface: DisplaySurface) {
 }
 const explainedRecordSchema = z.object({ id: z.string() });
 const entityDisplayFields = (entity: Entity, surface: DisplaySurface) =>
-  entityFieldModels[entity].fields.filter((field) => field.display[surface]);
+  entityFieldModel(entity).fields.filter((field) => field.display[surface]);
 
 /**
  * Columns hidden by default (`display.listHidden`) but still toggleable via
@@ -680,12 +681,12 @@ function relationCountFilter(entity: Entity, field: DisplayField) {
     return null;
   const [source, ...others] = field.provenance.sources;
   if (!source?.relation || others.length > 0) return null;
-  const section = entitySummary[entity].detail.sections.find(
+  const section = entitySummaryOf(entity).detail.sections.find(
     (candidate) =>
       candidate.kind === "relation" && candidate.relation === source.relation,
   );
   if (section?.kind !== "relation") return null;
-  const target = entityManifest[entity].relationships.find(
+  const target = entityDescriptorOf(entity).relationships.find(
     (relation) => relation.key === source.relation,
   )?.target;
   if (target === undefined || !isBrowserRoutedEntity(target)) return null;
@@ -764,7 +765,7 @@ function cohortFilterAction<TRecord extends object>(
 }
 
 /**
- * The detail fields a `fields` section of `entitySummary[entity].detail`
+ * The detail fields a `fields` section of `entitySummaryOf(entity).detail`
  * names, in declared order; without a section, every `display.detail` field
  * by `detailOrder`.
  */
@@ -794,7 +795,7 @@ const entityDetailFields = (
  */
 const foldedSpans = (entity: Entity, fields: readonly DisplayField[]) => {
   const present = new Set(fields.map((field) => field.key));
-  const declared: readonly SpanDeclaration[] = entitySummary[entity].spans;
+  const declared: readonly SpanDeclaration[] = entitySummaryOf(entity).spans;
   const active = declared.filter((span) => present.has(span.start));
   return {
     byStart: new Map(active.map((span) => [span.start, span])),
@@ -807,7 +808,7 @@ const spanDateOf = <TRecord extends object>(
   record: TRecord,
   key: string,
 ): string | null => {
-  const field = entityFieldModels[entity].fields.find(
+  const field = entityFieldModel(entity).fields.find(
     (candidate) => candidate.key === key,
   );
   if (field === undefined) return null;
@@ -840,7 +841,7 @@ export function entityPreviewFacts<TRecord extends object>(
   record: TRecord,
   limit = 4,
 ): { label: string; value: ReactNode }[] {
-  const presentation = entitySummary[entity];
+  const presentation = entitySummaryOf(entity);
   const { hero, preview } = presentation.detail;
   const firstSection = presentation.detail.sections.find(
     (section) => section.kind === "fields",
@@ -861,7 +862,7 @@ export function entityPreviewFacts<TRecord extends object>(
             key !== hero.chip &&
             key !== hero.breadcrumb,
         );
-  const fields = entityFieldModels[entity].fields;
+  const fields = entityFieldModel(entity).fields;
   const facts: { label: string; value: ReactNode }[] = [];
   for (const key of keys) {
     if (preview.length === 0 && facts.length >= limit) break;
@@ -886,7 +887,7 @@ export const entitySectionFields = (
   entity: Entity,
   sectionId: string,
 ): readonly string[] => {
-  const section = entitySummary[entity].detail.sections.find(
+  const section = entitySummaryOf(entity).detail.sections.find(
     (candidate) => candidate.id === sectionId,
   );
   if (section === undefined || section.kind !== "fields")
@@ -1389,8 +1390,8 @@ export function createEntityDisplayColumns<TRecord extends object>(
   )[entity];
   const sortableColumnIds: readonly string[] = sortRoster?.fields ?? [];
   const { only, skipSpecialized, onSaveField } = options;
-  const titleField = entitySummary[entity].titleField;
-  const updateFields: readonly string[] = entityFieldModels[entity].update;
+  const titleField = entityIndex[entity].titleField;
+  const updateFields: readonly string[] = entityFieldModel(entity).update;
   const listFields = orderedListFields(entity);
   const selected =
     only === undefined

@@ -9,6 +9,7 @@ import { z } from "zod";
 
 import { entityDetailFor } from "~/entity/entity-detail";
 import { GenericEntityDetail } from "~/entity/entity-detail/generic-entity-detail";
+import { recipeDetailClient } from "~/entity/generated/clients/recipe.detail.gen";
 import type { EntityDetailByEntity } from "~/entity/generated/entity-details.gen";
 import { ensureDetailRecord } from "~/entity/routing/detail-loader";
 import { detailPage, notFoundPage } from "~/entity/routing/detail-page";
@@ -89,7 +90,7 @@ const RecipeNotFound = notFoundPage("recipe");
 // splitter re-parses an inlined call expression with a JSX-less babel config,
 // so only the identifier path survives a page body that renders JSX.
 const RecipeDetailPage = detailPage({
-  entity: "recipe",
+  client: recipeDetailClient,
   query: (shortcode) => entityDetailFor("recipe").queryOptions(shortcode),
   render: (recipe) => <RecipeDetailBody recipe={recipe} />,
   title: (recipe) => recipe.name,

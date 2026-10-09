@@ -3,10 +3,9 @@ import type {
   FieldSuggestionOutcome,
 } from "@cubby/schemas/ai";
 import type { Entity } from "@cubby/schemas/entity";
-import { entityFieldModels } from "@cubby/schemas/entity-fields";
-import type { ShortcodeEntity } from "@cubby/schemas/entity-manifest";
+import { type ShortcodeEntity } from "@cubby/schemas/entity-index";
 import { fieldResolutionsSchema } from "@cubby/schemas/field-resolution";
-import { parseShortcode } from "@cubby/shared";
+import { parseShortcode } from "@cubby/shared/shortcode";
 import { useQueries } from "@tanstack/react-query";
 import {
   createContext,
@@ -29,6 +28,7 @@ import type { EntityMutationPort } from "~/entity/editing/types";
 import { useEntityCommands } from "~/entity/editing/use-entity-commands";
 import type { StandardEntity } from "~/entity/entity-contracts";
 import { entityDetailFor } from "~/entity/entity-detail";
+import { entityFieldModel } from "~/entity/entity-model";
 import { readReferenceField } from "~/entity/entity-references";
 import { enumFieldLabel } from "~/entity/enum-field-display";
 import { generatedBrowserCrudEntities } from "~/entity/generated/entity-routes.gen";
@@ -169,9 +169,8 @@ function removeFieldPatch(
   freshRecord: SuggestionRecord,
 ): z.output<typeof mutationPatchSchema> {
   const readKey =
-    entityFieldModels[entity].fields.find(
-      (candidate) => candidate.key === field,
-    )?.readKey ?? field;
+    entityFieldModel(entity).fields.find((candidate) => candidate.key === field)
+      ?.readKey ?? field;
   const current = textArraySchema.safeParse(freshRecord[readKey]);
   const removedValues = new Set(
     suggestion.removals.map((removal) => removal.value),
@@ -202,7 +201,7 @@ function setFieldPatch(
     throw new Error("Suggestion inputs changed");
   }
   const resolution = recordFieldResolutions(freshRecord)[field];
-  const resolutionPolicy = entityFieldModels[entity].fields.find(
+  const resolutionPolicy = entityFieldModel(entity).fields.find(
     (candidate) => candidate.key === field,
   )?.resolution;
   const usesInheritedValue =
@@ -221,7 +220,7 @@ function recordValue(
   record: SuggestionRecord,
   key: string,
 ) {
-  const field = entityFieldModels[entity].fields.find(
+  const field = entityFieldModel(entity).fields.find(
     (candidate) => candidate.key === key,
   );
   if (!field) return { value: null, label: null };
@@ -410,11 +409,11 @@ function visibleSuggestTargets(
   fieldKeys: readonly string[],
 ) {
   const visible = new Set(fieldKeys);
-  const updateFields: readonly string[] = entityFieldModels[entity].update;
+  const updateFields: readonly string[] = entityFieldModel(entity).update;
   return suggestTargetsFor(
     entity,
-    entityFieldModels[entity].fields
-      .filter(
+    entityFieldModel(entity)
+      .fields.filter(
         (field) =>
           visible.has(field.key) ||
           (field.reference != null &&
@@ -435,7 +434,7 @@ function firstBasisFieldLabel(
 ): string | null {
   for (const key of targets.basisKeys) {
     if (key.startsWith("__")) continue;
-    const field = entityFieldModels[entity].fields.find(
+    const field = entityFieldModel(entity).fields.find(
       (candidate) => candidate.key === key,
     );
     if (field && !field.reference) return field.label.toLowerCase();
@@ -503,7 +502,7 @@ function statusFieldsForRows(
     for (const field of row.sourceByField.keys()) {
       const outcome = row.outcomes[field];
       if (!outcome) continue;
-      const model = entityFieldModels[entity].fields.find(
+      const model = entityFieldModel(entity).fields.find(
         (candidate) => candidate.key === field,
       );
       const value = recordValue(entity, row.record, field);
@@ -737,7 +736,7 @@ export function RecordSuggestionBoundary({
 
 /** Wraps existing cells without changing their accessor, sorting, clipboard, or normal editor. */
 function findEntityField(entity: StandardEntity, column: string) {
-  return entityFieldModels[entity].fields.find(
+  return entityFieldModel(entity).fields.find(
     (candidate) =>
       candidate.key === column ||
       candidate.display.columnId === column ||
@@ -818,7 +817,7 @@ function ResolvedFieldSuggestion({
     source,
   ]);
   const resolution = recordFieldResolutions(row.record)[field];
-  const resolutionPolicy = entityFieldModels[context.entity].fields.find(
+  const resolutionPolicy = entityFieldModel(context.entity).fields.find(
     (candidate) => candidate.key === field,
   )?.resolution;
   const usesInheritedValue =
@@ -931,7 +930,7 @@ export function RecordRowSuggestions({ record }: { record: unknown }) {
         <Stack key={field} gap="xs">
           <Description size="xs">
             {
-              entityFieldModels[context.entity].fields.find(
+              entityFieldModel(context.entity).fields.find(
                 (candidate) => candidate.key === field,
               )?.label
             }

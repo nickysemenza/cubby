@@ -5,7 +5,7 @@ import {
   taskShortcode,
   recipeShortcode,
 } from "@cubby/schemas/identifiers";
-import { parseShortcode } from "@cubby/shared";
+import { parseShortcode } from "@cubby/shared/shortcode";
 import { createFileRoute, redirect, useNavigate } from "@tanstack/react-router";
 import { lazy, Suspense, useMemo, useCallback } from "react";
 import { z } from "zod";

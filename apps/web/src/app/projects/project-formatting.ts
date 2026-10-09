@@ -1,10 +1,10 @@
 import { TRADE_LABELS } from "@cubby/schemas/project";
-import { capitalize } from "@cubby/shared";
+import { capitalize } from "@cubby/shared/text-case";
 
 import { formatCalendarDay } from "~/lib/date-format";
 import { plainDateDaysBetween } from "~/lib/household-date";
 
-export { capitalize } from "@cubby/shared";
+export { capitalize } from "@cubby/shared/text-case";
 
 export { PROJECT_STATUS_LABELS } from "@cubby/schemas/project-fields";
 

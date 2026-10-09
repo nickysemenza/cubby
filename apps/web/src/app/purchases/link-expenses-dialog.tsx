@@ -20,7 +20,7 @@ import {
   entityDisplayImageKey,
   useEntityDisplayImages,
 } from "~/entity/entity-media/entity-display-images";
-import { purchase as purchaseOperations } from "~/integrations/tanstack-query/generated/catalog.gen";
+import { purchase as purchaseOperations } from "~/integrations/tanstack-query/generated/purchase.gen";
 import { purchaseLabel } from "~/lib/purchase-label";
 import {
   createCurrencyColumn,

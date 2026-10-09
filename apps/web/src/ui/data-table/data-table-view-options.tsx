@@ -1,4 +1,4 @@
-import { humanize } from "@cubby/shared";
+import { humanize } from "@cubby/shared/text-case";
 import { GearSixIcon } from "@phosphor-icons/react/dist/csr/GearSix";
 import type { RowData } from "@tanstack/react-table";
 import { useState } from "react";

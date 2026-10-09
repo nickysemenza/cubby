@@ -58,7 +58,12 @@ export type ContractMember = {
   input?: z.ZodType;
 };
 type Contract = { domain: string; ops: Record<string, ContractMember> };
-export type LoadedContract = { exportName: string; contract: Contract };
+export type LoadedContract = {
+  exportName: string;
+  contract: Contract;
+  /** The declaring module's stem: `product` for `contracts/product.contract.ts`. */
+  module: string;
+};
 export type DeclaredOperation = {
   kind: Kind;
   observability: OperationObservability;
@@ -242,37 +247,40 @@ let cachedContracts: Promise<LoadedContract[]> | undefined;
  * Contracts are the single authority for which operations exist. They are
  * imported at build time rather than parsed: the schemas are real values, so
  * the HTTP contract can reference them by name instead of copying source.
- * Every `*.contract.ts` file must be re-exported from the index barrel, and
- * every export of the barrel must be a contract.
+ * Every `defineContract()` export of a `*.contract.ts` module is a contract.
+ * There is no barrel: each generated client catalog module imports only its
+ * own contract module, so a route pays for the domains it uses. A contract
+ * module without a contract export, or a contract name exported by two
+ * modules, is a generator error.
  */
 export const loadContracts = (): Promise<LoadedContract[]> => {
   cachedContracts ??= (async () => {
-    const indexPath = join(CONTRACTS_ROOT, "index.ts");
     const files = readdirSync(CONTRACTS_ROOT)
       .filter((name) => name.endsWith(".contract.ts"))
       .sort();
-    const reexported = new Set(
-      parseFile(indexPath).body.flatMap((statement) =>
-        statement.type === "ExportNamedDeclaration" && statement.source
-          ? [statement.source.value.replace(/^\.\//u, "")]
-          : [],
-      ),
-    );
-    for (const file of files) {
-      assertContractPurity(join(CONTRACTS_ROOT, file));
-      if (!reexported.has(file.replace(/\.ts$/u, "")))
-        throw new Error(
-          `apps/web/src/contracts/${file} is not exported from apps/web/src/contracts/index.ts.`,
-        );
-    }
-    const index: object = await import(pathToFileURL(indexPath).href);
     const loaded: LoadedContract[] = [];
-    for (const [exportName, value] of Object.entries(index)) {
-      if (!isContract(value))
+    const owners = new Map<string, string>();
+    for (const file of files) {
+      const path = join(CONTRACTS_ROOT, file);
+      assertContractPurity(path);
+      const module = file.slice(0, -".contract.ts".length);
+      const exports: object = await import(pathToFileURL(path).href);
+      let found = false;
+      for (const [exportName, value] of Object.entries(exports)) {
+        if (!isContract(value)) continue;
+        const owner = owners.get(exportName);
+        if (owner !== undefined)
+          throw new Error(
+            `${exportName} is exported by both apps/web/src/contracts/${owner} and ${file}.`,
+          );
+        owners.set(exportName, file);
+        loaded.push({ exportName, contract: value, module });
+        found = true;
+      }
+      if (!found)
         throw new Error(
-          `apps/web/src/contracts/index.ts export ${exportName} is not a defineContract() value.`,
+          `apps/web/src/contracts/${file} exports no defineContract() value.`,
         );
-      loaded.push({ exportName, contract: value });
     }
     return loaded.sort((a, b) => a.exportName.localeCompare(b.exportName));
   })();
@@ -339,11 +347,13 @@ const resolveContractBinding = async (
       `${relative(ROOT, path)} imports ${binding.source}, which does not exist.`,
     );
   const loaded = (await loadContracts()).find(
-    (candidate) => candidate.exportName === binding.imported,
+    (candidate) =>
+      candidate.exportName === binding.imported &&
+      binding.source === `~/contracts/${candidate.module}.contract`,
   );
   if (!loaded) {
     throw new Error(
-      `${relative(ROOT, path)} implements ${identifier}, but ${binding.source} does not export a contract named ${binding.imported} through apps/web/src/contracts/index.ts.`,
+      `${relative(ROOT, path)} implements ${identifier}, but ${binding.source} does not export a contract named ${binding.imported}.`,
     );
   }
   return loaded;

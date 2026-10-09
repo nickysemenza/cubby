@@ -81,7 +81,7 @@ import {
 import { readOperation } from "~/server/repo/run-operation";
 import { resolveOrThrow } from "~/server/repo/shortcode-resolver";
 import { executeAtomicOperation } from "~/server/runs/operation";
-import { scheduleImageProcessingJobs } from "~/server/services/image-processing.service";
+import { scheduleImageProcessingJobs } from "~/server/services/image-processing-wakeups";
 import {
   deleteStoredObjects,
   importImageFromUrl,

@@ -1,7 +1,7 @@
 import { fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-import { entityGraph } from "~/integrations/tanstack-query/generated/catalog.gen";
+import { entityGraph } from "~/integrations/tanstack-query/generated/entity-graph.gen";
 import { createBrowserTestHarness } from "~/lib/test/browser-harness";
 
 import { RelationFieldWorkbench } from "./relation-field-workbench";

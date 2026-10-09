@@ -6,7 +6,7 @@ import type { ReactNode } from "react";
 import { describe, expect, it } from "vitest";
 
 import type { EntityMutationTransport } from "~/entity/entity-mutation-command";
-import { entityMutation } from "~/integrations/tanstack-query/generated/catalog.gen";
+import { entityMutation } from "~/integrations/tanstack-query/generated/entity-mutation.gen";
 import { StartOperationError } from "~/integrations/tanstack-query/start-transport";
 import { createBrowserTestHarness } from "~/lib/test/browser-harness";
 import { mock } from "~/lib/test/mock-schema";

@@ -1,7 +1,8 @@
 import type { Entity } from "@cubby/schemas/entity";
 import type { FieldExplanationOutput } from "@cubby/schemas/field-explanation";
 import type { FieldResolution } from "@cubby/schemas/field-resolution";
-import { capitalize, parseShortcode } from "@cubby/shared";
+import { parseShortcode } from "@cubby/shared/shortcode";
+import { capitalize } from "@cubby/shared/text-case";
 import type { ReactNode } from "react";
 import { z } from "zod";
 

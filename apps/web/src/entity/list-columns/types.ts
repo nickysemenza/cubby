@@ -1,4 +1,4 @@
-import type { BrowserRoutedEntity } from "@cubby/schemas/entity-manifest";
+import { type BrowserRoutedEntity } from "@cubby/schemas/entity-index";
 import type { CellData } from "@tanstack/react-table";
 import type { ReactNode } from "react";
 

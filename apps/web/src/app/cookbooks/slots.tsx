@@ -6,12 +6,12 @@ import { useQueryClient } from "@tanstack/react-query";
 import { Link, useNavigate } from "@tanstack/react-router";
 import { useState } from "react";
 
-import { DetailAction } from "~/entity/entity-detail/detail-action-bar";
-import type { DetailSlotComponent } from "~/entity/entity-detail/detail-slots";
+import { DetailAction } from "~/entity/entity-detail/detail-action-context";
+import type { DetailSlotComponent } from "~/entity/entity-detail/detail-hooks";
 import { EntityReportSlot } from "~/entity/entity-detail/report-slot";
 import { IngredientUsagePanel } from "~/features/ingredients/ingredient-usage-panel";
 import { ripple } from "~/integrations/tanstack-query/cache-tags";
-import { recipeStreams } from "~/integrations/tanstack-query/generated/catalog.gen";
+import { recipeStreams } from "~/integrations/tanstack-query/generated/recipe.gen";
 import { invalidateOperationTags } from "~/integrations/tanstack-query/operation-cache";
 import { useBulkStream } from "~/ui/hooks/useBulkStream";
 import { Row, Stack } from "~/ui/layout";

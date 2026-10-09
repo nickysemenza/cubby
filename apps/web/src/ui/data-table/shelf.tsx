@@ -1,5 +1,5 @@
 import type { Entity } from "@cubby/schemas/entity";
-import { entitySummary } from "@cubby/schemas/entity-summary";
+import { entityIndex } from "@cubby/schemas/entity-index";
 import type { ListGroupSummary } from "@cubby/schemas/pagination";
 import { ArrowUpRightIcon } from "@phosphor-icons/react/dist/csr/ArrowUpRight";
 import { Link } from "@tanstack/react-router";
@@ -143,7 +143,7 @@ function ShelfIdentityFallback({
       </span>
       {!compact && (
         <span className="font-mono text-2xs tracking-[0.16em] text-muted-foreground uppercase">
-          {entitySummary[entity].singular}
+          {entityIndex[entity].singular}
         </span>
       )}
     </div>

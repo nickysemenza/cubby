@@ -1,4 +1,4 @@
-import { UNRESOLVABLE_ENTITY_FILTER } from "@cubby/shared";
+import { UNRESOLVABLE_ENTITY_FILTER } from "@cubby/shared/filter";
 import { describe, expect, it } from "vitest";
 import { z } from "zod";
 

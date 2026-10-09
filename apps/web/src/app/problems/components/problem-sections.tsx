@@ -1,6 +1,6 @@
 import type { Entity } from "@cubby/schemas/entity";
+import { type ShortcodeEntity } from "@cubby/schemas/entity-index";
 import type { ReferentialLivenessViolation } from "@cubby/schemas/entity-integrity";
-import type { ShortcodeEntity } from "@cubby/schemas/entity-manifest";
 import { displayGtin } from "@cubby/schemas/external-id";
 import {
   type AllProblems,
@@ -16,7 +16,7 @@ import type {
   ProjectAttentionItem,
   ProjectAttentionType,
 } from "@cubby/schemas/project";
-import { humanize } from "@cubby/shared";
+import { humanize } from "@cubby/shared/text-case";
 import { DownloadIcon } from "@phosphor-icons/react/dist/csr/Download";
 import { FunnelIcon } from "@phosphor-icons/react/dist/csr/Funnel";
 import { ImageBrokenIcon } from "@phosphor-icons/react/dist/csr/ImageBroken";
@@ -50,10 +50,8 @@ import {
 } from "~/entity/entities";
 import type { ProblemQuery } from "~/entity/problem-query";
 import { problemQuery } from "~/entity/problem-registry";
-import {
-  product as productOperations,
-  maintenance,
-} from "~/integrations/tanstack-query/generated/catalog.gen";
+import { maintenance } from "~/integrations/tanstack-query/generated/maintenance.gen";
+import { product as productOperations } from "~/integrations/tanstack-query/generated/product.gen";
 import { formatCalendarDay, formatInstant } from "~/lib/date-format";
 import { countLabel } from "~/lib/pluralize";
 import { toastMutationWarnings } from "~/lib/recompute-summary";

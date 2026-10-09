@@ -8,7 +8,7 @@ import {
 } from "~/entity/entity-mutation";
 import { entityRipple } from "~/integrations/tanstack-query/cache-tags";
 import type { CubbyOperationMeta } from "~/integrations/tanstack-query/operation-meta";
-import { entityBrowserMutationCommandSchema } from "~/server/entity-kernel/contracts";
+import type { entityBrowserMutationCommandSchema } from "~/server/entity-kernel/contracts";
 
 import type { EntityEditResultFor } from "./editing/intent-types";
 import {

@@ -1,8 +1,4 @@
 import type { ChildTableDeclaration } from "../../../../packages/schemas/src/entity-definitions/child-definition.ts";
-import {
-  entityFieldControlKinds as fieldControlKinds,
-  entityFieldKinds as fieldKinds,
-} from "../../../../packages/schemas/src/entity-definitions/definition.ts";
 import { compactLiteral, generatedHeader } from "../../artifacts.ts";
 import {
   EntityDeclarationError,
@@ -17,6 +13,7 @@ import type {
   SourceRef,
 } from "../declarations.ts";
 import { renderFieldExplanationReference } from "./field-explanations-reference.ts";
+import { renderEntityModelArtifacts } from "./entity-models.ts";
 import { renderRecord } from "./record.ts";
 import { renderEntityTablesArtifact } from "./tables.ts";
 import { browserRoutes, lowerCamelCase } from "./routes.ts";
@@ -408,6 +405,34 @@ export const renderEntityArtifacts = (
             : `z.object(${filterSchema.export})`;
       return `  ${JSON.stringify(entity.key)}: entitySchema(${JSON.stringify(entity.key)},{filters:${filters},createInput:${contract.create?.export ?? "null"},updateInput:${contract.update?.export ?? "null"},bulkUpdateInput:${bulkUpdateInput},output:${contract.output.export},detail:${contract.detail.export},list:${contract.list.export},mcpOutput:${contract.mcpOutput.export},mcpDetail:${contract.mcpDetail.export},mcpList:${contract.mcpList.export}}),`;
     })
+    .join("\n");
+  // The browser editor's parsers: create/update/bulk-update inputs only, so
+  // the browser never imports the server's schema bindings.
+  const editInputImports = new Map<string, Set<string>>();
+  const editInputBindings = schemaEntitySpecs
+    .map((entity) => {
+      const { contract } = entity;
+      for (const ref of [contract.create, contract.update]) {
+        if (ref === null) continue;
+        const exports = editInputImports.get(ref.module) ?? new Set<string>();
+        exports.add(ref.export);
+        editInputImports.set(ref.module, exports);
+      }
+      const bulkUpdateInput =
+        entity.bulkUpdateFields === null
+          ? "null"
+          : `${contract.update?.export}.pick({${entity.bulkUpdateFields
+              .map((field) => `${JSON.stringify(field)}:true`)
+              .join(",")}}).strict()`;
+      return `  ${JSON.stringify(entity.key)}: {createInput:${contract.create?.export ?? "null"},updateInput:${contract.update?.export ?? "null"},bulkUpdateInput:${bulkUpdateInput}},`;
+    })
+    .join("\n");
+  const editInputImportSource = [...editInputImports.entries()]
+    .sort(([left], [right]) => left.localeCompare(right))
+    .map(
+      ([module, exports]) =>
+        `import { ${[...exports].sort().join(", ")} } from ${JSON.stringify(module)};`,
+    )
     .join("\n");
   const bindings = entities
     .filter((entity) => entity.shortcode !== null)
@@ -1093,134 +1118,12 @@ export const entityListSummaryOutputSchema = z.object({entity:z.enum(listEntitie
     ...renderCoverageTotalsArtifacts(entities),
     ...renderImagePolicyArtifacts(entities),
     ...renderFieldExplanationReference(entities),
-    {
-      relativePath:
-        "packages/schemas/src/generated/entity-manifest-data.gen.ts",
-      source:
-        generatedHeader +
-        'import type { Entity } from "../entity";\n' +
-        'import type { EntityDescriptor } from "../entity-manifest";\n\n' +
-        renderRecord({
-          name: "generatedEntityManifest",
-          entries: Object.fromEntries(
-            entities.map(({ key, descriptor }) => [key, descriptor]),
-          ),
-          satisfies: "Record<Entity, EntityDescriptor>",
-          comment: "// Generated data stays one entity per line.",
-        }),
-    },
-    {
-      relativePath: "packages/schemas/src/generated/entity-summary.gen.ts",
-      source:
-        generatedHeader +
-        // `entity-core` rather than `entity`: this artifact is imported by
-        // `identifiers.ts`, and `entity.ts` reaches back into the (much
-        // larger) manifest module.
-        'import type { Entity } from "../entity-core";\n' +
-        'import type { CompiledEntityPresentation } from "../entity-definitions/definition";\n\n' +
-        'export { WAYFINDING_DOMAINS, WAYFINDING_DOMAIN_PRESENTATION } from "../entity-definitions/definition";\n' +
-        'export type { CompiledEntityPresentation as EntityPresentation, EntityDetailSection, EntityListView, WayfindingDomain } from "../entity-definitions/definition";\n\n' +
-        "/**\n" +
-        " * Display names for one entity, exactly as its literal declares them.\n" +
-        " *\n" +
-        " * `singular` is Title Case and names ONE record; `plural` is the\n" +
-        " * nav/section name, which is not a pluralization of the singular (see the\n" +
-        " * `names` block in `packages/schemas/src/entity-definitions/*.entity.ts`). It is\n" +
-        " * `null` for the entities that have no browser route to name a section of.\n" +
-        " */\n" +
-        "export type EntityNames = { singular: string; plural: string | null };\n\n" +
-        "/**\n" +
-        " * One entity's names plus its `presentation` block with the hero defaults\n" +
-        " * resolved: domain, description, empty-state copy, icon names, title field,\n" +
-        " * detail sections, list views, edit rules — plus the resolved list search\n" +
-        " * (the compiler's `searchQuery` fallback included) and the bulk-update field\n" +
-        " * roster. Data only — for eagerly-loaded client code (the entity registry,\n" +
-        " * navigation, list hooks, bulk edit, `identifiers.ts`) that must not pull\n" +
-        " * the inspector.\n" +
-        " */\n" +
-        "export type EntitySummary = EntityNames & CompiledEntityPresentation & {\n" +
-        "  primarySearch: { key: string; placeholder: string } | null;\n" +
-        "  bulkUpdate: { fields: readonly string[] } | null;\n" +
-        "  /** The kernel serves `merge`, so the generic merge verb applies. */\n" +
-        "  merge: boolean;\n" +
-        "};\n\n" +
-        "/**\n" +
-        " * Every entity key, in declaration order. The leaf roster: `entity-core`'s\n" +
-        " * `entitySchema` is `z.enum(entityKeys)`, so this tuple carries no `Entity`\n" +
-        " * constraint of its own (the `satisfies` on `entitySummary` below is fine —\n" +
-        " * it only reads `Entity` after `entityKeys` is fixed).\n" +
-        " */\n" +
-        renderRecord({
-          name: "entityKeys",
-          entries: entities.map(({ key }) => key),
-        }) +
-        "\n" +
-        renderRecord({
-          name: "entitySummary",
-          entries: Object.fromEntries(
-            entities.map((entity) => [
-              entity.key,
-              {
-                ...entity.inspector,
-                primarySearch: resolvedPrimarySearch(entity),
-                bulkUpdate: bulkUpdateFor(entity),
-                merge: entity.operationOwners.merge === "kernel",
-              },
-            ]),
-          ),
-          satisfies: "Record<Entity, EntitySummary>",
-          comment: "// Generated summary stays one entity per line.",
-        }) +
-        "\n" +
-        'type GeneratedDetailSection<E extends Entity> = (typeof entitySummary)[E]["detail"]["sections"][number];\n' +
-        'type GeneratedListView<E extends Entity> = (typeof entitySummary)[E]["list"]["views"][number];\n' +
-        "/** Literal detail slot ids declared by one entity. */\n" +
-        'export type DetailSlotId<E extends Entity> = Extract<GeneratedDetailSection<E>, { kind: "slot" }>["id"];\n' +
-        "/** Literal list slot ids declared by one entity. */\n" +
-        'export type ListSlotId<E extends Entity> = Extract<GeneratedListView<E>, { kind: "slot" }>["id"];\n',
-    },
-    {
-      relativePath: "packages/schemas/src/generated/entity-field-model.gen.ts",
-      source:
-        generatedHeader +
-        'import type { Entity } from "../entity-core";\n\n' +
-        `export type GeneratedEntityFieldKind = ${fieldKinds.map((kind) => JSON.stringify(kind)).join(" | ")};\n` +
-        `export type GeneratedEntityFieldControlKind = ${fieldControlKinds.map((kind) => JSON.stringify(kind)).join(" | ")};\n\n` +
-        "type GeneratedEntityFieldResolutionValue = string | number | boolean | null | readonly GeneratedEntityFieldResolutionValue[] | GeneratedEntityFieldResolutionObject;\ninterface GeneratedEntityFieldResolutionObject { readonly [key: string]: GeneratedEntityFieldResolutionValue }\n\n" +
-        'export type GeneratedEntityFieldProvenance = { kind: "reference" | "relation" | "derived"; sources: readonly { entity: Entity | null; label: string | null; relation: string | null }[] };\n\n' +
-        "export type GeneratedEntityFieldModel = {\n" +
-        '  fields: readonly { key: string; kind: GeneratedEntityFieldKind; nullable: boolean; requiredOnCreate: boolean; label: string; description: string | null; readKey: string | null; reference: { entity: string; multiple: boolean; scope: readonly { sourceField: string; targetField: string }[]; filters: readonly { field: string; values: readonly string[] }[] } | null; explanation: { ruleId: string; version: number; description: string; readPath?: string; resolver: "field" | "inventoryOwnership" | "productValuation" | "imageRepresentation" | "imageCapture" | "productQuantity" | "recipeTotals" | "locationValuation" | "merchantVendorInference" | "expenseAttribution"; projections?: Readonly<{ list?: string; detail?: string; summary?: string }>; sourceDependencies?: readonly Readonly<{ path: string; label: string }>[]; actions?: readonly ("confirmOwner" | "inheritOwner" | "editSource")[] } | null; resolution: { reset: Readonly<Record<string, GeneratedEntityFieldResolutionValue>>; none: Readonly<Record<string, GeneratedEntityFieldResolutionValue>> | null; redundancy: "eligible" | "intentional" } | null; provenance: GeneratedEntityFieldProvenance | null; control: { kind: GeneratedEntityFieldControlKind; renderer: string | null; options: readonly { value: string; label: string; description?: string; color?: string }[] | null; width: "half" | null; placeholder: string | null; initial: "today" | { value: string | number | boolean | null } | null; required: boolean | null; suggest: { readonly basis: readonly string[]; readonly mode: "fill" | "prune"; readonly reviewRequired: boolean } | null } | null; display: { list: boolean; detail: boolean; columnId: string | null; standard: "name" | "image" | null; detailOrder: number | null; listOrder: number | null; width: "xs" | "sm" | "md" | "lg" | null; readPath: string | null; labelPath: string | null; detailLabelPath?: string | null; itemsPath?: string | null; format: "currency" | "signedCurrency" | "plainDate" | "timestamp" | "external-link" | "amount" | "presence" | "bytes" | "join" | "arrayCount" | "count" | null; renderer: { list: string | null; detail: string | null } | null; mobile: { slot: string; priority: number; interactive?: boolean } | null; listHidden: boolean; referencePreviewLimit: number | null; valueOptions: { value: string; label: string; color?: string }[] | null; preview: boolean } }[];\n' +
-        '  storage: readonly { key: string; column: string; kind: GeneratedEntityFieldKind; nullable: boolean; default: "none" | "generated" | "now" | "literal"; defaultValue: unknown; reference: string | null; specialized: string | null }[];\n' +
-        "  create: readonly string[];\n" +
-        "  update: readonly string[];\n" +
-        "  bulk: readonly string[];\n" +
-        "  audit: readonly string[];\n" +
-        "  output: readonly string[];\n" +
-        "  research?: { readonly fillFields: readonly string[] };\n" +
-        "};\n\n" +
-        renderRecord({
-          name: "generatedEntityFieldModels",
-          entries: fieldModels,
-          satisfies: "Record<Entity, GeneratedEntityFieldModel>",
-          comment: "// One authoritative field model per compiled entity.",
-        }) +
-        "\n" +
-        'type GeneratedEntityField<E extends Entity> = (typeof generatedEntityFieldModels)[E]["fields"][number];\n' +
-        "type RendererValue<T> = T extends { renderer: infer R } ? Exclude<R, null> : never;\n" +
-        'type ControlRendererIdFor<E extends Entity> = RendererValue<NonNullable<GeneratedEntityField<E>["control"]>>;\n' +
-        'type DisplayRendererIdFor<E extends Entity, K extends "list" | "detail"> = GeneratedEntityField<E>["display"]["renderer"] extends infer R ? R extends Record<K, infer V> ? Exclude<V, null> : never : never;\n' +
-        "\n" +
-        "/** Every specialized control renderer declared by an entity field. */\n" +
-        "export type ControlRendererId = { [E in Entity]: ControlRendererIdFor<E> }[Entity];\n" +
-        "/** Specialized list renderers declared for one entity's fields. */\n" +
-        'export type ListRendererId<E extends Entity> = DisplayRendererIdFor<E, "list">;\n' +
-        "/** Specialized detail renderers declared for one entity's fields. */\n" +
-        'export type DetailRendererId<E extends Entity> = DisplayRendererIdFor<E, "detail">;\n\n' +
-        '// Every `"entity.field"` whose control declares `suggest` (the\n' +
-        "// decision-tier auto-fill target list), across all entities.\n" +
-        `export const suggestFieldKeys = ${compactLiteral(suggestFieldKeys)} as const;\n` +
-        "export type GeneratedSuggestFieldKey = (typeof suggestFieldKeys)[number];\n",
-    },
+    ...renderEntityModelArtifacts({
+      entities,
+      fieldModels,
+      inspectorMetadata,
+      suggestFieldKeys,
+    }),
     {
       relativePath: "packages/schemas/src/generated/entity-edit-intents.gen.ts",
       source:
@@ -1304,59 +1207,6 @@ export const entityListSummaryOutputSchema = z.object({entity:z.enum(listEntitie
       source: renderEntityTablesArtifact(entities, moduleChildren),
     },
     ...fieldSchemaArtifacts,
-    {
-      relativePath: "packages/schemas/src/generated/entity-inspector.gen.ts",
-      source:
-        generatedHeader +
-        'import type { Entity } from "../entity";\n\n' +
-        'import type { CompiledEntityPresentation } from "../entity-definitions/definition";\n\n' +
-        "export type EntityInspectorMetadata = CompiledEntityPresentation & {\n" +
-        "  singular: string;\n" +
-        "  plural: string | null;\n" +
-        "  shortcodePrefix: string | null;\n" +
-        "  searchable: boolean;\n" +
-        "  primarySearch: { key: string; placeholder: string } | null;\n" +
-        "  browserRouted: boolean;\n" +
-        "  auditable: boolean;\n" +
-        "  hasImages: boolean;\n" +
-        '  imageStorage: false | "gallery" | "cover" | "logo";\n' +
-        "  displayImages: boolean;\n" +
-        "  countable: boolean;\n" +
-        '  kernelActions: readonly ("get" | "list" | "search" | "create" | "update" | "bulkUpdate" | "delete" | "merge" | "resolve")[];\n' +
-        "  filterUrlKeys: readonly string[];\n" +
-        "  filterDescriptors: readonly EntityFilterDescriptorMetadata[];\n" +
-        '  mcpOperations: readonly ("get" | "list" | "search" | "create" | "update" | "delete" | "bulkUpdate" | "merge")[];\n' +
-        '  mcpOwner: "kernel" | "workflow" | null;\n' +
-        '  lifecycle: { softDelete: boolean; delete: { mode: "soft" | "hard"; bulk: boolean } | null; merge: boolean; bulkUpdate: { fields: readonly string[] } | null };\n' +
-        '  operationOwners: { delete: "kernel" | "workflow" | null; merge: "kernel" | "workflow" | null };\n' +
-        "  sourceRefs: { create?: string; update?: string; output: string; list: string; detail: string; mcpOutput: string; mcpList: string; mcpDetail: string } | null;\n" +
-        "  ports: EntityPortSourceRoster;\n" +
-        "  references: readonly Entity[];\n" +
-        "};\n\n" +
-        "type EntityPortSourceRef = { module: string; export: string };\n" +
-        "type EntityInspectorOptionValue = string | number | boolean | null;\n" +
-        "type EntityInspectorOption = Readonly<Record<string, EntityInspectorOptionValue>>;\n" +
-        "type EntityFilterDescriptorMetadata = {\n" +
-        "  columnId: string; field: string | null; urlKey: string; kind: string; placeholder: string;\n" +
-        "  options: readonly EntityInspectorOption[] | null; optionsRef: EntityPortSourceRef | null; optionsKey: string | null;\n" +
-        '  label: string | null; schemaDescription: string | null; deriveSchema: boolean; schemaFromRead: boolean; brandRef: { entity: string } | null; expandRef: EntityPortSourceRef | null; schemaRef: EntityPortSourceRef | null; stored: { columns: readonly string[]; array: boolean } | null; range: { kind: "number" | "date"; int: boolean; nonnegative: boolean; finite: boolean; describe: { lower: string; upper: string } | null } | null;\n' +
-        "  urlOnly: boolean; nullable: { field: string; label: string } | null;\n" +
-        '  wire: { kind: "param"; name: string } | { kind: "range"; from: string; to: string; presence?: string };\n' +
-        "};\n" +
-        "type EntityPortSourceRoster = {\n" +
-        "  repository: EntityPortSourceRef | null;\n" +
-        "  references: { label: EntityPortSourceRef | null; resolver: EntityPortSourceRef | null };\n" +
-        "  filters: EntityPortSourceRef | null;\n" +
-        "  search: { projection: EntityPortSourceRef | null; semanticText: EntityPortSourceRef | null; dependentRefresh: EntityPortSourceRef | null };\n" +
-        "  timeline: EntityPortSourceRef | null;\n" +
-        "};\n\n" +
-        renderRecord({
-          name: "entityInspectorMetadata",
-          entries: inspectorMetadata,
-          satisfies: "Record<Entity, EntityInspectorMetadata>",
-          comment: "// Generated inspector metadata stays one entity per line.",
-        }),
-    },
     {
       relativePath: "apps/web/src/entity/generated/entity-details.gen.ts",
       source:
@@ -1493,6 +1343,17 @@ export const entityListSummaryOutputSchema = z.object({entity:z.enum(listEntitie
     ...renderSwiftEntityCatalog(entities),
     ...renderStructuredValueSchemas(entities),
     ...renderSwiftSharedConstants(),
+    {
+      relativePath: "apps/web/src/entity/generated/entity-edit-inputs.gen.ts",
+      source:
+        generatedHeader +
+        `${editInputImportSource}\n\n` +
+        "// The browser editor parses a draft with its entity's own input schema\n" +
+        "// before submitting; the server kernel re-parses every command.\n" +
+        "// oxfmt-ignore\n" +
+        `export const ENTITY_EDIT_INPUTS = {\n${editInputBindings}\n} as const;\n` +
+        "export type EntityEditInputMap = typeof ENTITY_EDIT_INPUTS;\n",
+    },
     {
       relativePath: "apps/web/src/server/generated/entity-bindings.gen.ts",
       source:

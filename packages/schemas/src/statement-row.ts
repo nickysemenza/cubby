@@ -1,4 +1,8 @@
 import { z } from "zod";
+import {
+  statementRowDisposition,
+  statementRowMatchState,
+} from "./statement-row-fields";
 import { externalIdSource } from "./external-id";
 import { money } from "./money";
 import { createSortPaginationFields } from "./pagination";
@@ -83,9 +87,6 @@ export const statementCsvCommitOut = z.object({
 export const statementDateKind = z.enum(["posted", "transaction", "unknown"]);
 export type StatementDateKind = z.infer<typeof statementDateKind>;
 
-export const statementRowDisposition = z.enum(["open", "ignored"]);
-export type StatementRowDisposition = z.infer<typeof statementRowDisposition>;
-
 /**
  * Why a row will never match. Parallel in style to `dataExceptionReason`, but a
  * deliberately separate set: that vocabulary is about a record Cubby owns being
@@ -104,18 +105,6 @@ export type StatementRowDispositionReason = z.infer<
 >;
 
 export const statementRowProviderStatus = z.enum(["posted", "pending"]);
-
-/**
- * Derived from whether a live transaction carries the row's `(source,
- * externalId)` pair — never stored, so it cannot go stale.
- */
-export const statementRowMatchState = z.enum([
-  "matched",
-  "unmatched",
-  "superseded",
-  "ignored",
-]);
-export type StatementRowMatchState = z.infer<typeof statementRowMatchState>;
 
 export const statementImportOut = z.object({
   source: z.string(),

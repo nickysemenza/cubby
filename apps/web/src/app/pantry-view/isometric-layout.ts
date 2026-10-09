@@ -1,10 +1,12 @@
 import type { InfLocation } from "@cubby/schemas/location";
 import {
   getCategoryColor,
+  type ProductCategory,
+} from "@cubby/shared/category-theme";
+import {
   getLocationTypeColor,
   type LocationType,
-  type ProductCategory,
-} from "@cubby/shared";
+} from "@cubby/shared/location-type-theme";
 import { sum, sumBy } from "es-toolkit";
 
 import { formatCurrency } from "~/lib/utils";

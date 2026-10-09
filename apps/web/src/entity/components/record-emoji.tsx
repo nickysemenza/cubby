@@ -1,6 +1,6 @@
 import { recordEmojiInput } from "@cubby/schemas/emoji";
 import { entitySchema, type Entity } from "@cubby/schemas/entity";
-import { entityInspectorMetadata } from "@cubby/schemas/entity-manifest";
+import { entityIndex } from "@cubby/schemas/entity-index";
 import { z } from "zod";
 
 import { EntityIcon } from "~/entity/entities";
@@ -20,7 +20,8 @@ export function RecordEmoji({
   size?: number;
   className?: string;
 }) {
-  const iconField = entityInspectorMetadata[entity]?.recordIconEntityField;
+  // A legacy audit row can name a kind that is no longer an entity.
+  const iconField = entityIndex[entity]?.recordIconEntityField;
   const iconData = z.record(z.string(), z.unknown()).catch({}).parse(record);
   const icon = entitySchema.safeParse(iconField ? iconData[iconField] : null);
   const legacy = Boolean(emoji && !recordEmojiInput.safeParse(emoji).success);

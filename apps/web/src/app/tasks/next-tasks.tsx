@@ -15,7 +15,7 @@ import {
   useEntityDisplayImages,
 } from "~/entity/entity-media/entity-display-images";
 import { fieldEnumOptions } from "~/entity/enum-field-display";
-import { task } from "~/integrations/tanstack-query/generated/catalog.gen";
+import { task } from "~/integrations/tanstack-query/generated/task.gen";
 import { CalendarDate } from "~/ui/common/calendar-date";
 import { renderOptionCell } from "~/ui/data-table/columnHelpers";
 import { ErrorDisplay } from "~/ui/feedback/error-display";

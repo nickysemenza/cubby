@@ -8,19 +8,19 @@ import { TIER1_NUTRIENT_KEYS } from "@cubby/usda";
 import { render, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
+import { runDetailClient } from "~/entity/generated/clients/run.detail.gen";
 import {
   detailEntities,
   getEntityDetailOutputSchema,
 } from "~/entity/generated/entity-details.gen";
 import { inventoryListItem } from "~/entity/generated/entity-lists.gen";
-import {
-  entityList,
-  entityTimeline,
-} from "~/integrations/tanstack-query/generated/catalog.gen";
+import { entityList } from "~/integrations/tanstack-query/generated/entity-list.gen";
+import { entityTimeline } from "~/integrations/tanstack-query/generated/entity-timeline.gen";
 import { createBrowserTestHarness } from "~/lib/test/browser-harness";
 import { mock } from "~/lib/test/mock-schema";
 
 import { categorySummaryFixture } from "../../../tooling/product-category-fixtures";
+import { DetailHooksProvider } from "./detail-hooks";
 import type { DetailRecordOf, GenericDetailEntity } from "./detail-record";
 import { GenericEntityDetail } from "./generic-entity-detail";
 
@@ -167,11 +167,13 @@ describe("GenericEntityDetail", () => {
   // they did (AI usage, changes) and none of the import workflow.
   it("gives an AI run its usage and changes but no import workflow", () => {
     render(
-      <GenericEntityDetail
-        entity="run"
-        record={{ ...recordFor("run"), purpose: "ai_suggest" }}
-        operations={operations}
-      />,
+      <DetailHooksProvider hooks={runDetailClient.hooks}>
+        <GenericEntityDetail
+          entity="run"
+          record={{ ...recordFor("run"), purpose: "ai_suggest" }}
+          operations={operations}
+        />
+      </DetailHooksProvider>,
       { wrapper: harness.wrapper },
     );
     const titles = screen

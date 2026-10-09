@@ -7,7 +7,7 @@ import type { EntityListParamsByEntity } from "~/entity/generated/entity-lists.g
 import { EditableTagsCell } from "~/features/recipes/editable-tags-cell";
 import { RecipeTag } from "~/features/recipes/recipe-tag";
 import { formatYield } from "~/features/recipes/recipe-yield";
-import { relatedData } from "~/integrations/tanstack-query/generated/catalog.gen";
+import { relatedData } from "~/integrations/tanstack-query/generated/related-data.gen";
 import { countLabel } from "~/lib/pluralize";
 import {
   numberCellData,

@@ -16,7 +16,7 @@ import {
   ProductImageSummariesProvider,
   useHydratedProductImages,
 } from "~/features/products/product-image-summaries";
-import { relatedData } from "~/integrations/tanstack-query/generated/catalog.gen";
+import { relatedData } from "~/integrations/tanstack-query/generated/related-data.gen";
 import { formatCurrencyRange, rangeMidpoint } from "~/lib/format-range";
 import { formatCurrency } from "~/lib/utils";
 import { renderOptionCell } from "~/ui/data-table/columnHelpers";

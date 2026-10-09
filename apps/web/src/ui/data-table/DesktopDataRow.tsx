@@ -1,4 +1,4 @@
-import { parseShortcode } from "@cubby/shared";
+import { parseShortcode } from "@cubby/shared/shortcode";
 import { BugIcon } from "@phosphor-icons/react/dist/csr/Bug";
 import type { RowData } from "@tanstack/react-table";
 import { flexRender } from "@tanstack/react-table";

@@ -1,4 +1,5 @@
-import { productShortcode, UNRESOLVABLE_ENTITY_FILTER } from "@cubby/shared";
+import { UNRESOLVABLE_ENTITY_FILTER } from "@cubby/shared/filter";
+import { productShortcode } from "@cubby/shared/shortcode";
 import { describe, expect, it } from "vitest";
 import { z } from "zod";
 import {

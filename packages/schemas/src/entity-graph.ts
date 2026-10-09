@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { parseShortcode } from "@cubby/shared";
+import { parseShortcode } from "@cubby/shared/shortcode";
 
 import { entityRefSchema, entitySchema } from "./entity";
 import { imageUrlSummary } from "./image-summary";

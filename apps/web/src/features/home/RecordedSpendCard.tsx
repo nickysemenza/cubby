@@ -3,7 +3,7 @@ import { ChartBarIcon } from "@phosphor-icons/react/dist/csr/ChartBar";
 import { useQuery } from "@tanstack/react-query";
 import { useId, useMemo } from "react";
 
-import { expense } from "~/integrations/tanstack-query/generated/catalog.gen";
+import { expense } from "~/integrations/tanstack-query/generated/expense.gen";
 import { formatCalendarDay } from "~/lib/date-format";
 import { formatCurrency } from "~/lib/utils";
 import { Row } from "~/ui/layout";

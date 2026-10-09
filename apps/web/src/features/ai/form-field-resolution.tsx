@@ -1,5 +1,4 @@
 import type { Entity } from "@cubby/schemas/entity";
-import { entityFieldModels } from "@cubby/schemas/entity-fields";
 import { useEffect, useMemo, useRef } from "react";
 import {
   type FieldValues,
@@ -11,6 +10,7 @@ import {
 } from "react-hook-form";
 import { z } from "zod";
 
+import { entityFieldModel } from "~/entity/entity-model";
 import {
   FieldResolutionStatus,
   resolutionActionClassName,
@@ -38,7 +38,7 @@ export function FormFieldResolution<TValues extends FieldValues>({
   const policy = useMemo(
     () =>
       resolvedEntity
-        ? entityFieldModels[resolvedEntity].fields.find(
+        ? entityFieldModel(resolvedEntity).fields.find(
             (candidate) => candidate.key === field,
           )?.resolution
         : null,

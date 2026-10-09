@@ -1,6 +1,6 @@
 import { z } from "zod";
 import type { Entity } from "./entity";
-import { localRelationshipByKey } from "./entity-manifest";
+import { entityIndex } from "./generated/entity-index.gen";
 import { money } from "./money";
 import { entitySchema } from "./entity";
 import { imageUrlSummary } from "./image-summary";
@@ -180,7 +180,7 @@ const relatedViewPresentationRegistry = [
   {
     // The `eaters` relation's list column reads only the primary (food-entry)
     // source; the `portions` (served-portion) source is graph-only, because
-    // `relatedViewPath` below compiles `provenance.steps` and never `sources`.
+    // `relatedViewPath` (`related-view-path.ts`) compiles `provenance.steps` and never `sources`.
     key: "meal.eaters",
     source: "meal",
     relationship: "eaters",
@@ -398,7 +398,7 @@ const relatedViewPresentationRegistry = [
   {
     // The `meals` relation's list column reads only the primary (food-entry)
     // source; the `portions` (served-portion) source is graph-only, because
-    // `relatedViewPath` below compiles `provenance.steps` and never `sources`.
+    // `relatedViewPath` (`related-view-path.ts`) compiles `provenance.steps` and never `sources`.
     key: "ledgerParty.meals",
     source: "ledgerParty",
     relationship: "meals",
@@ -423,7 +423,7 @@ const relatedViewPresentationRegistry = [
  */
 type RelatedViewPresentation = (typeof relatedViewPresentationRegistry)[number];
 
-const relatedViewRelationshipKeys = {
+export const relatedViewRelationshipKeys = {
   "product.vendors": "vendors",
   "product.projects": "purchased-projects",
   "product.usedOnProjects": "project-uses",
@@ -476,31 +476,28 @@ const relatedViewRelationshipKeys = {
   (typeof relatedViewPresentationRegistry)[number]["key"],
   string
 >;
-type RelatedViewRelationshipKey = keyof typeof relatedViewRelationshipKeys;
-const isRelatedViewRelationshipKey = (
-  key: string,
-): key is RelatedViewRelationshipKey =>
-  Object.hasOwn(relatedViewRelationshipKeys, key);
+
+// Reads the slim index, not the manifest aggregate: this module loads in the
+// browser (docs/adr/0009-per-entity-client-manifests.md). The server compiles
+// each view's path in `./related-view-path`.
+const declaredRelation = (source: Entity, key: string) => {
+  const relation = entityIndex[source].relations.find(
+    (candidate) => candidate.key === key,
+  );
+  if (relation === undefined)
+    throw new Error(`Unknown local relationship ${source}.${key}`);
+  return relation;
+};
 
 export const relatedViewRegistry = relatedViewPresentationRegistry.map(
   (view) => {
-    const relationship = localRelationshipByKey(view.source, view.relationship);
+    const relationship = declaredRelation(view.source, view.relationship);
     return { ...view, target: relationship.target, label: relationship.label };
   },
 ) satisfies readonly (RelatedViewPresentation & {
   target: Entity;
   label: string;
 })[];
-
-export const relatedViewPath = (
-  view: Pick<RelatedViewDefinition, "source" | "key">,
-) => {
-  if (!isRelatedViewRelationshipKey(view.key)) {
-    throw new Error(`Unknown related view key: ${view.key}`);
-  }
-  const relationshipKey = relatedViewRelationshipKeys[view.key];
-  return localRelationshipByKey(view.source, relationshipKey).provenance.steps;
-};
 
 type RelatedViewSource = (typeof relatedViewRegistry)[number]["source"];
 

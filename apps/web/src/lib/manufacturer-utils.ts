@@ -5,7 +5,7 @@
  * including the "(unspecified)" wildcard matching logic used in CSV import/export.
  */
 
-import { UNSPECIFIED_MANUFACTURER } from "@cubby/shared";
+import { UNSPECIFIED_MANUFACTURER } from "@cubby/shared/constants";
 
 /**
  * Check if a manufacturer value represents "unspecified"

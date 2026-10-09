@@ -1,4 +1,4 @@
-import type { BrowserRoutedEntity } from "@cubby/schemas/entity-manifest";
+import { type BrowserRoutedEntity } from "@cubby/schemas/entity-index";
 import type {
   ReportBlock,
   ReportRecordRow,
@@ -21,11 +21,11 @@ import { Image } from "~/ui/primitives/image";
 import { Skeleton } from "~/ui/primitives/skeleton";
 import { ShortcodeProse } from "~/ui/shortcode-prose";
 
-import { collectionActions } from "./collection-actions";
 import {
   DetailAction,
   type ReportDetailActionPlacement,
-} from "./detail-action-bar";
+} from "./detail-action-context";
+import { useDetailHooks } from "./detail-hooks";
 import {
   type ChoiceAnswerState,
   ChoiceControl,
@@ -37,7 +37,6 @@ import {
   type ReportCommands,
   useReportCommands,
 } from "./report-commands";
-import { sectionActionsFor } from "./section-actions";
 
 export type RecordsBlock = Extract<ReportBlock, { kind: "records" }>;
 type Action = NonNullable<ReportRecordRow["actions"]>[number];
@@ -74,15 +73,11 @@ export function ReportVerb({
   record: object;
   row?: ReportRecordRow | null;
 }) {
-  const Verb = collectionActions[action];
+  const Verb = useDetailHooks().collectionActions?.[action];
   // SAFETY: a report builder offers a verb only on the slot of the entity its plan names, and
-  // `record` is that entity's loaded detail record.
+  // `record` is that entity's loaded detail record (whose hooks supply the verb).
   const typed = record as never;
-  return (
-    <Suspense fallback={null}>
-      <Verb record={typed} item={row} />
-    </Suspense>
-  );
+  return Verb === undefined ? null : <Verb record={typed} item={row} />;
 }
 
 function RowTitle({ row }: { row: ReportRecordRow }) {
@@ -363,10 +358,9 @@ export function RecordsBlockView({
   const choicesLocked = commands.pending || commands.committed;
   const keys = rowKeys(block.rows);
   const verbs = block.verbs ?? [];
+  const hookedActions = useDetailHooks().sectionActions ?? {};
   const available =
-    entity === undefined || record === undefined
-      ? {}
-      : sectionActionsFor(entity);
+    entity === undefined || record === undefined ? {} : hookedActions;
   const selectable = verbs.some((verb) => verb.scope === "selection");
   const clearSelection = () => setSelection(new Set());
   // SAFETY: the verb registry is keyed by this entity, so it takes this entity's record.
@@ -496,7 +490,8 @@ export function RecordsDetailActions({
   record?: object;
 }) {
   const commands = useReportCommands();
-  const available = entity === undefined ? {} : sectionActionsFor(entity);
+  const hookedActions = useDetailHooks().sectionActions ?? {};
+  const available = entity === undefined ? {} : hookedActions;
   // SAFETY: the action registry correlates this entity with its loaded record.
   const erasedRecord = record as never;
   return (

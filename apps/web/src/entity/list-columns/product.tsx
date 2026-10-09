@@ -5,7 +5,7 @@ import {
   type ProductPricingOut,
 } from "@cubby/schemas/product";
 import type { KitComponentRowOut } from "@cubby/schemas/product-components";
-import { formatCategoryLabel } from "@cubby/shared";
+import { formatCategoryLabel } from "@cubby/shared/category-theme";
 import { PushPinIcon } from "@phosphor-icons/react/dist/csr/PushPin";
 import { useQuery } from "@tanstack/react-query";
 import type { ReactNode } from "react";
@@ -25,10 +25,8 @@ import { entityListHiddenColumns } from "~/entity/entity-display";
 import { relationshipFieldProvenance } from "~/entity/field-provenance";
 import { useCreateInventoryMutation } from "~/features/inventory/hooks";
 import { InventoryEntriesQuickEditDialog } from "~/features/inventory/inventory-entries-quick-edit-dialog";
-import {
-  product as productOperations,
-  relatedData,
-} from "~/integrations/tanstack-query/generated/catalog.gen";
+import { product as productOperations } from "~/integrations/tanstack-query/generated/product.gen";
+import { relatedData } from "~/integrations/tanstack-query/generated/related-data.gen";
 import { booleanCellOptions } from "~/lib/select-options";
 import { formatCurrency } from "~/lib/utils";
 import { wasm } from "~/lib/wasm";

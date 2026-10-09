@@ -1,5 +1,6 @@
 import type { Entity } from "@cubby/schemas/entity";
-import { allEntities, photoCategories } from "@cubby/schemas/entity-manifest";
+import { allEntities } from "@cubby/schemas/entity-index";
+import { photoCategories } from "@cubby/schemas/image-policy";
 import { CaretDownIcon } from "@phosphor-icons/react/dist/csr/CaretDown";
 import { CaretUpIcon } from "@phosphor-icons/react/dist/csr/CaretUp";
 import { useQuery } from "@tanstack/react-query";
@@ -16,7 +17,7 @@ import {
 
 import { EntityIcon } from "~/entity/entities";
 import type { EntityInspectorHealth } from "~/entity/entity-inspector-health";
-import { entityInspectorHealth } from "~/integrations/tanstack-query/generated/catalog.gen";
+import { entityInspectorHealth } from "~/integrations/tanstack-query/generated/entity-inspector-health.gen";
 import { authClient } from "~/lib/auth-client";
 import { cn } from "~/lib/utils";
 import { domainWayfinding } from "~/ui/navigation/domain-wayfinding";
@@ -41,6 +42,7 @@ import {
   relationStatusClass,
   schemaRow,
   schemaTotals,
+  useSchemaSurfaceModels,
 } from "./entity-schema-model";
 import { EntityOverrideTable } from "./EntityOverrideTable";
 import { EntityReferenceGraph } from "./EntityReferenceGraph";
@@ -704,6 +706,7 @@ export function EntityManifestGrid({
   onSheetChange: (sheet: SchemaSheet) => void;
   active?: boolean;
 }) {
+  useSchemaSurfaceModels();
   const session = authClient.useSession();
   const { data: health } = useQuery({
     ...entityInspectorHealth.inspectorHealth.queryOptions(null),

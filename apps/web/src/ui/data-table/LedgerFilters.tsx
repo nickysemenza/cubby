@@ -1,6 +1,6 @@
 import type { Entity } from "@cubby/schemas/entity";
-import { entitySummary } from "@cubby/schemas/entity-summary";
-import { humanize } from "@cubby/shared";
+import { entityIndex } from "@cubby/schemas/entity-index";
+import { humanize } from "@cubby/shared/text-case";
 import type { RowData } from "@tanstack/react-table";
 import { useCallback, useMemo } from "react";
 
@@ -86,7 +86,7 @@ export function LedgerFilters<TData extends RowData>({
     .filter((column) => column.columnDef.meta?.filterConfig)
     .map((column) => column.id)
     .join("|");
-  const primarySearch = entity ? entitySummary[entity].primarySearch : null;
+  const primarySearch = entity ? entityIndex[entity].primarySearch : null;
   const fields = useMemo(
     () => getLedgerFields(table, optionHints, primarySearch),
     // oxlint-disable-next-line react/exhaustive-deps -- filterColumnsKey is the late-materializing TanStack v9 signal described above

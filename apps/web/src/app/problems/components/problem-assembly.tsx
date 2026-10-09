@@ -1,6 +1,7 @@
 import type { Entity } from "@cubby/schemas/entity";
+import { FILTER_ANY, FILTER_NONE } from "@cubby/schemas/filter-sentinel-fields";
 import type { ProblemsCoverage } from "@cubby/schemas/problems";
-import { humanize } from "@cubby/shared";
+import { humanize } from "@cubby/shared/text-case";
 import { CaretDownIcon } from "@phosphor-icons/react/dist/csr/CaretDown";
 import { FunnelIcon } from "@phosphor-icons/react/dist/csr/Funnel";
 import { Fragment } from "react";
@@ -11,12 +12,7 @@ import {
   isBrowserRoutedEntity,
 } from "~/entity/entities";
 import { getEntityFilters } from "~/entity/filter-manifest";
-import {
-  encodeFilters,
-  FILTER_ANY,
-  FILTER_NONE,
-  sortToParam,
-} from "~/entity/filters";
+import { encodeFilters, sortToParam } from "~/entity/filters";
 import type { ProblemQuery } from "~/entity/problem-query";
 import { cn } from "~/lib/utils";
 import { Button, buttonVariants } from "~/ui/primitives/button";

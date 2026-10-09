@@ -21,8 +21,8 @@ import { toast } from "sonner";
 import { z } from "zod";
 
 import { VerbButton } from "~/entity/actions/action-verb-ui";
-import { DetailAction } from "~/entity/entity-detail/detail-action-bar";
-import { recipe as recipeOperations } from "~/integrations/tanstack-query/generated/catalog.gen";
+import { DetailAction } from "~/entity/entity-detail/detail-action-context";
+import { recipe as recipeOperations } from "~/integrations/tanstack-query/generated/recipe.gen";
 import { formatInstant } from "~/lib/date-format";
 import { getErrorMessage } from "~/lib/error-utils";
 import { showErrorToast } from "~/ui/feedback/error-details";

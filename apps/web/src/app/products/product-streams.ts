@@ -4,7 +4,7 @@ import type {
 } from "@cubby/schemas/product";
 import type { z } from "zod";
 
-import { productStreams } from "~/integrations/tanstack-query/generated/catalog.gen";
+import { productStreams } from "~/integrations/tanstack-query/generated/product.gen";
 
 export const createManyProductsStream = (
   input: z.input<typeof productCreateManyInput>,

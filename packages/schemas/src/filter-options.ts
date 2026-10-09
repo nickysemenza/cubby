@@ -1,6 +1,6 @@
 import { z } from "zod";
 import { entitySchema, type Entity } from "./entity";
-import { shortcodeEntities, type ShortcodeEntity } from "./entity-manifest";
+import { shortcodeEntities, type ShortcodeEntity } from "./entity-index";
 import { imageUrlSummary } from "./image-summary";
 import { plainDate } from "./base-entity";
 import { expenseShortcode } from "./identifiers";

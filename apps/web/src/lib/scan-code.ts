@@ -1,8 +1,8 @@
 import { parseShortcodeFor } from "@cubby/schemas/identifiers";
 import type { ProductFindOrCreateByCodeInput } from "@cubby/schemas/product";
 import type { ScanAtLocationCode } from "@cubby/schemas/scan";
-import type { ShortcodeType } from "@cubby/shared";
-import { extractShortcodeFromScan } from "@cubby/shared";
+import type { ShortcodeType } from "@cubby/shared/shortcode";
+import { extractShortcodeFromScan } from "@cubby/shared/shortcode";
 import { upc } from "@cubby/shared/upc";
 
 import { wasm } from "~/lib/wasm";

@@ -10,7 +10,7 @@ import {
 } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-import { collection } from "~/integrations/tanstack-query/generated/catalog.gen";
+import { collection } from "~/integrations/tanstack-query/generated/collection.gen";
 import { createBrowserTestHarness } from "~/lib/test/browser-harness";
 
 import { SmartCollectionPage } from "./smart-collection-page";

@@ -1,7 +1,7 @@
 import type { FunctionComponent } from "react";
 
-import type { CollectionActionProps } from "~/entity/entity-detail/collection-actions";
-import type { DetailSlotComponent } from "~/entity/entity-detail/detail-slots";
+import type { CollectionActionProps } from "~/entity/entity-detail/detail-hooks";
+import type { DetailSlotComponent } from "~/entity/entity-detail/detail-hooks";
 import { EntityReportSlot } from "~/entity/entity-detail/report-slot";
 import { purchaseLabel } from "~/lib/purchase-label";
 

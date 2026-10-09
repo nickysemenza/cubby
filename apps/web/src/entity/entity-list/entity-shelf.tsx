@@ -1,11 +1,17 @@
-import { entityFieldModels } from "@cubby/schemas/entity-fields";
-import type { BrowserRoutedEntity } from "@cubby/schemas/entity-manifest";
-import { entitySummary } from "@cubby/schemas/entity-summary";
+import {
+  type BrowserRoutedEntity,
+  entityIndex,
+} from "@cubby/schemas/entity-index";
 import type { ReactNode } from "react";
 import { z } from "zod";
 
 import { entities, entityDetailParams } from "~/entity/entities";
 import { renderCompactFieldValue } from "~/entity/entity-display";
+import {
+  entityFieldModel,
+  entitySummaryOf,
+  useEntityModel,
+} from "~/entity/entity-model";
 import { ShelfCard, ShelfEmpty, ShelfGrid } from "~/ui/data-table/shelf";
 import type { GroupConfig } from "~/ui/data-table/useGroupedList";
 import type { ListGroupState } from "~/ui/hooks/progressive-list";
@@ -28,7 +34,7 @@ type ShelfRow = z.infer<typeof shelfRowSchema>;
 /** The record's title, the manifest's `titleField` (a non-nullable text read field). */
 function shelfTitle(entity: BrowserRoutedEntity, row: ShelfRow): string {
   return (
-    z.string().catch("").parse(row[entitySummary[entity].titleField]) || row.id
+    z.string().catch("").parse(row[entityIndex[entity].titleField]) || row.id
   );
 }
 
@@ -55,8 +61,8 @@ function shelfSubtitle(
   row: ShelfRow,
   enrichmentState?: (id: string, field: string) => ListGroupState | undefined,
 ): ReactNode {
-  const subtitle = entitySummary[entity].list.shelf?.subtitle ?? [];
-  const fields = entityFieldModels[entity].fields;
+  const subtitle = entitySummaryOf(entity).list.shelf?.subtitle ?? [];
+  const fields = entityFieldModel(entity).fields;
   for (const key of subtitle) {
     const field = fields.find((candidate) => candidate.key === key);
     if (!field) continue;
@@ -115,7 +121,7 @@ export function EntityShelf<TRow extends { id: string }>({
   onRetry?: () => void;
   enrichmentState?: (id: string, field: string) => ListGroupState | undefined;
 }) {
-  const { emptyState } = entitySummary[entity];
+  const { emptyState } = useEntityModel(entity).summary;
   return (
     <ShelfGrid
       items={items}
