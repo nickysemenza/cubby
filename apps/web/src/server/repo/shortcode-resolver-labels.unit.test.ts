@@ -1,8 +1,6 @@
-import { shortcodeEntities } from "@cubby/schemas/entity-manifest";
 import { describe, expect, it } from "vitest";
 
 import {
-  DISPLAY_NAME_COLUMN,
   LABEL_COLUMN_OVERRIDES,
   resolveTitleFieldColumn,
 } from "./shortcode-resolver";
@@ -15,8 +13,7 @@ import {
  * *.entity.ts`) — see `resolveTitleFieldColumn` and `DISPLAY_NAME_COLUMN`'s
  * construction in `shortcode-resolver.ts`. A non-override entity whose
  * titleField has no derivable column already throws at module init, so this
- * file only needs to re-assert that guarantee plus check the override list
- * stays honest: every override must actually change the outcome, or it is
+ * file only checks that the override list stays honest: every override must actually change the outcome, or it is
  * dead documentation nobody would notice going stale.
  */
 describe("DISPLAY_NAME_COLUMN", () => {
@@ -42,30 +39,4 @@ describe("DISPLAY_NAME_COLUMN", () => {
       expect(redundant).toBe(false);
     },
   );
-
-  const nonOverrideEntities = shortcodeEntities.filter(
-    (entity) => !(entity in LABEL_COLUMN_OVERRIDES),
-  );
-
-  it.each(nonOverrideEntities)("%s resolves to a non-null column", (entity) => {
-    expect(DISPLAY_NAME_COLUMN[entity]).not.toBeNull();
-  });
-
-  it("the 7 documented overrides resolve to their documented columns", () => {
-    expect(DISPLAY_NAME_COLUMN.gardenEntry).toBe(
-      LABEL_COLUMN_OVERRIDES.gardenEntry.column,
-    );
-    expect(DISPLAY_NAME_COLUMN.planting).toBe(
-      LABEL_COLUMN_OVERRIDES.planting.column,
-    );
-    expect(DISPLAY_NAME_COLUMN.meal).toBe(LABEL_COLUMN_OVERRIDES.meal.column);
-    expect(DISPLAY_NAME_COLUMN.financialTransaction).toBe(
-      LABEL_COLUMN_OVERRIDES.financialTransaction.column,
-    );
-    expect(DISPLAY_NAME_COLUMN.purchase).toBe(
-      LABEL_COLUMN_OVERRIDES.purchase.column,
-    );
-    expect(DISPLAY_NAME_COLUMN.inventory).toBeNull();
-    expect(DISPLAY_NAME_COLUMN.ledgerTransfer).toBeNull();
-  });
 });

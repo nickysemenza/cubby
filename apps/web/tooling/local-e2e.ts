@@ -4,9 +4,8 @@ import { fileURLToPath } from "node:url";
 import { ensureWebBuild } from "./web-build-provenance";
 
 /**
- * Every local-only E2E lane (the ones CI does not run), one after another so a
- * laptop is never running two workerd harnesses or simulators at once. The web
- * Worker is built once up front instead of once per lane.
+ * Small native smoke by default; select affected domain lanes or --all for
+ * extended acceptance. Lanes stay sequential and share one Worker build.
  */
 const webRoot = path.resolve(
   path.dirname(fileURLToPath(import.meta.url)),
@@ -34,14 +33,25 @@ const lanes = [
     args: ["--order", "receipt,photo,csv"],
   },
 ];
-const only = process.argv.slice(2);
-const selected = only.length
-  ? lanes.filter((lane) => only.includes(lane.name))
-  : lanes;
-if (!selected.length)
+const only = process.argv.slice(2).filter((argument) => argument !== "--");
+if (only.includes("--help")) {
+  console.log(
+    `Usage: pnpm test:e2e:local [lane ... | --all]\nDefault: headless sim\nLanes: ${lanes.map((lane) => lane.name).join(", ")}`,
+  );
+  process.exit(0);
+}
+if (
+  only.some(
+    (name) => name !== "--all" && !lanes.some((lane) => lane.name === name),
+  )
+)
   throw new Error(
     `Unknown lane; choose from ${lanes.map((lane) => lane.name).join(", ")}`,
   );
+const names = only.length ? only : ["headless", "sim"];
+const selected = names.includes("--all")
+  ? lanes
+  : lanes.filter((lane) => names.includes(lane.name));
 
 const time = (run: () => number) => {
   const started = Date.now();

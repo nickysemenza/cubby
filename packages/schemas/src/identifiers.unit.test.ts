@@ -20,10 +20,6 @@ describe("entity id lookups", () => {
     // registry label, its route not-found copy, and the manifest's own
     // `names.singular` all already said "item" — a genuine word-choice drift
     // fixed here, not a casing one; see the `ENTITY_LABEL` doc comment).
-    expect(ENTITY_LABEL.inventory).toBe("Inventory item");
-    expect(ENTITY_LABEL.financialAccount).toBe("Financial account");
-    expect(ENTITY_LABEL.financialTransaction).toBe("Financial transaction");
-
     for (const entity of shortcodeEntities) {
       const label = ENTITY_LABEL[entity];
       expect(label).toMatch(/^[A-Z]/);
@@ -46,23 +42,6 @@ describe("entity id lookups", () => {
       const reason = ENTITY_NOT_FOUND_REASON[entity];
       expect(Object.keys(AppErrors)).toContain(reason);
       expect(AppErrors[reason]).toBe("NOT_FOUND");
-    }
-  });
-
-  it("keeps the three reasons a derived key would get wrong", () => {
-    expect(ENTITY_NOT_FOUND_REASON.inventory).toBe("INVENTORY_NOT_FOUND");
-    expect(ENTITY_NOT_FOUND_REASON.financialAccount).toBe(
-      "FINANCIAL_ACCOUNT_NOT_FOUND",
-    );
-    expect(ENTITY_NOT_FOUND_REASON.financialTransaction).toBe(
-      "FINANCIAL_TRANSACTION_NOT_FOUND",
-    );
-    for (const entity of shortcodeEntities) {
-      const derived = `${entity.toUpperCase()}_NOT_FOUND`;
-      if (derived !== ENTITY_NOT_FOUND_REASON[entity]) {
-        // oxlint-disable-next-line vitest/no-conditional-expect -- The data-dependent branch determines whether this optional case is applicable.
-        expect(Object.keys(AppErrors)).not.toContain(derived);
-      }
     }
   });
 

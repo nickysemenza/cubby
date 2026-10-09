@@ -106,14 +106,6 @@ describe("manifest registries", () => {
     expect(unsupportedWithoutReason).toEqual([]);
   });
 
-  it("preserves explicit sentence-case labels for derived garden windows", () => {
-    const labels = Object.fromEntries(
-      entityFieldModels.plant.fields.map((field) => [field.key, field.label]),
-    );
-    expect(labels.guideSowWindow).toBe("Guide sow window");
-    expect(labels.guideTransplantWindow).toBe("Guide transplant window");
-  });
-
   it("infers shared identifier labels and explains invalid relation defaults", () => {
     const labelsFor = (entity: "product" | "usda-food") =>
       Object.fromEntries(

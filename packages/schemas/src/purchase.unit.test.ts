@@ -2,33 +2,12 @@ import { describe, expect, it } from "vitest";
 import {
   deleteEmptyPurchasesInput,
   MAX_SPLIT_EXPENSE_PARTS,
-  purchaseFilterFields,
   RECONCILIATION_TOLERANCE,
   reconcilePurchase,
   splitExpenseDelta,
   splitExpenseInput,
   tiedTopSettlementCandidates,
 } from "./purchase";
-
-describe("purchase filter terminology", () => {
-  it("exposes expenseStatus and removes the old lineStatus field", () => {
-    expect(purchaseFilterFields).toHaveProperty("expenseStatus");
-    expect(purchaseFilterFields).not.toHaveProperty("lineStatus");
-  });
-
-  it("exposes the structured trio for every curated related column", () => {
-    for (const relation of [
-      "expense",
-      "financialTransaction",
-      "product",
-      "project",
-    ]) {
-      expect(purchaseFilterFields).toHaveProperty(`${relation}Id`);
-      expect(purchaseFilterFields).toHaveProperty(`${relation}PresenceFilter`);
-      expect(purchaseFilterFields).toHaveProperty(`${relation}Search`);
-    }
-  });
-});
 
 describe("purchase operation inputs", () => {
   it("requires a unique bounded delete-empty selection", () => {

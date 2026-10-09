@@ -3,6 +3,7 @@ import type { ExecutionContext, MessageBatch } from "@cloudflare/workers-types";
 import { z } from "zod";
 
 import worker from "../../src/cf-server";
+import { PREVIEW_DOCUMENT } from "./preview/document";
 import { assertDevDatabaseUrl } from "./state";
 import {
   DEV_USER_EMAIL,
@@ -208,6 +209,16 @@ export default {
       for (const cookie of signIn.headers.getSetCookie())
         headers.append("Set-Cookie", cookie);
       return new Response(null, { status: 303, headers });
+    }
+    if (url.pathname === "/__dev/preview") {
+      if (request.method !== "GET")
+        return new Response(null, { status: 405, headers: { Allow: "GET" } });
+      return new Response(PREVIEW_DOCUMENT, {
+        headers: {
+          "Content-Type": "text/html; charset=utf-8",
+          "Cache-Control": "no-store",
+        },
+      });
     }
     const storage = await handleLocalStorageRequest(request, env);
     if (storage) return storage;

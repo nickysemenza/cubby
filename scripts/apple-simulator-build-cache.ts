@@ -8,7 +8,7 @@ import { digestFiles, walkFiles } from "./lib/tree-digest.ts";
 
 // Both hosted callers compile this profile. Its bytes also enter the cache key;
 // harness and workflow changes do not change the app's compiler inputs.
-export const hostedSimulatorBuildArgs = Object.freeze([
+export const simulatorBuildArgs = Object.freeze([
   "-project",
   "apps/apple/Cubby.xcodeproj",
   "-scheme",
@@ -43,6 +43,7 @@ const requiredInputs = [
   "apps/apple/CubbyKit/Frameworks/CubbyFFI.xcframework/.fingerprint",
   "apps/apple/CubbyKit/Package.swift",
   "apps/apple/CubbyKit/Package.resolved",
+  "apps/apple/Package.resolved",
   "apps/apple/project.yml",
   "apps/apple/packages.yml",
   "apps/apple/Cubby.xcodeproj/project.pbxproj",
@@ -81,7 +82,7 @@ const buildDrivers = [
 export function simulatorBuildFingerprint(
   root: string,
   toolchain: string,
-  buildArgs: readonly string[] = hostedSimulatorBuildArgs,
+  buildArgs: readonly string[] = simulatorBuildArgs,
 ): string {
   const inputs = requiredInputs.map((file) => path.join(root, file));
   for (const file of inputs) {
@@ -136,7 +137,7 @@ export function stampSimulatorBuild(
   root: string,
   toolchain: string,
   expected: string,
-  buildArgs: readonly string[] = hostedSimulatorBuildArgs,
+  buildArgs: readonly string[] = simulatorBuildArgs,
 ): void {
   if (simulatorBuildFingerprint(root, toolchain, buildArgs) !== expected) {
     throw new Error("Simulator build inputs changed during compilation");
@@ -150,7 +151,7 @@ export function stampSimulatorBuild(
 export function hasMatchingSimulatorBuild(
   root: string,
   toolchain: string,
-  buildArgs: readonly string[] = hostedSimulatorBuildArgs,
+  buildArgs: readonly string[] = simulatorBuildArgs,
 ): boolean {
   try {
     return (
@@ -168,7 +169,7 @@ if (
 ) {
   const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
   const command = process.argv[2];
-  if (command === "args") console.log(hostedSimulatorBuildArgs.join("\n"));
+  if (command === "args") console.log(simulatorBuildArgs.join("\n"));
   else {
     const toolchain = execFileSync("xcodebuild", ["-version"], {
       encoding: "utf8",

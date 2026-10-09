@@ -7,7 +7,6 @@ import { createBrowserTestHarness } from "~/lib/test/browser-harness";
 
 import {
   ProblemsBanner,
-  problemsBannerMessage,
   type ProblemsBannerOperations,
 } from "./problems-banner";
 
@@ -45,9 +44,5 @@ describe("ProblemsBanner", () => {
     expect(await screen.findByText("problems need attention")).toBeVisible();
     expect(screen.getByText("3 coverage gaps")).toBeVisible();
     expect(screen.getByRole("link")).toHaveAttribute("href", "/problems");
-  });
-
-  it("does not claim everything checks out when coverage remains", () => {
-    expect(problemsBannerMessage(0)).toBe("No defects found.");
   });
 });

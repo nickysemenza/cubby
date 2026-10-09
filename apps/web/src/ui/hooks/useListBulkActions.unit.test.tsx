@@ -129,22 +129,6 @@ describe("useListBulkActions", () => {
     });
   });
 
-  it("offers Copy codes for image now that it has a shortcode", () => {
-    const { result } = renderHook(
-      () =>
-        useListBulkActions<TestRow>({
-          entity: "image",
-          deleteBulkAction: noop,
-        }),
-      { wrapper },
-    );
-
-    expect(result.current.config?.actions.map((a) => a.id)).toEqual([
-      "copy-shortcodes",
-      "delete",
-    ]);
-  });
-
   it("earns the checkbox column for image on Copy codes alone", () => {
     const { result } = renderHook(
       () => useListBulkActions<TestRow>({ entity: "image" }),

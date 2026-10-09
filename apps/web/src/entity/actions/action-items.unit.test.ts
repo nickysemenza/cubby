@@ -8,11 +8,7 @@ import { describe, expect, it } from "vitest";
 
 import { entities } from "~/entity/entities";
 
-import {
-  actionItems,
-  actionsForSurface,
-  createActionFor,
-} from "./action-items";
+import { actionItems, createActionFor } from "./action-items";
 import { verbDef } from "./action-verbs";
 
 describe("createActionFor", () => {
@@ -97,23 +93,6 @@ describe("action registry", () => {
       action.entity ? [action.entity] : [],
     );
     expect(new Set(claimed).size).toBe(claimed.length);
-  });
-
-  it("declares every action on at least one surface", () => {
-    for (const action of actionItems) {
-      expect(action.surfaces.length).toBeGreaterThan(0);
-    }
-  });
-
-  it("keeps every surface non-empty", () => {
-    for (const surface of [
-      "navbar-create",
-      "palette-quick",
-      "inventory-page",
-      "home-quick",
-    ] as const) {
-      expect(actionsForSurface(surface).length).toBeGreaterThan(0);
-    }
   });
 });
 

@@ -192,9 +192,15 @@ Run each engine three times for the live acceptance sample.
 Append `-- --wrong` to either journey command to deliberately expect wrong
 database values; it must fail the exact assertion. For a local replay comparison,
 run the same command twice with `-- --replay`. This enables Tester Army's local
-read-write cache; normal runs disable it. Compare the resulting summaries for
-model calls, tokens, timings, replay hits and handoffs. Cache eligibility depends
-on the engine's observed state, so a warm run may still use the model.
+read-write cache (`apps/web/.e2e/cache/`); normal runs disable it. Compare the
+resulting summaries for model calls, tokens, timings, replay hits and handoffs.
+Each run seeds fresh records, so every step passes the journey's seeded
+shortcodes as `unique()` params (`replayParams`): the SDK otherwise reads
+`/PRD-4K7M` as a literal route and misses with `wrong-context`. A step records
+only when a later on-screen check (a `check.visible` or the journey's
+`visible` text) passes; database read-backs and screen reads do not confirm it,
+so a step followed by neither runs live every time. A warm run may still hand
+off when its recorded controls or end state no longer match.
 
 ## Coupled import journeys
 

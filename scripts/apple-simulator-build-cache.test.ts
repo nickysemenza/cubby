@@ -20,11 +20,26 @@ const inputs = [
   "apps/apple/CubbyKit/Frameworks/CubbyFFI.xcframework/library.a",
   "apps/apple/CubbyKit/Package.swift",
   "apps/apple/CubbyKit/Package.resolved",
+  "apps/apple/Package.resolved",
   "apps/apple/project.yml",
   "apps/apple/packages.yml",
   "apps/apple/Cubby.xcodeproj/project.pbxproj",
   "apps/apple/SourcePackages/workspace-state.json",
 ];
+
+// App-only pins no longer live in CubbyKit's lockfile. Reusing a bundle after
+// an app dependency changes would bypass compilation with the old dependency.
+test("app-only package pins invalidate a certified simulator bundle", () => {
+  const f = fixture();
+  try {
+    const key = simulatorBuildFingerprint(f.root, "synthetic Xcode");
+    stampSimulatorBuild(f.root, "synthetic Xcode", key);
+    f.write("apps/apple/Package.resolved", "changed app-only pin");
+    assert.equal(hasMatchingSimulatorBuild(f.root, "synthetic Xcode"), false);
+  } finally {
+    f.dispose();
+  }
+});
 const bundle =
   "apps/apple/DerivedData/Build/Products/Debug-iphonesimulator/Cubby.app";
 function fixture() {

@@ -3,13 +3,13 @@ import { fileURLToPath } from "node:url";
 import { resolveDevProfile } from "./lib/dev-profile.ts";
 import { spawnToExit } from "./lib/run.ts";
 
+import { tcpReady, waitFor } from "./lib/apple-container.ts";
 import {
-  containerCli,
-  findContainer,
-  stopAndRemove,
-  tcpReady,
-  waitFor,
-} from "./lib/apple-container.ts";
+  devContainerCli as containerCli,
+  findDevContainer as findContainer,
+  stopDevContainer as stopAndRemove,
+  devContainerBackend,
+} from "./lib/dev-container.ts";
 
 /**
  * A persistent local PostgreSQL for `pnpm dev` iteration — separate
@@ -125,7 +125,7 @@ async function down(): Promise<void> {
   await stopAndRemove(DEV_DB_CONTAINER);
   console.log(
     `[dev-db] Stopped ${DEV_DB_CONTAINER} (volume ${DEV_DB_VOLUME} kept; ` +
-      `\`container volume rm ${DEV_DB_VOLUME}\` to wipe data)`,
+      `\`${devContainerBackend() === "docker" ? "docker" : "container"} volume rm ${DEV_DB_VOLUME}\` to wipe data)`,
   );
 }
 
@@ -202,14 +202,7 @@ async function reset(): Promise<number> {
 }
 
 async function main(): Promise<number> {
-  if (process.platform !== "darwin")
-    throw new Error(
-      "Local development requires macOS Apple container; CI uses external test services.",
-    );
-  if (process.env.CUBBY_DEV_SERVICES)
-    throw new Error(
-      "Local development uses Apple container; unset CUBBY_DEV_SERVICES.",
-    );
+  devContainerBackend();
   const [command] = process.argv.slice(2);
   switch (command) {
     case "up":

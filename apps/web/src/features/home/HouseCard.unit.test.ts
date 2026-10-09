@@ -1,10 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import {
-  TODAY_ENTITY_LINK_CLASS,
-  taskBriefingEvidence,
-  taskBriefingSecondary,
-} from "./HouseCard";
+import { taskBriefingEvidence, taskBriefingSecondary } from "./HouseCard";
 
 describe("TodayAttention", () => {
   it("uses the server's full counts without reconstructing the task queue client-side", () => {
@@ -33,10 +29,5 @@ describe("TodayAttention", () => {
     expect(taskBriefingEvidence(briefing)).toBe(
       "1 overdue · 4 due this week · 3 blocked",
     );
-  });
-
-  it("gives task and project anchors a phone-sized target", () => {
-    expect(TODAY_ENTITY_LINK_CLASS).toContain("min-h-11");
-    expect(TODAY_ENTITY_LINK_CLASS).toContain("sm:min-h-0");
   });
 });

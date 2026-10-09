@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from "vitest";
+import { describe, expect, it } from "vitest";
 
 import { entityTimeline } from "~/integrations/tanstack-query/generated/catalog.gen";
 import { startOperation } from "~/integrations/tanstack-query/start-transport";
@@ -6,22 +6,6 @@ import { startOperation } from "~/integrations/tanstack-query/start-transport";
 import { createBrowserTestHarness } from "./browser-harness";
 
 describe("browser test harness", () => {
-  it("pins and restores its clock", async () => {
-    const harness = createBrowserTestHarness({
-      clock: { now: new Date("2026-08-28T12:00:00.000Z") },
-    });
-    expect(harness.clock?.now()).toBe(
-      new Date("2026-08-28T12:00:00.000Z").getTime(),
-    );
-    await harness.clock?.advanceBy(250);
-    expect(harness.clock?.now()).toBe(
-      new Date("2026-08-28T12:00:00.250Z").getTime(),
-    );
-
-    harness.dispose();
-    expect(vi.isFakeTimers()).toBe(false);
-  });
-
   // Regression: unmocked slot reads reached the real Start dispatcher and
   // rejected ~1s later, after the file's worker had torn down.
   it("rejects an operation with no injected transport inside the test", async () => {

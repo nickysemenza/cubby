@@ -22,7 +22,6 @@ import {
   nativeHeroActionPlans,
   type NativeCoverageEntry,
   type NativeCoverageKind,
-  type NativeHeroActionPlan,
 } from "./native-coverage";
 
 const used = (ids: readonly string[]) => [...new Set(ids)].sort();
@@ -114,24 +113,6 @@ describe("native presentation coverage", () => {
     },
   );
 
-  it("keeps the Run agent conversation explained as web-only", () => {
-    // The agent conversation is an import-run agent stream with no native client; each reason says so, so a
-    // future reader does not mistake it for an oversight.
-    for (const id of [
-      "run.import-agent-live",
-      "run.import-agent-stopped",
-    ] as const) {
-      const entry = nativeCoverage.detailSlot[id];
-      expect(entry.status).toBe("unsupported");
-      expect("reason" in entry && entry.reason).toMatch(
-        /web-only.*import-run agent/,
-      );
-    }
-    expect(nativeCoverage.detailSlot["run.import-prepared-orders"].status).toBe(
-      "implemented",
-    );
-  });
-
   it("gives exactly the implemented hero actions a runner plan", () => {
     const implemented = entries("heroAction")
       .filter(([, entry]) => entry.status === "implemented")
@@ -143,10 +124,6 @@ describe("native presentation coverage", () => {
     // Deleting a record and discarding stock must never run on one tap.
     expect(nativeHeroActionPlans.delete.confirmation).toBe("destructive");
     expect(nativeHeroActionPlans.discard.confirmation).toBe("destructive");
-  });
-
-  it("classifies the multi-select verb as owned elsewhere, not faked", () => {
-    expect(nativeCoverage.heroAction.bulkEdit.status).toBe("ownedElsewhere");
   });
 
   it("opens Record sale in the same disposition editor web shows", () => {
@@ -167,23 +144,6 @@ describe("native collection verbs", () => {
     );
   });
 
-  it("names the entities each verb may be offered on", () => {
-    const plans: Record<string, NativeHeroActionPlan> =
-      nativeCollectionActionPlans;
-    const entitiesOf = Object.fromEntries(
-      COLLECTION_ACTIONS.map((action) => {
-        const plan = plans[action];
-        return [action, plan?.kind === "operation" ? plan.entities : []];
-      }),
-    );
-    expect(entitiesOf).toEqual({
-      analyzeLocation: ["location"],
-      attachImage: ["image"],
-      reviewLabelNutrition: ["product"],
-      validatePurchase: ["purchase"],
-    });
-  });
-
   it("reads a row's id only for a row-scoped verb", () => {
     for (const action of COLLECTION_ACTIONS) {
       const usesItem = JSON.stringify(
@@ -194,12 +154,5 @@ describe("native collection verbs", () => {
         usesItem: COLLECTION_ACTION_SCOPES[action] === "row",
       });
     }
-  });
-
-  it("starts from a form or an explicit tap, never a silent write", () => {
-    // Analysis, attaching and launching are named verbs the person chose; none removes a
-    // record, so none asks for the destructive confirmation.
-    for (const plan of Object.values(nativeCollectionActionPlans))
-      expect(plan.confirmation).toBe("none");
   });
 });

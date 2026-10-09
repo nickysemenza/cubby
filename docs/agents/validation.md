@@ -7,6 +7,29 @@ concurrency boundary. Use real implementations; mocks are for external seams
 that cannot run locally. Write failure modes and any isolated test before the
 implementation it guards.
 
+## Signal and speed
+
+Choose the cheapest boundary that can expose the failure. Headless HTTP/native
+service checks establish stored values, totals, provenance, ownership and error
+contracts; a small browser or Tester Army journey establishes navigation,
+editing and supported visible outcomes. AI chooses a path through the real UI;
+deterministic read-back establishes whether the action worked. Previews cover
+presentation states, not writes or navigation. Live model journeys remain
+opt-in and do not replace the exact-head deterministic CI gate.
+
+Keep an isolated test only when its named failure cannot reasonably be observed
+by the retained flow or an existing compiler/generator guard. Remove tests of
+declarations, constants, source spelling and mocks, repeated cases of the same
+shared primitive, and copy-only assertions. An accessible action name used to
+drive a real interaction still has value; incidental wording is not an outcome.
+For every deletion, record either the stronger retained regression or why the
+test guarded no runtime behavior. Preserve named regressions before removal.
+
+Reuse a healthy HMR session for iteration and fingerprint-verified native
+builds. Report setup separately from scenario time. A failed provenance/startup
+check is not a scenario result. Measure CI's natural job timings before changing
+shards; retain the existing cache keys and exact-head merge gate.
+
 ## During implementation
 
 For persistent HMR, fixture packs, runtime discovery, or manual simulator work,
@@ -24,8 +47,10 @@ Forward named-case flags directly, for example `pnpm test:postgres src/...
 does not apply the intended filter. Likewise, use `pnpm db:generate
 --name=description` without an extra separator.
 
-Before a PR, run only what CI cannot: `pnpm test:e2e:local` for the
-local-only native/simulator lanes (one lane: `pnpm test:e2e:sim -- <flags>`; `-- --help` lists
+Before a PR, run focused checks and the affected local-only native/simulator
+lane that CI cannot cover. `pnpm test:e2e:local` defaults to headless + simulator
+smoke; choose domain lanes by name or `--all` for the extended matrix
+(one lane: `pnpm test:e2e:sim -- <flags>`; `-- --help` lists
 modes, env, and artifact paths; see the
 [local development](../local-development.md#native-iteration-and-validation)), plus focused tests for
 the change. CI runs the PostgreSQL, fast, typecheck, lint, and knip tiers on every PR; do not

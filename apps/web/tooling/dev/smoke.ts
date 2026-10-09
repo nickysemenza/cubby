@@ -43,6 +43,9 @@ const repoRoot = path.resolve(import.meta.dirname, "../../../..");
 const webRoot = path.join(repoRoot, "apps/web");
 const runId = `${Date.now().toString(36)}_${randomBytes(3).toString("hex")}`;
 const outputDir = path.join(repoRoot, "artifacts/local-dev-smoke", runId);
+// Local debugging only: a Playwright trace holds session cookies, so it stays
+// beside the bundle rather than in its sanitized evidence.
+const tracePath = path.join(outputDir, "smoke-trace.zip");
 const cases: Array<{ name: string; status: string; durationMs: number }> = [];
 const sessions: Array<{
   profile: DevProfile;
@@ -818,9 +821,7 @@ try {
     },
   );
 
-  await context.tracing.stop({
-    path: path.join(first.profile.stateDir, "smoke-trace.zip"),
-  });
+  await context.tracing.stop({ path: tracePath });
   await context.close();
   tracedContext = undefined;
   await rm(path.join(first.profile.stateDir, "hmr-smoke.ts"), { force: true });
@@ -907,22 +908,17 @@ try {
 } catch (error) {
   failure = error;
 } finally {
-  const traceSession = sessions[0];
-  if (tracedContext && traceSession) {
-    await tracedContext.tracing
-      .stop({
-        path: path.join(traceSession.profile.stateDir, "smoke-trace.zip"),
-      })
-      .catch(() => {});
+  if (tracedContext) {
+    await tracedContext.tracing.stop({ path: tracePath }).catch(() => {});
     await tracedContext.close();
   }
   await browser?.close();
   for (const session of sessions) {
-    await rm(path.join(session.profile.stateDir, "hmr-smoke.ts"), {
-      force: true,
-    });
     try {
       await stop(session);
+      await discard(session);
+      evidence.discardedInstances =
+        Number(evidence.discardedInstances ?? 0) + 1;
     } catch (error) {
       failure ??= error;
     }
@@ -966,6 +962,35 @@ if (failure)
   throw new Error(
     diagnostic(failure instanceof Error ? failure.message : String(failure)),
   );
+
+/**
+ * Each run's instances are named for the run, so nothing reuses them: drop
+ * the database from the shared development Postgres and remove the state
+ * directory, or every run leaves two of each behind. A stopped supervisor is
+ * required first; `down` alone keeps both for a checkout's own instance.
+ */
+async function discard(session: (typeof sessions)[number]) {
+  const { profile, env } = session;
+  assert.match(env.CUBBY_DEV_INSTANCE ?? "", /^smoke_/u);
+  assert.match(profile.name, /^cubby_dev_[a-f0-9]{10}$/u);
+  const server = new URL(profile.databaseUrl);
+  server.pathname = "/postgres";
+  const pool = new Pool({
+    connectionString: server.toString(),
+    connectionTimeoutMillis: 3_000,
+  });
+  try {
+    await pool.query(`DROP DATABASE IF EXISTS "${profile.name}" WITH (FORCE)`);
+    const left = await pool.query(
+      "SELECT count(*)::integer AS count FROM pg_database WHERE datname = $1",
+      [profile.name],
+    );
+    assert.equal(left.rows[0]?.count, 0);
+  } finally {
+    await pool.end();
+  }
+  await rm(profile.stateDir, { recursive: true, force: true });
+}
 
 /** Wrangler supplies its own HTTP CORS. Read raw Worker responses to guard
  * the adapter's Authorization exception without hiding it behind that layer. */

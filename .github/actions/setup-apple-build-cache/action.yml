@@ -31,7 +31,7 @@ runs:
     - name: Hash the package graph
       id: packages
       shell: bash
-      run: echo "hash=${{ hashFiles('apps/apple/packages.yml', 'apps/apple/CubbyKit/Package.swift', 'apps/apple/CubbyKit/Package.resolved') }}" >> "$GITHUB_OUTPUT"
+      run: echo "hash=${{ hashFiles('apps/apple/packages.yml', 'apps/apple/CubbyKit/Package.swift', 'apps/apple/CubbyKit/Package.resolved', 'apps/apple/Package.resolved') }}" >> "$GITHUB_OUTPUT"
     - name: Define shared cache paths
       id: paths
       shell: bash

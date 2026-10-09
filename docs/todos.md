@@ -934,45 +934,22 @@ consume the declarations.
 
 ## Dev tooling, tests & CI
 
-- 🤔 **Replace long scrolling scripts with focused headless, preview and
-  Tester Army coverage.** Put import, provenance, money, ownership and recovery
-  assertions through the existing headless/native service boundaries; use
-  declaration-backed fixtures and previews for presentation states. Keep a
-  small Tester Army journey for real app navigation and visible supported
-  outcomes. Preserve each named regression in the stronger replacement before
-  deleting its old script; previews alone do not prove navigation or writes.
-  Reuse fingerprint-verified native builds and warm isolated runtimes, and
-  share the current T3 device launcher/session rather than preparing competing
-  drivers. Measure setup and scenario time separately; keep exact revision,
-  replay, results and evidence checksums. Owners: `apps/apple/ITERATION.md`,
-  `apps/web/tooling/sim-e2e.ts`, `apps/web/tooling/tester-army/`, shared preview
-  fixtures.
+The developer loop now defaults to focused headless + simulator smoke, retains
+extended domain lanes by name, uses deterministic stored-outcome read-back with
+small Tester Army navigation, and reuses verified native builds. Low-signal
+source/copy/declaration tests are removed with a deletion ledger. The shared T3
+device launcher is supported for finite simulator journeys.
 
-- 🤔 **Stop the simulator build from dirtying the checkout.** Every
-  `test:e2e:sim` lane's Xcode build rewrites the tracked
-  `apps/apple/CubbyKit/Package.resolved` (adding the app-only Nuke pin), so
-  each native E2E bundle records `dirty: true` and is not replayable evidence.
-  Give the app project its own resolved file or build with a resolution that
-  leaves CubbyKit's untouched. Owner: `apps/apple/project.yml`,
-  `apps/web/tooling/sim-e2e.ts`.
+Completed in the developer-loop change: separate app/Kit package lockfiles,
+shortcode-aware Tester Army replay keys, verified abandoned-container recovery,
+and Docker-backed persistent development. See [implementation and test deletion
+evidence](dev-tooling-evidence.md).
 
-- 🤔 **Make Tester Army `--replay` able to hit.** Two consecutive warm web
-  runs of `product-rename` (2026-10-04) both reported `replayed 0, missed 1`
-  and used the model each time. Each run seeds fresh records, so on-screen
-  shortcodes differ; find which observed state the SDK keys the cache on and
-  either stabilize it or drop the flag. Owner: `apps/web/tooling/tester-army/`.
-
-- 🤔 **Measure the delegate-less routing change.** Around 2026-10-06,
-  re-measure 30 days of Claude session transcripts against the baseline in
-  [model routing](agents/model-routing.md#delegate-or-not): share of sessions
-  spawning subagents (about half), subagent share of context tokens (47%), and
-  subagent output on Opus/Fable. Keep the rule if shares fell without slower or
-  lower-quality sessions.
-
-- 🤔 **Offer a Docker path for local development.** `pnpm dev` and local test
-  services need macOS with Apple `container` (`scripts/lib/apple-container.ts`).
-  Decide whether a Docker backend is worth supporting for non-macOS
-  contributors and agent sandboxes.
+- 🤔 **Measure post-change routing speed and quality.** The
+  [2026-10-08 metadata recheck](dev-tooling-evidence.md#routing-measurement)
+  records delegation and token shares, but mostly predates the routing rule.
+  Repeat after a full post-change window using the same accounting and explicit
+  latency/quality evidence; do not infer improvement from token shares alone.
 
 - 🤔 **Capture exact runtime error shapes before broadening suppression.**
   Client-disconnected cancellation, missing update-result, opaque database
@@ -980,15 +957,8 @@ consume the declarations.
   name/message/stack/route evidence and an event-shaped regression test before
   changing filters; never hide unrelated transport or query errors.
 
-- ⏳ **Fixture-backed web preview route.** A dev-only route rendering loading,
-  error, and edge states from schema-backed fixtures; the production bundle
-  excludes faker and the route. Promote when driving states through full app
-  flows repeatedly slows iteration.
-
-- ⏳ **E2E against the HMR session.** An optional Playwright lane reusing the
-  persistent `pnpm dev` workerd origin; needs isolated fixtures, cleanup, and
-  sanitized replay artifacts before replacing a local lane. CI keeps the
-  exact-head merge gate.
+Fixture-backed generic list previews and optional warm HMR Playwright validation
+are implemented. See [local development](local-development.md#fixture-previews-and-warm-hmr-validation).
 
 - ⏳ **Natural CI evidence.** Revisit sharding only when exact-head runs show
   a repeatable tail imbalance; no duration databases or custom sequencers.

@@ -28,6 +28,13 @@ options:
     fi
     plutil -replace DerivedDataLocationStyle -string WorkspaceRelativePath "$settings"
     plutil -replace DerivedDataCustomLocation -string DerivedData "$settings"
+    # Without a workspace lockfile, Xcode serializes the app graph (Nuke, Sentry)
+    # into the local CubbyKit/Package.resolved and floats unpinned app packages.
+    # The tracked apps/apple/Package.resolved owns the app graph; Xcode writes
+    # through this link, so a deliberate app package change shows in git.
+    swiftpm_dir="Cubby.xcodeproj/project.xcworkspace/xcshareddata/swiftpm"
+    mkdir -p "$swiftpm_dir"
+    ln -sfn ../../../../Package.resolved "$swiftpm_dir/Package.resolved"
 
 # MARKETING_VERSION comes from the shared compatibility version (`pnpm generate`).
 configFiles:

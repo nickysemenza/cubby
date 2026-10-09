@@ -48,6 +48,7 @@
     "deploy:all": "pnpm run wasm && pnpm --filter @cubby/web run deploy:cf && pnpm --filter @cubby/usda-api run deploy",
     "prepare": "husky",
     "test:services:down": "node scripts/test-services.ts --down",
+    "test:services:prune": "node scripts/test-services.ts --prune",
     "test:e2e:watch": "pnpm --filter @cubby/web test:e2e:watch",
     "db:generate": "pnpm --filter @cubby/web db:generate",
     "db:check": "pnpm --filter @cubby/web db:check",

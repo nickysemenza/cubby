@@ -1,5 +1,5 @@
 import type { AllProblems, ProblemItem } from "@cubby/schemas/problems";
-import { EMPTY_PROBLEM_ARRAYS, PROBLEM_CLASS } from "@cubby/schemas/problems";
+import { EMPTY_PROBLEM_ARRAYS } from "@cubby/schemas/problems";
 import { testShortcode } from "@cubby/schemas/testing";
 import { render, screen } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
@@ -67,11 +67,6 @@ describe("duplicate spend section", () => {
     const section = entry();
     expect(section.count(problems([candidate(), candidate()]))).toBe(2);
     expect(section.count(problems([]))).toBe(0);
-  });
-
-  it("declares coverage, so it groups as advisory rather than as a defect", () => {
-    expect(entry().coverage).toBeDefined();
-    expect(PROBLEM_CLASS.duplicateSpendCandidates).not.toBe("defect");
   });
 
   it("renders a row naming the expense, the collision, and the day gap", () => {

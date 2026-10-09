@@ -258,6 +258,13 @@ Test on the simulator with `xcrun simctl openurl booted https://cubby.nickysemen
 - `build-rust.sh --targets sim` writes a ONE-slice xcframework; a macOS build or CLI link then
   fails "no library for this platform". Run `--targets all` first. Never run two cargo commands
   against the shared `CARGO_TARGET_DIR` at once.
+- Without a workspace lockfile Xcode serializes the app graph into the local
+  `CubbyKit/Package.resolved`. `project.yml` links the tracked
+  `apps/apple/Package.resolved` into the generated workspace; keep app pins
+  there and Kit pins in CubbyKit's file ([ITERATION.md](ITERATION.md#build-reuse-and-a-clean-checkout)).
+- Never open an unsigned (`CODE_SIGNING_ALLOWED=NO`) Mac build under
+  `com.nickysemenza.cubby`: its cdhash requirement replaces the macOS privacy
+  grants and the next team-signed build prompts again. `pnpm apple mac` checks.
 - The CLI's ad-hoc signature changes every rebuild, so Keychain re-prompts; it uses a file token
   store under Application Support instead. `URL.path()` percent-encodes — use
   `path(percentEncoded: false)` for FileManager.

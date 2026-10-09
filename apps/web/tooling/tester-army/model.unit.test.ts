@@ -38,16 +38,8 @@ it("treats blank workflow variables as omitted", () => {
   expect(config.TESTER_ARMY_CF_ACCOUNT_ID).toMatch(/^[a-f0-9]{32}$/u);
 });
 
-// The driver runs on the member's ChatGPT subscription (`e2e login openai`)
-// with no gateway token; the Cloudflare gateway stays an explicit opt-in and
-// still refuses to start without its token.
-it("drives through the ChatGPT subscription without a gateway token", () => {
-  vi.stubEnv("TESTER_ARMY_MODEL", "gpt-6-luna");
-  expect(
-    modelConfiguration(process.env, () => undefined).TESTER_ARMY_MODEL,
-  ).toBe("chatgpt/gpt-6-luna");
-});
-
+// The ChatGPT subscription needs no gateway token (covered above); the
+// Cloudflare gateway stays an explicit opt-in that refuses to start without one.
 it("requires a token and an OpenAI model id for the gateway provider", () => {
   vi.stubEnv("TESTER_ARMY_PROVIDER", "gateway");
   expect(

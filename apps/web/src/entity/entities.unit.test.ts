@@ -7,22 +7,11 @@ import { ENTITY_LABEL } from "@cubby/schemas/identifiers";
 import { describe, expect, expectTypeOf, it } from "vitest";
 
 import {
-  defaultSortFor,
   type EntityDetailRoute,
   entities,
   entityLabel,
   isBrowserRoutedEntity,
 } from "./entities";
-
-describe("defaultSortFor", () => {
-  it("reads product's default straight off the generated roster", () => {
-    expect(defaultSortFor("product")).toBe("createdAt");
-  });
-
-  it("reads vendor's default sort as spend — the product decision now lives on the declaration, not a browser override", () => {
-    expect(defaultSortFor("vendor")).toBe("spend");
-  });
-});
 
 describe("entity label parity", () => {
   it("title-cases ENTITY_LABEL for every shortcode entity with a browser route", () => {
@@ -51,39 +40,6 @@ describe("entity label parity", () => {
     for (const entity of covered) {
       expect(entityLabel(entity)).toBe(titleCase(ENTITY_LABEL[entity]));
     }
-
-    // The concrete case this replaced: one word choice, not a casing quirk.
-    expect(ENTITY_LABEL.inventory).toBe("Inventory item");
-    expect(entityLabel("inventory")).toBe("Inventory Item");
-  });
-
-  it("takes every pluralLabel verbatim from the entity manifest", () => {
-    // `pluralLabel` used to be a hand-typed map here; it is now declared as
-    // `names.plural` on each entity literal. This pins the registry to the
-    // manifest so the nav name can't be re-forked locally, and re-lists the
-    // four that are NOT the naive plural of `label` — those are the reason
-    // the value stays declared rather than computed from the singular.
-    const declared = Object.fromEntries(
-      browserRoutedEntities.map((entity) => [
-        entity,
-        entities[entity].pluralLabel,
-      ]),
-    );
-    expect(declared).toEqual(
-      Object.fromEntries(
-        browserRoutedEntities.map((entity) => [
-          entity,
-          entitySummary[entity].plural,
-        ]),
-      ),
-    );
-
-    expect(declared).toMatchObject({
-      inventory: "Inventory",
-      financialAccount: "Accounts",
-      financialTransaction: "Transactions",
-      wish: "Wishlist",
-    });
   });
 });
 

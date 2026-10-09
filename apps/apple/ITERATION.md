@@ -173,6 +173,30 @@ killed. Simulator runs leave evidence under `artifacts/sim-dev/<database>/`,
 including a screenshot and UI tree after replay failure; use
 `test:e2e:sim -- --video` when a reviewable MP4 and contact sheet are needed.
 
+## Build reuse and a clean checkout
+
+Every simulator lane, local or hosted, builds one simulator-generic profile
+(`scripts/apple-simulator-build-cache.ts`) and stamps the bundle with a
+certificate of its compiler inputs, resolved packages, toolchain, and bundle
+bytes. A later lane, worktree restart, or disposable simulator installs that
+bundle without compiling when the certificate still matches; the run bundle
+records `runtime.appBuild` as `reused-certified` or `compiled`. Its
+`native-build` phase includes `pnpm apple gen`, so setup and scenario time
+stay separate in `phases`.
+
+Xcode resolves the app graph into the tracked `apps/apple/Package.resolved`,
+linked into the generated project's workspace by `project.yml`. Without that
+link Xcode wrote Nuke and Sentry into `CubbyKit/Package.resolved`, floated
+their versions, and marked every native E2E bundle `dirty`. CubbyKit's
+lockfile holds only its own pins and changes through `swift package update`;
+an app package change shows up in `apps/apple/Package.resolved`.
+
+`pnpm apple mac` refuses to open a Debug app that the project team did not
+sign. macOS privacy grants (Photos, browser automation, notifications) record
+the approving app's designated requirement; an ad-hoc build from a
+`CODE_SIGNING_ALLOWED=NO` command has a per-build requirement, so opening it
+resets those grants and the next signed build asks again.
+
 ## Timing on one local Mac
 
 These are observations, not budgets: a full simulator run took 3m27s warm and
