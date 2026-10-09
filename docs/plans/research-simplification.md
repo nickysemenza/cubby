@@ -1,7 +1,7 @@
 # Purchase research simplification
 
-Code audit baseline: `d884dcd40`, 2026-10-09. This is a deletion proposal,
-not a claim that the rewrite is already small or that live acceptance is done.
+Code audit baseline: `88523e287`, 2026-10-09. The first dead-code slice below
+is implemented; the remaining slices are proposals. Live acceptance is unfinished.
 The owning backlog is [todos](../todos.md#import-pipeline-architecture).
 
 ## Responsibility and shared seam
@@ -22,16 +22,30 @@ launch/URL-capture mode, or spending-classification review.
 
 ## Concrete deletion slices
 
-| Current code/storage                                                                                                    | Proposed replacement and callers                                                                                                                                                                                                                     | Deletions and acceptance                                                                                                                                                                                                                                                                                                                  |
-| ----------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `gmail/search-job.ts` (423 lines), `gmail/search.ts` (87), `gmail/vendor-search.ts` (38), vendor-search Workflow wiring | Known-vendor objectives use retained `research_mail_search`; keep mechanical mailbox discovery and its exact cursor protocol. Migrate `tests/e2e/fixtures-mail.ts` and `search-job.integration.test.ts` scenarios before removing their old starter. | Delete the three files (548 production lines), `VendorMailSearchWorkflow` only, its binding/getter/generated declaration, launcher purpose branch, vendor-search-only workflow steps and presentation hooks. Keep historical `mail_search` purpose/rendering. Check active Workflow instances and historical Runs before binding removal. |
-| Unreferenced old coordinator schemas in `purchase-agent-services.ts`                                                    | The existing research tool input schemas; no production callers remain for the old declarations.                                                                                                                                                     | Remove `purchaseAgentCommand`, `PurchaseAgentCommand`, `issueBrowserCommandInput`, `importOrderEvidenceInput`, `saveNavigationHintsInput`, `markHistoryExpiredInput`, `deferOrderForReviewInput`, `settleChargeHuntInput` and their dead imports. Keep stop/failure/settlement services.                                                  |
-| Handwritten research tool forwarding and Zod-to-TypeBox conversion in `purchase-agent/tools.ts`                         | Generate Pi descriptors and typed composition methods from the shared research contracts; migrate every research tool, retaining the separate photo-inventory family.                                                                                | Replace the research registration list and schema conversion with generated adapters. Preserve coercion, original media, task binding, before-effect checks, retained outputs and Pi memo/domain operation IDs. Measure generated and handwritten bytes separately.                                                                       |
-| Purpose lists in shared client constants, agent input schemas, Run declaration and Workflow contract                    | Generate common presentation membership from Run declarations; retain distinct execution subsets. Migrate web/Apple report gating and shared activity projection together.                                                                           | Delete handwritten common presentation twins. First reproduce missing `mail_import` report slots; do not equate all Run purposes with Workflow or Pi capabilities.                                                                                                                                                                        |
-| `RunOrderCandidate`, `research-legacy-mail.ts` (134), `research-legacy-objective.ts` (175), archived resolve contract   | Historical reader/converter, then one `RunTarget` task representation for executable work.                                                                                                                                                           | Conditional lossless migration only: inventory supported historical/in-flight shapes and transfer unresolved imported/covered dispositions first. Delete conversion code/table only after those readers have no remaining supported inputs. Production approval is required.                                                              |
-| Import report/review slots and `__debug_event` operation special cases                                                  | Existing generic entity/report/event projection, with evidence links and domain-specific action semantics                                                                                                                                            | Inspect `repo/entity-report/run.ts`, `repo/activity.ts`, `repo/run-operation.ts` and native detail slots. Delete a bespoke renderer/stream only after the generic equivalent exposes the same actionable provenance and raw failures. No speculative new log table.                                                                       |
+| Current code/storage                                                                                                    | Proposed replacement and callers                                                                                                                                                                                                                                                                                         | Deletions and acceptance                                                                                                                                                                                                                                                                                                                  |
+| ----------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `gmail/search-job.ts` (423 lines), `gmail/search.ts` (87), `gmail/vendor-search.ts` (38), vendor-search Workflow wiring | Known-vendor objectives use retained `research_mail_search`; keep mechanical mailbox discovery and its exact cursor protocol. The unused E2E starters are removed below. Preserve the remaining `search-job.integration.test.ts` failure/retry cases in retained-search coverage before removing the executable starter. | Delete the three files (548 production lines), `VendorMailSearchWorkflow` only, its binding/getter/generated declaration, launcher purpose branch, vendor-search-only workflow steps and presentation hooks. Keep historical `mail_search` purpose/rendering. Check active Workflow instances and historical Runs before binding removal. |
+| Unreferenced old coordinator schemas in `purchase-agent-services.ts`                                                    | The existing research tool input schemas; no production callers remain for the old declarations.                                                                                                                                                                                                                         | Removed `purchaseAgentCommand`, `PurchaseAgentCommand`, `issueBrowserCommandInput`, `importOrderEvidenceInput`, `saveNavigationHintsInput`, `markHistoryExpiredInput`, `deferOrderForReviewInput`, `settleChargeHuntInput` and their dead imports. Stop/failure/settlement services remain.                                               |
+| Handwritten research tool forwarding and Zod-to-TypeBox conversion in `purchase-agent/tools.ts`                         | Generate Pi descriptors and typed composition methods from the shared research contracts; migrate every research tool, retaining the separate photo-inventory family.                                                                                                                                                    | Replace the research registration list and schema conversion with generated adapters. Preserve coercion, original media, task binding, before-effect checks, retained outputs and Pi memo/domain operation IDs. Measure generated and handwritten bytes separately.                                                                       |
+| Purpose lists in shared client constants, agent input schemas, Run declaration and Workflow contract                    | Generate common presentation membership from Run declarations; retain distinct execution subsets. Migrate web/Apple report gating and shared activity projection together.                                                                                                                                               | Delete handwritten common presentation twins. First reproduce missing `mail_import` report slots; do not equate all Run purposes with Workflow or Pi capabilities.                                                                                                                                                                        |
+| `RunOrderCandidate`, `research-legacy-mail.ts` (134), `research-legacy-objective.ts` (175), archived resolve contract   | Historical reader/converter, then one `RunTarget` task representation for executable work.                                                                                                                                                                                                                               | Conditional lossless migration only: inventory supported historical/in-flight shapes and transfer unresolved imported/covered dispositions first. Delete conversion code/table only after those readers have no remaining supported inputs. Production approval is required.                                                              |
+| Import report/review slots and `__debug_event` operation special cases                                                  | Existing generic entity/report/event projection, with evidence links and domain-specific action semantics                                                                                                                                                                                                                | Inspect `repo/entity-report/run.ts`, `repo/activity.ts`, `repo/run-operation.ts` and native detail slots. Delete a bespoke renderer/stream only after the generic equivalent exposes the same actionable provenance and raw failures. No speculative new log table.                                                                       |
 
-The first slice has **548 exactly counted full-file production lines** available
+### Implemented dead-code slice
+
+Removed eight unused coordinator schema/type exports and their import (56 lines),
+and three unused Gmail-search E2E fixture starters, their launcher and imports
+(186 lines before import formatting). No runtime callers required migration.
+The semantic deletion is 242 lines; the formatted diff removes **245 net
+handwritten code/test lines**, with no replacement code, generated change, table
+or data deletion.
+The retained `vendor-order-mail-review.spec.ts` journeys cover saved raw failure
+diagnostics, live progress, retry lineage/cancellation and multi-page scope
+accounting through the replacement research dispatch. No test case was deleted.
+Compiler/generator and hosted checks verify the removal; a declaration-only
+regression would not guard behavior. This does not retire the old Workflow.
+
+The Workflow slice has **548 exactly counted full-file production lines** available
 for deletion plus wiring. A roughly 650-line combined estimate from the initial
 audit is not an accepted net result: fixtures, shared helpers, generated output
 and historical rendering must be measured from the actual diff. The generated
@@ -75,8 +89,11 @@ The upstream main branch is not proof that a feature exists in Cubby's pin.
 The [official Pi harness example](https://github.com/cloudflare/agents/tree/main/examples/next/harnesses/pi)
 and its [implementation notes](https://github.com/cloudflare/agents/blob/main/examples/next/harnesses/pi/NOTES.md)
 describe experimental `PiHarness`, durable submissions, lifecycle wakeups and
-tool recovery. Tools are fixed when a session is created; browser suspension
-and resumable task boundaries still need explicit hosting. Cubby already uses
+tool recovery. Current upstream [Pi durable documentation](https://github.com/earendil-works/pi/blob/main/packages/durable/README.md)
+supports changing registry/agent tool selection and nested tool execution. Verify
+those APIs against Cubby’s pin before replacing tool forwarding; preserve nested
+replay keys and scalar coercion. Browser suspension and resumable task boundaries
+still need explicit hosting. Cubby already uses
 this ownership split. Audit its extra settlement/exposure records rather than
 replacing Pi recovery with another generic engine. Preserve the existing
 interrupted-write and retained-browser-delivery regressions.
@@ -87,7 +104,10 @@ The [official Code Mode package](https://github.com/cloudflare/agents/blob/main/
 is experimental. It generates types and supports isolated execution and
 MCP/OpenAPI connectors. These supply composition and transport, not Cubby's
 evidence authorization or transaction idempotency. A generic low-level request
-escape hatch must not expose arbitrary domain writes.
+escape hatch must not expose arbitrary domain writes. Its separate
+[durable runtime](https://developers.cloudflare.com/agents/tools/codemode/durable-runtime/)
+persists history, approvals and snippet execution; adopting that alongside Pi
+would add a second execution owner. Evaluate bounded composition inside Pi first.
 
 Pilot a generated `research` namespace with bounded independent reads. Each
 method still passes through its normal authorization, spend check, operation
@@ -104,7 +124,8 @@ uses `@cloudflare/computer` for a SQLite-backed workspace and bounded host
 callbacks. This is not a remote authenticated Chrome replacement. Its example
 distinguishes replay-safe operations from `edit`/`exec`. A production workspace
 proposal must demonstrate a real document-processing need, source disposal,
-authentication boundaries, abort/recovery and measured deletion. No workspace
+authentication boundaries, abort/recovery and measured deletion. The [computer package](https://github.com/cloudflare/computer/blob/main/packages/computer/README.md)
+is explicitly preview-only and unsuitable for production use. No workspace
 is introduced in the live-completion fixes.
 
 ## Failure-first migration and acceptance
@@ -139,8 +160,12 @@ The approved preserving `0025_purchase_research` cutover is complete. Remaining
 acceptance includes the authorized live roster, known-vendor and unmatched-charge
 backfills, full-history coverage and separately verified continuous new-mail
 processing. A quota/auth/admission failure is not model-quality evidence.
-Subscription-required routing and metered authorization caps remain unchanged;
-no paid fallback, new migration or household cleanup follows from this proposal.
+Budgeted Gateway fallback is separately authorized within the existing pilot,
+historical and continuous caps. Each paid transmission still requires durable
+admission and known pricing. The current transport recognizes the exact HTTP 429
+quota code; the live refusal’s wire envelope is not yet captured, so an HTTP 200
+stream refusal remains a hypothesis. This proposal grants no additional spend,
+production migration or household cleanup.
 
 The forward image fix reuses a same-byte item attachment under the existing
 Product lock, retains new source support and cleans only newly staged redundant

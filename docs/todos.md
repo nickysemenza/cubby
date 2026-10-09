@@ -170,7 +170,9 @@ See also the image operational passes at the end of this file.
 The model owns adaptive investigation and semantic judgments. Code owns source
 retention, admission, durable recovery, replay, ownership and domain writes.
 Pi already hosts the researcher; the [simplification audit](plans/research-simplification.md)
-records the remaining deletion candidates and SDK comparisons. Browser transport
+records the remaining deletion candidates and SDK comparisons. The first slice
+removes 245 net handwritten code/test lines (coordinator declarations and old Gmail
+fixtures); the old Workflow and its historical compatibility still remain. Browser transport
 contracts remain in [infrastructure](infrastructure.md#browser-bridge).
 
 - 🟢 **Stop repeated logical failures across a Run.** One browser-command retry
