@@ -75,7 +75,7 @@ export function dataTypeLabel(dataType: DataType): string {
 // SR Legacy ~85 > Survey ~65 > Foundation ~30 > Branded ~14, so richer
 // (more-complete) reference foods out-rank sparse branded label data. The five
 // sampling/research types carry ~0 nutrients and sort last (and are normally
-// hidden by foodsOnly). Drives SQL ordering in usda-api (dataTypePriorityCase).
+// hidden by foodsOnly). Drives release search ordering (dataTypePriorityCase).
 export const DATA_TYPE_PRIORITY = {
   sr_legacy_food: 0,
   survey_fndds_food: 1,

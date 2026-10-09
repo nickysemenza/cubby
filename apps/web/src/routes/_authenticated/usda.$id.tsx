@@ -12,10 +12,9 @@ import { DetailPagePending } from "~/ui/route-pending";
 
 export const Route = createFileRoute("/_authenticated/usda/$id")({
   // Client-only for latency: this is the one de-flagged route whose loader
-  // blocks on an upstream rather than our own DB. The USDA detail projection reaches
-  // usda-api over a service binding whose internal work runs ~500ms-1s (see
-  // the abort ceiling in server/clients/usda.ts), and server-rendering it
-  // holds the whole document for that long. A skeleton that fills in beats a
+  // blocks on an upstream rather than our own DB. The USDA detail projection
+  // waits on the release Durable Object, one region away, and server-rendering
+  // it holds the whole document for that long. A skeleton that fills in beats a
   // blank wait on a rarely-visited detail route.
   ssr: false,
   loader: async ({ params, context }) => {
