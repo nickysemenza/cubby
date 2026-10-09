@@ -278,8 +278,17 @@ version against `APPLE_CLIENT_COMPATIBILITY_VERSION`, installs it at
 It verifies both the built app and any existing installed app against the
 project team and bundle ID, and checks the candidate against the installed
 app's designated privacy requirement. The copied candidate is verified before stopping
-Cubby or replacing the installed app; a failed replacement restores the old
+Cubby or replacing the installed app. Stop only processes launched from the
+installed executable, and await their exit before renaming its bundle: signalling
+termination alone can let a final capture resolve the app at an installer backup
+path. A shutdown timeout refuses replacement without moving the installed bundle.
+A failed replacement restores the old
 bundle. If the previous bundle is root-owned and cannot be removed, its
 sibling backup path is reported after successful relaunch for manual cleanup.
-App data is retained; privacy grants persist while the signing requirement stays compatible. The command requires write
+App data is retained; privacy grants persist while the signing requirement stays compatible.
+This preserves development rebuilds, not a TestFlight-to-development signing
+transition. Notarization does not grant screen capture permission or suppress
+macOS permission requests. A retained backup must not be launched for household
+automation; the running executable should be `/Applications/Cubby.app/Contents/MacOS/Cubby`.
+The command requires write
 access to `/Applications`; it never invokes sudo or resets permissions.

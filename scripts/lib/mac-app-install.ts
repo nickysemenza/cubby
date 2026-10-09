@@ -8,12 +8,12 @@ import {
 } from "node:fs";
 import { basename, dirname, join } from "node:path";
 
-export function installMacApp(
+export async function installMacApp(
   source: string,
   destination: string,
   verify: (app: string) => void,
-  stop: () => void,
-): string | undefined {
+  stop: () => Promise<void>,
+): Promise<string | undefined> {
   verify(source);
   if (existsSync(destination)) {
     if (!lstatSync(destination).isDirectory())
@@ -35,7 +35,7 @@ export function installMacApp(
   try {
     cpSync(source, candidate, { recursive: true, verbatimSymlinks: true });
     verify(candidate);
-    stop();
+    await stop();
     if (existsSync(destination)) renameSync(destination, backup);
     try {
       renameSync(candidate, destination);

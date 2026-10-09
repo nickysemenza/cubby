@@ -27,6 +27,7 @@ import { APPLE_CLIENT_COMPATIBILITY_VERSION } from "../packages/shared/src/apple
 import { installedApprovalVerifier } from "./lib/mac-app-approval.ts";
 import { installMacApp } from "./lib/mac-app-install.ts";
 import { spawnSync } from "node:child_process";
+import { setTimeout as delay } from "node:timers/promises";
 
 import { captureSyncChecked, runSyncChecked } from "./lib/run.ts";
 import { existsSync, mkdtempSync, readFileSync, rmSync } from "node:fs";
@@ -252,7 +253,7 @@ const assertTeamSigned = (app: string, allowTestFlight = false) => {
     );
 };
 
-const mac = (options: Options) => {
+const mac = async (options: Options) => {
   ensureFfi();
   run("node", [join(ROOT, "scripts/generator/ensure.ts")]);
   ensureProject();
@@ -272,7 +273,7 @@ const mac = (options: Options) => {
     existsSync(installed) && !options.replaceSigningIdentity
       ? installedApprovalVerifier(installed)
       : undefined;
-  const retainedBackup = installMacApp(
+  const retainedBackup = await installMacApp(
     app,
     installed,
     (candidate) => {
@@ -282,18 +283,40 @@ const mac = (options: Options) => {
       );
       verifyApproval?.(candidate);
     },
-    () => {
-      const result = spawnSync("pkill", ["-x", "Cubby"], { stdio: "ignore" });
-      if (result.error || (result.status !== 0 && result.status !== 1))
-        throw (
-          result.error ?? new Error(`Could not stop Cubby: ${result.status}`)
-        );
+    async () => {
+      const executable = join(installed, "Contents/MacOS/Cubby");
+      const pids = capture("ps", ["-axo", "pid=,comm="])
+        .split("\n")
+        .flatMap((line) => {
+          const match = /^\s*(\d+)\s+(.+)$/u.exec(line);
+          return match?.[2] === executable ? [Number(match[1])] : [];
+        });
+      const isAlive = (pid: number) => {
+        try {
+          process.kill(pid, 0);
+          return true;
+        } catch (error) {
+          if (
+            error instanceof Error &&
+            "code" in error &&
+            error.code === "ESRCH"
+          )
+            return false;
+          throw error;
+        }
+      };
+      for (const pid of pids) if (isAlive(pid)) process.kill(pid, "SIGTERM");
+      const deadline = Date.now() + 10_000;
+      while (pids.some(isAlive)) {
+        if (Date.now() >= deadline)
+          throw new Error(
+            "Cubby did not exit within 10 seconds; installed bundle was not moved",
+          );
+        await delay(50);
+      }
     },
   );
-  // `open` on a running app only activates it, so the old binary would keep
-  // running; pkill exits 1 when nothing matched, which is fine. Launch a new
-  // instance explicitly because LaunchServices may still consider the
-  // terminating process active for a short time after pkill.
+  // Launch the verified installed copy explicitly, after the old process exits.
   run("open", ["-n", installed]);
   if (retainedBackup)
     process.stdout.write(
@@ -489,7 +512,7 @@ const main = () => {
 };
 
 try {
-  main();
+  await main();
 } catch (error) {
   process.stderr.write(
     `apple: ${error instanceof Error ? error.message : String(error)}\n`,
