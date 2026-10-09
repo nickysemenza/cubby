@@ -280,6 +280,41 @@ export class PurchaseImportRunAgent
               return undefined;
             },
             afterResponse: (message) => this.afterResponse(message),
+            onYield: async (_answer, api, hookContext) => {
+              if (
+                purpose === "photo_inventory" ||
+                this.readState(STATE_KEYS.researchGenerationStop)
+              )
+                return undefined;
+              const existing = await api.memo<JsonValue>(
+                "research-continuation",
+                hookContext,
+              );
+              const output =
+                existing ??
+                (await api.memo(
+                  "research-continuation",
+                  z
+                    .json()
+                    .parse(
+                      await this.services().researchContinue(
+                        `yield:${api.taskId}`,
+                      ),
+                    ),
+                  hookContext,
+                ));
+              await this.retainResearchMode(output);
+              const active = z
+                .object({ status: z.literal("working") })
+                .safeParse(output);
+              if (!active.success) return undefined;
+              return {
+                continue: renderSignal({
+                  type: "cubby.research-continuation",
+                  body: JSON.stringify(output),
+                }),
+              };
+            },
           }),
         ],
       }),

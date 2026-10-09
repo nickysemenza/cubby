@@ -80,6 +80,8 @@ export interface RunServices {
   canDispatchCoordinator(eventId: string): Promise<boolean>;
   acknowledgeCoordinator(eventId: string): Promise<boolean>;
   researchNext(input: ResearchWorkNextInput, callId: string): Promise<object>;
+  /** Host-owned iteration before a normal final answer settles its submission. */
+  researchContinue(callId: string): Promise<object>;
   researchObserve(
     input: ResearchWorkObserveInput,
     callId: string,

@@ -725,6 +725,59 @@ describe("research host lifecycle", () => {
       expect(settled?.state).toBe("unresolved");
     },
   );
+  it("bounds unchanged yielded work without counting replay or rereading identical evidence as progress", async () => {
+    const f = await admitted(2);
+    const current = z.object({
+      status: z.literal("working"),
+      work: z.object({ workRef: z.uuid() }),
+    });
+    const firstCall = crypto.randomUUID();
+    const first = current.parse(await f.services.researchContinue(firstCall));
+    expect(await f.services.researchContinue(firstCall)).toMatchObject(first);
+    const [target] = await getDb(ctx.db)
+      .select()
+      .from(runTarget)
+      .where(eq(runTarget.id, first.work.workRef));
+    if (!target?.workKey) throw new Error("Synthetic yielded task missing");
+    const observe = () =>
+      f.services.researchMailRead(
+        { workRef: target.id, messageRef: target.workKey! },
+        crypto.randomUUID(),
+      );
+    await observe();
+    const changed = current.parse(
+      await f.services.researchContinue(crypto.randomUUID()),
+    );
+    expect(changed.work.workRef).toBe(target.id);
+    await observe();
+    const unchanged = current.parse(
+      await f.services.researchContinue(crypto.randomUUID()),
+    );
+    expect(unchanged.work.workRef).toBe(target.id);
+    const lastCall = crypto.randomUUID();
+    const next = current.parse(await f.services.researchContinue(lastCall));
+    expect(next.work.workRef).not.toBe(target.id);
+    expect(await f.services.researchContinue(lastCall)).toMatchObject(next);
+    const [settled] = await getDb(ctx.db)
+      .select()
+      .from(runTarget)
+      .where(eq(runTarget.id, target.id));
+    expect(settled).toMatchObject({
+      state: "unresolved",
+      outcome: "temporarily_blocked",
+    });
+    expect(settled?.warning).toContain("ended without resolving");
+    const attempts = await getDb(ctx.db)
+      .select()
+      .from(runOperation)
+      .where(
+        and(
+          eq(runOperation.runId, f.started.runId),
+          eq(runOperation.kind, "research_continue"),
+        ),
+      );
+    expect(attempts).toHaveLength(4);
+  });
   it("continues every selected mail after ambiguity and finishes with review accounting only after the last task", async () => {
     const f = await admitted(2);
     const targets = await getDb(ctx.db)

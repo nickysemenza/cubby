@@ -86,6 +86,7 @@ import { loadMailResearchSources } from "./research-run";
 type ResearchServices = Pick<
   RunServices,
   | "researchNext"
+  | "researchContinue"
   | "researchObserve"
   | "researchResolve"
   | "researchMailSearch"
@@ -443,6 +444,13 @@ export function researchServiceFor(
   };
 
   const services: ResearchServices = {
+    async researchContinue(callId) {
+      const next = await services.researchNext({}, `${callId}:next`);
+      const { continueResearchWork } = await import("./research-yield");
+      const decision = await continueResearchWork(db, { runId, callId, next });
+      if (!decision.settled) return decision.next;
+      return services.researchNext({}, `${callId}:after-stop`);
+    },
     researchNext(raw, callId) {
       const input = researchToolInputs.work_next.parse(raw);
       return call("next", callId, input, async () => {

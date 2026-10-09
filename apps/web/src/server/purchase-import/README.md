@@ -249,6 +249,15 @@ and deployment/readback order are owned by the
    task. Schema exceptions and transport failures do not trigger this policy;
    escalation preserves the existing attempt/generation limits and
    subscription-only transport without paid fallback.
+   A normal final answer yields to the host's next-work decision before pi
+   settles the submission. Runnable work continues within that same durable
+   submission; done, waiting and stopped dispositions settle normally. Queued
+   user input and reset retain pi's precedence. Repeated final answers pause
+   only the affected task after three decisions with unchanged retained source
+   checksums and accepted writes. Replaying a decision or rereading identical
+   source bytes does not count as progress. The retained decision includes the
+   last actual refusal/error, and other tasks continue. Failure, explicit abort
+   and the generation ceiling retain the existing settlement backstop.
    Retained mail observations present plain text and compact visible HTML with
    source links before applying the model-view size limit. Layout/CSS bytes never
    crowd receipt facts out of that view. The immutable original MIME content and

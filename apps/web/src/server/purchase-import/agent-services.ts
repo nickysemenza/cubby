@@ -189,6 +189,8 @@ export function runServicesFor(
 
     researchNext: (input, callId) =>
       withResearch((service) => service.researchNext(input, callId)),
+    researchContinue: (callId) =>
+      withResearch((service) => service.researchContinue(callId)),
     researchObserve: (input, callId) =>
       withResearch((service) => service.researchObserve(input, callId)),
     researchResolve: (input, callId) =>

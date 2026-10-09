@@ -14,10 +14,9 @@ export type SettlementReport =
     };
 
 /**
- * A finished submission is not a finished run: the coordinator may simply have
- * stopped calling tools, so an answered one goes to the server's reconcile,
- * which knows whether a browser command is still in flight or the run needs
- * review. An unanswered one fails the run, behind the same wake fence.
+ * Research's yield hook continues runnable work before a normal answer settles.
+ * A finished submission still passes the server's browser/wake fences; failures,
+ * aborts and exhausted execution bounds retain this reconciliation backstop.
  */
 export function settlementReport(result: PiOperationResult): SettlementReport {
   if (result.status === "done") return { kind: "reconcile" };
