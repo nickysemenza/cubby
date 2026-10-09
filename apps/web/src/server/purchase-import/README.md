@@ -249,6 +249,30 @@ and deployment/readback order are owned by the
    task. Schema exceptions and transport failures do not trigger this policy;
    escalation preserves the existing attempt/generation limits and
    subscription-only transport without paid fallback.
+   A normal final answer yields to the host's next-work decision before pi
+   settles the submission. Runnable work continues within that same durable
+   submission; done, waiting and stopped dispositions settle normally. Queued
+   user input and reset retain pi's precedence: no-progress accounting is
+   committed only when a generation consumes the selected host continuation.
+   Its exact signal must match the durable host-issued record; member text
+   cannot manufacture continuation authority.
+   Repeated final answers pause
+   only the affected task after three decisions with unchanged retained source
+   checksums and accepted writes, including each canonical fact subject.
+   Replaying a decision or rereading identical
+   source bytes does not count as progress. The retained decision includes the
+   last actual refusal/error, and other tasks continue. Failure, explicit abort
+   and the generation ceiling retain the existing settlement backstop.
+   A late final answer after cancellation creates no continuation ledger writes.
+   Continuation admission locks the Run and binds its next-work decisions to
+   the same transaction, so cancellation cannot commit between its status check
+   and ledger writes. Derived Product work dispatches after that transaction commits.
+   Continuations acquire the owning member before sources and Runs, matching
+   mail admission and the terminal Product sweep. Mail continuations then lock
+   their frozen source set in ID order before the Run,
+   matching source exposure, retirement and history erasure so those paths cannot invert locks.
+   Run status/ledger fences use key-preserving locks: cancellation still waits,
+   while a concurrent child admission can check its parent foreign key.
    Retained mail observations present plain text and compact visible HTML with
    source links before applying the model-view size limit. Layout/CSS bytes never
    crowd receipt facts out of that view. The immutable original MIME content and

@@ -2,13 +2,15 @@ import { parseEntityId } from "@cubby/schemas/identifiers";
 import type { PurchaseAgentEvent } from "@cubby/schemas/purchase-import";
 import { researchWorkResolve } from "@cubby/schemas/research-tools";
 import { fromPartial } from "@total-typescript/shoehorn";
-import { and, eq } from "drizzle-orm";
+import { and, eq, sql } from "drizzle-orm";
 import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 import { z } from "zod";
 
 import { runContract } from "~/contracts/run.contract";
+import type { DrizzleTransaction } from "~/server/db";
 import {
+  ledgerParty,
   mailboxMessage,
   orderMail,
   run,
@@ -16,11 +18,16 @@ import {
   runOperation,
   runTarget,
 } from "~/server/db/schema";
-import { getDb } from "~/server/repo/database-helpers";
+import {
+  databaseForTransaction,
+  getDb,
+  withTransaction,
+} from "~/server/repo/database-helpers";
 import { insertWithShortcode } from "~/server/repo/shortcode-utils";
 
+import { recordAcceptedFactEvidence } from "./fact-verification";
 import { resolveImportResearch } from "./research-import";
-import { startMailResearch } from "./research-run";
+import { admitMailResearch, startMailResearch } from "./research-run";
 import { researchServiceFor } from "./research-service";
 import { loadRunDetail, loadRunLog } from "./run-service";
 
@@ -29,6 +36,22 @@ import { loadRunDetail, loadRunLog } from "./run-service";
 // and legacy conversations never executing new tools or replaying old results.
 describe("research host lifecycle", () => {
   const ctx = withTestDb();
+  async function waitForBlockedBackend(tx: DrizzleTransaction) {
+    const deadline = Date.now() + 5_000;
+    while (true) {
+      await tx.execute(sql`select pg_stat_clear_snapshot()`);
+      const blocked = await tx.execute(
+        sql`select count(*)::integer as count from pg_stat_activity where pg_backend_pid() = any(pg_blocking_pids(pid))`,
+      );
+      const waiting = z
+        .array(z.object({ count: z.number() }))
+        .parse(blocked.rows);
+      if (waiting[0]?.count) return;
+      if (Date.now() >= deadline)
+        throw new Error("Synthetic continuation did not reach the held lock");
+      await new Promise((resolve) => setTimeout(resolve, 10));
+    }
+  }
   async function admitted(messageCount = 1) {
     const party = await insertWithShortcode(ctx.db, "ledgerParty", {
       name: "Example cloud research member",
@@ -725,6 +748,295 @@ describe("research host lifecycle", () => {
       expect(settled?.state).toBe("unresolved");
     },
   );
+  it("allows actual mail admission while a terminal continuation waits for the same member", async () => {
+    const { f } = await importPrimary(2);
+    await getDb(ctx.db)
+      .update(runTarget)
+      .set({ state: "unresolved", outcome: "temporarily_blocked" })
+      .where(
+        and(
+          eq(runTarget.runId, f.started.runId),
+          eq(runTarget.state, "pending"),
+        ),
+      );
+    let continuation: Promise<object> | undefined;
+    try {
+      await withTransaction(ctx.db, async (tx) => {
+        await tx
+          .select()
+          .from(ledgerParty)
+          .where(eq(ledgerParty.id, f.party.id))
+          .for("no key update");
+        continuation = f.services.researchContinue(crypto.randomUUID(), true);
+        await waitForBlockedBackend(tx);
+        await tx.execute(sql`set local lock_timeout = '250ms'`);
+        await admitMailResearch(databaseForTransaction(tx), {
+          ledgerPartyId: f.party.id,
+          userId: ctx.actor.userId,
+          mailboxId: f.mail.mailboxId,
+          messageIds: [f.mail.id],
+        });
+      });
+      expect(await continuation).toMatchObject({ status: "done" });
+    } finally {
+      await continuation;
+    }
+  });
+  it("allows a concurrent child Run foreign-key check while continuation waits for member admission", async () => {
+    const { f } = await importPrimary(2);
+    await getDb(ctx.db)
+      .update(runTarget)
+      .set({ state: "unresolved", outcome: "temporarily_blocked" })
+      .where(
+        and(
+          eq(runTarget.runId, f.started.runId),
+          eq(runTarget.state, "pending"),
+        ),
+      );
+    const [parent] = await getDb(ctx.db)
+      .select()
+      .from(run)
+      .where(eq(run.id, parseEntityId("run", f.started.runId)));
+    if (!parent) throw new Error("Synthetic parent Run missing");
+    let continuation: Promise<object> | undefined;
+    try {
+      await withTransaction(ctx.db, async (tx) => {
+        await tx
+          .select()
+          .from(ledgerParty)
+          .where(eq(ledgerParty.id, f.party.id))
+          .for("no key update");
+        continuation = f.services.researchContinue(crypto.randomUUID(), true);
+        await waitForBlockedBackend(tx);
+        await tx.execute(sql`set local lock_timeout = '250ms'`);
+        await tx.insert(run).values({
+          ...parent,
+          id: parseEntityId("run", crypto.randomUUID()),
+          shortcode: "RUN-4K7M",
+          clientKey: crypto.randomUUID(),
+          agentSessionId: crypto.randomUUID(),
+          dispatchEventId: crypto.randomUUID(),
+          parentRunId: parent.id,
+        });
+      });
+      expect(await continuation).toMatchObject({ status: "done" });
+    } finally {
+      await continuation;
+    }
+  });
+  it("locks source mail before its Run so concurrent retirement cannot invert the order", async () => {
+    const f = await admitted();
+    let continuation: Promise<object> | undefined;
+    try {
+      await withTransaction(ctx.db, async (tx) => {
+        await tx
+          .select()
+          .from(orderMail)
+          .where(eq(orderMail.id, f.mail.id))
+          .for("update");
+        continuation = f.services.researchContinue(crypto.randomUUID(), false);
+        await waitForBlockedBackend(tx);
+        await tx
+          .select()
+          .from(run)
+          .where(eq(run.id, parseEntityId("run", f.started.runId)))
+          .for("update", { noWait: true });
+      });
+      expect(await continuation).toMatchObject({ status: "working" });
+    } finally {
+      await continuation;
+    }
+  });
+  it("serializes continuation admission with a cancellation still committing", async () => {
+    const f = await admitted();
+    let continuation:
+      | ReturnType<typeof f.services.researchContinue>
+      | undefined;
+    await withTransaction(ctx.db, async (tx) => {
+      await tx
+        .select()
+        .from(run)
+        .where(eq(run.id, parseEntityId("run", f.started.runId)))
+        .for("update");
+      await tx
+        .update(run)
+        .set({
+          status: "failed",
+          failureCode: "user_cancelled",
+          endedAt: new Date(),
+        })
+        .where(eq(run.id, parseEntityId("run", f.started.runId)));
+      continuation = f.services.researchContinue(crypto.randomUUID(), false);
+      await waitForBlockedBackend(tx);
+    });
+    expect(await continuation).toMatchObject({
+      status: "stopped",
+      reason: "failed",
+    });
+    expect(
+      await getDb(ctx.db)
+        .select()
+        .from(runOperation)
+        .where(eq(runOperation.runId, f.started.runId)),
+    ).toEqual([]);
+  });
+  it("leaves a cancelled Run untouched when a late final answer proposes continuation", async () => {
+    const f = await admitted();
+    await getDb(ctx.db)
+      .update(run)
+      .set({
+        status: "failed",
+        failureCode: "user_cancelled",
+        endedAt: new Date(),
+      })
+      .where(eq(run.id, parseEntityId("run", f.started.runId)));
+    expect(
+      await f.services.researchContinue(crypto.randomUUID(), false),
+    ).toMatchObject({ status: "stopped", reason: "failed" });
+    expect(
+      await getDb(ctx.db)
+        .select()
+        .from(runOperation)
+        .where(eq(runOperation.runId, f.started.runId)),
+    ).toEqual([]);
+  });
+  it("does not consume a proposed continuation before pi selects it over queued input or reset", async () => {
+    const f = await admitted();
+    const calls = Array.from({ length: 3 }, () => crypto.randomUUID());
+    for (const callId of calls)
+      expect(await f.services.researchContinue(callId, false)).toMatchObject({
+        status: "working",
+      });
+    expect(
+      await getDb(ctx.db)
+        .select()
+        .from(runOperation)
+        .where(
+          and(
+            eq(runOperation.runId, f.started.runId),
+            eq(runOperation.kind, "research_continue"),
+          ),
+        ),
+    ).toEqual([]);
+    for (const callId of calls.slice(0, 2))
+      expect(await f.services.researchContinue(callId, true)).toMatchObject({
+        status: "working",
+      });
+    expect(await f.services.researchContinue(calls[2]!, true)).toMatchObject({
+      status: "done",
+    });
+  });
+  it("counts matching accepted values on distinct canonical Purchases as new progress", async () => {
+    const f = await admitted();
+    const next = z
+      .object({ work: z.object({ workRef: z.uuid() }) })
+      .parse(await f.services.researchNext({}, crypto.randomUUID()));
+    await f.services.researchMailRead(
+      { workRef: next.work.workRef, messageRef: f.mail.id },
+      crypto.randomUUID(),
+    );
+    const [original] = await getDb(ctx.db)
+      .select()
+      .from(runEvidence)
+      .where(eq(runEvidence.targetId, next.work.workRef));
+    if (!original) throw new Error("Synthetic retained original missing");
+    const vendor = await insertWithShortcode(ctx.db, "vendor", {
+      name: "Synthetic continuation retailer",
+    });
+    const first = await insertWithShortcode(ctx.db, "purchase", {
+      vendorId: vendor.id,
+      orderId: "SYNTHETIC-FIRST",
+      statedTotal: 24,
+    });
+    const second = await insertWithShortcode(ctx.db, "purchase", {
+      vendorId: vendor.id,
+      orderId: "SYNTHETIC-SECOND",
+      statedTotal: 24,
+    });
+    const retain = (entityId: typeof first.id) =>
+      withTransaction(ctx.db, (tx) =>
+        recordAcceptedFactEvidence(tx, {
+          runId: parseEntityId("run", f.started.runId),
+          targetId: next.work.workRef,
+          subject: { entityKind: "purchase", entityId },
+          claims: [
+            {
+              evidenceId: original.id,
+              fieldPath: "statedTotal",
+              value: 24,
+              support: {
+                observation: "Total $24",
+                reasoning:
+                  "The retained original supports this exact Purchase total.",
+              },
+            },
+          ],
+        }),
+      );
+    await retain(first.id);
+    await f.services.researchContinue(crypto.randomUUID());
+    await f.services.researchContinue(crypto.randomUUID());
+    await retain(second.id);
+    expect(
+      await f.services.researchContinue(crypto.randomUUID()),
+    ).toMatchObject({
+      status: "working",
+      work: { workRef: next.work.workRef },
+    });
+  });
+  it("bounds unchanged yielded work without counting replay or rereading identical evidence as progress", async () => {
+    const f = await admitted(2);
+    const current = z.object({
+      status: z.literal("working"),
+      work: z.object({ workRef: z.uuid() }),
+    });
+    const firstCall = crypto.randomUUID();
+    const first = current.parse(await f.services.researchContinue(firstCall));
+    expect(await f.services.researchContinue(firstCall)).toMatchObject(first);
+    const [target] = await getDb(ctx.db)
+      .select()
+      .from(runTarget)
+      .where(eq(runTarget.id, first.work.workRef));
+    if (!target?.workKey) throw new Error("Synthetic yielded task missing");
+    const observe = () =>
+      f.services.researchMailRead(
+        { workRef: target.id, messageRef: target.workKey! },
+        crypto.randomUUID(),
+      );
+    await observe();
+    const changed = current.parse(
+      await f.services.researchContinue(crypto.randomUUID()),
+    );
+    expect(changed.work.workRef).toBe(target.id);
+    await observe();
+    const unchanged = current.parse(
+      await f.services.researchContinue(crypto.randomUUID()),
+    );
+    expect(unchanged.work.workRef).toBe(target.id);
+    const lastCall = crypto.randomUUID();
+    const next = current.parse(await f.services.researchContinue(lastCall));
+    expect(next.work.workRef).not.toBe(target.id);
+    expect(await f.services.researchContinue(lastCall)).toMatchObject(next);
+    const [settled] = await getDb(ctx.db)
+      .select()
+      .from(runTarget)
+      .where(eq(runTarget.id, target.id));
+    expect(settled).toMatchObject({
+      state: "unresolved",
+      outcome: "temporarily_blocked",
+    });
+    expect(settled?.warning).toContain("ended without resolving");
+    const attempts = await getDb(ctx.db)
+      .select()
+      .from(runOperation)
+      .where(
+        and(
+          eq(runOperation.runId, f.started.runId),
+          eq(runOperation.kind, "research_continue"),
+        ),
+      );
+    expect(attempts).toHaveLength(4);
+  });
   it("continues every selected mail after ambiguity and finishes with review accounting only after the last task", async () => {
     const f = await admitted(2);
     const targets = await getDb(ctx.db)

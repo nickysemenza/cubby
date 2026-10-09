@@ -349,7 +349,7 @@ describe("purchase research through the built Worker", () => {
   it.each([
     {
       mode: "retained",
-      name: "imports retained mail, automatically researches its exact variant through the broker, and exposes current per-field proof while preserving recorded money",
+      name: "continues an early final answer to import retained mail, automatically research its exact variant, and expose current proof while preserving recorded money",
     },
     {
       mode: "provider",
@@ -580,7 +580,16 @@ describe("purchase research through the built Worker", () => {
               model,
               "https://model.test/configure",
               JSON.stringify({
-                steps: mailSteps,
+                steps:
+                  mode === "retained"
+                    ? [
+                        {
+                          await: ["cubby.research-continuation"],
+                          text: "The coordinator ended before investigating its assigned mail.",
+                        },
+                        ...mailSteps,
+                      ]
+                    : mailSteps,
                 purposeSteps: { product_enrichment: productSteps },
               }),
             );
@@ -819,6 +828,21 @@ describe("purchase research through the built Worker", () => {
                 );
               if (!child) throw new Error("Automatic child Run missing.");
               expect(importRun?.status).toBe("completed");
+              const continuations = await database
+                .select({ state: runOperation.state })
+                .from(runOperation)
+                .where(
+                  and(
+                    eq(runOperation.runId, runEntityId.parse(runId)),
+                    eq(runOperation.kind, "research_continue"),
+                  ),
+                );
+              expect(continuations).toEqual(
+                mode === "retained" ? [{ state: "completed" }] : [],
+              );
+              evidence.push({
+                consumedHostContinuations: continuations.length,
+              });
               if (mode === "provider")
                 await verifyProviderAcquisition({
                   runtime,
@@ -1081,6 +1105,9 @@ describe("purchase research through the built Worker", () => {
               expect(await controls.violations()).toEqual([]);
               expect(await controls.emitted()).toEqual(
                 expect.arrayContaining([
+                  ...(mode === "retained"
+                    ? ["await:cubby.research-continuation"]
+                    : []),
                   "mail-resolve",
                   "product-observe",
                   "product-resolve",

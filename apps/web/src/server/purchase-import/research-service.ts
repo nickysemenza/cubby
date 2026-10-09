@@ -35,6 +35,7 @@ import {
   getDb,
   notDeleted,
   withTransaction,
+  withTransactionDatabase,
 } from "~/server/repo/database-helpers";
 import { readCanonicalEntityIds } from "~/server/repo/entity-identity";
 import {
@@ -86,6 +87,7 @@ import { loadMailResearchSources } from "./research-run";
 type ResearchServices = Pick<
   RunServices,
   | "researchNext"
+  | "researchContinue"
   | "researchObserve"
   | "researchResolve"
   | "researchMailSearch"
@@ -283,8 +285,8 @@ export function researchServiceFor(
       });
     return owned;
   };
-  const owner = async () => {
-    const [owned] = await database
+  const owner = async (ownedDb: Database = db) => {
+    const [owned] = await getDb(ownedDb)
       .select({ run })
       .from(run)
       .innerJoin(
@@ -443,6 +445,53 @@ export function researchServiceFor(
   };
 
   const services: ResearchServices = {
+    async researchContinue(callId, admitted = true) {
+      return withTransactionDatabase(db, async (transactionDb) => {
+        // Both mail admission and the terminal Product sweep acquire member first.
+        const member = await owner(transactionDb);
+        await getDb(transactionDb)
+          .select({ id: ledgerParty.id })
+          .from(ledgerParty)
+          .where(eq(ledgerParty.id, member.ledgerPartyId!))
+          .for("no key update");
+        // Source exposure/retirement locks mail before Runs; preserve that order.
+        const sources = await loadMailResearchSources(transactionDb, runId);
+        if (sources?.length)
+          await getDb(transactionDb)
+            .select({ id: orderMail.id })
+            .from(orderMail)
+            .where(
+              inArray(
+                orderMail.id,
+                sources.map((source) => source.orderMailId),
+              ),
+            )
+            .orderBy(asc(orderMail.id))
+            .for("update");
+        // Cancellation and continuation admission share the Run write boundary.
+        await getDb(transactionDb)
+          .select({ id: run.id })
+          .from(run)
+          .where(and(eq(run.id, runId), notDeleted(run)))
+          .for("no key update");
+        await assertResearchRunExecutable(transactionDb, runId);
+        const scope = await owner(transactionDb);
+        if (!["running", "paused_offline"].includes(scope.status))
+          return { status: "stopped", reason: scope.status };
+        const scoped = researchServiceFor(transactionDb, env, runId, ports);
+        const next = await scoped.researchNext({}, `${callId}:next`);
+        // pi may discard a proposed continuation in favor of queued input/reset.
+        if (!admitted) return next;
+        const { continueResearchWork } = await import("./research-yield");
+        const decision = await continueResearchWork(transactionDb, {
+          runId,
+          callId,
+          next,
+        });
+        if (!decision.settled) return decision.next;
+        return scoped.researchNext({}, `${callId}:after-stop`);
+      });
+    },
     researchNext(raw, callId) {
       const input = researchToolInputs.work_next.parse(raw);
       return call("next", callId, input, async () => {

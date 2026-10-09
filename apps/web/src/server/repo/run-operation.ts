@@ -35,12 +35,13 @@ const matchesKey = (key: OperationKey) =>
 /** A `failed` row keeps a bounded diagnostic. */
 const boundedError = (message: string) => message.slice(0, 2_000);
 
+// Fence status/retirement writes without blocking child Run foreign-key checks.
 async function lockOperationRun(client: Client, key: OperationKey) {
   const [scope] = await client
     .select({ retiredAt: run.retiredAt })
     .from(run)
     .where(eq(run.id, key.runId))
-    .for("update");
+    .for("no key update");
   return scope?.retiredAt !== null && scope?.retiredAt !== undefined;
 }
 
@@ -105,7 +106,7 @@ export async function insertOperation(
       .from(run)
       .where(inArray(run.id, [...new Set(list.map((row) => row.runId))]))
       .orderBy(asc(run.id))
-      .for("update");
+      .for("no key update");
     if (scopes.some((scope) => scope.retiredAt !== null)) {
       if (options.ifAbsent) return 0;
       throw new Error(

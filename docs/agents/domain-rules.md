@@ -46,6 +46,9 @@ Traps, all seen for real:
 
 `Database` is a request-scoped handle: routers pass it onward, services
 orchestrate, and repos alone call `getDb`; transactions use `withTransaction`.
+Its callback receives a Drizzle transaction directly. Use
+`withTransactionDatabase` when a called domain module needs a transaction-bound
+`Database`; `getDb` accepts that facade, not a raw Drizzle transaction.
 The repository helper is the sanctioned client-resolution boundary. A service earns existence for
 cross-cutting enrichment/compute/rollups, not pass-throughs. Cubby domain
 compute belongs in recipebridge/WASM; TypeScript assembles inputs and reshapes
@@ -151,6 +154,10 @@ an index is eligible but unexercised, not droppable — audit every call site wi
 `EXPLAIN` first; the genuinely dead ones are `OR`'d against an unindexed column.
 
 ## Generated files
+
+Before adding a module, verify that its path does not already exist. A filename
+collision must preserve the existing module and its callers; use a distinct path
+for the new responsibility.
 
 Generated output is gitignored and never committed; it is identified by its
 generated header. Never hand-edit one — edit its generator or input and run
