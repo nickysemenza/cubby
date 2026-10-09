@@ -1,0 +1,33 @@
+.oxlintrc.json
+  s_2e87acf1f13363::t_a959d66ae370cd 217,226-228
+apps/web/src/entity/editing/intent-types.ts
+  s_2e87acf1f13363::t_21c0f4178b966c 5,32,34,38,44
+apps/web/src/entity/editing/mutation-data.ts
+  s_2e87acf1f13363::t_0ffc93e6419b3a 3,21,34,45,55
+apps/web/src/entity/entity-contracts.ts
+  s_2e87acf1f13363::t_767fb4f9304c68 11
+apps/web/src/entity/entity-mutation-command.ts
+  s_2e87acf1f13363::t_7149d473f64852 4-6,14-21,39-42
+docs/agents/web-runtime.md
+  s_2e87acf1f13363::t_7c9919deb14c20 49-54,78-85
+scripts/generator/entities/render/index.ts
+  s_2e87acf1f13363::t_565f21bcfa4070 409-436,1346-1356
+tools/oxlint/cubby/rules/no-client-entity-aggregate.ts
+  s_2e87acf1f13363::t_09b08cd6907c78 33-39,52,55,65-66,72-73
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "3925ba5276247e6d61b90d287098c32cfec86cbf",
+  "prompts": {},
+  "sessions": {
+    "s_2e87acf1f13363": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "31108f72-a141-4ae8-90c0-f38f0969a4e7",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "nicky <nicky@cloudflare.com>"
+    }
+  }
+}
