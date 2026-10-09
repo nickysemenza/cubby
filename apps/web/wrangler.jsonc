@@ -109,10 +109,20 @@
       {
         "name": "PURCHASE_IMPORT_RUN",
         "class_name": "PurchaseImportRunAgent"
+      },
+      // One object per USDA release, named `<release>.g<generation>`
+      // (src/server/usda-release; docs/adr/0008-usda-release-durable-object.md).
+      {
+        "name": "USDA_RELEASE",
+        "class_name": "UsdaReleaseDurableObject"
       }
     ]
   },
   "exports": {
+    "UsdaReleaseDurableObject": {
+      "type": "durable-object",
+      "storage": "sqlite"
+    },
     "DatabaseFreshnessDurableObject": {
       "type": "durable-object",
       "storage": "sqlite"
@@ -273,8 +283,14 @@
     // OAuth client IDs are public identifiers. The paired client secret is a
     // Worker secret and must never be committed.
     "GOOGLE_CLIENT_ID": "183601884678-9rddrge4anct24rnbvqb5jm5q9fb8oqg.apps.googleusercontent.com",
-    "USDA_API_URL": "https://usda-api.nicky.workers.dev/"
-  }
+    "USDA_API_URL": "https://usda-api.nicky.workers.dev/",
+    // Activation and rollback of a USDA release are a deploy (ADR 0008).
+    "USDA_ACTIVE_RELEASE": "2026-04"
+  },
+  // Gzipped NDJSON shards per USDA release, loaded by USDA_RELEASE.
+  "r2_buckets": [
+    { "binding": "USDA_RELEASES", "bucket_name": "cubby-usda-releases" }
+  ]
   // Required secrets (set via `wrangler secret put <NAME>`):
   //   BETTER_AUTH_SECRET
   //   R2_ACCESS_KEY_ID

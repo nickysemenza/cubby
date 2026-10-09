@@ -14,6 +14,7 @@ import type { DatabaseFreshnessRpc } from "./database-freshness/rpc";
 import type { ImageProcessingCompanionRpc } from "./image-processing/contracts";
 import type { PurchaseImportRunAgentRpc } from "./purchase-agent/environment";
 import type { PurchaseImportDurableObjectRpc } from "./purchase-import/rpc";
+import type { UsdaReleaseRpc } from "./usda-release/rpc";
 import type { WorkflowRunParams } from "./workflow-runs/contract";
 
 // Its implementation imports nothing from the app.
@@ -30,6 +31,8 @@ export type ImageProcessingDurableObject = ImageProcessingCompanionRpc &
 export type PurchaseImportDurableObject = PurchaseImportDurableObjectRpc &
   Rpc.DurableObjectBranded;
 export type PurchaseImportRunAgent = PurchaseImportRunAgentRpc &
+  Rpc.DurableObjectBranded;
+export type UsdaReleaseDurableObject = UsdaReleaseRpc &
   Rpc.DurableObjectBranded;
 
 export interface SearchIndexRepairWorkflowParams {

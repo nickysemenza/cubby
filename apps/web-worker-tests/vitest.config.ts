@@ -46,6 +46,7 @@ export default defineConfig({
       "../web/src/server/database-freshness/**/*.workers.test.ts",
       "../web/src/server/purchase-import/**/*.workers.test.ts",
       "../web/src/server/ai/**/*.workers.test.ts",
+      "../web/src/server/usda-release/**/*.workers.test.ts",
     ],
     testTimeout: 30_000,
     hookTimeout: 30_000,

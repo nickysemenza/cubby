@@ -972,11 +972,15 @@ are implemented. See [local development](local-development.md#fixture-previews-a
   not merge everything into one relational query (its memory cost is
   documented in `repo/product/crud.ts`).
 
-- 🤔 **Faster `usda-api` reads.** A lookup ran its version check and index
-  lookup as sequential D1 calls (~60 ms each) plus ~150 ms outside the
-  handler. Try D1 read replication with request-scoped Sessions and a warmer
-  version cache (`apps/usda-api/src/data/`); benchmark against the current
-  placement before adopting it.
+- ⏳ **Switch USDA reads to the release Durable Object.** The 2026-04
+  release loads into `USDA_RELEASE` ([ADR 0008](adr/0008-usda-release-durable-object.md));
+  no caller reads it yet. Remaining in one change: route every web USDA read
+  through RPC, return search rows without `nutrientSummary`, report `/counts`
+  as foods per data type, delete the web-side USDA caches, advance
+  `Product.fdc_id` links to current revisions on activation, seed a synthetic
+  dev release through the loader, regenerate the Apple client with a
+  compatibility bump, and delete `apps/usda-api`. Then remove its D1
+  database, `usda-api-bundles` bucket, and deployed Worker.
 
 - 🤔 **Summary `entity_read.get` without the detail read.** A summary get
   still runs the complete detail read (USDA, quality, ledger, breadcrumbs)

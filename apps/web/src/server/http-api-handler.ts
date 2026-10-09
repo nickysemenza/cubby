@@ -229,7 +229,7 @@ function methodTable(router: AppRouter) {
  * caller per request; only ambient cookies can be sent cross-site by a browser,
  * so the same-origin gate applies to cookie sessions alone.
  */
-const hasExplicitCredential = (request: Request) =>
+export const hasExplicitCredential = (request: Request) =>
   request.headers.has("x-api-key") ||
   /^bearer\s+\S/iu.test(request.headers.get("authorization") ?? "");
 

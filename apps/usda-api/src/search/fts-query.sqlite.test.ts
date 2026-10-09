@@ -1,6 +1,6 @@
 import Database from "better-sqlite3";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
-import { toFtsFallbackQuery, toFtsQuery } from "./fts-query";
+import { toFtsFallbackQuery, toFtsQuery } from "@cubby/usda/release";
 
 // Runs the generated MATCH strings against a real FTS5 table built with the
 // same tokenizer as the D1 edge index (scripts/build-edge-artifacts.ts), so a

@@ -116,6 +116,11 @@ export const getPurchaseImportNamespace = () => cfEnv?.PURCHASE_IMPORT;
 export const getPurchaseImportRunAgentNamespace = () =>
   cfEnv?.PURCHASE_IMPORT_RUN;
 
+/** USDA release Durable Objects and the active release name (`server/usda-release`). */
+export const getUsdaReleaseEnv = ():
+  | Pick<Env, "USDA_RELEASE" | "USDA_ACTIVE_RELEASE">
+  | undefined => cfEnv;
+
 /** Connected native image workers share this transport; job authority stays in Postgres. */
 export const getImageProcessingNamespace = () => cfEnv?.IMAGE_PROCESSING;
 

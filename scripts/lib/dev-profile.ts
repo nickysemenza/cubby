@@ -138,6 +138,7 @@ function localVars({
     R2_PUBLIC_URL: origin,
     R2_KEY_PREFIX: "cubby-local",
     USDA_API_URL: origin,
+    USDA_ACTIVE_RELEASE: "2026-04",
     UPC_UPSTREAM_DISABLED: "true",
     CUBBY_DEV_ID: id,
     CUBBY_DEV_DB_NAME: name,

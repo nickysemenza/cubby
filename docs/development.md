@@ -42,6 +42,9 @@ JSONL routes    →  cancellable workflow streams
   `check-client-bundle.ts` checks each package lands in the right bundle.
 - USDA data comes from the `usda-api` Worker through the ts-rest contract
   `@cubby/usda/contract`. Its client is `apps/web/src/server/clients/usda.ts`.
+  Its replacement is one `USDA_RELEASE` SQLite Durable Object per USDA release
+  in the web Worker ([ADR 0008](adr/0008-usda-release-durable-object.md)),
+  loaded from R2 but not read by any caller yet.
 - Purchase imports run in the web Worker, which binds both the purchase
   agent's and the browser bridge's Durable Objects, and in a Mac browser. The
   map of queue events, Run services and owning files is
@@ -95,6 +98,24 @@ CI scoping is in [CI](ci.md). Provider resources and secrets are in
 The `usda-api` D1 database does not use the web migration
 workflow. Apply remote D1 migrations before deploying code that depends on
 them.
+
+A USDA release is built locally from FoodData Central's CSV download and
+loads itself into its Durable Object:
+
+1. `pnpm --dir packages/usda release:build --csv <csv-dir> --release YYYY-MM --out <dir>`
+   writes `<dir>/YYYY-MM/shard-NNNNN.ndjson.gz` and `manifest.json`.
+2. Upload them to the `cubby-usda-releases` bucket under `YYYY-MM/`, the
+   manifest last (`cf r2 objects put YYYY-MM/<file> --bucket-name
+   cubby-usda-releases --file <path>`).
+3. Set `USDA_ACTIVE_RELEASE` in `apps/web/wrangler.jsonc` and deploy.
+4. Open `/api/debug/usda-release` signed in (or with `x-api-key`): the first
+   request starts the load and every request reports shard progress, size,
+   or the raw failure. `?probe=1` on a ready release times a search and a
+   batch lookup.
+
+Changing the release tables bumps `USDA_RELEASE_GENERATION` in
+`packages/usda/src/release/store.ts`, which reloads the release from the same
+shards under a new object name.
 
 ### Neon cache diagnostics
 

@@ -836,6 +836,7 @@ export { DatabaseFreshnessDurableObject } from "./server/database-freshness/dura
 export { ImageProcessingDurableObject } from "./server/image-processing/durable-object";
 export { PurchaseImportRunAgent } from "./server/purchase-import/agent-host";
 export { PurchaseImportDurableObject } from "./server/purchase-import/durable-object";
+export { UsdaReleaseDurableObject } from "./server/usda-release/durable-object";
 export { SearchIndexRepairWorkflow } from "./server/search-index-repair-workflow";
 export {
   MailDiscoveryWorkflow,
