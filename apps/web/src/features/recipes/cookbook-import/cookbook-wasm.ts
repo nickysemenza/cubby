@@ -1,5 +1,8 @@
 type CookbookWasm = typeof import("@cubby/recipebridge/cookbook");
 
+/** What the importer needs from the EPUB package; tests pass a faithful stand-in. */
+export type LoadCookbookWasm = () => Promise<Pick<CookbookWasm, "open_book">>;
+
 let loading: Promise<CookbookWasm> | undefined;
 
 /**
