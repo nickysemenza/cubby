@@ -58,6 +58,8 @@ function fixture() {
   put("apps/web/dist/client/main.js");
   put("apps/web/dist/server/index.js");
   put("packages/wasm/recipebridge_bg.wasm");
+  put("packages/wasm/browser/recipebridge_bg.wasm");
+  put("packages/wasm/cookbook/recipebridge_cookbook_bg.wasm");
   return { root, put };
 }
 describe("web build freshness", () => {
@@ -172,6 +174,19 @@ describe("web build freshness", () => {
     put("apps/web/dist/web-build-provenance.json", '{"schemaVersion":1}');
     expect(() => webBuildNeedsBuild(root, true)).toThrow(
       /invalid-build-stamp/u,
+    );
+  });
+  // The cookbook package is built by its own crate and bundled only by the
+  // client; editing either must not reuse the previous bundle.
+  it("tracks the cookbook wasm crate and its package", () => {
+    const { root, put } = fixture();
+    writeWebBuildProvenance(root);
+    put("recipebridge-cookbook/src/lib.rs", "pub fn changed() {}");
+    expect(readWebBuildProvenance(root).matchesSource).toBe(false);
+    writeWebBuildProvenance(root);
+    put("packages/wasm/cookbook/recipebridge_cookbook_bg.wasm", "rebuilt");
+    expect(() => webBuildNeedsBuild(root, true)).toThrow(
+      /build-output-changed/u,
     );
   });
   it("ignores secrets, evidence, and prose while retaining a clean build's replayability distinction", () => {
