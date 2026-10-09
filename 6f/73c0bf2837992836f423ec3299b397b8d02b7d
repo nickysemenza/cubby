@@ -1,0 +1,23 @@
+apps/web/src/features/recipes/cookbook-import/cookbook-wasm.ts
+  s_9e37542d401f69::t_f9ac708462fcd4 3-5
+apps/web/src/features/recipes/cookbook-import/index.tsx
+  s_9e37542d401f69::t_1c10ecea4ba0c5 63,118,122-123,160-169,206,230,287-288,380,383-387,389,455,825-833,845,858,861
+apps/web/src/features/recipes/cookbook-import/open-lifecycle.unit.test.tsx
+  s_9e37542d401f69::t_6255b9dc65352c 1-78
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "6f73c0bf2837992836f423ec3299b397b8d02b7d",
+  "prompts": {},
+  "sessions": {
+    "s_9e37542d401f69": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "0e86f572-b00a-4385-9ba9-59a84e2730f0",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "nicky <nicky@cloudflare.com>"
+    }
+  }
+}
