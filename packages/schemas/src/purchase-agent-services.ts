@@ -10,7 +10,6 @@ import { z } from "zod";
 
 import { researchToolInputs } from "./research-tools";
 
-import { tradeSchema } from "./task-fields";
 import { aiUsageTransport } from "./telemetry";
 
 /** Cleanup remains available while model execution is fenced. */
@@ -29,46 +28,6 @@ export const purchaseAgentEventRef = z.object({
   eventId: z.string().min(1).max(256),
 });
 
-/** The model's semantic browser request, before the server selects the URL. */
-export const purchaseAgentCommand = z.object({
-  kind: z.enum([
-    "navigate_orders",
-    "capture_order",
-    "capture_pdf",
-    "capture_screenshot",
-  ]),
-  target: z.string().max(2_048).optional(),
-});
-export type PurchaseAgentCommand = z.infer<typeof purchaseAgentCommand>;
-
-export const issueBrowserCommandInput = purchaseAgentOperationRef.extend({
-  command: purchaseAgentCommand,
-});
-
-export const importOrderEvidenceInput = purchaseAgentOperationRef.extend({
-  commandId: z.uuid(),
-  /** As for `purchase_import.commit`: a principal line needs a trade. */
-  defaultTrade: tradeSchema.optional(),
-  /** A Project shortcode, resolved and authorized by the host. */
-  defaultProjectId: z.string().min(1).optional(),
-});
-
-export const saveNavigationHintsInput = purchaseAgentOperationRef.extend({
-  hints: z
-    .array(
-      z.object({
-        url: z.url().max(2_048),
-        label: z.string().max(500).optional(),
-      }),
-    )
-    .min(1)
-    .max(25),
-});
-
-export const markHistoryExpiredInput = purchaseAgentOperationRef.extend({
-  earliestAvailableOrderAt: z.iso.datetime({ offset: true }),
-});
-
 export const stopForReviewInput = purchaseAgentOperationRef.extend({
   reason: z.enum([
     "navigation_ambiguity",
@@ -77,21 +36,6 @@ export const stopForReviewInput = purchaseAgentOperationRef.extend({
     "other",
   ]),
   detail: z.string().min(1).max(1_000).optional(),
-});
-
-export const deferOrderForReviewInput = purchaseAgentOperationRef.extend({
-  orderId: z.string().min(1).max(200),
-  detail: z.string().min(1).max(1_000),
-});
-
-/**
- * Record a selected charge hunt's outcome when its evidence did not settle it:
- * no matching order was found, or one stayed ambiguous and needs review.
- */
-export const settleChargeHuntInput = purchaseAgentOperationRef.extend({
-  huntId: z.uuid(),
-  outcome: z.enum(["not_found", "needs_review"]),
-  detail: z.string().min(1).max(1_000),
 });
 
 export const markRunFailedInput = purchaseAgentOperationRef.extend({
