@@ -1008,6 +1008,22 @@ export function liveProgressBlocks(
       ? [discoveryCountsBlock(progress.discovery, active)]
       : []),
     ...selectionBlocks(progress),
+    ...(progress.savedState
+      ? [
+          records(
+            Object.entries(progress.savedState).map(([key, value]) =>
+              row(key, {
+                title: phaseLabel(key),
+                detail: {
+                  label: "Saved data",
+                  text: JSON.stringify(value, null, 2),
+                },
+              }),
+            ),
+            { title: "Saved Run data" },
+          ),
+        ]
+      : []),
     records(
       progress.progress.map((event) =>
         row(event.id, {

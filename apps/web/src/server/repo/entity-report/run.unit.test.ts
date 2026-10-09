@@ -855,6 +855,7 @@ describe("liveProgressBlocks", () => {
     status: "running" as const,
     progress: events([300, 200]),
     discovery: null,
+    savedState: null,
     orders: [{ orderId: "fixture-order", state: "pending" as const }],
     charges: [],
     workflow: {

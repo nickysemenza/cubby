@@ -136,6 +136,10 @@ export async function getRunLiveProgress(
     : [];
   return {
     status: runStatus.parse(record.run.status),
+    savedState:
+      record.run.purpose === "mail_search"
+        ? { input: record.run.input, progress: record.run.progress }
+        : null,
     charges: charges.map((charge) => ({
       chargeId: charge.chargeId,
       outcome: chargeHuntOutcomeOf(charge.state),

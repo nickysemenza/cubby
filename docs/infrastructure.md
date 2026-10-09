@@ -74,8 +74,7 @@ Account ID: `9f10f078d35d86c78dedece2300a6b88`.
 
 ### Workflow-backed Runs
 
-A vendor Gmail search (`mail_search`) and a scheduled mailbox pass
-(`mail_discovery`) are Runs a Cloudflare Workflow executes
+A scheduled mailbox pass (`mail_discovery`) is a Run a Cloudflare Workflow executes
 (`server/gmail-workflows.ts`, bodies in `server/purchase-import/gmail/`).
 The Run row is the record; an instance is one attempt at it, named
 `<runShortcode>-<attempt>` (`server/workflow-runs/`):
@@ -94,9 +93,10 @@ The Run row is the record; an instance is one attempt at it, named
   link opens the current attempt under the corresponding Workflow in the
   Cloudflare dashboard on web and native; dashboard access requires a Cloudflare
   sign-in, and the link may outlive instance retention.
-- An AI Gateway 429 makes a search page step return its `Retry-After`; the
-  Workflow sleeps that long under a new step name instead of spending a retry,
-  up to twelve times per page.
+- Retired `mail_search` Runs retain their original input/checkpoint JSON in generic
+  saved-data report details. Their executor, binding and retry choreography are
+  removed; shared controls refuse execution before writes. Known-vendor search
+  uses the retained researcher with frozen acquisition and scoped coverage.
 - `reconcileWorkflowRuns` in catch-up fails a Run whose instance ended
   without its failure step, and one saved but never launched. The purchase
   agent's stale-run expiry skips these purposes.

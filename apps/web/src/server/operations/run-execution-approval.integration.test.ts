@@ -1,11 +1,11 @@
 import { executionAuthorizationInput } from "@cubby/schemas/execution-authorization";
-import { userId } from "@cubby/schemas/identifiers";
+import { runShortcode, userId } from "@cubby/schemas/identifiers";
 import {
   mailboxDiscoveryInput,
   mailboxDiscoveryProgress,
 } from "@cubby/schemas/mailbox-research";
 import { fromPartial } from "@total-typescript/shoehorn";
-import { eq } from "drizzle-orm";
+import { eq, sql } from "drizzle-orm";
 import { withTestDb } from "tooling/test-setup";
 import { afterEach, describe, expect, it } from "vitest";
 import type { JSONType } from "zod";
@@ -19,6 +19,7 @@ import {
 } from "~/server/purchase-import/gmail/discovery";
 import type { GmailProvider } from "~/server/purchase-import/gmail/types";
 import { getDb } from "~/server/repo/database-helpers";
+import { runReport } from "~/server/repo/entity-report/run";
 import { insertWithShortcode } from "~/server/repo/shortcode-utils";
 import { requireActor } from "~/server/request-context";
 import { ensureRun } from "~/server/runs/ensure-run";
@@ -137,27 +138,34 @@ describe("authenticated member execution approval", () => {
       .update(run)
       .set({
         ledgerPartyId: party.id,
-        input: { after: "", searchTerms: ["synthetic vendor"] },
-        progress: {
-          phase: "failed",
-          pageToken: null,
-          nextPageToken: "synthetic-next-page",
-          pagesScanned: 1,
-          searched: 2,
-          reviewable: 0,
-          attempt: 1,
-        },
         status: "failed",
         endedAt: new Date(),
         failureCode: "vendor_mail_search_failed",
         dispatchError: "Synthetic retained failure",
       })
       .where(eq(run.id, id));
+    // Historical JSON is outside current executable input/progress types.
+    await getDb(ctx.db).execute(sql`
+      UPDATE "Run" SET input=${JSON.stringify({ after: "2025/01/01", searchTerms: ["synthetic vendor"] })}::jsonb,
+      progress=${JSON.stringify({ phase: "failed", pageToken: null, nextPageToken: "synthetic-next-page", pagesScanned: 1, searched: 2, reviewable: 0, attempt: 1 })}::jsonb
+      WHERE id=${id}
+    `);
     const [before] = await getDb(ctx.db)
       .select()
       .from(run)
       .where(eq(run.id, id));
     if (!before) throw new Error("Synthetic historical Run missing");
+    const report = await runReport(
+      ctx.db,
+      "run.live-progress",
+      runShortcode.parse(before.shortcode),
+      undefined,
+    );
+    const visible = JSON.stringify(report);
+    expect(visible).toContain("synthetic vendor");
+    expect(visible).toContain("2025/01/01");
+    expect(visible).toContain("synthetic-next-page");
+    expect(visible).toContain("pagesScanned");
     const result = await invoke("control", {
       runId: before.shortcode,
       action: "retry",

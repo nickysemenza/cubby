@@ -50,10 +50,10 @@ accounting through the replacement research dispatch. No test case was deleted.
 Compiler/generator and hosted checks verify the removal; a declaration-only
 regression would not guard behavior. This does not retire the old Workflow.
 
-The retired Workflow slice removes **867 net handwritten production lines**
-(890 removed, 23 added), **403 net test lines** (565 removed, 162 added), one
-net generated line and 30 net documentation lines. The complete diff reduces
-**1,301 lines**. It deletes three engine files, their integration suite and two
+The retired Workflow slice removes **847 net handwritten production lines**
+(889 removed, 42 added), **433 net test lines** (605 removed, 172 added), one
+net generated line and 24 net documentation lines. The complete diff reduces
+**1,305 lines**. It deletes three engine files, their integration and wrapper unit suites and two
 obsolete runbooks, and adds no tables or data migration. All executable callers
 and bindings are removed; historical purpose values remain data. Review, hosted
 checks and deployment are pending. The generated-adapter slice has no defensible
@@ -209,6 +209,12 @@ write. This is a direct removal, with no retry or transport compatibility adapte
 | Quiet ended instance fails, waiting instance remains active | `fails a quiet discovery Run whose instance ended and leaves a waiting one`                                                                                                          |
 | Dispatch refusal leaves no phantom live Run                 | Existing discovery authorization/launch and retained research dispatch-failure regressions                                                                                           |
 | Retired retry preserves historical evidence                 | `refuses retired vendor-search retry without changing historical evidence` — meaningful RED changed cursor/failure before the control refusal; GREEN preserves the row               |
+
+The vendor-search unit test only asserted its retired wrapper's call shape;
+current retained-source integration covers bounded acquisition, query isolation,
+Spam/Trash exclusion and frozen-page replay. Its deletion removes no distinct
+current runtime contract. Historical input/checkpoint visibility is verified
+through the persisted generic report before refusing execution.
 
 The vendor-only stable step-name and twelve-wait orchestration assertions are
 removed with their unreachable engine. Retained discovery's three step-sequence
