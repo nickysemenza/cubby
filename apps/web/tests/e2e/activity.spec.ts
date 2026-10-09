@@ -1,6 +1,8 @@
 import {
   seedActivityHistory,
   seedPagedActivityHistory,
+  seedActiveResearchHistory,
+  setResearchHistoryStatus,
 } from "./fixtures-photos";
 import {
   expectViewportBounded,
@@ -8,6 +10,42 @@ import {
   uniqueName,
 } from "./e2e-helpers";
 import { expect, test } from "./e2e-test";
+
+test("Grouped research refreshes collapsed roots and expanded or reopened children", async ({
+  page,
+}) => {
+  test.setTimeout(60_000);
+  const sample = await seedActiveResearchHistory(
+    page,
+    uniqueName(test.info(), "Active research"),
+  );
+  await gotoAuthenticatedPage(
+    page,
+    `/runs?group=run&vendorId=${sample.vendorId}`,
+  );
+  const table = page.getByRole("table", { name: "Runs and image jobs" });
+  const expand = page.getByRole("button", {
+    name: `Expand jobs for ${sample.rootId}`,
+  });
+  await expect(expand).toBeVisible();
+  await setResearchHistoryStatus(sample.rootId, "failed");
+  await expect(table.getByText("failed", { exact: true })).toBeVisible({
+    timeout: 25_000,
+  });
+  await expand.click();
+  await expect(table.getByText("running", { exact: true })).toBeVisible();
+  await setResearchHistoryStatus(sample.childId, "completed");
+  await expect(table.getByText("running", { exact: true })).toHaveCount(0, {
+    timeout: 25_000,
+  });
+  await expect(table.getByText("completed", { exact: true })).toBeVisible();
+  await page
+    .getByRole("button", { name: `Collapse jobs for ${sample.rootId}` })
+    .click();
+  await setResearchHistoryStatus(sample.childId, "failed");
+  await expand.click();
+  await expect(table.getByText("failed", { exact: true })).toHaveCount(2);
+});
 
 /**
  * Every Runs cursor crosses its first page: the history list in both sort

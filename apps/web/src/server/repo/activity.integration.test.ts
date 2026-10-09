@@ -1,9 +1,10 @@
 import { parseEntityId } from "@cubby/schemas/identifiers";
 import { runPurpose } from "@cubby/schemas/run-fields";
 import { generateShortcode } from "@cubby/shared";
-import { eq } from "drizzle-orm";
+import { eq, sql } from "drizzle-orm";
 import { withTestDb } from "tooling/test-setup";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
+import { z } from "zod";
 
 import {
   imageProcessingAttempt,
@@ -778,6 +779,86 @@ describe("unified Runs history", () => {
       rows.find((row) => row.id === grandchildId)!.shortcode,
     ]);
     expect(rows.find((row) => row.id === legacyId)?.parentRunId).toBeNull();
+  });
+
+  it("keeps completed research roots refreshable while a descendant is running", async () => {
+    await insertWithShortcode(ctx.db, "ledgerParty", {
+      name: "Synthetic active lineage member",
+      kind: "member",
+      userId: ctx.actor.userId,
+    });
+    const rootId = await ensureRun(ctx.db, ctx.actor, {
+      purpose: "mail_discovery",
+      trigger: "manual",
+      status: "completed",
+    });
+    const childId = await ensureRun(ctx.db, ctx.actor, {
+      purpose: "mail_import",
+      trigger: "discovery",
+      parentRunId: rootId,
+    });
+    const input = {
+      executor: "all" as const,
+      limit: 100,
+      sort: "newest" as const,
+    };
+    expect((await listActivityGroups(ctx.db, null, input)).items).toMatchObject(
+      [{ active: true, root: { active: false, state: "completed" } }],
+    );
+    await getDb(ctx.db)
+      .update(runTable)
+      .set({ status: "completed", endedAt: new Date() })
+      .where(eq(runTable.id, childId));
+    expect((await listActivityGroups(ctx.db, null, input)).items).toMatchObject(
+      [{ active: false, root: { active: false, state: "completed" } }],
+    );
+  });
+
+  it("does not evaluate unrelated Run accounting when paging one research group", async () => {
+    const rootId = await ensureRun(ctx.db, ctx.actor, {
+      purpose: "background",
+    });
+    await ensureRun(ctx.db, ctx.actor, {
+      purpose: "background",
+      parentRunId: rootId,
+    });
+    for (let index = 0; index < 100; index += 1)
+      await ensureRun(ctx.db, ctx.actor, { purpose: "background" });
+    const [root] = await getDb(ctx.db)
+      .select()
+      .from(runTable)
+      .where(eq(runTable.id, rootId));
+    if (!root) throw new Error("Expected synthetic accounting root");
+    const execute = vi.spyOn(getDb(ctx.db), "execute");
+    await listActivityGroupChildren(ctx.db, null, {
+      rootId: root.shortcode,
+      executor: "all",
+      limit: 1,
+      sort: "newest",
+    });
+    const statement = execute.mock.calls[0]?.[0];
+    execute.mockRestore();
+    if (!statement) throw new Error("Expected real child page query");
+    const explained = await getDb(ctx.db).execute(
+      sql`EXPLAIN (ANALYZE, FORMAT JSON) ${statement}`,
+    );
+    const plan = z
+      .array(z.object({ Plan: z.unknown() }))
+      .parse(explained.rows[0]?.["QUERY PLAN"])[0]!.Plan;
+    const subplanLoops = (raw: unknown): number => {
+      const node = z
+        .object({
+          "Actual Loops": z.number(),
+          "Parent Relationship": z.string().optional(),
+          Plans: z.array(z.unknown()).optional(),
+        })
+        .parse(raw);
+      return Math.max(
+        node["Parent Relationship"] === "SubPlan" ? node["Actual Loops"] : 0,
+        ...(node.Plans ?? []).map(subplanLoops),
+      );
+    };
+    expect(subplanLoops(plan)).toBeLessThanOrEqual(2);
   });
 
   it("says what a run is doing and which records it worked on", async () => {

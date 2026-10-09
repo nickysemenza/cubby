@@ -126,6 +126,66 @@ export const attachProductImagePrerequisite = async (
   );
 
 /** Durable failed history only; this fixture never dispatches or calls AI. */
+export async function seedActiveResearchHistory(page: Page, name: string) {
+  const db = getFixtureDb();
+  const actorUserId = await fixtureUserId(page);
+  const party = await ensureMemberParty(page, name);
+  const vendor = await insertWithShortcode(db, "vendor", { name });
+  const values = {
+    ledgerPartyId: party.id,
+    actorUserId,
+    actorName: "Synthetic member",
+    actorEmail: "synthetic@example.test",
+    actorLedgerPartyShortcode: party.shortcode,
+    actorLedgerPartyName: party.name,
+    actorLedgerPartyKind: party.kind,
+    vendorId: vendor.id,
+    startedAt: new Date(),
+  };
+  const [root] = await getDb(db)
+    .insert(schema.run)
+    .values({
+      ...values,
+      shortcode: generateShortcode("run"),
+      purpose: "mail_discovery",
+      trigger: "manual",
+      status: "completed",
+      endedAt: new Date(),
+    })
+    .returning();
+  if (!root) throw new Error("Expected synthetic research root");
+  const [child] = await getDb(db)
+    .insert(schema.run)
+    .values({
+      ...values,
+      shortcode: generateShortcode("run"),
+      purpose: "mail_import",
+      trigger: "discovery",
+      status: "running",
+      parentRunId: root.id,
+    })
+    .returning();
+  if (!child) throw new Error("Expected synthetic research child");
+  return {
+    rootId: root.shortcode,
+    childId: child.shortcode,
+    vendorId: vendor.shortcode,
+  };
+}
+
+export async function setResearchHistoryStatus(
+  code: string,
+  status: "running" | "completed" | "failed",
+) {
+  await getDb(getFixtureDb())
+    .update(schema.run)
+    .set({
+      status,
+      endedAt: status === "running" ? null : new Date(),
+    })
+    .where(eq(schema.run.shortcode, parseShortcodeFor("run", code)));
+}
+
 export async function seedActivityHistory(page: Page, name: string) {
   const db = getFixtureDb();
   const actorUserId = await fixtureUserId(page);

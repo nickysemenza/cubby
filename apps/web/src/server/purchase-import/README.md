@@ -19,6 +19,11 @@ work, while an unmatched root remains visible as context; expanded children use
 the same filters and cursor protocol. A deleted parent starts a new visible root
 at its live child. Historical null lineage stays independent, and retry
 predecessors do not become causal parents.
+Group liveness includes retained descendants without changing the root's own
+state. Collapsed active groups continue refreshing; expanded child pages use
+the shared query cache, refresh through settlement, and reload when reopened.
+Child pagination traverses lightweight lineage before evaluating accounting
+and activity details for the selected group's members.
 
 Execution allowance is separate from causal lineage. A member's explicit
 approval is an immutable, completed background Run; completed RunOperation

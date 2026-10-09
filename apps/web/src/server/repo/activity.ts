@@ -71,7 +71,7 @@ const cloudExecutor = sql`jsonb_build_object(
  * Domain rows remain authoritative. This is only the cross-domain activity
  * projection; it neither schedules work nor infers device activity.
  */
-function runProjection(): SQL {
+function runProjection(memberIds?: SQL): SQL {
   return sql`
     SELECT
       j.id AS internal_id,
@@ -135,6 +135,7 @@ function runProjection(): SQL {
     LEFT JOIN "VendorAccount" parent_account ON parent_account.id = parent."vendorAccountId" AND parent_account."deletedAt" IS NULL
     LEFT JOIN "Vendor" parent_vendor ON parent_vendor.id = parent."vendorId" AND parent_vendor."deletedAt" IS NULL
     LEFT JOIN "LedgerParty" parent_party ON parent_party.id = parent."ledgerPartyId" AND parent_party."deletedAt" IS NULL
+    WHERE ${memberIds ? sql`j."publicId" IN (${memberIds})` : sql`true`}
 
     UNION ALL
 
@@ -190,21 +191,44 @@ function runProjection(): SQL {
     LEFT JOIN "LedgerParty" party ON party.id = r."ledgerPartyId"
     LEFT JOIN "Run" causal_parent ON causal_parent.id = r."parentRunId" AND causal_parent."deletedAt" IS NULL
     WHERE r."deletedAt" IS NULL
+      AND ${memberIds ? sql`r.shortcode IN (${memberIds})` : sql`true`}
   `;
 }
 
 /** Only retained live parent edges group work; legacy null edges remain roots. */
-function groupedRunProjection(): SQL {
+function groupedRunProjection(rootId?: string): SQL {
   return sql`
-    WITH RECURSIVE projected AS (${runProjection()}),
+    WITH RECURSIVE edges AS (
+      SELECT r.shortcode AS id, parent.shortcode AS "parentRunId",
+        r.status IN ('running', 'paused_auth', 'paused_offline', 'paused_approval') AS active
+      FROM "Run" r
+      LEFT JOIN "Run" parent ON parent.id = r."parentRunId" AND parent."deletedAt" IS NULL
+      WHERE r."deletedAt" IS NULL
+      UNION ALL
+      SELECT j."publicId", parent.shortcode,
+        j.state IN ('pending', 'leased', 'waiting_for_device')
+      FROM "ImageProcessingJob" j
+      JOIN "Image" i ON i.id = j."imageId" AND i."deletedAt" IS NULL
+      LEFT JOIN "Run" parent ON parent.id = j."runId" AND parent."deletedAt" IS NULL
+    ),
     lineage AS (
-      SELECT id, id AS "groupRootId" FROM projected WHERE "parentRunId" IS NULL
+      SELECT id, id AS "groupRootId" FROM edges WHERE "parentRunId" IS NULL
       UNION ALL
       SELECT child.id, lineage."groupRootId"
-      FROM projected child JOIN lineage ON child."parentRunId" = lineage.id
+      FROM edges child JOIN lineage ON child."parentRunId" = lineage.id
+    ),
+    members AS (
+      SELECT edges.id, coalesce(lineage."groupRootId", edges.id) AS "groupRootId",
+        bool_or(edges.active) OVER (PARTITION BY coalesce(lineage."groupRootId", edges.id)) AS "groupActive"
+      FROM edges LEFT JOIN lineage ON lineage.id = edges.id
+    ),
+    selected AS (
+      SELECT * FROM members
+      WHERE ${rootId ? sql`"groupRootId" = ${rootId} AND id <> ${rootId}` : sql`true`}
     )
-    SELECT projected.*, coalesce(lineage."groupRootId", projected.id) AS "groupRootId"
-    FROM projected LEFT JOIN lineage ON lineage.id = projected.id
+    SELECT projected.*, selected."groupRootId", selected."groupActive"
+    FROM (${runProjection(sql`SELECT id FROM selected`)}) projected
+    JOIN selected ON selected.id = projected.id
   `;
 }
 
@@ -487,9 +511,8 @@ export async function listActivity(
       : sql`("createdAt", id) < ((${cursor.at}::timestamptz AT TIME ZONE 'UTC'), ${cursor.id})`
     : sql`true`;
   const query = await getDb(db).execute(sql`
-    WITH runs AS (${groupRootId ? groupedRunProjection() : runProjection()}),
-    filtered AS (SELECT * FROM runs WHERE ${listPredicate(input)}
-      ${groupRootId ? sql`AND "groupRootId" = ${groupRootId} AND id <> ${groupRootId}` : sql``}),
+    WITH runs AS (${groupRootId ? groupedRunProjection(groupRootId) : runProjection()}),
+    filtered AS (SELECT * FROM runs WHERE ${listPredicate(input)}),
     page AS (
       SELECT *, to_char("createdAt", 'YYYY-MM-DD"T"HH24:MI:SS.US"Z"') AS "cursorAt"
       FROM filtered
@@ -550,6 +573,7 @@ export async function listActivityGroups(
         "groupRootId" AS "rootId",
         max("createdAt") AS "latestAt",
         count(*) FILTER (WHERE id <> "groupRootId")::int AS "childCount",
+        bool_or("groupActive") AS active,
         bool_or(id = "groupRootId") AS "rootMatched"
       FROM filtered
       GROUP BY 1
@@ -563,6 +587,7 @@ export async function listActivityGroups(
               ELSE to_char(root."completedAt", 'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"') END
           ),
           'childCount', aggregate."childCount",
+          'active', aggregate.active,
           'contextOnly', NOT aggregate."rootMatched",
           'latestAt', to_char(aggregate."latestAt", 'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"')
         ) AS item,
