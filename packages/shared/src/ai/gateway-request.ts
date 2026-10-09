@@ -520,11 +520,25 @@ const preOutputMetadata = z.strictObject({
     top_p: z.number().nullable().optional(),
     top_logprobs: z.number().nullable().optional(),
     truncation: z.enum(["auto", "disabled"]).nullable().optional(),
-    user: z.string().optional(),
+    user: z.string().nullable().optional(),
+    access_programs: z
+      .strictObject({
+        cyber: z.enum(["standard", "daybreak_blue", "daybreak_red"]),
+      })
+      .nullable()
+      .optional(),
+    frequency_penalty: z.number().nullable().optional(),
+    presence_penalty: z.number().nullable().optional(),
+    moderation: z.null().optional(),
     reasoning: z
       .strictObject({
         effort: z.string().nullable().optional(),
         summary: z.string().nullable().optional(),
+        context: z
+          .enum(["auto", "current_turn", "all_turns"])
+          .nullable()
+          .optional(),
+        mode: z.string().nullable().optional(),
       })
       .nullable()
       .optional(),
