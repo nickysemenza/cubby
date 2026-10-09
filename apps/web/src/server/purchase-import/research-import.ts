@@ -8,6 +8,7 @@ import {
 } from "@cubby/schemas/purchase-import";
 import { researchAssessment } from "@cubby/schemas/research-assessment";
 import {
+  archivedResearchWorkResolve,
   researchWorkResolve,
   type ResearchWorkResolveInput,
   type ResearchWorkResolution,
@@ -849,8 +850,8 @@ export async function resolveImportResearch(
   },
   ports: ImportResearchPorts = {},
 ) {
-  const proposal = researchWorkResolve.parse(input.proposal);
-  if (proposal.workRef !== input.workRef)
+  const receiptInput = archivedResearchWorkResolve.parse(input.proposal);
+  if (receiptInput.workRef !== input.workRef)
     throw new Error("Research proposal names a different work reference.");
   await assertResearchRunNotRetired(db, input.runId);
   // The callback keeps admission and assessment under one replay fence.
@@ -860,7 +861,7 @@ export async function resolveImportResearch(
       runId: runEntityId.parse(input.runId),
       operationId: input.callId,
       kind: "research_resolve_import",
-      payload: proposal,
+      payload: receiptInput,
       subject: "Research import",
       recordFailure: true,
       retainAttempt: true,
@@ -869,6 +870,8 @@ export async function resolveImportResearch(
     async (ledger) => {
       const replayed = await ledger.replay(getDb(db), researchImportResult);
       if (replayed) return replayed;
+      // Removed operands may recover their sealed receipt, never a new write.
+      const proposal = researchWorkResolve.parse(receiptInput);
       const { scope, target } = await assertResearchWork(
         db,
         input.runId,
@@ -892,6 +895,22 @@ export async function resolveImportResearch(
         scope.purpose === "purchase_validation"
           ? await loadPurchaseValidationContext(db, scope, target)
           : null;
+      if (scope.purpose !== "purchase_validation") {
+        for (const [orderIndex, order] of proposal.orders.entries()) {
+          const missing = order.candidate.lines.flatMap((line, lineIndex) =>
+            line.lineKind === "principal" &&
+            !order.productResolutions?.some(
+              (resolution) => resolution.lineIndex === lineIndex,
+            )
+              ? [lineIndex]
+              : [],
+          );
+          if (!order.productResolutions || missing.length)
+            throw new Error(
+              `orders[${orderIndex}].productResolutions requires a decision for each principal candidate.lines row; missing indices: ${missing.join(", ") || "none (supply [] for an incomplete order)"}.`,
+            );
+        }
+      }
       const evidenceIds = [
         ...new Set([
           ...proposal.identity.evidenceIds,
@@ -1038,10 +1057,6 @@ export async function resolveImportResearch(
           )
             throw new Error(
               "Automatic financial reversal/refund writes are forbidden; link lifecycle evidence instead.",
-            );
-          if (!order.productResolutions)
-            throw new Error(
-              "Accepted order requires explicit supported item resolutions.",
             );
         }
       // Source fences, domain writes, and work completion commit together.
@@ -1339,7 +1354,6 @@ export async function resolveImportResearch(
               source: sourceIdentity(firstSource),
               extraction: { status: "ready", candidate: order.candidate },
               productResolutions,
-              defaultTrade: order.defaultTrade,
               primaryDocumentImageId:
                 selectedSources.find((source) => source.receiptImage)
                   ?.receiptImage?.id ?? null,
@@ -1352,6 +1366,7 @@ export async function resolveImportResearch(
               transactionDb,
               writerInput,
               scope.actorUserId,
+              { applyUnassignedPurposeFallback: true },
             );
             if (!imported.purchaseId || imported.outcome === "conflict")
               throw new Error(

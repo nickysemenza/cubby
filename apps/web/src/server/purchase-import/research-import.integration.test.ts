@@ -38,12 +38,14 @@ import {
   runEvidence,
   runFinding,
   runFactEvidence,
+  runOperation,
   runTarget,
   spendingCategory,
   vendor,
 } from "~/server/db/schema";
 import { getDb, withTransaction } from "~/server/repo/database-helpers";
 import { effectiveExpenseSpendingCategorySql } from "~/server/repo/expense-category-resolution";
+import { effectiveExpenseTradeSql } from "~/server/repo/expense-inheritance";
 import {
   createProductFixture,
   makeProductInput,
@@ -209,7 +211,6 @@ describe("supported retained-mail research writes", () => {
           "The original states this distinct annual service and total.",
         candidate: candidate(id, 10 + index * 10),
         productResolutions: [{ kind: "expense_only", lineIndex: 0 }],
-        defaultTrade: "other",
       })),
       detail: "Verified two supported service acquisitions from one original.",
     });
@@ -226,6 +227,97 @@ describe("supported retained-mail research writes", () => {
       proposal,
     };
   }
+  it("retains an exact item-resolution refusal before source assessment and writes", async () => {
+    const f = await fixture();
+    let assessments = 0;
+    await expect(
+      resolveImportResearch(
+        ctx.db,
+        {
+          runId: f.run.id,
+          workRef: f.target.id,
+          callId: "synthetic-missing-item-resolution",
+          proposal: {
+            ...f.proposal,
+            orders: [{ ...f.proposal.orders[0]!, productResolutions: [] }],
+          },
+        },
+        {
+          ...f.ports,
+          assess: async () => {
+            assessments++;
+            return { ...(await f.ports.assess()), acceptedOrders: [0] };
+          },
+        },
+      ),
+    ).rejects.toThrow(/orders\[0\]\.productResolutions.*0/);
+    expect(assessments).toBe(0);
+    expect(await getDb(ctx.db).select().from(purchase)).toHaveLength(0);
+    expect(await getDb(ctx.db).select().from(expense)).toHaveLength(0);
+    const [attempt] = await getDb(ctx.db)
+      .select()
+      .from(runOperation)
+      .where(eq(runOperation.operationId, "synthetic-missing-item-resolution"));
+    expect(attempt).toMatchObject({
+      state: "failed",
+      result: { attempt: { orders: [{ productResolutions: [] }] } },
+    });
+    expect(attempt?.error).toMatch(/orders\[0\]\.productResolutions.*0/);
+  });
+  // Missing source purpose must not block supported imports or replace a
+  // member's existing purpose. The researcher supplies source facts only.
+  it.each(["new", "unassigned", "assigned"] as const)(
+    "applies the host purpose fallback without a researcher trade: %s",
+    async (purpose) => {
+      const f = await fixture();
+      if (purpose !== "new")
+        await insertWithShortcode(ctx.db, "purchase", {
+          vendorId: f.vendor.id,
+          orderId: "ORDER-ONE",
+          defaultTrade: purpose === "assigned" ? "plumbing" : null,
+        });
+      const proposal = {
+        ...f.proposal,
+        orders: f.proposal.orders.slice(0, 1),
+      };
+      const result = await resolveImportResearch(
+        ctx.db,
+        {
+          runId: f.run.id,
+          workRef: f.target.id,
+          callId: "synthetic-host-purpose-fallback",
+          proposal,
+        },
+        {
+          ...f.ports,
+          assess: async () => ({
+            ...(await f.ports.assess()),
+            acceptedOrders: [0],
+          }),
+        },
+      );
+      expect(result.status).toBe("verified");
+      const [saved] = await getDb(ctx.db).select().from(purchase);
+      expect(saved?.defaultTrade).toBe(
+        purpose === "assigned" ? "plumbing" : null,
+      );
+      const lines = await getDb(ctx.db)
+        .select({
+          cost: expense.cost,
+          trade: expense.trade,
+          effectiveTrade: effectiveExpenseTradeSql(),
+        })
+        .from(expense);
+      expect(lines).toEqual([
+        {
+          cost: 10,
+          trade: purpose === "assigned" ? null : "other",
+          effectiveTrade: purpose === "assigned" ? "plumbing" : "other",
+        },
+      ]);
+      expect(await getDb(ctx.db).select().from(product)).toHaveLength(0);
+    },
+  );
   // A semantic refusal must not surrender mail ownership; a corrected call and
   // replay must commit one source order, expense, and lifecycle association.
   it("retains refused mail work for a corrected call and replays both receipts without duplicate writes", async () => {
@@ -304,6 +396,79 @@ describe("supported retained-mail research writes", () => {
         f.ports,
       ),
     ).rejects.toThrow(/settled|closed/);
+  });
+  it("recovers a sealed pre-change import receipt without admitting removed fields for new writes", async () => {
+    const f = await fixture();
+    const input = {
+      runId: f.run.id,
+      workRef: f.target.id,
+      callId: "synthetic-archived-import",
+      proposal: f.proposal,
+    };
+    const committed = await resolveImportResearch(ctx.db, input, f.ports);
+    // A pre-deployment normalized proposal preserves the removed field at
+    // its original trailing position; archived fingerprints are immutable.
+    const archived = {
+      ...f.proposal,
+      orders: f.proposal.orders.map((order) => ({
+        ...order,
+        defaultTrade: "other",
+      })),
+    };
+    const fingerprint = await sha256Hex(JSON.stringify(archived));
+    const [receipt] = await getDb(ctx.db)
+      .select()
+      .from(runOperation)
+      .where(eq(runOperation.operationId, input.callId));
+    await getDb(ctx.db)
+      .update(runOperation)
+      .set({
+        inputFingerprint: fingerprint,
+        result: { ...committed, attempt: archived },
+      })
+      .where(eq(runOperation.id, receipt!.id));
+    const noAssessment = {
+      ...f.ports,
+      assess: async () => {
+        throw new Error("Replay must not reassess or write");
+      },
+    };
+    expect(
+      await resolveImportResearch(
+        ctx.db,
+        { ...input, proposal: archived },
+        noAssessment,
+      ),
+    ).toEqual(committed);
+    await expect(
+      resolveImportResearch(
+        ctx.db,
+        {
+          ...input,
+          proposal: { ...archived, detail: "Changed proposal" },
+        },
+        noAssessment,
+      ),
+    ).rejects.toThrow(/different input/);
+    await expect(
+      resolveImportResearch(
+        ctx.db,
+        {
+          ...input,
+          callId: "synthetic-new-obsolete-proposal",
+          proposal: archived,
+        },
+        noAssessment,
+      ),
+    ).rejects.toThrow(/defaultTrade|Unrecognized key/);
+    expect(await getDb(ctx.db).select().from(expense)).toHaveLength(2);
+    expect(await getDb(ctx.db).select().from(purchase)).toHaveLength(2);
+    const [unchanged] = await getDb(ctx.db)
+      .select()
+      .from(runOperation)
+      .where(eq(runOperation.id, receipt!.id));
+    expect(unchanged!.inputFingerprint).toBe(fingerprint);
+    expect(unchanged!.result).toEqual({ ...committed, attempt: archived });
   });
   it("counts replayed accepted source orders and links with the same refusal as zero progress", async () => {
     const f = await fixture();

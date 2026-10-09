@@ -1058,17 +1058,20 @@ async function seedRunOwnedRows(db: Database, ids: StagingIds, runId: RunId) {
       classificationVersion: "synthetic-v1",
       status: "pending",
     });
-    const [work] = await getDb(db)
-      .select({ id: runTarget.id })
-      .from(runTarget)
-      .where(eq(runTarget.runId, runId));
-    if (!work) throw new Error("Synthetic retained work missing");
+    const orderMailId = crypto.randomUUID();
+    const work = await insertAndReturn(db, runTarget, {
+      runId,
+      entityKind: "run",
+      entityId: runId,
+      workKey: orderMailId,
+      targetFingerprint: "delete-policy-retention-primary-source",
+    });
     await insertAndReturn(db, researchRetention, {
       id: crypto.randomUUID(),
       runId,
       workRef: work.id,
       ledgerPartyId,
-      orderMailId: crypto.randomUUID(),
+      orderMailId,
       mailboxId: "synthetic-delete-policy-retention-mailbox",
       messageId: "synthetic-delete-policy-retention-message",
       checksum: "b".repeat(64),
@@ -1281,6 +1284,21 @@ describe("entity delete policy — declared dispositions at the DB boundary", ()
       universe.shortcodeByPrefix,
       runId,
     );
+    const retainedWork = await getDb(ctx.db)
+      .select({
+        entityKind: runTarget.entityKind,
+        entityId: runTarget.entityId,
+        workKey: runTarget.workKey,
+        orderMailId: researchRetention.orderMailId,
+      })
+      .from(researchRetention)
+      .innerJoin(runTarget, eq(runTarget.id, researchRetention.workRef));
+    expect(retainedWork).toHaveLength(1);
+    expect(retainedWork[0]).toMatchObject({
+      entityKind: "run",
+      entityId: runId,
+    });
+    expect(retainedWork[0]?.workKey).toBe(retainedWork[0]?.orderMailId);
 
     const failures: string[] = [];
     const uncovered: string[] = [];

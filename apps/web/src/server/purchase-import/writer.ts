@@ -20,7 +20,16 @@ import {
   type AcceptedSourceOrder,
 } from "@cubby/schemas/purchase-import";
 import { sha256Hex } from "@cubby/shared/sha256";
-import { and, eq, ilike, isNotNull, or, sql } from "drizzle-orm";
+import {
+  and,
+  eq,
+  ilike,
+  inArray,
+  isNotNull,
+  isNull,
+  or,
+  sql,
+} from "drizzle-orm";
 
 import { householdLocalDate } from "~/lib/household-date";
 import {
@@ -963,6 +972,7 @@ export async function importVendorOrder(
   db: Database,
   rawInput: ImportWriterInput,
   actorUserId: string,
+  options: { applyUnassignedPurposeFallback?: boolean } = {},
 ): Promise<ImportWriterOutput> {
   const input = importWriterInput.parse(rawInput);
   // Validation consumes this exact deterministic projection before any writer
@@ -1478,6 +1488,37 @@ export async function importVendorOrder(
       }
     }
 
+    if (options.applyUnassignedPurposeFallback) {
+      const createdExpenses = rowMutations.filter(
+        (mutation) =>
+          mutation.targetKind === "expense" &&
+          mutation.mutationKind === "create",
+      );
+      if (createdExpenses.length) {
+        // Resolve inheritance after Products exist. A Purchase-wide default
+        // would override an already chosen household Project on food lines.
+        const filled = await tx
+          .update(expense)
+          .set({ trade: "other" })
+          .where(
+            and(
+              inArray(
+                expense.id,
+                createdExpenses.map((mutation) =>
+                  parseEntityId("expense", mutation.targetId),
+                ),
+              ),
+              eq(expense.lineKind, "principal"),
+              isNull(effectiveExpenseTradeSql()),
+              notDeleted(expense),
+            ),
+          )
+          .returning({ id: expense.id });
+        for (const mutation of createdExpenses)
+          if (filled.some((line) => line.id === mutation.targetId))
+            mutation.fields.push("trade");
+      }
+    }
     const classifiedLines = await tx.query.expense.findMany({
       where: and(eq(expense.purchaseId, purchaseId), notDeleted(expense)),
     });

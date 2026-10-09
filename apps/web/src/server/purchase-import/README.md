@@ -175,7 +175,11 @@ Retirement cleanup remains available independently of execution. A fresh,
 deliberately admitted successor is required for legacy work; legacy Runs are
 not classified as unrelated mail or automatically reopened. Contract validity
 is separate from active status, so completing its own work does not invalidate
-an operation's successful response.
+an operation's successful response. A started replacement-tool checkpoint may
+recover a pre-change import proposal only through its original hidden call ID
+and matching completed receipt. Receipt decoding preserves the old normalized
+fingerprint; new proposals still use the current strict tool schema. Removed
+operands never authorize new writes, and ownership/retirement fences still apply.
 Photo inventory keeps its explicitly selected shared owner and live initiating
 member; that permission never grants research another member's source scope.
 
@@ -230,11 +234,21 @@ and deployment/readback order are owned by the
    Unknown source currency remains null. Unknown or foreign-unit totals and
    payments stay in the immutable original, outside canonical USD financial
    writes. Unpriced item descriptions remain retained source evidence until
-   priced itemization is available. A new or unassigned Purchase uses the
-   approved `other` trade fallback when no household purpose is established;
-   this policy default is not a source-verified fact. Existing direct or inherited
-   member attribution remains authoritative, and principal Expenses require the shared
-   effective trade.
+   priced itemization is available. The researcher supplies an explicit Product
+   decision for every principal order line. Missing decisions return exact
+   per-order paths before source assessment. The host applies the approved
+   `other` trade fallback only to new principal Expense rows whose shared
+   effective trade remains null after Product/Project inheritance. This policy
+   is separate from source-verified facts, preserves member attribution and
+   leaves Purchase defaults and adjustments intact.
+   A returned domain refusal that leaves the same task active upgrades the
+   coordinator from Luna to Sol/high for the remainder of that Run. The host
+   retains this mode before returning the tool result and reapplies it after
+   eviction or result replay. Settled ambiguity, member contradictions,
+   exhausted attempts and unrelated-source retirement do not upgrade another
+   task. Schema exceptions and transport failures do not trigger this policy;
+   escalation preserves the existing attempt/generation limits and
+   subscription-only transport without paid fallback.
    Retained mail observations present plain text and compact visible HTML with
    source links before applying the model-view size limit. Layout/CSS bytes never
    crowd receipt facts out of that view. The immutable original MIME content and

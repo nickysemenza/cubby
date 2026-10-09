@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { tradeSchema } from "./task-fields";
 import { externalIdKind } from "./external-id";
 import { purchaseShortcode, vendorShortcode } from "./identifier-fields";
 import {
@@ -10,7 +11,6 @@ import {
   researchClaimSupport,
   retainedEvidenceId,
 } from "./research";
-import { tradeSchema } from "./task-fields";
 
 const workRef = z.uuid();
 const reasoning = z.string().trim().min(1).max(8_000);
@@ -32,13 +32,33 @@ const observationRef = {
 };
 const [existingProduct, newProduct, unresolvedProduct, expenseOnly] =
   preparedProductResolution.options;
-const indexedLine = { lineIndex: z.number().int().nonnegative() };
+const indexedLine = {
+  lineIndex: z
+    .number()
+    .int()
+    .nonnegative()
+    .describe(
+      "Zero-based index in this order's complete candidate.lines array, including adjustment rows. Supply one decision for each principal line; adjustments need none.",
+    ),
+};
 /** Researchers reuse public Product references returned by Cubby search. */
 export const researchProductResolution = z.discriminatedUnion("kind", [
-  existingProduct.extend(indexedLine).strict(),
-  newProduct.extend(indexedLine).strict(),
-  unresolvedProduct.extend(indexedLine).strict(),
-  expenseOnly.extend(indexedLine).strict(),
+  existingProduct
+    .extend(indexedLine)
+    .strict()
+    .meta(existingProduct.meta() ?? {}),
+  newProduct
+    .extend(indexedLine)
+    .strict()
+    .meta(newProduct.meta() ?? {}),
+  unresolvedProduct
+    .extend(indexedLine)
+    .strict()
+    .meta(unresolvedProduct.meta() ?? {}),
+  expenseOnly
+    .extend(indexedLine)
+    .strict()
+    .meta(expenseOnly.meta() ?? {}),
 ]);
 export const researchWorkNext = z.strictObject({});
 export const researchWorkObserve = z.strictObject({
@@ -121,11 +141,9 @@ export const researchWorkResolve = z.strictObject({
         productResolutions: z
           .array(researchProductResolution)
           .max(500)
-          .optional(),
-        defaultTrade: tradeSchema
           .optional()
           .describe(
-            "Preserve existing member attribution, including inherited Project and Expense purpose, by omitting this for an assigned Purchase. For a new or unassigned Purchase with no established household purpose, use other as Cubby's approved fallback, not a verified source fact. The host preserves assigned attribution. Specific trades require support.",
+            "Item identity decisions for this order: orders[i].productResolutions. Resolve every principal candidate.lines row as existing, new, unresolved or expense_only. Use an empty array for an identified order without priced itemization. Purchase validation can omit decisions because it proposes review rather than importing lines.",
           ),
       }),
     )
@@ -153,6 +171,18 @@ export const researchWorkResolve = z.strictObject({
       "Scope coverage for an assigned frozen account-history or explicit backfill objective. Omit for an individual mail or Product task; one source does not establish broader scope exhaustion.",
     ),
   detail: z.string().trim().min(1).max(8_000),
+});
+/** Receipt decoding only: never mounted as a live tool input. Preserves the
+ * pre-change normalized operand order for immutable operation fingerprints. */
+export const archivedResearchWorkResolve = researchWorkResolve.extend({
+  orders: z
+    .array(
+      researchWorkResolve.shape.orders.unwrap().element.extend({
+        defaultTrade: tradeSchema.optional(),
+      }),
+    )
+    .max(100)
+    .default([]),
 });
 export const researchMailSearch = z.strictObject({
   workRef,

@@ -237,7 +237,6 @@ describe("durable research objective admission", () => {
               allShipmentsDelivered: false,
             },
             productResolutions: [{ kind: "expense_only", lineIndex: 0 }],
-            defaultTrade: "other",
           },
         ],
         detail:

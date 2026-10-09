@@ -643,7 +643,6 @@ describe("current purchase-agent system boundaries", () => {
                     "work.retainedObservation.evidenceId",
                   ),
                 ],
-                defaultTrade: "other",
                 reasoning:
                   "The original supports the unchanged recorded order.",
                 candidate: {
@@ -887,7 +886,6 @@ describe("current purchase-agent system boundaries", () => {
                 {
                   vendorRef: vendor.shortcode,
                   evidenceIds: [from(`partial-${index}-read`, "evidenceId")],
-                  defaultTrade: "other",
                   reasoning:
                     "SERVICE-1 identifies one annual service, quantity 1, USD 9.00.",
                   candidate: {

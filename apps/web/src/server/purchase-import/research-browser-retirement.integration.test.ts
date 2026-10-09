@@ -13,7 +13,19 @@ import {
   type E2ERunIdentity,
 } from "tooling/e2e-run-bundle";
 import { withTestDb } from "tooling/test-setup";
-import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import {
+  HOLD_WORKERD_HARNESS_TIMEOUT_MS,
+  holdWorkerdHarness,
+} from "tooling/workerd-harness";
+import {
+  afterAll,
+  afterEach,
+  beforeAll,
+  beforeEach,
+  describe,
+  expect,
+  it,
+} from "vitest";
 import { z } from "zod";
 
 import { researchRetention, run, runTarget } from "~/server/db/schema";
@@ -47,6 +59,11 @@ type BrokerTestRequest = Partial<
 // not complete its cleanup. Reconnect delivers erasure to the original device.
 describe("research browser retirement", () => {
   const ctx = withTestDb();
+  let releaseHarness: (() => void) | undefined;
+  beforeAll(async () => {
+    releaseHarness = await holdWorkerdHarness();
+  }, HOLD_WORKERD_HARNESS_TIMEOUT_MS);
+  afterAll(() => releaseHarness?.());
   let runtime: ScenarioHarness | undefined;
   let started: E2ERunIdentity;
   let status = "failed";

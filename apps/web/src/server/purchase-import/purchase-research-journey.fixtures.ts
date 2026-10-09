@@ -91,7 +91,6 @@ export const mailSteps: ScriptStep[] = [
           allShipmentsDelivered: false,
         },
         productResolutions: [{ kind: "new", lineIndex: 0 }],
-        defaultTrade: "other",
       },
     ],
     detail:

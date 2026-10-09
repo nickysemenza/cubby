@@ -1199,18 +1199,29 @@ export const preparePurchaseImportOut = z.object({
 });
 
 export const preparedProductResolution = z.discriminatedUnion("kind", [
-  z.object({ kind: z.literal("existing"), productId: productShortcode }),
-  z.object({ kind: z.literal("new") }),
-  z.object({
-    kind: z.literal("unresolved"),
-    reason: z.string().trim().min(1).max(1_000),
-  }),
-  /**
-   * Household spending that is not a stocked item: prepared food, tickets,
-   * rides, memberships, subscriptions, digital access, donations, services.
-   * The line books an expense with no Product and nothing to review.
-   */
-  z.object({ kind: z.literal("expense_only") }),
+  z
+    .object({ kind: z.literal("existing"), productId: productShortcode })
+    .describe(
+      "Reuse an existing Product whose exact item and variant match the source without contradicting its recorded facts. productId is the public Product shortcode returned by Cubby search.",
+    ),
+  z
+    .object({ kind: z.literal("new") })
+    .describe(
+      "Create a Product from supported order-line facts after checking existing matches. Missing catalog identity stays unknown and continues through Product research.",
+    ),
+  z
+    .object({
+      kind: z.literal("unresolved"),
+      reason: z.string().trim().min(1).max(1_000),
+    })
+    .describe(
+      "Retain a specific unresolved Product identity or variant ambiguity for review while preserving supported spending.",
+    ),
+  z
+    .object({ kind: z.literal("expense_only") })
+    .describe(
+      "Spending with no tracked Product: prepared restaurant food, tickets, rides, donations or labor. Seeds, plants, ingredients, groceries, tools, supplies, tracked software and subscriptions delivering goods require a Product decision.",
+    ),
 ]);
 
 export const commitPurchaseImportInput = z.object({

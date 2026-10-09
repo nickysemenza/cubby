@@ -32,11 +32,10 @@ events on links to existing Purchases; a shipping-first import must establish
 shipping in its cited original. Do not invent missing values. Services, digital goods,
 food and subscriptions are purchases without necessarily being physical
 Products. An identified order without itemization can remain incomplete.
-The order's `defaultTrade: "other"` is the approved fallback for an unassigned
-household purpose; it does not need to appear in the original and is not a
-verified source fact. Missing purpose alone does not refute supported order
-itemization. Other trade values require support, and existing member attribution
-remains authoritative, including inherited Project and Expense purpose.
+Missing household purpose alone does not refute supported order itemization.
+The host preserves member attribution and applies the approved Other fallback
+only to new principal Expenses with no effective purpose after inheritance.
+This host policy is separate from source-verified claims.
 Purchase purpose facts must cite their original proposal's `orderIndex` and
 support the purpose of that exact accepted acquisition. The category is an
 existing SpendingCategory shortcode, not a new category or a financial change.
