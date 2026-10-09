@@ -740,7 +740,37 @@ const compileFieldModel = (
     output: policy("output"),
     sort,
     intents: compileEditIntents(model.intents, fieldKeys, `${context}.intents`),
+    research: model.research,
   };
+  if (model.research) {
+    const { fillFields } = model.research;
+    if (new Set(fillFields).size !== fillFields.length)
+      throw new EntityDeclarationError(
+        `${context}.research.fillFields contains duplicates.`,
+      );
+    for (const key of fillFields) {
+      const field = fields.find((candidate) => candidate.key === key);
+      if (
+        !field ||
+        !compiled.update.includes(key) ||
+        !storageKeys.includes(key)
+      )
+        throw new EntityDeclarationError(
+          `${context}.research.fillFields ${key} must be an ordinary stored update field.`,
+        );
+      if (
+        !(field.kind === "text" && field.reference === null) &&
+        !(
+          field.kind === "identifier" &&
+          field.reference !== null &&
+          !field.reference.multiple
+        )
+      )
+        throw new EntityDeclarationError(
+          `${context}.research.fillFields ${key} must be text or a single entity reference.`,
+        );
+    }
+  }
   const storedFields = new Set(storageKeys);
   for (const field of fields) {
     const exposed =

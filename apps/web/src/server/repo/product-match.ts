@@ -10,10 +10,11 @@ import type {
   productMatchSideRole,
 } from "@cubby/schemas/recommendations";
 import { isMiscProduct } from "@cubby/shared";
-import { and, asc, desc, eq, inArray, isNotNull, or, sql } from "drizzle-orm";
+import { and, asc, eq, inArray, isNotNull, or, sql } from "drizzle-orm";
 import { uniq } from "es-toolkit";
 import type { z } from "zod";
 
+import { comparePlainDatesDescending } from "~/lib/household-date";
 import type { Database } from "~/server/db";
 import {
   entityAttachment,
@@ -157,12 +158,13 @@ type MatchParty = {
 };
 
 function latestPurchaseByProduct<
-  T extends { productId: ProductId; date: string },
+  T extends { productId: ProductId; date: typeof purchase.$inferSelect.date },
 >(links: readonly T[], expenses: readonly T[]): Map<ProductId, T> {
-  const latest = new Map(links.map((row) => [row.productId, row]));
-  for (const row of expenses) {
+  const latest = new Map<ProductId, T>();
+  for (const row of [...links, ...expenses]) {
     const existing = latest.get(row.productId);
-    if (!existing || row.date > existing.date) latest.set(row.productId, row);
+    if (!existing || comparePlainDatesDescending(row.date, existing.date) < 0)
+      latest.set(row.productId, row);
   }
   return latest;
 }
@@ -275,7 +277,11 @@ export async function loadProductMatchSides(
       .where(
         and(inArray(entityLink.toEntityId, ids), liveLinks("purchaseProduct")),
       )
-      .orderBy(entityLink.toEntityId, desc(purchase.date)),
+      .orderBy(
+        entityLink.toEntityId,
+        sql`${purchase.date} desc nulls last`,
+        purchase.id,
+      ),
     client
       .selectDistinctOn([product.id], {
         productId: product.id,
@@ -307,7 +313,7 @@ export async function loadProductMatchSides(
           sql.raw(expenseAcquisitionSql('"Expense"')),
         ),
       )
-      .orderBy(product.id, desc(purchase.date)),
+      .orderBy(product.id, sql`${purchase.date} desc nulls last`, purchase.id),
     client
       .select({
         productId: expense.productId,

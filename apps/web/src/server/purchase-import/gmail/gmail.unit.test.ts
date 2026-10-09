@@ -2,10 +2,8 @@ import { describe, expect, it } from "vitest";
 
 import { createGmailApiClient } from "./client";
 import { normalizeHistoryPage, normalizeMessage } from "./normalize";
-import { buildBootstrapPlan, listGmailChanges, maxHistoryId } from "./sync";
-import { GmailApiError, type GmailMessage, type GmailProvider } from "./types";
-
-const NOW = new Date("2026-09-19T12:00:00.000Z");
+import { maxHistoryId } from "./sync";
+import type { GmailMessage } from "./types";
 
 const orderMessage = (
   id: string,
@@ -44,17 +42,6 @@ const orderMessage = (
       },
     ],
   },
-});
-
-const providerWith = (
-  overrides: Partial<GmailProvider> = {},
-): GmailProvider => ({
-  getProfile: async () => ({ historyId: "100" }),
-  listMessages: async () => ({ messages: [] }),
-  getMessage: async (messageId) => orderMessage(messageId),
-  listHistory: async () => ({ historyId: "100", history: [] }),
-  getAttachment: async () => ({ data: "YWJj", size: 3 }),
-  ...overrides,
 });
 
 describe("Gmail normalization", () => {
@@ -240,169 +227,10 @@ describe("Gmail API client", () => {
   });
 });
 
-describe("Gmail synchronization", () => {
-  it("builds deterministic bootstrap queries", () => {
-    expect(
-      buildBootstrapPlan({
-        knownSenders: [
-          " Orders@example.test ",
-          "alerts@example.test",
-          "orders@example.test",
-        ],
-        earliestUnresolvedHuntAt: new Date("2026-09-10T22:00:00.000Z"),
-        now: NOW,
-      }),
-    ).toEqual({
-      knownSenderQueries: [
-        "from:alerts@example.test after:2026-09-03",
-        "from:orders@example.test after:2026-09-03",
-      ],
-      unknownOrderQuery: "after:2026-08-20",
-    });
-  });
-
-  it("bootstraps from a profile baseline captured before listing pages", async () => {
-    const requestedQueries: string[] = [];
-    const provider = providerWith({
-      getProfile: async () => ({ historyId: "100" }),
-      listMessages: async ({ query, pageToken }) => {
-        requestedQueries.push(`${query}:${pageToken ?? "first"}`);
-        if (pageToken) return { messages: [{ id: "m-2" }] };
-        return {
-          messages: [{ id: "m-2" }, { id: "m-1" }],
-          nextPageToken: "next",
-        };
-      },
-      getMessage: async (messageId) => orderMessage(messageId),
-      getAttachment: async () => ({ data: "YWJj", size: 3 }),
-    });
-
-    const result = await listGmailChanges(provider, {
-      mailboxId: "mailbox-placeholder",
-      historyId: null,
-      bootstrap: { knownSenders: ["orders@example.test"], now: NOW },
-      maxResults: 50,
-    });
-
-    expect(result.mode).toBe("bootstrap");
-    expect(result.targetHistoryId).toBe("100");
-    expect(result.messageIds).toEqual(["m-1", "m-2"]);
-    expect(result.events).toEqual([]);
-    expect(requestedQueries).toHaveLength(4);
-    expect(
-      new Set(requestedQueries.map((query) => query.split(":")[0])),
-    ).toEqual(new Set(["from", "after"]));
-  });
-
-  it("lists every history page without fetching a message body", async () => {
-    const fetched: string[] = [];
-    const provider = providerWith({
-      listHistory: async ({ pageToken }) =>
-        pageToken
-          ? {
-              historyId: "103",
-              history: [
-                {
-                  id: "103",
-                  messagesDeleted: [{ message: { id: "m-deleted" } }],
-                },
-              ],
-            }
-          : {
-              historyId: "102",
-              nextPageToken: "next",
-              history: [
-                {
-                  id: "102",
-                  messagesAdded: [
-                    {
-                      message: {
-                        id: "m-changed",
-                        threadId: "thread-m-changed",
-                      },
-                    },
-                  ],
-                  labelsAdded: [
-                    { message: { id: "m-changed" }, labelIds: ["INBOX"] },
-                  ],
-                },
-              ],
-            },
-      getMessage: async (messageId) => {
-        fetched.push(messageId);
-        return orderMessage(messageId);
-      },
-    });
-
-    const result = await listGmailChanges(provider, {
-      mailboxId: "mailbox-placeholder",
-      historyId: "100",
-      bootstrap: { knownSenders: [], now: NOW },
-    });
-
-    expect(result.mode).toBe("incremental");
-    expect(result.targetHistoryId).toBe("103");
-    expect(result.events.map((event) => event.kind)).toEqual([
-      "message_added",
-      "labels_added",
-      "message_deleted",
-    ]);
-    expect(result.messageIds).toEqual(["m-changed"]);
-    expect(fetched).toEqual([]);
-  });
-
-  it("falls back to a full resync when Gmail expires the history cursor", async () => {
-    let historyCalls = 0;
-    const provider = providerWith({
-      getProfile: async () => ({ historyId: "200" }),
-      listHistory: async () => {
-        historyCalls += 1;
-        throw new GmailApiError({
-          status: 404,
-          reason: "historyIdInvalid",
-          message: "History id is too old",
-        });
-      },
-      listMessages: async ({ query }) =>
-        query.startsWith("after:")
-          ? { messages: [{ id: "m-recovered" }] }
-          : { messages: [] },
-    });
-
-    const result = await listGmailChanges(provider, {
-      mailboxId: "mailbox-placeholder",
-      historyId: "1",
-      bootstrap: { knownSenders: [], now: NOW },
-    });
-
-    expect(historyCalls).toBe(1);
-    expect(result.mode).toBe("full_resync");
-    expect(result.targetHistoryId).toBe("200");
-    expect(result.messageIds).toEqual(["m-recovered"]);
-  });
-
-  it("never regresses a cursor when a provider reports an older history id", () => {
+describe("Gmail history cursor", () => {
+  it("never regresses when a provider reports an older history id", () => {
     expect(maxHistoryId("100", "99")).toBe("100");
     expect(maxHistoryId("100", "101")).toBe("101");
     expect(maxHistoryId(null, undefined)).toBeNull();
-  });
-
-  // A message that vanishes between listing and fetching is skipped by the
-  // batch; only a 404 from history.list means the cursor expired.
-  it("does not treat a quiet mailbox as expired history", async () => {
-    const provider = providerWith({
-      listHistory: async () => ({ historyId: "100" }),
-    });
-    const result = await listGmailChanges(provider, {
-      mailboxId: "mailbox-placeholder",
-      historyId: "100",
-      bootstrap: { knownSenders: [], now: NOW },
-    });
-    expect(result).toMatchObject({
-      mode: "incremental",
-      targetHistoryId: "100",
-      messageIds: [],
-      events: [],
-    });
   });
 });

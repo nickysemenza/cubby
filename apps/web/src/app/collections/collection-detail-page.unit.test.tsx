@@ -14,6 +14,7 @@ import { collection } from "~/integrations/tanstack-query/generated/catalog.gen"
 import { createBrowserTestHarness } from "~/lib/test/browser-harness";
 
 import { CollectionDetailPage } from "./collection-detail-page";
+import { ProductPurchasesPopover } from "./collection-product-context";
 
 const PRODUCT_ID = testShortcode("product", "PRD-COLL");
 const LOCATION_ID = testShortcode("location", "LOC-COLL");
@@ -87,6 +88,32 @@ function operations() {
 }
 
 describe("CollectionDetailPage product locator", () => {
+  it("shows an undated Purchase in context without rendering a made-up calendar date", async () => {
+    const view = render(
+      <ProductPurchasesPopover
+        purchases={[
+          {
+            id: PURCHASE_ID,
+            orderId: "UNDATED-CONTEXT",
+            displayLabel: null,
+            date: null,
+            vendorName: "Synthetic supplier",
+            trades: [],
+          },
+        ]}
+      />,
+      { wrapper: harness.wrapper },
+    );
+    fireEvent.click(
+      screen.getByRole("button", { name: /Show 1 linked purchase/ }),
+    );
+    expect(
+      await screen.findByRole("link", { name: "UNDATED-CONTEXT" }),
+    ).toBeVisible();
+    expect(screen.getByText("Date unknown")).toBeVisible();
+    expect(view.baseElement.querySelector("time")).toBeNull();
+  });
+
   it("uses the embedded RTable with fixed server pagination and URL-owned search", async () => {
     const onSearchChange = vi.fn();
     render(

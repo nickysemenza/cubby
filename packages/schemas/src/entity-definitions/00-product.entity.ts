@@ -591,6 +591,15 @@ export default defineEntity({
     },
   },
   model: {
+    research: {
+      fillFields: [
+        "manufacturer",
+        "model",
+        "categoryId",
+        "ingredientId",
+        "growsPlantId",
+      ],
+    },
     fields: [
       {
         key: "acquisitionOrigin",
@@ -756,6 +765,14 @@ export default defineEntity({
       },
       {
         key: "manufacturer",
+        explanation: {
+          ruleId: "product.manufacturer",
+          description:
+            "The current manufacturer and retained evidence supporting this value.",
+          sourceDependencies: [
+            { path: "manufacturer", label: "Stored manufacturer" },
+          ],
+        },
         kind: "text",
         // The create schema defaults a missing maker, but the form still
         // asks for one.
@@ -778,6 +795,12 @@ export default defineEntity({
       },
       {
         key: "model",
+        explanation: {
+          ruleId: "product.model",
+          description:
+            "The current model and retained evidence identifying the selected variant.",
+          sourceDependencies: [{ path: "model", label: "Stored model" }],
+        },
         kind: "text",
         nullable: true,
         control: { kind: "text", width: "half" },
@@ -827,6 +850,14 @@ export default defineEntity({
       },
       {
         key: "categoryId",
+        explanation: {
+          ruleId: "product.category",
+          description:
+            "The current category and retained evidence supporting this classification.",
+          sourceDependencies: [
+            { path: "categoryId", label: "Stored category" },
+          ],
+        },
         kind: "identifier",
         nullable: true,
         reference: { entity: "productCategory" },

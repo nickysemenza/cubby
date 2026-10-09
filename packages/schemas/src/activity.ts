@@ -4,20 +4,17 @@ import { parseShortcode } from "@cubby/shared";
 import { imageShortcode } from "./identifiers";
 import { entitySchema, type Entity } from "./entity";
 import { imageDescriptionAnalysis } from "./image-processing";
-import { imageProcessingJobKind } from "./image-processing";
 import { imageUrlSummary } from "./image-summary";
-import { RUN_PURPOSE_LABEL, runPurpose, runTrigger } from "./run-fields";
+import { runTrigger } from "./run-fields";
+import { activityKind, type ActivityKind } from "./activity-fields";
+export { ACTIVITY_KIND_LABEL, activityKind } from "./activity-fields";
+export type { ActivityKind } from "./activity-fields";
 
 export const activityRunId = z.string().regex(/^(?:IPR|RUN)-[A-Z0-9]+$/u);
 export const activitySubmissionId = z.string().regex(/^IPS-[A-Z0-9]+$/u);
-export const activityKind = z.enum([
-  ...runPurpose.options,
-  ...imageProcessingJobKind.options,
-]);
-export type ActivityKind = z.infer<typeof activityKind>;
-
 const activityIconFallback = {
   account_sync: "vendor",
+  mail_import: "purchase",
   purchase_validation: "purchase",
   product_enrichment: "product",
   photo_inventory: "inventory",
@@ -45,12 +42,6 @@ export function activityIconEntity(input: {
   const entity = entitySchema.safeParse(subject?.type);
   return entity.success ? entity.data : activityIconFallback[input.kind];
 }
-/** The Runs list's name for each kind of work, for rows and the kind filter. */
-export const ACTIVITY_KIND_LABEL = {
-  ...RUN_PURPOSE_LABEL,
-  subject_lift: "Subject lift",
-  describe_image: "Image description",
-} as const satisfies Record<ActivityKind, string>;
 export const activityExecutor = z.object({
   kind: z.enum(["cloud", "device"]),
   deviceId: z.uuid().nullable(),

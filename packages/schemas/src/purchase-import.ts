@@ -3,9 +3,16 @@ import { z } from "zod";
 import { productCategoryShortcode } from "./identifier-fields";
 import { externalIdKind, externalIdSource } from "./external-id";
 import { agentImportRunPurpose } from "./import-run-agent";
+import { acceptedResearchFact } from "./research-facts";
+import { plainDate } from "./base-entity";
 
 import { money } from "./money";
-import { runPurpose, runStatus, runTrigger } from "./run-fields";
+import {
+  runEvidenceKind,
+  runPurpose,
+  runStatus,
+  runTrigger,
+} from "./run-fields";
 import { expenseLineKindSchema } from "./expense-line-kind";
 import {
   imageShortcode,
@@ -87,15 +94,19 @@ export const runTargetOutcome = z.enum([
   "enriched",
   "unavailable",
   "skipped",
+  "attached",
+  "verified",
+  "partially_verified",
+  "researched_with_gaps",
+  "ambiguous",
+  "temporarily_blocked",
+  "no_source_found",
+  "unrelated",
 ]);
 export type RunTargetOutcome = z.infer<typeof runTargetOutcome>;
 
-export const runEvidenceKind = z.enum([
-  "browser_capture",
-  "gmail_attachment",
-  "manual_upload",
-]);
-export type RunEvidenceKind = z.infer<typeof runEvidenceKind>;
+export { runEvidenceKind };
+export type { RunEvidenceKind } from "./run-fields";
 
 export { runShortcode };
 export type RunPublicId = z.infer<typeof runShortcode>;
@@ -243,11 +254,18 @@ export const extractedPaymentEvidence = z.object({
 });
 export type ExtractedPaymentEvidence = z.infer<typeof extractedPaymentEvidence>;
 
+const extractedOrderDate = z
+  .union([plainDate.pipe(z.iso.date()), z.iso.datetime({ offset: true })])
+  .nullable()
+  .describe(
+    "Source-printed order date as YYYY-MM-DD, or an explicit ISO timestamp with timezone. Preserve a printed calendar day without inventing a time or timezone. Null when absent; email receipt time is not an order date.",
+  );
+
 export const extractedOrderCandidate = z.object({
   orderId: z.string().trim().min(1).max(300).nullable(),
-  orderedAt: z.iso.datetime().nullable(),
+  orderedAt: extractedOrderDate,
   merchant: z.string().trim().min(1).max(300).nullable(),
-  currency: z.string().trim().length(3),
+  currency: z.string().trim().length(3).nullable(),
   printedGrandTotal: money.nullable(),
   lines: z.array(extractedPurchaseLine).max(500),
   payments: z.array(extractedPaymentEvidence).max(100),
@@ -256,6 +274,7 @@ export const extractedOrderCandidate = z.object({
 export type ExtractedOrderCandidate = z.infer<typeof extractedOrderCandidate>;
 
 const importExtractionReviewReason = z.enum([
+  "missing_currency",
   "sum_mismatch",
   "foreign_currency",
   "missing_total",
@@ -281,6 +300,13 @@ export const importExtractionOutcome = z.discriminatedUnion("status", [
 ]);
 export type ImportExtractionOutcome = z.infer<typeof importExtractionOutcome>;
 
+/** Accepted ordered-item identity remains independent of later catalog or ledger edits. */
+export const acceptedSourceOrder = z.object({
+  checksum: z.string().regex(/^[a-f0-9]{64}$/),
+  extraction: importExtractionOutcome,
+});
+export type AcceptedSourceOrder = z.infer<typeof acceptedSourceOrder>;
+
 const extractedPurchaseLineModelOutput = z.object({
   title: z.string().trim().min(1).max(500),
   amount: money,
@@ -304,9 +330,9 @@ const extractedPaymentEvidenceModelOutput = z.object({
 
 const extractedOrderCandidateModelOutput = z.object({
   orderId: z.string().trim().min(1).max(300).nullable(),
-  orderedAt: z.iso.datetime().nullable(),
+  orderedAt: extractedOrderDate,
   merchant: z.string().trim().min(1).max(300).nullable(),
-  currency: z.string().trim().length(3),
+  currency: z.string().trim().length(3).nullable(),
   printedGrandTotal: money.nullable(),
   lines: z.array(extractedPurchaseLineModelOutput),
   payments: z.array(extractedPaymentEvidenceModelOutput),
@@ -442,7 +468,34 @@ export const aggregateReplacementSnapshot = z.object({
   bookingTransactionCode: z.string().nullable(),
 });
 
+export const researchFieldCorrection = z.object({
+  kind: z.literal("research_field_correction"),
+  runRef: runShortcode,
+  productId: z.uuid(),
+  targetId: z.uuid(),
+  resolutionOperationId: z.string().min(1).max(200),
+  corrections: z
+    .array(z.object({ currentValue: z.json(), claim: acceptedResearchFact }))
+    .min(1),
+  evidenceIds: z.array(z.uuid()).min(1),
+  reviewSnapshot: z.object({
+    fingerprint: z.string().regex(/^[a-f0-9]{64}$/u),
+    targetFingerprint: z.string().regex(/^[a-f0-9]{64}$/u),
+    evidenceFingerprint: z.string().regex(/^[a-f0-9]{64}$/u),
+  }),
+});
+
 export const proposedImportFix = z.discriminatedUnion("kind", [
+  researchFieldCorrection,
+  z.object({
+    kind: z.literal("validation_corrections"),
+    purchaseId: z.uuid(),
+    targetId: z.uuid(),
+    resolutionOperationId: z.string().min(1).max(200),
+    reviewSnapshot: z.object({
+      fingerprint: z.string().regex(/^[a-f0-9]{64}$/u),
+    }),
+  }),
   z.object({
     kind: z.literal("replace_aggregate_line"),
     purchaseId: z.uuid(),
@@ -535,13 +588,18 @@ const allowedBrowserHosts = z
   .min(1)
   .max(20);
 /**
- * The bridge protocol. The Mac is a thin browser hand: it opens allowlisted
- * URLs, scrolls, raises its window, and captures the page's trimmed DOM (and a
- * screenshot when asked). It reports what it saw (`browserObservation`) and
- * never interprets the page; the server derives every fact from the DOM.
+ * Fixed browser actions in an owned account window. Navigation and interaction
+ * return retained DOM and observation-scoped controls; source content is untrusted.
+ * The server interprets evidence and chooses actions, never caller JavaScript.
  */
-export const BROWSER_BRIDGE_PROTOCOL = 3;
+export const BROWSER_BRIDGE_PROTOCOL = 4;
 const bridgeProtocol = z.literal(BROWSER_BRIDGE_PROTOCOL);
+const browserActionRef = z.string().min(1).max(100);
+const browserActionTarget = {
+  observationId: z.uuid(),
+  ref: browserActionRef,
+  allowedHosts: allowedBrowserHosts,
+};
 
 export const browserBridgeOperation = z.discriminatedUnion("type", [
   z.object({
@@ -551,10 +609,16 @@ export const browserBridgeOperation = z.discriminatedUnion("type", [
   }),
   z.object({
     type: z.literal("scroll"),
-    pageCount: z.number().int().min(1).max(10),
+    pageCount: z
+      .number()
+      .int()
+      .min(-10)
+      .max(10)
+      .refine((value) => value !== 0),
+    allowedHosts: allowedBrowserHosts,
   }),
   z.object({
-    type: z.literal("capture"),
+    type: z.literal("read"),
     allowedHosts: allowedBrowserHosts,
     /**
      * `required`: the capture fails without one (purchase documents).
@@ -570,6 +634,20 @@ export const browserBridgeOperation = z.discriminatedUnion("type", [
     evidenceScope: z
       .object({ runId: runShortcode, targetId: z.uuid() })
       .optional(),
+  }),
+  z.object({ type: z.literal("click"), ...browserActionTarget }),
+  z.object({
+    type: z.literal("type"),
+    ...browserActionTarget,
+    text: z.string().max(2_000),
+    /** Submit the control's form after typing, for navigation or site search. */
+    submit: z.boolean(),
+  }),
+  z.object({
+    type: z.literal("select"),
+    ...browserActionTarget,
+    /** An option ref from the same observation, belonging to this select. */
+    optionRef: browserActionRef,
   }),
   z.object({
     type: z.literal("window"),
@@ -711,8 +789,33 @@ export type BrowserObservation = z.infer<typeof browserObservation>;
 
 /** Bytes the Mac sends inline: scripts, styles, SVG, and input values removed. */
 export const BROWSER_DOM_MAX_ENCODED = 1_000_000;
+export const browserActionableControl = z.object({
+  ref: browserActionRef,
+  kind: z.enum([
+    "link",
+    "button",
+    "textbox",
+    "searchbox",
+    "select",
+    "option",
+    "checkbox",
+    "radio",
+  ]),
+  label: z.string().max(500),
+  disabled: z.boolean(),
+  /** The observed link or form destination; server acquisition derives its allowlist. */
+  navigationURL: z.url().nullish(),
+  selected: z.boolean().nullish(),
+  checked: z.boolean().nullish(),
+  parentRef: browserActionRef.nullish(),
+});
 export const browserPageSnapshot = z.object({
+  /** Single-use action references are fenced to this observation and its live document. */
+  observationId: z.uuid(),
   sourceURL: z.url(),
+  servedURL: z.url(),
+  actions: z.array(browserActionableControl).max(500),
+  actionsTruncated: z.boolean(),
   title: z.string().max(500),
   capturedAt: z.iso.datetime(),
   dom: z.object({
@@ -749,6 +852,10 @@ export const browserBridgeFailureCode = z.enum([
   "javascript_disabled",
   /** The page's DOM could not be read (navigation in flight, crashed tab). */
   "page_unreadable",
+  "stale_observation",
+  "action_unavailable",
+  /** Execution started but its durable completion is missing; read and reconcile first. */
+  "action_outcome_unknown",
   /** A required screenshot could not be taken; `screenshotGap` says why. */
   "screenshot_unavailable",
   "upload_failed",
@@ -788,12 +895,32 @@ export const browserBridgeCapabilities = z.object({
   /** The DOM trimming rules the Mac applies before it sends a snapshot. */
   snapshotVersion: z.number().int().positive(),
   screenshot: z.boolean(),
+  actions: z
+    .array(
+      z.enum([
+        "navigate",
+        "read",
+        "click",
+        "type",
+        "select",
+        "scroll",
+        "window",
+      ]),
+    )
+    .min(1),
 });
 export const browserBridgeClientMessage = z.discriminatedUnion("type", [
   z.object({
     protocolVersion: bridgeProtocol,
+    type: z.literal("forget_run_ack"),
+    runID: z.uuid().toLowerCase(),
+    retirementID: z.uuid().toLowerCase(),
+    deviceID: z.uuid().toLowerCase(),
+  }),
+  z.object({
+    protocolVersion: bridgeProtocol,
     type: z.literal("hello"),
-    deviceID: z.uuid(),
+    deviceID: z.uuid().toLowerCase(),
     browser: browserChoice,
     capabilities: browserBridgeCapabilities,
   }),
@@ -839,6 +966,12 @@ export type BrowserBridgeRunCompletion = z.infer<
 export const browserBridgeServerMessage = z.discriminatedUnion("type", [
   z.object({
     protocolVersion: bridgeProtocol,
+    type: z.literal("forget_run"),
+    runID: z.uuid().toLowerCase(),
+    retirementID: z.uuid().toLowerCase(),
+  }),
+  z.object({
+    protocolVersion: bridgeProtocol,
     type: z.literal("command"),
     command: browserBridgeRequest,
   }),
@@ -877,6 +1010,10 @@ const agentEventBase = z.object({
 });
 const agentEventId = z.string().trim().min(1).max(256);
 export const purchaseAgentEvent = z.discriminatedUnion("type", [
+  agentEventBase.extend({
+    type: z.literal("research_retention"),
+    receiptId: z.uuid(),
+  }),
   agentEventBase.extend({ type: z.literal("start_or_resume") }),
   agentEventBase.extend({
     type: z.literal("browser_connected"),
@@ -915,6 +1052,7 @@ export const runScope = z.object({
 export type RunScope = z.infer<typeof runScope>;
 
 export const importWriterInput = z.object({
+  orderLocator: z.string().trim().min(1).max(128).optional(),
   targetPurchaseId: z.uuid().nullable().optional(),
   defaultTrade: tradeSchema.optional(),
   defaultProjectId: z.uuid().optional(),
@@ -1414,7 +1552,7 @@ export const listReceiptHuntsInput = z.object({});
 /** A card charge still waiting on a person-confirmed photo of its receipt. */
 export const receiptHunt = z.object({
   id: z.uuid(),
-  transactionDate: z.iso.date(),
+  transactionDate: z.iso.date().nullable(),
   merchant: z.string().nullable(),
   amountInCents: z.number().int().nonnegative(),
 });

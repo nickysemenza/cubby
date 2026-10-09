@@ -47,31 +47,41 @@ export async function recoverMissedWork(db: Database) {
     { expireOfflineRuns, expireStaleRuns },
     { reconcileWorkflowRuns },
     { pruneRoutineRuns },
+    { publishPendingResearchRetention },
   ] = await Promise.all([
     import("~/server/repo/image-processing-maintenance"),
     import("~/server/purchase-import/run-service"),
     import("~/server/workflow-runs/lifecycle"),
     import("~/server/purchase-import/gmail/discovery"),
+    import("~/server/purchase-import/research-retention-delivery"),
   ]);
   const namespace = getPurchaseImportNamespace();
-  const [image, offlineResult, staleResult, workflowResult, pruneResult] =
-    await Promise.allSettled([
-      repairImageProcessingWork(db),
-      expireOfflineRuns(db),
-      namespace
-        ? expireStaleRuns(db, namespace)
-        : isCloudflareRuntime()
-          ? Promise.reject(new Error("PURCHASE_IMPORT binding is unavailable"))
-          : Promise.resolve(null),
-      reconcileWorkflowRuns(db),
-      pruneRoutineRuns(db),
-    ]);
+  const [
+    image,
+    offlineResult,
+    staleResult,
+    workflowResult,
+    pruneResult,
+    retentionResult,
+  ] = await Promise.allSettled([
+    repairImageProcessingWork(db),
+    expireOfflineRuns(db),
+    namespace
+      ? expireStaleRuns(db, namespace)
+      : isCloudflareRuntime()
+        ? Promise.reject(new Error("PURCHASE_IMPORT binding is unavailable"))
+        : Promise.resolve(null),
+    reconcileWorkflowRuns(db),
+    pruneRoutineRuns(db),
+    publishPendingResearchRetention(db),
+  ]);
   const errors = [
     image,
     offlineResult,
     staleResult,
     workflowResult,
     pruneResult,
+    retentionResult,
   ]
     .filter((result) => result.status === "rejected")
     .map((result) => String(result.reason));
@@ -109,7 +119,7 @@ export async function discoverPurchases(db: Database) {
     { startMailDiscovery },
     { gmailOAuthConfigured },
     { reconcileWorkflowRuns },
-    { bridgeReachability, sweepPendingEnrichment },
+    { sweepPendingEnrichment },
   ] = await Promise.all([
     import("~/server/purchase-import/hunts"),
     import("~/server/purchase-import/gmail/discovery"),
@@ -130,9 +140,6 @@ export async function discoverPurchases(db: Database) {
       : Promise.resolve(null),
   ]);
   const queue = getPurchaseAgentQueue();
-  const namespace = getPurchaseImportNamespace();
-  // Hunts dispatch before the sweep so an account's charge search, which a
-  // member is waiting on, claims it ahead of background enrichment.
   const dispatchResult = await Promise.allSettled([
     queue
       ? dispatchImportHunts(db, queue)
@@ -143,11 +150,7 @@ export async function discoverPurchases(db: Database) {
         : Promise.resolve(0),
   ]);
   const [enrichmentResult] = await Promise.allSettled([
-    namespace
-      ? sweepPendingEnrichment(db, { bridge: bridgeReachability(namespace) })
-      : isCloudflareRuntime()
-        ? Promise.reject(new Error("PURCHASE_IMPORT binding is unavailable"))
-        : sweepPendingEnrichment(db),
+    sweepPendingEnrichment(db),
   ]);
   const huntsCreated =
     huntResult.status === "fulfilled" ? huntResult.value : null;
@@ -162,7 +165,6 @@ export async function discoverPurchases(db: Database) {
     mailPassesStarted: mail?.started,
     mailPassesRunning: mail?.running,
     enrichmentRunsStarted: enrichment?.started.length,
-    enrichmentAccountsWaiting: enrichment?.waiting,
   });
   const errors = [huntResult, gmailResult, ...dispatchResult, enrichmentResult]
     .filter((result) => result.status === "rejected")

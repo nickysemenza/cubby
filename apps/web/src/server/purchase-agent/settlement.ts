@@ -40,6 +40,8 @@ export type SubmissionLedger = {
   latest(): string | undefined;
   /** Every queue event id this agent has received for its run. */
   receivedEventIds(): string[];
+  /** A host generation allowance stopped research; unfinished work needs review. */
+  reviewDetail?(): string | undefined;
 };
 
 /**
@@ -64,11 +66,16 @@ export async function reportSettlement(
   if (pending.some((operation) => operation.operationId === operationId))
     return "retry";
   const result = await deps.harness.wait(operationId);
+  // An operation receipt can be done while the host has stopped a later
+  // generation. Retain the durable stop reason across either SDK outcome.
+  const reviewDetail =
+    result.reason !== "aborted" ? deps.submissions.reviewDetail?.() : undefined;
   const settled: AgentConversationSettlement = {
     operationId,
     outcome: result.status,
   };
-  if (result.reason) settled.reason = result.reason;
+  if (reviewDetail) settled.reason = reviewDetail;
+  else if (result.reason) settled.reason = result.reason;
   deps.onSettled(settled);
   if (deps.submissions.latest() !== operationId) return "done";
   if (pending.length > 0) return "retry";
@@ -80,18 +87,21 @@ export async function reportSettlement(
     operationId: settledId,
     receivedEventIds: deps.submissions.receivedEventIds(),
   };
-  if (outcome.kind === "fail")
+  if (reviewDetail) input.detail = reviewDetail;
+  else if (outcome.kind === "fail")
     input.failure = {
       failureCode: outcome.failureCode,
       detail: outcome.detail,
     };
   try {
     const reconciled = await deps.services.reconcileSettledRun(input);
-    if (outcome.kind === "fail" && reconciled.reconciled)
+    if (reconciled.reconciled && (reviewDetail || outcome.kind === "fail"))
       await deps.services.updateAgentProgress({
         eventId: settledId,
         phase: "review",
-        detail: outcome.detail,
+        detail:
+          reviewDetail ??
+          (outcome.kind === "fail" ? outcome.detail : undefined),
       });
   } catch (error) {
     // The report failed (a database or network fault); try again.

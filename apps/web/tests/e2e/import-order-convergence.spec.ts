@@ -82,9 +82,11 @@ for (const order of BROWSER_SOURCE_ORDERS) {
     });
     const purchaseLink = page
       .locator("#order-mail")
-      .getByRole("article")
-      .filter({ hasText: harness.orderId })
-      .getByRole("link", { name: harness.orderId, exact: true });
+      .getByRole("listitem")
+      .filter({
+        has: page.getByText(`Order ${harness.orderId}`, { exact: true }),
+      })
+      .getByRole("link", { name: result.purchaseCode, exact: true });
     await expect(purchaseLink).toHaveAttribute(
       "href",
       `/purchases/${result.purchaseCode}`,

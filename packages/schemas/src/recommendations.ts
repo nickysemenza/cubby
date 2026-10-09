@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { generatedPurchaseFieldSchemas } from "./generated/entity-field-schemas.purchase.gen";
 import {
   inventoryShortcode,
   ledgerPartyShortcode,
@@ -126,7 +127,7 @@ export const productMatchSide = z.object({
   purchase: z
     .object({
       id: purchaseShortcode,
-      date: z.string(),
+      date: generatedPurchaseFieldSchemas.read.date,
       vendor: z.string().nullable(),
       line: z.string().nullable(),
     })

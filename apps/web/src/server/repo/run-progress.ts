@@ -1,7 +1,6 @@
 import { runShortcode } from "@cubby/schemas/identifiers";
 import {
   chargeHuntOutcomeOf,
-  chargeHuntRunInput,
   mailDiscoveryRunProgress,
   mailSearchRunInput,
   mailSearchRunProgress,
@@ -9,7 +8,7 @@ import {
   runOrderCandidateState,
   runStatus,
 } from "@cubby/schemas/run-fields";
-import { asc, desc, eq, inArray, sql } from "drizzle-orm";
+import { and, asc, desc, eq, inArray, sql } from "drizzle-orm";
 
 import type { Database } from "~/server/db";
 import {
@@ -19,7 +18,8 @@ import {
   runOrderCandidate,
   runProgress,
 } from "~/server/db/schema";
-import { getDb } from "~/server/repo/database-helpers";
+import { researchChargeHuntIds } from "~/server/purchase-import/research-objective";
+import { getDb, notDeleted } from "~/server/repo/database-helpers";
 import {
   isWorkflowRunPurpose,
   workflowInstanceId,
@@ -74,7 +74,9 @@ export async function getRunLiveProgress(
   const [record] = await database
     .select({ run })
     .from(run)
-    .where(eq(run.shortcode, runShortcode.parse(shortcode)))
+    .where(
+      and(eq(run.shortcode, runShortcode.parse(shortcode)), notDeleted(run)),
+    )
     .limit(1);
   if (!record) return null;
   const search =
@@ -120,8 +122,8 @@ export async function getRunLiveProgress(
             asc(runOrderCandidate.orderId),
           )
       : [];
-  const chargeRun = chargeHuntRunInput.safeParse(record.run.input);
-  const charges = chargeRun.success
+  const huntIds = researchChargeHuntIds(record.run.input);
+  const charges = huntIds?.length
     ? await database
         .select({
           chargeId: financialTransaction.shortcode,
@@ -130,9 +132,12 @@ export async function getRunLiveProgress(
         .from(importHunt)
         .innerJoin(
           financialTransaction,
-          eq(financialTransaction.id, importHunt.financialTransactionId),
+          and(
+            eq(financialTransaction.id, importHunt.financialTransactionId),
+            notDeleted(financialTransaction),
+          ),
         )
-        .where(inArray(importHunt.id, chargeRun.data.huntIds))
+        .where(inArray(importHunt.id, huntIds))
         .orderBy(
           asc(financialTransaction.transactionDate),
           asc(financialTransaction.shortcode),
@@ -169,11 +174,11 @@ export async function getRunLiveProgress(
       : null,
     discovery: discovery
       ? {
-          mode: discovery.mode ?? null,
-          batchesDone: discovery.batchesDone,
-          batches: discovery.batches?.length ?? null,
+          pagesDone: discovery.pagesDone,
           saved: discovery.saved,
           deleted: discovery.deleted,
+          excluded: discovery.excluded,
+          unrelated: discovery.unrelated,
           events: discovery.events,
           droppedEvents: discovery.droppedEvents,
           routine: record.run.routine,

@@ -7,6 +7,11 @@ import type { DrizzleClient, DrizzleTransaction } from "~/server/db";
 import { run, vendor, vendorAccount } from "~/server/db/schema";
 import { notDeleted } from "~/server/repo/database-helpers";
 
+import {
+  chargeResearchRunPredicate,
+  researchChargeHuntIds,
+} from "./research-objective";
+
 /** Both the plan and locked start require a live, enabled account and Vendor. */
 export function accountSyncEligibility() {
   return sql<boolean>`${and(
@@ -47,22 +52,19 @@ export async function readAccountSyncAdmission(
           inArray(run.status, [...ACTIVE_RUN_STATUSES]),
           and(
             eq(run.status, "dispatch_failed"),
-            sql`${run.input}->>'kind' = 'charge_hunts'`,
+            chargeResearchRunPredicate(run.input),
           ),
         ),
       ),
     )
     .orderBy(
-      sql`CASE WHEN ${run.input}->>'kind' = 'charge_hunts' THEN 0 WHEN ${run.purpose} != 'account_sync' THEN 1 ELSE 2 END`,
+      sql`CASE WHEN ${chargeResearchRunPredicate(run.input)} THEN 0 WHEN ${run.purpose} != 'account_sync' THEN 1 ELSE 2 END`,
       desc(run.createdAt),
       desc(run.id),
     )
     .limit(1);
   if (!held) return null;
-  const isChargeSearch =
-    held.input !== null &&
-    "kind" in held.input &&
-    held.input.kind === "charge_hunts";
+  const isChargeSearch = researchChargeHuntIds(held.input) !== null;
   return {
     isChargeSearch,
     kind:

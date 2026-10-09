@@ -8,6 +8,7 @@ import {
   purchaseShortcode,
   runShortcode,
   vendorAccountShortcode,
+  vendorShortcode,
 } from "./identifiers";
 
 export {
@@ -37,6 +38,12 @@ export type TargetedImportPurpose = z.infer<typeof targetedImportPurpose>;
  */
 export const targetedImportStartInput = z
   .discriminatedUnion("purpose", [
+    z
+      .object({
+        purpose: z.literal("account_sync"),
+        vendorId: vendorShortcode,
+      })
+      .meta({ id: "TargetedImportStartInputVendorPurchases" }),
     z
       .object({
         purpose: z.literal("purchase_validation"),
@@ -69,7 +76,7 @@ export const targetedImportStartOutput = z.object({
         .object({
           id: runShortcode,
           status: z.string().min(1),
-          purpose: targetedImportPurpose,
+          purpose: runPurpose,
           dispatchEventId: z.string().nullable(),
         })
         .nullable(),

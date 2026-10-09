@@ -1,4 +1,4 @@
-import { runEntityId, type RunId } from "@cubby/schemas/identifiers";
+import { runEntityId } from "@cubby/schemas/identifiers";
 import {
   browserCapture,
   type BrowserCapture,
@@ -20,25 +20,21 @@ import {
 import { and, eq } from "drizzle-orm";
 import { z } from "zod";
 
-import { env } from "~/env";
-import { localGoogleProviderOrigin } from "~/lib/e2e-google-provider";
 import type { UnparsedError } from "~/lib/error-utils";
 import { cachedCall } from "~/server/ai/adapters";
 import {
   PURCHASE_IMPORT_AUDIT_FEATURE,
   PURCHASE_IMPORT_EXTRACTION_FEATURE,
   PURCHASE_IMPORT_RECEIPT_FEATURE,
-  PURCHASE_IMPORT_MAIL_FEATURE,
   PURCHASE_IMPORT_REPAIR_FEATURE,
 } from "~/server/ai/features";
 import { gatewayFetch } from "~/server/ai/gateway";
 import { type AiMessage, runStructuredFeature } from "~/server/ai/run-feature";
 import { recordAiUsage } from "~/server/ai/usage";
 import type { Database } from "~/server/db";
-import { image, type orderMail } from "~/server/db/schema";
+import { image } from "~/server/db/schema";
 import { getDb, notDeleted } from "~/server/repo/database-helpers";
 import { cents } from "~/server/repo/money";
-import { ensureRun, systemActor } from "~/server/runs/ensure-run";
 import { getR2PublicUrl } from "~/server/utils/r2-public-url";
 
 import { purchaseImportPromptText } from "./prompt-text.gen";
@@ -87,59 +83,6 @@ export const extractPurchaseCapture = async (
     },
     ports,
   );
-};
-
-export const extractPurchaseOrderMail = async (
-  args: {
-    db: Database;
-    runId: string;
-    orderId: string;
-    /** The Vendor's website and browser domains; a product link must be on one. */
-    productHosts: readonly string[];
-    mail: Pick<
-      typeof orderMail.$inferSelect,
-      "sender" | "subject" | "receivedAt" | "content"
-    >;
-  },
-  ports = { runStructured: runStructuredFeature },
-) => {
-  const content = JSON.stringify({
-    kind: "order_confirmation_email",
-    orderId: args.orderId,
-    sender: args.mail.sender,
-    subject: args.mail.subject,
-    receivedAt: args.mail.receivedAt,
-    content: args.mail.content,
-  });
-  if (content.length > 256 * 1024)
-    throw new Error(
-      "Saved order confirmation exceeds the extraction limit; review its itemized evidence.",
-    );
-  const request = {
-    systemPrompts: [
-      purchaseImportPromptText.extraction,
-      purchaseImportPromptText.extractionOutput,
-    ],
-    messages: [{ role: "user" as const, content }],
-  };
-  const extraction = await extractPurchaseText(
-    { db: args.db, runId: args.runId, request },
-    ports,
-  );
-  if (extraction.candidate && extraction.candidate.orderId !== args.orderId)
-    throw new Error(
-      "Extracted confirmation order id differs from its assigned order; review the saved email.",
-    );
-  // Only a placement confirmation is assigned here, and it is sent when the
-  // order is placed. Without this, a confirmation that prints no order date
-  // left `orderedAt` null and the writer dated the Purchase on import day.
-  if (extraction.candidate && extraction.candidate.orderedAt === null)
-    extraction.candidate.orderedAt = args.mail.receivedAt.toISOString();
-  if (extraction.candidate)
-    extraction.candidate.lines = extraction.candidate.lines.map((line) =>
-      retainLiteralLineLinks(line, args.mail.content, args.productHosts),
-    );
-  return extraction;
 };
 
 /**
@@ -544,18 +487,6 @@ export const extractPurchaseEvidence = async (args: {
     ),
   );
 
-export const extractPurchaseReceipt = (args: {
-  db: Database;
-  runId: string;
-  imageUrl: string;
-}) =>
-  extractPurchaseEvidence({
-    db: args.db,
-    runId: args.runId,
-    evidenceUrl: args.imageUrl,
-    mediaType: "image/jpeg",
-  });
-
 export const orderMailRequest = (args: {
   sender: string;
   subject: string;
@@ -565,50 +496,3 @@ export const orderMailRequest = (args: {
   systemPrompts: [purchaseImportPromptText.orderMail],
   messages: [{ role: "user" as const, content: JSON.stringify(args) }],
 });
-
-export const classifyOrderMail = async (args: {
-  db: Database;
-  runId?: RunId;
-  messageId: string;
-  sender: string;
-  subject: string;
-  receivedAt: string;
-  content: unknown;
-}) => {
-  const localProvider = localGoogleProviderOrigin(
-    env.E2E_AUTH_TEST_MODE,
-    env.E2E_GOOGLE_PROVIDER_URL,
-  );
-  if (localProvider) {
-    const response = await fetch(`${localProvider}/model/classify-mail`, {
-      method: "POST",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify({
-        sender: args.sender,
-        subject: args.subject,
-        receivedAt: args.receivedAt,
-        content: args.content,
-      }),
-    });
-    if (!response.ok)
-      throw new Error(
-        `Local mail classifier provider: HTTP ${response.status}`,
-      );
-    return PURCHASE_IMPORT_MAIL_FEATURE.schema.parse(await response.json());
-  }
-  // No purchase-import run exists yet at this point — an inbound mail poll
-  // has no user behind it, so this books under the system actor.
-  const runId =
-    args.runId ??
-    (await ensureRun(args.db, systemActor(), { purpose: "background" }));
-  return runStructuredFeature(
-    PURCHASE_IMPORT_MAIL_FEATURE,
-    orderMailRequest(args),
-    {
-      db: args.db,
-      runId,
-      operation: "purchaseImport.classifyMail",
-      job: { kind: "purchase_import_mail", id: args.messageId },
-    },
-  );
-};

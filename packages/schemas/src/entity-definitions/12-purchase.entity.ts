@@ -96,7 +96,7 @@ export default defineEntity({
         { kind: "slot", id: "project-allocation", title: "Project allocation" },
         { kind: "slot", id: "receiving", title: "Receive into Inventory" },
         { kind: "slot", id: "runs", title: "Import runs" },
-        { kind: "slot", id: "order-mail", title: "Order email" },
+        { kind: "slot", id: "order-mail", title: "Email evidence" },
         {
           kind: "slot",
           id: "reconciliation",
@@ -190,6 +190,7 @@ export default defineEntity({
     },
   },
   model: {
+    research: { fillFields: ["spendingCategoryId"] },
     fields: [
       {
         key: "bookingCoverage",
@@ -559,6 +560,7 @@ export default defineEntity({
       {
         key: "date",
         kind: "date",
+        nullable: true,
         control: {
           kind: "date",
           initial: "today",
@@ -570,9 +572,13 @@ export default defineEntity({
           mobile: { slot: "meta", priority: 30 },
         },
         validation: {
-          read: plainDate.describe("The vendor order or receipt date"),
-          create: plainDate,
-          update: plainDate.optional(),
+          read: plainDate
+            .nullable()
+            .describe(
+              "The vendor order or receipt date, when supported by evidence",
+            ),
+          create: plainDate.nullable().optional(),
+          update: plainDate.nullable().optional(),
         },
       },
       {

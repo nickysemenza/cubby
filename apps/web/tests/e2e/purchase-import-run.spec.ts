@@ -1,18 +1,21 @@
-import { and, eq, inArray, sql } from "drizzle-orm";
+import { orderMailImportOut } from "@cubby/schemas/order-mail-review";
+import { sha256Hex } from "@cubby/shared/sha256";
+import superjson from "superjson";
+import { z } from "zod";
+import { eq, inArray } from "drizzle-orm";
 
 import * as schema from "~/server/db/schema";
 import {
   authorizePurchaseAgent,
-  mailCommit,
-  mailPrepare,
-  readyExtraction,
+  workerdDiagnostic,
 } from "~/server/purchase-import/purchase-agent-workerd.fixtures";
+import { BROWSER_OPERATION_PATH } from "~/lib/browser-operation-path";
 import { getDb } from "~/server/repo/database-helpers";
 
 import {
-  call,
-  currentRunId,
-  mcpRead,
+  from,
+  type ScriptStep,
+  type ScriptValue,
 } from "../../tooling/purchase-agent-script";
 import type { ScenarioControls } from "../../tooling/purchase-agent-workerd-harness";
 import { fixtureUserId, getFixtureDb } from "./fixtures-core";
@@ -20,22 +23,92 @@ import { seedUnimportedOrderMail } from "./fixtures-mail";
 import { gotoAuthenticatedPage } from "./e2e-helpers";
 import { expect, test } from "./e2e-test";
 
-// The Worker hosts the real import-run agent, its tools, MCP, and queue; only
-// the coordinator model and the extractor/audit gateway are scripted. These
-// prove the browser journey and its server writes, never model judgment.
+// Only external model judgment is scripted. The shared admission, researcher
+// tools, retained source checks, report commands and writer run in the Worker.
 test.use({ workerdProfile: "purchase-agent" });
 
-const ORDERED_AT = "2026-09-10T15:00:00.000Z";
-const herbPacket = (orderId: string, title: string, amount: number) => ({
-  match: orderId,
-  output: readyExtraction(orderId, ORDERED_AT, [
-    { title, amount, lineKind: "principal", sku: `SKU-${orderId}` },
-  ]),
-});
-
-/** Read-only verification the workflow asks for after each commit. */
-const settlementRead = (id: string) =>
-  mcpRead(id, "finance_read", { action: "statement_rows" });
+const step = (
+  id: string,
+  tool: string,
+  args: Record<string, ScriptValue> = {},
+): ScriptStep => ({ call: id, tool, args });
+const researchOrder = (
+  prefix: string,
+  { vendor, itemTitle }: Awaited<ReturnType<typeof seedUnimportedOrderMail>>,
+  orderId: string,
+  gate?: string,
+  productRef?: ScriptValue,
+): ScriptStep[] => [
+  step(`${prefix}-next`, "work_next"),
+  step(`${prefix}-read`, "mail_read", {
+    workRef: from(`${prefix}-next`, "work.workRef"),
+    messageRef: from(`${prefix}-next`, "work.sources.0.messageRef"),
+  }),
+  ...(gate ? [{ gate }] : []),
+  step(`${prefix}-resolve`, "work_resolve", {
+    workRef: from(`${prefix}-next`, "work.workRef"),
+    status: "verified",
+    identity: {
+      evidenceIds: [from(`${prefix}-read`, "evidenceId")],
+      reasoning:
+        "The retained itemized original identifies this order and its printed total.",
+    },
+    orders: [
+      {
+        vendorRef: vendor.shortcode,
+        evidenceIds: [from(`${prefix}-read`, "evidenceId")],
+        reasoning: `The original supports ${orderId}, one herb packet and its printed five-dollar total.`,
+        candidate: {
+          orderId,
+          orderedAt: "2026-09-10T15:00:00Z",
+          merchant: vendor.name,
+          currency: "USD",
+          printedGrandTotal: 5,
+          lines: [
+            {
+              title: itemTitle,
+              amount: 5,
+              lineKind: "principal",
+              quantity: 1,
+              sku: "HERB-1",
+            },
+          ],
+          payments: [],
+          allShipmentsDelivered: false,
+        },
+        productResolutions: [
+          productRef
+            ? { kind: "existing", lineIndex: 0, productId: productRef }
+            : { kind: "new", lineIndex: 0 },
+        ],
+        defaultTrade: "other",
+      },
+    ],
+    detail: `Imported ${orderId} from the retained original without receiving stock.`,
+  }),
+];
+const supportedOrder = {
+  identityVerified: true,
+  acceptedFacts: [],
+  acceptedIdentifiers: [],
+  acceptedImages: [],
+  acceptedOrders: [0],
+  acceptedEmailLinks: [],
+  rejected: [],
+};
+const productGapSteps: ScriptStep[] = [
+  step("product-next", "work_next"),
+  step("product-gap", "work_resolve", {
+    workRef: from("product-next", "work.workRef"),
+    status: "no_source_found",
+    identity: {
+      evidenceIds: [],
+      reasoning:
+        "Synthetic catalog gap: this fixture supplies no catalog original.",
+    },
+    detail: "Synthetic catalog gap: no product enrichment source was supplied.",
+  }),
+];
 
 function controls(purchaseAgent: ScenarioControls | undefined) {
   if (!purchaseAgent) throw new Error("The purchase-agent harness is off");
@@ -69,9 +142,20 @@ async function vendorPurchases(
     : [];
   const claims = ids.length
     ? await db
-        .select({ purchaseId: schema.importSourceClaim.purchaseId })
-        .from(schema.importSourceClaim)
-        .where(inArray(schema.importSourceClaim.purchaseId, ids))
+        .select({
+          purchaseId: schema.importSourceOrder.purchaseId,
+          sourceClaimId: schema.importSourceClaim.id,
+          externalKey: schema.importSourceClaim.externalKey,
+        })
+        .from(schema.importSourceOrder)
+        .innerJoin(
+          schema.importSourceClaim,
+          eq(
+            schema.importSourceClaim.id,
+            schema.importSourceOrder.sourceClaimId,
+          ),
+        )
+        .where(inArray(schema.importSourceOrder.purchaseId, ids))
     : [];
   return { purchases, expenses, claims };
 }
@@ -85,7 +169,14 @@ async function runByShortcode(shortcode: string) {
   return run;
 }
 
-test("imports saved order mail from the vendor page and follows the live Run to the committed Purchase", async ({
+async function completedRun(shortcode: string) {
+  const run = await runByShortcode(shortcode);
+  if (["failed", "needs_review"].includes(run.status))
+    throw new Error(await workerdDiagnostic(getFixtureDb(), run.id, undefined));
+  return run.status;
+}
+
+test("imports saved order mail from the generic Vendor report and follows the live Run to the committed Purchase", async ({
   page,
   e2eRuntime,
 }) => {
@@ -96,116 +187,102 @@ test("imports saved order mail from the vendor page and follows the live Run to 
   );
   await authorizePurchaseAgent(getFixtureDb(), await fixtureUserId(page));
   await agent.configure({
-    steps: [
-      call("claim-1", "claim_next_import_work"),
-      { check: "claim-1", includes: "mail_evidence" },
-      call("extract-1", "extract_run_evidence"),
-      mailPrepare("extract-1", "1", currentRunId),
-      // Hold here so the browser watches the run mid-flight.
-      { gate: "prepared" },
-      mailCommit("extract-1", "1", currentRunId),
-      // The identical commit under the same operation id is a replay.
-      mailCommit("extract-1", "1", currentRunId, "commit-1-replay"),
-      settlementRead("settlement-1"),
-      call("claim-2", "claim_next_import_work"),
-      { check: "claim-2", includes: "settlement_verification" },
-      call("finish-1", "finish_import_run"),
+    steps: researchOrder("mail", seed, "SYN-CONFIRM-1", "original-read"),
+    purposeSteps: { product_enrichment: productGapSteps },
+    assessments: [
+      { match: "printed five-dollar total", output: supportedOrder },
+      {
+        match: "Synthetic catalog gap",
+        output: {
+          ...supportedOrder,
+          identityVerified: false,
+          acceptedOrders: [],
+        },
+      },
     ],
-    extractions: [herbPacket("SYN-CONFIRM-1", "Synthetic herb packet", 5)],
   });
-
   await gotoAuthenticatedPage(
     page,
     `/vendors/${seed.vendor.shortcode}`,
-    page.getByText("Synthetic itemized confirmation"),
+    page.getByText("Synthetic itemized confirmation", { exact: true }),
   );
-  const article = page
-    .getByRole("article")
+  const original = page
+    .getByRole("listitem")
     .filter({ hasText: "Synthetic itemized confirmation" });
-
-  // The saved evidence changes after the page loaded: the server refuses the
-  // stale checksum and the member refreshes before importing.
   const db = getDb(getFixtureDb());
-  const [event] = await db
-    .select({ orderMailId: schema.orderMailEvent.orderMailId })
-    .from(schema.orderMailEvent)
-    .where(eq(schema.orderMailEvent.id, seed.eventId));
-  if (!event) throw new Error("Seeded order mail event is missing");
-  const eventRuns = () =>
-    db
-      .select({ id: schema.run.id })
-      .from(schema.run)
-      .where(sql`${schema.run.input}->>'eventId' = ${seed.eventId}`);
+  const [source] = await db
+    .select()
+    .from(schema.orderMail)
+    .where(eq(schema.orderMail.id, seed.events[0]!.orderMailId));
+  if (!source?.content?.bodyText) throw new Error("Seeded original is missing");
+  const bodyText = `${source.content.bodyText} Reference reissued.`;
+  const checksum = await sha256Hex(bodyText);
   await db
     .update(schema.orderMail)
-    .set({ rawChecksum: "b".repeat(64) })
-    .where(eq(schema.orderMail.id, event.orderMailId));
-  await article
-    .getByRole("button", { name: "Import order", exact: true })
+    .set({ rawChecksum: checksum, content: { ...source.content, bodyText } })
+    .where(eq(schema.orderMail.id, source.id));
+  await db
+    .update(schema.mailboxMessage)
+    .set({ checksum })
+    .where(eq(schema.mailboxMessage.orderMailId, source.id));
+  await original
+    .getByRole("button", { name: "Research original", exact: true })
     .click();
-  await expect(article.getByRole("alert")).toContainText(
-    "Order email evidence changed; refresh before importing.",
-  );
-  expect(await eventRuns()).toEqual([]);
+  await expect(
+    page.getByText(
+      "Order email evidence changed; refresh before researching.",
+      { exact: false },
+    ),
+  ).toBeVisible();
+  expect(
+    await db
+      .select({ runId: schema.mailboxMessage.runId })
+      .from(schema.mailboxMessage)
+      .where(eq(schema.mailboxMessage.orderMailId, source.id)),
+  ).toEqual([{ runId: null }]);
 
   await page.reload();
-  await article
-    .getByRole("button", { name: "Import order", exact: true })
+  await original
+    .getByRole("button", { name: "Research original", exact: true })
     .click();
-  const viewImport = article.getByRole("link", { name: "View import" });
-  await expect(viewImport).toHaveAttribute("href", /^\/runs\/RUN-/u);
-  await expect(
-    article.getByRole("button", { name: "Import order", exact: true }),
-  ).toHaveCount(0);
-  const runShortcode = (await viewImport.getAttribute("href"))?.replace(
+  const runLink = original.getByRole("link").filter({ hasText: /^RUN-/u });
+  await expect(runLink).toHaveAttribute("href", /^\/runs\/RUN-/u);
+  const runShortcode = (await runLink.getAttribute("href"))?.replace(
     "/runs/",
     "",
   );
-  if (!runShortcode) throw new Error("View import has no Run");
-  await viewImport.click();
+  if (!runShortcode) throw new Error("Research result has no Run");
+  await runLink.click();
   await expect(page).toHaveURL(new RegExp(`/runs/${runShortcode}$`, "u"));
-
-  // Mid-flight: the conversation streams in and progress shows the prepared
-  // order; nothing is imported until the commit.
-  await expect(page.getByText("live", { exact: true })).toBeVisible();
   await expect(
-    page.getByText("Working through purchase evidence"),
+    page.getByText(/^(Updating live|Last update .+ ago)$/u),
   ).toBeVisible();
-  await expect(page.getByText("0 orders seen · 0 imported")).toBeVisible();
-  await expect(
-    page
-      .getByRole("listitem")
-      .filter({ hasText: "order:SYN-CONFIRM-1" })
-      .filter({ hasText: "1 lines" }),
-  ).toBeVisible();
-  await page.getByText(/^Agent messages and tool calls/u).click();
-  const transcript = page.getByLabel("Agent conversation transcript");
-  await expect(
-    transcript.getByText("mcp__cubby__purchase_import · output-available"),
-  ).toHaveCount(1);
-  await expect(transcript.getByText(/^finish_import_run/u)).toHaveCount(0);
-
-  await agent.release("prepared");
-
-  // Without a reload, the stream and run read reach completion.
-  await expect(page.getByText("Purchase import complete")).toBeVisible({
-    timeout: 30_000,
-  });
-  await expect(page.getByText("1 order seen · 1 imported")).toBeVisible();
-  await page.getByText(/^Agent messages and tool calls/u).click();
-  await expect(
-    page
-      .getByLabel("Agent conversation transcript")
-      .getByText("finish_import_run · output-available"),
-  ).toBeVisible();
-
+  await expect.poll(async () => agent.emitted()).toContain("mail-read");
+  expect((await vendorPurchases(seed.vendor.id)).purchases).toEqual([]);
+  await agent.release("original-read");
+  await expect
+    .poll(async () => completedRun(runShortcode), {
+      timeout: 30_000,
+    })
+    .toBe("completed");
   const run = await runByShortcode(runShortcode);
-  expect(run.status).toBe("completed");
   const graph = await vendorPurchases(seed.vendor.id);
   expect(graph.purchases).toMatchObject([{ orderId: "SYN-CONFIRM-1" }]);
   expect(graph.expenses).toMatchObject([{ cost: 5, lineKind: "principal" }]);
   expect(graph.claims).toHaveLength(1);
-  // Importing a purchase never receives stock.
+  expect(graph.claims[0]?.externalKey).toBe(
+    `gmail:${source.mailboxId}:${source.messageId}`,
+  );
+  expect(
+    await db
+      .select({
+        runId: schema.mailboxMessage.runId,
+        status: schema.mailboxMessage.status,
+        checksum: schema.mailboxMessage.checksum,
+      })
+      .from(schema.mailboxMessage)
+      .where(eq(schema.mailboxMessage.orderMailId, source.id)),
+  ).toEqual([{ runId: run.id, status: "completed", checksum }]);
   const productId = graph.expenses[0]?.productId;
   if (!productId) throw new Error("The imported line has no Product");
   expect(
@@ -214,89 +291,154 @@ test("imports saved order mail from the vendor page and follows the live Run to 
       .from(schema.inventoryEntry)
       .where(eq(schema.inventoryEntry.productId, productId)),
   ).toEqual([]);
-  // The replayed commit is one completed operation, not a second write.
-  expect(
-    await db
-      .select({ state: schema.runOperation.state })
-      .from(schema.runOperation)
-      .where(
-        and(
-          eq(schema.runOperation.runId, run.id),
-          eq(schema.runOperation.operationId, "commit-1"),
-        ),
-      ),
-  ).toEqual([{ state: "completed" }]);
   expect(await agent.violations()).toEqual([]);
-
-  const [purchase] = graph.purchases;
+  const purchase = graph.purchases[0];
   if (!purchase) throw new Error("No Purchase was committed");
   await gotoAuthenticatedPage(
     page,
     `/purchases/${purchase.shortcode}`,
-    page.getByText("Synthetic herb packet").first(),
+    page.getByText(seed.itemTitle).first(),
   );
   await expect(page.getByText("SYN-CONFIRM-1").first()).toBeVisible();
   await expect(page.getByText("$5.00").first()).toBeVisible();
+  await expect(
+    page.getByRole("link", { name: "Open Gmail original" }),
+  ).toBeVisible();
+  await expect(
+    page.getByRole("link", { name: `Research ${runShortcode}` }),
+  ).toHaveAttribute("href", `/runs/${runShortcode}`);
 });
 
-test("imports several selected confirmations in one Run", async ({
+test("admits several retained confirmations as separate tasks in the same research Run", async ({
   page,
   e2eRuntime,
 }) => {
   const agent = controls(e2eRuntime.purchaseAgent);
   const seed = await seedUnimportedOrderMail(
     page,
-    `Synthetic selected import vendor ${Date.now()}`,
-    3,
+    `Synthetic batch import vendor ${Date.now()}`,
+    2,
   );
-  const [first, , third] = seed.events;
-  if (!first || !third) throw new Error("Missing seeded confirmations");
+  const [first, second] = seed.events;
+  if (!first || !second) throw new Error("Missing seeded confirmations");
   await authorizePurchaseAgent(getFixtureDb(), await fixtureUserId(page));
   await agent.configure({
-    steps: [1, 2]
-      .flatMap((n) => [
-        call(`claim-${n}`, "claim_next_import_work"),
-        { check: `claim-${n}`, includes: "mail_evidence" },
-        call(`extract-${n}`, "extract_run_evidence"),
-        mailPrepare(`extract-${n}`, String(n), currentRunId),
-        mailCommit(`extract-${n}`, String(n), currentRunId),
-        settlementRead(`settlement-${n}`),
-      ])
-      .concat([
-        call("claim-done", "claim_next_import_work"),
-        call("finish-1", "finish_import_run"),
-      ]),
-    extractions: [
-      herbPacket(first.orderId, "Synthetic basil packet", 5),
-      herbPacket(third.orderId, "Synthetic thyme packet", 7),
+    steps: researchOrder("first", seed, first.orderId).slice(0, 2),
+    sourceSteps: [
+      ...seed.events.map(({ orderId }) => ({
+        call: "second-read",
+        path: "observation.readableText",
+        includes: orderId,
+        steps: researchOrder(
+          "second",
+          seed,
+          orderId,
+          undefined,
+          from("first-resolve", "resolution.productRefs.0"),
+        ).slice(2),
+      })),
+      ...seed.events.map(({ orderId }) => ({
+        call: "first-read",
+        path: "observation.readableText",
+        includes: orderId,
+        steps: [
+          { gate: "batch-admitted" },
+          ...researchOrder("first", seed, orderId).slice(2),
+          ...researchOrder("second", seed, orderId).slice(0, 2),
+        ],
+      })),
+    ],
+    purposeSteps: { product_enrichment: productGapSteps },
+    assessments: [
+      { match: "printed five-dollar total", output: supportedOrder },
+      {
+        match: "Synthetic catalog gap",
+        output: {
+          ...supportedOrder,
+          identityVerified: false,
+          acceptedOrders: [],
+        },
+      },
     ],
   });
-
+  const response = await page.request.post(BROWSER_OPERATION_PATH, {
+    headers: { Origin: e2eRuntime.baseURL },
+    data: superjson.serialize({
+      operation: "vendor.importSelectedOrderMail",
+      input: {
+        orders: seed.events.map(({ eventId, checksum }) => ({
+          eventId,
+          evidenceChecksum: checksum,
+        })),
+      },
+    }),
+  });
+  expect(response.status(), await response.text()).toBe(200);
+  const { runIds } = z
+    .object({ ok: z.literal(true), data: orderMailImportOut })
+    .parse(superjson.deserialize(await response.json())).data;
+  expect(runIds).toHaveLength(1);
+  const runShortcode = runIds[0]!;
+  const run = await runByShortcode(runShortcode);
+  const db = getDb(getFixtureDb());
+  expect(
+    await db
+      .select({ sourceId: schema.runTarget.sourceExternalKey })
+      .from(schema.runTarget)
+      .where(eq(schema.runTarget.runId, run.id)),
+  ).toEqual(
+    expect.arrayContaining(
+      seed.events.map(({ orderMailId }) => ({ sourceId: orderMailId })),
+    ),
+  );
   await gotoAuthenticatedPage(
     page,
     `/vendors/${seed.vendor.shortcode}`,
-    page.getByText("Synthetic itemized confirmation", { exact: true }),
+    page.getByRole("link", { name: `Research ${runShortcode}` }).first(),
   );
-  for (const order of [first, third])
-    await page
-      .getByRole("checkbox", {
-        name: `Select order ${order.orderId} to import with others`,
-      })
-      .click();
-  await page.getByRole("button", { name: "Import selected (2)" }).click();
-  const viewImport = page.getByRole("link", { name: "View selected import" });
-  await expect(viewImport).toHaveAttribute("href", /^\/runs\/RUN-/u);
-  await viewImport.click();
-  await expect(page.getByText("Purchase import complete")).toBeVisible({
-    timeout: 30_000,
-  });
-  await expect(page.getByText("2 orders seen · 2 imported")).toBeVisible();
-
+  await page
+    .getByRole("link", { name: `Research ${runShortcode}` })
+    .first()
+    .click();
+  await expect(page).toHaveURL(new RegExp(`/runs/${runShortcode}$`, "u"));
+  await agent.release("batch-admitted");
+  await expect
+    .poll(async () => completedRun(runShortcode), {
+      timeout: 30_000,
+    })
+    .toBe("completed");
   const graph = await vendorPurchases(seed.vendor.id);
   expect(graph.purchases.map(({ orderId }) => orderId)).toEqual([
     first.orderId,
-    third.orderId,
+    second.orderId,
   ]);
-  expect(graph.expenses.map(({ cost }) => cost).sort()).toEqual([5, 7]);
+  expect(graph.expenses.map(({ cost }) => cost)).toEqual([5, 5]);
+  expect(new Set(graph.expenses.map(({ productId }) => productId)).size).toBe(
+    1,
+  );
+  expect(graph.claims).toHaveLength(2);
+  const owned = await db
+    .select({
+      orderMailId: schema.mailboxMessage.orderMailId,
+      runId: schema.mailboxMessage.runId,
+      status: schema.mailboxMessage.status,
+    })
+    .from(schema.mailboxMessage)
+    .where(
+      inArray(
+        schema.mailboxMessage.orderMailId,
+        seed.events.map(({ orderMailId }) => orderMailId),
+      ),
+    );
+  expect(owned).toHaveLength(2);
+  expect(owned).toEqual(
+    expect.arrayContaining(
+      seed.events.map(({ orderMailId }) => ({
+        orderMailId,
+        runId: run.id,
+        status: "completed",
+      })),
+    ),
+  );
   expect(await agent.violations()).toEqual([]);
 });

@@ -50,19 +50,14 @@ enum DetailSlotRegistry {
         .vendorAccountSync: { reportSlot(.vendorAccount_sync, $0) },
         .vendorAccountChargeSearch: { reportSlot(.vendorAccount_chargeSearch, $0) },
         .ledgerPartyWardrobe: { AnyView(WardrobeDetailSlot(ownerID: $0.id, ownerName: $0.title)) },
-        .vendorOrderMail: { AnyView(OrderMailDetailSlot(scope: .vendor($0.id, nil))) },
+        .vendorOrderMail: { reportSlot(.vendor_orderMail, $0) },
         .vendorSpendingClassification: { AnyView(SpendingClassificationView(key: .vendor, row: $0)) },
         .productCategorySpendingClassification: {
             AnyView(SpendingClassificationView(key: .productCategory, row: $0))
         },
-        .vendorAccountOrderMail: { row in
-            guard let vendorID = row.raw["vendorId"]?.stringValue else { return nil }
-            return AnyView(
-                OrderMailDetailSlot(
-                    scope: .vendor(vendorID, row.raw["ledgerPartyId"]?.stringValue)))
-        },
+        .vendorAccountOrderMail: { reportSlot(.vendorAccount_orderMail, $0) },
         .purchaseReceiving: { AnyView(PurchaseReceivingSlot(purchaseID: $0.id)) },
-        .purchaseOrderMail: { AnyView(OrderMailDetailSlot(scope: .purchase($0.id))) },
+        .purchaseOrderMail: { reportSlot(.purchase_orderMail, $0) },
         .runLiveProgress: { runReportSlot(.run_liveProgress, $0, imports: false) },
         .runImportStats: { runReportSlot(.run_importStats, $0) },
         .runImportProgressLive: { runReportSlot(.run_importProgressLive, $0, liveness: true) },

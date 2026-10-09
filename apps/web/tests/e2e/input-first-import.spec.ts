@@ -1,15 +1,19 @@
 import { prepareCapturedRetailerOrder } from "./prepare-retailer-source";
 import { z } from "zod";
-import { and, eq, inArray } from "drizzle-orm";
+import { and, eq, inArray, or } from "drizzle-orm";
 import { parseShortcodeFor } from "@cubby/schemas/identifiers";
 
 import * as schema from "~/server/db/schema";
 import { getDb, notDeleted } from "~/server/repo/database-helpers";
 import { resolveOrThrow } from "~/server/repo/shortcode-resolver";
+import { resolveProductIdentifierSource } from "~/server/repo/product-identifier-source";
 import { setMemberLoginParty } from "~/server/repo/member-login";
+import { account as googleAccount } from "~/server/db/auth.schema";
+import { createGmailApiClient } from "~/server/purchase-import/gmail/client";
 import {
   convergenceNames,
   createConvergenceFixtures,
+  ingestGmailEvidence,
   sha256Hex,
 } from "../../tooling/convergence-harness";
 import {
@@ -27,7 +31,7 @@ import { expect, test } from "./e2e-test";
 test.use({ workerdProfile: "gmail" });
 
 // Failure boundaries: OAuth callback must persist its real account, mailbox
-// discovery must classify actual MIME evidence, conflicting identities must
+// original acquisition must use its stored credentials and actual MIME evidence, conflicting identities must
 // require an explicit Product decision, and both arrivals must converge after
 // reviewed booking/correction without another Product or economic line.
 for (const statementFirst of [true, false]) {
@@ -49,16 +53,62 @@ for (const statementFirst of [true, false]) {
       parseShortcodeFor("ledgerParty", member.shortcode),
       actor,
     );
+    const canonicalWebsite = "https://www.amazon.com";
+    const existingVendor = await database.query.vendor.findFirst({
+      where: and(
+        eq(schema.vendor.website, canonicalWebsite),
+        notDeleted(schema.vendor),
+      ),
+    });
+    const vendorName = existingVendor?.name ?? "Synthetic Amazon retailer";
+    const browserDomains = [
+      ...new Set([
+        ...(existingVendor?.browserDomains ?? []),
+        "www.amazon.com",
+        names.host,
+      ]),
+    ];
+    const orderEmailSenders = [
+      ...new Set([...(existingVendor?.orderEmailSenders ?? []), names.sender]),
+    ];
+    // Both cases share Amazon's canonical issuer while their order evidence stays distinct.
+    const canonicalVendor = existingVendor
+      ? { id: existingVendor.shortcode }
+      : await createEntityFixture(page, "vendor", {
+          name: vendorName,
+          website: canonicalWebsite,
+          browserDomains,
+          orderEmailSenders,
+          orderEvidence: "online_account",
+        });
+    const vendorId = await resolveOrThrow(db, "vendor", canonicalVendor.id);
+    const existingAccount = await database.query.vendorAccount.findFirst({
+      where: and(
+        eq(schema.vendorAccount.vendorId, vendorId),
+        eq(schema.vendorAccount.ledgerPartyId, member.id),
+        notDeleted(schema.vendorAccount),
+      ),
+    });
     const prerequisites = await createConvergenceFixtures(
-      (entity, overrides) => createEntityFixture(page, entity, overrides),
+      (entity, overrides) => {
+        if (entity === "vendor") return Promise.resolve(canonicalVendor);
+        if (entity === "vendorAccount" && existingAccount)
+          return Promise.resolve({ id: existingAccount.shortcode });
+        return createEntityFixture(page, entity, overrides);
+      },
       member.shortcode,
       names,
     );
-    const vendorId = await resolveOrThrow(
-      db,
-      "vendor",
-      prerequisites.vendor.id,
-    );
+    if (existingVendor) {
+      const allowed = await page.request.patch(
+        `/api/v1/vendors/${canonicalVendor.id}`,
+        {
+          headers: { Origin: e2eRuntime.baseURL },
+          data: { browserDomains, orderEmailSenders },
+        },
+      );
+      expect(allowed.ok(), await allowed.text()).toBe(true);
+    }
     const accountId = await resolveOrThrow(
       db,
       "vendorAccount",
@@ -69,14 +119,23 @@ for (const statementFirst of [true, false]) {
       "financialAccount",
       prerequisites.card.id,
     );
+    const categoryId = await resolveOrThrow(
+      db,
+      "spendingCategory",
+      prerequisites.category.id,
+    );
     const asin = `B0${sha256Hex(`${token}:${statementFirst}`).slice(0, 8).toUpperCase()}`;
     const sku = `SYN-SKU-${token}`;
+    // Exact identifiers use the canonical Vendor's issuer, not a legacy name slug.
+    const identifierSource = await resolveProductIdentifierSource(db, {
+      vendorId,
+    });
     const product = await createEntityFixture(page, "product", {
       name: names.productName,
       categoryId: prerequisites.productCategory.id,
       externalIds: [
         {
-          source: "amazon",
+          source: identifierSource,
           kind: "retailer_sku",
           externalId: sku,
           isPrimary: true,
@@ -88,7 +147,12 @@ for (const statementFirst of [true, false]) {
       name: duplicateName,
       categoryId: prerequisites.productCategory.id,
       externalIds: [
-        { source: "amazon", kind: "asin", externalId: asin, isPrimary: true },
+        {
+          source: identifierSource,
+          kind: "asin",
+          externalId: asin,
+          isPrimary: true,
+        },
       ],
     });
     const session = z
@@ -189,26 +253,33 @@ for (const statementFirst of [true, false]) {
     expect(accounts.some((account) => account.providerId === "google")).toBe(
       true,
     );
-    await gotoAuthenticatedPage(page, `/vendors/${prerequisites.vendor.id}`);
-    await page
-      .getByRole("button", { name: "Search Gmail now", exact: true })
-      .click();
-    await expect(page.getByText(/Checked 1 messages/u)).toBeVisible({
-      timeout: 60_000,
+    const connected = await database.query.account.findFirst({
+      where: and(
+        eq(googleAccount.userId, actor.userId),
+        eq(googleAccount.providerId, "google"),
+      ),
     });
-    const searchRun = await page
-      .getByRole("link", { name: "View run", exact: true })
-      .getAttribute("href");
-    if (!searchRun) throw new Error("Gmail discovery has no public Run review");
-    await page.getByRole("link", { name: "View run", exact: true }).click();
-    await expect(page).toHaveURL(new RegExp(escapeRegExp(searchRun)));
-    await expect(
-      page.getByRole("heading", { name: /Run/u }).first(),
-    ).toBeVisible();
+    if (!connected?.accessToken)
+      throw new Error("Google callback did not retain its access token");
+    const client = createGmailApiClient({
+      accessToken: connected.accessToken,
+      baseUrl: `${provider.url}/gmail/v1/`,
+    });
+    const discovered = await client.listMessages({
+      query: "-in:spam -in:trash",
+    });
+    expect(discovered.messages?.map((message) => message.id)).toContain(
+      names.messageId,
+    );
+    const researchMail = await ingestGmailEvidence(db, member.id, names, {
+      client,
+      mailboxId: connected.accountId,
+    });
     expect(
       await database.query.purchase.findMany({
         where: and(
           eq(schema.purchase.vendorId, vendorId),
+          eq(schema.purchase.spendingCategoryId, categoryId),
           notDeleted(schema.purchase),
         ),
       }),
@@ -273,7 +344,7 @@ for (const statementFirst of [true, false]) {
         await selectComboboxItem(
           page,
           page.getByRole("combobox", { name: "Vendor", exact: true }),
-          names.name,
+          vendorName,
         );
         await selectComboboxItem(
           page,
@@ -298,8 +369,20 @@ for (const statementFirst of [true, false]) {
         .click();
       await expect
         .poll(async () => {
+          const allocation =
+            await database.query.financialTransactionAllocation.findFirst({
+              where: and(
+                eq(
+                  schema.financialTransactionAllocation.transactionId,
+                  transaction.id,
+                ),
+                notDeleted(schema.financialTransactionAllocation),
+              ),
+            });
+          if (!allocation) return undefined;
           const purchase = await database.query.purchase.findFirst({
             where: and(
+              eq(schema.purchase.id, allocation.purchaseId),
               eq(schema.purchase.vendorId, vendorId),
               notDeleted(schema.purchase),
             ),
@@ -361,14 +444,6 @@ for (const statementFirst of [true, false]) {
       const url = `https://${names.host}/orders/${names.orderId}`;
       const productUrl = `https://www.amazon.com/dp/${asin}`;
       const html = `<title>Synthetic order detail</title><main><h1>${names.orderId}</h1><p>Ordered September 10, 2026. Delivered.</p><p>USD 42.50</p><p>${names.productName} SKU ${sku} quantity 1</p><a href="${productUrl}">Product page</a></main>`;
-      const allowed = await page.request.patch(
-        `/api/v1/vendors/${prerequisites.vendor.id}`,
-        {
-          headers: { Origin: e2eRuntime.baseURL },
-          data: { browserDomains: [names.host, "www.amazon.com"] },
-        },
-      );
-      expect(allowed.ok(), await allowed.text()).toBe(true);
       const run = await prepareCapturedRetailerOrder({
         page,
         db,
@@ -392,6 +467,11 @@ for (const statementFirst of [true, false]) {
         name: "Approve and import",
         exact: true,
       });
+      await expect(
+        page.locator("#import-prepared-orders").getByText("Exact identifier", {
+          exact: true,
+        }),
+      ).toHaveCount(2);
       await expect(
         page.getByText(
           "Conflicting exact matches. Choose the Product to use.",
@@ -441,23 +521,22 @@ for (const statementFirst of [true, false]) {
       await retailer();
       await statement();
     }
+    if (!purchaseCode) throw new Error("Supported imports created no Purchase");
+    await researchMail(purchaseCode);
 
     await gotoAuthenticatedPage(page, `/vendors/${prerequisites.vendor.id}`);
     const mail = page
-      .getByRole("article")
-      .filter({ hasText: `Order ${names.orderId}` });
+      .locator("#order-mail")
+      .getByRole("listitem")
+      .filter({
+        has: page.getByText(`Order ${names.orderId}`, { exact: true }),
+      });
     // Exact-order mail is already linked before following its canonical Purchase.
-    await expect(
-      mail.getByRole("link", { name: names.orderId, exact: true }),
-    ).toBeVisible();
-    await expect(mail.getByText("linked", { exact: true })).toBeVisible();
-    await expect(
-      mail.getByRole("button", { name: "Link", exact: true }),
-    ).toHaveCount(0);
     const purchaseLink = mail.getByRole("link", {
-      name: names.orderId,
+      name: purchaseCode,
       exact: true,
     });
+    await expect(purchaseLink).toBeVisible();
     await expect(purchaseLink).toHaveAttribute(
       "href",
       `/purchases/${purchaseCode}`,
@@ -468,15 +547,23 @@ for (const statementFirst of [true, false]) {
     expect(await page.evaluate(() => performance.timeOrigin)).toBe(
       documentOrigin,
     );
-    await expect(
-      page.getByRole("link", { name: "Open Gmail conversation", exact: true }),
-    ).toBeVisible();
+    const originalMailUrl = `https://mail.google.com/mail/u/0/#all/synthetic-thread-${token}`;
+    const originalMail = page
+      .getByRole("link", { name: "Open Gmail original", exact: true })
+      .and(page.locator(`a[href="${originalMailUrl}"]`));
+    await expect(originalMail).toBeVisible();
+    await expect(originalMail).toHaveAttribute("href", originalMailUrl);
     await expect(
       page.getByRole("link", { name: names.productName, exact: true }).first(),
     ).toBeVisible();
     const purchases = await database.query.purchase.findMany({
       where: and(
         eq(schema.purchase.vendorId, vendorId),
+        // Include a statement aggregate left behind without the retailer order ID.
+        or(
+          eq(schema.purchase.spendingCategoryId, categoryId),
+          eq(schema.purchase.orderId, names.orderId),
+        ),
         notDeleted(schema.purchase),
       ),
     });
@@ -507,6 +594,10 @@ for (const statementFirst of [true, false]) {
       "asin",
       "retailer_sku",
     ]);
+    expect(ids.map((item) => item.source)).toEqual([
+      identifierSource,
+      identifierSource,
+    ]);
     expect(provider.events()).toEqual(
       expect.arrayContaining([
         "GET /authorize",
@@ -514,7 +605,6 @@ for (const statementFirst of [true, false]) {
         "GET /jwks",
         "GET /gmail/v1/users/me/messages",
         `GET /gmail/v1/users/me/messages/${names.messageId}`,
-        "POST /model/classify-mail",
         "POST /model/extract-capture",
       ]),
     );

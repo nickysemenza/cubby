@@ -58,6 +58,7 @@ import { match } from "ts-pattern";
 import { localPhotoAnalysisSchema } from "~/contracts/photo-import.contract";
 import type { Database, DrizzleClient, DrizzleTransaction } from "~/server/db";
 import {
+  edgeScopeWhere,
   INCOMING_EDGES,
   type IncomingEdge,
   type IncomingEdgeKey,
@@ -79,6 +80,7 @@ import {
   importPreparedOrder,
   run as runTable,
   runTarget,
+  runEvidence,
   ledgerParty,
   location,
   meal,
@@ -1095,6 +1097,7 @@ const imageReferenceCondition = (
     "ImageDescriptionCorrection.imageId": sql`FALSE`,
     // A run worklist row records history, never ownership of the image.
     "RunTarget.entityId": sql`FALSE`,
+    "RunFactEvidence.entityId": sql`FALSE`,
     // A sighting is reported evidence, not user ownership — same reasoning
     // as the processing children above.
     "ImageSighting.imageId": sql`FALSE`,
@@ -1597,6 +1600,12 @@ export const cullPendingImages = async (
  *   null it so the parent row survives, just without a cover.
  */
 export const IMAGE_HARD_DELETE = {
+  "RunFactEvidence.entityId": {
+    code: "deleteRow",
+    effect: "hard-delete",
+    description:
+      "Accepted image-subject proof is removed before the image worklist target that owns it.",
+  },
   "RunTarget.entityId": {
     code: "deleteRow",
     effect: "hard-delete",
@@ -1671,6 +1680,7 @@ type ImageEdgeOperation = {
 
 /** Edges that record processing of an image, never who owns it. */
 const PROCESSING_EDGES: ReadonlySet<string> = new Set([
+  "RunFactEvidence.entityId",
   "RunTarget.entityId",
   "ImageProcessingJob.imageId",
   "ImageDerivative.imageId",
@@ -1718,8 +1728,9 @@ const imageEdgeOperations: ImageEdgeOperation[] = Object.entries(
 ).map(([key, disposition]) => {
   // SAFETY: IMAGE_HARD_DELETE `satisfies` IncomingEdgePolicy<"image">, and
   // INCOMING_EDGES is built only from Postgres schema columns.
-  const column = (INCOMING_EDGES.image as Record<string, IncomingEdge>)[key]!
-    .column as PgColumn;
+  const edge = (INCOMING_EDGES.image as Record<string, IncomingEdge>)[key]!;
+  // SAFETY: every image incoming edge is built from a Postgres schema column.
+  const column = edge.column as PgColumn;
   // SAFETY: as above — a Postgres column's table is a PgTable.
   const table = column.table as PgTable;
   const columns = getTableColumns(table);
@@ -1734,13 +1745,35 @@ const imageEdgeOperations: ImageEdgeOperation[] = Object.entries(
     countsAsOwnership: !PROCESSING_EDGES.has(key),
     joinColumn: table === entityAttachment ? column : undefined,
     clear: async (tx, imageIds) => {
+      if (table === runTarget) {
+        // Original bytes remain Run history after their removed Image task.
+        await tx
+          .update(runEvidence)
+          .set({ targetId: null })
+          .where(
+            inArray(
+              runEvidence.targetId,
+              tx
+                .select({ id: runTarget.id })
+                .from(runTarget)
+                .where(
+                  and(
+                    inArray(runTarget.entityId, imageIds),
+                    eq(runTarget.entityKind, "image"),
+                  ),
+                ),
+            ),
+          );
+      }
       if (disposition.effect === "hard-delete")
-        await tx.delete(table).where(inArray(column, imageIds));
+        await tx
+          .delete(table)
+          .where(and(inArray(column, imageIds), edgeScopeWhere(edge)));
       else
         await tx
           .update(table)
           .set({ [property]: null })
-          .where(inArray(column, imageIds));
+          .where(and(inArray(column, imageIds), edgeScopeWhere(edge)));
       if (table === runTarget) await dropFromProposedGroups(tx, imageIds);
     },
     findReferenced: async (dbc, imageIds) => {
@@ -1751,6 +1784,7 @@ const imageEdgeOperations: ImageEdgeOperation[] = Object.entries(
           and(
             isNotNull(column),
             imageIds ? inArray(column, imageIds) : undefined,
+            edgeScopeWhere(edge),
             live,
           ),
         );

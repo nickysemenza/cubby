@@ -44,20 +44,6 @@ const fetchVendorLogoWorkflow = bindWorkflow(
 
 export const vendorHandlers = implementOperationDomain(vendorContract, {
   orderMail: (context, input) => listVendorOrderMail(context.db, input),
-  searchOrderMail: async (context, input) => {
-    const { startVendorMailSearchJob } =
-      await import("~/server/purchase-import/gmail/search-job");
-    return startVendorMailSearchJob(context.db, input, context.actorContext);
-  },
-  orderMailSearchStatus: async (context, input) => {
-    const { latestVendorMailSearchJob } =
-      await import("~/server/purchase-import/gmail/search-job");
-    return latestVendorMailSearchJob(
-      context.db,
-      input.vendorId,
-      context.actorContext,
-    );
-  },
   importOrderMail: (context, input) => {
     const queue = getPurchaseAgentQueue();
     if (!queue) throw new Error("Purchase Agent queue is unavailable");

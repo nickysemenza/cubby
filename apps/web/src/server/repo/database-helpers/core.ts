@@ -95,7 +95,7 @@ export const getDb = (db: Database): DrizzleClient => {
  * {@link withTransactionOn}) can't drift on it.
  */
 export const isTransaction = (
-  db: Database | DrizzleTransaction,
+  db: Database | DrizzleClient | DrizzleTransaction,
 ): db is DrizzleTransaction => "rollback" in db;
 
 /**

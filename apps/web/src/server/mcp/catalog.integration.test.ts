@@ -431,7 +431,7 @@ describe("MCP catalog", () => {
     ).toHaveProperty("proposals");
   });
 
-  it("refuses purchase_import.commit for a prepare-only run purpose", async () => {
+  it("refuses legacy purchase_import mutations for a focused research run purpose", async () => {
     const party = await insertWithShortcode(ctx.db, "ledgerParty", {
       name: "Catalog gate member",
       kind: "member",
@@ -472,11 +472,10 @@ describe("MCP catalog", () => {
     );
     expect(commit.isError).toBe(true);
     expect(JSON.stringify(commit.content)).toContain(
-      "forbids commit_purchase_import",
+      "does not mount purchase_import.commit",
     );
 
-    // A prepare-capability action on the same run passes the gate (stage
-    // "context") and reaches its writer, which refuses the unknown plan.
+    // Legacy validation is refused by the same purpose gate before its writer.
     const validate = await callMcpTool(
       createMcpServer(),
       "purchase_import",
@@ -499,7 +498,7 @@ describe("MCP catalog", () => {
         .parse(result._meta)["cubby/error"].diagnostics.stage;
     expect(stage(commit)).toBe("context");
     expect(validate.isError).toBe(true);
-    expect(stage(validate)).toBe("run");
+    expect(stage(validate)).toBe("context");
   });
 
   it("shows a purchase agent only its run purpose's actions", async () => {

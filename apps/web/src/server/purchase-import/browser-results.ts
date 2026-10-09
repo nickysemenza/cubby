@@ -4,31 +4,49 @@ import {
   browserObservation,
   browserPageCapture,
   type BrowserBridgeResult,
-  type BrowserObservation,
 } from "@cubby/schemas/purchase-import";
-import { sha256Uuid } from "@cubby/shared/sha256";
+import { retainedResearchObservation } from "@cubby/schemas/research";
+import {
+  MAX_EXTERNAL_HTML_BYTES,
+  readResponseWithLimit,
+} from "@cubby/shared/external-fetch";
 import { z } from "zod";
 
-import { env } from "~/env";
 import type { Database } from "~/server/db";
-import { runEvidence } from "~/server/db/schema";
-import { withTransaction } from "~/server/repo/database-helpers";
+import { getDb, withTransaction } from "~/server/repo/database-helpers";
 import {
+  readOperation,
   setOperationResult,
   type OperationKey,
 } from "~/server/repo/run-operation";
-import { uploadToS3 } from "~/server/utils/s3";
+import { getS3Object, uploadToS3 } from "~/server/utils/s3";
 
 import { derivePageCapture, readSnapshotDom } from "./browser-page";
+import { retainResearchObservation } from "./research-observations";
 
 /** Where a captured page's DOM is kept, so the server can read it again. */
 export interface BrowserEvidenceStorage {
   put(key: string, bytes: Uint8Array, contentType: string): Promise<void>;
+  get?(key: string): Promise<string>;
 }
 
-export const productionBrowserEvidenceStorage: BrowserEvidenceStorage = {
+export const productionBrowserEvidenceStorage: BrowserEvidenceStorage &
+  Required<Pick<BrowserEvidenceStorage, "get">> = {
   put: (key, bytes, contentType) =>
     uploadToS3({ key, body: Buffer.from(bytes), contentType }),
+  get: async (key) => {
+    const response = await getS3Object(key);
+    const bytes = await readResponseWithLimit(
+      response,
+      MAX_EXTERNAL_HTML_BYTES,
+    );
+    const content = new TextDecoder().decode(bytes);
+    if (!response.ok)
+      throw new Error(
+        `Retained evidence storage HTTP ${response.status}: ${content}`,
+      );
+    return content;
+  },
 };
 
 /** A capture as the server read it, cached on its command's operation row. */
@@ -36,6 +54,7 @@ const materializedPage = z.object({
   capture: browserPageCapture,
   domEvidenceId: z.uuid(),
   observation: browserObservation,
+  research: retainedResearchObservation,
 });
 export type MaterializedPage = z.infer<typeof materializedPage>;
 
@@ -43,15 +62,38 @@ export type MaterializedPage = z.infer<typeof materializedPage>;
 export const browserCommandRecord = z.looseObject({
   commandId: z.uuid(),
   command: browserBridgeRequest,
+  /** The exact source task authorized when this command was issued. */
+  workRef: z.uuid(),
+  /** The owned account supplying transport; it need not be the task Vendor. */
+  brokerAccountId: z.uuid().optional(),
+  /** Receipt in the durable agent transcript, separate from source upload. */
+  observationDelivered: z.boolean().optional(),
+  /** Automatic read reconciliation is bounded; member resume remains explicit. */
+  recoveryDepth: z.number().int().nonnegative().optional(),
   page: materializedPage.optional(),
   /** Operation ids of the server's automatic retries, oldest first. */
   retries: z.array(z.string()).optional(),
-  /** A public page the server read itself; the Mac never saw this step. */
+  /** Retained broker outcome, including terminal failures replayed by the host. */
   serverResult: browserBridgeResult.optional(),
   /** The attempt the run paused on; reading it again after resume retries. */
   pausedAt: z.string().optional(),
 });
 export type BrowserCommandRecord = z.infer<typeof browserCommandRecord>;
+
+function assertRecordedCommand(
+  current: BrowserCommandRecord,
+  supplied: BrowserCommandRecord,
+) {
+  if (
+    current.commandId !== supplied.commandId ||
+    current.workRef !== supplied.workRef ||
+    current.brokerAccountId !== supplied.brokerAccountId ||
+    JSON.stringify(current.command) !== JSON.stringify(supplied.command)
+  )
+    throw new Error(
+      "Browser snapshot authority does not match its stored command.",
+    );
+}
 
 /**
  * Read a completed capture once: decode the Mac's DOM, keep it as run
@@ -69,64 +111,87 @@ export async function materializeCapture(
     storage: BrowserEvidenceStorage;
   },
 ): Promise<MaterializedPage> {
-  if (input.record.page) return input.record.page;
-  const outcome = input.result.outcome;
+  const record = browserCommandRecord.parse(input.record);
+  const result = browserBridgeResult.parse(input.result);
+  if (
+    record.commandId !== record.command.id ||
+    record.command.runID !== input.key.runId ||
+    record.command.operationId !== input.key.operationId ||
+    result.commandID !== record.commandId ||
+    result.operationID !== input.key.operationId ||
+    result.runID !== input.key.runId
+  )
+    throw new Error("Browser result does not belong to this command and run");
+  const persisted = browserCommandRecord.parse(
+    (await readOperation(getDb(db), input.key))?.result,
+  );
+  assertRecordedCommand(persisted, record);
+  const outcome = result.outcome;
   if (outcome.status !== "completed" || !outcome.snapshot)
     throw new Error("Browser command produced no page snapshot");
   const snapshot = outcome.snapshot;
   const html = await readSnapshotDom(snapshot.dom);
-  const operation = input.record.command.operation;
-  const targetId =
-    operation.type === "capture"
-      ? (operation.evidenceScope?.targetId ?? null)
-      : null;
+  const operation = record.command.operation;
+  const research = await retainResearchObservation(
+    db,
+    {
+      runId: input.key.runId,
+      workRef: record.workRef,
+      callId: record.commandId,
+      kind: "browser_capture",
+      sourceMetadata: {
+        brokerAccountId: record.brokerAccountId,
+        sourceURL: snapshot.sourceURL,
+        servedURL: snapshot.servedURL,
+        title: snapshot.title,
+        capturedAt: snapshot.capturedAt,
+        truncated: snapshot.dom.truncated,
+        observationId: snapshot.observationId,
+        actions: snapshot.actions,
+        actionsTruncated: snapshot.actionsTruncated,
+        screenshots:
+          snapshot.screenshot.status === "captured"
+            ? snapshot.screenshot.evidence
+            : [],
+      },
+      content: html,
+    },
+    { storage: input.storage },
+  );
   const capture = derivePageCapture({
     html,
-    sourceURL: snapshot.sourceURL,
+    sourceURL: snapshot.servedURL,
     title: snapshot.title,
     capturedAt: snapshot.capturedAt,
     allowedHosts: input.allowedHosts,
     requestedURL:
-      operation.type === "capture" ? (operation.recoveryURL ?? null) : null,
+      operation.type === "read"
+        ? (operation.recoveryURL ?? null)
+        : operation.type === "navigate"
+          ? operation.url
+          : null,
     evidence:
       snapshot.screenshot.status === "captured"
         ? snapshot.screenshot.evidence
         : [],
     truncated: snapshot.dom.truncated,
   });
-  // One command's DOM has one evidence id and object key, so a read
-  // interrupted after the upload, or two reads racing, store it once.
-  const evidenceId = await sha256Uuid(`browser-dom:${input.record.commandId}`);
-  const objectKey = `${env.R2_KEY_PREFIX}/import-runs/${input.runShortcode}/${targetId ?? "pages"}/${evidenceId}-page.html`;
-  const bytes = new TextEncoder().encode(html);
-  await input.storage.put(objectKey, bytes, "text/html; charset=utf-8");
   const page = materializedPage.parse({
     capture,
-    domEvidenceId: evidenceId,
+    domEvidenceId: research.evidenceId,
     observation: outcome.observation,
+    research,
   });
-  await withTransaction(db, async (tx) => {
-    await tx
-      .insert(runEvidence)
-      .values({
-        id: evidenceId,
-        runId: input.key.runId,
-        targetId,
-        kind: "browser_capture",
-        objectKey,
-        checksum: snapshot.dom.sha256,
-        mediaType: "text/html",
-        byteSize: bytes.byteLength,
-        sourceMetadata: {
-          sourceURL: snapshot.sourceURL,
-          derivationRevision: capture.captureVersion,
-          truncated: snapshot.dom.truncated,
-        },
-      })
-      .onConflictDoNothing();
-    await setOperationResult(tx, input.key, { ...input.record, page });
+  return withTransaction(db, async (tx) => {
+    const current = browserCommandRecord.parse(
+      (await readOperation(tx, input.key, { forUpdate: true }))?.result,
+    );
+    assertRecordedCommand(current, record);
+    // Duplicate materializers preserve the durable receipt and the first cached page.
+    if (current.page) return current.page;
+    await setOperationResult(tx, input.key, { ...current, page });
+    return page;
   });
-  return page;
 }
 
 type FailedOutcome = Extract<
@@ -213,20 +278,4 @@ export function browserRecovery(
       reason: outcome.message,
     };
   return { action: "fail" };
-}
-
-/** A short, human line for what the Mac saw, for logs and the Runs UI. */
-export function describeObservation(observation: BrowserObservation): string {
-  const where = observation.url ? new URL(observation.url).host : "no page";
-  const window = observation.window;
-  const windowState = !window
-    ? "window not found"
-    : window.minimized
-      ? "window minimized"
-      : window.onScreen === false
-        ? "window off screen"
-        : window.recovered
-          ? "window recovered"
-          : "window ready";
-  return [where, observation.readyState ?? "unknown", windowState].join(" · ");
 }

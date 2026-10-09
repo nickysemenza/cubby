@@ -113,7 +113,11 @@ export type AtomicOperationLedger = {
   /** Claim the operation `started` ahead of the business writes that follow. */
   start(client: LedgerClient): Promise<void>;
   /** Record the replayable result: completes a started row, else inserts it completed. */
-  complete(client: LedgerClient, result: RecordedResult): Promise<void>;
+  complete(
+    client: LedgerClient,
+    result: RecordedResult,
+    options?: { retirementReceiptId?: string },
+  ): Promise<void>;
 };
 
 /**
@@ -140,6 +144,8 @@ export async function executeAtomicOperation<T>(
     /** Names the operation in the uncertain-outcome error ("Commit"). */
     subject: string;
     recordFailure?: boolean;
+    /** Retain a rejected research proposal outside its rolled-back transaction. */
+    retainAttempt?: boolean;
   },
   work: (ledger: AtomicOperationLedger) => Promise<T>,
 ): Promise<T> {
@@ -166,8 +172,8 @@ export async function executeAtomicOperation<T>(
       await insertOperation(client, row);
       started = true;
     },
-    async complete(client, result) {
-      if (started) await completeOperation(client, key, result);
+    async complete(client, result, options) {
+      if (started) await completeOperation(client, key, result, options);
       else
         await insertOperation(client, { ...row, state: "completed", result });
     },
@@ -182,6 +188,9 @@ export async function executeAtomicOperation<T>(
         ...row,
         state: "failed",
         error: error instanceof Error ? error.message : "unknown",
+        result: operation.retainAttempt
+          ? { attempt: operation.payload }
+          : undefined,
       },
       { ifAbsent: true },
     );

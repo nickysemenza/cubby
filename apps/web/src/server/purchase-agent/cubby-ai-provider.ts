@@ -6,6 +6,7 @@ import {
 import {
   type ChatGptInference,
   type GatewayQuery,
+  type GatewayFetchRoutes,
   gatewayFetchThrough,
   type GatewayResponseInfo,
   requestUrl,
@@ -57,10 +58,15 @@ const COORDINATOR_CALL = {
   operation: "agent.generation",
 } satisfies AiGatewayCallMetadata;
 
-interface AgentFetchOptions {
+interface AgentFetchOptions extends Pick<
+  GatewayFetchRoutes,
+  "subscriptionRequired" | "beforePaidRequest"
+> {
   gateway: () => AgentGateway;
   testModel?: TestModel;
   subscription?: ChatGptInference;
+  /** Host admission can reject locally before any provider route transmits. */
+  beforeTransmission?: () => Response | undefined;
   /** Each model request's transport, reported before it leaves. */
   onTransport?: (transport: AgentTransport) => void;
   /** Each received model response's gateway log id and cache verdict. */
@@ -79,10 +85,12 @@ export function createCubbyGatewayFetch(
   options: AgentFetchOptions,
 ): typeof fetch {
   const { testModel } = options;
-  return gatewayFetchThrough({
+  const routedFetch = gatewayFetchThrough({
     provider: route,
     rewriteQuery: (body) => withSequentialToolCalls(route, body),
     chatGpt: options.subscription,
+    subscriptionRequired: options.subscriptionRequired,
+    beforePaidRequest: options.beforePaidRequest,
     onTransport: options.onTransport,
     onResponse: options.onResponse,
     testPeer: () =>
@@ -103,6 +111,8 @@ export function createCubbyGatewayFetch(
       const gateway = options.gateway();
       return runUniversalGateway(gateway, route, request, {
         id: gateway.id,
+        skipCache: true,
+        collectPayload: false,
         metadata: aiGatewayMetadataSchema.parse({
           ...COORDINATOR_CALL,
           environment: gateway.environment,
@@ -110,6 +120,10 @@ export function createCubbyGatewayFetch(
       });
     },
   });
+  return (input, init) => {
+    const rejection = options.beforeTransmission?.();
+    return rejection ? Promise.resolve(rejection) : routedFetch(input, init);
+  };
 }
 
 /**

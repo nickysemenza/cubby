@@ -5,8 +5,8 @@ description: Support Cubby purchase imports when learning a vendor, ingesting a 
 
 # Purchase-import support
 
-For a durable account sync, purchase validation, or product enrichment run,
-load [run-workflow.md](references/run-workflow.md). For receipt, browser, or saved confirmation
+For a durable account sync, purchase validation, or mail-import Run,
+load [research-run-workflow.md](references/research-run-workflow.md). For receipt, browser, or retained mail
 extraction and post-commit audit, load the respective
 [extraction](references/extraction.md) and [audit](references/audit.md)
 instructions. For a photographed receipt or a Gmail order event, load
@@ -14,19 +14,30 @@ instructions. For a photographed receipt or a Gmail order event, load
 [order mail](references/order-mail.md). The import-run agent, Codex, and Claude share these
 contracts.
 
-The import-run agent, Claude, and Codex use this same workflow. The agent owns routine browser,
-email, receipt, retry, audit, and lifecycle orchestration; a human agent may
-continue the same work for unusual evidence. Source-backed orders always pass
-through Cubby's prepare/commit writer rather than generic entity mutation.
+The researcher investigates unfamiliar mail, pages and receipts; Cubby's host
+owns task references, evidence retention, replay, recovery and safe writes.
+Interactive Claude/Codex sessions use their available research and Cubby tools
+under the same domain contracts. Source-backed orders pass through Cubby's
+bounded import writer rather than generic entity mutation.
 
 ## Connect and converge evidence
 
-1. In Cubby Settings, connect Google with read-only Gmail access. Search order
-   mail by the Vendor website's domain, any optional known sender, order id,
-   and time window. On Vendor detail, **Search Gmail now** scans a bounded page
-   from the past year; **Search older email** continues when Gmail has more.
-   An email event establishes lifecycle context. Use **Import order** on a saved placement confirmation to let the agent extract its itemization through Cubby’s Gmail integration and prepare/commit writer. If the confirmation lacks itemized variants, stop for review and open the retailer order detail or a receipt. Shipping and delivery notices cannot start an order import. If a retailer requests login, pause the browser run
-   and let the member sign in to the Cubby-managed browser tab before resuming.
+1. Connect Google with read-only Gmail access. Prioritize known Vendors and
+   unmatched financial transactions, then paginate all retained history,
+   including archives and unfamiliar vendors, excluding Spam and Trash. Jev
+   routes relevant mail and escalates uncertainty to the researcher. An
+   unrelated message retains only its provider identity and scan/classification
+   status; related originals and useful attachments become retained evidence.
+   A historical launch needs its separately approved backfill allowance;
+   pilot candidate and Product limits, and continuous new-mail's monthly
+   metered allowance, are independent. Confirmation,
+   shipping, delivery, cancellation and refund mail may link to one Purchase.
+   An exact order id helps; a unique supported match can use account, items,
+   dates, totals, tracking or thread context together. Sender, thread or model
+   confidence alone does not establish that match. Shipping mail can establish
+   an incomplete identified Purchase while itemization stays unknown. If login
+   is needed, let the member sign in and resume that browser work; cloud research
+   can continue independently.
 2. For a statement CSV, use `/statement-rows/import` or parse the export in the
    MCP client. Known provider columns (Monarch, Mint, Copilot, Apple Card) use
    deterministic adapters; other CSVs need a reviewed column, account, source,
@@ -48,7 +59,7 @@ through Cubby's prepare/commit writer rather than generic entity mutation.
    ambiguous allocation and Product identity separately; show evidence and
    the changes that approval would make.
 
-The agent coordinates durable steps, browser handoffs, progress, and review stops.
+The host coordinates durable steps, browser handoffs, progress and review stops.
 Frontier AI can propose a mapping for an unfamiliar layout; a person verifies
 the columns and sign before saving. Jev can rank a bounded set of ambiguous
 account, transaction, or Purchase candidates using evidence. A choice is a
@@ -104,8 +115,10 @@ same outcome without prescribing an agent runtime.
    call `product_enrichment.propose_match` with the candidate pair and
    evidence for human review. Otherwise choose an
    existing Product shortcode, explicitly choose `new`, or leave the line
-   `unresolved`. Never create a Product merely because search was
-   inconclusive, and never claim a descriptive-only candidate directly.
+   `unresolved`. When the line proves a purchased item but catalog identity
+   remains incomplete, save only its supported Product facts and continue
+   research after checking existing matches. Preserve the original order-line
+   evidence; a descriptive-only candidate is not a direct match.
    Every order is household spending, but not every line is a stocked item:
    choose `expense_only` for prepared food and drinks from a restaurant or
    delivery order, event or travel tickets, rides, donations, and paid labor
@@ -123,44 +136,22 @@ same outcome without prescribing an agent runtime.
    terminal; `conflict` requires review.
 7. Report every conflict or open finding; resolve it through the Problems UI.
 
-For an agent run, call `claim_next_import_work` before selecting an evidence
-path and after each committed item. Account-sync work is a `cursor_walk`
-(capture the order-history page; importing it records an `order_list` of
-orders with `nextPageUrl`, or `null` once the page predates the account
-cursor), then one `order` at a time (capture and import its detail page),
-then hunts and enrichment; `finish_import_run` refuses while a listed order
-is still pending. A backfill run walks an explicit date range of older history
-and never moves the incremental cursor. `defer_order_for_review` leaves one
-ambiguous order for review while the others continue; the run then ends in
-review rather than reporting a complete import, and a restart retries it.
-A member can also select statement charges for one run
-(the Vendor account's Statement charges section, or MCP
-`run.start_charge_run` with charges from `imports_read.charge_hunts`): the run's work is exactly those charge hunts, each claimed as a
-`hunt` item with its `id`, and it never walks order history or joins another
-hunt. Find the charge's order on the vendor account and import it normally;
-the server settles the hunt only when the charge is uniquely and conservatively
-allocated (an amount or date coincidence, or your ranking, is review, never a
-settlement). When a hunt stays unsettled, record it with
-`settle_charge_hunt`: `not_found` after searching the vendor account's history
-for the charge's amount and date window without a matching order, or
-`needs_review` when a candidate order stays ambiguous or unreadable (it leaves
-one finding naming the charge). A charge the server already settled reads as
-resolved whatever you report. `finish_import_run` refuses while any selected
-hunt is still queued, and the run ends in review unless every charge resolved;
-a restart retries every unresolved selected charge. Imports and settlement
-never change stock. A `receipt_evidence` item must go through
-`extract_receipt_evidence`, whose immutable source/checksum/extraction payload
-is passed unchanged to `purchase_import.prepare`; it is not a separate writer.
-For browser evidence, continue every selected order or hunt before calling
-`finish_import_run`; that server transition refuses pending hunts and performs
-the required auditor batches. Persist only same-domain observations with
-`save_navigation_hints`, record a proven vendor-history boundary with
-`mark_history_expired`, and use `stop_import_run_for_review` when evidence is
-ambiguous or unreadable. Every turn ends in one of: a pending browser command,
-`awaiting_approval`, `finish_import_run`, or a review stop (a progress report
-with phase `review` stops the run exactly as `stop_import_run_for_review`
-does); a run left without any of these is moved to review by the server.
-These run-lifecycle tools are not substitutes for the prepare/commit writer.
+In a hosted Run, use `work_next`, task-scoped observation tools and
+`work_resolve` as described in the research workflow. Sources are retained
+automatically; use issued references and supported source-to-target reasoning.
+The host prepares and commits accepted orders, records refusals and produces
+progress and final accounting. It returns the next task or `done`; no separate
+finish ceremony or caller-generated operation/evidence bookkeeping is needed.
+An unresolved task remains visible with a concrete outcome and gaps.
+
+Account-history objectives retain their admitted cursor or explicit backfill
+range. Selected-charge objectives retain the exact Hunt selection and frozen
+search hints. Investigate those objectives without broadening their scope.
+Their snapshots alone establish neither current financial authority nor
+settlement; the host checks ownership and current allocations. Receipt originals
+use that same evidence/write path. A retry creates fresh task identities while
+preserving real lineage, old evidence and settled outcomes. A historical scope
+the old runtime did not retain cannot be reconstructed from today's cursor.
 
 An interrupted mutation is recovered through
 `imports_read.purchase_status` with its original operation id. Repeating
@@ -185,28 +176,23 @@ Create or update the Vendor deliberately, then configure:
 - `orderEmailSenders` only for verified senders outside the website domain;
 - `returnWindowDays` only when the policy is known.
 
-The website domain is the default Gmail sender signal. When two Vendors share
-that domain, an exact configured sender takes precedence; other ambiguous mail
-stays for review. Recognized order mail with an explicit order id creates a mail-only VendorAccount
-for that member when one does not exist. This records a vendor relationship,
+The website domain and configured senders are search hints, not purchase
+relevance gates. A new Vendor or member-owned VendorAccount may be created from
+sufficient retained purchase evidence. This records a vendor relationship,
 not proof of a browser login. Turn on browser sync (set the account's
 `browserSyncEnabled` and status `active`) only after confirming that member's
 online account. The Mac app picks up a newly synced account when it becomes
 active or within about ten minutes; Sync now runs it immediately while the Mac
 app and chosen browser are open.
-Mail that names the exact order id of the one live Purchase for its Vendor links
-itself (a `cubby-system` decision), whichever arrived first; a member's
-dismissal is never overridden. Review the remaining candidate links (amount and
-date matches) or dismissals from the Vendor's Order email worklist. A mail
-import's Purchase belongs to the member's VendorAccount; the import run itself
-has none, so it never walks order history. After a mail import commits, each
-new Product gets its confirmation line's thumbnail as a provisional cover (a
-verified catalog image from enrichment takes cover ahead of it), and when the
-Vendor has a browsing account, one `product_enrichment` run starts at the
-product pages the email linked (kept as each line's Expense `url`). Products
-it misses (occupied account, Mac offline, mail-only until browser sync turns
-on) are swept by later discovery passes. Treat cached navigation hints as advisory observations within
-`browserDomains`.
+Related mail can converge on the same Purchase in either arrival order. Preserve
+explicit member link and dismissal decisions. Competing supported matches stay
+unresolved. A cancellation or refund can attach evidence and record its event;
+changing existing Expenses or writing refund Expenses requires review.
+Import completion supplies automatic Product research work, including supported
+existing Products that lack verification. Preserve order-line URLs and original
+evidence. An order thumbnail remains provisional until exact-variant research
+verifies a representative image. Treat cached navigation hints as observations,
+not authority to alter a task's scope or bypass browser permissions.
 
 For every exact merchant descriptor observed on that member's statement, call
 `purchase_import.confirm_vendor` after the human/vendor mapping is known.
@@ -243,15 +229,14 @@ a new purchase-import Product or inventory.
 
 ## Agent authority
 
-Reads are available through Cubby's ordinary MCP catalog. The bounded
-prepare/commit workflow may write without a separate approval. Generic creates,
-updates, deletes, merges, and inventory receiving pause for an exact typed
-approval in an agent run, including the `entity.create`/`entity.update` steps
-the settlement reference describes; prose in a prompt is never approval.
-Reference steps that use a live browser console, scripts, or file parsing
-(payment-ledger scraping, statement CSV parsing) are for an interactive Claude
-or Codex session; an agent run uses only its mounted tools and retained evidence. Receiving remains a human
-decision and inventory never changes merely because an order arrived.
+Hosted research uses its focused mounted tools and retained observations.
+Bounded evidence-backed import and matching-value verification may write
+automatically; contradictions and financial corrections use explicit review.
+Interactive Claude/Codex sessions follow the actual Cubby tool contract and
+their granted authority. Techniques requiring a terminal, arbitrary browser
+evaluation or file parsing belong only to a session that exposes those
+capabilities. Receiving remains a human decision and inventory never changes
+merely because an order arrived.
 
 ## Completion report
 

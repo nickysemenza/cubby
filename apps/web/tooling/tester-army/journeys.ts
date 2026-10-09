@@ -808,15 +808,20 @@ export const journeys: Journey[] = [
   },
   {
     id: "run-restart-inputs",
-    title: "a finished mail import shows the Vendor and order a restart copies",
+    title:
+      "a settled mail investigation preserves its original and restart context",
     // The native run screen has no Restart inputs disclosure.
     webOnly: true,
     start: "run",
     steps: [
       {
-        goal: "Open Restart inputs on this run and read what starting it again would copy.",
+        goal: "Inspect the retained original on this report, then open Restart inputs and read this investigation’s purpose and retained source count.",
         check: {
-          visible: (ids) => [ids.get("vendor"), JOURNEY_NAMES.restartOrderId],
+          visible: (ids) => [
+            ids.get("sourceSubject"),
+            "mail_import",
+            '"sourceCount": 1',
+          ],
         },
       },
     ],
@@ -824,10 +829,24 @@ export const journeys: Journey[] = [
     db: [
       {
         label: "reading the run never restarts it",
-        sql: `SELECT status, (SELECT count(*)::int FROM "Run" s WHERE s."predecessorRunId" = r.id) AS successors
+        sql: `SELECT status, r.input->>'kind' AS kind, jsonb_array_length(r.input->'sources') AS "sourceCount",
+                     EXISTS (SELECT 1 FROM "OrderMail" m
+                       WHERE m.id = (r.input #>> '{sources,0,orderMailId}')::uuid
+                         AND m."ledgerPartyId" = r."ledgerPartyId"
+                         AND m."rawChecksum" = r.input #>> '{sources,0,checksum}'
+                         AND m.subject = $2) AS "originalPreserved",
+                     (SELECT count(*)::int FROM "Run" s WHERE s."predecessorRunId" = r.id) AS successors
                 FROM "Run" r WHERE r.shortcode = $1`,
-        params: only("run"),
-        rows: () => [{ status: "completed", successors: 0 }],
+        params: (ids) => [ids.get("run"), ids.get("sourceSubject")],
+        rows: () => [
+          {
+            status: "needs_review",
+            kind: "mail_research",
+            sourceCount: 1,
+            originalPreserved: true,
+            successors: 0,
+          },
+        ],
       },
     ],
   },

@@ -1,9 +1,8 @@
 /**
  * The purchase agent's only authority over Cubby: one Run's services. Each
- * method parses its input (`@cubby/schemas/purchase-agent-services`), opens
- * its own database scope, and resolves every target from the bound Run; the
- * caller cannot supply a Run, party, account, vendor, SQL, script, or generic
- * mutation target. Flow: `server/purchase-import/README.md`.
+ * call opens its own database scope. Research effects delegate to the bound
+ * research factory; lifecycle and photo-only effects retain their existing
+ * host contracts. Research authority, evidence, and replay belong to that factory. Flow: `server/purchase-import/README.md`.
  */
 import {
   agentImportRunPurpose,
@@ -12,24 +11,18 @@ import {
 import {
   agentProgressReport,
   agentUsageEvent,
-  deferOrderForReviewInput,
-  importOrderEvidenceInput,
-  issueBrowserCommandInput,
-  markHistoryExpiredInput,
   markRunFailedInput,
   purchaseAgentEventRef,
   purchaseAgentOperationRef,
   reconcileSettledRunInput,
-  saveNavigationHintsInput,
-  settleChargeHuntInput,
   stopForReviewInput,
 } from "@cubby/schemas/purchase-agent-services";
 import { sha256Uuid } from "@cubby/shared/sha256";
 
+import { assertNotInMaintenance } from "~/server/maintenance";
 import type { RunServices } from "~/server/purchase-agent/environment";
 
-import { runWithExecutionCtx, setCfEnv } from "../cf-env";
-import { resolvePurchaseAgentBrowserOperation } from "./agent-browser-command";
+import { getTestAiGateway, runWithExecutionCtx, setCfEnv } from "../cf-env";
 
 /** The MCP endpoint the delegation bearer's audience names. */
 const MCP_URL = "https://cubby.internal/api/mcp";
@@ -49,6 +42,7 @@ export function runServicesFor(
       operation: typeof import("~/server/runs/operation"),
     ) => Promise<T>,
   ): Promise<T> => {
+    assertNotInMaintenance(env);
     setCfEnv(env);
     return runWithExecutionCtx(ctx, async () => {
       const { db, withRequestDbClient } = await import("~/server/db");
@@ -62,7 +56,62 @@ export function runServicesFor(
     });
   };
 
+  const requirePhotoScope = async (
+    db: typeof import("~/server/db").db,
+    service: typeof import("./run-service"),
+  ) => {
+    const scope = await service.loadRunScope(db, runId);
+    if (scope.public.purpose !== "photo_inventory")
+      throw new Error(
+        "This host service is available only to photo inventory Runs",
+      );
+    return scope;
+  };
+  const withPhotoDatabase: typeof withDatabase = (fn) =>
+    withDatabase(async (db, service, operation) => {
+      await requirePhotoScope(db, service);
+      return fn(db, service, operation);
+    });
+  const withResearch = <T>(
+    fn: (
+      service: ReturnType<
+        typeof import("./research-service").researchServiceFor
+      >,
+    ) => Promise<T>,
+  ) =>
+    withDatabase(async (db) => {
+      const { assertResearchRunExecutable } =
+        await import("./research-execution");
+      await assertResearchRunExecutable(db, runId);
+      const { researchServiceFor } = await import("./research-service");
+      const { researchFixtureSources } =
+        await import("./research-source-transport");
+      return fn(
+        researchServiceFor(db, env, runId, {
+          observations: await researchFixtureSources(getTestAiGateway()),
+        }),
+      );
+    });
+
   return {
+    processResearchRetention: (receiptId) =>
+      withDatabase(async (db) => {
+        const { processBoundResearchRetention } =
+          await import("./research-retention-runtime");
+        return processBoundResearchRetention(db, env, { runId, receiptId });
+      }),
+    researchCoordinatorStatus: () =>
+      withDatabase(async (db) => {
+        const { researchCoordinatorStatus } =
+          await import("./research-execution");
+        return researchCoordinatorStatus(db, runId);
+      }),
+    authorizeResearchRetirement: (receiptId) =>
+      withDatabase(async (db) => {
+        const { authorizeResearchCoordinatorRetirement } =
+          await import("./research-retention");
+        await authorizeResearchCoordinatorRetirement(db, { runId, receiptId });
+      }),
     loadScope: () =>
       withDatabase(async (db, service) => {
         const scope = await service.loadRunScope(db, runId);
@@ -108,7 +157,7 @@ export function runServicesFor(
           ? undefined
           : await request.arrayBuffer();
       return withDatabase(async (db, service) => {
-        const scope = await service.loadRunScope(db, runId);
+        const scope = await requirePhotoScope(db, service);
         const [
           { findActivePurchaseAgentGrant, issuePurchaseAgentDelegation },
           { handleMcpHttpRequest },
@@ -138,9 +187,30 @@ export function runServicesFor(
       });
     },
 
+    researchNext: (input, callId) =>
+      withResearch((service) => service.researchNext(input, callId)),
+    researchObserve: (input, callId) =>
+      withResearch((service) => service.researchObserve(input, callId)),
+    researchResolve: (input, callId) =>
+      withResearch((service) => service.researchResolve(input, callId)),
+    researchMailSearch: (input, callId) =>
+      withResearch((service) => service.researchMailSearch(input, callId)),
+    researchMailRead: (input, callId) =>
+      withResearch((service) => service.researchMailRead(input, callId)),
+    researchWebSearch: (input, callId) =>
+      withResearch((service) => service.researchWebSearch(input, callId)),
+    researchWebRead: (input, callId) =>
+      withResearch((service) => service.researchWebRead(input, callId)),
+    researchFind: (input, callId) =>
+      withResearch((service) => service.researchFind(input, callId)),
+    researchResume: (signal) =>
+      withResearch((service) => service.researchResume(signal)),
+    researchAcknowledge: (signal) =>
+      withResearch((service) => service.researchAcknowledge(signal)),
+
     claimNextWork: (input) => {
       const ref = purchaseAgentOperationRef.parse(input);
-      return withDatabase((db, service, operation) =>
+      return withPhotoDatabase((db, service, operation) =>
         operation.executeLeasedOperation(
           db,
           {
@@ -149,167 +219,8 @@ export function runServicesFor(
             kind: "claim_next_work",
             payload: { runId, ...ref },
           },
-          () => service.claimNextImportWork(db, env.PURCHASE_IMPORT, runId),
+          () => service.claimPhotoInventoryWork(db, runId),
         ),
-      );
-    },
-
-    extractReceiptEvidence: (input) => {
-      const ref = purchaseAgentOperationRef.parse(input);
-      return withDatabase((db, _service, operation) =>
-        operation.executeLeasedOperation(
-          db,
-          {
-            runId,
-            ...ref,
-            kind: "extract_receipt_evidence",
-            payload: { runId, ...ref },
-          },
-          async () => {
-            const [{ extractPurchaseReceipt }, { loadReceiptEvidenceForRun }] =
-              await Promise.all([
-                import("~/server/agents/purchase-import/extract"),
-                import("./receipt-evidence"),
-              ]);
-            const evidence = await loadReceiptEvidenceForRun(db, runId);
-            if (!evidence)
-              throw new Error("This run has no pending receipt evidence");
-            const extraction = await extractPurchaseReceipt({
-              db,
-              runId,
-              imageUrl: evidence.imageUrl,
-            });
-            return {
-              stableOrderId: `receipt:${evidence.huntId}`,
-              itemOperationId: `receipt:${evidence.huntId}`,
-              source: evidence.source,
-              evidenceChecksum: evidence.evidenceChecksum,
-              extractionRevision: "receipt@1",
-              extraction,
-              lineIds: (extraction.candidate?.lines ?? []).map(
-                (_line, index) => `receipt:${evidence.huntId}:line:${index}`,
-              ),
-              primaryDocumentImageId: evidence.imageId,
-              screenshotImageId: null,
-            };
-          },
-        ),
-      );
-    },
-
-    extractRunEvidence: (input) => {
-      const ref = purchaseAgentOperationRef.parse(input);
-      return withDatabase((db, _service, operation) =>
-        operation.executeLeasedOperation(
-          db,
-          {
-            runId,
-            ...ref,
-            kind: "extract_run_evidence",
-            payload: { runId, ...ref },
-          },
-          async () => {
-            const { loadOrderMailImportEvidence } =
-              await import("./gmail/import");
-            const mail = await loadOrderMailImportEvidence(db, runId);
-            if (mail) {
-              const { extractPurchaseOrderMail } =
-                await import("~/server/agents/purchase-import/extract");
-              const extraction = await extractPurchaseOrderMail({
-                db,
-                runId,
-                mail: mail.mail,
-                orderId: mail.orderId,
-                productHosts: mail.productHosts,
-              });
-              const stableOrderId = `mail:${mail.eventId}`;
-              return {
-                stableOrderId,
-                itemOperationId: stableOrderId,
-                source: mail.source,
-                evidenceChecksum: mail.evidenceChecksum,
-                extractionRevision: "order-mail@1",
-                extraction,
-                lineIds: (extraction.candidate?.lines ?? []).map(
-                  (_line, index) => `${stableOrderId}:line:${index}`,
-                ),
-                primaryDocumentImageId: null,
-                screenshotImageId: null,
-              };
-            }
-            const [
-              { extractPurchaseEvidence },
-              { loadRunEvidenceForExtraction },
-            ] = await Promise.all([
-              import("~/server/agents/purchase-import/extract"),
-              import("./run-evidence"),
-            ]);
-            const evidence = await loadRunEvidenceForExtraction(db, runId);
-            if (!evidence)
-              throw new Error("This validation run has no uploaded evidence");
-            const extraction = await extractPurchaseEvidence({
-              db,
-              runId,
-              evidenceUrl: evidence.evidenceUrl,
-              mediaType: evidence.mediaType,
-            });
-            return {
-              stableOrderId: `run-evidence:${evidence.id}`,
-              itemOperationId: `run-evidence:${evidence.id}`,
-              source: {
-                kind: evidence.sourceKind ?? "receipt_photo",
-                externalKey: evidence.sourceExternalKey ?? evidence.id,
-                checksum: evidence.checksum,
-              },
-              evidenceChecksum: evidence.checksum,
-              extractionRevision: "run-evidence@1",
-              extraction,
-              lineIds: (extraction.candidate?.lines ?? []).map(
-                (_line, index) => `run-evidence:${evidence.id}:line:${index}`,
-              ),
-              primaryDocumentImageId: null,
-              screenshotImageId: null,
-            };
-          },
-        ),
-      );
-    },
-
-    issueBrowserCommand: (input) => {
-      const parsed = issueBrowserCommandInput.parse(input);
-      return withDatabase(async (db, service) => {
-        const scope = await service.loadRunScope(db, runId);
-        if (!scope.public.vendorAccountId)
-          throw new Error("This import run has no browser account");
-        const claimed = await service.claimNextImportWork(
-          db,
-          env.PURCHASE_IMPORT,
-          runId,
-        );
-        // The run ended while it was being claimed (an outdated Mac stopped
-        // it): report it stopped, which ends the agent's submission.
-        if ("kind" in claimed && claimed.kind === "stopped")
-          return { state: "stopped" as const, status: claimed.status };
-        const claimedTarget = "startUrl" in claimed ? claimed.startUrl : null;
-        return service.issueBrowserCommand(db, env.PURCHASE_IMPORT, {
-          runId,
-          operationId: parsed.operationId,
-          operation: resolvePurchaseAgentBrowserOperation(
-            parsed.command,
-            claimedTarget,
-            scope.public.allowedHosts,
-          ),
-        });
-      });
-    },
-
-    readBrowserCommandResult: (input) => {
-      const ref = purchaseAgentOperationRef.parse(input);
-      return withDatabase((db, service) =>
-        service.readBrowserCommandResult(db, env.PURCHASE_IMPORT, {
-          runId,
-          ...ref,
-        }),
       );
     },
 
@@ -337,70 +248,9 @@ export function runServicesFor(
       );
     },
 
-    importOrderEvidence: (input) => {
-      const parsed = importOrderEvidenceInput.parse(input);
-      const payload = { runId, ...parsed };
-      return withDatabase((db, service, operation) =>
-        operation.executeLeasedOperation(
-          db,
-          { ...payload, kind: "import_order_evidence", payload },
-          () =>
-            service.importBrowserOrderEvidence(
-              db,
-              env.PURCHASE_IMPORT,
-              payload,
-            ),
-        ),
-      );
-    },
-
-    saveNavigationHints: (input) => {
-      const parsed = saveNavigationHintsInput.parse(input);
-      const payload = { runId, ...parsed };
-      return withDatabase((db, service, operation) =>
-        operation.executeLeasedOperation(
-          db,
-          { ...payload, kind: "save_navigation_hints", payload },
-          () =>
-            service.saveNavigationHints(db, {
-              runId,
-              operationId: parsed.operationId,
-              patch: {
-                ordersListUrl: parsed.hints[0]?.url,
-                notes: parsed.hints
-                  .map((hint) => hint.label)
-                  .filter((label): label is string => Boolean(label)),
-              },
-            }),
-        ),
-      );
-    },
-
-    markHistoryExpired: (input) => {
-      const payload = { runId, ...markHistoryExpiredInput.parse(input) };
-      return withDatabase((db, service, operation) =>
-        operation.executeLeasedOperation(
-          db,
-          { ...payload, kind: "mark_history_expired", payload },
-          () => service.markHistoryExpired(db, payload),
-        ),
-      );
-    },
-
-    finishRun: (input) => {
-      const payload = { runId, ...purchaseAgentOperationRef.parse(input) };
-      return withDatabase((db, service, operation) =>
-        operation.executeLeasedOperation(
-          db,
-          { ...payload, kind: "finish_run", payload },
-          () => service.finishRun(db, env.PURCHASE_IMPORT, payload),
-        ),
-      );
-    },
-
     stopForReview: (input) => {
       const payload = { runId, ...stopForReviewInput.parse(input) };
-      return withDatabase((db, service, operation) =>
+      return withPhotoDatabase((db, service, operation) =>
         operation.executeLeasedOperation(
           db,
           { ...payload, kind: "stop_for_review", payload },
@@ -413,41 +263,6 @@ export function runServicesFor(
                   ? "expected_order_not_found"
                   : "other",
               summary: payload.detail ?? payload.reason.replaceAll("_", " "),
-            }),
-        ),
-      );
-    },
-
-    deferOrderForReview: (input) => {
-      const payload = { runId, ...deferOrderForReviewInput.parse(input) };
-      return withDatabase((db, service, operation) =>
-        operation.executeLeasedOperation(
-          db,
-          { ...payload, kind: "defer_order_for_review", payload },
-          () =>
-            service.deferOrderForReview(db, {
-              runId,
-              operationId: payload.operationId,
-              orderId: payload.orderId,
-              summary: payload.detail,
-            }),
-        ),
-      );
-    },
-
-    settleChargeHunt: (input) => {
-      const payload = { runId, ...settleChargeHuntInput.parse(input) };
-      return withDatabase((db, service, operation) =>
-        operation.executeLeasedOperation(
-          db,
-          { ...payload, kind: "settle_charge_hunt", payload },
-          () =>
-            service.settleChargeHunt(db, {
-              runId,
-              operationId: payload.operationId,
-              huntId: payload.huntId,
-              outcome: payload.outcome,
-              summary: payload.detail,
             }),
         ),
       );

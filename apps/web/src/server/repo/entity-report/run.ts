@@ -178,9 +178,71 @@ const targetCounts = (run: RunDetail) =>
     run.targets.map((target) => runTargetState.parse(target.state)),
   );
 
+const researchOutcomes = new Set([
+  "verified",
+  "partially_verified",
+  "researched_with_gaps",
+  "ambiguous",
+  "temporarily_blocked",
+  "no_source_found",
+  "unrelated",
+]);
+
+const isResearchRun = (run: RunDetail) =>
+  run.targets.some(
+    (target) => target.outcome && researchOutcomes.has(target.outcome),
+  ) || run.purpose === "product_enrichment";
+const researchCounts = (run: RunDetail) => ({
+  total: run.targets.length,
+  verified: run.targets.filter((target) => target.outcome === "verified")
+    .length,
+  gaps: run.targets.filter(
+    (target) =>
+      target.outcome !== "verified" &&
+      ["completed", "skipped", "unresolved", "unavailable"].includes(
+        target.state,
+      ),
+  ).length,
+  pending: run.targets.filter(
+    (target) =>
+      target.state === "pending" ||
+      target.state === "prepared" ||
+      target.state === "needs_evidence",
+  ).length,
+});
+const researchSummary = (run: RunDetail) => {
+  const tally = researchCounts(run);
+  return [
+    `${tally.verified}/${tally.total} verified`,
+    tally.gaps ? `${tally.gaps} with gaps` : null,
+    tally.pending ? `${tally.pending} to go` : null,
+  ]
+    .filter(Boolean)
+    .join(" · ");
+};
+const targetBadge = (
+  target: RunDetail["targets"][number],
+  research: boolean,
+) =>
+  target.outcome && researchOutcomes.has(target.outcome)
+    ? badge(
+        phaseLabel(target.outcome),
+        target.outcome === "verified" ? "positive" : "warning",
+      )
+    : research
+      ? badge(
+          phaseLabel(target.outcome ?? target.state),
+          ["completed", "skipped", "unresolved", "unavailable"].includes(
+            target.state,
+          )
+            ? "warning"
+            : undefined,
+        )
+      : badge(target.state, toneForState(target.state));
+
 /** Counts in the unit the run works in: Products for enrichment, orders otherwise. */
 const importStats = (run: RunDetail): ReportBlock[] => {
-  if (run.purpose !== "product_enrichment")
+  if (!isResearchRun(run))
     return [
       counts([
         ["Orders seen", run.ordersSeen],
@@ -189,13 +251,12 @@ const importStats = (run: RunDetail): ReportBlock[] => {
         ["Skipped", run.skipped],
       ]),
     ];
-  const tally = targetCounts(run);
+  const tally = researchCounts(run);
   return [
     counts([
-      ["Products", tally.total],
-      ["Enriched", tally.completed],
-      ["Skipped", tally.skipped],
-      ["Waiting on you", tally.blocked],
+      ["Targets", tally.total],
+      ["Verified", tally.verified],
+      ["With gaps", tally.gaps],
       ["To go", tally.pending],
     ]),
   ];
@@ -292,6 +353,26 @@ function findingFix(finding: RunDetail["findings"][number]) {
   const lines: Line[] = [];
   if (fix === null || fix.kind === "receive_purchase")
     return { lines, applyConfirm: null };
+  if (fix.kind === "research_field_correction") {
+    for (const correction of fix.corrections) {
+      lines.push(
+        line(
+          `${correction.claim.fieldPath}: ${JSON.stringify(correction.currentValue)} → ${JSON.stringify(correction.claim.value)}`,
+        ),
+        line(correction.claim.support.observation),
+        line(correction.claim.support.reasoning),
+      );
+      if (correction.claim.support.selectedVariant)
+        lines.push(
+          line(correction.claim.support.selectedVariant.reasoning, "muted"),
+        );
+    }
+    return {
+      lines,
+      applyConfirm:
+        "Apply these supported corrections to the saved Product values shown?",
+    };
+  }
   if (fix.kind !== "replace_aggregate_line")
     return { lines, applyConfirm: "Apply this correction to your records?" };
   const snapshot = fix.reviewSnapshot;
@@ -341,7 +422,9 @@ function findingActions(
 ): ReportCommand[] {
   if (finding.status !== "open") return [];
   const reviewedFingerprint =
-    finding.proposedFix?.kind === "replace_aggregate_line"
+    finding.proposedFix?.kind === "replace_aggregate_line" ||
+    finding.proposedFix?.kind === "validation_corrections" ||
+    finding.proposedFix?.kind === "research_field_correction"
       ? (finding.proposedFix.reviewSnapshot?.fingerprint ?? null)
       : null;
   const apply: ReportCommand[] =
@@ -417,7 +500,9 @@ const importTargets = (run: RunDetail): ReportBlock[] =>
     ? []
     : [
         note(
-          targetOutcomeSummary(targetCounts(run)) ??
+          (isResearchRun(run)
+            ? researchSummary(run)
+            : targetOutcomeSummary(targetCounts(run))) ??
             "The selected source and target are frozen for this run.",
         ),
         records(
@@ -427,7 +512,7 @@ const importTargets = (run: RunDetail): ReportBlock[] =>
                 target.targetName ??
                 target.targetShortcode ??
                 target.targetType,
-              badges: [badge(target.state, toneForState(target.state))],
+              badges: [targetBadge(target, isResearchRun(run))],
               lines: [
                 line(
                   `${target.sourceLabel ?? "No source selected"}${target.vendorAccountLabel ? ` · ${target.vendorAccountLabel}` : ""}`,
@@ -436,6 +521,13 @@ const importTargets = (run: RunDetail): ReportBlock[] =>
                 ...(target.outcome ? [line(`Outcome: ${target.outcome}`)] : []),
                 ...(target.warning ? [line(target.warning, "warning")] : []),
               ],
+              detail:
+                target.diff === null
+                  ? undefined
+                  : {
+                      label: "Recorded difference",
+                      text: JSON.stringify(target.diff, null, 2),
+                    },
               ref: target.targetShortcode
                 ? { entity: target.targetType, id: target.targetShortcode }
                 : undefined,
@@ -450,7 +542,7 @@ const importEvidence = (run: RunDetail): ReportBlock[] =>
     ? []
     : [
         note(
-          "This evidence belongs to the run. Validation does not attach it to a purchase or product.",
+          "Retained source observations belong to this run. Current field explanations show which values they support.",
         ),
         records(
           run.evidence.map((evidence) =>
@@ -829,14 +921,11 @@ function discoveryCountsBlock(
 ): ReportBlock {
   const sentence = (id: string, text: string) => row(id, { title: text });
   return records([
-    ...(discovery.mode
-      ? [sentence("mode", `Mailbox ${discovery.mode.replaceAll("_", " ")}`)]
-      : []),
-    ...(active && discovery.batches !== null
+    ...(active
       ? [
           sentence(
-            "batches",
-            `${discovery.batchesDone} of ${discovery.batches} batches saved`,
+            "pages",
+            `${discovery.pagesDone} mailbox ${discovery.pagesDone === 1 ? "page" : "pages"} processed`,
           ),
         ]
       : []),
@@ -845,6 +934,22 @@ function discoveryCountsBlock(
       `${discovery.saved} ${discovery.saved === 1 ? "message" : "messages"} saved`,
     ),
     sentence("events", `${discovery.events} history changes recorded`),
+    ...(discovery.unrelated
+      ? [
+          sentence(
+            "unrelated",
+            `${discovery.unrelated} messages unrelated to purchases`,
+          ),
+        ]
+      : []),
+    ...(discovery.excluded
+      ? [
+          sentence(
+            "excluded",
+            `${discovery.excluded} Spam or Trash messages excluded`,
+          ),
+        ]
+      : []),
     ...(discovery.deleted
       ? [sentence("deleted", `${discovery.deleted} deleted before fetching`)]
       : []),

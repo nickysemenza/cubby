@@ -8,8 +8,18 @@
  */
 import { z } from "zod";
 
+import { researchToolInputs } from "./research-tools";
+
 import { tradeSchema } from "./task-fields";
 import { aiUsageTransport } from "./telemetry";
+
+/** Cleanup remains available while model execution is fenced. */
+export const researchCoordinatorStatus = z.enum([
+  "ready",
+  "retired",
+  "legacy",
+  "incomplete_admission",
+]);
 
 export const purchaseAgentOperationRef = z.object({
   operationId: z.string().min(1).max(256),
@@ -155,30 +165,17 @@ const modelId = {
 };
 const modelOperationRef = z.object(modelId);
 
-/**
- * The inputs of the agent's typed tools (`server/purchase-agent/tools.ts`),
- * keyed by tool name and published to the model as their JSON Schema. Each is
- * its host contract above, narrowed where the model gets less: the shorter
- * operation id, and for progress the closed phase list and 1,000-character
- * detail instead of the host's open phase text and 2,000.
- */
-export const purchaseAgentToolInputs = {
+/** Bounded research inputs; host replay identity is never model supplied. */
+export const purchaseAgentToolInputs = researchToolInputs;
+
+/** Photo inventory retains its existing restricted workflow and replay keys. */
+export const photoInventoryToolInputs = {
   claim_next_import_work: modelOperationRef,
-  extract_receipt_evidence: modelOperationRef,
-  extract_run_evidence: modelOperationRef,
-  issue_browser_command: issueBrowserCommandInput.extend(modelId),
-  read_browser_command_result: modelOperationRef,
-  import_browser_order_evidence: importOrderEvidenceInput.extend(modelId),
   report_agent_progress: modelOperationRef.extend({
     phase: agentProgressPhase,
     currentItem: agentProgressReport.shape.currentItem,
     awaitingApproval: agentProgressReport.shape.awaitingApproval,
     detail: agentProgressReport.shape.detail.unwrap().max(1_000).optional(),
   }),
-  save_navigation_hints: saveNavigationHintsInput.extend(modelId),
-  mark_history_expired: markHistoryExpiredInput.extend(modelId),
-  finish_import_run: modelOperationRef,
   stop_import_run_for_review: stopForReviewInput.extend(modelId),
-  defer_order_for_review: deferOrderForReviewInput.extend(modelId),
-  settle_charge_hunt: settleChargeHuntInput.extend(modelId),
 };

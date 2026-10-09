@@ -2,12 +2,6 @@ import { runEntityId } from "@cubby/schemas/identifiers";
 import { sleep } from "@cubby/shared/retry";
 import { eq } from "drizzle-orm";
 import {
-  from,
-  mcp,
-  type ScriptStep,
-  type ScriptValue,
-} from "tooling/purchase-agent-script";
-import {
   type ScriptedScenario,
   scenarioControls,
 } from "tooling/purchase-agent-workerd-harness";
@@ -33,110 +27,6 @@ import {
 } from "./agent-auth";
 
 type Db = TestDbContext["db"];
-
-type Line = {
-  title: string;
-  amount: number;
-  lineKind: "principal" | "tax" | "shipping";
-  sku?: string;
-};
-
-/** The extractor's wire shape: every optional field is an explicit null. */
-export const readyExtraction = (
-  orderId: string,
-  orderedAt: string,
-  lines: Line[],
-) => ({
-  status: "ready",
-  candidate: {
-    orderId,
-    orderedAt,
-    merchant: "Scenario garden shop",
-    currency: "USD",
-    printedGrandTotal: lines.reduce((sum, line) => sum + line.amount, 0),
-    lines: lines.map((line) => ({
-      title: line.title,
-      amount: line.amount,
-      lineKind: line.lineKind,
-      quantity: line.lineKind === "principal" ? 1 : null,
-      productUrl: null,
-      imageUrl: null,
-      sku: line.sku ?? null,
-      seller: null,
-    })),
-    payments: [],
-    allShipmentsDelivered: false,
-  },
-  reason: null,
-  detail: null,
-});
-
-/**
- * Prepare the order an `extract_run_evidence` call returned, unchanged, as
- * `prepare-<suffix>`; then the commit for its single line as a new Product.
- * Each commit step id is `commit-<suffix>`.
- */
-export const mailPrepare = (
-  extractCallId: string,
-  suffix: string,
-  runId: ScriptValue,
-): ScriptStep => {
-  const order = (path: string) => from(extractCallId, path);
-  return mcp(
-    `prepare-${suffix}`,
-    "purchase_import",
-    runId,
-    {
-      action: "prepare",
-      orders: [
-        {
-          stableOrderId: order("stableOrderId"),
-          itemOperationId: order("itemOperationId"),
-          source: order("source"),
-          evidenceChecksum: order("evidenceChecksum"),
-          extractionRevision: order("extractionRevision"),
-          extraction: order("extraction"),
-          lineIds: order("lineIds"),
-          primaryDocumentImageId: null,
-          screenshotImageId: null,
-        },
-      ],
-    },
-    { itemOperationIds: [order("itemOperationId")] },
-  );
-};
-
-/**
- * Commit `prepare-<suffix>` under operation id `commit-<suffix>`; `callId`
- * names the step, so a second call with the same suffix is a replay.
- */
-export const mailCommit = (
-  extractCallId: string,
-  suffix: string,
-  runId: ScriptValue,
-  callId = `commit-${suffix}`,
-): ScriptStep => {
-  const order = (path: string) => from(extractCallId, path);
-  return mcp(
-    callId,
-    "purchase_import",
-    runId,
-    {
-      action: "commit",
-      prepareOperationId: `prepare-${suffix}`,
-      // A principal Expense needs a trade; nothing else supplies one.
-      defaultTrade: "other",
-      resolutions: [
-        {
-          stableOrderId: order("stableOrderId"),
-          stableLineId: order("lineIds.0"),
-          resolution: { kind: "new" },
-        },
-      ],
-    },
-    { operationId: `commit-${suffix}` },
-  );
-};
 
 /** Poll a database predicate; a scenario never sleeps a fixed interval. */
 export async function waitFor(

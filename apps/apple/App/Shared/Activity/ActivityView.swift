@@ -731,27 +731,6 @@ struct ActivityDetailView: View {
     }
 }
 
-/// Human labels for the raw enum, shared by every activity list/row (Today's inbox, the Activity
-/// screen, run detail) so a run never surfaces its wire value directly.
-extension ActivityKind {
-    var title: String {
-        switch self {
-        case .accountSync: "Account sync"
-        case .purchaseValidation: "Purchase validation"
-        case .productEnrichment: "Product enrichment"
-        case .photoInventory: "Photo inventory"
-        case .describeImage: "Image description"
-        case .subjectLift: "Image cutout"
-        case .aiSuggest: "AI suggestion"
-        case .background: "Background work"
-        case .fileImport: "File import"
-        case .mailSearch: "Mail search"
-        case .mailDiscovery: "Mail discovery"
-        }
-    }
-
-}
-
 #Preview(traits: .modifier(SignedInPreview())) {
     NavigationStack { ActivityView() }
 }

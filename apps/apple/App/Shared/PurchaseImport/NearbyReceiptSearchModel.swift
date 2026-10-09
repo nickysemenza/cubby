@@ -47,6 +47,10 @@ final class NearbyReceiptSearchModel {
         candidates = []
         selectedID = nil
         manualSelection = nil
+        guard context.transactionDate != nil else {
+            phase = .pickerRequired
+            return
+        }
         searchTask = Task { [weak self] in
             guard let self else { return }
             let authorization = await PHPhotoLibrary.requestAuthorization(for: .readWrite)
@@ -163,15 +167,16 @@ final class NearbyReceiptSearchModel {
     }
 
     private func nearbyAssets(for context: NearbyReceiptSearchContext) -> [PHAsset] {
+        guard let transactionDate = context.transactionDate else { return [] }
         let calendar = Calendar.current
         let lower =
             calendar.date(
                 byAdding: .day, value: -NearbyReceiptRanker.searchWindowDays,
-                to: calendar.startOfDay(for: context.transactionDate)) ?? context.transactionDate
+                to: calendar.startOfDay(for: transactionDate)) ?? transactionDate
         let upperStart =
             calendar.date(
                 byAdding: .day, value: NearbyReceiptRanker.searchWindowDays + 1,
-                to: calendar.startOfDay(for: context.transactionDate)) ?? context.transactionDate
+                to: calendar.startOfDay(for: transactionDate)) ?? transactionDate
         let options = PHFetchOptions()
         options.predicate = NSPredicate(
             format: "creationDate >= %@ AND creationDate < %@", lower as NSDate, upperStart as NSDate)

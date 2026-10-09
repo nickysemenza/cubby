@@ -1,6 +1,7 @@
 import { z } from "zod";
 import { dataExceptionReason, dataQualityStatus } from "./data-quality-shape";
 import { entityRefSchema } from "./entity";
+import { researchClaimSupport } from "./research";
 import {
   fieldResolutionSchema,
   fieldResolutionSourceSchema,
@@ -16,6 +17,25 @@ export const fieldExplanationSource = z.object({
   entity: entityRefSchema.nullable(),
   value: z.json(),
 });
+
+export const fieldExplanationVerification = z.object({
+  key: z.string(),
+  run: entityRefSchema,
+  subject: entityRefSchema,
+  fieldPath: z.string(),
+  value: z.json(),
+  verifiedAt: z.iso.datetime(),
+  support: researchClaimSupport.nullable(),
+  supportRetiredAt: z.iso.datetime().nullable(),
+  source: z.object({
+    label: z.string(),
+    url: z.url().nullable(),
+    kind: z.string(),
+  }),
+});
+export type FieldExplanationVerification = z.infer<
+  typeof fieldExplanationVerification
+>;
 
 export const qualityBreakdown = z.object({
   /** Null when not assessed; otherwise the weighted score after caps. */
@@ -88,6 +108,7 @@ export const fieldExplanationOutput = z.object({
     description: z.string(),
   }),
   sources: z.array(fieldExplanationSource),
+  verifications: z.array(fieldExplanationVerification).default([]),
   resolution: fieldResolutionSchema.nullable(),
   resolutionEvidence: z
     .object({

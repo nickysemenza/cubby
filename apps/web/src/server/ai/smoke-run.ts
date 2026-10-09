@@ -9,6 +9,7 @@ import {
   browserCapture,
   type ExtractedPurchaseLine,
 } from "@cubby/schemas/purchase-import";
+import { researchWorkResolve } from "@cubby/schemas/research-tools";
 import { and, eq, inArray } from "drizzle-orm";
 import type { z } from "zod";
 
@@ -20,6 +21,9 @@ import { purchaseExtractionPrompt } from "~/server/agents/purchase-import/prompt
 import { suggestExternalIdKind } from "~/server/ai/external-id-kind";
 import {
   ENTITY_EMBEDDING_FEATURE,
+  MAILBOX_TRIAGE_FEATURE,
+  MAILBOX_RELEVANCE_FEATURE,
+  RESEARCH_SUPPORT_FEATURE,
   PURCHASE_IMPORT_EXTRACTION_FEATURE,
   PURCHASE_IMPORT_MAIL_FEATURE,
   PURCHASE_IMPORT_PRODUCT_IDENTITY_FEATURE,
@@ -38,6 +42,10 @@ import { runAiSelection } from "~/server/ai/selection";
 import { getAiClient } from "~/server/clients/ai";
 import { aiUsage, image, run as runTable } from "~/server/db/schema";
 import { loadPurchaseAuditBatch } from "~/server/purchase-import/audit-batch";
+import { normalizeMessage } from "~/server/purchase-import/gmail/normalize";
+import { interpretMailRelevance } from "~/server/purchase-import/gmail/relevance";
+import { mailTriagePrompt } from "~/server/purchase-import/gmail/triage-model";
+import { researchAssessmentRequest } from "~/server/purchase-import/research-support";
 import {
   chooseLineStage,
   PRODUCT_IDENTITY_RULES,
@@ -369,6 +377,112 @@ async function runCase(
             entity: { entityKind: "recipe", entityId: id },
             validate: (plan) => assessRecipeFlowCandidate(recipe, plan),
           },
+        ),
+      };
+    }
+    case "mailboxTriage":
+    case "mailboxRelevance": {
+      const { fixture } = aiSmokeInputs[scenario].parse(raw);
+      const body =
+        fixture === "standard"
+          ? "Your order for a cordless drill kit is confirmed. Total $79.95 USD."
+          : "An account update is available; the message does not identify a purchase.";
+      const original = normalizeMessage("synthetic-mailbox", {
+        id: "synthetic-message",
+        payload: {
+          mimeType: "text/plain",
+          headers: [{ name: "Subject", value: "Example account notice" }],
+          body: { data: Buffer.from(body).toString("base64url") },
+        },
+      });
+      if (scenario === "mailboxTriage") {
+        return {
+          result: await runJevChoice({
+            ...mailTriagePrompt(
+              JSON.stringify({
+                headers: original.mail.headers,
+                body: original.mail.bodyText,
+                attachments: [],
+              }),
+            ),
+            feature: MAILBOX_TRIAGE_FEATURE,
+            usage: { db, runId, operation: "smoke.mailboxTriage" },
+          }),
+        };
+      }
+      return {
+        result: await interpretMailRelevance(
+          {
+            getProfile: async () => ({ historyId: "100" }),
+            listMessages: async () => ({ messages: [] }),
+            getMessage: async (id) => ({ id }),
+            listHistory: async () => ({ historyId: "100" }),
+            getAttachment: async () => ({}),
+          },
+          original,
+          (request) =>
+            runStructuredFeature(
+              MAILBOX_RELEVANCE_FEATURE,
+              request,
+              {
+                db,
+                runId,
+                operation: "smoke.mailboxRelevance",
+                subscriptionRequired: true,
+              },
+              structuredPorts,
+            ),
+        ),
+      };
+    }
+    case "researchSourceSupport": {
+      const { fixture } = aiSmokeInputs.researchSourceSupport.parse(raw);
+      const evidenceId = "00000000-0000-4000-8000-000000000001";
+      const proposal = researchWorkResolve.parse({
+        workRef: "00000000-0000-4000-8000-000000000002",
+        status: "verified",
+        identity: {
+          evidenceIds: [evidenceId],
+          reasoning: "The catalog names this model.",
+        },
+        facts: [
+          {
+            evidenceId,
+            fieldPath: "model",
+            value: "DRILL-20",
+            support: {
+              observation: "Model DRILL-20",
+              reasoning:
+                "The retained catalog names the exact requested model.",
+            },
+          },
+        ],
+        detail: "Assess the proposed model against the original catalog.",
+      });
+      return {
+        result: await runStructuredFeature(
+          RESEARCH_SUPPORT_FEATURE,
+          await researchAssessmentRequest({
+            context: { product: "Cordless drill", requestedModel: "DRILL-20" },
+            observations: [
+              {
+                evidenceId,
+                metadata: { url: "https://example.com/catalog/drill" },
+                content:
+                  fixture === "standard"
+                    ? "Cordless drill. Model DRILL-20. Manufacturer Example Tools."
+                    : "Cordless drill family. Model and selected variant are unavailable.",
+              },
+            ],
+            proposal,
+          }),
+          {
+            db,
+            runId,
+            operation: "smoke.researchSourceSupport",
+            subscriptionRequired: true,
+          },
+          structuredPorts,
         ),
       };
     }

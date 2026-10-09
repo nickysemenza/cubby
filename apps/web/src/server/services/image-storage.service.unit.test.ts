@@ -40,12 +40,11 @@ class MemoryImageStorage {
     width?: number;
     height?: number;
   }> = [];
-  readonly createdUploads: Array<{
-    filename: string;
-    contentType: string;
-    size: number;
-    key: string;
-  }> = [];
+  readonly createdUploads: Array<
+    Parameters<
+      ImageStoragePorts<TestDatabase>["repository"]["createUploadedImageRecord"]
+    >[1]
+  > = [];
   readonly uploaded: Array<{ key: string; contentType: string; size: number }> =
     [];
   readonly deletedKeys: string[] = [];
@@ -271,6 +270,19 @@ describe("image storage ports", () => {
     expect(imageShortcode.safeParse(result?.imageId).success).toBe(true);
     expect(result?.imageId).toBe("IMG-7QRS");
     expect(result?.created).toBe(true);
+  });
+
+  it("retains the downloaded image bytes hash before publishing metadata extraction", async () => {
+    const { service, storage } = setup();
+    const bytes = Buffer.from(PNG_BASE64, "base64");
+    storage.stagedObject = new Response(bytes);
+    await service.importImageFromUrl(database, {
+      sourceUrl: "https://shop.example.test/selected-small.png",
+      filenamePrefix: "selected-small",
+    });
+    expect(storage.createdUploads[0]?.sha256).toBe(
+      createHash("sha256").update(bytes).digest("hex"),
+    );
   });
 
   it("marks a same-bucket existing image as not created", async () => {

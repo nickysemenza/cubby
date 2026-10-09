@@ -29,10 +29,10 @@ describe("on-demand Vendor Gmail search", () => {
     });
 
     expect(listMessages).toHaveBeenCalledWith({
-      query: "from:example-outfitters.co.uk after:2025/09/01",
-      maxResults: 10,
+      query: '{"example-outfitters.co.uk"} after:2025/09/01 -in:spam -in:trash',
+      maxResults: 25,
     });
-    expect(result.messageIds).toHaveLength(10);
+    expect(result.messageIds).toHaveLength(12);
     expect(result.nextPageToken).toBe("next-page");
     expect(getMessage).not.toHaveBeenCalled();
   });

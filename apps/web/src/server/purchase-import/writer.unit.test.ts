@@ -22,24 +22,31 @@ describe("purchase date", () => {
     expect(purchaseDateFor(null, "2026-08-14")).toBe("2026-08-14");
   });
 
-  it("refuses to invent a date for a new Purchase", () => {
-    expect(() => purchaseDateFor(null, null)).toThrow(/no order date/);
+  it("keeps the date unknown for a new identified incomplete Purchase", () => {
+    expect(purchaseDateFor(null, null)).toBeNull();
   });
 });
 
 describe("purchase import line identity", () => {
   it("groups duplicate vendor SKUs before independent identity decisions", () => {
-    const vendorId = "11111111-1111-4111-8111-111111111111";
+    const source = "example-store";
     expect(
       lineExternalIdentity(
         { sku: "SKU-42", productUrl: "https://shop.example.test/p/first" },
-        vendorId,
+        source,
       ),
     ).toBe(
       lineExternalIdentity(
         { sku: "SKU-42", productUrl: "https://shop.example.test/p/second" },
-        vendorId,
+        source,
       ),
+    );
+  });
+
+  it("keeps the same SKU separate for distinct resolved issuer sources", () => {
+    const line = { sku: "SHARED-17" };
+    expect(lineExternalIdentity(line, "host-616c706861")).not.toBe(
+      lineExternalIdentity(line, "host-62657461"),
     );
   });
 
@@ -47,22 +54,22 @@ describe("purchase import line identity", () => {
     expect(
       lineExternalIdentity(
         { productUrl: "https://shop.example.test/p/first" },
-        "11111111-1111-4111-8111-111111111111",
+        "example-store",
       ),
     ).toBeNull();
   });
 
   it("groups Amazon lines by canonical ASIN when no retailer SKU was extracted", () => {
-    const vendorId = "11111111-1111-4111-8111-111111111111";
+    const source = "example-store";
     expect(
       lineExternalIdentity(
         { productUrl: "https://www.amazon.com/dp/B012345678?ref_=orders" },
-        vendorId,
+        source,
       ),
     ).toBe(
       lineExternalIdentity(
         { productUrl: "https://amazon.com/gp/product/B012345678/" },
-        vendorId,
+        source,
       ),
     );
   });

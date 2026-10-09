@@ -1,14 +1,29 @@
-/* eslint-disable anti-slop/no-unsafe-dictionary-type, anti-slop/no-object-parameters, anti-slop/no-unknown-returns, anti-slop/no-known-value-widening -- The scenario adapter forwards queue events, browser outcomes, and peer fixtures unchanged as JSON. */
+/* eslint-disable anti-slop/no-unsafe-dictionary-type, anti-slop/no-object-parameters, anti-slop/no-unknown-returns -- The scenario adapter forwards queue events, browser outcomes, and peer fixtures unchanged as JSON. */
+import type { researchAssessment } from "@cubby/schemas/research-assessment";
+import type { RunPurpose } from "@cubby/schemas/run-fields";
 import type { TestHarness } from "wrangler";
 import { z } from "zod";
+import type { Fixture as GatewayFixture } from "../tests/e2e/harness-services/purchase-import-test-gateway";
 
 import type { ScriptStep } from "./purchase-agent-script";
 
 /** One scripted purchase-agent scenario: the coordinator's steps and the gateway's outputs. */
 export type ScriptedScenario = {
   steps: ScriptStep[];
+  purposeSteps?: Partial<Record<RunPurpose, ScriptStep[]>>;
+  sourceSteps?: Array<{
+    call: string;
+    path: string;
+    includes: string;
+    steps: ScriptStep[];
+  }>;
+  assessments?: Array<{
+    match: string;
+    output: z.input<typeof researchAssessment>;
+  }>;
   extractions?: Array<{ match: string; output: unknown }>;
   audit?: unknown;
+  decisions?: GatewayFixture["decisions"];
 };
 
 type JsonPost = {
@@ -51,9 +66,16 @@ export function scenarioControls(harness: TestHarness) {
     configure: async (scenario: ScriptedScenario) => {
       await post(toModel, "https://model.test/configure", {
         steps: scenario.steps,
+        purposeSteps: scenario.purposeSteps,
+        sourceSteps: scenario.sourceSteps,
       });
-      const gatewayFixture: { extractions: unknown[]; audit?: unknown } = {
+      const gatewayFixture: Pick<
+        ScriptedScenario,
+        "extractions" | "assessments" | "audit" | "decisions"
+      > = {
         extractions: scenario.extractions ?? [],
+        assessments: scenario.assessments ?? [],
+        decisions: scenario.decisions,
       };
       if (scenario.audit) gatewayFixture.audit = scenario.audit;
       await post(toGateway, "https://gateway.test/configure", gatewayFixture);

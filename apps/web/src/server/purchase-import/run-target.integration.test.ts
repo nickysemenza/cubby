@@ -2,24 +2,548 @@ import {
   imageId as parseImageId,
   runEntityId,
 } from "@cubby/schemas/identifiers";
-import { runSummary } from "@cubby/schemas/run";
+import {
+  acceptedSourceOrder,
+  purchaseAgentEvent,
+} from "@cubby/schemas/purchase-import";
+import {
+  runSummary,
+  targetedImportStartInput,
+  targetedImportStartOutput,
+} from "@cubby/schemas/run";
+import { productResearchRunInput } from "@cubby/schemas/run-fields";
+import { sha256Hex } from "@cubby/shared/sha256";
+import { fromPartial } from "@total-typescript/shoehorn";
 import { and, eq, sql } from "drizzle-orm";
 import { withTestDb } from "tooling/test-setup";
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it } from "vitest";
 
-import { aiUsage, auditLog, runTarget } from "~/server/db/schema";
+import { setCfEnv } from "~/server/cf-env";
+import {
+  aiUsage,
+  auditLog,
+  runTarget,
+  run as runTable,
+  runFactEvidence,
+  importSourceClaim,
+  importSourceOrder,
+  vendor,
+  expense,
+  importSourceProduct,
+} from "~/server/db/schema";
 import { runHandlers } from "~/server/operations/run.server";
 import { getDb } from "~/server/repo/database-helpers";
+import {
+  createProductFixture,
+  makeProductInput,
+} from "~/server/repo/repo.fixtures";
+import { resolveOrThrow } from "~/server/repo/shortcode-resolver";
 import { insertWithShortcode } from "~/server/repo/shortcode-utils";
 import { requireActor } from "~/server/request-context";
 import { createTestRequestContext } from "~/server/testing/request-context";
 
+import { productResearchFixture } from "./product-research.fixtures";
+import { loadProductPurchaseContext } from "./research-context";
+import { researchServiceFor } from "./research-service";
 import { startOrResumeRun, startPhotoInventoryRun } from "./run-service";
 import {
   listRuns,
   reportRunTargetDeviceWork,
   resolvePurchaseImportTarget,
 } from "./run-target";
+import { loadTargetedImportLaunch } from "./targeted-run";
+
+// Manual launch failures: old untyped admission, a URL/Mac prerequisite,
+// dropped source authority, mismatched/foreign context, and filled-but-unproved
+// facts being mistaken for verified completion. Browser preference is optional.
+// Historical aliases must expose current source identity while retaining the
+// accepted evidence version. Stale aliases cannot be offered as replayable work.
+describe("manual Product research admission", () => {
+  const ctx = withTestDb();
+  afterEach(() => setCfEnv(undefined));
+
+  it("admits a manual owned-source Product through current cloud research even when existing facts lack provenance and no Mac or URL exists", async () => {
+    const f = await productResearchFixture(ctx.db, ctx.actor, {
+      complete: true,
+    });
+    if (!f.association) throw new Error("Synthetic source association missing");
+    const events: unknown[] = [];
+    const environment = fromPartial<Env>({
+      PURCHASE_AGENT_QUEUE: {
+        send: async (event: unknown) => {
+          events.push(purchaseAgentEvent.parse(event));
+        },
+      },
+    });
+    setCfEnv(environment);
+    const context = {
+      ...requireActor(
+        createTestRequestContext(ctx.db, {
+          auth: { userId: ctx.actor.userId },
+        }),
+      ),
+      signal: new AbortController().signal,
+    };
+    const input = targetedImportStartInput.parse({
+      purpose: "product_enrichment",
+      targets: [{ productId: f.item.id, sourceId: f.association.id }],
+    });
+    const launched = targetedImportStartOutput.parse(
+      await runHandlers.runs.startTargeted!.run(context, input),
+    );
+    const [admission] = launched.runs;
+    expect(admission?.created).toBe(true);
+    if (!admission?.run) throw new Error("Manual research Run missing");
+    const runId = await resolveOrThrow(ctx.db, "run", admission.run.id);
+    const [saved] = await getDb(ctx.db)
+      .select()
+      .from(runTable)
+      .where(eq(runTable.id, runId));
+    if (!saved) throw new Error("Admitted research Run missing");
+    expect(productResearchRunInput.parse(saved.input)).toMatchObject({
+      kind: "product_research",
+      products: [{ productId: f.item.entityId }],
+    });
+    expect(saved).toMatchObject({
+      ledgerPartyId: f.party.id,
+      actorUserId: ctx.actor.userId,
+      vendorId: null,
+      vendorAccountId: null,
+      cause: "member_request",
+      status: "running",
+    });
+    const next = await researchServiceFor(
+      ctx.db,
+      environment,
+      runId,
+    ).researchNext({}, crypto.randomUUID());
+    expect(next).toMatchObject({
+      status: "working",
+      work: {
+        kind: "product",
+        product: { productRef: f.item.id },
+        purchasedItems: [
+          {
+            order: { purchaseRef: f.order.shortcode },
+            currentLine: { name: "Small Q-17 device" },
+            source: { sourceRef: f.association.id },
+          },
+        ],
+      },
+    });
+    expect(await getDb(ctx.db).select().from(runFactEvidence)).toEqual([]);
+    expect(events).toHaveLength(1);
+    const replay = await runHandlers.runs.startTargeted!.run(context, input);
+    expect(replay).toMatchObject({
+      runs: [
+        { created: false, run: null, blockingRun: { id: admission.run.id } },
+      ],
+    });
+    expect(events).toHaveLength(1);
+    expect(
+      await getDb(ctx.db)
+        .select()
+        .from(runTarget)
+        .where(eq(runTarget.runId, runId)),
+    ).toHaveLength(1);
+  });
+  it("previews and admits a source-independent member request without inventing purchased context", async () => {
+    const party = await insertWithShortcode(ctx.db, "ledgerParty", {
+      name: "Example requesting member",
+      kind: "member",
+      userId: ctx.actor.userId,
+    });
+    const item = await createProductFixture(
+      ctx.db,
+      makeProductInput({ name: "Example shared catalog device" }),
+      ctx.actor,
+    );
+    const preview = await loadTargetedImportLaunch(
+      ctx.db,
+      party.id,
+      "product_enrichment",
+      item.id,
+    );
+    expect(preview.products).toMatchObject([
+      {
+        selected: true,
+        sourceId: null,
+        vendorAccountId: null,
+        needsAccountChoice: false,
+      },
+    ]);
+    setCfEnv(
+      fromPartial<Env>({
+        PURCHASE_AGENT_QUEUE: {
+          send: async (event: unknown) => {
+            purchaseAgentEvent.parse(event);
+          },
+        },
+      }),
+    );
+    const context = {
+      ...requireActor(
+        createTestRequestContext(ctx.db, {
+          auth: { userId: ctx.actor.userId },
+        }),
+      ),
+      signal: new AbortController().signal,
+    };
+    const started = targetedImportStartOutput.parse(
+      await runHandlers.runs.startTargeted!.run(
+        context,
+        targetedImportStartInput.parse({
+          purpose: "product_enrichment",
+          targets: [{ productId: item.id, sourceId: null }],
+        }),
+      ),
+    );
+    if (!started.runs[0]?.run) throw new Error("Member-request Run missing");
+    const id = await resolveOrThrow(ctx.db, "run", started.runs[0].run.id);
+    expect(
+      await researchServiceFor(ctx.db, fromPartial<Env>({}), id).researchNext(
+        {},
+        crypto.randomUUID(),
+      ),
+    ).toMatchObject({
+      status: "working",
+      work: { kind: "product", purchasedItems: [] },
+    });
+  });
+  it.each(["owned", "foreign"] as const)(
+    "#1761 previews and starts with the same optional %s browser transport",
+    async (ownership) => {
+      const f = await productResearchFixture(ctx.db, ctx.actor);
+      if (!f.association || !f.order.vendorId)
+        throw new Error("Synthetic source missing");
+      const owner =
+        ownership === "owned"
+          ? f.party
+          : await insertWithShortcode(ctx.db, "ledgerParty", {
+              name: "Other browser owner",
+              kind: "member",
+            });
+      const account = await insertWithShortcode(ctx.db, "vendorAccount", {
+        label: "Example Chrome transport",
+        vendorId: f.order.vendorId,
+        ledgerPartyId: owner.id,
+        browser: "chrome",
+        browserSyncEnabled: true,
+      });
+      const preview = await loadTargetedImportLaunch(
+        ctx.db,
+        f.party.id,
+        "product_enrichment",
+        f.item.id,
+      );
+      expect(preview.products).toMatchObject([
+        {
+          selected: true,
+          sourceId: f.association.id,
+          vendorAccountId: ownership === "owned" ? account.shortcode : null,
+        },
+      ]);
+      setCfEnv(
+        fromPartial<Env>({
+          PURCHASE_AGENT_QUEUE: {
+            send: async (event: unknown) => {
+              purchaseAgentEvent.parse(event);
+            },
+          },
+        }),
+      );
+      const context = {
+        ...requireActor(
+          createTestRequestContext(ctx.db, {
+            auth: { userId: ctx.actor.userId },
+          }),
+        ),
+        signal: new AbortController().signal,
+      };
+      const started = targetedImportStartOutput.parse(
+        await runHandlers.runs.startTargeted!.run(
+          context,
+          targetedImportStartInput.parse({
+            purpose: "product_enrichment",
+            targets: [{ productId: f.item.id, sourceId: f.association.id }],
+          }),
+        ),
+      );
+      if (!started.runs[0]?.run)
+        throw new Error("Research transport Run missing");
+      const id = await resolveOrThrow(ctx.db, "run", started.runs[0].run.id);
+      const [saved] = await getDb(ctx.db)
+        .select()
+        .from(runTable)
+        .where(eq(runTable.id, id));
+      expect(saved?.vendorAccountId).toBe(
+        ownership === "owned" ? account.id : null,
+      );
+      expect(productResearchRunInput.parse(saved?.input).kind).toBe(
+        "product_research",
+      );
+    },
+  );
+  it("previews and admits an accepted original Product binding after its editable Expense is removed", async () => {
+    const f = await productResearchFixture(ctx.db, ctx.actor);
+    if (!f.association) throw new Error("Synthetic source missing");
+    const original = acceptedSourceOrder.parse({
+      checksum: f.association.checksum,
+      extraction: {
+        status: "ready",
+        candidate: {
+          orderId: "SYNTHETIC-ORDER",
+          orderedAt: null,
+          merchant: "Example seller",
+          currency: "USD",
+          printedGrandTotal: null,
+          lines: [
+            {
+              title: "Original small Q-17 device",
+              amount: 24,
+              lineKind: "principal",
+            },
+          ],
+          payments: [],
+          allShipmentsDelivered: false,
+        },
+      },
+    });
+    await getDb(ctx.db)
+      .update(importSourceOrder)
+      .set({ originalOrder: original })
+      .where(eq(importSourceOrder.id, f.association.id));
+    await getDb(ctx.db).insert(importSourceProduct).values({
+      sourceOrderId: f.association.id,
+      lineIndex: 0,
+      productId: f.item.entityId,
+    });
+    await getDb(ctx.db)
+      .delete(expense)
+      .where(eq(expense.purchaseId, f.order.id));
+    const preview = await loadTargetedImportLaunch(
+      ctx.db,
+      f.party.id,
+      "product_enrichment",
+      f.item.id,
+    );
+    expect(preview.products).toMatchObject([
+      { selected: true, sourceId: f.association.id },
+    ]);
+    setCfEnv(
+      fromPartial<Env>({
+        PURCHASE_AGENT_QUEUE: {
+          send: async (event: unknown) => {
+            purchaseAgentEvent.parse(event);
+          },
+        },
+      }),
+    );
+    const context = {
+      ...requireActor(
+        createTestRequestContext(ctx.db, {
+          auth: { userId: ctx.actor.userId },
+        }),
+      ),
+      signal: new AbortController().signal,
+    };
+    const started = targetedImportStartOutput.parse(
+      await runHandlers.runs.startTargeted!.run(
+        context,
+        targetedImportStartInput.parse({
+          purpose: "product_enrichment",
+          targets: [{ productId: f.item.id, sourceId: f.association.id }],
+        }),
+      ),
+    );
+    if (!started.runs[0]?.run)
+      throw new Error("Original source research missing");
+    const id = await resolveOrThrow(ctx.db, "run", started.runs[0].run.id);
+    expect(
+      await researchServiceFor(ctx.db, fromPartial<Env>({}), id).researchNext(
+        {},
+        crypto.randomUUID(),
+      ),
+    ).toMatchObject({
+      work: {
+        purchasedItems: [
+          {
+            orderedLine: { title: "Original small Q-17 device" },
+            source: { sourceRef: f.association.id },
+          },
+        ],
+      },
+    });
+  });
+  it.each([true, false])(
+    "projects canonical identity and accepted evidence separately when the original is current: %s",
+    async (current) => {
+      const f = await productResearchFixture(ctx.db, ctx.actor);
+      if (!f.association)
+        throw new Error("Synthetic source association missing");
+      const [owner] = await getDb(ctx.db)
+        .select()
+        .from(importSourceClaim)
+        .where(eq(importSourceClaim.id, f.association.sourceClaimId));
+      if (!owner) throw new Error("Synthetic historical source owner missing");
+      const currentChecksum = current
+        ? owner.checksum
+        : await sha256Hex("refreshed original containing another order");
+      const [root] = await getDb(ctx.db)
+        .insert(importSourceClaim)
+        .values({
+          ledgerPartyId: owner.ledgerPartyId,
+          kind: owner.kind,
+          externalKey: "gmail:synthetic-mailbox:original-message",
+          checksum: currentChecksum,
+          firstRunId: owner.firstRunId,
+          lastRunId: owner.lastRunId,
+        })
+        .returning();
+      if (!root) throw new Error("Synthetic canonical source missing");
+      await getDb(ctx.db)
+        .update(importSourceClaim)
+        .set({ canonicalClaimId: root.id })
+        .where(eq(importSourceClaim.id, owner.id));
+
+      const preview = await loadTargetedImportLaunch(
+        ctx.db,
+        f.party.id,
+        "product_enrichment",
+        f.item.id,
+      );
+      expect(preview.products).toMatchObject([
+        {
+          sourceId: current ? f.association.id : null,
+          sourceLabel: current ? `mail message · ${root.externalKey}` : null,
+        },
+      ]);
+      expect(
+        await loadProductPurchaseContext(ctx.db, {
+          productId: f.item.entityId,
+          ledgerPartyId: f.party.id,
+        }),
+      ).toMatchObject([
+        {
+          currentLine: { name: "Small Q-17 device" },
+          source: {
+            sourceRef: f.association.id,
+            externalKey: root.externalKey,
+            checksum: f.association.checksum,
+            currentChecksum,
+          },
+        },
+      ]);
+      expect(
+        await getDb(ctx.db)
+          .select()
+          .from(importSourceOrder)
+          .where(eq(importSourceOrder.id, f.association.id)),
+      ).toEqual([f.association]);
+    },
+  );
+  it.each([
+    "foreign",
+    "mismatched",
+    "deleted",
+    "changed_checksum",
+    "changed_canonical_checksum",
+  ] as const)(
+    "refuses a supplied %s source association before manual Product admission",
+    async (problem) => {
+      const f = await productResearchFixture(ctx.db, ctx.actor);
+      if (!f.association || !f.order.vendorId)
+        throw new Error("Synthetic source missing");
+      setCfEnv(
+        fromPartial<Env>({ PURCHASE_AGENT_QUEUE: { send: async () => {} } }),
+      );
+      await getDb(ctx.db)
+        .update(vendor)
+        .set({
+          website: "https://shop.example.test",
+          browserDomains: ["shop.example.test"],
+        })
+        .where(eq(vendor.id, f.order.vendorId));
+      let selected = f.item.id;
+      if (problem === "foreign") {
+        const other = await insertWithShortcode(ctx.db, "ledgerParty", {
+          name: "Other synthetic source owner",
+          kind: "member",
+        });
+        await getDb(ctx.db)
+          .update(importSourceClaim)
+          .set({ ledgerPartyId: other.id })
+          .where(eq(importSourceClaim.id, f.association.sourceClaimId));
+      } else if (problem === "mismatched") {
+        const unrelated = await createProductFixture(
+          ctx.db,
+          makeProductInput({
+            name: "Other synthetic Product",
+            manufacturer: "Example maker",
+          }),
+          ctx.actor,
+        );
+        selected = unrelated.id;
+      } else if (problem === "deleted") {
+        await getDb(ctx.db)
+          .delete(importSourceOrder)
+          .where(eq(importSourceOrder.id, f.association.id));
+      } else if (problem === "changed_canonical_checksum") {
+        const [owner] = await getDb(ctx.db)
+          .select()
+          .from(importSourceClaim)
+          .where(eq(importSourceClaim.id, f.association.sourceClaimId));
+        if (!owner)
+          throw new Error("Synthetic historical source owner missing");
+        const [root] = await getDb(ctx.db)
+          .insert(importSourceClaim)
+          .values({
+            ledgerPartyId: owner.ledgerPartyId,
+            kind: owner.kind,
+            externalKey: "synthetic:canonical-current-original",
+            checksum: await sha256Hex(
+              "new original bytes for another consolidated order",
+            ),
+            firstRunId: owner.firstRunId,
+            lastRunId: owner.lastRunId,
+          })
+          .returning();
+        if (!root) throw new Error("Synthetic canonical source missing");
+        await getDb(ctx.db)
+          .update(importSourceClaim)
+          .set({ canonicalClaimId: root.id })
+          .where(eq(importSourceClaim.id, owner.id));
+      } else {
+        await getDb(ctx.db)
+          .update(importSourceClaim)
+          .set({ checksum: await sha256Hex("changed synthetic receipt bytes") })
+          .where(eq(importSourceClaim.id, f.association.sourceClaimId));
+      }
+      const input = targetedImportStartInput.parse({
+        purpose: "product_enrichment",
+        targets: [{ productId: selected, sourceId: f.association.id }],
+      });
+      const context = {
+        ...requireActor(
+          createTestRequestContext(ctx.db, {
+            auth: { userId: ctx.actor.userId },
+          }),
+        ),
+        signal: new AbortController().signal,
+      };
+      await expect(
+        runHandlers.runs.startTargeted!.run(context, input),
+      ).rejects.toThrow(/source.*contains|source.*current|current.*source/u);
+      expect(
+        await getDb(ctx.db)
+          .select()
+          .from(runTable)
+          .where(eq(runTable.purpose, "product_enrichment")),
+      ).toEqual([]);
+      expect(await getDb(ctx.db).select().from(runTarget)).toEqual([]);
+    },
+  );
+});
 
 describe("purchase import run target resolution", () => {
   const ctx = withTestDb();

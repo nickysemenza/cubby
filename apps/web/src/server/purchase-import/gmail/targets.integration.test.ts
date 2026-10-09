@@ -29,7 +29,7 @@ describe("Gmail sync targets", () => {
       userId: ctx.actor.userId,
       updatedAt: new Date(),
     });
-    await insertWithShortcode(ctx.db, "vendor", {
+    const vendor = await insertWithShortcode(ctx.db, "vendor", {
       name: "Example Outfitters",
       website: "https://shop.example-outfitters.test/orders",
       orderEmailSenders: ["orders@example-outfitters.test"],
@@ -40,13 +40,14 @@ describe("Gmail sync targets", () => {
     expect(targets).toContainEqual({
       ledgerPartyId: party.id,
       userId: ctx.actor.userId,
-      mailboxId: "me",
-      bootstrap: {
-        knownSenders: [
-          "example-outfitters.test",
-          "orders@example-outfitters.test",
-        ],
-      },
+      mailboxId: "synthetic-google-subject",
+      scopedQueries: [
+        {
+          key: `vendor:${vendor.id}`,
+          query:
+            '{"Example Outfitters" from:example-outfitters.test from:orders@example-outfitters.test}',
+        },
+      ],
     });
   });
 

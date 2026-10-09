@@ -5,9 +5,13 @@ description: Enrich Cubby Products with verified identity facts and representati
 
 # Enrich Cubby products
 
-Add proven facts and one representative cover through existing MCP tools. Keep
-research interactive: there is no enrichment queue or evidence table. Return a
-source-backed batch report.
+Research exact Product identity and representative images from retained sources.
+Interactive Claude/Codex research and automatic Cubby Runs share these domain
+contracts. For a hosted Run, use the [research workflow](references/research-run-workflow.md)
+and its mounted tools. In an interactive session, use the available research and
+bounded Cubby write tools; verify what their results persisted before reporting
+success. A populated field or source link alone does not establish retained
+verification.
 
 ## Worklist and read shape
 
@@ -42,26 +46,35 @@ Record only published evidence: UPC/EAN/GTIN in `upc` with leading zeroes,
 maker MPN in `model`, Amazon ASIN as `externalIds` `amazon`/`asin`, and retailer
 SKUs in their typed slot. Use lowercase kebab-case source slugs. A source/kind/
 external-ID tuple has one live owner; do not invent, relabel, or choose between
-variants. Ambiguity is a reported skip.
+variants. Preserve ambiguity as unresolved work with its competing candidates.
 
-A targeted run's commit trusts only retained browser evidence of the exact
-variant. Besides an Amazon ASIN, the server proves a retailer SKU, item or
-catalog number, or GTIN from any run-vendor page that exposes exactly one
-schema.org Product (never a ProductGroup or several variants) whose matching
-field equals the identifier. Search results, aggregators, and free-text hints
-are leads, not proof; an identifier the page does not show is refused. A proven
-identifier another Product owns is skipped, reported in `skippedIdentifiers`, and
-proposed in the match queue, never reassigned. A target with no exact source is
-closed with `product_enrichment.skip` and its reason, never left open: the run
-moves to its next Product, and a committed or skipped Product is not swept again.
+A hosted Run retains observations against its explicit task. Connect the ordered
+item to the observed selected variant, then support each fact and image with its
+issued evidence reference. Structured Product data is useful evidence; retained
+visible content and selected-variant state can also establish facts when JSON-LD
+is missing or describes a group. A quotation establishes what was observed, not
+which purchased variant it belongs to. Reject contradictions and preserve
+identifier kinds and issuer ownership. An identifier another Product owns
+requires review, never reassignment.
 
-Imported Products enrich without a click: after an import commits, on every
-discovery pass, and when an account turns browser sync on, the server starts one
-targeted run per browsing account whose Mac is connected, for Products an import
-created that no run has committed or skipped (at most three attempts each).
+Imported Products acquire automatic research work. Public-page research can
+continue without a Mac; authenticated browser work waits for the connected
+browser. Matching existing values can gain provenance without changing the
+value. Supported contradictions appear in the Run's generic findings report
+with saved and proposed values and retained support. Review and explicitly
+approve the atomic proposal there; approval rechecks its accepted assessment,
+admission, identity, source bytes and current Product before writing. A stale
+proposal refuses without replacing member edits. Automatic research promotes a
+verified image only over an explicitly marked provisional import thumbnail,
+preserving own photos, member-selected gallery order and unknown historical
+cover intent. Reselecting the same gallery order still records member intent;
+`source: catalog` alone never authorizes promotion.
+A resolved attempt with gaps is not full verification; relevant
+new evidence or changed instructions can make those gaps eligible again, while
+unchanged failures pause rather than loop.
 To start one yourself, read `imports_read.run_launch_preview` for the Product's
 `sourceId`, then call `run.start` with purpose `product_enrichment`; a
-`blockingRun` answer means the account is busy and nothing was queued. Poll
+`blockingRun` answer reports the launch constraint. Read
 `entity_read.get` on the RUN- id with `resultDetail: "full"` for its status.
 
 Read [source mechanics](references/sources.md) only for the source in hand.
@@ -113,7 +126,8 @@ exact variant.
 
 ## Report
 
-Return one compact row per candidate with identity, source link, changed fields,
-image result, and one of `enriched`, `skipped — ambiguous`, `skipped — no exact
-source`, `skipped — retired/bundle-only/no canonical image`, or `failed —
-<reason>`. State unresolved identity, price, or nutrition gaps separately.
+Return one compact row per candidate with identity, retained sources, changed
+and verified matching fields, image result, and the explicit outcome: verified,
+partially verified, researched with gaps, ambiguous, temporarily blocked, or no
+source found. Distinguish execution finishing from the Product being verified.
+State remaining identity and image gaps and any review proposal separately.

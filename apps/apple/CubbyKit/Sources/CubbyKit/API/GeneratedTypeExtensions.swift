@@ -337,10 +337,9 @@ extension ImageAnalysisOutput {
 }
 
 extension ReceiptHunt {
-    /// Where to look for the receipt photo: the charge's day in the device's zone, the day the
-    /// camera roll files it under.
-    public var searchContext: NearbyReceiptSearchContext? {
-        guard let date = PlainDate(rawValue: transactionDate).date() else { return nil }
+    /// An unknown charge day leaves manual selection available without inventing a search window.
+    public var searchContext: NearbyReceiptSearchContext {
+        let date = transactionDate.flatMap { PlainDate(rawValue: $0).date() }
         return NearbyReceiptSearchContext(
             huntID: id, transactionDate: date, merchant: merchant, amountInCents: amountInCents)
     }

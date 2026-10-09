@@ -1,10 +1,18 @@
+import { z } from "zod";
+import { fromPartial } from "@total-typescript/shoehorn";
+import { sha256Hex } from "@cubby/shared/sha256";
+import { retainedResearchObservation } from "@cubby/schemas/research";
+import { researchWorkResolve } from "@cubby/schemas/research-tools";
+import { researchServiceFor } from "~/server/purchase-import/research-service";
+import { resolveImportResearch } from "~/server/purchase-import/research-import";
 import { testUserId } from "@cubby/schemas/testing";
 import { generateShortcode } from "@cubby/shared";
 import type { Pool } from "pg";
 
 import { parseEntityId } from "@cubby/schemas/identifiers";
 import { buildActorContext } from "@cubby/schemas/context";
-import { orderMail, orderMailEvent } from "~/server/db/schema";
+import { eq } from "drizzle-orm";
+import { orderMail, orderMailEvent, run as runTable } from "~/server/db/schema";
 import { startOrderMailImport } from "~/server/purchase-import/gmail/import";
 import { startOrResumeRun } from "~/server/purchase-import/run-service";
 import { getDb } from "~/server/repo/database-helpers";
@@ -374,24 +382,26 @@ export async function seedJourneyWorld(
     vendor: syncVendor.shortcode,
   };
 
-  // A finished mail import: restart must show which Vendor and order it copies.
+  // Retained original and immutable terminal attempt remain inspectable before restart.
   const restartVendor = await insertWithShortcode(db, "vendor", {
     name: JOURNEY_NAMES.restartVendor,
   });
+  const restartBody = `Order ${JOURNEY_NAMES.restartOrderId}. Synthetic seed packet, qty 1, $7.00. Grand total $7.00 USD. Order date unavailable.`;
   const [restartMail] = await getDb(db)
     .insert(orderMail)
     .values({
       ledgerPartyId: parseEntityId("ledgerParty", memberId),
+      mailboxId: "synthetic-restart-mailbox",
       vendorId: restartVendor.id,
       messageId: `synthetic-restart-${crypto.randomUUID()}`,
       sender: "orders@restart.example.test",
       subject: "Synthetic restart confirmation",
       receivedAt: new Date("2026-09-12T15:00:00Z"),
-      rawChecksum: "c".repeat(64),
+      rawChecksum: await sha256Hex(restartBody),
       content: {
         snippet: null,
         bodyHtml: null,
-        bodyText: `Order ${JOURNEY_NAMES.restartOrderId}. Synthetic seed packet, qty 1, $7.00. Grand total $7.00 USD.`,
+        bodyText: restartBody,
       },
     })
     .returning();
@@ -414,13 +424,98 @@ export async function seedJourneyWorld(
     buildActorContext(testUserId(userId)),
     { send: async () => {} },
   );
-  await pool.query(
-    'UPDATE "Run" SET status = \'completed\', "endedAt" = now() WHERE shortcode = $1',
-    [restartRun.runId],
+  const [restartRunRef] = restartRun.runIds;
+  if (!restartRunRef || restartRun.runIds.length !== 1)
+    throw new Error("Synthetic restart source did not admit exactly one Run");
+  const [admitted] = await getDb(db)
+    .select()
+    .from(runTable)
+    .where(eq(runTable.shortcode, restartRunRef));
+  if (!admitted) throw new Error("Synthetic restart Run is missing");
+  const retained = new Map<string, string>();
+  const services = researchServiceFor(
+    db,
+    fromPartial<Env>({ R2_KEY_PREFIX: "synthetic/journeys" }),
+    admitted.id,
+    {
+      observations: {
+        storage: {
+          put: async (key, bytes) => {
+            retained.set(key, new TextDecoder().decode(bytes));
+          },
+          get: async (key) => {
+            const content = retained.get(key);
+            if (content === undefined)
+              throw new Error(`Synthetic original missing: ${key}`);
+            return content;
+          },
+        },
+      },
+      queue: { send: async () => {} },
+    },
   );
+  const next = z
+    .object({
+      status: z.literal("working"),
+      work: z.object({ workRef: z.uuid() }),
+    })
+    .parse(await services.researchNext({}, "synthetic-restart-next"));
+  const original = retainedResearchObservation.parse(
+    await services.researchMailRead(
+      { workRef: next.work.workRef, messageRef: restartMail.id },
+      "synthetic-restart-read",
+    ),
+  );
+  await resolveImportResearch(
+    db,
+    {
+      runId: admitted.id,
+      workRef: next.work.workRef,
+      callId: "synthetic-restart-resolve",
+      proposal: researchWorkResolve.parse({
+        workRef: next.work.workRef,
+        status: "ambiguous",
+        identity: {
+          evidenceIds: [original.evidenceId],
+          reasoning:
+            "The retained confirmation omits its order date; review remains required.",
+        },
+        detail:
+          "Synthetic original retained; unresolved order date requires member review.",
+      }),
+    },
+    {
+      readEvidence: (row) => {
+        const content = retained.get(row.objectKey);
+        if (content === undefined)
+          throw new Error(`Synthetic original missing: ${row.objectKey}`);
+        return Promise.resolve(content);
+      },
+      assess: async () => ({
+        identityVerified: false,
+        acceptedFacts: [],
+        acceptedIdentifiers: [],
+        acceptedImages: [],
+        acceptedOrders: [],
+        acceptedEmailLinks: [],
+        rejected: [],
+      }),
+    },
+  );
+  const finished = z
+    .object({ status: z.literal("done") })
+    .parse(await services.researchNext({}, "synthetic-restart-finish"));
+  if (finished.status !== "done")
+    throw new Error("Synthetic restart tasks remain open");
+  const [settled] = await getDb(db)
+    .select()
+    .from(runTable)
+    .where(eq(runTable.id, admitted.id));
+  if (settled?.status !== "needs_review" || !settled.endedAt)
+    throw new Error("Synthetic unresolved original did not settle honestly");
   seed["run-restart-inputs"] = {
-    run: restartRun.runId,
-    vendor: restartVendor.shortcode,
+    run: restartRunRef,
+    sourceSubject: restartMail.subject ?? "Synthetic restart confirmation",
   };
 
   // A live Product enrichment run, as the Runs list shows it: one target

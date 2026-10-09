@@ -16,6 +16,7 @@ import type { AiUsageTransport } from "@cubby/schemas/telemetry";
 import type { GatewayResponseInfo } from "@cubby/shared/ai/gateway-request";
 import { piTokenUsage } from "@cubby/shared/ai/pi-providers";
 import { createLogger } from "@cubby/worker-tracing";
+import type { JsonValue } from "@earendil-works/chord";
 import { BACKGROUND_CONTEXT } from "@earendil-works/chord/context";
 import type { AssistantMessage } from "@earendil-works/pi-ai";
 import { createModels } from "@earendil-works/pi-ai/models";
@@ -28,6 +29,8 @@ import {
   LiveDoc,
   ROOT_CONVERSATION_ID,
   type EntryRecord,
+  type Storage,
+  type TaskId,
 } from "@earendil-works/pi-durable";
 import * as Sentry from "@sentry/cloudflare";
 import { Agent } from "agents";
@@ -50,8 +53,12 @@ import type {
 } from "./environment";
 import { workflowForRun } from "./import-run-workflows";
 import { RunSettlement } from "./run-settlement";
-import { renderSignal } from "./signals";
-import { purchaseImportTools } from "./tools";
+import {
+  renderSignal,
+  resumeResearchSignal,
+  type AgentSignal,
+} from "./signals";
+import { photoInventoryTools, purchaseImportTools } from "./tools";
 
 const log = createLogger("purchase-agent");
 const context = BACKGROUND_CONTEXT;
@@ -86,10 +93,11 @@ const NO_BINDINGS = Object.freeze({}) as Cloudflare.Env;
 /** Mutable per-run facts kept in this object's SQLite, beside pi's tables. */
 const STATE_KEYS = {
   identity: "identity",
-  toolRounds: "tool_rounds",
-  nudgedAt: "nudged_at",
+  reasoningMode: "reasoning_mode",
   latestSubmission: "latest_submission",
   receivedEvents: "received_events",
+  researchGenerationCount: "research_generation_count",
+  researchGenerationStop: "research_generation_stop",
 } as const;
 
 /**
@@ -104,7 +112,7 @@ const STATE_KEYS = {
  */
 export class PurchaseImportRunAgent
   extends Agent
-  implements PurchaseImportRunAgentRpc
+  implements Pick<PurchaseImportRunAgentRpc, "dispatch">
 {
   private readonly registry = createRegistry();
   private readonly recorder = createContextRecorder();
@@ -114,6 +122,7 @@ export class PurchaseImportRunAgent
   private requestTransport: AiUsageTransport = "unknown";
   /** The current request's last gateway response, for its usage row. */
   private requestGateway: GatewayResponseInfo | undefined;
+  private piStorage: Storage | undefined;
 
   readonly harness = new PiHarness({
     harness: (input) => this.openPi(input),
@@ -126,6 +135,7 @@ export class PurchaseImportRunAgent
     {
       latest: () => this.readState(STATE_KEYS.latestSubmission),
       receivedEventIds: () => this.receivedEventIds(),
+      reviewDetail: () => this.readState(STATE_KEYS.researchGenerationStop),
     },
   );
 
@@ -142,6 +152,9 @@ export class PurchaseImportRunAgent
     );
     this.ctx.storage.sql.exec(
       "CREATE TABLE IF NOT EXISTS cubby_settlements (operation_id TEXT PRIMARY KEY, outcome TEXT NOT NULL, reason TEXT)",
+    );
+    this.ctx.storage.sql.exec(
+      "CREATE TABLE IF NOT EXISTS cubby_browser_deliveries (request_id TEXT PRIMARY KEY, signal TEXT NOT NULL)",
     );
     this.lifecycle.use(this.harness).use(this.settlement);
   }
@@ -171,9 +184,9 @@ export class PurchaseImportRunAgent
     return raw ? runIdentity.parse(JSON.parse(raw)) : undefined;
   }
 
-  private counter(key: string, fallback: number): number {
-    const raw = this.readState(key);
-    return raw === undefined ? fallback : Number(raw);
+  /** External retirement waits for the terminating tool; cold disposal must not reopen pi. */
+  async abortForRetirement(): Promise<void> {
+    if (this.identity()) await this.harness.abort();
   }
 
   private services(): RunServices {
@@ -188,12 +201,30 @@ export class PurchaseImportRunAgent
   // ---- pi ---------------------------------------------------------------
 
   private async openPi({ storage, context: open }: PiHarnessContext) {
+    this.piStorage = storage;
     const models = createModels();
+    const identity = this.identity();
     for (const provider of cubbyAgentProviders({
       gateway: () => this.agentEnv.gateway(),
       recorder: this.recorder,
       testModel: this.agentEnv.testModel,
       subscription: this.agentEnv.chatGptInference,
+      subscriptionRequired: identity?.purpose !== "photo_inventory",
+      beforeTransmission: () => {
+        if (identity?.purpose === "photo_inventory") return;
+        const stop = this.readState(STATE_KEYS.researchGenerationStop);
+        if (!stop) return;
+        return Response.json(
+          {
+            error: {
+              type: "permission_error",
+              code: "research_generation_limit",
+              message: stop,
+            },
+          },
+          { status: 403 },
+        );
+      },
       onTransport: (transport) => {
         this.requestTransport = transport;
       },
@@ -204,7 +235,6 @@ export class PurchaseImportRunAgent
       models.setProvider(provider);
     // A cold start reinstalls the run's tools before pi resumes any task, so
     // a recovered tool call never finds its tool missing.
-    const identity = this.identity();
     if (identity) await this.installRunExtensions(identity);
     return Harness.open(
       storage,
@@ -225,54 +255,85 @@ export class PurchaseImportRunAgent
   private async installRunExtensions(identity: RunIdentity): Promise<void> {
     if (this.installed === identity.runId) return;
     const { runId, purpose } = identity;
-    const mcpTools = await this.agentEnv.mcpTools(purpose);
     const manifest = importRunAgentManifest[purpose];
     const workflow = workflowForRun(purpose, runId);
     const agentTools = new Set<string>(manifest.agentTools);
     this.registry.install(
       defineExtension({
         name: "cubby.run",
-        tools: purchaseImportTools(() => this.services()).filter((tool) =>
-          agentTools.has(tool.name),
-        ),
+        tools: (purpose === "photo_inventory"
+          ? photoInventoryTools(() => this.services())
+          : purchaseImportTools(
+              () => this.services(),
+              (output) => this.retainResearchMode(output),
+              () => this.acknowledgeAdmittedObservations(),
+            )
+        ).filter((tool) => agentTools.has(tool.name)),
         hooks: [
           hook(GenerationTask, {
-            beforeRequest: () => {
+            beforeRequest: async (_request, api) => {
+              this.admitResearchGeneration(purpose, api.taskId);
+              await this.acknowledgeAdmittedObservations();
               this.requestStartedAt = Date.now();
               this.requestTransport = "unknown";
               this.requestGateway = undefined;
               return undefined;
             },
             afterResponse: (message) => this.afterResponse(message),
-            afterTools: () => {
-              this.writeState(
-                STATE_KEYS.toolRounds,
-                String(this.counter(STATE_KEYS.toolRounds, 0) + 1),
-              );
-            },
-            onYield: () => this.finishNudge(workflow.finishNudge),
           }),
         ],
       }),
     );
-    this.registry.install(cubbyMcpExtension(mcpTools, () => this.services()));
-    this.registry.install(await piSkills([workflow.skills]));
+    if (purpose === "photo_inventory") {
+      const mcpTools = await this.agentEnv.mcpTools(purpose);
+      this.registry.install(cubbyMcpExtension(mcpTools, () => this.services()));
+    }
+    if (workflow.skills)
+      this.registry.install(await piSkills([workflow.skills]));
     this.installed = runId;
   }
 
-  /**
-   * The model may stop talking without a terminal tool call. Send it back
-   * once per stretch of new tool rounds; if it stops again without doing
-   * anything, the run's inputs settle and the server's reconcile moves the run
-   * to review. pi never yields after a terminating round, so a pending browser
-   * command or an approval stop is never nudged.
-   */
-  private finishNudge(body: string | null) {
-    if (!body) return undefined;
-    const rounds = this.counter(STATE_KEYS.toolRounds, 0);
-    if (this.counter(STATE_KEYS.nudgedAt, -1) === rounds) return undefined;
-    this.writeState(STATE_KEYS.nudgedAt, String(rounds));
-    return { continue: renderSignal({ type: "run_not_finished", body }) };
+  /** Count unique pi generations atomically; retries and recovery keep their task id. */
+  private admitResearchGeneration(
+    purpose: RunIdentity["purpose"],
+    taskId: TaskId,
+  ): void {
+    if (purpose === "photo_inventory") return;
+    this.ctx.storage.transactionSync(() => {
+      const key = `research_generation:${taskId}`;
+      if (this.readState(key)) return undefined;
+      const count = z.coerce
+        .number()
+        .int()
+        .nonnegative()
+        .parse(this.readState(STATE_KEYS.researchGenerationCount) ?? "0");
+      if (count >= 256) {
+        const detail =
+          "Research generation limit (256) reached. Unfinished work remains for review; no verification or completion is claimed.";
+        this.writeState(STATE_KEYS.researchGenerationStop, detail);
+        return;
+      }
+      this.writeState(STATE_KEYS.researchGenerationCount, String(count + 1));
+      this.writeState(key, "admitted");
+      return undefined;
+    });
+  }
+
+  /** Preserve host-requested escalation across eviction and service-result replay. */
+  private async retainResearchMode(output: JsonValue): Promise<void> {
+    const mode = z
+      .looseObject({ reasoningMode: z.literal("unfamiliar_resolution") })
+      .safeParse(output);
+    if (!mode.success) return;
+    this.writeState(STATE_KEYS.reasoningMode, mode.data.reasoningMode);
+    const root = await (await this.harness.pi()).root(context);
+    await root.configure(
+      {
+        model: { provider: "openai", modelId: "gpt-6-sol" },
+        thinkingLevel: "high",
+      },
+      context,
+    );
   }
 
   private async afterResponse(message: AssistantMessage) {
@@ -318,6 +379,37 @@ export class PurchaseImportRunAgent
 
   // ---- entry points -----------------------------------------------------
 
+  /** SDK admission is the receipt authority, including cold tool recovery. */
+  private async acknowledgeAdmittedObservations(): Promise<void> {
+    const storage = this.piStorage;
+    if (!storage) return;
+    const deliveries = this.ctx.storage.sql
+      .exec<{ request_id: string; signal: string }>(
+        "SELECT request_id, signal FROM cubby_browser_deliveries ORDER BY rowid",
+      )
+      .toArray();
+    for (const delivery of deliveries) {
+      const admitted = await storage.submissionByRequest(
+        ROOT_CONVERSATION_ID,
+        delivery.request_id,
+        context,
+      );
+      if (!admitted) continue;
+      const signal: AgentSignal = z
+        .object({
+          type: z.string(),
+          attributes: z.record(z.string(), z.string()).optional(),
+          body: z.string(),
+        })
+        .parse(JSON.parse(delivery.signal));
+      await this.services().researchAcknowledge(signal);
+      this.ctx.storage.sql.exec(
+        "DELETE FROM cubby_browser_deliveries WHERE request_id = ?",
+        delivery.request_id,
+      );
+    }
+  }
+
   /** A queue event for this Run: admit it once, keyed by its operation id. */
   async dispatch(input: DispatchInput): Promise<{ accepted: boolean }> {
     const identity = runIdentity.parse(input.identity);
@@ -340,15 +432,47 @@ export class PurchaseImportRunAgent
     // persists it: a submission that persists but fails to return is then
     // still the newest when the queue redelivers it, and gets its watcher. A
     // redelivered older event leaves the newest submission alone.
+    const signal =
+      identity.purpose === "photo_inventory"
+        ? input.signal
+        : await resumeResearchSignal(input.signal, async (incoming) => {
+            const observation = await this.services().researchResume(incoming);
+            if (observation)
+              await this.retainResearchMode(z.json().parse(observation));
+            return observation;
+          });
     const eventId = input.signal.attributes?.eventId;
     if (!eventId || !this.receivedEventIds().includes(eventId)) {
       if (eventId) this.recordReceived(eventId);
-      this.writeState(STATE_KEYS.latestSubmission, input.operationId);
+      if (signal)
+        this.writeState(STATE_KEYS.latestSubmission, input.operationId);
     }
-    const receipt = await this.harness.submit(renderSignal(input.signal), {
+    if (!signal) return { accepted: true };
+    if (
+      identity.purpose !== "photo_inventory" &&
+      input.signal.type === "purchase-import.browser_result"
+    ) {
+      const serialized = JSON.stringify(input.signal);
+      this.ctx.storage.sql.exec(
+        "INSERT OR IGNORE INTO cubby_browser_deliveries (request_id, signal) VALUES (?, ?)",
+        input.operationId,
+        serialized,
+      );
+      const retained = this.ctx.storage.sql
+        .exec<{ signal: string }>(
+          "SELECT signal FROM cubby_browser_deliveries WHERE request_id = ?",
+          input.operationId,
+        )
+        .one();
+      if (retained.signal !== serialized)
+        throw new Error("Browser delivery request is bound to another signal");
+    }
+    const receipt = await this.harness.submit(renderSignal(signal), {
       operationId: input.operationId,
       whenBusy: "steer",
     });
+    if (identity.purpose !== "photo_inventory")
+      await this.acknowledgeAdmittedObservations();
     if (
       receipt.accepted ||
       this.readState(STATE_KEYS.latestSubmission) === receipt.operationId
@@ -375,10 +499,15 @@ export class PurchaseImportRunAgent
     await this.installRunExtensions(identity);
     const manifest = importRunAgentManifest[identity.purpose];
     const root = await (await this.harness.pi()).root(context);
+    const escalated =
+      this.readState(STATE_KEYS.reasoningMode) === "unfamiliar_resolution";
     await root.configure(
       {
-        model: { provider: "openai", modelId: manifest.model },
-        thinkingLevel: manifest.effort,
+        model: {
+          provider: "openai",
+          modelId: escalated ? "gpt-6-sol" : manifest.model,
+        },
+        thinkingLevel: escalated ? "high" : manifest.effort,
         instructions: workflowForRun(identity.purpose, identity.runId)
           .instructions,
       },

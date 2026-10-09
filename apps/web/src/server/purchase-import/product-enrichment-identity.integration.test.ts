@@ -1,13 +1,10 @@
 import { type ProductId, productShortcode } from "@cubby/schemas/identifiers";
-import {
-  BROWSER_BRIDGE_PROTOCOL,
-  type BrowserBridgeRequest,
-  type BrowserBridgeResult,
-  type BrowserStructuredProducts,
-} from "@cubby/schemas/purchase-import";
+import { type BrowserStructuredProducts } from "@cubby/schemas/purchase-import";
+import { fromPartial } from "@total-typescript/shoehorn";
 import { and, eq } from "drizzle-orm";
 import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
+import { z } from "zod";
 
 import {
   entityExternalId,
@@ -21,28 +18,22 @@ import {
 } from "~/server/db/schema";
 import { getDb } from "~/server/repo/database-helpers";
 import { ensureExternalSources } from "~/server/repo/entity-external-ids";
+import { updateProduct } from "~/server/repo/product/crud";
 import {
   createProductFixture,
   makeProductInput,
 } from "~/server/repo/repo.fixtures";
 import { insertWithShortcode } from "~/server/repo/shortcode-utils";
 
-import { completedCapture, testBrowserPorts } from "./browser.fixtures";
 import { CAPTURE_INTERIM_NOTE } from "./capture-interim-note";
 import {
   commitProductEnrichment,
   skipProductEnrichment,
 } from "./import-orders";
 import { productEnrichmentTarget } from "./product-enrichment-target";
-import {
-  claimNextImportWork,
-  controlRun,
-  finishRun,
-  importBrowserOrderEvidence,
-  issueBrowserCommand,
-  startTargetedRun,
-  stopRunForReview,
-} from "./run-service";
+import { admitProductResearch } from "./product-research-run";
+import { researchServiceFor } from "./research-service";
+import { controlRun, stopRunForReview } from "./run-service";
 
 const single: BrowserStructuredProducts = {
   products: [
@@ -88,24 +79,21 @@ describe("product enrichment structured identifier proof", () => {
     );
     const live = await productEnrichmentTarget(getDb(ctx.db), target.entityId);
     if (!live) throw new Error("Target product missing");
-    const started = await startTargetedRun(ctx.db, {
-      ledgerPartyId: party.id,
-      purpose: "product_enrichment",
+    const account = await insertWithShortcode(ctx.db, "vendorAccount", {
+      label: "Synthetic structured-proof browser",
       vendorId: vendor.id,
-      trigger: "manual",
-      targets: [
-        {
-          kind: "product",
-          productId: target.entityId,
-          targetFingerprint: live.fingerprint,
-        },
-      ],
+      ledgerPartyId: party.id,
+      browserSyncEnabled: true,
     });
+    const [started] = await admitProductResearch(ctx.db, {
+      ledgerPartyId: party.id,
+      userId: ctx.actor.userId,
+      productIds: [target.entityId],
+      preferredBrowserAccountId: account.id,
+      cause: "member_request",
+    });
+    if (!started) throw new Error("Expected current Product admission");
     if (!started.created) throw new Error("Expected enrichment admission");
-    await getDb(ctx.db)
-      .update(runTable)
-      .set({ status: "running" })
-      .where(eq(runTable.id, started.run.id));
     const [ref] = await getDb(ctx.db)
       .select({ id: runTarget.id })
       .from(runTarget)
@@ -544,28 +532,10 @@ describe("product enrichment structured identifier proof", () => {
   });
 });
 
-// One run works several Products in claim order. Failure modes: a Product
-// with no exact source holds the run forever (nothing moves its target out
-// of the worklist); a capture is filed under a different target than the
-// one claimed, so the claimed Product's commit is refused; targets inserted
-// together tie on createdAt and claim and capture pick different ones.
+// Current admission must deduplicate active Product work across accounts;
+// continuation must not steal another Run's task. Manual skip receipts replay.
 describe("product enrichment worklist", () => {
   const ctx = withTestDb();
-  const issued: BrowserBridgeRequest[] = [];
-  const results = new Map<string, BrowserBridgeResult>();
-  const broker = {
-    enqueue: async (command: BrowserBridgeRequest) => {
-      issued.push(command);
-    },
-    result: async (commandId: string) => results.get(commandId) ?? null,
-    cancel: async () => undefined,
-    connected: async () => true,
-    pendingCommands: async () => [],
-    notifyRunCompleted: async () => undefined,
-    requestAuthentication: async () => undefined,
-  };
-  const namespace = { getByName: () => broker };
-
   /** One running enrichment run over two Products inserted together. */
   async function worklist() {
     const [existingParty] = await getDb(ctx.db)
@@ -596,46 +566,31 @@ describe("product enrichment worklist", () => {
         createProductFixture(ctx.db, makeProductInput({ name }), ctx.actor),
       ),
     );
-    const started = await startTargetedRun(ctx.db, {
+    const [started] = await admitProductResearch(ctx.db, {
       ledgerPartyId: party.id,
-      purpose: "product_enrichment",
-      vendorId: vendor.id,
-      vendorAccountId: account.id,
-      trigger: "discovery",
-      targets: await Promise.all(
-        products.map(async (row) => ({
-          kind: "product" as const,
-          productId: row.entityId,
-          sourceExternalKey: "https://seed.example.test/",
-          targetFingerprint: (await productEnrichmentTarget(
-            getDb(ctx.db),
-            row.entityId,
-          ))!.fingerprint,
-        })),
-      ),
+      userId: ctx.actor.userId,
+      productIds: products.map((row) => row.entityId),
+      preferredBrowserAccountId: account.id,
+      cause: "member_request",
     });
-    if (!started.created) throw new Error("Expected enrichment admission");
+    if (!started?.created)
+      throw new Error("Expected current Product admission");
     const runId = started.run.id;
+    const services = researchServiceFor(ctx.db, fromPartial<Env>({}), runId);
     const claim = async () => {
-      const claimed = await claimNextImportWork(ctx.db, namespace, runId);
-      if (claimed.kind !== "product_enrichment" || !("targetId" in claimed))
-        throw new Error(`Expected enrichment work, got ${claimed.kind}`);
-      return claimed;
-    };
-    const capture = async (operationId: string) => {
-      await issueBrowserCommand(ctx.db, namespace, {
-        runId,
-        operationId,
-        operation: {
-          type: "capture",
-          allowedHosts: ["seed.example.test"],
-          screenshot: "preferred",
-        },
-      });
-      const command = issued.at(-1);
-      if (command?.operation.type !== "capture")
-        throw new Error("Expected a capture command");
-      return { commandId: command.id, operation: command.operation };
+      const next = z
+        .object({
+          status: z.literal("working"),
+          work: z.object({
+            workRef: z.uuid(),
+            product: z.object({ productRef: productShortcode }),
+          }),
+        })
+        .parse(await services.researchNext({}, crypto.randomUUID()));
+      return {
+        targetId: next.work.workRef,
+        productId: next.work.product.productRef,
+      };
     };
     const skip = (productId: string, operationId: string) =>
       skipProductEnrichment(
@@ -658,91 +613,8 @@ describe("product enrichment worklist", () => {
         .where(eq(runTarget.id, targetId));
       return row;
     };
-    return { runId, party, products, claim, capture, skip, targetState };
+    return { runId, party, products, claim, skip, targetState };
   }
-
-  it("captures for the claimed target and moves past a skipped Product", async () => {
-    const { runId, claim, capture, skip, targetState } = await worklist();
-    const skippedTargets: string[] = [];
-    for (const expected of [0, 1]) {
-      const claimed = await claim();
-      // Claim and capture agree even when every target shares createdAt.
-      const { operation } = await capture(`capture-${expected}`);
-      expect(operation.evidenceScope?.targetId).toBe(claimed.targetId);
-      expect(await skip(claimed.productId, `skip-${expected}`)).toMatchObject({
-        productId: claimed.productId,
-        state: "skipped",
-      });
-      skippedTargets.push(claimed.targetId);
-    }
-    expect(new Set(skippedTargets).size).toBe(2);
-    expect(await claimNextImportWork(ctx.db, namespace, runId)).toEqual({
-      kind: "none",
-    });
-    await finishRun(ctx.db, namespace, { runId, operationId: "finish" });
-    const [finished] = await getDb(ctx.db)
-      .select({ status: runTable.status })
-      .from(runTable)
-      .where(eq(runTable.id, runId));
-    expect(finished?.status).toBe("completed");
-    for (const targetId of skippedTargets)
-      expect(await targetState(targetId)).toEqual({
-        state: "skipped",
-        outcome: "skipped",
-        warning: "No exact source page shows this variant.",
-      });
-  });
-
-  // A capture still in flight when its Product is skipped answers later;
-  // binding that evidence must not reopen the skipped target.
-  it("keeps a skipped target skipped when its outstanding capture is imported later", async () => {
-    const { runId, claim, capture, skip, targetState } = await worklist();
-    const claimed = await claim();
-    const { commandId } = await capture("capture-late");
-    await skip(claimed.productId, "skip-late");
-    const [evidence] = await getDb(ctx.db)
-      .insert(runEvidence)
-      .values({
-        runId,
-        targetId: claimed.targetId,
-        kind: "browser_capture",
-        objectKey: `test/${crypto.randomUUID()}`,
-        checksum: "e".repeat(64),
-        mediaType: "application/pdf",
-      })
-      .returning({ id: runEvidence.id });
-    results.set(commandId, {
-      protocolVersion: BROWSER_BRIDGE_PROTOCOL,
-      commandID: commandId,
-      operationID: "browser-command:capture-late",
-      runID: runId,
-      completedAt: "2026-09-25T12:00:00.000Z",
-      outcome: await completedCapture(
-        "https://seed.example.test/products/basil",
-        { title: "Basil packet", text: "Basil packet" },
-        [
-          {
-            id: evidence!.id,
-            kind: "rendered_pdf",
-            checksum: "e".repeat(64),
-            contentType: "application/pdf",
-          },
-        ],
-      ),
-    });
-    await importBrowserOrderEvidence(
-      ctx.db,
-      namespace,
-      { runId, operationId: "evidence-late", commandId },
-      testBrowserPorts(),
-    );
-    expect(await targetState(claimed.targetId)).toEqual({
-      state: "skipped",
-      outcome: "skipped",
-      warning: "No exact source page shows this variant.",
-    });
-    expect((await claim()).targetId).not.toBe(claimed.targetId);
-  });
 
   // Any enrichment admission (a member's manual start included) must not
   // put a Product into a second concurrent run on another account.
@@ -760,22 +632,16 @@ describe("product enrichment worklist", () => {
       status: "active",
       browserSyncEnabled: true,
     });
-    const second = await startTargetedRun(ctx.db, {
+    const second = await admitProductResearch(ctx.db, {
       ledgerPartyId: party.id,
-      purpose: "product_enrichment",
-      vendorId: otherVendor.id,
-      vendorAccountId: otherAccount.id,
-      trigger: "manual",
-      targets: [
-        {
-          kind: "product",
-          productId: products[0]!.entityId,
-          sourceExternalKey: "https://other.example.test/",
-          targetFingerprint: "f".repeat(64),
-        },
-      ],
+      userId: ctx.actor.userId,
+      productIds: [products[0]!.entityId],
+      preferredBrowserAccountId: otherAccount.id,
+      cause: "member_request",
     });
-    expect(second).toEqual({ created: false, blockingRun: null });
+    expect(second).toHaveLength(1);
+    expect(second[0]?.created).toBe(false);
+    expect(second[0]?.run.vendorAccountId).not.toBe(otherAccount.id);
   });
 
   // Restarting or re-dispatching an enrichment run brings its Products back
@@ -802,22 +668,30 @@ describe("product enrichment worklist", () => {
       .update(runTable)
       .set({ status: "dispatch_failed", coordinatorStartedAt: null })
       .where(eq(runTable.id, runId));
-    const holder = await startTargetedRun(ctx.db, {
+    await getDb(ctx.db)
+      .update(runTable)
+      .set({ status: "failed", endedAt: new Date() })
+      .where(eq(runTable.id, runId));
+    // A member's changed canonical model makes this a fresh admissible request;
+    // an identical failed context requires continuation instead of a new Run.
+    await updateProduct(
+      ctx.db,
+      products[0]!.entityId,
+      { model: "Synthetic revised model" },
+      ctx.actor,
+    );
+    const [holder] = await admitProductResearch(ctx.db, {
       ledgerPartyId: party.id,
-      purpose: "product_enrichment",
-      vendorId: otherVendor.id,
-      vendorAccountId: otherAccount.id,
-      trigger: "manual",
-      targets: [
-        {
-          kind: "product",
-          productId: products[0]!.entityId,
-          sourceExternalKey: "https://other.example.test/",
-          targetFingerprint: "f".repeat(64),
-        },
-      ],
+      userId: ctx.actor.userId,
+      productIds: [products[0]!.entityId],
+      preferredBrowserAccountId: otherAccount.id,
+      cause: "member_request",
     });
-    expect(holder.created).toBe(true);
+    expect(holder?.created).toBe(true);
+    await getDb(ctx.db)
+      .update(runTable)
+      .set({ status: "dispatch_failed", endedAt: null })
+      .where(eq(runTable.id, runId));
     await expect(
       controlRun(ctx.db, ctx.actor, {
         runPublicId: run!.shortcode,
@@ -833,7 +707,25 @@ describe("product enrichment worklist", () => {
         runPublicId: run!.shortcode,
         action: "restart",
       }),
-    ).rejects.toThrow(/already being enriched/u);
+    ).rejects.toThrow(/already owned by another Run/u);
+    const [original] = await getDb(ctx.db)
+      .select({
+        status: runTable.status,
+        predecessorRunId: runTable.predecessorRunId,
+      })
+      .from(runTable)
+      .where(eq(runTable.id, runId));
+    expect(original).toEqual({ status: "failed", predecessorRunId: null });
+    const [stillHeld] = await getDb(ctx.db)
+      .select({ runId: runTarget.runId })
+      .from(runTarget)
+      .where(
+        and(
+          eq(runTarget.runId, holder!.run.id),
+          eq(runTarget.entityId, products[0]!.entityId),
+        ),
+      );
+    expect(stillHeld?.runId).toBe(holder!.run.id);
   });
 
   it("returns the recorded result to a concurrent replay of one skip", async () => {

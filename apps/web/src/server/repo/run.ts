@@ -52,11 +52,15 @@ const hydrateProjection = async (
     ),
     refs(
       "run",
-      rows.map((row) => row.predecessorRunId),
+      rows.flatMap((row) => [row.predecessorRunId, row.parentRunId]),
     ),
   ]);
   const at = <V>(map: Map<string, V>, id: string | null) =>
     id === null ? undefined : map.get(id);
+  const runLinks = (row: RunRow) => ({
+    predecessorRunId: at(predecessors, row.predecessorRunId)?.id ?? null,
+    parentRunId: at(predecessors, row.parentRunId)?.id ?? null,
+  });
   return rows.map((row) => {
     const account = at(accounts, row.vendorAccountId);
     const vendor = at(vendors, row.vendorId);
@@ -77,7 +81,7 @@ const hydrateProjection = async (
       vendorName: vendor?.name ?? null,
       ledgerPartyId: party?.id ?? null,
       ledgerPartyName: party?.name ?? null,
-      predecessorRunId: at(predecessors, row.predecessorRunId)?.id ?? null,
+      ...runLinks(row),
     };
     return runProjection.parse({
       ...projected,

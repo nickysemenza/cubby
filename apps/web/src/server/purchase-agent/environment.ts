@@ -12,17 +12,22 @@ import type { AgentImportRunPurpose } from "@cubby/schemas/import-run-agent";
 import type {
   AgentProgressEvent,
   AgentUsageEvent,
-  deferOrderForReviewInput,
-  importOrderEvidenceInput,
-  issueBrowserCommandInput,
-  markHistoryExpiredInput,
   markRunFailedInput,
   purchaseAgentOperationRef,
   reconcileSettledRunInput,
-  saveNavigationHintsInput,
-  settleChargeHuntInput,
+  researchCoordinatorStatus,
   stopForReviewInput,
 } from "@cubby/schemas/purchase-agent-services";
+import type {
+  ResearchWorkNextInput,
+  ResearchWorkObserveInput,
+  ResearchWorkResolveInput,
+  ResearchMailSearchInput,
+  ResearchMailReadInput,
+  ResearchWebSearchInput,
+  ResearchWebReadInput,
+  ResearchFindInput,
+} from "@cubby/schemas/research-tools";
 import type { AiGatewayEnvironment } from "@cubby/shared/ai/gateway-metadata";
 import type {
   ChatGptInference,
@@ -49,6 +54,8 @@ export type DispatchInput = {
 /** The coordinator Durable Object's RPC surface. */
 export interface PurchaseImportRunAgentRpc {
   dispatch(input: DispatchInput): Promise<{ accepted: boolean }>;
+  /** External disposal is receipt-authorized and never enters a model turn. */
+  retire(input: { receiptId: string }): Promise<{ disposed: boolean }>;
 }
 
 /** A service result: the host's JSON answer, or null when there is none. */
@@ -58,6 +65,11 @@ type OperationRef = z.input<typeof purchaseAgentOperationRef>;
 
 /** One Run's services. No method takes a Run: the host bound it. */
 export interface RunServices {
+  researchCoordinatorStatus(): Promise<
+    z.output<typeof researchCoordinatorStatus>
+  >;
+  authorizeResearchRetirement(receiptId: string): Promise<void>;
+  processResearchRetention(receiptId: string): Promise<{ completed: boolean }>;
   /**
    * Require the member's live Purchase Agent grant before a new coordinator
    * starts; without one the host pauses the Run for authorization and throws.
@@ -67,36 +79,40 @@ export interface RunServices {
   loadScope(): Promise<{ purpose: AgentImportRunPurpose; agentId: string }>;
   canDispatchCoordinator(eventId: string): Promise<boolean>;
   acknowledgeCoordinator(eventId: string): Promise<boolean>;
+  researchNext(input: ResearchWorkNextInput, callId: string): Promise<object>;
+  researchObserve(
+    input: ResearchWorkObserveInput,
+    callId: string,
+  ): Promise<object>;
+  researchResolve(
+    input: ResearchWorkResolveInput,
+    callId: string,
+  ): Promise<object>;
+  researchMailSearch(
+    input: ResearchMailSearchInput,
+    callId: string,
+  ): Promise<object>;
+  researchMailRead(
+    input: ResearchMailReadInput,
+    callId: string,
+  ): Promise<object>;
+  researchWebSearch(
+    input: ResearchWebSearchInput,
+    callId: string,
+  ): Promise<object>;
+  researchWebRead(input: ResearchWebReadInput, callId: string): Promise<object>;
+  researchFind(input: ResearchFindInput, callId: string): Promise<object>;
+  researchResume(signal: AgentSignal): Promise<object | null>;
+  /** Delivery receipt follows successful durable submission, including replay. */
+  researchAcknowledge(signal: AgentSignal): Promise<void>;
   claimNextWork(input: OperationRef): Promise<RunServiceResult>;
-  extractReceiptEvidence(input: OperationRef): Promise<RunServiceResult>;
-  extractRunEvidence(input: OperationRef): Promise<RunServiceResult>;
   /**
    * One request to Cubby's MCP server, in process. The host mints a fresh
    * run-bound delegation bearer for it; the agent never holds the token.
    */
   mcpFetch(request: Request): Promise<Response>;
-  issueBrowserCommand(
-    input: z.input<typeof issueBrowserCommandInput>,
-  ): Promise<RunServiceResult>;
-  readBrowserCommandResult(input: OperationRef): Promise<RunServiceResult>;
-  importOrderEvidence(
-    input: z.input<typeof importOrderEvidenceInput>,
-  ): Promise<RunServiceResult>;
-  saveNavigationHints(
-    input: z.input<typeof saveNavigationHintsInput>,
-  ): Promise<RunServiceResult>;
-  markHistoryExpired(
-    input: z.input<typeof markHistoryExpiredInput>,
-  ): Promise<RunServiceResult>;
-  finishRun(input: OperationRef): Promise<RunServiceResult>;
   stopForReview(
     input: z.input<typeof stopForReviewInput>,
-  ): Promise<RunServiceResult>;
-  deferOrderForReview(
-    input: z.input<typeof deferOrderForReviewInput>,
-  ): Promise<RunServiceResult>;
-  settleChargeHunt(
-    input: z.input<typeof settleChargeHuntInput>,
   ): Promise<RunServiceResult>;
   recordAgentUsage(input: AgentUsageEvent): Promise<void>;
   updateAgentProgress(

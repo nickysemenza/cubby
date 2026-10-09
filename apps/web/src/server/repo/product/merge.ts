@@ -43,6 +43,7 @@ import {
   expense,
   ingredient,
   inventoryEntry,
+  importSourceProduct,
   location,
   mealFoodEntry,
   planting,
@@ -62,6 +63,7 @@ import {
   notDeleted,
   withTransaction,
 } from "~/server/repo/database-helpers";
+import { lockExternalIdentifierParents } from "~/server/repo/entity-external-ids";
 import { linkQuantity, liveLinks } from "~/server/repo/entity-links";
 import { impact, present, sideEffect } from "~/server/repo/impact";
 import {
@@ -88,6 +90,18 @@ import { markProductConversionCoverageInputStale } from "./conversion-coverage";
 import { ensureSlotPrimaries } from "./update-helpers";
 
 export const PRODUCT_MERGE_EDGE_POLICY = {
+  "RunFactEvidence.entityId": {
+    code: "move-dedupe-canonical-research-proof",
+    effect: "move-dedupe",
+    description:
+      "Accepted proofs follow the surviving Product; exact proof identities fold while independent retained originals remain.",
+  },
+  "ImportSourceProduct.productId": {
+    code: "repoint-original-order-evidence",
+    effect: "repoint",
+    description:
+      "Original order-line bindings follow the surviving Product while their retained extraction and checksum remain unchanged.",
+  },
   "RunTarget.entityId": {
     code: "repoint-targeted-import-history",
     effect: "repoint",
@@ -720,6 +734,7 @@ interface ProductMergePlan {
   purchases: PlannedAssociation<PurchaseAssociationRow>;
   wishes: PlannedAssociation<WishAssociationRow>;
   expenses: ProductAssociationRow[];
+  originalOrderLines: ProductAssociationRow[];
   tasks: ProductAssociationRow[];
   locations: ProductAssociationRow[];
   cookbooks: ProductAssociationRow[];
@@ -955,6 +970,13 @@ async function buildProductMergePlan(
     ...row,
     productId: parseEntityId("product", row.productId),
   }));
+  const originalOrderLines = await db
+    .select({
+      id: importSourceProduct.id,
+      productId: importSourceProduct.productId,
+    })
+    .from(importSourceProduct)
+    .where(inArray(importSourceProduct.productId, liveLoserIds));
   const tasks = (
     await db
       .select({ id: task.id, productId: task.subjectProductId })
@@ -1117,6 +1139,7 @@ async function buildProductMergePlan(
       slotKey: (row) => row.wishId,
     }),
     expenses,
+    originalOrderLines,
     tasks,
     locations,
     cookbooks,
@@ -1358,6 +1381,13 @@ export const mergeProducts = async (
       product,
       [keepId, ...loserIds],
       "Product",
+    );
+    await lockExternalIdentifierParents(
+      tx,
+      [keepId, ...loserIds].map((entityId) => ({
+        entityId,
+        entityKind: "product",
+      })),
     );
 
     // Rebuild after the locks: preview is advisory, while this is the plan the
@@ -2065,6 +2095,12 @@ const previewMergeProductsFromPlan = async (
       edgeKey: "Expense.productId",
       label: "ledger lines re-pointed",
       byTargetId: byProduct(plan.expenses),
+    }),
+    impact({
+      disposition: PRODUCT_MERGE_EDGE_POLICY["ImportSourceProduct.productId"],
+      edgeKey: "ImportSourceProduct.productId",
+      label: "original order lines re-pointed",
+      byTargetId: byProduct(plan.originalOrderLines),
     }),
     impact({
       disposition: PRODUCT_MERGE_EDGE_POLICY["ProductUnitMapping.productId"],

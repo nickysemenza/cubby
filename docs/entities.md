@@ -30,6 +30,10 @@ Declarations may import shared primitives and cycle-safe field modules. They
 must not import canonical schemas, generated artifacts, server implementations,
 or browser modules. Implementation references remain `{ module, export }` data.
 Browser metadata is generated separately and contains no executable schemas.
+Static generator inputs also cannot execute schemas that consume generated
+output: install runs generation before those files exist. Shared presentation
+vocabulary such as `activity-fields.ts` owns primitive enums and labels so runtime
+and native generation share exhaustive labels without a bootstrap cycle.
 Existing specialist list columns declare `route.listColumns: { module, export }`;
 the generated index route passes that synchronous override to `listPage`. Its
 component split owns the import, so other entities do not load that specialist
@@ -300,6 +304,22 @@ A report may say the record is `live` (clients poll; there is no realtime transp
 `status` (a client showing another refreshes its record) and a `nextCursor` for paging. A page that
 shows several slots of one record (a Run) polls one `entityReport.getMany`, so the server loads the
 record once per poll.
+
+**Email evidence.** Vendor, Vendor Account, and Purchase detail use the same
+server-composed records report. Accepted source associations and explicit
+member decisions establish relationships; a nullable mail Vendor hint or
+matching order number alone does not link a Purchase. One original may support
+several Vendors. Reports preserve the original Gmail link, known date, accepted
+source checksums, reviewed decisions, and the actual research Run outcome.
+Changed originals remain distinguishable from previously reviewed evidence;
+missing timestamps stay unknown. Research command results show Run links only
+while their event and reviewed checksum still match the current operand; earlier
+Run links come from retained source provenance. Shared commands carry the current checksum,
+and the write rechecks source ownership and retention before changing a link.
+Declared command inputs are collected by the same generic form on web and
+native. Vendor purchase research starts the shared Run objective without a
+website, sender, Vendor Account, or Mac prerequisite; progress belongs to that
+Run rather than a separate mail workbench.
 
 **Report choices.** A `records` row may carry a `choice` (a decision the person makes) and the block
 a `form` (its own choices, the progress wording, a `disabledReason` and the one command the answers
@@ -1111,7 +1131,16 @@ refusal stays authoritative.
 Merge is keeper-wins. Declared edges are repointed, only explicitly mergeable
 fields combine, and uniqueness or workflow collisions reject the operation.
 Entity-specific merge code remains only for irreducible transaction and
-collision rules.
+collision rules. Accepted research proof follows its canonical Product or
+Purchase subject independently of the source task. A merge folds only identical
+proof identities and preserves independent retained evidence and actual support.
+Colliding Run targets fold only within the same Run, entity kind, and frozen
+work key; evidence and proof references move before the absorbed task is removed.
+Purchase and Run soft deletion retain proof against their tombstones. Product
+proof remains retaining history and blocks deletion; an Image hard deletion
+removes its proof before its worklist target and detaches retained original
+evidence to the owning Run. These history references do not claim ownership of
+an Image.
 
 ## Identity, attachments, and the physical graph
 
@@ -1231,7 +1260,7 @@ Reset and navigation actions remain in the popover footer, while exception actio
 stay with their check. Tables retain their compact rows and lazy explanations.
 The sticky footer stays wholly inside the scrollport so its actions retain their
 phone touch targets. Nested evidence switches from aligned facts to stacked labels
-based on its own container width, avoiding progressively narrower columns. Generic evidence values link validated HTTP(S) URLs, format ISO timestamps in the household zone, and use calendar-date context for plain dates. Bounded evidence IDs resolve in one identity batch to canonical public codes and then shared entity links; unregistered row IDs and source slugs remain literal. Technical details is collapsed by default.
+based on its own container width, avoiding progressively narrower columns. Generic evidence values link validated HTTP(S) URLs, format ISO timestamps in the household zone, and use calendar-date context for plain dates. Bounded evidence IDs resolve in one identity batch to canonical public codes and then shared entity links, which resolve record names when evidence supplies only a code. Identifier source links use the registered `ExternalSource.vendorId` owner, including host-based slugs; a slug's spelling never establishes Vendor ownership. External identifier values remain literal through rendering even when they match an entity UUID, public code, or source slug. Unregistered row IDs and unowned source slugs remain literal. Technical details is collapsed by default.
 
 An Image has provenance (`own`, `catalog`, `unknown`, or `screenshot`, plus
 optional supplying source name/page/asset URLs). Its Product attachment has

@@ -141,6 +141,14 @@ describe("photo group proposals", () => {
 
   it("hands a saved photo proposal to human review when the agent ends without a final progress call", async () => {
     const { run, codes } = await seedRun(2);
+    const owner = await insertWithShortcode(ctx.db, "ledgerParty", {
+      name: "Synthetic shared photo owner",
+      kind: "household",
+    });
+    await getDb(ctx.db)
+      .update(runTable)
+      .set({ ledgerPartyId: owner.id })
+      .where(eq(runTable.id, run.id));
     await proposePhotoGroups(ctx.db, {
       runId: run.shortcode,
       groups: [createGroup("shirt", codes)],

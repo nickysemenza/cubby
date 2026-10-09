@@ -1,5 +1,10 @@
 import { aiRunUsageInput, aiRunUsageOut } from "@cubby/schemas/ai";
 import {
+  executionAuthorizationApprovalInput,
+  executionAuthorizationRef,
+  executionAuthorizationRequestedScope,
+} from "@cubby/schemas/execution-authorization";
+import {
   anyShortcodeSchema,
   runShortcode,
   imageShortcode,
@@ -7,6 +12,7 @@ import {
   purchaseShortcode,
   vendorAccountShortcode,
 } from "@cubby/schemas/identifiers";
+import { mailboxDiscoveryStartOutput } from "@cubby/schemas/mailbox-research";
 import { runTargetDeviceWorkState } from "@cubby/schemas/photo-import-run";
 import {
   proposedImportFix,
@@ -24,6 +30,7 @@ import {
   targetedImportPurpose,
   targetedImportStartInput,
   targetedImportStartOutput,
+  runOut,
   type TargetedImportPurpose,
   type TargetedImportStartInput,
   type TargetedImportStartOutput,
@@ -33,6 +40,7 @@ import {
   runControlAction,
   runPurpose,
   runStatus,
+  runTargetEntityKind,
 } from "@cubby/schemas/run-fields";
 import { z } from "zod";
 
@@ -82,131 +90,133 @@ const restartInputs = z.object({
 });
 
 /** The run work view. Private UUIDs and operation payloads never cross it. */
-const runDetail = z.object({
-  publicId: runShortcode,
-  purpose: runPurpose,
-  status: z.string().min(1),
-  trigger: z.string().min(1),
-  startedAt: z.iso.datetime(),
-  endedAt: z.iso.datetime().nullable(),
-  ordersSeen: z.number().int().nonnegative(),
-  imported: z.number().int().nonnegative(),
-  updated: z.number().int().nonnegative(),
-  skipped: z.number().int().nonnegative(),
-  failureCode: z.string().nullable(),
-  notes: z.string().nullable(),
-  predecessorRunPublicId: runShortcode.nullable(),
-  successorRunPublicId: runShortcode.nullable(),
-  /** Null for runs that cannot be started again. */
-  restartInputs: restartInputs.nullable(),
-  coordinatorModel: z.string().nullable(),
-  skillRevision: z.string().nullable(),
-  runtimeRevision: z.string().nullable(),
-  agentModelMs: z.number().nonnegative(),
-  source: z.object({ kind: z.string(), vendorName: z.string().nullable() }),
-  actor: runController,
-  controllingMembers: z.array(runController),
-  controlHistory: z.array(
-    runController.extend({
-      action: z.string().min(1),
-      createdAt: z.iso.datetime(),
-    }),
-  ),
-  vendorAccount: z.object({ id: z.string(), label: z.string() }).nullable(),
-  affectedPurchases: z.array(
-    z.object({
-      shortcode: z.string().min(1),
-      displayName: z.string().nullable(),
-      orderId: z.string().nullable(),
-    }),
-  ),
-  findings: z.array(
-    z.object({
-      id: z.string().min(1),
-      kind: z.string().min(1),
-      summary: z.string().min(1),
-      status: z.string().min(1),
-      proposedFix: proposedImportFix.nullable(),
-      autoApplied: z.boolean(),
-      probability: z.number().nullable(),
-      createdAt: z.iso.datetime(),
-      expiresAt: z.iso.datetime().nullable(),
-    }),
-  ),
-  operations: z.array(
-    z.object({
-      operationId: z.string().min(1),
-      kind: z.string().min(1),
+const runDetail = z
+  .object({
+    publicId: runShortcode,
+    purpose: runPurpose,
+    status: z.string().min(1),
+    trigger: z.string().min(1),
+    startedAt: z.iso.datetime(),
+    endedAt: z.iso.datetime().nullable(),
+    ordersSeen: z.number().int().nonnegative(),
+    imported: z.number().int().nonnegative(),
+    updated: z.number().int().nonnegative(),
+    skipped: z.number().int().nonnegative(),
+    failureCode: z.string().nullable(),
+    notes: z.string().nullable(),
+    predecessorRunPublicId: runShortcode.nullable(),
+    successorRunPublicId: runShortcode.nullable(),
+    /** Null for runs that cannot be started again. */
+    restartInputs: restartInputs.nullable(),
+    coordinatorModel: z.string().nullable(),
+    skillRevision: z.string().nullable(),
+    runtimeRevision: z.string().nullable(),
+    agentModelMs: z.number().nonnegative(),
+    source: z.object({ kind: z.string(), vendorName: z.string().nullable() }),
+    actor: runController,
+    controllingMembers: z.array(runController),
+    controlHistory: z.array(
+      runController.extend({
+        action: z.string().min(1),
+        createdAt: z.iso.datetime(),
+      }),
+    ),
+    vendorAccount: z.object({ id: z.string(), label: z.string() }).nullable(),
+    affectedPurchases: z.array(
+      z.object({
+        shortcode: z.string().min(1),
+        displayName: z.string().nullable(),
+        orderId: z.string().nullable(),
+      }),
+    ),
+    findings: z.array(
+      z.object({
+        id: z.string().min(1),
+        kind: z.string().min(1),
+        summary: z.string().min(1),
+        status: z.string().min(1),
+        proposedFix: proposedImportFix.nullable(),
+        autoApplied: z.boolean(),
+        probability: z.number().nullable(),
+        createdAt: z.iso.datetime(),
+        expiresAt: z.iso.datetime().nullable(),
+      }),
+    ),
+    operations: z.array(
+      z.object({
+        operationId: z.string().min(1),
+        kind: z.string().min(1),
+        state: z.string().min(1),
+        startedAt: z.iso.datetime(),
+        completedAt: z.iso.datetime().nullable(),
+        error: z.string().nullable(),
+      }),
+    ),
+    preparedOrders: z.array(
+      z.object({
+        stableOrderId: z.string().min(1),
+        prepareOperationId: commitPurchaseImportInput.shape.prepareOperationId,
+        itemOperationId: z.string().min(1),
+        sourceKind: z.string().min(1),
+        externalKey: z.string().nullable(),
+        preparedAt: z.iso.datetime(),
+        lineCount: z.number().int().nonnegative(),
+        committed: z.boolean(),
+        lines: preparePurchaseImportOut.shape.orders.element.shape.lines,
+      }),
+    ),
+    targets: z.array(
+      z.object({
+        id: z.string().min(1),
+        targetType: runTargetEntityKind,
+        targetShortcode: z.string().min(1).nullable(),
+        targetName: z.string().nullable(),
+        sourceId: z.string().nullable(),
+        sourceLabel: z.string().nullable(),
+        vendorAccountLabel: z.string().nullable(),
+        state: z.string().min(1),
+        fingerprint: z.string().nullable(),
+        outcome: z.string().nullable(),
+        warning: z.string().nullable(),
+        diff: z.json().nullable(),
+        completedAt: z.iso.datetime().nullable(),
+      }),
+    ),
+    evidence: z.array(
+      z.object({
+        id: z.string().min(1),
+        targetId: z.string().nullable(),
+        sourceKind: z.string().min(1),
+        filename: z.string().nullable(),
+        mediaType: z.string().nullable(),
+        checksum: z.string().nullable(),
+        createdAt: z.iso.datetime(),
+      }),
+    ),
+    dispatch: z.object({
+      eventId: z.string().nullable(),
       state: z.string().min(1),
-      startedAt: z.iso.datetime(),
-      completedAt: z.iso.datetime().nullable(),
+      attempts: z.number().int().nonnegative(),
       error: z.string().nullable(),
+      coordinatorStartedAt: z.iso.datetime().nullable(),
     }),
-  ),
-  preparedOrders: z.array(
-    z.object({
-      stableOrderId: z.string().min(1),
-      prepareOperationId: commitPurchaseImportInput.shape.prepareOperationId,
-      itemOperationId: z.string().min(1),
-      sourceKind: z.string().min(1),
-      externalKey: z.string().nullable(),
-      preparedAt: z.iso.datetime(),
-      lineCount: z.number().int().nonnegative(),
-      committed: z.boolean(),
-      lines: preparePurchaseImportOut.shape.orders.element.shape.lines,
-    }),
-  ),
-  targets: z.array(
-    z.object({
-      id: z.string().min(1),
-      targetType: z.enum(["purchase", "product", "image"]),
-      targetShortcode: z.string().min(1).nullable(),
-      targetName: z.string().nullable(),
-      sourceId: z.string().nullable(),
-      sourceLabel: z.string().nullable(),
-      vendorAccountLabel: z.string().nullable(),
-      state: z.string().min(1),
-      fingerprint: z.string().nullable(),
-      outcome: z.string().nullable(),
-      warning: z.string().nullable(),
-      diff: z.json().nullable(),
-      completedAt: z.iso.datetime().nullable(),
-    }),
-  ),
-  evidence: z.array(
-    z.object({
-      id: z.string().min(1),
-      targetId: z.string().nullable(),
-      sourceKind: z.string().min(1),
-      filename: z.string().nullable(),
-      mediaType: z.string().nullable(),
-      checksum: z.string().nullable(),
-      createdAt: z.iso.datetime(),
-    }),
-  ),
-  dispatch: z.object({
-    eventId: z.string().nullable(),
-    state: z.string().min(1),
-    attempts: z.number().int().nonnegative(),
-    error: z.string().nullable(),
-    coordinatorStartedAt: z.iso.datetime().nullable(),
-  }),
-  progress: z.array(runProgress),
-  latestProgress: runProgress.nullable(),
-  approvals: z.array(
-    z.object({
-      id: z.string().min(1),
-      operationId: z.string().min(1),
-      operationKind: z.string().min(1),
-      args: z.json(),
-      state: z.string().min(1),
-      grantedAt: z.iso.datetime().nullable(),
-      consumedAt: z.iso.datetime().nullable(),
-      invalidatedAt: z.iso.datetime().nullable(),
-      rejectedAt: z.iso.datetime().nullable(),
-    }),
-  ),
-});
+    progress: z.array(runProgress),
+    latestProgress: runProgress.nullable(),
+    approvals: z.array(
+      z.object({
+        id: z.string().min(1),
+        operationId: z.string().min(1),
+        operationKind: z.string().min(1),
+        args: z.json(),
+        state: z.string().min(1),
+        grantedAt: z.iso.datetime().nullable(),
+        consumedAt: z.iso.datetime().nullable(),
+        invalidatedAt: z.iso.datetime().nullable(),
+        rejectedAt: z.iso.datetime().nullable(),
+      }),
+    ),
+  })
+  .extend(runOut.pick({ parentRunId: true, cause: true, attempt: true }).shape);
 export type RunDetail = z.infer<typeof runDetail>;
 
 const runLogEntry = z.object({
@@ -247,7 +257,7 @@ const merchantRules = z.object({
   vendors: z.array(z.object({ shortcode: z.string(), name: z.string() })),
 });
 
-export { targetedImportPurpose, type TargetedImportPurpose };
+export type { TargetedImportPurpose };
 
 const targetedImportSource = z.object({
   id: z.string().min(1),
@@ -302,6 +312,33 @@ export type TargetedImportLaunch = z.infer<typeof targetedImportLaunch>;
 export { type TargetedImportStartInput, type TargetedImportStartOutput };
 
 export const runContract = defineContract("run", {
+  executionMailboxes: query({
+    native: "Select a connected owned mailbox for an execution approval",
+    mcp: { omit: "human_approval" },
+    input: z.strictObject({}),
+    output: z.object({
+      mailboxes: z.array(
+        executionAuthorizationRequestedScope.pick({ mailboxId: true }),
+      ),
+    }),
+    cache: { tags: [] },
+  }),
+  approveExecution: mutation({
+    native:
+      "Approve exact mailbox discovery scope, limits, metered budget and expiry",
+    mcp: { omit: "human_approval" },
+    input: executionAuthorizationApprovalInput,
+    output: executionAuthorizationRef,
+    invalidates: ["runOnly"],
+  }),
+  discoverMail: mutation({
+    native:
+      "Start discovery for one owned mailbox under its current execution approvals",
+    mcp: { omit: "human_approval" },
+    input: executionAuthorizationRequestedScope.pick({ mailboxId: true }),
+    output: mailboxDiscoveryStartOutput,
+    invalidates: ["runOnly"],
+  }),
   syncPlan: query({
     native: "Preview each browser account sync before starting it",
     input: syncPlanInput,

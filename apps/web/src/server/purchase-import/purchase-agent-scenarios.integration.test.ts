@@ -1,112 +1,133 @@
-/* eslint-disable anti-slop/no-unsafe-dictionary-type -- Browser outcomes and extractor outputs are external wire payloads. */
-import { parseEntityId, runEntityId } from "@cubby/schemas/identifiers";
-import { chargeRunStartInput } from "@cubby/schemas/order-mail-review";
-import { and, eq, inArray } from "drizzle-orm";
+import { mkdirSync, writeFileSync } from "node:fs";
+import path from "node:path";
+import { fileURLToPath } from "node:url";
+
 import {
-  awaitBrowserResult,
-  awaitEvent,
+  parseEntityId,
+  runEntityId,
+  runShortcode,
+} from "@cubby/schemas/identifiers";
+import type { PurchaseAgentEvent } from "@cubby/schemas/purchase-import";
+import {
+  CHARGE_HUNT_STATE,
+  mailResearchRunInput,
+} from "@cubby/schemas/run-fields";
+import { sha256Hex } from "@cubby/shared/sha256";
+import { and, asc, eq } from "drizzle-orm";
+import {
+  captureE2ERunIdentity,
+  writeE2ERunBundle,
+  type E2ERunIdentity,
+} from "tooling/e2e-run-bundle";
+import {
   call,
   from,
   mcp,
   mcpRead,
   type ScriptStep,
+  type ScriptValue,
 } from "tooling/purchase-agent-script";
-import { type TestDbContext, withTestDb } from "tooling/test-setup";
+import {
+  TEST_HOME_SHORTCODE,
+  type TestDbContext,
+  withTestDb,
+} from "tooling/test-setup";
 import {
   HOLD_WORKERD_HARNESS_TIMEOUT_MS,
   holdWorkerdHarness,
 } from "tooling/workerd-harness";
-import { afterAll, afterEach, beforeAll, describe, expect, it } from "vitest";
+import {
+  afterAll,
+  afterEach,
+  beforeAll,
+  beforeEach,
+  describe,
+  expect,
+  it,
+} from "vitest";
 import { z } from "zod";
 
 import {
   aiUsage,
   auditLog,
   entityAttachment,
-  entityExternalId,
   expense,
   financialTransaction,
   financialTransactionAllocation,
   image,
+  imageProcessingJob,
+  importHunt,
   importSourceClaim,
+  importSourceOrder,
   inventoryEntry,
-  merchantVendorRule,
-  oauthRefreshToken,
+  mailboxMessage,
   orderMail,
-  orderMailEvent,
   photoGroupProposal,
   product,
   purchase,
   purchasePaymentEvidence,
+  vendorAccount,
   run as runTable,
-  runApproval,
-  runFinding,
   runOperation,
-  runOrderCandidate,
-  runEvidence,
   runProgress,
   runTarget,
 } from "~/server/db/schema";
 import { approvePhotoGroupProposals } from "~/server/photo-import-run/proposals";
-import { getDb, withTransaction } from "~/server/repo/database-helpers";
+import { getDb } from "~/server/repo/database-helpers";
+import { updateFinancialTransaction } from "~/server/repo/financial-transaction";
+import { updateImageProcessingSettings } from "~/server/repo/image-processing-maintenance";
 import {
   createImageFixture,
+  createLocationFixture,
   createProductFixture,
+  makeLocationInput,
   makeProductInput,
 } from "~/server/repo/repo.fixtures";
 import { getRunLiveProgress } from "~/server/repo/run-progress";
 import { insertWithShortcode } from "~/server/repo/shortcode-utils";
+import { productionPhotoImportCommitPorts } from "~/server/services/photo-import-commit.service";
 
-import { capturedHtml, completedCapture } from "./browser.fixtures";
+import { completedCapture } from "./browser.fixtures";
 import { startSelectedChargeRun } from "./charge-runs";
-import { learnPurchaseProductExternalId } from "./external-id-learning";
-import {
-  loadOrderMailImportEvidence,
-  startOrderMailImport,
-  startSelectedOrderMailImport,
-} from "./gmail/import";
-import { discoverImportHunts } from "./hunts";
-import { commitPurchaseImport, preparePurchaseImport } from "./import-orders";
 import {
   authorizePurchaseAgent,
-  mailCommit,
-  mailPrepare,
-  readyExtraction,
-  type ScenarioHarness,
   startScenarioHarness,
   waitFor,
   workerdDiagnostic,
+  type ScenarioHarness,
 } from "./purchase-agent-workerd.fixtures";
+import { admitPurchaseValidationResearch } from "./purchase-validation-research";
 import {
-  approvalWakeEvent,
+  researchObjectiveKey,
+  researchObjectivesOf,
+} from "./research-objective";
+import { startMailResearch } from "./research-run";
+import {
   controlRun,
-  startOrResumeRun,
+  finalizePhotoRun,
   startPhotoInventoryCoordinator,
   startPhotoInventoryRun,
-  startTargetedRun,
 } from "./run-service";
 
-// Each scenario drives the production import-run agent, its tools, the MCP server,
-// queue delivery, the browser broker, and the web Worker's writers end to
-// end. Only the coordinator model and the web Worker's extractor/audit model
-// are scripted, so these prove orchestration and server fences — never model
-// judgment (see purchase-decision-eval.live-eval.ts for that).
-
-const SHOP_HOST = "shop.example.test";
-const PANTRY_SKU = "OATS-1KG";
-const orderUrl = (orderId: string) =>
-  `https://${SHOP_HOST}/order-details?orderId=${orderId}`;
-
-const capturedOrder = (orderId: string, text: string) =>
-  completedCapture(orderUrl(orderId), { title: `Order ${orderId}`, text });
-
-const unreadableExtraction = (detail: string) => ({
-  status: "unreadable",
-  candidate: null,
-  reason: null,
-  detail,
-});
-
+// Current coordinator boundaries still needing built-Worker coverage: reviewed
+// photo stock, partial source retry, and a late canonical charge allocation.
+// Numeric clickable rows and auth/cancel have dedicated current Worker suites.
+const repoRoot = fileURLToPath(new URL("../../../../../", import.meta.url));
+const step = (
+  id: string,
+  tool: string,
+  args: Record<string, ScriptValue> = {},
+): ScriptStep => ({ call: id, tool, args });
+const noOperands = {
+  identityVerified: false,
+  acceptedFacts: [],
+  acceptedIdentifiers: [],
+  acceptedIdentifierClaims: [],
+  acceptedImages: [],
+  acceptedOrders: [],
+  acceptedEmailLinks: [],
+  rejected: [],
+};
 async function protectedBusinessSnapshot(
   db: TestDbContext["db"],
   input: {
@@ -132,6 +153,7 @@ async function protectedBusinessSnapshot(
       .from(entityAttachment)
       .where(eq(entityAttachment.entityId, input.productId)),
     database.select().from(importSourceClaim),
+    database.select().from(importSourceOrder),
     database.select().from(purchasePaymentEvidence),
     database.select().from(financialTransaction),
     database.select().from(financialTransactionAllocation),
@@ -142,1176 +164,138 @@ async function protectedBusinessSnapshot(
 
 let scenario: ScenarioHarness | undefined;
 let scenarioRunId: string | undefined;
+let identity: E2ERunIdentity;
+let began = 0;
+let diagnostic: string | undefined;
+let photoApproval:
+  | Awaited<ReturnType<typeof approvePhotoGroupProposals>>
+  | undefined;
+const readScenarioEvidence = async (active: ScenarioHarness | undefined) => ({
+  emitted: await active?.emitted(),
+  violations: await active?.violations(),
+  gateway: await active?.gatewayCalls(),
+});
 
-describe("purchase-agent scripted scenarios", () => {
+describe("current purchase-agent system boundaries", () => {
   const ctx = withTestDb();
   let releaseHarness: (() => void) | undefined;
   beforeAll(async () => {
     releaseHarness = await holdWorkerdHarness();
   }, HOLD_WORKERD_HARNESS_TIMEOUT_MS);
   afterAll(() => releaseHarness?.());
-
-  afterEach(async ({ task }) => {
-    // A failed scenario prints what the model was told to do, what the server
-    // recorded, and the runtime logs: the evidence a rerun would rediscover.
-    if (task.result?.state === "fail" && scenario && scenarioRunId)
-      console.error(
-        `[scenario] ${task.name}\nemitted=${JSON.stringify(await scenario.emitted())}\nviolations=${JSON.stringify(await scenario.violations())}\ngateway=${JSON.stringify(await scenario.gatewayCalls())}\n${await workerdDiagnostic(ctx.db, scenarioRunId, scenario.harness)}`,
-      );
-    await scenario?.close();
-    scenario = undefined;
-    scenarioRunId = undefined;
+  beforeEach(() => {
+    identity = captureE2ERunIdentity(repoRoot);
+    began = Date.now();
+    diagnostic = undefined;
+    photoApproval = undefined;
   });
-
-  const waitForRun = async (
-    runId: string,
-    predicate: () => Promise<boolean>,
-    message: string,
-    timeoutMs = 20_000,
-  ) => {
+  afterEach(async ({ task }) => {
+    const outputDir = path.join(
+      repoRoot,
+      "artifacts/purchase-research-lifecycle",
+      new Date().toISOString().replaceAll(":", "-"),
+    );
+    mkdirSync(outputDir, { recursive: true });
+    let cleanupError: unknown;
+    let observations:
+      | Awaited<ReturnType<typeof readScenarioEvidence>>
+      | undefined;
     try {
-      await waitFor(predicate, message, timeoutMs);
+      observations = await readScenarioEvidence(scenario);
+      if (scenarioRunId)
+        diagnostic = await workerdDiagnostic(
+          ctx.db,
+          scenarioRunId,
+          scenario?.harness,
+        );
     } catch (error) {
-      throw new Error(
-        `${error instanceof Error ? error.message : String(error)}\nemitted=${JSON.stringify(await scenario?.emitted())}\nviolations=${JSON.stringify(await scenario?.violations())}\ngateway=${JSON.stringify(await scenario?.gatewayCalls())}\n${await workerdDiagnostic(ctx.db, runId, scenario?.harness)}`,
-        { cause: error },
+      cleanupError = error;
+    } finally {
+      try {
+        await scenario?.close();
+      } catch (error) {
+        cleanupError ??= error;
+      }
+      scenario = undefined;
+      scenarioRunId = undefined;
+      const failed = task.result?.state === "fail" || Boolean(cleanupError);
+      writeFileSync(
+        path.join(outputDir, "report.json"),
+        JSON.stringify(
+          {
+            synthetic: true,
+            result: failed ? "failed" : "passed",
+            errors: task.result?.errors?.map((error) => error.message),
+            cleanupError:
+              cleanupError instanceof Error
+                ? cleanupError.message
+                : cleanupError,
+            observations,
+            diagnostic,
+            photoApproval,
+            durationMs: Date.now() - began,
+            limits: [
+              "External coordinator and semantic decisions are scripted; this does not measure model quality.",
+              "Photo description processing is skipped at its external seam; approval readiness is covered by the photo proposal integration tests.",
+            ],
+          },
+          null,
+          2,
+        ),
       );
+      writeE2ERunBundle({
+        repoRoot,
+        outputDir,
+        started: identity,
+        evidence: [outputDir],
+        kind: "browser",
+        status: failed ? "failed" : "passed",
+        profile: "purchase-agent",
+        scenario: task.name,
+        phase: "completed",
+        command: [
+          "pnpm",
+          "--dir",
+          repoRoot,
+          "test:postgres",
+          "src/server/purchase-import/purchase-agent-scenarios.integration.test.ts",
+          "--project",
+          "integration-workerd",
+          "-t",
+          task.name,
+        ],
+        cases: [
+          {
+            name: task.name,
+            status: failed ? "failed" : "passed",
+            durationMs: Date.now() - began,
+          },
+        ],
+      });
     }
-  };
-
+    if (cleanupError) throw cleanupError;
+  });
   const runRow = async (runId: string) => {
     const [row] = await getDb(ctx.db)
-      .select({
-        status: runTable.status,
-        failureCode: runTable.failureCode,
-      })
+      .select()
       .from(runTable)
       .where(eq(runTable.id, runEntityId.parse(runId)));
-    if (!row) throw new Error("Scenario run disappeared");
+    if (!row) throw new Error("Synthetic Run missing");
     return row;
   };
-
+  const waitForRun = (
+    _runId: string,
+    predicate: () => Promise<boolean>,
+    message: string,
+  ) => waitFor(predicate, message, 20_000);
   const waitForStatus = (runId: string, status: string) =>
     waitForRun(
       runId,
       async () => (await runRow(runId)).status === status,
-      `Run never reached ${status}`,
+      `Run did not settle as ${status}`,
     );
-
-  const waitForEmitted = (runId: string, entry: string) =>
-    waitForRun(
-      runId,
-      async () => (await scenario?.emitted())?.includes(entry) ?? false,
-      `Scripted model never reached ${entry}`,
-    );
-
-  /** Nothing the harness can observe changes for a bounded quiet window. */
-  const expectQuiet = async (observe: () => Promise<object>) => {
-    const before = JSON.stringify(await observe());
-    const deadline = Date.now() + 2_000;
-    while (Date.now() < deadline) {
-      expect(JSON.stringify(await observe())).toBe(before);
-      await new Promise((resolve) => setTimeout(resolve, 100));
-    }
-  };
-
-  const findings = (runId: string) =>
-    getDb(ctx.db)
-      .select({ summary: runFinding.summary, status: runFinding.status })
-      .from(runFinding)
-      .where(eq(runFinding.runId, runId));
-
-  const purchaseGraph = async (
-    vendorId: typeof purchase.$inferSelect.vendorId,
-  ) => {
-    const purchases = await getDb(ctx.db)
-      .select({
-        id: purchase.id,
-        shortcode: purchase.shortcode,
-        orderId: purchase.orderId,
-      })
-      .from(purchase)
-      .where(eq(purchase.vendorId, vendorId));
-    const expenses = purchases.length
-      ? await getDb(ctx.db)
-          .select({
-            purchaseId: expense.purchaseId,
-            cost: expense.cost,
-            lineKind: expense.lineKind,
-            productId: expense.productId,
-          })
-          .from(expense)
-          .where(
-            inArray(
-              expense.purchaseId,
-              purchases.map(({ id }) => id),
-            ),
-          )
-      : [];
-    const claims = purchases.length
-      ? await getDb(ctx.db)
-          .select({ id: importSourceClaim.id })
-          .from(importSourceClaim)
-          .where(
-            inArray(
-              importSourceClaim.purchaseId,
-              purchases.map(({ id }) => id),
-            ),
-          )
-      : [];
-    const inventory = await getDb(ctx.db)
-      .select({ id: inventoryEntry.id })
-      .from(inventoryEntry);
-    return { purchases, expenses, claims, inventory };
-  };
-
-  /** One member, one browser-synced account, and a recorded order listing. */
-  const seedAccountSync = async (
-    orders: Array<{ orderId: string; orderedAt: string }>,
-  ) => {
-    const party = await insertWithShortcode(ctx.db, "ledgerParty", {
-      name: "Scenario member",
-      kind: "member",
-      userId: ctx.actor.userId,
-    });
-    // No website or saved hints: once the listing is worked, claim reports
-    // `none` instead of walking more history.
-    const vendor = await insertWithShortcode(ctx.db, "vendor", {
-      name: `Scenario garden shop ${crypto.randomUUID()}`,
-      browserDomains: [SHOP_HOST],
-    });
-    const account = await insertWithShortcode(ctx.db, "vendorAccount", {
-      label: "Scenario shop account",
-      vendorId: vendor.id,
-      ledgerPartyId: party.id,
-      browserSyncEnabled: true,
-    });
-    const run = await startOrResumeRun(ctx.db, {
-      ledgerPartyId: party.id,
-      vendorAccountId: account.id,
-      trigger: "manual",
-    });
-    if (!run.dispatchEventId) throw new Error("Run has no dispatch generation");
-    scenarioRunId = run.id;
-    if (orders.length > 0)
-      await getDb(ctx.db)
-        .insert(runOrderCandidate)
-        .values(
-          orders.map((order) => ({
-            runId: run.id,
-            orderId: order.orderId,
-            orderUrl: orderUrl(order.orderId),
-            orderedAt: order.orderedAt,
-            state: "pending",
-          })),
-        );
-    await authorizePurchaseAgent(ctx.db, ctx.actor.userId);
-    // A product this vendor already sold the household, by its exact SKU.
-    // It is deliberately not food, so no Project trade is inherited: the
-    // principal line's trade comes from the import call's defaultTrade, as it
-    // does for purchase_import.commit.
-    const pantry = await createProductFixture(
-      ctx.db,
-      makeProductInput({ name: "Scenario rolled oats, 1 kg" }),
-      ctx.actor,
-    );
-    await withTransaction(ctx.db, (tx) =>
-      learnPurchaseProductExternalId(tx, {
-        productId: pantry.entityId,
-        source: `vendor-${vendor.id}`,
-        kind: "retailer_sku",
-        externalId: PANTRY_SKU,
-      }),
-    );
-    const start = {
-      version: 1,
-      type: "start_or_resume",
-      runId: run.id,
-      eventId: run.dispatchEventId,
-    };
-    const browser = {
-      vendorAccountId: account.id,
-      ledgerPartyId: party.id,
-      userId: ctx.actor.userId,
-    };
-    return {
-      party,
-      vendor,
-      account,
-      run,
-      start,
-      browser,
-      pantryProductId: pantry.entityId,
-    };
-  };
-
-  /** claim → capture → (pause offline) → claim on connect → import. */
-  const captureAndImport = (orderId: string, suffix: string): ScriptStep[] => [
-    call(`claim-${suffix}`, "claim_next_import_work"),
-    { check: `claim-${suffix}`, includes: orderId },
-    call(`browser-${suffix}`, "issue_browser_command", {
-      command: { kind: "capture_order", target: orderUrl(orderId) },
-    }),
-    awaitBrowserResult(`browser-${suffix}`),
-    call(`import-${suffix}`, "import_browser_order_evidence", {
-      commandId: from(`browser-${suffix}`, "commandId"),
-      defaultTrade: "other",
-    }),
-  ];
-
-  /** The first command pauses offline; the browser connects afterwards. */
-  const firstCapture = (orderId: string): ScriptStep[] => [
-    call("claim-1", "claim_next_import_work"),
-    { check: "claim-1", includes: orderId },
-    call("browser-1", "issue_browser_command", {
-      command: { kind: "capture_order", target: orderUrl(orderId) },
-    }),
-    awaitEvent("browser_connected", "browser_result"),
-    // The connect event resumes a `paused_offline` run through claim.
-    call("claim-resume", "claim_next_import_work"),
-    awaitBrowserResult("browser-1"),
-    call("import-1", "import_browser_order_evidence", {
-      commandId: from("browser-1", "commandId"),
-      defaultTrade: "other",
-    }),
-  ];
-
-  const settlementRead = (id: string) =>
-    mcpRead(id, "finance_read", { action: "statement_rows" });
-
-  const connectAfterPause = async (
-    seeded: Awaited<ReturnType<typeof seedAccountSync>>,
-    outcomes: Record<string, unknown>,
-    delayMs?: number,
-  ) => {
-    await waitForStatus(seeded.run.id, "paused_offline");
-    await scenario?.connectBrowser({ ...seeded.browser, outcomes, delayMs });
-  };
-
-  it("account sync: follows a clickable account listing to its short-numbered order and commits the purchase", async () => {
-    const seeded = await seedAccountSync([]);
-    const accountUrl = `https://${SHOP_HOST}/account`;
-    const detailUrl = `https://${SHOP_HOST}/account/orders/opaque-token`;
-    scenario = await startScenarioHarness(ctx.databaseUrl, {
-      steps: [
-        call("listing-browser", "issue_browser_command", {
-          command: { kind: "capture_order", target: accountUrl },
-        }),
-        awaitEvent("browser_connected", "browser_result"),
-        call("resume", "claim_next_import_work"),
-        awaitBrowserResult("listing-browser"),
-        call("listing-import", "import_browser_order_evidence", {
-          commandId: from("listing-browser", "commandId"),
-        }),
-        { check: "listing-import", includes: "order_list" },
-        call("claim-order", "claim_next_import_work"),
-        { check: "claim-order", includes: detailUrl },
-        call("detail-browser", "issue_browser_command", {
-          command: { kind: "capture_order", target: detailUrl },
-        }),
-        awaitBrowserResult("detail-browser"),
-        call("detail-import", "import_browser_order_evidence", {
-          commandId: from("detail-browser", "commandId"),
-          defaultTrade: "other",
-        }),
-        settlementRead("settlement-account"),
-        call("claim-done", "claim_next_import_work"),
-        { check: "claim-done", includes: "none" },
-        call("finish-account", "finish_import_run"),
-      ],
-      extractions: [
-        {
-          match: "54321",
-          output: readyExtraction("54321", "2026-09-12T12:00:00.000Z", [
-            {
-              title: "Scenario rolled oats, 1 kg",
-              amount: 12,
-              lineKind: "principal",
-              sku: PANTRY_SKU,
-            },
-          ]),
-        },
-      ],
-    });
-    await scenario.dispatch(seeded.start);
-    await connectAfterPause(seeded, {
-      [accountUrl]: await capturedHtml({
-        sourceURL: accountUrl,
-        title: "Account",
-        html: `<html><body><h1>Your account</h1><p>View all your orders</p><table><tr onclick="window.location.href = '${detailUrl}'"><td>#54321</td><td>September 12, 2026</td><td>$12.00</td></tr></table></body></html>`,
-      }),
-      [detailUrl]: await completedCapture(detailUrl, {
-        title: "Order #54321",
-        text: "Order #54321 placed September 12, 2026. Scenario rolled oats, 1 kg (SKU OATS-1KG) $12.00. Order total $12.00.",
-      }),
-    });
-    await waitForStatus(seeded.run.id, "completed");
-    const graph = await purchaseGraph(seeded.vendor.id);
-    expect(graph.purchases).toMatchObject([{ orderId: "54321" }]);
-    expect(graph.expenses).toMatchObject([
-      { cost: 12, productId: seeded.pantryProductId },
-    ]);
-    expect(graph.claims).toHaveLength(1);
-    expect(await scenario.gatewayCalls()).toEqual(
-      expect.arrayContaining([
-        { feature: "purchase-import-extraction", matched: "54321" },
-      ]),
-    );
-    expect(await scenario.violations()).toEqual([]);
-  });
-
-  it("account sync: captures one order through the browser broker, imports it, verifies settlement, and completes", async () => {
-    const seeded = await seedAccountSync([
-      { orderId: "SCN10001", orderedAt: "2026-09-20" },
-    ]);
-    scenario = await startScenarioHarness(ctx.databaseUrl, {
-      steps: [
-        ...firstCapture("SCN10001"),
-        { check: "import-1", includes: "SCN10001" },
-        settlementRead("settlement-1"),
-        call("claim-done", "claim_next_import_work"),
-        { check: "claim-done", includes: "none" },
-        call("finish-1", "finish_import_run"),
-      ],
-      extractions: [
-        {
-          match: "SCN10001",
-          output: readyExtraction("SCN10001", "2026-09-20T12:00:00.000Z", [
-            {
-              title: "Scenario rolled oats, 1 kg",
-              amount: 12,
-              lineKind: "principal",
-              sku: PANTRY_SKU,
-            },
-            { title: "Sales tax", amount: 1, lineKind: "tax" },
-          ]),
-        },
-      ],
-    });
-    await scenario.dispatch(seeded.start);
-    await connectAfterPause(seeded, {
-      [orderUrl("SCN10001")]: await capturedOrder(
-        "SCN10001",
-        "Order SCN10001 placed September 20, 2026. Scenario rolled oats, 1 kg (SKU OATS-1KG) $12.00. Sales tax $1.00. Order total $13.00.",
-      ),
-    });
-    await waitForStatus(seeded.run.id, "completed");
-
-    const graph = await purchaseGraph(seeded.vendor.id);
-    expect(graph.purchases).toMatchObject([{ orderId: "SCN10001" }]);
-    expect(
-      graph.expenses
-        .map(({ cost, lineKind, productId }) => [lineKind, cost, productId])
-        .sort(),
-    ).toEqual([
-      ["principal", 12, seeded.pantryProductId],
-      ["tax", 1, null],
-    ]);
-    expect(graph.claims).toHaveLength(1);
-    expect(graph.inventory).toEqual([]);
-    expect(
-      await getDb(ctx.db)
-        .select({ state: runOrderCandidate.state })
-        .from(runOrderCandidate)
-        .where(eq(runOrderCandidate.runId, seeded.run.id)),
-    ).toEqual([{ state: "imported" }]);
-    expect(
-      (await findings(seeded.run.id)).filter((f) => f.status === "open"),
-    ).toEqual([]);
-    expect(await scenario.gatewayCalls()).toEqual(
-      expect.arrayContaining([
-        { feature: "purchase-import-extraction", matched: "SCN10001" },
-        { feature: "purchase-import-audit", matched: "audit" },
-      ]),
-    );
-    expect(await scenario.violations()).toEqual([]);
-
-    // Redelivery: the same start event is fenced by its acknowledged
-    // generation and the same browser result by the agent's idempotency key, so
-    // neither reaches the model or writes again.
-    const emittedBefore = await scenario.emitted();
-    const [command] = await getDb(ctx.db)
-      .select({ result: runOperation.result })
-      .from(runOperation)
-      .where(
-        and(
-          eq(runOperation.runId, seeded.run.id),
-          eq(runOperation.kind, "browser_command"),
-        ),
-      );
-    const { commandId } = z
-      .object({ commandId: z.uuid() })
-      .parse(command?.result);
-    await scenario.dispatch(seeded.start);
-    await scenario.dispatch({
-      version: 1,
-      type: "browser_result",
-      runId: seeded.run.id,
-      eventId: `browser-result:${commandId}`,
-      commandId,
-    });
-    await expectQuiet(async () => [
-      await scenario?.emitted(),
-      await purchaseGraph(seeded.vendor.id),
-      (await runRow(seeded.run.id)).status,
-    ]);
-    expect(await scenario.emitted()).toEqual(emittedBefore);
-  }, 90_000);
-
-  it("account sync: imports the first of two orders exactly once, defers the unreadable second, and ends in review naming it", async () => {
-    const seeded = await seedAccountSync([
-      { orderId: "SCN20001", orderedAt: "2026-09-22" },
-      { orderId: "SCN20002", orderedAt: "2026-09-21" },
-    ]);
-    scenario = await startScenarioHarness(ctx.databaseUrl, {
-      steps: [
-        ...firstCapture("SCN20001"),
-        // Replay the same evidence under a new operation id, as a crashed
-        // and resumed coordinator would: the source claim must hold.
-        call("import-1-replay", "import_browser_order_evidence", {
-          commandId: from("browser-1", "commandId"),
-          defaultTrade: "other",
-        }),
-        settlementRead("settlement-1"),
-        ...captureAndImport("SCN20002", "2"),
-        { check: "import-2", includes: "unreadable" },
-        call("defer-2", "defer_order_for_review", {
-          orderId: "SCN20002",
-          detail: "The order detail page stayed unreadable after capture.",
-        }),
-        call("claim-done", "claim_next_import_work"),
-        { check: "claim-done", includes: "none" },
-        call("finish-1", "finish_import_run"),
-      ],
-      extractions: [
-        {
-          match: "SCN20001",
-          output: readyExtraction("SCN20001", "2026-09-22T12:00:00.000Z", [
-            {
-              title: "Scenario rolled oats, 1 kg",
-              amount: 8.5,
-              lineKind: "principal",
-              sku: PANTRY_SKU,
-            },
-            { title: "Shipping", amount: 1.5, lineKind: "shipping" },
-          ]),
-        },
-        {
-          match: "SCN20002",
-          output: unreadableExtraction(
-            "The capture shows a loading placeholder instead of order lines.",
-          ),
-        },
-      ],
-    });
-    await scenario.dispatch(seeded.start);
-    await connectAfterPause(
-      seeded,
-      {
-        [orderUrl("SCN20001")]: await capturedOrder(
-          "SCN20001",
-          "Order SCN20001 placed September 22, 2026. Scenario rolled oats, 1 kg (SKU OATS-1KG) $8.50. Shipping $1.50. Order total $10.00.",
-        ),
-        [orderUrl("SCN20002")]: await capturedOrder(
-          "SCN20002",
-          "Order SCN20002. Loading order details…",
-        ),
-      },
-      // No capture delay: the browser may answer before the submission that
-      // issued the command settles, and the run must keep working.
-    );
-    await waitForStatus(seeded.run.id, "needs_review");
-
-    const graph = await purchaseGraph(seeded.vendor.id);
-    expect(graph.purchases).toMatchObject([{ orderId: "SCN20001" }]);
-    expect(
-      graph.expenses
-        .map(({ cost, lineKind, productId }) => [lineKind, cost, productId])
-        .sort(),
-    ).toEqual([
-      ["principal", 8.5, seeded.pantryProductId],
-      ["shipping", 1.5, null],
-    ]);
-    expect(graph.claims).toHaveLength(1);
-    expect(graph.inventory).toEqual([]);
-    const open = (await findings(seeded.run.id)).filter(
-      (f) => f.status === "open",
-    );
-    expect(open).toHaveLength(1);
-    expect(open[0]?.summary).toContain("SCN20002");
-    expect(
-      (
-        await getDb(ctx.db)
-          .select({
-            orderId: runOrderCandidate.orderId,
-            state: runOrderCandidate.state,
-          })
-          .from(runOrderCandidate)
-          .where(eq(runOrderCandidate.runId, seeded.run.id))
-      ).sort((a, b) => a.orderId.localeCompare(b.orderId)),
-    ).toEqual([
-      { orderId: "SCN20001", state: "imported" },
-      { orderId: "SCN20002", state: "skipped" },
-    ]);
-    expect(await scenario.violations()).toEqual([]);
-  }, 90_000);
-
-  it("approval: a generic mutation pauses, a grant replays it exactly once after the member continues, and a rejection never writes", async () => {
-    const seeded = await seedAccountSync([]);
-    const target = await createProductFixture(
-      ctx.db,
-      makeProductInput({ name: "Scenario watering can" }),
-      ctx.actor,
-    );
-    const [targetRow] = await getDb(ctx.db)
-      .select({ shortcode: product.shortcode })
-      .from(product)
-      .where(eq(product.id, target.entityId));
-    if (!targetRow) throw new Error("Expected scenario Product");
-    const note = (id: string, notes: string) =>
-      mcp(
-        id,
-        "entity",
-        seeded.run.id,
-        {
-          action: "update",
-          entity: "product",
-          id: targetRow.shortcode,
-          data: { notes },
-        },
-        { operationId: id.replace(/-(?:propose|replay)$/u, "") },
-      );
-    const awaitApproval = (id: string) =>
-      call(id, "report_agent_progress", {
-        phase: "awaiting_approval",
-        awaitingApproval: true,
-        detail: "A Product note needs member approval.",
-      });
-    scenario = await startScenarioHarness(ctx.databaseUrl, {
-      steps: [
-        call("claim-1", "claim_next_import_work"),
-        note("note-granted-propose", "Granted scenario note"),
-        awaitApproval("await-granted"),
-        { await: [":approved"] },
-        note("note-granted-replay", "Granted scenario note"),
-        note("note-rejected-propose", "Rejected scenario note"),
-        awaitApproval("await-rejected"),
-        { await: [":rejected"] },
-        call("finish-1", "finish_import_run"),
-      ],
-    });
-    await scenario.dispatch(seeded.start);
-    await waitForStatus(seeded.run.id, "paused_approval");
-    await waitForEmitted(seeded.run.id, "await-granted");
-    const approve = await controlRun(ctx.db, ctx.actor, {
-      runPublicId: seeded.run.publicId,
-      action: "approve",
-      operationId: "note-granted",
-    });
-    expect(approve).toMatchObject({ decision: "approved" });
-    // The decision's own wake event resumes the parked conversation; no
-    // member prompt is needed (the run-control handler dispatches it).
-    const approvalWake = approvalWakeEvent(approve);
-    if (!approvalWake) throw new Error("A grant must wake the coordinator");
-    await scenario.dispatch(approvalWake);
-    await waitForEmitted(seeded.run.id, "await-rejected");
-    await waitForStatus(seeded.run.id, "paused_approval");
-    // Reject immediately: a settle event from the parked submission that
-    // lands after the decision must not move the run to review.
-    const reject = await controlRun(ctx.db, ctx.actor, {
-      runPublicId: seeded.run.publicId,
-      action: "reject",
-      operationId: "note-rejected",
-    });
-    expect((await runRow(seeded.run.id)).status).toBe("running");
-    const rejectionWake = approvalWakeEvent(reject);
-    if (!rejectionWake)
-      throw new Error("A rejection must wake the coordinator");
-    await scenario.dispatch(rejectionWake);
-    await waitForStatus(seeded.run.id, "completed");
-
-    const [updated] = await getDb(ctx.db)
-      .select({ notes: product.notes })
-      .from(product)
-      .where(eq(product.id, target.entityId));
-    expect(updated?.notes).toBe("Granted scenario note");
-    expect(
-      (
-        await getDb(ctx.db)
-          .select({
-            operationId: runApproval.operationId,
-            state: runApproval.state,
-          })
-          .from(runApproval)
-          .where(eq(runApproval.runId, seeded.run.id))
-      ).sort((a, b) => a.operationId.localeCompare(b.operationId)),
-    ).toEqual([
-      { operationId: "note-granted", state: "consumed" },
-      { operationId: "note-rejected", state: "rejected" },
-    ]);
-    expect(
-      (
-        await getDb(ctx.db)
-          .select({
-            operationId: runOperation.operationId,
-            state: runOperation.state,
-          })
-          .from(runOperation)
-          .where(
-            and(
-              eq(runOperation.runId, seeded.run.id),
-              inArray(runOperation.operationId, [
-                "note-granted",
-                "note-rejected",
-              ]),
-            ),
-          )
-      ).sort((a, b) => a.operationId.localeCompare(b.operationId)),
-    ).toEqual([
-      { operationId: "note-granted", state: "completed" },
-      { operationId: "note-rejected", state: "failed" },
-    ]);
-    expect(await scenario.violations()).toEqual([]);
-  }, 90_000);
-
-  // Regression: the pi-durable move dropped the submission-start marker the
-  // settle report keyed on, so every settle was ignored and a coordinator
-  // that simply stopped left its run `running` until the two-hour sweep.
-  it("stall: a coordinator that stops without finishing moves the run to review once it settles", async () => {
-    const seeded = await seedAccountSync([]);
-    scenario = await startScenarioHarness(ctx.databaseUrl, {
-      steps: [
-        call("claim-1", "claim_next_import_work"),
-        { await: ["scenario-event-that-never-arrives"] },
-      ],
-    });
-    await scenario.dispatch(seeded.start);
-    await waitForRun(
-      seeded.run.id,
-      async () => (await runRow(seeded.run.id)).status === "needs_review",
-      "Run never reached needs_review",
-      // Settlement is polled every ten seconds.
-      40_000,
-    );
-    expect(await findings(seeded.run.id)).toEqual([
-      {
-        summary: "Coordinator ended without finishing the run",
-        status: "open",
-      },
-    ]);
-    expect(await scenario.violations()).toEqual([]);
-  }, 90_000);
-
-  it("cancellation: cancelling during a pending browser command fails the run and a late browser result writes nothing", async () => {
-    const seeded = await seedAccountSync([
-      { orderId: "SCN40001", orderedAt: "2026-09-23" },
-    ]);
-    scenario = await startScenarioHarness(ctx.databaseUrl, {
-      // The script keeps going after the cancel, as a model that missed it
-      // would; the server fences must refuse every step.
-      steps: [
-        ...firstCapture("SCN40001"),
-        call("finish-1", "finish_import_run"),
-      ],
-      extractions: [
-        {
-          match: "SCN40001",
-          output: readyExtraction("SCN40001", "2026-09-23T12:00:00.000Z", [
-            { title: "Synthetic plant ties", amount: 4, lineKind: "principal" },
-          ]),
-        },
-      ],
-    });
-    await scenario.dispatch(seeded.start);
-    await waitForStatus(seeded.run.id, "paused_offline");
-    const cancelled = await controlRun(ctx.db, ctx.actor, {
-      runPublicId: seeded.run.publicId,
-      action: "cancel",
-    });
-    expect(cancelled).toMatchObject({ status: "failed" });
-    expect(
-      "cancelledBrowserCommandIds" in cancelled
-        ? cancelled.cancelledBrowserCommandIds
-        : undefined,
-    ).toHaveLength(1);
-    // The browser was already executing: its result reaches the broker after
-    // the cancellation (the route's broker cancel lost the race).
-    await scenario.connectBrowser({
-      ...seeded.browser,
-      outcomes: {
-        [orderUrl("SCN40001")]: await capturedOrder(
-          "SCN40001",
-          "Order SCN40001 placed September 23, 2026. Synthetic plant ties $4.00. Order total $4.00.",
-        ),
-      },
-    });
-    await waitForEmitted(seeded.run.id, "script-complete");
-    expect(await runRow(seeded.run.id)).toMatchObject({
-      status: "failed",
-      failureCode: "user_cancelled",
-    });
-    const graph = await purchaseGraph(seeded.vendor.id);
-    expect(graph.purchases).toEqual([]);
-    expect(graph.expenses).toEqual([]);
-    expect(
-      (await scenario.gatewayCalls()).filter(
-        ({ feature }) => feature === "purchase-import-extraction",
-      ),
-    ).toEqual([]);
-    expect(
-      await getDb(ctx.db)
-        .select({ state: runOrderCandidate.state })
-        .from(runOrderCandidate)
-        .where(eq(runOrderCandidate.runId, seeded.run.id)),
-    ).toEqual([{ state: "pending" }]);
-    expect(await scenario.violations()).toEqual([]);
-  }, 90_000);
-
-  /** A saved order confirmation and its browser-independent run. */
-  const seedOrderMail = async (orderId: string, bodyText: string) => {
-    const party = await insertWithShortcode(ctx.db, "ledgerParty", {
-      name: "Scenario mail member",
-      kind: "member",
-      userId: ctx.actor.userId,
-    });
-    const vendor = await insertWithShortcode(ctx.db, "vendor", {
-      name: `Scenario mail shop ${crypto.randomUUID()}`,
-    });
-    const [mail] = await getDb(ctx.db)
-      .insert(orderMail)
-      .values({
-        ledgerPartyId: party.id,
-        vendorId: vendor.id,
-        messageId: `scenario-confirmation-${crypto.randomUUID()}`,
-        sender: "orders@mail-shop.example.test",
-        subject: `Order ${orderId} confirmed`,
-        receivedAt: new Date("2026-09-24T12:00:00Z"),
-        rawChecksum: "c".repeat(64),
-        content: { snippet: null, bodyHtml: null, bodyText },
-      })
-      .returning();
-    if (!mail) throw new Error("Missing scenario mail");
-    const [event] = await getDb(ctx.db)
-      .insert(orderMailEvent)
-      .values({
-        orderMailId: mail.id,
-        event: "placed",
-        orderId,
-        amount: 9,
-        currency: "USD",
-        sourceKey: `scenario:${mail.id}`,
-      })
-      .returning();
-    if (!event) throw new Error("Missing scenario mail event");
-    const sent: Array<Record<string, unknown>> = [];
-    const started = await startOrderMailImport(
-      ctx.db,
-      { eventId: event.id, evidenceChecksum: mail.rawChecksum },
-      ctx.actor,
-      { send: async (value) => void sent.push(value) },
-    );
-    const [run] = await getDb(ctx.db)
-      .select({ id: runTable.id })
-      .from(runTable)
-      .where(eq(runTable.shortcode, started.runId));
-    if (!run || !sent[0]) throw new Error("Mail import did not dispatch");
-    scenarioRunId = run.id;
-    await authorizePurchaseAgent(ctx.db, ctx.actor.userId);
-    return { vendor, runId: run.id, start: sent[0] };
-  };
-
-  it("mail evidence: a confirmation with no itemization stops for review without preparing anything", async () => {
-    const seeded = await seedOrderMail(
-      "SCN50001",
-      "Thanks for your order SCN50001! We will email you when it ships.",
-    );
-    scenario = await startScenarioHarness(ctx.databaseUrl, {
-      steps: [
-        call("claim-1", "claim_next_import_work"),
-        call("extract-1", "extract_run_evidence"),
-        { check: "extract-1", includes: "unreadable" },
-        call("stop-1", "stop_import_run_for_review", {
-          reason: "unreadable_evidence",
-          detail: "The confirmation for SCN50001 lists no items or total.",
-        }),
-      ],
-      extractions: [
-        {
-          match: "SCN50001",
-          output: unreadableExtraction(
-            "The confirmation names the order but lists no items or total.",
-          ),
-        },
-      ],
-    });
-    await scenario.dispatch(seeded.start);
-    await waitForStatus(seeded.runId, "needs_review");
-
-    expect((await purchaseGraph(seeded.vendor.id)).purchases).toEqual([]);
-    expect(
-      await getDb(ctx.db)
-        .select({ kind: runOperation.kind })
-        .from(runOperation)
-        .where(
-          and(
-            eq(runOperation.runId, seeded.runId),
-            eq(runOperation.kind, "prepare_purchase_import"),
-          ),
-        ),
-    ).toEqual([]);
-    const open = (await findings(seeded.runId)).filter(
-      (f) => f.status === "open",
-    );
-    expect(open).toHaveLength(1);
-    expect(open[0]?.summary).toContain("SCN50001");
-    expect(await scenario.violations()).toEqual([]);
-  }, 90_000);
-
-  // A new coordinator once checked the member's grant by listing MCP tools
-  // before its first turn; it now mounts tools without listing, so the
-  // preflight is an explicit `authorize` and must still run first.
-  it("authorization: a new coordinator without a live grant pauses the run before any model turn or effect", async () => {
-    const seeded = await seedOrderMail(
-      "SCN50002",
-      "Thanks for your order SCN50002! Rolled oats 1 kg, $6.50.",
-    );
-    await getDb(ctx.db)
-      .delete(oauthRefreshToken)
-      .where(eq(oauthRefreshToken.userId, ctx.actor.userId));
-    scenario = await startScenarioHarness(ctx.databaseUrl, {
-      steps: [call("claim-1", "claim_next_import_work")],
-    });
-    await scenario.dispatch(seeded.start);
-    await waitForStatus(seeded.runId, "paused_auth");
-
-    expect(await scenario.emitted()).toEqual([]);
-    expect(
-      await getDb(ctx.db)
-        .select({ kind: runOperation.kind })
-        .from(runOperation)
-        .where(eq(runOperation.runId, seeded.runId)),
-    ).toEqual([]);
-  }, 90_000);
-
-  it("browser evidence: an unreadable single-order capture stops the run for review with no speculative writes", async () => {
-    const seeded = await seedAccountSync([
-      { orderId: "SCN60001", orderedAt: "2026-09-25" },
-    ]);
-    scenario = await startScenarioHarness(ctx.databaseUrl, {
-      steps: [
-        ...firstCapture("SCN60001"),
-        { check: "import-1", includes: "unreadable" },
-        call("stop-1", "stop_import_run_for_review", {
-          reason: "unreadable_evidence",
-          detail: "Order SCN60001 rendered no readable lines.",
-        }),
-      ],
-      extractions: [
-        {
-          match: "SCN60001",
-          output: unreadableExtraction("Only a sign-in banner was captured."),
-        },
-      ],
-    });
-    await scenario.dispatch(seeded.start);
-    await connectAfterPause(seeded, {
-      [orderUrl("SCN60001")]: await capturedOrder(
-        "SCN60001",
-        "Order SCN60001. Sign in to see your order.",
-      ),
-    });
-    await waitForStatus(seeded.run.id, "needs_review");
-
-    const graph = await purchaseGraph(seeded.vendor.id);
-    expect(graph.purchases).toEqual([]);
-    expect(graph.expenses).toEqual([]);
-    const open = (await findings(seeded.run.id)).filter(
-      (f) => f.status === "open",
-    );
-    expect(open).toHaveLength(1);
-    expect(open[0]?.summary).toContain("SCN60001");
-    expect(await scenario.violations()).toEqual([]);
-  }, 90_000);
-
-  it("mail evidence: one run over two selected confirmations imports the readable one, defers the unreadable one, and finishes for review", async () => {
-    const party = await insertWithShortcode(ctx.db, "ledgerParty", {
-      name: "Scenario mail member",
-      kind: "member",
-      userId: ctx.actor.userId,
-    });
-    const vendor = await insertWithShortcode(ctx.db, "vendor", {
-      name: `Scenario mail shop ${crypto.randomUUID()}`,
-    });
-    const seedEvent = async (
-      orderId: string,
-      receivedAt: string,
-      bodyText: string,
-    ) => {
-      const [mail] = await getDb(ctx.db)
-        .insert(orderMail)
-        .values({
-          ledgerPartyId: party.id,
-          vendorId: vendor.id,
-          messageId: `scenario-confirmation-${crypto.randomUUID()}`,
-          sender: "orders@mail-shop.example.test",
-          subject: `Order ${orderId} confirmed`,
-          receivedAt: new Date(receivedAt),
-          rawChecksum: crypto.randomUUID().replaceAll("-", "").repeat(2),
-          content: { snippet: null, bodyHtml: null, bodyText },
-        })
-        .returning();
-      if (!mail) throw new Error("Missing scenario mail");
-      const [event] = await getDb(ctx.db)
-        .insert(orderMailEvent)
-        .values({
-          orderMailId: mail.id,
-          event: "placed",
-          orderId,
-          amount: 9,
-          currency: "USD",
-          sourceKey: `scenario:${mail.id}`,
-        })
-        .returning();
-      if (!event) throw new Error("Missing scenario mail event");
-      return { eventId: event.id, evidenceChecksum: mail.rawChecksum };
-    };
-    const sent: Array<Record<string, unknown>> = [];
-    const started = await startSelectedOrderMailImport(
-      ctx.db,
-      {
-        orders: [
-          await seedEvent(
-            "SCN70001",
-            "2026-09-24T12:00:00Z",
-            "Order SCN70001. Synthetic pruning saw, SKU SAW-30, quantity 1, $9.00. Grand Total $9.00 USD.",
-          ),
-          await seedEvent(
-            "SCN70002",
-            "2026-09-25T12:00:00Z",
-            "Thanks for your order SCN70002! We will email you when it ships.",
-          ),
-        ],
-      },
-      ctx.actor,
-      { send: async (value) => void sent.push(value) },
-    );
-    const [row] = await getDb(ctx.db)
-      .select({ id: runTable.id })
-      .from(runTable)
-      .where(eq(runTable.shortcode, started.runId));
-    if (!row || !sent[0]) throw new Error("Selected mail did not dispatch");
-    const runId = row.id;
-    scenarioRunId = runId;
-    await authorizePurchaseAgent(ctx.db, ctx.actor.userId);
-    scenario = await startScenarioHarness(ctx.databaseUrl, {
-      steps: [
-        call("claim-1", "claim_next_import_work"),
-        { check: "claim-1", includes: "SCN70001" },
-        call("extract-1", "extract_run_evidence"),
-        mailPrepare("extract-1", "1", runId),
-        mailCommit("extract-1", "1", runId),
-        // A coordinator that lost the commit response re-issues it under the
-        // same operation id: the recorded result answers and nothing is
-        // written again. A changed payload under that id is refused.
-        mailCommit("extract-1", "1", runId, "commit-1-replay"),
-        { check: "commit-1-replay", includes: "findingCount" },
-        mcp(
-          "commit-1-changed",
-          "purchase_import",
-          runId,
-          {
-            action: "commit",
-            prepareOperationId: "prepare-1",
-            defaultTrade: "other",
-            resolutions: [],
-          },
-          { operationId: "commit-1" },
-        ),
-        {
-          check: "commit-1-changed",
-          includes: "Operation id was replayed with different input",
-        },
-        settlementRead("settlement-1"),
-        call("claim-2", "claim_next_import_work"),
-        { check: "claim-2", includes: "SCN70002" },
-        call("extract-2", "extract_run_evidence"),
-        { check: "extract-2", includes: "unreadable" },
-        call("defer-2", "defer_order_for_review", {
-          orderId: "SCN70002",
-          detail: "The confirmation names the order but lists no items.",
-        }),
-        call("claim-done", "claim_next_import_work"),
-        { check: "claim-done", includes: "none" },
-        call("finish-1", "finish_import_run"),
-      ],
-      extractions: [
-        {
-          match: "SCN70001",
-          output: readyExtraction("SCN70001", "2026-09-24T12:00:00.000Z", [
-            {
-              title: "Synthetic pruning saw",
-              amount: 9,
-              lineKind: "principal",
-              sku: "SAW-30",
-            },
-          ]),
-        },
-        {
-          match: "SCN70002",
-          output: unreadableExtraction(
-            "The confirmation names the order but lists no items or total.",
-          ),
-        },
-      ],
-    });
-    await scenario.dispatch(sent[0]);
-    await waitForStatus(runId, "needs_review");
-
-    const graph = await purchaseGraph(vendor.id);
-    expect(graph.purchases).toMatchObject([{ orderId: "SCN70001" }]);
-    expect(graph.expenses).toHaveLength(1);
-    // The refused payload left the recorded commit as it was.
-    expect(
-      await getDb(ctx.db)
-        .select({ state: runOperation.state, error: runOperation.error })
-        .from(runOperation)
-        .where(
-          and(
-            eq(runOperation.runId, runId),
-            eq(runOperation.operationId, "commit-1"),
-          ),
-        ),
-    ).toEqual([{ state: "completed", error: null }]);
-    expect(
-      await getDb(ctx.db)
-        .select({
-          orderId: runOrderCandidate.orderId,
-          state: runOrderCandidate.state,
-        })
-        .from(runOrderCandidate)
-        .where(eq(runOrderCandidate.runId, runId))
-        .orderBy(runOrderCandidate.orderId),
-    ).toEqual([
-      { orderId: "SCN70001", state: "imported" },
-      { orderId: "SCN70002", state: "skipped" },
-    ]);
-    expect(
-      (await findings(runId)).filter((f) => f.status === "open"),
-    ).toMatchObject([{ summary: expect.stringContaining("SCN70002") }]);
-    expect(await scenario.violations()).toEqual([]);
-  }, 90_000);
-
-  it("charge search: one run over three selected charges settles one, records one as not found and one for review, and finishes for review", async () => {
-    const party = await insertWithShortcode(ctx.db, "ledgerParty", {
-      name: "Scenario charge member",
-      kind: "member",
-      userId: ctx.actor.userId,
-    });
-    const card = await insertWithShortcode(ctx.db, "financialAccount", {
-      name: "Scenario card",
-      identity: { kind: "credit_card", issuer: null, network: "visa" },
-      ledgerPartyId: party.id,
-    });
-    const vendor = await insertWithShortcode(ctx.db, "vendor", {
-      name: `Scenario charge shop ${crypto.randomUUID()}`,
-      website: `https://${SHOP_HOST}/orders`,
-      browserDomains: [SHOP_HOST],
-      orderEvidence: "online_account",
-    });
-    await getDb(ctx.db).insert(merchantVendorRule).values({
-      ledgerPartyId: party.id,
-      normalizedMerchant: "scenario charge shop",
-      vendorId: vendor.id,
-      confirmedByUserId: ctx.actor.userId,
-    });
-    const account = await insertWithShortcode(ctx.db, "vendorAccount", {
-      label: "Scenario charge account",
-      vendorId: vendor.id,
-      ledgerPartyId: party.id,
-    });
-    const charge = (amount: number, date: string) =>
-      insertWithShortcode(ctx.db, "financialTransaction", {
-        accountId: card.id,
-        kind: "purchase",
-        status: "posted",
-        amount,
-        merchant: "SCENARIO CHARGE SHOP",
-        transactionDate: date,
-        postedDate: date,
-      });
-    const [a, b, c] = [
-      await charge(11, "2026-09-01"),
-      await charge(22, "2026-09-02"),
-      await charge(33, "2026-09-03"),
-    ];
-    await discoverImportHunts(ctx.db);
-    const sent: Array<Record<string, unknown>> = [];
-    const started = await startSelectedChargeRun(
-      ctx.db,
-      chargeRunStartInput.parse({
-        vendorAccountId: account.shortcode,
-        transactionIds: [a.shortcode, b.shortcode, c.shortcode],
-      }),
-      ctx.actor,
-      { send: async (value) => void sent.push(value) },
-    );
-    const [row] = await getDb(ctx.db)
-      .select({ id: runTable.id })
-      .from(runTable)
-      .where(eq(runTable.shortcode, started.runId));
-    if (!row || !sent[0]) throw new Error("Selected charges did not dispatch");
-    const runId = row.id;
-    scenarioRunId = runId;
-    // Another path settles the newest charge before the agent reaches it.
-    const settled = await insertWithShortcode(ctx.db, "purchase", {
-      vendorId: vendor.id,
-      vendorAccountId: account.id,
-      date: "2026-09-03",
-      displayLabel: "Settled elsewhere",
-    });
-    await getDb(ctx.db)
-      .insert(financialTransactionAllocation)
-      .values({ transactionId: c.id, purchaseId: settled.id, amount: 33 });
-    await authorizePurchaseAgent(ctx.db, ctx.actor.userId);
-    scenario = await startScenarioHarness(ctx.databaseUrl, {
-      steps: [
-        call("claim-1", "claim_next_import_work"),
-        { check: "claim-1", includes: "hunt" },
-        call("settle-1", "settle_charge_hunt", {
-          huntId: from("claim-1", "id"),
-          outcome: "not_found",
-          detail: "No order near this amount in the vendor history.",
-        }),
-        call("claim-2", "claim_next_import_work"),
-        { check: "claim-2", includes: "hunt" },
-        call("settle-2", "settle_charge_hunt", {
-          huntId: from("claim-2", "id"),
-          outcome: "needs_review",
-          detail: "Two orders fit this amount and date.",
-        }),
-        call("claim-done", "claim_next_import_work"),
-        { check: "claim-done", includes: "none" },
-        call("finish-1", "finish_import_run"),
-      ],
-      extractions: [],
-    });
-    await scenario.dispatch(sent[0]);
-    await waitForStatus(runId, "needs_review");
-
-    const progress = await getRunLiveProgress(ctx.db, started.runId);
-    expect(progress?.charges).toEqual([
-      { chargeId: a.shortcode, outcome: "not_found" },
-      { chargeId: b.shortcode, outcome: "deferred" },
-      { chargeId: c.shortcode, outcome: "resolved" },
-    ]);
-    expect(
-      (await findings(runId)).filter((f) => f.status === "open"),
-    ).toMatchObject([{ summary: expect.stringContaining(b.shortcode) }]);
-    expect(await scenario.violations()).toEqual([]);
-  }, 90_000);
-
   it("photo inventory: dispatches through the agent and MCP, waits for review, then commits only on approval", async () => {
-    await insertWithShortcode(ctx.db, "ledgerParty", {
+    const party = await insertWithShortcode(ctx.db, "ledgerParty", {
       name: "Synthetic wardrobe member",
       kind: "member",
       userId: ctx.actor.userId,
@@ -1319,20 +303,67 @@ describe("purchase-agent scripted scenarios", () => {
     const run = await startPhotoInventoryRun(ctx.db, {
       actorUserId: ctx.actor.userId,
     });
+    const bytes = Buffer.from(
+      "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg==",
+      "base64",
+    );
+    const checksum = await sha256Hex(bytes);
     const imageFixture = await createImageFixture(
       ctx.db,
       `synthetic-wardrobe-${crypto.randomUUID()}`,
+      {
+        status: "PENDING",
+        size: bytes.byteLength,
+        sha256: checksum,
+        width: 1,
+        height: 1,
+        renderStatus: null,
+        storageStatus: "unverified",
+      },
     );
-    await getDb(ctx.db)
-      .insert(runTarget)
-      .values({
-        runId: runEntityId.parse(run.id),
-        entityKind: "image",
-        entityId: parseEntityId("image", imageFixture.id),
-        position: 0,
-        state: "pending",
-        targetFingerprint: `synthetic-${crypto.randomUUID()}`,
-      });
+    await updateImageProcessingSettings(ctx.db, {
+      enabled: false,
+      paused: true,
+    });
+    await finalizePhotoRun(
+      ctx.db,
+      {
+        runId: runShortcode.parse(run.publicId),
+        images: [
+          {
+            imageId: imageFixture.shortcode,
+            position: 0,
+            sha256: checksum,
+            width: 1,
+            height: 1,
+          },
+        ],
+      },
+      ctx.actor,
+      {
+        ...productionPhotoImportCommitPorts,
+        getObject: async () => new Response(bytes),
+        inspect: async () => ({
+          contentType: "image/png",
+          detectedContentType: "image/png",
+          width: 1,
+          height: 1,
+          sha256: checksum,
+          renderStatus: "verified",
+          storageStatus: "available",
+          verifiedAt: new Date(),
+        }),
+      },
+    );
+    const closet = await createLocationFixture(
+      ctx.db,
+      makeLocationInput({
+        name: "Synthetic review closet",
+        parentId: TEST_HOME_SHORTCODE,
+      }),
+      ctx.actor,
+    );
+    scenarioRunId = run.id;
     const started = await startPhotoInventoryCoordinator(ctx.db, {
       publicId: run.publicId,
       actorUserId: ctx.actor.userId,
@@ -1360,6 +391,7 @@ describe("purchase-agent scripted scenarios", () => {
               groupKey: "synthetic-wardrobe-item",
               images: [{ id: imageFixture.shortcode, purpose: "item" }],
               product: { kind: "create", create: { name: productName } },
+              inventory: { locationId: closet.id, quantity: 1 },
               evidence:
                 "Synthetic item photo; review the proposed identity before creating a Product.",
             },
@@ -1439,12 +471,32 @@ describe("purchase-agent scripted scenarios", () => {
       .from(runTable)
       .where(eq(runTable.id, run.id));
     expect(waitingRun?.status).toBe("running");
+    expect(await getDb(ctx.db).select().from(inventoryEntry)).toEqual([]);
+    await getDb(ctx.db)
+      .update(imageProcessingJob)
+      .set({
+        state: "skipped",
+        completedAt: new Date(),
+        lastError:
+          "Synthetic lifecycle scenario skips external photo description",
+      })
+      .where(
+        and(
+          eq(
+            imageProcessingJob.imageId,
+            parseEntityId("image", imageFixture.id),
+          ),
+          eq(imageProcessingJob.kind, "describe_image"),
+          eq(imageProcessingJob.sourceContentHash, checksum),
+        ),
+      );
     const approval = await approvePhotoGroupProposals(
       ctx.db,
       { runId: run.publicId },
       ctx.actor,
     );
-    expect(approval.results[0]?.outcome).toBe("committed");
+    photoApproval = approval;
+    expect(approval.results[0]).toMatchObject({ outcome: "committed" });
     expect(
       await getDb(ctx.db)
         .select({ id: product.id })
@@ -1456,10 +508,40 @@ describe("purchase-agent scripted scenarios", () => {
       .from(runTable)
       .where(eq(runTable.id, run.id));
     expect(settled?.status).toBe("completed");
+    const [created] = await getDb(ctx.db)
+      .select({ id: product.id })
+      .from(product)
+      .where(eq(product.name, productName));
+    if (!created) throw new Error("Approved Product missing");
+    const entries = await getDb(ctx.db)
+      .select()
+      .from(inventoryEntry)
+      .where(eq(inventoryEntry.productId, created.id));
+    expect(entries).toHaveLength(1);
+    expect(entries[0]).toMatchObject({
+      amountValue: 1,
+      amountUnit: "each",
+      ownershipMode: "person",
+      ownerLedgerPartyId: party.id,
+      locationId: closet.entityId,
+    });
+    const replay = await approvePhotoGroupProposals(
+      ctx.db,
+      { runId: run.publicId, groupKeys: ["synthetic-wardrobe-item"] },
+      ctx.actor,
+    );
+    expect(replay.results).toEqual([
+      { groupKey: "synthetic-wardrobe-item", outcome: "replayed" },
+    ]);
+    expect(
+      await getDb(ctx.db)
+        .select()
+        .from(inventoryEntry)
+        .where(eq(inventoryEntry.productId, created.id)),
+    ).toEqual(entries);
     expect(await scenario.violations()).toEqual([]);
   }, 60_000);
-
-  it("purchase validation: fences, pauses for browser evidence, resumes, and completes without business writes", async () => {
+  it("purchase validation: fences, waits for browser evidence, resumes, and completes without business writes", async () => {
     const party = await insertWithShortcode(ctx.db, "ledgerParty", {
       name: "Workerd harness member",
       kind: "member",
@@ -1472,6 +554,7 @@ describe("purchase-agent scripted scenarios", () => {
     });
     const account = await insertWithShortcode(ctx.db, "vendorAccount", {
       label: "Workerd harness account",
+      browserSyncEnabled: true,
       vendorId: vendor.id,
       ledgerPartyId: party.id,
     });
@@ -1506,170 +589,171 @@ describe("purchase-agent scripted scenarios", () => {
       productQuantity: 1,
     });
     await authorizePurchaseAgent(ctx.db, ctx.actor.userId);
-    const sourceExternalKey = "workerd:ORDER-WORKERD-1";
-    const evidenceChecksum = "a".repeat(64);
-    const started = await startTargetedRun(ctx.db, {
+    const started = await admitPurchaseValidationResearch(ctx.db, {
       ledgerPartyId: party.id,
-      purpose: "purchase_validation",
-      vendorId: vendor.id,
-      vendorAccountId: account.id,
-      trigger: "manual",
-      targets: [
-        {
-          kind: "purchase",
-          purchaseId: targetPurchase.id,
-          vendorAccountId: account.id,
-          sourceKind: "browser_order",
-          sourceExternalKey,
-          targetFingerprint: "a".repeat(64),
-          evidenceFingerprint: evidenceChecksum,
-        },
-      ],
+      userId: ctx.actor.userId,
+      purchaseIds: [targetPurchase.id],
     });
-    if (!started.created || !started.run.dispatchEventId)
-      throw new Error("Expected targeted run dispatch generation");
-    const runId = started.run.id;
-
+    if (!started.created || !started.row.dispatchEventId)
+      throw new Error("Expected current validation dispatch generation");
+    const runId = started.row.id;
+    scenarioRunId = runId;
     const before = await protectedBusinessSnapshot(ctx.db, {
       purchaseId: targetPurchase.id,
       productId: targetProduct.entityId,
     });
     scenario = await startScenarioHarness(ctx.databaseUrl, {
       steps: [
-        call("claim-initial", "claim_next_import_work"),
-        call("browser-1", "issue_browser_command", {
-          operationId: "capture-order",
-          command: {
-            kind: "capture_order",
-            target: "https://shop.example.test/orders/ORDER-WORKERD-1",
+        { call: "validation-next", tool: "work_next", args: {} },
+        {
+          call: "validation-browser",
+          tool: "work_observe",
+          args: {
+            workRef: from("validation-next", "work.workRef"),
+            action: {
+              kind: "navigate",
+              url: "https://shop.example.test/orders/ORDER-WORKERD-1",
+            },
           },
-        }),
-        awaitEvent("browser_connected", "browser_result"),
-        call("claim-resume", "claim_next_import_work"),
-        awaitEvent("browser_result"),
-        mcp(
-          "prepare:workerd",
-          "purchase_import",
-          runId,
-          {
-            action: "prepare",
+        },
+        { await: ["research_observation"] },
+        { call: "validation-observed", tool: "work_next", args: {} },
+        {
+          call: "validation-resolve",
+          tool: "work_resolve",
+          args: {
+            workRef: from("validation-observed", "work.workRef"),
+            status: "verified",
+            identity: {
+              evidenceIds: [
+                from(
+                  "validation-observed",
+                  "work.retainedObservation.evidenceId",
+                ),
+              ],
+              reasoning: "The original names this unchanged recorded order.",
+            },
             orders: [
               {
-                stableOrderId: "order-workerd",
-                itemOperationId: "prepare-item:workerd",
-                source: {
-                  kind: "browser_order",
-                  externalKey: sourceExternalKey,
-                  checksum: evidenceChecksum,
+                purchaseRef: targetPurchase.shortcode,
+                vendorRef: vendor.shortcode,
+                evidenceIds: [
+                  from(
+                    "validation-observed",
+                    "work.retainedObservation.evidenceId",
+                  ),
+                ],
+                defaultTrade: "other",
+                reasoning:
+                  "The original supports the unchanged recorded order.",
+                candidate: {
+                  orderId: "ORDER-WORKERD-1",
+                  orderedAt: "2026-09-20T12:00:00.000Z",
+                  merchant: vendor.name,
+                  currency: "USD",
+                  printedGrandTotal: 12.34,
+                  lines: [
+                    {
+                      title: "Workerd validation product",
+                      amount: 12.34,
+                      lineKind: "principal",
+                      quantity: 1,
+                    },
+                  ],
+                  payments: [],
+                  allShipmentsDelivered: false,
                 },
-                evidenceChecksum,
-                extractionRevision: "workerd@1",
-                extraction: {
-                  status: "ready",
-                  candidate: {
-                    orderId: "ORDER-WORKERD-1",
-                    orderedAt: "2026-09-20T12:00:00.000Z",
-                    merchant: "Workerd harness vendor",
-                    currency: "USD",
-                    printedGrandTotal: 12.34,
-                    lines: [
-                      {
-                        title: "Workerd validation product",
-                        amount: 12.34,
-                        lineKind: "principal",
-                        quantity: 1,
-                      },
-                    ],
-                    payments: [],
-                    allShipmentsDelivered: false,
+                productResolutions: [
+                  {
+                    lineIndex: 0,
+                    kind: "existing",
+                    productId: targetProductRow.shortcode,
                   },
-                },
-                lineIds: ["order-workerd:line-1"],
-                primaryDocumentImageId: null,
-                screenshotImageId: null,
+                ],
               },
             ],
+            detail:
+              "Validated the unchanged recorded order from retained browser evidence.",
           },
-          { itemOperationIds: ["prepare-item:workerd"] },
-        ),
-        mcp("validate:workerd", "purchase_import", runId, {
-          action: "validate",
-          prepareOperationId: "prepare:workerd",
-          resolutions: [
+        },
+        { check: "validation-resolve", includes: "verified" },
+      ],
+    });
+    await scenario.harness
+      .getWorker("cubby-test-gateway")
+      .fetch("https://gateway.test/configure", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          extractions: [],
+          assessments: [
             {
-              stableOrderId: "order-workerd",
-              stableLineId: "order-workerd:line-1",
-              resolution: {
-                kind: "existing",
-                productId: targetProductRow.shortcode,
+              match: "unchanged recorded order",
+              output: {
+                identityVerified: true,
+                acceptedOrders: [0],
+                acceptedEmailLinks: [],
+                acceptedFacts: [],
+                acceptedIdentifiers: [],
+                acceptedIdentifierClaims: [],
+                acceptedImages: [],
+                rejected: [],
               },
             },
           ],
         }),
-        // An unchanged Purchase must compare as `replayed`.
-        { check: "validate:workerd", includes: "replayed" },
-        call("finish-1", "finish_import_run", {
-          operationId: "finish-after-validation",
-        }),
-      ],
-    });
+      });
     await scenario.dispatch({
       version: 1,
       type: "start_or_resume",
       runId,
       purpose: "purchase_validation",
-      eventId: started.run.dispatchEventId,
+      eventId: started.row.dispatchEventId,
     });
-    // Connect the browser only after the run has paused. The row exists
-    // before the broker is consulted, so connecting on its first sight raced
-    // the pause and let browser evidence join the still-open submission,
-    // hiding how the agent settles a pending browser command.
     await waitForRun(
       runId,
       async () => {
-        const [[operation], [run]] = await Promise.all([
-          getDb(ctx.db)
-            .select({ state: runOperation.state, result: runOperation.result })
-            .from(runOperation)
-            .where(
-              and(
-                eq(runOperation.runId, runId),
-                eq(runOperation.kind, "browser_command"),
-              ),
-            )
-            .limit(1),
-          getDb(ctx.db)
-            .select({ status: runTable.status })
-            .from(runTable)
-            .where(eq(runTable.id, runId)),
-        ]);
-        return (
-          z.object({ commandId: z.uuid() }).safeParse(operation?.result)
-            .success &&
-          operation?.state === "completed" &&
-          run?.status === "paused_offline"
-        );
+        const [operation] = await getDb(ctx.db)
+          .select()
+          .from(runOperation)
+          .where(
+            and(
+              eq(runOperation.runId, runId),
+              eq(runOperation.kind, "browser_command"),
+            ),
+          )
+          .limit(1);
+        return z
+          .object({ commandId: z.uuid(), workRef: z.uuid() })
+          .safeParse(operation?.result).success;
       },
-      "Production service never paused for the browser command",
+      "Current research never retained a pending browser command",
     );
+    expect(
+      await protectedBusinessSnapshot(ctx.db, {
+        purchaseId: targetPurchase.id,
+        productId: targetProduct.entityId,
+      }),
+    ).toEqual(before);
     await scenario.connectBrowser({
       vendorAccountId: account.id,
       ledgerPartyId: party.id,
       userId: ctx.actor.userId,
+      outcomes: {
+        "https://shop.example.test/orders/ORDER-WORKERD-1":
+          await completedCapture(
+            "https://shop.example.test/orders/ORDER-WORKERD-1",
+            {
+              title: "Synthetic unchanged order",
+              text: "ORDER-WORKERD-1: Workerd validation product, quantity 1, USD 12.34. Not delivered.",
+            },
+          ),
+      },
     });
     await waitForRun(
       runId,
-      async () => {
-        const [run] = await getDb(ctx.db)
-          .select({
-            status: runTable.status,
-            coordinatorStartedAt: runTable.coordinatorStartedAt,
-          })
-          .from(runTable)
-          .where(eq(runTable.id, runId));
-        return run?.status === "completed" && run.coordinatorStartedAt !== null;
-      },
-      "Production service never finalized targeted run",
+      async () => (await runRow(runId))?.status === "completed",
+      "Current researcher did not complete supported unchanged validation",
     );
     expect(
       await protectedBusinessSnapshot(ctx.db, {
@@ -1678,366 +762,483 @@ describe("purchase-agent scripted scenarios", () => {
       }),
     ).toEqual(before);
     expect(await scenario.violations()).toEqual([]);
+    diagnostic = await workerdDiagnostic(ctx.db, runId, scenario.harness);
   }, 60_000);
 
-  // The hands-free path for a mail-imported seed order: the import commits
-  // two new Products on a browsing account, the post-import sweep starts one
-  // enrichment run, the Mac captures each product page, and the agent commits
-  // what one page proves and skips the Product no page proves. Failure modes:
-  // no run after a mail import; a capture filed under another target; one
-  // unprovable Product stranding the rest; an identifier written without
-  // retained page evidence.
-  it("product enrichment: a mail import's new Products are enriched from captured pages, one committed and one skipped", async () => {
-    const SEED_HOST = "seed.example.test";
-    const basilUrl = `https://${SEED_HOST}/products/basil?variant=101`;
-    const dillUrl = `https://${SEED_HOST}/products/dill`;
+  it("partial mail: retries only unresolved sources after a supported import without replacing prior money or results", async () => {
+    const database = getDb(ctx.db);
     const party = await insertWithShortcode(ctx.db, "ledgerParty", {
-      name: "Scenario member",
+      name: "Synthetic partial-source member",
       kind: "member",
       userId: ctx.actor.userId,
     });
     const vendor = await insertWithShortcode(ctx.db, "vendor", {
-      name: `Scenario seed shop ${crypto.randomUUID()}`,
-      website: `https://${SEED_HOST}`,
-      browserDomains: [SEED_HOST],
+      name: "Synthetic service shop",
+      website: "https://service.example.test",
+      browserDomains: ["service.example.test"],
     });
-    const account = await insertWithShortcode(ctx.db, "vendorAccount", {
-      label: "Scenario seed account",
-      vendorId: vendor.id,
-      ledgerPartyId: party.id,
-      status: "active",
-      browserSyncEnabled: true,
-    });
-    const [mail] = await getDb(ctx.db)
-      .insert(orderMail)
-      .values({
-        ledgerPartyId: party.id,
-        vendorId: vendor.id,
-        messageId: `scenario-seed-order-${crypto.randomUUID()}`,
-        sender: `orders@${SEED_HOST}`,
-        subject: "Order confirmation",
-        receivedAt: new Date("2026-09-01T12:00:00Z"),
-        rawChecksum: "c".repeat(64),
-        content: {
-          snippet: null,
-          bodyHtml: null,
-          bodyText:
-            "Order SEED-1. Basil packet $3.00. Dill packet $2.00. Total $5.00 USD.",
-        },
-      })
-      .returning();
-    const [event] = await getDb(ctx.db)
-      .insert(orderMailEvent)
-      .values({
-        orderMailId: mail!.id,
-        event: "placed",
-        orderId: "SEED-1",
-        amount: 5,
-        currency: "USD",
-        sourceKey: `scenario:${mail!.id}`,
-      })
-      .returning();
-    const started = await startOrderMailImport(
-      ctx.db,
-      { eventId: event!.id, evidenceChecksum: mail!.rawChecksum },
-      ctx.actor,
-      { send: async () => {} },
-    );
-    const [mailRun] = await getDb(ctx.db)
-      .select({ id: runTable.id })
-      .from(runTable)
-      .where(eq(runTable.shortcode, started.runId));
-    const evidence = await loadOrderMailImportEvidence(ctx.db, mailRun!.id);
-    if (!evidence) throw new Error("Missing assigned mail");
-    await preparePurchaseImport(
-      ctx.db,
-      {
-        _runExecution: { runId: mailRun!.id, operationId: "prepare-seed" },
-        orders: [
-          {
-            stableOrderId: "seed-order",
-            itemOperationId: "seed-order",
-            source: evidence.source,
-            evidenceChecksum: evidence.evidenceChecksum,
-            extractionRevision: "order-mail@1",
-            extraction: {
-              status: "ready",
-              candidate: {
-                orderId: evidence.orderId,
-                orderedAt: "2026-09-01T12:00:00Z",
-                merchant: "Scenario seed shop",
-                currency: "USD",
-                printedGrandTotal: 5,
-                lines: [
-                  {
-                    title: "Synthetic basil packet",
-                    amount: 3,
-                    quantity: 1,
-                    productUrl: basilUrl,
-                    lineKind: "principal",
-                  },
-                  {
-                    title: "Synthetic dill packet",
-                    amount: 2,
-                    quantity: 1,
-                    productUrl: dillUrl,
-                    lineKind: "principal",
-                  },
-                ],
-                payments: [],
-                allShipmentsDelivered: null,
-              },
-            },
-            lineIds: ["basil", "dill"],
-            primaryDocumentImageId: null,
-            screenshotImageId: null,
-          },
-        ],
-      },
-      ctx.actor,
-    );
-    await commitPurchaseImport(
-      ctx.db,
-      {
-        _runExecution: { runId: mailRun!.id, operationId: "commit-seed" },
-        prepareOperationId: "prepare-seed",
-        defaultTrade: "landscaping",
-        resolutions: ["basil", "dill"].map((stableLineId) => ({
-          stableOrderId: "seed-order",
-          stableLineId,
-          resolution: { kind: "new" as const },
-        })),
-      },
-      ctx.actor,
-    );
-
-    // The commit's sweep started the run. This test process has no queue
-    // binding, so dispatch recorded a failure; the harness delivers the same
-    // start event the queue would have.
-    const [run] = await getDb(ctx.db)
-      .select({ id: runTable.id, dispatchEventId: runTable.dispatchEventId })
-      .from(runTable)
-      .where(
-        and(
-          eq(runTable.purpose, "product_enrichment"),
-          eq(runTable.vendorAccountId, account.id),
-        ),
-      );
-    if (!run?.dispatchEventId) throw new Error("No enrichment run started");
-    const runId = run.id;
-    scenarioRunId = runId;
-    await getDb(ctx.db)
-      .update(runTable)
-      .set({ status: "running", dispatchError: null })
-      .where(eq(runTable.id, runId));
-    const targets = await getDb(ctx.db)
-      .select({
-        id: runTarget.id,
-        productId: runTarget.entityId,
-        startUrl: runTarget.sourceExternalKey,
-      })
-      .from(runTarget)
-      .where(eq(runTarget.runId, runId));
-    const targetFor = (url: string) => {
-      const target = targets.find((row) => row.startUrl === url);
-      if (!target) throw new Error(`No target starts at ${url}`);
-      return target;
-    };
-    // Pin the claim order so the script knows which Product comes first.
-    for (const [position, url] of [basilUrl, dillUrl].entries())
-      await getDb(ctx.db)
-        .update(runTarget)
-        .set({ position })
-        .where(eq(runTarget.id, targetFor(url).id));
-    // The Mac uploads each capture's PDF before answering; its run evidence
-    // row is what the capture result names.
-    const retained = async (url: string) => {
-      const [row] = await getDb(ctx.db)
-        .insert(runEvidence)
-        .values({
-          runId,
-          targetId: targetFor(url).id,
-          kind: "browser_capture",
-          objectKey: `scenario/${crypto.randomUUID()}`,
-          checksum: "d".repeat(64),
-          mediaType: "application/pdf",
-        })
-        .returning({ id: runEvidence.id });
-      return row!.id;
-    };
-    const productPage = async (
-      url: string,
-      sku: string,
-      variantGroup: boolean,
-    ) =>
-      completedCapture(
-        url,
-        {
-          title: `Seed packet ${sku}`,
-          text: `Seed packet ${sku}`,
-          canonicalUrl: url,
-          // The basil page's Product is the served ?variant=101; the dill
-          // page is a ProductGroup listing several packet sizes.
-          jsonLd: [
-            variantGroup
-              ? {
-                  "@type": "ProductGroup",
-                  hasVariant: [{ "@type": "Product", sku }],
-                }
-              : { "@type": "Product", sku },
-          ],
-        },
-        [
-          {
-            id: await retained(url),
-            kind: "rendered_pdf",
-            checksum: "d".repeat(64),
-            contentType: "application/pdf",
-          },
-        ],
-      );
-    const outcomes = {
-      [basilUrl]: await productPage(basilUrl, "BASIL-101", false),
-      [dillUrl]: await productPage(dillUrl, "DILL-PKT", true),
-    };
-    await authorizePurchaseAgent(ctx.db, ctx.actor.userId);
-    scenario = await startScenarioHarness(ctx.databaseUrl, {
-      steps: [
-        call("claim-basil", "claim_next_import_work"),
-        { check: "claim-basil", includes: basilUrl },
-        call("capture-basil", "issue_browser_command", {
-          command: { kind: "capture_pdf" },
-        }),
-        awaitBrowserResult("capture-basil"),
-        call("evidence-basil", "import_browser_order_evidence", {
-          commandId: from("capture-basil", "commandId"),
-        }),
-        call("claim-basil-evidence", "claim_next_import_work"),
-        mcp("commit-basil-wrong-source", "product_enrichment", runId, {
-          action: "commit",
-          productId: from("claim-basil", "productId"),
-          targetFingerprint: from("claim-basil", "targetFingerprint"),
-          changes: {
-            identifiers: [
-              {
-                evidenceId: from("claim-basil-evidence", "evidence.0.id"),
-                source: "scenario-seed-shop",
-                kind: "retailer_sku",
-                externalId: "BASIL-101",
-                url: basilUrl,
-              },
-            ],
-          },
-        }),
-        {
-          check: "commit-basil-wrong-source",
-          includes: "source is not the page vendor; expected source: seed",
-        },
-        mcp("commit-basil", "product_enrichment", runId, {
-          action: "commit",
-          productId: from("claim-basil", "productId"),
-          targetFingerprint: from("claim-basil", "targetFingerprint"),
-          changes: {
-            manufacturer: "Scenario Seed Co",
-            identifiers: [
-              {
-                evidenceId: from("claim-basil-evidence", "evidence.0.id"),
-                source: "seed",
-                kind: "retailer_sku",
-                externalId: "BASIL-101",
-                url: basilUrl,
-              },
-            ],
-          },
-        }),
-        { check: "commit-basil", includes: "identifiers" },
-        call("claim-dill", "claim_next_import_work"),
-        { check: "claim-dill", includes: dillUrl },
-        call("capture-dill", "issue_browser_command", {
-          command: { kind: "capture_pdf" },
-        }),
-        awaitBrowserResult("capture-dill"),
-        call("evidence-dill", "import_browser_order_evidence", {
-          commandId: from("capture-dill", "commandId"),
-        }),
-        // The page offers several packet sizes: no exact variant, so skip.
-        mcp("skip-dill", "product_enrichment", runId, {
-          action: "skip",
-          productId: from("claim-dill", "productId"),
-          reason: "The product page lists several packet sizes.",
-        }),
-        { check: "skip-dill", includes: "skipped" },
-        call("claim-none", "claim_next_import_work"),
-        { check: "claim-none", includes: "none" },
-        call("finish", "finish_import_run", {
-          operationId: "finish-enrichment",
-        }),
+    const sources = [];
+    for (const [messageId, body] of [
+      [
+        "synthetic-supported-service",
+        "Synthetic service shop. SERVICE-1, September 20 2026: annual service, quantity 1, USD 9.00. Total USD 9.00.",
       ],
+      [
+        "synthetic-ambiguous-source",
+        "Synthetic service shop purchase inquiry. Exact order, itemization, date and amount absent.",
+      ],
+    ]) {
+      const checksum = await sha256Hex(body!);
+      const [mail] = await database
+        .insert(orderMail)
+        .values({
+          ledgerPartyId: party.id,
+          mailboxId: "synthetic-partial-mailbox",
+          messageId: messageId!,
+          sender: "orders@service.example.test",
+          subject: "Synthetic service inquiry",
+          receivedAt: new Date("2026-09-20T12:00:00Z"),
+          rawChecksum: checksum,
+          content: { snippet: null, bodyText: body!, bodyHtml: null },
+        })
+        .returning();
+      if (!mail) throw new Error("Synthetic partial source missing");
+      sources.push(mail);
+      await database.insert(mailboxMessage).values({
+        ledgerPartyId: party.id,
+        mailboxId: mail.mailboxId,
+        messageId: mail.messageId,
+        checksum,
+        classification: "related",
+        classificationVersion: "synthetic-source-v1",
+        status: "pending",
+        orderMailId: mail.id,
+      });
+    }
+    const supported = sources.find(
+      (source) => source.messageId === "synthetic-supported-service",
+    );
+    const ambiguous = sources.find(
+      (source) => source.messageId === "synthetic-ambiguous-source",
+    );
+    if (!supported || !ambiguous)
+      throw new Error("Synthetic partial sources missing");
+    const events: PurchaseAgentEvent[] = [];
+    const [started] = await startMailResearch(
+      ctx.db,
+      {
+        ledgerPartyId: party.id,
+        userId: ctx.actor.userId,
+        messageIds: sources.map((source) => source.id),
+      },
+      {
+        send: async (event) => {
+          events.push(event);
+        },
+      },
+    );
+    if (!started || events.length !== 1)
+      throw new Error("Synthetic partial admission missing");
+    const parent = await runRow(started.runId);
+    scenarioRunId = parent.id;
+    await authorizePurchaseAgent(ctx.db, ctx.actor.userId);
+    const targets = await database
+      .select()
+      .from(runTarget)
+      .where(eq(runTarget.runId, parent.id))
+      .orderBy(asc(runTarget.createdAt), asc(runTarget.id));
+    const ambiguousSteps = (prefix: string): ScriptStep[] => [
+      step(`${prefix}-next`, "work_next"),
+      step(`${prefix}-read`, "mail_read", {
+        workRef: from(`${prefix}-next`, "work.workRef"),
+        messageRef: ambiguous.id,
+      }),
+      step(`${prefix}-resolve`, "work_resolve", {
+        workRef: from(`${prefix}-next`, "work.workRef"),
+        status: "ambiguous",
+        identity: {
+          evidenceIds: [from(`${prefix}-read`, "evidenceId")],
+          reasoning:
+            "Exact ordered identity is absent in the retained original.",
+        },
+        detail:
+          "Synthetic unresolved itemization has no supported order or amount.",
+      }),
+      { check: `${prefix}-resolve`, includes: "ambiguous" },
+    ];
+    const steps: ScriptStep[] = targets.flatMap((target, index) =>
+      target.workKey === ambiguous.id
+        ? ambiguousSteps(`partial-${index}`)
+        : [
+            step(`partial-${index}-next`, "work_next"),
+            step(`partial-${index}-read`, "mail_read", {
+              workRef: from(`partial-${index}-next`, "work.workRef"),
+              messageRef: supported.id,
+            }),
+            step(`partial-${index}-resolve`, "work_resolve", {
+              workRef: from(`partial-${index}-next`, "work.workRef"),
+              status: "verified",
+              identity: {
+                evidenceIds: [from(`partial-${index}-read`, "evidenceId")],
+                reasoning:
+                  "SERVICE-1 identifies one annual service, quantity 1, USD 9.00.",
+              },
+              orders: [
+                {
+                  vendorRef: vendor.shortcode,
+                  evidenceIds: [from(`partial-${index}-read`, "evidenceId")],
+                  defaultTrade: "other",
+                  reasoning:
+                    "SERVICE-1 identifies one annual service, quantity 1, USD 9.00.",
+                  candidate: {
+                    orderId: "SERVICE-1",
+                    orderedAt: "2026-09-20T12:00:00.000Z",
+                    merchant: vendor.name,
+                    currency: "USD",
+                    printedGrandTotal: 9,
+                    lines: [
+                      {
+                        title: "Annual service",
+                        quantity: 1,
+                        amount: 9,
+                        lineKind: "principal",
+                      },
+                    ],
+                    payments: [],
+                    allShipmentsDelivered: false,
+                  },
+                  productResolutions: [{ lineIndex: 0, kind: "expense_only" }],
+                },
+              ],
+              detail: "Supported synthetic service imported without stock.",
+            }),
+            { check: `partial-${index}-resolve`, includes: "verified" },
+          ],
+    );
+    const assessments = [
+      { match: "Synthetic unresolved itemization", output: noOperands },
+      {
+        match: "SERVICE-1 identifies one annual service",
+        output: { ...noOperands, identityVerified: true, acceptedOrders: [0] },
+      },
+    ];
+    scenario = await startScenarioHarness(ctx.databaseUrl, {
+      steps,
+      assessments,
     });
-    await scenario.connectBrowser({
-      vendorAccountId: account.id,
-      ledgerPartyId: party.id,
-      userId: ctx.actor.userId,
-      outcomes,
+    await scenario.dispatch(events[0]!);
+    await waitForStatus(parent.id, "needs_review");
+    const settledTargets = await database
+      .select()
+      .from(runTarget)
+      .where(eq(runTarget.runId, parent.id))
+      .orderBy(asc(runTarget.position));
+    expect(
+      settledTargets.find((target) => target.workKey === supported.id),
+    ).toMatchObject({ state: "completed", outcome: "verified" });
+    expect(
+      settledTargets.find((target) => target.workKey === ambiguous.id),
+    ).toMatchObject({ state: "unresolved", outcome: "ambiguous" });
+    const originalPurchases = await database.select().from(purchase);
+    const originalExpenses = await database.select().from(expense);
+    const originalAssociations = await database
+      .select()
+      .from(importSourceOrder);
+    expect(originalPurchases).toHaveLength(1);
+    expect(originalExpenses).toHaveLength(1);
+    expect(originalExpenses[0]).toMatchObject({
+      purchaseId: originalPurchases[0]!.id,
+      cost: 9,
     });
+    expect(originalAssociations).toHaveLength(1);
+    expect(await database.select().from(inventoryEntry)).toEqual([]);
+    const retried = await controlRun(ctx.db, ctx.actor, {
+      runPublicId: parent.shortcode,
+      action: "retry",
+    });
+    if (!("successorRunId" in retried) || !retried.successorRunId)
+      throw new Error("Synthetic partial successor missing");
+    const child = await runRow(retried.successorRunId);
+    expect(child).toMatchObject({
+      predecessorRunId: parent.id,
+      attempt: parent.attempt === null ? null : parent.attempt + 1,
+    });
+    expect(mailResearchRunInput.parse(child.input).sources).toEqual([
+      { orderMailId: ambiguous.id, checksum: ambiguous.rawChecksum },
+    ]);
+    expect((await runRow(parent.id)).input).toEqual(parent.input);
+    expect(
+      await database
+        .select()
+        .from(runTarget)
+        .where(eq(runTarget.runId, parent.id))
+        .orderBy(asc(runTarget.position)),
+    ).toEqual(settledTargets);
+    await scenario.configure({
+      steps: ambiguousSteps("partial-retry"),
+      assessments,
+    });
+    scenarioRunId = child.id;
+    if (!child.dispatchEventId)
+      throw new Error("Synthetic retry dispatch generation missing");
     await scenario.dispatch({
       version: 1,
       type: "start_or_resume",
-      runId,
-      purpose: "product_enrichment",
-      eventId: run.dispatchEventId,
+      runId: child.id,
+      eventId: child.dispatchEventId,
+      purpose: child.purpose,
     });
-    await waitForStatus(runId, "completed");
+    await waitForStatus(child.id, "needs_review");
+    expect(await database.select().from(purchase)).toEqual(originalPurchases);
+    expect(await database.select().from(expense)).toEqual(originalExpenses);
+    expect(await database.select().from(importSourceOrder)).toEqual(
+      originalAssociations,
+    );
+    expect(await database.select().from(inventoryEntry)).toEqual([]);
+    const replay = await controlRun(ctx.db, ctx.actor, {
+      runPublicId: parent.shortcode,
+      action: "retry",
+    });
+    if (!("successorRunId" in replay))
+      throw new Error("Synthetic partial replay successor missing");
+    expect(replay.successorRunId).toBe(child.id);
     expect(await scenario.violations()).toEqual([]);
+  }, 60_000);
 
-    const basil = parseEntityId("product", targetFor(basilUrl).productId);
-    const dill = parseEntityId("product", targetFor(dillUrl).productId);
-    const [basilRow] = await getDb(ctx.db)
-      .select({ manufacturer: product.manufacturer })
-      .from(product)
-      .where(eq(product.id, basil));
-    expect(basilRow?.manufacturer).toBe("Scenario Seed Co");
-    // The identifier is learned only from the page this run retained.
-    expect(
-      await getDb(ctx.db)
-        .select({
-          entityId: entityExternalId.entityId,
-          source: entityExternalId.source,
-          kind: entityExternalId.kind,
-          externalId: entityExternalId.externalId,
-        })
-        .from(entityExternalId)
-        .where(inArray(entityExternalId.entityId, [basil, dill])),
-    ).toEqual([
-      {
-        entityId: basil,
-        source: "seed",
-        kind: "retailer_sku",
-        externalId: "BASIL-101",
-      },
-    ]);
-    expect(
-      await getDb(ctx.db)
-        .select({
-          productId: runTarget.entityId,
-          state: runTarget.state,
-          outcome: runTarget.outcome,
-        })
-        .from(runTarget)
-        .where(eq(runTarget.runId, runId))
-        .orderBy(runTarget.position),
-    ).toEqual([
-      { productId: basil, state: "completed", outcome: "enriched" },
-      { productId: dill, state: "skipped", outcome: "skipped" },
-    ]);
-    // The run's evidence, not a free-text claim, backs the write.
-    const [basilEvidence] = await getDb(ctx.db)
-      .select({ sourceMetadata: runEvidence.sourceMetadata })
-      .from(runEvidence)
-      .where(eq(runEvidence.targetId, targetFor(basilUrl).id));
-    expect(basilEvidence?.sourceMetadata).toMatchObject({
-      sourceURL: basilUrl,
-      structuredProducts: { variantGroup: false },
+  it("selected charges: retains not-found and ambiguous review outcomes without downgrading a late member allocation", async () => {
+    const database = getDb(ctx.db);
+    const party = await insertWithShortcode(ctx.db, "ledgerParty", {
+      name: "Synthetic charge member",
+      kind: "member",
+      userId: ctx.actor.userId,
     });
-  }, 90_000);
+    const vendor = await insertWithShortcode(ctx.db, "vendor", {
+      name: "Synthetic charge shop",
+      website: "https://charge.example.test",
+      browserDomains: ["charge.example.test"],
+    });
+    const account = await insertWithShortcode(ctx.db, "vendorAccount", {
+      label: "Synthetic charge transport",
+      vendorId: vendor.id,
+      ledgerPartyId: party.id,
+      browserSyncEnabled: true,
+    });
+    const card = await insertWithShortcode(ctx.db, "financialAccount", {
+      name: "Synthetic charge card",
+      ledgerPartyId: party.id,
+      identity: { kind: "credit_card", issuer: null, network: "visa" },
+    });
+    const charges = [];
+    for (const [index, amount] of [11, 22, 33].entries()) {
+      const transaction = await insertWithShortcode(
+        ctx.db,
+        "financialTransaction",
+        {
+          accountId: card.id,
+          kind: "purchase",
+          status: "posted",
+          amount,
+          merchant: vendor.name,
+          transactionDate: `2026-09-${String(index + 20).padStart(2, "0")}`,
+          postedDate: `2026-09-${String(index + 20).padStart(2, "0")}`,
+        },
+      );
+      const [hunt] = await database
+        .insert(importHunt)
+        .values({
+          ledgerPartyId: party.id,
+          financialTransactionId: transaction.id,
+          vendorId: vendor.id,
+          vendorAccountId: account.id,
+          state: "pending_browser",
+          dateFrom: "2026-09-01",
+          dateTo: "2026-09-30",
+        })
+        .returning();
+      if (!hunt) throw new Error("Synthetic selected hunt missing");
+      charges.push({ transaction, hunt });
+    }
+    const [notFound, ambiguous, lateAllocated] = charges;
+    if (!notFound || !ambiguous || !lateAllocated)
+      throw new Error("Synthetic charge selection missing");
+    const events: PurchaseAgentEvent[] = [];
+    const started = await startSelectedChargeRun(
+      ctx.db,
+      {
+        vendorAccountId: account.shortcode,
+        transactionIds: charges.map((charge) => charge.transaction.shortcode),
+      },
+      ctx.actor,
+      {
+        send: async (event) => {
+          events.push(event);
+        },
+      },
+    );
+    const [scope] = await database
+      .select()
+      .from(runTable)
+      .where(eq(runTable.shortcode, started.runId));
+    if (!scope || events.length !== 1)
+      throw new Error("Synthetic selected-charge admission missing");
+    const objectives = researchObjectivesOf(scope.input);
+    if (!objectives)
+      throw new Error("Selected charges were not typed objectives");
+    expect(objectives.objectives.map((objective) => objective.kind)).toEqual([
+      "charge_hunt",
+      "charge_hunt",
+      "charge_hunt",
+    ]);
+    const recorded = await insertWithShortcode(ctx.db, "purchase", {
+      vendorId: vendor.id,
+      vendorAccountId: account.id,
+      orderId: "SYNTHETIC-ALREADY-RECORDED",
+      date: "2026-09-22",
+      displayLabel: "Synthetic allocated purchase",
+      statedTotal: 33,
+    });
+    await insertWithShortcode(ctx.db, "expense", {
+      purchaseId: recorded.id,
+      name: "Synthetic recorded service",
+      cost: 33,
+      date: "2026-09-22",
+      lineKind: "principal",
+      costType: "materials",
+      trade: "other",
+      future: false,
+    });
+    // A real member allocation arrives after the frozen discovery admission.
+    await updateFinancialTransaction(
+      ctx.db,
+      lateAllocated.transaction.shortcode,
+      { purchaseId: recorded.shortcode },
+      ctx.actor,
+    );
+    const before = {
+      purchases: await database.select().from(purchase),
+      expenses: await database.select().from(expense),
+      transactions: await database.select().from(financialTransaction),
+      allocations: await database.select().from(financialTransactionAllocation),
+      cursor: (
+        await database
+          .select()
+          .from(vendorAccount)
+          .where(eq(vendorAccount.id, account.id))
+      )[0]!.cursor,
+    };
+    await authorizePurchaseAgent(ctx.db, ctx.actor.userId);
+    scenarioRunId = scope.id;
+    const targets = await database
+      .select()
+      .from(runTarget)
+      .where(eq(runTarget.runId, scope.id))
+      .orderBy(asc(runTarget.createdAt), asc(runTarget.id));
+    const steps: ScriptStep[] = targets.flatMap((target, index) => {
+      const objective = objectives.objectives.find(
+        (value) => researchObjectiveKey(value) === target.workKey,
+      );
+      if (!objective || objective.kind !== "charge_hunt")
+        throw new Error("Synthetic charge objective missing");
+      const isAmbiguous = objective.huntId === ambiguous.hunt.id;
+      return [
+        step(`charge-${index}-next`, "work_next"),
+        step(`charge-${index}-read`, "web_read", {
+          workRef: from(`charge-${index}-next`, "work.workRef"),
+          url: `https://charge.example.test/evidence/${index}`,
+        }),
+        step(`charge-${index}-resolve`, "work_resolve", {
+          workRef: from(`charge-${index}-next`, "work.workRef"),
+          status: isAmbiguous ? "ambiguous" : "no_source_found",
+          identity: {
+            evidenceIds: [from(`charge-${index}-read`, "evidenceId")],
+            reasoning:
+              "The frozen selected charge has no supported order identity on this retained page.",
+          },
+          progress: {
+            scopeExhausted: true,
+            evidenceIds: [from(`charge-${index}-read`, "evidenceId")],
+            gaps: isAmbiguous
+              ? ["Two candidate identities remain unproven."]
+              : [],
+          },
+          detail: isAmbiguous
+            ? "Synthetic selected-charge identity remains ambiguous."
+            : "Synthetic selected-charge investigation found no supported order.",
+        }),
+        {
+          check: `charge-${index}-resolve`,
+          includes: isAmbiguous ? "researched_with_gaps" : "no_source_found",
+        },
+      ];
+    });
+    const assessments = [
+      {
+        match: "frozen selected charge",
+        output: { ...noOperands, scopeCompletionVerified: true },
+      },
+    ];
+    scenario = await startScenarioHarness(ctx.databaseUrl, {
+      steps,
+      assessments,
+    });
+    const configured = await scenario.harness
+      .getWorker("cubby-test-gateway")
+      .fetch("https://gateway.test/configure", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          assessments,
+          sources: targets.map((_target, index) => ({
+            url: `https://charge.example.test/evidence/${index}`,
+            title: "Synthetic scoped charge evidence",
+            description: "No supported purchase identity.",
+            html: "<main>Synthetic charge research: no supported order identity in this scoped source.</main>",
+          })),
+        }),
+      });
+    expect({ ok: configured.ok, body: await configured.text() }).toMatchObject({
+      ok: true,
+    });
+    await scenario.dispatch(events[0]!);
+    await waitForStatus(scope.id, "needs_review");
+    const hunts = await database.select().from(importHunt);
+    expect(hunts.find((hunt) => hunt.id === notFound.hunt.id)).toMatchObject({
+      state: CHARGE_HUNT_STATE.notFound,
+    });
+    expect(hunts.find((hunt) => hunt.id === ambiguous.hunt.id)).toMatchObject({
+      state: CHARGE_HUNT_STATE.deferred,
+    });
+    expect(
+      hunts.find((hunt) => hunt.id === lateAllocated.hunt.id),
+    ).toMatchObject({ state: CHARGE_HUNT_STATE.resolved });
+    expect(await database.select().from(purchase)).toEqual(before.purchases);
+    expect(await database.select().from(expense)).toEqual(before.expenses);
+    expect(await database.select().from(financialTransaction)).toEqual(
+      before.transactions,
+    );
+    expect(
+      await database.select().from(financialTransactionAllocation),
+    ).toEqual(before.allocations);
+    expect(await database.select().from(importSourceOrder)).toEqual([]);
+    expect(await database.select().from(inventoryEntry)).toEqual([]);
+    expect(
+      (
+        await database
+          .select()
+          .from(vendorAccount)
+          .where(eq(vendorAccount.id, account.id))
+      )[0]!.cursor,
+    ).toEqual(before.cursor);
+    const progress = await getRunLiveProgress(ctx.db, scope.shortcode);
+    if (!progress) throw new Error("Synthetic charge Run progress missing");
+    expect(progress.charges).toEqual(
+      expect.arrayContaining([
+        { chargeId: notFound.transaction.shortcode, outcome: "not_found" },
+        { chargeId: ambiguous.transaction.shortcode, outcome: "deferred" },
+        { chargeId: lateAllocated.transaction.shortcode, outcome: "resolved" },
+      ]),
+    );
+    expect(progress.charges).toHaveLength(3);
+    expect(await scenario.violations()).toEqual([]);
+  }, 60_000);
 });

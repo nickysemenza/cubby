@@ -44,6 +44,13 @@ JSONL routes    →  cancellable workflow streams
   local authorization, the read-only account model catalog, limitations, and
   how each `AiUsage` row records its transport.
 
+The interactive `/ai-smoke-test` catalog covers every active AI feature. Mailbox
+triage and relevance probes use synthetic original mail; research source support
+compares a proposed fact with a synthetic retained catalog observation. These
+probes share production request builders and feature/subscription settings;
+durable research allowance admission is verified by its PostgreSQL and Worker
+contracts separately.
+
 ## Commands
 
 | Command                                                            | What it does                                                        |
@@ -156,6 +163,48 @@ restarts; interpret them after representative traffic. See the
   projections are written inside the entity write transaction.
 - Secrets are set with `wrangler secret put`. Production is the only deployed
   environment.
+
+### Purchase research schema cutover
+
+The replacement changes stored research contracts and native browser protocol
+in place. Before production migration approval, retain immutable builds for
+both the replacement and a current-main-compatible quiescence build carrying
+the maintenance guards. Keep the same Durable Object namespaces and storage.
+The populated-history migration regression runs the complete journal twice;
+its preservation checks are a prerequisite, not production readback evidence.
+
+1. Pause delivery for `cubby-background`, `cubby-telemetry` and
+   `cubby-purchase-agent`; record pending and in-flight batches. Enable
+   `MAINTENANCE_MODE=true` and pause live Workflow instances, including any
+   search-index repair writer. Wait for actual paused status.
+2. Deploy the quiescence build fully. Verify affected coordinator/broker
+   instances have stopped: in-flight model/tool calls and database transactions
+   must settle or stop. A deployment request or deleting an alarm is not that
+   acknowledgement. Coordinator callbacks defer/refuse before database access,
+   broker sockets close without result ACKs, and the Mac retains replay bytes.
+3. Terminate obsolete Gmail Workflows without rollback or history deletion.
+   Leave compatible work paused. Wait out the last possible direct R2 upload
+   grant (300 seconds for legacy Run evidence), accounting for uploads already
+   started and any other issued upload grants before declaring objects stable.
+4. After approval of `0025_purchase_research` and the preservation/readback plan,
+   apply this single rewrite migration with all holds in place. Interrupted legacy research becomes
+   `needs_review`; retain its inputs, targets, operations and diagnostics.
+   Read back signed money totals, stock, photos, associations and decisions,
+   plus the migration/schema state.
+5. Deploy the exact replacement revision while maintenance remains enabled.
+   Verify compatible native clients before resuming their work. TestFlight
+   continues publishing from main; branch iteration uses a verified development
+   client, and the minimum-version fence keeps older clients from writing until
+   their main release is installed. Verify Worker/DO revisions and reconcile retained browser
+   results against interrupted Runs; they must not reopen old conversations.
+6. Reopen HTTP, resume queues, and admit only approved fresh research. Resume
+   separately paused compatible Workflows deliberately. Terminated legacy
+   instances stay terminated; historical full-mail backfill remains disabled
+   until its measured spending cap is approved.
+
+Queues are paused externally because ordinary retries consume their bounded
+retry allowance. Maintenance guards supplement those controls; they do not
+replace quiescence evidence or establish erasure of unknown legacy client caches.
 
 ## Auth and HTTP API
 

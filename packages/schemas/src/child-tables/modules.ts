@@ -81,6 +81,8 @@ export const modulesChildren = [
         reference: { table: "ledgerParty", column: "id" },
       },
       { key: "provider", kind: "text", notNull: true, default: "gmail" },
+      { key: "mailboxId", kind: "text", notNull: true },
+      { key: "coverage", kind: "jsonb", type: "MailboxCoverage" },
       { key: "historyId", kind: "text" },
       { key: "lastPolledAt", kind: "timestamp" },
       {
@@ -99,12 +101,99 @@ export const modulesChildren = [
     ],
     types: [
       { module: "@cubby/schemas/identifiers", exports: ["LedgerPartyId"] },
+      {
+        module: "@cubby/schemas/mailbox-research",
+        exports: ["MailboxCoverage"],
+      },
     ],
     indexes: [
       {
-        name: "MailboxCursor_party_provider_key",
+        name: "MailboxCursor_party_provider_mailbox_key",
         unique: true,
-        on: ["ledgerPartyId", "provider"],
+        on: ["ledgerPartyId", "provider", "mailboxId"],
+      },
+    ],
+  }),
+  defineChildTable({
+    name: "MailboxMessage",
+    exportName: "mailboxMessage",
+    columns: [
+      {
+        key: "id",
+        kind: "uuid",
+        primaryKey: true,
+        default: { sql: "gen_random_uuid()" },
+      },
+      {
+        key: "ledgerPartyId",
+        kind: "uuid",
+        notNull: true,
+        type: "LedgerPartyId",
+        reference: { table: "ledgerParty", column: "id" },
+      },
+      { key: "provider", kind: "text", notNull: true, default: "gmail" },
+      { key: "mailboxId", kind: "text", notNull: true },
+      { key: "messageId", kind: "text", notNull: true },
+      { key: "checksum", kind: "text", notNull: true },
+      {
+        key: "classification",
+        kind: "text",
+        notNull: true,
+        type: "MailboxClassification",
+      },
+      { key: "classificationVersion", kind: "text", notNull: true },
+      {
+        key: "status",
+        kind: "text",
+        notNull: true,
+        type: "MailboxMessageStatus",
+      },
+      {
+        key: "orderMailId",
+        kind: "uuid",
+        reference: { table: "orderMail", column: "id" },
+      },
+      { key: "runId", kind: "uuid", reference: { table: "run", column: "id" } },
+      {
+        key: "createdAt",
+        kind: "timestamp",
+        notNull: true,
+        default: { now: true },
+      },
+      {
+        key: "updatedAt",
+        kind: "timestamp",
+        notNull: true,
+        default: { now: true },
+        onUpdateNow: true,
+      },
+    ],
+    types: [
+      { module: "@cubby/schemas/identifiers", exports: ["LedgerPartyId"] },
+      {
+        module: "@cubby/schemas/mailbox-research",
+        exports: ["MailboxClassification", "MailboxMessageStatus"],
+      },
+    ],
+    indexes: [
+      {
+        name: "MailboxMessage_mailbox_message_key",
+        unique: true,
+        on: ["ledgerPartyId", "provider", "mailboxId", "messageId"],
+      },
+      {
+        name: "MailboxMessage_pending_idx",
+        on: ["ledgerPartyId", "mailboxId", "status"],
+      },
+    ],
+    checks: [
+      {
+        name: "MailboxMessage_classification_check",
+        sql: "{classification} IN ('related', 'unrelated', 'uncertain')",
+      },
+      {
+        name: "MailboxMessage_status_check",
+        sql: "{status} IN ('pending', 'researching', 'completed', 'blocked', 'deleted', 'excluded')",
       },
     ],
   }),
@@ -131,18 +220,19 @@ export const modulesChildren = [
         type: "VendorId",
         reference: { table: "vendor", column: "id" },
       },
+      { key: "mailboxId", kind: "text", notNull: true },
       { key: "messageId", kind: "text", notNull: true },
       { key: "threadId", kind: "text" },
       { key: "historyId", kind: "text" },
       { key: "sender", kind: "text", notNull: true },
       { key: "subject", kind: "text", notNull: true },
-      { key: "receivedAt", kind: "timestamp", notNull: true },
+      { key: "receivedAt", kind: "timestamp" },
       { key: "rawChecksum", kind: "text", notNull: true },
       { key: "classifiedChecksum", kind: "text" },
       {
         key: "content",
         kind: "jsonb",
-        type: "{\n        snippet: string | null;\n        bodyText: string | null;\n        bodyHtml: string | null;\n      }",
+        type: "RetainedMailContent",
         notNull: true,
         default: {
           sql: '\'{"snippet":null,"bodyText":null,"bodyHtml":null}\'::jsonb',
@@ -167,12 +257,16 @@ export const modulesChildren = [
         module: "@cubby/schemas/identifiers",
         exports: ["LedgerPartyId", "VendorId"],
       },
+      {
+        module: "@cubby/schemas/mailbox-research",
+        exports: ["RetainedMailContent"],
+      },
     ],
     indexes: [
       {
-        name: "OrderMail_party_message_key",
+        name: "OrderMail_mailbox_message_key",
         unique: true,
-        on: ["ledgerPartyId", "messageId"],
+        on: ["ledgerPartyId", "mailboxId", "messageId"],
       },
       {
         name: "OrderMail_party_received_idx",

@@ -32,6 +32,8 @@ const DECLARED_UUID_OUTPUT_PATHS = new Set([
   "entity_read.item.unitMappings[].id",
   "entity_read.items[].product[].unitMappings[].id",
   "entity_read.items[].unitMappings[].id",
+  // Image processing jobs are internal queue handles, not Image entity links.
+  "image.jobIds[]",
   // A recipe line has no shortcode; recipe_import.patch_line takes this id.
   "recipe_insights.recipes[].usages[].lineId",
   // MealRecipe has no shortcode. meal_recipe.add exposes the newly inserted
@@ -46,6 +48,11 @@ const DECLARED_UUID_OUTPUT_PATHS = new Set([
   "activity.runFindings[].proposedFix.expenseId",
   "activity.runFindings[].proposedFix.productId",
   "activity.runFindings[].proposedFix.purchaseId",
+  // Reviewed research fixes bind to the exact internal RunTarget and retained
+  // RunEvidence rows rechecked by applyFix; these are not entity links.
+  "activity.runFindings[].proposedFix.targetId",
+  "activity.runFindings[].proposedFix.corrections[].claim.evidenceId",
+  "activity.runFindings[].proposedFix.evidenceIds[]",
   // Nullable row handles in the reviewed replacement snapshot participate in
   // the approval fingerprint and attribution comparison in applyFix.
   "activity.runFindings[].proposedFix.reviewedLineIdentities[].productId",
@@ -113,7 +120,15 @@ function collectUuidFindings(
 
   const items = node["items"];
   if (node["type"] === "array" && isJsonSchemaNode(items)) {
-    collectUuidFindings(items, defs, toolName, `${path}[]`, ancestry, out);
+    collectUuidFindings(
+      items,
+      defs,
+      toolName,
+      `${path}[]`,
+      ancestry,
+      out,
+      fieldContext,
+    );
   }
 
   const properties = node["properties"];
@@ -167,6 +182,7 @@ describe("MCP output schemas expose shortcodes, not uuids, outside declared exce
         type: "object",
         properties: {
           id: nullableIdentifier,
+          ids: { type: "array", items: { $ref: "#/definitions/identifier" } },
           next: { $ref: "#/definitions/row" },
         },
       },
@@ -188,7 +204,9 @@ describe("MCP output schemas expose shortcodes, not uuids, outside declared exce
     );
     expect(findings.map((finding) => finding.path)).toEqual([
       "probe.left.id",
+      "probe.left.ids[]",
       "probe.right.id",
+      "probe.right.ids[]",
     ]);
   });
   it("walks every registered tool's OUTPUT schema off the live catalog", async () => {

@@ -25,6 +25,7 @@ import {
   sanitizeExternalUrl,
   validateExternalHttpUrl,
 } from "@cubby/shared/external-fetch";
+import { sha256Hex } from "@cubby/shared/sha256";
 import { createLogger } from "@cubby/worker-tracing";
 
 import type { Database } from "~/server/db";
@@ -386,6 +387,13 @@ const importImageFromUrlWithPorts = async <TDatabase>(
 
   let createdImage: { id: string; shortcode: string };
   try {
+    const response = await ports.objectStorage.getObject(stored.key);
+    if (!response.ok)
+      throw new Error(`Imported image read failed: ${response.status}`);
+    const bytes = await ports.externalFetch.readResponseWithLimit(
+      response,
+      MAX_IMAGE_UPLOAD_BYTES,
+    );
     createdImage = await ports.repository.createUploadedImageRecord(db, {
       key: stored.key,
       filename: `${params.filenamePrefix}.${ports.objectStorage.contentTypeToExtension(stored.contentType)}`,
@@ -393,6 +401,7 @@ const importImageFromUrlWithPorts = async <TDatabase>(
       contentType: stored.contentType,
       source: "catalog",
       sourceAssetUrl: params.sourceUrl,
+      sha256: await sha256Hex(bytes),
     });
   } catch (error) {
     // SILENT: this is rollback for the DB-record failure being rethrown

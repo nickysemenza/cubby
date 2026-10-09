@@ -8,13 +8,14 @@ import {
 import type { RunTrigger } from "@cubby/schemas/purchase-import";
 import {
   type RunInput,
+  type RunCause,
   type RunProgress,
   type RunPurpose,
   runStatus,
 } from "@cubby/schemas/run-fields";
-import { and, eq } from "drizzle-orm";
+import { and, eq, sql } from "drizzle-orm";
 
-import type { Database } from "~/server/db";
+import type { Database, DrizzleClient, DrizzleTransaction } from "~/server/db";
 import { run as runTable, ledgerParty, user } from "~/server/db/schema";
 import { getDb, notDeleted } from "~/server/repo/database-helpers";
 import {
@@ -22,6 +23,8 @@ import {
   insertWithShortcode,
   type ShortcodeGeneratorPort,
 } from "~/server/repo/shortcode-utils";
+
+import { inheritExecutionAuthorization } from "./execution-context";
 
 /**
  * The actor for work with nobody behind it: crons, retries, scheduled
@@ -48,6 +51,8 @@ export type EnsureRunInput = {
   /** Saved with the row, so a Run is never visible without its work. */
   input?: RunInput;
   progress?: RunProgress;
+  parentRunId?: RunId;
+  cause?: RunCause;
 };
 
 /**
@@ -73,7 +78,9 @@ export async function ensureRun(
   if (input.clientKey) {
     const [existing] = await database
       .update(runTable)
-      .set({ endedAt: now })
+      .set({
+        endedAt: sql`CASE WHEN ${runTable.status} = 'completed' THEN ${now}::timestamptz ELSE ${runTable.endedAt} END`,
+      })
       .where(eq(runTable.clientKey, input.clientKey))
       .returning({ id: runTable.id });
     if (existing) return existing.id;
@@ -81,6 +88,12 @@ export async function ensureRun(
   const trigger = input.trigger ?? "ephemeral";
   const completed = trigger === "ephemeral" || input.status === "completed";
   const snapshot = await actorSnapshot(database, actor.userId);
+  if (input.parentRunId) {
+    await assertRunParent(database, input.parentRunId, {
+      actorUserId: actor.userId,
+      ledgerPartyId: snapshot.ledgerPartyId,
+    });
+  }
   const values = {
     id: runEntityId.parse(crypto.randomUUID()),
     // Only import runs carry a member scope. Ephemeral runs have none, so
@@ -95,6 +108,10 @@ export async function ensureRun(
     actorLedgerPartyName: snapshot.ledgerPartyName,
     actorLedgerPartyKind: snapshot.ledgerPartyKind,
     purpose: input.purpose,
+    parentRunId: input.parentRunId ?? null,
+    cause:
+      input.cause ?? (trigger === "scheduled" ? "scheduled" : "member_request"),
+    attempt: 1,
     trigger,
     status: completed ? runStatus.enum.completed : runStatus.enum.running,
     startedAt: now,
@@ -104,7 +121,10 @@ export async function ensureRun(
     deviceId: actor.deviceId,
     clientKey: input.clientKey ?? null,
     notes: input.notes ?? null,
-    input: input.input ?? null,
+    input:
+      (await inheritExecutionAuthorization(db, input.input, {
+        parentRunId: input.parentRunId,
+      })) ?? null,
     progress: input.progress ?? null,
   };
   if (!input.clientKey) {
@@ -119,10 +139,37 @@ export async function ensureRun(
   if (!result.created) {
     await database
       .update(runTable)
-      .set({ endedAt: now })
+      .set({
+        endedAt: sql`CASE WHEN ${runTable.status} = 'completed' THEN ${now}::timestamptz ELSE ${runTable.endedAt} END`,
+      })
       .where(eq(runTable.id, result.row.id));
   }
   return result.row.id;
+}
+
+/** Causal links preserve the initiating member scope, including telemetry-only parents. */
+export async function assertRunParent(
+  database: DrizzleClient | DrizzleTransaction,
+  parentRunId: RunId,
+  owner: Pick<typeof runTable.$inferSelect, "actorUserId" | "ledgerPartyId">,
+) {
+  const [parent] = await database
+    .select({
+      ledgerPartyId: runTable.ledgerPartyId,
+      actorUserId: runTable.actorUserId,
+    })
+    .from(runTable)
+    .where(and(eq(runTable.id, parentRunId), notDeleted(runTable)))
+    .limit(1);
+  if (
+    !parent ||
+    (parent.ledgerPartyId
+      ? parent.ledgerPartyId !== owner.ledgerPartyId
+      : parent.actorUserId !== owner.actorUserId)
+  )
+    throw new Error(
+      "The parent Run does not belong to this actor's member scope.",
+    );
 }
 
 /**
@@ -170,7 +217,10 @@ export const cookbookRunInput = (cookbookName: string): EnsureRunInput => ({
 
 // The actor's member party; the system user (and a member not yet linked to
 // a party) has none.
-async function actorSnapshot(database: ReturnType<typeof getDb>, id: UserId) {
+export async function actorSnapshot(
+  database: DrizzleClient | DrizzleTransaction,
+  id: UserId,
+) {
   const [actor] = await database
     .select({ name: user.name, email: user.email })
     .from(user)

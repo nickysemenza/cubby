@@ -1,20 +1,13 @@
 import type { ActorContext } from "@cubby/schemas/context";
-import type { LedgerPartyId } from "@cubby/schemas/identifiers";
-import { and, eq, inArray } from "drizzle-orm";
+import { runEntityId } from "@cubby/schemas/identifiers";
 
 import type { Database } from "~/server/db";
-import { orderMail } from "~/server/db/schema";
-import { getDb } from "~/server/repo/database-helpers";
 
+import { startMailResearch } from "../research-run";
 import { ingestGmailMessages } from "./ingest";
-import { processOrderMails } from "./process";
 import { gmailProviderForUser } from "./provider";
-import { listVendorOrderMail } from "./review";
 import { resolveVendorMailSearchTarget } from "./targets";
-import {
-  identityFromSearchTerms,
-  matchesVendorSender,
-} from "./vendor-identity";
+import { identityFromSearchTerms } from "./vendor-identity";
 import {
   defaultVendorMailSearchAfter,
   listVendorMailPage,
@@ -25,37 +18,6 @@ export type VendorMailSearchProgress = (
   detail: string,
   counts?: { searched?: number; skipped?: number },
 ) => Promise<void>;
-
-/** Saved messages already classified at their current content; skipped on a re-scan. */
-async function classifiedMessageIds(
-  db: Database,
-  memberId: LedgerPartyId,
-  ids: readonly string[],
-): Promise<ReadonlySet<string>> {
-  if (ids.length === 0) return new Set();
-  const saved = await getDb(db)
-    .select({
-      messageId: orderMail.messageId,
-      rawChecksum: orderMail.rawChecksum,
-      classifiedChecksum: orderMail.classifiedChecksum,
-    })
-    .from(orderMail)
-    .where(
-      and(
-        eq(orderMail.ledgerPartyId, memberId),
-        inArray(orderMail.messageId, [...ids]),
-      ),
-    );
-  return new Set(
-    saved
-      .filter(
-        (row) =>
-          row.classifiedChecksum !== null &&
-          row.classifiedChecksum === row.rawChecksum,
-      )
-      .map((row) => row.messageId),
-  );
-}
 
 export async function searchVendorOrderMail(
   db: Database,
@@ -70,75 +32,55 @@ export async function searchVendorOrderMail(
 ) {
   await onProgress("gmail_connect", "Connecting to Gmail");
   const target = await resolveVendorMailSearchTarget(db, input.vendorId, actor);
-  const provider = await gmailProviderForUser(db, target.userId);
+  const provider = await gmailProviderForUser(
+    db,
+    target.userId,
+    target.mailboxId,
+  );
   const after = input.after ?? defaultVendorMailSearchAfter();
   const identity = input.searchTerms?.length
     ? identityFromSearchTerms(input.searchTerms)
     : target.identity;
-  let page: Awaited<ReturnType<typeof listVendorMailPage>>;
-  try {
-    page = await listVendorMailPage(provider, {
-      identity,
-      after,
-      pageToken: input.pageToken ?? null,
-    });
-  } catch (error) {
-    throw new Error(
-      `Gmail page retrieval failed: ${error instanceof Error ? error.message : String(error)}`,
-      { cause: error },
-    );
-  }
-  const known = await classifiedMessageIds(
-    db,
-    target.memberId,
-    page.messageIds,
-  );
-  const searched = page.messageIds.length;
-  const skipped = page.messageIds.filter((id) => known.has(id)).length;
-  await onProgress("gmail_list", `Found ${searched} messages`, {
-    searched,
-    skipped,
+  const page = await listVendorMailPage(provider, {
+    identity,
+    after,
+    pageToken: input.pageToken ?? null,
+  });
+  if (!actor.runId)
+    throw new Error("Scoped Gmail acquisition requires its durable Run");
+  const runId = actor.runId;
+  await onProgress("gmail_list", `Found ${page.messageIds.length} messages`, {
+    searched: page.messageIds.length,
+    skipped: 0,
   });
   const ingested = await ingestGmailMessages(db, provider, {
     ledgerPartyId: target.memberId,
-    mailboxId: "me",
-    messageIds: page.messageIds.filter((id) => !known.has(id)),
-    accept: (mail) => matchesVendorSender(mail.headers.from ?? "", identity),
+    mailboxId: target.mailboxId,
+    messageIds: page.messageIds,
+    runId: runEntityId.parse(runId),
     onMessage: (handled) =>
       onProgress(
         "gmail_fetch",
-        `Checked ${skipped + handled} of ${searched} messages`,
+        `Checked ${handled} of ${page.messageIds.length} messages`,
       ),
   });
-  if (ingested.saved.length > 0) {
-    await onProgress(
-      "mail_classify",
-      `Classifying ${ingested.saved.length} messages`,
-    );
-    await processOrderMails(
-      db,
-      ingested.saved,
-      undefined,
-      actor.runId ?? undefined,
-    );
-  }
-  let reviewable = 0;
-  await onProgress("mail_review", "Checking order emails for review");
-  if (page.messageIds.length > 0) {
-    const pageWorklist = await listVendorOrderMail(
-      db,
-      {
-        vendorId: input.vendorId,
-        ledgerPartyId: target.memberShortcode,
-      },
-      { messageIds: page.messageIds },
-    );
-    reviewable = pageWorklist.items.length;
+  if (ingested.orderMailIds.length) {
+    const results = await startMailResearch(db, {
+      ledgerPartyId: target.memberId,
+      userId: target.userId,
+      parentRunId: runEntityId.parse(runId),
+      mailboxId: target.mailboxId,
+      messageIds: ingested.orderMailIds,
+    });
+    if (results.some((result) => result.status === "dispatch_failed"))
+      throw new Error(
+        "Mail research dispatch failed; replay the retained page.",
+      );
   }
   return {
-    searched,
-    skipped,
-    reviewable,
+    searched: page.messageIds.length,
+    skipped: page.messageIds.length - ingested.orderMailIds.length,
+    reviewable: 0,
     after,
     nextPageToken: page.nextPageToken,
   };

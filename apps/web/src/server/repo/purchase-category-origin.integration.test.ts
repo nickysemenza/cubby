@@ -9,6 +9,27 @@ import { getPurchaseByID, updatePurchase } from "./purchase";
 import { insertWithShortcode } from "./shortcode-utils";
 
 const ctx = withTestDb();
+it("records an accepted source category through the ordinary Purchase writer", async () => {
+  const category = await insertWithShortcode(ctx.db, "spendingCategory", {
+    name: "Synthetic supported service purpose",
+  });
+  const vendor = await insertWithShortcode(ctx.db, "vendor", {
+    name: "Synthetic supported service seller",
+  });
+  const purchase = await insertWithShortcode(ctx.db, "purchase", {
+    date: "2026-09-20",
+    vendorId: vendor.id,
+  });
+  const { output } = await updatePurchase(
+    ctx.db,
+    purchase.shortcode,
+    { spendingCategoryId: category.shortcode },
+    ctx.actor,
+    { spendingCategoryOrigin: "source" },
+  );
+  expect(output.spendingCategoryOrigin).toBe("source");
+  expect(output.spendingCategoryId).toBe(category.shortcode);
+});
 it("keeps legacy fallback provenance pending review until an explicit category save", async () => {
   const category = await insertWithShortcode(ctx.db, "spendingCategory", {
     name: "Synthetic fallback purpose",

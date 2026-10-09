@@ -178,6 +178,8 @@ async function requestJev(
   // The last attempt's response; a throttled retry replaces the earlier one.
   let gateway: GatewayResponseInfo | undefined;
   const fetch = gatewayFetch("workers-ai", {
+    beforePaidRequest: ctx.beforePaidRequest,
+    collectPayload: feature.collectPayload,
     ...(feature.cache
       ? cachedCall({ metadata, force: ctx.force })
       : { metadata, skipCache: true }),
@@ -387,10 +389,11 @@ export async function runJevChoice(args: {
     }
     return result;
   };
-  // Pin the sampled model before cache lookup; retries and usage keep it.
-  const feature = args.port
-    ? args.feature
-    : { ...args.feature, model: selectDecisionModel() };
+  // Mail routing stays pinned; trial features sample once before cache/retry.
+  const feature =
+    args.port || args.feature.sample === false
+      ? args.feature
+      : { ...args.feature, model: selectDecisionModel() };
   return withAiResponseCache({
     enabled: feature.cache && !args.port,
     force: args.usage.force,

@@ -21,6 +21,7 @@ import {
   financialTransactionAllocation,
   importHunt,
   importSourceClaim,
+  importSourceOrder,
   ledgerParty,
   purchase,
   purchasePaymentEvidence,
@@ -351,7 +352,11 @@ async function namesOnlyThisCharge(
   const [claim] = await tx
     .select({ ledgerPartyId: importSourceClaim.ledgerPartyId })
     .from(importSourceClaim)
-    .where(eq(importSourceClaim.purchaseId, row.id))
+    .innerJoin(
+      importSourceOrder,
+      eq(importSourceOrder.sourceClaimId, importSourceClaim.id),
+    )
+    .where(eq(importSourceOrder.purchaseId, row.id))
     .limit(1);
   if (claim?.ledgerPartyId !== input.ledgerPartyId) return false;
   const payments = await loadPaymentSet(tx, row.id);

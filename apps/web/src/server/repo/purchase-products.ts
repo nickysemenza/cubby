@@ -19,6 +19,7 @@ import type {
 import { and, asc, count, eq, inArray, type SQL, sql } from "drizzle-orm";
 import { uniq } from "es-toolkit";
 
+import { comparePlainDatesDescending } from "~/lib/household-date";
 import { classifyProductMovement } from "~/lib/product-movement";
 import type { Database, DrizzleClient, DrizzleTransaction } from "~/server/db";
 import {
@@ -319,7 +320,7 @@ export async function listProductPurchases(
   const rows = mergeSources<Omit<(typeof linkRows)[number], "linkAttachedAt">>(
     linkRows.map((row) => ({ ...row, key: row.purchaseKey })),
     expenseRows.map((row) => ({ ...row, key: row.purchaseKey })),
-  ).sort((a, b) => b.date.localeCompare(a.date));
+  ).sort((a, b) => comparePlainDatesDescending(a.date, b.date));
 
   return rows.map((row) => ({
     purchaseId: parseShortcodeFor("purchase", row.purchaseCode),

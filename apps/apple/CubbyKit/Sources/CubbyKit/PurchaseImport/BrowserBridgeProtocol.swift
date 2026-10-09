@@ -3,9 +3,9 @@ import Foundation
 public enum BrowserBridgeProtocol {
     /// This value binds every websocket envelope and durable command/result. An older peer is
     /// deliberately rejected so cached work cannot cross protocol versions.
-    public static let currentProtocolVersion = 3
+    public static let currentProtocolVersion = 4
     /// The DOM trimming rules of `MacBrowserCommandExecutor.snapshotScript`; bump it when they change.
-    public static let snapshotVersion = 1
+    public static let snapshotVersion = 2
 }
 
 // The wire payloads below are generated from @cubby/schemas through OpenAPI. This file adds only
@@ -30,7 +30,7 @@ extension BrowserBridgeFailureCode {
 
 extension BrowserBridgeRequest {
     public init(
-        protocolVersion: ProtocolVersionPayload = ._3, id: UUID, runID: String,
+        protocolVersion: ProtocolVersionPayload = ._4, id: UUID, runID: String,
         operationID: String, deadline: Date, operation: BrowserBridgeOperation
     ) {
         self.init(
@@ -49,16 +49,18 @@ extension BrowserBridgeOperation {
                 _type: .navigate, url: url.absoluteString, allowedHosts: allowedHosts.sorted()))
     }
 
-    public static func scroll(pageCount: Int) -> Self {
-        .scroll(BrowserBridgeOperationScroll(_type: .scroll, pageCount: pageCount))
+    public static func scroll(pageCount: Int, allowedHosts: Set<String>) -> Self {
+        .scroll(
+            BrowserBridgeOperationScroll(
+                _type: .scroll, pageCount: pageCount, allowedHosts: allowedHosts.sorted()))
     }
 
-    public static func capture(
+    public static func read(
         allowedHosts: Set<String>, screenshot: BrowserScreenshotPolicy.Mode, recoveryURL: URL? = nil
     ) -> Self {
-        .capture(
-            BrowserBridgeOperationCapture(
-                _type: .capture, allowedHosts: allowedHosts.sorted(), screenshot: screenshot,
+        .read(
+            BrowserBridgeOperationRead(
+                _type: .read, allowedHosts: allowedHosts.sorted(), screenshot: screenshot,
                 recoveryURL: recoveryURL?.absoluteString))
     }
 
@@ -99,7 +101,7 @@ extension BrowserBridgeResult: Identifiable {
     public var commandUUID: UUID? { UUID(uuidString: commandID) }
 
     public init(
-        protocolVersion: ProtocolVersionPayload = ._3, commandID: UUID, runID: String,
+        protocolVersion: ProtocolVersionPayload = ._4, commandID: UUID, runID: String,
         operationID: String, completedAt: Date, outcome: BrowserBridgeCommandOutcome
     ) {
         self.init(
@@ -112,7 +114,7 @@ extension BrowserBridgeResult: Identifiable {
         outcome: BrowserBridgeCommandOutcome
     ) {
         self.init(
-            protocolVersion: ._3, commandID: commandID, operationID: operationID,
+            protocolVersion: ._4, commandID: commandID, operationID: operationID,
             runID: runID, completedAt: completedAt, outcome: outcome)
     }
 }
@@ -121,35 +123,43 @@ extension BrowserBridgeCapabilities {
     /// Every Mac build can screenshot its window; whether macOS allows it right now is reported
     /// per command in `BrowserObservation.screenRecording`.
     public static let current = Self(
-        snapshotVersion: BrowserBridgeProtocol.snapshotVersion, screenshot: true)
+        snapshotVersion: BrowserBridgeProtocol.snapshotVersion, screenshot: true,
+        actions: [.navigate, .read, .click, ._type, .select, .scroll, .window])
 }
 
 extension BrowserBridgeClientMessage {
+    public static func runForgotten(runID: String, retirementID: String, deviceID: UUID) -> Self {
+        .forgetRunAck(
+            .init(
+                protocolVersion: ._4, _type: .forgetRunAck, runID: runID,
+                retirementID: retirementID, deviceID: deviceID.uuidString.lowercased()))
+    }
+
     public static func hello(
         deviceID: UUID, browser: BrowserChoice, capabilities: BrowserBridgeCapabilities
     ) -> Self {
         .hello(
             BrowserBridgeClientMessageHello(
-                protocolVersion: ._3, _type: .hello,
+                protocolVersion: ._4, _type: .hello,
                 deviceID: deviceID.uuidString.lowercased(),
                 browser: browser == .chrome ? .chrome : .safari,
                 capabilities: capabilities))
     }
 
     public static func pong(timestamp: Date) -> Self {
-        .pong(BrowserBridgeClientMessagePong(protocolVersion: ._3, _type: .pong, timestamp: timestamp))
+        .pong(BrowserBridgeClientMessagePong(protocolVersion: ._4, _type: .pong, timestamp: timestamp))
     }
 
     public static func result(_ result: BrowserBridgeCommandResult) -> Self {
         .result(
             BrowserBridgeClientMessageResult(
-                protocolVersion: ._3, _type: .result, result: result))
+                protocolVersion: ._4, _type: .result, result: result))
     }
 
     public static func runCompletedAcknowledged(runID: String) -> Self {
         .runCompletedAck(
             BrowserBridgeClientMessageRunCompletedAck(
-                protocolVersion: ._3, _type: .runCompletedAck, runID: runID))
+                protocolVersion: ._4, _type: .runCompletedAck, runID: runID))
     }
 }
 
@@ -194,13 +204,13 @@ extension BrowserBridgeServerMessage {
     public static func command(_ command: BrowserBridgeCommand) -> Self {
         .command(
             BrowserBridgeServerMessageCommand(
-                protocolVersion: ._3, _type: .command, command: command))
+                protocolVersion: ._4, _type: .command, command: command))
     }
 
     public static func raiseAuthWindow(runID: String) -> Self {
         .raiseAuthWindow(
             BrowserBridgeServerMessageRaiseAuthWindow(
-                protocolVersion: ._3, _type: .raiseAuthWindow, runID: runID))
+                protocolVersion: ._4, _type: .raiseAuthWindow, runID: runID))
     }
 
     public static func runCompleted(_ completion: BrowserBridgeRunCompletion) -> Self {
@@ -213,7 +223,7 @@ extension BrowserBridgeServerMessage {
             }
         return .runCompleted(
             BrowserBridgeServerMessageRunCompleted(
-                protocolVersion: ._3, _type: .runCompleted, runID: completion.runID,
+                protocolVersion: ._4, _type: .runCompleted, runID: completion.runID,
                 terminalStatus: terminalStatus, outcome: completion.outcome,
                 imported: completion.imported, updated: completion.updated,
                 skipped: completion.skipped, findingCount: completion.findingCount))
@@ -224,5 +234,6 @@ extension BrowserBridgeServerMessage {
 public protocol BrowserCommandExecuting: AnyObject, Sendable {
     func execute(_ command: BrowserBridgeCommand) async -> BrowserBridgeCommandOutcome
     func cancel(commandID: UUID)
+    func forget(runID: String) async throws
     func raiseAuthenticationWindow()
 }

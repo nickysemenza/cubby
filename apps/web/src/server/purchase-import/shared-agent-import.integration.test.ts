@@ -2,22 +2,23 @@ import {
   commitPurchaseImportInput,
   aggregateReplacementSnapshot,
   proposedImportFix,
-  validatePurchaseImportInput,
 } from "@cubby/schemas/purchase-import";
+import { fromPartial } from "@total-typescript/shoehorn";
 import { and, eq, inArray, isNull } from "drizzle-orm";
 import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 
 import {
   entityExternalId,
+  externalSource,
   auditLog,
   expense,
   financialTransactionAllocation,
   product,
   purchase,
   runFinding,
+  runEvidence,
   runOperation,
-  run as runTable,
   runTarget,
 } from "~/server/db/schema";
 import { getDb, withTransaction } from "~/server/repo/database-helpers";
@@ -33,12 +34,12 @@ import {
   loadAggregateReplacementSnapshot,
 } from "./aggregate-replacement";
 import { resolveRunFinding } from "./findings";
-import {
-  commitPurchaseImport,
-  preparePurchaseImport,
-  validatePurchaseImport,
-} from "./import-orders";
-import { startOrResumeRun, startTargetedRun } from "./run-service";
+import { commitPurchaseImport, preparePurchaseImport } from "./import-orders";
+import { admitPurchaseValidationResearch } from "./purchase-validation-research";
+import { resolveImportResearch } from "./research-import";
+import { retainResearchObservation } from "./research-observations";
+import { researchServiceFor } from "./research-service";
+import { startOrResumeRun } from "./run-service";
 
 const checksum = (digit: string) => digit.repeat(64);
 
@@ -72,7 +73,12 @@ describe("shared purchase-import prepare and commit", () => {
       .where(eq(product.id, existingProduct.entityId));
     if (!existingProductRow) throw new Error("Product fixture was not created");
     await withTransaction(ctx.db, async (tx) => {
-      await ensureExternalSources(tx, ["amazon", "gtin"]);
+      await ensureExternalSources(tx, ["gtin"]);
+      await tx.insert(externalSource).values({
+        slug: "amazon",
+        label: "Example registered catalog",
+        vendorId: vendor.id,
+      });
       await tx.insert(entityExternalId).values({
         entityId: existingProduct.entityId,
         entityKind: "product" as const,
@@ -404,50 +410,68 @@ describe("shared purchase-import prepare and commit", () => {
       currency: "USD" | "EUR",
       sourceChecksum: string,
     ) => {
-      const started = await startTargetedRun(ctx.db, {
+      const started = await admitPurchaseValidationResearch(ctx.db, {
         ledgerPartyId: party.id,
-        purpose: "purchase_validation",
-        vendorId: vendor.id,
-        vendorAccountId: null,
-        trigger: "manual",
-        targets: [
-          {
-            kind: "purchase",
-            purchaseId: existingPurchase.id,
-            sourceKind: "browser_order",
-            sourceExternalKey: "validation:ORDER-VALIDATE-1",
-            targetFingerprint: checksum("c"),
-            evidenceFingerprint: checksum("a"),
-          },
-        ],
+        userId: ctx.actor.userId,
+        purchaseIds: [existingPurchase.id],
       });
       if (!started.created) throw new Error("Validation run was blocked");
-      const prepareOperationId = `prepare:${currency.toLowerCase()}`;
-      await preparePurchaseImport(
+      const [work] = await getDb(ctx.db)
+        .select()
+        .from(runTarget)
+        .where(eq(runTarget.runId, started.row.id));
+      if (!work) throw new Error("Current validation task missing");
+      const body = `<p>Order ORDER-VALIDATE-1: Validation product, ${currency} 12.34.</p>`;
+      const retained = await retainResearchObservation(
         ctx.db,
         {
-          _runExecution: {
-            runId: started.run.id,
-            operationId: prepareOperationId,
-            itemOperationIds: [`item:${currency.toLowerCase()}`],
+          runId: started.row.id,
+          workRef: work.id,
+          callId: `original:${currency}:${sourceChecksum}`,
+          kind: "web_page",
+          sourceMetadata: {
+            sourceURL: "https://shop.example.test/orders/ORDER-VALIDATE-1",
           },
-          orders: [
-            {
-              stableOrderId: `order-${currency.toLowerCase()}`,
-              itemOperationId: `item:${currency.toLowerCase()}`,
-              source: {
-                kind: "browser_order",
-                externalKey: "validation:ORDER-VALIDATE-1",
-                checksum: sourceChecksum,
-              },
-              evidenceChecksum: checksum("b"),
-              extractionRevision: "validation@1",
-              extraction: {
-                status: "ready",
+          content: body,
+        },
+        {
+          keyPrefix: "synthetic/shared-validation",
+          storage: {
+            put: async () => {},
+            get: async () => body,
+          },
+        },
+      );
+      if (sourceChecksum !== checksum("a"))
+        await getDb(ctx.db)
+          .update(runEvidence)
+          .set({ checksum: sourceChecksum })
+          .where(eq(runEvidence.id, retained.evidenceId));
+      const result = await resolveImportResearch(
+        ctx.db,
+        {
+          runId: started.row.id,
+          workRef: work.id,
+          callId: `validate:${currency}:${sourceChecksum}`,
+          proposal: {
+            workRef: work.id,
+            status: "verified",
+            identity: {
+              evidenceIds: [retained.evidenceId],
+              reasoning: "The original identifies this recorded order.",
+            },
+            orders: [
+              {
+                purchaseRef: existingPurchase.shortcode,
+                vendorRef: vendor.shortcode,
+                evidenceIds: [retained.evidenceId],
+                defaultTrade: "other",
+                reasoning:
+                  "The original supports the exact stated currency and total.",
                 candidate: {
                   orderId: "ORDER-VALIDATE-1",
                   orderedAt: "2026-09-20T12:00:00.000Z",
-                  merchant: "Example",
+                  merchant: vendor.name,
                   currency,
                   printedGrandTotal: 12.34,
                   lines: [
@@ -459,60 +483,61 @@ describe("shared purchase-import prepare and commit", () => {
                     },
                   ],
                   payments: [],
-                  allShipmentsDelivered: true,
+                  allShipmentsDelivered: false,
                 },
+                productResolutions: [
+                  {
+                    lineIndex: 0,
+                    kind: "existing",
+                    productId: productRow.shortcode,
+                  },
+                ],
               },
-              lineIds: [`line-${currency.toLowerCase()}`],
-              primaryDocumentImageId: null,
-              screenshotImageId: null,
-            },
-          ],
-        },
-        ctx.actor,
-      );
-      const result = await validatePurchaseImport(
-        ctx.db,
-        validatePurchaseImportInput.parse({
-          _runExecution: {
-            runId: started.run.id,
-            operationId: `validate:${currency.toLowerCase()}`,
+            ],
+            detail:
+              "Compared the original to the recorded Purchase without writing money.",
           },
-          prepareOperationId,
-          resolutions: [
-            {
-              stableOrderId: `order-${currency.toLowerCase()}`,
-              stableLineId: `line-${currency.toLowerCase()}`,
-              resolution: { kind: "existing", productId: productRow.shortcode },
-            },
-          ],
-        }),
-        ctx.actor,
+        },
+        {
+          readEvidence: async () => body,
+          assess: async () => ({
+            identityVerified: true,
+            acceptedOrders: [0],
+            acceptedEmailLinks: [],
+            acceptedFacts: [],
+            acceptedIdentifiers: [],
+            acceptedIdentifierClaims: [],
+            acceptedImages: [],
+            rejected: [],
+          }),
+        },
       );
-      // The coordinator finishes the run; while it is active, another
-      // validation of this Purchase is blocked by target.
-      await getDb(ctx.db)
-        .update(runTable)
-        .set({ status: "completed" })
-        .where(eq(runTable.id, started.run.id));
+      await researchServiceFor(
+        ctx.db,
+        fromPartial<Env>({}),
+        started.row.id,
+      ).researchNext({}, `settle:${currency}`);
       const [target] = await getDb(ctx.db)
-        .select({ warning: runTarget.warning })
+        .select({ warning: runTarget.warning, diff: runTarget.diff })
         .from(runTarget)
-        .where(eq(runTarget.runId, started.run.id));
+        .where(eq(runTarget.runId, started.row.id));
       return { result, target };
     };
 
     const foreign = await runValidation("EUR", checksum("a"));
-    expect(foreign.result).toMatchObject({
-      status: "needs_review",
-      targets: [{ outcome: "semantic_drift" }],
-    });
-
-    const rawDrift = await runValidation("USD", checksum("d"));
-    expect(rawDrift.result).toMatchObject({
-      status: "completed",
-      targets: [{ outcome: "raw_evidence_drift", diff: null }],
-    });
-    expect(rawDrift.target?.warning).toContain("source evidence changed");
+    expect(foreign.result).toMatchObject({ status: "researched_with_gaps" });
+    expect(foreign.target?.diff).toMatchObject({ corrections: [] });
+    await expect(runValidation("USD", checksum("d"))).rejects.toThrow(
+      /checksum|retained.*changed/u,
+    );
+    expect(
+      (
+        await getDb(ctx.db)
+          .select()
+          .from(expense)
+          .where(eq(expense.purchaseId, existingPurchase.id))
+      ).map((row) => row.cost),
+    ).toEqual([12.34]);
   });
 
   it("commits tax and shipping lines using only the principal line's resolution", async () => {

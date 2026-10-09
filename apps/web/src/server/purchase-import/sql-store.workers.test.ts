@@ -7,7 +7,7 @@ import { bridgeServerMessage, type BrowserBridgeResult } from "./contracts";
 import { PurchaseImportSqlStore } from "./sql-store";
 
 const command = {
-  protocolVersion: 3 as const,
+  protocolVersion: 4 as const,
   id: "894efe4d-8567-56db-9c06-e533b9945c6f",
   operationId: "browser-command:nav-001",
   runID: "df62c017-5669-4d6d-9f7e-088b6bcffc9f",
@@ -20,7 +20,7 @@ const command = {
 };
 
 const result: BrowserBridgeResult = {
-  protocolVersion: 3,
+  protocolVersion: 4,
   // Foundation's UUID Codable representation is uppercase while the web
   // command producer emits lowercase UUID strings.
   commandID: command.id.toUpperCase(),
@@ -42,6 +42,95 @@ const result: BrowserBridgeResult = {
 };
 
 describe("purchase-import broker SQLite", () => {
+  // Offline recipients retain bytes after server cache deletion. Another Mac,
+  // late result, wake, completion, or an acknowledgement for another receipt
+  // must not certify erasure. Authorized source receipts share one Run disposal.
+  it("keeps forget pending until every actual recipient acknowledges and fences retired replay", async () => {
+    const stub = env.DB_FRESHNESS.getByName(crypto.randomUUID());
+    await runInDurableObject(stub, (_instance, state) => {
+      const store = new PurchaseImportSqlStore(state.storage);
+      store.migrate();
+      const device = "11111111-1111-4111-8111-111111111111";
+      const otherDevice = "22222222-2222-4222-8222-222222222222";
+      const receipt = "33333333-3333-4333-8333-333333333333";
+      const overlappingReceipt = "44444444-4444-4444-8444-444444444444";
+      const other = {
+        ...command,
+        id: crypto.randomUUID(),
+        runID: crypto.randomUUID(),
+      };
+      store.enqueue(command);
+      store.enqueue(other);
+      store.recordDelivery(command.id, device);
+      store.claimResult(result);
+      store.rememberWake(command.runID);
+      expect(store.forgetRun(command.runID, receipt)).toEqual({
+        forgotten: false,
+      });
+      expect(store.result(command.id)).toBeNull();
+      expect(store.nextWake()).toBeNull();
+      expect(store.nextReplayable()).toEqual(other);
+      expect(() => store.enqueue(command)).toThrow(/retired/i);
+      expect(store.claimResult(result)).toEqual({
+        command: null,
+        newlyCompleted: false,
+      });
+      store.rememberWake(command.runID);
+      expect(store.nextWake()).toBeNull();
+      store.acknowledgeForget(command.runID, receipt, otherDevice);
+      expect(store.forgetRun(command.runID, receipt)).toEqual({
+        forgotten: false,
+      });
+      expect(store.pendingForgets(device)).toEqual([
+        { runId: command.runID, receiptId: receipt },
+      ]);
+      const coldStore = new PurchaseImportSqlStore(state.storage);
+      expect(coldStore.forgetRun(command.runID, overlappingReceipt)).toEqual({
+        forgotten: false,
+      });
+      coldStore.acknowledgeForget(command.runID, overlappingReceipt, device);
+      expect(coldStore.pendingForgets(device)).toEqual([
+        { runId: command.runID, receiptId: receipt },
+      ]);
+      store.acknowledgeForget(command.runID, receipt, device);
+      expect(store.forgetRun(command.runID, receipt)).toEqual({
+        forgotten: true,
+      });
+      expect(store.pendingForgets(device)).toEqual([]);
+      expect(coldStore.forgetRun(command.runID, overlappingReceipt)).toEqual({
+        forgotten: true,
+      });
+      const retained = state.storage.sql
+        .exec<{ request_json: string }>(
+          "SELECT request_json FROM broker_command WHERE run_id = ?",
+          command.runID,
+        )
+        .toArray();
+      expect(retained).toEqual([]);
+    });
+  });
+
+  it("does not claim erasure for historical deliveries without device identity", async () => {
+    const stub = env.DB_FRESHNESS.getByName(crypto.randomUUID());
+    await runInDurableObject(stub, (_instance, state) => {
+      const store = new PurchaseImportSqlStore(state.storage);
+      store.migrate();
+      store.enqueue(command);
+      store.markSent(command.id);
+      const receipt = crypto.randomUUID();
+      expect(store.forgetRun(command.runID, receipt)).toEqual({
+        forgotten: false,
+      });
+      expect(store.forgetRun(command.runID, crypto.randomUUID())).toEqual({
+        forgotten: false,
+      });
+      store.acknowledgeForget(command.runID, receipt, crypto.randomUUID());
+      expect(store.forgetRun(command.runID, receipt)).toEqual({
+        forgotten: false,
+      });
+    });
+  });
+
   it("removes a claimed result from the replay queue before acknowledging it", async () => {
     const stub = env.DB_FRESHNESS.getByName(crypto.randomUUID());
 
@@ -151,11 +240,23 @@ describe("purchase-import broker SQLite", () => {
 
     socket.send(
       JSON.stringify({
-        protocolVersion: 3,
+        protocolVersion: 4,
         type: "hello",
         deviceID: "11111111-1111-4111-8111-111111111111",
         browser: "chrome",
-        capabilities: { snapshotVersion: 1, screenshot: true },
+        capabilities: {
+          snapshotVersion: 2,
+          screenshot: true,
+          actions: [
+            "navigate",
+            "read",
+            "click",
+            "type",
+            "select",
+            "scroll",
+            "window",
+          ],
+        },
       }),
     );
     expect(await receiveMessage(socket)).toMatchObject({
@@ -163,9 +264,9 @@ describe("purchase-import broker SQLite", () => {
       command: { id: command.id },
     });
 
-    socket.send(JSON.stringify({ protocolVersion: 3, type: "result", result }));
+    socket.send(JSON.stringify({ protocolVersion: 4, type: "result", result }));
     expect(await receiveMessage(socket)).toEqual({
-      protocolVersion: 3,
+      protocolVersion: 4,
       type: "acknowledge",
       commandID: command.id,
     });

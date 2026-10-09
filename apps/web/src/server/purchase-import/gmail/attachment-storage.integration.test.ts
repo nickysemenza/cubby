@@ -31,7 +31,7 @@ import { getDb } from "~/server/repo/database-helpers";
 import { insertWithShortcode } from "~/server/repo/shortcode-utils";
 
 import type { OrderMailAttachmentStorage } from "./attachment-storage";
-import { ingestGmailMessages } from "./ingest";
+import { ingestGmailMessages as acquireGmailMessages } from "./ingest";
 import {
   advanceMailboxCursor,
   loadGmailCursor,
@@ -43,6 +43,16 @@ import {
   type GmailOrderMailEvent,
   type GmailProvider,
 } from "./types";
+
+const ingestGmailMessages: typeof acquireGmailMessages = (
+  db,
+  provider,
+  input,
+) =>
+  acquireGmailMessages(db, provider, {
+    ...input,
+    relevance: input.relevance ?? (async () => ({ classification: "related" })),
+  });
 
 const PDF_BYTES = Buffer.from("%PDF-1.4 synthetic invoice bytes ÿ\u0000");
 
@@ -105,8 +115,8 @@ const event = (
   messageId: string,
   kind: GmailOrderMailEvent["kind"],
 ): GmailOrderMailEvent => ({
-  sourceKey: `gmail:me:history:${messageId}:${kind}`,
-  mailboxId: "me",
+  sourceKey: `gmail:synthetic-google-subject:history:${messageId}:${kind}`,
+  mailboxId: "synthetic-google-subject",
   historyId: "450",
   messageId,
   threadId: null,
@@ -140,12 +150,15 @@ describe("Gmail ingestion and attachment storage", () => {
 
     const outcome = await ingestGmailMessages(ctx.db, provider(), {
       ledgerPartyId: party.id,
-      mailboxId: "me",
+      mailboxId: "synthetic-google-subject",
       messageIds: ["msg-1"],
       storage,
     });
 
-    expect(outcome).toEqual({ saved: ["msg-1"], deleted: [], rejected: [] });
+    expect(outcome).toMatchObject({
+      saved: ["msg-1"],
+      deleted: [],
+    });
     const [row] = await attachments();
     expect(row?.key).toBe(`order-mail-attachment/${row?.id}`);
     expect(row?.checksum).toMatch(/^[0-9a-f]{64}$/);
@@ -166,7 +179,7 @@ describe("Gmail ingestion and attachment storage", () => {
     });
     const input = {
       ledgerPartyId: party.id,
-      mailboxId: "me",
+      mailboxId: "synthetic-google-subject",
       messageIds: ["msg-1"],
       storage,
     };
@@ -189,6 +202,7 @@ describe("Gmail ingestion and attachment storage", () => {
       .values({
         ledgerPartyId: party.id,
         messageId: "msg-legacy",
+        mailboxId: "synthetic-google-subject",
         sender: "orders@forgewear.example",
         subject: "Receipt",
         receivedAt: new Date("2026-08-31T00:00:00.000Z"),
@@ -219,7 +233,7 @@ describe("Gmail ingestion and attachment storage", () => {
       }),
       {
         ledgerPartyId: party.id,
-        mailboxId: "me",
+        mailboxId: "synthetic-google-subject",
         messageIds: ["msg-legacy"],
         storage,
       },
@@ -230,14 +244,15 @@ describe("Gmail ingestion and attachment storage", () => {
         id: legacy?.id,
         key: "order-mail-attachment/legacy",
         checksum: "legacy",
-        providerAttachmentId: "gmail:me:msg-legacy:attachment:1",
+        providerAttachmentId:
+          "gmail:synthetic-google-subject:msg-legacy:attachment:1",
       },
     ]);
-    expect(fetches).toBe(0);
+    expect(fetches).toBe(1);
     expect(objects.size).toBe(0);
   });
 
-  it("holds at most one attachment payload at a time across a large batch", async () => {
+  it("bounds transient attachment payloads to one message across a large batch", async () => {
     const party = await seedParty();
     const { storage } = memoryStorage();
     const fourMiB = Buffer.alloc(4 * 1024 * 1024, 7).toString("base64url");
@@ -261,14 +276,14 @@ describe("Gmail ingestion and attachment storage", () => {
 
     const outcome = await ingestGmailMessages(ctx.db, gmail, {
       ledgerPartyId: party.id,
-      mailboxId: "me",
+      mailboxId: "synthetic-google-subject",
       messageIds: Array.from({ length: 32 }, (_, index) => `msg-${index}`),
       storage: counting,
     });
 
     expect(outcome.saved).toHaveLength(32);
     expect(await attachments()).toHaveLength(64);
-    expect(peak).toBe(1);
+    expect(peak).toBe(2);
   });
 
   it("leaves a failed upload keyless and stores it on the retry", async () => {
@@ -276,7 +291,7 @@ describe("Gmail ingestion and attachment storage", () => {
     const { objects, storage } = memoryStorage();
     const input = {
       ledgerPartyId: party.id,
-      mailboxId: "me",
+      mailboxId: "synthetic-google-subject",
       messageIds: ["msg-1"],
     };
 
@@ -312,31 +327,34 @@ describe("Gmail ingestion and attachment storage", () => {
 
     const outcome = await ingestGmailMessages(ctx.db, gmail, {
       ledgerPartyId: party.id,
-      mailboxId: "me",
+      mailboxId: "synthetic-google-subject",
       messageIds: ["msg-1", "msg-gone"],
       storage,
     });
 
-    expect(outcome).toEqual({
+    expect(outcome).toMatchObject({
       saved: ["msg-1"],
       deleted: ["msg-gone"],
-      rejected: [],
+      excluded: [],
+      blocked: [],
+      unrelated: [],
     });
+    expect(outcome.orderMailIds).toHaveLength(1);
   });
 
-  it("saves nothing for a message the caller rejects", async () => {
+  it("stores no original or attachments when capable interpretation rejects a message", async () => {
     const party = await seedParty();
     const { objects, storage } = memoryStorage();
 
     const outcome = await ingestGmailMessages(ctx.db, provider(), {
       ledgerPartyId: party.id,
-      mailboxId: "me",
+      mailboxId: "synthetic-google-subject",
       messageIds: ["msg-1"],
       storage,
-      accept: () => false,
+      relevance: async () => ({ classification: "unrelated" }),
     });
 
-    expect(outcome.rejected).toEqual(["msg-1"]);
+    expect(outcome.unrelated).toEqual(["msg-1"]);
     expect(await getDb(ctx.db).select().from(orderMail)).toEqual([]);
     expect(objects.size).toBe(0);
   });
@@ -346,13 +364,14 @@ describe("Gmail ingestion and attachment storage", () => {
     const { storage } = memoryStorage();
     await ingestGmailMessages(ctx.db, provider(), {
       ledgerPartyId: party.id,
-      mailboxId: "me",
+      mailboxId: "synthetic-google-subject",
       messageIds: ["msg-1"],
       storage,
     });
 
     const result = await persistGmailEvents(ctx.db, {
       ledgerPartyId: party.id,
+      mailboxId: "synthetic-google-subject",
       events: [
         event("msg-1", "labels_added"),
         event("msg-never-saved", "message_deleted"),
@@ -366,11 +385,16 @@ describe("Gmail ingestion and attachment storage", () => {
   it("moves the cursor only from the pass's own starting point, never backwards", async () => {
     const party = await seedParty();
     const polledAt = new Date("2026-10-05T12:00:00.000Z");
-    const cursor = () => loadGmailCursor(ctx.db, { ledgerPartyId: party.id });
+    const cursor = () =>
+      loadGmailCursor(ctx.db, {
+        ledgerPartyId: party.id,
+        mailboxId: "synthetic-google-subject",
+      });
 
     expect(
       await advanceMailboxCursor(ctx.db, {
         ledgerPartyId: party.id,
+        mailboxId: "synthetic-google-subject",
         from: null,
         to: "500",
         polledAt,
@@ -380,6 +404,7 @@ describe("Gmail ingestion and attachment storage", () => {
     expect(
       await advanceMailboxCursor(ctx.db, {
         ledgerPartyId: party.id,
+        mailboxId: "synthetic-google-subject",
         from: null,
         to: "450",
         polledAt,
@@ -388,19 +413,21 @@ describe("Gmail ingestion and attachment storage", () => {
     expect(
       await advanceMailboxCursor(ctx.db, {
         ledgerPartyId: party.id,
+        mailboxId: "synthetic-google-subject",
         from: "500",
         to: "490",
         polledAt,
       }),
     ).toBe(true);
-    expect(await cursor()).toEqual({ historyId: "500" });
+    expect(await cursor()).toMatchObject({ historyId: "500" });
     await advanceMailboxCursor(ctx.db, {
       ledgerPartyId: party.id,
+      mailboxId: "synthetic-google-subject",
       from: "500",
       to: "600",
       polledAt,
     });
-    expect(await cursor()).toEqual({ historyId: "600" });
+    expect(await cursor()).toMatchObject({ historyId: "600" });
     expect(
       await getDb(ctx.db)
         .select({ lastPolledAt: mailboxCursor.lastPolledAt })

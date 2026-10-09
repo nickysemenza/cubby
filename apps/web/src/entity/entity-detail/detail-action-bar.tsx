@@ -38,11 +38,6 @@ type HeaderActionRegistry = Partial<{
   [E in GenericDetailEntity]: LazyExoticComponent<DetailSlotComponent<E>>;
 }>;
 const headerActions: HeaderActionRegistry = {
-  vendor: action<"vendor">(() =>
-    import("~/app/vendors/order-mail-worklist").then((m) => ({
-      default: m.VendorMailActions,
-    })),
-  ),
   purchase: action<"purchase">(() =>
     import("./report-slot").then((m) => ({ default: m.PurchaseDetailActions })),
   ),

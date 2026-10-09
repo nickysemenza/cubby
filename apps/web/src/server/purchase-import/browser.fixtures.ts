@@ -8,9 +8,9 @@ import {
 
 import { encodeSnapshotDom } from "./browser-page";
 import type { BrowserEvidenceStorage } from "./browser-results";
-import type { BrowserPagePorts } from "./run-service";
+import type { ResearchObservationPorts } from "./research-observations";
 
-/** Synthetic Mac results for tests: real v3 snapshots of rendered HTML. */
+/** Synthetic Mac results for tests: protocol-v4 snapshots of rendered HTML. */
 
 type Outcome = BrowserBridgeResult["outcome"];
 type FailedOutcome = Extract<Outcome, { status: "failed" }>;
@@ -93,7 +93,11 @@ export async function capturedHtml(input: {
   return {
     status: "completed",
     snapshot: {
+      observationId: crypto.randomUUID(),
       sourceURL: input.sourceURL,
+      servedURL: input.sourceURL,
+      actions: [],
+      actionsTruncated: false,
       title: input.title,
       capturedAt: new Date().toISOString(),
       dom: await encodeSnapshotDom(input.html),
@@ -140,18 +144,26 @@ function memoryEvidenceStorage() {
     put: async (key, bytes, contentType) => {
       objects.set(key, { bytes, contentType });
     },
+    get: async (key) => {
+      const object = objects.get(key);
+      if (!object)
+        throw new Error(`Synthetic retained evidence is missing: ${key}`);
+      return new TextDecoder().decode(object.bytes);
+    },
   };
   return { storage, objects };
 }
 
 /** Ports for tests: in-memory evidence and a server that is always refused. */
 export function testBrowserPorts(
-  fetchPage: BrowserPagePorts["fetchPage"] = async () => ({
+  fetchPage: NonNullable<ResearchObservationPorts["fetchPage"]> = async () => ({
     status: "blocked",
     reason: "synthetic refusal",
     durationMs: 1,
   }),
-): BrowserPagePorts & { objects: Map<string, unknown> } {
+): Required<Pick<ResearchObservationPorts, "storage" | "fetchPage">> & {
+  objects: Map<string, unknown>;
+} {
   const { storage, objects } = memoryEvidenceStorage();
   return { storage, fetchPage, objects };
 }

@@ -1196,6 +1196,7 @@ export const entityListSummaryOutputSchema = z.object({entity:z.enum(listEntitie
         "  bulk: readonly string[];\n" +
         "  audit: readonly string[];\n" +
         "  output: readonly string[];\n" +
+        "  research?: { readonly fillFields: readonly string[] };\n" +
         "};\n\n" +
         renderRecord({
           name: "generatedEntityFieldModels",

@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { plainDate } from "./base-entity";
+import { generatedPurchaseFieldSchemas } from "./generated/entity-field-schemas.purchase.gen";
 import { productShortcode, purchaseShortcode } from "./identifiers";
 import { moneyNullable } from "./money";
 import { productListItemOut } from "./product";
@@ -97,7 +97,7 @@ export const kitMembershipPurchaseOut = z.object({
   purchaseId: purchaseShortcode,
   displayLabel: z.string().nullable(),
   vendorName: z.string().nullable(),
-  date: plainDate,
+  date: generatedPurchaseFieldSchemas.read.date,
   orderId: z.string().nullable(),
 });
 export type KitMembershipPurchaseOut = z.infer<typeof kitMembershipPurchaseOut>;

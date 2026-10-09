@@ -5,7 +5,6 @@ import type {
   ProjectId,
   PurchaseId,
   SpendingCategoryId,
-  VendorId,
 } from "@cubby/schemas/identifiers";
 import { parseShortcodeFor } from "@cubby/schemas/identifiers";
 import {
@@ -16,6 +15,7 @@ import {
 import type { ExpenseOut } from "@cubby/schemas/project";
 import { purchaseOrderUrl } from "@cubby/schemas/vendor";
 
+import type { purchase } from "~/server/db/schema";
 import { createAppError } from "~/server/errors/app-error";
 import {
   resolveLiveJoinName,
@@ -139,31 +139,35 @@ export type ExpenseRow = {
   updatedAt: Date;
   project: { name: string; shortcode: string; deletedAt: Date | null } | null;
   product: { name: string; shortcode: string; deletedAt: Date | null } | null;
-  purchase: {
-    id: PurchaseId;
-    shortcode: string;
-    orderId: string | null;
-    displayLabel: string | null;
-    date: string;
-    vendorId: VendorId;
-    deletedAt: Date | null;
-    vendor: {
-      name: string;
-      shortcode: string;
-      orderUrlTemplate: string | null;
-      deletedAt: Date | null;
-      /** The vendor's live `logo` attachment, at most one. */
-      attachments: Array<{
-        image: {
-          key: string;
-          contentType: string;
-          renderStatus: ImageRenderStatus | null;
-          storageStatus: ImageStorageStatus | null;
+  purchase:
+    | (Pick<
+        typeof purchase.$inferSelect,
+        | "id"
+        | "shortcode"
+        | "orderId"
+        | "displayLabel"
+        | "date"
+        | "vendorId"
+        | "deletedAt"
+      > & {
+        vendor: {
+          name: string;
+          shortcode: string;
+          orderUrlTemplate: string | null;
           deletedAt: Date | null;
-        };
-      }>;
-    } | null;
-  } | null;
+          /** The vendor's live `logo` attachment, at most one. */
+          attachments: Array<{
+            image: {
+              key: string;
+              contentType: string;
+              renderStatus: ImageRenderStatus | null;
+              storageStatus: ImageStorageStatus | null;
+              deletedAt: Date | null;
+            };
+          }>;
+        } | null;
+      })
+    | null;
   attributions: Array<{
     role: "beneficiary" | "funder";
     ledgerPartyId: string | null;

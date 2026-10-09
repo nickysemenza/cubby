@@ -5,13 +5,6 @@ export type VendorMailIdentity = {
   orderEmailSenders: readonly string[];
 };
 
-const senderAddress = (header: string): string | null => {
-  const trimmed = header.trim();
-  const bracketed = /<([^<>\s@]+@[^<>\s@]+)>$/u.exec(trimmed);
-  const address = bracketed?.[1] ?? trimmed;
-  return /^[^<>\s@]+@[^<>\s@]+$/u.test(address) ? address.toLowerCase() : null;
-};
-
 const vendorWebsiteDomain = (website: string | null): string | null => {
   if (!website) return null;
   try {
@@ -43,33 +36,4 @@ export const identityFromSearchTerms = (
     website: domain ? `https://${domain}` : null,
     orderEmailSenders: terms.filter((term) => term.includes("@")),
   };
-};
-
-export const matchesVendorSender = (
-  header: string,
-  vendor: VendorMailIdentity,
-): boolean => {
-  const address = senderAddress(header);
-  if (!address) return false;
-  if (matchesConfiguredVendorSender(header, vendor)) return true;
-  const domain = vendorWebsiteDomain(vendor.website);
-  return (
-    domain !== null &&
-    getDomain(address.slice(address.lastIndexOf("@") + 1), {
-      allowPrivateDomains: true,
-    }) === domain
-  );
-};
-
-export const matchesConfiguredVendorSender = (
-  header: string,
-  vendor: VendorMailIdentity,
-): boolean => {
-  const address = senderAddress(header);
-  return (
-    address !== null &&
-    vendor.orderEmailSenders.some(
-      (sender) => sender.trim().toLowerCase() === address,
-    )
-  );
 };

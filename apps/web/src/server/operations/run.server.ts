@@ -4,6 +4,7 @@ import { and, eq, isNull } from "drizzle-orm";
 
 import { runContract } from "~/contracts/run.contract";
 import { getPurchaseAgentQueue } from "~/server/cf-env";
+import { account } from "~/server/db/auth.schema";
 import { oauthRefreshToken, run as runTable } from "~/server/db/schema";
 import { implementOperationDomain } from "~/server/operation-domain.server";
 import {
@@ -15,6 +16,7 @@ import {
   PURCHASE_AGENT_OAUTH_CLIENT_ID,
 } from "~/server/purchase-import/agent-auth";
 import { dispatchRunEvent } from "~/server/purchase-import/dispatch";
+import { startMailDiscovery } from "~/server/purchase-import/gmail/discovery";
 import {
   confirmMerchantVendorRule,
   listMerchantVendorRules,
@@ -43,6 +45,7 @@ import { listAiUsageForRun } from "~/server/repo/ai-usage";
 import { getDb } from "~/server/repo/database-helpers";
 import { resolveOrThrow } from "~/server/repo/shortcode-resolver";
 import type { AuthenticatedRequestContext } from "~/server/request-context";
+import { issueExecutionAuthorization } from "~/server/runs/execution-authorization";
 import { isWorkflowRunPurpose } from "~/server/workflow-runs/contract";
 
 /** Import runs belong to a household member's ledger party. */
@@ -54,6 +57,37 @@ async function memberParty(context: AuthenticatedRequestContext) {
 }
 
 export const runHandlers = implementOperationDomain(runContract, {
+  executionMailboxes: async (context) => {
+    await memberParty(context);
+    const mailboxes = await getDb(context.db)
+      .selectDistinct({ mailboxId: account.accountId })
+      .from(account)
+      .where(
+        and(
+          eq(account.userId, context.auth.userId),
+          eq(account.providerId, "google"),
+        ),
+      )
+      .orderBy(account.accountId);
+    return { mailboxes };
+  },
+  approveExecution: async (context, input) => {
+    const party = await memberParty(context);
+    return issueExecutionAuthorization(context.db, context.actorContext, {
+      kind: "execution_authorization",
+      version: 1,
+      owner: { userId: context.auth.userId, ledgerPartyId: party.id },
+      ...input,
+    });
+  },
+  discoverMail: async (context, input) =>
+    startMailDiscovery(context.db, {
+      target: {
+        ledgerPartyId: (await memberParty(context)).id,
+        userId: context.auth.userId,
+        mailboxId: input.mailboxId,
+      },
+    }),
   syncPlan: async (context, input) =>
     loadSyncPlan(context.db, (await memberParty(context)).id, input),
   startSync: async (context, input) =>

@@ -32,6 +32,7 @@ import {
 } from "./charge-hunt-state";
 import { dispatchRunEvent } from "./dispatch";
 import { matchProcessedOrderMail } from "./gmail/match";
+import { chargeResearchRunPredicate } from "./research-objective";
 import { settleRetainedPaymentEvidence } from "./retained-settlement";
 import { AccountOccupiedError, startOrResumeRun } from "./run-service";
 import { CHARGE_HOLDING_STATUSES } from "./sync-admission";
@@ -291,7 +292,9 @@ export async function dispatchImportHunts(
           lte(importHunt.createdAt, new Date(now.getTime() - MAIL_GRACE_MS)),
         ),
       ),
-    );
+    )
+    .orderBy(asc(importHunt.createdAt), asc(importHunt.id))
+    .limit(50);
   // An account running a member's selected charges does only that: another
   // hunt must not join it, so it waits for the next implicit run.
   const selectedChargeAccounts = new Set<string | null>(
@@ -301,50 +304,48 @@ export async function dispatchImportHunts(
         .from(runTable)
         .where(
           and(
-            sql`${runTable.input}->>'kind' = 'charge_hunts'`,
+            chargeResearchRunPredicate(runTable.input),
             inArray(runTable.status, [...CHARGE_HOLDING_STATUSES]),
           ),
         )
     ).map((row) => row.accountId),
   );
   let dispatched = 0;
-  const runsByAccount = new Map<
-    string,
-    Awaited<ReturnType<typeof startOrResumeRun>>
-  >();
+  const grouped = new Map<string, typeof hunts>();
   for (const hunt of hunts) {
     if (
       !hunt.vendorAccountId ||
       selectedChargeAccounts.has(hunt.vendorAccountId)
     )
       continue;
-    let run = runsByAccount.get(hunt.vendorAccountId);
-    if (!run) {
-      try {
-        run = await startOrResumeRun(db, {
-          ledgerPartyId: hunt.ledgerPartyId,
-          vendorAccountId: vendorAccountId.parse(hunt.vendorAccountId),
-          trigger: "discovery",
-        });
-      } catch (error) {
-        // Another run holds the account (a selected-charges search that began
-        // after the read above, an enrichment or a validation): leave the
-        // hunt for a later pass.
-        if (!(error instanceof AccountOccupiedError)) throw error;
-        selectedChargeAccounts.add(hunt.vendorAccountId);
-        continue;
-      }
-      runsByAccount.set(hunt.vendorAccountId, run);
-      await dispatchRunEvent(db, queue, {
-        version: 1,
-        runId: run.id,
-        eventId: run.created
-          ? (run.dispatchEventId ?? crypto.randomUUID())
-          : crypto.randomUUID(),
-        type: run.created ? "start_or_resume" : "retry",
+    const group = grouped.get(hunt.vendorAccountId) ?? [];
+    group.push(hunt);
+    grouped.set(hunt.vendorAccountId, group);
+  }
+  for (const [accountId, group] of grouped) {
+    const first = group[0];
+    if (!first) continue;
+    let admitted;
+    try {
+      admitted = await startOrResumeRun(db, {
+        ledgerPartyId: first.ledgerPartyId,
+        vendorAccountId: vendorAccountId.parse(accountId),
+        trigger: "discovery",
+        chargeHuntIds: group.map((hunt) => hunt.id),
       });
+    } catch (error) {
+      if (!(error instanceof AccountOccupiedError)) throw error;
+      continue;
     }
-    await database
+    await dispatchRunEvent(db, queue, {
+      version: 1,
+      runId: admitted.id,
+      eventId: admitted.created
+        ? (admitted.dispatchEventId ?? crypto.randomUUID())
+        : crypto.randomUUID(),
+      type: admitted.created ? "start_or_resume" : "retry",
+    });
+    const queued = await database
       .update(importHunt)
       .set({
         state: "browser_queued",
@@ -353,11 +354,15 @@ export async function dispatchImportHunts(
       })
       .where(
         and(
-          eq(importHunt.id, hunt.id),
+          inArray(
+            importHunt.id,
+            group.map((hunt) => hunt.id),
+          ),
           inArray(importHunt.state, ["pending_browser", "pending_mail"]),
         ),
-      );
-    dispatched += 1;
+      )
+      .returning({ id: importHunt.id });
+    dispatched += queued.length;
   }
   return dispatched;
 }

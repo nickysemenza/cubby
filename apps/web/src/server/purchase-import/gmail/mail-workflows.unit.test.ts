@@ -160,26 +160,35 @@ describe("vendor mail search Workflow", () => {
 const discoveryWork = (
   overrides: Partial<MailDiscoveryWork> = {},
 ): MailDiscoveryWork => ({
-  list: vi.fn(async () => ({ kind: "listed" as const, batches: 3 })),
+  begin: vi.fn(async () => ({ kind: "page" as const, index: 0 })),
+  list: vi.fn(async (page: number) => ({
+    kind: "listed" as const,
+    more: page < 2,
+  })),
   batch: vi.fn(async () => ({ kind: "done" as const })),
   finish: vi.fn(async () => ({ kind: "done" as const })),
+  continue: vi.fn(async () => undefined),
   fail: vi.fn(async () => null),
   ...overrides,
 });
 
 describe("mail discovery Workflow", () => {
-  it("lists once, saves each frozen batch, then finishes", async () => {
+  it("checkpoints a bounded page before listing the next one, then finishes", async () => {
     const { steps, attempts } = memoryDurableSteps();
     const work = discoveryWork();
 
     await runMailDiscovery(steps, work);
 
     expect(attempts).toEqual([
-      "list#1",
-      "batch.0#1",
-      "batch.1#1",
-      "batch.2#1",
+      "begin#1",
+      "page.0.list#1",
+      "page.0.save#1",
+      "page.1.list#1",
+      "page.1.save#1",
+      "page.2.list#1",
+      "page.2.save#1",
       "finish#1",
+      "continue#1",
     ]);
   });
 

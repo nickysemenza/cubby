@@ -247,6 +247,7 @@ describe("create_refund findings", () => {
       .values({
         ledgerPartyId: fixture.party.id,
         vendorId: fixture.vendor.id,
+        mailboxId: "synthetic-refund-mailbox",
         messageId: input.messageId,
         sender: "orders@forgewear.example",
         subject: `Your ForgeWear refund for ${input.orderId}`,

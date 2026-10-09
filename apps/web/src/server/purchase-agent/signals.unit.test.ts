@@ -3,14 +3,6 @@ import { describe, expect, it } from "vitest";
 import { parseSignal, renderSignal } from "./signals";
 
 describe("agent signals", () => {
-  // The workerd scripted model and its await markers match these exact bytes;
-  // the coordinator's workflow prompts are written against them too.
-  it("renders the finish nudge in the established wire format", () => {
-    expect(
-      renderSignal({ type: "run_not_finished", body: "Keep going." }),
-    ).toBe('<signal type="run_not_finished">Keep going.</signal>');
-  });
-
   it("renders queue events with escaped attributes and round-trips them", () => {
     const text = renderSignal({
       type: "purchase-import.browser_result",

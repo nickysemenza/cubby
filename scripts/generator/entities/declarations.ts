@@ -19,6 +19,7 @@ import type {
   CompiledEntityPresentation,
   DisplayFormat,
   EntityDeclarationMetadata,
+  EntityFieldModelMetadata,
   EntityFieldControlKind,
   EntityFieldKind,
   EntityStorageDefaultKind,
@@ -279,6 +280,7 @@ type EntityEditIntents = Readonly<{
   required: Readonly<Record<string, readonly string[]>>;
 }>;
 export type EntityFieldModel = Readonly<{
+  research?: EntityFieldModelMetadata["research"];
   fields: readonly EntityField[];
   storage: readonly EntityStorageField[];
   create: readonly string[];

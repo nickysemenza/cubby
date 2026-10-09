@@ -2,8 +2,11 @@ import { z } from "zod";
 
 /**
  * Cutover switch: while the `MAINTENANCE_MODE` Worker secret is `"true"`, the
- * web Worker answers every request with 503 and the daily cron skips, so no
- * writer runs against a database that is being migrated. Toggle it with
+ * web Worker answers every request with 503, the daily cron skips, and purchase
+ * coordinator/broker callbacks defer or refuse before database/model effects.
+ * This is not proof that previously running work has stopped: the cutover also
+ * waits for in-flight work and pauses/terminates the appropriate Workflows.
+ * Toggle it with
  * `wrangler secret put MAINTENANCE_MODE` / `wrangler secret delete
  * MAINTENANCE_MODE` (a secret change deploys a new version of the current
  * code). Queue consumers are not gated here: pause them with `wrangler queues
@@ -16,6 +19,11 @@ const maintenanceSwitch = z.object({ MAINTENANCE_MODE: z.string().optional() });
 
 export function isMaintenanceMode(env: unknown): boolean {
   return maintenanceSwitch.safeParse(env).data?.MAINTENANCE_MODE === "true";
+}
+
+export function assertNotInMaintenance(env: unknown): void {
+  if (maintenanceSwitch.safeParse(env).data?.MAINTENANCE_MODE === "true")
+    throw new Error("Cubby maintenance: retry this delivery after cutover.");
 }
 
 const RETRY_AFTER_SECONDS = "300";

@@ -28,6 +28,8 @@ import {
 } from "~/server/entity-kernel";
 import { ENTITY_KERNEL_ENTITIES } from "~/server/entity-kernel/contracts";
 import { implementOperationDomain } from "~/server/operation-domain.server";
+import { loadCurrentFactEvidence } from "~/server/purchase-import/fact-verification";
+import { readResearchCanonicalProjection } from "~/server/purchase-import/research-projection";
 import { getCookbookSummary } from "~/server/repo/cookbook";
 import { loadQualityBreakdown } from "~/server/repo/data-quality/hydrate";
 import { explanationReferenceValues } from "~/server/repo/explanation-reference-values";
@@ -563,6 +565,7 @@ async function loadExplanationSnapshot(
       resolutionEvidence: null,
       resolutionEvidenceTruncated: false,
       qualityBreakdown: undefined,
+      verifications: [],
     };
   }
   return withFieldExplanationSnapshot(context.db, async (snapshotDb) => {
@@ -592,6 +595,15 @@ async function loadExplanationSnapshot(
     );
     return {
       projection,
+      verifications: await loadCurrentFactEvidence(
+        snapshotDb,
+        {
+          entityKind: entity,
+          entityId: input.entityId,
+          fieldPath: fieldKey,
+        },
+        readResearchCanonicalProjection,
+      ),
       qualityBreakdown:
         fieldKey === "dataQuality" &&
         z.enum(scoredEntities).safeParse(entity).success
@@ -875,6 +887,15 @@ export async function explainField(
     snapshot.qualityBreakdown,
     snapshot.resolutionEvidenceTruncated,
   );
+  if (
+    snapshot.verifications.some(
+      (verification) =>
+        verification.support === null || verification.supportRetiredAt !== null,
+    )
+  )
+    interpretation.caveats.push(
+      "Verification rationale was retired for retained source evidence; these values need fresh verification.",
+    );
   const linkedValues = await explanationReferenceValues(
     context.db,
     finalSources.sources.map((source) => source.value),
@@ -897,12 +918,18 @@ export async function explainField(
       description: explanation.description,
     },
     sources: linkedSources,
+    verifications: snapshot.verifications.map((verification) => ({
+      ...verification,
+      value: verification.fieldPath === field.key ? value : verification.value,
+    })),
     resolution,
     resolutionEvidence: snapshot.resolutionEvidence,
-    truncated:
-      finalSources.truncated ||
-      (countEvidence?.truncated ?? false) ||
+    truncated: [
+      finalSources.truncated,
+      countEvidence?.truncated ?? false,
       snapshot.resolutionEvidenceTruncated,
+      snapshot.verifications.length >= 50,
+    ].some(Boolean),
     evidenceFingerprint: ownershipEvidence?.evidenceFingerprint ?? null,
     actions,
   });

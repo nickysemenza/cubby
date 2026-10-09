@@ -11,6 +11,7 @@ import {
   TASK_BOARD_UNTITLED_PROJECT_LABEL,
 } from "../../../../packages/shared/src/client-constants.ts";
 import { APPLE_CLIENT_COMPATIBILITY_VERSION } from "../../../../packages/shared/src/apple-client-version.ts";
+import { ACTIVITY_KIND_LABEL } from "../../../../packages/schemas/src/activity-fields.ts";
 import {
   WAYFINDING_DOMAINS,
   WAYFINDING_DOMAIN_PRESENTATION,
@@ -29,6 +30,12 @@ const swiftString = (value: string): string => JSON.stringify(value);
  * marketing version is the server's compatibility minimum.
  */
 export const renderSwiftSharedConstants = (): EntityArtifacts[] => {
+  const activityCases = Object.entries(ACTIVITY_KIND_LABEL)
+    .map(
+      ([kind, label]) =>
+        `        case .${kind.replace(/_([a-z])/gu, (_, letter: string) => letter.toUpperCase())}: ${swiftString(label)}`,
+    )
+    .join("\n");
   const domainCases = (property: "label" | "sfSymbol") =>
     WAYFINDING_DOMAINS.map(
       (domain) =>
@@ -70,6 +77,14 @@ export const renderSwiftSharedConstants = (): EntityArtifacts[] => {
         `    public static let importWorkflowPurposes: [String] = [${IMPORT_WORKFLOW_PURPOSES.map(swiftString).join(", ")}]\n` +
         "    /// Run statuses in which a run is still moving (`ACTIVE_RUN_STATUSES`).\n" +
         `    public static let activeRunStatuses: [String] = [${ACTIVE_RUN_STATUSES.map(swiftString).join(", ")}]\n` +
+        "}\n\n" +
+        "extension ActivityKind {\n" +
+        "    /// The shared activity label (`ACTIVITY_KIND_LABEL`).\n" +
+        "    public var title: String {\n" +
+        "        switch self {\n" +
+        `${activityCases}\n` +
+        "        }\n" +
+        "    }\n" +
         "}\n\n" +
         "extension WayfindingDomain {\n" +
         "    /// The line's name (`WAYFINDING_DOMAIN_PRESENTATION.label`).\n" +

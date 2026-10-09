@@ -1,4 +1,17 @@
 import { z } from "zod";
+import { RUN_PURPOSE_LABEL, runPurpose } from "./activity-fields";
+export { RUN_PURPOSE_LABEL, runPurpose } from "./activity-fields";
+export type { RunPurpose } from "./activity-fields";
+import type { ExecutionAuthorizationInput } from "./execution-authorization.js";
+import { executionAuthorizationRef } from "./execution-authorization.js";
+import { plainDate } from "./base-entity.js";
+import { financialTransactionNonZeroAmount } from "./financial-transaction-fields.js";
+import { vendorAccountCursor } from "./vendor-account-fields.js";
+import {
+  mailboxDiscoveryInput,
+  mailboxDiscoveryProgress,
+  mailboxHistoryEvent,
+} from "./mailbox-research.js";
 
 /**
  * Cycle-safe enums for the `run` declaration. `purchase-import.ts`
@@ -26,6 +39,46 @@ export const runStatus = z.enum([
   "failed",
   "dispatch_failed",
 ]);
+export const runTargetEntityKind = z.enum([
+  "purchase",
+  "product",
+  "image",
+  "run",
+]);
+export type RunTargetEntityKind = z.infer<typeof runTargetEntityKind>;
+/** Permanent retirement prevents disposed coordinator history from being recreated. */
+export const runRetirementReason = z.enum(["unrelated_source"]);
+export type RunRetirementReason = z.infer<typeof runRetirementReason>;
+export const runEvidenceKind = z.enum([
+  "browser_capture",
+  "web_page",
+  "mail_message",
+  "gmail_attachment",
+  "manual_upload",
+  "upload_evidence",
+]);
+export type RunEvidenceKind = z.infer<typeof runEvidenceKind>;
+
+export const researchRetentionPhase = z.enum([
+  "fenced",
+  "objects_deleted",
+  "coordinators_destroyed",
+  "completed",
+]);
+export type ResearchRetentionPhase = z.infer<typeof researchRetentionPhase>;
+/** Only server-derived deletion/transfer identities survive interrupted cleanup. */
+export const researchRetentionPlan = z.object({
+  originOperationId: z.string().min(1),
+  objectKeys: z.array(z.string()),
+  screenshotRefs: z.array(
+    z.object({ runId: z.uuid(), imageRef: z.string().min(1) }),
+  ),
+  retiredRunIds: z.array(z.uuid()),
+  successors: z.array(
+    z.object({ runId: z.uuid(), successorRunIds: z.array(z.uuid()) }),
+  ),
+});
+export type ResearchRetentionPlan = z.infer<typeof researchRetentionPlan>;
 /** What `run.control` can do to a Run; the report actions and the operation share it. */
 export const runControlAction = z.enum([
   "pause",
@@ -42,20 +95,16 @@ export const runControlAction = z.enum([
   "no_evidence_available",
 ]);
 export type RunControlAction = z.infer<typeof runControlAction>;
-export const runPurpose = z.enum([
-  "account_sync",
-  "purchase_validation",
-  "product_enrichment",
-  "photo_inventory",
-  // Every AI call belongs to a run; these purposes group work that is not an
-  // import. Their lifetime is set by `trigger` (`ephemeral` or not).
-  "ai_suggest",
-  "background",
-  "file_import",
-  "mail_search",
-  "mail_discovery",
+/** Why a new immutable attempt was admitted; historical lineage remains unknown. */
+export const runCause = z.enum([
+  "member_request",
+  "scheduled",
+  "source_discovered",
+  "import_completed",
+  "evidence_changed",
+  "retry",
 ]);
-export type RunPurpose = z.infer<typeof runPurpose>;
+export type RunCause = z.infer<typeof runCause>;
 
 /**
  * `Run.input` / `Run.progress` for a `mail_search` run: the Gmail search a
@@ -94,62 +143,67 @@ export const mailSearchRunProgress = z.object({
 });
 export type MailSearchRunProgress = z.infer<typeof mailSearchRunProgress>;
 
-/** `Run.input` for a `mail_discovery` run: the mailbox and bootstrap senders. */
-export const mailDiscoveryRunInput = z.object({
-  mailboxId: z.string().min(1),
-  /** Searched on a first sync or after Gmail expires the history cursor. */
-  knownSenders: z.array(z.string()),
-});
+/** Bounded acquisition and independent full/scoped mailbox coverage. */
+export const mailDiscoveryRunInput = mailboxDiscoveryInput;
 export type MailDiscoveryRunInput = z.infer<typeof mailDiscoveryRunInput>;
-/** How a `mail_discovery` run listed its mailbox changes. */
-export const mailDiscoveryMode = z.enum([
-  "bootstrap",
-  "full_resync",
-  "incremental",
-]);
-/** One Gmail history change a `mail_discovery` pass persists after its batches. */
-export const mailDiscoveryEvent = z.object({
-  sourceKey: z.string(),
-  mailboxId: z.string(),
-  historyId: z.string(),
-  messageId: z.string(),
-  threadId: z.string().nullable(),
-  kind: z.enum([
-    "message_added",
-    "message_deleted",
-    "labels_added",
-    "labels_removed",
-  ]),
-  labelIds: z.array(z.string()),
-});
-/**
- * `Run.progress` for a `mail_discovery` run: one scheduled pass over a
- * member's Gmail mailbox, executed by a Workflow instance
- * (`<runShortcode>-<attempt>`). The `list` step freezes the work here — the
- * batches and history events — so a replayed or retried attempt processes the
- * same messages, and the cursor moves only after every batch from
- * `startHistoryId` to `targetHistoryId`.
- */
-export const mailDiscoveryRunProgress = z.object({
-  attempt: z.number().int().nonnegative(),
-  phase: z.enum(["listing", "fetching", "completed", "failed"]),
-  /** The mailbox cursor this pass started from; null on a first sync. */
-  startHistoryId: z.string().nullable(),
-  /** Frozen by `list`: the cursor the pass advances to when it finishes. */
-  targetHistoryId: z.string().nullable().optional(),
-  mode: mailDiscoveryMode.optional(),
-  /** Frozen by `list`: message ids, chunked once so replay cannot regroup them. */
-  batches: z.array(z.array(z.string())).optional(),
-  /** Frozen by `list`: history changes, saved once every batch is in. */
-  pendingEvents: z.array(mailDiscoveryEvent).optional(),
-  batchesDone: z.number().int().nonnegative().default(0),
-  /** Messages saved; deleted between listing and fetching; events dropped. */
-  saved: z.number().int().nonnegative().default(0),
-  deleted: z.number().int().nonnegative().default(0),
-  events: z.number().int().nonnegative().default(0),
-  droppedEvents: z.number().int().nonnegative().default(0),
-});
+export const mailDiscoveryEvent = mailboxHistoryEvent;
+export const mailDiscoveryRunProgress = mailboxDiscoveryProgress;
 export type MailDiscoveryRunProgress = z.infer<typeof mailDiscoveryRunProgress>;
+/** Original retained sources; interpreted order identity remains a research decision. */
+export const mailResearchRunInput = z.object({
+  executionAuthorization: executionAuthorizationRef.optional(),
+  kind: z.literal("mail_research"),
+  sources: z
+    .array(
+      z.object({
+        orderMailId: z.uuid(),
+        checksum: z.string().regex(/^[a-f0-9]{64}$/),
+      }),
+    )
+    .min(1)
+    .max(50),
+});
+export type MailResearchRunInput = z.infer<typeof mailResearchRunInput>;
+export const productResearchRunInput = z.object({
+  executionAuthorization: executionAuthorizationRef.optional(),
+  kind: z.literal("product_research"),
+  instructionRevision: z.number().int().positive(),
+  products: z
+    .array(
+      z.object({
+        productId: z.uuid(),
+        contextFingerprint: z.string().regex(/^[a-f0-9]{64}$/),
+      }),
+    )
+    .min(1)
+    .max(50),
+});
+export type ProductResearchRunInput = z.infer<typeof productResearchRunInput>;
+/** Purchase validation freezes recorded context and optional original-source preference. */
+export const purchaseValidationResearchRunInput = z.strictObject({
+  executionAuthorization: executionAuthorizationRef.optional(),
+  kind: z.literal("purchase_validation_research"),
+  instructionRevision: z.number().int().positive(),
+  purchases: z
+    .array(
+      z.strictObject({
+        purchaseId: z.uuid(),
+        manualEvidenceUnavailable: z.boolean().default(false),
+        contextFingerprint: z.string().regex(/^[a-f0-9]{64}$/u),
+        selectedSource: z
+          .strictObject({
+            sourceOrderId: z.uuid(),
+            checksum: z.string().regex(/^[a-f0-9]{64}$/u),
+          })
+          .nullable(),
+      }),
+    )
+    .min(1)
+    .max(50),
+});
+export type PurchaseValidationResearchRunInput = z.infer<
+  typeof purchaseValidationResearchRunInput
+>;
 /** A listed or selected order's terminal outcome on one Run. */
 export const runOrderCandidateState = z.enum([
   "pending",
@@ -216,10 +270,56 @@ export const chargeHuntRunInput = z.object({
   kind: z.literal("charge_hunts"),
   huntIds: z.array(z.uuid()).min(1).max(50),
 });
+/** Host-frozen objectives; source identity is never supplied by the researcher. */
+export const researchObjective = z.discriminatedUnion("kind", [
+  z.strictObject({
+    kind: z.literal("vendor_purchases"),
+    vendorId: z.uuid(),
+    range: z.strictObject({ from: z.iso.date(), to: z.iso.date() }).nullable(),
+  }),
+  z.strictObject({
+    kind: z.literal("account_history"),
+    vendorAccountId: z.uuid(),
+    range: z.strictObject({ from: z.iso.date(), to: z.iso.date() }).nullable(),
+    cursor: vendorAccountCursor.nullable(),
+  }),
+  z.strictObject({
+    kind: z.literal("charge_hunt"),
+    huntId: z.uuid(),
+    financialTransactionId: z.uuid(),
+    vendorAccountId: z.uuid().nullable(),
+    range: z.strictObject({ from: plainDate, to: plainDate }),
+    charge: z.strictObject({
+      merchant: z.string().nullable(),
+      rawDescription: z.string().nullable(),
+      amount: financialTransactionNonZeroAmount,
+      transactionDate: plainDate.nullable(),
+      postedDate: plainDate.nullable(),
+    }),
+  }),
+  z.strictObject({
+    kind: z.literal("receipt_hunt"),
+    huntId: z.uuid(),
+    imageId: z.uuid(),
+    checksum: z.string().regex(/^[a-f0-9]{64}$/u),
+  }),
+]);
+export type ResearchObjective = z.infer<typeof researchObjective>;
+export const researchObjectivesRunInput = z.strictObject({
+  executionAuthorization: executionAuthorizationRef.optional(),
+  kind: z.literal("research_objectives"),
+  instructionRevision: z.number().int().positive(),
+  objectives: z.array(researchObjective).min(1).max(50),
+});
+export type ResearchObjectivesRunInput = z.infer<
+  typeof researchObjectivesRunInput
+>;
+
 /**
  * What a restart copies from `Run.input`, by public values only: a mail
  * import's order ids, a backfill's range, or how many charges a charge run
- * carries. Mail-event and hunt ids are private and never cross it.
+ * carries, or a retained mail source count. Source, mail-event and hunt ids
+ * are private and never cross it.
  */
 export const runRestartOrderMailInput = z
   .object({
@@ -240,10 +340,19 @@ export const runRestartChargeHuntsInput = z
     chargeCount: z.number().int().positive(),
   })
   .meta({ id: "RunRestartChargeHuntsInput" });
+export const runRestartVendorPurchasesInput = researchObjective.options[0]
+  .extend({ vendorId: z.string().min(1) })
+  .meta({ id: "RunRestartVendorPurchasesInput" });
+export const runRestartMailResearchInput = mailResearchRunInput
+  .pick({ kind: true })
+  .extend({ sourceCount: z.number().int().min(1).max(50) })
+  .meta({ id: "RunRestartMailResearchInput" });
 export const runRestartInput = z.discriminatedUnion("kind", [
   runRestartOrderMailInput,
   runRestartOrderBackfillInput,
   runRestartChargeHuntsInput,
+  runRestartVendorPurchasesInput,
+  runRestartMailResearchInput,
 ]);
 export type RunRestartInput = z.infer<typeof runRestartInput>;
 /** `ImportHunt.state` values a selected-charges run writes (plain text column). */
@@ -275,25 +384,17 @@ export const chargeHuntOutcomeOf = (
   }
 };
 export type RunInput =
+  | ExecutionAuthorizationInput
+  | ResearchObjectivesRunInput
+  | MailResearchRunInput
+  | ProductResearchRunInput
+  | PurchaseValidationResearchRunInput
   | MailSearchRunInput
   | MailDiscoveryRunInput
   | z.infer<typeof orderMailImportRunInput>
   | OrderBackfillRunInput
   | z.infer<typeof chargeHuntRunInput>;
 export type RunProgress = MailSearchRunProgress | MailDiscoveryRunProgress;
-
-/** The label of each run purpose; `runWorkLabel` names one run's actual work. */
-export const RUN_PURPOSE_LABEL = {
-  account_sync: "Account sync",
-  purchase_validation: "Purchase validation",
-  product_enrichment: "Product enrichment",
-  photo_inventory: "Photo inventory",
-  ai_suggest: "AI suggestions",
-  background: "Background",
-  file_import: "File import",
-  mail_search: "Mail search",
-  mail_discovery: "Mail discovery",
-} as const satisfies Record<z.infer<typeof runPurpose>, string>;
 
 /**
  * What one run actually does, for every surface that names it (lists,
@@ -313,6 +414,20 @@ export function runWorkLabel(run: {
   if (purpose.data !== "account_sync") return RUN_PURPOSE_LABEL[purpose.data];
   const kind = z.object({ kind: z.string() }).safeParse(run.input);
   switch (kind.success ? kind.data.kind : null) {
+    case "research_objectives": {
+      const objectives = researchObjectivesRunInput.parse(run.input).objectives;
+      if (objectives.some((objective) => objective.kind === "receipt_hunt"))
+        return "Receipt research";
+      if (objectives.some((objective) => objective.kind === "charge_hunt"))
+        return "Charge search";
+      return objectives.some(
+        (objective) => objective.kind === "account_history" && objective.range,
+      )
+        ? "Order history backfill"
+        : "Order history sync";
+    }
+    case "mail_research":
+      return "Purchase research";
     case "order_mail_import":
       return "Order mail import";
     case "charge_hunts":

@@ -8,7 +8,7 @@ import { Database } from "~/server/db";
 
 import {
   auditPurchaseImportBatch,
-  extractPurchaseOrderMail,
+  retainLiteralLineLinks,
   type PurchaseAuditPorts,
 } from "./extract";
 
@@ -182,80 +182,7 @@ describe("purchase import audit recovery", () => {
   });
 });
 
-type MailPorts = NonNullable<Parameters<typeof extractPurchaseOrderMail>[1]>;
-
-describe("order confirmation email extraction", () => {
-  const db = new Database(() => {
-    throw new Error("Mail extraction unit test never resolves a database");
-  });
-  const mail = {
-    sender: "Example Seeds <orders@seeds.example.test>",
-    subject: "Order 1001 confirmed",
-    receivedAt: new Date("2026-09-22T06:23:46.000Z"),
-    content: { snippet: null, bodyText: "Order 1001", bodyHtml: null },
-  };
-  const modelOutput = (orderedAt: string | null) => ({
-    status: "ready" as const,
-    candidate: {
-      orderId: "1001",
-      orderedAt,
-      merchant: "Example Seeds",
-      currency: "USD",
-      printedGrandTotal: 4.5,
-      lines: [
-        {
-          title: "Tomato seeds",
-          amount: 4.5,
-          lineKind: "principal" as const,
-          quantity: 1,
-          productUrl: null,
-          imageUrl: null,
-          sku: null,
-          seller: null,
-        },
-      ],
-      payments: [],
-      allShipmentsDelivered: null,
-    },
-    reason: null,
-    detail: null,
-  });
-
-  it("dates an undated placement confirmation by when it was sent", async () => {
-    const extraction = await extractPurchaseOrderMail(
-      {
-        db,
-        runId: "00000000-0000-4000-8000-000000000001",
-        orderId: "1001",
-        productHosts: [],
-        mail,
-      },
-      fromPartial<MailPorts>({ runStructured: async () => modelOutput(null) }),
-    );
-    expect(extraction.candidate?.orderedAt).toBe("2026-09-22T06:23:46.000Z");
-  });
-
-  it("keeps an order date the confirmation prints", async () => {
-    const extraction = await extractPurchaseOrderMail(
-      {
-        db,
-        runId: "00000000-0000-4000-8000-000000000001",
-        orderId: "1001",
-        productHosts: [],
-        mail,
-      },
-      fromPartial<MailPorts>({
-        runStructured: async () => modelOutput("2026-09-20T12:00:00.000Z"),
-      }),
-    );
-    expect(extraction.candidate?.orderedAt).toBe("2026-09-20T12:00:00.000Z");
-  });
-});
-
 describe("order confirmation line links", () => {
-  const db = new Database(() => {
-    throw new Error("Mail extraction unit test never resolves a database");
-  });
   const html =
     '<a href="https://seeds.example.test/products/tomato?variant=7">Tomato seeds</a>' +
     '<img src="https://cdn.example.test/tomato_small.jpg" alt="Tomato seeds">' +
@@ -269,79 +196,56 @@ describe("order confirmation line links", () => {
     amount: 2,
     lineKind: "principal" as const,
     quantity: 1,
-    productUrl,
-    imageUrl,
+    productUrl: productUrl ?? undefined,
+    imageUrl: imageUrl ?? undefined,
     sku: null,
     seller: null,
   });
-  const extract = (lines: ReturnType<typeof line>[]) =>
-    extractPurchaseOrderMail(
-      {
-        db,
-        runId: "00000000-0000-4000-8000-000000000001",
-        orderId: "1001",
-        productHosts: ["seeds.example.test"],
-        mail: {
-          sender: "orders@seeds.example.test",
-          subject: "Order 1001 confirmed",
-          receivedAt: new Date("2026-09-22T06:23:46.000Z"),
-          content: { snippet: null, bodyText: null, bodyHtml: html },
-        },
-      },
-      fromPartial<MailPorts>({
-        runStructured: async () => ({
-          status: "ready" as const,
-          candidate: {
-            orderId: "1001",
-            orderedAt: null,
-            merchant: "Example Seeds",
-            currency: "USD",
-            printedGrandTotal: 4,
-            lines,
-            payments: [],
-            allShipmentsDelivered: null,
-          },
-          reason: null,
-          detail: null,
-        }),
-      }),
-    );
-
-  it("keeps a product link and image the email literally shows", async () => {
-    const extraction = await extract([
-      line(
-        "Tomato seeds",
-        "https://seeds.example.test/products/tomato?variant=7",
-        "https://cdn.example.test/tomato_small.jpg",
-      ),
-      line("Pepper seeds", null, null),
+  const retainLinks = (value: ReturnType<typeof line>) =>
+    retainLiteralLineLinks(value, { bodyText: null, bodyHtml: html }, [
+      "seeds.example.test",
     ]);
-    expect(extraction.candidate?.lines[0]).toMatchObject({
+
+  it("keeps a product link and image the email literally shows", () => {
+    expect(
+      retainLinks(
+        line(
+          "Tomato seeds",
+          "https://seeds.example.test/products/tomato?variant=7",
+          "https://cdn.example.test/tomato_small.jpg",
+        ),
+      ),
+    ).toMatchObject({
       productUrl: "https://seeds.example.test/products/tomato?variant=7",
       imageUrl: "https://cdn.example.test/tomato_small.jpg",
     });
   });
 
-  it("drops a URL that is only a prefix of a longer link in the email", async () => {
-    const extraction = await extract([
-      line("Tomato seeds", "https://seeds.example.test/products/tomato", null),
-      line("Pepper seeds", null, null),
-    ]);
-    expect(extraction.candidate?.lines[0]?.productUrl).toBeUndefined();
+  it("drops a URL that is only a prefix of a longer link in the email", () => {
+    expect(
+      retainLinks(
+        line(
+          "Tomato seeds",
+          "https://seeds.example.test/products/tomato",
+          null,
+        ),
+      ).productUrl,
+    ).toBeUndefined();
   });
 
-  it("drops an invented URL and a tracking redirect off the Vendor's site", async () => {
-    const extraction = await extract([
+  it("drops an invented URL and a tracking redirect off the Vendor's site", () => {
+    const tomato = retainLinks(
       line(
         "Tomato seeds",
         "https://seeds.example.test/products/made-up",
         "https://cdn.example.test/invented.jpg",
       ),
+    );
+    const pepper = retainLinks(
       line("Pepper seeds", "https://click.mail.example.test/r/abc", null),
-    ]);
-    const [tomato, pepper] = extraction.candidate?.lines ?? [];
-    expect(tomato?.productUrl).toBeUndefined();
-    expect(tomato?.imageUrl).toBeUndefined();
-    expect(pepper?.productUrl).toBeUndefined();
+    );
+    expect(tomato.productUrl).toBeUndefined();
+    expect(tomato.imageUrl).toBeUndefined();
+    expect(pepper.productUrl).toBeUndefined();
   });
 });

@@ -10,6 +10,7 @@ import {
   unwrapDb,
   withTransaction,
 } from "~/server/repo/database-helpers";
+import { lockExternalIdentifierParents } from "~/server/repo/entity-external-ids";
 import { resolveOrThrow } from "~/server/repo/shortcode-resolver";
 import { importImageFromUrl } from "~/server/services/image-storage.service";
 
@@ -26,9 +27,19 @@ type ThumbnailPorts = {
   ) => Promise<{ imageId: string; created: boolean } | null>;
 };
 
+const THUMBNAIL_ATTACHMENT_PREFIX = "order-line-thumbnail:";
+export const isProvisionalOrderThumbnail = (
+  key: string | null,
+  productId: string,
+) =>
+  Boolean(
+    key?.startsWith(THUMBNAIL_ATTACHMENT_PREFIX) &&
+    key.endsWith(`:${productId}`),
+  );
+
 /**
  * After a mail import commits, give each image-less Product its confirmation
- * line's thumbnail as the item cover. It is provisional by position only: a
+ * line's thumbnail as the item cover. Its attachment marker is provisional: a
  * verified catalog image from enrichment later takes cover ahead of it. Runs
  * outside the import transaction because it fetches over the network, and is
  * best-effort per line: a failed fetch never fails the import.
@@ -61,6 +72,9 @@ export async function attachOrderLineThumbnails(
       if (!imported) continue;
       const imageId = await resolveOrThrow(db, "image", imported.imageId);
       await withTransaction(db, async (tx) => {
+        await lockExternalIdentifierParents(tx, [
+          { entityId: productId, entityKind: "product" },
+        ]);
         // A concurrent edit may have added an image since the check above.
         if (await hasImage(tx, productId)) return;
         if (imported.created)
@@ -81,6 +95,7 @@ export async function attachOrderLineThumbnails(
           imageId,
           sortOrder: 0,
           purpose: "item",
+          idempotencyKey: `${THUMBNAIL_ATTACHMENT_PREFIX}${input.purchaseId}:${productId}`,
         });
       });
     } catch (error) {

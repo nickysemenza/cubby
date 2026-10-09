@@ -65,7 +65,8 @@ export async function encodeSnapshotDom(html: string): Promise<SnapshotDom> {
 /**
  * Browser commands reach only ordinary HTTPS pages on an allowlisted host or
  * one of its subdomains (`notexample.com` never matches `example.com`), with
- * no credentials or fragment. The Mac enforces the same rule on every URL it
+ * no credentials. Fragments preserve the site's rendered variant selection.
+ * The Mac enforces the same rule on every URL it
  * opens; the server applies it to every URL it hands back or derives.
  */
 export function urlAllowed(raw: string, allowedHosts: readonly string[]) {
@@ -75,8 +76,7 @@ export function urlAllowed(raw: string, allowedHosts: readonly string[]) {
   } catch {
     return false;
   }
-  if (url.protocol !== "https:" || url.username || url.password || url.hash)
-    return false;
+  if (url.protocol !== "https:" || url.username || url.password) return false;
   const host = url.hostname.toLowerCase();
   return allowedHosts.some((allowed) => {
     const normalized = allowed.toLowerCase().replaceAll(/^\.+|\.+$/gu, "");

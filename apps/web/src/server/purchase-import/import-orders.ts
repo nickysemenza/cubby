@@ -54,7 +54,6 @@ import {
   importHunt,
   importPreparedLine,
   importPreparedOrder,
-  importSourceClaim,
   product,
   purchase,
   run as runTable,
@@ -95,15 +94,7 @@ import {
   learnPurchaseProductExternalId,
   PurchaseProductExternalIdCollisionError,
 } from "./external-id-learning";
-import {
-  loadOrderMailImportEvidence,
-  markOrderMailCandidateImported,
-} from "./gmail/import";
 import { ensureMailVendorAccount } from "./gmail/mail-account";
-import {
-  attachPendingOrderMailEvidence,
-  type OrderMailEvidencePorts,
-} from "./gmail/process";
 import { attachOrderLineThumbnails } from "./line-thumbnails";
 import {
   MODEL_STYLE_MATCH_REASON,
@@ -111,12 +102,16 @@ import {
   modelStyleTokens,
   sharesModelWithinManufacturer,
 } from "./manufacturer-identity";
-import { autoFillCreatedProducts } from "./post-import-autofill";
+import { loadMailResearchSources } from "./research-run";
+import { resolveImportSourceOrder } from "./source-claim-family";
 
 const log = createLogger("purchase-import-commit");
+import { resolveProductIdentifierSource } from "~/server/repo/product-identifier-source";
+
 import { productEnrichmentTarget } from "./product-enrichment-target";
 import { recordRunWrites } from "./run-audit";
 import { auditAllImportBatches, loadRunScope } from "./run-service";
+import { sourceOrderKey } from "./source-order-key";
 import {
   proveStructuredIdentifier,
   structuredPageProvesExactVariant,
@@ -130,7 +125,6 @@ import {
 import {
   amazonAsin,
   buildPurchaseImportPlan,
-  externalSource,
   importVendorOrder,
   productSearchPatterns,
 } from "./writer";
@@ -158,11 +152,42 @@ const assertOwnedRun = async (
   return scope;
 };
 
+type MailResearchSources = Awaited<ReturnType<typeof loadMailResearchSources>>;
+
+/** Mail writes must name bytes admitted by the Run, never a model-provided key. */
+function assignedRetainedMailSource(
+  sources: MailResearchSources,
+  source: PreparePurchaseImportInput["orders"][number]["source"],
+  evidenceChecksum: string,
+) {
+  const isMail =
+    source.kind === "mail_message" || source.kind === "mail_attachment";
+  if (!isMail && sources === null) return null;
+  const assigned = sources?.find((mail) => {
+    const key = `gmail:${mail.mailboxId}:${mail.messageId}`;
+    if (source.kind === "mail_message")
+      return source.externalKey === key && source.checksum === mail.checksum;
+    return (
+      source.kind === "mail_attachment" &&
+      mail.attachments.some(
+        (attachment) =>
+          source.externalKey ===
+            `${key}:attachment:${attachment.providerAttachmentId}` &&
+          source.checksum === attachment.checksum,
+      )
+    );
+  });
+  if (!assigned || evidenceChecksum !== source.checksum)
+    throw new Error(
+      "Purchase import must use an assigned retained mail source unchanged.",
+    );
+  return assigned;
+}
+
 const lineIdentifierRequests = (
-  vendorId: VendorId,
+  source: string,
   line: z.infer<typeof extractedPurchaseLine>,
 ): ExternalIdPair[] => {
-  const source = externalSource(line.productUrl, vendorId);
   const ids = [
     ...new Set(
       [line.sku, amazonAsin(line.productUrl)].filter((id): id is string =>
@@ -278,22 +303,17 @@ async function computeTargetFingerprint(
   },
 ) {
   const database = getDb(db);
-  const [claim] = await database
-    .select({
-      id: importSourceClaim.id,
-      checksum: importSourceClaim.checksum,
-      purchaseId: importSourceClaim.purchaseId,
-      updatedAt: importSourceClaim.updatedAt,
-    })
-    .from(importSourceClaim)
-    .where(
-      and(
-        eq(importSourceClaim.ledgerPartyId, input.ledgerPartyId),
-        eq(importSourceClaim.kind, input.sourceKind),
-        eq(importSourceClaim.externalKey, input.sourceExternalKey),
-      ),
-    )
-    .limit(1);
+  const retained = await resolveImportSourceOrder(
+    database,
+    {
+      ledgerPartyId: input.ledgerPartyId,
+      kind: input.sourceKind,
+      externalKey: input.sourceExternalKey,
+      orderKey: sourceOrderKey(input),
+    },
+    { lock: "share", writable: true },
+  );
+  const claim = retained?.association;
   const [ordered] = input.orderId
     ? await database
         .select()
@@ -333,7 +353,7 @@ async function computeTargetFingerprint(
     throw new Error(
       "Another Purchase already owns this vendor order. Review the two Purchases before importing.",
     );
-  if (chosen && claim?.purchaseId && claim.purchaseId !== chosen.id)
+  if (chosen && claim && claim.purchaseId !== chosen.id)
     throw new Error("This source already belongs to a different Purchase.");
   const target = chosen ?? ordered;
   const expenses = target
@@ -346,7 +366,12 @@ async function computeTargetFingerprint(
   return sha256Hex(
     JSON.stringify({
       claim: claim
-        ? { ...claim, updatedAt: claim.updatedAt.toISOString() }
+        ? {
+            id: claim.id,
+            checksum: claim.checksum,
+            purchaseId: claim.purchaseId,
+            updatedAt: claim.updatedAt.toISOString(),
+          }
         : null,
       target: target
         ? { ...target, updatedAt: target.updatedAt.toISOString() }
@@ -434,24 +459,12 @@ export async function preparePurchaseImport(
     throw new Error(
       "Purchase validation accepts only run-scoped evidence, never shared images",
     );
-  const assignedMail = await loadOrderMailImportEvidence(
-    db,
-    scope.public.runId,
-  );
-  if (
-    assignedMail &&
-    (input.orders.length !== 1 ||
-      input.orders.some(
-        (order) =>
-          order.source.kind !== assignedMail.source.kind ||
-          order.source.externalKey !== assignedMail.source.externalKey ||
-          order.source.checksum !== assignedMail.evidenceChecksum ||
-          order.evidenceChecksum !== assignedMail.evidenceChecksum ||
-          order.extraction.candidate?.orderId !== assignedMail.orderId,
-      ))
-  )
-    throw new Error(
-      "Preparation must use the assigned order confirmation evidence unchanged.",
+  const mailSources = await loadMailResearchSources(db, scope.public.runId);
+  for (const order of input.orders)
+    assignedRetainedMailSource(
+      mailSources,
+      order.source,
+      order.evidenceChecksum,
     );
   if (!scope.vendorId) throw new Error("Purchase import run has no vendor");
   const vendorId = scope.vendorId;
@@ -549,9 +562,17 @@ export async function preparePurchaseImport(
           if (!storedOrder) throw new Error("Prepared order was not persisted");
 
           const outputLines = [];
-          const exactRequests = candidate.lines.map((line) =>
-            lineIdentifierRequests(vendorId, line),
-          );
+          const exactRequests: ExternalIdPair[][] = [];
+          for (const line of candidate.lines) {
+            const source =
+              line.sku || amazonAsin(line.productUrl)
+                ? await resolveProductIdentifierSource(transactionDb, {
+                    url: line.productUrl,
+                    vendorId,
+                  })
+                : "";
+            exactRequests.push(lineIdentifierRequests(source, line));
+          }
           const exactHits = await findProductsByExternalIds(
             transactionDb,
             exactRequests.flat(),
@@ -654,7 +675,6 @@ export async function commitPurchaseImport(
   db: Database,
   rawInput: CommitPurchaseImportInput,
   actor: ActorContext,
-  mailEvidencePorts?: OrderMailEvidencePorts,
 ) {
   const input = commitPurchaseImportInput.parse(rawInput);
   const scope = await assertOwnedRun(db, actor, input._runExecution.runId);
@@ -701,21 +721,30 @@ export async function commitPurchaseImport(
             scope.public.runId,
             input.prepareOperationId,
           );
-          const assignedMail = await loadOrderMailImportEvidence(
+          const mailSources = await loadMailResearchSources(
             transactionDb,
             scope.public.runId,
-            { allowComplete: true },
           );
+          for (const { order } of prepared)
+            assignedRetainedMailSource(
+              mailSources,
+              {
+                kind: importSourceKind.parse(order.sourceKind),
+                externalKey: order.sourceExternalKey,
+                checksum: order.sourceChecksum,
+              },
+              order.evidenceChecksum,
+            );
           // A mail import's Purchase belongs to the member's (mail-only)
           // account; the run itself stays account-less so it never walks
           // order history or competes with that account's browser runs.
           const purchaseVendorAccountId =
             scope.public.vendorAccountId ??
-            (assignedMail && scope.vendorId
+            (mailSources && scope.vendorId
               ? (
                   await ensureMailVendorAccount(transactionDb, {
                     vendorId: scope.vendorId,
-                    ledgerPartyId: assignedMail.mail.ledgerPartyId,
+                    ledgerPartyId: scope.ledgerPartyId,
                   })
                 ).id
               : null);
@@ -903,6 +932,15 @@ export async function commitPurchaseImport(
               committedPurchaseIds.push(
                 parseEntityId("purchase", result.purchaseId),
               );
+            const assignedMail = assignedRetainedMailSource(
+              mailSources,
+              {
+                kind: importSourceKind.parse(order.sourceKind),
+                externalKey: order.sourceExternalKey,
+                checksum: order.sourceChecksum,
+              },
+              order.evidenceChecksum,
+            );
             if (
               result.purchaseId &&
               assignedMail &&
@@ -911,29 +949,9 @@ export async function commitPurchaseImport(
             )
               thumbnailWork.push({
                 purchaseId: parseEntityId("purchase", result.purchaseId),
-                mailContent: assignedMail.mail.content,
+                mailContent: assignedMail.content,
                 lines: extraction.candidate?.lines ?? [],
               });
-            if (written && extraction.candidate?.orderId) {
-              await attachPendingOrderMailEvidence(
-                transactionDb,
-                {
-                  vendorId,
-                  orderId: extraction.candidate.orderId,
-                  purchaseShortcode: written.shortcode,
-                  ledgerPartyId: scope.ledgerPartyId,
-                },
-                mailEvidencePorts,
-              );
-              // A selected-mail run records this order's outcome; every other
-              // run has no pending mail candidate, so this is a no-op there.
-              if (order.sourceKind === "mail_message")
-                await markOrderMailCandidateImported(
-                  transactionDb,
-                  scope.public.runId,
-                  extraction.candidate.orderId,
-                );
-            }
             items.push({
               stableOrderId: order.stableOrderId,
               outcome: result.outcome,
@@ -971,11 +989,6 @@ export async function commitPurchaseImport(
       ),
   );
   // Network work stays outside the import transaction; each is best-effort.
-  // Auto-fill runs first so enrichment fingerprints the filled Products.
-  await autoFillCreatedProducts(db, {
-    runId: scope.public.runId,
-    purchaseIds: transactionResult.committedPurchaseIds ?? [],
-  });
   for (const work of transactionResult.thumbnailWork ?? [])
     await attachOrderLineThumbnails(db, work);
   // The import already committed: a follow-up failure is logged, never

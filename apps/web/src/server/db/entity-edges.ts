@@ -82,6 +82,7 @@ import {
   EXTERNAL_ID_KINDS,
   type EntityExternalIdKind,
 } from "@cubby/schemas/external-id";
+import type { RunTargetEntityKind } from "@cubby/schemas/run-fields";
 import type { AnyColumn } from "drizzle-orm";
 
 import {
@@ -112,11 +113,16 @@ import {
   runApproval,
   runControlEvent,
   runEvidence,
+  runFactEvidence,
+  researchSourceExposure,
+  researchRetention,
   runOperation,
   runOrderCandidate,
   runProgress,
   runTarget,
   importSourceClaim,
+  importSourceOrder,
+  importSourceProduct,
   ingredient,
   inventoryEntry,
   ledgerSourceClaim,
@@ -126,6 +132,7 @@ import {
   mealRecipe,
   mealRecipePortion,
   mailboxCursor,
+  mailboxMessage,
   merchantVendorRule,
   orderMail,
   orderMailCandidateDecision,
@@ -210,6 +217,23 @@ type WellKeyed<T extends Record<string, EntityEdge>> = {
 function edges<T extends Record<string, EntityEdge>>(t: T & WellKeyed<T>): T {
   return t;
 }
+
+const researchFactSubjectEdges = (entityKind: RunTargetEntityKind) =>
+  edges({
+    "RunFactEvidence.entityId": {
+      column: runFactEvidence.entityId,
+      scope: { column: runFactEvidence.entityKind, value: entityKind },
+      role: "history",
+      label: "accepted research facts",
+      description:
+        "An accepted field value names its canonical subject independently of the research task and retained original that proved it.",
+      liveness: {
+        kind: "allow-target-deleted",
+        reason:
+          "Accepted proof retains its canonical subject tombstone as history.",
+      },
+    },
+  });
 
 type LinkDeclaration = typeof ENTITY_LINK_KINDS;
 
@@ -337,6 +361,7 @@ export const ENTITY_EDGES = {
     },
   }),
   image: edges({
+    ...researchFactSubjectEdges("image"),
     "EntityAttachment.imageId": {
       column: entityAttachment.imageId,
       role: "media",
@@ -593,6 +618,29 @@ export const ENTITY_EDGES = {
       description: "A member mailbox's durable Gmail history cursor.",
       liveness: { kind: "must-target-live" },
     },
+    "MailboxMessage.ledgerPartyId": {
+      column: mailboxMessage.ledgerPartyId,
+      role: "metadata",
+      label: "mailbox message status",
+      description:
+        "Minimal classification and recovery metadata for a member mailbox.",
+      liveness: { kind: "must-target-live" },
+    },
+    "ResearchSourceExposure.ledgerPartyId": {
+      column: researchSourceExposure.ledgerPartyId,
+      role: "metadata",
+      label: "research source exposure",
+      description:
+        "Content-free source checksum exposure in the authenticated member scope.",
+      liveness: { kind: "must-target-live" },
+    },
+    "ResearchRetention.ledgerPartyId": {
+      column: researchRetention.ledgerPartyId,
+      role: "metadata",
+      label: "research retention receipts",
+      description: "A disposal receipt retains its authenticated member scope.",
+      liveness: { kind: "must-target-live" },
+    },
     "OrderMail.ledgerPartyId": {
       column: orderMail.ledgerPartyId,
       role: "history",
@@ -680,6 +728,15 @@ export const ENTITY_EDGES = {
   }),
   product: {
     ...edges({
+      ...researchFactSubjectEdges("product"),
+      "ImportSourceProduct.productId": {
+        column: importSourceProduct.productId,
+        role: "history",
+        label: "original order lines",
+        description:
+          "The exact original ordered line identifies this Product without implying an inventory movement or financial amount.",
+        liveness: { kind: "must-target-live" },
+      },
       "RunTarget.entityId": {
         column: runTarget.entityId,
         role: "history",
@@ -1068,6 +1125,7 @@ export const ENTITY_EDGES = {
   }),
   purchase: {
     ...edges({
+      ...researchFactSubjectEdges("purchase"),
       "ImportPreparedOrder.targetPurchaseId": {
         column: importPreparedOrder.targetPurchaseId,
         role: "history",
@@ -1104,8 +1162,8 @@ export const ENTITY_EDGES = {
             "Purchase deletion preserves targeted-run history (see PURCHASE_DELETE_EDGE_POLICY), so the run target deliberately retains the Purchase tombstone.",
         },
       },
-      "ImportSourceClaim.purchaseId": {
-        column: importSourceClaim.purchaseId,
+      "ImportSourceOrder.purchaseId": {
+        column: importSourceOrder.purchaseId,
         role: "history",
         label: "import source claims",
         description: "The idempotency claim that produced this purchase.",
@@ -1310,6 +1368,27 @@ export const ENTITY_EDGES = {
   // run (purchases it touched, claims it advanced, findings it produced) are
   // `history`, mirroring vendorAccount's own edges above.
   run: edges({
+    ...researchFactSubjectEdges("run"),
+    "MailboxMessage.runId": {
+      column: mailboxMessage.runId,
+      role: "association",
+      label: "mail research assignments",
+      description:
+        "The durable researcher currently processing a retained mailbox message.",
+      liveness: { kind: "must-target-live" },
+    },
+    "RunTarget.entityId": {
+      column: runTarget.entityId,
+      role: "owned-child",
+      label: "research source tasks",
+      description:
+        "A source-set task names its owning Run through the shared entity spine.",
+      liveness: {
+        kind: "allow-target-deleted",
+        reason:
+          "The task and its evidence are retained with the Run tombstone.",
+      },
+    },
     "AuditLog.runId": {
       column: auditLog.runId,
       role: "history",
@@ -1358,6 +1437,13 @@ export const ENTITY_EDGES = {
       description: "A later run that continued from this one.",
       liveness: { kind: "must-target-live" },
     },
+    "Run.parentRunId": {
+      column: runTable.parentRunId,
+      role: "history",
+      label: "child runs",
+      description: "Work caused by this Run, distinct from its retry attempts.",
+      liveness: { kind: "must-target-live" },
+    },
     "RunTarget.runId": {
       column: runTarget.runId,
       role: "owned-child",
@@ -1380,6 +1466,29 @@ export const ENTITY_EDGES = {
       label: "evidence",
       description: "Captured evidence filed under this run.",
       liveness: { kind: "must-target-live" },
+    },
+    "ResearchSourceExposure.runId": {
+      column: researchSourceExposure.runId,
+      role: "history",
+      label: "research source exposure",
+      description:
+        "A source exposure continues to identify contaminated coordinator storage after the Run is deleted.",
+      liveness: {
+        kind: "allow-target-deleted",
+        reason: "Deleting a Run does not dispose its exposed durable content.",
+      },
+    },
+    "ResearchRetention.runId": {
+      column: researchRetention.runId,
+      role: "history",
+      label: "research retention receipts",
+      description:
+        "External cleanup authority and replay fences survive a Run tombstone.",
+      liveness: {
+        kind: "allow-target-deleted",
+        reason:
+          "Pending disposal must remain authorized after the Run is deleted.",
+      },
     },
     "RunOperation.runId": {
       column: runOperation.runId,

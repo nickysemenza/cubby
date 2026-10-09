@@ -26,6 +26,13 @@ history is the archive. Permanent product constraints live in the
 
 ## Images & photos
 
+- 🟢 **Deduplicate research images across re-imports.** A repeated import or
+  enrichment can attach the same representative picture more than once. Reuse
+  shared image/attachment identity and content hashes across changed source URLs,
+  and keep provenance for every observation without duplicating the gallery.
+  Preserve member photos, chosen cover order, and genuinely different variants;
+  define safe cleanup of existing duplicates before changing household records.
+
 - 🧱 **Full capture metadata from the Photos library.** The library match path
   (`LibraryMetadataSync` → `image.recordSightings`) already backfills
   `capturedAt` and location for every strong perceptual-hash match across the
@@ -261,9 +268,9 @@ change the shape of the pipeline. The browser bridge contract is in
 ## Runs, enrichment & browser capture
 
 Runs are the household's unattended work: account syncs, mail passes, charge
-searches, Product enrichment, photo inventory. Today each is a separate Run
-linked only by restarts (`predecessorRunId`) and the records it wrote. The
-Runs list and `imports_read.run_status` read one shared projection
+searches, Product enrichment, photo inventory. The replacement declares
+parent/child lineage alongside restarts (`predecessorRunId`) and the records
+each Run wrote. The Runs list and `imports_read.run_status` read one shared projection
 (`server/repo/activity.ts`).
 
 - 🧱 **Run lineage.** Keep Run as the one unit of work; a Job or Step table
@@ -274,14 +281,18 @@ Runs list and `imports_read.run_status` read one shared projection
   enum, and `attempt` to the Run declaration, and write them at every
   starter. Give the discovery pass its own Run so every automatic child has
   a parent, and group the Runs list by root. Historical rows stay null; do
-  not backfill lineage from AuditLog. Enum values reach production before
-  any writer uses them (two deploys).
+  not backfill lineage from AuditLog. The purchase-research replacement is
+  implementing this together with the generic parent/child relations. Its
+  approved breaking cutover must use the main-compatible quiescence build,
+  settle old automation, apply the reviewed schema with production approval,
+  deploy the replacement, refresh every affected client, and verify recovery
+  before work resumes. Follow the exact sequence in
+  [development](development.md#purchase-research-schema-cutover).
 
-- 🧱 **An honest purpose for mail imports.** Order-mail imports are
-  vendor-less `account_sync` Runs told apart only by `input.kind`. Add a
-  `mail_import` purpose and relabel existing rows, updating the enrichment
-  sweep's import-provenance join, the run cap, and skill text that names
-  purposes in the same change. Production data change: confirm first.
+- 🧱 **An honest purpose for mail imports.** The replacement adds
+  `mail_import` and `mail_discovery`, updates shared presentation and research
+  admission, and migrates historical mail imports from vendor-less
+  `account_sync`. Production approval and persisted readback remain pending.
 
 - 🟢 **Chain enrichment from run completion, on one path.** A finished
   mail import or account sync triggers the enrichment sweep for its account
@@ -296,13 +307,15 @@ Runs list and `imports_read.run_status` read one shared projection
   (`readPageOnServer`). Tally refusals per vendor before skipping the fetch
   for vendors that always refuse, or routing any vendor fetch-only.
 
-- 🟢 **Enrich the variant that was bought.** Seed and Shopify pages are often
-  variant groups, which the single-Product proof rule rightly skips. Open
-  the purchased variant (`?variant=` matched by SKU or price) and read its
-  per-variant barcode (Shopify's `.js` product JSON exposes them).
+- 🟢 **Enrich the variant that was bought.** Connect the original ordered item
+  to the retained selected variant and support each accepted fact. Structured
+  data and visible selected-variant content can both supply evidence; a variant
+  group alone is insufficient. Open the purchased variant or investigate its
+  selectors when the first page does not establish that connection. Finish
+  real-model and visible-provenance acceptance before closing this item.
 
-- 🟢 **Sync order history before enriching mail-imported orders.** Order mail
-  rarely names the variant; the vendor's order page does. Enrichment
+- 🟢 **Use order history when mail leaves variant identity unresolved.** Order mail
+  can omit the variant; investigate the vendor's order page when needed. Enrichment
   targets carry the order line (`sourceKind: order_line`) and its parent
   run's evidence, and a commit whose variant disagrees with the ordered line
   is refused.
@@ -313,7 +326,9 @@ Runs list and `imports_read.run_status` read one shared projection
 
 - 🤔 **Provenance for already-filled fields.** Enrichment fills only empty
   fields, so a verified value matching an existing one gains no provenance.
-  Decide whether a matching verified value records its source.
+  The rewrite's approved behavior records support for matching values and
+  presents contradictory values for review. Finish the complete visible-proof
+  acceptance path before closing this item.
 
 - 🤔 **Controlled-browser preview.** Show Cubby's Chrome window in a small
   floating monitor that stays visible while browsing other records, like a
@@ -650,6 +665,17 @@ Runs list and `imports_read.run_status` read one shared projection
 
 ## Entity platform & data model
 
+- 🧱 **Audit for deletion and consolidation after the research rewrite.** Review
+  the whole codebase, including database tables, import/browser execution, review
+  surfaces, and tests. Identify unused functionality, duplicate services and
+  policies, redundant persisted state, and code that can move into shared
+  declarations or maintained Markdown skills. The model should own adaptive
+  investigation and semantic interpretation; justify each code layer by evidence
+  retention, recovery/replay, ownership, or safe domain writes. Prefer existing
+  Expense/domain services over a second accounting framework. Propose concrete
+  deletions and table consolidation with preserved invariants and data-transforming
+  migrations; measure the resulting code and schema reduction.
+
 - 🟢 **Classification-declared field policies: remaining classifications.**
   A classification decides whether a field or link is expected, and whether
   it is allowed at all: a SpendingCategory with `productExpectation:
@@ -796,6 +822,39 @@ consume the declarations.
 
 ## AI & search
 
+- 🤔 **Assess Agents SDK capabilities after the purchase rewrite.** Compare
+  Cubby's existing plumbing with the [SDK feature table](https://github.com/cloudflare/agents#features),
+  especially state/RPC synchronization, scheduling, child-agent timelines, and
+  bounded Code Mode research composition. Generate typed composition methods
+  from the existing research contracts and reuse their domain services; keep
+  lifecycle/browser waits and original-media delivery explicit. Preserve Pi's
+  recovery ownership, task-scoped evidence, per-call admission, and replay
+  fences. Adopt capabilities where they remove duplicate code or demonstrate
+  better research behavior. Evaluate a persistent Computer workspace only for
+  a concrete document-processing need, including source disposal and production
+  readiness. This follow-up does not expand the current rewrite or the separately
+  owned MCP enrichment workstream.
+
+- 🟢 **Show estimated API spend avoided by subscription inference.** Retain
+  each ChatGPT-plan call's catalog-priced API equivalent alongside its zero
+  incremental API charge, then aggregate it through the shared AI usage and
+  Run reports. Label the amount as estimated API spend avoided; preserve
+  unknown prices as `null`, count cache/replay correctly, and keep subscription
+  fees separate. Do not infer savings from missing usage or add a separate
+  accounting workbench.
+
+- 🟢 **Use Claude subscriber API credits through AI Gateway BYOK.** Link an
+  eligible Max or Team plan to a Claude Console organization and claim its
+  [included API credits](https://platform.claude.com/docs/en/about-claude/api-credits-for-subscribers).
+  Store that organization's Anthropic API key in Cloudflare AI Gateway under
+  the `default` [BYOK alias](https://developers.cloudflare.com/ai-gateway/configuration/bring-your-own-keys/),
+  which precedes [Unified Billing](https://developers.cloudflare.com/ai-gateway/features/unified-billing/)
+  when a request supplies no provider key. Use the Console API key, not Claude
+  login credentials. Verify the route and spend limit, record credit-funded
+  usage separately from paid charges, and prevent unintended paid fallback or
+  auto-reload when the expiring monthly credits run out. Reuse shared transport
+  and usage reporting; credits are bounded, not unlimited free API access.
+
 - 🤔 **One pricing source for the upstream cookbook pipeline.** Cubby usage
   pricing uses `models.dev` through `packages/shared/src/ai/pricing.ts`, but
   ingredient-parser's `cookbook` crate still builds its own model-price table
@@ -809,8 +868,7 @@ consume the declarations.
   `pnpm generate` requires it to be named here
   ([MCP exposure](agents/mcp.md#exposure)). Decide per group whether and how
   to expose it, then drop the group when it ships:
-  - Order mail: `vendor.orderMail`, `vendor.searchOrderMail`,
-    `vendor.orderMailSearchStatus`, `vendor.importOrderMail`,
+  - Order mail: `vendor.orderMail`, `vendor.importOrderMail`,
     `vendor.importSelectedOrderMail`.
   - Targeted runs and their evidence:
     `purchaseImport.initiateRunEvidenceUpload`.
@@ -876,6 +934,20 @@ consume the declarations.
 
 ## Dev tooling, tests & CI
 
+- 🤔 **Replace long scrolling scripts with focused headless, preview and
+  Tester Army coverage.** Put import, provenance, money, ownership and recovery
+  assertions through the existing headless/native service boundaries; use
+  declaration-backed fixtures and previews for presentation states. Keep a
+  small Tester Army journey for real app navigation and visible supported
+  outcomes. Preserve each named regression in the stronger replacement before
+  deleting its old script; previews alone do not prove navigation or writes.
+  Reuse fingerprint-verified native builds and warm isolated runtimes, and
+  share the current T3 device launcher/session rather than preparing competing
+  drivers. Measure setup and scenario time separately; keep exact revision,
+  replay, results and evidence checksums. Owners: `apps/apple/ITERATION.md`,
+  `apps/web/tooling/sim-e2e.ts`, `apps/web/tooling/tester-army/`, shared preview
+  fixtures.
+
 - 🤔 **Stop the simulator build from dirtying the checkout.** Every
   `test:e2e:sim` lane's Xcode build rewrites the tracked
   `apps/apple/CubbyKit/Package.resolved` (adding the app-only Nuke pin), so
@@ -926,8 +998,12 @@ consume the declarations.
 ## Infra & deploy
 
 - 🤔 **Maintenance mode.** The `MAINTENANCE_MODE` Worker secret makes the web
-  Worker answer 503 and skips the cron (`server/maintenance.ts`); queues are
-  paused by hand. Wanted: status in a Durable Object checked per request (503
+  Worker answer 503 and skips the cron (`server/maintenance.ts`); purchase
+  coordinator callbacks and tool effects now defer/refuse before DB/model
+  access, and browser brokers close without acknowledging unprocessed results.
+  Queues are paused by hand. The schema cutover sequence is in
+  [development](development.md#purchase-research-schema-cutover). Remaining:
+  status in a Durable Object checked per request (503
   page except a new health route and the switch), by every queue consumer
   (`background-tasks/consume.ts`, `telemetry-queue.ts`, the purchase-agent
   consumer) and each Workflow-backed Run step (`server/workflow-runs/`), and by the agent's purchase-import run before each tool call (via a

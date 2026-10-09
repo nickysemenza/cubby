@@ -64,6 +64,7 @@ export const problemsHandlers = implementOperationDomain(problemsContract, {
       context.db,
       input,
       context.actorContext,
+      context.services.recipeCosting,
     ),
   resolveArrivedFindings: async (context, input) =>
     (

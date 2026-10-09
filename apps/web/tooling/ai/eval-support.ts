@@ -16,9 +16,10 @@ import { localSecret } from "../local-secret";
 import { type ModelSwap, modelSwapSchema } from "../responses-model-swap";
 
 /**
- * Shared plumbing for the opt-in, billed model evals: the candidate list, the
+ * Shared plumbing for opt-in model evals: the candidate list, the
  * `tooling/agent-eval-model.ts` proxy that forwards the agent's model calls to
- * Cubby's AI Gateway as each candidate, and its usage and cost accounting.
+ * Cubby's AI Gateway or required subscription as each candidate, and usage
+ * and separately billed cost accounting.
  */
 export const evalWebRoot = path.resolve(
   path.dirname(fileURLToPath(import.meta.url)),
@@ -46,6 +47,17 @@ export const evalUsageReport = z.object({
   outputTokens: z.number(),
   reasoningTokens: z.number(),
   modelMs: z.number(),
+  transport: z.enum(["chatgpt", "gateway"]).optional(),
+  failures: z
+    .array(
+      z.object({
+        stage: z.enum(["http", "transport", "stream"]),
+        status: z.number().int().optional(),
+        message: z.string().max(2000),
+      }),
+    )
+    .max(8)
+    .optional(),
   calls: z.array(
     z.object({
       inputTokens: z.number(),
@@ -66,6 +78,7 @@ export function evalCostEstimator(pricing: PricingSource) {
     usage: EvalUsage,
   ): Promise<number | null> => {
     if (usage.calls.length !== usage.requests) return null;
+    if (usage.transport === "chatgpt") return 0;
     const catalog = await pricing.current();
     const costs = usage.calls.map((call) =>
       estimateAiUsageCost(catalog, providerFor(model), model, {
@@ -80,12 +93,35 @@ export function evalCostEstimator(pricing: PricingSource) {
   };
 }
 
-export const evalCostUsd = evalCostEstimator(
-  createAiModelPricing({
-    onError: (error) =>
-      console.warn("[eval] models.dev pricing unavailable", error),
-  }),
-);
+const evalPricing = createAiModelPricing({
+  onError: (error) =>
+    console.warn("[eval] models.dev pricing unavailable", error),
+});
+export const evalCostUsd = evalCostEstimator(evalPricing);
+
+/** Subscription output caps are stripped; reserve the exact catalog maximum. */
+export async function evalSubscriptionOutputTokens(
+  model: EvalCandidate["model"],
+) {
+  const catalog = await evalPricing.current();
+  const maximum = catalog?.[model]?.limit?.output;
+  if (!Number.isSafeInteger(maximum) || !maximum || maximum < 1)
+    throw new Error(
+      `Subscription evaluation lacks a finite output bound for ${model}`,
+    );
+  return maximum;
+}
+
+export const subscriptionEvalModelWorker = (origin: string) => ({
+  main: "tooling/agent-eval-model.ts",
+  vars: {
+    ACCOUNT_ID: CF_ACCOUNT_ID,
+    AI_GATEWAY_API_KEY: "",
+    GATEWAY_ENVIRONMENT: testAiGatewayEnvironment(process.env.CI),
+    SUBSCRIPTION_REQUIRED: "true",
+    SUBSCRIPTION_PROVIDER_URL: origin,
+  },
+});
 
 /** A candidate's mean cost; one unpriced run leaves the mean unpriced. */
 export function meanEvalCostUsd(costs: readonly (number | null)[]) {

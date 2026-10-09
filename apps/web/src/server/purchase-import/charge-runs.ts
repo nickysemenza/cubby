@@ -15,7 +15,6 @@ import {
 import {
   CHARGE_HUNT_STATE,
   chargeHuntOutcomeOf,
-  chargeHuntRunInput,
 } from "@cubby/schemas/run-fields";
 import { and, asc, eq, inArray, notInArray, sql } from "drizzle-orm";
 
@@ -35,7 +34,12 @@ import {
 } from "~/server/repo/database-helpers";
 import { currentMemberLedgerParty } from "~/server/repo/member-login";
 
+import { hasHuntAllocation } from "./charge-hunt-state";
 import { dispatchRunEvent } from "./dispatch";
+import {
+  chargeResearchRunPredicate,
+  researchChargeHuntIds,
+} from "./research-objective";
 import { startOrResumeRun } from "./run-service";
 
 /** Hunt states a member may send to a browser search. */
@@ -116,7 +120,7 @@ async function huntOwners(db: Database, accountId: VendorAccountId) {
     .where(
       and(
         eq(runTable.vendorAccountId, accountId),
-        sql`${runTable.input}->>'kind' = 'charge_hunts'`,
+        chargeResearchRunPredicate(runTable.input),
         notInArray(runTable.status, ["completed", "failed"]),
       ),
     );
@@ -136,19 +140,13 @@ async function huntOwners(db: Database, accountId: VendorAccountId) {
   );
   for (const run of runs) {
     if (restarted.has(run.id)) continue;
-    const parsed = chargeHuntRunInput.safeParse(run.input);
-    if (!parsed.success) continue;
-    for (const huntId of parsed.data.huntIds)
+    const huntIds = researchChargeHuntIds(run.input);
+    if (!huntIds) continue;
+    for (const huntId of huntIds)
       owners.set(huntId, { shortcode: run.shortcode, status: run.status });
   }
   return owners;
 }
-
-const hasAllocation = sql<boolean>`EXISTS (
-  SELECT 1 FROM "FinancialTransactionAllocation" a
-  WHERE a."transactionId" = ${importHunt.financialTransactionId}
-    AND a."deletedAt" IS NULL
-)`;
 
 async function accountHunts(
   db: Database,
@@ -162,7 +160,7 @@ async function accountHunts(
       merchant: financialTransaction.merchant,
       amount: financialTransaction.amount,
       transactionDate: financialTransaction.transactionDate,
-      settled: hasAllocation,
+      settled: hasHuntAllocation,
     })
     .from(importHunt)
     .innerJoin(
@@ -262,7 +260,7 @@ export async function startSelectedChargeRun(
         state: importHunt.state,
         transactionId: financialTransaction.shortcode,
         transactionDate: financialTransaction.transactionDate,
-        settled: hasAllocation,
+        settled: hasHuntAllocation,
       })
       .from(importHunt)
       .innerJoin(

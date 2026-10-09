@@ -37,12 +37,7 @@ public protocol BrowserEvidenceUploading: Sendable {
 
 /// A PDF rendered from the screenshot of Cubby's dedicated browser window, uploaded beside the PNG.
 public enum RenderedBrowserEvidencePDF {
-    public static func makeFile(from image: CGImage) throws -> BrowserLocalEvidence {
-        let directory = FileManager.default.temporaryDirectory.appendingPathComponent(
-            "CubbyBrowserEvidence", isDirectory: true)
-        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
-        let url = directory.appendingPathComponent(
-            "browser-view-\(UUID().uuidString).pdf")
+    public static func makeFile(from image: CGImage, to url: URL) throws -> BrowserLocalEvidence {
         let width = CGFloat(image.width)
         let height = CGFloat(image.height)
         var mediaBox = CGRect(x: 0, y: 0, width: width, height: height)

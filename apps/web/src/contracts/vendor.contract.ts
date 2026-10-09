@@ -10,9 +10,6 @@ import {
   vendorChargeHuntsInput,
   vendorChargeHuntsOut,
   vendorOrderMailInput,
-  vendorSearchMailInput,
-  vendorSearchMailOut,
-  vendorSearchMailStatusInput,
 } from "@cubby/schemas/order-mail-review";
 import {
   fetchVendorLogoInput,
@@ -37,32 +34,16 @@ export const vendorContract = defineContract("vendor", {
     output: purchaseOrderMailOut,
     cache: { tags: [["vendor"]] },
   }),
-  searchOrderMail: mutation({
-    mcp: {
-      omit: "deferred_capability",
-      todo: "Deferred MCP agent capabilities",
-    },
-    input: vendorSearchMailInput,
-    output: vendorSearchMailOut,
-    invalidates: ["vendor"],
-  }),
-  orderMailSearchStatus: query({
-    mcp: {
-      omit: "deferred_capability",
-      todo: "Deferred MCP agent capabilities",
-    },
-    input: vendorSearchMailStatusInput,
-    output: vendorSearchMailOut.nullable(),
-    cache: { tags: [] },
-  }),
   importOrderMail: mutation({
+    native:
+      "Research a reviewed retained original through the shared Run runtime",
     mcp: {
       omit: "deferred_capability",
       todo: "Deferred MCP agent capabilities",
     },
     input: orderMailImportInput,
     output: orderMailImportOut,
-    invalidates: ["vendor"],
+    invalidates: ["vendor", "runOnly"],
   }),
   importSelectedOrderMail: mutation({
     mcp: {

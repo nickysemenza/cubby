@@ -1,3 +1,4 @@
+import { buildActorContext } from "@cubby/schemas/context";
 import type { LedgerPartyId } from "@cubby/schemas/identifiers";
 import {
   syncPlanOutput,
@@ -12,6 +13,7 @@ import { and, desc, eq } from "drizzle-orm";
 import type { Database } from "~/server/db";
 import {
   ledgerParty,
+  run as runTable,
   runProgress,
   vendor,
   vendorAccount,
@@ -21,7 +23,7 @@ import { getDb, notDeleted } from "~/server/repo/database-helpers";
 import { resolveOrThrow } from "~/server/repo/shortcode-resolver";
 
 import { dispatchRunEvent } from "./dispatch";
-import { startOrResumeRun } from "./run-service";
+import { controlRun, startOrResumeRun } from "./run-service";
 import {
   accountSyncEligibility,
   readAccountSyncAdmission,
@@ -139,6 +141,36 @@ export async function startAccountSync(
       ? { trigger: "backfill" as const, backfill: input.backfill }
       : { trigger: "manual" as const }),
   });
+  if (!run.created) {
+    const [current] = await getDb(db)
+      .select({ status: runTable.status, actorUserId: runTable.actorUserId })
+      .from(runTable)
+      .where(and(eq(runTable.id, run.id), notDeleted(runTable)));
+    if (!current) throw new Error("Account sync Run is no longer available");
+    if (
+      current.status === "paused_auth" ||
+      current.status === "paused_offline"
+    ) {
+      if (!current.actorUserId)
+        throw new Error("Account sync Run has no owning member actor");
+      const resumed = await controlRun(
+        db,
+        buildActorContext(current.actorUserId),
+        { runPublicId: run.publicId, action: "resume" },
+      );
+      if (!("dispatchEventId" in resumed) || !resumed.dispatchEventId)
+        throw new Error(
+          "Account sync resume did not admit a dispatch generation",
+        );
+      await dispatchRunEvent(db, queue, {
+        version: 1,
+        runId: run.id,
+        eventId: resumed.dispatchEventId,
+        type: "start_or_resume",
+      });
+      return { runId: run.publicId, resumed: true };
+    }
+  }
   await dispatchRunEvent(db, queue, {
     version: 1,
     runId: run.id,

@@ -1,5 +1,10 @@
 import type { ActorContext } from "@cubby/schemas/context";
-import { parseEntityId } from "@cubby/schemas/identifiers";
+import {
+  parseEntityId,
+  type VendorId,
+  type PurchaseId,
+} from "@cubby/schemas/identifiers";
+import { purchaseOrderMailOut } from "@cubby/schemas/order-mail-review";
 import {
   and,
   desc,
@@ -7,7 +12,6 @@ import {
   exists,
   gte,
   inArray,
-  isNotNull,
   isNull,
   lte,
   or,
@@ -22,26 +26,124 @@ import {
 } from "~/lib/household-date";
 import type { Database } from "~/server/db";
 import {
+  importSourceClaim,
+  importSourceOrder,
   ledgerParty,
+  mailboxMessage,
   orderMail,
   orderMailCandidateDecision,
   orderMailEvent,
   purchase,
+  run,
   vendor,
   vendorAccount,
 } from "~/server/db/schema";
 import { isUniqueViolation } from "~/server/errors/db-errors";
 import {
+  databaseForTransaction,
   getDb,
   notDeleted,
   withTransaction,
 } from "~/server/repo/database-helpers";
 import { resolveOrThrow } from "~/server/repo/shortcode-resolver";
 
+import { lockOwnedResearchSource } from "../research-retention";
 import { ensureMailVendorAccount } from "./mail-account";
 
+const mailSourceIdentity = and(
+  eq(importSourceClaim.ledgerPartyId, orderMail.ledgerPartyId),
+  eq(importSourceClaim.kind, "mail_message"),
+  eq(
+    importSourceClaim.externalKey,
+    sql`'gmail:' || ${orderMail.mailboxId} || ':' || ${orderMail.messageId}`,
+  ),
+);
+
+/** Source ownership survives a multi-Vendor original and nullable discovery hints. */
+const acceptedMailScope = (
+  db: ReturnType<typeof getDb>,
+  target: {
+    vendorId?: VendorId;
+    purchaseId?: PurchaseId;
+  },
+) =>
+  exists(
+    db
+      .select({ id: importSourceOrder.id })
+      .from(importSourceClaim)
+      .innerJoin(
+        importSourceOrder,
+        eq(
+          importSourceOrder.sourceClaimId,
+          sql`coalesce(${importSourceClaim.canonicalClaimId}, ${importSourceClaim.id})`,
+        ),
+      )
+      .innerJoin(purchase, eq(purchase.id, importSourceOrder.purchaseId))
+      .leftJoin(
+        vendorAccount,
+        and(
+          eq(vendorAccount.id, purchase.vendorAccountId),
+          notDeleted(vendorAccount),
+        ),
+      )
+      .where(
+        and(
+          mailSourceIdentity,
+          notDeleted(purchase),
+          target.vendorId ? eq(purchase.vendorId, target.vendorId) : undefined,
+          target.purchaseId ? eq(purchase.id, target.purchaseId) : undefined,
+          or(
+            isNull(vendorAccount.ledgerPartyId),
+            eq(vendorAccount.ledgerPartyId, orderMail.ledgerPartyId),
+          ),
+        ),
+      ),
+  );
+
+const reviewedMailScope = (
+  db: ReturnType<typeof getDb>,
+  target: {
+    vendorId?: VendorId;
+    purchaseId?: PurchaseId;
+  },
+) =>
+  exists(
+    db
+      .select({ id: orderMailCandidateDecision.id })
+      .from(orderMailEvent)
+      .innerJoin(
+        orderMailCandidateDecision,
+        eq(orderMailCandidateDecision.eventId, orderMailEvent.id),
+      )
+      .innerJoin(
+        purchase,
+        eq(purchase.id, orderMailCandidateDecision.purchaseId),
+      )
+      .leftJoin(
+        vendorAccount,
+        and(
+          eq(vendorAccount.id, purchase.vendorAccountId),
+          notDeleted(vendorAccount),
+        ),
+      )
+      .where(
+        and(
+          eq(orderMailEvent.orderMailId, orderMail.id),
+          isNull(orderMailEvent.supersededAt),
+          notDeleted(purchase),
+          target.vendorId ? eq(purchase.vendorId, target.vendorId) : undefined,
+          target.purchaseId ? eq(purchase.id, target.purchaseId) : undefined,
+          or(
+            isNull(vendorAccount.ledgerPartyId),
+            eq(vendorAccount.ledgerPartyId, orderMail.ledgerPartyId),
+          ),
+        ),
+      ),
+  );
+
 const candidateReason = (
-  event: { orderId: string | null; amount: number | null; receivedAt: Date },
+  event: Pick<typeof orderMailEvent.$inferSelect, "orderId" | "amount"> &
+    Pick<typeof orderMail.$inferSelect, "receivedAt">,
   candidate: {
     orderId: string | null;
     statedTotal: number | null;
@@ -51,6 +153,7 @@ const candidateReason = (
   if (event.orderId && candidate.orderId === event.orderId)
     return "exact_order_id" as const;
   const withinWindow =
+    event.receivedAt !== null &&
     candidate.date !== null &&
     Math.abs(
       plainDateDaysBetween(
@@ -66,6 +169,19 @@ const candidateReason = (
   )
     return "amount_and_date" as const;
   return "nearby_date" as const;
+};
+
+const candidateMailDateWindow = (
+  mails: ReadonlyArray<Pick<typeof orderMail.$inferSelect, "receivedAt">>,
+) => {
+  const times = mails.flatMap((mail) =>
+    mail.receivedAt ? [mail.receivedAt.getTime()] : [],
+  );
+  if (!times.length) return undefined;
+  return and(
+    gte(purchase.date, householdDaysAgo(45, new Date(Math.min(...times)))),
+    lte(purchase.date, householdDaysFromNow(45, new Date(Math.max(...times)))),
+  );
 };
 
 /** Vendor-wide mail worklist; a member filter narrows both mail and matches. */
@@ -88,7 +204,13 @@ export async function listVendorOrderMail(
     .selectDistinct({ id: ledgerParty.shortcode, name: ledgerParty.name })
     .from(orderMail)
     .innerJoin(ledgerParty, eq(ledgerParty.id, orderMail.ledgerPartyId))
-    .where(eq(orderMail.vendorId, vendorId));
+    .where(
+      or(
+        eq(orderMail.vendorId, vendorId),
+        acceptedMailScope(database, { vendorId }),
+        reviewedMailScope(database, { vendorId }),
+      ),
+    );
   const mails = await database
     .select({
       id: orderMail.id,
@@ -100,30 +222,29 @@ export async function listVendorOrderMail(
       subject: orderMail.subject,
       receivedAt: orderMail.receivedAt,
       rawChecksum: orderMail.rawChecksum,
+      researchRunId: run.shortcode,
+      researchRunStatus: run.status,
+      researchSourceStatus: mailboxMessage.status,
+      researchChecksum: mailboxMessage.checksum,
     })
     .from(orderMail)
     .innerJoin(ledgerParty, eq(ledgerParty.id, orderMail.ledgerPartyId))
+    .leftJoin(
+      mailboxMessage,
+      and(
+        eq(mailboxMessage.orderMailId, orderMail.id),
+        eq(mailboxMessage.ledgerPartyId, orderMail.ledgerPartyId),
+        eq(mailboxMessage.mailboxId, orderMail.mailboxId),
+        eq(mailboxMessage.messageId, orderMail.messageId),
+      ),
+    )
+    .leftJoin(run, and(eq(run.id, mailboxMessage.runId), notDeleted(run)))
     .where(
       and(
-        eq(orderMail.vendorId, vendorId),
-        exists(
-          database
-            .select({ id: orderMailEvent.id })
-            .from(orderMailEvent)
-            .where(
-              and(
-                eq(orderMailEvent.orderMailId, orderMail.id),
-                isNull(orderMailEvent.supersededAt),
-                or(
-                  eq(orderMailEvent.event, "placed"),
-                  eq(orderMailEvent.event, "shipped"),
-                  eq(orderMailEvent.event, "delivered"),
-                  eq(orderMailEvent.event, "refunded"),
-                  isNotNull(orderMailEvent.orderId),
-                  isNotNull(orderMailEvent.amount),
-                ),
-              ),
-            ),
+        or(
+          eq(orderMail.vendorId, vendorId),
+          acceptedMailScope(database, { vendorId }),
+          reviewedMailScope(database, { vendorId }),
         ),
         ledgerPartyId ? eq(orderMail.ledgerPartyId, ledgerPartyId) : undefined,
         options.messageIds
@@ -143,7 +264,50 @@ export async function listVendorOrderMail(
           )
         : 100,
     );
-  if (mails.length === 0) return { members, items: [] };
+  if (mails.length === 0)
+    return purchaseOrderMailOut.parse({ members, items: [] });
+  const associations = await database
+    .select({
+      orderMailId: orderMail.id,
+      purchaseId: purchase.shortcode,
+      evidenceChecksum: importSourceOrder.checksum,
+    })
+    .from(orderMail)
+    .innerJoin(importSourceClaim, mailSourceIdentity)
+    .innerJoin(
+      importSourceOrder,
+      eq(
+        importSourceOrder.sourceClaimId,
+        sql`coalesce(${importSourceClaim.canonicalClaimId}, ${importSourceClaim.id})`,
+      ),
+    )
+    .innerJoin(
+      purchase,
+      and(
+        eq(purchase.id, importSourceOrder.purchaseId),
+        notDeleted(purchase),
+        eq(purchase.vendorId, vendorId),
+      ),
+    )
+    .leftJoin(
+      vendorAccount,
+      and(
+        eq(vendorAccount.id, purchase.vendorAccountId),
+        notDeleted(vendorAccount),
+      ),
+    )
+    .where(
+      and(
+        inArray(
+          orderMail.id,
+          mails.map((mail) => mail.id),
+        ),
+        or(
+          isNull(vendorAccount.ledgerPartyId),
+          eq(vendorAccount.ledgerPartyId, orderMail.ledgerPartyId),
+        ),
+      ),
+    );
   const events = await database
     .select()
     .from(orderMailEvent)
@@ -177,14 +341,7 @@ export async function listVendorOrderMail(
   const decidedPurchaseIds = [
     ...new Set(decisions.map((decision) => decision.purchaseId)),
   ];
-  const firstMailTime = Math.min(
-    ...mails.map((mail) => mail.receivedAt.getTime()),
-  );
-  const lastMailTime = Math.max(
-    ...mails.map((mail) => mail.receivedAt.getTime()),
-  );
-  const candidateDateFrom = householdDaysAgo(45, new Date(firstMailTime));
-  const candidateDateTo = householdDaysFromNow(45, new Date(lastMailTime));
+  const candidateDateWindow = candidateMailDateWindow(mails);
   const candidates = await database
     .select({
       id: purchase.id,
@@ -209,20 +366,17 @@ export async function listVendorOrderMail(
         notDeleted(purchase),
         or(
           orderIds.length ? inArray(purchase.orderId, orderIds) : undefined,
-          and(
-            gte(purchase.date, candidateDateFrom),
-            lte(purchase.date, candidateDateTo),
-          ),
+          candidateDateWindow,
           decidedPurchaseIds.length
             ? inArray(purchase.id, decidedPurchaseIds)
             : undefined,
-        ),
+        ) ?? sql`false`,
       ),
     );
   const decisionsByPair = new Map(
     decisions.map((decision) => [
       `${decision.eventId}:${decision.purchaseId}`,
-      decision.decision,
+      decision,
     ]),
   );
   const eventsByMail = new Map<string, typeof events>();
@@ -231,15 +385,33 @@ export async function listVendorOrderMail(
     group.push(event);
     eventsByMail.set(event.orderMailId, group);
   }
-  return {
+  return purchaseOrderMailOut.parse({
     members,
     items: mails.map((mail) => ({
       messageId: mail.messageId,
       threadId: mail.threadId,
       sender: mail.sender,
       subject: mail.subject,
-      receivedAt: mail.receivedAt.toISOString(),
+      receivedAt: mail.receivedAt?.toISOString() ?? null,
       ledgerPartyId: mail.ledgerPartyShortcode,
+      researchRun:
+        mail.researchRunId &&
+        mail.researchRunStatus &&
+        mail.researchSourceStatus &&
+        mail.researchChecksum
+          ? {
+              id: mail.researchRunId,
+              status: mail.researchRunStatus,
+              sourceStatus: mail.researchSourceStatus,
+              evidenceChecksum: mail.researchChecksum,
+            }
+          : null,
+      associations: associations
+        .filter((association) => association.orderMailId === mail.id)
+        .map(({ purchaseId, evidenceChecksum }) => ({
+          purchaseId,
+          evidenceChecksum,
+        })),
       events: (eventsByMail.get(mail.id) ?? []).map((event) => ({
         id: event.id,
         event: event.event,
@@ -269,7 +441,8 @@ export async function listVendorOrderMail(
                 statedTotal: candidate.statedTotal,
                 date: candidate.date,
                 reason: reason ?? ("previous_decision" as const),
-                decision,
+                decision: decision?.decision ?? null,
+                evidenceChecksum: decision?.evidenceChecksum ?? null,
               },
             ];
           })
@@ -285,7 +458,7 @@ export async function listVendorOrderMail(
           .slice(0, 10),
       })),
     })),
-  };
+  });
 }
 
 export async function listPurchaseOrderMail(
@@ -297,6 +470,7 @@ export async function listPurchaseOrderMail(
   const [target] = await database
     .select({
       id: purchase.id,
+      shortcode: purchase.shortcode,
       vendorId: purchase.vendorId,
       vendorShortcode: vendor.shortcode,
       orderId: purchase.orderId,
@@ -308,26 +482,11 @@ export async function listPurchaseOrderMail(
   if (!target) throw new Error("Purchase no longer exists");
   const related = await database
     .select({ mailId: orderMail.id })
-    .from(orderMailEvent)
-    .innerJoin(orderMail, eq(orderMail.id, orderMailEvent.orderMailId))
-    .leftJoin(
-      orderMailCandidateDecision,
-      and(
-        eq(orderMailCandidateDecision.eventId, orderMailEvent.id),
-        eq(orderMailCandidateDecision.purchaseId, target.id),
-        eq(orderMailCandidateDecision.decision, "linked"),
-      ),
-    )
+    .from(orderMail)
     .where(
-      and(
-        eq(orderMail.vendorId, target.vendorId),
-        isNull(orderMailEvent.supersededAt),
-        or(
-          target.orderId
-            ? eq(orderMailEvent.orderId, target.orderId)
-            : undefined,
-          eq(orderMailCandidateDecision.purchaseId, target.id),
-        ),
+      or(
+        acceptedMailScope(database, { purchaseId: target.id }),
+        reviewedMailScope(database, { purchaseId: target.id }),
       ),
     );
   const mailIds = [...new Set(related.map((row) => row.mailId))];
@@ -342,22 +501,23 @@ export async function listPurchaseOrderMail(
     items: worklist.items
       .map((mail) => ({
         ...mail,
+        associations: mail.associations.filter(
+          (association) => association.purchaseId === target.shortcode,
+        ),
         events: mail.events
           .filter((event) =>
             event.candidates.some(
-              (candidate) =>
-                candidate.purchaseId === input.purchaseId &&
-                candidate.decision !== "dismissed",
+              (candidate) => candidate.purchaseId === target.shortcode,
             ),
           )
           .map((event) => ({
             ...event,
             candidates: event.candidates.filter(
-              (candidate) => candidate.purchaseId === input.purchaseId,
+              (candidate) => candidate.purchaseId === target.shortcode,
             ),
           })),
       }))
-      .filter((mail) => mail.events.length > 0),
+      .filter((mail) => mail.events.length > 0 || mail.associations.length > 0),
   };
 }
 
@@ -370,7 +530,7 @@ type OrderMailDecisionInput = {
 
 /**
  * A member's link or dismissal. An automatic exact-order link
- * (`linkExactOrderMail`) can commit between this transaction's read and its
+ * can commit between this transaction's read and its
  * insert and win the one-link-per-event index; the member's choice must still
  * win, so that one conflict retries once, now seeing (and demoting) the
  * committed automatic link.
@@ -402,6 +562,26 @@ async function decideOrderMailCandidateOnce(
     await tx.execute(
       sql`SELECT pg_advisory_xact_lock(hashtext(${input.eventId}))`,
     );
+    const [source] = await tx
+      .select({
+        orderMailId: orderMail.id,
+        ledgerPartyId: orderMail.ledgerPartyId,
+      })
+      .from(orderMailEvent)
+      .innerJoin(orderMail, eq(orderMail.id, orderMailEvent.orderMailId))
+      .where(
+        and(
+          eq(orderMailEvent.id, input.eventId),
+          isNull(orderMailEvent.supersededAt),
+        ),
+      )
+      .limit(1);
+    if (!source) throw new Error("Order mail event no longer exists");
+    await lockOwnedResearchSource(databaseForTransaction(tx), {
+      ...source,
+      checksum: input.evidenceChecksum,
+      actorUserId: actor.userId,
+    });
     const [lockedPurchase] = await tx
       .select({ id: purchase.id })
       .from(purchase)
@@ -412,16 +592,15 @@ async function decideOrderMailCandidateOnce(
       .select({
         eventId: orderMailEvent.id,
         checksum: orderMail.rawChecksum,
-        vendorId: orderMail.vendorId,
+        vendorId: purchase.vendorId,
         ledgerPartyId: orderMail.ledgerPartyId,
-        purchaseVendorId: purchase.vendorId,
         purchaseAccountPartyId: vendorAccount.ledgerPartyId,
         vendorName: vendor.name,
       })
       .from(orderMailEvent)
       .innerJoin(orderMail, eq(orderMail.id, orderMailEvent.orderMailId))
       .innerJoin(purchase, eq(purchase.id, purchaseId))
-      .innerJoin(vendor, eq(vendor.id, orderMail.vendorId))
+      .innerJoin(vendor, eq(vendor.id, purchase.vendorId))
       .leftJoin(
         vendorAccount,
         and(
@@ -442,8 +621,6 @@ async function decideOrderMailCandidateOnce(
     if (scope.checksum !== input.evidenceChecksum)
       throw new Error("Order mail changed; review its current evidence first");
     const vendorId = scope.vendorId;
-    if (!vendorId || vendorId !== scope.purchaseVendorId)
-      throw new Error("Order mail and Purchase belong to different Vendors");
     if (
       scope.purchaseAccountPartyId &&
       scope.purchaseAccountPartyId !== scope.ledgerPartyId

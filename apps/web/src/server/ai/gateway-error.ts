@@ -25,7 +25,7 @@ class GatewayHttpError extends Error {
 }
 
 /** Keep request identity next to the provider's original error and stack. */
-export class AiGatewayRequestError extends Error {
+class AiGatewayRequestError extends Error {
   constructor(message: string, cause: unknown) {
     super(message, { cause });
     this.name = "AiGatewayRequestError";

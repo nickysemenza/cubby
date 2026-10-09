@@ -1,39 +1,28 @@
-import type { BrowserBridgeResult } from "@cubby/schemas/purchase-import";
 import { vendorAccountCursor } from "@cubby/schemas/vendor-account-fields";
-import { and, eq } from "drizzle-orm";
+import { eq } from "drizzle-orm";
 import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 
 import {
+  expense,
   run as runTable,
-  runFinding,
-  runOrderCandidate,
+  runEvidence,
   vendorAccount,
 } from "~/server/db/schema";
 import { getDb } from "~/server/repo/database-helpers";
 import { insertWithShortcode } from "~/server/repo/shortcode-utils";
 
-import { fakeBroker, historyPage, HOST } from "./order-history.fixtures";
-import {
-  claimNextImportWork,
-  controlRun,
-  deferOrderForReview,
-  finishRun,
-  importBrowserOrderEvidence,
-  issueBrowserCommand,
-  startOrResumeRun,
-} from "./run-service";
-
+import { researchWorklistFixture } from "./research-worklist.fixtures";
+import { controlRun, startOrResumeRun } from "./run-service";
+const HOST = "shop.example.test";
 const INCREMENTAL_CURSOR = {
   newestOrderAt: "2026-09-15T00:00:00.000Z",
-  orderIdsOnNewestDate: ["111-0000000-0000001"],
+  orderIdsOnNewestDate: ["synthetic-existing-order"],
   backfillBeforeOrderAt: null,
   earliestAvailableOrderAt: null,
 };
-
 describe("explicit historical order backfill", () => {
   const ctx = withTestDb();
-
   async function seedAccount() {
     const party = await insertWithShortcode(ctx.db, "ledgerParty", {
       name: "Backfill member",
@@ -54,131 +43,42 @@ describe("explicit historical order backfill", () => {
     return { party, vendor, account };
   }
 
-  async function listPage(
-    runId: string,
-    operationId: string,
-    outcome: Promise<BrowserBridgeResult["outcome"]>,
-  ) {
-    const bridge = fakeBroker();
-    const issued = await issueBrowserCommand(ctx.db, bridge.namespace, {
-      runId,
-      operationId,
-      operation: {
-        type: "capture",
-        allowedHosts: [HOST],
-        screenshot: "preferred",
-      },
-    });
-    bridge.respondWith(await outcome);
-    return importBrowserOrderEvidence(
-      ctx.db,
-      bridge.namespace,
-      {
-        runId,
-        operationId: `${operationId}:import`,
-        commandId: issued.commandId,
-      },
-      bridge.ports,
-    );
-  }
-
-  async function candidates(runId: string) {
-    return (
-      await getDb(ctx.db)
-        .select({
-          orderId: runOrderCandidate.orderId,
-          state: runOrderCandidate.state,
-        })
-        .from(runOrderCandidate)
-        .where(eq(runOrderCandidate.runId, runId))
-    ).sort((a, b) => a.orderId.localeCompare(b.orderId));
-  }
-
-  it("walks past the incremental cursor, keeps only in-range orders, and never moves the cursor", async () => {
+  it("keeps backfill range isolated from the incremental cursor and never advances it on exhaustion", async () => {
     const { party, account } = await seedAccount();
-    const run = await startOrResumeRun(ctx.db, {
+    const range = { from: "2026-06-01", to: "2026-07-31" };
+    const scope = await startOrResumeRun(ctx.db, {
       ledgerPartyId: party.id,
       vendorAccountId: account.id,
       trigger: "backfill",
-      backfill: { from: "2026-06-01", to: "2026-07-31" },
+      backfill: range,
+    });
+    const research = researchWorklistFixture(ctx.db, scope.id);
+    const work = await research.assigned();
+    expect(work).toMatchObject({
+      kind: "account_history",
+      range,
+      cursor: INCREMENTAL_CURSOR,
+    });
+    const observation = await research.retain(
+      work.workRef,
+      "<main>All pages for June through July were examined. There are no orders in that range.</main>",
+    );
+    await research.resolve(work.workRef, {
+      status: "verified",
+      evidenceIds: [observation.evidenceId],
+      scopeExhausted: true,
+    });
+    expect(await research.next()).toMatchObject({
+      status: "done",
+      summary: { unresolved: 0 },
     });
     const [stored] = await getDb(ctx.db)
-      .select({ trigger: runTable.trigger, input: runTable.input })
-      .from(runTable)
-      .where(eq(runTable.id, run.id));
-    expect(stored).toEqual({
-      trigger: "backfill",
-      input: { kind: "order_backfill", from: "2026-06-01", to: "2026-07-31" },
-    });
-
-    // A page entirely older than the incremental cursor would end an
-    // incremental walk; a backfill keeps paging until it passes `from`.
-    const first = await listPage(
-      run.id,
-      "walk:1",
-      historyPage(
-        [
-          { id: "111-1000000-0000008", date: "August 3, 2026" },
-          { id: "111-1000000-0000007", date: "July 20, 2026" },
-          { id: "111-1000000-0000006", date: "July 20, 2026" },
-        ],
-        `https://${HOST}/order-history?startIndex=10`,
-      ),
-    );
-    expect(first).toMatchObject({
-      kind: "order_list",
-      pending: 2,
-      nextPageUrl: `https://${HOST}/order-history?startIndex=10`,
-    });
-    const second = await listPage(
-      run.id,
-      "walk:2",
-      historyPage(
-        [
-          { id: "111-1000000-0000005", date: "June 2, 2026" },
-          { id: "111-1000000-0000004", date: "May 28, 2026" },
-        ],
-        `https://${HOST}/order-history?startIndex=20`,
-      ),
-    );
-    // Pages are newest first, but only a page entirely older than `from`
-    // proves nothing in range remains, as with the incremental cursor.
-    expect(second).toMatchObject({
-      kind: "order_list",
-      nextPageUrl: `https://${HOST}/order-history?startIndex=20`,
-    });
-    const third = await listPage(
-      run.id,
-      "walk:3",
-      historyPage(
-        [{ id: "111-1000000-0000003", date: "May 10, 2026" }],
-        `https://${HOST}/order-history?startIndex=30`,
-      ),
-    );
-    expect(third).toMatchObject({ kind: "order_list", nextPageUrl: null });
-    expect(await candidates(run.id)).toEqual([
-      { orderId: "111-1000000-0000005", state: "pending" },
-      { orderId: "111-1000000-0000006", state: "pending" },
-      { orderId: "111-1000000-0000007", state: "pending" },
-    ]);
-
-    await getDb(ctx.db)
-      .update(runOrderCandidate)
-      .set({ state: "imported" })
-      .where(eq(runOrderCandidate.runId, run.id));
-    await finishRun(ctx.db, fakeBroker().namespace, {
-      runId: run.id,
-      operationId: "finish:backfill",
-    });
-    const [after] = await getDb(ctx.db)
-      .select({ cursor: vendorAccount.cursor })
+      .select()
       .from(vendorAccount)
       .where(eq(vendorAccount.id, account.id));
-    expect(vendorAccountCursor.parse(after?.cursor)).toEqual(
-      INCREMENTAL_CURSOR,
-    );
+    expect(stored?.cursor).toEqual(INCREMENTAL_CURSOR);
+    expect(await getDb(ctx.db).select().from(expense)).toEqual([]);
   });
-
   it("refuses a backfill while another run holds the account and resumes the same range", async () => {
     const { party, account } = await seedAccount();
     const incremental = await startOrResumeRun(ctx.db, {
@@ -223,147 +123,102 @@ describe("explicit historical order backfill", () => {
     ).rejects.toThrow("already has an active import run");
   });
 
-  it("defers one unreadable order for review while the rest of the run continues and finishes", async () => {
+  it("retains an unreadable backfill as replay-safe review work without inventing expenses", async () => {
     const { party, account } = await seedAccount();
-    const run = await startOrResumeRun(ctx.db, {
+    const scope = await startOrResumeRun(ctx.db, {
       ledgerPartyId: party.id,
       vendorAccountId: account.id,
       trigger: "backfill",
       backfill: { from: "2026-06-01", to: "2026-07-31" },
     });
-    await listPage(
-      run.id,
-      "walk:1",
-      historyPage(
-        [
-          { id: "111-2000000-0000002", date: "July 2, 2026" },
-          { id: "111-2000000-0000001", date: "June 2, 2026" },
-        ],
-        null,
-      ),
+    const research = researchWorklistFixture(ctx.db, scope.id);
+    const work = await research.assigned();
+    const observation = await research.retain(
+      work.workRef,
+      "<main>Order SYNTHETIC-UNREADABLE June 2, 2026. Detail has no itemization or amount.</main>",
     );
-
-    const deferred = await deferOrderForReview(ctx.db, {
-      runId: run.id,
-      operationId: "defer:111-2000000-0000002",
-      orderId: "111-2000000-0000002",
-      summary: "Order detail page rendered without line items twice.",
+    const input = {
+      status: "researched_with_gaps",
+      evidenceIds: [observation.evidenceId],
+      gaps: ["Order detail has no line items or supported amount."],
+      callId: "synthetic-unreadable-backfill",
+    } as const;
+    const first = await research.resolve(work.workRef, {
+      ...input,
+      evidenceIds: [...input.evidenceIds],
+      gaps: [...input.gaps],
     });
     expect(
-      await deferOrderForReview(ctx.db, {
-        runId: run.id,
-        operationId: "defer:111-2000000-0000002",
-        orderId: "111-2000000-0000002",
-        summary: "Order detail page rendered without line items twice.",
+      await research.resolve(work.workRef, {
+        ...input,
+        evidenceIds: [...input.evidenceIds],
+        gaps: [...input.gaps],
       }),
-    ).toEqual(deferred);
-    await expect(
-      deferOrderForReview(ctx.db, {
-        runId: run.id,
-        operationId: "defer:unknown",
-        orderId: "111-9999999-9999999",
-        summary: "Not on the worklist.",
-      }),
-    ).rejects.toThrow("not a pending order");
-
-    // The other order is still the next work item.
-    await expect(
-      claimNextImportWork(ctx.db, fakeBroker().namespace, run.id),
-    ).resolves.toMatchObject({
-      kind: "order",
-      orderId: "111-2000000-0000001",
+    ).toEqual(first);
+    expect(await research.next()).toMatchObject({
+      status: "done",
+      summary: { unresolved: 1 },
     });
-    await getDb(ctx.db)
-      .update(runOrderCandidate)
-      .set({ state: "imported" })
-      .where(
-        and(
-          eq(runOrderCandidate.runId, run.id),
-          eq(runOrderCandidate.orderId, "111-2000000-0000001"),
-        ),
-      );
-    const finished = await finishRun(ctx.db, fakeBroker().namespace, {
-      runId: run.id,
-      operationId: "finish:with-deferred",
-    });
-    // A deferred order is not a completed import: the run ends in review.
-    expect(finished).toMatchObject({
-      status: "needs_review",
-      findingCount: 1,
-    });
-    expect(await candidates(run.id)).toEqual([
-      { orderId: "111-2000000-0000001", state: "imported" },
-      { orderId: "111-2000000-0000002", state: "skipped" },
-    ]);
-    const findings = await getDb(ctx.db)
-      .select({ summary: runFinding.summary, status: runFinding.status })
-      .from(runFinding)
-      .where(eq(runFinding.runId, run.id));
-    expect(findings).toEqual([
-      {
-        summary: expect.stringContaining("111-2000000-0000002"),
-        status: "open",
-      },
-    ]);
+    const [stored] = await getDb(ctx.db)
+      .select()
+      .from(runTable)
+      .where(eq(runTable.id, scope.id));
+    expect(stored?.status).toBe("needs_review");
+    expect(await getDb(ctx.db).select().from(expense)).toEqual([]);
   });
-
-  it("restarts an interrupted backfill from its history page with its unfinished orders", async () => {
+  it("restarts interrupted backfill with its frozen range and preserves retained originals", async () => {
     const { party, account } = await seedAccount();
-    const run = await startOrResumeRun(ctx.db, {
+    const range = { from: "2026-06-01", to: "2026-07-31" };
+    const scope = await startOrResumeRun(ctx.db, {
       ledgerPartyId: party.id,
       vendorAccountId: account.id,
       trigger: "backfill",
-      backfill: { from: "2026-06-01", to: "2026-07-31" },
+      backfill: range,
     });
-    await listPage(
-      run.id,
-      "walk:1",
-      historyPage(
-        [
-          { id: "111-3000000-0000002", date: "July 9, 2026" },
-          { id: "111-3000000-0000001", date: "July 8, 2026" },
-        ],
-        `https://${HOST}/order-history?startIndex=10`,
-      ),
+    const research = researchWorklistFixture(ctx.db, scope.id);
+    const work = await research.assigned();
+    const observation = await research.retain(
+      work.workRef,
+      '<main><a href="/orders/synthetic-detail">SYNTHETIC-OPEN July 8, 2026</a><a href="/orders?page=2">Next page</a></main>',
     );
-    await getDb(ctx.db)
-      .update(runOrderCandidate)
-      .set({ state: "imported" })
-      .where(
-        and(
-          eq(runOrderCandidate.runId, run.id),
-          eq(runOrderCandidate.orderId, "111-3000000-0000002"),
-        ),
-      );
+    const [original] = await getDb(ctx.db)
+      .select()
+      .from(runEvidence)
+      .where(eq(runEvidence.id, observation.evidenceId));
     await getDb(ctx.db)
       .update(runTable)
       .set({ status: "failed" })
-      .where(eq(runTable.id, run.id));
-    const [publicRun] = await getDb(ctx.db)
-      .select({ shortcode: runTable.shortcode })
+      .where(eq(runTable.id, scope.id));
+    const [publicScope] = await getDb(ctx.db)
+      .select()
       .from(runTable)
-      .where(eq(runTable.id, run.id));
-
+      .where(eq(runTable.id, scope.id));
+    if (!publicScope) throw new Error("Synthetic interrupted Run missing");
     const restarted = await controlRun(ctx.db, ctx.actor, {
-      runPublicId: publicRun!.shortcode,
+      runPublicId: publicScope.shortcode,
       action: "restart",
     });
-    const successorId = restarted.successorRunId!;
-    const [successor] = await getDb(ctx.db)
-      .select({
-        trigger: runTable.trigger,
-        input: runTable.input,
-        historyCursorUrl: runTable.historyCursorUrl,
-      })
-      .from(runTable)
-      .where(eq(runTable.id, successorId));
-    expect(successor).toEqual({
-      trigger: "backfill",
-      input: { kind: "order_backfill", from: "2026-06-01", to: "2026-07-31" },
-      historyCursorUrl: `https://${HOST}/order-history?startIndex=10`,
+    if (!("successorRunId" in restarted) || !restarted.successorRunId)
+      throw new Error("Synthetic backfill successor missing");
+    const next = await researchWorklistFixture(
+      ctx.db,
+      restarted.successorRunId,
+    ).assigned();
+    expect(next).toMatchObject({
+      kind: "account_history",
+      range,
+      cursor: INCREMENTAL_CURSOR,
     });
-    expect(await candidates(successorId)).toEqual([
-      { orderId: "111-3000000-0000001", state: "pending" },
-    ]);
+    expect(next.workRef).not.toBe(work.workRef);
+    const [retained] = await getDb(ctx.db)
+      .select()
+      .from(runEvidence)
+      .where(eq(runEvidence.id, observation.evidenceId));
+    expect(retained).toEqual(original);
+    const [stored] = await getDb(ctx.db)
+      .select()
+      .from(vendorAccount)
+      .where(eq(vendorAccount.id, account.id));
+    expect(stored?.cursor).toEqual(INCREMENTAL_CURSOR);
   });
 });

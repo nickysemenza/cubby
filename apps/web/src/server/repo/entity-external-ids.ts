@@ -14,6 +14,7 @@
 
 import type { ShortcodeEntity } from "@cubby/schemas/entity-manifest";
 import type { EntityExternalIdKind } from "@cubby/schemas/external-id";
+import { parseEntityId } from "@cubby/schemas/identifiers";
 import {
   and,
   asc,
@@ -28,11 +29,59 @@ import {
 import { uniq } from "es-toolkit";
 
 import type { Database, DrizzleTransaction } from "~/server/db";
-import { entityExternalId } from "~/server/db/schema";
+import { entityExternalId, entityIdentity, product } from "~/server/db/schema";
 import { createAppError } from "~/server/errors/app-error";
+import { notDeleted } from "~/server/repo/database-helpers";
 import { unwrapDb } from "~/server/repo/database-helpers/core";
 
 type Db = Database | DrizzleTransaction;
+
+/** Payload, then identity parent, then children: replacement and new IDs share one fence. */
+export async function lockExternalIdentifierParents(
+  tx: DrizzleTransaction,
+  owners: readonly Pick<
+    typeof entityExternalId.$inferInsert,
+    "entityId" | "entityKind"
+  >[],
+): Promise<void> {
+  const uniqueOwners = [
+    ...new Map(owners.map((owner) => [owner.entityId, owner])).values(),
+  ].sort((left, right) => left.entityId.localeCompare(right.entityId));
+  if (!uniqueOwners.length) return;
+  const productIds = uniqueOwners
+    .filter((owner) => owner.entityKind === "product")
+    .map((owner) => parseEntityId("product", owner.entityId));
+  if (productIds.length) {
+    const locked = await tx
+      .select({ id: product.id })
+      .from(product)
+      .where(and(inArray(product.id, productIds), notDeleted(product)))
+      .orderBy(asc(product.id))
+      .for("update");
+    if (locked.length !== productIds.length)
+      throw new Error("Product identifier owner is no longer live.");
+  }
+  const parents = await tx
+    .select({ id: entityIdentity.id })
+    .from(entityIdentity)
+    .where(
+      and(
+        notDeleted(entityIdentity),
+        or(
+          ...uniqueOwners.map((owner) =>
+            and(
+              eq(entityIdentity.id, owner.entityId),
+              eq(entityIdentity.kind, owner.entityKind),
+            ),
+          ),
+        ),
+      ),
+    )
+    .orderBy(asc(entityIdentity.id))
+    .for("update");
+  if (parents.length !== uniqueOwners.length)
+    throw new Error("External identifier parent is no longer live.");
+}
 
 /**
  * Register source slugs, naming the Vendor a slug is when one live Vendor's
@@ -233,6 +282,7 @@ export async function setSingleExternalId(
   slot: { source: string; kind: EntityExternalIdKind },
   value: { externalId: string; url: string | null } | null,
 ): Promise<void> {
+  await lockExternalIdentifierParents(tx, [owner]);
   const current = (await singleExternalIds(tx, [owner.entityId], slot)).get(
     owner.entityId,
   );

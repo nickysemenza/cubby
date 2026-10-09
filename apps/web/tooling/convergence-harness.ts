@@ -1,6 +1,7 @@
 import { createHash } from "node:crypto";
 
 import type { ActorContext } from "@cubby/schemas/context";
+import { parseEntityId } from "@cubby/schemas/identifiers";
 import {
   IMAGE_DESCRIPTION_PROMPT_REVISION,
   IMAGE_DESCRIPTION_RESULT_SCHEMA_REVISION,
@@ -9,19 +10,24 @@ import {
   commitPurchaseImportInput,
   preparePurchaseImportInput,
 } from "@cubby/schemas/purchase-import";
+import { retainedResearchObservation } from "@cubby/schemas/research";
+import { researchWorkResolve } from "@cubby/schemas/research-tools";
+import { fromPartial } from "@total-typescript/shoehorn";
 import { and, eq, inArray, sql } from "drizzle-orm";
+import { z } from "zod";
 
 import { IMAGE_DESCRIPTION_FEATURE } from "~/server/ai/features";
 import { providerFor } from "@cubby/shared/ai/models";
 import type { Database } from "~/server/db";
 import * as schema from "~/server/db/schema";
 import { ingestGmailMessages } from "~/server/purchase-import/gmail/ingest";
-import { productionOrderMailAttachmentStorage } from "~/server/purchase-import/gmail/attachment-storage";
-import { processOrderMails } from "~/server/purchase-import/gmail/process";
 import {
   commitPurchaseImport,
   preparePurchaseImport,
 } from "~/server/purchase-import/import-orders";
+import { resolveImportResearch } from "~/server/purchase-import/research-import";
+import { startMailResearch } from "~/server/purchase-import/research-run";
+import { researchServiceFor } from "~/server/purchase-import/research-service";
 import { getDb } from "~/server/repo/database-helpers";
 import { effectiveExpenseSpendingCategorySql } from "~/server/repo/expense-category-resolution";
 import {
@@ -30,7 +36,6 @@ import {
 } from "~/server/repo/image-processing";
 import { assignImageProcessingExecutor } from "~/server/repo/image-processing-history";
 import { imageDescriptionInputFingerprint } from "~/server/services/image-description.service";
-import { attachFileToEntity } from "~/server/services/image-storage.service";
 
 import type { CreatableEntity, EntityOverrides } from "./factories/build";
 
@@ -167,11 +172,19 @@ export async function createConvergenceFixtures(
   return { vendor, account, card, location, category, productCategory };
 }
 
-/** Synthetic provider payload through the real MIME normalization and cursor persistence. */
+/**
+ * Acquire and admit the original through production services. The returned
+ * researcher turn runs after the other sources arrive, modeling delayed
+ * background execution rather than a member link or invented itemization.
+ */
 export async function ingestGmailEvidence(
   db: Database,
   ledgerPartyId: string,
   names: ConvergenceNames,
+  transport?: {
+    client: Parameters<typeof ingestGmailMessages>[1];
+    mailboxId: string;
+  },
 ) {
   const { token, orderId, sender, messageId } = names;
   const message = {
@@ -193,9 +206,9 @@ export async function ingestGmailEvidence(
     },
   };
   // A provider that serves exactly this message, through the real ingestion.
-  const { saved } = await ingestGmailMessages(
+  const { orderMailIds } = await ingestGmailMessages(
     db,
-    {
+    transport?.client ?? {
       getProfile: async () => ({ historyId: "1" }),
       listMessages: async () => ({ messages: [{ id: messageId }] }),
       getMessage: async () => message,
@@ -204,26 +217,103 @@ export async function ingestGmailEvidence(
     },
     {
       ledgerPartyId,
-      mailboxId: `synthetic-mailbox-${token}`,
+      mailboxId: transport?.mailboxId ?? `synthetic-mailbox-${token}`,
       messageIds: [messageId],
+      triage: async () => "related",
     },
   );
-  // Only the classifier's model response is supplied.
-  await processOrderMails(db, saved, {
-    classify: async () => ({
-      events: [
+  const [member] = await getDb(db)
+    .select({ userId: schema.ledgerParty.userId })
+    .from(schema.ledgerParty)
+    .where(
+      eq(schema.ledgerParty.id, parseEntityId("ledgerParty", ledgerPartyId)),
+    );
+  if (!member?.userId || orderMailIds.length !== 1)
+    throw new Error("Synthetic retained mail or owning member missing");
+  const [started] = await startMailResearch(
+    db,
+    { ledgerPartyId, userId: member.userId, messageIds: orderMailIds },
+    { send: async () => {} },
+  );
+  if (!started) throw new Error("Synthetic mail research admission missing");
+  const bytes = new Map<string, Uint8Array>();
+  const services = researchServiceFor(
+    db,
+    fromPartial<Env>({ R2_KEY_PREFIX: "synthetic/convergence" }),
+    started.runId,
+    {
+      observations: {
+        storage: {
+          put: async (key, data) => {
+            bytes.set(key, data);
+          },
+          get: async (key) => {
+            const data = bytes.get(key);
+            if (!data) throw new Error("Synthetic retained original missing");
+            return new TextDecoder().decode(data);
+          },
+        },
+      },
+      queue: { send: async () => {} },
+    },
+  );
+  return async (purchaseRef: string) => {
+    const next = z
+      .object({ work: z.object({ workRef: z.uuid() }) })
+      .parse(await services.researchNext({}, `synthetic-next-${token}`));
+    const observed = retainedResearchObservation.parse(
+      await services.researchMailRead(
+        { workRef: next.work.workRef, messageRef: orderMailIds[0]! },
+        `synthetic-read-${token}`,
+      ),
+    );
+    const proposal = researchWorkResolve.parse({
+      workRef: next.work.workRef,
+      status: "verified",
+      identity: {
+        evidenceIds: [observed.evidenceId],
+        reasoning: "The original names the retailer order and its exact total.",
+      },
+      emailLinks: [
         {
-          event: "placed",
-          orderId,
-          amount: 42.5,
-          currency: "USD",
-          occurredAt: "2026-09-10T12:00:00.000Z",
+          purchaseRef,
+          evidenceIds: [observed.evidenceId],
+          event: "confirmation",
+          reasoning:
+            "The retained order ID, retailer and total uniquely match this Purchase.",
         },
       ],
-    }),
-    attachFile: attachFileToEntity,
-    attachmentStorage: productionOrderMailAttachmentStorage,
-  });
+      detail:
+        "Linked the retained confirmation without changing itemization or settlement.",
+    });
+    const callId = `synthetic-resolve-${token}`;
+    await resolveImportResearch(
+      db,
+      {
+        runId: started.runId,
+        workRef: next.work.workRef,
+        callId,
+        proposal,
+      },
+      {
+        readEvidence: async (evidence) => {
+          const data = bytes.get(evidence.objectKey);
+          if (!data) throw new Error("Synthetic retained original missing");
+          return new TextDecoder().decode(data);
+        },
+        assess: async () => ({
+          identityVerified: true,
+          acceptedFacts: [],
+          acceptedIdentifiers: [],
+          acceptedImages: [],
+          acceptedOrders: [],
+          acceptedEmailLinks: [0],
+          rejected: [],
+        }),
+      },
+    );
+    await services.researchResolve(proposal, callId);
+  };
 }
 
 export interface BrowserOrderImport {

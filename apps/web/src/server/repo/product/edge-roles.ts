@@ -3,16 +3,13 @@
  * edge semantics — replacing the "must agree on both" prose comment that used
  * to sit next to `deleteProducts` in `crud.ts`.
  *
- * `product` has sixteen incoming edges (`INCOMING_EDGES.product` in
- * `entity-incoming-edges.ts`). Their *stable roles* now live in
+ * Product incoming edges (`INCOMING_EDGES.product` in
+ * `entity-incoming-edges.ts`) have stable roles in
  * `ENTITY_EDGE_SEMANTICS.product` (`~/server/db/entity-edge-semantics`)
  * alongside every other entity's, because a role describes what an edge means
- * and not what deleting does about it. Three are **acquisition** evidence —
- * proof the thing was actually owned at some point — two are durable
- * **history**, one is a retained Wishlist **association**, two are a
- * **reference** from another row's own record, one is **usage** by a live kit,
- * one is **composition** (a kit's own component list), three are **metadata**,
- * and one is **media**:
+ * and not what deleting does about it. Roles distinguish acquisition,
+ * durable history, associations, references, usage, composition, metadata,
+ * and media:
  *
  *  - acquisition: `InventoryEntry.productId` (it's on a shelf right now),
  *    `Expense.productId` (it was bought — the ledger's net cost and
@@ -23,6 +20,8 @@
  *  - history: `Task.subjectProductId` (work performed on the product; deleting
  *    the subject would leave that durable task history nameless) and
  *    `EntityLink[projectTool].to` (a reusable tool's project-use history).
+ *    `ImportSourceProduct.productId` preserves an exact original ordered line,
+ *    including historical source rows; it implies no stock or financial value.
  *  - association: `EntityLink[wishCandidate].to` (a candidate alternative remains
  *    meaningful until removed from its Wishlist entries).
  *  - reference: `Location.productId` (a Location that IS this product — the
@@ -139,6 +138,22 @@ export type ProductDeleteDisposition =
   | (OperationDisposition & { effect: "detach" });
 
 export const PRODUCT_DELETE_EDGE_POLICY = {
+  "RunFactEvidence.entityId": {
+    code: "block-accepted-research-history",
+    effect: "block",
+    description:
+      "A Product retained by accepted research proof cannot be deleted; a supported merge preserves that proof.",
+    reason: "CONSTRAINT_VIOLATION",
+    label: "accepted research facts",
+  },
+  "ImportSourceProduct.productId": {
+    code: "block-original-order-evidence",
+    effect: "block",
+    description:
+      "A Product identified by a retained original order line cannot be deleted; a supported Product merge preserves that evidence.",
+    reason: "CONSTRAINT_VIOLATION",
+    label: "original order lines",
+  },
   "RunTarget.entityId": {
     code: "block-targeted-import-history",
     effect: "block",

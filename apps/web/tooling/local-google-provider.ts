@@ -12,6 +12,14 @@ const configuration = z.object({
   email: z.email(),
   message: z.json(),
   classification: orderMailMessageClassification,
+  mailbox: z
+    .object({
+      historyId: z.string().regex(/^\d+$/u),
+      messages: z.array(z.json()).min(1).max(8),
+      pages: z.array(z.array(z.string()).max(8)).min(1).max(4),
+      history: z.array(z.json()).max(8).default([]),
+    })
+    .optional(),
   extraction: z
     .object({ url: z.url(), output: importExtractionModelOutput })
     .optional(),
@@ -50,6 +58,11 @@ export async function createLocalGoogleProvider() {
     { challenge: string; redirect: string; state: string; scope: string }
   >();
   const events: string[] = [];
+  const requests: Array<{
+    method: string;
+    path: string;
+    query: Record<string, string>;
+  }> = [];
   let origin = "";
   const json = (value: ProviderJson) => JSON.stringify(value);
   const encode = (value: ProviderJson) =>
@@ -143,10 +156,93 @@ export async function createLocalGoogleProvider() {
     send(200, extraction.output);
     return;
   };
+  const serveGmail = (url: URL, response: ServerResponse): boolean => {
+    if (!fixture) return false;
+    const send = (status: number, value: ProviderJson) =>
+      sendJson(response, status, value);
+    const message = messageIdentity.parse(fixture.message);
+    const mailbox = fixture.mailbox;
+    if (url.pathname === "/gmail/v1/users/me/profile" && mailbox) {
+      send(200, {
+        emailAddress: fixture.email,
+        historyId: mailbox.historyId,
+        messagesTotal: mailbox.messages.length,
+        threadsTotal: mailbox.messages.length,
+      });
+      return true;
+    }
+    if (url.pathname === "/gmail/v1/users/me/history" && mailbox) {
+      const since = url.searchParams.get("startHistoryId");
+      if (!since || !/^\d+$/u.test(since)) {
+        send(400, {
+          message: "Synthetic Gmail history requires a frozen baseline.",
+        });
+        return true;
+      }
+      send(200, { historyId: mailbox.historyId, history: mailbox.history });
+      return true;
+    }
+    if (url.pathname === "/gmail/v1/users/me/messages") {
+      if (mailbox) {
+        const query = url.searchParams.get("q") ?? "";
+        if (!query.includes("-in:spam") || !query.includes("-in:trash")) {
+          send(400, {
+            message: "Gmail enumeration must exclude Spam and Trash.",
+          });
+          return true;
+        }
+        if (query !== "-in:spam -in:trash") {
+          send(200, { messages: [], resultSizeEstimate: 0 });
+          return true;
+        }
+        const tokens = mailbox.pages.map(
+          (_, index) => `synthetic-page-${index}`,
+        );
+        const token = url.searchParams.get("pageToken");
+        const index = token === null ? 0 : tokens.indexOf(token);
+        const page = mailbox.pages[index];
+        if (!page) {
+          send(400, { message: "Unknown synthetic Gmail page token." });
+          return true;
+        }
+        const result = {
+          messages: page.map((id) => ({ id })),
+          resultSizeEstimate: mailbox.messages.length,
+        };
+        const nextPageToken = tokens[index + 1];
+        if (nextPageToken) Object.assign(result, { nextPageToken });
+        send(200, result);
+        return true;
+      }
+      send(200, { messages: [{ id: message.id }], resultSizeEstimate: 1 });
+      return true;
+    }
+    if (url.pathname === `/gmail/v1/users/me/messages/${message.id}`) {
+      send(200, fixture.message);
+      return true;
+    }
+    if (mailbox) {
+      const found = mailbox.messages.find(
+        (candidate) =>
+          url.pathname ===
+          `/gmail/v1/users/me/messages/${messageIdentity.parse(candidate).id}`,
+      );
+      if (found) {
+        send(200, found);
+        return true;
+      }
+    }
+    return false;
+  };
   const server = createServer(async (request, response) => {
     try {
       const url = new URL(request.url ?? "/", origin);
       events.push(`${request.method} ${url.pathname}`);
+      requests.push({
+        method: request.method ?? "GET",
+        path: url.pathname,
+        query: Object.fromEntries(url.searchParams),
+      });
       const send = (status: number, value: ProviderJson) =>
         response
           .writeHead(status, { "content-type": "application/json" })
@@ -211,15 +307,7 @@ export async function createLocalGoogleProvider() {
         send(401, { message: "Missing exchanged Gmail token" });
         return;
       }
-      const message = messageIdentity.parse(fixture.message);
-      if (url.pathname === "/gmail/v1/users/me/messages") {
-        send(200, { messages: [{ id: message.id }], resultSizeEstimate: 1 });
-        return;
-      }
-      if (url.pathname === `/gmail/v1/users/me/messages/${message.id}`) {
-        send(200, fixture.message);
-        return;
-      }
+      if (serveGmail(url, response)) return;
       send(404, { message: "Unknown synthetic provider endpoint" });
     } catch (error) {
       response.writeHead(500, { "content-type": "application/json" }).end(
@@ -239,8 +327,11 @@ export async function createLocalGoogleProvider() {
     configure(input: z.input<typeof configuration>) {
       fixture = configuration.parse(input);
       events.length = 0;
+      requests.length = 0;
     },
     events: () => [...events],
+    requests: () =>
+      requests.map((request) => ({ ...request, query: { ...request.query } })),
     close: () =>
       new Promise<void>((resolve, reject) => {
         server.closeAllConnections();

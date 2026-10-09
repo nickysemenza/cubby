@@ -1,4 +1,8 @@
-import { purchaseAgentToolInputs } from "@cubby/schemas/purchase-agent-services";
+import {
+  photoInventoryToolInputs,
+  purchaseAgentToolInputs,
+} from "@cubby/schemas/purchase-agent-services";
+import { researchAttachmentOriginal } from "@cubby/schemas/research-tools";
 import type { Context, JsonValue } from "@earendil-works/chord";
 import { Type, type TSchema } from "@earendil-works/pi-ai";
 import {
@@ -11,7 +15,8 @@ import { z } from "zod";
 
 import type { RunServices } from "./environment";
 
-type ToolInputs = typeof purchaseAgentToolInputs;
+const toolInputs = { ...purchaseAgentToolInputs, ...photoInventoryToolInputs };
+type ToolInputs = typeof toolInputs;
 type ToolName = keyof ToolInputs;
 
 /** The lifecycle fields of a browser command result. */
@@ -22,20 +27,6 @@ const browserCommandState = z.looseObject({
 
 const claimStopped = (output: JsonValue) =>
   z.object({ kind: z.literal("stopped") }).safeParse(output).success;
-
-function pendingResult(result: JsonValue): boolean {
-  const parsed = browserCommandState.safeParse(result);
-  return (
-    parsed.success &&
-    (parsed.data.status === "pending" ||
-      parsed.data.state === "pending" ||
-      parsed.data.state === "dispatched" ||
-      parsed.data.state === "paused_auth" ||
-      // The run ended for review (an outdated Mac app); nothing more to do.
-      parsed.data.state === "stopped" ||
-      parsed.data.state === "paused_offline")
-  );
-}
 
 /**
  * One service effect per step key. The first completion is memoized on the tool
@@ -54,10 +45,37 @@ async function step(
   return (await api.memo(key, { value }, context)).value;
 }
 
-function result(output: JsonValue, terminate = false): ToolExecutionResult {
+function result(
+  output: JsonValue,
+  terminate = false,
+): ToolExecutionResult & {
+  content: NonNullable<ToolExecutionResult["content"]>;
+} {
   const content = [{ type: "text" as const, text: JSON.stringify(output) }];
   if (!terminate) return { content };
   return { content, control: { terminate: true } };
+}
+
+function originalMediaResult(
+  output: JsonValue,
+  terminate: boolean,
+): ToolExecutionResult {
+  const parsed = z
+    .looseObject({ originalAttachment: researchAttachmentOriginal.optional() })
+    .parse(output);
+  if (!parsed.originalAttachment) return result(output, terminate);
+  const { dataBase64, ...descriptor } = parsed.originalAttachment;
+  const text = result(
+    z.json().parse({ ...parsed, originalAttachment: descriptor }),
+    terminate,
+  );
+  return {
+    ...text,
+    content: [
+      ...text.content,
+      { type: "image", data: dataBase64, mimeType: descriptor.mimeType },
+    ],
+  };
 }
 
 type JsonSchema = z.core.JSONSchema._JSONSchema;
@@ -72,7 +90,20 @@ type JsonSchema = z.core.JSONSchema._JSONSchema;
 function typeboxSchema(node: JsonSchema): TSchema {
   if (node === true || node === false)
     throw new Error("Unsupported boolean schema");
-  const { type, properties, required, items, ...options } = node;
+  if (node.$ref) return Type.Unsafe(node);
+  const { type, properties, required, items, anyOf, oneOf, ...options } = node;
+  const alternatives = anyOf ?? oneOf;
+  if (alternatives) return Type.Union(alternatives.map(typeboxSchema), options);
+  if (Array.isArray(type))
+    return Type.Union(
+      type.map((variant) => typeboxSchema({ ...node, type: variant })),
+      options,
+    );
+  if (node.const !== undefined)
+    return Type.Literal(
+      z.union([z.string(), z.number(), z.boolean()]).parse(node.const),
+      options,
+    );
   switch (type) {
     case "object":
       return Type.Object(
@@ -91,24 +122,32 @@ function typeboxSchema(node: JsonSchema): TSchema {
       if (items === undefined || Array.isArray(items))
         throw new Error("Unsupported array schema");
       return Type.Array(typeboxSchema(items), options);
+    case "null":
+      return Type.Null(options);
     case "string":
       return Type.String(options);
     case "boolean":
       return Type.Boolean(options);
     case "number":
-    case "integer": {
-      // Draft-7 exclusive bounds are numbers; only draft-04's are booleans.
-      const { exclusiveMinimum: min, exclusiveMaximum: max, ...rest } = options;
-      const bounds = {
-        ...rest,
-        ...(min !== undefined && { exclusiveMinimum: z.number().parse(min) }),
-        ...(max !== undefined && { exclusiveMaximum: z.number().parse(max) }),
-      };
-      return type === "number" ? Type.Number(bounds) : Type.Integer(bounds);
-    }
+    case "integer":
+      return numericSchema(type, options);
+
     default:
-      throw new Error(`Unsupported tool schema ${JSON.stringify(node)}`);
+      return Type.Unsafe(node);
   }
+}
+
+function numericSchema(
+  type: "number" | "integer",
+  options: Exclude<JsonSchema, boolean>,
+): TSchema {
+  const { exclusiveMinimum: min, exclusiveMaximum: max, ...rest } = options;
+  const bounds = {
+    ...rest,
+    ...(min !== undefined && { exclusiveMinimum: z.number().parse(min) }),
+    ...(max !== undefined && { exclusiveMaximum: z.number().parse(max) }),
+  };
+  return type === "number" ? Type.Number(bounds) : Type.Integer(bounds);
 }
 
 /**
@@ -126,19 +165,26 @@ function tool<N extends ToolName>(
     ) => Promise<ToolExecutionResult>;
   },
 ) {
-  const { $schema: _dialect, ...schema } = z.toJSONSchema(
-    purchaseAgentToolInputs[name],
-    { target: "draft-7", io: "input" },
-  );
+  const { $schema: _dialect, ...schema } = z.toJSONSchema(toolInputs[name], {
+    target: "draft-7",
+    io: "input",
+  });
   return defineTool<TSchema>({
     name,
     // Non-strict, like the MCP tools in `cubby-mcp.ts`: pi-ai
     // `structuredClone`s strict tool parameters (see `ai/run-feature.ts`).
     parameters: typeboxSchema(schema),
     // Every typed tool is replay-safe: its effects are memoized steps keyed
-    // by the model's operation id.
+    // by the durable tool task.
     replay: "safe",
     ...definition,
+    execute: (args, api, context) =>
+      definition.execute(
+        // SAFETY: the same indexed schema parses this tool's input, including defaults.
+        toolInputs[name].parse(args) as z.input<ToolInputs[N]>,
+        api,
+        context,
+      ),
   });
 }
 
@@ -152,6 +198,104 @@ function tool<N extends ToolName>(
  * agent's transport disables parallel tool calls so that always holds.
  */
 export function purchaseImportTools(
+  services: () => RunServices,
+  retainOutput?: (output: JsonValue) => Promise<void>,
+  beforeEffect?: () => Promise<void>,
+): ToolRegistration[] {
+  const run = <N extends keyof typeof purchaseAgentToolInputs>(
+    name: N,
+    description: string,
+    effect: (
+      service: RunServices,
+      args: z.input<(typeof purchaseAgentToolInputs)[N]>,
+      callId: string,
+    ) => Promise<object>,
+  ) =>
+    tool(name, {
+      description,
+      execute: async (args, api, context) => {
+        await beforeEffect?.();
+        const stored = await api.memo<{ value: string }>(
+          "host-call-id",
+          context,
+        );
+        const callId =
+          stored?.value ??
+          (
+            await api.memo(
+              "host-call-id",
+              { value: crypto.randomUUID() },
+              context,
+            )
+          ).value;
+        const output = await step(api, context, "service-result", () =>
+          effect(services(), args, callId),
+        );
+        await retainOutput?.(output);
+        return originalMediaResult(output, researchTerminated(output));
+      },
+    });
+  return [
+    run(
+      "work_next",
+      "Get the next bounded research task. No remaining work automatically settles the Run.",
+      (service, args, callId) => service.researchNext(args, callId),
+    ),
+    run(
+      "work_observe",
+      "Read the selected receipt original, or observe and interact with the assigned browser source using retained observation references. browser_pending retains the offline command: investigate public or mail sources for this task, or request another task with work_next. waiting ends this turn.",
+      (service, args, callId) => service.researchObserve(args, callId),
+    ),
+    run(
+      "work_resolve",
+      "Resolve the assigned research task with semantic identity reasoning, evidence-backed facts and retained candidates. The host validates safe writes and returns next work or done.",
+      (service, args, callId) => service.researchResolve(args, callId),
+    ),
+    run(
+      "mail_search",
+      "Search connected Gmail for any assigned task. Select an issued mailboxRef if several are available. Continue the same query with the issued continuationRef until exhausted. Related discoveries enter child mail research; returned message references provide context and do not grant this task write ownership. A Gmail reconnect result leaves other research available; use a new call after reconnecting.",
+      (service, args, callId) => service.researchMailSearch(args, callId),
+    ),
+    run(
+      "mail_read",
+      "Read an authorized message and list its attachment references. Supply an attachmentRef from that result to inspect its full original PDF/image (up to 3 MiB) as retained evidence for this task.",
+      (service, args, callId) => service.researchMailRead(args, callId),
+    ),
+    run(
+      "web_search",
+      "Search public web sources for the assigned task.",
+      (service, args, callId) => service.researchWebSearch(args, callId),
+    ),
+    run(
+      "web_read",
+      "Read a public web source and retain its observation as evidence for this task.",
+      (service, args, callId) => service.researchWebRead(args, callId),
+    ),
+    run(
+      "cubby_find",
+      "Find existing Cubby context relevant to this task.",
+      (service, args, callId) => service.researchFind(args, callId),
+    ),
+  ];
+}
+
+function researchTerminated(output: JsonValue): boolean {
+  const parsed = browserCommandState.safeParse(output);
+  return (
+    claimStopped(output) ||
+    (parsed.success &&
+      [parsed.data.state, parsed.data.status].some(
+        (state) =>
+          state === "waiting" ||
+          state === "done" ||
+          state === "stopped" ||
+          state === "paused_auth",
+      ))
+  );
+}
+
+/** Photo inventory keeps its restricted existing tools and replay keys. */
+export function photoInventoryTools(
   services: () => RunServices,
 ): ToolRegistration[] {
   return [
@@ -168,81 +312,6 @@ export function purchaseImportTools(
         // The run ended (for example an outdated Mac stopped it): nothing to claim.
         return result(output, claimStopped(output));
       },
-    }),
-    tool("extract_receipt_evidence", {
-      description:
-        "Run Cubby's bounded receipt extractor for the receipt assigned to this run. Its returned immutable source, checksum, extraction, image id, and stable ids are the input to purchase_import.prepare.",
-      execute: async (args, api, context) =>
-        result(
-          await step(api, context, `extract-receipt:${args.operationId}`, () =>
-            services().extractReceiptEvidence(args),
-          ),
-        ),
-    }),
-    tool("extract_run_evidence", {
-      description:
-        "Extract the saved confirmation assigned to mail_evidence work, or immutable uploaded evidence for a purchase validation target. Pass the returned source, checksum, extraction, revision and stable ids unchanged to purchase_import.prepare. Use this instead of a shared Image or document API.",
-      execute: async (args, api, context) =>
-        result(
-          await step(
-            api,
-            context,
-            `extract-run-evidence:${args.operationId}`,
-            () => services().extractRunEvidence(args),
-          ),
-        ),
-    }),
-    tool("issue_browser_command", {
-      description:
-        "Request one fixed read-only browser action. A pending command ends this submission; a queue event resumes this same agent when evidence is ready.",
-      execute: async (args, api, context) => {
-        await step(api, context, `browser-progress:${args.operationId}`, () =>
-          services().updateAgentProgress({
-            eventId: `browser-progress:${args.operationId}`,
-            phase: "awaiting_browser",
-            currentItem: args.command.target,
-            detail: args.command.kind,
-          }),
-        );
-        const output = await step(
-          api,
-          context,
-          `browser-command:${args.operationId}`,
-          () =>
-            services().issueBrowserCommand({
-              operationId: `browser-command:${args.operationId}`,
-              command: args.command,
-            }),
-        );
-        return result(output, pendingResult(output));
-      },
-    }),
-    tool("read_browser_command_result", {
-      description:
-        "Read the persisted result for a browser command. A pending result ends this submission; do not poll it.",
-      // Deliberately not a memoized step: a stored pending answer would hide
-      // the completed result the resumed agent comes back to read.
-      execute: async (args) => {
-        const output = z.json().parse(
-          (await services().readBrowserCommandResult({
-            operationId: `browser-command:${args.operationId}`,
-          })) ?? null,
-        );
-        return result(output, pendingResult(output));
-      },
-    }),
-    tool("import_browser_order_evidence", {
-      description:
-        "Bind a completed browser command's retained evidence to its exact run target before preparation or enrichment. Use the commandId returned by the browser result. For an order page, pass defaultTrade (and defaultProjectId when known) exactly as for purchase_import.commit: a principal line without a trade from its Purchase or Project is refused.",
-      execute: async (args, api, context) =>
-        result(
-          await step(
-            api,
-            context,
-            `import-browser-evidence:${args.operationId}`,
-            () => services().importOrderEvidence(args),
-          ),
-        ),
     }),
     tool("report_agent_progress", {
       description:
@@ -278,37 +347,6 @@ export function purchaseImportTools(
         );
       },
     }),
-    tool("save_navigation_hints", {
-      description:
-        "Persist observed vendor navigation hints. The server accepts only URLs inside the vendor's existing browser allowlist; this tool cannot expand browser authority.",
-      execute: async (args, api, context) =>
-        result(
-          await step(api, context, `navigation-hints:${args.operationId}`, () =>
-            services().saveNavigationHints(args),
-          ),
-        ),
-    }),
-    tool("mark_history_expired", {
-      description:
-        "Record the earliest order timestamp the vendor still exposes after the bounded history scan proves older orders are unavailable.",
-      execute: async (args, api, context) =>
-        result(
-          await step(api, context, `history-expired:${args.operationId}`, () =>
-            services().markHistoryExpired(args),
-          ),
-        ),
-    }),
-    tool("finish_import_run", {
-      description:
-        "Complete the run only after every selected order or hunt is resolved or explicitly exhausted. The server refuses pending hunts and enforces all required audit batches before completion.",
-      execute: async (args, api, context) =>
-        result(
-          await step(api, context, `finish-run:${args.operationId}`, () =>
-            services().finishRun(args),
-          ),
-          true,
-        ),
-    }),
     tool("stop_import_run_for_review", {
       description:
         "Stop on ambiguous or unreadable evidence without speculative writes. The server creates one run-scoped finding, runs required audits, fences the run, and records needs_review.",
@@ -318,29 +356,6 @@ export function purchaseImportTools(
             services().stopForReview(args),
           ),
           true,
-        ),
-    }),
-    tool("defer_order_for_review", {
-      description:
-        "Leave one listed order from this account-sync worklist for human review when its evidence stays ambiguous or unreadable, then continue with the remaining orders. The server records one finding naming the order and marks it skipped; the run then ends in review instead of claiming a complete import.",
-      execute: async (args, api, context) =>
-        result(
-          await step(api, context, `defer-order:${args.operationId}`, () =>
-            services().deferOrderForReview(args),
-          ),
-        ),
-    }),
-    tool("settle_charge_hunt", {
-      description:
-        "Record the outcome of one statement charge this run was asked to find, when importing evidence did not settle it. Use not_found after searching the vendor account for the charge's amount and date window without a matching order; use needs_review when a candidate order exists but stays ambiguous or unreadable. The server records the outcome for that one charge and the run continues with the remaining charges; it then ends in review instead of claiming a complete import. A charge the server already settled is recorded as resolved.",
-      execute: async (args, api, context) =>
-        result(
-          await step(
-            api,
-            context,
-            `settle-charge-hunt:${args.operationId}`,
-            () => services().settleChargeHunt(args),
-          ),
         ),
     }),
   ];

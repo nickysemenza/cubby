@@ -1,10 +1,7 @@
 import {
-  BROWSER_BRIDGE_PROTOCOL,
   commitProductEnrichmentInput,
   commitPurchaseImportInput,
   validatePurchaseImportInput,
-  type BrowserBridgeRequest,
-  type BrowserBridgeResult,
 } from "@cubby/schemas/purchase-import";
 import { sha256Hex, sha256Uuid } from "@cubby/shared/sha256";
 import { fromPartial } from "@total-typescript/shoehorn";
@@ -25,19 +22,17 @@ import {
   purchaseAgentTargetFingerprint,
 } from "~/server/mcp/purchase-agent-protocol";
 import type { ToolExtra } from "~/server/mcp/tools/tool-registration";
-import { observation } from "~/server/purchase-import/browser.fixtures";
 import {
   commitProductEnrichment,
   commitPurchaseImport,
   preparePurchaseImport,
   validatePurchaseImport,
 } from "~/server/purchase-import/import-orders";
+import { admitProductResearch } from "~/server/purchase-import/product-research-run";
+import { admitPurchaseValidationResearch } from "~/server/purchase-import/purchase-validation-research";
 import {
   controlRun,
-  issueBrowserCommand,
-  readBrowserCommandResult,
   startOrResumeRun,
-  startTargetedRun,
 } from "~/server/purchase-import/run-service";
 import { applyValidationCorrections } from "~/server/purchase-import/validation-corrections";
 import { getDb } from "~/server/repo/database-helpers";
@@ -230,94 +225,10 @@ describe("RunOperation rows written by earlier code", () => {
     });
   });
 
-  it("re-enqueues the recorded browser command under its derived id", async () => {
-    const { run } = await startRun();
-    const operationId = "browser-command:orders";
-    const operation = {
-      type: "navigate" as const,
-      url: "https://shop.example.test/orders",
-      allowedHosts: ["shop.example.test"],
-    };
-    const commandId = await sha256Uuid(`${run.id}:${operationId}`);
-    // The row as `issueBrowserCommand` inserted it before the Worker died,
-    // with a deadline no fresh command would carry.
-    const command = {
-      protocolVersion: BROWSER_BRIDGE_PROTOCOL,
-      id: commandId,
-      operationId,
-      runID: run.id,
-      deadline: "2030-01-01T00:00:00.000Z",
-      operation,
-    };
-    await seed({
-      runId: run.id,
-      operationId,
-      kind: "browser_command",
-      inputFingerprint: await sha256Hex(
-        JSON.stringify({
-          protocolVersion: BROWSER_BRIDGE_PROTOCOL,
-          id: commandId,
-          operationId,
-          runID: run.id,
-          operation,
-        }),
-      ),
-      result: { command, commandId },
-    });
-    const enqueued: BrowserBridgeRequest[] = [];
-    const broker = {
-      enqueue: async (request: BrowserBridgeRequest) => {
-        enqueued.push(request);
-      },
-      result: async () => null,
-      cancel: async () => undefined,
-      connected: async () => true,
-      pendingCommands: async () => [],
-      notifyRunCompleted: async () => undefined,
-      requestAuthentication: async () => undefined,
-    };
-
-    await expect(
-      issueBrowserCommand(
-        ctx.db,
-        { getByName: () => broker },
-        { runId: run.id, operationId, operation },
-      ),
-    ).resolves.toEqual({ commandId, state: "dispatched" });
-    expect(enqueued).toEqual([command]);
-    expect(await stored(run.id, operationId)).toMatchObject({
-      kind: "browser_command",
-      state: "completed",
-      result: { command, commandId },
-    });
-
-    // Cancelling the Run reports that command to the broker and fails only
-    // the rows still in flight.
-    await seed({
-      runId: run.id,
-      operationId: "agent-progress:open",
-      kind: "update_agent_progress",
-      inputFingerprint: "0".repeat(64),
-    });
-    const cancelled = await controlRun(ctx.db, ctx.actor, {
-      runPublicId: run.publicId,
-      action: "cancel",
-    });
-    expect(cancelled).toMatchObject({
-      status: "failed",
-      cancelledBrowserCommandIds: [commandId],
-    });
-    expect(await stored(run.id, "agent-progress:open")).toMatchObject({
-      state: "failed",
-      error: "Run cancelled by its owner",
-    });
-    expect(await stored(run.id, operationId)).toMatchObject({
-      state: "completed",
-    });
-  });
-
   /** A paused `mcp:<tool>` proposal as earlier code stored it, approved by a member. */
-  const seedApprovedMcpMutation = async () => {
+  const seedMcpMutation = async (
+    decision: "approve" | "reject" = "approve",
+  ) => {
     const party = await insertWithShortcode(ctx.db, "ledgerParty", {
       name: "Synthetic paused member",
       kind: "member",
@@ -376,14 +287,20 @@ describe("RunOperation rows written by earlier code", () => {
 
     const approved = await controlRun(ctx.db, ctx.actor, {
       runPublicId: run.shortcode,
-      action: "approve",
+      action: decision,
       operationId,
     });
-    expect(approved).toMatchObject({ decision: "approved" });
-    expect(await stored(run.id, operationId)).toMatchObject({
-      state: "paused_approval",
-      result: { approvalProposal, approvalId: approved.approvalId },
+    expect(approved).toMatchObject({
+      decision: decision === "approve" ? "approved" : "rejected",
     });
+    if (decision === "approve") {
+      if (!("approvalId" in approved))
+        throw new Error("Synthetic approval returned another control outcome");
+      expect(await stored(run.id, operationId)).toMatchObject({
+        state: "paused_approval",
+        result: { approvalProposal, approvalId: approved.approvalId },
+      });
+    }
 
     let executions = 0;
     const execute = () =>
@@ -416,8 +333,7 @@ describe("RunOperation rows written by earlier code", () => {
   };
 
   it("approves and executes a paused MCP mutation proposed by earlier code", async () => {
-    const { run, operationId, execute, executions } =
-      await seedApprovedMcpMutation();
+    const { run, operationId, execute, executions } = await seedMcpMutation();
     await expect(execute()).resolves.toEqual({ accepted: true });
     await expect(execute()).resolves.toEqual({ accepted: true });
     expect(executions()).toBe(1);
@@ -427,9 +343,22 @@ describe("RunOperation rows written by earlier code", () => {
     });
   });
 
-  it("locks the Run before the operation when executing an approved mutation", async () => {
+  it("keeps a rejected persisted mutation refused on every replay without an effect", async () => {
     const { run, operationId, execute, executions } =
-      await seedApprovedMcpMutation();
+      await seedMcpMutation("reject");
+    const before = await stored(run.id, operationId);
+    expect(before).toMatchObject({
+      state: "failed",
+      error: expect.stringMatching(/reject/iu),
+    });
+    await expect(execute()).rejects.toThrow("Mutation outcome is uncertain");
+    await expect(execute()).rejects.toThrow("Mutation outcome is uncertain");
+    expect(executions()).toBe(0);
+    expect(await stored(run.id, operationId)).toEqual(before);
+  });
+
+  it("locks the Run before the operation when executing an approved mutation", async () => {
+    const { run, operationId, execute, executions } = await seedMcpMutation();
     let pending: Promise<unknown> | undefined;
     // A transaction holding the Run lock stands in for `controlRun`, which
     // locks the Run before the operation. The mutation must queue behind the
@@ -472,60 +401,6 @@ describe("RunOperation rows written by earlier code", () => {
     expect(executions()).toBe(1);
   });
 
-  it("keeps a failed browser command's diagnostic when the command is replayed", async () => {
-    const { run } = await startRun();
-    const operationId = "browser-command:bad-link";
-    let issued: BrowserBridgeRequest | undefined;
-    const broker = {
-      enqueue: async (request: BrowserBridgeRequest) => {
-        issued = request;
-      },
-      result: async (): Promise<BrowserBridgeResult> => ({
-        protocolVersion: BROWSER_BRIDGE_PROTOCOL,
-        commandID: issued!.id,
-        operationID: issued!.operationId,
-        runID: run.id,
-        completedAt: new Date().toISOString(),
-        outcome: {
-          status: "failed",
-          code: "disallowed_url",
-          message: "Navigation left the vendor allowlist",
-          retryable: false,
-          screenshotGap: null,
-          observation: observation(),
-        },
-      }),
-      cancel: async () => undefined,
-      connected: async () => true,
-      pendingCommands: async () => [],
-      notifyRunCompleted: async () => undefined,
-      requestAuthentication: async () => undefined,
-    };
-    const namespace = { getByName: () => broker };
-    const input = {
-      runId: run.id,
-      operationId,
-      operation: {
-        type: "navigate" as const,
-        url: "https://shop.example.test/orders",
-        allowedHosts: ["shop.example.test"],
-      },
-    };
-    await issueBrowserCommand(ctx.db, namespace, input);
-    await readBrowserCommandResult(ctx.db, namespace, {
-      runId: run.id,
-      operationId,
-    });
-    await issueBrowserCommand(ctx.db, namespace, input);
-
-    expect(await stored(run.id, operationId)).toMatchObject({
-      state: "completed",
-      error: expect.stringMatching(
-        /^disallowed_url: Navigation left the vendor allowlist \[/u,
-      ),
-    });
-  });
-
   it("replays a product enrichment commit by its parsed-input fingerprint", async () => {
     const { party } = await startRun();
     const vendor = await insertWithShortcode(ctx.db, "vendor", {
@@ -542,24 +417,20 @@ describe("RunOperation rows written by earlier code", () => {
       .select({ shortcode: product.shortcode })
       .from(product)
       .where(eq(product.id, target.entityId));
-    const started = await startTargetedRun(ctx.db, {
-      ledgerPartyId: party.id,
-      purpose: "product_enrichment",
+    const account = await insertWithShortcode(ctx.db, "vendorAccount", {
+      label: "Synthetic replay transport",
       vendorId: vendor.id,
-      trigger: "manual",
-      targets: [
-        {
-          kind: "product",
-          productId: target.entityId,
-          targetFingerprint: "c".repeat(64),
-        },
-      ],
+      ledgerPartyId: party.id,
+      browserSyncEnabled: true,
     });
-    if (!started.created) throw new Error("Expected enrichment admission");
-    await getDb(ctx.db)
-      .update(runTable)
-      .set({ status: "running" })
-      .where(eq(runTable.id, started.run.id));
+    const [started] = await admitProductResearch(ctx.db, {
+      ledgerPartyId: party.id,
+      userId: ctx.actor.userId,
+      productIds: [target.entityId],
+      preferredBrowserAccountId: account.id,
+      cause: "member_request",
+    });
+    if (!started?.created) throw new Error("Expected enrichment admission");
     const input = commitProductEnrichmentInput.parse({
       _runExecution: { runId: started.run.id, operationId: "enrich:1" },
       productId: productRow!.shortcode,
@@ -567,7 +438,7 @@ describe("RunOperation rows written by earlier code", () => {
       changes: { manufacturer: "Synthetic Works" },
     });
     const recorded = {
-      runId: started.run.publicId,
+      runId: started.run.shortcode,
       operationId: "enrich:1",
       productId: productRow!.shortcode,
       status: "running",
@@ -731,29 +602,17 @@ describe("RunOperation rows written by earlier code", () => {
       date: "2026-09-20",
       statedTotal: 10,
     });
-    const started = await startTargetedRun(ctx.db, {
+    const started = await admitPurchaseValidationResearch(ctx.db, {
       ledgerPartyId: party.id,
-      purpose: "purchase_validation",
-      vendorId: vendor.id,
-      vendorAccountId: null,
-      trigger: "manual",
-      targets: [
-        {
-          kind: "purchase",
-          purchaseId: target.id,
-          sourceKind: "browser_order",
-          sourceExternalKey: "validation:ORDER-LEDGER-1",
-          targetFingerprint: "c".repeat(64),
-          evidenceFingerprint: "a".repeat(64),
-        },
-      ],
+      userId: ctx.actor.userId,
+      purchaseIds: [target.id],
     });
     if (!started.created) throw new Error("Expected validation admission");
     const setStatus = (status: "running" | "needs_review") =>
       getDb(ctx.db)
         .update(runTable)
         .set({ status })
-        .where(eq(runTable.id, started.run.id));
+        .where(eq(runTable.id, started.row.id));
     const targetRow = () =>
       getDb(ctx.db)
         .select({
@@ -762,24 +621,24 @@ describe("RunOperation rows written by earlier code", () => {
           diff: runTarget.diff,
         })
         .from(runTarget)
-        .where(eq(runTarget.runId, started.run.id));
+        .where(eq(runTarget.runId, started.row.id));
     const targetBefore = await targetRow();
 
     // Validation fingerprints its whole parsed input, envelope first.
     await setStatus("running");
     const validationResult = {
-      runId: started.run.publicId,
+      runId: started.row.shortcode,
       operationId: "validate:1",
       status: "completed",
       targets: [{ stableOrderId: "order-1", outcome: "replayed", diff: null }],
     };
     await seed({
-      runId: started.run.id,
+      runId: started.row.id,
       operationId: "validate:1",
       kind: "validate_purchase_import",
       inputFingerprint: await sha256Hex(
         JSON.stringify({
-          _runExecution: { runId: started.run.id, operationId: "validate:1" },
+          _runExecution: { runId: started.row.id, operationId: "validate:1" },
           prepareOperationId: "prepare:1",
           resolutions: [],
         }),
@@ -792,7 +651,7 @@ describe("RunOperation rows written by earlier code", () => {
       validatePurchaseImport(
         ctx.db,
         validatePurchaseImportInput.parse({
-          _runExecution: { runId: started.run.id, operationId: "validate:1" },
+          _runExecution: { runId: started.row.id, operationId: "validate:1" },
           prepareOperationId,
           resolutions: [],
         }),
@@ -808,7 +667,7 @@ describe("RunOperation rows written by earlier code", () => {
     await setStatus("needs_review");
     const correctionResult = {
       status: "applied",
-      runId: started.run.publicId,
+      runId: started.row.shortcode,
       purchaseId: target.shortcode,
       operationId: "apply:1",
       applied: ["expense:add:a", "purchase:statedTotal"],
@@ -816,12 +675,12 @@ describe("RunOperation rows written by earlier code", () => {
       remainingCorrections: 0,
     };
     await seed({
-      runId: started.run.id,
+      runId: started.row.id,
       operationId: "apply:1",
       kind: "apply_validation_corrections",
       inputFingerprint: await sha256Hex(
         JSON.stringify({
-          runId: started.run.publicId,
+          runId: started.row.shortcode,
           purchaseId: target.shortcode,
           operationId: "apply:1",
           correctionIds: ["expense:add:a", "purchase:statedTotal"],
@@ -835,7 +694,7 @@ describe("RunOperation rows written by earlier code", () => {
       applyValidationCorrections(
         ctx.db,
         {
-          runId: started.run.publicId,
+          runId: started.row.shortcode,
           purchaseId: target.shortcode,
           operationId: "apply:1",
           correctionIds,
@@ -857,7 +716,7 @@ describe("RunOperation rows written by earlier code", () => {
     const rows = await getDb(ctx.db)
       .select({ operationId: runOperation.operationId })
       .from(runOperation)
-      .where(eq(runOperation.runId, started.run.id));
+      .where(eq(runOperation.runId, started.row.id));
     expect(rows.map((row) => row.operationId).sort()).toEqual([
       "apply:1",
       "validate:1",

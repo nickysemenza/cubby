@@ -60,12 +60,15 @@ export async function runVendorMailSearch(
   }
 }
 
+const MAIL_DISCOVERY_PAGES_PER_PASS = 12;
 export interface MailDiscoveryWork {
-  /** Freeze the pass's messages and history events on the Run. */
-  list(): Promise<{ kind: "stopped" } | { kind: "listed"; batches: number }>;
+  begin(): Promise<{ kind: "stopped" } | { kind: "page"; index: number }>;
+  list(
+    index: number,
+  ): Promise<{ kind: "stopped" } | { kind: "listed"; more: boolean }>;
   batch(index: number): Promise<{ kind: "stopped" } | { kind: "done" }>;
-  /** Save history events, advance the cursor, and complete the Run. */
   finish(): Promise<{ kind: "stopped" } | { kind: "done" }>;
+  continue(): Promise<void>;
   fail(stepError: string): Promise<null>;
 }
 
@@ -74,16 +77,35 @@ export async function runMailDiscovery(
   work: MailDiscoveryWork,
 ): Promise<void> {
   try {
-    const listed = await steps.do("list", PROVIDER_RETRIES, () => work.list());
-    if (listed.kind === "stopped") return;
-    for (let index = 0; index < listed.batches; index += 1) {
+    const start = await steps.do("begin", BOOKKEEPING_RETRIES, () =>
+      work.begin(),
+    );
+    if (start.kind === "stopped") return;
+    for (
+      let index = start.index;
+      index < start.index + MAIL_DISCOVERY_PAGES_PER_PASS;
+      index += 1
+    ) {
       const current = index;
-      const saved = await steps.do(`batch.${current}`, PROVIDER_RETRIES, () =>
-        work.batch(current),
+      const listed = await steps.do(
+        `page.${current}.list`,
+        PROVIDER_RETRIES,
+        () => work.list(current),
+      );
+      if (listed.kind === "stopped") return;
+      const saved = await steps.do(
+        `page.${current}.save`,
+        PROVIDER_RETRIES,
+        () => work.batch(current),
       );
       if (saved.kind === "stopped") return;
+      if (!listed.more) break;
     }
-    await steps.do("finish", BOOKKEEPING_RETRIES, () => work.finish());
+    const finished = await steps.do("finish", BOOKKEEPING_RETRIES, () =>
+      work.finish(),
+    );
+    if (finished.kind === "done")
+      await steps.do("continue", BOOKKEEPING_RETRIES, () => work.continue());
   } catch (error) {
     const stepError = error instanceof Error ? error.message : String(error);
     await steps.do("fail", BOOKKEEPING_RETRIES, () => work.fail(stepError));

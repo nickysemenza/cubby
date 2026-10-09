@@ -21,10 +21,8 @@ const webRoot = path.resolve(
  *   `max_batch_timeout: 0`, so a test never waits out a batching window.
  * - `dropped`: `local-offline-peers` acknowledges and discards every message.
  * - `unconsumed`: no consumer; messages stay queued for the harness's life.
- * - `native-continuation`: `tooling/mac-import-continuation-peer.ts` records
- *   native Sync retries for the Mac import scenario.
  */
-type QueueRoute = "real" | "dropped" | "unconsumed" | "native-continuation";
+type QueueRoute = "real" | "dropped" | "unconsumed";
 
 /**
  * Each profile routes every production queue consumer explicitly. The
@@ -77,16 +75,27 @@ export const WORKERD_PROFILES = {
     purchaseAgentPeers: false,
     harnessLock: false,
   },
-  /** The Mac import lane: agent events reach the continuation peer. */
+  /** Provider acquisition and research use the deployed Workflow/queue handoffs. */
+  "gmail-research": {
+    queues: {
+      "cubby-background": "real",
+      "cubby-telemetry": "real",
+      "cubby-purchase-agent": "real",
+    },
+    googleProvider: true,
+    purchaseAgentPeers: true,
+    harnessLock: true,
+  },
+  /** Actual Mac captures; the production coordinator uses scripted judgment. */
   "native-import": {
     queues: {
       "cubby-background": "dropped",
       "cubby-telemetry": "dropped",
-      "cubby-purchase-agent": "native-continuation",
+      "cubby-purchase-agent": "real",
     },
     googleProvider: false,
-    purchaseAgentPeers: false,
-    harnessLock: false,
+    purchaseAgentPeers: true,
+    harnessLock: true,
   },
   /**
    * The purchase agent against scripted (or live-eval) model peers: the real
@@ -244,7 +253,6 @@ function peerWorkers(
     Object.entries(profile.queues)
       .filter(([, to]) => to === route)
       .map(([queue]) => ({ queue, max_batch_timeout: 0 }));
-  const continuation = consumersRoutedTo("native-continuation");
   const model = options.models?.agent ?? {
     main: "tests/e2e/harness-services/purchase-agent-test-model.ts",
   };
@@ -260,18 +268,6 @@ function peerWorkers(
         queues: { consumers: consumersRoutedTo("dropped") },
       },
     },
-    ...(continuation.length > 0
-      ? [
-          {
-            config: {
-              name: "native-import-continuation",
-              main: "tooling/mac-import-continuation-peer.ts",
-              compatibility_date: compatibilityDate,
-              queues: { consumers: continuation },
-            },
-          },
-        ]
-      : []),
     ...(profile.purchaseAgentPeers
       ? [
           {
@@ -292,6 +288,11 @@ function peerWorkers(
                   {
                     name: "PURCHASE_IMPORT_CLIENT",
                     class_name: "PurchaseImportDurableObject",
+                    script_name: "cubby",
+                  },
+                  {
+                    name: "PURCHASE_AGENT_RUN_CLIENT",
+                    class_name: "PurchaseImportRunAgent",
                     script_name: "cubby",
                   },
                 ],

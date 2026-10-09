@@ -204,13 +204,13 @@ struct BrowserSnapshotTests {
         #expect(navigate == "navigate · seeds.example.test/orders · complete")
 
         let captureFailed = BrowserBridgeCommandSummary.line(
-            operation: .capture(
-                BrowserBridgeOperationCapture(
-                    _type: .capture, allowedHosts: ["seeds.example.test"], screenshot: .required)),
+            operation: .read(
+                BrowserBridgeOperationRead(
+                    _type: .read, allowedHosts: ["seeds.example.test"], screenshot: .required)),
             outcome: .failed(
                 code: .screenshotUnavailable, message: "", retryable: true,
                 screenshotGap: .windowMinimized, observation: .unobserved))
-        #expect(captureFailed == "capture · window minimized → screenshot unavailable")
+        #expect(captureFailed == "read · window minimized → screenshot unavailable")
 
         let raise = BrowserBridgeCommandSummary.line(
             operation: .window(.init(_type: .window, action: .raise)),

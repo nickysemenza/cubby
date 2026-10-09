@@ -95,7 +95,10 @@ const NON_ENTITY_FK_TARGETS = {
     "an account-sync run's order-history worklist, not a domain entity",
   ImportPreparedOrder:
     "immutable purchase-import evidence preparation, not a domain entity",
-  ImportSourceClaim: "idempotency provenance for imported evidence",
+  ImportSourceClaim: "retained source authority for imported evidence",
+  ImportSourceOrder:
+    "an accepted original order owned by a retained import source",
+  RunEvidence: "retained evidence bytes and metadata owned by a Run",
   ImageDerivative: "a non-gallery representation owned by its original Image",
   ImageProcessingJob:
     "authoritative operational image work, exposed through Activity",
@@ -210,6 +213,28 @@ const NON_GRAPH_ENTITY_FK_EXEMPTIONS = {
     classification: "ownership",
     reason: "captured evidence filed under its run",
   },
+  "ResearchSourceExposure.runId": {
+    classification: "metadata",
+    reason:
+      "content-free source exposure used to dispose contaminated Run storage",
+  },
+  "ResearchRetention.runId": {
+    classification: "metadata",
+    reason:
+      "external disposal authority survives the Run coordinator and its tombstone",
+  },
+  "ResearchSourceExposure.ledgerPartyId": {
+    classification: "metadata",
+    reason: "authenticated member scope of a content-free source exposure",
+  },
+  "ResearchRetention.ledgerPartyId": {
+    classification: "metadata",
+    reason: "authenticated member scope of an external disposal receipt",
+  },
+  "MailboxMessage.runId": {
+    classification: "metadata",
+    reason: "records which research Run owns the retained mailbox message",
+  },
   "RunOperation.runId": {
     classification: "ownership",
     reason: "one idempotent operation owned by its run",
@@ -255,6 +280,11 @@ const NON_GRAPH_ENTITY_FK_EXEMPTIONS = {
     classification: "metadata",
     reason: "immutable prepared evidence retains its browser screenshot",
   },
+  "MailboxMessage.ledgerPartyId": {
+    classification: "metadata",
+    reason:
+      "scopes mailbox acquisition and research coverage to a household member",
+  },
   "ImportSourceClaim.ledgerPartyId": {
     classification: "metadata",
     reason: "scopes import provenance to a household member",
@@ -263,9 +293,14 @@ const NON_GRAPH_ENTITY_FK_EXEMPTIONS = {
     classification: "metadata",
     reason: "records which vendor login supplied the evidence",
   },
-  "ImportSourceClaim.purchaseId": {
+  "ImportSourceOrder.purchaseId": {
     classification: "metadata",
     reason: "idempotency provenance for the purchase created from evidence",
+  },
+  "ImportSourceProduct.productId": {
+    classification: "metadata",
+    reason:
+      "an original line binding supplies retained variant evidence through Product and Purchase research context; the child row is not a navigable entity",
   },
   "RunFinding.ledgerPartyId": {
     classification: "metadata",

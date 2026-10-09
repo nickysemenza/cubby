@@ -7,6 +7,17 @@ import { run as runTable } from "~/server/db/schema";
 import type { PurchaseAgentQueueProducer } from "~/server/purchase-agent-queue-types";
 import { getDb } from "~/server/repo/database-helpers";
 
+/** Retry the persisted handoff only while the coordinator has not acknowledged it. */
+export function researchDispatchPending(scope: typeof runTable.$inferSelect) {
+  return (
+    !scope.deletedAt &&
+    !scope.retiredAt &&
+    scope.coordinatorStartedAt === null &&
+    (scope.status === "dispatch_failed" ||
+      (scope.status === "running" && scope.dispatchAttempts === 0))
+  );
+}
+
 /**
  * Producer-side dispatch accounting. Its own module because both the run
  * service and the paths that admit runs (hunts, receipts, manual sync) need

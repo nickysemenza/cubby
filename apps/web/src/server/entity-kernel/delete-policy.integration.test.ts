@@ -55,7 +55,7 @@ import type {
 } from "@cubby/schemas/identifiers";
 import { attachableImageEntityId } from "@cubby/schemas/image";
 import { generateShortcode } from "@cubby/shared";
-import { getTableColumns, type SQL, sql } from "drizzle-orm";
+import { eq, getTableColumns, type SQL, sql } from "drizzle-orm";
 import {
   getTableConfig,
   type PgColumn,
@@ -80,9 +80,13 @@ import {
   importHunt,
   importPreparedOrder,
   importSourceClaim,
+  importSourceOrder,
+  importSourceProduct,
   imageDerivative,
   imageProcessingJob,
   ledgerSourceClaim,
+  mailboxMessage,
+  researchRetention,
   mealFoodEntry,
   mealRecipe,
   mealRecipePortion,
@@ -93,6 +97,8 @@ import {
   photoGroupProposal,
   productMatchCandidate,
   runFinding,
+  runEvidence,
+  runFactEvidence,
   runTarget,
   statementImport,
   statementRow,
@@ -565,7 +571,7 @@ async function measureEdge(
         throw new Rollback();
       // Every other guard is cleared, so a refusal is this edge's own.
       const others = blockEdges.filter((other) => other !== edge);
-      if (!(await clearBlockers(txDb, others, edge, target.id)))
+      if (!(await clearBlockers(txDb, others, edge, target.id, item.entity)))
         throw new Rollback();
       measured = true;
       const problem = await checkDisposition(txDb, item, target);
@@ -592,6 +598,7 @@ const clearBlockers = async (
   blockEdges: readonly IncomingEdge[],
   measured: IncomingEdge,
   targetId: string,
+  entity: EntityKernelEntity,
 ): Promise<boolean> => {
   const own = physical(measured);
   for (const edge of blockEdges) {
@@ -626,7 +633,33 @@ const clearBlockers = async (
         return true;
       })
       .catch(() => false);
-    if (!removed) return false;
+    if (removed) continue;
+    // Retained evidence may itself reference a blocker. Move only the
+    // unrelated blocking reference, preserving the measured proof/history.
+    if (!edge.column.notNull) {
+      const detached = await getDb(db)
+        .transaction(async (tx) => {
+          await tx.execute(
+            sql`UPDATE ${sql.identifier(tableName)} SET ${sql.identifier(columnName)} = NULL ${where}`,
+          );
+          return true;
+        })
+        .catch(() => false);
+      if (detached) continue;
+    }
+    const alternate = (await liveTargets(db, entity)).find(
+      (target) => target.id !== targetId,
+    );
+    if (!alternate) return false;
+    const repointed = await getDb(db)
+      .transaction(async (tx) => {
+        await tx.execute(
+          sql`UPDATE ${sql.identifier(tableName)} SET ${sql.identifier(columnName)} = ${alternate.id} ${where}`,
+        );
+        return true;
+      })
+      .catch(() => false);
+    if (!repointed) return false;
   }
   return true;
 };
@@ -718,18 +751,42 @@ async function seedImportSourceClaim(
       status: "completed",
     })
     .returning({ id: runTable.id });
-  await getDb(db)
+  // Raw retained claims survive deleting their Purchase association.
+  const retainedSourceParty = await insertWithShortcode(db, "ledgerParty", {
+    name: "Delete policy retained source party",
+    kind: "guest",
+  });
+  const [claim] = await getDb(db)
     .insert(importSourceClaim)
     .values({
-      ledgerPartyId: await resolveOrThrow(db, "ledgerParty", partyCode),
-      purchaseId: await resolveOrThrow(db, "purchase", purchaseCode),
+      ledgerPartyId: retainedSourceParty.id,
       kind: "vendor_export",
       externalKey: "delete-policy-order-1",
       checksum: "delete-policy",
       firstRunId: run!.id,
       lastRunId: run!.id,
+    })
+    .returning({ id: importSourceClaim.id });
+  if (!claim) throw new Error("Expected source claim fixture");
+  await getDb(db)
+    .insert(importSourceOrder)
+    .values({
+      id: claim.id,
+      sourceClaimId: claim.id,
+      purchaseId: await resolveOrThrow(db, "purchase", purchaseCode),
+      orderKey: "delete-policy-order-1",
+      checksum: "delete-policy",
       outputFingerprint: "delete-policy",
     });
+  const productCode = shortcodeByPrefix.get("PRD-");
+  if (productCode)
+    await getDb(db)
+      .insert(importSourceProduct)
+      .values({
+        sourceOrderId: claim.id,
+        lineIndex: 0,
+        productId: await resolveOrThrow(db, "product", productCode),
+      });
   return run!.id;
 }
 
@@ -946,29 +1003,86 @@ async function seedRunOwnedRows(db: Database, ids: StagingIds, runId: RunId) {
       dateTo: "2024-01-31",
     }).catch(() => undefined);
 
-  if (purchaseId)
-    await insertAndReturn(db, runTarget, {
-      runId,
-      entityKind: "purchase",
-      entityId: purchaseId,
-      vendorAccountId: vendorAccountId ?? undefined,
-      deviceWorkDeviceId: deviceId ?? undefined,
-      targetFingerprint: "delete-policy-runtarget",
-    }).catch(() => undefined);
-
-  // A target names a purchase, product or image; each kind is its own edge
-  // into the entity it points at.
+  // Each canonical subject has real retained proof so the matrix checks the
+  // proof disposition as well as task history and hard-delete dependency order.
   for (const [entityKind, entityId] of [
+    ["purchase", purchaseId],
     ["product", productId],
     ["image", imageId],
-  ] as const)
-    if (entityId)
-      await insertAndReturn(db, runTarget, {
-        runId,
-        entityKind,
-        entityId,
-        targetFingerprint: `delete-policy-runtarget-${entityKind}`,
-      }).catch(() => undefined);
+  ] as const) {
+    if (!entityId) continue;
+    const target = await insertAndReturn(db, runTarget, {
+      runId,
+      entityKind,
+      entityId,
+      vendorAccountId:
+        entityKind === "purchase" ? (vendorAccountId ?? undefined) : undefined,
+      deviceWorkDeviceId:
+        entityKind === "purchase" ? (deviceId ?? undefined) : undefined,
+      targetFingerprint: `delete-policy-runtarget-${entityKind}`,
+    });
+    const evidence = await insertAndReturn(db, runEvidence, {
+      runId,
+      targetId: target.id,
+      kind: "browser_capture",
+      objectKey: `synthetic-delete-policy/${target.id}`,
+      checksum: "a".repeat(64),
+      mediaType: "text/plain",
+      sourceMetadata: {
+        title: "Synthetic delete-policy original",
+        sourceURL: null,
+      },
+    });
+    await insertAndReturn(db, runFactEvidence, {
+      targetId: target.id,
+      evidenceId: evidence.id,
+      entityKind,
+      entityId,
+      fieldPath: "name",
+      value: "Synthetic accepted subject value",
+      valueFingerprint: "b".repeat(64),
+      support: {
+        observation: "Synthetic retained original",
+        reasoning: "The synthetic original names this canonical subject.",
+      },
+    });
+  }
+
+  if (ledgerPartyId) {
+    await insertAndReturn(db, mailboxMessage, {
+      ledgerPartyId,
+      mailboxId: "synthetic-delete-policy-mailbox",
+      messageId: "synthetic-delete-policy-message",
+      checksum: "a".repeat(64),
+      classification: "related",
+      classificationVersion: "synthetic-v1",
+      status: "pending",
+    });
+    const [work] = await getDb(db)
+      .select({ id: runTarget.id })
+      .from(runTarget)
+      .where(eq(runTarget.runId, runId));
+    if (!work) throw new Error("Synthetic retained work missing");
+    await insertAndReturn(db, researchRetention, {
+      id: crypto.randomUUID(),
+      runId,
+      workRef: work.id,
+      ledgerPartyId,
+      orderMailId: crypto.randomUUID(),
+      mailboxId: "synthetic-delete-policy-retention-mailbox",
+      messageId: "synthetic-delete-policy-retention-message",
+      checksum: "b".repeat(64),
+      phase: "completed",
+      completedAt: new Date(),
+      plan: {
+        originOperationId: "synthetic-delete-policy-retention",
+        objectKeys: [],
+        screenshotRefs: [],
+        retiredRunIds: [runId],
+        successors: [],
+      },
+    });
+  }
 
   if (ledgerPartyId && purchaseId)
     await insertAndReturn(db, runFinding, {
@@ -1040,6 +1154,7 @@ async function seedOrderMailAttachment(db: Database, ids: StagingIds) {
   if (!orderMailParty) return;
   const mail = await insertAndReturn(db, orderMail, {
     ledgerPartyId: orderMailParty.id,
+    mailboxId: "delete-policy-mailbox",
     messageId: "delete-policy-msg-1",
     sender: "vendor@example.test",
     subject: "Delete policy fixture",

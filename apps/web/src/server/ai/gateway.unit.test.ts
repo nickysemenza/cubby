@@ -261,6 +261,41 @@ describe("gatewayFetch on the dev REST fallback", () => {
 });
 
 describe("gatewayFetch transport selection", () => {
+  // Disconnected subscription research must stop before API billing, and a
+  // refused metered reservation must stop the physical gateway request.
+  it("refuses paid transmission before invoking the Worker binding", async () => {
+    const runs = fakeBinding(new Response("{}"));
+    const beforePaidRequest = vi.fn(async () => {
+      throw new Error("Metered research allowance exhausted");
+    });
+    const options = { metadata, beforePaidRequest };
+
+    await expect(
+      gatewayFetch("anthropic", options)(
+        `${gatewayBaseURL("anthropic")}/v1/messages`,
+        { method: "POST", body: JSON.stringify({ model: "claude-sonnet-5" }) },
+      ),
+    ).rejects.toThrow(/allowance exhausted/);
+
+    expect(beforePaidRequest).toHaveBeenCalledOnce();
+    expect(runs).toHaveLength(0);
+  });
+
+  it("requires the connected subscription instead of falling back to paid API", async () => {
+    const { runs, infer } = bindingWithPlan(false);
+    const options = { metadata, subscriptionRequired: true };
+
+    await expect(
+      gatewayFetch("openai", options)(`${gatewayBaseURL("openai")}/responses`, {
+        method: "POST",
+        body: JSON.stringify({ model: "gpt-6-sol", input: [] }),
+      }),
+    ).rejects.toThrow(/Required ChatGPT subscription/);
+
+    expect(infer).not.toHaveBeenCalled();
+    expect(runs).toHaveLength(0);
+  });
+
   /** The binding plus a household ChatGPT plan whose inference fails. */
   function bindingWithPlan(connected: boolean) {
     const runs: GatewayRun[] = [];

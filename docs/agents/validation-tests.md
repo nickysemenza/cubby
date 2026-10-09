@@ -19,11 +19,94 @@ sequentially. Do not overlap PostgreSQL and E2E locally: they contend for
 containers, workerd, browsers, and database connections. Other workspace
 packages need `pnpm -r --filter '!@cubby/web' run test` after changing
 `packages/*`.
+Verify every named test path exists before invoking a runner: Vitest can ignore
+a nonexistent selector when another supplied file matches. Report only the
+files and cases the run actually exercised.
+For a named-case handoff, copy the exact replay selector or confirm the literal
+test title with `rg` before invoking the runner. A title inferred from the task
+description can select no cases; that setup failure supplies no regression evidence.
+
+Scripted multi-task decisions must use the task returned by Next or its declared
+stable ordering. Ordering fixture rows by a different column can apply a judgment
+to another task even when the issued references are valid. Inspect the task
+context and attempted resolution together before diagnosing a write failure.
+
+Before replaying a fixture correction, inspect the exact changed helper, the
+called API's output schema, external port signatures and the complete proposed
+operand's shared schema.
+Validate that operand before starting SQL or Worker infrastructure. Resolve work
+through the declared output or a durable ownership relation; do not assume an
+admission call returns a Run reference.
+Check evaluation budget overrides against the harness's declared limits before
+starting containers or inference. Rejected configuration executes no scenarios
+and supplies neither regression nor real-model acceptance evidence.
+When parsing an opaque tool reply with a partial Zod object, declare every field
+the regression later inspects: undeclared fields are stripped, so parsing only
+`status` can erase issued work and manufacture a missing-task failure. A fixture
+expecting a validation correction must contain a real discrepancy between the
+recorded values and the retained source; matching values do not require review.
+Before fixture writes and table assertions, inspect the declared row shape,
+ownership graph, and lifecycle transition. Use the real transition when the
+test is about its effect; otherwise use its actual status/failure-code pair,
+validated by the shared schema and database constraint. A user-facing label
+such as cancellation need not be a stored status. An admission's member
+reference does not imply a direct member column; assert the declared relation
+or attribution graph. Object matchers accept nonexistent expected keys at
+compile time. A constraint failure in fixture setup is not the intended RED.
+Run fixtures carry complete required actor attribution and trigger; copy those
+from an owned admitted scope, including its member shortcode, rather than
+inventing a minimally attributed row. A dispatch-failed Run uses the public
+`abort` action; `cancel` applies only to active Runs.
+Repository create fixtures retain the public shortcode in `id` and attach the
+branded database UUID as `entityId`. Use `entityId` for internal admissions,
+repository mutations and row predicates; use `id` for public operation inputs.
+Create Products with `createProductFixture(db, makeProductInput({...}), actor)`;
+use its `entityId` internally and `id` in public calls. Do not construct a
+minimal Product with `insertWithShortcode`: database fields such as
+manufacturer have required values supplied by the input factory, and domain
+effects belong to the repository create path. Inspect the factory before
+adding a Product fixture, including in a harness-profile test.
+Derive source checksums from distinct synthetic content. Reusing a convenient
+constant can collide with a protected source association and exercise evidence
+preservation instead of the intended disposable-evidence failure. Inspect those
+associations before asserting that a checksum is disposable.
+Pre-admitted real-model cases that share a seller domain reuse one canonical
+Vendor, with independent order identities and retained mail. Check this before
+inference: duplicate fixture Vendors turn a supported SKU into a genuine issuer
+refusal and measure fixture corruption instead of research behavior. Keep the
+production ambiguity guard intact.
+Browser fixtures for independent synthetic retailers use their own Product-page
+hosts. Adding a shared real retailer domain to each fixture Vendor creates
+competing canonical issuers across the suite; an isolated replay can miss that
+collision. Use a shared canonical Vendor only when that retailer is the subject
+of the regression.
+Exact-identifier fixtures use the canonical issuer resolver and source
+registration. A familiar retailer name or a Vendor-shaped source slug does not
+establish domain authority or identifier ownership.
+For Run-scoped fact assertions, follow `RunFactEvidence.targetId` through
+`RunTarget.runId`; fact evidence has no direct Run column. Apply that same
+declared ownership join to diagnostics. Diagnostic queries must not prevent
+the harness from closing or the failed-run artifact from being written.
 
 Before a focused browser replay, run `pnpm --filter @cubby/web run build:cf
 --ensure` after changing the recorded source revision. The prebuilt provenance
 gate can reject a run after workflow or documentation edits too; a
 `source-changed` startup failure executed no scenarios and is not a test result.
+
+A shared-worktree Worker build starts after every source writer explicitly
+acknowledges a stable revision. Hold all repository source, test, documentation,
+and generated-file edits until the runner reports terminal completion. Send
+its live handle to every writer and release the hold after cleanup. A test-only
+edit also changes the build fingerprint; a rejected build supplies no scenario
+evidence.
+Workerd suites acquire the machine-wide harness lock in `beforeAll` using
+`HOLD_WORKERD_HARNESS_TIMEOUT_MS`, then release it in `afterAll`. Queue waits
+belong to setup and must not consume a scenario's behavioral timeout.
+Use the shared E2E identity and bundle for source provenance. Do not add a
+second recorder that buffers the entire Git diff: a large breaking change can
+overflow the subprocess buffer before the scenario and its cleanup begin, and
+the diff omits untracked replacement files. Fixture-specific hashes may remain
+in the scenario report.
 
 Target a browser spec as `pnpm test:e2e <spec>` without an extra `--`. E2E
 serves `dist/`, so build it before a standalone run; `verify:local` does. The
@@ -137,9 +220,38 @@ the profile's peers, and the harness. `close()` releases them newest first
 and runs every release even when one fails; a start that fails at any step
 releases everything acquired before it. Borrowed storage carries its S3
 endpoint and public URL separately; neither startup failure nor close stops
-caller-owned storage. Native runners keep their build, process, simulator,
-watchdog, scenario and artifact boundaries outside the runtime. Their
-`leaseNamedDatabase` backend in `test-database-lease.ts` creates and migrates
+caller-owned storage.
+
+Scripted purchase-agent peers own the external models.dev catalog transport as
+well as model responses. Their illustrative prices and complete token bounds
+exercise the real paid-admission reservation; they never bypass pricing or
+budget fences. Live-model peers forward catalog reads to models.dev. Keep this
+distinction when adding a peer so deterministic mail discovery does not depend
+on public catalog availability and live usage does not acquire fixture prices.
+
+Every built-Worker journey uses `captureE2ERunIdentity` before scenario work
+and `writeE2ERunBundle` after cleanup. A manual revision/build report alone
+does not verify source stability across execution. The bundle records both
+source boundaries, dirty-source limits, the exact replay command and checksums.
+
+Before a new Worker journey or a fixture-correction replay, compare the complete
+runtime options with the owning `WorkerdRuntimeOptions` and a working caller:
+profile, database ownership, storage endpoint/public URL, and required peers.
+Check the actor grant and retained-source authority through the existing fixture
+helpers. Record startup failures as setup failures; behavioral red requires the
+scenario to reach its failing boundary. Wrap runtime acquisition in the artifact
+boundary so an exception before the scenario callback still records the failure
+phase, scrubbed diagnostic, available build identity, and evidence checksums.
+
+Native runners keep their build, process, simulator,
+watchdog, scenario and artifact boundaries outside the runtime. Native
+relation journeys scroll the navigation row back into view after inspecting
+its badges, then wait for the destination detail marker before inspecting
+inverse evidence. A successful tap alone does not establish navigation.
+Rows with interactive facts expose a separate title identifier; navigation
+tests target that title rather than the aggregate row, whose center can land
+on a field explanation control.
+Their `leaseNamedDatabase` backend in `test-database-lease.ts` creates and migrates
 only `cubby_sim_<16 hex>` names on the guarded loopback admin server at port 55432. Normal close verifies the database was dropped; `retention: "retain"`
 explicitly leaves it available for debugging. Failed acquisition always drops
 the database it created, including in retain mode; a name collision never
@@ -166,14 +278,12 @@ queue consumer to one of:
   `max_batch_timeout: 0`.
 - `dropped`: `local-offline-peers` acknowledges and discards each message.
 - `unconsumed`: no consumer; messages stay queued.
-- `native-continuation`: the Mac continuation peer records native Sync
-  retries.
 
 | Profile          | Used by                                   | `cubby-background` | `cubby-telemetry` | `cubby-purchase-agent` | Extra peers                    | Harness lock |
 | ---------------- | ----------------------------------------- | ------------------ | ----------------- | ---------------------- | ------------------------------ | ------------ |
 | `offline`        | browser default, simulator, Tester Army   | dropped            | dropped           | unconsumed             | none                           | no           |
 | `gmail`          | `test.use({ workerdProfile: "gmail" })`   | real               | dropped           | unconsumed             | local Google provider          | no           |
-| `native-import`  | Mac import lane                           | dropped            | dropped           | native-continuation    | continuation peer              | no           |
+| `native-import`  | Mac import lane                           | dropped            | dropped           | real                   | queue producer, model, gateway | yes          |
 | `purchase-agent` | agent scenarios, live evals, browser spec | unconsumed         | real              | real                   | queue producer, model, gateway | yes          |
 | `coupled`        | coupled Tester Army journeys              | real               | real              | real                   | queue producer, model, gateway | yes          |
 
@@ -185,10 +295,18 @@ producers, Durable Objects, Hyperdrive, or service bindings, so it is not
 exhaustive binding coverage; `tooling/workerd-runtime.integration.test.ts`
 probes each profile's queues in a running harness.
 
+A browser spec may declare `objectStoragePublicUrl` for an HTTPS source identity
+while its bucket remains local. Its asset transport must forward requests to the
+actual stored bytes; do not substitute an image or loosen capture URL guards.
+The visible purchase-research journey uses that seam for retained catalog-image
+reuse, real queue delivery, automatic child research, and UI provenance. Its
+model decisions and Mac captures are scripted; it does not evaluate live research
+quality, remote retailer image downloads, or Gmail discovery.
+
 The harness lock is the one machine-wide lock above; only the profiles marked
 "yes" take it (and rebuild a stale Worker). A Playwright run already holds it
-from global setup and its workers pass through; other `offline`, `gmail`,
-and `native-import` callers run without it. Run one runtime per process at a time: it
+from global setup and its workers pass through; other `offline` and `gmail`
+callers run without it. Run one runtime per process at a time: it
 snapshots and restores `E2E_DATABASE_URL` and the Hyperdrive variables
 process-wide, and the lock is reentrant within a process, so two concurrent
 runtimes would restore each other's environment.
@@ -204,6 +322,11 @@ excluded from the required desktop shards and runs in CI as an optional job
 starts has no id until the click, so scripts use `currentRunId`. Prefer it over
 a UI-less scenario for anything the Run or Purchase page shows; keep scenarios
 for server fences the UI cannot observe.
+Branch on the current public tool-result shape (mail content is under
+`observation.readableText`). Generate an item title once per fixture and reuse
+it in the retained original and proposal: tests share a worker database, so
+unrelated fixtures must not collide on Product name/manufacturer. Repeated
+orders for the same item reuse the Product reference returned by resolution.
 
 Every completed E2E run produces a sanitized run bundle with its revision,
 replay command, runtime versions, case results, and SHA-256 checksums. CI uploads
@@ -214,6 +337,9 @@ they can contain household data or credentials. Run `shasum -a 256 -c
 SHA256SUMS` from the downloaded bundle directory to verify its contents, then
 replay the `command` array in `run-manifest.json` against the recorded commit.
 Desktop CI disables trace recording because raw traces are never uploaded.
+Before another local browser replay, archive and verify the completed sanitized
+bundle outside `playwright-report`; the reporter replaces that directory on the
+next run. Keep failed-run evidence as well as successful acceptance bundles.
 For a local debugging replay, replace its `--trace=off` argument with
 `--trace=retain-on-failure`; local runs otherwise retain traces on failure.
 
@@ -233,6 +359,14 @@ checks.
 Mapped database fixtures annotate the callback return with the table
 `$inferInsert` type so enum literals retain their insert contract; passing a
 runtime test does not verify TypeScript inference.
+`insertWithShortcode` only supplies identity; it does not fill required entity
+values, actor snapshots or execution identity. Prefer the existing admission
+fixtures. A directly inserted Run used by public controls needs the complete
+actor snapshot, agent session and dispatch identity. A cloned Run mints its own
+Run UUID, shortcode, dispatch event and agent session; copied identity is a
+fixture constraint failure. Researcher fixtures also
+need typed input and its matching admitted roster. A fixture constraint
+failure is not a behavior regression; correct it before implementing the fix.
 
 Pricing integration tests stub the catalog socket for every test and keep it
 separate from inference socket overrides. The runtime catalog client reads
@@ -316,3 +450,17 @@ Keep kernel fixtures declaration-backed. The
 table-derived insert schemas omit virtual inputs and declaration-level defaults;
 `drizzle-seed` generates foreign keys and writes directly to tables. Those are
 storage-fixture capabilities, not replacements for `buildEntity`/`createEntity`.
+
+Migration regressions rehearse the committed journal from the actual deployed
+prefix through the canonical migration using a leased local database and
+`migrateDatabase`. Consolidation retires filename-based or intermediate-schema
+fixtures only after the named invariant is retained at the real domain
+write/readback boundary. `purchase-research-cutover.fixtures.ts` shares the
+main-to-0025 rehearsal; mail-source identity tests cover proved/unproved/collision
+graphs, source-claim-family tests own invalid alias-family refusal, and
+fact-evidence-subject tests own canonical Product/Purchase proof and idempotent
+preservation.
+
+Provider discovery scenarios grant historical backfill and continuous new-mail
+catchup independently. A backfill continuation never authorizes a history pass;
+assert that each continuation retains its own execution authorization.

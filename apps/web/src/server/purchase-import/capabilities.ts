@@ -29,6 +29,13 @@ type Capability =
   | "start_run";
 
 const capabilityMatrix = {
+  mail_import: new Set([
+    "business_writer",
+    "evidence",
+    "browser",
+    "finalize",
+    "match_proposal",
+  ]),
   account_sync: new Set([
     "prepare",
     "commit_purchase_import",

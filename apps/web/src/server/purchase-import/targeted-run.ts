@@ -5,19 +5,18 @@ import type {
   VendorId,
 } from "@cubby/schemas/identifiers";
 import {
-  runShortcode,
   vendorAccountId,
   vendorAccountShortcode,
+  userId,
+  runShortcode,
 } from "@cubby/schemas/identifiers";
 import { agentImportRunPurpose } from "@cubby/schemas/import-run-agent";
 import type { PurchaseAgentEvent } from "@cubby/schemas/purchase-import";
-import { sha256Hex } from "@cubby/shared/sha256";
-import { and, desc, eq, isNotNull } from "drizzle-orm";
+import { and, asc, desc, eq, inArray, ne } from "drizzle-orm";
 import { z } from "zod";
 
 import {
   type TargetedImportLaunch,
-  targetedImportPurpose,
   type TargetedImportPurpose,
   type TargetedImportStartInput,
   type TargetedImportStartOutput,
@@ -25,26 +24,32 @@ import {
 import { getPurchaseAgentQueue } from "~/server/cf-env";
 import type { Database } from "~/server/db";
 import {
-  entityExternalId,
-  expense,
   importSourceClaim,
+  importSourceOrder,
+  ledgerParty,
+  run,
   product,
   purchase,
   vendor,
   vendorAccount,
 } from "~/server/db/schema";
-import {
-  browsingAccountFor,
-  browsingAccounts,
-} from "~/server/purchase-import/browsing-account";
+import { browsingAccountFor } from "~/server/purchase-import/browsing-account";
 import {
   dispatchRunEvent,
   recordRunDispatchAttempt,
 } from "~/server/purchase-import/dispatch";
-import { productEnrichmentTarget } from "~/server/purchase-import/product-enrichment-target";
-import { startTargetedRun } from "~/server/purchase-import/run-service";
+import {
+  purchasedResearchProducts,
+  startProductResearch,
+} from "~/server/purchase-import/product-research-run";
 import { getDb, notDeleted } from "~/server/repo/database-helpers";
 import { resolveOrThrow } from "~/server/repo/shortcode-resolver";
+
+import {
+  previewPurchaseValidationSource,
+  startPurchaseValidationResearch,
+} from "./purchase-validation-research";
+import { admitVendorResearch } from "./vendor-research-run";
 
 type SourceClaim = {
   id: string;
@@ -58,19 +63,7 @@ type SourceClaim = {
   vendorShortcode: string;
 };
 
-type TargetFingerprintInput =
-  | {
-      purchaseId: string;
-      updatedAt: Date;
-      source: string | null;
-    }
-  /** A Product that was not found; a live one uses `productEnrichmentTarget`. */
-  | { product: undefined };
-
 const accountShortcode = vendorAccountShortcode.nullable();
-
-const fingerprint = (value: TargetFingerprintInput) =>
-  sha256Hex(JSON.stringify(value));
 
 /**
  * Hand a committed run to the coordinator queue. A missing queue or a failed
@@ -109,56 +102,6 @@ export async function dispatchStartedRun(
   }
 }
 
-async function queueStartedRun(
-  db: Database,
-  run: {
-    id: string;
-    publicId: string;
-    status: string;
-    purpose: string;
-    dispatchEventId: string | null;
-  },
-) {
-  if (!run.dispatchEventId)
-    throw new Error("Targeted import run has no dispatch event");
-  const status = await dispatchStartedRun(db, {
-    id: run.id,
-    eventId: run.dispatchEventId,
-    purpose: run.purpose,
-  });
-  return {
-    id: runShortcode.parse(run.publicId),
-    status,
-    purpose: targetedImportPurpose.parse(run.purpose),
-    dispatchEventId: run.dispatchEventId,
-  };
-}
-
-async function startedOutcome(
-  db: Database,
-  started: Awaited<ReturnType<typeof startTargetedRun>>,
-): Promise<TargetedImportStartOutput["runs"][number]> {
-  if (!started.created) {
-    if (!started.blockingRun)
-      throw new Error(
-        "Every Product here is already being enriched by an active run",
-      );
-    return {
-      created: false,
-      run: null,
-      blockingRun: {
-        id: runShortcode.parse(started.blockingRun.publicId),
-        status: started.blockingRun.status,
-      },
-    };
-  }
-  return {
-    created: true,
-    run: await queueStartedRun(db, started.run),
-    blockingRun: null,
-  };
-}
-
 async function claimsForPurchase(
   db: Database,
   ledgerPartyId: LedgerPartyId,
@@ -166,18 +109,25 @@ async function claimsForPurchase(
 ): Promise<SourceClaim[]> {
   return await getDb(db)
     .select({
-      id: importSourceClaim.id,
+      id: importSourceOrder.id,
       kind: importSourceClaim.kind,
       externalKey: importSourceClaim.externalKey,
-      checksum: importSourceClaim.checksum,
-      outputFingerprint: importSourceClaim.outputFingerprint,
+      checksum: importSourceOrder.checksum,
+      outputFingerprint: importSourceOrder.outputFingerprint,
       vendorAccountShortcode: vendorAccount.shortcode,
       vendorAccountLabel: vendorAccount.label,
       vendorId: vendor.id,
       vendorShortcode: vendor.shortcode,
     })
-    .from(importSourceClaim)
-    .innerJoin(purchase, eq(purchase.id, importSourceClaim.purchaseId))
+    .from(importSourceOrder)
+    .innerJoin(
+      importSourceClaim,
+      eq(importSourceClaim.id, importSourceOrder.sourceClaimId),
+    )
+    .innerJoin(
+      purchase,
+      and(eq(purchase.id, importSourceOrder.purchaseId), notDeleted(purchase)),
+    )
     .innerJoin(
       vendor,
       and(eq(vendor.id, purchase.vendorId), notDeleted(vendor)),
@@ -192,45 +142,10 @@ async function claimsForPurchase(
     .where(
       and(
         eq(importSourceClaim.ledgerPartyId, ledgerPartyId),
-        eq(importSourceClaim.purchaseId, purchaseId),
+        eq(importSourceOrder.purchaseId, purchaseId),
       ),
     )
-    .orderBy(desc(importSourceClaim.updatedAt));
-}
-
-async function claimForActor(
-  db: Database,
-  ledgerPartyId: LedgerPartyId,
-  claimId: string,
-) {
-  const parsedClaimId = z.uuid().safeParse(claimId);
-  if (!parsedClaimId.success) return null;
-  const [claim] = await getDb(db)
-    .select({
-      id: importSourceClaim.id,
-      kind: importSourceClaim.kind,
-      externalKey: importSourceClaim.externalKey,
-      checksum: importSourceClaim.checksum,
-      outputFingerprint: importSourceClaim.outputFingerprint,
-      purchaseId: importSourceClaim.purchaseId,
-      vendorAccountId: importSourceClaim.vendorAccountId,
-      vendorId: vendor.id,
-      vendorShortcode: vendor.shortcode,
-    })
-    .from(importSourceClaim)
-    .innerJoin(purchase, eq(purchase.id, importSourceClaim.purchaseId))
-    .innerJoin(
-      vendor,
-      and(eq(vendor.id, purchase.vendorId), notDeleted(vendor)),
-    )
-    .where(
-      and(
-        eq(importSourceClaim.id, parsedClaimId.data),
-        eq(importSourceClaim.ledgerPartyId, ledgerPartyId),
-      ),
-    )
-    .limit(1);
-  return claim ?? null;
+    .orderBy(desc(importSourceOrder.updatedAt));
 }
 
 const claimLabel = (claim: { kind: string; externalKey: string }) =>
@@ -261,6 +176,33 @@ export async function loadTargetedImportLaunch(
       .limit(1);
     if (!target) throw new Error("Target was not found");
     const claims = await claimsForPurchase(db, ledgerPartyId, purchaseId);
+    const sources = await Promise.all(
+      claims.map(async (claim) => {
+        const preview = await previewPurchaseValidationSource(
+          db,
+          ledgerPartyId,
+          purchaseId,
+          claim.id,
+        );
+        return {
+          id: claim.id,
+          label: claimLabel(claim),
+          kind: claim.kind,
+          fingerprint: claim.checksum,
+          vendorAccountId: accountShortcode.parse(
+            preview.account?.shortcode ?? null,
+          ),
+          vendorAccountLabel: preview.account?.label ?? null,
+          usable: preview.usable,
+          reason: preview.reason,
+          default: false,
+        };
+      }),
+    );
+    const preferred = sources.find(
+      (source) => source.usable && source.kind === "browser_order",
+    );
+    if (preferred) preferred.default = true;
     return {
       purpose,
       purchase: {
@@ -270,18 +212,8 @@ export async function loadTargetedImportLaunch(
         reason:
           claims.length > 0
             ? null
-            : "No replayable claim exists; the run will search Gmail, then use an owned browser account when available.",
-        sources: claims.map((claim, index) => ({
-          id: claim.id,
-          label: claimLabel(claim),
-          kind: claim.kind,
-          fingerprint: claim.checksum,
-          vendorAccountId: accountShortcode.parse(claim.vendorAccountShortcode),
-          vendorAccountLabel: claim.vendorAccountLabel,
-          usable: true,
-          reason: null,
-          default: index === 0 && claim.kind === "browser_order",
-        })),
+            : "Research the recorded Purchase using owned mail, public sources, or an uploaded original. Browser access is optional.",
+        sources,
         products: [],
       },
       products: [],
@@ -295,33 +227,13 @@ export async function loadTargetedImportLaunch(
     .where(and(eq(product.id, productId), notDeleted(product)))
     .limit(1);
   if (!target) throw new Error("Target was not found");
-  const [claim] = await getDb(db)
-    .select({
-      id: importSourceClaim.id,
-      kind: importSourceClaim.kind,
-      externalKey: importSourceClaim.externalKey,
-      vendorId: purchase.vendorId,
-      vendorAccountId: importSourceClaim.vendorAccountId,
-    })
-    .from(expense)
-    .innerJoin(
-      purchase,
-      and(eq(purchase.id, expense.purchaseId), notDeleted(purchase)),
-    )
-    .innerJoin(
-      importSourceClaim,
-      and(
-        eq(importSourceClaim.purchaseId, purchase.id),
-        eq(importSourceClaim.ledgerPartyId, ledgerPartyId),
-      ),
-    )
-    .where(and(eq(expense.productId, productId), notDeleted(expense)))
-    .orderBy(desc(importSourceClaim.updatedAt))
-    .limit(1);
-  // Name the account the start will browse with, not the claim's own.
-  const [accountId] = claim?.vendorId
-    ? await enrichmentAccountIds(db, [{ ...claim, vendorId: claim.vendorId }])
-    : [claim?.vendorAccountId ?? null];
+  const claims = await productResearchSources(db, ledgerPartyId, [productId]);
+  const claim = claims[0];
+  const [accountId] = await enrichmentAccountIds(
+    db,
+    ledgerPartyId,
+    claim ? [claim] : [],
+  );
   const [account] = accountId
     ? await getDb(db)
         .select({
@@ -344,14 +256,14 @@ export async function loadTargetedImportLaunch(
       {
         productId: targetId,
         productName: target.name,
-        selected: Boolean(claim),
+        selected: true,
         sourceId: claim?.id ?? null,
         sourceLabel: claim ? claimLabel(claim) : null,
         vendorAccountId: accountShortcode.parse(account?.shortcode ?? null),
         vendorAccountLabel: account?.label ?? null,
         needsAccountChoice: false,
         accountChoices: [],
-        reason: claim ? null : "No verified purchase source is available.",
+        reason: claim ? null : "Research this Product using public sources.",
       },
     ],
   };
@@ -363,158 +275,107 @@ async function startPurchaseValidation(
   input: Extract<TargetedImportStartInput, { purpose: "purchase_validation" }>,
 ): Promise<TargetedImportStartOutput> {
   const purchaseId = await resolveOrThrow(db, "purchase", input.purchaseId);
-  const claim = input.sourceId
-    ? await claimForActor(db, ledgerPartyId, input.sourceId)
-    : null;
-  if (claim && claim.purchaseId !== purchaseId)
-    throw new Error("Choose a current replayable source");
-  const [purchaseScope] = await getDb(db)
-    .select({
-      vendorId: purchase.vendorId,
-      vendorAccountId: purchase.vendorAccountId,
-      orderId: purchase.orderId,
-      updatedAt: purchase.updatedAt,
-    })
-    .from(purchase)
-    .where(and(eq(purchase.id, purchaseId), notDeleted(purchase)))
-    .limit(1);
-  if (!purchaseScope?.vendorId || !purchaseScope.orderId)
-    throw new Error("Purchase needs a Vendor and order ID");
-  const accountId = claim?.vendorAccountId
-    ? vendorAccountId.parse(claim.vendorAccountId)
-    : purchaseScope.vendorAccountId
-      ? vendorAccountId.parse(purchaseScope.vendorAccountId)
-      : null;
-  const started = await startTargetedRun(db, {
-    ledgerPartyId,
-    purpose: "purchase_validation",
-    vendorId: claim?.vendorId ?? purchaseScope.vendorId,
-    vendorAccountId: accountId,
-    trigger: "manual",
-    targets: [
-      {
-        kind: "purchase",
-        purchaseId,
-        vendorAccountId: accountId,
-        sourceKind: claim?.kind ?? null,
-        sourceExternalKey: claim?.externalKey ?? purchaseScope.orderId,
-        targetFingerprint: await fingerprint({
-          purchaseId,
-          updatedAt: purchaseScope.updatedAt,
-          source: claim?.outputFingerprint ?? null,
-        }),
-        evidenceFingerprint: claim?.checksum ?? null,
-      },
-    ],
-  });
-  return { runs: [await startedOutcome(db, started)] };
-}
-
-/**
- * The page an enrichment run opens first: the first HTTP(S) candidate on the
- * Vendor's browser domains, because the browser bridge refuses any other
- * navigation. Candidates in order: the given pages (a browser-captured
- * claim's order page, or the import line's product page), the Product's
- * learned pages (primary first), the Vendor's website. A Gmail or receipt
- * claim's key names no page and is never used. Null when none is on the
- * Vendor's browser domains.
- */
-export async function enrichmentStartPage(
-  db: Database,
-  input: {
-    productId: ProductId;
-    vendorId: VendorId;
-    pages: readonly (string | null | undefined)[];
-  },
-) {
-  const vendorRow = await vendorPages(db, input.vendorId);
-  const learned = await getDb(db)
-    .select({ url: entityExternalId.url })
-    .from(entityExternalId)
+  const [owner] = await getDb(db)
+    .select({ userId: ledgerParty.userId })
+    .from(ledgerParty)
     .where(
       and(
-        eq(entityExternalId.entityId, input.productId),
-        isNotNull(entityExternalId.url),
-        notDeleted(entityExternalId),
+        eq(ledgerParty.id, ledgerPartyId),
+        eq(ledgerParty.kind, "member"),
+        notDeleted(ledgerParty),
       ),
-    )
-    .orderBy(desc(entityExternalId.isPrimary));
-  const candidates = [
-    ...input.pages,
-    ...learned.map((page) => page.url),
-    vendorRow.website,
-  ];
-  for (const candidate of candidates) {
-    if (!candidate) continue;
-    let url: URL;
-    try {
-      url = new URL(candidate);
-    } catch {
-      // SILENT: a claim key or malformed website is not a page; try the next.
-      continue;
-    }
-    if (
-      (url.protocol === "https:" || url.protocol === "http:") &&
-      vendorRow.allowed.has(url.hostname.toLowerCase())
-    )
-      return url.href;
-  }
-  return null;
-}
-
-async function vendorPages(db: Database, vendorId: VendorId) {
-  const [owner] = await getDb(db)
-    .select({
-      name: vendor.name,
-      website: vendor.website,
-      browserDomains: vendor.browserDomains,
-    })
-    .from(vendor)
-    .where(eq(vendor.id, vendorId))
-    .limit(1);
+    );
+  if (!owner?.userId) throw new Error("Validation requires the owning member.");
+  const started = await startPurchaseValidationResearch(db, {
+    ledgerPartyId,
+    userId: userId.parse(owner.userId),
+    purchaseIds: [purchaseId],
+    selectedSources: input.sourceId
+      ? [{ purchaseId, sourceOrderId: input.sourceId }]
+      : [],
+  });
   return {
-    name: owner?.name,
-    website: owner?.website,
-    allowed: new Set(owner?.browserDomains.map((host) => host.toLowerCase())),
+    runs: [
+      {
+        created: started.created,
+        run: started.created
+          ? {
+              id: runShortcode.parse(started.row.shortcode),
+              status: started.row.status,
+              purpose: "purchase_validation",
+              dispatchEventId: started.row.dispatchEventId,
+            }
+          : null,
+        blockingRun: started.created
+          ? null
+          : {
+              id: runShortcode.parse(started.row.shortcode),
+              status: started.row.status,
+            },
+      },
+    ],
   };
 }
 
-async function enrichmentStartUrl(
+async function productResearchSources(
   db: Database,
-  productId: ProductId,
-  claim: Pick<
-    NonNullable<Awaited<ReturnType<typeof claimForActor>>>,
-    "externalKey" | "vendorId"
-  >,
+  ledgerPartyId: LedgerPartyId,
+  productIds: readonly ProductId[],
 ) {
-  const page = await enrichmentStartPage(db, {
-    productId,
-    vendorId: claim.vendorId,
-    pages: [claim.externalKey],
-  });
-  if (page) return page;
-  const owner = await vendorPages(db, claim.vendorId);
-  throw new Error(
-    `No page to start enriching this Product is on ${owner.name ?? "its Vendor"}'s browser domains (${[...owner.allowed].join(", ") || "none"}). Add the site's host to the Vendor's browser domains or a website on one of them.`,
-  );
+  const contexts = await purchasedResearchProducts(getDb(db), { productIds });
+  return contexts
+    .flatMap((row) =>
+      "sourceOrderId" in row &&
+      row.ledgerPartyId === ledgerPartyId &&
+      row.checksum === row.orderChecksum
+        ? [
+            {
+              id: row.sourceOrderId,
+              productId: row.productId,
+              kind: row.sourceKind,
+              externalKey: row.sourceKey,
+              vendorId: row.vendorId,
+              vendorAccountId: row.vendorAccountId,
+            },
+          ]
+        : [],
+    )
+    .sort((a, b) => a.id.localeCompare(b.id));
 }
 
-/**
- * The account each claim's enrichment run browses with, shared by the launch
- * preview and the start. A mail or receipt claim may name no account, or a
- * mail-only one; the run browses with the Vendor's browsing account when
- * there is one, otherwise the claim's own.
- */
+/** Optional owned Chrome transport; ambiguity leaves research cloud-capable. */
 async function enrichmentAccountIds(
   db: Database,
-  claims: readonly { vendorId: VendorId; vendorAccountId: string | null }[],
+  ledgerPartyId: LedgerPartyId,
+  claims: readonly {
+    vendorId: VendorId | null;
+    vendorAccountId: string | null;
+  }[],
 ) {
-  const accounts = await browsingAccounts(
-    db,
-    claims.map((claim) => claim.vendorId),
+  const vendorIds = claims.flatMap((claim) =>
+    claim.vendorId ? [claim.vendorId] : [],
   );
-  return claims.map(
-    (claim) => browsingAccountFor(accounts, claim)?.id ?? claim.vendorAccountId,
+  const accounts = vendorIds.length
+    ? await getDb(db)
+        .select()
+        .from(vendorAccount)
+        .where(
+          and(
+            inArray(vendorAccount.vendorId, vendorIds),
+            eq(vendorAccount.ledgerPartyId, ledgerPartyId),
+            eq(vendorAccount.browser, "chrome"),
+            eq(vendorAccount.browserSyncEnabled, true),
+            ne(vendorAccount.status, "disabled"),
+            notDeleted(vendorAccount),
+          ),
+        )
+        .orderBy(asc(vendorAccount.id))
+    : [];
+  return claims.map((claim) =>
+    claim.vendorId
+      ? (browsingAccountFor(accounts, { ...claim, vendorId: claim.vendorId })
+          ?.id ?? null)
+      : null,
   );
 }
 
@@ -523,87 +384,145 @@ async function startProductEnrichment(
   ledgerPartyId: LedgerPartyId,
   input: Extract<TargetedImportStartInput, { purpose: "product_enrichment" }>,
 ): Promise<TargetedImportStartOutput> {
-  const resolved = await Promise.all(
-    input.targets.map(async (target) => {
-      const productId = await resolveOrThrow(db, "product", target.productId);
-      const claim = target.sourceId
-        ? await claimForActor(db, ledgerPartyId, target.sourceId)
-        : null;
-      const productState = await productEnrichmentTarget(getDb(db), productId);
-      const [sourceLine] = claim?.purchaseId
-        ? await getDb(db)
-            .select({ id: expense.id })
-            .from(expense)
-            .where(
-              and(
-                eq(expense.purchaseId, claim.purchaseId),
-                eq(expense.productId, productId),
-                notDeleted(expense),
-              ),
-            )
-            .limit(1)
-        : [];
-      if (!claim || !sourceLine)
-        throw new Error(
-          "Every product needs a verified source that contains it",
-        );
-      return {
-        productId,
-        claim,
-        startUrl: await enrichmentStartUrl(db, productId, claim),
-        targetFingerprint:
-          productState?.fingerprint ??
-          (await fingerprint({ product: undefined })),
-      };
-    }),
+  const [member] = await getDb(db)
+    .select({ userId: ledgerParty.userId })
+    .from(ledgerParty)
+    .where(
+      and(
+        eq(ledgerParty.id, ledgerPartyId),
+        eq(ledgerParty.kind, "member"),
+        notDeleted(ledgerParty),
+      ),
+    )
+    .limit(1);
+  if (!member?.userId)
+    throw new Error("Product research member ownership is unavailable.");
+  const targets = await Promise.all(
+    input.targets.map(async (target) => ({
+      productId: await resolveOrThrow(db, "product", target.productId),
+      sourceOrderId:
+        target.sourceId === null ? null : z.uuid().parse(target.sourceId),
+    })),
   );
-  const accountIds = await enrichmentAccountIds(
+  const sources = await productResearchSources(
     db,
-    resolved.map((row) => row.claim),
+    ledgerPartyId,
+    targets.map((target) => target.productId),
   );
-  const groups = new Map<string, typeof resolved>();
-  for (const [index, row] of resolved.entries()) {
-    const vendorAccountId = accountIds[index] ?? null;
-    row.claim = { ...row.claim, vendorAccountId };
-    const key = `${row.claim.vendorId}:${vendorAccountId ?? "none"}`;
-    groups.set(key, [...(groups.get(key) ?? []), row]);
-  }
-  const runs = await Promise.all(
-    [...groups.values()].map(async (group) => {
-      const { claim } = group[0]!;
-      const started = await startTargetedRun(db, {
-        ledgerPartyId,
-        purpose: "product_enrichment",
-        vendorId: claim.vendorId,
-        vendorAccountId: claim.vendorAccountId
-          ? vendorAccountId.parse(claim.vendorAccountId)
-          : null,
-        trigger: "manual",
-        targets: group.map((row) => ({
-          kind: "product" as const,
-          productId: row.productId,
-          vendorAccountId: row.claim.vendorAccountId
-            ? vendorAccountId.parse(row.claim.vendorAccountId)
-            : null,
-          sourceKind: row.claim.kind,
-          // The enrichment agent opens this; a mail claim's key is no page.
-          sourceExternalKey: row.startUrl,
-          targetFingerprint: row.targetFingerprint,
-          evidenceFingerprint: row.claim.checksum,
-        })),
-      });
-      return startedOutcome(db, started);
+  const preferences = await enrichmentAccountIds(
+    db,
+    ledgerPartyId,
+    targets.flatMap((target) => {
+      const source = sources.find(
+        (row) =>
+          row.productId === target.productId &&
+          (target.sourceOrderId === null || row.id === target.sourceOrderId),
+      );
+      return source ? [source] : [];
     }),
+  );
+  const preferredBrowserAccountId =
+    preferences.length === targets.length &&
+    preferences.every((id) => id === preferences[0])
+      ? (preferences[0] ?? undefined)
+      : undefined;
+  const admitted = await startProductResearch(db, {
+    ledgerPartyId,
+    userId: userId.parse(member.userId),
+    productIds: targets.map((target) => target.productId),
+    selectedSources: targets.flatMap((target) =>
+      target.sourceOrderId === null
+        ? []
+        : [
+            {
+              productId: target.productId,
+              sourceOrderId: target.sourceOrderId,
+            },
+          ],
+    ),
+    preferredBrowserAccountId,
+    cause: "member_request",
+  });
+  const runs = await Promise.all(
+    admitted.map(
+      async (entry): Promise<TargetedImportStartOutput["runs"][number]> => {
+        const [saved] = await getDb(db)
+          .select()
+          .from(run)
+          .where(
+            and(
+              eq(run.id, entry.runId),
+              eq(run.ledgerPartyId, ledgerPartyId),
+              notDeleted(run),
+            ),
+          )
+          .limit(1);
+        if (!saved)
+          throw new Error("Admitted Product research Run is unavailable.");
+        return entry.created
+          ? {
+              created: true,
+              run: {
+                id: runShortcode.parse(saved.shortcode),
+                status: entry.status,
+                purpose: "product_enrichment",
+                dispatchEventId: saved.dispatchEventId,
+              },
+              blockingRun: null,
+            }
+          : {
+              created: false,
+              run: null,
+              blockingRun: {
+                id: runShortcode.parse(saved.shortcode),
+                status: entry.status,
+              },
+            };
+      },
+    ),
   );
   return { runs };
 }
 
-/** Admit and dispatch targeted validation or enrichment runs. */
-export function startTargetedImport(
+/** Admit and dispatch explicit research using the shared durable runtime. */
+export async function startTargetedImport(
   db: Database,
   ledgerPartyId: LedgerPartyId,
   input: TargetedImportStartInput,
 ): Promise<TargetedImportStartOutput> {
+  if (input.purpose === "account_sync") {
+    const admission = await admitVendorResearch(
+      db,
+      ledgerPartyId,
+      input.vendorId,
+    );
+    const row = admission.run;
+    const status =
+      row.dispatchEventId &&
+      (admission.created ||
+        row.status === "dispatch_failed" ||
+        (row.status === "running" && row.dispatchAttempts === 0))
+        ? await dispatchStartedRun(db, {
+            id: row.id,
+            eventId: row.dispatchEventId,
+            purpose: row.purpose,
+          })
+        : row.status;
+    return {
+      runs: [
+        {
+          created: admission.created,
+          run: {
+            id: runShortcode.parse(row.shortcode),
+            status,
+            purpose: "account_sync",
+            dispatchEventId: row.dispatchEventId,
+          },
+          blockingRun: null,
+        },
+      ],
+    };
+  }
   return input.purpose === "purchase_validation"
     ? startPurchaseValidation(db, ledgerPartyId, input)
     : startProductEnrichment(db, ledgerPartyId, input);

@@ -50,9 +50,10 @@ in `model` or `notes`.
 
 An exact manufacturer part number (MPN that names one size and color) is the
 exception: store it as `manufacturer_part` with `source` set to the kebab slug
-of the Product's `manufacturer` (not the seller's slug). Commits prove it only
-from the page's `mpns` on a single-Product vendor page; a ProductGroup page does
-not prove it. Purchase prep still ranks a shared model/style number
+of the Product's `manufacturer` (not the seller's slug). Support the literal
+part number and its connection to the selected variant with retained evidence;
+the hosted researcher derives the issuer. A group-level number without that
+connection does not prove a variant. Purchase prep still ranks a shared model/style number
 (`Product.model` within the same manufacturer) as a candidate with "confirm size
 and color", never as `exactIdentifierMatch`.
 

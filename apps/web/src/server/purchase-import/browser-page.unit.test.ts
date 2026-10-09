@@ -105,13 +105,44 @@ describe("a captured page derived on the server", () => {
     expect(capture.servedAmazonAsin).toBe("B000000002");
   });
 
-  it("allows only https on an allowlisted host or its subdomain, without credentials or fragments", () => {
+  it("retains variant fragments in allowlisted page links and canonical URLs", () => {
+    const capture = derivePageCapture({
+      html: `<html><head><link rel="canonical" href="https://shop.example.test/shirt#color=green"></head><body>
+        <p>Green shirt</p><a href="#color=blue">Choose blue</a>
+        <a href="https://other.example.net/shirt#color=red">Foreign retailer</a>
+        <a href="https://user:secret@shop.example.test/shirt#color=red">Credentials</a>
+        <a href="http://shop.example.test/shirt#color=red">Insecure</a>
+        </body></html>`,
+      sourceURL: "https://shop.example.test/shirt#color=green",
+      title: "Green shirt",
+      capturedAt: "2026-10-07T12:00:00.000Z",
+      allowedHosts: ["shop.example.test"],
+      requestedURL: null,
+      evidence: [],
+      truncated: false,
+    });
+    expect(capture.sourceURL).toBe(
+      "https://shop.example.test/shirt#color=green",
+    );
+    expect(capture.canonicalUrl).toBe(
+      "https://shop.example.test/shirt#color=green",
+    );
+    expect(capture.links).toEqual([
+      {
+        id: "link-1",
+        url: "https://shop.example.test/shirt#color=blue",
+        label: "Choose blue",
+      },
+    ]);
+  });
+
+  it("allows only https on an allowlisted host or its subdomain, without credentials", () => {
     const hosts = ["example.test"];
     expect(urlAllowed("https://shop.example.test/a", hosts)).toBe(true);
     expect(urlAllowed("https://example.test/a", hosts)).toBe(true);
     expect(urlAllowed("https://notexample.test/a", hosts)).toBe(false);
     expect(urlAllowed("http://example.test/a", hosts)).toBe(false);
     expect(urlAllowed("https://user:pw@example.test/a", hosts)).toBe(false);
-    expect(urlAllowed("https://example.test/a#x", hosts)).toBe(false);
+    expect(urlAllowed("https://example.test/a#x", hosts)).toBe(true);
   });
 });

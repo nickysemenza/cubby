@@ -24,6 +24,9 @@ export const aiSmokeInputs = {
   inventoryDetection: z.object({ locationId: sourceId }),
   imageDescription: z.object({ imageId: sourceId }),
   recipeFlow: z.object({ recipeId: sourceId }),
+  mailboxTriage: z.object({ fixture }),
+  mailboxRelevance: z.object({ fixture }),
+  researchSourceSupport: z.object({ fixture }),
   purchaseProductIdentity: z.object({
     fixture,
     productId: sourceId.optional(),
