@@ -1,7 +1,10 @@
 import type { DetailSlotId } from "@cubby/schemas/entity-manifest";
 import type { ReportSlot } from "@cubby/schemas/entity-report";
 import type { RunOut } from "@cubby/schemas/run";
-import { hasImportRunReports } from "@cubby/schemas/run-fields";
+import {
+  hasImportRunReports,
+  type RunPurpose,
+} from "@cubby/schemas/run-fields";
 import { ACTIVE_RUN_STATUSES } from "@cubby/shared/client-constants";
 import { type FunctionComponent, lazy, type LazyExoticComponent } from "react";
 
