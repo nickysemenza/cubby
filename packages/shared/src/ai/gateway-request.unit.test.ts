@@ -1234,6 +1234,42 @@ describe("budgeted pre-output stream quota fallback", () => {
     expect(diagnostic).toContain(quota.code);
   });
 
+  it("keeps admission evidence valid and bounded with escaped structural keys", async () => {
+    const unknown = Object.fromEntries(
+      Array.from({ length: 4 }, (_, index) => [
+        "\u0000".repeat(40) + index,
+        "PRIVATE_SYNTHETIC_VALUE",
+      ]),
+    );
+    const source =
+      frame("response.created", {
+        ...created,
+        ...unknown,
+        response: {
+          ...created.response,
+          ...unknown,
+          reasoning: { ...unknown },
+          text: { ...unknown },
+        },
+      }) + refusal();
+    const r = routes(() => new Response(chunked(source, 131)));
+    const response = await gatewayFetchThrough(r.fetchRoutes)(url, init);
+    expect(await response.text()).toBe(source);
+    expect(r.gateway).not.toHaveBeenCalled();
+    const prefix = "Subscription stream admission: ";
+    const diagnostic = (r.failures[0]?.body ?? "").split(prefix)[1] ?? "";
+    expect(
+      new TextEncoder().encode("\n" + prefix + diagnostic).length,
+    ).toBeLessThanOrEqual(2_048);
+    expect(JSON.parse(diagnostic)).toMatchObject({
+      reason: "metadata_schema",
+      streamRequested: true,
+      elapsedMs: expect.any(Number),
+      inspectedBytes: expect.any(Number),
+    });
+    expect(diagnostic).not.toContain("PRIVATE_SYNTHETIC_VALUE");
+  });
+
   it.each(["\n", "\r\n"])(
     "recovers the observed MIME-less fragmented pre-output refusal (%j)",
     async (eol) => {

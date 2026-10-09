@@ -298,8 +298,12 @@ research acceptance.
   with no Content-Type. It was canceled after one failed subscription call ($0),
   before further inference. HTTP 429 fallback therefore does not establish live
   paid recovery. A bounded pre-output probe now qualifies the exact stream
-  refusal through the shared router and existing admission; review, hosted checks
-  and live paid recovery remain pending.
+  refusal through the shared router and existing admission. #1794 completed
+  independent Sol/high and Astra/high review, exact-head hosted checks and merge.
+  A fresh bounded attempt on deployed main `01dda8634` still returned the quota
+  without paid admission or transmission; it was canceled after one failed call.
+  The actual stream-admission rejection and live paid recovery remain unresolved;
+  do not infer eligibility from preceding event names alone.
 
 - 🤔 **Link enriched seed Products to Plants.** `growsPlantId` is supported,
   but deciding which growing facts belong on Plant versus a purchased seed

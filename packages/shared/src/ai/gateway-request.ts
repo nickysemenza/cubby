@@ -559,6 +559,53 @@ const streamQuotaEnvelope = z.union([
 const STREAM_ADMISSION_BYTES = 65_536;
 const STREAM_ADMISSION_MS = 30_000;
 
+function streamAdmissionDecision(
+  reason: string,
+  event?: string,
+  issues?: z.core.$ZodIssue[],
+) {
+  return {
+    reason,
+    event: event?.slice(0, 80),
+    issues: issues?.slice(0, 4).map((issue) => ({
+      code: issue.code,
+      path: issue.path.slice(0, 4).map((part) => String(part).slice(0, 40)),
+      keys:
+        issue.code === "unrecognized_keys"
+          ? issue.keys.slice(0, 4).map((key) => key.slice(0, 40))
+          : undefined,
+    })),
+  };
+}
+
+function streamAdmissionDiagnostic(
+  decision: ReturnType<typeof streamAdmissionDecision>,
+  started: number,
+  heldBytes: number,
+) {
+  const description = {
+    reason: decision.reason,
+    event: decision.event,
+    streamRequested: true,
+    elapsedMs: Date.now() - started,
+    inspectedBytes: heldBytes,
+    issues: decision.issues,
+  };
+  const serialize = () =>
+    `Subscription stream admission: ${JSON.stringify(description)}`;
+  let diagnostic = serialize();
+  // Keep required evidence and valid JSON; escaped structural keys consume
+  // bytes too. The separator belongs to the same 2 KiB allowance.
+  while (
+    new TextEncoder().encode(diagnostic).byteLength > 2_047 &&
+    description.issues?.length
+  ) {
+    description.issues.pop();
+    diagnostic = serialize();
+  }
+  return diagnostic;
+}
+
 /**
  * Holds a requested subscription stream until its first event that is not
  * pre-output metadata. Only a complete exact quota `error` there is
@@ -579,23 +626,7 @@ async function admitSubscriptionStream(
       diagnostic: 'Subscription stream admission: {"reason":"no_body"}',
     };
   const started = Date.now();
-  const decisionFor = (
-    reason: string,
-    event?: string,
-    issues?: z.core.$ZodIssue[],
-  ) => ({
-    reason,
-    event: event?.slice(0, 80),
-    issues: issues?.slice(0, 4).map((issue) => ({
-      code: issue.code,
-      path: issue.path.slice(0, 4).map((part) => String(part).slice(0, 40)),
-      keys:
-        issue.code === "unrecognized_keys"
-          ? issue.keys.slice(0, 4).map((key) => key.slice(0, 40))
-          : undefined,
-    })),
-  });
-  let decision = decisionFor("eof");
+  let decision = streamAdmissionDecision("eof");
   const reject = (
     reason: string,
     event?: string,
@@ -603,7 +634,7 @@ async function admitSubscriptionStream(
   ) => {
     if (replay) return;
     replay = true;
-    decision = decisionFor(reason, event, issues);
+    decision = streamAdmissionDecision(reason, event, issues);
   };
   const reader = response.body.getReader();
   const held: Uint8Array[] = [];
@@ -718,12 +749,8 @@ async function admitSubscriptionStream(
     },
     { highWaterMark: 0 },
   );
-  const diagnostic = `Subscription stream admission: ${JSON.stringify({ ...decision, streamRequested: true, elapsedMs: Date.now() - started, inspectedBytes: heldBytes })}`;
   return {
-    diagnostic: new TextDecoder().decode(
-      new TextEncoder().encode(diagnostic).subarray(0, 2_048),
-      { stream: true },
-    ),
+    diagnostic: streamAdmissionDiagnostic(decision, started, heldBytes),
     response: new Response(body, {
       status: response.status,
       statusText: response.statusText,
