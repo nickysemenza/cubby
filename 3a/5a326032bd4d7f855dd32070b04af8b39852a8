@@ -1,0 +1,21 @@
+apps/web/src/app/usda/usdafoodlist.tsx
+  s_6da132381c4599::t_1df7ea3906fa92 29,203-205,207,211-246,248-255,272,276-282,284,292,302-303
+apps/web/tests/e2e/usda-list-density.spec.ts
+  s_6da132381c4599::t_97bb30511a69e7 1-27
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "3a5a326032bd4d7f855dd32070b04af8b39852a8",
+  "prompts": {},
+  "sessions": {
+    "s_6da132381c4599": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "3b25d3fe-73f0-492d-8b86-87f07e0b1ef7",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "nicky <nicky@cloudflare.com>"
+    }
+  }
+}
