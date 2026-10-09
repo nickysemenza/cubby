@@ -62,6 +62,7 @@ import {
   commitAcceptedResearchFields,
 } from "./research-accepted-fields";
 import { attachmentAssessmentContext } from "./research-attachment-content";
+import { researchAttemptDisposition } from "./research-attempt";
 import {
   assertResearchWork,
   loadResearchEvidence,
@@ -1138,7 +1139,9 @@ export async function resolveImportResearch(
         const productIds: string[] = [];
         const eventIds: string[] = [];
         let refused = false;
+        let progressed = false;
         let hasWriteGaps = false;
+        let hasMemberContradictions = false;
         const canonicalNoIdOrders = new Set<string>();
         const acceptedPurchases = new Map<
           number,
@@ -1184,25 +1187,37 @@ export async function resolveImportResearch(
               checksum: source.checksum,
             }),
           );
-          const [retainedEvent] = await tx
+          const payload = {
+            researchRunId: scope.id,
+            workRef: target.id,
+            proof,
+          };
+          const [createdEvent] = await tx
             .insert(orderMailEvent)
             .values({
               orderMailId: source.mail.id,
               event,
               orderId: chosen.orderId,
               sourceKey,
-              payload: { researchRunId: scope.id, workRef: target.id, proof },
+              payload,
             })
-            .onConflictDoUpdate({
-              target: [orderMailEvent.orderMailId, orderMailEvent.sourceKey],
-              set: {
-                payload: { researchRunId: scope.id, workRef: target.id, proof },
-              },
-            })
+            .onConflictDoNothing()
             .returning();
+          const [retainedEvent] = createdEvent
+            ? [createdEvent]
+            : await tx
+                .update(orderMailEvent)
+                .set({ payload })
+                .where(
+                  and(
+                    eq(orderMailEvent.orderMailId, source.mail.id),
+                    eq(orderMailEvent.sourceKey, sourceKey),
+                  ),
+                )
+                .returning();
           if (!retainedEvent)
             throw new Error("Research mail event was not persisted.");
-          await tx
+          const [createdDecision] = await tx
             .insert(orderMailCandidateDecision)
             .values({
               eventId: retainedEvent.id,
@@ -1211,7 +1226,9 @@ export async function resolveImportResearch(
               evidenceChecksum: source.checksum,
               decidedByUserId: scope.actorUserId,
             })
-            .onConflictDoNothing();
+            .onConflictDoNothing()
+            .returning({ id: orderMailCandidateDecision.id });
+          progressed ||= Boolean(createdEvent || createdDecision);
           eventIds.push(retainedEvent.id);
           await (ports.attachSource ?? attachRetainedSource)(transactionDb, {
             orderMailId: source.mail.id,
@@ -1335,6 +1352,7 @@ export async function resolveImportResearch(
               throw new Error(
                 "Supported order conflicts with existing Purchase state.",
               );
+            progressed ||= imported.outcome !== "replayed";
             if (imported.findingIds.length) {
               const pendingFindings = await tx
                 .select({ kind: runFinding.kind })
@@ -1463,6 +1481,7 @@ export async function resolveImportResearch(
               claims,
               actor,
             });
+            hasMemberContradictions ||= committed.contradictions.length > 0;
             factRefusals.push(
               ...committed.refusals.map((refusal) => ({
                 ...refusal,
@@ -1473,12 +1492,14 @@ export async function resolveImportResearch(
                 reason: `Accepted source value ${JSON.stringify(contradiction.proposedValue)} contradicts the existing value ${JSON.stringify(contradiction.currentValue)}; member review is required.`,
               })),
             );
-            await recordAcceptedFactEvidence(tx, {
+            const proof = await recordAcceptedFactEvidence(tx, {
               runId: scope.id,
               targetId: target.id,
               subject: { entityKind: "purchase", entityId: chosen.id },
               claims: committed.claims,
             });
+            progressed ||=
+              committed.changedFields.size > 0 || proof.inserted > 0;
           }
         }
         const validationProjection =
@@ -1492,10 +1513,17 @@ export async function resolveImportResearch(
                 evidenceIds,
               })
             : null;
+        const objective = researchObjectiveFor(scope, target);
+        const verifiedScopeCompletion = Boolean(
+          objective &&
+          ["account_history", "vendor_purchases"].includes(objective.kind) &&
+          proposal.progress?.scopeExhausted &&
+          assessment.scopeCompletionVerified,
+        );
         const candidateStatus =
-          (scope.purpose === "purchase_validation" &&
-            proposal.status === "partially_verified" &&
-            orders.length + links.length + facts.length === 0) ||
+          (["verified", "partially_verified"].includes(proposal.status) &&
+            orders.length + links.length + facts.length === 0 &&
+            !verifiedScopeCompletion) ||
           validationProjection?.needsReview ||
           refused ||
           hasWriteGaps ||
@@ -1506,16 +1534,37 @@ export async function resolveImportResearch(
           facts.length !== proposal.facts.length
             ? "researched_with_gaps"
             : proposal.status;
-        const objectiveResolution = await reconcileResearchObjective(
-          transactionDb,
-          {
-            scope,
-            target,
-            proposal,
-            assessment,
-            status: candidateStatus,
-          },
-        );
+        const refusals = [...assessment.rejected, ...factRefusals];
+        const attempt = await researchAttemptDisposition(tx, {
+          runId: scope.id,
+          workRef: target.id,
+          outcome: candidateStatus,
+          progress: progressed,
+          correctable:
+            !validationProjection?.needsReview &&
+            !hasMemberContradictions &&
+            !refused &&
+            !hasWriteGaps &&
+            ["verified", "partially_verified"].includes(proposal.status) &&
+            (refusals.length > 0 ||
+              orders.length !== proposal.orders.length ||
+              links.length !== proposal.emailLinks.length ||
+              facts.length !== proposal.facts.length ||
+              (!orders.length &&
+                !links.length &&
+                !facts.length &&
+                !verifiedScopeCompletion)),
+          refusals,
+        });
+        const objectiveResolution = attempt.retry
+          ? { status: attempt.outcome, warning: proposal.detail }
+          : await reconcileResearchObjective(transactionDb, {
+              scope,
+              target,
+              proposal,
+              assessment,
+              status: attempt.outcome,
+            });
         const status = objectiveResolution.status;
         const retirement =
           status === "unrelated"
@@ -1542,22 +1591,23 @@ export async function resolveImportResearch(
           proposedOrders: scope.purpose === "purchase_validation" ? orders : [],
           proposedLinks: scope.purpose === "purchase_validation" ? links : [],
           proposedFacts: facts,
-          refusals: [...assessment.rejected, ...factRefusals],
+          refusals,
         });
         await tx
           .update(runTarget)
           .set({
-            state:
-              status === "verified" || status === "unrelated"
+            state: attempt.retry
+              ? "needs_evidence"
+              : status === "verified" || status === "unrelated"
                 ? "completed"
                 : "unresolved",
-            outcome: status,
+            outcome: attempt.retry ? null : status,
             warning:
               status === "unrelated"
                 ? null
                 : (validationProjection?.warning ??
                   objectiveResolution.warning),
-            completedAt: new Date(),
+            completedAt: attempt.retry ? null : new Date(),
             updatedAt: new Date(),
           })
           .where(eq(runTarget.id, target.id));
@@ -1565,12 +1615,13 @@ export async function resolveImportResearch(
           await tx
             .update(mailboxMessage)
             .set({
-              status:
-                [
-                  "verified",
-                  "partially_verified",
-                  "researched_with_gaps",
-                ].includes(status) && purchaseIds.length
+              status: attempt.retry
+                ? "researching"
+                : [
+                      "verified",
+                      "partially_verified",
+                      "researched_with_gaps",
+                    ].includes(status) && purchaseIds.length
                   ? "completed"
                   : "blocked",
               updatedAt: new Date(),
@@ -1588,8 +1639,13 @@ export async function resolveImportResearch(
                 ...result,
                 validationReview: validationProjection.review,
                 attempt: proposal,
+                correctionAttempt: attempt.correctionAttempt,
               }
-            : { ...result, attempt: proposal },
+            : {
+                ...result,
+                attempt: proposal,
+                correctionAttempt: attempt.correctionAttempt,
+              },
           retirement
             ? { retirementReceiptId: retirement.receiptId }
             : undefined,

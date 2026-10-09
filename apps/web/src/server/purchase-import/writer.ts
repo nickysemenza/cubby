@@ -117,19 +117,21 @@ export function buildPurchaseImportPlan(
   const candidate = extraction.candidate;
   const writeBlockReason = !candidate
     ? "unreadable"
-    : candidate.orderedAt === null &&
-        candidate.lines.some((line) => line.amount !== 0)
-      ? "missing_date"
-      : candidate.printedGrandTotal === null
-        ? "missing_total"
-        : candidate.currency !== "USD"
-          ? "foreign_currency"
-          : extraction.status === "needs_review" &&
-              ["sum_mismatch", "foreign_currency", "missing_total"].includes(
-                extraction.reason,
-              )
-            ? extraction.reason
-            : null;
+    : candidate.currency === null
+      ? "missing_currency"
+      : candidate.orderedAt === null &&
+          candidate.lines.some((line) => line.amount !== 0)
+        ? "missing_date"
+        : candidate.printedGrandTotal === null
+          ? "missing_total"
+          : candidate.currency !== "USD"
+            ? "foreign_currency"
+            : extraction.status === "needs_review" &&
+                ["sum_mismatch", "foreign_currency", "missing_total"].includes(
+                  extraction.reason,
+                )
+              ? extraction.reason
+              : null;
   return {
     orderId: candidate?.orderId ?? null,
     currency: candidate?.currency ?? null,
@@ -966,9 +968,12 @@ export async function importVendorOrder(
   await assertRunCapabilityById(db, input.runId, "business_writer");
   await assertImportOwnership(db, input, actorUserId);
   const skipsLineWrites = semanticPlan.writeBlockReason !== null;
-  const identityOnly = ["missing_date", "missing_total"].includes(
-    semanticPlan.writeBlockReason ?? "",
-  );
+  const identityOnly = [
+    "missing_currency",
+    "foreign_currency",
+    "missing_date",
+    "missing_total",
+  ].includes(semanticPlan.writeBlockReason ?? "");
   const explicitResolutions = input.productResolutions;
   const identityDecisions =
     skipsLineWrites && !identityOnly
@@ -1126,7 +1131,8 @@ export async function importVendorOrder(
         orderId: candidate.orderId,
         displayLabel: candidate.merchant,
         date: orderDate,
-        statedTotal: candidate.printedGrandTotal,
+        statedTotal:
+          candidate.currency === "USD" ? candidate.printedGrandTotal : null,
       });
     } else if (!isSourceRefresh) {
       await tx
@@ -1143,7 +1149,9 @@ export async function importVendorOrder(
               : null),
           runId: target.runId ?? input.runId,
           displayLabel: target.displayLabel ?? candidate.merchant,
-          statedTotal: target.statedTotal ?? candidate.printedGrandTotal,
+          statedTotal:
+            target.statedTotal ??
+            (candidate.currency === "USD" ? candidate.printedGrandTotal : null),
         })
         .where(eq(purchase.id, target.id));
     }
@@ -1523,37 +1531,41 @@ export async function importVendorOrder(
           runId: runEntityId.parse(input.runId),
         }),
       );
-    if (isSourceRefresh) {
-      await tx
-        .delete(purchasePaymentEvidence)
-        .where(
-          and(
-            eq(purchasePaymentEvidence.sourceClaimId, sourceClaimId),
-            eq(purchasePaymentEvidence.purchaseId, purchaseId),
-          ),
-        );
-    }
-    for (const [evidenceIndex, payment] of candidate.payments.entries()) {
-      await tx.insert(purchasePaymentEvidence).values({
+    // Canonical amounts are USD. Unknown or foreign units remain in the
+    // immutable original and cannot replace accepted payments or settle charges.
+    if (candidate.currency === "USD") {
+      if (isSourceRefresh) {
+        await tx
+          .delete(purchasePaymentEvidence)
+          .where(
+            and(
+              eq(purchasePaymentEvidence.sourceClaimId, sourceClaimId),
+              eq(purchasePaymentEvidence.purchaseId, purchaseId),
+            ),
+          );
+      }
+      for (const [evidenceIndex, payment] of candidate.payments.entries()) {
+        await tx.insert(purchasePaymentEvidence).values({
+          purchaseId,
+          sourceClaimId,
+          amount: payment.amount,
+          chargedAt: payment.chargedAt ? new Date(payment.chargedAt) : null,
+          cardLastFour: payment.cardLastFour,
+          description: payment.description,
+          evidenceIndex,
+        });
+      }
+      // Settle from the payment lines this order retained, against charges
+      // already on the member's statements. Later charges settle through the
+      // same function before any hunt opens (retained-settlement.ts).
+      await settlePurchaseFromRetainedPayments(tx, {
         purchaseId,
-        sourceClaimId,
-        amount: payment.amount,
-        chargedAt: payment.chargedAt ? new Date(payment.chargedAt) : null,
-        cardLastFour: payment.cardLastFour,
-        description: payment.description,
-        evidenceIndex,
+        ledgerPartyId: partyId,
+        actor: buildActorContext(userIdSchema.parse(actorUserId), "mcp", {
+          runId: runEntityId.parse(input.runId),
+        }),
       });
     }
-    // Settle from the payment lines this order retained, against charges
-    // already on the member's statements. Later charges settle through the
-    // same function before any hunt opens (retained-settlement.ts).
-    await settlePurchaseFromRetainedPayments(tx, {
-      purchaseId,
-      ledgerPartyId: partyId,
-      actor: buildActorContext(userIdSchema.parse(actorUserId), "mcp", {
-        runId: runEntityId.parse(input.runId),
-      }),
-    });
     if (replacementExpenseId) {
       const reviewedIdentities = identityDecisions.map((decision) => ({
         ...decision,

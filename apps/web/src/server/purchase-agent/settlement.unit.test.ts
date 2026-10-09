@@ -50,6 +50,9 @@ describe("reportSettlement", () => {
   const setup = (input: {
     pending: Array<{ operationId: string }>;
     latest: string;
+    reason?: string;
+    status?: "done" | "unanswered";
+    reviewDetail?: string;
   }) => {
     const reports: Array<z.input<typeof reconcileSettledRunInput>> = [];
     const deps = {
@@ -63,8 +66,9 @@ describe("reportSettlement", () => {
         wait: async (operationId: string) => ({
           operationId,
           session: "1",
-          status: "unanswered" as const,
-          reason: "aborted",
+          status: input.status ?? ("unanswered" as const),
+          reason:
+            input.status === "done" ? undefined : (input.reason ?? "aborted"),
         }),
       },
       services: {
@@ -79,6 +83,7 @@ describe("reportSettlement", () => {
       submissions: {
         latest: () => input.latest,
         receivedEventIds: () => ["event-1"],
+        reviewDetail: () => input.reviewDetail,
       },
       onSettled: () => undefined,
       report: () => undefined,
@@ -89,6 +94,44 @@ describe("reportSettlement", () => {
     };
   };
 
+  // PiHarness drops hook exception details; a persisted research budget stop
+  // must reach ordinary unfinished-work review rather than generic failure.
+  it.each([
+    { status: "done" as const, reason: undefined },
+    { status: "unanswered" as const, reason: "faulted" },
+    { status: "unanswered" as const, reason: "model_error" },
+  ])(
+    "reconciles a durable generation limit behind a $status/$reason operation receipt with its retained reason",
+    async ({ status, reason }) => {
+      const { reports, settle } = setup({
+        pending: [],
+        latest: "newest",
+        reason,
+        status,
+        reviewDetail: "Research generation limit (256) reached.",
+      });
+      expect(await settle("newest")).toBe("done");
+      expect(reports).toEqual([
+        {
+          operationId: "submission-settled:newest",
+          receivedEventIds: ["event-1"],
+          detail: "Research generation limit (256) reached.",
+        },
+      ]);
+    },
+  );
+  it("preserves an explicit abort even when a previous generation limit is retained", async () => {
+    const { reports, settle } = setup({
+      pending: [],
+      latest: "newest",
+      reason: "aborted",
+      reviewDetail: "Research generation limit (256) reached.",
+    });
+    expect(await settle("newest")).toBe("done");
+    expect(reports[0]).toMatchObject({
+      failure: { failureCode: "agent_aborted" },
+    });
+  });
   it("waits to report the newest settlement while older work is pending", async () => {
     const { reports, settle } = setup({
       pending: [{ operationId: "older" }],

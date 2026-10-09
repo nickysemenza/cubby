@@ -656,6 +656,195 @@ describe("supported Product research writes", () => {
       .where(eq(runEvidence.id, f.evidence.id));
     return { candidateRef, sourceUrl };
   }
+  // Corrective attempts must retain work, replay without effects, refresh only
+  // their own write fence, and stop repeated unsupported completion claims.
+  it("retains a refused Product attempt and accepts a corrected fresh call after partial writes", async () => {
+    const f = await fixture(UNSPECIFIED_MANUFACTURER);
+    const firstInput = {
+      runId: f.run.id,
+      callId: "synthetic-partial-attempt",
+      proposal: f.proposal,
+    };
+    const first = await resolveProductResearch(ctx.db, firstInput, {
+      ...f.ports,
+      assess: async () => ({
+        identityVerified: true,
+        acceptedIdentifiers: [],
+        acceptedImages: [],
+        acceptedFacts: [1],
+        rejected: [
+          { path: "facts.0", reason: "Maker claim needs corrected support." },
+        ],
+      }),
+    });
+    expect(first).toMatchObject({
+      outcome: "partially_verified",
+      changedFields: ["model"],
+    });
+    const [active] = await getDb(ctx.db)
+      .select()
+      .from(runTarget)
+      .where(eq(runTarget.id, f.target.id));
+    const current = await productEnrichmentTarget(
+      getDb(ctx.db),
+      f.entity.entityId,
+    );
+    expect(active).toMatchObject({
+      state: "needs_evidence",
+      completedAt: null,
+      outcome: null,
+      targetFingerprint: current?.fingerprint,
+    });
+    expect(await resolveProductResearch(ctx.db, firstInput, f.ports)).toEqual(
+      first,
+    );
+    const correctedInput = {
+      ...firstInput,
+      callId: "synthetic-corrected-attempt",
+      proposal: { ...f.proposal, status: "researched_with_gaps" as const },
+    };
+    const corrected = await resolveProductResearch(
+      ctx.db,
+      correctedInput,
+      f.ports,
+    );
+    expect(corrected.changedFields).toEqual(["manufacturer"]);
+    expect(
+      await resolveProductResearch(ctx.db, correctedInput, f.ports),
+    ).toEqual(corrected);
+    expect(
+      await getDb(ctx.db)
+        .select()
+        .from(runFactEvidence)
+        .where(eq(runFactEvidence.targetId, f.target.id)),
+    ).toHaveLength(2);
+    await expect(
+      resolveProductResearch(
+        ctx.db,
+        { ...correctedInput, callId: "synthetic-late-attempt" },
+        f.ports,
+      ),
+    ).rejects.toThrow(/settled|closed/);
+  });
+  it("settles repeated unsupported Product proposals with an honest attempt-limit gap", async () => {
+    const f = await fixture();
+    const ports = {
+      ...f.ports,
+      assess: async () => ({
+        identityVerified: true,
+        acceptedIdentifiers: [],
+        acceptedImages: [],
+        acceptedFacts: [],
+        rejected: [{ path: "facts", reason: "Unsupported facts." }],
+      }),
+    };
+    for (let attempt = 1; attempt <= 3; attempt++) {
+      const input = {
+        runId: f.run.id,
+        callId: `synthetic-refusal-${attempt}`,
+        proposal: f.proposal,
+      };
+      const receipt = await resolveProductResearch(ctx.db, input, ports);
+      expect(await resolveProductResearch(ctx.db, input, ports)).toEqual(
+        receipt,
+      );
+      const [target] = await getDb(ctx.db)
+        .select()
+        .from(runTarget)
+        .where(eq(runTarget.id, f.target.id));
+      expect(target?.state).toBe(
+        attempt === 3 ? "unresolved" : "needs_evidence",
+      );
+    }
+    const lastReceipt = await resolveProductResearch(
+      ctx.db,
+      { runId: f.run.id, callId: "synthetic-refusal-3", proposal: f.proposal },
+      ports,
+    );
+    expect(lastReceipt.refusals).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          path: "attempt",
+          reason: expect.stringMatching(/limit/i),
+        }),
+      ]),
+    );
+    expect(await getDb(ctx.db).select().from(runFactEvidence)).toEqual([]);
+  });
+  it("counts repeated accepted Product proofs with the same refusal as zero progress", async () => {
+    const f = await fixture();
+    const ports = {
+      ...f.ports,
+      assess: async () => ({
+        identityVerified: true,
+        acceptedFacts: [0],
+        acceptedIdentifiers: [],
+        acceptedImages: [],
+        rejected: [{ path: "facts.1", reason: "Model remains unsupported." }],
+      }),
+    };
+    for (let attempt = 1; attempt <= 4; attempt++) {
+      const input = {
+        runId: f.run.id,
+        callId: `synthetic-matching-proof-${attempt}`,
+        proposal: f.proposal,
+      };
+      const receipt = await resolveProductResearch(ctx.db, input, ports);
+      expect(await resolveProductResearch(ctx.db, input, ports)).toEqual(
+        receipt,
+      );
+      const [target] = await getDb(ctx.db)
+        .select()
+        .from(runTarget)
+        .where(eq(runTarget.id, f.target.id));
+      expect(target?.state).toBe(
+        attempt === 4 ? "unresolved" : "needs_evidence",
+      );
+    }
+    expect(
+      await getDb(ctx.db)
+        .select()
+        .from(runFactEvidence)
+        .where(eq(runFactEvidence.targetId, f.target.id)),
+    ).toHaveLength(1);
+  });
+  it("keeps an empty verified Product proposal active without claiming supported facts", async () => {
+    const f = await fixture();
+    const result = await resolveProductResearch(
+      ctx.db,
+      {
+        runId: f.run.id,
+        callId: "synthetic-empty-attempt",
+        proposal: { ...f.proposal, facts: [] },
+      },
+      {
+        ...f.ports,
+        assess: async () => ({
+          identityVerified: true,
+          acceptedIdentifiers: [],
+          acceptedImages: [],
+          acceptedFacts: [],
+          rejected: [],
+        }),
+      },
+    );
+    expect(result).toMatchObject({
+      outcome: "researched_with_gaps",
+      verifiedFields: [],
+      changedFields: [],
+    });
+    expect(result.refusals).toEqual(
+      expect.arrayContaining([expect.objectContaining({ path: "attempt" })]),
+    );
+    const [target] = await getDb(ctx.db)
+      .select()
+      .from(runTarget)
+      .where(eq(runTarget.id, f.target.id));
+    expect(target).toMatchObject({
+      state: "needs_evidence",
+      completedAt: null,
+    });
+  });
   it("replaces the imported manufacturer sentinel with a supported maker and retained proof", async () => {
     const f = await fixture(UNSPECIFIED_MANUFACTURER);
     const input = {
@@ -701,12 +890,12 @@ describe("supported Product research writes", () => {
     ).toHaveLength(2);
   });
 
-  it("fills a supported fact and verifies matching existing facts from a selected variant without JSON-LD", async () => {
+  it("fills a supported fact and settles explicit gaps from a selected variant without JSON-LD", async () => {
     const f = await fixture();
     const input = {
       runId: f.run.id,
       callId: crypto.randomUUID(),
-      proposal: f.proposal,
+      proposal: { ...f.proposal, status: "researched_with_gaps" as const },
     };
     const first = await resolveProductResearch(ctx.db, input, f.ports);
     expect(first).toMatchObject({
@@ -748,34 +937,40 @@ describe("supported Product research writes", () => {
   it("refuses unsupported ordered-variant identity and evidence from another task before writing", async () => {
     const f = await fixture();
     const callId = crypto.randomUUID();
-    await expect(
-      resolveProductResearch(
-        ctx.db,
-        { runId: f.run.id, callId, proposal: f.proposal },
-        {
-          ...f.ports,
-          assess: async () => ({
-            identityVerified: false,
-            acceptedFacts: [],
-            acceptedIdentifiers: [],
-            acceptedImages: [],
-            rejected: [
-              {
-                path: "identity",
-                reason:
-                  "Source describes the large device, not the ordered small device.",
-              },
-            ],
-          }),
-        },
-      ),
-    ).rejects.toThrow(/identity|variant/);
+    const refused = await resolveProductResearch(
+      ctx.db,
+      { runId: f.run.id, callId, proposal: f.proposal },
+      {
+        ...f.ports,
+        assess: async () => ({
+          identityVerified: false,
+          acceptedFacts: [],
+          acceptedIdentifiers: [],
+          acceptedImages: [],
+          rejected: [
+            {
+              path: "identity",
+              reason:
+                "Source describes the large device, not the ordered small device.",
+            },
+          ],
+        }),
+      },
+    );
+    expect(refused).toMatchObject({
+      outcome: "researched_with_gaps",
+      changedFields: [],
+      verifiedFields: [],
+      refusals: expect.arrayContaining([
+        expect.objectContaining({ path: "identity" }),
+      ]),
+    });
     const [attempt] = await getDb(ctx.db)
       .select()
       .from(runOperation)
       .where(eq(runOperation.operationId, callId));
     expect(attempt).toMatchObject({
-      state: "failed",
+      state: "completed",
       result: { attempt: expect.objectContaining(f.proposal) },
     });
     await getDb(ctx.db)
@@ -957,8 +1152,8 @@ describe("supported Product research writes", () => {
       .from(runTarget)
       .where(eq(runTarget.id, f.target.id));
     expect(target).toMatchObject({
-      state: "unresolved",
-      outcome: "researched_with_gaps",
+      state: "needs_evidence",
+      outcome: null,
     });
   });
   // Distinct issuers sharing a first hostname label must not collide, cross

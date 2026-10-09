@@ -27,8 +27,8 @@ import { callMcpTool } from "./mcp-test-utils";
 import type { ToolArguments } from "./tools/tool-registration";
 
 /**
- * An MCP client starts an enrichment run for an import-created Product and
- * polls it. Failure modes: the start actions are not exposed; the launch
+ * An MCP client names the automatic enrichment run for an import-created
+ * Product and polls it. Failure modes: the start actions are not exposed; the launch
  * preview hides the source a start needs; the start answers a uuid instead of
  * the RUN- code `entity_read` takes, or the preview leaks a uuid account id;
  * the MCP context lacks the member party;
@@ -109,7 +109,7 @@ describe("run start through MCP", () => {
     return { productId: line!.productId, order: order! };
   };
 
-  it("starts a product_enrichment run, reads it back, and names it when started again", async () => {
+  it("names the automatic product_enrichment run, reads it back, and does not dispatch again", async () => {
     const { productId } = await importProduct();
 
     const preview = z
@@ -143,18 +143,24 @@ describe("run start through MCP", () => {
     expect(first).toMatchObject({
       runs: [
         {
-          created: true,
-          run: { id: expect.stringMatching(/^RUN-/), status: "running" },
-          blockingRun: null,
+          created: false,
+          run: null,
+          blockingRun: {
+            id: expect.stringMatching(/^RUN-/),
+            status: "running",
+          },
         },
       ],
     });
     const runId = z
       .object({
-        runs: z.tuple([z.object({ run: z.object({ id: z.string() }) })]),
+        runs: z.tuple([
+          z.object({ blockingRun: z.object({ id: z.string() }) }),
+        ]),
       })
-      .parse(first).runs[0].run.id;
+      .parse(first).runs[0].blockingRun.id;
     expect(sent).toHaveLength(1);
+    const dispatched = [...sent];
 
     expect(
       await call("entity_read", {
@@ -176,7 +182,7 @@ describe("run start through MCP", () => {
         },
       ],
     });
-    expect(sent).toHaveLength(1);
+    expect(sent).toEqual(dispatched);
   });
 
   // With no account there is no account lock to block on, so a retried start
@@ -214,6 +220,8 @@ describe("run start through MCP", () => {
         },
       ],
     });
-    expect(sent).toHaveLength(1);
+    expect(
+      sent.filter((event) => event.purpose === "purchase_validation"),
+    ).toHaveLength(1);
   });
 });

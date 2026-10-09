@@ -181,6 +181,10 @@ export async function ingestGmailEvidence(
   db: Database,
   ledgerPartyId: string,
   names: ConvergenceNames,
+  transport?: {
+    client: Parameters<typeof ingestGmailMessages>[1];
+    mailboxId: string;
+  },
 ) {
   const { token, orderId, sender, messageId } = names;
   const message = {
@@ -204,7 +208,7 @@ export async function ingestGmailEvidence(
   // A provider that serves exactly this message, through the real ingestion.
   const { orderMailIds } = await ingestGmailMessages(
     db,
-    {
+    transport?.client ?? {
       getProfile: async () => ({ historyId: "1" }),
       listMessages: async () => ({ messages: [{ id: messageId }] }),
       getMessage: async () => message,
@@ -213,7 +217,7 @@ export async function ingestGmailEvidence(
     },
     {
       ledgerPartyId,
-      mailboxId: `synthetic-mailbox-${token}`,
+      mailboxId: transport?.mailboxId ?? `synthetic-mailbox-${token}`,
       messageIds: [messageId],
       triage: async () => "related",
     },

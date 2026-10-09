@@ -8,10 +8,9 @@ import type {
 import { sha256Hex } from "@cubby/shared/sha256";
 
 /**
- * Purchases carry no currency column: the import writer only ever writes USD
- * orders (`foreign_currency` blocks the write), so every live Purchase is USD
- * by construction. Validation compares the plan's currency against this, and a
- * non-USD plan is write-blocked and offers no corrections.
+ * USD is the canonical unit for financial amounts. A Purchase can retain an
+ * identified header whose source currency is unknown; unknown or foreign units
+ * remain in original evidence and cannot authorize financial corrections.
  */
 export const PURCHASE_CURRENCY = "USD";
 

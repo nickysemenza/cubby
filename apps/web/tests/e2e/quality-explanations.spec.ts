@@ -604,6 +604,8 @@ test("explanation evidence formats links and dates without exposing internal ent
 }) => {
   const { getFixtureDb } = await import("./fixtures-core");
   const { getDb } = await import("~/server/repo/database-helpers");
+  const { resolveProductIdentifierSource } =
+    await import("~/server/repo/product-identifier-source");
   const { vendor } = await import("~/server/db/schema");
   const { eq } = await import("drizzle-orm");
   const suffix = Date.now();
@@ -616,13 +618,16 @@ test("explanation evidence formats links and dates without exposing internal ent
     columns: { id: true },
   });
   if (!storedVendor) throw new Error("Synthetic supplier fixture is missing");
+  const source = await resolveProductIdentifierSource(getFixtureDb(), {
+    vendorId: storedVendor.id,
+  });
   const productName = `Synthetic formatted evidence ${suffix}`;
   const url = `https://example.com/catalog/${"synthetic-".repeat(30)}item`;
   const product = await seedProductPrerequisite(page, {
     name: productName,
     externalIds: [
       {
-        source: `vendor-${storedVendor.id}`,
+        source,
         kind: "retailer_sku",
         externalId: `SYNTHETIC-${suffix}`,
         url,

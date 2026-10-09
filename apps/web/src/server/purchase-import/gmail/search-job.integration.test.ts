@@ -19,6 +19,7 @@ import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it, vi } from "vitest";
 
 import { wrapAiGatewayError } from "~/server/ai/gateway-error";
+import { account as authAccount } from "~/server/db/auth.schema";
 import { run, runProgress } from "~/server/db/schema";
 import { getDb } from "~/server/repo/database-helpers";
 import { getRunLiveProgress } from "~/server/repo/run-progress";
@@ -83,6 +84,13 @@ describe("Vendor Gmail search Runs", () => {
       name: "Synthetic search member",
       kind: "member",
       userId: ctx.actor.userId,
+    });
+    await getDb(ctx.db).insert(authAccount).values({
+      id: crypto.randomUUID(),
+      accountId: "synthetic-search-mailbox",
+      providerId: "google",
+      userId: ctx.actor.userId,
+      updatedAt: new Date(),
     });
     const vendor = await insertWithShortcode(ctx.db, "vendor", {
       name: "Synthetic search vendor",
@@ -324,6 +332,13 @@ describe("Vendor Gmail search Runs", () => {
       name: "Synthetic refused member",
       kind: "member",
       userId: ctx.actor.userId,
+    });
+    await getDb(ctx.db).insert(authAccount).values({
+      id: crypto.randomUUID(),
+      accountId: "synthetic-refused-mailbox",
+      providerId: "google",
+      userId: ctx.actor.userId,
+      updatedAt: new Date(),
     });
     const vendor = await insertWithShortcode(ctx.db, "vendor", {
       name: "Synthetic refused vendor",

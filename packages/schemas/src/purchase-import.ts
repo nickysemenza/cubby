@@ -265,7 +265,7 @@ export const extractedOrderCandidate = z.object({
   orderId: z.string().trim().min(1).max(300).nullable(),
   orderedAt: extractedOrderDate,
   merchant: z.string().trim().min(1).max(300).nullable(),
-  currency: z.string().trim().length(3),
+  currency: z.string().trim().length(3).nullable(),
   printedGrandTotal: money.nullable(),
   lines: z.array(extractedPurchaseLine).max(500),
   payments: z.array(extractedPaymentEvidence).max(100),
@@ -274,6 +274,7 @@ export const extractedOrderCandidate = z.object({
 export type ExtractedOrderCandidate = z.infer<typeof extractedOrderCandidate>;
 
 const importExtractionReviewReason = z.enum([
+  "missing_currency",
   "sum_mismatch",
   "foreign_currency",
   "missing_total",
@@ -331,7 +332,7 @@ const extractedOrderCandidateModelOutput = z.object({
   orderId: z.string().trim().min(1).max(300).nullable(),
   orderedAt: extractedOrderDate,
   merchant: z.string().trim().min(1).max(300).nullable(),
-  currency: z.string().trim().length(3),
+  currency: z.string().trim().length(3).nullable(),
   printedGrandTotal: money.nullable(),
   lines: z.array(extractedPurchaseLineModelOutput),
   payments: z.array(extractedPaymentEvidenceModelOutput),

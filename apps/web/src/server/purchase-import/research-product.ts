@@ -59,6 +59,7 @@ import {
   acceptedProductField,
   commitAcceptedResearchFields,
 } from "./research-accepted-fields";
+import { researchAttemptDisposition } from "./research-attempt";
 import { loadProductPurchaseContext } from "./research-context";
 import {
   assertResearchWork,
@@ -493,11 +494,72 @@ function researchOutcome(
   completeCoverage: boolean,
 ) {
   if (partial && acceptedClaimCount) return "partially_verified" as const;
-  if (proposal.status === "partially_verified" && !acceptedClaimCount)
+  if (
+    ["verified", "partially_verified"].includes(proposal.status) &&
+    !acceptedClaimCount
+  )
     return "researched_with_gaps" as const;
   if (proposal.status === "verified" && !completeCoverage)
     return "researched_with_gaps" as const;
   return proposal.status;
+}
+
+function canCorrectProductAttempt(
+  proposal: Proposal,
+  coverage: {
+    reviewRequired: boolean;
+    refusals: number;
+    accepted: number;
+    operands: number;
+    claims: number;
+    completeCoverage: boolean;
+  },
+) {
+  return (
+    !coverage.reviewRequired &&
+    ["verified", "partially_verified"].includes(proposal.status) &&
+    (coverage.refusals > 0 ||
+      coverage.accepted !== coverage.operands ||
+      !coverage.claims ||
+      (proposal.status === "verified" && !coverage.completeCoverage))
+  );
+}
+
+async function recordProductAttempt(
+  tx: DrizzleTransaction,
+  input: {
+    target: typeof runTarget.$inferSelect;
+    proposal: Proposal;
+    attempt: Awaited<ReturnType<typeof researchAttemptDisposition>>;
+    productId: typeof product.$inferSelect.id;
+    refusals: z.infer<typeof researchAssessment>["rejected"];
+  },
+) {
+  const { target, proposal, attempt, productId, refusals } = input;
+  const outcome = attempt.outcome;
+  const refreshed = attempt.retry
+    ? await productEnrichmentTarget(tx, productId)
+    : undefined;
+  if (attempt.retry && !refreshed)
+    throw new Error("Research Product disappeared after accepted writes.");
+  await tx
+    .update(runTarget)
+    .set({
+      state: attempt.retry
+        ? "needs_evidence"
+        : outcome === "verified"
+          ? "completed"
+          : "unresolved",
+      outcome: attempt.retry ? null : outcome,
+      targetFingerprint: refreshed?.fingerprint ?? target.targetFingerprint,
+      warning: [
+        proposal.detail,
+        ...refusals.map((refusal) => refusal.reason),
+      ].join("\n"),
+      completedAt: attempt.retry ? null : new Date(),
+      updatedAt: new Date(),
+    })
+    .where(eq(runTarget.id, target.id));
 }
 
 /** Semantic acceptance precedes canonical fill-only writes and current member proofs. */
@@ -583,13 +645,6 @@ export async function resolveProductResearch(
         proposal.imageCandidates.length;
       const identitySupported =
         assessed.identityVerified && proposal.identity.evidenceIds.length > 0;
-      if (
-        !identitySupported &&
-        ["verified", "partially_verified"].includes(proposal.status)
-      )
-        throw new Error(
-          `Ordered variant identity was not supported: ${assessed.rejected.map((item) => item.reason).join("; ")}`,
-        );
       // An unresolved report may contain declined claims. Preserve the report
       // without letting even an accepted family-level claim bypass exact identity.
       const supported = identitySupported
@@ -724,7 +779,7 @@ export async function resolveProductResearch(
             if (committed.changed) changedFields.add("images");
             claims.push(...committed.claims);
           }
-          await recordAcceptedFactEvidence(
+          const proof = await recordAcceptedFactEvidence(
             tx,
             { runId: scope.id, targetId: target.id, claims },
             readResearchCanonicalProjection,
@@ -765,7 +820,7 @@ export async function resolveProductResearch(
             productId,
             ledgerPartyId: parseEntityId("ledgerParty", scope.ledgerPartyId!),
           });
-          const outcome = researchOutcome(
+          const assessedOutcome = researchOutcome(
             proposal,
             Boolean(
               contradictions.length ||
@@ -776,16 +831,29 @@ export async function resolveProductResearch(
             claims.length,
             coverage.complete,
           );
-          await tx
-            .update(runTarget)
-            .set({
-              state: outcome === "verified" ? "completed" : "unresolved",
-              outcome,
-              warning: proposal.detail,
-              completedAt: new Date(),
-              updatedAt: new Date(),
-            })
-            .where(eq(runTarget.id, target.id));
+          const attempt = await researchAttemptDisposition(tx, {
+            runId: scope.id,
+            workRef: target.id,
+            outcome: assessedOutcome,
+            progress: changedFields.size + proof.inserted > 0,
+            correctable: canCorrectProductAttempt(proposal, {
+              reviewRequired: Boolean(contradictions.length || refused),
+              refusals: refusals.length,
+              accepted: acceptedCount,
+              operands: operandCount,
+              claims: claims.length,
+              completeCoverage: coverage.complete,
+            }),
+            refusals,
+          });
+          const outcome = attempt.outcome;
+          await recordProductAttempt(tx, {
+            target,
+            proposal,
+            attempt,
+            productId,
+            refusals,
+          });
           const result = productResearchResult.parse({
             outcome,
             changedFields: [...changedFields],
@@ -798,6 +866,7 @@ export async function resolveProductResearch(
           await ledger.complete(tx, {
             ...result,
             attempt: proposal,
+            correctionAttempt: attempt.correctionAttempt,
             fieldCorrectionProof,
           });
           await afterProductResearchCommit(

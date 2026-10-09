@@ -82,7 +82,7 @@ export const researchWorkResolve = z.strictObject({
       "unrelated",
     ])
     .describe(
-      "Outcome of the assigned task. A mail task can be verified when its supported order or lifecycle event is committed and linked, while the Purchase still has unknown payment, delivery or catalog facts. Product verification requires the requested identity coverage.",
+      "Outcome of the assigned task. A mail task can be verified when its supported order or lifecycle event is committed and linked, while the Purchase still has unknown payment, delivery or catalog facts. Product verification requires the requested identity coverage. A refused completion proposal can return the same active work and feedback for correction; explicit unresolved outcomes settle it for review.",
     ),
   identity: z.strictObject({ evidenceIds: evidenceIds.default([]), reasoning }),
   facts: z.array(acceptedResearchFact).max(100).default([]),
@@ -122,7 +122,11 @@ export const researchWorkResolve = z.strictObject({
           .array(researchProductResolution)
           .max(500)
           .optional(),
-        defaultTrade: tradeSchema,
+        defaultTrade: tradeSchema
+          .optional()
+          .describe(
+            "Source-supported household purpose only. Omit when unknown; preserve existing member attribution.",
+          ),
       }),
     )
     .max(100)
@@ -189,6 +193,7 @@ export const researchWebRead = z.strictObject({
 });
 export const researchFind = z.strictObject({
   workRef,
+  entityKind: z.enum(["productCategory", "spendingCategory"]).optional(),
   query: z.string().trim().min(1).max(100),
 });
 export const researchToolInputs = {

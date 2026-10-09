@@ -202,6 +202,35 @@ describe("research host lifecycle", () => {
     expect(header?.status).toBe("running");
     expect(header?.input).toBeNull();
   });
+  it("finds an existing category by public code even when it has no search document", async () => {
+    const f = await admitted();
+    const category = await insertWithShortcode(ctx.db, "productCategory", {
+      name: "Synthetic compact tools",
+      parentId: null,
+      feature: null,
+      emoji: null,
+      sortOrder: 0,
+      spendingCategoryMode: "inherit",
+      spendingCategoryId: null,
+    });
+    const next = await f.services.researchNext({}, crypto.randomUUID());
+    const workRef = z
+      .object({ work: z.object({ workRef: z.uuid() }) })
+      .parse(next).work.workRef;
+    const result = await f.services.researchFind(
+      { workRef, entityKind: "productCategory", query: category.shortcode },
+      crypto.randomUUID(),
+    );
+    expect(result).toMatchObject({
+      results: [
+        {
+          entityKind: "productCategory",
+          id: category.shortcode,
+          name: "Synthetic compact tools",
+        },
+      ],
+    });
+  });
   it("refuses current inputs whose task admission is missing instead of reporting success", async () => {
     const f = await admitted();
     await getDb(ctx.db)

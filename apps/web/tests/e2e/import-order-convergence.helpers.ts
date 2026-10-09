@@ -405,7 +405,7 @@ export async function createConvergenceHarness(
       .getByRole("article")
       .filter({ hasText: orderId });
     // The exact-order mail links itself to the booked Purchase; no click.
-    await expect(mail.getByText("linked", { exact: true })).toBeVisible({
+    await expect(mail.getByText("Linked", { exact: true })).toBeVisible({
       timeout: 30_000,
     });
     await expect(

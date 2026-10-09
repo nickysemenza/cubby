@@ -351,8 +351,8 @@ describe("RunOperation rows written by earlier code", () => {
       state: "failed",
       error: expect.stringMatching(/reject/iu),
     });
-    await expect(execute()).rejects.toThrow(/reject|failed/iu);
-    await expect(execute()).rejects.toThrow(/reject|failed/iu);
+    await expect(execute()).rejects.toThrow("Mutation outcome is uncertain");
+    await expect(execute()).rejects.toThrow("Mutation outcome is uncertain");
     expect(executions()).toBe(0);
     expect(await stored(run.id, operationId)).toEqual(before);
   });

@@ -176,6 +176,14 @@ an operation's successful response.
 Photo inventory keeps its explicitly selected shared owner and live initiating
 member; that permission never grants research another member's source scope.
 
+Research admission counts unique generations in Durable Object SQLite across
+replay and eviction. Exhausting its allowance retains a concrete review reason
+and denies inference at the provider fetch boundary before every transport.
+SDK hooks may report an exception and continue; a hook exception alone cannot
+enforce the allowance. The local denial is terminal, avoiding provider retries
+for intentionally stopped work. Explicit member aborts retain their failure
+semantics, while allowance exhaustion leaves unfinished targets for review.
+
 The replacement's migration chain follows the current main journal, including
 Neon diagnostics. Its populated-history rehearsal rebuilds main's actual schema,
 restores synthetic service-created records, and invokes the production migrator
@@ -216,6 +224,11 @@ and deployment/readback order are owned by the
    is converted to the household-local day. Mail task verification records the
    supported event even when unrelated payment/delivery/catalog facts remain
    unknown. Broader scope coverage belongs to explicit research objectives.
+   Unknown source currency remains null. Unknown or foreign-unit totals and
+   payments stay in the immutable original, outside canonical USD financial
+   writes. Unpriced item descriptions remain retained source evidence until
+   priced itemization is available. Missing purpose never replaces member
+   attribution; principal Expenses still require the shared effective trade.
    Retained mail observations present plain text and compact visible HTML with
    source links before applying the model-view size limit. Layout/CSS bytes never
    crowd receipt facts out of that view. The immutable original MIME content and

@@ -7,9 +7,12 @@ import * as schema from "~/server/db/schema";
 import { getDb, notDeleted } from "~/server/repo/database-helpers";
 import { resolveOrThrow } from "~/server/repo/shortcode-resolver";
 import { setMemberLoginParty } from "~/server/repo/member-login";
+import { account as googleAccount } from "~/server/db/auth.schema";
+import { createGmailApiClient } from "~/server/purchase-import/gmail/client";
 import {
   convergenceNames,
   createConvergenceFixtures,
+  ingestGmailEvidence,
   sha256Hex,
 } from "../../tooling/convergence-harness";
 import {
@@ -27,7 +30,7 @@ import { expect, test } from "./e2e-test";
 test.use({ workerdProfile: "gmail" });
 
 // Failure boundaries: OAuth callback must persist its real account, mailbox
-// discovery must classify actual MIME evidence, conflicting identities must
+// original acquisition must use its stored credentials and actual MIME evidence, conflicting identities must
 // require an explicit Product decision, and both arrivals must converge after
 // reviewed booking/correction without another Product or economic line.
 for (const statementFirst of [true, false]) {
@@ -189,22 +192,28 @@ for (const statementFirst of [true, false]) {
     expect(accounts.some((account) => account.providerId === "google")).toBe(
       true,
     );
-    await gotoAuthenticatedPage(page, `/vendors/${prerequisites.vendor.id}`);
-    await page
-      .getByRole("button", { name: "Search Gmail now", exact: true })
-      .click();
-    await expect(page.getByText(/Checked 1 messages/u)).toBeVisible({
-      timeout: 60_000,
+    const connected = await database.query.account.findFirst({
+      where: and(
+        eq(googleAccount.userId, actor.userId),
+        eq(googleAccount.providerId, "google"),
+      ),
     });
-    const searchRun = await page
-      .getByRole("link", { name: "View run", exact: true })
-      .getAttribute("href");
-    if (!searchRun) throw new Error("Gmail discovery has no public Run review");
-    await page.getByRole("link", { name: "View run", exact: true }).click();
-    await expect(page).toHaveURL(new RegExp(escapeRegExp(searchRun)));
-    await expect(
-      page.getByRole("heading", { name: /Run/u }).first(),
-    ).toBeVisible();
+    if (!connected?.accessToken)
+      throw new Error("Google callback did not retain its access token");
+    const client = createGmailApiClient({
+      accessToken: connected.accessToken,
+      baseUrl: `${provider.url}/gmail/v1/`,
+    });
+    const discovered = await client.listMessages({
+      query: "-in:spam -in:trash",
+    });
+    expect(discovered.messages?.map((message) => message.id)).toContain(
+      names.messageId,
+    );
+    const researchMail = await ingestGmailEvidence(db, member.id, names, {
+      client,
+      mailboxId: connected.accountId,
+    });
     expect(
       await database.query.purchase.findMany({
         where: and(
@@ -441,6 +450,8 @@ for (const statementFirst of [true, false]) {
       await retailer();
       await statement();
     }
+    if (!purchaseCode) throw new Error("Supported imports created no Purchase");
+    await researchMail(purchaseCode);
 
     await gotoAuthenticatedPage(page, `/vendors/${prerequisites.vendor.id}`);
     const mail = page
@@ -450,7 +461,7 @@ for (const statementFirst of [true, false]) {
     await expect(
       mail.getByRole("link", { name: names.orderId, exact: true }),
     ).toBeVisible();
-    await expect(mail.getByText("linked", { exact: true })).toBeVisible();
+    await expect(mail.getByText("Linked", { exact: true })).toBeVisible();
     await expect(
       mail.getByRole("button", { name: "Link", exact: true }),
     ).toHaveCount(0);
@@ -514,7 +525,6 @@ for (const statementFirst of [true, false]) {
         "GET /jwks",
         "GET /gmail/v1/users/me/messages",
         `GET /gmail/v1/users/me/messages/${names.messageId}`,
-        "POST /model/classify-mail",
         "POST /model/extract-capture",
       ]),
     );

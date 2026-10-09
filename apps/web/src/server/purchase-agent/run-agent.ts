@@ -30,6 +30,7 @@ import {
   ROOT_CONVERSATION_ID,
   type EntryRecord,
   type Storage,
+  type TaskId,
 } from "@earendil-works/pi-durable";
 import * as Sentry from "@sentry/cloudflare";
 import { Agent } from "agents";
@@ -95,6 +96,8 @@ const STATE_KEYS = {
   reasoningMode: "reasoning_mode",
   latestSubmission: "latest_submission",
   receivedEvents: "received_events",
+  researchGenerationCount: "research_generation_count",
+  researchGenerationStop: "research_generation_stop",
 } as const;
 
 /**
@@ -132,6 +135,7 @@ export class PurchaseImportRunAgent
     {
       latest: () => this.readState(STATE_KEYS.latestSubmission),
       receivedEventIds: () => this.receivedEventIds(),
+      reviewDetail: () => this.readState(STATE_KEYS.researchGenerationStop),
     },
   );
 
@@ -206,6 +210,21 @@ export class PurchaseImportRunAgent
       testModel: this.agentEnv.testModel,
       subscription: this.agentEnv.chatGptInference,
       subscriptionRequired: identity?.purpose !== "photo_inventory",
+      beforeTransmission: () => {
+        if (identity?.purpose === "photo_inventory") return;
+        const stop = this.readState(STATE_KEYS.researchGenerationStop);
+        if (!stop) return;
+        return Response.json(
+          {
+            error: {
+              type: "permission_error",
+              code: "research_generation_limit",
+              message: stop,
+            },
+          },
+          { status: 403 },
+        );
+      },
       onTransport: (transport) => {
         this.requestTransport = transport;
       },
@@ -252,7 +271,8 @@ export class PurchaseImportRunAgent
         ).filter((tool) => agentTools.has(tool.name)),
         hooks: [
           hook(GenerationTask, {
-            beforeRequest: async () => {
+            beforeRequest: async (_request, api) => {
+              this.admitResearchGeneration(purpose, api.taskId);
               await this.acknowledgeAdmittedObservations();
               this.requestStartedAt = Date.now();
               this.requestTransport = "unknown";
@@ -271,6 +291,32 @@ export class PurchaseImportRunAgent
     if (workflow.skills)
       this.registry.install(await piSkills([workflow.skills]));
     this.installed = runId;
+  }
+
+  /** Count unique pi generations atomically; retries and recovery keep their task id. */
+  private admitResearchGeneration(
+    purpose: RunIdentity["purpose"],
+    taskId: TaskId,
+  ): void {
+    if (purpose === "photo_inventory") return;
+    this.ctx.storage.transactionSync(() => {
+      const key = `research_generation:${taskId}`;
+      if (this.readState(key)) return undefined;
+      const count = z.coerce
+        .number()
+        .int()
+        .nonnegative()
+        .parse(this.readState(STATE_KEYS.researchGenerationCount) ?? "0");
+      if (count >= 256) {
+        const detail =
+          "Research generation limit (256) reached. Unfinished work remains for review; no verification or completion is claimed.";
+        this.writeState(STATE_KEYS.researchGenerationStop, detail);
+        return;
+      }
+      this.writeState(STATE_KEYS.researchGenerationCount, String(count + 1));
+      this.writeState(key, "admitted");
+      return undefined;
+    });
   }
 
   /** Preserve host-requested escalation across eviction and service-result replay. */

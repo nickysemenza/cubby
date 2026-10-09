@@ -135,6 +135,7 @@ const crud = createEntityCrud({
     "productExpectation",
   ],
 });
+export const getSpendingCategoryByShortcode = crud.getByShortcode;
 /** The category and every live ancestor above it. */
 async function selfAndAncestors(
   db: Database | DrizzleTransaction,

@@ -22,6 +22,7 @@ import {
 import { startLocalChatGptProvider } from "tooling/local-chatgpt-provider";
 import { createE2EObjectStorage } from "tooling/local-object-storage";
 import {
+  mailEvalCategoryName,
   mailEvalMailboxId,
   mailEvalMessages,
   mailEvalOrderId,
@@ -249,6 +250,7 @@ describe("bounded real Gmail purchase and Product research", () => {
         seams: [
           "synthetic OAuth/Gmail original transport",
           "public source search/page transport",
+          "live category catalog read with no search document",
           "all measured closed-set Jev decisions scripted",
         ],
         limits: [
@@ -284,6 +286,15 @@ describe("bounded real Gmail purchase and Product research", () => {
           name: "Example Works",
           website: "https://maker.example.test",
           browserDomains: ["maker.example.test"],
+        });
+        const category = await insertWithShortcode(ctx.db, "productCategory", {
+          name: mailEvalCategoryName,
+          parentId: null,
+          feature: null,
+          emoji: null,
+          sortOrder: 0,
+          spendingCategoryMode: "inherit",
+          spendingCategoryId: null,
         });
         await authorizePurchaseAgent(ctx.db, ctx.actor.userId);
         await getDb(ctx.db)
@@ -532,7 +543,7 @@ describe("bounded real Gmail purchase and Product research", () => {
               expect(savedProduct).toMatchObject({
                 manufacturer: "Example Works",
                 model: "P-20-SB",
-                categoryId: null,
+                categoryId: category.id,
                 ingredientId: null,
                 growsPlantId: null,
               });
@@ -560,6 +571,27 @@ describe("bounded real Gmail purchase and Product research", () => {
                   .executionAuthorization,
               ).toEqual(approval);
               expect(child.status).toBe("needs_review");
+              expect(
+                state.operations.some(
+                  (operation) =>
+                    operation.runId === child.id &&
+                    operation.kind === "research_find" &&
+                    operation.state === "completed" &&
+                    z
+                      .object({
+                        results: z.array(
+                          z.object({
+                            entityKind: z.literal("productCategory"),
+                            id: z.string(),
+                          }),
+                        ),
+                      })
+                      .safeParse(operation.result)
+                      .data?.results.some(
+                        (result) => result.id === category.shortcode,
+                      ),
+                ),
+              ).toBe(true);
               const target = state.targets.find(
                 (row) =>
                   row.runId === child.id && row.entityId === savedProduct.id,
@@ -568,7 +600,7 @@ describe("bounded real Gmail purchase and Product research", () => {
                 throw new Error(
                   "Automatic child lacks its admitted Product task",
                 );
-              for (const fieldPath of ["manufacturer", "model"]) {
+              for (const fieldPath of ["manufacturer", "model", "categoryId"]) {
                 const currentProofs = await loadCurrentFactEvidence(ctx.db, {
                   entityKind: "product",
                   entityId: savedProduct.shortcode,
@@ -647,7 +679,7 @@ describe("bounded real Gmail purchase and Product research", () => {
                 coverImageUrl: null,
               });
               const explanations = [];
-              for (const field of ["manufacturer", "model"]) {
+              for (const field of ["manufacturer", "model", "categoryId"]) {
                 const response = await fetch(
                   `${runtime.origin}/api/v1/fieldExplanation/explain?entityKind=product&entityId=${savedProduct.shortcode}&field=${field}&surface=detail`,
                   { headers },
@@ -666,7 +698,11 @@ describe("bounded real Gmail purchase and Product research", () => {
                       proof.run.entityId === child.shortcode &&
                       proof.subject.entityId === savedProduct.shortcode &&
                       proof.value ===
-                        (field === "model" ? "P-20-SB" : "Example Works") &&
+                        (field === "model"
+                          ? "P-20-SB"
+                          : field === "categoryId"
+                            ? category.shortcode
+                            : "Example Works") &&
                       proof.support !== null,
                   ),
                 ).toBe(true);

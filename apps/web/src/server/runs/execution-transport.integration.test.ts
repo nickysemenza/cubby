@@ -17,6 +17,12 @@ import type { WorkflowLauncher } from "~/server/workflow-runs/launcher";
 import { ensureRun } from "./ensure-run";
 import { issueExecutionAuthorization } from "./execution-authorization";
 
+// A catalog cached by another integration file must not bypass this file's
+// held pricing socket and the cancellation boundary it exposes.
+vi.hoisted(() => {
+  vi.resetModules();
+});
+
 // The configured allowance must prevent physical inference, not merely record
 // excessive cost afterward. A missing approval must be equally restrictive.
 describe("mail routing at the paid transport boundary", () => {

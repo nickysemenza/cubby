@@ -148,12 +148,19 @@ describe("immutable prepared purchase review", () => {
       });
 
     const detail = await loadRunDetail(ctx.db, run.publicId);
-    expect(detail.targets).toMatchObject([
-      {
-        targetType: "product",
-        targetShortcode: product.shortcode,
-        targetName: "Fixture Nasturtium",
-      },
-    ]);
+    expect(detail.targets).toHaveLength(2);
+    expect(detail.targets).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          targetType: "run",
+          targetName: "account_sync",
+        }),
+        expect.objectContaining({
+          targetType: "product",
+          targetShortcode: product.shortcode,
+          targetName: "Fixture Nasturtium",
+        }),
+      ]),
+    );
   });
 });

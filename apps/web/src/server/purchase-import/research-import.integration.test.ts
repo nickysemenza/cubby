@@ -224,6 +224,186 @@ describe("supported retained-mail research writes", () => {
       proposal,
     };
   }
+  // A semantic refusal must not surrender mail ownership; a corrected call and
+  // replay must commit one source order, expense, and lifecycle association.
+  it("retains refused mail work for a corrected call and replays both receipts without duplicate writes", async () => {
+    const f = await fixture();
+    const proposal = { ...f.proposal, orders: f.proposal.orders.slice(0, 1) };
+    const input = {
+      runId: f.run.id,
+      workRef: f.target.id,
+      callId: "synthetic-refused-mail",
+      proposal,
+    };
+    const refused = await resolveImportResearch(ctx.db, input, {
+      ...f.ports,
+      assess: async () => ({
+        identityVerified: true,
+        acceptedFacts: [],
+        acceptedIdentifiers: [],
+        acceptedImages: [],
+        acceptedOrders: [],
+        rejected: [
+          {
+            path: "orders.0",
+            reason: "Correct the unsupported purpose claim.",
+          },
+        ],
+      }),
+    });
+    expect(refused).toMatchObject({
+      status: "researched_with_gaps",
+      purchaseIds: [],
+    });
+    const [active] = await getDb(ctx.db)
+      .select()
+      .from(runTarget)
+      .where(eq(runTarget.id, f.target.id));
+    expect(active).toMatchObject({
+      state: "needs_evidence",
+      completedAt: null,
+      outcome: null,
+    });
+    const [mail] = await getDb(ctx.db)
+      .select()
+      .from(mailboxMessage)
+      .where(eq(mailboxMessage.runId, f.run.id));
+    expect(mail).toMatchObject({ status: "researching", runId: f.run.id });
+    expect(await resolveImportResearch(ctx.db, input, f.ports)).toEqual(
+      refused,
+    );
+    const correctedInput = { ...input, callId: "synthetic-corrected-mail" };
+    const corrected = await resolveImportResearch(ctx.db, correctedInput, {
+      ...f.ports,
+      assess: async () => ({
+        identityVerified: true,
+        acceptedFacts: [],
+        acceptedIdentifiers: [],
+        acceptedImages: [],
+        acceptedOrders: [0],
+        rejected: [],
+      }),
+    });
+    expect(corrected).toMatchObject({ status: "verified" });
+    expect(corrected.purchaseIds).toHaveLength(1);
+    expect(
+      await resolveImportResearch(ctx.db, correctedInput, f.ports),
+    ).toEqual(corrected);
+    expect(await getDb(ctx.db).select().from(expense)).toHaveLength(1);
+    expect(await getDb(ctx.db).select().from(purchase)).toHaveLength(1);
+    expect(await getDb(ctx.db).select().from(product)).toHaveLength(0);
+    expect(
+      await getDb(ctx.db).select().from(orderMailCandidateDecision),
+    ).toHaveLength(1);
+    await expect(
+      resolveImportResearch(
+        ctx.db,
+        { ...correctedInput, callId: "synthetic-late-mail" },
+        f.ports,
+      ),
+    ).rejects.toThrow(/settled|closed/);
+  });
+  it("counts replayed accepted source orders and links with the same refusal as zero progress", async () => {
+    const f = await fixture();
+    const ports = {
+      ...f.ports,
+      assess: async () => ({
+        identityVerified: true,
+        acceptedFacts: [],
+        acceptedIdentifiers: [],
+        acceptedImages: [],
+        acceptedOrders: [0],
+        rejected: [
+          { path: "orders.1", reason: "Second order remains unsupported." },
+        ],
+      }),
+    };
+    for (let attempt = 1; attempt <= 4; attempt++) {
+      const input = {
+        runId: f.run.id,
+        workRef: f.target.id,
+        callId: `synthetic-replayed-source-${attempt}`,
+        proposal: f.proposal,
+      };
+      const receipt = await resolveImportResearch(ctx.db, input, ports);
+      expect(await resolveImportResearch(ctx.db, input, ports)).toEqual(
+        receipt,
+      );
+      const [target] = await getDb(ctx.db)
+        .select()
+        .from(runTarget)
+        .where(eq(runTarget.id, f.target.id));
+      expect(target?.state).toBe(
+        attempt === 4 ? "unresolved" : "needs_evidence",
+      );
+    }
+    expect(await getDb(ctx.db).select().from(expense)).toHaveLength(1);
+    expect(await getDb(ctx.db).select().from(purchase)).toHaveLength(1);
+    expect(await getDb(ctx.db).select().from(orderMailEvent)).toHaveLength(1);
+    expect(
+      await getDb(ctx.db).select().from(orderMailCandidateDecision),
+    ).toHaveLength(1);
+  });
+  it("keeps an empty verified mail proposal active and settles an explicit final gap", async () => {
+    const f = await fixture();
+    const proposal = { ...f.proposal, orders: [] };
+    const ports = {
+      ...f.ports,
+      assess: async () => ({
+        identityVerified: true,
+        scopeCompletionVerified: true,
+        acceptedFacts: [],
+        acceptedIdentifiers: [],
+        acceptedImages: [],
+        acceptedOrders: [],
+        rejected: [],
+      }),
+    };
+    const result = await resolveImportResearch(
+      ctx.db,
+      {
+        runId: f.run.id,
+        workRef: f.target.id,
+        callId: "synthetic-empty-mail",
+        proposal,
+      },
+      ports,
+    );
+    expect(result).toMatchObject({
+      status: "researched_with_gaps",
+      purchaseIds: [],
+    });
+    expect(result.refusals).toEqual(
+      expect.arrayContaining([expect.objectContaining({ path: "attempt" })]),
+    );
+    const [active] = await getDb(ctx.db)
+      .select()
+      .from(runTarget)
+      .where(eq(runTarget.id, f.target.id));
+    expect(active).toMatchObject({
+      state: "needs_evidence",
+      completedAt: null,
+    });
+    await resolveImportResearch(
+      ctx.db,
+      {
+        runId: f.run.id,
+        workRef: f.target.id,
+        callId: "synthetic-final-mail-gap",
+        proposal: { ...proposal, status: "researched_with_gaps" },
+      },
+      ports,
+    );
+    const [settled] = await getDb(ctx.db)
+      .select()
+      .from(runTarget)
+      .where(eq(runTarget.id, f.target.id));
+    expect(settled).toMatchObject({
+      state: "unresolved",
+      outcome: "researched_with_gaps",
+      completedAt: expect.any(Date),
+    });
+  });
   async function validationAdmission(
     f: Awaited<ReturnType<typeof fixture>>,
     targetPurchase: typeof purchase.$inferSelect,
@@ -800,6 +980,14 @@ describe("supported retained-mail research writes", () => {
       expect(result.status).toBe(
         mode === "matching" ? "verified" : "researched_with_gaps",
       );
+      const [settled] = await getDb(ctx.db)
+        .select()
+        .from(runTarget)
+        .where(eq(runTarget.id, f.target.id));
+      expect(settled).toMatchObject({
+        state: mode === "matching" ? "completed" : "unresolved",
+        completedAt: expect.any(Date),
+      });
       const contradictionRefusal = {
         path: "orders[0].spendingCategoryId",
         reason: expect.stringMatching(/conflict|contradict/i),

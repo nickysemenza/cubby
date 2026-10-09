@@ -2,6 +2,7 @@ import { parseEntityId } from "@cubby/schemas/identifiers";
 import { userId } from "@cubby/schemas/identifiers";
 import type { ImportWriterInput } from "@cubby/schemas/purchase-import";
 import type { PurchaseAgentEvent } from "@cubby/schemas/purchase-import";
+import { researchWorkResolve } from "@cubby/schemas/research-tools";
 import { and, eq } from "drizzle-orm";
 import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
@@ -13,6 +14,7 @@ import {
   inventoryEntry,
   product,
   purchase,
+  purchasePaymentEvidence,
   run,
   runFinding,
   runTarget,
@@ -50,92 +52,200 @@ describe("research order writes", () => {
     return { party, vendor, runId };
   }
 
-  it("keeps an identified incomplete order unknown, then improves it without invented spend", async () => {
+  it("imports a supported receipt without inventing purpose or replacing member attribution", async () => {
     const { party, vendor, runId } = await scope();
-    const incomplete: ImportWriterInput = {
-      runId,
-      ledgerPartyId: party.id,
+    const existing = await insertWithShortcode(ctx.db, "purchase", {
       vendorId: vendor.id,
-      vendorAccountId: null,
+      orderId: "EXAMPLE-UNKNOWN-PURPOSE",
       defaultTrade: "other",
-      source: {
-        kind: "mail_message",
-        externalKey: "gmail:synthetic-mailbox:shipment",
-        checksum: "a".repeat(64),
+    });
+    const resolved = researchWorkResolve.parse({
+      workRef: crypto.randomUUID(),
+      status: "verified",
+      identity: {
+        evidenceIds: [],
+        reasoning: "The original identifies this order and item.",
       },
-      extraction: {
-        status: "ready",
-        candidate: {
-          orderId: "EXAMPLE-101",
-          orderedAt: null,
-          merchant: "Research fixture vendor",
-          currency: "USD",
-          printedGrandTotal: null,
-          lines: [],
-          payments: [],
-          allShipmentsDelivered: false,
+      orders: [
+        {
+          vendorRef: vendor.shortcode,
+          evidenceIds: [],
+          reasoning:
+            "The original prints this service, its order date, and USD 10; its household purpose is unknown.",
+          candidate: {
+            orderId: "EXAMPLE-UNKNOWN-PURPOSE",
+            orderedAt: "2026-09-01T18:00:00Z",
+            merchant: vendor.name,
+            currency: "USD",
+            printedGrandTotal: 10,
+            lines: [
+              {
+                title: "Synthetic service",
+                amount: 10,
+                quantity: 1,
+                lineKind: "principal",
+              },
+            ],
+            payments: [],
+            allShipmentsDelivered: false,
+          },
+          productResolutions: [{ kind: "expense_only", lineIndex: 0 }],
         },
+      ],
+      detail: "Supported acquisition; purpose remains unknown.",
+    });
+    const order = resolved.orders[0]!;
+    const result = await importVendorOrder(
+      ctx.db,
+      {
+        runId,
+        ledgerPartyId: party.id,
+        vendorId: vendor.id,
+        vendorAccountId: null,
+        defaultTrade: order.defaultTrade,
+        targetPurchaseId: existing.id,
+        source: {
+          kind: "mail_message",
+          externalKey: "gmail:synthetic:unknown-purpose",
+          checksum: "a".repeat(64),
+        },
+        extraction: { status: "ready", candidate: order.candidate },
+        productResolutions: [{ kind: "expense_only", lineIndex: 0 }],
+        primaryDocumentImageId: null,
+        screenshotImageId: null,
       },
-      primaryDocumentImageId: null,
-      screenshotImageId: null,
-      productResolutions: [],
-    };
-    const first = await importVendorOrder(ctx.db, incomplete, ctx.actor.userId);
-    expect(first.purchaseId).not.toBeNull();
+      ctx.actor.userId,
+    );
     const [saved] = await getDb(ctx.db)
       .select()
       .from(purchase)
-      .where(eq(purchase.id, parseEntityId("purchase", first.purchaseId)));
-    expect(saved).toMatchObject({ date: null, statedTotal: null });
-    expect(
-      await getDb(ctx.db)
-        .select()
-        .from(expense)
-        .where(
-          eq(expense.purchaseId, parseEntityId("purchase", first.purchaseId)),
-        ),
-    ).toEqual([]);
-    const confirmation: ImportWriterInput = {
-      ...incomplete,
-      source: {
-        kind: "mail_message",
-        externalKey: "gmail:synthetic-mailbox:confirmation",
-        checksum: "b".repeat(64),
-      },
-      extraction: {
-        status: "ready",
-        candidate: {
-          ...incomplete.extraction.candidate!,
-          orderedAt: "2026-09-01T18:00:00Z",
-          printedGrandTotal: 24,
-          lines: [
-            { title: "Workshop admission", amount: 24, lineKind: "principal" },
-          ],
-        },
-      },
-      productResolutions: [{ kind: "expense_only", lineIndex: 0 }],
-    };
-    const improved = await importVendorOrder(
-      ctx.db,
-      confirmation,
-      ctx.actor.userId,
-    );
-    expect(improved.purchaseId).toBe(first.purchaseId);
-    await importVendorOrder(ctx.db, confirmation, ctx.actor.userId);
-    const [final] = await getDb(ctx.db)
+      .where(eq(purchase.id, parseEntityId("purchase", result.purchaseId!)));
+    expect(order.defaultTrade).toBeUndefined();
+    expect(saved?.defaultTrade).toBe("other");
+    const lines = await getDb(ctx.db)
       .select()
-      .from(purchase)
-      .where(eq(purchase.id, parseEntityId("purchase", first.purchaseId)));
-    expect(final).toMatchObject({ date: "2026-09-01", statedTotal: 24 });
-    expect(
-      await getDb(ctx.db)
-        .select({ cost: expense.cost, productId: expense.productId })
-        .from(expense)
-        .where(
-          eq(expense.purchaseId, parseEntityId("purchase", first.purchaseId)),
-        ),
-    ).toEqual([{ cost: 24, productId: null }]);
+      .from(expense)
+      .where(eq(expense.purchaseId, saved!.id));
+    expect(lines.map(({ cost }) => Number(cost))).toEqual([10]);
   });
+  it.each(["USD", null, "CAD", "CAD-mismatch"])(
+    "keeps an identified incomplete order in %s unknown, then improves it without invented spend",
+    async (currency) => {
+      const { party, vendor, runId } = await scope();
+      const incomplete: ImportWriterInput = {
+        runId,
+        ledgerPartyId: party.id,
+        vendorId: vendor.id,
+        vendorAccountId: null,
+        defaultTrade: "other",
+        source: {
+          kind: "mail_message",
+          externalKey: "gmail:synthetic-mailbox:shipment",
+          checksum: "a".repeat(64),
+        },
+        extraction: {
+          status: "ready",
+          candidate: {
+            orderId: "EXAMPLE-101",
+            orderedAt: currency === "USD" ? null : "2026-09-01T18:00:00Z",
+            merchant: "Research fixture vendor",
+            currency: currency === "CAD-mismatch" ? "CAD" : currency,
+            printedGrandTotal: currency === "USD" ? null : 24,
+            lines: [],
+            payments: currency === "USD" ? [] : [{ amount: 24 }],
+            allShipmentsDelivered: false,
+          },
+        },
+        primaryDocumentImageId: null,
+        screenshotImageId: null,
+        productResolutions: [],
+      };
+      if (
+        currency === "CAD-mismatch" &&
+        incomplete.extraction.status === "ready"
+      )
+        incomplete.extraction = {
+          ...incomplete.extraction,
+          status: "needs_review",
+          reason: "sum_mismatch",
+          detail: "The foreign-unit total differs from priced lines.",
+        };
+      const first = await importVendorOrder(
+        ctx.db,
+        incomplete,
+        ctx.actor.userId,
+      );
+      expect(first.purchaseId).not.toBeNull();
+      const [saved] = await getDb(ctx.db)
+        .select()
+        .from(purchase)
+        .where(eq(purchase.id, parseEntityId("purchase", first.purchaseId)));
+      expect(saved).toMatchObject({
+        date: currency === "USD" ? null : "2026-09-01",
+        statedTotal: null,
+      });
+      expect(
+        await getDb(ctx.db)
+          .select()
+          .from(purchasePaymentEvidence)
+          .where(eq(purchasePaymentEvidence.purchaseId, saved!.id)),
+      ).toEqual([]);
+      expect(
+        await getDb(ctx.db)
+          .select()
+          .from(expense)
+          .where(
+            eq(expense.purchaseId, parseEntityId("purchase", first.purchaseId)),
+          ),
+      ).toEqual([]);
+      const confirmation: ImportWriterInput = {
+        ...incomplete,
+        source: {
+          kind: "mail_message",
+          externalKey: "gmail:synthetic-mailbox:confirmation",
+          checksum: "b".repeat(64),
+        },
+        extraction: {
+          status: "ready",
+          candidate: {
+            ...incomplete.extraction.candidate!,
+            currency: "USD",
+            payments: [],
+            orderedAt: "2026-09-01T18:00:00Z",
+            printedGrandTotal: 24,
+            lines: [
+              {
+                title: "Workshop admission",
+                amount: 24,
+                lineKind: "principal",
+              },
+            ],
+          },
+        },
+        productResolutions: [{ kind: "expense_only", lineIndex: 0 }],
+      };
+      const improved = await importVendorOrder(
+        ctx.db,
+        confirmation,
+        ctx.actor.userId,
+      );
+      expect(improved.purchaseId).toBe(first.purchaseId);
+      await importVendorOrder(ctx.db, confirmation, ctx.actor.userId);
+      const [final] = await getDb(ctx.db)
+        .select()
+        .from(purchase)
+        .where(eq(purchase.id, parseEntityId("purchase", first.purchaseId)));
+      expect(final).toMatchObject({ date: "2026-09-01", statedTotal: 24 });
+      expect(
+        await getDb(ctx.db)
+          .select({ cost: expense.cost, productId: expense.productId })
+          .from(expense)
+          .where(
+            eq(expense.purchaseId, parseEntityId("purchase", first.purchaseId)),
+          ),
+      ).toEqual([{ cost: 24, productId: null }]);
+    },
+  );
 
   it("retains two orders from one source and replays both without duplicate Expenses", async () => {
     const { party, vendor, runId } = await scope();

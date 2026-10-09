@@ -65,6 +65,8 @@ interface AgentFetchOptions extends Pick<
   gateway: () => AgentGateway;
   testModel?: TestModel;
   subscription?: ChatGptInference;
+  /** Host admission can reject locally before any provider route transmits. */
+  beforeTransmission?: () => Response | undefined;
   /** Each model request's transport, reported before it leaves. */
   onTransport?: (transport: AgentTransport) => void;
   /** Each received model response's gateway log id and cache verdict. */
@@ -83,7 +85,7 @@ export function createCubbyGatewayFetch(
   options: AgentFetchOptions,
 ): typeof fetch {
   const { testModel } = options;
-  return gatewayFetchThrough({
+  const routedFetch = gatewayFetchThrough({
     provider: route,
     rewriteQuery: (body) => withSequentialToolCalls(route, body),
     chatGpt: options.subscription,
@@ -118,6 +120,10 @@ export function createCubbyGatewayFetch(
       });
     },
   });
+  return (input, init) => {
+    const rejection = options.beforeTransmission?.();
+    return rejection ? Promise.resolve(rejection) : routedFetch(input, init);
+  };
 }
 
 /**

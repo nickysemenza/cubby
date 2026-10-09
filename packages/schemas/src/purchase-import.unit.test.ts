@@ -170,15 +170,15 @@ describe("purchase import contracts", () => {
     ).toThrow("Invalid input");
   });
 
-  it("preserves the bounded recovery URL for a restart-safe capture", () => {
+  it("preserves the recovery URL for a restart-safe read", () => {
     const request = browserBridgeRequest.parse({
-      protocolVersion: 3,
+      protocolVersion: 4,
       id: crypto.randomUUID(),
       operationId: "capture-after-restart",
       runID: crypto.randomUUID(),
       deadline: "2026-09-21T12:00:00.000Z",
       operation: {
-        type: "capture",
+        type: "read",
         allowedHosts: ["orders.example.test"],
         screenshot: "preferred",
         recoveryURL: "https://orders.example.test/history",
@@ -186,7 +186,7 @@ describe("purchase import contracts", () => {
     });
 
     expect(request.operation).toMatchObject({
-      type: "capture",
+      type: "read",
       recoveryURL: "https://orders.example.test/history",
     });
   });

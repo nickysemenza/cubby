@@ -1,5 +1,11 @@
 import { entityFieldModels } from "@cubby/schemas/entity-fields";
-import { parseEntityId, runEntityId } from "@cubby/schemas/identifiers";
+import { shortcodeEntities } from "@cubby/schemas/entity-manifest";
+import {
+  parseEntityId,
+  productCategoryShortcode,
+  spendingCategoryShortcode,
+  runEntityId,
+} from "@cubby/schemas/identifiers";
 import { researchToolInputs } from "@cubby/schemas/research-tools";
 import {
   mailResearchRunInput,
@@ -28,6 +34,15 @@ import {
   withTransaction,
 } from "~/server/repo/database-helpers";
 import { readCanonicalEntityIds } from "~/server/repo/entity-identity";
+import {
+  getProductCategoryByShortcode,
+  listProductCategories,
+} from "~/server/repo/product-category";
+import { lookupEntityReferences } from "~/server/repo/shortcode-resolver";
+import {
+  getSpendingCategoryByShortcode,
+  listSpendingCategories,
+} from "~/server/repo/spending-category";
 import {
   claimRunExecution,
   ExecutionLimitError,
@@ -97,6 +112,131 @@ const mailReceivedTimestamp = (receivedAt: Date | null) =>
 type ResearchToolPayload = z.output<
   (typeof researchToolInputs)[keyof typeof researchToolInputs]
 >;
+
+async function loadProductResearchFields(
+  db: Database,
+  current: typeof product.$inferSelect,
+) {
+  const fillFields = entityFieldModels.product.research.fillFields;
+  const references = fillFields.flatMap((field) => {
+    const definition = entityFieldModels.product.fields.find(
+      (candidate) => candidate.key === field,
+    );
+    const id = current[field];
+    return definition?.reference && id !== null && id !== undefined
+      ? [{ field, entity: definition.reference.entity, id: String(id) }]
+      : [];
+  });
+  const idsByEntity = new Map<string, string[]>();
+  for (const reference of references) {
+    const ids = idsByEntity.get(reference.entity) ?? [];
+    ids.push(reference.id);
+    idsByEntity.set(reference.entity, ids);
+  }
+  const publicReferences = new Map<string, string>();
+  const referenceNames = new Map<string, string>();
+  for (const [entity, ids] of idsByEntity) {
+    const shortcodeEntity = shortcodeEntities.find(
+      (candidate) => candidate === entity,
+    );
+    if (!shortcodeEntity) continue;
+    const found = await lookupEntityReferences(db, shortcodeEntity, ids);
+    for (const [id, reference] of found) {
+      publicReferences.set(`${entity}:${id}`, reference.id);
+      if (reference.name) referenceNames.set(`${entity}:${id}`, reference.name);
+    }
+  }
+  const categoryReference = references.find(
+    (reference) => reference.field === "categoryId",
+  );
+  const categoryCode = categoryReference
+    ? publicReferences.get(
+        `${categoryReference.entity}:${categoryReference.id}`,
+      )
+    : undefined;
+  const category = categoryCode
+    ? await getProductCategoryByShortcode(
+        db,
+        productCategoryShortcode.parse(categoryCode),
+      )
+    : null;
+  const categoryContext = categoryReference
+    ? {
+        id: categoryCode ?? null,
+        name:
+          category?.name ??
+          referenceNames.get(
+            `${categoryReference.entity}:${categoryReference.id}`,
+          ) ??
+          null,
+        path: category?.path ?? null,
+      }
+    : null;
+  const values = Object.fromEntries(
+    fillFields.map((field) => {
+      const reference = references.find(
+        (candidate) => candidate.field === field,
+      );
+      return [
+        field,
+        reference
+          ? (publicReferences.get(`${reference.entity}:${reference.id}`) ??
+            null)
+          : current[field],
+      ];
+    }),
+  );
+  return { values, categoryContext };
+}
+
+async function findResearchCatalog(
+  db: Database,
+  entityKind: "productCategory" | "spendingCategory",
+  query: string,
+) {
+  if (entityKind === "productCategory") {
+    const code = productCategoryShortcode.safeParse(query);
+    const exact = code.success
+      ? await getProductCategoryByShortcode(db, code.data)
+      : null;
+    const page = code.success
+      ? { data: exact ? [exact] : [], count: exact ? 1 : 0 }
+      : await listProductCategories(db, { search: query }, [], {
+          pageIndex: 0,
+          pageSize: 20,
+        });
+    return {
+      results: page.data.map((category) => ({
+        entityKind,
+        id: category.id,
+        name: category.name,
+        path: category.path,
+      })),
+      total: page.count,
+      truncated: page.count > page.data.length,
+    };
+  }
+  const code = spendingCategoryShortcode.safeParse(query);
+  const exact = code.success
+    ? await getSpendingCategoryByShortcode(db, code.data)
+    : null;
+  const page = code.success
+    ? { data: exact ? [exact] : [], count: exact ? 1 : 0 }
+    : await listSpendingCategories(db, { search: query }, [], {
+        pageIndex: 0,
+        pageSize: 20,
+      });
+  return {
+    results: page.data.map((category) => ({
+      entityKind,
+      id: category.id,
+      name: category.name,
+      parentId: category.parentId,
+    })),
+    total: page.count,
+    truncated: page.count > page.data.length,
+  };
+}
 
 /** One authority boundary for interactive investigation and unattended research. */
 export function researchServiceFor(
@@ -340,6 +480,10 @@ export function researchServiceFor(
               )
               .limit(1);
             if (!current) throw new Error("Research Product is unavailable.");
+            const { values, categoryContext } = await loadProductResearchFields(
+              db,
+              current,
+            );
             return {
               status: "working",
               work: {
@@ -349,11 +493,8 @@ export function researchServiceFor(
                 product: {
                   productRef: current.shortcode,
                   name: current.name,
-                  ...Object.fromEntries(
-                    entityFieldModels.product.research.fillFields.map(
-                      (field) => [field, current[field]],
-                    ),
-                  ),
+                  categoryContext,
+                  ...values,
                 },
                 purchasedItems: await loadProductPurchaseContext(db, {
                   productId: current.id,
@@ -551,6 +692,8 @@ export function researchServiceFor(
       const input = researchToolInputs.cubby_find.parse(raw);
       return call("find", callId, input, async () => {
         await cloudWork(input.workRef);
+        if (input.entityKind)
+          return findResearchCatalog(db, input.entityKind, input.query);
         return {
           results: await findSearchHits(db, { query: input.query, limit: 20 }),
         };
