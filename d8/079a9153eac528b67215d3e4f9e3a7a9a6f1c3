@@ -1,0 +1,19 @@
+docs/todos.md
+  s_2e87acf1f13363::t_7a6f99315f43a3 611-651,1048-1063
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "d8079a9153eac528b67215d3e4f9e3a7a9a6f1c3",
+  "prompts": {},
+  "sessions": {
+    "s_2e87acf1f13363": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "31108f72-a141-4ae8-90c0-f38f0969a4e7",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "nicky <nicky@cloudflare.com>"
+    }
+  }
+}
