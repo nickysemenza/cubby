@@ -770,6 +770,9 @@ importers:
       '@opencode-ai/models':
         specifier: 0.0.95
         version: 0.0.95
+      eventsource-parser:
+        specifier: 3.1.1
+        version: 3.1.1
       ipaddr.js:
         specifier: ^2.4.0
         version: 2.5.0

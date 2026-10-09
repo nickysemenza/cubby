@@ -973,11 +973,6 @@ are implemented. See [local development](local-development.md#fixture-previews-a
   not merge everything into one relational query (its memory cost is
   documented in `repo/product/crud.ts`).
 
-- ⏳ **Retire the old USDA resources.** After the release Durable Object
-  serves production reads ([ADR 0008](adr/0008-usda-release-durable-object.md)),
-  delete the `usda-api-index` D1 database, the `usda-api-bundles` R2 bucket,
-  and the deployed `usda-api` Worker by hand.
-
 - 🤔 **Summary `entity_read.get` without the detail read.** A summary get
   still runs the complete detail read (USDA, quality, ledger, breadcrumbs)
   before projecting to identity. Route it through `listFields` with an `ids`
