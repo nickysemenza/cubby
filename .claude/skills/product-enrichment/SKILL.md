@@ -36,6 +36,10 @@ adding another image; skip redundant catalog views.
 
 ## Research and identity
 
+For seed packets, apply the manufacturer rule in the
+[research workflow](references/research-run-workflow.md): distinguish the packet
+brand from credited seed growers before proposing a manufacturer claim.
+
 Prove the exact variant before writing: existing external-ID URL, deterministic
 UPC lookup, manufacturer page, then exact retailer page. An Amazon ASIN can use
 `https://www.amazon.com/dp/<ASIN>`; confirm the selected variant. General search
