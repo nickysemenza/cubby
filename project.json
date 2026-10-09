@@ -71,7 +71,7 @@
       // packages/wasm for these exact recipebridge sources and exports
       // CUBBY_WASM_PKG_READY=1; a fresh runner has no Nx cache, so without
       // this every `dependsOn: ["wasm"]` rebuilt it (~90s in Validation).
-      "command": "if [ \"${CUBBY_WASM_PKG_READY:-}\" = 1 ] && [ -f packages/wasm/cookbook/recipebridge_cookbook_bg.wasm ]; then echo 'wasm: packages/wasm already provided by setup-node-with-deps'; else pnpm run wasm; fi",
+      "command": "if [ \"${CUBBY_WASM_PKG_READY:-}\" = 1 ]; then echo 'wasm: packages/wasm already provided by setup-node-with-deps'; else pnpm run wasm; fi",
       "cache": true,
       "inputs": [
         "{workspaceRoot}/recipebridge/**/*",

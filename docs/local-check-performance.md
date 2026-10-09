@@ -224,11 +224,13 @@ retained boundaries are:
   [agent guidance](agents/validation.md) is the current command authority.
 - `ensure-wasm.ts` fingerprints Rust sources, configuration, tool versions, and
   build environment, then restores the complete generated WASM package from
-  Nx cache. A local marker avoids a repeat restore when nothing changed.
+  Nx cache.
   Tracking the workspace `Cargo.lock` and excluding `.DS_Store` from the source
   digest make that fingerprint stable across worktrees. A measured fresh
   worktree WASM step fell from 54.8 seconds of compilation to a 1.6-second
-  cache hit; a warm unchanged check fell from about 7 seconds to 0.3 seconds.
+  cache hit; a warm unchanged check is an Nx cache hit of about 1 second. An
+  in-package marker that skipped Nx saved only about 0.5 seconds of that and
+  missed incomplete packages, so it was removed.
 - A shared Cargo path patch once selected an older ingredient-parser checkout
   and broke imports. Updating that checkout fixed the missing API; changing
   installer settings would not have fixed it.
