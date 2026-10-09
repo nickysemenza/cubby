@@ -1206,6 +1206,34 @@ describe("budgeted pre-output stream quota fallback", () => {
     };
   }
 
+  // A rejected metadata frame currently hides why an otherwise exact quota
+  // refusal was replayed. Diagnostics must preserve the first decision only,
+  // expose structural issues, and never retain lifecycle values.
+  it("reports the first stream admission rejection without lifecycle values", async () => {
+    const source =
+      frame("response.created", {
+        ...created,
+        response: {
+          ...created.response,
+          user: null,
+          unknown_metadata: "PRIVATE_SYNTHETIC_VALUE",
+        },
+      }) + refusal();
+    const r = routes(() => new Response(chunked(source, 17)));
+    const response = await gatewayFetchThrough(r.fetchRoutes)(url, init);
+    expect(await response.text()).toBe(source);
+    expect(r.gateway).not.toHaveBeenCalled();
+    expect(r.beforePaidRequest).not.toHaveBeenCalled();
+    const diagnostic = r.failures[0]?.body ?? "";
+    expect(diagnostic).toContain('"reason":"metadata_schema"');
+    expect(diagnostic).toContain('"event":"response.created"');
+    expect(diagnostic).toContain('"path":["response","user"]');
+    expect(diagnostic).toContain('"code":"invalid_type"');
+    expect(diagnostic).toContain('"keys":["unknown_metadata"]');
+    expect(diagnostic).not.toContain("PRIVATE_SYNTHETIC_VALUE");
+    expect(diagnostic).toContain(quota.code);
+  });
+
   it.each(["\n", "\r\n"])(
     "recovers the observed MIME-less fragmented pre-output refusal (%j)",
     async (eol) => {

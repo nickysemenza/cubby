@@ -172,7 +172,9 @@ retention, admission, durable recovery, replay, ownership and domain writes.
 Pi already hosts the researcher; the [simplification audit](plans/research-simplification.md)
 records the remaining deletion candidates and SDK comparisons. The first slice
 removes 245 net handwritten code/test lines (coordinator declarations and old Gmail
-fixtures); the old Workflow and its historical compatibility still remain. Browser transport
+fixtures); the old Workflow remains a deletion target. Remove its executable
+launch/retry paths without a compatibility adapter; retain historical records
+through generic presentation. Browser transport
 contracts remain in [infrastructure](infrastructure.md#browser-bridge).
 
 - 🟢 **Stop repeated logical failures across a Run.** One browser-command retry
@@ -264,7 +266,9 @@ research acceptance.
   purpose sets in shared constants, agent inputs, Run declarations and Workflow
   contracts. Import report eligibility now comes from the shared Run schema, including
   `mail_import`, with generated Swift and one web/server predicate. Exact-head
-  hosted and client acceptance are pending. Agent execution, discovery and the
+  hosted checks and checksum-verified E2E artifacts passed before PR #1793
+  merged; production deployment succeeded on `01dda8634`. Native visible
+  report acceptance remains pending. Agent execution, discovery and the
   Imports saved view intentionally cover different capabilities; finish their
   audit before consolidating additional purpose declarations.
 
