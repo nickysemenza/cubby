@@ -1,0 +1,23 @@
+.oxlintrc.json
+  s_2e87acf1f13363::t_632357d4a266f9 214-232
+tools/oxlint/cubby/index.ts
+  s_2e87acf1f13363::t_e7ae18cea17112 17,35
+tools/oxlint/cubby/rules/worker-lazy-import-boundary.ts
+  s_2e87acf1f13363::t_fdb02a0289a04f 1-216
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "33cd95476f2ff5368159ef57f337b87f54dd8583",
+  "prompts": {},
+  "sessions": {
+    "s_2e87acf1f13363": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "31108f72-a141-4ae8-90c0-f38f0969a4e7",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "nicky <nicky@cloudflare.com>"
+    }
+  }
+}
