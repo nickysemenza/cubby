@@ -380,6 +380,10 @@ and deployment/readback order are owned by the
    provenance alone never establishes permission to change a cover.
    Work iteration and completion accounting belong to the host. Unresolved
    targets remain visible; a settled conversation does not imply verification.
+   Failed model turns retain their upstream diagnostic as ordinary conversation
+   text, including when no answer was produced or a partial answer preceded the
+   failure. The shared error scrubber removes credentials and applies its
+   existing display bound; settlement reasons do not replace that diagnostic.
    An unresolved Product report may include declined claims. When exact ordered
    identity is unsupported, resolution records that outcome and its refusal
    reasons without writing facts or provenance. A proposed verified or partially

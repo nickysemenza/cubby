@@ -5,6 +5,7 @@ import type {
   AgentConversationSettlement,
 } from "@cubby/schemas/agent-conversation";
 import type { ContextBreakdown } from "@cubby/schemas/context-breakdown";
+import { scrubErrorMessage } from "@cubby/worker-tracing/scrub-error-message";
 import type {
   AssistantMessage,
   ImageContent,
@@ -131,6 +132,8 @@ function assistantMessage(
       durationMs,
     };
   });
+  if (message.errorMessage)
+    parts.push({ type: "text", text: scrubErrorMessage(message.errorMessage) });
   const breakdown = message.responseId
     ? contextCalls.get(message.responseId)
     : undefined;

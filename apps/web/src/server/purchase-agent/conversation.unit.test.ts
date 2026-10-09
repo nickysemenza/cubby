@@ -1,4 +1,5 @@
 import { agentConversationSchema } from "@cubby/schemas/agent-conversation";
+import type { AssistantMessage } from "@earendil-works/pi-ai";
 import type {
   ConversationId,
   EntryId,
@@ -99,6 +100,47 @@ const entries: EntryRecord[] = [
 ];
 
 describe("projectConversation", () => {
+  it.each([false, true])(
+    "shows failed model diagnostics without credentials (live=%s)",
+    (live) => {
+      const failure: AssistantMessage = {
+        role: "assistant",
+        api: "openai-responses",
+        provider: "openai",
+        model: "gpt-6-sol",
+        usage,
+        stopReason: "error",
+        errorMessage:
+          "HTTP 429: quota exceeded\nAuthorization: Bearer synthetic-secret",
+        timestamp: Date.parse("2026-10-04T10:00:01Z"),
+        content: live ? [{ type: "text", text: "Research started." }] : [],
+      };
+      const result = projectConversation({
+        entries: live
+          ? []
+          : [
+              {
+                id: entryId(5),
+                conversationId: root,
+                kind: "pi.assistant",
+                model: [failure],
+              },
+            ],
+        partial: live ? failure : undefined,
+        running: live,
+        settlements: [],
+        contextCalls: new Map(),
+      });
+      expect(result.messages[0]?.parts).toEqual([
+        ...(live ? [{ type: "text", text: "Research started." }] : []),
+        {
+          type: "text",
+          text: "HTTP 429: quota exceeded\nAuthorization: [REDACTED]",
+        },
+      ]);
+    },
+  );
+
   const projected = projectConversation({
     entries,
     running: true,
