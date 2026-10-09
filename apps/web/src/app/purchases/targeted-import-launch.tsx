@@ -247,7 +247,7 @@ export function TargetedImportLaunchDialog({
       description={
         purpose === "purchase_validation"
           ? "Replay the chosen evidence without changing the purchase. A difference is recorded for review."
-          : "Only the listed empty fields can be filled. Existing product values remain untouched unless separately approved."
+          : "Research the purchased variant, fill supported gaps, and verify matching facts. Conflicting values are proposed for review."
       }
       error={start.isError ? start.error.message : null}
       primary={{
@@ -277,6 +277,13 @@ export function TargetedImportLaunchDialog({
       ) : null}
       {launch.data && purpose === "product_enrichment" ? (
         <ProductTargetChecklist targets={targets} onChange={setTargets} />
+      ) : null}
+      {start.data?.runs.length === 0 ? (
+        <output aria-label="Research launch result" className="text-sm">
+          No new research Run was created. Unchanged research is not started
+          again automatically. Use the latest Run’s retry action for unresolved
+          work.
+        </output>
       ) : null}
       {start.data?.runs.some((entry) => entry.blockingRun) ? (
         <div className="grid gap-1 border border-border bg-muted/30 p-3 text-sm">

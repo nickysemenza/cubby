@@ -423,6 +423,37 @@ async function commitImage(
     throw new Error(
       "A label image cannot become an item image through research.",
     );
+  // The Product parent is locked before admission: a concurrent importer sees
+  // the winner's attachment here. URL changes do not create another gallery
+  // member, and reusing bytes preserves its original provenance and order.
+  let representative = live;
+  if (!member) {
+    const [matching] = await tx
+      .select({ attachment: entityAttachment, row: image })
+      .from(entityAttachment)
+      .innerJoin(image, eq(image.id, entityAttachment.imageId))
+      .where(
+        and(
+          eq(entityAttachment.entityKind, "product"),
+          eq(entityAttachment.entityId, productId),
+          eq(entityAttachment.purpose, "item"),
+          eq(image.sha256, prepared.hash),
+          notDeleted(entityAttachment),
+          notDeleted(image),
+        ),
+      )
+      .orderBy(
+        entityAttachment.sortOrder,
+        entityAttachment.createdAt,
+        entityAttachment.id,
+      )
+      .limit(1)
+      .for("update");
+    if (matching) {
+      member = matching.attachment;
+      representative = matching.row;
+    }
+  }
   const changed = !member;
   if (!member) {
     const promoteAt = await provisionalCoverOrder(tx, productId, attachments);
@@ -466,8 +497,8 @@ async function commitImage(
           evidenceId,
           fieldPath,
           value: {
-            imageId: live.shortcode,
-            sourceAssetUrl: live.sourceAssetUrl,
+            imageId: representative.shortcode,
+            sourceAssetUrl: representative.sourceAssetUrl,
             contentHash: prepared.hash,
           },
           support: prepared.support,

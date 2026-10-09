@@ -1,9 +1,13 @@
 # Purchase import and Product research rewrite
 
-Status: design decisions settled; independent plan review complete; user
-confirmed shared understanding, then selected one complete breaking-change
-replacement PR using Sol and Luna implementation. Small real-model checks are
-part of implementation validation rather than a standalone experiment PR.
+Status: replacement and recovery/retention follow-ups shipped in #1767–#1774.
+The approved preserving `0025_purchase_research` production cutover and schema
+readback completed; do not apply it again. The sections below retain the settled
+design and implementation record, not an unshipped migration worklist. Authorized
+live research, full-history/new-mail acceptance and client verification remain
+open. A terminal Run or populated fields do not establish research completion.
+The [current simplification audit](research-simplification.md) owns the next
+deletion/consolidation proposal; the canonical backlog is `docs/todos.md`.
 
 Replace the purchase coordinator with a capable research agent using ordinary
 mail, browser, web, and Cubby tools. The reference experience is interactive

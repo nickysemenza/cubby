@@ -635,13 +635,14 @@ export async function admitProductResearch(
           sources,
         }),
       );
-      const sameOriginalContext = prior.some(
+      const unchangedAutomaticContext = prior.some(
         (row) =>
+          !continuation &&
           row.target.entityId === item.id &&
           row.target.evidenceFingerprint === evidenceFingerprint,
       );
       if (
-        sameOriginalContext &&
+        unchangedAutomaticContext &&
         (
           await loadProductResearchCoverage(tx, {
             productId: item.id,

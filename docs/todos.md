@@ -26,12 +26,12 @@ history is the archive. Permanent product constraints live in the
 
 ## Images & photos
 
-- 🟢 **Deduplicate research images across re-imports.** A repeated import or
-  enrichment can attach the same representative picture more than once. Reuse
-  shared image/attachment identity and content hashes across changed source URLs,
-  and keep provenance for every observation without duplicating the gallery.
-  Preserve member photos, chosen cover order, and genuinely different variants;
-  define safe cleanup of existing duplicates before changing household records.
+- 🤔 **Review existing duplicate research images.** New research admissions
+  reuse same-byte item attachments under the Product lock and retain each source's
+  support. Existing duplicate galleries and historical images without SHA-256
+  need an approved preservation/cleanup plan. Preserve member photos, cover order,
+  labels and genuinely different variants; do not delete household records from
+  a forward-prevention fix.
 
 - 🧱 **Full capture metadata from the Photos library.** The library match path
   (`LibraryMetadataSync` → `image.recordSightings`) already backfills
@@ -167,163 +167,119 @@ See also the image operational passes at the end of this file.
 
 ## Import pipeline architecture
 
-How browser, mail, file, and photo imports, account syncs, and enrichment
-should work end to end. Area-specific items stay in their sections; these
-change the shape of the pipeline. The browser bridge contract is in
-[infrastructure](infrastructure.md#browser-bridge).
+The model owns adaptive investigation and semantic judgments. Code owns source
+retention, admission, durable recovery, replay, ownership and domain writes.
+Pi already hosts the researcher; the [simplification audit](plans/research-simplification.md)
+records the remaining deletion candidates and SDK comparisons. Browser transport
+contracts remain in [infrastructure](infrastructure.md#browser-bridge).
 
-- 🔭 **Code drives the sync; the model only judges.** An account sync is a
-  fixed loop: open order history, list orders, capture each, extract, write,
-  page on. Today the coordinator model drives every step, so a stuck capture
-  costs model time on every retry (one sync spent minutes of model time over
-  hours, re-issuing the same capture). Make the walk a server workflow
-  (`readBrowserCommandResult` already owns recovery) and call the model only
-  at judgment points: reading an order, matching Products, choosing review.
-  The purchase decision evaluation gates the switch.
+- 🟢 **Stop repeated logical failures across a Run.** One browser-command retry
+  and a generation cap do not bound repeated commands under new operation IDs.
+  Persist target/tool/outcome failure identity and active-time accounting; pause
+  repeated unchanged failures with their raw last observation. Member sign-in,
+  permissions and Mac-offline waits do not consume active time. Reuse Run state
+  and existing usage/cost authorization; do not introduce another job engine.
 
-- 🟢 **Server-enforced run budgets.** `browserRecovery` already caps one
-  command at one retry, but the coordinator then issues the same logical step
-  under a new operation id, so a run loops for hours. Budget across the run
-  instead: repeated failures of the same step (same target and outcome) and
-  total active time, then stop for review with the last observation as the
-  reason. Time paused for the member (sign-in, a permission, the Mac offline)
-  does not count; those pauses already expire on their own.
+- 🤔 **Reviewed Vendor capture profiles.** Reuse the Vendor declaration for
+  learned order-history URLs, sign-in hosts, reviewed additional hosts and
+  pagination hints. Current `agentHints` readers have no maintained learning
+  writer. Establish typed proposal/admission semantics before restoring one;
+  page content cannot grant itself host authorization.
 
-- 🧱 **Vendor capture profiles.** Record per Vendor what a sync learns once:
-  the order-history URL, sign-in host, extra allowed hosts (for example a
-  hosted customer-account domain), and pagination shape, so later runs go
-  straight there instead of guessing from the home page. Learned values
-  are proposed for review, never silently trusted.
+- 🤔 **Recognize email-code and hosted sign-in.** Combine retained page
+  interpretation with deterministic host/path checks. Exercise a hosted customer
+  account, redirects, email-code login and slow navigation through the real Mac
+  bridge. Model classification alone must not broaden browser permissions.
 
-- 🤔 **Sign-in detection beyond password fields.** `derivePageCapture`
-  flags sign-in only when the page has a password input; email-code logins and
-  redirects to a hosted sign-in domain read as an ordinary page. Combine a
-  model classification of the page with code checks (a host change, a known
-  sign-in path) before pausing for sign-in.
+- 🟢 **Notify when a Run needs the member.** Extend the Mac's existing notifier
+  beyond prolonged offline waits and completion: sign-in, Screen Recording and
+  Apple Events pauses name the fix and raise the exact owned Cubby window.
+  Coordinate with the activity strip and attention-first workspace below.
 
-- 🤔 **Check hosted customer accounts.** Verify whether a vendor's order
-  history lives on a hosted account domain outside its `browserDomains`
-  (Shopify's newer customer accounts do); if so, the capture can never reach
-  it. This feeds vendor capture profiles.
+- 🟢 **Re-derive retained captures without rewriting committed history.**
+  `PAGE_DERIVATION_REVISION` stamps captures, but cached derived results do not
+  have a maintenance path. Re-derive eligible retained originals, version the new
+  interpretation and report affected facts; preserve original bytes, checksums,
+  accepted claims and replay results. Fresh research remains a separate Run.
 
-- 🟢 **Tell the member when a run needs them.** A pause for sign-in,
-  Screen Recording, or Chrome's Apple Events setting should post a macOS
-  notification naming the fix, with an action that raises Cubby's window.
-  Today the reason appears only on the Runs page and in Mac Settings.
+- 🤔 **One source contract, without a second extractor.** Mail, browser, file
+  and photo readers should return retained text, links, media, typed identifiers
+  and selected-variant context through the existing research observation spine.
+  Generate adapters over shared domain services. Preserve original-media delivery
+  and each source's retention policy; a giant flattened text call is insufficient.
 
-- 🟢 **Re-read stored pages after a derivation change.** Captured DOMs are
-  kept as `RunEvidence` and stamped with `PAGE_DERIVATION_REVISION`, but the
-  derived page is cached on its operation row (`materializeCapture`) and
-  later reads return the cache. A maintenance job should re-derive pages at
-  an older revision, replace the cached page and evidence metadata, and
-  report which committed imports or enrichments the new reading would change
-  (re-running them stays a member decision). Done when no cached page is
-  below the current revision.
+- 🤔 **Repeatable real Mac/browser acceptance.** The fixture-retailer journey
+  still requires a signed app and persistent Automation/Screen Recording grants.
+  Inspect the signed-install work in #1775 before adding signing infrastructure.
+  Choose a self-hosted runner or a harness that removes those prerequisites,
+  then cover redirect readiness, email-code sign-in and slow navigation with
+  sanitized exact-revision artifacts. Installed-app behavior remains an
+  acceptance requirement even when a signed build succeeds.
 
-- 🔭 **One order document for every source.** Browser captures, order mail,
-  uploaded files, and receipt photos each reach extraction differently.
-  Normalize each source into one order-document shape (text, links, images,
-  structured identifiers, provenance) feeding one extractor and writer, so a
-  fix to one path improves every path.
+- 🟢 **Vendor-platform page-reading regressions.** Keep synthetic storefront
+  captures for Shopify, WooCommerce, BigCommerce and a marketplace. Assert
+  supported variant semantics and truncation rather than incidental DOM markup.
 
-- 🤔 **Live browser E2E on macOS.** No automated test drives the Mac app and a
-  real Chrome together, so the redirect-readiness bug reached production. The
-  fixture-retailer scenario (`tooling/mac-browser-import-scenario.ts`) is
-  local-only: it needs the project's Developer ID identity
-  (`mac-fixture-identity.ts`) and persistent Automation and Screen Recording
-  grants, which a hosted macOS runner lacks. Decide between a self-hosted Mac
-  runner and a harness that drops those prerequisites, then run it nightly
-  with a redirecting order page, an email-code sign-in, and a slow
-  navigation, leaving the E2E artifact described in
-  [test tiers](agents/validation-tests.md).
+- 🟢 **Server-owned account status in Mac Settings.** Project browser-sync
+  authorization, socket connectivity, current Run/step and last successful sync
+  through the existing server status contract instead of local socket state alone.
 
-- 🟢 **Vendor-platform fixtures for page reading.** Keep synthetic DOM
-  fixtures modeled on common storefront platforms (Shopify, WooCommerce,
-  BigCommerce, a marketplace) and assert what `derivePageCapture` and the
-  extractor read from each, including variant groups and truncation.
+- 🟢 **Generate remaining Mac agent-route contracts.** Move accounts and debug
+  events from hand-written `/api/import/agent/*` routes onto shared contracts and
+  generated Swift. Keep the separately owned MCP HTTP handler out of this work.
 
-- 🟢 **Account status from the server.** Mac Settings shows "Connected" from
-  its own socket state. Show the server's view per account: browser sync on,
-  socket connected, the current run and its last step, and the last
-  successful sync.
+- 🤔 **Separate debug observations from replayable operations.** Replace
+  `__debug_event` special cases with an existing bounded event/report path if it
+  removes storage/read code. Preserve raw diagnostics, retention and historical
+  rendering; a new log table needs a demonstrated reduction and migration plan.
 
-- 🟢 **Agent routes on generated contracts.** Move the remaining hand-written
-  `/api/import/agent/*` routes the Mac calls (accounts, debug events) onto RPC
-  contracts with generated Swift, as account sync is moving.
-
-- 🟢 **Keep debug events out of run operations.** Mac debug events are stored
-  as `__debug_event` operation rows, so one run's status read lists dozens of
-  them among its real steps. Give them their own bounded stream and keep run
-  operations to real work.
-
-- 🟢 **Show each run's cost and time.** The Runs page should show model time,
-  token cost, browser time, and retries per run, so an expensive or looping
-  run is visible at a glance.
+- 🟢 **Complete Run cost/time explanations.** The Runs list already shows cost,
+  duration and attempts, and detail shows model timing. Add the missing browser
+  time/retry attribution to the same shared projection; unknown intervals and
+  prices stay unknown. Subscription savings use the existing AI usage ledger.
 
 ## Runs, enrichment & browser capture
 
-Runs are the household's unattended work: account syncs, mail passes, charge
-searches, Product enrichment, photo inventory. The replacement declares
-parent/child lineage alongside restarts (`predecessorRunId`) and the records
-each Run wrote. The Runs list and `imports_read.run_status` read one shared projection
-(`server/repo/activity.ts`).
+Run remains the one unit of unattended work. Parent/child lineage, retry
+predecessors, causes, attempts, `mail_import` and `mail_discovery` shipped with
+`0025_purchase_research`; its approved preserving production cutover and schema
+readback were completed. Do not reapply that migration. The shared activity
+projection owns list/status presentation. Shipped schema is distinct from live
+research acceptance.
 
-- 🧱 **Run lineage.** Keep Run as the one unit of work; a Job or Step table
-  would duplicate status, actor, and the one-active-run-per-account fence,
-  and the pending work already lives in `RunOrderCandidate`, `ImportHunt`,
-  and open Products. Add `parentRunId` (the run whose work caused this one,
-  apart from `predecessorRunId`, the same work's next attempt), a `cause`
-  enum, and `attempt` to the Run declaration, and write them at every
-  starter. Give the discovery pass its own Run so every automatic child has
-  a parent, and group the Runs list by root. Historical rows stay null; do
-  not backfill lineage from AuditLog. The purchase-research replacement is
-  implementing this together with the generic parent/child relations. Its
-  approved breaking cutover must use the main-compatible quiescence build,
-  settle old automation, apply the reviewed schema with production approval,
-  deploy the replacement, refresh every affected client, and verify recovery
-  before work resumes. Follow the exact sequence in
-  [development](development.md#purchase-research-schema-cutover).
+- 🟢 **Group research children by root Run.** Starters already persist lineage;
+  the activity list's root grouping currently handles image jobs. Extend it to
+  research children without inventing lineage for historical null rows.
 
-- 🧱 **An honest purpose for mail imports.** The replacement adds
-  `mail_import` and `mail_discovery`, updates shared presentation and research
-  admission, and migrates historical mail imports from vendor-less
-  `account_sync`. Production approval and persisted readback remain pending.
+- 🟢 **Derive research-purpose presentation consistently.** Audit the duplicated
+  purpose sets in shared constants, agent inputs, Run declarations and Workflow
+  contracts. `mail_import` is missing from `IMPORT_WORKFLOW_PURPOSES`, which gates
+  import report slots. Preserve intentionally different execution capabilities
+  while generating common presentation from one declaration.
 
-- 🟢 **Chain enrichment from run completion, on one path.** A finished
-  mail import or account sync triggers the enrichment sweep for its account
-  (after commit, never inside the finish transaction), replacing the sweep's
-  wait on an occupied account. Delete the inline enrichment of image-less
-  Products inside an account-sync claim (`run-service.ts`), so the sweep is
-  the only enrichment path. Only import completions trigger, so enrichment
-  cannot re-trigger itself.
+- 🤔 **Verify automatic enrichment dispatch after import commit.** Imports now
+  admit Product research through `startProductResearch`, which obtains the
+  configured producer when none is supplied. Verify real completion and restart
+  behavior; do not restore the removed inline enrichment path or add a second
+  completion scheduler.
 
-- 🤔 **Route vendors by their fetch-first record.** Enrichment captures try
-  a server fetch first and record each refusal as a run progress line
-  (`readPageOnServer`). Tally refusals per vendor before skipping the fetch
-  for vendors that always refuse, or routing any vendor fetch-only.
+- 🤔 **Measured fetch/browser routing.** Public reads and authenticated Mac
+  capture are separate research tools. Investigate repeated host-specific public
+  refusals using retained operation results; a learned routing hint may save
+  calls, but source freshness and authenticated-page needs still decide the tool.
 
-- 🟢 **Enrich the variant that was bought.** Connect the original ordered item
-  to the retained selected variant and support each accepted fact. Structured
-  data and visible selected-variant content can both supply evidence; a variant
-  group alone is insufficient. Open the purchased variant or investigate its
-  selectors when the first page does not establish that connection. Finish
-  real-model and visible-provenance acceptance before closing this item.
+- ⏳ **Finish actual research and visible-proof acceptance.** Complete the
+  authorized external roster through new Runs once subscription inference is
+  available. Prove original-order/selected-variant identity, matching-value
+  provenance, reviewed contradictions and representative images. Populated fields
+  and terminal Runs do not establish verification. Use `ImportSourceOrder` /
+  `ImportSourceProduct`, including order-history evidence when mail omits the
+  variant. Preserve immutable settled targets and report unsupported facts as gaps.
+  No subscription reauthorization or paid fallback is implied by a usage limit.
 
-- 🟢 **Use order history when mail leaves variant identity unresolved.** Order mail
-  can omit the variant; investigate the vendor's order page when needed. Enrichment
-  targets carry the order line (`sourceKind: order_line`) and its parent
-  run's evidence, and a commit whose variant disagrees with the ordered line
-  is refused.
-
-- 🤔 **Link enriched seeds to Plants.** Seed Products could set `growsPlantId`
-  and carry plant facts (days to maturity, spacing) from the vendor page.
-  Needs a decision on which facts live on Plant versus Product.
-
-- 🤔 **Provenance for already-filled fields.** Enrichment fills only empty
-  fields, so a verified value matching an existing one gains no provenance.
-  The rewrite's approved behavior records support for matching values and
-  presents contradictory values for review. Finish the complete visible-proof
-  acceptance path before closing this item.
+- 🤔 **Link enriched seed Products to Plants.** `growsPlantId` is supported,
+  but deciding which growing facts belong on Plant versus a purchased seed
+  Product remains separate from completing Product identity research.
 
 - 🤔 **Controlled-browser preview.** Show Cubby's Chrome window in a small
   floating monitor that stays visible while browsing other records, like a
@@ -384,12 +340,10 @@ each Run wrote. The Runs list and `imports_read.run_status` read one shared proj
   human (`run.control` is omitted from MCP as `human_approval`), so this is a
   narrower operation, not that one exposed.
 
-- 🤔 **Model routing for capture.** Use Jev for constrained choices (variant
-  matching), Luna for reading unstructured pages, and Sol only to
-  orchestrate. Measure on the purchase decision evaluation before switching.
-
-- 🟢 **Generate native activity kind titles.** The Apple `kind.title` and
-  `kind.symbol` extensions restate `ACTIVITY_KIND_LABEL`; generate them.
+- 🤔 **Measure capture model routing before changing it.** Keep the current
+  evaluated routing until a controlled comparison establishes safe purchased-
+  variant judgments. Jev's bounded routing does not prove exact identity;
+  compare the same model version, effort, budget, sources and acceptance rules.
 
 ## Ingredients, recipes & nutrition
 
@@ -669,7 +623,9 @@ each Run wrote. The Runs list and `imports_read.run_status` read one shared proj
   retention, recovery/replay, ownership, or safe domain writes. Prefer existing
   Expense/domain services over a second accounting framework. Propose concrete
   deletions and table consolidation with preserved invariants and data-transforming
-  migrations; measure the resulting code and schema reduction.
+  migrations; measure the resulting code and schema reduction. The initial
+  [audit and concrete migration proposal](plans/research-simplification.md) is
+  recorded; implementation and historical/in-flight readback remain open.
 
 - 🟢 **Classification-declared field policies: remaining classifications.**
   A classification decides whether a field or link is expected, and whether
@@ -828,7 +784,9 @@ consume the declarations.
   better research behavior. Evaluate a persistent Computer workspace only for
   a concrete document-processing need, including source disposal and production
   readiness. This follow-up does not expand the current rewrite or the separately
-  owned MCP enrichment workstream.
+  owned MCP enrichment workstream. See the current
+  [feature-by-feature assessment](plans/research-simplification.md#sdk-feature-assessment);
+  experiments and measured code removal remain open.
 
 - 🟢 **Show estimated API spend avoided by subscription inference.** Retain
   each ChatGPT-plan call's catalog-priced API equivalent alongside its zero
@@ -977,10 +935,12 @@ are implemented. See [local development](local-development.md#fixture-previews-a
   `retry()` spends `max_retries: 3` with no dead-letter queue, so either call
   the Queues pause-delivery API from the toggle or retry with long delays.
 
-- 🤔 **Move backfills onto Workflow-backed Runs.** Vendor mail search and
-  scheduled Gmail discovery run as Workflow-backed Runs (see
-  `docs/infrastructure.md#workflow-backed-runs`); search-index repair is the
-  other Workflow. Long, page-oriented backfills are the next fit: give each a
+- 🤔 **Move mechanical backfills onto existing Workflow-backed Runs.**
+  Scheduled Gmail discovery uses a Workflow; vendor mail-search's former
+  production starter has been removed, while its Workflow and synthetic tests
+  remain. Audit that orphaned chain before preserving it as precedent (see the
+  [deletion proposal](plans/research-simplification.md)). Long, page-oriented
+  mechanical backfills are the next fit: give each a
   Run whose progress is the cursor and reuse `server/workflow-runs/`. Evaluated
   and kept as they are: `cubby-background` tasks (single, freshness-gated and
   idempotent, so a queue fits), image processing (a device-companion
@@ -1241,20 +1201,21 @@ counts are dated observations from the 2026-09 consolidation, not current
 usage measurements or proof of obsolescence. (The contribution ledger left
 this list: attribution prefill now reads it.)
 
-- **Run and import machinery.** `RunApproval`, `RunControlEvent`, `RunEvidence`,
-  `RunOrderCandidate`, `ImportHunt` (all 0); `ImportPreparedOrder` /
-  `ImportPreparedLine` (1 / 5). Recheck use against
+- **Historical Run machinery.** Audit `RunOrderCandidate` and legacy approval /
+  control storage only after checking current readers, historical state and
+  in-flight recovery. `RunEvidence`, `ImportHunt`, `ImportPreparedOrder` and
+  `ImportPreparedLine` are active contracts, not dormant tables. Recheck against
   [import and resume orders](#import-and-resume-orders-reliably) before deciding
   whether to use or remove these tables.
 - **Review queues.** `SuggestionDismissal`, `ProductMatchCandidate`,
   `ImageDescriptionCorrection`, `OrderMailCandidateDecision`,
-  `MerchantVendorRule`, `MailboxCursor` (all 0). Recheck against Product match
+  `MerchantVendorRule` (historical counts: all 0). `MailboxCursor` is active in
+  Gmail pagination/replay and must be preserved. Recheck against Product match
   recall, collision review, and [purchase corrections](#review-and-apply-corrections);
   an empty queue alone does not establish that its workflow is unnecessary.
 - **Always-null columns.** `Plant.daysFrom*` and `Plant.breeding`,
   `Planting.outcome`, `Vendor.returnWindowDays` and `Vendor.orderEvidence`,
-  Image `sourcePageUrl`, `sourceAssetUrl`, `sourceName`,
-  `Run.historyCursorUrl` / `dispatchError` / `deviceId`, `Task.sortOrder`,
+  `Run.historyCursorUrl`, `Task.sortOrder`,
   `Meal.sortOrder`, `Wish.acquiredAt`, `Device.productId`, `Cookbook.report`.
   Image `captureDeviceLabel`, `capturePlaceName`, and
   `capturedAtOffsetMinutes` fill once the library path sends them (Images &

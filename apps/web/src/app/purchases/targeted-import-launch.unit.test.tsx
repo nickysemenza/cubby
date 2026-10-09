@@ -19,6 +19,47 @@ afterEach(() => {
 });
 
 describe("TargetedImportLaunchDialog", () => {
+  it("explains an unchanged Product launch that admits no new Run", async () => {
+    restoreDispatch = overrideStartDispatch(async (operation) => ({
+      ok: true,
+      data:
+        operation === "run.targetedLaunch"
+          ? {
+              purpose: "product_enrichment",
+              purchase: null,
+              products: [
+                {
+                  productId: "PRD-4K7M",
+                  productName: "Fixture widget",
+                  sourceId: null,
+                  sourceLabel: null,
+                  vendorAccountId: null,
+                  vendorAccountLabel: null,
+                  needsAccountChoice: false,
+                  selected: true,
+                  accountChoices: [],
+                  reason: null,
+                },
+              ],
+            }
+          : { runs: [] },
+    }));
+    render(
+      <TargetedImportLaunchDialog
+        open
+        onOpenChange={vi.fn()}
+        targetId="PRD-4K7M"
+        targetLabel="Fixture widget"
+        purpose="product_enrichment"
+      />,
+      { wrapper: harness.wrapper },
+    );
+    await screen.findByRole("checkbox");
+    fireEvent.click(screen.getByRole("button", { name: "Start enrichment" }));
+    expect(
+      await screen.findByRole("status", { name: "Research launch result" }),
+    ).toHaveTextContent("No new research Run was created");
+  });
   it("defaults to browser evidence and links a busy account's blocking run", async () => {
     restoreDispatch = overrideStartDispatch(async (operation) => {
       if (operation === "run.targetedLaunch")
