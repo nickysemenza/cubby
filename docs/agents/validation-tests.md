@@ -315,6 +315,11 @@ excluded from the required desktop shards and runs in CI as an optional job
 starts has no id until the click, so scripts use `currentRunId`. Prefer it over
 a UI-less scenario for anything the Run or Purchase page shows; keep scenarios
 for server fences the UI cannot observe.
+Branch on the current public tool-result shape (mail content is under
+`observation.readableText`). Generate an item title once per fixture and reuse
+it in the retained original and proposal: tests share a worker database, so
+unrelated fixtures must not collide on Product name/manufacturer. Repeated
+orders for the same item reuse the Product reference returned by resolution.
 
 Every completed E2E run produces a sanitized run bundle with its revision,
 replay command, runtime versions, case results, and SHA-256 checksums. CI uploads

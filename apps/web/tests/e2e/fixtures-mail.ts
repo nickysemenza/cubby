@@ -261,6 +261,7 @@ export async function seedUnimportedOrderMail(
   const db = getFixtureDb();
   const member = await ensureMemberParty(page, name);
   const vendor = await insertWithShortcode(db, "vendor", { name });
+  const itemTitle = `Synthetic herb packet from ${name}`;
   const events: Array<{
     eventId: string;
     orderMailId: typeof schema.orderMail.$inferSelect.id;
@@ -269,7 +270,7 @@ export async function seedUnimportedOrderMail(
   }> = [];
   for (let index = 1; index <= count; index += 1) {
     const orderId = `SYN-CONFIRM-${index}`;
-    const bodyText = `${name}. Order ${orderId}. Synthetic herb packet, SKU HERB-1, qty 1, $5.00. Ordered 2026-09-10. Grand total $5.00 USD.`;
+    const bodyText = `${name}. Order ${orderId}. ${itemTitle}, SKU HERB-1, qty 1, $5.00. Ordered 2026-09-10. Grand total $5.00 USD.`;
     const checksum = await sha256Hex(bodyText);
     const [mail] = await getDb(db)
       .insert(schema.orderMail)
@@ -318,6 +319,7 @@ export async function seedUnimportedOrderMail(
   return {
     vendor,
     member,
+    itemTitle,
     eventId: first.eventId,
     checksum: first.checksum,
     events,

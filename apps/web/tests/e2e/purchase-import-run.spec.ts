@@ -5,7 +5,10 @@ import { z } from "zod";
 import { eq, inArray } from "drizzle-orm";
 
 import * as schema from "~/server/db/schema";
-import { authorizePurchaseAgent } from "~/server/purchase-import/purchase-agent-workerd.fixtures";
+import {
+  authorizePurchaseAgent,
+  workerdDiagnostic,
+} from "~/server/purchase-import/purchase-agent-workerd.fixtures";
 import { BROWSER_OPERATION_PATH } from "~/lib/browser-operation-path";
 import { getDb } from "~/server/repo/database-helpers";
 
@@ -31,9 +34,10 @@ const step = (
 ): ScriptStep => ({ call: id, tool, args });
 const researchOrder = (
   prefix: string,
-  vendor: Awaited<ReturnType<typeof seedUnimportedOrderMail>>["vendor"],
+  { vendor, itemTitle }: Awaited<ReturnType<typeof seedUnimportedOrderMail>>,
   orderId: string,
   gate?: string,
+  productRef?: ScriptValue,
 ): ScriptStep[] => [
   step(`${prefix}-next`, "work_next"),
   step(`${prefix}-read`, "mail_read", {
@@ -62,7 +66,7 @@ const researchOrder = (
           printedGrandTotal: 5,
           lines: [
             {
-              title: "Synthetic herb packet",
+              title: itemTitle,
               amount: 5,
               lineKind: "principal",
               quantity: 1,
@@ -72,7 +76,11 @@ const researchOrder = (
           payments: [],
           allShipmentsDelivered: false,
         },
-        productResolutions: [{ kind: "new", lineIndex: 0 }],
+        productResolutions: [
+          productRef
+            ? { kind: "existing", lineIndex: 0, productId: productRef }
+            : { kind: "new", lineIndex: 0 },
+        ],
         defaultTrade: "other",
       },
     ],
@@ -161,6 +169,13 @@ async function runByShortcode(shortcode: string) {
   return run;
 }
 
+async function completedRun(shortcode: string) {
+  const run = await runByShortcode(shortcode);
+  if (["failed", "needs_review"].includes(run.status))
+    throw new Error(await workerdDiagnostic(getFixtureDb(), run.id));
+  return run.status;
+}
+
 test("imports saved order mail from the generic Vendor report and follows the live Run to the committed Purchase", async ({
   page,
   e2eRuntime,
@@ -172,7 +187,7 @@ test("imports saved order mail from the generic Vendor report and follows the li
   );
   await authorizePurchaseAgent(getFixtureDb(), await fixtureUserId(page));
   await agent.configure({
-    steps: researchOrder("mail", seed.vendor, "SYN-CONFIRM-1", "original-read"),
+    steps: researchOrder("mail", seed, "SYN-CONFIRM-1", "original-read"),
     purposeSteps: { product_enrichment: productGapSteps },
     assessments: [
       { match: "printed five-dollar total", output: supportedOrder },
@@ -239,12 +254,14 @@ test("imports saved order mail from the generic Vendor report and follows the li
   if (!runShortcode) throw new Error("Research result has no Run");
   await runLink.click();
   await expect(page).toHaveURL(new RegExp(`/runs/${runShortcode}$`, "u"));
-  await expect(page.getByText("live", { exact: true })).toBeVisible();
+  await expect(
+    page.getByText(/^(Updating live|Last update .+ ago)$/u),
+  ).toBeVisible();
   await expect.poll(async () => agent.emitted()).toContain("mail-read");
   expect((await vendorPurchases(seed.vendor.id)).purchases).toEqual([]);
   await agent.release("original-read");
   await expect
-    .poll(async () => (await runByShortcode(runShortcode)).status, {
+    .poll(async () => completedRun(runShortcode), {
       timeout: 30_000,
     })
     .toBe("completed");
@@ -280,7 +297,7 @@ test("imports saved order mail from the generic Vendor report and follows the li
   await gotoAuthenticatedPage(
     page,
     `/purchases/${purchase.shortcode}`,
-    page.getByText("Synthetic herb packet").first(),
+    page.getByText(seed.itemTitle).first(),
   );
   await expect(page.getByText("SYN-CONFIRM-1").first()).toBeVisible();
   await expect(page.getByText("$5.00").first()).toBeVisible();
@@ -306,22 +323,28 @@ test("admits several retained confirmations as separate tasks in the same resear
   if (!first || !second) throw new Error("Missing seeded confirmations");
   await authorizePurchaseAgent(getFixtureDb(), await fixtureUserId(page));
   await agent.configure({
-    steps: researchOrder("first", seed.vendor, first.orderId).slice(0, 2),
+    steps: researchOrder("first", seed, first.orderId).slice(0, 2),
     sourceSteps: [
       ...seed.events.map(({ orderId }) => ({
         call: "second-read",
-        path: "readableText",
+        path: "observation.readableText",
         includes: orderId,
-        steps: researchOrder("second", seed.vendor, orderId).slice(2),
+        steps: researchOrder(
+          "second",
+          seed,
+          orderId,
+          undefined,
+          from("first-resolve", "resolution.productRefs.0"),
+        ).slice(2),
       })),
       ...seed.events.map(({ orderId }) => ({
         call: "first-read",
-        path: "readableText",
+        path: "observation.readableText",
         includes: orderId,
         steps: [
           { gate: "batch-admitted" },
-          ...researchOrder("first", seed.vendor, orderId).slice(2),
-          ...researchOrder("second", seed.vendor, orderId).slice(0, 2),
+          ...researchOrder("first", seed, orderId).slice(2),
+          ...researchOrder("second", seed, orderId).slice(0, 2),
         ],
       })),
     ],
@@ -380,7 +403,7 @@ test("admits several retained confirmations as separate tasks in the same resear
   await expect(page).toHaveURL(new RegExp(`/runs/${runShortcode}$`, "u"));
   await agent.release("batch-admitted");
   await expect
-    .poll(async () => (await runByShortcode(runShortcode)).status, {
+    .poll(async () => completedRun(runShortcode), {
       timeout: 30_000,
     })
     .toBe("completed");
@@ -390,6 +413,9 @@ test("admits several retained confirmations as separate tasks in the same resear
     second.orderId,
   ]);
   expect(graph.expenses.map(({ cost }) => cost)).toEqual([5, 5]);
+  expect(new Set(graph.expenses.map(({ productId }) => productId)).size).toBe(
+    1,
+  );
   expect(graph.claims).toHaveLength(2);
   const owned = await db
     .select({
