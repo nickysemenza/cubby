@@ -38,7 +38,9 @@ import {
   product,
   productCategory,
   recipe,
+  user,
 } from "~/server/db/schema";
+import { systemActor } from "~/server/runs/ensure-run";
 import { getR2PublicUrl } from "~/server/utils/r2-public-url";
 
 import { getDb } from "./database-helpers";
@@ -658,4 +660,16 @@ export const insertEntityAttachments = async (
       }),
     )
     .returning();
+};
+
+/** The reserved system user exists in production; crons write as it. */
+export const createSystemUserFixture = async (db: Database): Promise<void> => {
+  await getDb(db).insert(user).values({
+    id: systemActor().userId,
+    name: "System",
+    email: "system@example.test",
+    emailVerified: true,
+    createdAt: new Date(),
+    updatedAt: new Date(),
+  });
 };

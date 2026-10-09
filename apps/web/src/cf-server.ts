@@ -696,6 +696,41 @@ const handler = {
               // through both the errored child span and Sentry.
               Sentry.captureException(error);
             }
+            // Activation is a deploy that changes USDA_ACTIVE_RELEASE (ADR 0008):
+            // this starts the new release's load, and once it is ready
+            // advances Product links from superseded food revisions.
+            try {
+              await withRequestDbClient(
+                env.HYPERDRIVE.connectionString,
+                async () => {
+                  const [
+                    { db },
+                    { advanceLinksWhenReady },
+                    { requestUsdaRelease },
+                  ] = await Promise.all([
+                    import("./server/db"),
+                    import("./server/services/usda-link-advance.service"),
+                    import("./server/usda-release/client"),
+                  ]);
+                  await withTrace(
+                    "cf.scheduled.job",
+                    async (span) => {
+                      const result = await advanceLinksWhenReady(
+                        db,
+                        requestUsdaRelease(),
+                      );
+                      span.setAttributes({
+                        "cubby.usda.release_state": result.state,
+                        "cubby.usda.links_advanced": result.advanced.length,
+                      });
+                    },
+                    { "cubby.scheduled.job": "usda-link-advance" },
+                  );
+                },
+              );
+            } catch (error) {
+              Sentry.captureException(error);
+            }
             // The clock is a legitimate input for the calendar above. This job is
             // not a repair: it only reads the markers that "Settle now" acts on
             // and reports when they are non-zero, which is the evidence that a
