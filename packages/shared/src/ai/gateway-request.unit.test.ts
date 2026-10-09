@@ -827,3 +827,116 @@ it.each(["extension: synthetic", "retry: synthetic"])(
     expect(observer).toHaveBeenCalledTimes(1);
   },
 );
+
+// Preserve later error evidence after large output, honor every SSE line ending,
+// and keep the complete diagnostic within its byte cap without broken UTF-8.
+describe("bounded stream error evidence", () => {
+  const headers = { "content-type": "text/event-stream" };
+  it("observes a small error after an oversized preceding output event", async () => {
+    const text = `event: response.output_text.delta\ndata: ${JSON.stringify({ type: "response.output_text.delta", delta: "x".repeat(17_000) })}\n\nevent: error\ndata: {"code":"synthetic_error"}\n\n`;
+    const diagnostics: string[] = [];
+    const send = gatewayFetchThrough({
+      provider: "openai",
+      gateway: async () => new Response(text, { headers }),
+      onErrorResponse: (f) => diagnostics.push(f.body),
+    });
+    expect(
+      await (
+        await send(`${gatewayBaseURL("openai")}/responses`, {
+          body: "{}",
+          method: "POST",
+        })
+      ).text(),
+    ).toBe(text);
+    expect(diagnostics).toHaveLength(1);
+    expect(diagnostics[0]).toContain('"eventsSeen":1');
+    expect(diagnostics[0]).toContain("response.output_text.delta");
+    expect(diagnostics[0]).not.toContain('"delta"');
+  });
+
+  it.each([
+    { chunkSize: 1, suffix: "" },
+    { chunkSize: 65_536, suffix: "" },
+    { chunkSize: 1, suffix: ":synthetic comment" },
+    { chunkSize: 65_536, suffix: ":synthetic comment" },
+  ])(
+    "retains a CR-delimited complete error in $chunkSize-byte chunks ($suffix)",
+    async ({ chunkSize, suffix }) => {
+      const text = `event: error\rdata: {"code":"synthetic_error"}\r\r${suffix}`;
+      const bytes = new TextEncoder().encode(text);
+      let offset = 0;
+      const observer = vi.fn();
+      const send = gatewayFetchThrough({
+        provider: "openai",
+        gateway: async () =>
+          new Response(
+            new ReadableStream({
+              pull(controller) {
+                if (offset >= bytes.length) controller.close();
+                else {
+                  controller.enqueue(bytes.slice(offset, offset + chunkSize));
+                  offset += chunkSize;
+                }
+              },
+            }),
+            { headers },
+          ),
+        onErrorResponse: observer,
+      });
+      expect(
+        await (
+          await send(`${gatewayBaseURL("openai")}/responses`, {
+            body: "{}",
+            method: "POST",
+          })
+        ).text(),
+      ).toBe(text);
+      expect(observer).toHaveBeenCalledTimes(1);
+    },
+  );
+
+  it("does not invent a terminating blank line for an incomplete CR event", async () => {
+    const text = 'event: error\rdata: {"code":"synthetic_error"}\r';
+    const observer = vi.fn();
+    const send = gatewayFetchThrough({
+      provider: "openai",
+      gateway: async () => new Response(text, { headers }),
+      onErrorResponse: observer,
+    });
+    expect(
+      await (
+        await send(`${gatewayBaseURL("openai")}/responses`, {
+          body: "{}",
+          method: "POST",
+        })
+      ).text(),
+    ).toBe(text);
+    expect(observer).not.toHaveBeenCalled();
+  });
+
+  it.each(["x".repeat(4_200), "aaa" + "😀".repeat(1_100)])(
+    "bounds the entire diagnostic without corrupting UTF-8 (%#)",
+    async (message) => {
+      const text = `event: error\ndata: ${JSON.stringify({ code: "synthetic_error", message })}\n\n`;
+      const diagnostics: string[] = [];
+      const send = gatewayFetchThrough({
+        provider: "openai",
+        gateway: async () => new Response(text, { headers }),
+        onErrorResponse: (f) => diagnostics.push(f.body),
+      });
+      expect(
+        await (
+          await send(`${gatewayBaseURL("openai")}/responses`, {
+            body: "{}",
+            method: "POST",
+          })
+        ).text(),
+      ).toBe(text);
+      expect(diagnostics).toHaveLength(1);
+      expect(
+        new TextEncoder().encode(diagnostics[0]).byteLength,
+      ).toBeLessThanOrEqual(4_096);
+      expect(diagnostics[0]).not.toContain("\uFFFD");
+    },
+  );
+});

@@ -217,6 +217,7 @@ function observeStreamFailure(
   let eventsSeen = 0;
   let remaining = 65_536;
   let observing = true;
+  let trailingCR = false;
   const recordPriorEvent = (type: string) => {
     eventsSeen += 1;
     if (priorEvents.length < 8) priorEvents.push(type.slice(0, 200));
@@ -231,7 +232,7 @@ function observeStreamFailure(
     onEvent: (event) => {
       if (!observing) return;
       if (event.data.length > 16_384) {
-        observing = false;
+        recordPriorEvent(event.event ?? "unnamed");
         return;
       }
       let decoded: unknown;
@@ -269,16 +270,17 @@ function observeStreamFailure(
               param: z.json().optional(),
             })
             .parse(envelope.data);
-        const raw = new TextDecoder().decode(
-          new TextEncoder()
-            .encode(JSON.stringify(errorData))
-            .subarray(0, 4_096),
+        const diagnostic = `SSE ${JSON.stringify({ event: type.slice(0, 200), contentType: response.headers.get("content-type"), requestId: response.headers.get("x-request-id"), priorEvents, eventsSeen })}\n${JSON.stringify(errorData)}`;
+        // Streaming decode drops an incomplete trailing UTF-8 sequence.
+        const body = new TextDecoder().decode(
+          new TextEncoder().encode(diagnostic).subarray(0, 4_096),
+          { stream: true },
         );
         onErrorResponse({
           status: response.status,
           statusText: response.statusText,
           retryAfter: response.headers.get("retry-after"),
-          body: `SSE ${JSON.stringify({ event: type.slice(0, 200), contentType: response.headers.get("content-type"), requestId: response.headers.get("x-request-id"), priorEvents, eventsSeen })}\n${raw}`,
+          body,
         });
       } else {
         recordPriorEvent(type);
@@ -298,7 +300,14 @@ function observeStreamFailure(
           const bytes = part.value.subarray(0, remaining);
           remaining -= bytes.byteLength;
           try {
-            parser.feed(decoder.decode(bytes, { stream: true }));
+            const text = decoder.decode(bytes, { stream: true });
+            if (text) {
+              // Normalize only diagnostic framing; raw SDK bytes stay unchanged.
+              const framed =
+                trailingCR && text.startsWith("\n") ? text.slice(1) : text;
+              trailingCR = text.endsWith("\r");
+              parser.feed(framed.replace(/\r\n?/gu, "\n"));
+            }
           } catch {
             observing = false; /* Diagnostics cannot replace the SDK's original stream. */
           }
