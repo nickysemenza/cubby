@@ -838,9 +838,6 @@ export { PurchaseImportRunAgent } from "./server/purchase-import/agent-host";
 export { PurchaseImportDurableObject } from "./server/purchase-import/durable-object";
 export { UsdaReleaseDurableObject } from "./server/usda-release/durable-object";
 export { SearchIndexRepairWorkflow } from "./server/search-index-repair-workflow";
-export {
-  MailDiscoveryWorkflow,
-  VendorMailSearchWorkflow,
-} from "./server/gmail-workflows";
+export { MailDiscoveryWorkflow } from "./server/gmail-workflows";
 
 export default Sentry.withSentry(workerSentryOptions, handler);

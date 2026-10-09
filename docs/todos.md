@@ -172,9 +172,11 @@ retention, admission, durable recovery, replay, ownership and domain writes.
 Pi already hosts the researcher; the [simplification audit](plans/research-simplification.md)
 records the remaining deletion candidates and SDK comparisons. The first slice
 removes 245 net handwritten code/test lines (coordinator declarations and old Gmail
-fixtures); the old Workflow remains a deletion target. Remove its executable
-launch/retry paths without a compatibility adapter; retain historical records
-through generic presentation. Browser transport
+fixtures). The next slice removes the retired vendor-search Workflow, binding,
+schemas and bespoke progress presentation; its historical Run records remain
+readable through generic reports and cannot execute again. No compatibility
+adapter remains. Review and deployment of that slice are pending; live mailbox
+acceptance remains open. Browser transport
 contracts remain in [infrastructure](infrastructure.md#browser-bridge).
 
 - 🟢 **Stop repeated logical failures across a Run.** One browser-command retry

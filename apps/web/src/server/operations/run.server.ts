@@ -176,6 +176,10 @@ export const runHandlers = implementOperationDomain(runContract, {
       .from(runTable)
       .where(eq(runTable.shortcode, runShortcode.parse(runId)))
       .limit(1);
+    if (target?.purpose === "mail_search")
+      throw new Error(
+        "Historical vendor-search Runs cannot execute again; start current research instead.",
+      );
     // A Workflow executes these Runs: cancel and retry act on its instance.
     if (target && isWorkflowRunPurpose(target.purpose)) {
       const { controlWorkflowRun } =

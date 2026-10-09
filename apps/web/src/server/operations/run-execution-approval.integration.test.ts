@@ -21,6 +21,7 @@ import type { GmailProvider } from "~/server/purchase-import/gmail/types";
 import { getDb } from "~/server/repo/database-helpers";
 import { insertWithShortcode } from "~/server/repo/shortcode-utils";
 import { requireActor } from "~/server/request-context";
+import { ensureRun } from "~/server/runs/ensure-run";
 import { createStartOperationRunner } from "~/server/start-operation.server";
 import { createTestRequestContext } from "~/server/testing/request-context";
 import type { AppSpan } from "~/server/tracing";
@@ -124,6 +125,57 @@ describe("authenticated member execution approval", () => {
       ]);
     return party;
   };
+
+  // Retired execution must not restart or mutate preserved historical Runs.
+  it("refuses retired vendor-search retry without changing historical evidence", async () => {
+    const party = await seed();
+    const id = await ensureRun(ctx.db, ctx.actor, {
+      purpose: "mail_search",
+      trigger: "manual",
+    });
+    await getDb(ctx.db)
+      .update(run)
+      .set({
+        ledgerPartyId: party.id,
+        input: { after: "", searchTerms: ["synthetic vendor"] },
+        progress: {
+          phase: "failed",
+          pageToken: null,
+          nextPageToken: "synthetic-next-page",
+          pagesScanned: 1,
+          searched: 2,
+          reviewable: 0,
+          attempt: 1,
+        },
+        status: "failed",
+        endedAt: new Date(),
+        failureCode: "vendor_mail_search_failed",
+        dispatchError: "Synthetic retained failure",
+      })
+      .where(eq(run.id, id));
+    const [before] = await getDb(ctx.db)
+      .select()
+      .from(run)
+      .where(eq(run.id, id));
+    if (!before) throw new Error("Synthetic historical Run missing");
+    const result = await invoke("control", {
+      runId: before.shortcode,
+      action: "retry",
+    });
+    expect(result).toMatchObject({ ok: false });
+    const [after] = await getDb(ctx.db)
+      .select()
+      .from(run)
+      .where(eq(run.id, id));
+    expect(after).toMatchObject({
+      status: "failed",
+      input: before.input,
+      progress: before.progress,
+      failureCode: before.failureCode,
+      dispatchError: before.dispatchError,
+      endedAt: before.endedAt,
+    });
+  });
 
   it("derives the owner, persists a completed immutable root, and selects targeted discovery without full history", async () => {
     const party = await seed();

@@ -47,14 +47,6 @@ export interface SearchIndexRepairWorkflow {
   ): Promise<SearchIndexRepairCounters>;
 }
 
-/** The `VENDOR_MAIL_SEARCH` binding: one `mail_search` Run attempt. */
-export interface VendorMailSearchWorkflow {
-  run(
-    event: Readonly<WorkflowEvent<WorkflowRunParams>>,
-    step: WorkflowStep,
-  ): Promise<{ runId: string }>;
-}
-
 /** The `MAIL_DISCOVERY` binding: one scheduled `mail_discovery` Run attempt. */
 export interface MailDiscoveryWorkflow {
   run(

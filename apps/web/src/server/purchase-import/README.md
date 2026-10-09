@@ -720,7 +720,7 @@ handlers need browser navigation rather than a guessed URL.
 | Queue event and bridge message shapes            | `packages/schemas/src/purchase-import.ts`                                        |
 | Run lifecycle, claims, and terminal states       | `run-service.ts` (search the function name from above)                           |
 | What the researcher may call, and its inputs     | `packages/schemas/src/research-tools.ts`, `server/purchase-agent/environment.ts` |
-| Gmail discovery and retained mail                | `gmail/` (`discovery.ts`, `sync.ts`, `ingest.ts`, `search-job.ts`)               |
+| Gmail discovery and retained mail                | `gmail/` (`discovery.ts`, `sync.ts`, `ingest.ts`)                                |
 | Statement-charge hunts                           | `hunts.ts`, `charge-runs.ts`, `charge-hunt-state.ts`                             |
 | Enriching imported Products (post-import, sweep) | `enrichment-sweep.ts`, `browsing-account.ts`                                     |
 | Manual research admission and browser selection  | `product-research-run.ts`, `browsing-account.ts`                                 |
@@ -742,3 +742,17 @@ handlers need browser navigation rather than a guessed URL.
 - The photo inventory agent mounts its purpose's MCP tools from the same compiled catalog
   the MCP server lists to it (`server/mcp/agent-tool-catalog.ts`), without
   listing them; renaming a tool or action changes both.
+
+## Retired vendor-search execution
+
+Known-vendor and unmatched-transaction priorities are mailbox-discovery scopes;
+adaptive scoped searches use `research_mail_search` within an admitted research
+Run. There is no separate vendor-search Workflow or retry adapter. Historical
+`mail_search` Runs retain their original input, progress, failure and source
+associations and remain readable through the generic Run presentation. Their
+control endpoint refuses execution before changing any stored state.
+
+Scoped pagination remains task/query/account-bound and replayable. An interrupted
+classification or dispatch reuses its frozen page without advancing mailbox-wide
+coverage. Mechanical mailbox discovery retains its own exact checkpoints,
+cancellation, dispatch-failure handling and ended-instance reconciliation.

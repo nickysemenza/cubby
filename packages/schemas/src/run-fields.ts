@@ -111,43 +111,6 @@ export const runCause = z.enum([
 ]);
 export type RunCause = z.infer<typeof runCause>;
 
-/**
- * `Run.input` / `Run.progress` for a `mail_search` run: the Gmail search a
- * member asked for and where its page-by-page walk stands. A Cloudflare
- * Workflow instance (`<runShortcode>-<attempt>`) executes it; the Run row is
- * the durable record, so a retry starts a fresh instance that resumes from
- * `pagesScanned`/`nextPageToken`. `queued` and `running` predate the Workflow
- * and still parse on historical rows.
- */
-export const mailSearchRunInput = z.object({
-  after: z.string(),
-  searchTerms: z.array(z.string()),
-});
-export type MailSearchRunInput = z.infer<typeof mailSearchRunInput>;
-export const mailSearchPhase = z.enum([
-  "queued",
-  "running",
-  "waiting",
-  "completed",
-  "failed",
-]);
-export const mailSearchRunProgress = z.object({
-  phase: mailSearchPhase,
-  /** The cursor the walk started from; null when it began at the newest page. */
-  pageToken: z.string().nullable(),
-  nextPageToken: z.string().nullable(),
-  pagesScanned: z.number().int().nonnegative(),
-  searched: z.number().int().nonnegative(),
-  reviewable: z.number().int().nonnegative(),
-  /** A transient cause kept while a rate-limited page waits to be retried. */
-  error: z.string().nullable().optional(),
-  /** The Workflow attempt that owns the Run; absent on pre-Workflow rows. */
-  attempt: z.number().int().nonnegative().optional(),
-  /** When a rate-limited page is retried. */
-  retryAt: z.iso.datetime().nullable().optional(),
-});
-export type MailSearchRunProgress = z.infer<typeof mailSearchRunProgress>;
-
 /** Bounded acquisition and independent full/scoped mailbox coverage. */
 export const mailDiscoveryRunInput = mailboxDiscoveryInput;
 export type MailDiscoveryRunInput = z.infer<typeof mailDiscoveryRunInput>;
@@ -394,12 +357,11 @@ export type RunInput =
   | MailResearchRunInput
   | ProductResearchRunInput
   | PurchaseValidationResearchRunInput
-  | MailSearchRunInput
   | MailDiscoveryRunInput
   | z.infer<typeof orderMailImportRunInput>
   | OrderBackfillRunInput
   | z.infer<typeof chargeHuntRunInput>;
-export type RunProgress = MailSearchRunProgress | MailDiscoveryRunProgress;
+export type RunProgress = MailDiscoveryRunProgress;
 
 /**
  * What one run actually does, for every surface that names it (lists,

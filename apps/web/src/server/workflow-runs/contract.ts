@@ -8,7 +8,7 @@ import type { RunPurpose } from "@cubby/schemas/run-fields";
  * so a retry starts a fresh instance that resumes from `Run.progress` and
  * never depends on Cloudflare still retaining an older instance's state.
  */
-export const WORKFLOW_RUN_PURPOSES = ["mail_search", "mail_discovery"] as const;
+export const WORKFLOW_RUN_PURPOSES = ["mail_discovery"] as const;
 export type WorkflowRunPurpose = (typeof WORKFLOW_RUN_PURPOSES)[number];
 
 export const isWorkflowRunPurpose = (
