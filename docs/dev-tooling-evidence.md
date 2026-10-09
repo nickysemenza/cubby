@@ -3,8 +3,8 @@
 The feedback loop uses deterministic service read-back for stored correctness,
 small user journeys for navigation and edits, and previews for presentation.
 The isolated suite keeps distinct failures that those boundaries cannot expose.
-This change removes 85 source-level cases across the two test-audit passes and
-Tester Army consolidation; parameterized runtime case counts differ. Nineteen
+This change removes 86 source-level cases across the two test-audit passes,
+Tester Army consolidation and CI follow-up; parameterized runtime case counts differ. Nineteen
 whole files are deleted and the recipe-import projections retain their named
 regressions under a clearer filename. Extended native scenarios remain available
 by name or `test:e2e:local --all`; the default local smoke is headless + simulator.
@@ -200,3 +200,7 @@ Golden-vector suites (gtin, display-format, household-date, image-url); generate
 - `pnpm --dir packages/shared exec vitest run src/shortcode.unit.test.ts` → 1 file / 142 tests passed (≈1s).
 - `pnpm --dir packages/schemas exec tsc --noEmit`, `pnpm --dir packages/shared exec tsc --noEmit` → clean.
 - Not run: web typecheck (`typecheck:web:tests`, covers the `expectTypeOf` guard kept in `entities.unit.test.ts`), full unit/ui tiers, knip (deleted tests may leave test-only exports such as `workspaceNavigatorLeavesForTest` untouched — none of the deleted files were sole importers I verified, but knip did not run), lint over the whole repo, E2E, Postgres tier, commits.
+
+## CI follow-up
+
+- Removed the obsolete `scripts/dev-db.test.ts` case requiring Docker to be rejected. Docker is now a supported development backend; `scripts/dev-db-docker.test.ts` exercises actual CLI routing, preserves the owned volume, and refuses a foreign database before stop/removal. The inherited-production-target guard remains. This adds one removed source-level case (86 overall); the whole-file count remains 19.
