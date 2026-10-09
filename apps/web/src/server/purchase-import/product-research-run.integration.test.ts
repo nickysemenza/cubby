@@ -59,6 +59,8 @@ describe("cloud Product research admission", () => {
   const ctx = withTestDb();
   // Paid binding failures: missing/foreign originals or approvals, mailbox ambiguity,
   // invalid latest approvals reviving an older bucket, and retries switching authority.
+  // Historical per-order checksums differ from raw mail: bind only a retained
+  // original in the exact owner's mailbox, never a missing or foreign receipt.
   const authorityModes = [
     "approved",
     "missing",
@@ -70,6 +72,9 @@ describe("cloud Product research admission", () => {
     "foreign_original",
     "legacy",
     "inherited",
+    "historical",
+    "historical_missing",
+    "historical_foreign",
   ] as const;
   const prepareAuthority = async (mode: (typeof authorityModes)[number]) => {
     const f = await productResearchFixture(ctx.db, ctx.actor, {
@@ -94,15 +99,22 @@ describe("cloud Product research admission", () => {
     if (f.association)
       await getDb(ctx.db)
         .update(importSourceClaim)
-        .set({ externalKey: `gmail:${mailboxId}:synthetic-message` })
+        .set({
+          externalKey: mode.startsWith("historical")
+            ? "gmail:synthetic-message:order:SYNTHETIC-101"
+            : `gmail:${mailboxId}:synthetic-message`,
+          checksum: mode.startsWith("historical")
+            ? "b".repeat(64)
+            : "a".repeat(64),
+        })
         .where(eq(importSourceClaim.id, f.association.sourceClaimId));
-    if (mode !== "no_original")
+    if (mode !== "no_original" && mode !== "historical_missing")
       await getDb(ctx.db)
         .insert(orderMail)
         .values({
           ledgerPartyId: f.party.id,
           mailboxId:
-            mode === "foreign_original"
+            mode === "foreign_original" || mode === "historical_foreign"
               ? "synthetic-foreign-mailbox"
               : mailboxId,
           messageId: "synthetic-message",
@@ -197,6 +209,8 @@ describe("cloud Product research admission", () => {
     "no_original",
     "foreign_original",
     "legacy",
+    "historical_missing",
+    "historical_foreign",
   ] as const)(
     "leaves unsupported retained-mail backfill unpaid: %s",
     async (mode) => {
@@ -243,7 +257,7 @@ describe("cloud Product research admission", () => {
       expect(await getDb(ctx.db).select().from(runTarget)).toHaveLength(0);
     },
   );
-  it.each(["approved", "inherited"] as const)(
+  it.each(["approved", "inherited", "historical"] as const)(
     "keeps retained-mail approval and retry cap bucket stable: %s",
     async (mode) => {
       const { f, input, queue, approval, mailboxId } =

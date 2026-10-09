@@ -71,10 +71,15 @@ Pi can open before dispatch binds its Run, so the coordinator resolves transport
 policy from its persisted identity at each request. Photo inventory keeps its
 existing transport policy; an unbound coordinator cannot bypass research admission.
 New mail and Product research Runs without inherited authority can bind the
-existing backfill approval only when every target has checksum-matching retained
-original mail in the member's single connected Google mailbox. Selected Product
-sources constrain that check. Missing, foreign, ambiguous or legacy-only sources
-remain unpaid. The latest approval is authoritative even if revoked or expired;
+existing backfill approval only when every target has retained original mail in
+the member's single connected Google mailbox. Canonical sources must match the
+raw checksum. Historical `gmail:synthetic-message:order:EXAMPLE-101` sources
+instead bind through their message identity and the owned retained original:
+their old checksum describes derived order data, not raw mail. This proves
+budget ownership only; it does not revalidate old claims, rewrite source history,
+or make historical identities writable. Selected Product sources constrain that
+check. Missing, foreign, ambiguous or sources without a retained original remain
+unpaid. The latest approval is authoritative even if revoked or expired;
 inherited authority always wins, keeping retry buckets stable. Settled Run inputs
 are never rewritten. Both launch paths use the same evidence/ownership check.
 No caps, provider credentials or billing arrangements change.
