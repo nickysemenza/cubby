@@ -9,7 +9,6 @@ import { setMemberLoginParty } from "~/server/repo/member-login";
 import {
   convergenceNames,
   createConvergenceFixtures,
-  sha256Hex,
 } from "../../tooling/convergence-harness";
 import {
   createEntityFixture,
@@ -139,9 +138,8 @@ test("reviews CSV charge groups and refunds against captured retailer orders", a
     const orderToken = `${token}-${index}`;
     const orderNames = convergenceNames(orderToken);
     const url = `https://${names.host}/orders/${orderNames.orderId}`;
-    const asin = `B0${sha256Hex(orderToken).slice(0, 8).toUpperCase()}`;
-    const productUrl = `https://www.amazon.com/dp/${asin}`;
     const sku = `SYN-SKU-${orderToken}`;
+    const productUrl = `https://${names.host}/products/${sku}`;
     provider.configure({
       email,
       message: {
@@ -178,7 +176,7 @@ test("reviews CSV charge groups and refunds against captured retailer orders", a
       `/api/v1/vendors/${prerequisites.vendor.id}`,
       {
         headers: { Origin: e2eRuntime.baseURL },
-        data: { browserDomains: [names.host, "www.amazon.com"] },
+        data: { browserDomains: [names.host] },
       },
     );
     expect(allowlist.ok(), await allowlist.text()).toBe(true);
@@ -193,10 +191,10 @@ test("reviews CSV charge groups and refunds against captured retailer orders", a
       token: orderToken,
       url,
       productUrl,
-      expectedProductText: asin,
+      expectedProductText: sku,
       retailerPages: {
         [url]: `<title>Synthetic order detail</title><main><h1>${orderNames.orderId}</h1><p>Ordered September 10, 2026. Delivered. USD 42.50</p><p>${orderNames.productName} SKU ${sku} quantity1</p><a href="${productUrl}">Product page</a></main>`,
-        [productUrl]: `<main>${orderNames.productName} SKU ${sku} ASIN ${asin} USD42.50</main>`,
+        [productUrl]: `<main>${orderNames.productName} SKU ${sku} USD42.50</main>`,
       },
     });
     await gotoAuthenticatedPage(page, `/runs/${run.publicId}`);

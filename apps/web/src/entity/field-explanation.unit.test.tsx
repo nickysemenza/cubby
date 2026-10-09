@@ -41,7 +41,7 @@ it("keeps shortcode-shaped retailer identifiers literal while linking source rec
 });
 
 // A collection's proof must identify its own live operand, rather than merely repeat the rationale.
-it("shows each verified collection member with public references and keeps byte identity in technical details", () => {
+it("shows verified collection values and image sources without exposing byte identity", () => {
   const verification = (
     key: string,
     fieldPath: string,
@@ -83,15 +83,16 @@ it("shows each verified collection member with public references and keeps byte 
     { wrapper: harness.wrapper },
   );
   expect(screen.getByText("BLUE-42")).toBeInTheDocument();
-  expect(screen.getByRole("link", { name: "IMG-4K7M" })).toHaveAttribute(
-    "href",
-    expect.stringContaining("IMG-4K7M"),
-  );
+  expect(screen.getByText("image", { exact: true })).toBeVisible();
+  expect(
+    screen.queryByRole("link", { name: "IMG-4K7M" }),
+  ).not.toBeInTheDocument();
   expect(
     screen.getByRole("link", { name: "https://maker.example.test/blue.jpg" }),
   ).toHaveAttribute("href", "https://maker.example.test/blue.jpg");
   expect(screen.queryByText("a".repeat(64))).not.toBeInTheDocument();
   expect(screen.getAllByRole("link", { name: "RUN-4K7M" })).toHaveLength(2);
+  expect(screen.getAllByRole("link", { name: "PRD-4K7M" })).toHaveLength(2);
 });
 
 it("keeps the accepted value and source visible when verification rationale is retired", () => {

@@ -75,6 +75,11 @@ Vendor, with independent order identities and retained mail. Check this before
 inference: duplicate fixture Vendors turn a supported SKU into a genuine issuer
 refusal and measure fixture corruption instead of research behavior. Keep the
 production ambiguity guard intact.
+Browser fixtures for independent synthetic retailers use their own Product-page
+hosts. Adding a shared real retailer domain to each fixture Vendor creates
+competing canonical issuers across the suite; an isolated replay can miss that
+collision. Use a shared canonical Vendor only when that retailer is the subject
+of the regression.
 Exact-identifier fixtures use the canonical issuer resolver and source
 registration. A familiar retailer name or a Vendor-shaped source slug does not
 establish domain authority or identifier ownership.

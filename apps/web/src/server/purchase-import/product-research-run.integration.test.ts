@@ -102,7 +102,10 @@ describe("cloud Product research admission", () => {
       status: "working",
       work: {
         kind: "product",
-        product: { ingredientId: ingredient.id, categoryId: food.id },
+        product: {
+          ingredientId: ingredient.shortcode,
+          categoryId: food.shortcode,
+        },
       },
     });
     const [before] = await getDb(ctx.db)

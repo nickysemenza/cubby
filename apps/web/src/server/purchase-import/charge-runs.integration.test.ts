@@ -15,6 +15,7 @@ import {
   vendorChargeHuntsInput,
 } from "@cubby/schemas/order-mail-review";
 import type { PurchaseAgentEvent } from "@cubby/schemas/purchase-import";
+import { researchWorkResolve } from "@cubby/schemas/research-tools";
 import { researchObjectivesRunInput } from "@cubby/schemas/run-fields";
 import { vendorAccountCursor } from "@cubby/schemas/vendor-account-fields";
 import { eq } from "drizzle-orm";
@@ -38,6 +39,7 @@ import {
   dispatchImportHunts,
   MAIL_GRACE_MS,
 } from "./hunts";
+import { resolveImportResearch } from "./research-import";
 import { researchWorklistFixture } from "./research-worklist.fixtures";
 import {
   controlRun,
@@ -178,6 +180,79 @@ describe("selected statement-charge runs", () => {
       transactionId: charge.id,
       purchaseId: purchase.id,
       amount: 1,
+    });
+    return purchase;
+  }
+
+  async function verifyAllocatedOrder(
+    runId: string,
+    workRef: string,
+    purchase: Awaited<ReturnType<typeof allocate>>,
+  ) {
+    const content =
+      "Synthetic settled order: September 1, 2026. Annual service, quantity 1, total USD 1.00.";
+    const retained = await researchWorklistFixture(ctx.db, runId).retain(
+      workRef,
+      content,
+    );
+    const result = await resolveImportResearch(
+      ctx.db,
+      {
+        runId,
+        workRef,
+        callId: crypto.randomUUID(),
+        proposal: researchWorkResolve.parse({
+          workRef,
+          status: "verified",
+          identity: {
+            evidenceIds: [retained.evidenceId],
+            reasoning: "The retained order identifies the allocated Purchase.",
+          },
+          orders: [
+            {
+              purchaseRef: purchase.shortcode,
+              evidenceIds: [retained.evidenceId],
+              reasoning: "The original supports the settled annual service.",
+              candidate: {
+                orderId: null,
+                orderedAt: "2026-09-01T12:00:00Z",
+                merchant: "Synthetic service merchant",
+                currency: "USD",
+                printedGrandTotal: 1,
+                lines: [
+                  {
+                    title: "Synthetic annual service",
+                    amount: 1,
+                    quantity: 1,
+                    lineKind: "principal",
+                  },
+                ],
+                payments: [],
+                allShipmentsDelivered: true,
+              },
+              productResolutions: [{ kind: "expense_only", lineIndex: 0 }],
+              defaultTrade: "other",
+            },
+          ],
+          detail: "Verified the allocated order from retained evidence.",
+        }),
+      },
+      {
+        readEvidence: async () => content,
+        assess: async () => ({
+          identityVerified: true,
+          acceptedOrders: [0],
+          acceptedFacts: [],
+          acceptedIdentifiers: [],
+          acceptedImages: [],
+          rejected: [],
+        }),
+      },
+    );
+    expect(result).toMatchObject({
+      status: "verified",
+      purchaseIds: [purchase.id],
+      refusals: [],
     });
   }
 
@@ -347,11 +422,11 @@ describe("selected statement-charge runs", () => {
       .set({ cursor })
       .where(eq(vendorAccount.id, s.account.id));
     const started = await start(s, [s.a]);
-    await allocate(s, s.a);
+    const purchase = await allocate(s, s.a);
     const research = researchWorklistFixture(ctx.db, started.run.id);
     const work = await research.assigned();
     expect(await research.next()).toMatchObject({ status: "working" });
-    await research.resolve(work.workRef, { status: "verified" });
+    await verifyAllocatedOrder(started.run.id, work.workRef, purchase);
     expect(await research.next()).toMatchObject({
       status: "done",
       summary: { unresolved: 0 },
@@ -390,10 +465,10 @@ describe("selected statement-charge runs", () => {
       .update(importHunt)
       .set({ state: "browser_queued" })
       .where(eq(importHunt.id, (await huntOf(s.c.shortcode)).id));
-    await allocate(s, s.a);
+    const purchase = await allocate(s, s.a);
     const research = researchWorklistFixture(ctx.db, started.run.id);
     const work = await research.assigned();
-    await research.resolve(work.workRef, { status: "verified" });
+    await verifyAllocatedOrder(started.run.id, work.workRef, purchase);
     expect(await research.next()).toMatchObject({
       status: "done",
       summary: { unresolved: 0 },
@@ -608,10 +683,10 @@ describe("selected statement-charge runs", () => {
   it("refuses to restart a charge run that has nothing left to carry", async () => {
     const s = await threeCharges();
     const started = await start(s, [s.a]);
-    await allocate(s, s.a);
+    const purchase = await allocate(s, s.a);
     const research = researchWorklistFixture(ctx.db, started.run.id);
     const work = await research.assigned();
-    await research.resolve(work.workRef, { status: "verified" });
+    await verifyAllocatedOrder(started.run.id, work.workRef, purchase);
     expect(await research.next()).toMatchObject({ status: "done" });
     const before = await getDb(ctx.db)
       .select()

@@ -158,6 +158,16 @@ describe("account-sync research worklist", () => {
       scopeExhausted: false,
     });
     expect(await research.next()).toMatchObject({
+      status: "working",
+      work: { workRef: work.workRef },
+    });
+    await research.resolve(work.workRef, {
+      status: "researched_with_gaps",
+      evidenceIds: [retained.evidenceId],
+      gaps: ["Only one history page was available."],
+      scopeExhausted: false,
+    });
+    expect(await research.next()).toMatchObject({
       status: "done",
       summary: { unresolved: 1 },
     });

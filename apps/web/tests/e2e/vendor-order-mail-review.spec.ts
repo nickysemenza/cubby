@@ -265,11 +265,12 @@ const investigation: ScriptStep[] = [
   }),
 ];
 function resolution(exhausted: boolean): ScriptStep {
+  const status = exhausted ? "verified" : "researched_with_gaps";
   // Validate authored operands before expensive infrastructure; references below
   // are replaced by the actual server-issued task and evidence IDs in the peer.
   researchWorkResolve.parse({
     workRef: "00000000-0000-4000-8000-000000000001",
-    status: "verified",
+    status,
     identity: {
       evidenceIds: ["00000000-0000-4000-8000-000000000002"],
       reasoning:
@@ -284,7 +285,7 @@ function resolution(exhausted: boolean): ScriptStep {
   });
   return call("resolve", "work_resolve", {
     workRef: from("scope", "work.workRef"),
-    status: "verified",
+    status,
     identity: {
       evidenceIds: [
         from("current-page", "evidenceId"),

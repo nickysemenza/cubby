@@ -731,7 +731,10 @@ describe("purchase research through the built Worker", () => {
                     ),
                   });
                 }
-                throw error;
+                throw new Error(
+                  `${error instanceof Error ? error.message : String(error)}\nAcquisition diagnostics: ${JSON.stringify(evidence.slice(-2))}`,
+                  { cause: error },
+                );
               });
               const [mailRun] = await database
                 .select()
