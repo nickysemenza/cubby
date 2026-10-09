@@ -125,7 +125,7 @@ export const researchWorkResolve = z.strictObject({
         defaultTrade: tradeSchema
           .optional()
           .describe(
-            "Source-supported household purpose only. Omit when unknown; preserve existing member attribution.",
+            "Preserve existing member attribution, including inherited Project and Expense purpose, by omitting this for an assigned Purchase. For a new or unassigned Purchase with no established household purpose, use other as Cubby's approved fallback, not a verified source fact. The host preserves assigned attribution. Specific trades require support.",
           ),
       }),
     )

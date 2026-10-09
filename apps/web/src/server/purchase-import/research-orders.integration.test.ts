@@ -21,6 +21,7 @@ import {
   user,
 } from "~/server/db/schema";
 import { getDb } from "~/server/repo/database-helpers";
+import { effectiveExpenseTradeSql } from "~/server/repo/expense-inheritance";
 import { insertWithShortcode } from "~/server/repo/shortcode-utils";
 import { ensureRun } from "~/server/runs/ensure-run";
 
@@ -128,6 +129,127 @@ describe("research order writes", () => {
       .where(eq(expense.purchaseId, saved!.id));
     expect(lines.map(({ cost }) => Number(cost))).toEqual([10]);
   });
+  // A null Purchase trade can intentionally inherit a selected Project or
+  // line purpose. A new receipt's fallback must not override that selection.
+  it.each([
+    "purchase_project",
+    "line_project",
+    "line_trade",
+    "unassigned_purchase",
+    "new_purchase",
+  ] as const)(
+    "fills Other only without member purpose: %s",
+    async (selection) => {
+      const { party, vendor, runId } = await scope();
+      const parentProject = await insertWithShortcode(ctx.db, "project", {
+        name: "Synthetic purpose parent",
+        defaultTrade: "plumbing",
+      });
+      const selectedProject = await insertWithShortcode(ctx.db, "project", {
+        name: "Synthetic purpose child",
+        parentProjectId: parentProject.id,
+      });
+      const existing =
+        selection === "new_purchase"
+          ? undefined
+          : await insertWithShortcode(ctx.db, "purchase", {
+              vendorId: vendor.id,
+              orderId: "EXAMPLE-MEMBER-PURPOSE",
+              date: "2026-09-01",
+              defaultTrade: null,
+              defaultProjectId:
+                selection === "purchase_project" ? selectedProject.id : null,
+            });
+      if (
+        existing &&
+        (selection === "line_project" || selection === "line_trade")
+      )
+        await insertWithShortcode(ctx.db, "expense", {
+          purchaseId: existing.id,
+          name: "Synthetic service",
+          date: "2026-09-01",
+          cost: 10,
+          costType: "materials",
+          lineKind: "principal",
+          lineBasis: "item_line",
+          trade: selection === "line_trade" ? "plumbing" : null,
+          projectId: selection === "line_project" ? selectedProject.id : null,
+        });
+      const input: ImportWriterInput = {
+        runId,
+        ledgerPartyId: party.id,
+        vendorId: vendor.id,
+        vendorAccountId: null,
+        defaultTrade: "other",
+        targetPurchaseId: existing?.id,
+        source: {
+          kind: "mail_message",
+          externalKey: "gmail:synthetic:member-purpose",
+          checksum: "b".repeat(64),
+        },
+        extraction: {
+          status: "ready",
+          candidate: {
+            orderId: "EXAMPLE-MEMBER-PURPOSE",
+            orderedAt: "2026-09-01T18:00:00Z",
+            merchant: vendor.name,
+            currency: "USD",
+            printedGrandTotal: 10,
+            lines: [
+              {
+                title: "Synthetic service",
+                amount: 10,
+                quantity: 1,
+                lineKind: "principal",
+              },
+            ],
+            payments: [],
+            allShipmentsDelivered: false,
+          },
+        },
+        productResolutions: [{ kind: "expense_only", lineIndex: 0 }],
+        primaryDocumentImageId: null,
+        screenshotImageId: null,
+      };
+      const result = await importVendorOrder(ctx.db, input, ctx.actor.userId);
+      const [saved] = await getDb(ctx.db)
+        .select()
+        .from(purchase)
+        .where(eq(purchase.id, parseEntityId("purchase", result.purchaseId!)));
+      const hasMemberPurpose =
+        selection === "purchase_project" ||
+        selection === "line_project" ||
+        selection === "line_trade";
+      expect(saved).toMatchObject({
+        id: existing?.id ?? result.purchaseId,
+        defaultTrade: hasMemberPurpose ? null : "other",
+        defaultProjectId:
+          selection === "purchase_project" ? selectedProject.id : null,
+      });
+      const savedLines = await getDb(ctx.db)
+        .select({
+          cost: expense.cost,
+          trade: expense.trade,
+          projectId: expense.projectId,
+          effectiveTrade: effectiveExpenseTradeSql(),
+        })
+        .from(expense)
+        .where(eq(expense.purchaseId, saved!.id));
+      expect(savedLines).toEqual([
+        {
+          cost: 10,
+          trade: selection === "line_trade" ? "plumbing" : null,
+          projectId: selection === "line_project" ? selectedProject.id : null,
+          effectiveTrade: hasMemberPurpose ? "plumbing" : "other",
+        },
+      ]);
+      const replay = await importVendorOrder(ctx.db, input, ctx.actor.userId);
+      expect(replay).toMatchObject({
+        outcome: "replayed",
+        purchaseId: result.purchaseId,
+      });
+    },
+  );
   it.each(["USD", null, "CAD", "CAD-mismatch"])(
     "keeps an identified incomplete order in %s unknown, then improves it without invented spend",
     async (currency) => {

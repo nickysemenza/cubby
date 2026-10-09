@@ -54,7 +54,10 @@ import {
   notDeleted,
   withTransaction,
 } from "~/server/repo/database-helpers";
-import { validateExpenseInheritance } from "~/server/repo/expense-inheritance";
+import {
+  effectiveExpenseTradeSql,
+  validateExpenseInheritance,
+} from "~/server/repo/expense-inheritance";
 import { validateProductPolicy } from "~/server/repo/inheritance-validation";
 import { resolveProductIdentifierSource } from "~/server/repo/product-identifier-source";
 import { upsertAgentProductMatch } from "~/server/repo/product-match-candidate";
@@ -1135,13 +1138,39 @@ export async function importVendorOrder(
           candidate.currency === "USD" ? candidate.printedGrandTotal : null,
       });
     } else if (!isSourceRefresh) {
+      // A null trade can be intentional Project inheritance. Filling a
+      // Purchase default would take precedence over existing line Projects.
+      const canFillTrade =
+        target.defaultTrade === null &&
+        target.defaultProjectId === null &&
+        input.defaultTrade !== undefined;
+      const [assignedLine] = canFillTrade
+        ? await tx
+            .select({ id: expense.id })
+            .from(expense)
+            .where(
+              and(
+                eq(expense.purchaseId, target.id),
+                eq(expense.lineKind, "principal"),
+                notDeleted(expense),
+                or(
+                  isNotNull(expense.projectId),
+                  isNotNull(expense.trade),
+                  isNotNull(effectiveExpenseTradeSql()),
+                ),
+              ),
+            )
+            .limit(1)
+        : [];
       await tx
         .update(purchase)
         .set({
           orderId: target.orderId ?? candidate.orderId,
           date: target.date ?? orderDate,
           vendorAccountId: target.vendorAccountId ?? vendorAccountId,
-          defaultTrade: target.defaultTrade ?? input.defaultTrade,
+          defaultTrade:
+            target.defaultTrade ??
+            (canFillTrade && !assignedLine ? input.defaultTrade : null),
           defaultProjectId:
             target.defaultProjectId ??
             (input.defaultProjectId
