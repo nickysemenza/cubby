@@ -71,14 +71,12 @@ export function ReadableExplanationValue({
 }) {
   if (value === null) return <NoneValue />;
   const textValue = z.string().safeParse(value);
+  if (textValue.success && property === "externalId")
+    return <span className="break-words">{textValue.data}</span>;
   const reference = textValue.success ? parseShortcode(textValue.data) : null;
   if (reference)
     return (
-      <ExplanationEntityLink
-        entity={reference.type}
-        id={reference.shortcode}
-        name={reference.shortcode}
-      />
+      <ExplanationEntityLink entity={reference.type} id={reference.shortcode} />
     );
   if (textValue.success) {
     const formatted = readableExplanationText(textValue.data);

@@ -1260,7 +1260,7 @@ Reset and navigation actions remain in the popover footer, while exception actio
 stay with their check. Tables retain their compact rows and lazy explanations.
 The sticky footer stays wholly inside the scrollport so its actions retain their
 phone touch targets. Nested evidence switches from aligned facts to stacked labels
-based on its own container width, avoiding progressively narrower columns. Generic evidence values link validated HTTP(S) URLs, format ISO timestamps in the household zone, and use calendar-date context for plain dates. Bounded evidence IDs resolve in one identity batch to canonical public codes and then shared entity links; unregistered row IDs and source slugs remain literal. Technical details is collapsed by default.
+based on its own container width, avoiding progressively narrower columns. Generic evidence values link validated HTTP(S) URLs, format ISO timestamps in the household zone, and use calendar-date context for plain dates. Bounded evidence IDs resolve in one identity batch to canonical public codes and then shared entity links, which resolve record names when evidence supplies only a code. Identifier source links use the registered `ExternalSource.vendorId` owner, including host-based slugs; a slug's spelling never establishes Vendor ownership. External identifier values remain literal through rendering even when they match an entity UUID, public code, or source slug. Unregistered row IDs and unowned source slugs remain literal. Technical details is collapsed by default.
 
 An Image has provenance (`own`, `catalog`, `unknown`, or `screenshot`, plus
 optional supplying source name/page/asset URLs). Its Product attachment has

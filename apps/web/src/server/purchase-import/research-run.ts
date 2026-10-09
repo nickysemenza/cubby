@@ -158,7 +158,7 @@ async function retainedMailResearchOwners(
         !owner ||
         owner.retiredAt ||
         message.checksum !== source.rawChecksum ||
-        !["researching", "completed"].includes(message.status) ||
+        !["researching", "completed", "blocked"].includes(message.status) ||
         !frozenOwnerMatches(owner, source)
       )
         throw new Error(

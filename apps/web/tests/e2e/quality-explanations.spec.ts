@@ -610,8 +610,10 @@ test("explanation evidence formats links and dates without exposing internal ent
   const { eq } = await import("drizzle-orm");
   const suffix = Date.now();
   const vendorName = `Synthetic evidence supplier ${suffix}`;
+  const url = `https://example.com/catalog/${"synthetic-".repeat(30)}item`;
   const supplier = await createEntityFixture(page, "vendor", {
     name: vendorName,
+    website: "https://example.com",
   });
   const storedVendor = await getDb(getFixtureDb()).query.vendor.findFirst({
     where: eq(vendor.shortcode, supplier.id),
@@ -620,9 +622,9 @@ test("explanation evidence formats links and dates without exposing internal ent
   if (!storedVendor) throw new Error("Synthetic supplier fixture is missing");
   const source = await resolveProductIdentifierSource(getFixtureDb(), {
     vendorId: storedVendor.id,
+    url,
   });
   const productName = `Synthetic formatted evidence ${suffix}`;
-  const url = `https://example.com/catalog/${"synthetic-".repeat(30)}item`;
   const product = await seedProductPrerequisite(page, {
     name: productName,
     externalIds: [

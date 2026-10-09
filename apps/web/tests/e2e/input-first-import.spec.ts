@@ -6,6 +6,7 @@ import { parseShortcodeFor } from "@cubby/schemas/identifiers";
 import * as schema from "~/server/db/schema";
 import { getDb, notDeleted } from "~/server/repo/database-helpers";
 import { resolveOrThrow } from "~/server/repo/shortcode-resolver";
+import { resolveProductIdentifierSource } from "~/server/repo/product-identifier-source";
 import { setMemberLoginParty } from "~/server/repo/member-login";
 import { account as googleAccount } from "~/server/db/auth.schema";
 import { createGmailApiClient } from "~/server/purchase-import/gmail/client";
@@ -74,12 +75,16 @@ for (const statementFirst of [true, false]) {
     );
     const asin = `B0${sha256Hex(`${token}:${statementFirst}`).slice(0, 8).toUpperCase()}`;
     const sku = `SYN-SKU-${token}`;
+    // Exact identifiers use the canonical Vendor's issuer, not a legacy name slug.
+    const identifierSource = await resolveProductIdentifierSource(db, {
+      vendorId,
+    });
     const product = await createEntityFixture(page, "product", {
       name: names.productName,
       categoryId: prerequisites.productCategory.id,
       externalIds: [
         {
-          source: "amazon",
+          source: identifierSource,
           kind: "retailer_sku",
           externalId: sku,
           isPrimary: true,
@@ -91,7 +96,12 @@ for (const statementFirst of [true, false]) {
       name: duplicateName,
       categoryId: prerequisites.productCategory.id,
       externalIds: [
-        { source: "amazon", kind: "asin", externalId: asin, isPrimary: true },
+        {
+          source: identifierSource,
+          kind: "asin",
+          externalId: asin,
+          isPrimary: true,
+        },
       ],
     });
     const session = z
@@ -402,6 +412,11 @@ for (const statementFirst of [true, false]) {
         exact: true,
       });
       await expect(
+        page.locator("#import-prepared-orders").getByText("Exact identifier", {
+          exact: true,
+        }),
+      ).toHaveCount(2);
+      await expect(
         page.getByText(
           "Conflicting exact matches. Choose the Product to use.",
           { exact: true },
@@ -520,6 +535,10 @@ for (const statementFirst of [true, false]) {
     expect(ids.map((item) => item.kind).sort()).toEqual([
       "asin",
       "retailer_sku",
+    ]);
+    expect(ids.map((item) => item.source)).toEqual([
+      identifierSource,
+      identifierSource,
     ]);
     expect(provider.events()).toEqual(
       expect.arrayContaining([

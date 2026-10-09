@@ -1,6 +1,8 @@
+import { externalIdInputs } from "@cubby/schemas/external-id";
 import { parseShortcodeFor } from "@cubby/schemas/identifiers";
 import { acceptedResearchFact } from "@cubby/schemas/research";
 import { eq } from "drizzle-orm";
+import { createRepoEntity } from "tooling/factories/repo";
 import {
   taxonomyId,
   taxonomyShortcode,
@@ -10,6 +12,7 @@ import { describe, expect, it } from "vitest";
 
 import {
   product,
+  externalSource,
   runEvidence,
   runFactEvidence,
   runTarget,
@@ -24,6 +27,7 @@ import { getDb, withTransaction } from "~/server/repo/database-helpers";
 import { createExpense } from "~/server/repo/expense/crud";
 import { createInventoryEntry } from "~/server/repo/inventory/crud";
 import { createLedgerParty } from "~/server/repo/ledger-party";
+import { resolveProductIdentifierSource } from "~/server/repo/product-identifier-source";
 import {
   createLocationFixture,
   createProductFixture,
@@ -41,6 +45,85 @@ describe("derived field explanations against canonical records", () => {
     entityKernelContextSchema.parse(
       createTestRequestContext(ctx.db, { auth: { userId: ctx.actor.userId } }),
     );
+
+  it("links registered identifier source owners and preserves unowned slugs", async () => {
+    const supplier = await createRepoEntity(ctx, "vendor", {
+      name: "Synthetic evidence supplier",
+      website: "https://shop.example.test",
+    });
+    const source = await resolveProductIdentifierSource(ctx.db, {
+      url: "https://shop.example.test/catalog/item",
+    });
+    const offlineSupplier = await createRepoEntity(ctx, "vendor", {
+      name: "Synthetic supplier without a website",
+      website: null,
+      browserDomains: [],
+    });
+    const offlineSource = await resolveProductIdentifierSource(ctx.db, {
+      vendorId: offlineSupplier.entityId,
+    });
+    // Prefix-shaped slugs do not establish ownership, and an external ID
+    // that equals a registered slug remains an identifier rather than a link.
+    const unownedSource = `vendor-${supplier.entityId}`;
+    await getDb(ctx.db).insert(externalSource).values({
+      slug: unownedSource,
+      label: "Synthetic unowned source",
+      vendorId: null,
+    });
+    const item = await createProductFixture(
+      ctx.db,
+      makeProductInput({
+        externalIds: externalIdInputs.parse([
+          { source, kind: "retailer_sku", externalId: source },
+          {
+            source: unownedSource,
+            kind: "retailer_sku",
+            externalId: "SYNTHETIC-UNOWNED",
+          },
+          {
+            source: offlineSource,
+            kind: "retailer_sku",
+            externalId: offlineSource,
+          },
+          {
+            source: offlineSource,
+            kind: "retailer_sku",
+            externalId: offlineSupplier.entityId,
+            isPrimary: false,
+          },
+        ]),
+      }),
+      ctx.actor,
+    );
+    const explanation = await explainField(context(), {
+      entityKind: "product",
+      entityId: item.id,
+      field: "primaryGtin",
+      surface: "list",
+    });
+    expect(explanation.sources).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          label: "Product identifiers",
+          value: expect.arrayContaining([
+            expect.objectContaining({
+              source: supplier.output.id,
+              externalId: source,
+            }),
+            expect.objectContaining({ source: unownedSource }),
+            expect.objectContaining({
+              source: offlineSupplier.output.id,
+              externalId: offlineSource,
+            }),
+            expect.objectContaining({
+              source: offlineSupplier.output.id,
+              externalId: offlineSupplier.entityId,
+            }),
+          ]),
+        }),
+      ]),
+    );
+  });
 
   it("shows retained verification for an existing model, exposes retired rationale as a proof gap, and hides stale values", async () => {
     const item = await createProductFixture(

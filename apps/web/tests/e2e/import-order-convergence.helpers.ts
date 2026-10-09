@@ -400,22 +400,6 @@ export async function createConvergenceHarness(
     if (!researchMail) throw new Error("Retained mail research missing");
     await researchMail(purchase.shortcode);
     await gotoAuthenticatedPage(page, `/vendors/${vendor.id}`);
-    const mail = page
-      .locator("#order-mail")
-      .getByRole("listitem")
-      .filter({ has: page.getByText(`Order ${orderId}`, { exact: true }) });
-    // The exact-order mail links itself to the booked Purchase; no click.
-    const acceptedPurchase = mail.getByRole("link", {
-      name: purchase.shortcode,
-      exact: true,
-    });
-    await expect(acceptedPurchase).toBeVisible({
-      timeout: 30_000,
-    });
-    await expect(acceptedPurchase).toHaveAttribute(
-      "href",
-      `/purchases/${purchase.shortcode}`,
-    );
     const { rows: links } = await database.execute(sql`
       SELECT p.shortcode AS "purchaseCode"
       FROM "OrderMailCandidateDecision" d

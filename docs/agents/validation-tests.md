@@ -75,6 +75,9 @@ Vendor, with independent order identities and retained mail. Check this before
 inference: duplicate fixture Vendors turn a supported SKU into a genuine issuer
 refusal and measure fixture corruption instead of research behavior. Keep the
 production ambiguity guard intact.
+Exact-identifier fixtures use the canonical issuer resolver and source
+registration. A familiar retailer name or a Vendor-shaped source slug does not
+establish domain authority or identifier ownership.
 For Run-scoped fact assertions, follow `RunFactEvidence.targetId` through
 `RunTarget.runId`; fact evidence has no direct Run column. Apply that same
 declared ownership join to diagnostics. Diagnostic queries must not prevent

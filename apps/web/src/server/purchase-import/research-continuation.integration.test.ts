@@ -32,7 +32,7 @@ import { controlRun } from "./run-service";
 
 // Public control -> current research Next: a retry must not require a Vendor or
 // Mac, replay settled work, copy stale admission, lose source ownership, or let
-// work already owned elsewhere block retrying the remaining original sources.
+// work already owned elsewhere, even when blocked, stop retrying remaining sources.
 describe("research continuation", () => {
   const ctx = withTestDb();
   it.each([
@@ -413,9 +413,13 @@ describe("research continuation", () => {
       work: { kind: "product", product: { productRef: unfinished.id } },
     });
   });
-  it.each([false, true])(
-    "retries unresolved mail without transferring sources owned elsewhere (%s)",
-    async (sourceMoved) => {
+  it.each([
+    { sourceMoved: false, ownerStatus: "researching" },
+    { sourceMoved: true, ownerStatus: "researching" },
+    { sourceMoved: true, ownerStatus: "blocked" },
+  ] as const)(
+    "retries unresolved mail without transferring sources owned elsewhere ($sourceMoved/$ownerStatus)",
+    async ({ sourceMoved, ownerStatus }) => {
       const party = await insertWithShortcode(ctx.db, "ledgerParty", {
         name: "Example continuation member",
         kind: "member",
@@ -523,7 +527,7 @@ describe("research continuation", () => {
           clientKey: "synthetic-independent-mail-owner",
           predecessorRunId: null,
           parentRunId: null,
-          status: "running",
+          status: ownerStatus === "blocked" ? "needs_review" : "running",
           input: mailResearchRunInput.parse({
             kind: "mail_research",
             sources: [
@@ -533,7 +537,7 @@ describe("research continuation", () => {
         });
         await getDb(ctx.db)
           .update(mailboxMessage)
-          .set({ runId: otherOwner.id, status: "researching" })
+          .set({ runId: otherOwner.id, status: ownerStatus })
           .where(eq(mailboxMessage.orderMailId, settled.id));
       }
       const originalTargets = await getDb(ctx.db)
@@ -594,8 +598,11 @@ describe("research continuation", () => {
         ledger.find((message) => message.orderMailId === unfinished.id),
       ).toMatchObject({ runId: successorId, status: "researching" });
       expect(
-        ledger.find((message) => message.orderMailId === settled.id)?.runId,
-      ).toBe(otherOwner?.id ?? originalId);
+        ledger.find((message) => message.orderMailId === settled.id),
+      ).toMatchObject({
+        runId: otherOwner?.id ?? originalId,
+        status: ownerStatus,
+      });
     },
   );
 });

@@ -101,6 +101,9 @@ its mailbox provenance; one Run may investigate retained sources from several
 owned mailboxes without confusing repeated provider message IDs. Fresh searches
 can choose any connected owned mailbox. Pagination remains bound to the issued
 Run, work, query and account; retained context never steals another Run's source.
+An original already owned by another valid research Run stays with that owner,
+including blocked originals; retry admits only the predecessor's remaining
+sources. A blocked disposition does not invalidate matching frozen ownership.
 Historical `order_mail_import` selections convert only after every saved event,
 order ID, checksum, member and candidate mapping is proved. Imported candidates
 and covered candidates stay settled. Missing historical mailbox records are
