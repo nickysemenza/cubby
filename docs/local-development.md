@@ -164,6 +164,9 @@ For finite simulator smoke or QA journeys in the shared T3 Device panel, set
 `CUBBY_SIM_DEVICE` before setup.
 The harness keeps the returned launcher, host configuration and session on
 every driver command, and leaves the shared session and daemon running.
+Single-file `.ad` journeys use `replay` in that session; `test` would fork an
+attempt session and conflict with an already-open panel. Replay diagnostics and
+root scenario results remain in the sanitized harness bundle.
 Watch, input and Tester Army modes keep their owned driver lifecycle and
 reject this override.
 

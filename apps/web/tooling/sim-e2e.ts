@@ -69,7 +69,7 @@ Modes (one per run; no mode = search/detail smoke in the iOS simulator):
     --statement-csv          Swift CSV statement preview/import
     --watch                  stay up; press Enter to rerun
   --watch                    simulator app against real API data; Enter replays
-  --extended-journey         full native edit, view-switch and relation journey
+  --extended-journey         full native edit, view-switch and filter journey
   --video                    selected journey plus MP4 and contact sheet
   --layout [--video]         layout probe screens
   --product-clarity [--video]  focused synthetic Product journey (Maestro)
@@ -197,6 +197,7 @@ if (
   flags.some(
     (argument) =>
       ![
+        "--extended-journey",
         "--emoji-review",
         "--input-journey",
         "--headless",
@@ -218,7 +219,7 @@ if (
   )
 )
   throw new Error(
-    "Usage (see --help): sim-e2e.ts [--emoji-review [--video] | --input-journey [--video] | --tester-army [--journey a,b] [--replay] [--wrong] | --video | --layout [--video] | --product-clarity [--video] | --qa [--hold] [--video] [--journey qa-a,qa-b] | --watch | --headless [--watch | --photo [--purchase] | --statement-csv]]",
+    "Usage (see --help): sim-e2e.ts [--emoji-review [--video] | --input-journey [--video] | --tester-army [--journey a,b] [--replay] [--wrong] | --extended-journey [--video] | --video | --layout [--video] | --product-clarity [--video] | --qa [--hold] [--video] [--journey qa-a,qa-b] | --watch | --headless [--watch | --photo [--purchase] | --statement-csv]]",
   );
 const lane = qa
   ? "sim-qa-e2e"

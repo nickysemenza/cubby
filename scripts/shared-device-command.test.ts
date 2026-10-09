@@ -79,3 +79,28 @@ test("simulator rejects a conflicting shared target before setup", () => {
   assert.notEqual(result.status, 0);
   assert.match(result.stderr, /Shared driver targets a different device/);
 });
+
+// `test` forks an attempt session, which cannot borrow an already-open panel.
+test("shared single-file journeys replay inside the existing session", () => {
+  const module = path.join(import.meta.dirname, "lib/shared-device-command.ts");
+  const driver = {
+    command: "/synthetic/driver",
+    targetArgs: [
+      "--platform",
+      "ios",
+      "--udid",
+      "synthetic-device",
+      "--config",
+      "/synthetic/config",
+      "--session",
+      "panel",
+    ],
+  };
+  const script = `import assert from 'node:assert/strict'; import { sharedDeviceCommand } from ${JSON.stringify(module)}; const result = sharedDeviceCommand('pnpm', ['exec','agent-device','test','journey.ad','--reporter','default','--artifacts-dir','/synthetic/artifacts','-e','PRODUCT_ID=synthetic'], {CUBBY_E2E_AGENT_DEVICE:${JSON.stringify(JSON.stringify(driver))}}); assert.deepEqual(result.args, ['replay','journey.ad','-e','PRODUCT_ID=synthetic',...${JSON.stringify(driver.targetArgs)}]);`;
+  const result = spawnSync(
+    process.execPath,
+    ["--input-type=module", "--eval", script],
+    { encoding: "utf8" },
+  );
+  assert.equal(result.status, 0, result.stderr);
+});

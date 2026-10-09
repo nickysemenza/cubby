@@ -8,7 +8,7 @@ Swift tests or previews for failures native E2E cannot observe,
 `test:e2e:sim -- --headless --watch` for API behavior, and
 `test:e2e:sim -- --watch` for repeated simulator UI interactions. The warm simulator
 runner owns its disposable database and agent-device session; stop it with
-Ctrl-C when done. Run `test:e2e:sim` for the full Search journey (flags: `--video`, `--layout`, `--headless [--photo [--purchase]]`, `--watch`).
+Ctrl-C when done. Run `test:e2e:sim` for search/detail smoke; editing, view switching and filtering require `--extended-journey` (other flags: `--video`, `--layout`, `--headless [--photo [--purchase]]`, `--watch`).
 
 ## Build order
 

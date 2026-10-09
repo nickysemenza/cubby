@@ -621,7 +621,7 @@ jobs:
           if [[ "$SIMULATOR_JOURNEY" == "inputs" ]]; then
             pnpm test:e2e:sim -- --input-journey
           else
-            pnpm test:e2e:sim
+            pnpm test:e2e:sim -- --extended-journey
           fi
       - name: Save Apple test runner cache
         uses: ./.github/actions/save-apple-test-runner-cache

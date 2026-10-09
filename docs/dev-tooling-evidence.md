@@ -61,7 +61,7 @@ full UI journey failed on the visible edit field: the driver reported it covered
 This establishes an interaction failure, not a completed UI edit or a conclusively
 external defect. Its sanitized failure bundle is retained under `artifacts/sim-e2e/`.
 Default smoke now checks search/detail identity; the headless lane checks native
-client writes. The full UI edit/view/relation journey remains under
+client writes. The full UI edit/view/filter journey remains under
 `--extended-journey` and is required for changes to those interactions.
 
 ## Natural CI sample

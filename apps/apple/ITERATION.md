@@ -158,7 +158,7 @@ and press Enter again. `agent-device replay --save-script` can capture a repaire
 flow, and `--from` can resume a divergent replay using the digest in its error.
 Use `test:e2e:sim` for navigation through Search. Run
 `test:e2e:sim -- --extended-journey` for native UI editing, view switching and
-relation regressions; those interactions require that extended check.
+filter regressions; those interactions require that extended check.
 
 A runner watchdog timeout while typing is not by itself evidence of a slow app:
 sample both the app and the runner and check the runner's selected identifier
