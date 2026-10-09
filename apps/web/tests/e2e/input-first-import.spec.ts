@@ -1,6 +1,6 @@
 import { prepareCapturedRetailerOrder } from "./prepare-retailer-source";
 import { z } from "zod";
-import { and, eq, inArray } from "drizzle-orm";
+import { and, eq, inArray, or } from "drizzle-orm";
 import { parseShortcodeFor } from "@cubby/schemas/identifiers";
 
 import * as schema from "~/server/db/schema";
@@ -53,11 +53,52 @@ for (const statementFirst of [true, false]) {
       parseShortcodeFor("ledgerParty", member.shortcode),
       actor,
     );
+    const canonicalWebsite = "https://www.amazon.com";
+    const existingVendor = await database.query.vendor.findFirst({
+      where: and(
+        eq(schema.vendor.website, canonicalWebsite),
+        notDeleted(schema.vendor),
+      ),
+    });
+    const vendorName = existingVendor?.name ?? "Synthetic Amazon retailer";
+    const browserDomains = [
+      ...new Set([
+        ...(existingVendor?.browserDomains ?? []),
+        "www.amazon.com",
+        names.host,
+      ]),
+    ];
+    const orderEmailSenders = [
+      ...new Set([...(existingVendor?.orderEmailSenders ?? []), names.sender]),
+    ];
+    // Both cases share Amazon's canonical issuer while their order evidence stays distinct.
+    const canonicalVendor = existingVendor
+      ? { id: existingVendor.shortcode }
+      : await createEntityFixture(page, "vendor", {
+          name: vendorName,
+          website: canonicalWebsite,
+          browserDomains,
+          orderEmailSenders,
+          orderEvidence: "online_account",
+        });
     const prerequisites = await createConvergenceFixtures(
-      (entity, overrides) => createEntityFixture(page, entity, overrides),
+      (entity, overrides) =>
+        entity === "vendor"
+          ? Promise.resolve(canonicalVendor)
+          : createEntityFixture(page, entity, overrides),
       member.shortcode,
       names,
     );
+    if (existingVendor) {
+      const allowed = await page.request.patch(
+        `/api/v1/vendors/${canonicalVendor.id}`,
+        {
+          headers: { Origin: e2eRuntime.baseURL },
+          data: { browserDomains, orderEmailSenders },
+        },
+      );
+      expect(allowed.ok(), await allowed.text()).toBe(true);
+    }
     const vendorId = await resolveOrThrow(
       db,
       "vendor",
@@ -72,6 +113,11 @@ for (const statementFirst of [true, false]) {
       db,
       "financialAccount",
       prerequisites.card.id,
+    );
+    const categoryId = await resolveOrThrow(
+      db,
+      "spendingCategory",
+      prerequisites.category.id,
     );
     const asin = `B0${sha256Hex(`${token}:${statementFirst}`).slice(0, 8).toUpperCase()}`;
     const sku = `SYN-SKU-${token}`;
@@ -228,6 +274,7 @@ for (const statementFirst of [true, false]) {
       await database.query.purchase.findMany({
         where: and(
           eq(schema.purchase.vendorId, vendorId),
+          eq(schema.purchase.spendingCategoryId, categoryId),
           notDeleted(schema.purchase),
         ),
       }),
@@ -292,7 +339,7 @@ for (const statementFirst of [true, false]) {
         await selectComboboxItem(
           page,
           page.getByRole("combobox", { name: "Vendor", exact: true }),
-          names.name,
+          vendorName,
         );
         await selectComboboxItem(
           page,
@@ -317,8 +364,20 @@ for (const statementFirst of [true, false]) {
         .click();
       await expect
         .poll(async () => {
+          const allocation =
+            await database.query.financialTransactionAllocation.findFirst({
+              where: and(
+                eq(
+                  schema.financialTransactionAllocation.transactionId,
+                  transaction.id,
+                ),
+                notDeleted(schema.financialTransactionAllocation),
+              ),
+            });
+          if (!allocation) return undefined;
           const purchase = await database.query.purchase.findFirst({
             where: and(
+              eq(schema.purchase.id, allocation.purchaseId),
               eq(schema.purchase.vendorId, vendorId),
               notDeleted(schema.purchase),
             ),
@@ -380,14 +439,6 @@ for (const statementFirst of [true, false]) {
       const url = `https://${names.host}/orders/${names.orderId}`;
       const productUrl = `https://www.amazon.com/dp/${asin}`;
       const html = `<title>Synthetic order detail</title><main><h1>${names.orderId}</h1><p>Ordered September 10, 2026. Delivered.</p><p>USD 42.50</p><p>${names.productName} SKU ${sku} quantity 1</p><a href="${productUrl}">Product page</a></main>`;
-      const allowed = await page.request.patch(
-        `/api/v1/vendors/${prerequisites.vendor.id}`,
-        {
-          headers: { Origin: e2eRuntime.baseURL },
-          data: { browserDomains: [names.host, "www.amazon.com"] },
-        },
-      );
-      expect(allowed.ok(), await allowed.text()).toBe(true);
       const run = await prepareCapturedRetailerOrder({
         page,
         db,
@@ -506,6 +557,11 @@ for (const statementFirst of [true, false]) {
     const purchases = await database.query.purchase.findMany({
       where: and(
         eq(schema.purchase.vendorId, vendorId),
+        // Include a statement aggregate left behind without the retailer order ID.
+        or(
+          eq(schema.purchase.spendingCategoryId, categoryId),
+          eq(schema.purchase.orderId, names.orderId),
+        ),
         notDeleted(schema.purchase),
       ),
     });

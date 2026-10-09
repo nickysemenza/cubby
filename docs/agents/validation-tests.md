@@ -320,6 +320,9 @@ they can contain household data or credentials. Run `shasum -a 256 -c
 SHA256SUMS` from the downloaded bundle directory to verify its contents, then
 replay the `command` array in `run-manifest.json` against the recorded commit.
 Desktop CI disables trace recording because raw traces are never uploaded.
+Before another local browser replay, archive and verify the completed sanitized
+bundle outside `playwright-report`; the reporter replaces that directory on the
+next run. Keep failed-run evidence as well as successful acceptance bundles.
 For a local debugging replay, replace its `--trace=off` argument with
 `--trace=retain-on-failure`; local runs otherwise retain traces on failure.
 
