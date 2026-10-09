@@ -29,7 +29,6 @@ const log = createLogger("usda-edge");
 export {
   dataTypePredicate,
   dataTypePriorityCase,
-  escapeLike,
   FOOD_DATA_TYPES,
   matchQualityBindings,
   matchQualityCase,
@@ -407,7 +406,7 @@ export function createEdgeUsdaDataSource(
         // or recency signal. These extra `?`s bind AFTER the WHERE values and
         // BEFORE LIMIT/OFFSET, by SQL appearance order. Without a name filter,
         // fall back to alphabetical.
-        const orderValues: string[] = [];
+        const orderValues: Array<string | number> = [];
         let orderClause: string;
         if (orderBy === "relevance") {
           if (hasName) {

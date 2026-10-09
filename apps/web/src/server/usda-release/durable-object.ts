@@ -29,6 +29,7 @@ export class UsdaReleaseDurableObject
 {
   private readonly release: ReleaseId;
   private readonly store: UsdaReleaseStore;
+  private alarmRunning = false;
 
   constructor(ctx: DurableObjectState, env: Env) {
     super(ctx, env);
@@ -39,31 +40,49 @@ export class UsdaReleaseDurableObject
     this.store.init();
   }
 
+  // Every call re-checks that a loading release still has an alarm: one the
+  // platform gave up retrying after a killed invocation is not rescheduled
+  // by anything else.
   private async start() {
-    if (this.store.hasStarted()) return;
-    const manifest = await this.readManifest();
-    // Another call may have started the load while the manifest read awaited.
-    if (this.store.hasStarted()) return;
-    this.store.begin(this.release, manifest);
-    if (!(manifest instanceof Error))
+    if (!this.store.hasStarted()) {
+      const manifest = await this.readManifest();
+      // Another call may have started the load while the manifest read awaited.
+      if (!this.store.hasStarted()) this.store.begin(this.release, manifest);
+    }
+    if (
+      this.store.isLoading() &&
+      !this.alarmRunning &&
+      (await this.ctx.storage.getAlarm()) === null
+    )
       await this.ctx.storage.setAlarm(Date.now());
   }
 
-  private async readManifest(): Promise<ReleaseManifest | Error> {
+  // Unreadable manifests are not persisted: the next call retries the read.
+  private async readManifest(): Promise<ReleaseManifest> {
     const key = manifestKey(this.release);
+    const object = await this.env.USDA_RELEASES.get(key);
+    if (!object) throw new Error(`Missing USDA release manifest ${key}`);
     try {
-      const object = await this.env.USDA_RELEASES.get(key);
-      if (!object) return new Error(`Missing USDA release manifest ${key}`);
       return releaseManifest.parse(await object.json());
     } catch (error) {
-      return new Error(
+      throw new Error(
         `Unreadable USDA release manifest ${key}: ${getErrorMessage(error)}`,
+        { cause: error },
       );
     }
   }
 
   async alarm() {
-    const key = this.store.nextShardKey();
+    this.alarmRunning = true;
+    try {
+      await this.loadNextShard();
+    } finally {
+      this.alarmRunning = false;
+    }
+  }
+
+  private async loadNextShard() {
+    const key = this.store.beginShardAttempt();
     if (!key) return;
     try {
       const object = await this.env.USDA_RELEASES.get(key);
@@ -80,7 +99,15 @@ export class UsdaReleaseDurableObject
       if (retry) await this.ctx.storage.setAlarm(Date.now() + RETRY_DELAY_MS);
       return;
     }
-    if (this.store.nextShardKey()) await this.ctx.storage.setAlarm(Date.now());
+    if (this.store.isLoading()) await this.ctx.storage.setAlarm(Date.now());
+  }
+
+  /** Resumes a failed load from its last committed shard. */
+  async resume() {
+    await this.start();
+    this.store.resume();
+    await this.start();
+    return this.store.status();
   }
 
   async status() {

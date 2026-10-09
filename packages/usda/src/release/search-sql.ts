@@ -37,13 +37,6 @@ export function dataTypePriorityCase(column: string): string {
   return `CASE ${column} ${whens} ELSE 99 END`;
 }
 
-// Backslash-escapes the SQL LIKE metacharacters (`%`, `_`, `\`) in a raw search
-// term so user punctuation can't act as a wildcard in the prefix match below.
-// Pairs with `... LIKE ? ESCAPE '\\'`.
-export function escapeLike(term: string): string {
-  return term.replace(/[\\%_]/g, (ch) => `\\${ch}`);
-}
-
 // SQL CASE that scores how closely a row's description matches the raw search
 // term (lower = surfaced first). This is the "smart" tier that mimics USDA FDC's
 // own search — it floats a literal "VANILLA BEAN" above noisy long descriptions
@@ -59,21 +52,22 @@ export function escapeLike(term: string): string {
 // "Butter oil, anhydrous") — so real butters sort above butterbur while the
 // plain-prefix tier still catches everything else.
 //
-// FOUR `?` placeholders, bound in this order: the exact term, the two
-// word-boundary patterns, then the plain prefix. `column` is a fixed column name
-// (not a bind surface). Keep `matchQualityBindings` in sync.
+// `substr` comparisons, not `LIKE`: D1 and Durable Object SQLite reject a LIKE
+// pattern over 50 bytes, so a long typed query 500'd the whole search.
+// `column` is a fixed column name (not a bind surface); bind
+// `matchQualityBindings` in SQL appearance order.
 export function matchQualityCase(column: string): string {
   return (
     `CASE WHEN ${column} = ? COLLATE NOCASE THEN 0` +
-    ` WHEN ${column} LIKE ? ESCAPE '\\' OR ${column} LIKE ? ESCAPE '\\' THEN 1` +
-    ` WHEN ${column} LIKE ? ESCAPE '\\' THEN 2 ELSE 3 END`
+    ` WHEN substr(${column}, 1, ?) = ? COLLATE NOCASE AND substr(${column}, ?, 1) IN (' ', ',') THEN 1` +
+    ` WHEN substr(${column}, 1, ?) = ? COLLATE NOCASE THEN 2 ELSE 3 END`
   );
 }
 
 /** The bind values `matchQualityCase` expects, in SQL appearance order. */
-export function matchQualityBindings(term: string): string[] {
-  const escaped = escapeLike(term);
-  return [term, `${escaped} %`, `${escaped},%`, `${escaped}%`];
+export function matchQualityBindings(term: string): Array<string | number> {
+  const length = [...term].length;
+  return [term, length, term, length + 1, length, term];
 }
 
 // The four user-facing food types. The other five (agricultural_acquisition,

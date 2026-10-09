@@ -13,6 +13,8 @@ import type {
 /** What callers reach through a `USDA_RELEASE` stub; one object per USDA release. */
 export interface UsdaReleaseRpc {
   status(): Promise<ReleaseStatus>;
+  /** Resumes a failed load from its last committed shard. */
+  resume(): Promise<ReleaseStatus>;
   counts(): Promise<ReleaseCounts>;
   getFood(fdcId: number): Promise<FoodSummary | null>;
   lookupBatch(lookups: FoodLookupParam[]): Promise<Array<FoodSummary | null>>;

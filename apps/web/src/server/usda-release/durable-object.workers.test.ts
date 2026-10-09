@@ -2,12 +2,17 @@ import type { FoodSummary } from "@cubby/usda";
 import type { ListFoodsArgs } from "@cubby/usda/contract";
 import {
   manifestKey,
+  MAX_SHARD_ATTEMPTS,
   releaseShardLine,
   shardKey,
   type ReleaseManifest,
   type ReleaseShardLine,
 } from "@cubby/usda/release";
-import { evictDurableObject, runDurableObjectAlarm } from "cloudflare:test";
+import {
+  evictDurableObject,
+  runDurableObjectAlarm,
+  runInDurableObject,
+} from "cloudflare:test";
 import { env } from "cloudflare:workers";
 import { describe, expect, it } from "vitest";
 
@@ -69,7 +74,11 @@ async function gzipLines(lines: string[]): Promise<ArrayBuffer> {
 
 // Shards are raw NDJSON lines so a test can plant an invalid one; the manifest
 // counts only the lines that parse.
-async function seedRelease(shards: string[][], release = freshRelease()) {
+async function seedRelease(
+  shards: string[][],
+  release = freshRelease(),
+  { withManifest = true } = {},
+) {
   const foodsByDataType: ReleaseManifest["foodsByDataType"] = {};
   let supersededCount = 0;
   for (const [index, shard] of shards.entries()) {
@@ -91,7 +100,8 @@ async function seedRelease(shards: string[][], release = freshRelease()) {
     foodsByDataType,
     supersededCount,
   };
-  await env.USDA_RELEASES.put(manifestKey(release), JSON.stringify(manifest));
+  if (withManifest)
+    await env.USDA_RELEASES.put(manifestKey(release), JSON.stringify(manifest));
   const object = env.USDA_RELEASE.getByName(usdaReleaseObjectName(release));
   // The generated binding types stubs loosely; results are read through the RPC contract.
   const stub: UsdaReleaseRpc = object;
@@ -188,17 +198,67 @@ describe("USDA release Durable Object", () => {
     expect(await rejection(stub.getFood(301))).toMatch(/failed/);
   });
 
-  it("fails instead of loading forever when a shard is missing", async () => {
+  it("fails a missing shard after its attempts, then resumes once it is uploaded", async () => {
     const release = freshRelease();
+    const shard = [current({ fdc_id: 402, description: "Sorghum, raw" })];
     const { stub, object } = await seedRelease(
-      [[current({ fdc_id: 401, description: "Millet, raw" })], []],
+      [[current({ fdc_id: 401, description: "Millet, raw" })], shard],
       release,
     );
     await env.USDA_RELEASES.delete(shardKey(release, 1));
     await settle({ object, stub });
+    const failed = await stub.status();
+    expect(failed).toMatchObject({ state: "failed", shardsLoaded: 1 });
+    expect(failed.error).toContain(shardKey(release, 1));
+    await env.USDA_RELEASES.put(shardKey(release, 1), await gzipLines(shard));
+    expect((await stub.resume()).state).toBe("loading");
+    await settle({ object, stub });
+    expect((await stub.getFood(402))?.fdc_id).toBe(402);
+  });
+
+  it("retries a missing manifest on the next request instead of failing the release", async () => {
+    const release = freshRelease();
+    const lines = [current({ fdc_id: 451, description: "Teff, raw" })];
+    const { stub, object } = await seedRelease([lines], release, {
+      withManifest: false,
+    });
+    expect(await rejection(stub.status())).toContain(manifestKey(release));
+    await seedRelease([lines], release);
+    await settle({ object, stub });
+    expect((await stub.getFood(451))?.fdc_id).toBe(451);
+  });
+
+  it("reschedules a load whose alarm was lost", async () => {
+    const lines = Array.from({ length: 6 }, (_, i) =>
+      current({ fdc_id: 460 + i, description: `Quinoa lot ${i}` }),
+    );
+    const { stub, object } = await seedRelease([
+      lines.slice(0, 3),
+      lines.slice(3),
+    ]);
+    await stub.status();
+    await runInDurableObject(object, (_instance, state) =>
+      state.storage.deleteAlarm(),
+    );
+    await settle({ object, stub });
+    expect((await stub.status()).state).toBe("ready");
+  });
+
+  it("fails a shard whose attempts were all killed before they could report", async () => {
+    const { stub, object } = await seedRelease([
+      [current({ fdc_id: 471, description: "Spelt, raw" })],
+    ]);
+    await stub.status();
+    await runInDurableObject(object, (_instance, state) => {
+      state.storage.sql.exec(
+        "UPDATE release_state SET attempts = ? WHERE id = 1",
+        MAX_SHARD_ATTEMPTS,
+      );
+    });
+    await settle({ object, stub });
     const status = await stub.status();
     expect(status.state).toBe("failed");
-    expect(status.error).toContain(shardKey(release, 1));
+    expect(status.error).toMatch(/shard-00000.*attempts/);
   });
 
   it("resolves superseded revisions and every barcode encoding to the current revision", async () => {
@@ -249,6 +309,24 @@ describe("USDA release Durable Object", () => {
       "Butter, whipped, with salt",
       "Butterbur, canned",
     ]);
+  });
+
+  it("ranks queries longer than SQLite's LIKE pattern limit", async () => {
+    const { stub } = await readyRelease([
+      current({
+        fdc_id: 651,
+        description:
+          "Cereal, whole grain breakfast with dried fruit and nuts, synthetic",
+      }),
+    ]);
+    const page = await stub.search({
+      nameFilter: "whole grain breakfast cereal with dried fruit and nuts",
+      orderBy: "relevance",
+      direction: "asc",
+      pageIndex: 0,
+      pageSize: 10,
+    });
+    expect(page.data.map((row) => row.fdc_id)).toEqual([651]);
   });
 
   it("treats punctuation and FTS operators as literal text", async () => {

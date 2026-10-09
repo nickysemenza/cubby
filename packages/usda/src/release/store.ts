@@ -108,9 +108,13 @@ const SCHEMA = [
      fdc_id INTEGER PRIMARY KEY,
      current_fdc_id INTEGER NOT NULL
    ) WITHOUT ROWID`,
-  // Contentless: the text lives in `food`; this table only maps terms to
-  // rowid = fdc_id. Brand columns weigh less than the description.
-  `CREATE VIRTUAL TABLE IF NOT EXISTS food_search USING fts5(
+];
+
+// Contentless: the text lives in `food`; this table only maps terms to
+// rowid = fdc_id. Brand columns weigh less than the description. The rank
+// setting persists, so it is written once, with the table.
+const SEARCH_SCHEMA = [
+  `CREATE VIRTUAL TABLE food_search USING fts5(
      description, brand_name, brand_owner,
      content = '', tokenize = 'unicode61 remove_diacritics 1'
    )`,
@@ -162,6 +166,11 @@ export class UsdaReleaseStore {
 
   init() {
     for (const statement of SCHEMA) this.sql.exec(statement);
+    const [search] = this.sql
+      .exec("SELECT 1 AS present FROM sqlite_master WHERE name = 'food_search'")
+      .toArray();
+    if (!search)
+      for (const statement of SEARCH_SCHEMA) this.sql.exec(statement);
   }
 
   private stateRow(): StateRow | null {
@@ -179,18 +188,8 @@ export class UsdaReleaseStore {
     return this.stateRow() !== null;
   }
 
-  /** Records a load that could not begin, e.g. a missing manifest. */
-  begin(release: ReleaseId, manifest: ReleaseManifest | Error) {
-    const now = new Date().toISOString();
-    if (manifest instanceof Error) {
-      this.sql.exec(
-        "INSERT INTO release_state (id, release, state, error, started_at) VALUES (1, ?, 'failed', ?, ?)",
-        release,
-        manifest.message,
-        now,
-      );
-      return;
-    }
+  /** Starts loading `manifest`'s shards from the first one. */
+  begin(release: ReleaseId, manifest: ReleaseManifest) {
     if (manifest.release !== release) {
       throw new Error(
         `Manifest for ${manifest.release} found under release ${release}`,
@@ -200,8 +199,12 @@ export class UsdaReleaseStore {
       "INSERT INTO release_state (id, release, state, manifest, started_at) VALUES (1, ?, 'loading', ?, ?)",
       release,
       JSON.stringify(manifest),
-      now,
+      new Date().toISOString(),
     );
+  }
+
+  isLoading() {
+    return this.stateRow()?.state === "loading";
   }
 
   status(): ReleaseStatus {
@@ -219,11 +222,34 @@ export class UsdaReleaseStore {
     };
   }
 
-  /** The R2 key of the next shard to load, or null when nothing is pending. */
-  nextShardKey(): string | null {
+  /**
+   * Claims an attempt at the next shard and returns its R2 key, or null when
+   * nothing is pending. The attempt is counted before any work, so an
+   * invocation the platform kills mid-shard still uses one up; a shard whose
+   * attempts are spent fails the release here.
+   */
+  beginShardAttempt(): string | null {
     const row = this.stateRow();
     if (row?.state !== "loading") return null;
-    return shardKey(row.release, row.next_shard);
+    const key = shardKey(row.release, row.next_shard);
+    if (row.attempts >= MAX_SHARD_ATTEMPTS) {
+      this.sql.exec(
+        "UPDATE release_state SET state = 'failed', error = ? WHERE id = 1",
+        `${key} did not load after ${row.attempts} attempts${row.error ? `; last error: ${row.error}` : ""}`,
+      );
+      return null;
+    }
+    this.sql.exec(
+      "UPDATE release_state SET attempts = attempts + 1 WHERE id = 1",
+    );
+    return key;
+  }
+
+  /** Returns a failed load to loading from its last committed shard. */
+  resume() {
+    this.sql.exec(
+      "UPDATE release_state SET state = 'loading', attempts = 0, error = NULL WHERE id = 1 AND state = 'failed'",
+    );
   }
 
   /**
@@ -271,15 +297,12 @@ export class UsdaReleaseStore {
     message: string;
     permanent: boolean;
   }): boolean {
-    const { message } = failure;
     const row = this.stateRow();
     if (!row) return false;
-    const attempts = row.attempts + 1;
-    const failed = failure.permanent || attempts >= MAX_SHARD_ATTEMPTS;
+    const failed = failure.permanent || row.attempts >= MAX_SHARD_ATTEMPTS;
     this.sql.exec(
-      "UPDATE release_state SET attempts = ?, error = ?, state = ? WHERE id = 1",
-      attempts,
-      message,
+      "UPDATE release_state SET error = ?, state = ? WHERE id = 1",
+      failure.message,
       failed ? "failed" : "loading",
     );
     return !failed;
@@ -435,7 +458,7 @@ export class UsdaReleaseStore {
       ? "food_search JOIN food f ON f.fdc_id = food_search.rowid"
       : "food f";
 
-    const orderValues: string[] = [];
+    const orderValues: Array<string | number> = [];
     let order: string;
     if (args.orderBy === "relevance" && ftsQuery) {
       orderValues.push(...matchQualityBindings(args.nameFilter?.trim() ?? ""));

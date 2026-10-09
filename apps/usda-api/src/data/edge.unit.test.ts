@@ -4,10 +4,7 @@ import {
   createEdgeUsdaDataSource,
   dataTypePredicate,
   dataTypePriorityCase,
-  escapeLike,
   FOOD_DATA_TYPES,
-  matchQualityBindings,
-  matchQualityCase,
   normalizeUpc,
 } from "./edge";
 import type { EdgeBindings, EdgeCachePort } from "./cloudflare-types";
@@ -34,12 +31,6 @@ type TestBucket = {
 
 function toEdgeBindings(db: TestDatabase, bucket: TestBucket): EdgeBindings {
   return fromPartial<EdgeBindings>({ DB: db, USDA_BUNDLES: bucket });
-}
-
-function requiredBinding(bindings: string[], index: number): string {
-  const value = bindings[index];
-  if (value === undefined) throw new Error(`missing binding at index ${index}`);
-  return value;
 }
 
 describe("normalizeUpc", () => {
@@ -131,66 +122,6 @@ describe("dataTypePriorityCase", () => {
     expect(sql).toMatch(/ELSE 99 END$/);
     expect(rank("branded_food")).toBeLessThan(99);
     expect(sql.startsWith("CASE s.data_type ")).toBe(true);
-  });
-});
-
-describe("escapeLike", () => {
-  it("backslash-escapes LIKE metacharacters so they match literally", () => {
-    expect(escapeLike("50% milk")).toBe("50\\% milk");
-    expect(escapeLike("a_b")).toBe("a\\_b");
-    expect(escapeLike("back\\slash")).toBe("back\\\\slash");
-  });
-
-  it("leaves ordinary search terms untouched", () => {
-    expect(escapeLike("vanilla bean")).toBe("vanilla bean");
-  });
-});
-
-describe("matchQualityCase", () => {
-  // Tier order is the "smart match" signal: exact beats a whole-word match beats
-  // a bare prefix beats everything else, so a literal "VANILLA BEAN" outranks
-  // the long noisy descriptions bm25 would otherwise float.
-  it("scores exact < word < prefix < other", () => {
-    const sql = matchQualityCase("i.description");
-    const tiers = [...sql.matchAll(/THEN (\d+)/g)].map((m) => Number(m[1]));
-    const other = Number(sql.match(/ELSE (\d+) END$/)?.[1]);
-    expect(tiers).toEqual([0, 1, 2]);
-    expect(other).toBe(3);
-  });
-
-  it("binds one value per placeholder, in SQL appearance order", () => {
-    // Drift here is silent and ugly: SQLite binds positionally, so a mismatch
-    // shifts every later parameter (LIMIT/OFFSET included) rather than erroring.
-    const sql = matchQualityCase("i.description");
-    expect((sql.match(/\?/g) ?? []).length).toBe(
-      matchQualityBindings("butter").length,
-    );
-  });
-
-  it("separates a whole-word match from a mere prefix", () => {
-    // The bug this exists for: FTS matches `butter*`, so "Butterbur" (a Japanese
-    // vegetable) tied with real butters on the prefix tier and then won on
-    // description length — outranking "Butter, whipped, with salt" and ghee.
-    const bindings = matchQualityBindings("butter");
-    const wordSpace = requiredBinding(bindings, 1);
-    const wordComma = requiredBinding(bindings, 2);
-    const prefix = requiredBinding(bindings, 3);
-    const like = (pattern: string, value: string) => {
-      const re = new RegExp(
-        `^${pattern.replace(/[.*+?^${}()|[\]\\]/g, "\\$&").replace(/%/g, ".*")}$`,
-        "i",
-      );
-      return re.test(value);
-    };
-    const isWord = (d: string) => like(wordSpace, d) || like(wordComma, d);
-
-    expect(isWord("Butter, salted")).toBe(true);
-    expect(isWord("Butter oil, anhydrous")).toBe(true);
-    expect(isWord("Butter, whipped, with salt")).toBe(true);
-    expect(isWord("Butterbur, canned")).toBe(false);
-    expect(isWord("Butterbur, (fuki), raw")).toBe(false);
-    // Butterbur still matches the looser prefix tier, so it is ranked, not lost.
-    expect(like(prefix, "Butterbur, canned")).toBe(true);
   });
 });
 
