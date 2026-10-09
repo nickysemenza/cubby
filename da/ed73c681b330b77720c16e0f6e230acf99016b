@@ -1,0 +1,25 @@
+docs/local-check-performance.md
+  s_9e37542d401f69::t_e98cf2749dd00f 227,231-233
+package.json
+  s_9e37542d401f69::t_41fb11d851729f 47
+project.json
+  s_9e37542d401f69::t_4372147a933a11 74
+scripts/ensure-wasm.ts
+  s_9e37542d401f69::t_b79a13908ba4b6 9-11,43,66-67
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "daed73c681b330b77720c16e0f6e230acf99016b",
+  "prompts": {},
+  "sessions": {
+    "s_9e37542d401f69": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "0e86f572-b00a-4385-9ba9-59a84e2730f0",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "nicky <nicky@cloudflare.com>"
+    }
+  }
+}
