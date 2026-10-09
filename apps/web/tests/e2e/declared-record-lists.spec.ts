@@ -227,6 +227,9 @@ test("declared record lists retain identities, relationships and amounts on desk
 test("purchase and expense totals follow the full filtered set in tables and cards", async ({
   page,
 }) => {
+  // Early typing must survive cold hydration and toolbar portal placement.
+  const session = await page.context().newCDPSession(page);
+  await session.send("Emulation.setCPUThrottlingRate", { rate: 6 });
   const tag = `RecordTotals${Date.now()}`;
   const vendor = await seedVendorDisplayPrerequisite(page, `${tag} vendor`);
   const purchase = async (suffix: string) =>

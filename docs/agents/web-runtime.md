@@ -68,6 +68,10 @@ Suspense contracts without removing the all-entity list schemas. Scope
 `authClient.useSession()`. Editors and the JSON viewer use `browserOnlyLazy` at their interaction boundary.
 Date-cell inputs stay eager so typing to edit keeps every keystroke while
 focus transfers to the input.
+Keep picker option rosters and Base UI label/equality functions stable across
+form rerenders; use the existing enum roster cache and memoize search projections.
+Resolve the page toolbar's header portal target in a layout effect before paint:
+moving the inline fallback later remounts it and discards an early search draft.
 Keep list page factories (`list-page.tsx`) separate from detail factories
 (`detail-page.tsx`) so lists do not import generic detail sections. Bind each
 factory result to a module-level constant referenced by a splittable property

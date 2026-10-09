@@ -5,6 +5,7 @@ import {
   Suspense,
   useContext,
   useEffect,
+  useLayoutEffect,
   useState,
 } from "react";
 
@@ -52,7 +53,9 @@ const isTextTitle = (value: ReactNode): value is string =>
 /** Portal target for table-owned Display and Saved views controls. */
 export function usePageWorkbenchTarget(): HTMLDivElement | null {
   const [target, setTarget] = useState<HTMLDivElement | null>(null);
-  useEffect(() => {
+  // Portal placement must finish before the inline toolbar can accept edits:
+  // moving it later remounts the filter input and discards its pending draft.
+  useLayoutEffect(() => {
     setTarget(
       document.querySelector<HTMLDivElement>("[data-workbench-utilities]"),
     );

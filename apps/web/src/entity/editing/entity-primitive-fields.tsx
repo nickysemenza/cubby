@@ -27,6 +27,7 @@ import {
   SourceAliasesField,
   SourceRefsField,
 } from "~/app/finance/financial-form-fields";
+import { enumFieldOptions } from "~/entity/enum-field-display";
 import { FieldProvenance } from "~/entity/field-provenance";
 import {
   generic,
@@ -216,6 +217,22 @@ function selectDescriptionFor(
   );
 }
 
+function selectOptionsFor(
+  entity: Entity,
+  field: PrimitiveFieldModel,
+  mode: EditMode,
+  overrides: readonly EntitySelectOption[] | undefined,
+) {
+  if (mode === "edit" && overrides === undefined)
+    return enumFieldOptions(entity, field);
+  return presentEntitySelectOptions(
+    entity,
+    field.key,
+    overrides ?? field.control?.options ?? [],
+    mode,
+  );
+}
+
 /**
  * Renders one field's control given its presentation metadata. Shared by
  * `EntityPrimitiveFields` (a caller-chosen, section-scoped subset) and
@@ -374,12 +391,7 @@ function renderPrimitiveField({
         form={form}
         name={name}
         label={presentation.label}
-        options={presentEntitySelectOptions(
-          entity,
-          field.key,
-          fieldOptions.options ?? control.options ?? [],
-          mode,
-        )}
+        options={selectOptionsFor(entity, field, mode, fieldOptions.options)}
         placeholder={placeholder ?? undefined}
         nullable={field.nullable}
         disabled={fieldOptions.disabled}
