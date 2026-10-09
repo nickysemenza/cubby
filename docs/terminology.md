@@ -108,6 +108,17 @@ USDAFood  ←(loose link, fdc_id/barcode)──  Product  ──(optional FK, in
   (resolved at query time, `fdc_id`-first then barcode) — see the USDA bullet in
   [development](development.md#architecture).
 
+- **USDA release** — one immutable FoodData Central publication (identified by
+  its publication date, e.g. `2026-04`) that `usda-api` serves in full. Exactly
+  one is the **active USDA release** at a time; a USDA food's record never
+  changes within a release. Not "edge version" or "dataset version".
+
+- **Food revision** — FoodData Central republishes a branded food under a new
+  `fdc_id` each time its label data changes; every such `fdc_id` is one
+  revision of the same barcoded food. The **current revision** is the most
+  recently published one in the active USDA release, and a link to any older
+  revision means the current one. Non-branded foods have a single revision.
+
 **Rule of thumb:** Recipes reference **Ingredients**; the pantry holds
 **InventoryEntries of Products**; **USDA** supplies nutrition. The Product is
 the bridge between the recipe world (via `ingredientId`) and the physical/cost

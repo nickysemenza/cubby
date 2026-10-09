@@ -50,6 +50,7 @@ export async function writeLocalDevConfig(
     })),
     r2_buckets: [
       { binding: "LOCAL_DEV_STORAGE", bucket_name: `${name}-storage` },
+      { binding: "USDA_RELEASES", bucket_name: `${name}-usda-releases` },
     ],
     queues: {
       producers: [

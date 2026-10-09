@@ -1,5 +1,5 @@
-import { DATA_TYPE_PRIORITY } from "@cubby/usda";
-import type { ListFoodsArgs } from "./types.js";
+import { DATA_TYPE_PRIORITY } from "../schemas";
+import type { ListFoodsArgs } from "../contract";
 
 export function sqlOrderBy(orderBy: ListFoodsArgs["orderBy"]): string {
   switch (orderBy) {

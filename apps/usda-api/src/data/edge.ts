@@ -3,7 +3,7 @@ import { countsSchema } from "@cubby/usda/contract";
 import type { FoodLookupParam, FoodSummary } from "@cubby/usda";
 import type { D1PreparedStatement } from "@cloudflare/workers-types";
 import { type SpanAttr, withSpan } from "@cubby/worker-tracing";
-import { toFtsFallbackQuery, toFtsQuery } from "../search/fts-query.js";
+import { toFtsFallbackQuery, toFtsQuery } from "@cubby/usda/release";
 import { manifestKey } from "./artifact-layout.js";
 import {
   createFoodBundleLoader,
@@ -17,7 +17,7 @@ import {
   matchQualityCase,
   sqlDirection,
   sqlOrderBy,
-} from "./edge-index-query.js";
+} from "@cubby/usda/release";
 import { getActiveVersion } from "./edge-version.js";
 import type { EdgeBindings, EdgeCachePort } from "./cloudflare-types.js";
 import { readFoodCache, writeFoodCache } from "./food-cache.js";
@@ -33,7 +33,7 @@ export {
   FOOD_DATA_TYPES,
   matchQualityBindings,
   matchQualityCase,
-} from "./edge-index-query.js";
+} from "@cubby/usda/release";
 export { normalizeUpc } from "./edge-bundle-loader.js";
 
 const MAX_SQL_VARIABLES = 100;

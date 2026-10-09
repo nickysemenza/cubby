@@ -25,6 +25,10 @@
         "name": "CHATGPT_PLAN",
         "class_name": "ChatGptPlanDurableObject",
       },
+      {
+        "name": "USDA_RELEASE",
+        "class_name": "UsdaReleaseDurableObject",
+      },
     ],
   },
   "exports": {
@@ -48,7 +52,14 @@
       "type": "durable-object",
       "storage": "sqlite",
     },
+    "UsdaReleaseDurableObject": {
+      "type": "durable-object",
+      "storage": "sqlite",
+    },
   },
+  "r2_buckets": [
+    { "binding": "USDA_RELEASES", "bucket_name": "cubby-usda-releases-test" },
+  ],
   "queues": {
     "producers": [
       {
