@@ -26,7 +26,7 @@ import {
   createCubbyColumnHelper,
 } from "~/ui/data-table/table-features";
 import { useEntityList } from "~/ui/hooks/useEntityList";
-import { Stack } from "~/ui/layout";
+import { Row, Stack } from "~/ui/layout";
 import { Description } from "~/ui/primitives/description";
 import { NoneValue } from "~/ui/primitives/none-value";
 
@@ -200,40 +200,59 @@ export function USDAFoodList({
           }),
         );
         add(
-          columnHelper.accessor("brandedFoodInfo", {
-            header: "Brand Info",
+          columnHelper.accessor((row) => row.brandedFoodInfo?.brand_owner, {
+            id: "brandOwner",
+            header: "Brand",
             meta: {
-              className: "w-56",
+              className: "w-48 max-w-48",
               mobile: { slot: "meta", priority: 20 },
             },
             cell: (info) => {
-              const brandedFood = info.getValue();
-              if (!brandedFood) return <NoneValue />;
-
+              const owner = info.getValue();
+              if (!owner) return <NoneValue />;
+              return <span className="block truncate">{owner}</span>;
+            },
+          }),
+        );
+        add(
+          columnHelper.accessor(
+            (row) => row.brandedFoodInfo?.branded_food_category,
+            {
+              id: "brandCategory",
+              header: "Category",
+              meta: { className: "w-48 max-w-48" },
+              cell: (info) => {
+                const category = info.getValue();
+                if (!category) return <NoneValue />;
+                return (
+                  <Description as="span" size="xs" className="block truncate">
+                    {category}
+                  </Description>
+                );
+              },
+            },
+          ),
+        );
+        add(
+          columnHelper.accessor((row) => row.brandedFoodInfo?.gtin_upc, {
+            id: "gtinUpc",
+            header: "UPC",
+            meta: {
+              className: "w-36 max-w-36",
+              mobile: { slot: "meta", priority: 25 },
+            },
+            cell: (info) => {
+              const upc = info.getValue();
+              if (!upc) return <NoneValue />;
               return (
-                <div className="flex flex-col space-y-1">
-                  <div className="text-sm">
-                    {brandedFood.brand_owner || <NoneValue />}
-                  </div>
-                  {brandedFood.branded_food_category && (
-                    <Description as="div" size="xs" className="truncate">
-                      {brandedFood.branded_food_category}
-                    </Description>
-                  )}
-                  {brandedFood.gtin_upc && (
-                    <div className="font-mono text-xs">
-                      UPC:{" "}
-                      <EntityRefLink
-                        variant="table"
-                        to="/usda/upc/$code"
-                        params={{ code: brandedFood.gtin_upc }}
-                        tone="mono"
-                      >
-                        {brandedFood.gtin_upc}
-                      </EntityRefLink>
-                    </div>
-                  )}
-                </div>
+                <EntityRefLink
+                  variant="table"
+                  to="/usda/upc/$code"
+                  params={{ code: upc }}
+                  tone="mono"
+                >
+                  {upc}
+                </EntityRefLink>
               );
             },
           }),
@@ -250,14 +269,19 @@ export function USDAFoodList({
               const total = nutrientCount(nutritionInfo.nutrientsPer100);
               if (total === 0) return <NoneValue />;
               return (
-                <Stack gap="sm" className="w-48">
+                <Row align="center" gap="sm">
                   <CoreNutrientCoverage
                     nutrients={nutritionInfo.nutrientsPer100}
                   />
-                  <Description as="div" size="2xs">
-                    {total} nutrients total
+                  <Description
+                    as="span"
+                    size="2xs"
+                    className="whitespace-nowrap"
+                    title={`${total} nutrients total`}
+                  >
+                    {total} total
                   </Description>
-                </Stack>
+                </Row>
               );
             },
           }),
@@ -265,7 +289,7 @@ export function USDAFoodList({
         add(
           columnHelper.accessor("inferredUnitMappings", {
             header: "Unit Mappings",
-            meta: { className: "w-48" },
+            meta: { className: "min-w-0 w-32" },
             cell: (info) => {
               const inferredUnitMappings = info.getValue();
               if (inferredUnitMappings.length === 0) return <NoneValue />;
@@ -275,6 +299,8 @@ export function USDAFoodList({
                   <UnitMappingDisplay
                     mappings={inferredUnitMappings}
                     title=""
+                    compact
+                    showTier
                     kinds={USDA_KINDS}
                   />
                 </div>
