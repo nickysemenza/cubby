@@ -2,7 +2,10 @@ import { mkdirSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
-import { executionAuthorizationInput } from "@cubby/schemas/execution-authorization";
+import {
+  executionAuthorizationInput,
+  executionAuthorizationReceipt,
+} from "@cubby/schemas/execution-authorization";
 import { fieldExplanationOutput } from "@cubby/schemas/field-explanation";
 import { runEntityId } from "@cubby/schemas/identifiers";
 import { importRunAgentIdentity } from "@cubby/schemas/import-run-agent";
@@ -304,6 +307,22 @@ describe("purchase research through the built Worker", () => {
       { model: "typesafe/jev", classification: "unrelated" },
       { model: "typesafe/jev", classification: "related" },
     ]);
+    const receipts = await database
+      .select({ result: runOperation.result })
+      .from(runOperation)
+      .where(
+        and(
+          eq(runOperation.runId, approval.runId),
+          eq(runOperation.kind, "execution_authorization"),
+        ),
+      );
+    const reservations = receipts
+      .map(({ result }) => executionAuthorizationReceipt.parse(result))
+      .filter((receipt) => receipt.kind === "metered_reservation");
+    expect(reservations).toHaveLength(2);
+    expect(reservations.every((receipt) => receipt.reservedMicroUSD > 0)).toBe(
+      true,
+    );
     expect(
       await database
         .select()

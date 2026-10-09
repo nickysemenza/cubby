@@ -6,11 +6,19 @@ import {
 } from "@cubby/shared/ai/pricing";
 import { createLogger } from "@cubby/worker-tracing";
 
+import { getTestAiGateway } from "~/server/cf-env";
+
 const log = createLogger("ai/models");
 
 // One live catalog per isolate: a request at a time, a success reused for its
 // TTL, and a failure answered as unpriced until its backoff ends.
 const pricing = createAiModelPricing({
+  // The harness owns catalog transport too; pricing and paid admission still
+  // use the official client and the same unknown-price refusal.
+  fetch: (input, init) => {
+    const gateway = getTestAiGateway();
+    return gateway ? gateway.fetch(input, init) : fetch(input, init);
+  },
   onError: (error) => {
     // Never fail the caller: pricing is telemetry, and an unpriced row is
     // already a visible state on /ai-usage.

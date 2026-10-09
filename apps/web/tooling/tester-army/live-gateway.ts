@@ -10,6 +10,7 @@ import {
   workersAiRunRequest,
 } from "@cubby/shared/ai/gateway-request";
 import { z } from "zod";
+import { isModelPricingRead } from "../ai/model-pricing-transport";
 import { modelSwapSchema, swapResponsesModel } from "../responses-model-swap";
 
 /**
@@ -106,6 +107,8 @@ function forward(
 export default {
   async fetch(request: Request, env: Env): Promise<Response> {
     const url = new URL(request.url);
+    // Pricing reads keep their official origin and never count as inference.
+    if (isModelPricingRead(request)) return fetch(request);
     if (url.pathname === "/usage") return Response.json(usage);
     if (url.pathname === "/reset") {
       usage = {};

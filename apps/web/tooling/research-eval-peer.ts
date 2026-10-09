@@ -2,6 +2,7 @@ import { purchaseAgentToolInputs } from "@cubby/schemas/purchase-agent-services"
 import { z } from "zod";
 
 import agentEvalModel from "./agent-eval-model";
+import { isModelPricingRead } from "./ai/model-pricing-transport";
 import { modelSwapSchema, swapResponsesModel } from "./responses-model-swap";
 
 const source = z.object({
@@ -98,6 +99,9 @@ export default {
     ctx: Parameters<typeof agentEvalModel.fetch>[2],
   ): Promise<Response> {
     const url = new URL(request.url);
+    // Live inference keeps live catalog prices; only scripted peers own a
+    // synthetic catalog. Forward this read without inference accounting.
+    if (isModelPricingRead(request)) return fetch(request);
     if (url.pathname === "/configure") {
       configured = readConfiguration(
         await request.json(),

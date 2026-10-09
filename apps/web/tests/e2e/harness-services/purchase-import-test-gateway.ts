@@ -10,6 +10,8 @@
  */
 import { z } from "zod";
 
+import { isModelPricingRead } from "../../../tooling/ai/model-pricing-transport";
+
 const fixtureSource = z.object({
   url: z.url(),
   title: z.string(),
@@ -187,6 +189,31 @@ async function sourceResponse(request: Request): Promise<Response | null> {
 export default {
   async fetch(request: Request) {
     const url = new URL(request.url);
+    // Illustrative catalog rates and complete bounds for synthetic inference.
+    // Never used by production or peers that perform live inference.
+    if (isModelPricingRead(request))
+      return Response.json({
+        "cloudflare-ai-gateway": {
+          id: "cloudflare-ai-gateway",
+          models: {
+            "typesafe/jev": {
+              id: "typesafe/jev",
+              cost: { input: 0.5, output: 0 },
+              limit: { context: 10_000, input: 9_000, output: 0 },
+            },
+          },
+        },
+        "cloudflare-workers-ai": {
+          id: "cloudflare-workers-ai",
+          models: {
+            "@cf/cloudflare/clef": {
+              id: "@cf/cloudflare/clef",
+              cost: { input: 0.5, output: 0 },
+              limit: { context: 10_000, input: 9_000, output: 0 },
+            },
+          },
+        },
+      });
     if (url.pathname === "/configure" && request.method === "POST") {
       const input = await request.json();
       const { sources } = sourceConfiguration.parse(input);

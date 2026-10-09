@@ -222,6 +222,13 @@ releases everything acquired before it. Borrowed storage carries its S3
 endpoint and public URL separately; neither startup failure nor close stops
 caller-owned storage.
 
+Scripted purchase-agent peers own the external models.dev catalog transport as
+well as model responses. Their illustrative prices and complete token bounds
+exercise the real paid-admission reservation; they never bypass pricing or
+budget fences. Live-model peers forward catalog reads to models.dev. Keep this
+distinction when adding a peer so deterministic mail discovery does not depend
+on public catalog availability and live usage does not acquire fixture prices.
+
 Every built-Worker journey uses `captureE2ERunIdentity` before scenario work
 and `writeE2ERunBundle` after cleanup. A manual revision/build report alone
 does not verify source stability across execution. The bundle records both
