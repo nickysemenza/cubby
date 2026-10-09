@@ -89,26 +89,3 @@ unset. Existing Products retain unknown acquisition origin. Neither old bank
 transactions nor old Expenses are automatically reclassified or booked.
 The PR requires production migration and schema readback before merge under
 [validation policy](agents/validation.md); deployment does not apply migrations.
-
-## Reviewed policy rollout
-
-`apps/web/tooling/review-evidence-policies.ts` accepts an explicit reviewed JSON
-array of Vendor or SpendingCategory identities, exact current names, and
-`evidenceExpectation` or category `productExpectation` decisions. It never
-classifies merchant names or replaces an existing required/not-expected choice.
-Run with `--target=dev|production --policy-file=<private-reviewed-file.json>`;
-preview is read-only. Provide the fingerprint via `--apply=<fingerprint>` to
-commit an unchanged plan through normal audited entity writes.
-
-Set `EVIDENCE_POLICY_ROLLOUT_DEV_DATABASE_URL` for a loopback database, or
-`PRODUCTION_DIRECT_DATABASE_URL` for the verified direct production endpoint.
-Apply requires the real `EVIDENCE_POLICY_ROLLOUT_ACTOR_USER_ID`. Ambient
-`DATABASE_URL` is never used to choose the target. Keep real reviewed files
-outside repository content and published artifacts.
-
-The preview uses canonical coverage calculations to report effective
-transitions, higher-precedence overrides, and unreviewed child categories. Its
-fingerprint includes live identities and the evidence graph. Apply is atomic,
-refuses a stale preview, and returns the reviewed forecast. Verify actual
-policies, coverage, and quality through a fresh post-commit read; ambiguous
-merchant identities and unreviewed exceptions remain unresolved.
