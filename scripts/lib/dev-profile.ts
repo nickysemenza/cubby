@@ -17,31 +17,10 @@ export interface DevProfile {
   inspectorPort: number;
   vars: Record<string, string>;
   integration?: { vectorizeIndex: string };
-  /** A built USDA release (`CUBBY_DEV_USDA_RELEASE_DIR`) seeded instead of the synthetic one. */
-  usdaReleaseDir?: string;
 }
 
 /** The release id of the synthetic USDA release (`apps/web/tooling/dev/usda-synthetic-release.ts`). */
 export const SYNTHETIC_USDA_RELEASE = "2000-01";
-
-/**
- * A directory `pnpm --dir packages/usda release:build` wrote for one release:
- * its `manifest.json` beside its shards. The manifest names the active release.
- */
-function resolveUsdaRelease(inherited: Partial<NodeJS.ProcessEnv>) {
-  const dir = inherited.CUBBY_DEV_USDA_RELEASE_DIR;
-  if (!dir) return { release: SYNTHETIC_USDA_RELEASE };
-  const releaseDir = path.resolve(dir);
-  const manifestPath = path.join(releaseDir, "manifest.json");
-  if (!existsSync(manifestPath))
-    throw new Error(
-      `CUBBY_DEV_USDA_RELEASE_DIR has no manifest.json: ${manifestPath}`,
-    );
-  const { release } = z
-    .object({ release: z.string().regex(/^\d{4}-\d{2}$/u) })
-    .parse(JSON.parse(readFileSync(manifestPath, "utf8")));
-  return { release, releaseDir };
-}
 
 function assertDatabaseOverrides(
   inherited: Partial<NodeJS.ProcessEnv>,
@@ -131,7 +110,6 @@ interface LocalSettings {
   inherited: Partial<NodeJS.ProcessEnv>;
   migrationCount: number;
   migrationHash: string;
-  usdaRelease: string;
 }
 function localVars({
   id,
@@ -142,7 +120,6 @@ function localVars({
   inherited,
   migrationCount,
   migrationHash,
-  usdaRelease,
 }: LocalSettings) {
   const vars = {
     NODE_ENV: "development",
@@ -163,7 +140,7 @@ function localVars({
     R2_BUCKET_NAME: "cubby-local",
     R2_PUBLIC_URL: origin,
     R2_KEY_PREFIX: "cubby-local",
-    USDA_ACTIVE_RELEASE: usdaRelease,
+    USDA_ACTIVE_RELEASE: SYNTHETIC_USDA_RELEASE,
     UPC_UPSTREAM_DISABLED: "true",
     CUBBY_DEV_ID: id,
     CUBBY_DEV_DB_NAME: name,
@@ -214,7 +191,6 @@ export function resolveDevProfile(
   assertOrigins(inherited, origin);
   const integration = resolveIntegrations(inherited, profile, id);
   const { migrationCount, migrationHash } = migrationIdentity(repoRoot);
-  const usda = resolveUsdaRelease(inherited);
   const vars = localVars({
     id,
     origin,
@@ -224,7 +200,6 @@ export function resolveDevProfile(
     inherited,
     migrationCount,
     migrationHash,
-    usdaRelease: usda.release,
   });
   return {
     schemaVersion: 1,
@@ -242,7 +217,6 @@ export function resolveDevProfile(
     inspectorPort,
     vars,
     integration,
-    usdaReleaseDir: usda.releaseDir,
   };
 }
 

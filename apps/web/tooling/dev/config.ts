@@ -1,12 +1,8 @@
 import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
-import { mkdir, readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
-import type { R2Bucket } from "@cloudflare/workers-types";
-import { getPlatformProxy } from "wrangler";
 import { parse } from "jsonc-parser";
 import { z } from "zod";
 import type { DevProfile } from "../../../../scripts/lib/dev-profile.ts";
-import type { UsdaReleaseFile } from "./usda-synthetic-release.ts";
 
 /** Derive local bindings from the deployed declarations, never its resource targets. */
 export function writeLocalDevConfig(profile: DevProfile): string {
@@ -115,77 +111,3 @@ export function writeLocalDevConfig(profile: DevProfile): string {
 
 const usdaReleasesBucket = (profile: DevProfile) =>
   `cubby-dev-${profile.id}-usda-releases`;
-
-/**
- * Seed the dev Worker's `USDA_RELEASES` bucket before Vite starts: the
- * synthetic release, or the built release `CUBBY_DEV_USDA_RELEASE_DIR` names.
- * The proxy shares the dev Worker's persistence root, and `USDA_ACTIVE_RELEASE`
- * (dev-profile.ts) names the same release. The release modules load lazily
- * so vite.config.ts, which imports this file, stays light.
- */
-export async function prepareLocalUsdaRelease(
-  profile: DevProfile,
-): Promise<void> {
-  const { seedUsdaRelease, syntheticUsdaReleaseFiles } =
-    await import("./usda-synthetic-release.ts");
-  const release = profile.vars.USDA_ACTIVE_RELEASE;
-  if (!release) throw new Error("The dev profile has no USDA_ACTIVE_RELEASE");
-  const configPath = path.join(profile.stateDir, "config/usda-releases.json");
-  await mkdir(path.dirname(configPath), { recursive: true });
-  await writeFile(
-    configPath,
-    `${JSON.stringify({
-      name: `cubby-dev-${profile.id}-usda-seed`,
-      compatibility_date: "2026-09-19",
-      r2_buckets: [
-        { binding: "USDA_RELEASES", bucket_name: usdaReleasesBucket(profile) },
-      ],
-    })}\n`,
-    { mode: 0o600 },
-  );
-  const proxy = await getPlatformProxy<{ USDA_RELEASES: R2Bucket }>({
-    configPath,
-    envFiles: [],
-    // The plugin and Wrangler CLI append v3; the programmatic proxy does not.
-    persist: { path: path.join(profile.stateDir, "cloudflare/v3") },
-    remoteBindings: false,
-  });
-  try {
-    if (!profile.usdaReleaseDir)
-      await seedUsdaRelease(
-        proxy.env.USDA_RELEASES,
-        syntheticUsdaReleaseFiles(release),
-      );
-    // One shard in memory at a time; the manifest comes last.
-    else
-      for await (const file of readUsdaReleaseDir(
-        profile.usdaReleaseDir,
-        release,
-      ))
-        await seedUsdaRelease(proxy.env.USDA_RELEASES, [file]);
-  } finally {
-    await proxy.dispose();
-  }
-}
-
-/** A `release:build` output directory, keyed as R2 holds it. */
-async function* readUsdaReleaseDir(
-  dir: string,
-  release: string,
-): AsyncGenerator<UsdaReleaseFile> {
-  const { manifestKey, RELEASE_MANIFEST_FILE, releaseManifest, shardKey } =
-    await import("@cubby/usda/release");
-  const manifest = releaseManifest.parse(
-    JSON.parse(await readFile(path.join(dir, RELEASE_MANIFEST_FILE), "utf8")),
-  );
-  if (manifest.release !== release)
-    throw new Error(`${dir} holds release ${manifest.release}, not ${release}`);
-  const keys = [
-    ...Array.from({ length: manifest.shardCount }, (_, index) =>
-      shardKey(manifest.release, index),
-    ),
-    manifestKey(manifest.release),
-  ];
-  for (const key of keys)
-    yield { key, body: await readFile(path.join(dir, path.basename(key))) };
-}

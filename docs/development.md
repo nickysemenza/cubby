@@ -114,17 +114,14 @@ loads itself into its Durable Object:
    current revision on the next daily cron, or at once with a `POST` to the
    same route; a `POST` on a failed load resumes it instead.
 
-Development seeds the dev Worker's `USDA_RELEASES` bucket before Vite starts
-with the synthetic release `2000-01` (`apps/web/tooling/dev/usda-synthetic-release.ts`):
+The dev Worker seeds its `USDA_RELEASES` bucket on its first request with the
+synthetic release `2000-01` (`apps/web/tooling/dev/usda-synthetic-release.ts`):
 three foundation foods (9900001–9900003) and one branded food (9900010, UPC
 `299000000106`, superseding 9900009). The E2E harness seeds the same release.
-To develop against real data, build a release and start with
-`CUBBY_DEV_USDA_RELEASE_DIR=<dir>/YYYY-MM pnpm dev`; dev uploads that
-directory (skipping objects already stored at the same size) and uses the
-release id from its manifest. `/__dev/ready` stays 503 with `usdaReady: false`
-while the release loads and reports the raw error if the load fails. Changing
-the synthetic foods needs a new release id or `pnpm dev:reset`, because a
-loaded release object keeps its data.
+`/__dev/ready` stays 503 with `usdaReady: false` while the release loads and
+reports the raw error if the load fails. Changing the synthetic foods needs a
+new release id or `pnpm dev:reset`, because a loaded release object keeps its
+data.
 
 Changing the release tables bumps `USDA_RELEASE_GENERATION` in
 `packages/usda/src/release/store.ts`, which reloads the release from the same

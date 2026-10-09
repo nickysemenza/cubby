@@ -280,10 +280,6 @@ async function start(profile: DevProfile, preview: boolean): Promise<void> {
     await phase("mcpAssets", () =>
       run(profile, process.execPath, ["apps/mcp-apps/build.mjs", "--if-stale"]),
     );
-    await phase("usdaRelease", async () => {
-      const { prepareLocalUsdaRelease } = await import("./config.ts");
-      await prepareLocalUsdaRelease(profile);
-    });
     if (preview)
       await phase("build", async () => {
         await run(

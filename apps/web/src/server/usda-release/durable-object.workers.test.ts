@@ -18,10 +18,7 @@ import { describe, expect, it } from "vitest";
 
 import { getErrorMessage } from "~/lib/error-utils";
 
-import {
-  seedUsdaRelease,
-  syntheticUsdaReleaseFiles,
-} from "../../../tooling/dev/usda-synthetic-release";
+import { seedUsdaRelease } from "../../../tooling/dev/usda-synthetic-release";
 import { usdaReleaseObjectName } from "./client";
 import type { UsdaReleaseRpc } from "./rpc";
 
@@ -466,10 +463,7 @@ describe("USDA release Durable Object", () => {
 
   it("loads the dev and harness synthetic release with its barcode and alias", async () => {
     const release = freshRelease();
-    await seedUsdaRelease(
-      env.USDA_RELEASES,
-      syntheticUsdaReleaseFiles(release),
-    );
+    await seedUsdaRelease(env.USDA_RELEASES, release);
     const object = env.USDA_RELEASE.getByName(usdaReleaseObjectName(release));
     const stub: UsdaReleaseRpc = object;
     await settle({ object, stub });

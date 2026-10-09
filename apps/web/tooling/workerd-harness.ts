@@ -9,10 +9,7 @@ import { z } from "zod";
 import { SYNTHETIC_USDA_RELEASE } from "../../../scripts/lib/dev-profile.ts";
 import { acquireHarnessLock } from "../../../scripts/lib/harness-lock.ts";
 
-import {
-  seedUsdaRelease,
-  syntheticUsdaReleaseFiles,
-} from "./dev/usda-synthetic-release";
+import { seedUsdaRelease } from "./dev/usda-synthetic-release";
 import { COUPLED_WORKER_BUILDS, ensureWorkerBuilds } from "./worker-builds";
 
 const webRoot = path.resolve(
@@ -504,10 +501,7 @@ export async function startWorkerdHarness(options: WorkerdHarnessOptions) {
     const { USDA_RELEASES } = await harness
       .getWorker<{ USDA_RELEASES: R2Bucket }>()
       .getEnv();
-    await seedUsdaRelease(
-      USDA_RELEASES,
-      syntheticUsdaReleaseFiles(SYNTHETIC_USDA_RELEASE),
-    );
+    await seedUsdaRelease(USDA_RELEASES, SYNTHETIC_USDA_RELEASE);
     return Object.assign(harness, { close: cleanup.close });
   });
 }

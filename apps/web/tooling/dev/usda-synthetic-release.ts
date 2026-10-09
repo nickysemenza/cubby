@@ -1,21 +1,15 @@
 import { gzipSync } from "node:zlib";
+import type { R2Bucket } from "@cloudflare/workers-types";
 
 import { foodSummary } from "@cubby/usda";
 import {
   manifestKey,
-  RELEASE_MANIFEST_FILE,
   releaseManifest,
   releaseShardLine,
   shardKey,
   type ReleaseId,
   type ReleaseManifest,
 } from "@cubby/usda/release";
-
-/** One object of a USDA release, keyed exactly as the release object reads R2. */
-export interface UsdaReleaseFile {
-  key: string;
-  body: Uint8Array;
-}
 
 const foundationFoods = [
   {
@@ -87,9 +81,7 @@ const lines = [
 ];
 
 /** The synthetic release dev and the workerd harness load, as one shard. */
-export function syntheticUsdaReleaseFiles(
-  release: ReleaseId,
-): UsdaReleaseFile[] {
+function syntheticUsdaReleaseFiles(release: ReleaseId) {
   const foodsByDataType: ReleaseManifest["foodsByDataType"] = {};
   for (const line of lines) {
     const type = line.food.foodInfo.data_type;
@@ -115,23 +107,13 @@ export function syntheticUsdaReleaseFiles(
 }
 
 /**
- * Upload a release, shards before the manifest so a reader never sees a
- * manifest whose shards are missing. An object already stored at the same
- * size is skipped, so restarting dev with a full release does not re-upload it.
+ * Upload the synthetic release. The release object reads R2 only on its
+ * first read, so seeding must precede any USDA request.
  */
 export async function seedUsdaRelease(
-  bucket: {
-    head(key: string): Promise<{ size: number } | null>;
-    put(key: string, body: Uint8Array): Promise<{ key: string } | null>;
-  },
-  files: UsdaReleaseFile[],
+  bucket: Pick<R2Bucket, "put">,
+  release: ReleaseId,
 ): Promise<void> {
-  const isManifest = (file: UsdaReleaseFile) =>
-    Number(file.key.endsWith(`/${RELEASE_MANIFEST_FILE}`));
-  const ordered = [...files].sort((a, b) => isManifest(a) - isManifest(b));
-  for (const file of ordered) {
-    const existing = await bucket.head(file.key);
-    if (existing?.size === file.body.byteLength) continue;
+  for (const file of syntheticUsdaReleaseFiles(release))
     await bucket.put(file.key, file.body);
-  }
 }

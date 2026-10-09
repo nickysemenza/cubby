@@ -12,6 +12,7 @@ import {
   LOCAL_FIXTURE_VERSION,
 } from "./state";
 import { handleLocalStorageRequest, type LocalStorageEnv } from "./storage";
+import { seedUsdaRelease } from "./usda-synthetic-release";
 
 // Durable Objects, Workflows, and RPC exports remain the production classes.
 export * from "../../src/cf-server";
@@ -28,6 +29,11 @@ type LocalDevEnv = Env &
 const loopback = new Set(["localhost", "127.0.0.1", "[::1]"]);
 const databaseRow = z.object({ database: z.string() });
 const fixturesRow = z.object({ fixtures_ready: z.boolean() });
+
+// Once per isolate, before any request or queue batch can read USDA.
+let usdaSeeded: Promise<void> | undefined;
+const seedUsda = (env: LocalDevEnv) =>
+  (usdaSeeded ??= seedUsdaRelease(env.USDA_RELEASES, env.USDA_ACTIVE_RELEASE));
 
 function assertLocalEnvironment(request: Request, env: LocalDevEnv) {
   const origin = new URL(env.APP_ORIGIN);
@@ -136,6 +142,7 @@ export default {
     env: LocalDevEnv,
     ctx: ExecutionContext,
   ) {
+    await seedUsda(env);
     // Production handlers discriminate on their deployed queue names. Local
     // queues retain checkout isolation at transport and normalize at delivery.
     if (batch.queue === `cubby-dev-${env.CUBBY_DEV_ID}-telemetry`)
@@ -167,6 +174,7 @@ export default {
         { status: 403 },
       );
     }
+    await seedUsda(env);
     const url = new URL(request.url);
     if (url.pathname === "/__dev/health" || url.pathname === "/__dev/ready") {
       if (request.method !== "GET")
