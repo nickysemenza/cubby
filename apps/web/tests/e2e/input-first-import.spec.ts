@@ -547,15 +547,12 @@ for (const statementFirst of [true, false]) {
     expect(await page.evaluate(() => performance.timeOrigin)).toBe(
       documentOrigin,
     );
-    const originalMail = page.getByRole("link", {
-      name: "Open Gmail original",
-      exact: true,
-    });
+    const originalMailUrl = `https://mail.google.com/mail/u/0/#all/synthetic-thread-${token}`;
+    const originalMail = page
+      .getByRole("link", { name: "Open Gmail original", exact: true })
+      .and(page.locator(`a[href="${originalMailUrl}"]`));
     await expect(originalMail).toBeVisible();
-    await expect(originalMail).toHaveAttribute(
-      "href",
-      `https://mail.google.com/mail/u/0/#all/synthetic-thread-${token}`,
-    );
+    await expect(originalMail).toHaveAttribute("href", originalMailUrl);
     await expect(
       page.getByRole("link", { name: names.productName, exact: true }).first(),
     ).toBeVisible();
