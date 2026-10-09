@@ -257,6 +257,18 @@ readback were completed. Do not reapply that migration. The shared activity
 projection owns list/status presentation. Shipped schema is distinct from live
 research acceptance.
 
+- 🟢 **Explain household work before listing its attempts.** Show what is working
+  now, waiting and why, needs a member decision, and what happens next. Group
+  related discovery, purchase research, enrichment and retries using existing
+  lineage. Matching working, waiting, review, failed and completed attempt
+  counts must remain independent of the root status and Product verification.
+  Finish a record-level view of processed emails, matched orders, linked
+  Purchases and enriched Products with processing time, outcome, evidence and
+  links. Include supported unchanged facts and unresolved work, not only audit
+  writes. Keep classification, linking, financial review and verification
+  distinct. Reuse shared entity/report presentation; disclose count scope rather
+  than extrapolating loaded pages into household totals.
+
 - ⏳ **Accept research root grouping in the clients.** The shared activity
   projection groups research descendants and image jobs through retained live
   causal parents, with filtered, cursor-paged children. Persisted-state
