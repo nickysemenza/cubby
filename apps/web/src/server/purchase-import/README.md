@@ -502,6 +502,12 @@ They reuse an existing successor even after its cancellation or after the
 predecessor's task descriptors are erased. Mail continuations exclude every
 already-retired source/checksum, not only the source named by the current
 receipt. A conflicting persisted disposition stops cleanup for diagnosis.
+An older mail Run can retain pending descriptors for originals subsequently
+owned by another frozen Run. If that canonical owner is retired by the same
+validated receipt, cleanup leaves its disposition with that owner and transfers
+only its unfinished tasks. Settled or blocked mail is not imported again.
+Owners outside the receipt, changed frozen checksums and missing ownership
+remain refusals.
 Modern screenshot references remain authorized by their exact receipt manifest.
 If an earlier receipt already completed this fenced Run's physical disposal,
 later receipts can reuse that recorded result after disposable evidence rows

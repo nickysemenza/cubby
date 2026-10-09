@@ -80,6 +80,17 @@ function predecessorOwnsMail(
   );
 }
 
+function receiptCoversRetiredMailOwner(
+  owner: typeof run.$inferSelect,
+  input: Parameters<typeof retainedMailResearchOwners>[3],
+) {
+  return (
+    input.retiredRunIds?.includes(owner.id) &&
+    owner.retirementReason === "unrelated_source" &&
+    owner.actorUserId === input.predecessor?.actorUserId
+  );
+}
+
 async function retainedMailResearchOwners(
   tx: Pick<DrizzleTransaction, "select">,
   sources: (typeof orderMail.$inferSelect)[],
@@ -89,6 +100,7 @@ async function retainedMailResearchOwners(
     predecessor?: typeof run.$inferSelect;
     historicalSources?: (typeof orderMail.$inferSelect)[];
     retirement: boolean;
+    retiredRunIds?: readonly string[];
   },
 ) {
   const owned = new Map<string, typeof run.$inferSelect>();
@@ -156,7 +168,7 @@ async function retainedMailResearchOwners(
       }
       if (
         !owner ||
-        owner.retiredAt ||
+        (owner.retiredAt && !receiptCoversRetiredMailOwner(owner, input)) ||
         message.checksum !== source.rawChecksum ||
         !["researching", "completed", "blocked"].includes(message.status) ||
         !frozenOwnerMatches(owner, source)
@@ -164,8 +176,8 @@ async function retainedMailResearchOwners(
         throw new Error(
           "Mail research ownership does not match its retained source.",
         );
-      // A valid current owner keeps this source; the predecessor can still
-      // continue its remaining originals without transferring this one.
+      // The canonical owner keeps its source disposition. A shared receipt
+      // transfers that owner's unfinished work separately from stale descriptors.
       if (input.predecessor) continue;
       owned.set(owner.id, owner);
     } else fresh.push(source);
@@ -371,22 +383,24 @@ export async function admitMailResearch(
       actorUserId: actorId,
       ledgerPartyId: partyId,
     });
-    const continuation =
-      (await researchContinuationAdmission(tx, {
-        continuation: input.continuation,
-        ledgerPartyId: partyId,
-        actorUserId: actorId,
-        purpose: "mail_import",
-        taskKeys: input.messageIds,
-      })) ??
-      (await researchRetirementAdmission(tx, {
-        receiptId: input.retirementReceiptId,
-        parentRunId: input.parentRunId,
-        ledgerPartyId: partyId,
-        actorUserId: actorId,
-        purpose: "mail_import",
-        taskKeys: input.messageIds,
-      }));
+    const ordinaryContinuation = await researchContinuationAdmission(tx, {
+      continuation: input.continuation,
+      ledgerPartyId: partyId,
+      actorUserId: actorId,
+      purpose: "mail_import",
+      taskKeys: input.messageIds,
+    });
+    const retirement = ordinaryContinuation
+      ? null
+      : await researchRetirementAdmission(tx, {
+          receiptId: input.retirementReceiptId,
+          parentRunId: input.parentRunId,
+          ledgerPartyId: partyId,
+          actorUserId: actorId,
+          purpose: "mail_import",
+          taskKeys: input.messageIds,
+        });
+    const continuation = ordinaryContinuation ?? retirement;
     if (continuation) {
       const [existing] = await tx
         .select()
@@ -436,7 +450,8 @@ export async function admitMailResearch(
         partyId,
         predecessor: continuation?.predecessor,
         historicalSources,
-        retirement: Boolean(input.retirementReceiptId),
+        retirement: Boolean(retirement),
+        retiredRunIds: retirement?.retiredRunIds,
       },
     );
     const existingOwners = [...owned.values()].map((row) => ({

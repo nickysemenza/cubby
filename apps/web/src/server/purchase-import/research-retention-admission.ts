@@ -107,6 +107,7 @@ async function retirementAdmission(
     predecessorRunId: scope.parent.id,
     parentRunId: scope.parent.parentRunId,
     predecessor: scope.parent,
+    retiredRunIds: scope.receipt.plan.retiredRunIds,
   };
 }
 

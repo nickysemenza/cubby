@@ -8,7 +8,7 @@ import {
 } from "@cubby/schemas/run-fields";
 import { sha256Hex } from "@cubby/shared/sha256";
 import { fromPartial } from "@total-typescript/shoehorn";
-import { and, eq, sql } from "drizzle-orm";
+import { and, eq, inArray, sql } from "drizzle-orm";
 import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it, vi } from "vitest";
 import { z } from "zod";
@@ -723,6 +723,168 @@ describe("retired research successor admission", () => {
       retiredAt: null,
     });
   });
+  it.each(["same_receipt", "outside_receipt", "changed_owner_scope"])(
+    "preserves canonical mail dispositions when an older exposed Run is cleaned first (%s)",
+    async (mode) => {
+      const f = await fixture(true);
+      if (!f.surviving) throw new Error("Synthetic surviving source missing.");
+      // An older failed investigation may retain pending descriptors after
+      // discovery assigns its originals to a different frozen batch.
+      await getDb(ctx.db)
+        .update(run)
+        .set({ status: "failed", failureCode: "model_error" })
+        .where(eq(run.id, runEntityId.parse(f.mailRun.runId)));
+      await getDb(ctx.db)
+        .update(mailboxMessage)
+        .set({ runId: null, status: "pending" })
+        .where(
+          and(
+            eq(mailboxMessage.ledgerPartyId, f.party.id),
+            inArray(mailboxMessage.orderMailId, [
+              f.remaining.id,
+              f.surviving.id,
+            ]),
+          ),
+        );
+      const [canonical] = await startMailResearch(
+        ctx.db,
+        {
+          ledgerPartyId: f.party.id,
+          userId: ctx.actor.userId,
+          messageIds: [f.remaining.id, f.surviving.id],
+        },
+        f.queue,
+      );
+      if (!canonical) throw new Error("Synthetic canonical owner missing.");
+      const canonicalId = runEntityId.parse(canonical.runId);
+      await exposeResearchSources(ctx.db, {
+        runId: canonical.runId,
+        sources: [
+          { orderMailId: f.primary.id, checksum: f.primary.rawChecksum },
+        ],
+      });
+      await getDb(ctx.db)
+        .update(runTarget)
+        .set({ state: "unresolved", outcome: "ambiguous" })
+        .where(
+          and(
+            eq(runTarget.runId, canonicalId),
+            eq(runTarget.workKey, f.remaining.id),
+          ),
+        );
+      await getDb(ctx.db)
+        .update(mailboxMessage)
+        .set({ status: "blocked" })
+        .where(eq(mailboxMessage.orderMailId, f.remaining.id));
+      await getDb(ctx.db)
+        .update(run)
+        .set({ status: "needs_review" })
+        .where(eq(run.id, canonicalId));
+      const receipt = await f.retire();
+      expect(receipt.retiredRunIds).toContain(canonical.runId);
+      const [savedReceipt] = await getDb(ctx.db)
+        .select()
+        .from(researchRetention)
+        .where(eq(researchRetention.id, receipt.receiptId));
+      if (!savedReceipt) throw new Error("Synthetic cleanup receipt missing.");
+      await getDb(ctx.db)
+        .update(researchRetention)
+        .set({
+          plan: {
+            ...savedReceipt.plan,
+            retiredRunIds:
+              mode !== "outside_receipt"
+                ? [runEntityId.parse(f.mailRun.runId), canonicalId]
+                : [runEntityId.parse(f.mailRun.runId)],
+          },
+        })
+        .where(eq(researchRetention.id, receipt.receiptId));
+      if (mode === "changed_owner_scope")
+        await getDb(ctx.db)
+          .update(run)
+          .set({
+            input: mailResearchRunInput.parse({
+              kind: "mail_research",
+              sources: [
+                {
+                  orderMailId: f.surviving.id,
+                  checksum: f.surviving.rawChecksum,
+                },
+              ],
+            }),
+          })
+          .where(eq(run.id, canonicalId));
+      const input = { runId: f.mailRun.runId, receiptId: receipt.receiptId };
+      const env = fromPartial<Env>({
+        PURCHASE_IMPORT: {
+          getByName: () => ({ forgetRun: async () => ({ forgotten: true }) }),
+        },
+        PURCHASE_IMPORT_RUN: {
+          getByName: () => ({ retire: async () => ({ disposed: true }) }),
+        },
+        PURCHASE_AGENT_QUEUE: f.queue,
+      });
+      const deletion = vi.spyOn(s3, "deleteS3Object").mockResolvedValue();
+      try {
+        if (mode !== "same_receipt") {
+          // These negative admission modes must fail before any disposition is recorded.
+          // oxlint-disable-next-line vitest/no-conditional-expect
+          await expect(
+            processBoundResearchRetention(ctx.db, env, input),
+          ).rejects.toThrow(/ownership/iu);
+          return;
+        }
+        expect(await processBoundResearchRetention(ctx.db, env, input)).toEqual(
+          {
+            completed: true,
+          },
+        );
+        expect(await processBoundResearchRetention(ctx.db, env, input)).toEqual(
+          {
+            completed: true,
+          },
+        );
+        const successors = await getDb(ctx.db)
+          .select()
+          .from(run)
+          .where(eq(run.predecessorRunId, canonicalId));
+        expect(successors).toHaveLength(1);
+        const successor = successors[0]!;
+        expect(mailResearchRunInput.parse(successor.input).sources).toEqual([
+          { orderMailId: f.surviving.id, checksum: f.surviving.rawChecksum },
+        ]);
+        expect(
+          await getDb(ctx.db)
+            .select()
+            .from(run)
+            .where(
+              eq(run.predecessorRunId, runEntityId.parse(f.mailRun.runId)),
+            ),
+        ).toEqual([]);
+        const messages = await getDb(ctx.db)
+          .select()
+          .from(mailboxMessage)
+          .where(eq(mailboxMessage.ledgerPartyId, f.party.id));
+        expect(
+          messages.find((m) => m.orderMailId === f.remaining.id),
+        ).toMatchObject({
+          runId: canonical.runId,
+          status: "blocked",
+        });
+        expect(
+          messages.find((m) => m.orderMailId === f.surviving!.id),
+        ).toMatchObject({
+          runId: successor.id,
+          status: "researching",
+        });
+        expect(
+          f.events.filter((event) => event.runId === successor.id),
+        ).toHaveLength(1);
+      } finally {
+        deletion.mockRestore();
+      }
+    },
+  );
   it("refuses an invented retirement receipt before borrowing the retired mail owner", async () => {
     const f = await fixture();
     await f.retire();
