@@ -19,6 +19,7 @@ import {
   mailResearchRunInput,
   productResearchRunInput,
 } from "@cubby/schemas/run-fields";
+import { requestUrl } from "@cubby/shared/ai/gateway-request";
 import {
   createAiModelPricing,
   quoteAiDecisionRequest,
@@ -325,8 +326,17 @@ describe("purchase research through the built Worker", () => {
       .map(({ result }) => executionAuthorizationReceipt.parse(result))
       .filter((receipt) => receipt.kind === "metered_reservation");
     const pricing = createAiModelPricing({
-      fetch: (input, init) =>
-        runtime.harness.getWorker("cubby-test-gateway").fetch(input, init),
+      fetch: async (input) => {
+        // Catalog reads cross the host/workerd boundary as URL and body bytes.
+        const response = await runtime.harness
+          .getWorker("cubby-test-gateway")
+          .fetch(requestUrl(input));
+        return new Response(await response.text(), {
+          status: response.status,
+          statusText: response.statusText,
+          headers: [...response.headers],
+        });
+      },
       onError: (error) => {
         throw error;
       },

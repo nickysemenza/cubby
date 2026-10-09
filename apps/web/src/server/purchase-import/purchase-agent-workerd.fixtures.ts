@@ -100,6 +100,7 @@ export async function authorizeSyntheticRunInference(
   if (!scope?.ledgerPartyId || scope.actorUserId !== context.actor.userId)
     throw new Error("Synthetic inference Run has no matching member owner.");
   if (
+    !scope.input ||
     scope.status !== "running" ||
     scope.retiredAt ||
     scope.coordinatorStartedAt ||
