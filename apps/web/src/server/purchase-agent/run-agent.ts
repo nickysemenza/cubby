@@ -54,6 +54,7 @@ import type {
 import { workflowForRun } from "./import-run-workflows";
 import { RunSettlement } from "./run-settlement";
 import {
+  parseSignal,
   renderSignal,
   resumeResearchSignal,
   type AgentSignal,
@@ -271,12 +272,61 @@ export class PurchaseImportRunAgent
         ).filter((tool) => agentTools.has(tool.name)),
         hooks: [
           hook(GenerationTask, {
-            beforeRequest: async (_request, api) => {
+            beforeRequest: async (request, api, hookContext) => {
               this.admitResearchGeneration(purpose, api.taskId);
               await this.acknowledgeAdmittedObservations();
               this.requestStartedAt = Date.now();
               this.requestTransport = "unknown";
               this.requestGateway = undefined;
+              const index = request.messages.findLastIndex(
+                (message) => message.role === "user",
+              );
+              const last = request.messages[index];
+              const text =
+                last?.role === "user"
+                  ? z.string().safeParse(last.content)
+                  : undefined;
+              const signal = text?.success ? parseSignal(text.data) : undefined;
+              if (
+                purpose !== "photo_inventory" &&
+                !this.readState(STATE_KEYS.researchGenerationStop) &&
+                last?.role === "user" &&
+                signal?.type === "cubby.research-continuation" &&
+                signal.attributes?.yieldRef
+              ) {
+                const existing = await api.memo<JsonValue>(
+                  "research-continuation-consumed",
+                  hookContext,
+                );
+                const output =
+                  existing ??
+                  (await api.memo(
+                    "research-continuation-consumed",
+                    z
+                      .json()
+                      .parse(
+                        await this.services().researchContinue(
+                          signal.attributes.yieldRef,
+                          true,
+                        ),
+                      ),
+                    hookContext,
+                  ));
+                await this.retainResearchMode(output);
+                return {
+                  messages: [
+                    ...request.messages.slice(0, index),
+                    {
+                      ...last,
+                      content: renderSignal({
+                        ...signal,
+                        body: JSON.stringify(output),
+                      }),
+                    },
+                    ...request.messages.slice(index + 1),
+                  ],
+                };
+              }
               return undefined;
             },
             afterResponse: (message) => this.afterResponse(message),
@@ -299,6 +349,7 @@ export class PurchaseImportRunAgent
                     .parse(
                       await this.services().researchContinue(
                         `yield:${api.taskId}`,
+                        false,
                       ),
                     ),
                   hookContext,
@@ -311,6 +362,7 @@ export class PurchaseImportRunAgent
               return {
                 continue: renderSignal({
                   type: "cubby.research-continuation",
+                  attributes: { yieldRef: `yield:${api.taskId}` },
                   body: JSON.stringify(output),
                 }),
               };

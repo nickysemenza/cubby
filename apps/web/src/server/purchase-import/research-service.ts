@@ -444,8 +444,10 @@ export function researchServiceFor(
   };
 
   const services: ResearchServices = {
-    async researchContinue(callId) {
+    async researchContinue(callId, admitted = true) {
       const next = await services.researchNext({}, `${callId}:next`);
+      // pi may discard a proposed continuation in favor of queued input/reset.
+      if (!admitted) return next;
       const { continueResearchWork } = await import("./research-yield");
       const decision = await continueResearchWork(db, { runId, callId, next });
       if (!decision.settled) return decision.next;

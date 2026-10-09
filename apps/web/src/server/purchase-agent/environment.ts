@@ -81,7 +81,7 @@ export interface RunServices {
   acknowledgeCoordinator(eventId: string): Promise<boolean>;
   researchNext(input: ResearchWorkNextInput, callId: string): Promise<object>;
   /** Host-owned iteration before a normal final answer settles its submission. */
-  researchContinue(callId: string): Promise<object>;
+  researchContinue(callId: string, admitted?: boolean): Promise<object>;
   researchObserve(
     input: ResearchWorkObserveInput,
     callId: string,

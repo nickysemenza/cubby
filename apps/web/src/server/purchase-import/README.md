@@ -252,9 +252,12 @@ and deployment/readback order are owned by the
    A normal final answer yields to the host's next-work decision before pi
    settles the submission. Runnable work continues within that same durable
    submission; done, waiting and stopped dispositions settle normally. Queued
-   user input and reset retain pi's precedence. Repeated final answers pause
+   user input and reset retain pi's precedence: no-progress accounting is
+   committed only when a generation consumes the selected host continuation.
+   Repeated final answers pause
    only the affected task after three decisions with unchanged retained source
-   checksums and accepted writes. Replaying a decision or rereading identical
+   checksums and accepted writes, including each canonical fact subject.
+   Replaying a decision or rereading identical
    source bytes does not count as progress. The retained decision includes the
    last actual refusal/error, and other tasks continue. Failure, explicit abort
    and the generation ceiling retain the existing settlement backstop.

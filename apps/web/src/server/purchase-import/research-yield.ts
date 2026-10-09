@@ -72,6 +72,8 @@ export async function continueResearchWork(
           .where(eq(runEvidence.targetId, workRef));
         const claims = await tx
           .selectDistinct({
+            entityKind: runFactEvidence.entityKind,
+            entityId: runFactEvidence.entityId,
             field: runFactEvidence.fieldPath,
             value: runFactEvidence.valueFingerprint,
           })

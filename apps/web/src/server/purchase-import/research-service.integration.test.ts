@@ -16,9 +16,10 @@ import {
   runOperation,
   runTarget,
 } from "~/server/db/schema";
-import { getDb } from "~/server/repo/database-helpers";
+import { getDb, withTransaction } from "~/server/repo/database-helpers";
 import { insertWithShortcode } from "~/server/repo/shortcode-utils";
 
+import { recordAcceptedFactEvidence } from "./fact-verification";
 import { resolveImportResearch } from "./research-import";
 import { startMailResearch } from "./research-run";
 import { researchServiceFor } from "./research-service";
@@ -725,6 +726,90 @@ describe("research host lifecycle", () => {
       expect(settled?.state).toBe("unresolved");
     },
   );
+  it("does not consume a proposed continuation before pi selects it over queued input or reset", async () => {
+    const f = await admitted();
+    const calls = Array.from({ length: 3 }, () => crypto.randomUUID());
+    for (const callId of calls)
+      expect(await f.services.researchContinue(callId, false)).toMatchObject({
+        status: "working",
+      });
+    expect(
+      await getDb(ctx.db)
+        .select()
+        .from(runOperation)
+        .where(
+          and(
+            eq(runOperation.runId, f.started.runId),
+            eq(runOperation.kind, "research_continue"),
+          ),
+        ),
+    ).toEqual([]);
+    for (const callId of calls.slice(0, 2))
+      expect(await f.services.researchContinue(callId, true)).toMatchObject({
+        status: "working",
+      });
+    expect(await f.services.researchContinue(calls[2]!, true)).toMatchObject({
+      status: "done",
+    });
+  });
+  it("counts matching accepted values on distinct canonical Purchases as new progress", async () => {
+    const f = await admitted();
+    const next = z
+      .object({ work: z.object({ workRef: z.uuid() }) })
+      .parse(await f.services.researchNext({}, crypto.randomUUID()));
+    await f.services.researchMailRead(
+      { workRef: next.work.workRef, messageRef: f.mail.id },
+      crypto.randomUUID(),
+    );
+    const [original] = await getDb(ctx.db)
+      .select()
+      .from(runEvidence)
+      .where(eq(runEvidence.targetId, next.work.workRef));
+    if (!original) throw new Error("Synthetic retained original missing");
+    const vendor = await insertWithShortcode(ctx.db, "vendor", {
+      name: "Synthetic continuation retailer",
+    });
+    const first = await insertWithShortcode(ctx.db, "purchase", {
+      vendorId: vendor.id,
+      orderId: "SYNTHETIC-FIRST",
+      statedTotal: 24,
+    });
+    const second = await insertWithShortcode(ctx.db, "purchase", {
+      vendorId: vendor.id,
+      orderId: "SYNTHETIC-SECOND",
+      statedTotal: 24,
+    });
+    const retain = (entityId: typeof first.id) =>
+      withTransaction(ctx.db, (tx) =>
+        recordAcceptedFactEvidence(tx, {
+          runId: f.started.runId,
+          targetId: next.work.workRef,
+          subject: { entityKind: "purchase", entityId },
+          claims: [
+            {
+              evidenceId: original.id,
+              fieldPath: "statedTotal",
+              value: 24,
+              support: {
+                observation: "Total $24",
+                reasoning:
+                  "The retained original supports this exact Purchase total.",
+              },
+            },
+          ],
+        }),
+      );
+    await retain(first.id);
+    await f.services.researchContinue(crypto.randomUUID());
+    await f.services.researchContinue(crypto.randomUUID());
+    await retain(second.id);
+    expect(
+      await f.services.researchContinue(crypto.randomUUID()),
+    ).toMatchObject({
+      status: "working",
+      work: { workRef: next.work.workRef },
+    });
+  });
   it("bounds unchanged yielded work without counting replay or rereading identical evidence as progress", async () => {
     const f = await admitted(2);
     const current = z.object({
