@@ -1,0 +1,97 @@
+apps/apple/AGENTS.md
+  s_53c2b3e2ea9cb9::t_81718b7bee7a20 113
+apps/apple/App/Shared/Browse/AIReviewSheet.swift
+  s_53c2b3e2ea9cb9::t_a0ba3970a4199a 25
+apps/apple/App/Shared/Browse/BrowseRootView.swift
+  s_53c2b3e2ea9cb9::t_732e1b5529d4b0 215-217,223-224
+apps/apple/App/Shared/Browse/DetailSectionViews.swift
+  s_53c2b3e2ea9cb9::t_45bd5303ba8154 61,67,378,399,414
+apps/apple/App/Shared/Browse/EntityDetailView.swift
+  s_53c2b3e2ea9cb9::t_a18bc519de65fa 182
+apps/apple/App/Shared/Browse/EntityListView.swift
+  s_53c2b3e2ea9cb9::t_a4a79104633510 487
+apps/apple/App/Shared/Browse/GraphWorkspaceView.swift
+  s_53c2b3e2ea9cb9::t_0e1601b237b7b1 240,244
+apps/apple/App/Shared/Browse/RecipeWorkflowSlot.swift
+  s_53c2b3e2ea9cb9::t_aa9e7bbee121fb 285
+apps/apple/App/Shared/Browse/WardrobeView.swift
+  s_53c2b3e2ea9cb9::t_45c5ef167714c2 117
+apps/apple/App/Shared/Photo/Library/PhotoDestinationSheet.swift
+  s_53c2b3e2ea9cb9::t_5d7c397f3714dc 389
+apps/apple/App/Shared/Photo/Library/PhotoImportRunSheet.swift
+  s_53c2b3e2ea9cb9::t_333e327a34f3d0 258,323
+apps/apple/App/Shared/Photo/Library/PhotoLibraryHeader.swift
+  s_53c2b3e2ea9cb9::t_ffe656bc9cc833 443
+apps/apple/App/Shared/Photo/Library/PhotosRootView.swift
+  s_53c2b3e2ea9cb9::t_617c612cd6da55 400-403,418
+apps/apple/App/Shared/Photo/PhotoBatch.swift
+  s_53c2b3e2ea9cb9::t_eab3d9e509fc75 133
+apps/apple/App/Shared/Theme/FieldGuideMetrics.swift
+  s_53c2b3e2ea9cb9::t_025e6eae97fd76 11-13
+apps/apple/App/Shared/Theme/FieldGuideTokens.swift
+  s_53c2b3e2ea9cb9::t_72e95805553d6c 39-40,114,118-126
+apps/apple/App/iOS/RootTabsView.swift
+  s_53c2b3e2ea9cb9::t_4c8d5b5e9d7da7 12-13,15,21,25,34,42,70
+apps/apple/App/macOS/PurchaseImport/BrowserSyncPane.swift
+  s_53c2b3e2ea9cb9::t_d9e13df8bf0732 39,213
+apps/apple/App/macOS/RootSplitView.swift
+  s_53c2b3e2ea9cb9::t_d301b04770d144 7-9,96,109,111-126
+apps/apple/DESIGN.md
+  s_53c2b3e2ea9cb9::t_f420c14291fab7 15,33-34
+apps/web/DESIGN.md
+  s_53c2b3e2ea9cb9::t_86ed98f4a9f848 20,27,29
+apps/web/src/styles.css
+  s_53c2b3e2ea9cb9::t_c3dc5f37ce65e5 326-327
+apps/web/src/styles/layouts.ts
+  s_53c2b3e2ea9cb9::t_c8a7a692b8dc0e 6-7,9,23-26,56,85,98-101
+apps/web/src/ui/data-table/FilterBar.tsx
+  s_53c2b3e2ea9cb9::t_eb7a5fe1d29039 43
+apps/web/src/ui/navigation/application-directory.unit.test.tsx
+  s_53c2b3e2ea9cb9::t_5e2fbaacdf9b06 53-56
+apps/web/src/ui/navigation/application-views.ts
+  s_53c2b3e2ea9cb9::t_8b1acced4d0bd9 83,89,143,155,177,198,204
+apps/web/src/ui/navigation/authenticated-app-shell.tsx
+  s_53c2b3e2ea9cb9::t_ea9e9da2dfa7fd 1,5,12,56,92,130,223,232,246,271-275,287,293,295,305,315-322,326-349,353-358,362,364,368-372,416-417,422-423,434-439,446-449,453-454,458-459,462,465-472,474-479,482-499,509,525-527,531,545
+apps/web/src/ui/navigation/navigation-count-badge.tsx
+  s_53c2b3e2ea9cb9::t_e89bd1de330ee2 38
+apps/web/src/ui/navigation/sidebar-rail-group.tsx
+  s_53c2b3e2ea9cb9::t_dec5ce73c138b6 51,54-55,64-72,111-112
+apps/web/src/ui/navigation/workspace-navigator.unit.test.tsx
+  s_53c2b3e2ea9cb9::t_0ef1b84c575b8d 51
+apps/web/src/ui/primitives/card.tsx
+  s_53c2b3e2ea9cb9::t_4615584bf90a2f 32,93
+apps/web/src/ui/primitives/combobox.tsx
+  s_53c2b3e2ea9cb9::t_3a7a0ed8e659a8 148
+apps/web/src/ui/primitives/dropdown-menu.tsx
+  s_53c2b3e2ea9cb9::t_d2e41f3e15ad05 8
+apps/web/src/ui/primitives/input-group.tsx
+  s_53c2b3e2ea9cb9::t_111eda61b9f8b1 13
+apps/web/src/ui/primitives/input.tsx
+  s_53c2b3e2ea9cb9::t_03a00022f0e7f9 14
+apps/web/src/ui/primitives/native-select.tsx
+  s_53c2b3e2ea9cb9::t_91290fbc5e640c 15
+apps/web/src/ui/primitives/tabs.tsx
+  s_53c2b3e2ea9cb9::t_99f64ed07d4137 26
+apps/web/tests/e2e/console-ledger-overhaul.spec.ts
+  s_53c2b3e2ea9cb9::t_5fb4f317c11712 14,18-33,35
+packages/design-tokens/brand.css
+  s_53c2b3e2ea9cb9::t_308d080981a14c 39-41
+packages/design-tokens/tokens.json
+  s_53c2b3e2ea9cb9::t_0d8294e8bb939a 43-45
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "8cf645b6c1ca29bf844bc7849258fa6b73f6265e",
+  "prompts": {},
+  "sessions": {
+    "s_53c2b3e2ea9cb9": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "22e7134d-5a3f-4a9e-9825-697b97297b82",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "nicky <nicky@cloudflare.com>"
+    }
+  }
+}
