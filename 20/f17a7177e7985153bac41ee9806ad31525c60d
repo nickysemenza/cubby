@@ -1,0 +1,151 @@
+apps/apple/CubbyKit/Sources/CubbyKit/Deeplink/CubbyLink.swift
+  s_2e87acf1f13363::t_405164c19dd219 17
+apps/web/src/app/collections/collection-assignment-matrix.tsx
+  s_2e87acf1f13363::t_28a7f229a1645d 1,9
+apps/web/src/app/collections/collection-assignment-search.ts
+  s_2e87acf1f13363::t_1a2ba185f5e6d2 5
+apps/web/src/app/collections/collection-cache.unit.test.ts
+  s_2e87acf1f13363::t_1e47423f8bcd58 1
+apps/web/src/app/collections/collection-detail-page.tsx
+  s_2e87acf1f13363::t_3a76a4faea40a9 5
+apps/web/src/app/collections/smart-collection-page.tsx
+  s_2e87acf1f13363::t_77bab185d2cf71 1,6
+apps/web/src/app/collections/smart-collection-state.tsx
+  s_2e87acf1f13363::t_2fbe8922e12d18 8
+apps/web/src/app/garden-workbench/garden-schedule.ts
+  s_2e87acf1f13363::t_eb220bc170f691 1
+apps/web/src/app/garden-workbench/garden-workbench.tsx
+  s_2e87acf1f13363::t_7a557f92696daf 5-8
+apps/web/src/app/recommendations/recommendation-workbench.tsx
+  s_2e87acf1f13363::t_d0daf0fda172a9 6
+apps/web/src/app/runs/list-slots.tsx
+  s_2e87acf1f13363::t_b49f4007fc4c5b 1
+apps/web/src/app/tools/tool-search.ts
+  s_2e87acf1f13363::t_0a288b0617f872 1-4
+apps/web/src/contracts/entity-records.schema.ts
+  s_2e87acf1f13363::t_a3b13b24cea419 1
+apps/web/src/entity/filter-manifest.unit.test.tsx
+  s_2e87acf1f13363::t_5982b8835fc55e 3
+apps/web/src/entity/problem-filter-semantics.ts
+  s_2e87acf1f13363::t_c4a97aa5a24b5c 19
+apps/web/src/entity/problem-queries/product-coverage.ts
+  s_2e87acf1f13363::t_c3feee169961a5 1
+apps/web/src/entity/problem-queries/tracker.ts
+  s_2e87acf1f13363::t_c42720d410c1b8 1-2
+apps/web/src/entity/problem-registry.unit.test.ts
+  s_2e87acf1f13363::t_6b3ebbebb73eca 16
+apps/web/src/entity/view-manifest.ts
+  s_2e87acf1f13363::t_fe41954ac91292 5
+apps/web/src/entity/view-manifest.unit.test.tsx
+  s_2e87acf1f13363::t_b56e7158d6d977 2,8
+apps/web/src/features/search/search-page.tsx
+  s_2e87acf1f13363::t_0c9891e99816e7 6
+apps/web/src/lib/purchase-import-debug.ts
+  s_2e87acf1f13363::t_0c334e4ea1c5c1 1
+apps/web/src/lib/status-tone.ts
+  s_2e87acf1f13363::t_00e507a04df03d 7
+apps/web/src/routes/_authenticated/collections.$collection.tsx
+  s_2e87acf1f13363::t_0a2ac7a49e22b4 1
+apps/web/src/routes/_authenticated/collections.smart.$starter.tsx
+  s_2e87acf1f13363::t_f53cc2a69ae719 4
+apps/web/src/routes/_authenticated/detail-filter-search.unit.test.ts
+  s_2e87acf1f13363::t_e473f7fdb4ec10 1
+apps/web/src/routes/_authenticated/garden-workbench.tsx
+  s_2e87acf1f13363::t_fe7c038e172f2e 1
+apps/web/src/routes/_authenticated/recommendations.workbench.tsx
+  s_2e87acf1f13363::t_c00a7a548e41d9 1
+apps/web/src/routes/_authenticated/runs.jobs.$id.tsx
+  s_2e87acf1f13363::t_0a0bc2888d9257 1
+apps/web/src/routes/_authenticated/search.index.tsx
+  s_2e87acf1f13363::t_83bf0c9d275933 1
+apps/web/src/routes/_authenticated/statement-rows.index.tsx
+  s_2e87acf1f13363::t_a76e418de0fcdd 4
+apps/web/src/server/garden-guides/windows.ts
+  s_2e87acf1f13363::t_0675a05c1edb68 1-4
+apps/web/src/server/repo/collection-membership.ts
+  s_2e87acf1f13363::t_ead65a380693a6 1-4
+apps/web/src/server/repo/collection.ts
+  s_2e87acf1f13363::t_3c4bb4d1398535 12-17
+apps/web/src/server/repo/image-processing-history.ts
+  s_2e87acf1f13363::t_58f30b24deeb62 1
+apps/web/src/server/repo/smart-collection-membership.ts
+  s_2e87acf1f13363::t_51a4aa56aff01d 5
+apps/web/src/server/repo/smart-collection-membership.unit.test.ts
+  s_2e87acf1f13363::t_49a4d44fda2264 6
+apps/web/src/server/repo/smart-collection.integration.test.ts
+  s_2e87acf1f13363::t_bbcb0a14c2d2d8 1-2
+docs/agents/web-runtime.md
+  s_5014ae36ded3ea::t_34488a6f2726ea 65-73
+docs/entities.md
+  s_2e87acf1f13363::t_aa29990f78a586 863-865
+packages/schemas/package.json
+  s_2e87acf1f13363::t_ff49adf34e23d8 11,18,59,123,166
+packages/schemas/src/activity-fields.ts
+  s_2e87acf1f13363::t_5986a01c279b28 4-18
+packages/schemas/src/activity.ts
+  s_2e87acf1f13363::t_e068431bfaaf78 3,9-14
+packages/schemas/src/child-tables/image-processing.ts
+  s_2e87acf1f13363::t_677d6c1ca81740 346-349
+packages/schemas/src/child-tables/run.ts
+  s_2e87acf1f13363::t_ff093f17dc4523 664-667
+packages/schemas/src/collection-fields.ts
+  s_2e87acf1f13363::t_866d40c0910b1b 1-100
+packages/schemas/src/collection.ts
+  s_2e87acf1f13363::t_66344b0285da96 12-21
+packages/schemas/src/entity-definitions/04-location.entity.ts
+  s_2e87acf1f13363::t_6d956731bb1cd9 10
+packages/schemas/src/entity-definitions/26-plant.entity.ts
+  s_2e87acf1f13363::t_5d0bbb137fac87 6-9,370
+packages/schemas/src/entity-definitions/field-primitives.ts
+  s_2e87acf1f13363::t_366931e99a304e 4-6,34-49
+packages/schemas/src/garden-fields.ts
+  s_2e87acf1f13363::t_27d167da6e2895 13-105
+packages/schemas/src/garden-practice.ts
+  s_2e87acf1f13363::t_562f48d672ec0b 3-4
+packages/schemas/src/garden-practice.unit.test.ts
+  s_2e87acf1f13363::t_4ac817310518e2 3,9
+packages/schemas/src/location-fields.ts
+  s_2e87acf1f13363::t_3f1317dbce29e2 1,4
+packages/schemas/src/nutrition.ts
+  s_2e87acf1f13363::t_b097c398b1fb84 1
+packages/schemas/src/plant.ts
+  s_2e87acf1f13363::t_673f3017c28816 6
+packages/schemas/src/recommendation-search.ts
+  s_2e87acf1f13363::t_e10771d342ec03 1-25
+packages/schemas/src/search-fields.ts
+  s_2e87acf1f13363::t_eb216795dce787 1-8
+packages/schemas/src/search.ts
+  s_2e87acf1f13363::t_2f5c341c2998e3 2
+packages/schemas/src/statement-row-fields.ts
+  s_2e87acf1f13363::t_d5d9b510bf6e62 1-20
+packages/schemas/src/statement-row.ts
+  s_2e87acf1f13363::t_265c3f23804057 2-5
+packages/usda/package.json
+  s_2e87acf1f13363::t_6d717d15eb7932 11-12
+scripts/generator/entities/render/search.ts
+  s_2e87acf1f13363::t_3b78d210191be3 144,155,157-179,200
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "20f17a7177e7985153bac41ee9806ad31525c60d",
+  "prompts": {},
+  "sessions": {
+    "s_2e87acf1f13363": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "31108f72-a141-4ae8-90c0-f38f0969a4e7",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "nicky <nicky@cloudflare.com>"
+    },
+    "s_5014ae36ded3ea": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "42b29afb-7bdb-4969-8017-3261bd1e63a2",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "nicky <nicky@cloudflare.com>"
+    }
+  }
+}
