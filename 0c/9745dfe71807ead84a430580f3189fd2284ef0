@@ -1,0 +1,433 @@
+.oxlintrc.json
+  s_2e87acf1f13363::t_0e1855d9a9a0d4 214-231
+apps/web/src/app/activity/activity-changes.tsx
+  s_2e87acf1f13363::t_d3026e5b9bd7bb 7
+apps/web/src/app/calendar/calendar-filter-specs.ts
+  s_2e87acf1f13363::t_e050ae3275d076 79-81,116-118,130-132
+apps/web/src/app/calendar/unified-calendar.tsx
+  s_2e87acf1f13363::t_c51655224357e7 25,276-283,295-297
+apps/web/src/app/collections/wardrobe-link.tsx
+  s_2e87acf1f13363::t_c84a418f8f43f9 3
+apps/web/src/app/cookbooks/slots.tsx
+  s_2e87acf1f13363::t_88ae5c2dd5ee55 9-10
+apps/web/src/app/docs/sections/entity-relationships-diagram.tsx
+  s_2e87acf1f13363::t_198b3706784610 8-12,17-24,26,32-34,53,66,84
+apps/web/src/app/expenses/expense-settlement-body.tsx
+  s_2e87acf1f13363::t_8c97bb39e7599f 1
+apps/web/src/app/expenses/section-actions.tsx
+  s_2e87acf1f13363::t_5dc230156016f1 4
+apps/web/src/app/finance/financial-transaction-form.tsx
+  s_2e87acf1f13363::t_0555e0144a1583 31-33,218
+apps/web/src/app/images/image-processing-panel.tsx
+  s_2e87acf1f13363::t_4a99465935ad92 8-9
+apps/web/src/app/images/slots.tsx
+  s_2e87acf1f13363::t_b36538f114f83c 3-4
+apps/web/src/app/ingredients/slots.tsx
+  s_2e87acf1f13363::t_4398505192eb6d 1
+apps/web/src/app/locations/slots.tsx
+  s_2e87acf1f13363::t_3a947b7ee28b99 3-4
+apps/web/src/app/meals/slots.tsx
+  s_2e87acf1f13363::t_975e9e118d98db 17-18
+apps/web/src/app/problems/components/problem-sections.tsx
+  s_2e87acf1f13363::t_06d3558d7bd530 2
+apps/web/src/app/problems/components/tier2-fixes.tsx
+  s_2e87acf1f13363::t_a02f338a8d31bd 141
+apps/web/src/app/product-categories/feature-options.tsx
+  s_2e87acf1f13363::t_278f6cd1512d35 1,12-20
+apps/web/src/app/products/product-runs.tsx
+  s_2e87acf1f13363::t_223e7c0a93884b 9-10,192
+apps/web/src/app/products/slots.tsx
+  s_2e87acf1f13363::t_1b07353b79cbdc 5-6
+apps/web/src/app/projects/slots.tsx
+  s_2e87acf1f13363::t_6947bcceedc180 2
+apps/web/src/app/purchases/financial-settlement-body.tsx
+  s_2e87acf1f13363::t_c63de6222b9d02 1
+apps/web/src/app/purchases/financial-settlement.tsx
+  s_2e87acf1f13363::t_5c403f82c851d4 14,38-46,143
+apps/web/src/app/purchases/project-allocation-table.tsx
+  s_2e87acf1f13363::t_7c9142b7d54c60 1
+apps/web/src/app/purchases/purchase-import-run-detail.tsx
+  s_2e87acf1f13363::t_550988c15c4177 40
+apps/web/src/app/purchases/receive-purchase-section.tsx
+  s_2e87acf1f13363::t_2c5ee5687e08dc 7
+apps/web/src/app/purchases/section-actions.tsx
+  s_2e87acf1f13363::t_2b67fbef5f5ad5 4
+apps/web/src/app/purchases/slots.tsx
+  s_2e87acf1f13363::t_dbaa9670b1172e 3-4
+apps/web/src/app/recipes/slots.tsx
+  s_2e87acf1f13363::t_dd5eb48998dae3 6-7
+apps/web/src/app/runs/list-slots.tsx
+  s_2e87acf1f13363::t_27da0c988616c8 2,47
+apps/web/src/app/runs/photo-run-detail.tsx
+  s_2e87acf1f13363::t_e6007ab5b72f3c 6
+apps/web/src/app/runs/slots.tsx
+  s_2e87acf1f13363::t_03a519f4caa677 4
+apps/web/src/app/vendors/account-sync.tsx
+  s_2e87acf1f13363::t_07780678396b97 4-5
+apps/web/src/app/vendors/charge-search.tsx
+  s_2e87acf1f13363::t_7f177b167ec29b 7-8
+apps/web/src/contracts/cache-policy.ts
+  s_2e87acf1f13363::t_fb562cb7799d5c 1
+apps/web/src/contracts/photo-import.contract.ts
+  s_2e87acf1f13363::t_b1cc88bc221228 1
+apps/web/src/entity/actions/action-items.ts
+  s_2e87acf1f13363::t_bc5e696dd10892 4-5
+apps/web/src/entity/actions/bulk-edit-entity-action.tsx
+  s_2e87acf1f13363::t_3cccc2c8a104a5 2,23,46,48,56,114,255,474
+apps/web/src/entity/actions/entity-actions.tsx
+  s_2e87acf1f13363::t_6fd49cf4bd398e 2
+apps/web/src/entity/actions/merge-entity-actions.tsx
+  s_2e87acf1f13363::t_62f67c676d3d60 1,52
+apps/web/src/entity/clients/cookbook.detail.tsx
+  s_2e87acf1f13363::t_febeae2f03df46 1-14
+apps/web/src/entity/clients/expense.detail.tsx
+  s_2e87acf1f13363::t_e3c4500db85f60 1-27
+apps/web/src/entity/clients/expense.list.tsx
+  s_2e87acf1f13363::t_aaa1489ae58cfe 1-6
+apps/web/src/entity/clients/image.detail.tsx
+  s_2e87acf1f13363::t_f7b1632d73b091 1-9
+apps/web/src/entity/clients/ingredient.detail.tsx
+  s_2e87acf1f13363::t_39c531bbfb7c50 1-12
+apps/web/src/entity/clients/inventory.detail.tsx
+  s_2e87acf1f13363::t_83fad7eb1ae20a 1-6
+apps/web/src/entity/clients/ledgerParty.detail.tsx
+  s_2e87acf1f13363::t_c03fc6b26e11f4 1-12
+apps/web/src/entity/clients/location.detail.tsx
+  s_2e87acf1f13363::t_342303daa932d5 1-14
+apps/web/src/entity/clients/location.list.tsx
+  s_2e87acf1f13363::t_2f63a85e49a2ee 1-6
+apps/web/src/entity/clients/meal.detail.tsx
+  s_2e87acf1f13363::t_63645284593d1d 1-10
+apps/web/src/entity/clients/meal.list.tsx
+  s_2e87acf1f13363::t_64ccd89291a219 1-6
+apps/web/src/entity/clients/planting.list.tsx
+  s_2e87acf1f13363::t_305ccb3e495376 1-6
+apps/web/src/entity/clients/product.detail.tsx
+  s_2e87acf1f13363::t_0da52839b0aebc 1-36
+apps/web/src/entity/clients/productCategory.detail.tsx
+  s_2e87acf1f13363::t_473e001975e026 1-8
+apps/web/src/entity/clients/productCategory.list.tsx
+  s_2e87acf1f13363::t_078eca7b9f5cb3 1-6
+apps/web/src/entity/clients/project.detail.tsx
+  s_2e87acf1f13363::t_e02b522d55d0b2 1-16
+apps/web/src/entity/clients/project.list.tsx
+  s_2e87acf1f13363::t_93fc54c21afbfa 1-6
+apps/web/src/entity/clients/purchase.detail.tsx
+  s_2e87acf1f13363::t_12b91bfc510785 1-54
+apps/web/src/entity/clients/recipe.detail.tsx
+  s_2e87acf1f13363::t_3c759dc9e0b857 1-7
+apps/web/src/entity/clients/run.detail.tsx
+  s_2e87acf1f13363::t_f1d40606061e4a 9-24,38,40-43,45-55,57-58,62,68-71,85-88,91-94,96,98-99
+apps/web/src/entity/clients/run.detail.unit.test.ts
+  s_2e87acf1f13363::t_a51849132204ef 5-8,30-31,36-38
+apps/web/src/entity/clients/run.list.tsx
+  s_2e87acf1f13363::t_6bc3380fb535e2 1-6
+apps/web/src/entity/clients/task.list.tsx
+  s_2e87acf1f13363::t_db46f8a478e706 1-6
+apps/web/src/entity/clients/vendor.detail.tsx
+  s_2e87acf1f13363::t_3889049c8f4dbb 1-10
+apps/web/src/entity/clients/vendorAccount.detail.tsx
+  s_2e87acf1f13363::t_f428e531805bcb 1-22
+apps/web/src/entity/components/EntityPreviewContent.tsx
+  s_2e87acf1f13363::t_ac82f16d47dd45 2,21-25,106,108,354,441-451
+apps/web/src/entity/components/record-emoji.tsx
+  s_2e87acf1f13363::t_8f03055750bd46 3,23-24
+apps/web/src/entity/components/record-mark.tsx
+  s_2e87acf1f13363::t_b5d6f0ebeb23eb 2-5
+apps/web/src/entity/components/ref-link/by-id.tsx
+  s_2e87acf1f13363::t_575cea4291983d 3,124
+apps/web/src/entity/components/ref-link/leaf.tsx
+  s_2e87acf1f13363::t_65861833f0f4d4 2
+apps/web/src/entity/detail-field-renderers/expense.tsx
+  s_2e87acf1f13363::t_5b1811d8a28fc2 7,14-16,18-24,71-73,89
+apps/web/src/entity/detail-field-renderers/index.ts
+  s_2e87acf1f13363::t_40f20bd4eb3a98 7,161
+apps/web/src/entity/detail-field-renderers/inventory-expense.tsx
+  s_2e87acf1f13363::t_1bf7c8bbc4077e 10
+apps/web/src/entity/detail-field-renderers/inventory.tsx
+  s_2e87acf1f13363::t_1a441db655806e 10,23-32,35
+apps/web/src/entity/detail-field-renderers/run.tsx
+  s_2e87acf1f13363::t_7f8fb2f50f6d68 1
+apps/web/src/entity/editing/definitions.ts
+  s_2e87acf1f13363::t_7ea920ca355915 4-5,28,106,149-150,337,340,543,559,1151-1161,1167-1171
+apps/web/src/entity/editing/editor-presentations.tsx
+  s_2e87acf1f13363::t_89bca50cc00ff7 1,257-258,263,271,300-303,699
+apps/web/src/entity/editing/editor-requests.ts
+  s_2e87acf1f13363::t_aa5cd065c59dbb 14-15,300
+apps/web/src/entity/editing/entity-edit-dialog-content.tsx
+  s_2e87acf1f13363::t_ddbffc77c14a66 2
+apps/web/src/entity/editing/entity-edit-dialog.tsx
+  s_2e87acf1f13363::t_c00d13fc4e60a2 3-4,61-63
+apps/web/src/entity/editing/entity-field-presentation.ts
+  s_2e87acf1f13363::t_ff483b4ea96640 2-4,28
+apps/web/src/entity/editing/entity-primitive-fields.tsx
+  s_2e87acf1f13363::t_3d6629f30cefda 7,29,491,498,728,1044,1061,1126
+apps/web/src/entity/editing/select-options.ts
+  s_2e87acf1f13363::t_30459ead47c29c 70-73
+apps/web/src/entity/entities.tsx
+  s_2e87acf1f13363::t_723a98cdc601eb 5-6,32,40,85,114,141,149-150,163-165
+apps/web/src/entity/entities.unit.test.ts
+  s_2e87acf1f13363::t_143b58270bfeb1 1,3,5
+apps/web/src/entity/entity-detail/detail-action-bar.tsx
+  s_2e87acf1f13363::t_6f109c80ddc4a0 3,5-8,12-16,24-25,28,38,49
+apps/web/src/entity/entity-detail/detail-action-context.tsx
+  s_2e87acf1f13363::t_44d8ebd323649f 1-54
+apps/web/src/entity/entity-detail/detail-hooks.tsx
+  s_2e87acf1f13363::t_927bf9ff957f95 1-6,8-13,17-30,42,46-61,64-73,75-79,83-102,104-139
+apps/web/src/entity/entity-detail/entity-relation-table.tsx
+  s_2e87acf1f13363::t_19c03be92cd353 6-7,19,35-39,134,162,196,283,530-540,655
+apps/web/src/entity/entity-detail/entity-workbench-inspector.tsx
+  s_2e87acf1f13363::t_702412226452f7 2
+apps/web/src/entity/entity-detail/generic-entity-detail.tsx
+  s_2e87acf1f13363::t_c2dd5ac3f45c33 1,3-4,40-44,86-87,89,115,150,233,366,445,529-531,542-543,558,690-691
+apps/web/src/entity/entity-detail/generic-entity-detail.unit.test.tsx
+  s_2e87acf1f13363::t_0c442024f42fca 11,23,170-176
+apps/web/src/entity/entity-detail/records-block.tsx
+  s_2e87acf1f13363::t_8bee2a56df67a0 1,27-28,76,78,80,361,363,493-494
+apps/web/src/entity/entity-detail/records-verbs.unit.test.tsx
+  s_2e87acf1f13363::t_e1233756065abe 5-7,11,76-82,120-140,154-160,162-163
+apps/web/src/entity/entity-detail/report-choices.tsx
+  s_2e87acf1f13363::t_eca42508e9d73d 1
+apps/web/src/entity/entity-detail/report-slot.tsx
+  s_2e87acf1f13363::t_e2a716bfe22fdc 5,42-44,546-553
+apps/web/src/entity/entity-detail/report-slot.unit.test.tsx
+  s_2e87acf1f13363::t_5e7f9556bb2b09 12
+apps/web/src/entity/entity-display.tsx
+  s_2e87acf1f13363::t_96020eef2bc4ef 3,6-7,16-20,115,667,672,751,781,794,827,848,873,1376-1377
+apps/web/src/entity/entity-list-ssr.ts
+  s_2e87acf1f13363::t_12b7b0283e4a80 3,110
+apps/web/src/entity/entity-list/entity-shelf.tsx
+  s_2e87acf1f13363::t_870b21af5b611a 1-4,10-14,37,64-65,124
+apps/web/src/entity/entity-list/generic-entity-list.tsx
+  s_2e87acf1f13363::t_aa68968376de45 2,25-30,84,212,215,246-247,254-257,261,265,270,345,347,357,437
+apps/web/src/entity/entity-list/generic-entity-list.unit.test.tsx
+  s_2e87acf1f13363::t_b4c7e90816ac7a 22,76-87,95,123-124
+apps/web/src/entity/entity-list/identity-list-config.ts
+  s_2e87acf1f13363::t_b7afa5aa230c82 1-7,45-46,55
+apps/web/src/entity/entity-list/list-column-read-fields.ts
+  s_2e87acf1f13363::t_aa2288fe2ffc3e 1-3,11
+apps/web/src/entity/entity-list/list-hooks.ts
+  s_2e87acf1f13363::t_c6e6d91e3625b0 6-8,11-15,17,19-22,24-26,28-33
+apps/web/src/entity/entity-list/list-scope-chips.tsx
+  s_2e87acf1f13363::t_6370fb1fccf419 2,27,61
+apps/web/src/entity/entity-list/manifest-tree.ts
+  s_2e87acf1f13363::t_b026c50098350c 4,55,57
+apps/web/src/entity/entity-list/resolve-list-view.ts
+  s_2e87acf1f13363::t_2bf8276d76e27b 3-6,20,26
+apps/web/src/entity/entity-model.ts
+  s_2e87acf1f13363::t_1e94d9d47539c4 1-203
+apps/web/src/entity/enum-field-display.tsx
+  s_2e87acf1f13363::t_fdc3e26541c50e 2-3,6,61,108
+apps/web/src/entity/field-explanation.tsx
+  s_2e87acf1f13363::t_5e11166c88ea3c 22,319,746-751
+apps/web/src/entity/field-provenance.tsx
+  s_2e87acf1f13363::t_c979c8cf0b36a2 7,17-21
+apps/web/src/entity/field-resolution.tsx
+  s_2e87acf1f13363::t_bedd3ce43762f0 2,24,67,84,199,302
+apps/web/src/entity/filter-manifest.tsx
+  s_2e87acf1f13363::t_a6c18eee0cb899 2
+apps/web/src/entity/list-columns/types.ts
+  s_2e87acf1f13363::t_4b7b3f45844f67 1
+apps/web/src/entity/manifest-registries.unit.test.tsx
+  s_2e87acf1f13363::t_e8922f9e2019d5 43,85-87
+apps/web/src/entity/merge/entity-merge-dialog.tsx
+  s_2e87acf1f13363::t_c59d01ad1c87f6 1,12
+apps/web/src/entity/merge/entity-merge-dialog.unit.test.tsx
+  s_2e87acf1f13363::t_ea257c9d1d8fa2 7,110,170
+apps/web/src/entity/merge/merge-configs.tsx
+  s_2e87acf1f13363::t_0833d6745dca00 1-196
+apps/web/src/entity/problem-registry-validation.ts
+  s_2e87acf1f13363::t_694c11ba9075b8 2
+apps/web/src/entity/relatedness/relatedness-rail.tsx
+  s_2e87acf1f13363::t_6ca72e4228fd47 9
+apps/web/src/entity/relationships/entity-relations.tsx
+  s_2e87acf1f13363::t_41aa0249ecc86c 10,18-25,38,77-78,654-659,918-924,939,955
+apps/web/src/entity/routing/detail-page.tsx
+  s_2e87acf1f13363::t_2d8c6327d55ddc 1-4,12-15,75-80,92,98,107,110-112,117,123,125-129,153-159
+apps/web/src/entity/routing/list-page.tsx
+  s_2e87acf1f13363::t_5ab76e148ef796 7,25,27,72-78,189,194-195,202
+apps/web/src/entity/view-manifest.ts
+  s_2e87acf1f13363::t_24d142041b256b 2-4,127
+apps/web/src/features/ai/auto-suggest-slot.tsx
+  s_2e87acf1f13363::t_7cab5bc0ac06ca 3,46
+apps/web/src/features/ai/field-suggestion-provider.tsx
+  s_2e87acf1f13363::t_b5ebff224e22e5 5,26,634
+apps/web/src/features/ai/field-suggestion.ts
+  s_2e87acf1f13363::t_abf0cc22c69c91 5,10,24,90,120
+apps/web/src/features/ai/form-field-resolution.tsx
+  s_2e87acf1f13363::t_7009b538783024 13,41
+apps/web/src/features/ai/record-suggestions.tsx
+  s_2e87acf1f13363::t_7013ae5e622e50 6,31,172-173,204,223,412,415-416,437,505,739,820,933
+apps/web/src/features/ai/use-auto-field-suggestion.ts
+  s_2e87acf1f13363::t_16edc3c405a422 12,88,418
+apps/web/src/features/developer/ai-smoke-form.tsx
+  s_2e87acf1f13363::t_1b1185bf5972f4 9,278
+apps/web/src/features/entity-platform/EntityManifestGrid.tsx
+  s_2e87acf1f13363::t_3a7136f50d09e2 2-3,45,709
+apps/web/src/features/entity-platform/EntityManifestGrid.unit.test.tsx
+  s_2e87acf1f13363::t_1c86d226ce66f0 3-11,13,23-26
+apps/web/src/features/entity-platform/EntityOverrideTable.tsx
+  s_2e87acf1f13363::t_0b79983a882d77 2
+apps/web/src/features/entity-platform/EntityRecordsTab.tsx
+  s_2e87acf1f13363::t_64754d1ba3c87e 2
+apps/web/src/features/entity-platform/EntityReferenceGraph.tsx
+  s_2e87acf1f13363::t_dc19d462914397 2,18-21,78,98-99,116-117
+apps/web/src/features/entity-platform/EntitySchemaInspector.tsx
+  s_2e87acf1f13363::t_07e07c041b675d 35,478
+apps/web/src/features/entity-platform/entity-schema-model.ts
+  s_2e87acf1f13363::t_3c5576b7c3eb58 2-5,10-15,20-24,31-35,37,39,45,55,250-251,256
+apps/web/src/features/home/entitycount.tsx
+  s_2e87acf1f13363::t_cf45383ad2f66b 4
+apps/web/src/features/images/attach-existing-image-dialog.tsx
+  s_2e87acf1f13363::t_bef6d4f52ec6b2 1
+apps/web/src/features/photos/entity-photos-section.tsx
+  s_2e87acf1f13363::t_c8700545ea0b24 1
+apps/web/src/features/photos/use-entity-photo-capture.ts
+  s_2e87acf1f13363::t_d1bd0e2f626e9f 1,51
+apps/web/src/features/recipes/RecipeDetail.tsx
+  s_2e87acf1f13363::t_70790a043a319f 15
+apps/web/src/features/recipes/RecipeFlowView.tsx
+  s_2e87acf1f13363::t_212fb1cc5af56c 24
+apps/web/src/features/search/search-utils.tsx
+  s_2e87acf1f13363::t_0752b1403c174b 1
+apps/web/src/integrations/tanstack-query/cache-tags.ts
+  s_2e87acf1f13363::t_1ccb81562306d1 1-2
+apps/web/src/routes/_authenticated/connections.tsx
+  s_2e87acf1f13363::t_6e07c1587ec692 1-2,12,32-48,50
+apps/web/src/routes/_authenticated/images.index.tsx
+  s_2e87acf1f13363::t_63253898f7d854 4,14
+apps/web/src/routes/_authenticated/recipes.$shortcode.tsx
+  s_2e87acf1f13363::t_4510a0a4e2cb0a 12,93
+apps/web/src/server/repo/related-view.ts
+  s_2e87acf1f13363::t_0b5b83a68474d4 19
+apps/web/src/server/repo/relatedness/related-view-paths.unit.test.ts
+  s_2e87acf1f13363::t_2bf9efd60db5af 2-3
+apps/web/src/ui/combobox/combobox-builders.tsx
+  s_2e87acf1f13363::t_69c17a793946f8 1,398
+apps/web/src/ui/combobox/with-search-hook.tsx
+  s_2e87acf1f13363::t_33b79caf258daa 1,92,171
+apps/web/src/ui/data-table/LedgerFilters.tsx
+  s_2e87acf1f13363::t_aae1e63b1dd9b3 2,89
+apps/web/src/ui/data-table/columnHelpers.tsx
+  s_2e87acf1f13363::t_c9795ddd721b0a 5,262
+apps/web/src/ui/data-table/detail-page.tsx
+  s_2e87acf1f13363::t_e934ea8c6a3704 2
+apps/web/src/ui/data-table/entity-empty-states.tsx
+  s_2e87acf1f13363::t_ee9203936fba20 2-5,34
+apps/web/src/ui/data-table/inventory-column-helpers.ts
+  s_2e87acf1f13363::t_9929139950aedf 2
+apps/web/src/ui/data-table/shelf.tsx
+  s_2e87acf1f13363::t_5a820bb7ace17d 2,146
+apps/web/src/ui/data-table/table-meta.ts
+  s_2e87acf1f13363::t_cbddb5ad251237 7-8,74-76
+apps/web/src/ui/hooks/useClientEntityList.tsx
+  s_2e87acf1f13363::t_c253d3cfafa813 1,179
+apps/web/src/ui/hooks/useDeferredReferenceFilterOptions.ts
+  s_2e87acf1f13363::t_9b5d9592ce309e 1
+apps/web/src/ui/hooks/useDeletableConfig.ts
+  s_2e87acf1f13363::t_a83df849ef0e8d 1
+apps/web/src/ui/hooks/useEntityList.tsx
+  s_2e87acf1f13363::t_6b18a828dd7add 2-5,397
+apps/web/src/ui/hooks/useEntityListPresentation.tsx
+  s_2e87acf1f13363::t_7a78214785c4f6 1-4,100,107
+apps/web/src/ui/hooks/useEntityOptions.ts
+  s_2e87acf1f13363::t_99a23ee1cc19d1 1
+apps/web/src/ui/hooks/useRelatedPreviewColumns.tsx
+  s_2e87acf1f13363::t_3edcc5ce50c32f 1
+apps/web/src/ui/hooks/useStandardColumns.tsx
+  s_2e87acf1f13363::t_192624c907f001 2-5,16,196-197,208,312
+apps/web/src/ui/navigation/application-views.ts
+  s_2e87acf1f13363::t_0bacf8d44eecfe 4-6,222
+apps/web/src/ui/navigation/domain-wayfinding.ts
+  s_2e87acf1f13363::t_ec1b15890db43f 4-7,18,126
+apps/web/src/ui/navigation/nav-items.ts
+  s_2e87acf1f13363::t_2308f1a0742863 1
+apps/web/src/ui/navigation/navigation-count-badge.tsx
+  s_2e87acf1f13363::t_5c8e41c09306e7 5
+apps/web/src/ui/preview/preview-entities.ts
+  s_2e87acf1f13363::t_24f609cf7f98d9 1
+apps/web/tooling/dev/preview/main.tsx
+  s_2e87acf1f13363::t_30ceb6b1c140ea 138
+apps/web/tooling/entity-models-test-setup.ts
+  s_2e87acf1f13363::t_0b9d0c47776154 1-8
+apps/web/vitest.config.ts
+  s_2e87acf1f13363::t_f0813aebe250bf 237,292-295,347-350
+docs/adr/0009-per-entity-client-manifests.md
+  s_2e87acf1f13363::t_f752ee05b35c46 1-83
+docs/agents/generic-paths.md
+  s_2e87acf1f13363::t_ac16f05083c311 36-46,58-59
+docs/agents/web-runtime.md
+  s_2e87acf1f13363::t_a9bb4c92c7ec19 36-40,48-54,57-59
+docs/entities.md
+  s_2e87acf1f13363::t_2675dfb27ed1fb 70-87,226-230,233-238,255-256,260-262,284-288,714-716
+packages/schemas/package.json
+  s_2e87acf1f13363::t_524dad94716161 36-40,43,55
+packages/schemas/src/ai.ts
+  s_2e87acf1f13363::t_c535d9404a63d9 5
+packages/schemas/src/audit.ts
+  s_2e87acf1f13363::t_e49228af5bdedc 4
+packages/schemas/src/background-tasks.ts
+  s_2e87acf1f13363::t_f6cc1237b2f960 2
+packages/schemas/src/dashboard.ts
+  s_2e87acf1f13363::t_f8bdd2b77f3001 3
+packages/schemas/src/entity-connections.ts
+  s_2e87acf1f13363::t_a271ef1b5c5eba 5
+packages/schemas/src/entity-core.ts
+  s_2e87acf1f13363::t_2d8cfd190d7065 2
+packages/schemas/src/entity-index-types.ts
+  s_2e87acf1f13363::t_05411c74cc8e76 1-47
+packages/schemas/src/entity-index.ts
+  s_2e87acf1f13363::t_2052f8dd58c28a 1-120
+packages/schemas/src/entity-manifest.ts
+  s_2e87acf1f13363::t_00ce2466918522 7-8,118-122,126-127
+packages/schemas/src/entity.ts
+  s_2e87acf1f13363::t_de762f629b3331 3
+packages/schemas/src/filter-options.ts
+  s_2e87acf1f13363::t_fa84c16263b367 3
+packages/schemas/src/identifiers.ts
+  s_2e87acf1f13363::t_8ed92c2b88f88e 10,38
+packages/schemas/src/image-policies.ts
+  s_2e87acf1f13363::t_2aa21444aef560 1-43
+packages/schemas/src/image.ts
+  s_2e87acf1f13363::t_3222cd28e733c8 35
+packages/schemas/src/problems.ts
+  s_2e87acf1f13363::t_a224e593cc3390 4
+packages/schemas/src/project.ts
+  s_2e87acf1f13363::t_a4dbd6241bf0be 72
+packages/schemas/src/related-view-path.ts
+  s_2e87acf1f13363::t_9356a2d01c4263 1-26
+packages/schemas/src/related-view.ts
+  s_2e87acf1f13363::t_9ea486b41d4fc4 3,183,401,426,479-490,494
+packages/schemas/src/related-view.unit.test.ts
+  s_2e87acf1f13363::t_da841e8cdc5449 18
+packages/schemas/src/search.ts
+  s_2e87acf1f13363::t_d13b879731bcb3 9,22-23
+scripts/generator/entities/render/browser-routes.ts
+  s_2e87acf1f13363::t_b502fe743692e8 1-4,7-11,13-21,25-149,200,219,269,280,351-354,357-358
+scripts/generator/entities/render/entity-models.ts
+  s_2e87acf1f13363::t_1ff8d3c816eeda 1-395
+scripts/generator/entities/render/index.ts
+  s_2e87acf1f13363::t_f9ade2707d610f 16,1093-1098
+scripts/generator/http-api/schema-names.ts
+  s_2e87acf1f13363::t_0a313999c54285 68-73
+tools/oxlint/cubby/index.ts
+  s_2e87acf1f13363::t_683cdeb2e0b422 12,25
+tools/oxlint/cubby/rules/no-client-entity-aggregate.ts
+  s_2e87acf1f13363::t_053aaa6c608c35 1-84
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "0c9745dfe71807ead84a430580f3189fd2284ef0",
+  "prompts": {},
+  "sessions": {
+    "s_2e87acf1f13363": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "31108f72-a141-4ae8-90c0-f38f0969a4e7",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "nicky <nicky@cloudflare.com>"
+    }
+  }
+}
