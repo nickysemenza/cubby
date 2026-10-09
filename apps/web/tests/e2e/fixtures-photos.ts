@@ -490,3 +490,32 @@ export async function seedRunHistoryDefaults(page: Page, name: string) {
     hiddenName: await insertRun(`${name} ephemeral`, "ai_suggest", "ephemeral"),
   };
 }
+
+/** Retained mail-import report state only; no dispatch, inference or domain writes. */
+export async function seedMailImportReportRun(page: Page, name: string) {
+  const db = getFixtureDb();
+  const member = await ensureMemberParty(page, name);
+  const [run] = await getDb(db)
+    .insert(schema.run)
+    .values({
+      shortcode: generateShortcode("run"),
+      actorUserId: await fixtureUserId(page),
+      actorName: "Synthetic member",
+      actorEmail: "synthetic@example.test",
+      ledgerPartyId: member.id,
+      actorLedgerPartyShortcode: member.shortcode,
+      actorLedgerPartyName: member.name,
+      purpose: "mail_import",
+      trigger: "manual",
+      status: "completed",
+      startedAt: new Date(),
+      endedAt: new Date(),
+      ordersSeen: 3,
+      imported: 1,
+      updated: 1,
+      skipped: 1,
+    })
+    .returning({ shortcode: schema.run.shortcode });
+  if (!run) throw new Error("Synthetic mail-import report Run was not created");
+  return run.shortcode;
+}

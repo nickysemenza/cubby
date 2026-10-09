@@ -5,13 +5,15 @@ import {
 import {
   ACTIVE_RUN_STATUSES,
   HOUSEHOLD_TIMEZONE,
-  IMPORT_WORKFLOW_PURPOSES,
   IMAGE_WIDTHS,
   TASK_BOARD_INBOX_LABEL,
   TASK_BOARD_UNTITLED_PROJECT_LABEL,
 } from "../../../../packages/shared/src/client-constants.ts";
 import { APPLE_CLIENT_COMPATIBILITY_VERSION } from "../../../../packages/shared/src/apple-client-version.ts";
-import { ACTIVITY_KIND_LABEL } from "../../../../packages/schemas/src/activity-fields.ts";
+import {
+  ACTIVITY_KIND_LABEL,
+  IMPORT_REPORT_RUN_PURPOSES,
+} from "../../../../packages/schemas/src/activity-fields.ts";
 import {
   WAYFINDING_DOMAINS,
   WAYFINDING_DOMAIN_PRESENTATION,
@@ -73,8 +75,8 @@ export const renderSwiftSharedConstants = (): EntityArtifacts[] => {
         `    public static let collectionTagPrefix = ${swiftString(COLLECTION_TAG_PREFIX)}\n` +
         "    /// What a Collection slug must match (`collectionSlugPattern`).\n" +
         `    public static let collectionSlugPattern = ${swiftString(collectionSlugPattern.source)}\n` +
-        "    /// Run purposes the purchase agent drives (`IMPORT_WORKFLOW_PURPOSES`).\n" +
-        `    public static let importWorkflowPurposes: [String] = [${IMPORT_WORKFLOW_PURPOSES.map(swiftString).join(", ")}]\n` +
+        "    /// Run purposes with import report presentation (`IMPORT_REPORT_RUN_PURPOSES`).\n" +
+        `    public static let importReportRunPurposes: [String] = [${IMPORT_REPORT_RUN_PURPOSES.map(swiftString).join(", ")}]\n` +
         "    /// Run statuses in which a run is still moving (`ACTIVE_RUN_STATUSES`).\n" +
         `    public static let activeRunStatuses: [String] = [${ACTIVE_RUN_STATUSES.map(swiftString).join(", ")}]\n` +
         "}\n\n" +

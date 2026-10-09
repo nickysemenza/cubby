@@ -262,9 +262,11 @@ research acceptance.
 
 - 🟢 **Derive research-purpose presentation consistently.** Audit the duplicated
   purpose sets in shared constants, agent inputs, Run declarations and Workflow
-  contracts. `mail_import` is missing from `IMPORT_WORKFLOW_PURPOSES`, which gates
-  import report slots. Preserve intentionally different execution capabilities
-  while generating common presentation from one declaration.
+  contracts. Import report eligibility now comes from the shared Run schema, including
+  `mail_import`, with generated Swift and one web/server predicate. Exact-head
+  hosted and client acceptance are pending. Agent execution, discovery and the
+  Imports saved view intentionally cover different capabilities; finish their
+  audit before consolidating additional purpose declarations.
 
 - 🤔 **Verify automatic enrichment dispatch after import commit.** Imports now
   admit Product research through `startProductResearch`, which obtains the

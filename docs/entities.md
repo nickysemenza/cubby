@@ -271,6 +271,14 @@ signal, e.g. a Location only reads as a growing area once it has Plantings.
 `collapseWhenEmpty: true` instead keeps the header, `0` count and create
 button and folds only the body away.
 
+Run import report eligibility comes from `IMPORT_REPORT_RUN_PURPOSES` in the
+shared Run schema, including `mail_import`. Web and server use its shared
+predicate; Swift reads its generated constant. This is presentation, not
+execution authority: agent-coordinated purposes include photo inventory and
+exclude historical file imports, while discovery and the Imports saved view
+have their own deliberately different scopes. A photo batch keeps its own
+review and durable transcript rather than purchase report sections.
+
 **Report slots.** A `slot` section whose content is figures, a chart series, a
 table or dated schedule rows has no per-platform code: the server composes it
 once (`entityReport.get`, builders in `server/repo/entity-report/`, block kinds
