@@ -9,6 +9,7 @@ import type { z } from "zod";
 import { RESEARCH_SUPPORT_FEATURE } from "~/server/ai/features";
 import { runStructuredFeature } from "~/server/ai/run-feature";
 import type { Database } from "~/server/db";
+import { paidResearchPreflight } from "~/server/runs/execution-transport";
 
 import supportRules from "../../../../../.claude/skills/purchase-import/references/research-support.md?raw";
 import { attachmentAssessmentContext } from "./research-attachment-content";
@@ -65,6 +66,11 @@ export async function assessResearchProposal(
         runId: runEntityId.parse(input.runId),
         operation: "research-source-support",
         subscriptionRequired: true,
+        subscriptionFallback: "budgeted",
+        beforePaidRequest: paidResearchPreflight(
+          input.db,
+          runEntityId.parse(input.runId),
+        ),
       },
     ),
   );

@@ -244,7 +244,10 @@ Before a new Worker journey or a fixture-correction replay, compare the complete
 runtime options with the owning `WorkerdRuntimeOptions` and a working caller:
 profile, database ownership, storage endpoint/public URL, and required peers.
 Check the actor grant and retained-source authority through the existing fixture
-helpers. Record startup failures as setup failures; behavioral red requires the
+helpers. Scripted paid peers still require an explicit synthetic execution approval
+and complete synthetic pricing; bind the approval before dispatch and retain
+per-transmission reservation assertions. Never bypass paid admission for a fixture.
+Record startup failures as setup failures; behavioral red requires the
 scenario to reach its failing boundary. Wrap runtime acquisition in the artifact
 boundary so an exception before the scenario callback still records the failure
 phase, scrubbed diagnostic, available build identity, and evidence checksums.

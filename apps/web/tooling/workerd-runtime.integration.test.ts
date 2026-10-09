@@ -40,7 +40,10 @@ import {
 } from "../src/server/repo/repo.fixtures";
 import { browserCommandRecord } from "../src/server/purchase-import/browser-results";
 import { completedCapture } from "../src/server/purchase-import/browser.fixtures";
-import { authorizePurchaseAgent } from "../src/server/purchase-import/purchase-agent-workerd.fixtures";
+import {
+  authorizePurchaseAgent,
+  authorizeSyntheticRunInference,
+} from "../src/server/purchase-import/purchase-agent-workerd.fixtures";
 import { startProductResearch } from "../src/server/purchase-import/product-research-run";
 import { startAccountSync } from "../src/server/purchase-import/account-sync";
 import { resolveOrThrow } from "../src/server/repo/shortcode-resolver";
@@ -280,6 +283,7 @@ describe("workerd test runtime profiles", () => {
       const env = await started.harness
         .getWorker<{ PURCHASE_AGENT_QUEUE: QueueSend }>()
         .getEnv();
+      const initialEvents: PurchaseAgentEvent[] = [];
       const admissions = await startProductResearch(
         ctx.db,
         {
@@ -289,11 +293,18 @@ describe("workerd test runtime profiles", () => {
           cause: "member_request",
           preferredBrowserAccountId: account.id,
         },
-        env.PURCHASE_AGENT_QUEUE,
+        { send: async (event) => void initialEvents.push(event) },
       );
       const admitted = admissions[0];
       if (!admitted) throw new Error("Synthetic research admission missing.");
       runId = admitted.runId;
+      await authorizeSyntheticRunInference(
+        ctx,
+        admitted.runId,
+        "synthetic-native-product-mailbox",
+      );
+      for (const event of initialEvents)
+        await env.PURCHASE_AGENT_QUEUE.send(event);
       await pollUntil(
         async () =>
           (await controls!.emitted()).includes(
@@ -482,13 +493,21 @@ describe("workerd test runtime profiles", () => {
       const env = await started.harness
         .getWorker<{ PURCHASE_AGENT_QUEUE: QueueSend }>()
         .getEnv();
+      const initialEvents: PurchaseAgentEvent[] = [];
       const first = await startAccountSync(
         ctx.db,
         party.id,
         { vendorAccountId: account.shortcode },
-        env.PURCHASE_AGENT_QUEUE,
+        { send: async (event) => void initialEvents.push(event) },
       );
       const runId = await resolveOrThrow(ctx.db, "run", first.runId);
+      await authorizeSyntheticRunInference(
+        ctx,
+        runId,
+        "synthetic-native-sync-mailbox",
+      );
+      for (const event of initialEvents)
+        await env.PURCHASE_AGENT_QUEUE.send(event);
       const database = getDb(ctx.db);
       const scope = async () =>
         (

@@ -6,6 +6,7 @@ import { eq, inArray } from "drizzle-orm";
 
 import * as schema from "~/server/db/schema";
 import {
+  authorizeSyntheticBackfill,
   authorizePurchaseAgent,
   workerdDiagnostic,
 } from "~/server/purchase-import/purchase-agent-workerd.fixtures";
@@ -18,7 +19,11 @@ import {
   type ScriptValue,
 } from "../../tooling/purchase-agent-script";
 import type { ScenarioControls } from "../../tooling/purchase-agent-workerd-harness";
-import { fixtureUserId, getFixtureDb } from "./fixtures-core";
+import {
+  createEvidenceHarnessContext,
+  fixtureUserId,
+  getFixtureDb,
+} from "./fixtures-core";
 import { seedUnimportedOrderMail } from "./fixtures-mail";
 import { gotoAuthenticatedPage } from "./e2e-helpers";
 import { expect, test } from "./e2e-test";
@@ -114,6 +119,18 @@ function controls(purchaseAgent: ScenarioControls | undefined) {
   return purchaseAgent;
 }
 
+async function authorizeSeed(
+  context: Awaited<ReturnType<typeof createEvidenceHarnessContext>>,
+  seed: Awaited<ReturnType<typeof seedUnimportedOrderMail>>,
+) {
+  const [source] = await getDb(context.db)
+    .select()
+    .from(schema.orderMail)
+    .where(eq(schema.orderMail.id, seed.events[0]!.orderMailId));
+  if (!source) throw new Error("Synthetic original is missing");
+  return authorizeSyntheticBackfill(context, seed.member.id, source.mailboxId);
+}
+
 async function vendorPurchases(
   vendorId: typeof schema.purchase.$inferSelect.vendorId,
 ) {
@@ -185,6 +202,7 @@ test("imports saved order mail from the generic Vendor report and follows the li
     `Synthetic import vendor ${Date.now()}`,
   );
   await authorizePurchaseAgent(getFixtureDb(), await fixtureUserId(page));
+  await authorizeSeed(await createEvidenceHarnessContext(page), seed);
   await agent.configure({
     steps: researchOrder("mail", seed, "SYN-CONFIRM-1", "original-read"),
     purposeSteps: { product_enrichment: productGapSteps },
@@ -321,6 +339,7 @@ test("admits several retained confirmations as separate tasks in the same resear
   const [first, second] = seed.events;
   if (!first || !second) throw new Error("Missing seeded confirmations");
   await authorizePurchaseAgent(getFixtureDb(), await fixtureUserId(page));
+  await authorizeSeed(await createEvidenceHarnessContext(page), seed);
   await agent.configure({
     steps: researchOrder("first", seed, first.orderId).slice(0, 2),
     sourceSteps: [

@@ -19,6 +19,11 @@ import {
   mailResearchRunInput,
   productResearchRunInput,
 } from "@cubby/schemas/run-fields";
+import { requestUrl } from "@cubby/shared/ai/gateway-request";
+import {
+  createAiModelPricing,
+  quoteAiDecisionRequest,
+} from "@cubby/shared/ai/pricing";
 import { sha256Hex } from "@cubby/shared/sha256";
 import { makeSignature } from "better-auth/crypto";
 import { and, eq } from "drizzle-orm";
@@ -79,6 +84,7 @@ import { issueExecutionAuthorization } from "~/server/runs/execution-authorizati
 import { completedCapture, renderPage } from "./browser.fixtures";
 import {
   authorizePurchaseAgent,
+  authorizeSyntheticBackfill,
   waitFor,
   workerdDiagnostic,
 } from "./purchase-agent-workerd.fixtures";
@@ -319,7 +325,40 @@ describe("purchase research through the built Worker", () => {
     const reservations = receipts
       .map(({ result }) => executionAuthorizationReceipt.parse(result))
       .filter((receipt) => receipt.kind === "metered_reservation");
-    expect(reservations).toHaveLength(2);
+    const pricing = createAiModelPricing({
+      fetch: async (input) => {
+        // Catalog reads cross the host/workerd boundary as URL and body bytes.
+        const response = await runtime.harness
+          .getWorker("cubby-test-gateway")
+          .fetch(requestUrl(input));
+        return new Response(await response.text(), {
+          status: response.status,
+          statusText: response.statusText,
+          headers: [...response.headers],
+        });
+      },
+      onError: (error) => {
+        throw error;
+      },
+    });
+    const triageQuote = quoteAiDecisionRequest(await pricing.current(), {
+      provider: "typesafe",
+      model: "typesafe/jev",
+      questionCount: 1,
+    });
+    if (!triageQuote)
+      throw new Error("Synthetic triage reservation is unpriced");
+    // This root also funds coordinator and semantic assessment requests.
+    expect(
+      reservations.filter(
+        (receipt) =>
+          receipt.reservedMicroUSD ===
+          Math.ceil(triageQuote.maxCostUsd * 1_000_000),
+      ),
+    ).toHaveLength(2);
+    expect(
+      new Set(reservations.map((receipt) => receipt.physicalAttemptId)).size,
+    ).toBe(reservations.length);
     expect(reservations.every((receipt) => receipt.reservedMicroUSD > 0)).toBe(
       true,
     );
@@ -412,6 +451,7 @@ describe("purchase research through the built Worker", () => {
           orderMailId: mail.id,
         });
         retainedMailId = mail.id;
+        approval = await authorizeSyntheticBackfill(ctx, party.id, mailboxId);
       } else {
         await database.insert(googleAccount).values({
           id: crypto.randomUUID(),
@@ -1403,6 +1443,11 @@ describe("unrelated mail retention through the built Worker", () => {
                 )
               ).status,
             ).toBe(204);
+            await authorizeSyntheticBackfill(
+              ctx,
+              member.id,
+              newsletter.mailboxId,
+            );
             const events: PurchaseAgentEvent[] = [];
             const [admitted] = await startMailResearch(
               ctx.db,

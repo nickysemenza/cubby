@@ -10,12 +10,17 @@ import {
 import type { RunId } from "@cubby/schemas/identifiers";
 import type { RunInput } from "@cubby/schemas/run-fields";
 import { sha256Hex } from "@cubby/shared/sha256";
-import { and, desc, eq, sql } from "drizzle-orm";
+import { and, desc, eq, inArray, sql } from "drizzle-orm";
 import { z } from "zod";
 
 import type { Database, DrizzleTransaction } from "~/server/db";
-import { run } from "~/server/db/schema";
-import { unwrapDb, notDeleted } from "~/server/repo/database-helpers";
+import { account } from "~/server/db/auth.schema";
+import { run, orderMail, importSourceClaim } from "~/server/db/schema";
+import {
+  unwrapDb,
+  notDeleted,
+  databaseForTransaction,
+} from "~/server/repo/database-helpers";
 
 import {
   assertExecutionAuthorization,
@@ -70,6 +75,70 @@ export function executionAuthorizationFromInput(
   input: unknown,
 ): ExecutionAuthorizationRef | undefined {
   return executionContext.nullish().parse(input)?.executionAuthorization;
+}
+
+/** Existing inherited authority wins; new mail-backed work shares its owned backfill bucket. */
+export async function bindRetainedMailBackfill<T extends RunInput>(
+  tx: DrizzleTransaction,
+  input: T,
+  owner: ExecutionAuthorizationOwner,
+  sourceGroups: readonly (readonly Pick<
+    typeof importSourceClaim.$inferSelect,
+    "externalKey" | "checksum"
+  >[])[],
+): Promise<T> {
+  if (
+    executionAuthorizationFromInput(input) ||
+    !sourceGroups.length ||
+    sourceGroups.some((group) => !group.length)
+  )
+    return input;
+  const mailboxes = await tx
+    .selectDistinct({ id: account.accountId })
+    .from(account)
+    .where(
+      and(eq(account.userId, owner.userId), eq(account.providerId, "google")),
+    );
+  const [mailbox] = mailboxes;
+  if (mailboxes.length !== 1 || !mailbox) return input;
+  const sourceKeys = sourceGroups.flatMap((group) =>
+    group.map((source) => source.externalKey),
+  );
+  const originals = await tx
+    .select({ messageId: orderMail.messageId, checksum: orderMail.rawChecksum })
+    .from(orderMail)
+    .where(
+      and(
+        eq(orderMail.ledgerPartyId, owner.ledgerPartyId),
+        eq(orderMail.mailboxId, mailbox.id),
+        inArray(
+          sql<string>`'gmail:' || ${orderMail.mailboxId} || ':' || ${orderMail.messageId}`,
+          sourceKeys,
+        ),
+      ),
+    );
+  if (
+    !sourceGroups.every((group) =>
+      group.some((source) =>
+        originals.some(
+          (original) =>
+            source.externalKey ===
+              `gmail:${mailbox.id}:${original.messageId}` &&
+            source.checksum === original.checksum,
+        ),
+      ),
+    )
+  )
+    return input;
+  const authorization = await latestExecutionAuthorization(
+    databaseForTransaction(tx),
+    owner,
+    mailbox.id,
+    "backfill",
+  );
+  return authorization
+    ? { ...input, executionAuthorization: authorization }
+    : input;
 }
 
 /** The latest approval in this scope is authoritative, including invalid dispositions. */

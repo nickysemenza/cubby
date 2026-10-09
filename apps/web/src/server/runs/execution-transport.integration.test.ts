@@ -1,14 +1,18 @@
 import { executionAuthorizationInput } from "@cubby/schemas/execution-authorization";
+import { researchWorkResolve } from "@cubby/schemas/research-tools";
+import { gatewayFetchThrough } from "@cubby/shared/ai/gateway-request";
 import { fromPartial } from "@total-typescript/shoehorn";
 import { eq } from "drizzle-orm";
 import { withTestDb } from "tooling/test-setup";
 import { afterEach, describe, expect, it, vi } from "vitest";
+import { z } from "zod";
 
 import { setCfEnv } from "~/server/cf-env";
 import { account } from "~/server/db/auth.schema";
-import { run } from "~/server/db/schema";
+import { run, aiUsage } from "~/server/db/schema";
 import { startMailDiscovery } from "~/server/purchase-import/gmail/discovery";
 import { productionMailTriage } from "~/server/purchase-import/gmail/triage-model";
+import { assessResearchProposal } from "~/server/purchase-import/research-support";
 import { getDb } from "~/server/repo/database-helpers";
 import { insertWithShortcode } from "~/server/repo/shortcode-utils";
 import { controlWorkflowRun } from "~/server/workflow-runs/control";
@@ -16,6 +20,7 @@ import type { WorkflowLauncher } from "~/server/workflow-runs/launcher";
 
 import { ensureRun } from "./ensure-run";
 import { issueExecutionAuthorization } from "./execution-authorization";
+import { paidResearchPreflight } from "./execution-transport";
 
 // A catalog cached by another integration file must not bypass this file's
 // held pricing socket and the cancellation boundary it exposes.
@@ -87,6 +92,16 @@ describe("mail routing at the paid transport boundary", () => {
     vi.stubGlobal("fetch", async () => {
       await beforePricing?.();
       return Response.json({
+        openai: {
+          id: "openai",
+          models: {
+            "gpt-6-sol": {
+              id: "gpt-6-sol",
+              cost: { input: 1, output: 2, reasoning: 3 },
+              limit: { context: 100, input: 100, output: 100 },
+            },
+          },
+        },
         "cloudflare-ai-gateway": {
           id: "cloudflare-ai-gateway",
           models: {
@@ -210,4 +225,116 @@ describe("mail routing at the paid transport boundary", () => {
     });
     expect(launched).toHaveLength(1);
   });
+  it.each(["active", "exhausted", "unapproved", "cancelled"] as const)(
+    "enforces the durable %s allowance before a paid researcher call",
+    async (condition) => {
+      const { runId } = await routing(condition);
+      const transmit = vi.fn(async () => Response.json({ output: [] }));
+      const send = gatewayFetchThrough({
+        provider: "openai",
+        beforePaidRequest: paidResearchPreflight(ctx.db, runId),
+        gateway: transmit,
+      });
+      const result = await send("https://ai-gateway.invalid/openai/responses", {
+        method: "POST",
+        body: JSON.stringify({ model: "gpt-6-sol", input: [] }),
+      }).then(
+        (response) => ({ ok: response.ok }),
+        (error: unknown) => ({
+          error: z.instanceof(Error).parse(error).message,
+        }),
+      );
+      const refused = {
+        error: expect.stringMatching(/authorization|allowance|executable/iu),
+      };
+      expect(result).toMatchObject(
+        condition === "active" ? { ok: true } : refused,
+      );
+      expect(transmit).toHaveBeenCalledTimes(condition === "active" ? 1 : 0);
+    },
+  );
+  it.each(["active", "unapproved"] as const)(
+    "admits independent source assessment through the bound paid allowance: %s",
+    async (condition) => {
+      const { runId } = await routing(condition);
+      const assessment = {
+        identityVerified: false,
+        acceptedFacts: [],
+        acceptedIdentifiers: [],
+        acceptedImages: [],
+        rejected: [],
+      };
+      const item = {
+        type: "function_call",
+        id: "synthetic-call",
+        call_id: "synthetic-call",
+        name: "respond",
+        arguments: JSON.stringify(assessment),
+      };
+      const response = {
+        id: "synthetic-assessment",
+        status: "completed",
+        output: [item],
+        usage: { input_tokens: 1, output_tokens: 1, total_tokens: 2 },
+      };
+      const transmit = vi.fn(
+        async () =>
+          new Response(
+            [
+              { type: "response.created", response: { id: response.id } },
+              { type: "response.output_item.added", output_index: 0, item },
+              { type: "response.output_item.done", output_index: 0, item },
+              { type: "response.completed", response },
+            ]
+              .map((event) => `data: ${JSON.stringify(event)}\n\n`)
+              .join(""),
+            { headers: { "content-type": "text/event-stream" } },
+          ),
+      );
+      setCfEnv(
+        fromPartial<Env>({ AI: { gateway: () => ({ run: transmit }) } }),
+      );
+      const pending = assessResearchProposal({
+        db: ctx.db,
+        runId,
+        context: {},
+        observations: [],
+        proposal: researchWorkResolve.parse({
+          workRef: crypto.randomUUID(),
+          status: "no_source_found",
+          identity: {
+            evidenceIds: [],
+            reasoning: "Synthetic retained-source gap.",
+          },
+          detail: "Synthetic source gap.",
+        }),
+      });
+      const result = await pending
+        .then((value) => ({ value }))
+        .catch((error: unknown) => ({
+          error: z.instanceof(Error).parse(error).message,
+        }));
+      const refused = {
+        error: expect.stringMatching(/explicit execution authorization/iu),
+      };
+      const expected = condition === "active" ? { value: assessment } : refused;
+      expect(result).toMatchObject(expected);
+      expect(transmit).toHaveBeenCalledTimes(condition === "active" ? 1 : 0);
+      const usage = await getDb(ctx.db)
+        .select({
+          transport: aiUsage.transport,
+          estimatedCost: aiUsage.estimatedCost,
+        })
+        .from(aiUsage)
+        .where(eq(aiUsage.runId, runId));
+      const paidUsage = [
+        { transport: "gateway", estimatedCost: expect.any(Number) },
+      ];
+      const expectedUsage =
+        condition === "active"
+          ? paidUsage
+          : [{ transport: "unknown", estimatedCost: null }];
+      expect(usage).toMatchObject(expectedUsage);
+    },
+  );
 });

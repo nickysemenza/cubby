@@ -48,6 +48,7 @@ import { browserCommandRecord } from "./browser-results";
 import { admitProductResearch } from "./product-research-run";
 import {
   authorizePurchaseAgent,
+  authorizeSyntheticRunInference,
   startScenarioHarness,
   waitFor,
   workerdDiagnostic,
@@ -275,6 +276,11 @@ describe("research continues with the Mac offline", () => {
     if (!admitted?.created)
       throw new Error("Synthetic Product admission unavailable");
     runId = admitted.run.id;
+    await authorizeSyntheticRunInference(
+      ctx,
+      admitted.run.id,
+      "synthetic-offline-mailbox",
+    );
     if (!admitted.run.dispatchEventId)
       throw new Error("Synthetic research dispatch unavailable");
     const admittedTargets = await database

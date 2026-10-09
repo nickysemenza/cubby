@@ -32,7 +32,8 @@ export async function chatGptInference(
 
 /**
  * Null only when the plan is not connected. A connected plan's failure throws:
- * the caller must never retry it as a paid API call.
+ * generic callers preserve it. Explicit budgeted research may route a definitive
+ * quota refusal through its admitted paid transport before consuming output.
  */
 export async function connectedChatGptInference(
   plan: ChatGptPlanRpc,

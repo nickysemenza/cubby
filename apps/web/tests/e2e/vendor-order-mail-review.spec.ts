@@ -8,11 +8,15 @@ import * as schema from "~/server/db/schema";
 import { getDb } from "~/server/repo/database-helpers";
 
 import {
+  createEvidenceHarnessContext,
   getFixtureDb,
   ensureMemberParty,
   fixtureUserId,
 } from "./fixtures-core";
-import { authorizePurchaseAgent } from "~/server/purchase-import/purchase-agent-workerd.fixtures";
+import {
+  authorizeSyntheticRunInference,
+  authorizePurchaseAgent,
+} from "~/server/purchase-import/purchase-agent-workerd.fixtures";
 import { admitVendorResearch } from "~/server/purchase-import/vendor-research-run";
 import { dispatchRunEvent } from "~/server/purchase-import/dispatch";
 import {
@@ -238,6 +242,17 @@ async function launch(page: Page, name: string) {
   const member = await ensureMemberParty(page, name);
   const vendor = await insertWithShortcode(getFixtureDb(), "vendor", { name });
   await authorizePurchaseAgent(getFixtureDb(), await fixtureUserId(page));
+  // The progress/retry journey starts with an explicitly approved, undispatched scope.
+  const admitted = await admitVendorResearch(
+    getFixtureDb(),
+    member.id,
+    vendor.shortcode,
+  );
+  await authorizeSyntheticRunInference(
+    await createEvidenceHarnessContext(page),
+    admitted.run.id,
+    `synthetic-mailbox-${member.id}`,
+  );
   await gotoAuthenticatedPage(
     page,
     `/vendors/${vendor.shortcode}`,
@@ -250,6 +265,7 @@ async function launch(page: Page, name: string) {
   const shortcode = page.url().split("/").at(-1);
   if (!shortcode) throw new Error("Research launch omitted its Run reference.");
   const run = await readRun(shortcode);
+  expect(run.id).toBe(admitted.run.id);
   expect(run.ledgerPartyId).toBe(member.id);
   expect(researchObjectivesRunInput.parse(run.input).objectives).toEqual([
     { kind: "vendor_purchases", vendorId: vendor.id, range: null },

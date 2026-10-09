@@ -1,3 +1,4 @@
+import { executionAuthorizationInput } from "@cubby/schemas/execution-authorization";
 import { userId } from "@cubby/schemas/identifiers";
 import type { PurchaseAgentEvent } from "@cubby/schemas/purchase-import";
 import { acceptedResearchFact } from "@cubby/schemas/research";
@@ -6,7 +7,9 @@ import { and, eq } from "drizzle-orm";
 import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 
+import { account } from "~/server/db/auth.schema";
 import {
+  orderMail,
   importSourceClaim,
   importSourceOrder,
   entityExternalId,
@@ -30,6 +33,15 @@ import {
   makeProductInput,
 } from "~/server/repo/repo.fixtures";
 import { insertWithShortcode } from "~/server/repo/shortcode-utils";
+import {
+  issueExecutionAuthorization,
+  revokeExecutionAuthorization,
+  reserveExecutionAuthorization,
+} from "~/server/runs/execution-authorization";
+import {
+  executionAuthorizationFromInput,
+  executionRequestForRun,
+} from "~/server/runs/execution-context";
 
 import { recordAcceptedFactEvidence } from "./fact-verification";
 import { startProductResearch } from "./product-research-run";
@@ -45,6 +57,284 @@ import { controlRun } from "./run-service";
 // unchanged failed attempts looping, changed retained evidence never revisited.
 describe("cloud Product research admission", () => {
   const ctx = withTestDb();
+  // Paid binding failures: missing/foreign originals or approvals, mailbox ambiguity,
+  // invalid latest approvals reviving an older bucket, and retries switching authority.
+  const authorityModes = [
+    "approved",
+    "missing",
+    "foreign",
+    "expired",
+    "revoked",
+    "ambiguous",
+    "no_original",
+    "foreign_original",
+    "legacy",
+    "inherited",
+  ] as const;
+  const prepareAuthority = async (mode: (typeof authorityModes)[number]) => {
+    const f = await productResearchFixture(ctx.db, ctx.actor, {
+      legacy: mode === "legacy",
+    });
+    const mailboxId = "synthetic-research-mailbox";
+    await getDb(ctx.db).insert(account).values({
+      id: crypto.randomUUID(),
+      accountId: mailboxId,
+      providerId: "google",
+      userId: ctx.actor.userId,
+      updatedAt: new Date(),
+    });
+    if (mode === "ambiguous")
+      await getDb(ctx.db).insert(account).values({
+        id: crypto.randomUUID(),
+        accountId: "synthetic-other-mailbox",
+        providerId: "google",
+        userId: ctx.actor.userId,
+        updatedAt: new Date(),
+      });
+    if (f.association)
+      await getDb(ctx.db)
+        .update(importSourceClaim)
+        .set({ externalKey: `gmail:${mailboxId}:synthetic-message` })
+        .where(eq(importSourceClaim.id, f.association.sourceClaimId));
+    if (mode !== "no_original")
+      await getDb(ctx.db)
+        .insert(orderMail)
+        .values({
+          ledgerPartyId: f.party.id,
+          mailboxId:
+            mode === "foreign_original"
+              ? "synthetic-foreign-mailbox"
+              : mailboxId,
+          messageId: "synthetic-message",
+          sender: "seller@example.test",
+          subject: "Synthetic receipt",
+          rawChecksum: "a".repeat(64),
+          content: {
+            snippet: null,
+            bodyText: "Synthetic ordered device",
+            bodyHtml: null,
+          },
+        });
+    const otherUserId = userId.parse("synthetic-foreign-approval-user");
+    const approvalActor =
+      mode === "foreign" ? { ...ctx.actor, userId: otherUserId } : ctx.actor;
+    let approvalMemberId = f.party.id;
+    if (mode === "foreign") {
+      await getDb(ctx.db).insert(user).values({
+        id: otherUserId,
+        name: "Synthetic foreign member",
+        email: "foreign@example.test",
+      });
+      const party = await insertWithShortcode(ctx.db, "ledgerParty", {
+        name: "Synthetic foreign owner",
+        kind: "member",
+        userId: otherUserId,
+      });
+      approvalMemberId = party.id;
+      await getDb(ctx.db).insert(account).values({
+        id: crypto.randomUUID(),
+        accountId: mailboxId,
+        providerId: "google",
+        userId: otherUserId,
+        updatedAt: new Date(),
+      });
+    }
+    const approval =
+      mode === "missing"
+        ? undefined
+        : await issueExecutionAuthorization(
+            ctx.db,
+            approvalActor,
+            executionAuthorizationInput.parse({
+              kind: "execution_authorization",
+              version: 1,
+              owner: {
+                userId: approvalActor.userId,
+                ledgerPartyId: approvalMemberId,
+              },
+              scope:
+                mode === "inherited"
+                  ? {
+                      kind: "pilot",
+                      mailboxId,
+                      discovery: "targeted",
+                      candidateLimit: 10,
+                      productLimit: 10,
+                    }
+                  : { kind: "backfill", mailboxId, discovery: "all_history" },
+              meteredBudget: {
+                period: "lifetime",
+                limitMicroUSD: 10_000_000,
+              },
+              expiresAt: new Date(Date.now() + 60_000).toISOString(),
+            }),
+          );
+    if (approval && mode === "inherited")
+      await getDb(ctx.db)
+        .update(run)
+        .set({
+          input: {
+            kind: "product_research",
+            instructionRevision: 1,
+            products: [],
+            executionAuthorization: approval,
+          },
+        })
+        .where(eq(run.id, f.parent.id));
+    const input = {
+      ledgerPartyId: f.party.id,
+      userId: ctx.actor.userId,
+      productIds: [f.item.entityId],
+      parentRunId: f.parent.id,
+    };
+    const queue = { send: async (_event: PurchaseAgentEvent) => {} };
+    return { f, mailboxId, approval, input, queue };
+  };
+  it.each([
+    "missing",
+    "foreign",
+    "ambiguous",
+    "no_original",
+    "foreign_original",
+    "legacy",
+  ] as const)(
+    "leaves unsupported retained-mail backfill unpaid: %s",
+    async (mode) => {
+      const { f, input, queue } = await prepareAuthority(mode);
+      const [started] = await startProductResearch(ctx.db, input, queue);
+      if (!started) throw new Error("Synthetic launch missing");
+      const [saved] = await getDb(ctx.db)
+        .select()
+        .from(run)
+        .where(eq(run.id, started.runId));
+      expect(executionAuthorizationFromInput(saved?.input)).toBeUndefined();
+      const [parent] = await getDb(ctx.db)
+        .select()
+        .from(run)
+        .where(eq(run.id, f.parent.id));
+      expect(executionAuthorizationFromInput(parent?.input)).toBeUndefined();
+    },
+  );
+  it.each(["expired", "revoked"] as const)(
+    "refuses invalid latest retained-mail backfill: %s",
+    async (mode) => {
+      const { approval, input, queue } = await prepareAuthority(mode);
+      if (!approval) throw new Error("Synthetic approval missing");
+      const [root] = await getDb(ctx.db)
+        .select()
+        .from(run)
+        .where(eq(run.id, approval.runId));
+      const snapshot = executionAuthorizationInput.parse(root?.input);
+      // A valid older approval cannot be revived by rejecting the latest root.
+      await issueExecutionAuthorization(ctx.db, ctx.actor, snapshot);
+      await getDb(ctx.db)
+        .update(run)
+        .set({ createdAt: new Date(Date.now() + 1000) })
+        .where(eq(run.id, approval.runId));
+      if (mode === "expired")
+        await getDb(ctx.db)
+          .update(run)
+          .set({ input: { ...snapshot, expiresAt: "2020-01-01T00:00:00Z" } })
+          .where(eq(run.id, approval.runId));
+      else await revokeExecutionAuthorization(ctx.db, ctx.actor, approval);
+      await expect(startProductResearch(ctx.db, input, queue)).rejects.toThrow(
+        mode,
+      );
+      expect(await getDb(ctx.db).select().from(runTarget)).toHaveLength(0);
+    },
+  );
+  it.each(["approved", "inherited"] as const)(
+    "keeps retained-mail approval and retry cap bucket stable: %s",
+    async (mode) => {
+      const { f, input, queue, approval, mailboxId } =
+        await prepareAuthority(mode);
+      const [parentBefore] = await getDb(ctx.db)
+        .select()
+        .from(run)
+        .where(eq(run.id, f.parent.id));
+      const [started] = await startProductResearch(ctx.db, input, queue);
+      if (!started) throw new Error("Synthetic launch missing");
+      const [saved] = await getDb(ctx.db)
+        .select()
+        .from(run)
+        .where(eq(run.id, started.runId));
+      expect(executionAuthorizationFromInput(saved?.input)).toEqual(approval);
+      const [parentAfter] = await getDb(ctx.db)
+        .select()
+        .from(run)
+        .where(eq(run.id, f.parent.id));
+      expect(parentAfter).toEqual(parentBefore);
+      const authority = await executionRequestForRun(ctx.db, started.runId);
+      if (!authority) throw new Error("Synthetic execution authority missing");
+      expect(
+        await reserveExecutionAuthorization(ctx.db, {
+          ...authority,
+          physicalAttemptId: crypto.randomUUID(),
+          reservationMicroUSD: 10_000_000,
+        }),
+      ).toEqual({ status: "reserved" });
+      await getDb(ctx.db)
+        .update(run)
+        .set({
+          status: "needs_review",
+          failureCode: "execution_limit",
+          endedAt: new Date(),
+        })
+        .where(eq(run.id, started.runId));
+      await getDb(ctx.db)
+        .update(runTarget)
+        .set({
+          state: "unresolved",
+          outcome: "researched_with_gaps",
+          completedAt: new Date(),
+        })
+        .where(eq(runTarget.runId, started.runId));
+      if (!saved) throw new Error("Synthetic saved launch missing");
+      // A later allowance must not move this retry off its exhausted bucket.
+      await issueExecutionAuthorization(
+        ctx.db,
+        ctx.actor,
+        executionAuthorizationInput.parse({
+          kind: "execution_authorization",
+          version: 1,
+          owner: { userId: ctx.actor.userId, ledgerPartyId: f.party.id },
+          scope: { kind: "backfill", mailboxId, discovery: "all_history" },
+          meteredBudget: { period: "lifetime", limitMicroUSD: 10_000_000 },
+          expiresAt: new Date(Date.now() + 60_000).toISOString(),
+        }),
+      );
+      const retry = await controlRun(ctx.db, ctx.actor, {
+        runPublicId: saved.shortcode,
+        action: "retry",
+      });
+      if (!("successorRunId" in retry) || !retry.successorRunId)
+        throw new Error("Synthetic retry missing");
+      const [successor] = await getDb(ctx.db)
+        .select()
+        .from(run)
+        .where(eq(run.id, retry.successorRunId));
+      expect(executionAuthorizationFromInput(successor?.input)).toEqual(
+        approval,
+      );
+      const retryAuthority = await executionRequestForRun(
+        ctx.db,
+        retry.successorRunId,
+      );
+      if (!retryAuthority) throw new Error("Synthetic retry authority missing");
+      expect(
+        await reserveExecutionAuthorization(ctx.db, {
+          ...retryAuthority,
+          physicalAttemptId: crypto.randomUUID(),
+          reservationMicroUSD: 1,
+        }),
+      ).toEqual({ status: "refused", reason: "budget_exhausted" });
+      const [original] = await getDb(ctx.db)
+        .select()
+        .from(run)
+        .where(eq(run.id, started.runId));
+      expect(original?.failureCode).toBe("execution_limit");
+    },
+  );
   it("revisits a changed declared Ingredient link without looping on unchanged reference facts", async () => {
     const f = await productResearchFixture(ctx.db, ctx.actor);
     const [food] = await getDb(ctx.db)

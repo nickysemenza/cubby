@@ -58,6 +58,7 @@ import { completedCapture } from "./browser.fixtures";
 import { startProductResearch } from "./product-research-run";
 import {
   authorizePurchaseAgent,
+  authorizeSyntheticRunInference,
   startScenarioHarness,
   waitFor,
   workerdDiagnostic,
@@ -225,6 +226,11 @@ describe("current research authorization and cancellation through the built Work
     if (!admitted)
       throw new Error("Synthetic Product research was not admitted");
     runId = admitted.runId;
+    await authorizeSyntheticRunInference(
+      ctx,
+      admitted.runId,
+      "synthetic-lifecycle-mailbox",
+    );
     const [saved] = await getDb(ctx.db)
       .select()
       .from(run)

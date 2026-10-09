@@ -1,9 +1,11 @@
+import { executionAuthorizationInput } from "@cubby/schemas/execution-authorization";
 import { parseEntityId } from "@cubby/schemas/identifiers";
 import type { PurchaseAgentEvent } from "@cubby/schemas/purchase-import";
 import { eq } from "drizzle-orm";
 import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 
+import { account } from "~/server/db/auth.schema";
 import { orderMail, mailboxMessage, run, runTarget } from "~/server/db/schema";
 import {
   databaseForTransaction,
@@ -12,6 +14,8 @@ import {
 } from "~/server/repo/database-helpers";
 import { insertWithShortcode } from "~/server/repo/shortcode-utils";
 import { ensureRun } from "~/server/runs/ensure-run";
+import { issueExecutionAuthorization } from "~/server/runs/execution-authorization";
+import { executionAuthorizationFromInput } from "~/server/runs/execution-context";
 
 import { startMailResearch, loadMailResearchSources } from "./research-run";
 
@@ -55,6 +59,58 @@ describe("mail research admission", () => {
     });
     return { party, mail };
   }
+  it.each(["owned", "foreign"] as const)(
+    "binds retained mail backfill only to an owned connected mailbox: %s",
+    async (ownership) => {
+      const { party, mail } = await source();
+      await getDb(ctx.db).insert(account).values({
+        id: crypto.randomUUID(),
+        accountId: mail.mailboxId,
+        providerId: "google",
+        userId: ctx.actor.userId,
+        updatedAt: new Date(),
+      });
+      const approval = await issueExecutionAuthorization(
+        ctx.db,
+        ctx.actor,
+        executionAuthorizationInput.parse({
+          kind: "execution_authorization",
+          version: 1,
+          owner: { userId: ctx.actor.userId, ledgerPartyId: party.id },
+          scope: {
+            kind: "backfill",
+            mailboxId: mail.mailboxId,
+            discovery: "all_history",
+          },
+          meteredBudget: { period: "lifetime", limitMicroUSD: 10_000_000 },
+          expiresAt: new Date(Date.now() + 60_000).toISOString(),
+        }),
+      );
+      if (ownership === "foreign")
+        await getDb(ctx.db)
+          .update(account)
+          .set({ accountId: "another-mailbox" })
+          .where(eq(account.userId, ctx.actor.userId));
+      const [admitted] = await startMailResearch(
+        ctx.db,
+        {
+          ledgerPartyId: party.id,
+          userId: ctx.actor.userId,
+          mailboxId: mail.mailboxId,
+          messageIds: [mail.id],
+        },
+        { send: async () => {} },
+      );
+      expect(admitted).toBeDefined();
+      const [saved] = await getDb(ctx.db)
+        .select()
+        .from(run)
+        .where(eq(run.id, parseEntityId("run", admitted!.runId)));
+      expect(executionAuthorizationFromInput(saved?.input)).toEqual(
+        ownership === "owned" ? approval : undefined,
+      );
+    },
+  );
   it("refuses a historical ownership block before admitting or dispatching mail", async () => {
     const { party, mail } = await source();
     await getDb(ctx.db)

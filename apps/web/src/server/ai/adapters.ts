@@ -16,6 +16,7 @@ import {
   type OpenAIResponsesOptions,
 } from "@earendil-works/pi-ai";
 
+import type { UnparsedError } from "~/lib/error-utils";
 import {
   type GatewayCallOptions,
   type GatewayMetadata,
@@ -70,15 +71,29 @@ export function piCallTarget(
 ): PiCallTarget {
   const { gatewayProvider } = getChatModelConfig(model);
   const models = createModels();
-  for (const provider of cubbyPiProviders((route, onUnbilledResponse) =>
-    gatewayFetch(route, {
+  let failedFetch: { error: UnparsedError } | undefined;
+  for (const provider of cubbyPiProviders((route, onUnbilledResponse) => {
+    let finalTransport: "gateway" | "chatgpt" | undefined;
+    const routedFetch = gatewayFetch(route, {
       ...call,
       onTransport: (transport) => {
+        finalTransport = transport;
         call.onTransport?.(transport);
-        if (transport === "chatgpt") onUnbilledResponse?.();
       },
-    }),
-  )) {
+    });
+    return async (input, init) => {
+      finalTransport = undefined;
+      failedFetch = undefined;
+      try {
+        const response = await routedFetch(input, init);
+        if (response.ok && finalTransport === "chatgpt") onUnbilledResponse?.();
+        return response;
+      } catch (error: UnparsedError) {
+        failedFetch = { error };
+        throw error;
+      }
+    };
+  })) {
     models.setProvider(provider);
   }
   const resolved = models.getModel(gatewayProvider, model);
@@ -89,7 +104,17 @@ export function piCallTarget(
   }
   return {
     model: resolved,
-    complete: (context, options) => models.complete(resolved, context, options),
+    complete: async (context, options) => {
+      const message = await models.complete(resolved, context, options);
+      // The provider SDK replaces fetch refusals with "Connection error".
+      // Preserve the final admission/provider cause after its retries finish.
+      if (
+        (message.stopReason === "error" || message.stopReason === "aborted") &&
+        failedFetch
+      )
+        throw failedFetch.error;
+      return message;
+    },
   };
 }
 

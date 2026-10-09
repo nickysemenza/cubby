@@ -51,6 +51,39 @@ describe("gatewayResponseInfo", () => {
   });
 });
 
+it("returns bounded error diagnostics without waiting for an open upstream body to end", async () => {
+  const body = new ReadableStream<Uint8Array>({
+    start(controller) {
+      controller.enqueue(new Uint8Array(4_096).fill(65));
+    },
+  });
+  const observed: string[] = [];
+  const response = new Response(body, { status: 502 });
+  const send = gatewayFetchThrough({
+    provider: "openai",
+    gateway: async () => response,
+    onErrorResponse: (failure) => observed.push(failure.body),
+  });
+  try {
+    const returned = await Promise.race([
+      send(`${gatewayBaseURL("openai")}/responses`, {
+        method: "POST",
+        body: "{}",
+      }),
+      new Promise<never>((_resolve, reject) =>
+        setTimeout(
+          () => reject(new Error("Diagnostics waited for upstream EOF")),
+          250,
+        ),
+      ),
+    ]);
+    expect(returned).toBe(response);
+    expect(observed).toEqual(["A".repeat(4_096)]);
+  } finally {
+    void response.body?.cancel();
+  }
+});
+
 // A required disconnected plan must not silently spend through chat APIs;
 // reservations must finish before every actual paid request, including peers
 // and retries. Response/transport observers do not authorize a transmission.
@@ -158,6 +191,237 @@ describe("gateway required subscription", () => {
     method: "POST",
     body: JSON.stringify({ model: "gpt-6-sol", input: [] }),
   };
+
+  // A disconnected research plan may spend only after explicit opt-in and
+  // durable admission; a rejected reservation must leave the gateway untouched.
+  it("admits budgeted fallback for a disconnected required subscription", async () => {
+    const events: string[] = [];
+    const send = gatewayFetchThrough({
+      provider: "openai",
+      subscriptionRequired: true,
+      subscriptionFallback: "budgeted",
+      chatGpt: async () => null,
+      beforePaidRequest: async () => {
+        events.push("admitted");
+      },
+      onTransport: (transport) => events.push(transport),
+      gateway: async () => {
+        events.push("transmitted");
+        return new Response("paid research");
+      },
+    });
+    expect(await (await send(url, init)).text()).toBe("paid research");
+    expect(events).toEqual(["admitted", "gateway", "transmitted"]);
+  });
+
+  // Only a complete HTTP quota refusal is safe to replay through a paid
+  // route. Generic 429s, auth/network/abort errors and emitted streams are not.
+  it("falls back on the exact subscription quota refusal and preserves raw diagnostics", async () => {
+    const body = JSON.stringify({
+      error: {
+        code: "subscription_sharing_usage_limit_exceeded",
+        message: "Synthetic Subscription Sharing usage limit.",
+      },
+    });
+    const events: string[] = [];
+    const failures: unknown[] = [];
+    const gateway = vi.fn(async () => {
+      events.push("transmitted");
+      return new Response("paid research");
+    });
+    const send = gatewayFetchThrough({
+      provider: "openai",
+      subscriptionRequired: true,
+      subscriptionFallback: "budgeted",
+      chatGpt: async (_body, options) => {
+        options?.onSelected?.();
+        return new Response(body, {
+          status: 429,
+          headers: { "retry-after": "60" },
+        });
+      },
+      beforePaidRequest: async () => {
+        events.push("admitted");
+      },
+      onTransport: (transport) => events.push(transport),
+      onErrorResponse: (failure) => failures.push(failure),
+      gateway,
+    });
+    expect(await (await send(url, init)).text()).toBe("paid research");
+    expect(events).toEqual(["chatgpt", "admitted", "gateway", "transmitted"]);
+    expect(failures).toEqual([
+      { status: 429, statusText: "", body, retryAfter: "60" },
+    ]);
+  });
+
+  it("separates a recovered quota diagnostic before a refused paid admission", async () => {
+    const diagnostic = {
+      error: { code: "subscription_sharing_usage_limit_exceeded" },
+    };
+    const events: string[] = [];
+    const routes = {
+      provider: "openai",
+      subscriptionRequired: true,
+      subscriptionFallback: "budgeted" as const,
+      chatGpt: async () => Response.json(diagnostic, { status: 429 }),
+      onErrorResponse: () => events.push("quota"),
+      onRecoveredErrorResponse: () => events.push("recovered"),
+      beforePaidRequest: async () => {
+        events.push("admission");
+        throw new Error("Synthetic budget exhausted");
+      },
+      gateway: async () => {
+        throw new Error("must not transmit");
+      },
+    };
+    await expect(gatewayFetchThrough(routes)(url, init)).rejects.toThrow(
+      "Synthetic budget exhausted",
+    );
+    expect(events).toEqual(["quota", "recovered", "admission"]);
+  });
+
+  it.each([16_384, 16_385])(
+    "admits complete quota JSON through the 16 KiB boundary: %s bytes",
+    async (bytes) => {
+      const raw = JSON.stringify({
+        error: { code: "subscription_sharing_usage_limit_exceeded" },
+      });
+      const body = raw + " ".repeat(bytes - raw.length);
+      const gateway = vi.fn(async () => new Response("paid research"));
+      const send = gatewayFetchThrough({
+        provider: "openai",
+        subscriptionRequired: true,
+        subscriptionFallback: "budgeted",
+        chatGpt: async () => new Response(body, { status: 429 }),
+        beforePaidRequest: async () => {},
+        gateway,
+      });
+      expect(await (await send(url, init)).text()).toBe(
+        bytes === 16_384 ? "paid research" : body,
+      );
+      expect(gateway).toHaveBeenCalledTimes(bytes === 16_384 ? 1 : 0);
+    },
+  );
+
+  it.each(["disabled", "missing-admission", "reservation-refused"] as const)(
+    "does not transmit quota fallback when %s",
+    async (mode) => {
+      const raw = JSON.stringify({
+        error: { code: "subscription_sharing_usage_limit_exceeded" },
+      });
+      const gateway = vi.fn(async () => new Response("must not transmit"));
+      const send = gatewayFetchThrough({
+        provider: "openai",
+        subscriptionRequired: true,
+        subscriptionFallback: mode === "disabled" ? undefined : "budgeted",
+        chatGpt: async () => new Response(raw, { status: 429 }),
+        beforePaidRequest:
+          mode === "missing-admission"
+            ? undefined
+            : async () => {
+                throw new Error("Synthetic durable allowance exhausted");
+              },
+        gateway,
+      });
+      const [outcome] = await Promise.allSettled([
+        send(url, init).then((response) => response.text()),
+      ]);
+      expect(outcome).toEqual(
+        mode === "reservation-refused"
+          ? {
+              status: "rejected",
+              reason: new Error("Synthetic durable allowance exhausted"),
+            }
+          : { status: "fulfilled", value: raw },
+      );
+      expect(gateway).not.toHaveBeenCalled();
+    },
+  );
+
+  it.each([
+    { status: 429, body: '{"error":{"code":"rate_limit_exceeded"}}' },
+    {
+      status: 401,
+      body: '{"error":{"code":"subscription_sharing_usage_limit_exceeded"}}',
+    },
+    { status: 429, body: "Subscription Sharing usage limit exceeded" },
+    {
+      status: 200,
+      body: 'data: {"type":"response.output_text.delta","delta":"useful output"}\n\ndata: {"type":"response.failed","response":{"error":{"code":"subscription_sharing_usage_limit_exceeded"}}}\n\n',
+    },
+  ])(
+    "preserves non-definitive refusals and partial streams ($status, $body)",
+    async ({ status, body }) => {
+      const gateway = vi.fn(async () => new Response("must not transmit"));
+      const admission = vi.fn(async () => {});
+      const response = new Response(body, { status });
+      const send = gatewayFetchThrough({
+        provider: "openai",
+        subscriptionRequired: true,
+        subscriptionFallback: "budgeted",
+        chatGpt: async () => response,
+        beforePaidRequest: admission,
+        gateway,
+      });
+      expect(await send(url, init)).toBe(response);
+      expect(await response.text()).toBe(body);
+      expect(gateway).not.toHaveBeenCalled();
+      expect(admission).not.toHaveBeenCalled();
+    },
+  );
+
+  it.each([
+    new Error("Synthetic network reset"),
+    new DOMException("Synthetic aborted request", "AbortError"),
+  ])(
+    "preserves a thrown subscription failure without paid replay: %s",
+    async (failure) => {
+      const gateway = vi.fn(async () => new Response("must not transmit"));
+      const send = gatewayFetchThrough({
+        provider: "openai",
+        subscriptionRequired: true,
+        subscriptionFallback: "budgeted",
+        chatGpt: async () => {
+          throw failure;
+        },
+        beforePaidRequest: async () => {},
+        gateway,
+      });
+      await expect(send(url, init)).rejects.toBe(failure);
+      expect(gateway).not.toHaveBeenCalled();
+    },
+  );
+
+  it("refuses disconnected fallback without admission even when subscriptionRequired is absent", async () => {
+    const gateway = vi.fn(async () => new Response("must not transmit"));
+    const send = gatewayFetchThrough({
+      provider: "openai",
+      subscriptionFallback: "budgeted",
+      chatGpt: async () => null,
+      gateway,
+    });
+    await expect(send(url, init)).rejects.toThrow(/subscription/i);
+    expect(gateway).not.toHaveBeenCalled();
+  });
+
+  it("does not transmit if fallback is aborted while durable admission completes", async () => {
+    const controller = new AbortController();
+    const gateway = vi.fn(async () => new Response("must not transmit"));
+    const send = gatewayFetchThrough({
+      provider: "openai",
+      subscriptionRequired: true,
+      subscriptionFallback: "budgeted",
+      chatGpt: async () => null,
+      beforePaidRequest: async () => {
+        controller.abort(new Error("Synthetic caller cancelled"));
+      },
+      gateway,
+    });
+    await expect(
+      send(url, { ...init, signal: controller.signal }),
+    ).rejects.toThrow("Synthetic caller cancelled");
+    expect(gateway).not.toHaveBeenCalled();
+  });
 
   it.each(["absent", "disconnected"] as const)(
     "refuses an %s required ChatGPT subscription without paid chat fallback",

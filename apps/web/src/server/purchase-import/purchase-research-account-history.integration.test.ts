@@ -52,6 +52,7 @@ import { browserCommandRecord } from "./browser-results";
 import { capturedHtml } from "./browser.fixtures";
 import {
   authorizePurchaseAgent,
+  authorizeSyntheticRunInference,
   startScenarioHarness,
   waitFor,
   workerdDiagnostic,
@@ -337,6 +338,11 @@ describe("research account-history clickable numeric row", () => {
       trigger: "manual",
     });
     activeRunId = admitted.id;
+    await authorizeSyntheticRunInference(
+      ctx,
+      admitted.id,
+      "synthetic-history-mailbox",
+    );
     const [scope] = await getDb(ctx.db)
       .select()
       .from(run)

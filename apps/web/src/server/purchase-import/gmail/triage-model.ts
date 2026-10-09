@@ -8,7 +8,7 @@ import {
 import { jevChoiceFitsContext, runJevChoice } from "~/server/ai/jev";
 import { runStructuredFeature } from "~/server/ai/run-feature";
 import type { Database } from "~/server/db";
-import { paidDecisionPreflight } from "~/server/runs/execution-transport";
+import { paidResearchPreflight } from "~/server/runs/execution-transport";
 
 import type { MailRelevance } from "./relevance";
 import type { MailTriage } from "./triage";
@@ -41,7 +41,7 @@ export const productionMailTriage =
         db,
         runId: runEntityId.parse(runId),
         operation: "mailbox-triage",
-        beforePaidRequest: paidDecisionPreflight(db, runEntityId.parse(runId)),
+        beforePaidRequest: paidResearchPreflight(db, runEntityId.parse(runId)),
       },
     });
     if (result.selectedIndex === null) return "uncertain";
@@ -59,4 +59,6 @@ export const productionMailRelevance =
       runId: runEntityId.parse(runId),
       operation: "mailbox-relevance",
       subscriptionRequired: true,
+      subscriptionFallback: "budgeted",
+      beforePaidRequest: paidResearchPreflight(db, runEntityId.parse(runId)),
     });

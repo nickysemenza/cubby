@@ -109,7 +109,7 @@ export interface AiChatRequest {
 /** What one call site supplies about *this* call. */
 export interface AiRunContext<T = unknown> extends Pick<
   GatewayCallOptions,
-  "subscriptionRequired" | "beforePaidRequest"
+  "subscriptionRequired" | "subscriptionFallback" | "beforePaidRequest"
 > {
   /**
    * Where the `AiUsage` row is written. Omit to run without usage accounting
@@ -258,6 +258,7 @@ export function planStructuredRun<T = unknown>(
         : { metadata, skipCache: true }),
       collectPayload: spec.collectPayload,
       subscriptionRequired: ctx.subscriptionRequired,
+      subscriptionFallback: ctx.subscriptionFallback,
       beforePaidRequest: ctx.beforePaidRequest,
     },
   };
@@ -700,6 +701,7 @@ export async function runStructuredFeature<T>(
     },
   ): Promise<T> => {
     let responseFailure: GatewayResponseFailure | undefined;
+    const recoveredFailures: GatewayResponseFailure[] = [];
     // Unknown until the transport selects itself before the request leaves.
     let transport: AiUsageTransport = "unknown";
     let response: AssistantMessage | undefined;
@@ -709,6 +711,10 @@ export async function runStructuredFeature<T>(
       ...plan.call,
       onErrorResponse: (failure) => {
         responseFailure = failure;
+      },
+      onRecoveredErrorResponse: (failure) => {
+        recoveredFailures.push(failure);
+        responseFailure = undefined;
       },
       onResponse: (info) => {
         gateway = info;
@@ -767,6 +773,7 @@ export async function runStructuredFeature<T>(
           feature: spec.feature,
           operation: ctx.operation,
           gatewayLogId: gateway?.gatewayLogId,
+          recoveredFailures,
         },
         responseFailure,
       );
