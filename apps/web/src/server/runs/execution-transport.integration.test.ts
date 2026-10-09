@@ -1,8 +1,10 @@
 import { executionAuthorizationInput } from "@cubby/schemas/execution-authorization";
+import { gatewayFetchThrough } from "@cubby/shared/ai/gateway-request";
 import { fromPartial } from "@total-typescript/shoehorn";
 import { eq } from "drizzle-orm";
 import { withTestDb } from "tooling/test-setup";
 import { afterEach, describe, expect, it, vi } from "vitest";
+import { z } from "zod";
 
 import { setCfEnv } from "~/server/cf-env";
 import { account } from "~/server/db/auth.schema";
@@ -16,6 +18,7 @@ import type { WorkflowLauncher } from "~/server/workflow-runs/launcher";
 
 import { ensureRun } from "./ensure-run";
 import { issueExecutionAuthorization } from "./execution-authorization";
+import { paidResearchPreflight } from "./execution-transport";
 
 // A catalog cached by another integration file must not bypass this file's
 // held pricing socket and the cancellation boundary it exposes.
@@ -87,6 +90,16 @@ describe("mail routing at the paid transport boundary", () => {
     vi.stubGlobal("fetch", async () => {
       await beforePricing?.();
       return Response.json({
+        openai: {
+          id: "openai",
+          models: {
+            "gpt-6-sol": {
+              id: "gpt-6-sol",
+              cost: { input: 1, output: 2, reasoning: 3 },
+              limit: { context: 100, input: 100, output: 100 },
+            },
+          },
+        },
         "cloudflare-ai-gateway": {
           id: "cloudflare-ai-gateway",
           models: {
@@ -210,4 +223,32 @@ describe("mail routing at the paid transport boundary", () => {
     });
     expect(launched).toHaveLength(1);
   });
+  it.each(["active", "exhausted", "unapproved", "cancelled"] as const)(
+    "enforces the durable %s allowance before a paid researcher call",
+    async (condition) => {
+      const { runId } = await routing(condition);
+      const transmit = vi.fn(async () => Response.json({ output: [] }));
+      const send = gatewayFetchThrough({
+        provider: "openai",
+        beforePaidRequest: paidResearchPreflight(ctx.db, runId),
+        gateway: transmit,
+      });
+      const result = await send("https://ai-gateway.invalid/openai/responses", {
+        method: "POST",
+        body: JSON.stringify({ model: "gpt-6-sol", input: [] }),
+      }).then(
+        (response) => ({ ok: response.ok }),
+        (error: unknown) => ({
+          error: z.instanceof(Error).parse(error).message,
+        }),
+      );
+      const refused = {
+        error: expect.stringMatching(/authorization|allowance|executable/iu),
+      };
+      expect(result).toMatchObject(
+        condition === "active" ? { ok: true } : refused,
+      );
+      expect(transmit).toHaveBeenCalledTimes(condition === "active" ? 1 : 0);
+    },
+  );
 });

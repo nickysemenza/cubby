@@ -30,6 +30,39 @@ const completedResponse = (headers: Record<string, string> = {}) =>
   );
 
 describe("createCubbyGatewayFetch", () => {
+  // The agent adapter must forward both opt-in and admission; otherwise a
+  // disconnected research Run waits despite its existing paid allowance.
+  it("forwards durable admission for budgeted disconnected research", async () => {
+    const events: string[] = [];
+    const send = createCubbyGatewayFetch("openai", {
+      gateway: () =>
+        gateway(async () => {
+          events.push("transmit");
+          return completedResponse();
+        }),
+      subscriptionRequired: true,
+      subscriptionFallback: "budgeted",
+      subscription: async () => null,
+      beforePaidRequest: async (request) => {
+        expect(await request.query()).toEqual({
+          model: "gpt-6-sol",
+          input: [],
+        });
+        events.push("admitted");
+      },
+      onTransport: (transport) => events.push(transport),
+    });
+    expect(
+      (
+        await send("https://ai-gateway.invalid/openai/responses", {
+          method: "POST",
+          body: JSON.stringify({ model: "gpt-6-sol", input: [] }),
+        })
+      ).ok,
+    ).toBe(true);
+    expect(events).toEqual(["admitted", "gateway", "transmit"]);
+  });
+
   it("stops subscription-required research when the plan is disconnected", async () => {
     const run = vi.fn(async () => completedResponse());
     const options = {
@@ -89,6 +122,49 @@ describe("createCubbyGatewayFetch", () => {
     subscribed = false;
     const paid = await models.complete(model, { messages: [] });
     expect(paid.usage.cost.total).toBeGreaterThan(0);
+  });
+
+  // Selecting the plan precedes quota refusal. Marking pi unbilled at that
+  // selection would incorrectly erase the final paid fallback's catalog cost.
+  it("keeps paid fallback costs after a selected subscription refuses quota", async () => {
+    const transports: string[] = [];
+    const admitted = vi.fn(async () => {});
+    const run = vi.fn(async () =>
+      completedResponse({ "cf-aig-log-id": "synthetic-paid-log" }),
+    );
+    const models = createModels();
+    for (const provider of cubbyAgentProviders({
+      gateway: () => gateway(run),
+      recorder: createContextRecorder(),
+      subscriptionRequired: true,
+      subscriptionFallback: "budgeted",
+      beforePaidRequest: admitted,
+      subscription: async (_body, options) => {
+        options?.onSelected?.();
+        return new Response(
+          JSON.stringify({
+            error: {
+              code: "subscription_sharing_usage_limit_exceeded",
+              message: "Synthetic plan allowance exhausted",
+            },
+          }),
+          { status: 429 },
+        );
+      },
+      onTransport: (transport) => transports.push(transport),
+    }))
+      models.setProvider(provider);
+    const model = models.getModel("openai", "gpt-6-sol");
+    if (!model) throw new Error("Missing test model");
+    const stream = models.stream(model, { messages: [] });
+    let terminalCost: number | undefined;
+    for await (const event of stream)
+      if (event.type === "done") terminalCost = event.message.usage.cost.total;
+    expect(terminalCost).toBeGreaterThan(0);
+    expect((await stream.result()).usage.cost.total).toBeGreaterThan(0);
+    expect(transports).toEqual(["chatgpt", "gateway"]);
+    expect(admitted).toHaveBeenCalledOnce();
+    expect(run).toHaveBeenCalledOnce();
   });
   // A gateway cache HIT is not billed, but it still rode the gateway and its
   // log id is the usage row's correlation handle.

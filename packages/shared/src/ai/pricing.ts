@@ -98,14 +98,15 @@ function decisionQuoteRates(cost: ModelCost, inputWindow: number) {
 }
 
 /**
- * A conservative reservation for the exact declared decision model. Every
- * question may bill a full input/context window independently; byte lengths
+ * A conservative reservation for the exact declared model and role. Each
+ * physical call may bill a full input/context window; byte lengths
  * and expected cache hits are not billing bounds. Explicit zero output rates
  * are valid for input-only decision models.
  */
-export function quoteAiDecisionRequest(
+function quoteAiRequest(
   pricing: AiModelPricing | null,
   request: { provider: string; model: string; questionCount: number },
+  role: "decision" | "chat",
 ) {
   if (
     !pricing ||
@@ -119,7 +120,7 @@ export function quoteAiDecisionRequest(
   const declaration = AI_MODELS[model];
   const price = pricing[model];
   if (
-    declaration.role !== "decision" ||
+    declaration.role !== role ||
     price?.provider !== request.provider ||
     !price.cost ||
     !price.limit
@@ -148,6 +149,22 @@ export function quoteAiDecisionRequest(
     outputTokens,
     maxCostUsd,
   };
+}
+
+/** A decision can bill each question independently at full catalog bounds. */
+export function quoteAiDecisionRequest(
+  pricing: AiModelPricing | null,
+  request: Parameters<typeof quoteAiRequest>[1],
+) {
+  return quoteAiRequest(pricing, request, "decision");
+}
+
+/** One physical chat call reserves the full priced input and output bounds. */
+export function quoteAiChatRequest(
+  pricing: AiModelPricing | null,
+  request: Omit<Parameters<typeof quoteAiRequest>[1], "questionCount">,
+) {
+  return quoteAiRequest(pricing, { ...request, questionCount: 1 }, "chat");
 }
 
 export interface AiTokenUsage {

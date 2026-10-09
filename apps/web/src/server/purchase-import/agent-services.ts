@@ -100,6 +100,14 @@ export function runServicesFor(
           await import("./research-retention-runtime");
         return processBoundResearchRetention(db, env, { runId, receiptId });
       }),
+    admitPaidInference: (request) =>
+      withDatabase(async (db) => {
+        const [{ paidResearchPreflight }, { runEntityId }] = await Promise.all([
+          import("~/server/runs/execution-transport"),
+          import("@cubby/schemas/identifiers"),
+        ]);
+        await paidResearchPreflight(db, runEntityId.parse(runId))(request);
+      }),
     researchCoordinatorStatus: () =>
       withDatabase(async (db) => {
         const { researchCoordinatorStatus } =

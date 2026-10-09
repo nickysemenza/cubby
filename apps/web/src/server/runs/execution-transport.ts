@@ -10,7 +10,10 @@ import {
 import { and, eq } from "drizzle-orm";
 import { z } from "zod";
 
-import { quoteAiDecisionRequestUsd } from "~/server/ai/pricing";
+import {
+  quoteAiDecisionRequestUsd,
+  quoteAiChatRequestUsd,
+} from "~/server/ai/pricing";
 import type { Database } from "~/server/db";
 import { run } from "~/server/db/schema";
 import { getDb, notDeleted } from "~/server/repo/database-helpers";
@@ -29,8 +32,8 @@ const decisionQuestions = z.object({
   questions: z.record(z.string(), z.unknown()),
 });
 
-/** Each physical decision attempt reserves its complete bill before transmission. */
-export function paidDecisionPreflight(
+/** Each physical research attempt reserves its complete bill before transmission. */
+export function paidResearchPreflight(
   db: Database,
   runId: RunId,
 ): NonNullable<GatewayFetchRoutes["beforePaidRequest"]> {
@@ -66,18 +69,28 @@ export function paidDecisionPreflight(
       )
         throw new Error("Execution authorization Run binding changed.");
     };
-    const model = supportedDecisionModelSchema.parse(
-      workersAiModel(request.endpoint),
-    );
-    const questions = decisionQuestions.parse(await request.query()).questions;
-    const quote = await quoteAiDecisionRequestUsd({
-      provider: providerFor(model),
-      model,
-      questionCount: Object.keys(questions).length,
-    });
+    const body = await request.query();
+    const quote =
+      request.endpoint === "responses"
+        ? await quoteAiChatRequestUsd({
+            provider: "openai",
+            model: z.string().parse(body.model),
+          })
+        : await quoteAiDecisionRequestUsd({
+            provider: providerFor(
+              supportedDecisionModelSchema.parse(
+                workersAiModel(request.endpoint),
+              ),
+            ),
+            model: supportedDecisionModelSchema.parse(
+              workersAiModel(request.endpoint),
+            ),
+            questionCount: Object.keys(decisionQuestions.parse(body).questions)
+              .length,
+          });
     if (!quote)
       throw new Error(
-        "Paid research allowance cannot price this decision's full billing bounds.",
+        "Paid research allowance cannot price this model call's full billing bounds.",
       );
     const reservationMicroUSD = Math.ceil(quote.maxCostUsd * 1_000_000);
     if (!Number.isSafeInteger(reservationMicroUSD))

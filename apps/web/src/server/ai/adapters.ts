@@ -70,15 +70,22 @@ export function piCallTarget(
 ): PiCallTarget {
   const { gatewayProvider } = getChatModelConfig(model);
   const models = createModels();
-  for (const provider of cubbyPiProviders((route, onUnbilledResponse) =>
-    gatewayFetch(route, {
+  for (const provider of cubbyPiProviders((route, onUnbilledResponse) => {
+    let finalTransport: "gateway" | "chatgpt" | undefined;
+    const routedFetch = gatewayFetch(route, {
       ...call,
       onTransport: (transport) => {
+        finalTransport = transport;
         call.onTransport?.(transport);
-        if (transport === "chatgpt") onUnbilledResponse?.();
       },
-    }),
-  )) {
+    });
+    return async (input, init) => {
+      finalTransport = undefined;
+      const response = await routedFetch(input, init);
+      if (response.ok && finalTransport === "chatgpt") onUnbilledResponse?.();
+      return response;
+    };
+  })) {
     models.setProvider(provider);
   }
   const resolved = models.getModel(gatewayProvider, model);

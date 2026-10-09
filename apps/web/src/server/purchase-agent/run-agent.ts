@@ -211,6 +211,12 @@ export class PurchaseImportRunAgent
       testModel: this.agentEnv.testModel,
       subscription: this.agentEnv.chatGptInference,
       subscriptionRequired: identity?.purpose !== "photo_inventory",
+      subscriptionFallback:
+        identity?.purpose === "photo_inventory" ? undefined : "budgeted",
+      beforePaidRequest:
+        identity?.purpose === "photo_inventory"
+          ? undefined
+          : (request) => this.services().admitPaidInference(request),
       beforeTransmission: () => {
         if (identity?.purpose === "photo_inventory") return;
         const stop = this.readState(STATE_KEYS.researchGenerationStop);

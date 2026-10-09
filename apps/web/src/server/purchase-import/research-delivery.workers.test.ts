@@ -37,6 +37,7 @@ describe("research observation delivery ordering", () => {
       const reads: boolean[] = [];
       const services = fromPartial<RunServices>({
         authorize: async () => {},
+        admitPaidInference: async () => {},
         researchResume: async () => ({ state: "ready", workRef }),
         researchAcknowledge: async () => {
           await new Promise((resolve) => setTimeout(resolve, 2_000));
@@ -93,6 +94,7 @@ describe("research observation delivery ordering", () => {
       let nextCalls = 0;
       const services = fromPartial<RunServices>({
         authorize: async () => {},
+        admitPaidInference: async () => {},
         researchResume: async () => ({
           state: "ready",
           workRef: crypto.randomUUID(),
@@ -208,6 +210,7 @@ describe("research observation delivery ordering", () => {
       let requests = 0;
       const services = fromPartial<RunServices>({
         authorize: async () => {},
+        admitPaidInference: async () => {},
         researchResume: async () => ({ state: "ready", workRef }),
         researchAcknowledge: async () => {},
         researchNext: async () => ({ state: "ready", workRef }),
@@ -291,6 +294,7 @@ describe("research observation delivery ordering", () => {
       let modelTurns = 0;
       const services = fromPartial<RunServices>({
         authorize: async () => {},
+        admitPaidInference: async () => {},
         recordAgentUsage: async () => {
           modelTurns++;
         },

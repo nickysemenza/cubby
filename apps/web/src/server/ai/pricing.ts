@@ -3,6 +3,7 @@ import {
   createAiModelPricing,
   estimateAiUsageCost,
   quoteAiDecisionRequest,
+  quoteAiChatRequest,
 } from "@cubby/shared/ai/pricing";
 import { createLogger } from "@cubby/worker-tracing";
 
@@ -45,4 +46,11 @@ export async function quoteAiDecisionRequestUsd(
   request: Parameters<typeof quoteAiDecisionRequest>[1],
 ) {
   return quoteAiDecisionRequest(await pricing.current(), request);
+}
+
+/** Unknown chat prices or complete billing bounds refuse paid transmission. */
+export async function quoteAiChatRequestUsd(
+  request: Parameters<typeof quoteAiChatRequest>[1],
+) {
+  return quoteAiChatRequest(await pricing.current(), request);
 }

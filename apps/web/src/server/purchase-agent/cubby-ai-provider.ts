@@ -60,7 +60,7 @@ const COORDINATOR_CALL = {
 
 interface AgentFetchOptions extends Pick<
   GatewayFetchRoutes,
-  "subscriptionRequired" | "beforePaidRequest"
+  "subscriptionRequired" | "subscriptionFallback" | "beforePaidRequest"
 > {
   gateway: () => AgentGateway;
   testModel?: TestModel;
@@ -90,6 +90,7 @@ export function createCubbyGatewayFetch(
     rewriteQuery: (body) => withSequentialToolCalls(route, body),
     chatGpt: options.subscription,
     subscriptionRequired: options.subscriptionRequired,
+    subscriptionFallback: options.subscriptionFallback,
     beforePaidRequest: options.beforePaidRequest,
     onTransport: options.onTransport,
     onResponse: options.onResponse,
@@ -134,18 +135,27 @@ export function createCubbyGatewayFetch(
 export function cubbyAgentProviders(
   input: AgentFetchOptions & { recorder: ContextRecorder },
 ): Provider[] {
-  return cubbyPiProviders((route, onUnbilledResponse) =>
-    withContextCapture(
-      createCubbyGatewayFetch(route, {
-        ...input,
-        onTransport: (transport) => {
-          input.onTransport?.(transport);
-          if (transport === "chatgpt") onUnbilledResponse?.();
-        },
-      }),
+  return cubbyPiProviders((route, onUnbilledResponse) => {
+    let finalTransport: AgentTransport | undefined;
+    const routedFetch = createCubbyGatewayFetch(route, {
+      ...input,
+      onTransport: (transport) => {
+        finalTransport = transport;
+        input.onTransport?.(transport);
+      },
+    });
+    return withContextCapture(
+      async (request, init) => {
+        finalTransport = undefined;
+        const response = await routedFetch(request, init);
+        // Selection can precede quota fallback. Only the final successful
+        // plan response is unbilled; HTTP refusals can trigger SDK retries.
+        if (response.ok && finalTransport === "chatgpt") onUnbilledResponse?.();
+        return response;
+      },
       { recorder: input.recorder, scope: () => CONTEXT_SCOPE },
-    ),
-  );
+    );
+  });
 }
 
 /** One agent instance per Durable Object, so one recorder scope suffices. */

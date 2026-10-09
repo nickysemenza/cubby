@@ -30,7 +30,10 @@ import {
 import { runAfterCommit } from "~/server/repo/database-helpers/core";
 import { insertWithShortcode } from "~/server/repo/shortcode-utils";
 import { actorSnapshot, assertRunParent } from "~/server/runs/ensure-run";
-import { inheritExecutionAuthorization } from "~/server/runs/execution-context";
+import {
+  bindRetainedMailBackfill,
+  inheritExecutionAuthorization,
+} from "~/server/runs/execution-context";
 
 import { dispatchRunEvent, recordRunDispatchAttempt } from "./dispatch";
 import { assertMailSourceIdentityReady } from "./mail-source-identity";
@@ -535,6 +538,25 @@ export async function admitMailResearch(
           cause: "source_discovered",
           attempt: 1,
         };
+    const inheritedInput = mailResearchRunInput.parse(
+      await inheritExecutionAuthorization(tx, sourceSet, {
+        parentRunId: continuation
+          ? continuation.parentRunId
+          : input.parentRunId,
+        predecessorRunId: continuation?.predecessorRunId,
+      }),
+    );
+    const authorizedInput = await bindRetainedMailBackfill(
+      tx,
+      inheritedInput,
+      { userId: actorId, ledgerPartyId: party.id },
+      fresh.map((source) => [
+        {
+          externalKey: `gmail:${source.mailboxId}:${source.messageId}`,
+          checksum: source.rawChecksum,
+        },
+      ]),
+    );
     const row = await insertWithShortcode(tx, "run", {
       id,
       ledgerPartyId: party.id,
@@ -549,13 +571,7 @@ export async function admitMailResearch(
       actorLedgerPartyShortcode: snapshot.ledgerPartyShortcode,
       actorLedgerPartyName: snapshot.ledgerPartyName,
       actorLedgerPartyKind: snapshot.ledgerPartyKind,
-      input:
-        (await inheritExecutionAuthorization(tx, sourceSet, {
-          parentRunId: continuation
-            ? continuation.parentRunId
-            : input.parentRunId,
-          predecessorRunId: continuation?.predecessorRunId,
-        })) ?? null,
+      input: authorizedInput,
       clientKey,
       startedAt: new Date(),
       dispatchEventId: crypto.randomUUID(),

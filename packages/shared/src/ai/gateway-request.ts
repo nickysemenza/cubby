@@ -197,6 +197,8 @@ export interface GatewayResponseObservers {
   onResponse?: (info: GatewayResponseInfo) => void;
   /** Preserve a failed HTTP response even if the provider SDK replaces it. */
   onErrorResponse?: (failure: GatewayResponseFailure) => void;
+  /** An observed refusal is being recovered; it is no longer the terminal failure. */
+  onRecoveredErrorResponse?: (failure: GatewayResponseFailure) => void;
 }
 
 /** Reports `response` to `observers` and returns it untouched. */
@@ -212,7 +214,7 @@ async function observeGatewayResponse(
   let remaining = 4_096;
   if (reader) {
     try {
-      while (remaining > 0) {
+      while (true) {
         const part = await reader.read();
         if (part.done) break;
         const bytes = part.value.subarray(0, remaining);
@@ -240,10 +242,47 @@ async function observeGatewayResponse(
 /** What carried a model request: the household ChatGPT plan or the gateway. */
 export type GatewayTransport = "gateway" | "chatgpt";
 
+const subscriptionQuotaRefusal = z.object({
+  error: z.object({
+    code: z.literal("subscription_sharing_usage_limit_exceeded"),
+  }),
+});
+
+/** Only an HTTP admission refusal is replayable; never inspect a live SSE stream. */
+async function isSubscriptionQuotaRefusal(
+  response: Response,
+): Promise<boolean> {
+  if (response.status !== 429) return false;
+  const reader = response.clone().body?.getReader();
+  if (!reader) return false;
+  const decoder = new TextDecoder();
+  let body = "";
+  let remaining = 16_384;
+  try {
+    while (true) {
+      const part = await reader.read();
+      if (part.done)
+        return subscriptionQuotaRefusal.safeParse(
+          JSON.parse(body + decoder.decode()),
+        ).success;
+      if (part.value.length > remaining) return false;
+      remaining -= part.value.length;
+      body += decoder.decode(part.value, { stream: true });
+    }
+  } catch {
+    // SILENT: an unreadable or unrecognized refusal stays on the original response.
+    return false;
+  } finally {
+    void reader.cancel().catch(() => {
+      // SILENT: clone cleanup cannot replace the original subscription diagnostics.
+    });
+  }
+}
+
 /**
  * The household's ChatGPT plan: null only when no plan is connected. A
- * connected plan calls `onSelected` before inference and throws on failure,
- * so the call is never retried through the paid gateway.
+ * connected plan calls `onSelected` before inference. Transport failures throw;
+ * HTTP refusals retain their upstream status and body for routing and diagnostics.
  */
 export type ChatGptInference = (
   body: GatewayQuery,
@@ -280,6 +319,8 @@ export interface GatewayFetchRoutes extends GatewayResponseObservers {
   chatGpt?: ChatGptInference;
   /** A disconnected subscription must wait instead of using a paid chat route. */
   subscriptionRequired?: boolean;
+  /** Explicit research fallback, allowed only with durable paid admission. */
+  subscriptionFallback?: "budgeted";
   /** Admission completes before each actual paid or synthetic-peer transmission. */
   beforePaidRequest?: (request: GatewayFetchRequest) => Promise<void>;
   requestTimeoutMs?: number;
@@ -293,12 +334,20 @@ export interface GatewayFetchRoutes extends GatewayResponseObservers {
 
 /**
  * A `fetch` any provider SDK can be handed: the test peer when the harness
- * supplies one, else the connected ChatGPT plan for Responses calls (whose
- * failure never falls back to the gateway), else the gateway. Every received
+ * supplies one, else the connected ChatGPT plan for Responses calls, else the
+ * gateway. Explicit budgeted fallback may replay a definitive quota refusal
+ * only after durable paid admission. Every received
  * response is reported to the observers and returned untouched, so streaming
  * bodies pass straight through to the SDK.
  */
 export function gatewayFetchThrough(routes: GatewayFetchRoutes): typeof fetch {
+  const budgetedFallback =
+    routes.subscriptionFallback === "budgeted" &&
+    routes.beforePaidRequest !== undefined;
+  const requireSubscription =
+    (routes.subscriptionRequired ||
+      routes.subscriptionFallback === "budgeted") &&
+    !budgetedFallback;
   return async (input, init) => {
     const endpoint = endpointFor(routes.provider, requestUrl(input));
     let decoded: Promise<GatewayQuery> | undefined;
@@ -332,13 +381,27 @@ export function gatewayFetchThrough(routes: GatewayFetchRoutes): typeof fetch {
         requestTimeoutMs: routes.requestTimeoutMs,
         onSelected: () => routes.onTransport?.("chatgpt"),
       });
-      if (subscription) return observe(subscription);
+      if (subscription) {
+        const recover =
+          budgetedFallback && (await isSubscriptionQuotaRefusal(subscription));
+        await observeGatewayResponse(subscription, {
+          ...routes,
+          onErrorResponse: (failure) => {
+            routes.onErrorResponse?.(failure);
+            if (recover) routes.onRecoveredErrorResponse?.(failure);
+          },
+        });
+        if (!recover) return subscription;
+        await subscription.body?.cancel();
+      }
     }
-    if (routes.subscriptionRequired)
+    if (requireSubscription)
       throw new Error(
         "Required ChatGPT subscription is unavailable; reconnect before retrying.",
       );
+    request.signal?.throwIfAborted();
     await routes.beforePaidRequest?.(request);
+    request.signal?.throwIfAborted();
     routes.onTransport?.("gateway");
     return observe(await routes.gateway(request));
   };

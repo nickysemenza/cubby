@@ -31,6 +31,7 @@ import type {
 import type { AiGatewayEnvironment } from "@cubby/shared/ai/gateway-metadata";
 import type {
   ChatGptInference,
+  GatewayFetchRequest,
   UniversalGateway,
 } from "@cubby/shared/ai/gateway-request";
 import type { JSONType, z } from "zod";
@@ -75,6 +76,8 @@ export interface RunServices {
    * starts; without one the host pauses the Run for authorization and throws.
    */
   authorize(): Promise<void>;
+  /** Commit the bound Run allowance before one physical paid transmission. */
+  admitPaidInference(request: GatewayFetchRequest): Promise<void>;
   /** The Run's public identity: its purpose and agent instance name. */
   loadScope(): Promise<{ purpose: AgentImportRunPurpose; agentId: string }>;
   canDispatchCoordinator(eventId: string): Promise<boolean>;

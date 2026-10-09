@@ -41,6 +41,7 @@ export function wrapAiGatewayError(
     feature: string;
     operation: string;
     gatewayLogId?: string | null;
+    recoveredFailures?: readonly GatewayResponseFailure[];
   },
   responseFailure?: GatewayResponseFailure,
 ): Error {
@@ -51,8 +52,11 @@ export function wrapAiGatewayError(
     ? new GatewayHttpError(responseFailure, error)
     : error;
   const reason = cause instanceof Error ? cause.message : String(cause);
+  const recovered = context.recoveredFailures?.length
+    ? `; recovered refusals: ${context.recoveredFailures.map((failure) => `${failure.status} ${failure.statusText}: ${failure.body}`).join("; ")}`
+    : "";
   return new AiGatewayRequestError(
-    `AI Gateway request failed (model: ${context.model}, provider: ${context.provider}, route: ${context.route}, feature: ${context.feature}, operation: ${context.operation}${log}): ${reason}`,
+    `AI Gateway request failed (model: ${context.model}, provider: ${context.provider}, route: ${context.route}, feature: ${context.feature}, operation: ${context.operation}${log}): ${reason}${recovered}`,
     cause,
   );
 }

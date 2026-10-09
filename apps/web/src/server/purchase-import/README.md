@@ -43,7 +43,7 @@ scope, and launch does not reissue approval or start global catch-up work. An
 already running discovery returns `running: 1` without another Workflow launch.
 Scheduled global discovery continues to visit all connected member mailboxes.
 
-Paid decision inference reserves the exact catalog model's full billing bound
+Paid research inference reserves the exact catalog model's full billing bound
 before each physical transmission, including retries. Unknown pricing or token
 bounds refuse the request. Reservations commit independently before network
 work; timeout, interruption and gateway-cache hits never refund them. Pilot
@@ -56,8 +56,25 @@ transmission, while an already admitted request can finish. A reservation
 committed before cancellation remains spent conservatively. Exhausted discovery stays in review;
 scheduled passes reuse its approval and wait for a new explicit lifetime grant
 or the next continuous calendar bucket rather than restarting the same failure.
-Production research chat requires the connected ChatGPT subscription;
-disconnect or selected-plan failure cannot switch to paid chat inference.
+Research prefers the connected ChatGPT subscription. Explicit budgeted fallback
+permits a disconnected plan or its exact HTTP 429
+`subscription_sharing_usage_limit_exceeded` refusal to use AI Gateway. Every
+physical paid call first reserves its complete catalog-priced input/output
+billing bounds against the Run's existing execution authorization. Unknown
+prices/bounds, missing authority, cancellation or insufficient allowance prevent
+transmission; budget exhaustion pauses the scope. A reservation is conservative
+and remains consumed even if cancellation or provider failure follows admission.
+Actual usage and reservations are distinct. A retry cannot reset the bucket.
+Other HTTP errors, network/abort errors and partial streaming failures do not
+fall back. Interactive calls without this explicit policy retain their defaults.
+New mail and Product research Runs without inherited authority can bind the
+existing backfill approval only when every target has checksum-matching retained
+original mail in the member's single connected Google mailbox. Selected Product
+sources constrain that check. Missing, foreign, ambiguous or legacy-only sources
+remain unpaid. The latest approval is authoritative even if revoked or expired;
+inherited authority always wins, keeping retry buckets stable. Settled Run inputs
+are never rewritten. Both launch paths use the same evidence/ownership check.
+No caps, provider credentials or billing arrangements change.
 
 Gmail discovery initializes a new-mail history baseline even without historical
 approval. Targeted approval permits only host-derived known-Vendor and unmatched
