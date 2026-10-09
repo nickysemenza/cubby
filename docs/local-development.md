@@ -26,7 +26,8 @@ selected origin, database, profile, process identity, readiness, startup phase
 timings, and inspection URLs. Use that file or `dev:status` to discover the
 running origin; ports can differ between checkouts. `/__dev/health` reports
 runtime identity, while `/__dev/ready` checks database connectivity, committed
-migrations, the completed core fixture marker, and the USDA/UPC peers.
+migrations, the completed core fixture marker, and that the synthetic USDA
+release has loaded (`usdaReady`).
 `/__dev/login` signs in the synthetic local
 account through real Better Auth on loopback.
 Debug Swift apps launched with `--cubby-dev-server <origin>` use
@@ -103,8 +104,9 @@ created by development tooling and has no production migration.
 
 ## Profiles and inspection
 
-The default `offline` profile uses actual USDA and UPC workers with a small
-synthetic D1 index and R2 objects. Images use local R2, and auth uses local
+The default `offline` profile reads USDA from the real release Durable Object,
+which the dev Worker seeds with the synthetic release `2000-01`; UPC upstream
+lookups are disabled. Images use local R2, and auth uses local
 PostgreSQL. External provider operations return unavailable diagnostics.
 Purchase-agent starts fail immediately with `dispatch_failed` before an offline
 producer can enqueue work. Unexpected queue deliveries are retried and throw
