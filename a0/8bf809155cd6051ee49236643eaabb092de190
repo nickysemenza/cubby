@@ -1,0 +1,21 @@
+docs/adr/0008-usda-release-durable-object.md
+  s_baac6c838b330d::t_5df4050e175772 31-34
+docs/local-development.md
+  s_baac6c838b330d::t_d224b04e1400c9 29-30,107-109
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "a08bf809155cd6051ee49236643eaabb092de190",
+  "prompts": {},
+  "sessions": {
+    "s_baac6c838b330d": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "4e072615-6da5-4add-8945-be01765ee61f",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "nicky <nicky@cloudflare.com>"
+    }
+  }
+}
