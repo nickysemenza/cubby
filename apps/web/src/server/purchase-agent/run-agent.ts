@@ -210,15 +210,18 @@ export class PurchaseImportRunAgent
       recorder: this.recorder,
       testModel: this.agentEnv.testModel,
       subscription: this.agentEnv.chatGptInference,
-      subscriptionRequired: identity?.purpose !== "photo_inventory",
-      subscriptionFallback:
-        identity?.purpose === "photo_inventory" ? undefined : "budgeted",
-      beforePaidRequest:
-        identity?.purpose === "photo_inventory"
-          ? undefined
-          : (request) => this.services().admitPaidInference(request),
+      transportPolicy: () => {
+        const photo = this.identity()?.purpose === "photo_inventory";
+        return {
+          subscriptionRequired: !photo,
+          subscriptionFallback: photo ? undefined : "budgeted",
+          beforePaidRequest: photo
+            ? undefined
+            : (request) => this.services().admitPaidInference(request),
+        };
+      },
       beforeTransmission: () => {
-        if (identity?.purpose === "photo_inventory") return;
+        if (this.identity()?.purpose === "photo_inventory") return;
         const stop = this.readState(STATE_KEYS.researchGenerationStop);
         if (!stop) return;
         return Response.json(

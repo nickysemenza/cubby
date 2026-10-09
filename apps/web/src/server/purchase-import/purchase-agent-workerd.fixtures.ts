@@ -1,6 +1,7 @@
-import { runEntityId } from "@cubby/schemas/identifiers";
+import { executionAuthorizationInput } from "@cubby/schemas/execution-authorization";
+import { type LedgerPartyId, runEntityId } from "@cubby/schemas/identifiers";
 import { sleep } from "@cubby/shared/retry";
-import { eq } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
 import {
   type ScriptedScenario,
   scenarioControls,
@@ -9,6 +10,7 @@ import type { TestDbContext } from "tooling/test-setup";
 import { openWorkerdRuntime } from "tooling/workerd-runtime";
 import type { TestHarness } from "wrangler";
 
+import { account } from "~/server/db/auth.schema";
 import {
   aiUsage,
   oauthRefreshToken,
@@ -20,6 +22,8 @@ import {
   session,
 } from "~/server/db/schema";
 import { getDb } from "~/server/repo/database-helpers";
+import { issueExecutionAuthorization } from "~/server/runs/execution-authorization";
+import { executionAuthorizationFromInput } from "~/server/runs/execution-context";
 
 import {
   ensurePurchaseAgentOAuthClient,
@@ -40,6 +44,80 @@ export async function waitFor(
     await sleep(25);
   }
   throw new Error(message);
+}
+
+/** Scripted inference uses real durable admission and synthetic funds. */
+export async function authorizeSyntheticBackfill(
+  context: Pick<TestDbContext, "db" | "actor">,
+  memberId: LedgerPartyId,
+  mailboxId: string,
+) {
+  const database = getDb(context.db);
+  const [connected] = await database
+    .select({ id: account.id })
+    .from(account)
+    .where(
+      and(
+        eq(account.userId, context.actor.userId),
+        eq(account.providerId, "google"),
+        eq(account.accountId, mailboxId),
+      ),
+    );
+  if (!connected)
+    await database.insert(account).values({
+      id: crypto.randomUUID(),
+      accountId: mailboxId,
+      providerId: "google",
+      userId: context.actor.userId,
+      updatedAt: new Date(),
+    });
+  return issueExecutionAuthorization(
+    context.db,
+    context.actor,
+    executionAuthorizationInput.parse({
+      kind: "execution_authorization",
+      version: 1,
+      owner: { userId: context.actor.userId, ledgerPartyId: memberId },
+      scope: { kind: "backfill", mailboxId, discovery: "all_history" },
+      meteredBudget: { period: "lifetime", limitMicroUSD: 10_000_000 },
+      expiresAt: new Date(Date.now() + 60 * 60_000).toISOString(),
+    }),
+  );
+}
+
+/** Explicit fixture approval is attached before a retained event can execute. */
+export async function authorizeSyntheticRunInference(
+  context: Pick<TestDbContext, "db" | "actor">,
+  rawRunId: string,
+  mailboxId: string,
+) {
+  const id = runEntityId.parse(rawRunId);
+  const database = getDb(context.db);
+  const [scope] = await database
+    .select()
+    .from(runTable)
+    .where(eq(runTable.id, id));
+  if (!scope?.ledgerPartyId || scope.actorUserId !== context.actor.userId)
+    throw new Error("Synthetic inference Run has no matching member owner.");
+  if (
+    scope.status !== "running" ||
+    scope.retiredAt ||
+    scope.coordinatorStartedAt ||
+    executionAuthorizationFromInput(scope.input)
+  )
+    throw new Error(
+      "Synthetic inference approval requires an unstarted Run without existing authority.",
+    );
+  const approval = await authorizeSyntheticBackfill(
+    context,
+    scope.ledgerPartyId,
+    mailboxId,
+  );
+  await database
+    .update(runTable)
+    .set({ input: { ...scope.input, executionAuthorization: approval } })
+    .where(eq(runTable.id, id));
+  return approval;
 }
 
 /** The member's active Purchase Agent grant, which MCP delegation requires. */

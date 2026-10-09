@@ -4,7 +4,10 @@ import { and, eq } from "drizzle-orm";
 import * as schema from "~/server/db/schema";
 import { completedCapture } from "~/server/purchase-import/browser.fixtures";
 import { startMailResearch } from "~/server/purchase-import/research-run";
-import { authorizePurchaseAgent } from "~/server/purchase-import/purchase-agent-workerd.fixtures";
+import {
+  authorizeSyntheticBackfill,
+  authorizePurchaseAgent,
+} from "~/server/purchase-import/purchase-agent-workerd.fixtures";
 import {
   assetKey,
   assetURL,
@@ -24,6 +27,7 @@ import { insertWithShortcode } from "~/server/repo/shortcode-utils";
 
 import { from } from "../../tooling/purchase-agent-script";
 import {
+  createEvidenceHarnessContext,
   ensureMemberParty,
   fixtureUserId,
   getFixtureDb,
@@ -93,7 +97,7 @@ test("imports an original, automatically verifies the exact Product with visible
       .values({
         ledgerPartyId: member.id,
         vendorId: seller.id,
-        mailboxId: "synthetic-visible-proof-mailbox",
+        mailboxId: `synthetic-mailbox-${member.id}`,
         messageId: crypto.randomUUID(),
         threadId: `synthetic-thread-${crypto.randomUUID()}`,
         sender: "orders@maker.example.test",
@@ -131,6 +135,11 @@ test("imports an original, automatically verifies the exact Product with visible
     size: png.byteLength,
   });
   await authorizePurchaseAgent(db, userId);
+  await authorizeSyntheticBackfill(
+    await createEvidenceHarnessContext(page),
+    member.id,
+    confirmation.mailboxId,
+  );
   await page.route(`${new URL(assetURL).origin}/**`, async (route) => {
     const path = new URL(route.request().url()).pathname;
     const response = await page.request.get(

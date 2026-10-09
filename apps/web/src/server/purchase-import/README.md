@@ -67,6 +67,9 @@ and remains consumed even if cancellation or provider failure follows admission.
 Actual usage and reservations are distinct. A retry cannot reset the bucket.
 Other HTTP errors, network/abort errors and partial streaming failures do not
 fall back. Interactive calls without this explicit policy retain their defaults.
+Pi can open before dispatch binds its Run, so the coordinator resolves transport
+policy from its persisted identity at each request. Photo inventory keeps its
+existing transport policy; an unbound coordinator cannot bypass research admission.
 New mail and Product research Runs without inherited authority can bind the
 existing backfill approval only when every target has checksum-matching retained
 original mail in the member's single connected Google mailbox. Selected Product
@@ -269,7 +272,7 @@ and deployment/readback order are owned by the
    exhausted attempts and unrelated-source retirement do not upgrade another
    task. Schema exceptions and transport failures do not trigger this policy;
    escalation preserves the existing attempt/generation limits and
-   subscription-only transport without paid fallback.
+   subscription preference and the same approved per-call paid allowance.
    A normal final answer yields to the host's next-work decision before pi
    settles the submission. Runnable work continues within that same durable
    submission; done, waiting and stopped dispositions settle normally. Queued

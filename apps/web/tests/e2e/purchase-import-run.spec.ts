@@ -1,4 +1,3 @@
-import { executionAuthorizationInput } from "@cubby/schemas/execution-authorization";
 import { orderMailImportOut } from "@cubby/schemas/order-mail-review";
 import { sha256Hex } from "@cubby/shared/sha256";
 import superjson from "superjson";
@@ -6,9 +5,8 @@ import { z } from "zod";
 import { eq, inArray } from "drizzle-orm";
 
 import * as schema from "~/server/db/schema";
-import { account } from "~/server/db/auth.schema";
-import { issueExecutionAuthorization } from "~/server/runs/execution-authorization";
 import {
+  authorizeSyntheticBackfill,
   authorizePurchaseAgent,
   workerdDiagnostic,
 } from "~/server/purchase-import/purchase-agent-workerd.fixtures";
@@ -121,49 +119,16 @@ function controls(purchaseAgent: ScenarioControls | undefined) {
   return purchaseAgent;
 }
 
-async function authorizeSyntheticBackfill(
+async function authorizeSeed(
   context: Awaited<ReturnType<typeof createEvidenceHarnessContext>>,
   seed: Awaited<ReturnType<typeof seedUnimportedOrderMail>>,
 ) {
-  const database = getDb(context.db);
-  const [source] = await database
+  const [source] = await getDb(context.db)
     .select()
     .from(schema.orderMail)
     .where(eq(schema.orderMail.id, seed.events[0]!.orderMailId));
   if (!source) throw new Error("Synthetic original is missing");
-  const connected = await database
-    .select()
-    .from(account)
-    .where(eq(account.userId, context.actor.userId));
-  if (
-    !connected.some(
-      (item) =>
-        item.providerId === "google" && item.accountId === source.mailboxId,
-    )
-  )
-    await database.insert(account).values({
-      id: crypto.randomUUID(),
-      accountId: source.mailboxId,
-      providerId: "google",
-      userId: context.actor.userId,
-      updatedAt: new Date(),
-    });
-  await issueExecutionAuthorization(
-    context.db,
-    context.actor,
-    executionAuthorizationInput.parse({
-      kind: "execution_authorization",
-      version: 1,
-      owner: { userId: context.actor.userId, ledgerPartyId: seed.member.id },
-      scope: {
-        kind: "backfill",
-        mailboxId: source.mailboxId,
-        discovery: "all_history",
-      },
-      meteredBudget: { period: "lifetime", limitMicroUSD: 10_000_000 },
-      expiresAt: new Date(Date.now() + 60 * 60_000).toISOString(),
-    }),
-  );
+  return authorizeSyntheticBackfill(context, seed.member.id, source.mailboxId);
 }
 
 async function vendorPurchases(
@@ -237,10 +202,7 @@ test("imports saved order mail from the generic Vendor report and follows the li
     `Synthetic import vendor ${Date.now()}`,
   );
   await authorizePurchaseAgent(getFixtureDb(), await fixtureUserId(page));
-  await authorizeSyntheticBackfill(
-    await createEvidenceHarnessContext(page),
-    seed,
-  );
+  await authorizeSeed(await createEvidenceHarnessContext(page), seed);
   await agent.configure({
     steps: researchOrder("mail", seed, "SYN-CONFIRM-1", "original-read"),
     purposeSteps: { product_enrichment: productGapSteps },
@@ -377,10 +339,7 @@ test("admits several retained confirmations as separate tasks in the same resear
   const [first, second] = seed.events;
   if (!first || !second) throw new Error("Missing seeded confirmations");
   await authorizePurchaseAgent(getFixtureDb(), await fixtureUserId(page));
-  await authorizeSyntheticBackfill(
-    await createEvidenceHarnessContext(page),
-    seed,
-  );
+  await authorizeSeed(await createEvidenceHarnessContext(page), seed);
   await agent.configure({
     steps: researchOrder("first", seed, first.orderId).slice(0, 2),
     sourceSteps: [

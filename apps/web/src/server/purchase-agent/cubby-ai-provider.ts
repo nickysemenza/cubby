@@ -62,6 +62,11 @@ interface AgentFetchOptions extends Pick<
   GatewayFetchRoutes,
   "subscriptionRequired" | "subscriptionFallback" | "beforePaidRequest"
 > {
+  /** Pi may open before dispatch binds a Run; resolve its policy per request. */
+  transportPolicy?: () => Pick<
+    GatewayFetchRoutes,
+    "subscriptionRequired" | "subscriptionFallback" | "beforePaidRequest"
+  >;
   gateway: () => AgentGateway;
   testModel?: TestModel;
   subscription?: ChatGptInference;
@@ -85,45 +90,47 @@ export function createCubbyGatewayFetch(
   options: AgentFetchOptions,
 ): typeof fetch {
   const { testModel } = options;
-  const routedFetch = gatewayFetchThrough({
-    provider: route,
-    rewriteQuery: (body) => withSequentialToolCalls(route, body),
-    chatGpt: options.subscription,
-    subscriptionRequired: options.subscriptionRequired,
-    subscriptionFallback: options.subscriptionFallback,
-    beforePaidRequest: options.beforePaidRequest,
-    onTransport: options.onTransport,
-    onResponse: options.onResponse,
-    testPeer: () =>
-      testModel &&
-      (async (request) => {
-        // A live test peer forwards these labels under its own environment.
-        const headers = new Headers(request.init?.headers);
-        headers.set("cf-aig-metadata", JSON.stringify(COORDINATOR_CALL));
-        return testModel.fetch(
-          new Request(requestUrl(request.input), {
-            method: request.init?.method ?? "POST",
-            headers,
-            body: JSON.stringify(await request.query()),
-          }),
-        );
-      }),
-    gateway: (request) => {
-      const gateway = options.gateway();
-      return runUniversalGateway(gateway, route, request, {
-        id: gateway.id,
-        skipCache: true,
-        collectPayload: false,
-        metadata: aiGatewayMetadataSchema.parse({
-          ...COORDINATOR_CALL,
-          environment: gateway.environment,
+  const routedFetch = () =>
+    gatewayFetchThrough({
+      provider: route,
+      rewriteQuery: (body) => withSequentialToolCalls(route, body),
+      chatGpt: options.subscription,
+      subscriptionRequired: options.subscriptionRequired,
+      subscriptionFallback: options.subscriptionFallback,
+      beforePaidRequest: options.beforePaidRequest,
+      ...options.transportPolicy?.(),
+      onTransport: options.onTransport,
+      onResponse: options.onResponse,
+      testPeer: () =>
+        testModel &&
+        (async (request) => {
+          // A live test peer forwards these labels under its own environment.
+          const headers = new Headers(request.init?.headers);
+          headers.set("cf-aig-metadata", JSON.stringify(COORDINATOR_CALL));
+          return testModel.fetch(
+            new Request(requestUrl(request.input), {
+              method: request.init?.method ?? "POST",
+              headers,
+              body: JSON.stringify(await request.query()),
+            }),
+          );
         }),
-      });
-    },
-  });
+      gateway: (request) => {
+        const gateway = options.gateway();
+        return runUniversalGateway(gateway, route, request, {
+          id: gateway.id,
+          skipCache: true,
+          collectPayload: false,
+          metadata: aiGatewayMetadataSchema.parse({
+            ...COORDINATOR_CALL,
+            environment: gateway.environment,
+          }),
+        });
+      },
+    });
   return (input, init) => {
     const rejection = options.beforeTransmission?.();
-    return rejection ? Promise.resolve(rejection) : routedFetch(input, init);
+    return rejection ? Promise.resolve(rejection) : routedFetch()(input, init);
   };
 }
 
