@@ -12,7 +12,10 @@ import {
 } from "~/server/repo/repo.fixtures";
 import type { UsdaReleaseRpc } from "~/server/usda-release/rpc";
 
-import { advanceProductUsdaLinks } from "./usda-link-advance.service";
+import {
+  advanceLinksWhenReady,
+  advanceProductUsdaLinks,
+} from "./usda-link-advance.service";
 
 // A release where 9900101 was superseded by 9900105, 9900200 is current, and
 // 9900300 is not in the release at all.
@@ -81,5 +84,19 @@ describe("advanceProductUsdaLinks", () => {
     expect(
       await advanceProductUsdaLinks(ctx.db, new USDAClient(release)),
     ).toEqual([]);
+  });
+
+  it("reports a failed release load instead of skipping it", async () => {
+    const failed = fromPartial<UsdaReleaseRpc>({
+      status: async () =>
+        fromPartial<Awaited<ReturnType<UsdaReleaseRpc["status"]>>>({
+          release: "2000-01",
+          state: "failed",
+          error: "shard 3: unexpected end of gzip stream",
+        }),
+    });
+    await expect(advanceLinksWhenReady(ctx.db, failed)).rejects.toThrowError(
+      "USDA release 2000-01 failed to load: shard 3: unexpected end of gzip stream",
+    );
   });
 });

@@ -109,7 +109,8 @@ loads itself into its Durable Object:
 4. Open `/api/debug/usda-release` signed in (or with `x-api-key`): the first
    request starts the load and every request reports shard progress, size,
    or the raw failure. `?probe=1` on a ready release times a search and a
-   batch lookup. The daily cron also starts the load.
+   batch lookup. The daily cron also starts the load, and reports a failed
+   load to Sentry each day until it is resumed.
 5. Once ready, Product links to superseded food revisions advance to the
    current revision on the next daily cron, or at once with a `POST` to the
    same route; a `POST` on a failed load resumes it instead.
