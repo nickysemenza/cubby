@@ -54,9 +54,9 @@ Account ID: `9f10f078d35d86c78dedece2300a6b88`.
   release, loaded from R2 bucket `cubby-usda-releases` (binding
   `USDA_RELEASES`) and selected by the plaintext variable
   `USDA_ACTIVE_RELEASE` ([ADR 0008](adr/0008-usda-release-durable-object.md)).
-- Workflows `cubby-search-index-repair`, `cubby-vendor-mail-search`, and
-  `cubby-mail-discovery`. The two Gmail Workflows each execute one Run
-  attempt (see [Workflow-backed Runs](#workflow-backed-runs)).
+- Workflows `cubby-search-index-repair` and `cubby-mail-discovery`.
+  Gmail discovery executes one Run attempt per Workflow instance
+  (see [Workflow-backed Runs](#workflow-backed-runs)).
 - Queues `cubby-background`, `cubby-telemetry`, and `cubby-purchase-agent`,
   each produced and consumed by this Worker, with settings in the Wrangler
   file.
