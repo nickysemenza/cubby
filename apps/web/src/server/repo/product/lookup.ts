@@ -357,3 +357,16 @@ export const loadProductInventoryEntries = async (
   }
   return out;
 };
+
+/** Every live Product with an explicit USDA link, for advancing superseded revisions. */
+export async function listProductFdcLinks(
+  db: Database,
+): Promise<Array<{ id: ProductId; fdcId: number }>> {
+  const rows = await getDb(db)
+    .select({ id: product.id, fdcId: product.fdc_id })
+    .from(product)
+    .where(and(sql`${product.fdc_id} IS NOT NULL`, notDeleted(product)));
+  return rows.flatMap((row) =>
+    row.fdcId === null ? [] : [{ id: row.id, fdcId: row.fdcId }],
+  );
+}

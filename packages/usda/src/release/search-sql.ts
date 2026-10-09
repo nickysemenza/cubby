@@ -1,7 +1,8 @@
 import { DATA_TYPE_PRIORITY } from "../schemas";
-import type { ListFoodsArgs } from "../contract";
+import type { DataType } from "../schemas";
+import type { FoodSearchArgs } from "./search-args";
 
-export function sqlOrderBy(orderBy: ListFoodsArgs["orderBy"]): string {
+export function sqlOrderBy(orderBy: FoodSearchArgs["orderBy"]): string {
   switch (orderBy) {
     case "data_type":
       return "data_type";
@@ -12,7 +13,7 @@ export function sqlOrderBy(orderBy: ListFoodsArgs["orderBy"]): string {
   }
 }
 
-export function sqlDirection(direction: ListFoodsArgs["direction"]): string {
+export function sqlDirection(direction: FoodSearchArgs["direction"]): string {
   return direction === "desc" ? "DESC" : "ASC";
 }
 
@@ -88,23 +89,20 @@ export interface DataTypePredicate {
 
 // Builds the data_type SQL predicate + bind values for a given column.
 // Precedence: an explicit single `dataTypeFilter` wins, then a multi-type
-// `dataTypes` list (comma-joined), then `foodsOnly` (the user-facing food
+// `dataTypes` list, then `foodsOnly` (the user-facing food
 // types). Returns empty sql when none apply (all types).
 export function dataTypePredicate(
   column: string,
   dataTypeFilter: string | undefined,
   foodsOnly: boolean | undefined,
-  dataTypes?: string,
+  dataTypes?: readonly DataType[],
 ): DataTypePredicate {
   if (dataTypeFilter) return { sql: `${column} = ?`, values: [dataTypeFilter] };
-  const multi = (dataTypes ?? "")
-    .split(",")
-    .map((t) => t.trim())
-    .filter(Boolean);
+  const multi = dataTypes ?? [];
   if (multi.length > 0) {
     return {
       sql: `${column} IN (${multi.map(() => "?").join(", ")})`,
-      values: multi,
+      values: [...multi],
     };
   }
   if (foodsOnly) {

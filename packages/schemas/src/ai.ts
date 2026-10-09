@@ -20,7 +20,7 @@ import {
   aiUsageTransportValues,
   type AiUsageTransport,
 } from "./telemetry";
-import { foodSummaryWithLinkedProducts } from "./usda";
+import { usdaFoodListRow } from "./usda";
 
 // Confidence level values - single source of truth
 export const confidenceValues = ["high", "medium", "low"] as const;
@@ -173,7 +173,7 @@ export const usdaFoodSuggestionInput = z.object({
 });
 
 const usdaFoodSuggestionFields = {
-  food: foodSummaryWithLinkedProducts.nullable(),
+  food: usdaFoodListRow.nullable(),
   confidence,
   reasoning: z.string(),
 };

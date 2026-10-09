@@ -17,7 +17,6 @@ import { workerStaticAssets } from "./tooling/worker-static-assets.ts";
 import { createServerFunctionIdGenerator } from "./tooling/server-function-id.ts";
 import { resolveDevProfile } from "../../scripts/lib/dev-profile.ts";
 import { writeLocalDevConfig } from "./tooling/dev/config.ts";
-import { createLocalDevPeers } from "./tooling/dev/config.ts";
 import { readR2PublicUrlFromWrangler } from "./tooling/wrangler-public-config.ts";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -286,12 +285,10 @@ export default defineConfig(async ({ command }) => {
   const deployPlugin: PluginOption[] = [];
   const { cloudflare } = await import("@cloudflare/vite-plugin");
   if (profile) {
-    const peers = await createLocalDevPeers(profile);
     deployPlugin.push(
       cloudflare({
-        configPath: await writeLocalDevConfig(profile),
+        configPath: writeLocalDevConfig(profile),
         viteEnvironment: { name: "ssr" },
-        auxiliaryWorkers: peers.auxiliaryWorkers,
         // The plugin and Wrangler CLI append v3; the programmatic proxy does not.
         persistState: { path: path.join(profile.stateDir, "cloudflare") },
         inspectorPort: profile.inspectorPort,

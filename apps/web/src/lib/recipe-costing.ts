@@ -233,8 +233,7 @@ export type RecipeCosting = {
 
 /**
  * All tier-1 targets including kcal, in TIER1_NUTRIENTS order. TS stays the
- * source of truth for the list (usda-api shares the package and must not need
- * WASM); the engine special-cases `unit === "kcal"` to the Calories kind.
+ * source of truth for the list; the engine special-cases `unit === "kcal"` to the Calories kind.
  */
 export const nutrientTargets = (): WCostingInput["nutrient_targets"] =>
   TIER1_NUTRIENT_KEYS.map((key) => ({

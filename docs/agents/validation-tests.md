@@ -296,8 +296,9 @@ queue consumer to one of:
 | `purchase-agent` | agent scenarios, live evals, browser spec | unconsumed         | real              | real                   | queue producer, model, gateway | yes          |
 | `coupled`        | coupled Tester Army journeys              | real               | real              | real                   | queue producer, model, gateway | yes          |
 
-Every profile includes `local-offline-peers` for the USDA binding. Durable
-Objects live in the built Worker and are real in every profile. Starting a
+Every profile includes `local-offline-peers` as the sink for dropped queues.
+Durable Objects live in the built Worker and are real in every profile; the
+harness seeds the synthetic USDA release into `USDA_RELEASES` before any USDA read. Starting a
 profile throws when its routes and the compiled Worker's queue consumer names
 differ in either direction. That check covers consumer queue names only, not
 producers, Durable Objects, Hyperdrive, or service bindings, so it is not

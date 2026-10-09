@@ -4,6 +4,7 @@ import {
   foodSummaryWithLinkedProducts,
   usdaFoodIdInput,
   usdaFoodListOut,
+  usdaFoodListRow,
   usdaFoodLookupInput,
   usdaListInput,
 } from "@cubby/schemas/usda";
@@ -28,7 +29,7 @@ export const usdaProductSuggestionsOut = z.object({
   candidates: z.array(
     z.object({
       reason: usdaSuggestionReason,
-      food: foodSummaryWithLinkedProducts,
+      food: usdaFoodListRow,
     }),
   ),
 });

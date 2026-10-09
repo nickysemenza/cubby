@@ -19,6 +19,9 @@ export interface DevProfile {
   integration?: { vectorizeIndex: string };
 }
 
+/** The release id of the synthetic USDA release (`apps/web/tooling/dev/usda-synthetic-release.ts`). */
+export const SYNTHETIC_USDA_RELEASE = "2000-01";
+
 function assertDatabaseOverrides(
   inherited: Partial<NodeJS.ProcessEnv>,
   databaseUrl: string,
@@ -137,8 +140,7 @@ function localVars({
     R2_BUCKET_NAME: "cubby-local",
     R2_PUBLIC_URL: origin,
     R2_KEY_PREFIX: "cubby-local",
-    USDA_API_URL: origin,
-    USDA_ACTIVE_RELEASE: "2026-04",
+    USDA_ACTIVE_RELEASE: SYNTHETIC_USDA_RELEASE,
     UPC_UPSTREAM_DISABLED: "true",
     CUBBY_DEV_ID: id,
     CUBBY_DEV_DB_NAME: name,

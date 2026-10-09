@@ -28,8 +28,10 @@ FoodData Central release, most branded rows are superseded food revisions: the
 - A release loads itself: the DO pulls gzipped `FoodSummary` NDJSON shards from
   R2 in an alarm loop and reports its progress until ready.
 - Only the current revision of each branded food is stored. An alias table
-  maps every older revision's `fdc_id` to it, and each activation advances
-  `Product.fdc_id` links to current revisions automatically, with no triage.
+  maps every older revision's `fdc_id` to it. After an activation, one manual
+  `POST /api/debug/usda-release` advances `Product.fdc_id` links to current
+  revisions, with no triage; releases change about once a year, so no cron
+  repeats it.
 
 ## Considered options
 

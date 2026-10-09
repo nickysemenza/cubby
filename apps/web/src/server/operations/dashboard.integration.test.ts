@@ -22,7 +22,7 @@ describe("dashboard count workflow", () => {
   const ctx = withTestDb();
   afterEach(() => setCfEnv(undefined));
 
-  it("preserves local counts when the external USDA service fails", async () => {
+  it("preserves local counts while the USDA release is unavailable", async () => {
     await createProductFixture(
       ctx.db,
       makeProductInput({ name: "Dashboard test product" }),
@@ -42,18 +42,14 @@ describe("dashboard count workflow", () => {
     expect(result.device).toBe(0);
   });
 
-  it("combines external counts with the local entity population", async () => {
+  it("sums the release's foods per data type beside the local counts", async () => {
     const result = await getDashboardCounts({
       db: ctx.db,
       usdaClient: {
         getCounts: async () => ({
-          usda_food: 42,
-          usda_branded_food: 20,
-          usda_nutrient: 10,
-          usda_food_nutrient: 50,
-          usda_measure_unit: 3,
-          usda_food_portion: 4,
-          usda_sr_legacy_food: 22,
+          release: "2000-01",
+          foodsByDataType: { branded_food: 20, sr_legacy_food: 22 },
+          supersededCount: 5,
         }),
       },
     });
@@ -113,13 +109,9 @@ describe("dashboard count workflow", () => {
       db: ctx.db,
       usdaClient: {
         getCounts: async () => ({
-          usda_food: 42,
-          usda_branded_food: 0,
-          usda_nutrient: 0,
-          usda_food_nutrient: 0,
-          usda_measure_unit: 0,
-          usda_food_portion: 0,
-          usda_sr_legacy_food: 0,
+          release: "2000-01",
+          foodsByDataType: { foundation_food: 42 },
+          supersededCount: 0,
         }),
       },
     });

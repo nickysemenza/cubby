@@ -1,4 +1,4 @@
-import { dataTypeEnum, foodLookupParam } from "@cubby/usda";
+import { dataTypeEnum, foodLookupParam, foodSummaryCompact } from "@cubby/usda";
 import { z } from "zod";
 import {
   createSortPaginationFields,
@@ -50,16 +50,14 @@ export const foodSummaryEnrichment = foodSummaryWithLinkedProducts.pick({
 
 export type FoodSummaryEnrichment = z.infer<typeof foodSummaryEnrichment>;
 
-export const usdaFoodListOut = createPaginatedResponseSchema(
-  foodSummaryWithLinkedProducts,
-);
+/** A USDA list or search row: the food without its full nutrient table. */
+export const usdaFoodListRow = foodSummaryWithLinkedProducts.extend({
+  nutritionInfo: foodSummaryCompact.shape.nutritionInfo,
+});
 
-export const usdaFoodSummaryListOut = createPaginatedResponseSchema(
-  foodSummaryWithLinkedProducts.omit({
-    inferredUnitMappings: true,
-    linkedProducts: true,
-  }),
-);
+export type UsdaFoodListRow = z.infer<typeof usdaFoodListRow>;
+
+export const usdaFoodListOut = createPaginatedResponseSchema(usdaFoodListRow);
 
 export const usdaFoodEnrichmentsOut = z.record(
   z.string(),

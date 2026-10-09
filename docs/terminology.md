@@ -103,13 +103,13 @@ USDAFood  ←(loose link, fdc_id/barcode)──  Product  ──(optional FK, in
   where_.
 
 - **USDAFood** (`usda_food`) — nutrition reference data from USDA FoodData
-  Central, served by the sibling `usda-api` worker (not a row in the main DB).
+  Central, served from the active USDA release (not a row in the main DB).
   Linked to a Product for nutrition/cost intelligence; the link is _loose_
   (resolved at query time, `fdc_id`-first then barcode) — see the USDA bullet in
   [development](development.md#architecture).
 
 - **USDA release** — one immutable FoodData Central publication (identified by
-  its publication date, e.g. `2026-04`) that `usda-api` serves in full. Exactly
+  its publication date, e.g. `2026-04`) that Cubby serves in full. Exactly
   one is the **active USDA release** at a time; a USDA food's record never
   changes within a release. Not "edge version" or "dataset version".
 

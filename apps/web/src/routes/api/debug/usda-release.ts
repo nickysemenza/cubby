@@ -4,6 +4,7 @@ import { createFileRoute } from "@tanstack/react-router";
 import { auth } from "~/lib/auth";
 import { getErrorMessage } from "~/lib/error-utils";
 import { getUsdaReleaseEnv } from "~/server/cf-env";
+import { db } from "~/server/db";
 import {
   hasExplicitCredential,
   verifyHttpApiKeyActor,
@@ -84,7 +85,8 @@ async function withRelease(
  * The active USDA release's load state (ADR 0008). The first request after a
  * release is activated starts its load; `?probe=1` on a ready release also
  * times one search and one batch lookup through the binding. POST resumes a
- * failed load from its last committed shard.
+ * failed load from its last committed shard, or on a ready release advances
+ * Product links from superseded food revisions.
  */
 export const Route = createFileRoute("/api/debug/usda-release")({
   server: {
@@ -123,7 +125,24 @@ export const Route = createFileRoute("/api/debug/usda-release")({
           };
         }),
       POST: ({ request }) =>
-        withRelease(request, (release) => release.resume()),
+        withRelease(request, async (release) => {
+          const status = await release.status();
+          if (status.state === "failed") return await release.resume();
+          if (status.state !== "ready") return status;
+          // Lazy: product orchestration stays off the first-request bundle.
+          const [{ USDAClient }, { advanceProductUsdaLinks }] =
+            await Promise.all([
+              import("~/server/clients/usda"),
+              import("~/server/services/usda-link-advance.service"),
+            ]);
+          return {
+            ...status,
+            advanced: await advanceProductUsdaLinks(
+              db,
+              new USDAClient(release),
+            ),
+          };
+        }),
     },
   },
 });

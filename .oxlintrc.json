@@ -35,7 +35,6 @@
     "**/dist/**",
     "**/drizzle/**",
     "**/node_modules/**",
-    "apps/usda-api/data/**",
     "apps/web/src/ui/reui/**",
     "apps/web/src/ui/primitives/**",
     "apps/web/src/routeTree.gen.ts",
@@ -325,7 +324,6 @@
       "files": [
         "apps/web/src/server/**/*.ts",
         "apps/web/src/cf-server.ts",
-        "apps/usda-api/src/**/*.ts",
         "packages/*/src/**/*.ts"
       ],
       "excludeFiles": [

@@ -280,10 +280,6 @@ async function start(profile: DevProfile, preview: boolean): Promise<void> {
     await phase("mcpAssets", () =>
       run(profile, process.execPath, ["apps/mcp-apps/build.mjs", "--if-stale"]),
     );
-    await phase("peers", async () => {
-      const { prepareLocalDevPeers } = await import("./config.ts");
-      await prepareLocalDevPeers(profile);
-    });
     if (preview)
       await phase("build", async () => {
         await run(
@@ -314,8 +310,6 @@ async function start(profile: DevProfile, preview: boolean): Promise<void> {
           JSON.stringify(config),
         );
       });
-    const { createLocalDevPeers } = await import("./config.ts");
-    const peers = await createLocalDevPeers(profile);
     const args = preview
       ? [
           "exec",
@@ -323,10 +317,6 @@ async function start(profile: DevProfile, preview: boolean): Promise<void> {
           "dev",
           "--config",
           path.join(profile.stateDir, "config/preview.json"),
-          ...peers.auxiliaryWorkers.flatMap((peer) => [
-            "--config",
-            peer.configPath,
-          ]),
           "--port",
           String(profile.port),
           "--inspector-port",

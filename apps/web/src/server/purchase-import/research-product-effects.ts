@@ -1,7 +1,5 @@
 import type { IngredientId } from "@cubby/schemas/identifiers";
 
-import { env } from "~/env";
-import { getBindingFetcher } from "~/server/cf-env";
 import { USDAClient } from "~/server/clients/usda";
 import type { Database, DrizzleTransaction } from "~/server/db";
 import type { product, run } from "~/server/db/schema";
@@ -12,6 +10,7 @@ import {
   runMutationSideEffectsForEntities,
 } from "~/server/services/mutation-side-effects";
 import { RecipeCostingService } from "~/server/services/recipe-costing.service";
+import { requestUsdaRelease } from "~/server/usda-release/client";
 
 export type ProductResearchEffects = {
   recomputeForIngredients?: (
@@ -25,7 +24,7 @@ const recomputeForIngredients: NonNullable<
 > = (db, ids) =>
   new RecipeCostingService(
     db,
-    new USDAClient(env.USDA_API_URL, getBindingFetcher("USDA_API")),
+    new USDAClient(requestUsdaRelease()),
   ).recomputeForIngredients(ids, { source: "product.research" });
 
 export async function afterProductResearchCommit(

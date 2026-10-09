@@ -13,7 +13,6 @@ export const env = createEnv({
     R2_BUCKET_NAME: z.string().min(1),
     R2_PUBLIC_URL: z.string().url(),
     R2_KEY_PREFIX: z.string().min(1).default("cubby-dev"),
-    USDA_API_URL: z.string().url().default("http://localhost:8080/"),
     // Dev/E2E: skip the upcitemdb fallback and answer from UpcLookupCache only.
     UPC_UPSTREAM_DISABLED: z.enum(["true", "false"]).default("false"),
     BETTER_AUTH_SECRET: z.string().min(1),
@@ -49,7 +48,6 @@ export const env = createEnv({
     R2_BUCKET_NAME: process.env.R2_BUCKET_NAME,
     R2_PUBLIC_URL: process.env.R2_PUBLIC_URL,
     R2_KEY_PREFIX: process.env.R2_KEY_PREFIX,
-    USDA_API_URL: process.env.USDA_API_URL,
     UPC_UPSTREAM_DISABLED: process.env.UPC_UPSTREAM_DISABLED,
     BETTER_AUTH_SECRET: process.env.BETTER_AUTH_SECRET,
     BETTER_AUTH_URL: process.env.BETTER_AUTH_URL,

@@ -1,4 +1,7 @@
-import { parseShortcodeFor } from "@cubby/schemas/identifiers";
+import {
+  type IngredientId,
+  parseShortcodeFor,
+} from "@cubby/schemas/identifiers";
 import type { ProductCreateInput } from "@cubby/schemas/product";
 import { researchWorkResolve } from "@cubby/schemas/research-tools";
 import { UNSPECIFIED_MANUFACTURER } from "@cubby/shared/constants";
@@ -10,6 +13,7 @@ import { describe, expect, it, vi } from "vitest";
 import { z } from "zod";
 
 import { setCfEnv } from "~/server/cf-env";
+import { USDAClient } from "~/server/clients/usda";
 import {
   entityAttachment,
   image,
@@ -45,6 +49,8 @@ import {
   makeProductInput,
 } from "~/server/repo/repo.fixtures";
 import { insertWithShortcode } from "~/server/repo/shortcode-utils";
+import { RecipeCostingService } from "~/server/services/recipe-costing.service";
+import { emptyUsdaRelease } from "~/server/testing/request-context";
 import { createTestRequestContext } from "~/server/testing/request-context";
 
 import { productionBrowserEvidenceStorage } from "./browser-results";
@@ -204,6 +210,13 @@ describe("supported Product research writes", () => {
         rejected: [],
       }),
       readEvidence: async () => sourceText,
+      // The real recompute, against a release with no foods: Node has no
+      // USDA_RELEASE binding.
+      recomputeForIngredients: (db: typeof ctx.db, ids: IngredientId[]) =>
+        new RecipeCostingService(
+          db,
+          new USDAClient(emptyUsdaRelease),
+        ).recomputeForIngredients(ids, { source: "product.research" }),
     };
     return { entity, run, target, evidence, proposal, ports };
   }

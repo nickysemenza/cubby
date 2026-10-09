@@ -1,6 +1,5 @@
-import type { FoodSummaryWithLinkedProducts } from "@cubby/schemas/usda";
+import type { UsdaFoodListRow } from "@cubby/schemas/usda";
 import { dataTypeLabel } from "@cubby/usda";
-import { CopyIcon } from "@phosphor-icons/react/dist/csr/Copy";
 import { LinkIcon } from "@phosphor-icons/react/dist/csr/Link";
 
 import { isUnspecifiedManufacturer } from "~/lib/manufacturer-utils";
@@ -24,16 +23,14 @@ function MetaChip({ children }: { children: React.ReactNode }) {
   );
 }
 
-const foodBrand = (
-  brandedFoodInfo: FoodSummaryWithLinkedProducts["brandedFoodInfo"],
-) => {
+const foodBrand = (brandedFoodInfo: UsdaFoodListRow["brandedFoodInfo"]) => {
   if (!brandedFoodInfo) return null;
   const brand = brandedFoodInfo.brand_name ?? brandedFoodInfo.brand_owner;
   return isUnspecifiedManufacturer(brand) ? null : brand;
 };
 
 const foodServingText = (
-  brandedFoodInfo: FoodSummaryWithLinkedProducts["brandedFoodInfo"],
+  brandedFoodInfo: UsdaFoodListRow["brandedFoodInfo"],
 ) => {
   const serving = brandedFoodInfo?.serving;
   if (serving?.household_serving_fulltext) {
@@ -48,17 +45,8 @@ const foodServingText = (
  * USDA list projection already returns — food type, brand, category, serving, UPC/NDB,
  * a linked-product badge, and per-100g nutrition chips — instead of just the name.
  * Every field is omitted gracefully when absent (generic/foundation foods).
- *
- * `duplicateCount` is the number of other UPC-identical records collapsed into
- * this one by the dropdown's dedup, surfaced so nothing feels hidden.
  */
-export function UsdaFoodResultRow({
-  food,
-  duplicateCount = 0,
-}: {
-  food: FoodSummaryWithLinkedProducts;
-  duplicateCount?: number;
-}) {
+export function UsdaFoodResultRow({ food }: { food: UsdaFoodListRow }) {
   const { foodInfo, brandedFoodInfo, legacyFoodInfo, nutritionInfo } = food;
   const totalNutrients = nutrientCount(nutritionInfo.nutrientsPer100);
 
@@ -99,12 +87,6 @@ export function UsdaFoodResultRow({
           <MetaChip>
             <LinkIcon className="size-3" />
             {linkedCount} linked
-          </MetaChip>
-        )}
-        {duplicateCount > 0 && (
-          <MetaChip>
-            <CopyIcon className="size-3" />+{duplicateCount} record
-            {duplicateCount === 1 ? "" : "s"}
           </MetaChip>
         )}
       </Row>

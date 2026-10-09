@@ -5,7 +5,7 @@ import {
 } from "@cubby/schemas/external-id";
 import { imageOut, partitionEntityFiles } from "@cubby/schemas/image";
 import type { UnitMappingInput } from "@cubby/schemas/unitmapping";
-import type { FoodSummaryWithLinkedProducts } from "@cubby/schemas/usda";
+import type { UsdaFoodListRow } from "@cubby/schemas/usda";
 import {
   mergeProductTags,
   splitProductTags,
@@ -375,7 +375,7 @@ export function ProductUsdaFoodField({
     control: form.control,
     name: ["name", field.key, "upc"],
   });
-  const handleSelect = (food: FoodSummaryWithLinkedProducts) => {
+  const handleSelect = (food: UsdaFoodListRow) => {
     form.setValue(field.key, food.fdc_id, { shouldDirty: true });
     if (!basisValueOf(name)) {
       form.setValue("name", food.foodInfo.description ?? "", {

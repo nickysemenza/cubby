@@ -8,7 +8,7 @@
 
 import type { Confidence } from "@cubby/schemas/ai";
 import type { RunId, IngredientId } from "@cubby/schemas/identifiers";
-import type { FoodSummaryWithLinkedProducts } from "@cubby/schemas/usda";
+import type { UsdaFoodListRow } from "@cubby/schemas/usda";
 import { createLogger } from "@cubby/worker-tracing";
 
 import { runAiSelection } from "~/server/ai/selection";
@@ -32,7 +32,7 @@ export interface UsdaMatchAiPort {
 const productionUsdaMatchAiPort: UsdaMatchAiPort = { select: runAiSelection };
 
 export interface UsdaFoodSuggestion {
-  food: FoodSummaryWithLinkedProducts | null;
+  food: UsdaFoodListRow | null;
   confidence: Confidence;
   reasoning: string;
 }

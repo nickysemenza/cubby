@@ -9,7 +9,7 @@ import { productCategoryShortcode } from "./identifier-fields";
 import { productTopLevelOut } from "./product-output-fields";
 import { inventoryPlacementValues } from "@cubby/shared";
 import { upc } from "@cubby/shared/upc";
-import { foodSummary, foodSummaryMcpOut } from "@cubby/usda";
+import { foodSummary, foodSummaryCompact } from "@cubby/usda";
 import { z } from "zod";
 import type { GeneratedEntitySortField } from "./generated/entity-sort.gen";
 import {
@@ -755,7 +755,7 @@ export const productWithMappingsAndFoodMcpEntityOut =
   productWithMappingsAndFoodOut.extend({
     externalIds: z.array(productExternalIdMcpEntityOut),
     unitMappings: z.array(productUnitMappingMcpEntityOut),
-    food: foodSummaryMcpOut.nullable(),
+    food: foodSummaryCompact.nullable(),
   });
 
 export const productPickerItemOut = z.object({
@@ -899,7 +899,7 @@ export type ProductListItem = z.infer<typeof productListItemOut>;
 export const productListItemMcpEntityOut = productListItemOut.extend({
   externalIds: z.array(productExternalIdMcpEntityOut),
   unitMappings: z.array(productUnitMappingMcpEntityOut),
-  food: foodSummaryMcpOut.nullable(),
+  food: foodSummaryCompact.nullable(),
 });
 
 export const productOwnershipEvidenceOut = z.object({
@@ -978,7 +978,7 @@ export const productWithFoodMcpEntityOut = productWithFoodOut.extend({
   externalIds: z.array(productExternalIdMcpEntityOut),
   unitMappings: z.array(productUnitMappingMcpEntityOut),
   recipeUsages: z.array(recipeUsageMcpEntityOut),
-  food: foodSummaryMcpOut.nullable(),
+  food: foodSummaryCompact.nullable(),
 });
 
 /** Generic MCP create/update result with storage-only child identifiers removed. */

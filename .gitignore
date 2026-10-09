@@ -46,7 +46,6 @@ yarn-error.log*
 .idea
 
 # USDA database (large files)
-apps/usda-api/data/
 
 tsconfig.vitest-temp.json
 

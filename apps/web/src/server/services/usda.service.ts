@@ -3,8 +3,15 @@ import type { ProductTopLevelOut } from "@cubby/schemas/product";
 import type {
   FoodSummaryEnrichment,
   FoodSummaryWithLinkedProducts,
+  UsdaFoodListRow,
 } from "@cubby/schemas/usda";
-import type { DataType, FoodLookupParam, FoodSummary } from "@cubby/usda";
+import {
+  type DataType,
+  type FoodLookupParam,
+  type FoodSummary,
+  type FoodSummaryCompact,
+  toFoodSummaryCompact,
+} from "@cubby/usda";
 
 import { unitMappingsFromFood } from "~/lib/unit-mapping-utils";
 import { TraceNames, withTrace } from "~/server/tracing";
@@ -72,10 +79,7 @@ export class USDAService {
     foodsOnly?: boolean,
     dataTypes?: DataType[],
     linkedProductsOnly?: boolean,
-  ): Promise<{
-    data: FoodSummaryWithLinkedProducts[];
-    count: number;
-  }> {
+  ): Promise<{ data: UsdaFoodListRow[]; count: number }> {
     if (linkedProductsOnly || sort.orderBy === "linkedProducts") {
       return await this.listLinkedProductFoods(
         nameFilter,
@@ -104,49 +108,6 @@ export class USDAService {
     };
   }
 
-  async listFoodSummaries(
-    nameFilter: string | undefined,
-    dataTypeFilter: DataType | undefined,
-    sort: SortParams,
-    pagination: PaginationParams,
-    foodsOnly?: boolean,
-    dataTypes?: DataType[],
-    linkedProductsOnly?: boolean,
-  ): Promise<{
-    data: FoodSummary[];
-    count: number;
-  }> {
-    if (linkedProductsOnly || sort.orderBy === "linkedProducts") {
-      const result = await this.listLinkedProductFoods(
-        nameFilter,
-        dataTypeFilter,
-        sort,
-        pagination,
-        foodsOnly,
-        dataTypes,
-      );
-      return {
-        data: result.data.map(
-          ({
-            inferredUnitMappings: _mappings,
-            linkedProducts: _products,
-            ...food
-          }) => food,
-        ),
-        count: result.count,
-      };
-    }
-
-    return await this.usdaClient.listFoods(
-      nameFilter,
-      dataTypeFilter,
-      sort,
-      pagination,
-      foodsOnly,
-      dataTypes,
-    );
-  }
-
   private async enrichWithLinkedProducts(
     foodSummary: FoodSummary,
   ): Promise<FoodSummaryWithLinkedProducts> {
@@ -157,7 +118,7 @@ export class USDAService {
     };
   }
 
-  private foodLookup(foodSummary: FoodSummary): FoodLookupParam {
+  private foodLookup(foodSummary: FoodSummaryCompact): FoodLookupParam {
     const upc = foodSummary.brandedFoodInfo?.gtin_upc;
     return upc !== undefined
       ? { kind: "upc", gtin_upc: upc }
@@ -165,8 +126,8 @@ export class USDAService {
   }
 
   private async enrichFoodsWithLinkedProducts(
-    foods: FoodSummary[],
-  ): Promise<FoodSummaryWithLinkedProducts[]> {
+    foods: FoodSummaryCompact[],
+  ): Promise<UsdaFoodListRow[]> {
     const lookups = foods.map((food) => this.foodLookup(food));
     const linkedByFood = this.getLinkedProductsBatch
       ? await this.getLinkedProductsBatch(lookups)
@@ -191,15 +152,15 @@ export class USDAService {
     pagination: PaginationParams,
     foodsOnly?: boolean,
     dataTypes?: DataType[],
-  ): Promise<{ data: FoodSummaryWithLinkedProducts[]; count: number }> {
+  ): Promise<{ data: UsdaFoodListRow[]; count: number }> {
     const lookups = this.getLinkedProductLookups
       ? await this.getLinkedProductLookups()
       : [];
     const foods = await this.usdaClient.findFoodsBatch(lookups);
 
-    const byFdcId = new Map<number, FoodSummary>();
+    const byFdcId = new Map<number, FoodSummaryCompact>();
     for (const food of foods) {
-      if (food) byFdcId.set(food.fdc_id, food);
+      if (food) byFdcId.set(food.fdc_id, toFoodSummaryCompact(food));
     }
 
     const lowerName = nameFilter?.trim().toLowerCase();

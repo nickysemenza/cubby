@@ -200,7 +200,6 @@ function installScenarioEnvironment(storageURL: string): () => void {
     R2_PUBLIC_URL: storageURL,
     R2_KEY_PREFIX: "e2e",
     UPC_UPSTREAM_DISABLED: "true",
-    USDA_API_URL: "http://127.0.0.1:9/",
     AI_GATEWAY_API_KEY: "",
   })) {
     previous.set(key, process.env[key]);

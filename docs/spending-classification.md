@@ -65,15 +65,3 @@ in which case PostgreSQL aborts one and the person retries.
 Splitting an Expense preserves its category when a part omits the field, resets
 it when a part supplies null, and stores an explicit category when supplied.
 Splits preserve allocation basis and cannot fabricate Product/receipt identity.
-
-## Initial taxonomy and mappings
-
-`apps/web/tooling/spending-classification-seed.ts` previews a curated manifest
-without writing. Apply requires that exact preview fingerprint and a real member
-actor. It preserves explicit/blocked mappings, refuses ambiguous names/aliases,
-and reports category deltas that conserve the ledger. It never
-rewrites Expense costs or legacy Purchase/Transaction scalar categories.
-
-Run committed migrations first against the explicit direct target. Inspect the
-seed preview and confirm category deltas conserve the ledger before applying it.
-Read back schema, audit writes, mappings, and exact ledger cents afterward.

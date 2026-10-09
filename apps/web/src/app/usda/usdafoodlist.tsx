@@ -1,7 +1,4 @@
-import type {
-  FoodSummaryWithLinkedProducts,
-  USDAFoodSortField,
-} from "@cubby/schemas/usda";
+import type { UsdaFoodListRow, USDAFoodSortField } from "@cubby/schemas/usda";
 import { usdaListInput } from "@cubby/schemas/usda";
 import { type DataType, dataTypeEnum, dataTypeLabel } from "@cubby/usda";
 import { useCallback, useEffect, useMemo } from "react";
@@ -39,7 +36,7 @@ import { createEntityInlineLinkColumn } from "../../ui/data-table/columnHelpers"
 import type { TableStateReturn } from "../../ui/data-table/useTableState";
 import type { ListQueryOptionsFn } from "../../ui/hooks/usePaginatedTableCore";
 
-type USDAListRow = FoodSummaryWithLinkedProducts & {
+type USDAListRow = UsdaFoodListRow & {
   id: string;
   name: string;
   description: string;

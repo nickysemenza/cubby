@@ -2,11 +2,15 @@ import { readFileSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
+import type { R2Bucket } from "@cloudflare/workers-types";
+import { usdaReleaseObjectName } from "@cubby/usda/release";
 import { createTestHarness, type TestHarnessOptions } from "wrangler";
 import { z } from "zod";
 
+import { SYNTHETIC_USDA_RELEASE } from "../../../scripts/lib/dev-profile.ts";
 import { acquireHarnessLock } from "../../../scripts/lib/harness-lock.ts";
 
+import { seedUsdaRelease } from "./dev/usda-synthetic-release";
 import { COUPLED_WORKER_BUILDS, ensureWorkerBuilds } from "./worker-builds";
 
 const webRoot = path.resolve(
@@ -222,11 +226,7 @@ function compiledWebWorkerConfig(
   config.main = `dist/server/${config.main ?? "index.js"}`;
   if (config.assets) config.assets.directory = "dist/client";
   config.services = [
-    ...(config.services ?? []).map((service) =>
-      service.binding === "USDA_API"
-        ? { ...service, service: "local-offline-peers" }
-        : service,
-    ),
+    ...(config.services ?? []),
     ...(profile.purchaseAgentPeers
       ? [
           // Harness-only bindings: the agent's model provider and the
@@ -357,7 +357,8 @@ export function workerdHarnessOptions(
           R2_KEY_PREFIX: "e2e",
           R2_ACCESS_KEY_ID: "dummy",
           R2_SECRET_ACCESS_KEY: "dummy",
-          USDA_API_URL: "http://127.0.0.1:9/",
+          // Seeded into the harness's USDA_RELEASES bucket after listen().
+          USDA_ACTIVE_RELEASE: SYNTHETIC_USDA_RELEASE,
           UPC_UPSTREAM_DISABLED: "true",
           // Keyless and deterministic like CI; a model peer, when present,
           // takes precedence over the Gateway transport anyway.
@@ -496,8 +497,41 @@ export async function startWorkerdHarness(options: WorkerdHarnessOptions) {
       harness.debug();
       throw error;
     }
+    // The release object loads on its first read and rejects reads until it
+    // is ready, so a scenario starts only once the seeded release has loaded.
+    const env = await harness
+      .getWorker<{
+        USDA_RELEASES: R2Bucket;
+        USDA_RELEASE: { getByName(name: string): UsdaReleaseStatus };
+      }>()
+      .getEnv();
+    await seedUsdaRelease(env.USDA_RELEASES, SYNTHETIC_USDA_RELEASE);
+    await waitForUsdaRelease(
+      env.USDA_RELEASE.getByName(usdaReleaseObjectName(SYNTHETIC_USDA_RELEASE)),
+    );
     return Object.assign(harness, { close: cleanup.close });
   });
+}
+
+interface UsdaReleaseStatus {
+  status(): Promise<{ release: string; state: string; error: string | null }>;
+}
+
+async function waitForUsdaRelease(release: UsdaReleaseStatus) {
+  const deadline = Date.now() + 30_000;
+  for (;;) {
+    const status = await release.status();
+    if (status.state === "ready") return;
+    if (status.state === "failed")
+      throw new Error(
+        `USDA release ${status.release} failed to load: ${status.error}`,
+      );
+    if (Date.now() > deadline)
+      throw new Error(
+        `USDA release ${status.release} is still ${status.state}`,
+      );
+    await new Promise((resolve) => setTimeout(resolve, 100));
+  }
 }
 
 export type WorkerdHarness = Awaited<ReturnType<typeof startWorkerdHarness>>;

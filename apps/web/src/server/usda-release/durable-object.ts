@@ -1,12 +1,13 @@
 import type { DurableObjectState } from "@cloudflare/workers-types";
 import type { FoodLookupParam } from "@cubby/usda";
-import type { ListFoodsArgs } from "@cubby/usda/contract";
 import {
+  foodSearchArgs,
   manifestKey,
   releaseFromObjectName,
   releaseManifest,
   ShardLoadError,
   UsdaReleaseStore,
+  type FoodSearchArgs,
   type ReleaseId,
   type ReleaseManifest,
 } from "@cubby/usda/release";
@@ -130,8 +131,8 @@ export class UsdaReleaseDurableObject
     return this.store.lookupBatch(lookups);
   }
 
-  async search(args: ListFoodsArgs) {
+  async search(args: FoodSearchArgs) {
     await this.start();
-    return this.store.search(args);
+    return this.store.search(foodSearchArgs.parse(args));
   }
 }

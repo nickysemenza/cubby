@@ -4,8 +4,8 @@
  * @cubby/worker-tracing
  *
  * Minimal custom-span helper over the `cloudflare:workers` `tracing.enterSpan`
- * API, plus a minimal structured logger. For the downstream Workers (usda-api, purchase-agent), which run on workerd in dev and prod; apps/web's `withTrace`
- * delegates to the same span core (`./span`), so there is one implementation.
+ * API, plus a minimal structured logger. apps/web's `withTrace` delegates to the
+ * same span core (`./span`), so there is one implementation.
  *
  * Spans created here auto-nest under the request's root span (and, across a
  * service-binding subrequest, under the calling worker's trace — the CF platform
@@ -23,7 +23,7 @@
  * The `cloudflare:workers` import is resolved LAZILY and tolerantly: on workerd
  * it's present; under Node (vitest / any non-worker context) the import throws
  * and we fall back to a no-op span so `fn` still runs. That keeps this safe to
- * import from code that's also unit-tested in Node (e.g. usda-api's edge.ts).
+ * import from code that's also unit-tested in Node.
  */
 
 import {
@@ -119,8 +119,7 @@ export interface ErrorCapturingApp {
  * enough: its auto-capture only fires on a throw that escapes `fetch`, which
  * never happens once Hono has swallowed it. `apps/web/src/cf-server.ts` works
  * around the equivalent gap (Nitro's handler) by inspecting the response
- * status after the fact; this is the same fix for a Hono app, factored out so
- * usda-api and purchase-agent don't each reimplement it.
+ * status after the fact; this is the same fix for a Hono app.
  *
  * Framework-free: takes a plain `capture` callback (pass
  * `Sentry.captureException`) rather than depending on `@sentry/cloudflare` or

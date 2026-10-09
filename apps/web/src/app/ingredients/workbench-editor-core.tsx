@@ -6,7 +6,7 @@ import {
   manualUnitMapping,
   type UnitMapping,
 } from "@cubby/schemas/unitmapping";
-import type { FoodSummaryWithLinkedProducts } from "@cubby/schemas/usda";
+import type { UsdaFoodListRow } from "@cubby/schemas/usda";
 import { UNSPECIFIED_MANUFACTURER } from "@cubby/shared";
 import type { FoodSummary } from "@cubby/usda";
 
@@ -87,7 +87,7 @@ export const buildPreviewMappings = (
     unit,
     convRows = [],
   }: {
-    food: FoodSummaryWithLinkedProducts | null;
+    food: UsdaFoodListRow | null;
     dollars: string;
     qty: string;
     unit: string;
@@ -340,7 +340,7 @@ export const buildProductWrite = (
     newMappings,
     productId,
   }: {
-    food: FoodSummaryWithLinkedProducts | null;
+    food: UsdaFoodListRow | null;
     eachPrice: number | null;
     newMappings: UnitMappingInput[];
     productId?: string;

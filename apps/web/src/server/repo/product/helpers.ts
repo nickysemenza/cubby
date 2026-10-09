@@ -9,9 +9,8 @@ import { type FoodLookupParam, foodLookupParam } from "@cubby/usda";
  * richer reference food. `ndb_number` is no longer consulted — the migration
  * folded every NDB link into `fdc_id`. Only returns a param if values validate.
  *
- * The barcode is sent as `displayGtin`, NOT the stored GTIN-14: `usda-api`
- * left-pads its `branded_food.gtin_upc` values to twelve and looks them up by
- * exact string match, so a 14-digit key misses nearly every branded food.
+ * The barcode is sent as `displayGtin`; the release normalizes both sides to
+ * GTIN-14 (`usdaBarcodeKey`), so either form matches.
  */
 export const foodLookupParamFromProduct = (product: {
   primaryGtin: string | null;

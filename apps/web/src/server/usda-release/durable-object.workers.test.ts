@@ -1,5 +1,5 @@
 import type { FoodSummary } from "@cubby/usda";
-import type { ListFoodsArgs } from "@cubby/usda/contract";
+import type { FoodSearchArgs } from "@cubby/usda/release";
 import {
   manifestKey,
   MAX_SHARD_ATTEMPTS,
@@ -18,6 +18,7 @@ import { describe, expect, it } from "vitest";
 
 import { getErrorMessage } from "~/lib/error-utils";
 
+import { seedUsdaRelease } from "../../../tooling/dev/usda-synthetic-release";
 import { usdaReleaseObjectName } from "./client";
 import type { UsdaReleaseRpc } from "./rpc";
 
@@ -430,7 +431,7 @@ describe("USDA release Durable Object", () => {
     ]);
     const types = async (
       filters: Pick<
-        ListFoodsArgs,
+        FoodSearchArgs,
         "dataTypeFilter" | "dataTypes" | "foodsOnly"
       >,
     ) =>
@@ -449,15 +450,39 @@ describe("USDA release Durable Object", () => {
     expect(
       await types({
         foodsOnly: true,
-        dataTypes: "branded_food,sub_sample_food",
+        dataTypes: ["branded_food", "sub_sample_food"],
       }),
     ).toEqual([1102, 1103]);
     expect(
       await types({
         dataTypeFilter: "sub_sample_food",
-        dataTypes: "branded_food",
+        dataTypes: ["branded_food"],
       }),
     ).toEqual([1103]);
+  });
+
+  it("loads the dev and harness synthetic release with its barcode and alias", async () => {
+    const release = freshRelease();
+    await seedUsdaRelease(env.USDA_RELEASES, release);
+    const object = env.USDA_RELEASE.getByName(usdaReleaseObjectName(release));
+    const stub: UsdaReleaseRpc = object;
+    await settle({ object, stub });
+    expect((await stub.status()).state).toBe("ready");
+    expect((await stub.getFood(9900001))?.foodInfo.description).toBe(
+      "Synthetic rolled oats",
+    );
+    const branded = await stub.lookupBatch([
+      { kind: "upc", gtin_upc: "299000000106" },
+      { kind: "fdc", fdc_id: 9900009 },
+    ]);
+    expect(branded.map((row) => row?.fdc_id ?? null)).toEqual([
+      9900010, 9900010,
+    ]);
+    expect(await stub.counts()).toEqual({
+      release,
+      foodsByDataType: { foundation_food: 3, branded_food: 1 },
+      supersededCount: 1,
+    });
   });
 
   it("reports the release and foods per data type", async () => {

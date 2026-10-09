@@ -3,6 +3,7 @@ import type { ExecutionContext, MessageBatch } from "@cloudflare/workers-types";
 import { z } from "zod";
 
 import worker from "../../src/cf-server";
+import { activeUsdaRelease } from "../../src/server/usda-release/client";
 import { PREVIEW_DOCUMENT } from "./preview/document";
 import { assertDevDatabaseUrl } from "./state";
 import {
@@ -11,6 +12,7 @@ import {
   LOCAL_FIXTURE_VERSION,
 } from "./state";
 import { handleLocalStorageRequest, type LocalStorageEnv } from "./storage";
+import { seedUsdaRelease } from "./usda-synthetic-release";
 
 // Durable Objects, Workflows, and RPC exports remain the production classes.
 export * from "../../src/cf-server";
@@ -27,6 +29,11 @@ type LocalDevEnv = Env &
 const loopback = new Set(["localhost", "127.0.0.1", "[::1]"]);
 const databaseRow = z.object({ database: z.string() });
 const fixturesRow = z.object({ fixtures_ready: z.boolean() });
+
+// Once per isolate, before any request or queue batch can read USDA.
+let usdaSeeded: Promise<void> | undefined;
+const seedUsda = (env: LocalDevEnv) =>
+  (usdaSeeded ??= seedUsdaRelease(env.USDA_RELEASES, env.USDA_ACTIVE_RELEASE));
 
 function assertLocalEnvironment(request: Request, env: LocalDevEnv) {
   const origin = new URL(env.APP_ORIGIN);
@@ -58,7 +65,7 @@ async function readiness(env: LocalDevEnv, fixturesRequired: boolean) {
   });
   let fixturesReady = false;
   let migrationsReady = false;
-  let peersReady = false;
+  let usdaReady = false;
   let database: string | null = null;
   try {
     await client.connect();
@@ -86,21 +93,22 @@ async function readiness(env: LocalDevEnv, fixturesRequired: boolean) {
         [LOCAL_FIXTURE_VERSION],
       );
       fixturesReady = fixturesRow.parse(fixtures.rows[0]).fixtures_ready;
-      const usda = await env.USDA_API.fetch("http://local/counts");
-      peersReady = usda.ok;
-      if (!peersReady)
+      // The first status() starts the load; a loading release is not ready yet.
+      const usda = await activeUsdaRelease(env).status();
+      if (usda.state === "failed")
         throw new Error(
-          "Local USDA data is unavailable; restart pnpm dev to prepare peers",
+          `USDA release ${usda.release} failed to load: ${usda.error}`,
         );
+      usdaReady = usda.state === "ready";
     }
-    const ready = !fixturesRequired || fixturesReady;
+    const ready = !fixturesRequired || (fixturesReady && usdaReady);
     return Response.json(
       {
         devId: env.CUBBY_DEV_ID,
         database,
         fixturesReady,
         migrationsReady,
-        peersReady,
+        usdaReady,
         fixtureVersion: LOCAL_FIXTURE_VERSION,
         ready,
       },
@@ -116,7 +124,7 @@ async function readiness(env: LocalDevEnv, fixturesRequired: boolean) {
         database,
         fixturesReady,
         migrationsReady,
-        peersReady,
+        usdaReady,
         ready: false,
         error: error instanceof Error ? error.message : String(error),
       },
@@ -134,6 +142,7 @@ export default {
     env: LocalDevEnv,
     ctx: ExecutionContext,
   ) {
+    await seedUsda(env);
     // Production handlers discriminate on their deployed queue names. Local
     // queues retain checkout isolation at transport and normalize at delivery.
     if (batch.queue === `cubby-dev-${env.CUBBY_DEV_ID}-telemetry`)
@@ -165,6 +174,7 @@ export default {
         { status: 403 },
       );
     }
+    await seedUsda(env);
     const url = new URL(request.url);
     if (url.pathname === "/__dev/health" || url.pathname === "/__dev/ready") {
       if (request.method !== "GET")

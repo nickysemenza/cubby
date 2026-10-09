@@ -10,7 +10,7 @@ import {
   productTopLevelOut,
 } from "@cubby/schemas/product";
 import { recipeMcpOut } from "@cubby/schemas/recipe";
-import { foodSummary } from "@cubby/usda";
+import { foodSummary, foodSummaryCompact } from "@cubby/usda";
 import { z } from "zod";
 
 /**
@@ -131,10 +131,15 @@ export function slimMeal<TInput>(row: TInput) {
   return parseAs(mealMcpOut, row);
 }
 
+const linkedProductsInput = z
+  .array(productTopLevelOut.pick({ id: true, name: true }))
+  .optional();
 const usdaProjectionInput = foodSummary.extend({
-  linkedProducts: z
-    .array(productTopLevelOut.pick({ id: true, name: true }))
-    .optional(),
+  linkedProducts: linkedProductsInput,
+});
+// Search rows omit the nutrient table (`UsdaFoodListRow`).
+const usdaListProjectionInput = foodSummaryCompact.extend({
+  linkedProducts: linkedProductsInput,
 });
 
 const NUTRIENT_DISPLAY_ORDER: Array<[name: string, unit?: string]> = [
@@ -167,8 +172,9 @@ function orderNutrientSummary<T extends { name: string; unit: string }>(
 }
 
 type UsdaProjectionInput = z.output<typeof usdaProjectionInput>;
+type UsdaListProjectionInput = z.output<typeof usdaListProjectionInput>;
 
-const usdaIdentityProjection = (food: UsdaProjectionInput) => ({
+const usdaIdentityProjection = (food: UsdaListProjectionInput) => ({
   description: food.foodInfo?.description ?? null,
   data_type: food.foodInfo?.data_type ?? null,
   brand_owner: food.brandedFoodInfo?.brand_owner ?? null,
@@ -187,22 +193,31 @@ const usdaNutritionProjection = (food: UsdaProjectionInput) => ({
   portionInfoRaw: food.portionInfoRaw ?? [],
 });
 
+const linkedProductsProjection = (food: UsdaListProjectionInput) =>
+  (food.linkedProducts ?? []).map((product) => ({
+    id: product.id,
+    name: product.name,
+  }));
+
 export function slimUsdaFood<TInput>(row: TInput) {
   const food = parseAs(usdaProjectionInput, row);
   return mcpUsdaFoodOut.parse({
     fdc_id: food.fdc_id,
     ...usdaIdentityProjection(food),
     ...usdaNutritionProjection(food),
-    linkedProducts: (food.linkedProducts ?? []).map((product) => ({
-      id: product.id,
-      name: product.name,
-    })),
+    linkedProducts: linkedProductsProjection(food),
   });
 }
 
 export function slimUsdaFoodListItem<TInput>(row: TInput) {
-  const { nutrientSummary: _nutrients, ...item } = slimUsdaFood(row);
-  return mcpUsdaFoodListItemOut.parse(item);
+  const food = parseAs(usdaListProjectionInput, row);
+  return mcpUsdaFoodListItemOut.parse({
+    fdc_id: food.fdc_id,
+    ...usdaIdentityProjection(food),
+    nutrientsPer100: food.nutritionInfo?.nutrientsPer100 ?? null,
+    portionInfoRaw: food.portionInfoRaw ?? [],
+    linkedProducts: linkedProductsProjection(food),
+  });
 }
 
 export interface ProjectedList<TItem> {

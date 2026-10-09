@@ -7,6 +7,7 @@ import type { ProductLabelNutrition } from "@cubby/schemas/nutrition";
 import type { UnitMapping } from "@cubby/schemas/unitmapping";
 import {
   type FoodSummary,
+  type FoodSummaryCompact,
   getNutrientKey,
   getNutrientUnitString,
   isTier1Nutrient,
@@ -25,10 +26,9 @@ import { wasm } from "~/lib/wasm";
 /**
  * Project a `FoodSummary` down to the WASM synthesis input (the
  * mapping-relevant subset). Tier-1 filtering and conversion-target labeling
- * ("g protein", "kcal") happen here so `TIER1_NUTRIENTS` stays TS-owned —
- * usda-api shares the package and must not need WASM.
+ * ("g protein", "kcal") happen here so `TIER1_NUTRIENTS` stays TS-owned.
  */
-export const toWFoodInput = (food: FoodSummary): WFoodInput => ({
+export const toWFoodInput = (food: FoodSummaryCompact): WFoodInput => ({
   fdc_id: food.fdc_id,
   portions: food.portionInfoRaw.map((p) => ({
     amount: p.amount,
@@ -80,7 +80,7 @@ const toUnitMapping = (m: ReadonlyDeep<WUnitMapping>): UnitMapping => {
   return mapping;
 };
 
-export const unitMappingsFromFood = (food: FoodSummary): UnitMapping[] =>
+export const unitMappingsFromFood = (food: FoodSummaryCompact): UnitMapping[] =>
   wasm.unit_mappings_from_food(toWFoodInput(food)).map(toUnitMapping);
 
 /**

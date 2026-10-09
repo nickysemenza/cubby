@@ -411,9 +411,6 @@ research acceptance.
 - ⏳ **Aggregate range materiality.** Promote if always-on cost/calorie/weight
   ranges create visible noise; collapse only immaterial aggregate spreads.
 
-- ⏳ **USDA duplicate collapsing.** Promote if repeated UPC versions return to
-  search pages; reuse `dedupeUsdaFoodsByUpc` in the MCP handler.
-
 - 🔭 **Recipe scaling extensions.** Pan-size targets, interactive parse
   clarification, and baker's-percentage comparison without a global density
   table.
@@ -976,15 +973,10 @@ are implemented. See [local development](local-development.md#fixture-previews-a
   not merge everything into one relational query (its memory cost is
   documented in `repo/product/crud.ts`).
 
-- ⏳ **Switch USDA reads to the release Durable Object.** The 2026-04
-  release loads into `USDA_RELEASE` ([ADR 0008](adr/0008-usda-release-durable-object.md));
-  no caller reads it yet. Remaining in one change: route every web USDA read
-  through RPC, return search rows without `nutrientSummary`, report `/counts`
-  as foods per data type, delete the web-side USDA caches, advance
-  `Product.fdc_id` links to current revisions on activation, seed a synthetic
-  dev release through the loader, regenerate the Apple client with a
-  compatibility bump, and delete `apps/usda-api`. Then remove its D1
-  database, `usda-api-bundles` bucket, and deployed Worker.
+- ⏳ **Retire the old USDA resources.** After the release Durable Object
+  serves production reads ([ADR 0008](adr/0008-usda-release-durable-object.md)),
+  delete the `usda-api-index` D1 database, the `usda-api-bundles` R2 bucket,
+  and the deployed `usda-api` Worker by hand.
 
 - 🤔 **Summary `entity_read.get` without the detail read.** A summary get
   still runs the complete detail read (USDA, quality, ledger, breadcrumbs)

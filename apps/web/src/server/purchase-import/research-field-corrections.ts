@@ -35,7 +35,10 @@ import {
   readRetainedResearchEvidence,
   type loadResearchEvidence,
 } from "./research-evidence";
-import { afterProductResearchCommit } from "./research-product-effects";
+import {
+  afterProductResearchCommit,
+  type ProductResearchEffects,
+} from "./research-product-effects";
 import { readResearchCanonicalProjection } from "./research-projection";
 
 type Correction = z.infer<typeof researchFieldCorrection>;
@@ -356,6 +359,7 @@ export async function applyResearchFieldCorrection(
   finding: FindingScope,
   fix: Correction,
   reviewedFingerprint?: string,
+  effects: ProductResearchEffects = {},
 ) {
   if (
     !finding.runId ||
@@ -444,7 +448,7 @@ export async function applyResearchFieldCorrection(
       previousIngredientId: current.live.ingredientId,
       ingredientId: result.changes.ingredientId,
     },
-    {},
+    effects,
   );
   return result;
 }
