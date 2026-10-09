@@ -487,14 +487,73 @@ async function isSubscriptionQuotaRefusal(
  * Stream lifecycle metadata that carries no model output: the only events a
  * recoverable quota refusal may follow.
  */
-const preOutputMetadata = z.looseObject({
+// This admission schema is intentionally narrower than diagnostic parsing.
+// New provider fields replay unchanged until their pre-output semantics are known.
+const preOutputMetadata = z.strictObject({
   type: z.enum(["response.created", "response.in_progress"]),
-  response: z.looseObject({
+  sequence_number: z.number().int().nonnegative().optional(),
+  response: z.strictObject({
+    id: z.string().optional(),
+    object: z.literal("response").optional(),
+    created_at: z.number().optional(),
     status: z.enum(["queued", "in_progress"]).optional(),
     output: z.tuple([]).optional(),
+    output_text: z.literal("").optional(),
     error: z.null().optional(),
+    completed_at: z.null().optional(),
+    incomplete_details: z.null().optional(),
+    usage: z.null().optional(),
+    model: z.string().optional(),
+    instructions: z.string().nullable().optional(),
+    metadata: z.record(z.string(), z.string()).nullable().optional(),
+    parallel_tool_calls: z.boolean().optional(),
+    background: z.boolean().nullable().optional(),
+    store: z.boolean().optional(),
+    max_output_tokens: z.number().nullable().optional(),
+    max_tool_calls: z.number().nullable().optional(),
+    previous_response_id: z.string().nullable().optional(),
+    prompt_cache_key: z.string().nullable().optional(),
+    prompt_cache_retention: z.enum(["in_memory", "24h"]).nullable().optional(),
+    safety_identifier: z.string().nullable().optional(),
+    service_tier: z.string().nullable().optional(),
+    temperature: z.number().nullable().optional(),
+    top_p: z.number().nullable().optional(),
+    top_logprobs: z.number().nullable().optional(),
+    truncation: z.enum(["auto", "disabled"]).nullable().optional(),
+    user: z.string().optional(),
+    reasoning: z
+      .strictObject({
+        effort: z.string().nullable().optional(),
+        summary: z.string().nullable().optional(),
+      })
+      .nullable()
+      .optional(),
+    text: z
+      .strictObject({
+        format: z.json().optional(),
+        verbosity: z.string().optional(),
+      })
+      .optional(),
+    tool_choice: z.json().optional(),
+    tools: z.array(z.json()).optional(),
   }),
 });
+
+const streamQuotaError = z.strictObject({
+  type: z.enum(["error", "invalid_request_error"]).optional(),
+  code: subscriptionQuotaCode.shape.code,
+  message: z.string().optional(),
+  param: z.string().nullable().optional(),
+  sequence_number: z.number().int().nonnegative().optional(),
+});
+const streamQuotaEnvelope = z.union([
+  streamQuotaError,
+  z.strictObject({
+    type: z.literal("error").optional(),
+    error: streamQuotaError,
+    sequence_number: z.number().int().nonnegative().optional(),
+  }),
+]);
 
 /** Bounds on a held subscription stream prefix before it is handed back. */
 const STREAM_ADMISSION_BYTES = 65_536;
@@ -522,25 +581,24 @@ async function admitSubscriptionStream(
   const feed = sseEventFeed(
     (event) => {
       if (replay || quota) return;
-      const classified = classifyStreamEvent(event);
-      if ("error" in classified) {
-        if (
-          classified.type === "error" &&
-          subscriptionQuotaCode.safeParse(classified.error).success
-        )
-          quota = prior.failure(response, classified.type, classified.error);
-        else replay = true;
-        return;
-      }
       let metadata: unknown;
       try {
         metadata = JSON.parse(event.data);
       } catch {
         metadata = undefined;
       }
+      if (event.event === "error") {
+        const refusal = streamQuotaEnvelope.safeParse(metadata);
+        if (refusal.success) {
+          const error =
+            "error" in refusal.data ? refusal.data.error : refusal.data;
+          quota = prior.failure(response, "error", error);
+        } else replay = true;
+        return;
+      }
       const parsed = preOutputMetadata.safeParse(metadata);
       if (parsed.success && event.event === parsed.data.type)
-        prior.record(classified.type);
+        prior.record(parsed.data.type);
       else replay = true;
     },
     () => {

@@ -1338,6 +1338,17 @@ describe("budgeted pre-output stream quota fallback", () => {
       frame(undefined, { ...created, response: { output: [] } }),
     ],
     [
+      "unexpected top-level metadata output",
+      frame("response.created", { ...created, delta: "Synthetic output" }),
+    ],
+    [
+      "unexpected nested metadata output",
+      frame("response.created", {
+        ...created,
+        response: { ...created.response, delta: "Synthetic output" },
+      }),
+    ],
+    [
       "metadata carrying an error",
       frame("response.created", {
         ...created,
@@ -1360,6 +1371,27 @@ describe("budgeted pre-output stream quota fallback", () => {
   it.each([
     ["another error code", frame("error", { ...quota, code: "rate_limit" })],
     ["a JSON-string error", rawFrame("error", JSON.stringify(quota.code))],
+    [
+      "an error with a conflicting failed-response type",
+      frame("error", {
+        type: "response.failed",
+        response: { output: [], error: quota },
+      }),
+    ],
+    [
+      "an error containing a function call",
+      frame("error", {
+        type: "error",
+        response: {
+          output: [{ type: "function_call", name: "synthetic_tool" }],
+          error: quota,
+        },
+      }),
+    ],
+    [
+      "a quota error carrying unexpected output",
+      frame("error", { ...quota, delta: "Synthetic output" }),
+    ],
     [
       "a failed response",
       frame("response.failed", {
