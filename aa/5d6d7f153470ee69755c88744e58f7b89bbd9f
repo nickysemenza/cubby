@@ -1,0 +1,40 @@
+apps/web/src/server/db-request-scope.ts
+  s_2e87acf1f13363::t_d0abc9103a647a 1-25
+apps/web/src/cf-server.ts
+  s_2e87acf1f13363::t_45434c8b2c1b71 133-140
+  s_2e87acf1f13363::t_7f0180a23e4b7b 45
+apps/web/src/server/gmail-workflows.ts
+  s_2e87acf1f13363::t_f9b1e7deb821cb 9,25-28,33
+apps/web/src/server/db.ts
+  s_baac6c838b330d::t_cc067d451cbc0d 26
+  s_2e87acf1f13363::t_26fb8ee98df7a5 11
+apps/web/src/server/image-processing/durable-object.ts
+  s_2e87acf1f13363::t_937391b7a7807e 13,23-32,145-163,193-195,239,309-311
+  s_2e87acf1f13363::t_5235c76710393e 312-315
+apps/web/src/server/search-index-repair-workflow.ts
+  s_2e87acf1f13363::t_21a38786ad2777 14,39-43
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "aa5d6d7f153470ee69755c88744e58f7b89bbd9f",
+  "prompts": {},
+  "sessions": {
+    "s_2e87acf1f13363": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "31108f72-a141-4ae8-90c0-f38f0969a4e7",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "nicky <nicky@cloudflare.com>"
+    },
+    "s_baac6c838b330d": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "4e072615-6da5-4add-8945-be01765ee61f",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "nicky <nicky@cloudflare.com>"
+    }
+  }
+}
