@@ -82,6 +82,10 @@ check. Missing, foreign, ambiguous or sources without a retained original remain
 unpaid. The latest approval is authoritative even if revoked or expired;
 inherited authority always wins, keeping retry buckets stable. Settled Run inputs
 are never rewritten. Both launch paths use the same evidence/ownership check.
+Retirement receipts fence originals before cleanup finishes. Mail identity and
+a preserved checksum alone do not prove retained content: cleared content
+tombstones and fenced originals cannot grant new paid authority, for either
+historical or canonical keys.
 No caps, provider credentials or billing arrangements change.
 
 Gmail discovery initializes a new-mail history baseline even without historical

@@ -17,6 +17,7 @@ import {
   productCategory,
   run,
   runEvidence,
+  researchRetention,
   runTarget,
   user,
 } from "~/server/db/schema";
@@ -75,6 +76,9 @@ describe("cloud Product research admission", () => {
     "historical",
     "historical_missing",
     "historical_foreign",
+    "historical_cleared",
+    "canonical_cleared",
+    "historical_retired",
   ] as const;
   const prepareAuthority = async (mode: (typeof authorityModes)[number]) => {
     const f = await productResearchFixture(ctx.db, ctx.actor, {
@@ -123,10 +127,51 @@ describe("cloud Product research admission", () => {
           rawChecksum: "a".repeat(64),
           content: {
             snippet: null,
-            bodyText: "Synthetic ordered device",
+            bodyText: mode.endsWith("_cleared")
+              ? null
+              : "Synthetic ordered device",
             bodyHtml: null,
           },
         });
+    if (mode === "historical_retired") {
+      const [original] = await getDb(ctx.db)
+        .select()
+        .from(orderMail)
+        .where(eq(orderMail.ledgerPartyId, f.party.id));
+      if (!original) throw new Error("Synthetic original missing");
+      const [target] = await getDb(ctx.db)
+        .insert(runTarget)
+        .values({
+          runId: f.parent.id,
+          entityId: f.parent.id,
+          entityKind: "run",
+          workKey: original.id,
+          state: "pending",
+          targetFingerprint: original.rawChecksum,
+        })
+        .returning();
+      if (!target) throw new Error("Synthetic retirement target missing");
+      await getDb(ctx.db)
+        .insert(researchRetention)
+        .values({
+          id: crypto.randomUUID(),
+          runId: f.parent.id,
+          workRef: target.id,
+          ledgerPartyId: f.party.id,
+          orderMailId: original.id,
+          mailboxId,
+          messageId: original.messageId,
+          checksum: original.rawChecksum,
+          phase: "fenced",
+          plan: {
+            originOperationId: "synthetic-retirement",
+            objectKeys: [],
+            screenshotRefs: [],
+            retiredRunIds: [],
+            successors: [],
+          },
+        });
+    }
     const otherUserId = userId.parse("synthetic-foreign-approval-user");
     const approvalActor =
       mode === "foreign" ? { ...ctx.actor, userId: otherUserId } : ctx.actor;
@@ -211,6 +256,9 @@ describe("cloud Product research admission", () => {
     "legacy",
     "historical_missing",
     "historical_foreign",
+    "historical_cleared",
+    "canonical_cleared",
+    "historical_retired",
   ] as const)(
     "leaves unsupported retained-mail backfill unpaid: %s",
     async (mode) => {

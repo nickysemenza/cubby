@@ -10,12 +10,17 @@ import {
 import type { RunId } from "@cubby/schemas/identifiers";
 import type { RunInput } from "@cubby/schemas/run-fields";
 import { sha256Hex } from "@cubby/shared/sha256";
-import { and, desc, eq, inArray, or, sql } from "drizzle-orm";
+import { and, desc, eq, inArray, isNull, or, sql } from "drizzle-orm";
 import { z } from "zod";
 
 import type { Database, DrizzleTransaction } from "~/server/db";
 import { account } from "~/server/db/auth.schema";
-import { run, orderMail, importSourceClaim } from "~/server/db/schema";
+import {
+  run,
+  orderMail,
+  importSourceClaim,
+  researchRetention,
+} from "~/server/db/schema";
 import {
   unwrapDb,
   notDeleted,
@@ -114,13 +119,28 @@ export async function bindRetainedMailBackfill<T extends RunInput>(
     .select({
       messageId: orderMail.messageId,
       checksum: orderMail.rawChecksum,
-      retained: sql<boolean>`${orderMail.content} IS NOT NULL`,
     })
     .from(orderMail)
+    .leftJoin(
+      researchRetention,
+      and(
+        eq(researchRetention.ledgerPartyId, orderMail.ledgerPartyId),
+        eq(researchRetention.orderMailId, orderMail.id),
+        eq(researchRetention.checksum, orderMail.rawChecksum),
+      ),
+    )
     .where(
       and(
         eq(orderMail.ledgerPartyId, owner.ledgerPartyId),
         eq(orderMail.mailboxId, mailbox.id),
+        isNull(researchRetention.id),
+        // Cleanup preserves identity/checksum tombstones; only readable content
+        // outside a retirement fence can establish a retained original.
+        sql`COALESCE(
+          NULLIF(BTRIM(${orderMail.content}->>'bodyText'), ''),
+          NULLIF(BTRIM(${orderMail.content}->>'bodyHtml'), ''),
+          NULLIF(BTRIM(${orderMail.content}->>'snippet'), '')
+        ) IS NOT NULL`,
         or(
           inArray(
             sql<string>`'gmail:' || ${orderMail.mailboxId} || ':' || ${orderMail.messageId}`,
@@ -140,7 +160,7 @@ export async function bindRetainedMailBackfill<T extends RunInput>(
           // proves budget ownership only; it never revalidates their claims
           // or makes their historical source identity writable.
           if (historicalMessages.get(source.externalKey) === original.messageId)
-            return original.retained && !!original.checksum;
+            return !!original.checksum;
           return (
             source.externalKey ===
               `gmail:${mailbox.id}:${original.messageId}` &&
