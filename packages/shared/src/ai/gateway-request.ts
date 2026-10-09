@@ -1,4 +1,4 @@
-import { createParser } from "eventsource-parser";
+import { createParser, type EventSourceMessage } from "eventsource-parser";
 import { z } from "zod";
 
 import type { AiGatewayMetadata } from "./gateway-metadata";
@@ -213,6 +213,110 @@ export interface GatewayResponseObservers {
 }
 
 /**
+ * Complete SSE events decoded from raw bytes. Line endings are normalized only
+ * for parsing; callers forward the original bytes. `onOverflow` reports a frame
+ * beyond the parser's bounded buffer.
+ */
+function sseEventFeed(
+  onEvent: (event: EventSourceMessage) => void,
+  onOverflow: () => void,
+): (bytes: Uint8Array) => void {
+  const decoder = new TextDecoder();
+  let trailingCR = false;
+  const parser = createParser({
+    // Framing counts toward parser buffering, but not decoded error data.
+    maxBufferSize: 65_536,
+    onError: (error) => {
+      // SSE ignores unknown fields and invalid retry hints.
+      if (error.type === "max-buffer-size-exceeded") onOverflow();
+    },
+    onEvent,
+  });
+  return (bytes) => {
+    const text = decoder.decode(bytes, { stream: true });
+    if (!text) return;
+    const framed = trailingCR && text.startsWith("\n") ? text.slice(1) : text;
+    trailingCR = text.endsWith("\r");
+    parser.feed(framed.replace(/\r\n?/gu, "\n"));
+  };
+}
+
+/** One SSE event's type and, when it reports a failure, only its error. */
+function classifyStreamEvent(event: EventSourceMessage) {
+  if (event.data.length > 16_384) return { type: event.event ?? "unnamed" };
+  let decoded: unknown;
+  try {
+    decoded = JSON.parse(event.data);
+  } catch {
+    return { type: event.event ?? "unnamed" };
+  }
+  // A JSON-string `event: error` is the error itself; other strings are output.
+  const message = z.string().safeParse(decoded);
+  if (event.event === "error" && message.success)
+    return { type: event.event, error: message.data };
+  const envelope = z
+    .looseObject({
+      type: z.string().optional(),
+      error: z.json().optional(),
+      response: z.looseObject({ error: z.json().optional() }).optional(),
+    })
+    .safeParse(decoded);
+  const type = event.event ?? envelope.data?.type ?? "unnamed";
+  if (
+    !envelope.success ||
+    (type !== "error" &&
+      type !== "response.failed" &&
+      envelope.data.error == null &&
+      envelope.data.response?.error == null)
+  )
+    return { type };
+  // A failed Response may contain output; only its error is diagnostic.
+  return {
+    type,
+    error:
+      envelope.data.error ??
+      envelope.data.response?.error ??
+      z
+        .object({
+          type: z.string().optional(),
+          code: z.json().optional(),
+          message: z.json().optional(),
+          param: z.json().optional(),
+        })
+        .parse(envelope.data),
+  };
+}
+
+/** Event types seen before a stream error, without their data. */
+function priorStreamEvents() {
+  const types: string[] = [];
+  let seen = 0;
+  return {
+    record(type: string) {
+      seen += 1;
+      if (types.length < 8) types.push(type.slice(0, 200));
+    },
+    failure(
+      response: Response,
+      type: string,
+      error: ReturnType<typeof classifyStreamEvent>["error"],
+    ): GatewayResponseFailure {
+      const diagnostic = `SSE ${JSON.stringify({ event: type.slice(0, 200), contentType: response.headers.get("content-type"), requestId: response.headers.get("x-request-id"), priorEvents: types, eventsSeen: seen })}\n${JSON.stringify(error)}`;
+      return {
+        status: response.status,
+        statusText: response.statusText,
+        retryAfter: response.headers.get("retry-after"),
+        // Streaming decode drops an incomplete trailing UTF-8 sequence.
+        body: new TextDecoder().decode(
+          new TextEncoder().encode(diagnostic).subarray(0, 4_096),
+          { stream: true },
+        ),
+      };
+    },
+  };
+}
+
+/**
  * Observe only the bounded prefix the SDK itself reads. Never clone/tee a live
  * stream, pull ahead, retain model output, or make stream errors replayable.
  */
@@ -222,91 +326,26 @@ function observeStreamFailure(
 ): Response {
   if (!response.body) return response;
   const reader = response.body.getReader();
-  const decoder = new TextDecoder();
-  const priorEvents: string[] = [];
-  let eventsSeen = 0;
+  const prior = priorStreamEvents();
   let remaining = 65_536;
   let observing = true;
-  let trailingCR = false;
-  const recordPriorEvent = (type: string) => {
-    eventsSeen += 1;
-    if (priorEvents.length < 8) priorEvents.push(type.slice(0, 200));
-  };
-  const report = (type: string, errorData: GatewayQuery[string]) => {
-    observing = false;
-    const diagnostic = `SSE ${JSON.stringify({ event: type.slice(0, 200), contentType: response.headers.get("content-type"), requestId: response.headers.get("x-request-id"), priorEvents, eventsSeen })}\n${JSON.stringify(errorData)}`;
-    // Streaming decode drops an incomplete trailing UTF-8 sequence.
-    const body = new TextDecoder().decode(
-      new TextEncoder().encode(diagnostic).subarray(0, 4_096),
-      { stream: true },
-    );
-    onErrorResponse({
-      status: response.status,
-      statusText: response.statusText,
-      retryAfter: response.headers.get("retry-after"),
-      body,
-    });
-  };
-  const parser = createParser({
-    // Framing counts toward parser buffering, but not decoded error data.
-    maxBufferSize: 65_536,
-    onError: (error) => {
-      // SSE ignores unknown fields and invalid retry hints.
-      if (error.type === "max-buffer-size-exceeded") observing = false;
-    },
-    onEvent: (event) => {
+  const feed = sseEventFeed(
+    (event) => {
       if (!observing) return;
-      if (event.data.length > 16_384) {
-        recordPriorEvent(event.event ?? "unnamed");
+      const classified = classifyStreamEvent(event);
+      if (!("error" in classified)) {
+        prior.record(classified.type);
         return;
       }
-      let decoded: unknown;
-      try {
-        decoded = JSON.parse(event.data);
-      } catch {
-        recordPriorEvent(event.event ?? "unnamed");
-        return;
-      }
-      // A JSON-string `event: error` is the error itself; other strings are output.
-      const message = z.string().safeParse(decoded);
-      if (event.event === "error" && message.success) {
-        report(event.event, message.data);
-        return;
-      }
-      const envelope = z
-        .looseObject({
-          type: z.string().optional(),
-          error: z.json().optional(),
-          response: z.looseObject({ error: z.json().optional() }).optional(),
-        })
-        .safeParse(decoded);
-      const type = event.event ?? envelope.data?.type ?? "unnamed";
-      if (
-        envelope.success &&
-        (type === "error" ||
-          type === "response.failed" ||
-          envelope.data.error != null ||
-          envelope.data.response?.error != null)
-      ) {
-        // A failed Response may contain output; only its error is diagnostic.
-        report(
-          type,
-          envelope.data.error ??
-            envelope.data.response?.error ??
-            z
-              .object({
-                type: z.string().optional(),
-                code: z.json().optional(),
-                message: z.json().optional(),
-                param: z.json().optional(),
-              })
-              .parse(envelope.data),
-        );
-      } else {
-        recordPriorEvent(type);
-      }
+      observing = false;
+      onErrorResponse(
+        prior.failure(response, classified.type, classified.error),
+      );
     },
-  });
+    () => {
+      observing = false;
+    },
+  );
   const body = new ReadableStream<Uint8Array>(
     {
       async pull(controller) {
@@ -320,14 +359,7 @@ function observeStreamFailure(
           const bytes = part.value.subarray(0, remaining);
           remaining -= bytes.byteLength;
           try {
-            const text = decoder.decode(bytes, { stream: true });
-            if (text) {
-              // Normalize only diagnostic framing; raw SDK bytes stay unchanged.
-              const framed =
-                trailingCR && text.startsWith("\n") ? text.slice(1) : text;
-              trailingCR = text.endsWith("\r");
-              parser.feed(framed.replace(/\r\n?/gu, "\n"));
-            }
+            feed(bytes);
           } catch {
             observing = false; /* Diagnostics cannot replace the SDK's original stream. */
           }
@@ -349,6 +381,17 @@ function observeStreamFailure(
   });
 }
 
+function reportResponse(
+  response: Response,
+  observers: GatewayResponseObservers,
+): void {
+  observers.onResponse?.(gatewayResponseInfo(response), {
+    status: response.status,
+    contentType: response.headers.get("content-type"),
+    requestId: response.headers.get("x-request-id"),
+  });
+}
+
 /**
  * Reports diagnostics while preserving the SDK’s response bytes and cancellation.
  * A provider SDK that requested a stream parses SSE whatever the response MIME
@@ -359,11 +402,7 @@ async function observeGatewayResponse(
   observers: GatewayResponseObservers,
   streamRequested: boolean,
 ): Promise<Response> {
-  observers.onResponse?.(gatewayResponseInfo(response), {
-    status: response.status,
-    contentType: response.headers.get("content-type"),
-    requestId: response.headers.get("x-request-id"),
-  });
+  reportResponse(response, observers);
   if (!observers.onErrorResponse) return response;
   if (response.ok)
     return streamRequested ||
@@ -408,13 +447,12 @@ async function observeGatewayResponse(
 /** What carried a model request: the household ChatGPT plan or the gateway. */
 export type GatewayTransport = "gateway" | "chatgpt";
 
-const subscriptionQuotaRefusal = z.object({
-  error: z.object({
-    code: z.literal("subscription_sharing_usage_limit_exceeded"),
-  }),
+const subscriptionQuotaCode = z.object({
+  code: z.literal("subscription_sharing_usage_limit_exceeded"),
 });
+const subscriptionQuotaRefusal = z.object({ error: subscriptionQuotaCode });
 
-/** Only an HTTP admission refusal is replayable; never inspect a live SSE stream. */
+/** A complete HTTP quota refusal; streams use {@link admitSubscriptionStream}. */
 async function isSubscriptionQuotaRefusal(
   response: Response,
 ): Promise<boolean> {
@@ -443,6 +481,148 @@ async function isSubscriptionQuotaRefusal(
       // SILENT: clone cleanup cannot replace the original subscription diagnostics.
     });
   }
+}
+
+/**
+ * Stream lifecycle metadata that carries no model output: the only events a
+ * recoverable quota refusal may follow.
+ */
+const preOutputMetadata = z.looseObject({
+  type: z.enum(["response.created", "response.in_progress"]),
+  response: z.looseObject({
+    status: z.enum(["queued", "in_progress"]).optional(),
+    output: z.tuple([]).optional(),
+    error: z.null().optional(),
+  }),
+});
+
+/** Bounds on a held subscription stream prefix before it is handed back. */
+const STREAM_ADMISSION_BYTES = 65_536;
+const STREAM_ADMISSION_MS = 30_000;
+
+/**
+ * Holds a requested subscription stream until its first event that is not
+ * pre-output metadata. Only a complete exact quota `error` there is
+ * recoverable. Anything else — output, tools, reasoning, unknown or malformed
+ * events, other errors, EOF, a read failure, or the byte/time bound — hands
+ * back the held bytes unchanged ahead of the unread remainder, so a later
+ * error stays the SDK's and is never replayed through a paid route.
+ */
+async function admitSubscriptionStream(
+  response: Response,
+  signal: AbortSignal | undefined,
+): Promise<{ quota: GatewayResponseFailure } | { response: Response }> {
+  if (!response.body) return { response };
+  const reader = response.body.getReader();
+  const held: Uint8Array[] = [];
+  const prior = priorStreamEvents();
+  let heldBytes = 0;
+  let quota: GatewayResponseFailure | undefined;
+  let replay = false;
+  const feed = sseEventFeed(
+    (event) => {
+      if (replay || quota) return;
+      const classified = classifyStreamEvent(event);
+      if ("error" in classified) {
+        if (
+          classified.type === "error" &&
+          subscriptionQuotaCode.safeParse(classified.error).success
+        )
+          quota = prior.failure(response, classified.type, classified.error);
+        else replay = true;
+        return;
+      }
+      let metadata: unknown;
+      try {
+        metadata = JSON.parse(event.data);
+      } catch {
+        metadata = undefined;
+      }
+      const parsed = preOutputMetadata.safeParse(metadata);
+      if (parsed.success && event.event === parsed.data.type)
+        prior.record(classified.type);
+      else replay = true;
+    },
+    () => {
+      replay = true;
+    },
+  );
+  let pending: Promise<ReadableStreamReadResult<Uint8Array>> | undefined;
+  let stop: (reason: "expired" | "aborted") => void = () => {};
+  const stopped = new Promise<"expired" | "aborted">((resolve) => {
+    stop = resolve;
+  });
+  const timer = setTimeout(() => stop("expired"), STREAM_ADMISSION_MS);
+  const onAbort = () => stop("aborted");
+  signal?.addEventListener("abort", onAbort, { once: true });
+  try {
+    signal?.throwIfAborted();
+    const decided = () => replay || quota !== undefined;
+    while (!decided() && heldBytes < STREAM_ADMISSION_BYTES) {
+      pending ??= reader.read();
+      const part = await Promise.race([pending, stopped]);
+      if (part === "aborted") {
+        signal?.throwIfAborted();
+        break;
+      }
+      if (part === "expired") break;
+      pending = undefined;
+      if (part.done) break;
+      held.push(part.value);
+      const inspect = part.value.subarray(
+        0,
+        STREAM_ADMISSION_BYTES - heldBytes,
+      );
+      heldBytes += inspect.byteLength;
+      feed(inspect);
+    }
+  } catch (error) {
+    if (signal?.aborted) {
+      await reader.cancel(signal.reason).catch(() => {
+        // SILENT: the caller's abort is the failure that matters.
+      });
+      throw error;
+    }
+    // SILENT: a failed read reaches the SDK from the original reader below.
+    pending = undefined;
+  } finally {
+    clearTimeout(timer);
+    signal?.removeEventListener("abort", onAbort);
+  }
+  if (quota && !replay) {
+    void reader.cancel().catch(() => {
+      // SILENT: cleanup cannot replace the recovered quota diagnostics.
+    });
+    return { quota };
+  }
+  const body = new ReadableStream<Uint8Array>(
+    {
+      async pull(controller) {
+        const chunk = held.shift();
+        if (chunk) {
+          controller.enqueue(chunk);
+          return;
+        }
+        const part = await (pending ?? reader.read());
+        pending = undefined;
+        if (part.done) {
+          reader.releaseLock();
+          controller.close();
+        } else controller.enqueue(part.value);
+      },
+      async cancel(reason) {
+        await reader.cancel(reason);
+      },
+    },
+    { highWaterMark: 0 },
+  );
+  return {
+    response: new Response(body, {
+      status: response.status,
+      statusText: response.statusText,
+      headers: response.headers,
+    }),
+  };
 }
 
 /**
@@ -498,11 +678,49 @@ export interface GatewayFetchRoutes extends GatewayResponseObservers {
   gateway: (request: GatewayFetchRequest) => Promise<Response>;
 }
 
+async function routeSubscriptionResponse(
+  subscription: Response,
+  routes: GatewayFetchRoutes,
+  request: GatewayFetchRequest,
+  budgetedFallback: boolean,
+  streamRequested: boolean,
+): Promise<Response | null> {
+  if (budgetedFallback && subscription.ok && streamRequested) {
+    const admitted = await admitSubscriptionStream(
+      subscription,
+      request.signal,
+    );
+    if ("response" in admitted)
+      return observeGatewayResponse(admitted.response, routes, true);
+    reportResponse(subscription, routes);
+    routes.onErrorResponse?.(admitted.quota);
+    routes.onRecoveredErrorResponse?.(admitted.quota);
+  } else {
+    const recover =
+      budgetedFallback && (await isSubscriptionQuotaRefusal(subscription));
+    const observedSubscription = await observeGatewayResponse(
+      subscription,
+      {
+        ...routes,
+        onErrorResponse: (failure) => {
+          routes.onErrorResponse?.(failure);
+          if (recover) routes.onRecoveredErrorResponse?.(failure);
+        },
+      },
+      streamRequested,
+    );
+    if (!recover) return observedSubscription;
+    await subscription.body?.cancel();
+  }
+  return null;
+}
+
 /**
  * A `fetch` any provider SDK can be handed: the test peer when the harness
  * supplies one, else the connected ChatGPT plan for Responses calls, else the
- * gateway. Explicit budgeted fallback may replay a definitive quota refusal
- * only after durable paid admission. Every received
+ * gateway. Explicit budgeted fallback may replay a definitive quota refusal —
+ * a complete HTTP 429, or a requested stream's quota `error` before any output
+ * ({@link admitSubscriptionStream}) — only after durable paid admission. Every received
  * response is reported to observers. Streaming bytes pass through unchanged;
  * passive error observation never authorizes replay.
  */
@@ -560,21 +778,14 @@ export function gatewayFetchThrough(routes: GatewayFetchRoutes): typeof fetch {
         onSelected: () => routes.onTransport?.("chatgpt"),
       });
       if (subscription) {
-        const recover =
-          budgetedFallback && (await isSubscriptionQuotaRefusal(subscription));
-        const observedSubscription = await observeGatewayResponse(
+        const result = await routeSubscriptionResponse(
           subscription,
-          {
-            ...routes,
-            onErrorResponse: (failure) => {
-              routes.onErrorResponse?.(failure);
-              if (recover) routes.onRecoveredErrorResponse?.(failure);
-            },
-          },
+          routes,
+          request,
+          budgetedFallback,
           await streamRequested(),
         );
-        if (!recover) return observedSubscription;
-        await subscription.body?.cancel();
+        if (result) return result;
       }
     }
     if (requireSubscription)

@@ -57,8 +57,18 @@ committed before cancellation remains spent conservatively. Exhausted discovery 
 scheduled passes reuse its approval and wait for a new explicit lifetime grant
 or the next continuous calendar bucket rather than restarting the same failure.
 Research prefers the connected ChatGPT subscription. Explicit budgeted fallback
-permits a disconnected plan or its exact HTTP 429
-`subscription_sharing_usage_limit_exceeded` refusal to use AI Gateway. Every
+permits a disconnected plan or a complete exact
+`subscription_sharing_usage_limit_exceeded` refusal to use AI Gateway. An HTTP
+429 JSON refusal qualifies. For a requested ChatGPT Responses stream, a bounded
+pre-SDK admission probe also recognizes an HTTP 200 `event: error` carrying that
+code, including when Content-Type is missing. Before the refusal, only matching
+`response.created`/`response.in_progress` metadata with absent/queued/in-progress status,
+absent or empty output and absent/null error can qualify. Any output, tool,
+reasoning, unknown/malformed event or other failure ends eligibility immediately.
+The probe holds at most the first 64 KiB for inspection and waits at most 30 s;
+non-refusals replay the original held chunks and unread remainder without changing
+bytes, headers, read failures or cancellation. It never probes a paid response or
+synthetic peer. Every
 physical paid call first reserves its complete catalog-priced input/output
 billing bounds against the Run's existing execution authorization. Unknown
 prices/bounds, missing authority, cancellation or insufficient allowance prevent
@@ -85,8 +95,11 @@ CR/CRLF/LF framing is normalized only for observation. It does
 not pull ahead or retain preceding output, and preserves original bytes and
 cancellation. Incomplete/oversized/non-JSON error data remain unobserved; ignorable SSE field
 warnings do not suppress later errors. Event
-names alone do not prove absence of useful output. A stream error never grants
-paid replay; wire evidence is required before changing fallback eligibility. Interactive calls without this explicit policy retain their defaults.
+names alone do not prove absence of useful output. Passive observation never
+grants paid replay: only the opt-in pre-SDK admission probe can recover the
+complete pre-output quota refusal. `response.failed`, partial output and
+unrecognized failures remain on their original transport. Interactive calls
+without this explicit policy retain their defaults.
 Pi can open before dispatch binds its Run, so the coordinator resolves transport
 policy from its persisted identity at each request. Photo inventory keeps its
 existing transport policy; an unbound coordinator cannot bypass research admission.

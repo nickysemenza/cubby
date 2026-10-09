@@ -212,8 +212,12 @@ contracts remain in [infrastructure](infrastructure.md#browser-bridge).
 
 - 🤔 **Repeatable real Mac/browser acceptance.** The fixture-retailer journey
   still requires a signed app and persistent Automation/Screen Recording grants.
-  Inspect the signed-install work in #1775 before adding signing infrastructure.
-  Choose a self-hosted runner or a harness that removes those prerequisites,
+  The #1775 guarded installer was exercised against clean main `fa218505e`:
+  the signed 2.15.0 app replaced 2.14.0, retained its session and existing
+  Automation/Screen Recording grants, loaded server-backed Today, and reconnected
+  Browser Sync. That establishes installed-client compatibility and permission
+  continuity; authenticated capture and screenshot roundtrips remain unverified.
+  Reuse this path before adding signing infrastructure. Choose a self-hosted runner or a harness that removes those prerequisites,
   then cover redirect readiness, email-code sign-in and slow navigation with
   sanitized exact-revision artifacts. Installed-app behavior remains an
   acceptance requirement even when a signed build succeeds.
@@ -280,6 +284,13 @@ research acceptance.
   A usage limit does not require reauthorization. Paid fallback must reserve
   the existing durable allowance before every transmission; unknown prices or
   insufficient budget refuse it. Verify actual spend separately from reservations.
+  The bounded live attempt on main `fa218505e` exposed the exact quota code in
+  an HTTP 200 `event: error` after `response.created` and `response.in_progress`,
+  with no Content-Type. It was canceled after one failed subscription call ($0),
+  before further inference. HTTP 429 fallback therefore does not establish live
+  paid recovery. A bounded pre-output probe now qualifies the exact stream
+  refusal through the shared router and existing admission; review, hosted checks
+  and live paid recovery remain pending.
 
 - 🤔 **Link enriched seed Products to Plants.** `growsPlantId` is supported,
   but deciding which growing facts belong on Plant versus a purchased seed
