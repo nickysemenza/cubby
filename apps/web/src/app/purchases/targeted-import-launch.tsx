@@ -108,14 +108,7 @@ export function TargetedProductBulkEnrichmentDialog({
     setEdited({ productSet, targets: next });
   const selected = targets.filter((target) => target.selected);
   const start = useMutation({
-    mutationFn: () =>
-      startTargetedImport({
-        purpose: "product_enrichment",
-        targets: selected.map((target) => ({
-          productId: target.productId,
-          sourceId: target.sourceId,
-        })),
-      }),
+    mutationFn: startTargetedImport,
     onSuccess: (result) => {
       const first = result.runs.find(
         (entry) => entry.created && entry.run,
@@ -141,7 +134,14 @@ export function TargetedProductBulkEnrichmentDialog({
         label: "Start enrichment",
         pending: start.isPending,
         disabled: selected.length === 0,
-        onClick: () => start.mutate(),
+        onClick: () =>
+          start.mutate({
+            purpose: "product_enrichment",
+            targets: selected.map((target) => ({
+              productId: target.productId,
+              sourceId: target.sourceId,
+            })),
+          }),
       }}
     >
       {launch.isPending ? (
@@ -190,24 +190,7 @@ export function TargetedImportLaunchDialog({
   const [sourceId, setSourceId] = useState<string | null>(null);
   const [targets, setTargets] = useState<TargetedProductCandidate[]>([]);
   const start = useMutation({
-    mutationFn: async () => {
-      if (purpose === "purchase_validation") {
-        return await startTargetedImport({
-          purpose,
-          purchaseId: targetId,
-          sourceId,
-        });
-      }
-      return await startTargetedImport({
-        purpose,
-        targets: targets
-          .filter((target) => target.selected)
-          .map((target) => ({
-            productId: target.productId,
-            sourceId: target.sourceId,
-          })),
-      });
-    },
+    mutationFn: startTargetedImport,
     onSuccess: (result) => {
       const run = result.runs.find((entry) => entry.created && entry.run)?.run;
       if (run) window.location.assign(runHref(run.id));
@@ -259,7 +242,19 @@ export function TargetedImportLaunchDialog({
             : "Start enrichment",
         pending: start.isPending,
         disabled: !canStart,
-        onClick: () => start.mutate(),
+        // Mutation observer options can lag this render; submit its selected inputs.
+        onClick: () =>
+          start.mutate(
+            purpose === "purchase_validation"
+              ? { purpose, purchaseId: targetId, sourceId }
+              : {
+                  purpose,
+                  targets: selectedTargets.map((target) => ({
+                    productId: target.productId,
+                    sourceId: target.sourceId,
+                  })),
+                },
+          ),
       }}
     >
       {launch.isPending ? (
