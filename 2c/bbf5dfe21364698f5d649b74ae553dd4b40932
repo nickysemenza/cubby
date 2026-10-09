@@ -1,0 +1,23 @@
+apps/web/src/server/services/usda-link-advance.integration.test.ts
+  s_baac6c838b330d::t_a49d49cab53836 15-18,88-101
+apps/web/src/server/services/usda-link-advance.service.ts
+  s_baac6c838b330d::t_c61445855ad977 13-15,27-28,35-50,72-73,79-84
+docs/development.md
+  s_baac6c838b330d::t_ec0d8d917ac6dc 112-113
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "2cbbf5dfe21364698f5d649b74ae553dd4b40932",
+  "prompts": {},
+  "sessions": {
+    "s_baac6c838b330d": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "4e072615-6da5-4add-8945-be01765ee61f",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "nicky <nicky@cloudflare.com>"
+    }
+  }
+}
