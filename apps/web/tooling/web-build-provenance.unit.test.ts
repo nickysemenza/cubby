@@ -57,7 +57,7 @@ function fixture() {
   );
   put("apps/web/dist/client/main.js");
   put("apps/web/dist/server/index.js");
-  put("packages/wasm/recipebridge_bg.wasm");
+  put("packages/wasm/worker/recipebridge_bg.wasm");
   put("packages/wasm/browser/recipebridge_bg.wasm");
   put("packages/wasm/cookbook/recipebridge_cookbook_bg.wasm");
   return { root, put };
@@ -181,7 +181,7 @@ describe("web build freshness", () => {
   it("tracks the cookbook wasm crate and its package", () => {
     const { root, put } = fixture();
     writeWebBuildProvenance(root);
-    put("recipebridge-cookbook/src/lib.rs", "pub fn changed() {}");
+    put("recipebridge/cookbook/src/lib.rs", "pub fn changed() {}");
     expect(readWebBuildProvenance(root).matchesSource).toBe(false);
     writeWebBuildProvenance(root);
     put("packages/wasm/cookbook/recipebridge_cookbook_bg.wasm", "rebuilt");

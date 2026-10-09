@@ -32,11 +32,11 @@ JSONL routes    →  cancellable workflow streams
   server. Conversions chain through a product's unit mappings, e.g.
   `2 cups → $5.00 → 333g`.
 - [scripts/build-wasm.sh](../scripts/build-wasm.sh) builds three packages into
-  `packages/wasm`. The Worker and Vitest load the full build. The browser
+  `packages/wasm`. The Worker and Vitest load the full build, `worker/`. The browser
   loads `browser/`, built without the Worker-only `html` and `ai-usage`
   features (`compact_browser_page`, `parse_scraped_recipe`,
   `gateway_call_usage`). Only the cookbook import loads
-  `@cubby/recipebridge/cookbook` (the `recipebridge-cookbook` crate). Put a new
+  `@cubby/recipebridge/cookbook` (the `recipebridge/cookbook` crate). Put a new
   Worker-only export behind one of those features; browser code must not call
   it, which `wasm-browser-exports.unit.test.ts` enforces, and
   `check-client-bundle.ts` checks each package lands in the right bundle.

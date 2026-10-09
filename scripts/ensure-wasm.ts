@@ -13,8 +13,7 @@
 // ensure-apple-ffi.ts does for the xcframework, the key is also written inside
 // the package (it restores with the cache) and a matching marker short-circuits
 // before Nx is involved. The marker is deliberately not an Nx input — it is an
-// output of the build, like packages/wasm/package.json and .gitignore, which
-// wasm-pack rewrites byte-identically so the cache key stays stable.
+// output of the build, so hashing it would change the key it records.
 import { existsSync, readFileSync, writeFileSync } from "node:fs";
 import { join, resolve } from "node:path";
 import { homedir } from "node:os";
@@ -41,7 +40,7 @@ export const cargoMetadataSchema = z.object({
 const WASM_DIR = join(ROOT, "packages/wasm");
 // scripts/build-wasm.sh emits all three; any one missing means a partial build.
 const BINARIES = [
-  "recipebridge_bg.wasm",
+  "worker/recipebridge_bg.wasm",
   "browser/recipebridge_bg.wasm",
   "cookbook/recipebridge_cookbook_bg.wasm",
 ];

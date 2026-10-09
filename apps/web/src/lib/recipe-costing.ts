@@ -1,11 +1,11 @@
 import type {
   AmountKind,
+  IngredientUsage,
   WAmount,
   WAvailabilityInput,
   WAvailabilityResult,
   WCostingInput,
   WCostingRow,
-  WIngredientUsage,
   WMeasureResult,
   WNeedsInput,
   WNeedsResult,
@@ -56,7 +56,7 @@ import { wasm } from "~/lib/wasm";
 // utilities that keep their non-costing callers.
 
 /** The role a row plays, as classified by ingredient-parser. */
-export type IngredientUsage = WIngredientUsage;
+export type { IngredientUsage };
 
 /**
  * A section ingredient carrying its enclosing section's name — the costing
@@ -178,7 +178,7 @@ export type IngredientDataItem = CostingRow & {
  * The diagnostic shapes are declared once as the zod wire contract in
  * `@cubby/schemas/recipe-shared` and inferred here, so the contract and the source
  * can't silently diverge (the structural compat between the WASM types the
- * reshaper feeds in — PlanTrio, WConversionStep, WIngredientUsage — and these
+ * reshaper feeds in — PlanTrio, WConversionStep, IngredientUsage — and these
  * is compiler-enforced at `toRowDiagnostic`).
  */
 

@@ -36,7 +36,7 @@ const gitCommit = execSync("git rev-parse --short HEAD", {
  * jsdom `ui` project, where the client transform emitted a `/@fs/…` URL that
  * `fetch` can't parse under Node:
  *
- *     TypeError: Failed to parse URL from /@fs/…/packages/wasm/recipebridge_bg.wasm
+ *     TypeError: Failed to parse URL from /@fs/…/packages/wasm/worker/recipebridge_bg.wasm
  *
  * That made every module transitively reaching `@cubby/recipebridge` — notably
  * `data-table/columnHelpers.tsx`, via `cell-data` → `~/lib/wasm` — unimportable

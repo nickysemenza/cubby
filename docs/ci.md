@@ -90,7 +90,7 @@ target regardless of what changed.
 
 `cubby-ffi` and the WASM packages share the `recipebridge` Rust core and Cargo
 lockfile, but each target needs its own compiled artifacts. EPUB extraction is
-the separate wasm-only `recipebridge-cookbook` crate, and `cubby-ffi` turns off
+the separate wasm-only `recipebridge/cookbook` crate, and `cubby-ffi` turns off
 `recipebridge`'s Worker-only default features (`html`, `ai-usage`), so Apple
 targets compile neither the cookbook crate nor `page.rs`. The `rust` target
 also lints `recipebridge --no-default-features`, the browser build.

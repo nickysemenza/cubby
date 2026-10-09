@@ -96,7 +96,8 @@ test("the in-package marker short-circuits only when it matches and every binary
   stampWasm("key", pkg);
   assert.equal(wasmIsCurrent("key", pkg), false);
   // A build interrupted after the first wasm-pack run is still stale.
-  writeFileSync(join(pkg, "recipebridge_bg.wasm"), "binary");
+  mkdirSync(join(pkg, "worker"));
+  writeFileSync(join(pkg, "worker/recipebridge_bg.wasm"), "binary");
   mkdirSync(join(pkg, "browser"));
   writeFileSync(join(pkg, "browser/recipebridge_bg.wasm"), "binary");
   assert.equal(wasmIsCurrent("key", pkg), false);

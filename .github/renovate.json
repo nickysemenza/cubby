@@ -41,7 +41,12 @@
     },
     {
       "matchManagers": ["cargo"],
-      "matchPackageNames": ["ingredient", "recipe-scraper", "cookbook"],
+      "matchPackageNames": [
+        "ingredient",
+        "recipe-scraper",
+        "recipe-types",
+        "cookbook"
+      ],
       "enabled": true,
       "groupName": "ingredient-parser upstream",
       "groupSlug": "ingredient-parser-upstream"

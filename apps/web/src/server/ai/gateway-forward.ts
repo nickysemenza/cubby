@@ -1,3 +1,4 @@
+import type { WGatewayCallUsage } from "@cubby/recipebridge";
 import type { RunId } from "@cubby/schemas/identifiers";
 import {
   gatewayForwardInput,
@@ -70,37 +71,20 @@ const gatewayMetadataKeys = z.object({
   purpose: z.string().optional(),
 });
 
-/** Provider token counts extracted by the crate; pricing is owned by accounting. */
-const gatewayCallUsageSchema = z.object({
-  provider: z.string().min(1),
-  usage: z.object({
-    input_tokens: z.number().int().nonnegative().default(0),
-    output_tokens: z.number().int().nonnegative().default(0),
-    cache_read_input_tokens: z.number().int().nonnegative().default(0),
-    cache_creation_input_tokens: z.number().int().nonnegative().default(0),
-  }),
-});
-type GatewayCallUsage = z.output<typeof gatewayCallUsageSchema>;
-
 type AiUsageRecord = Parameters<typeof recordAiUsage>[1];
 
 /** Everything the forwarder reaches outside itself, so tests can stand it in. */
 export interface GatewayForwardPort {
   /** The shared AI Gateway transport: binding in prod, REST in dev. */
   transport: typeof gatewayFetch;
-  /** Usage from a raw provider body, or `null` when unknown. */
-  callUsage: (model: string, body: string) => GatewayCallUsage | null;
+  /** Provider token counts from a raw provider body; pricing is owned by accounting. */
+  callUsage: (model: string, body: string) => WGatewayCallUsage | undefined;
   recordUsage: (db: Database, input: AiUsageRecord) => Promise<void>;
 }
 
 const productionGatewayForwardPort: GatewayForwardPort = {
   transport: gatewayFetch,
-  callUsage: (model, body) => {
-    const parsed = gatewayCallUsageSchema.safeParse(
-      wasm.gateway_call_usage(model, body),
-    );
-    return parsed.success ? parsed.data : null;
-  },
+  callUsage: (model, body) => wasm.gateway_call_usage(model, body),
   recordUsage: recordAiUsage,
 };
 
@@ -181,7 +165,7 @@ function usageRecord(
   feature: string,
   model: string,
   purpose: string | undefined,
-  usage: GatewayCallUsage,
+  usage: WGatewayCallUsage,
   durationMs: number,
   gateway: GatewayResponseInfo,
   transport: GatewayTransport | "unknown",
@@ -266,7 +250,7 @@ export async function forwardGatewayRequest(
   const durationMs = Math.max(0, Math.round(performance.now() - startedAt));
 
   const usage =
-    opts.db && response.ok && model ? port.callUsage(model, body) : null;
+    opts.db && response.ok && model ? port.callUsage(model, body) : undefined;
   if (opts.db && opts.runId && model && usage) {
     await port.recordUsage(
       opts.db,

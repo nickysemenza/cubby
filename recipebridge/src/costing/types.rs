@@ -9,9 +9,9 @@ use serde::{Deserialize, Serialize};
 use tsify_next::Tsify;
 
 use super::consumption::PlanTrio;
-use crate::{
-    WAmount, WConversionStep, WIngredientUsage, WNamedEstimate, WNutritionTotals, WProductInput,
-};
+use ingredient::usage::IngredientUsage;
+
+use crate::{WAmount, WConversionStep, WNamedEstimate, WNutritionTotals, WProductInput};
 
 /// Row kind (the zod `kind: "ingredient" | "recipe"`).
 #[derive(Tsify, Serialize, Deserialize, Clone, Copy, PartialEq, Eq, Debug)]
@@ -226,7 +226,7 @@ pub struct WRowResult {
     #[tsify(type = "string | null")]
     pub section_name: Option<String>,
     pub kind: WRowKind,
-    pub usage: WIngredientUsage,
+    pub usage: IngredientUsage,
     pub measured: bool,
     pub plan: PlanTrio,
     /// Basis weight (g) deferred rows estimated from; None for pass-1 rows.

@@ -144,55 +144,36 @@ function cfPgNativeStub(): Plugin {
 }
 
 /**
- * Vite plugin that redirects @cubby/recipebridge to a CF Workers-compatible
- * wrapper in the SSR environment. The wrapper uses the ?init pattern supported
- * by @cloudflare/vite-plugin to properly instantiate the WASM module.
+ * Resolves @cubby/recipebridge per environment (scripts/build-wasm.sh).
  *
- * Without this, vite-plugin-wasm doesn't apply to the CF Workers SSR environment,
- * so the bare .wasm import returns a WebAssembly.Module (not instantiated exports),
- * causing `__wbindgen_start is not a function`.
+ * SSR gets a CF Workers wrapper over the full build. It uses the ?init pattern
+ * @cloudflare/vite-plugin supports: vite-plugin-wasm doesn't apply to the
+ * Workers environment, so a bare .wasm import returns an uninstantiated
+ * WebAssembly.Module, causing `__wbindgen_start is not a function`.
+ *
+ * The client gets the build without the Worker-only features: HTML parsing
+ * alone is ~0.34 MB gzip that only the Worker calls.
  */
-function cfWasmPlugin(): Plugin {
-  const cfWrapper = path.resolve(__dirname, "src/lib/recipebridge-cf.ts");
+function recipebridgePlugin(): Plugin {
+  const targets = new Map([
+    ["ssr", path.resolve(__dirname, "src/lib/recipebridge-cf.ts")],
+    [
+      "client",
+      path.resolve(__dirname, "../../packages/wasm/browser/recipebridge.js"),
+    ],
+  ]);
   return {
-    name: "cf-wasm-redirect",
+    name: "recipebridge-redirect",
     enforce: "pre",
     applyToEnvironment(env) {
-      return env.name === "ssr";
+      return targets.has(env.name);
     },
     resolveId(source) {
       if (
         source === "@cubby/recipebridge" ||
-        source.endsWith("/packages/wasm/recipebridge.js")
+        source.endsWith("/packages/wasm/worker/recipebridge.js")
       ) {
-        return cfWrapper;
-      }
-    },
-  };
-}
-
-/**
- * Serve the browser the recipebridge build without the `html` feature
- * (scripts/build-wasm.sh): HTML parsing is ~0.34 MB gzip that only the Worker
- * calls. The SSR environment keeps the full build through cfWasmPlugin.
- */
-function browserWasmPlugin(): Plugin {
-  const browserBuild = path.resolve(
-    __dirname,
-    "../../packages/wasm/browser/recipebridge.js",
-  );
-  return {
-    name: "browser-wasm-redirect",
-    enforce: "pre",
-    applyToEnvironment(env) {
-      return env.name === "client";
-    },
-    resolveId(source) {
-      if (
-        source === "@cubby/recipebridge" ||
-        source.endsWith("/packages/wasm/recipebridge.js")
-      ) {
-        return browserBuild;
+        return targets.get(this.environment.name);
       }
     },
   };
@@ -419,8 +400,7 @@ export default defineConfig(async ({ command }) => {
       workerStaticAssets(),
       // CF Workers WASM instantiation plugin must run before vite-plugin-wasm
       cfPgNativeStub(),
-      cfWasmPlugin(),
-      browserWasmPlugin(),
+      recipebridgePlugin(),
       cfSentryShim(),
       cfZodLocalesStub(),
       phosphorWeights(),

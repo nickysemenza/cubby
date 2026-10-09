@@ -33,7 +33,7 @@ describe("browser recipebridge build", () => {
   it("is never asked for an export only the Worker build has", () => {
     const browser = exportNames("packages/wasm/browser/recipebridge.d.ts");
     const serverOnly = [
-      ...exportNames("packages/wasm/recipebridge.d.ts"),
+      ...exportNames("packages/wasm/worker/recipebridge.d.ts"),
     ].filter((name) => !browser.has(name));
     expect(serverOnly).toContain("compact_browser_page");
 
