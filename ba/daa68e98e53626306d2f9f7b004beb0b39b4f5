@@ -1,0 +1,29 @@
+apps/web/src/cf-server.ts
+  s_baac6c838b330d::t_38dca15b0c696e 699-733
+apps/web/src/routes/api/debug/usda-release.ts
+  s_baac6c838b330d::t_c967115e942d79 7,15,89-90,129-136
+apps/web/src/server/repo/product/lookup.ts
+  s_baac6c838b330d::t_1644aeff5d2e58 360-372
+apps/web/src/server/repo/repo.fixtures.ts
+  s_baac6c838b330d::t_7337d9b453b533 41,43,664-675
+apps/web/src/server/services/usda-link-advance.integration.test.ts
+  s_baac6c838b330d::t_a7616bc42ff672 1-85
+apps/web/src/server/services/usda-link-advance.service.ts
+  s_baac6c838b330d::t_b61ffde82ce8e7 1-74
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "badaa68e98e53626306d2f9f7b004beb0b39b4f5",
+  "prompts": {},
+  "sessions": {
+    "s_baac6c838b330d": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "4e072615-6da5-4add-8945-be01765ee61f",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "nicky <nicky@cloudflare.com>"
+    }
+  }
+}
