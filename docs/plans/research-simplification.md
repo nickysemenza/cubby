@@ -20,6 +20,11 @@ Interactive and unattended adapters can call that same seam. This proposal does
 not change the MCP HTTP handler, the separately owned caller-driven enrichment
 launch/URL-capture mode, or spending-classification review.
 
+Delete obsolete execution contracts in place and migrate their current callers;
+do not add adapters that make retired launch or retry engines executable again.
+Historical records remain readable through generic presentation. Preserve their
+data and settled outcomes without preserving their old execution contract.
+
 ## Concrete deletion slices
 
 | Current code/storage                                                                                                    | Proposed replacement and callers                                                                                                                                                                                                                                                                                         | Deletions and acceptance                                                                                                                                                                                                                                                                                                                  |
@@ -171,8 +176,13 @@ not prove empty output. The shared router now inspects a complete bounded
 pre-output refusal and qualifying metadata before the SDK receives bytes,
 then runs the existing durable paid admission. Non-refusal chunks are returned
 unchanged; any output, tool, reasoning, unknown event or `response.failed`
-prevents recovery. Exact-head review, hosted checks and live paid acceptance
-remain required. This proposal grants no additional spend,
+prevents recovery. PR #1794 passed independent Sol/high and Astra/high review,
+exact-head hosted checks and checksum-verified E2E artifacts before merging.
+A fresh bounded attempt after deployment of `01dda8634` still received the
+exact quota refusal, with no paid admission or gateway call; it was canceled
+after one failed subscription call. The reason admission declined that stream
+is not established by event names alone. Live paid acceptance remains open.
+This proposal grants no additional spend,
 production migration or household cleanup.
 
 The forward image fix reuses a same-byte item attachment under the existing

@@ -172,7 +172,9 @@ retention, admission, durable recovery, replay, ownership and domain writes.
 Pi already hosts the researcher; the [simplification audit](plans/research-simplification.md)
 records the remaining deletion candidates and SDK comparisons. The first slice
 removes 245 net handwritten code/test lines (coordinator declarations and old Gmail
-fixtures); the old Workflow and its historical compatibility still remain. Browser transport
+fixtures); the old Workflow remains a deletion target. Remove its executable
+launch/retry paths without a compatibility adapter; retain historical records
+through generic presentation. Browser transport
 contracts remain in [infrastructure](infrastructure.md#browser-bridge).
 
 - 🟢 **Stop repeated logical failures across a Run.** One browser-command retry
@@ -264,7 +266,9 @@ research acceptance.
   purpose sets in shared constants, agent inputs, Run declarations and Workflow
   contracts. Import report eligibility now comes from the shared Run schema, including
   `mail_import`, with generated Swift and one web/server predicate. Exact-head
-  hosted and client acceptance are pending. Agent execution, discovery and the
+  hosted checks and checksum-verified E2E artifacts passed before PR #1793
+  merged; production deployment succeeded on `01dda8634`. Native visible
+  report acceptance remains pending. Agent execution, discovery and the
   Imports saved view intentionally cover different capabilities; finish their
   audit before consolidating additional purpose declarations.
 
@@ -294,8 +298,12 @@ research acceptance.
   with no Content-Type. It was canceled after one failed subscription call ($0),
   before further inference. HTTP 429 fallback therefore does not establish live
   paid recovery. A bounded pre-output probe now qualifies the exact stream
-  refusal through the shared router and existing admission; review, hosted checks
-  and live paid recovery remain pending.
+  refusal through the shared router and existing admission. #1794 completed
+  independent Sol/high and Astra/high review, exact-head hosted checks and merge.
+  A fresh bounded attempt on deployed main `01dda8634` still returned the quota
+  without paid admission or transmission; it was canceled after one failed call.
+  The actual stream-admission rejection and live paid recovery remain unresolved;
+  do not infer eligibility from preceding event names alone.
 
 - 🤔 **Link enriched seed Products to Plants.** `growsPlantId` is supported,
   but deciding which growing facts belong on Plant versus a purchased seed

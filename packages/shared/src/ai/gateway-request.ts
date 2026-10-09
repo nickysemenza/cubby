@@ -559,6 +559,78 @@ const streamQuotaEnvelope = z.union([
 const STREAM_ADMISSION_BYTES = 65_536;
 const STREAM_ADMISSION_MS = 30_000;
 
+/** Union branches contain structural errors too; never project input values. */
+function streamAdmissionIssues(
+  issues: z.core.$ZodIssue[],
+  depth = 0,
+): z.core.$ZodIssue[] {
+  return issues
+    .slice(0, 16)
+    .flatMap((issue) =>
+      issue.code === "invalid_union" && depth < 2
+        ? streamAdmissionIssues(
+            issue.errors.slice(0, 2).flatMap((branch) => branch.slice(0, 8)),
+            depth + 1,
+          )
+        : [issue],
+    )
+    .slice(0, 16);
+}
+
+function streamAdmissionDecision(
+  reason: string,
+  event?: string,
+  issues?: z.core.$ZodIssue[],
+) {
+  return {
+    reason,
+    event: event?.slice(0, 80),
+    issues: issues
+      ? streamAdmissionIssues(issues)
+          .sort((left, right) => right.path.length - left.path.length)
+          .slice(0, 4)
+          .map((issue) => ({
+            code: issue.code,
+            path: issue.path
+              .slice(0, 4)
+              .map((part) => String(part).slice(0, 40)),
+            keys:
+              issue.code === "unrecognized_keys"
+                ? issue.keys.slice(0, 4).map((key) => key.slice(0, 40))
+                : undefined,
+          }))
+      : undefined,
+  };
+}
+
+function streamAdmissionDiagnostic(
+  decision: ReturnType<typeof streamAdmissionDecision>,
+  started: number,
+  heldBytes: number,
+) {
+  const description = {
+    reason: decision.reason,
+    event: decision.event,
+    streamRequested: true,
+    elapsedMs: Date.now() - started,
+    inspectedBytes: heldBytes,
+    issues: decision.issues,
+  };
+  const serialize = () =>
+    `Subscription stream admission: ${JSON.stringify(description)}`;
+  let diagnostic = serialize();
+  // Keep required evidence and valid JSON; escaped structural keys consume
+  // bytes too. The separator belongs to the same 2 KiB allowance.
+  while (
+    new TextEncoder().encode(diagnostic).byteLength > 2_047 &&
+    description.issues?.length
+  ) {
+    description.issues.pop();
+    diagnostic = serialize();
+  }
+  return diagnostic;
+}
+
 /**
  * Holds a requested subscription stream until its first event that is not
  * pre-output metadata. Only a complete exact quota `error` there is
@@ -570,8 +642,25 @@ const STREAM_ADMISSION_MS = 30_000;
 async function admitSubscriptionStream(
   response: Response,
   signal: AbortSignal | undefined,
-): Promise<{ quota: GatewayResponseFailure } | { response: Response }> {
-  if (!response.body) return { response };
+): Promise<
+  { quota: GatewayResponseFailure } | { response: Response; diagnostic: string }
+> {
+  if (!response.body)
+    return {
+      response,
+      diagnostic: 'Subscription stream admission: {"reason":"no_body"}',
+    };
+  const started = Date.now();
+  let decision = streamAdmissionDecision("eof");
+  const reject = (
+    reason: string,
+    event?: string,
+    issues?: z.core.$ZodIssue[],
+  ) => {
+    if (replay) return;
+    replay = true;
+    decision = streamAdmissionDecision(reason, event, issues);
+  };
   const reader = response.body.getReader();
   const held: Uint8Array[] = [];
   const prior = priorStreamEvents();
@@ -593,16 +682,21 @@ async function admitSubscriptionStream(
           const error =
             "error" in refusal.data ? refusal.data.error : refusal.data;
           quota = prior.failure(response, "error", error);
-        } else replay = true;
+        } else reject("quota_schema", event.event, refusal.error.issues);
         return;
       }
       const parsed = preOutputMetadata.safeParse(metadata);
       if (parsed.success && event.event === parsed.data.type)
         prior.record(parsed.data.type);
-      else replay = true;
+      else
+        reject(
+          parsed.success ? "event_mismatch" : "metadata_schema",
+          event.event,
+          parsed.success ? undefined : parsed.error.issues,
+        );
     },
     () => {
-      replay = true;
+      reject("frame_overflow");
     },
   );
   let pending: Promise<ReadableStreamReadResult<Uint8Array>> | undefined;
@@ -623,7 +717,10 @@ async function admitSubscriptionStream(
         signal?.throwIfAborted();
         break;
       }
-      if (part === "expired") break;
+      if (part === "expired") {
+        reject("timeout");
+        break;
+      }
       pending = undefined;
       if (part.done) break;
       held.push(part.value);
@@ -641,12 +738,15 @@ async function admitSubscriptionStream(
       });
       throw error;
     }
+    reject("read_failure");
     // SILENT: a failed read reaches the SDK from the original reader below.
     pending = undefined;
   } finally {
     clearTimeout(timer);
     signal?.removeEventListener("abort", onAbort);
   }
+  if (!quota && !replay && heldBytes >= STREAM_ADMISSION_BYTES)
+    reject("byte_limit");
   if (quota && !replay) {
     void reader.cancel().catch(() => {
       // SILENT: cleanup cannot replace the recovered quota diagnostics.
@@ -675,6 +775,7 @@ async function admitSubscriptionStream(
     { highWaterMark: 0 },
   );
   return {
+    diagnostic: streamAdmissionDiagnostic(decision, started, heldBytes),
     response: new Response(body, {
       status: response.status,
       statusText: response.statusText,
@@ -749,7 +850,20 @@ async function routeSubscriptionResponse(
       request.signal,
     );
     if ("response" in admitted)
-      return observeGatewayResponse(admitted.response, routes, true);
+      return observeGatewayResponse(
+        admitted.response,
+        {
+          ...routes,
+          onErrorResponse: routes.onErrorResponse
+            ? (failure) =>
+                routes.onErrorResponse?.({
+                  ...failure,
+                  body: `${failure.body}\n${admitted.diagnostic}`,
+                })
+            : undefined,
+        },
+        true,
+      );
     reportResponse(subscription, routes);
     routes.onErrorResponse?.(admitted.quota);
     routes.onRecoveredErrorResponse?.(admitted.quota);

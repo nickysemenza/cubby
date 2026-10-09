@@ -1206,6 +1206,105 @@ describe("budgeted pre-output stream quota fallback", () => {
     };
   }
 
+  // A rejected metadata frame currently hides why an otherwise exact quota
+  // refusal was replayed. Diagnostics must preserve the first decision only,
+  // expose structural issues, and never retain lifecycle values.
+  it("reports the first stream admission rejection without lifecycle values", async () => {
+    const source =
+      frame("response.created", {
+        ...created,
+        response: {
+          ...created.response,
+          user: null,
+          unknown_metadata: "PRIVATE_SYNTHETIC_VALUE",
+        },
+      }) + refusal();
+    const r = routes(() => new Response(chunked(source, 17)));
+    const response = await gatewayFetchThrough(r.fetchRoutes)(url, init);
+    expect(await response.text()).toBe(source);
+    expect(r.gateway).not.toHaveBeenCalled();
+    expect(r.beforePaidRequest).not.toHaveBeenCalled();
+    const diagnostic = r.failures[0]?.body ?? "";
+    expect(diagnostic).toContain('"reason":"metadata_schema"');
+    expect(diagnostic).toContain('"event":"response.created"');
+    expect(diagnostic).toContain('"path":["response","user"]');
+    expect(diagnostic).toContain('"code":"invalid_type"');
+    expect(diagnostic).toContain('"keys":["unknown_metadata"]');
+    expect(diagnostic).not.toContain("PRIVATE_SYNTHETIC_VALUE");
+    expect(diagnostic).toContain(quota.code);
+  });
+
+  it("keeps admission evidence valid and bounded with escaped structural keys", async () => {
+    const unknown = Object.fromEntries(
+      Array.from({ length: 4 }, (_, index) => [
+        "\u0000".repeat(40) + index,
+        "PRIVATE_SYNTHETIC_VALUE",
+      ]),
+    );
+    const source =
+      frame("response.created", {
+        ...created,
+        ...unknown,
+        response: {
+          ...created.response,
+          ...unknown,
+          reasoning: { ...unknown },
+          text: { ...unknown },
+        },
+      }) + refusal();
+    const r = routes(() => new Response(chunked(source, 131)));
+    const response = await gatewayFetchThrough(r.fetchRoutes)(url, init);
+    expect(await response.text()).toBe(source);
+    expect(r.gateway).not.toHaveBeenCalled();
+    const prefix = "Subscription stream admission: ";
+    const diagnostic = (r.failures[0]?.body ?? "").split(prefix)[1] ?? "";
+    expect(
+      new TextEncoder().encode("\n" + prefix + diagnostic).length,
+    ).toBeLessThanOrEqual(2_048);
+    expect(JSON.parse(diagnostic)).toMatchObject({
+      reason: "metadata_schema",
+      streamRequested: true,
+      elapsedMs: expect.any(Number),
+      inspectedBytes: expect.any(Number),
+    });
+    expect(diagnostic).not.toContain("PRIVATE_SYNTHETIC_VALUE");
+  });
+
+  it("reports nested quota-envelope rejection paths without envelope values", async () => {
+    const source =
+      metadata() +
+      frame("error", {
+        error: {
+          ...quota,
+          param: 17,
+          unknown_error_field: "PRIVATE_SYNTHETIC_VALUE",
+        },
+      });
+    const r = routes(() => new Response(chunked(source, 17)));
+    const response = await gatewayFetchThrough(r.fetchRoutes)(url, init);
+    expect(await response.text()).toBe(source);
+    expect(r.beforePaidRequest).not.toHaveBeenCalled();
+    const diagnostic =
+      (r.failures[0]?.body ?? "").split("Subscription stream admission: ")[1] ??
+      "";
+    const evidence = JSON.parse(diagnostic);
+    expect(evidence).toMatchObject({
+      reason: "quota_schema",
+      issues: expect.arrayContaining([
+        expect.objectContaining({
+          code: "invalid_type",
+          path: ["error", "param"],
+        }),
+        expect.objectContaining({
+          code: "unrecognized_keys",
+          path: ["error"],
+          keys: ["unknown_error_field"],
+        }),
+      ]),
+    });
+    expect(diagnostic).not.toContain("PRIVATE_SYNTHETIC_VALUE");
+  });
+
   it.each(["\n", "\r\n"])(
     "recovers the observed MIME-less fragmented pre-output refusal (%j)",
     async (eol) => {

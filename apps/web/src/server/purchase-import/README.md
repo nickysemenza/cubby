@@ -114,7 +114,13 @@ warnings do not suppress later errors. Event
 names alone do not prove absence of useful output. Passive observation never
 grants paid replay: only the opt-in pre-SDK admission probe can recover the
 complete pre-output quota refusal. `response.failed`, partial output and
-unrecognized failures remain on their original transport. Interactive calls
+unrecognized failures remain on their original transport. When a replayed stream
+later fails, its error also reports the admission probe's first rejection reason,
+event name, elapsed time, inspected byte count, and bounded schema issue paths,
+codes and unknown-key names. This separate diagnostic adds at most 2 KiB and
+retains no lifecycle values or preceding output. It distinguishes schema rejection,
+time/byte limits, frame overflow, EOF and read failure without changing admission.
+Interactive calls
 without this explicit policy retain their defaults.
 Pi can open before dispatch binds its Run, so the coordinator resolves transport
 policy from its persisted identity at each request. Photo inventory keeps its
