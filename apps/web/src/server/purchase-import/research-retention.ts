@@ -221,7 +221,7 @@ export async function exposeResearchSources(
           inArray(run.status, liveStatuses),
         ),
       )
-      .for("update");
+      .for("no key update");
     if (!live)
       throw new Error("Research exposure requires a live coordinator.");
     for (const source of sources) {

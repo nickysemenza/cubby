@@ -447,12 +447,26 @@ export function researchServiceFor(
   const services: ResearchServices = {
     async researchContinue(callId, admitted = true) {
       return withTransactionDatabase(db, async (transactionDb) => {
+        // Source exposure/retirement locks mail before Runs; preserve that order.
+        const sources = await loadMailResearchSources(transactionDb, runId);
+        if (sources?.length)
+          await getDb(transactionDb)
+            .select({ id: orderMail.id })
+            .from(orderMail)
+            .where(
+              inArray(
+                orderMail.id,
+                sources.map((source) => source.orderMailId),
+              ),
+            )
+            .orderBy(asc(orderMail.id))
+            .for("update");
         // Cancellation and continuation admission share the Run write boundary.
         await getDb(transactionDb)
           .select({ id: run.id })
           .from(run)
           .where(and(eq(run.id, runId), notDeleted(run)))
-          .for("update");
+          .for("no key update");
         await assertResearchRunExecutable(transactionDb, runId);
         const scope = await owner(transactionDb);
         if (!["running", "paused_offline"].includes(scope.status))

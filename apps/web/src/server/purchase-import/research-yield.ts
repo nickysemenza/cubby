@@ -47,7 +47,7 @@ export async function continueResearchWork(
           .select()
           .from(run)
           .where(and(eq(run.id, input.runId), notDeleted(run)))
-          .for("update");
+          .for("no key update");
         if (
           !scope ||
           scope.retiredAt ||

@@ -8,7 +8,9 @@ import { describe, expect, it } from "vitest";
 import { z } from "zod";
 
 import { runContract } from "~/contracts/run.contract";
+import type { DrizzleTransaction } from "~/server/db";
 import {
+  ledgerParty,
   mailboxMessage,
   orderMail,
   run,
@@ -30,6 +32,22 @@ import { loadRunDetail, loadRunLog } from "./run-service";
 // and legacy conversations never executing new tools or replaying old results.
 describe("research host lifecycle", () => {
   const ctx = withTestDb();
+  async function waitForBlockedBackend(tx: DrizzleTransaction) {
+    const deadline = Date.now() + 5_000;
+    while (true) {
+      await tx.execute(sql`select pg_stat_clear_snapshot()`);
+      const blocked = await tx.execute(
+        sql`select count(*)::integer as count from pg_stat_activity where pg_backend_pid() = any(pg_blocking_pids(pid))`,
+      );
+      const waiting = z
+        .array(z.object({ count: z.number() }))
+        .parse(blocked.rows);
+      if (waiting[0]?.count) return;
+      if (Date.now() >= deadline)
+        throw new Error("Synthetic continuation did not reach the held lock");
+      await new Promise((resolve) => setTimeout(resolve, 10));
+    }
+  }
   async function admitted(messageCount = 1) {
     const party = await insertWithShortcode(ctx.db, "ledgerParty", {
       name: "Example cloud research member",
@@ -726,6 +744,71 @@ describe("research host lifecycle", () => {
       expect(settled?.state).toBe("unresolved");
     },
   );
+  it("allows a concurrent child Run foreign-key check while continuation waits for member admission", async () => {
+    const { f } = await importPrimary(2);
+    await getDb(ctx.db)
+      .update(runTarget)
+      .set({ state: "unresolved", outcome: "temporarily_blocked" })
+      .where(
+        and(
+          eq(runTarget.runId, f.started.runId),
+          eq(runTarget.state, "pending"),
+        ),
+      );
+    const [parent] = await getDb(ctx.db)
+      .select()
+      .from(run)
+      .where(eq(run.id, parseEntityId("run", f.started.runId)));
+    if (!parent) throw new Error("Synthetic parent Run missing");
+    let continuation: Promise<object> | undefined;
+    try {
+      await withTransaction(ctx.db, async (tx) => {
+        await tx
+          .select()
+          .from(ledgerParty)
+          .where(eq(ledgerParty.id, f.party.id))
+          .for("no key update");
+        continuation = f.services.researchContinue(crypto.randomUUID(), true);
+        await waitForBlockedBackend(tx);
+        await tx.execute(sql`set local lock_timeout = '250ms'`);
+        await tx.insert(run).values({
+          ...parent,
+          id: crypto.randomUUID(),
+          shortcode: "RUN-4K7M",
+          clientKey: crypto.randomUUID(),
+          agentSessionId: crypto.randomUUID(),
+          dispatchEventId: crypto.randomUUID(),
+          parentRunId: parent.id,
+        });
+      });
+      expect(await continuation).toMatchObject({ status: "done" });
+    } finally {
+      await continuation;
+    }
+  });
+  it("locks source mail before its Run so concurrent retirement cannot invert the order", async () => {
+    const f = await admitted();
+    let continuation: Promise<object> | undefined;
+    try {
+      await withTransaction(ctx.db, async (tx) => {
+        await tx
+          .select()
+          .from(orderMail)
+          .where(eq(orderMail.id, f.mail.id))
+          .for("update");
+        continuation = f.services.researchContinue(crypto.randomUUID(), false);
+        await waitForBlockedBackend(tx);
+        await tx
+          .select()
+          .from(run)
+          .where(eq(run.id, parseEntityId("run", f.started.runId)))
+          .for("update", { noWait: true });
+      });
+      expect(await continuation).toMatchObject({ status: "working" });
+    } finally {
+      await continuation;
+    }
+  });
   it("serializes continuation admission with a cancellation still committing", async () => {
     const f = await admitted();
     let continuation:
@@ -746,22 +829,7 @@ describe("research host lifecycle", () => {
         })
         .where(eq(run.id, parseEntityId("run", f.started.runId)));
       continuation = f.services.researchContinue(crypto.randomUUID(), false);
-      const deadline = Date.now() + 5_000;
-      while (true) {
-        await tx.execute(sql`select pg_stat_clear_snapshot()`);
-        const blocked = await tx.execute(
-          sql`select count(*)::integer as count from pg_stat_activity where pg_backend_pid() = any(pg_blocking_pids(pid))`,
-        );
-        const waiting = z
-          .array(z.object({ count: z.number() }))
-          .parse(blocked.rows);
-        if (waiting[0]?.count) break;
-        if (Date.now() >= deadline)
-          throw new Error(
-            "Synthetic continuation did not reach the cancellation lock",
-          );
-        await new Promise((resolve) => setTimeout(resolve, 10));
-      }
+      await waitForBlockedBackend(tx);
     });
     expect(await continuation).toMatchObject({
       status: "stopped",
