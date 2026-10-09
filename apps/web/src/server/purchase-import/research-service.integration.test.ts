@@ -638,6 +638,93 @@ describe("research host lifecycle", () => {
       expect(saved?.endedAt).toBeInstanceOf(Date);
     },
   );
+  // Refusal recovery must upgrade continuing investigation, not a different
+  // task after settled ambiguity, and must preserve the existing attempt cap.
+  it.each(["correctable", "settled"] as const)(
+    "escalates only the same active refused task (%s)",
+    async (disposition) => {
+      const f = await admitted(2);
+      const first = z
+        .object({ work: z.object({ workRef: z.uuid() }) })
+        .parse(await f.services.researchNext({}, crypto.randomUUID()));
+      const [target] = await getDb(ctx.db)
+        .select()
+        .from(runTarget)
+        .where(eq(runTarget.id, first.work.workRef));
+      if (!target?.workKey) throw new Error("Synthetic mail task missing");
+      const observed = z
+        .object({ evidenceId: z.uuid() })
+        .parse(
+          await f.services.researchMailRead(
+            { workRef: target.id, messageRef: target.workKey },
+            crypto.randomUUID(),
+          ),
+        );
+      const proposal = researchWorkResolve.parse({
+        workRef: target.id,
+        status: disposition === "correctable" ? "verified" : "ambiguous",
+        identity: {
+          evidenceIds: [observed.evidenceId],
+          reasoning: "The source identity needs further investigation.",
+        },
+        detail: "The receipt is retained; its precise identity is unresolved.",
+      });
+      for (
+        let attempt = 1;
+        attempt <= (disposition === "correctable" ? 3 : 1);
+        attempt++
+      ) {
+        const callId = crypto.randomUUID();
+        const result = await resolveImportResearch(
+          ctx.db,
+          { runId: f.started.runId, workRef: target.id, callId, proposal },
+          {
+            readEvidence: async (row) => {
+              const bytes = f.bytes.get(row.objectKey);
+              if (!bytes) throw new Error("Synthetic retained source missing");
+              return new TextDecoder().decode(bytes);
+            },
+            assess: async () => ({
+              identityVerified: false,
+              acceptedFacts: [],
+              acceptedIdentifiers: [],
+              acceptedImages: [],
+              acceptedOrders: [],
+              acceptedEmailLinks: [],
+              rejected: [
+                {
+                  path: "proposal.identity.reasoning",
+                  reason: "The exact order identity is not established.",
+                },
+              ],
+            }),
+          },
+        );
+        expect(result.refusals.length).toBeGreaterThan(0);
+        const response = await f.services.researchResolve(proposal, callId);
+        const continuing = disposition === "correctable" && attempt < 3;
+        const current = z
+          .object({
+            status: z.literal("working"),
+            work: z.object({ workRef: z.uuid() }),
+            reasoningMode: z.literal("unfamiliar_resolution").optional(),
+          })
+          .parse(response);
+        expect(current.work.workRef === target.id).toBe(continuing);
+        expect(current.reasoningMode).toBe(
+          continuing ? "unfamiliar_resolution" : undefined,
+        );
+        expect(await f.services.researchResolve(proposal, callId)).toEqual(
+          response,
+        );
+      }
+      const [settled] = await getDb(ctx.db)
+        .select()
+        .from(runTarget)
+        .where(eq(runTarget.id, target.id));
+      expect(settled?.state).toBe("unresolved");
+    },
+  );
   it("continues every selected mail after ambiguity and finishes with review accounting only after the last task", async () => {
     const f = await admitted(2);
     const targets = await getDb(ctx.db)

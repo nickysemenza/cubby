@@ -241,6 +241,14 @@ and deployment/readback order are owned by the
    effective trade remains null after Product/Project inheritance. This policy
    is separate from source-verified facts, preserves member attribution and
    leaves Purchase defaults and adjustments intact.
+   A returned domain refusal that leaves the same task active upgrades the
+   coordinator from Luna to Sol/high for the remainder of that Run. The host
+   retains this mode before returning the tool result and reapplies it after
+   eviction or result replay. Settled ambiguity, member contradictions,
+   exhausted attempts and unrelated-source retirement do not upgrade another
+   task. Schema exceptions and transport failures do not trigger this policy;
+   escalation preserves the existing attempt/generation limits and
+   subscription-only transport without paid fallback.
    Retained mail observations present plain text and compact visible HTML with
    source links before applying the model-view size limit. Layout/CSS bytes never
    crowd receipt facts out of that view. The immutable original MIME content and

@@ -87,6 +87,10 @@ For Run-scoped fact assertions, follow `RunFactEvidence.targetId` through
 `RunTarget.runId`; fact evidence has no direct Run column. Apply that same
 declared ownership join to diagnostics. Diagnostic queries must not prevent
 the harness from closing or the failed-run artifact from being written.
+Retention receipt fixtures bind `ResearchRetention.workRef` to the exact
+primary-source work: its `RunTarget.entityKind` is `run`, its `entityId` is the
+owning Run, and its `workKey` matches the receipt's `orderMailId`. Selecting an
+arbitrary target can attach cleanup authority to a disposable image task.
 
 Before a focused browser replay, run `pnpm --filter @cubby/web run build:cf
 --ensure` after changing the recorded source revision. The prebuilt provenance

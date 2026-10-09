@@ -755,6 +755,18 @@ export function researchServiceFor(
         });
       }
       const next = await services.researchNext({}, `${callId}:next`);
+      const active = z
+        .object({
+          status: z.literal("working"),
+          work: z.object({ workRef: z.uuid() }),
+        })
+        .safeParse(next);
+      const escalation =
+        active.success &&
+        active.data.work.workRef === proposal.workRef &&
+        resolution.refusals.length > 0
+          ? { reasoningMode: "unfamiliar_resolution" }
+          : {};
       if ("purchaseIds" in resolution) {
         const {
           purchaseIds: _purchaseIds,
@@ -786,6 +798,7 @@ export function researchServiceFor(
           : [];
         return json({
           ...next,
+          ...escalation,
           resolution: {
             ...publicResolution,
             purchaseContext: await loadRunPurchaseContext(db, {
@@ -796,7 +809,7 @@ export function researchServiceFor(
           },
         });
       }
-      return json({ ...next, resolution });
+      return json({ ...next, ...escalation, resolution });
     },
     async researchObserve(raw, callId) {
       await assertResearchRunExecutable(db, runId);
