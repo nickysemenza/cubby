@@ -10,12 +10,17 @@ import {
 import type { RunId } from "@cubby/schemas/identifiers";
 import type { RunInput } from "@cubby/schemas/run-fields";
 import { sha256Hex } from "@cubby/shared/sha256";
-import { and, desc, eq, inArray, sql } from "drizzle-orm";
+import { and, desc, eq, inArray, isNull, or, sql } from "drizzle-orm";
 import { z } from "zod";
 
 import type { Database, DrizzleTransaction } from "~/server/db";
 import { account } from "~/server/db/auth.schema";
-import { run, orderMail, importSourceClaim } from "~/server/db/schema";
+import {
+  run,
+  orderMail,
+  importSourceClaim,
+  researchRetention,
+} from "~/server/db/schema";
 import {
   unwrapDb,
   notDeleted,
@@ -104,28 +109,64 @@ export async function bindRetainedMailBackfill<T extends RunInput>(
   const sourceKeys = sourceGroups.flatMap((group) =>
     group.map((source) => source.externalKey),
   );
+  const historicalMessages = new Map(
+    sourceKeys.flatMap((key) => {
+      const messageId = /^gmail:([^:]+):order:.+$/u.exec(key)?.[1];
+      return messageId ? [[key, messageId] as const] : [];
+    }),
+  );
   const originals = await tx
-    .select({ messageId: orderMail.messageId, checksum: orderMail.rawChecksum })
+    .select({
+      messageId: orderMail.messageId,
+      checksum: orderMail.rawChecksum,
+    })
     .from(orderMail)
+    .leftJoin(
+      researchRetention,
+      and(
+        eq(researchRetention.ledgerPartyId, orderMail.ledgerPartyId),
+        eq(researchRetention.orderMailId, orderMail.id),
+        eq(researchRetention.checksum, orderMail.rawChecksum),
+      ),
+    )
     .where(
       and(
         eq(orderMail.ledgerPartyId, owner.ledgerPartyId),
         eq(orderMail.mailboxId, mailbox.id),
-        inArray(
-          sql<string>`'gmail:' || ${orderMail.mailboxId} || ':' || ${orderMail.messageId}`,
-          sourceKeys,
+        isNull(researchRetention.id),
+        // Cleanup preserves identity/checksum tombstones; only readable content
+        // outside a retirement fence can establish a retained original.
+        sql`COALESCE(
+          NULLIF(BTRIM(${orderMail.content}->>'bodyText'), ''),
+          NULLIF(BTRIM(${orderMail.content}->>'bodyHtml'), ''),
+          NULLIF(BTRIM(${orderMail.content}->>'snippet'), '')
+        ) IS NOT NULL`,
+        or(
+          inArray(
+            sql<string>`'gmail:' || ${orderMail.mailboxId} || ':' || ${orderMail.messageId}`,
+            sourceKeys,
+          ),
+          historicalMessages.size
+            ? inArray(orderMail.messageId, [...historicalMessages.values()])
+            : undefined,
         ),
       ),
     );
   if (
     !sourceGroups.every((group) =>
       group.some((source) =>
-        originals.some(
-          (original) =>
+        originals.some((original) => {
+          // Old per-order claims hash derived order data, not raw mail. This
+          // proves budget ownership only; it never revalidates their claims
+          // or makes their historical source identity writable.
+          if (historicalMessages.get(source.externalKey) === original.messageId)
+            return !!original.checksum;
+          return (
             source.externalKey ===
               `gmail:${mailbox.id}:${original.messageId}` &&
-            source.checksum === original.checksum,
-        ),
+            source.checksum === original.checksum
+          );
+        }),
       ),
     )
   )
