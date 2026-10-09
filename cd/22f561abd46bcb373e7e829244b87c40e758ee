@@ -1,0 +1,267 @@
+.oxlintrc.json
+  s_2e87acf1f13363::t_ed183b5d689d8e 234-252
+apps/web-worker-tests/recipebridge.js
+  s_2e87acf1f13363::t_160d85f2a29416 1-15
+apps/web-worker-tests/vitest.config.ts
+  s_2e87acf1f13363::t_0cdf0d7fadb383 1,7-15,51-64
+apps/web/src/app/purchases/targeted-import-launch.tsx
+  s_2e87acf1f13363::t_5db1f3d7b80f83 111,137-144,193,245-257
+apps/web/src/cf-server.ts
+  s_2e87acf1f13363::t_322c45313f5884 6-18,48,50,285-288,574-576,578-580,588-589,594-595,620,637-640,663-664,667-670,672-675,677
+apps/web/src/routes/api/import/evidence.ts
+  s_2e87acf1f13363::t_f56847aa0cec69 8-10
+apps/web/src/server/ai/adapters.ts
+  s_2e87acf1f13363::t_8cafd0e9c4a314 19,74-77,80,83-96,107-117
+apps/web/src/server/ai/chatgpt/client.ts
+  s_2e87acf1f13363::t_b4ed29edc79d5b 35-36
+apps/web/src/server/ai/chatgpt/durable-object.ts
+  s_2e87acf1f13363::t_184df14cfc853c 8-9,13
+apps/web/src/server/ai/gateway-error.ts
+  s_2e87acf1f13363::t_538f72808032b1 44,55-57,59
+apps/web/src/server/ai/gateway.ts
+  s_2e87acf1f13363::t_37000833cc7025 49-52,191,196
+apps/web/src/server/ai/pricing.ts
+  s_2e87acf1f13363::t_9af69dc5c62f06 6,50-56
+apps/web/src/server/ai/run-feature.ts
+  s_2e87acf1f13363::t_f0c62c698864f6 112,261,704,715-718,776
+apps/web/src/server/ai/run-feature.unit.test.ts
+  s_2e87acf1f13363::t_d2c9b74cfb32a9 193-224
+apps/web/src/server/background-tasks/handle.ts
+  s_2e87acf1f13363::t_833bd7527feca6 6-7,9-10,12-22,59
+apps/web/src/server/calendar/client.ts
+  s_2e87acf1f13363::t_cd4446733a30f0 11,90-94
+apps/web/src/server/calendar/durable-object.ts
+  s_2e87acf1f13363::t_606b4b9a42d3c7 8,13-14,18,32,37-38,41-44,46-60,210,216-218,222-223,236,246-265,267-276,293-296
+apps/web/src/server/calendar/postgres-backend.ts
+  s_2e87acf1f13363::t_21994f5421dc65 1-12
+apps/web/src/server/crud-services.ts
+  s_2e87acf1f13363::t_29c62e387227d6 1-93
+apps/web/src/server/daily-maintenance.ts
+  s_2e87acf1f13363::t_fae022ccbccfa3 1-138
+apps/web/src/server/database-freshness/durable-object.ts
+  s_2e87acf1f13363::t_ecedd6491a359d 24-29,32-35,210-212,215
+apps/web/src/server/database-freshness/problem-counts.ts
+  s_2e87acf1f13363::t_42c9393aab7b17 1-10
+apps/web/src/server/entity-list-runtime.server.ts
+  s_2e87acf1f13363::t_18960f153447be 9
+apps/web/src/server/gmail-workflows.ts
+  s_2e87acf1f13363::t_db2e8c942925bb 1,5-22,46-75,78-106
+apps/web/src/server/image-processing/cloud-description.ts
+  s_2e87acf1f13363::t_a59f8be22d31a8 16-17
+apps/web/src/server/image-processing/dispatch.ts
+  s_2e87acf1f13363::t_d2244d05ee2208 22
+apps/web/src/server/image-processing/durable-object.ts
+  s_2e87acf1f13363::t_6d3c20449909c3 1-4,16-21,27,72-75,77-82
+apps/web/src/server/mcp/http-handler.ts
+  s_2e87acf1f13363::t_967e051242b068 12,15,119,122,171
+apps/web/src/server/operations/image-processing.server.ts
+  s_2e87acf1f13363::t_e5bb894e72894a 10,16
+apps/web/src/server/operations/image.server.ts
+  s_2e87acf1f13363::t_334871d422bae9 40
+apps/web/src/server/operations/maintenance.server.ts
+  s_2e87acf1f13363::t_e389a7847ee0d4 8
+apps/web/src/server/operations/problem-counts.server.ts
+  s_2e87acf1f13363::t_ba6d71b630be54 20-22
+apps/web/src/server/operations/problem-reports.server.ts
+  s_2e87acf1f13363::t_4cc9dc442af08c 1-28
+apps/web/src/server/operations/problems.server.ts
+  s_2e87acf1f13363::t_5811f22257aaa3 20-22,27,30,32,37,42,44,46,48,50,52-55,57,59,66,79,81,105,151,166,168
+apps/web/src/server/operations/purchase.server.ts
+  s_2e87acf1f13363::t_7c8f88ea2e575a 18
+apps/web/src/server/photo-import-run/writer.ts
+  s_2e87acf1f13363::t_38fb9c2af2c71f 31
+apps/web/src/server/purchase-agent/cubby-ai-provider.ts
+  s_2e87acf1f13363::t_93908682e55b2a 63,65-69,93-116,118-130,133,145-162,164-165
+apps/web/src/server/purchase-agent/cubby-ai-provider.unit.test.ts
+  s_2e87acf1f13363::t_d6b1d1bdc0d87a 33-65,126-168
+apps/web/src/server/purchase-agent/environment.ts
+  s_2e87acf1f13363::t_b9ec1b718462c3 34,79-80
+apps/web/src/server/purchase-agent/run-agent.ts
+  s_2e87acf1f13363::t_6b1a71156b5190 110-111,213-222,224
+apps/web/src/server/purchase-import/README.md
+  s_2e87acf1f13363::t_18eef8fa85cc50 46,59-89,249-251,285
+apps/web/src/server/purchase-import/agent-host.ts
+  s_2e87acf1f13363::t_ffffeb5843600c 2-4,12-15,22,28,33,68-70,77,83-84,87-91,103-107,123,165,182,199
+apps/web/src/server/purchase-import/agent-services.ts
+  s_2e87acf1f13363::t_9dbf08272937de 8,20-30,32-46,53-68,77-79,81-82,85-86,101,114-117,119,122
+apps/web/src/server/purchase-import/catch-up.integration.test.ts
+  s_2e87acf1f13363::t_f38de8e7315dd3 10-11
+apps/web/src/server/purchase-import/durable-object.ts
+  s_2e87acf1f13363::t_c0480ab1314744 26,44-45,48-51,105-111
+apps/web/src/server/purchase-import/gmail/discovery.ts
+  s_2e87acf1f13363::t_b65c19bcc002be 47,415
+apps/web/src/server/purchase-import/gmail/import.ts
+  s_2e87acf1f13363::t_5a224ffa965fb3 22,75
+apps/web/src/server/purchase-import/gmail/ingest.ts
+  s_2e87acf1f13363::t_261547bcaec730 63-65,73,83
+apps/web/src/server/purchase-import/gmail/search-job.ts
+  s_2e87acf1f13363::t_bc4f91ed77ebe8 28,234,297,299
+apps/web/src/server/purchase-import/gmail/triage-model.ts
+  s_2e87acf1f13363::t_9c57070b84c803 11,44,62-63
+apps/web/src/server/purchase-import/host-database.ts
+  s_2e87acf1f13363::t_f122014414cc24 1-21
+apps/web/src/server/purchase-import/import-orders.ts
+  s_2e87acf1f13363::t_ec46cca9ece348 84
+apps/web/src/server/purchase-import/maintenance.workers.test.ts
+  s_2e87acf1f13363::t_1e4c3e3f3e2f1e 7,9,44,61,79,103,128
+apps/web/src/server/purchase-import/product-research-run.integration.test.ts
+  s_2e87acf1f13363::t_0e024c58bc0a32 1,10,12,20,37-45,61-399
+apps/web/src/server/purchase-import/product-research-run.ts
+  s_2e87acf1f13363::t_dee5f3ca4d2e56 9,48-51,711-735,748
+apps/web/src/server/purchase-import/purchase-agent-scenarios.integration.test.ts
+  s_2e87acf1f13363::t_8b42bc5f5f3b7c 94-95,602-606,833-837,1094-1098
+apps/web/src/server/purchase-import/purchase-agent-workerd.fixtures.ts
+  s_2e87acf1f13363::t_98417fe7a3baf6 1-2,4,13,25-26,49-123
+apps/web/src/server/purchase-import/purchase-research-account-history.integration.test.ts
+  s_2e87acf1f13363::t_18fade2ef5961d 55,341-345
+apps/web/src/server/purchase-import/purchase-research-lifecycle-workerd.integration.test.ts
+  s_2e87acf1f13363::t_a09068f41f251f 61,229-233
+apps/web/src/server/purchase-import/purchase-research-offline.integration.test.ts
+  s_2e87acf1f13363::t_67d932a855aecb 51,279-283
+apps/web/src/server/purchase-import/purchase-research-workerd.integration.test.ts
+  s_2e87acf1f13363::t_fcac64bbacdfda 22-26,87,328-361,454,1446-1450
+apps/web/src/server/purchase-import/research-delivery.workers.test.ts
+  s_2e87acf1f13363::t_99de05d9fa5093 40,97,213,297
+apps/web/src/server/purchase-import/research-run.integration.test.ts
+  s_2e87acf1f13363::t_1080041164ef4e 1,8,17-18,62-113
+apps/web/src/server/purchase-import/research-run.ts
+  s_2e87acf1f13363::t_1c2b35d5b33112 33-36,541-559,574
+apps/web/src/server/purchase-import/research-service.ts
+  s_2e87acf1f13363::t_6e5673245e533f 75,80,88
+apps/web/src/server/purchase-import/research-support.ts
+  s_2e87acf1f13363::t_1ec2b364e23f4b 12,69-73
+apps/web/src/server/purchase-import/run-evidence.ts
+  s_2e87acf1f13363::t_cd66c3ac9fa161 17,141-144
+apps/web/src/server/purchase-import/run-service.ts
+  s_2e87acf1f13363::t_c49a5400f3b12c 129,143,989
+apps/web/src/server/repo/calendar-caldav.ts
+  s_2e87acf1f13363::t_bfecfa18d27a05 18
+apps/web/src/server/repo/classification-field-policy.ts
+  s_2e87acf1f13363::t_f8172c929199e6 16,38-39
+apps/web/src/server/repo/entity-report/cookbook.ts
+  s_2e87acf1f13363::t_e8817346c745fc 3,9
+apps/web/src/server/repo/entity-report/index.ts
+  s_2e87acf1f13363::t_96c7fe8a9bfa7c 20,47,94
+apps/web/src/server/repo/entity-report/recipe-walkthrough.ts
+  s_2e87acf1f13363::t_ec34845e2fac5d 5,7
+apps/web/src/server/repo/garden/index.ts
+  s_2e87acf1f13363::t_a8c764086e7864 84
+apps/web/src/server/repo/image-processing-history.integration.test.ts
+  s_2e87acf1f13363::t_8c3ca2353d8e87 15-16
+apps/web/src/server/repo/image-processing-maintenance.ts
+  s_2e87acf1f13363::t_a7e5226a843f77 9,11,13-22,48-51,56,61
+apps/web/src/server/repo/image-processing-settings.ts
+  s_2e87acf1f13363::t_4c21379e0b644d 1-46
+apps/web/src/server/repo/image-processing.ts
+  s_2e87acf1f13363::t_a9d18511e7dd3d 44-45
+apps/web/src/server/repo/image.ts
+  s_2e87acf1f13363::t_7bfe6ee31e3064 135-138,146
+apps/web/src/server/repo/product-category-feature.ts
+  s_2e87acf1f13363::t_a40498088bb3ac 1-65
+apps/web/src/server/repo/product-category.ts
+  s_2e87acf1f13363::t_52e8666b85072c 68
+apps/web/src/server/repo/product/classification.ts
+  s_2e87acf1f13363::t_c8276904040033 22
+apps/web/src/server/repo/product/crud.ts
+  s_2e87acf1f13363::t_87522a63dd8d81 142-143
+apps/web/src/server/repo/product/merge.ts
+  s_2e87acf1f13363::t_bbb470799fae7f 82
+apps/web/src/server/repo/project/tools.ts
+  s_2e87acf1f13363::t_dff949e7c06ae1 70
+apps/web/src/server/repo/spending-classification-review.ts
+  s_2e87acf1f13363::t_aa66f7a5101b8b 42-45
+apps/web/src/server/request-context.ts
+  s_2e87acf1f13363::t_7357bcd2e9d944 16-19
+apps/web/src/server/runs/execution-context.ts
+  s_2e87acf1f13363::t_30fc968df375c9 13,17-28,85-184
+apps/web/src/server/runs/execution-transport.integration.test.ts
+  s_2e87acf1f13363::t_7114cc2d51e1ba 2-3,8,12,15,23,95-104,228-339
+apps/web/src/server/runs/execution-transport.ts
+  s_2e87acf1f13363::t_ad16c042276255 13-16,35-36,72-90,93
+apps/web/src/server/search-index-repair-workflow.ts
+  s_2e87acf1f13363::t_8929b6dc0d5496 6,10,12-21,23,43,45-62,64-99,101-106,108-160,162-167,169-172
+apps/web/src/server/services/app-open-catch-up.service.ts
+  s_2e87acf1f13363::t_a832ba134f6168 1-34
+apps/web/src/server/services/awaiting-work.service.ts
+  s_2e87acf1f13363::t_fe39d38093da67 19
+apps/web/src/server/services/catch-up.service.ts
+  s_2e87acf1f13363::t_fdc5ed6dec0b30 10,12-26,28-31
+apps/web/src/server/services/image-processing-wakeups.ts
+  s_2e87acf1f13363::t_dedc8f61e5c5ea 1-67
+apps/web/src/server/services/image-processing.service.ts
+  s_2e87acf1f13363::t_0e33704d57c943 1,52-53,57,59-60
+apps/web/src/server/services/mutation-side-effects.ts
+  s_2e87acf1f13363::t_a5228cc689896f 425-446
+apps/web/src/server/services/product-orchestration.service.integration.test.ts
+  s_2e87acf1f13363::t_a75a10bec06429 11
+apps/web/src/server/testing/request-context.ts
+  s_2e87acf1f13363::t_3a86425ed6fc43 5,7
+apps/web/src/server/usda-release/durable-object.ts
+  s_2e87acf1f13363::t_3c75cdaade9ea7 21-22,26,31-34
+apps/web/src/server/worker-entrypoints.ts
+  s_2e87acf1f13363::t_7ec615b09aa188 1-291
+apps/web/tests/e2e/companion-analysis.spec.ts
+  s_2e87acf1f13363::t_b796cd895be31a 26
+apps/web/tests/e2e/harness-services/purchase-import-test-gateway.ts
+  s_2e87acf1f13363::t_2bf795e1672b0a 196-208
+apps/web/tests/e2e/purchase-import-run.spec.ts
+  s_2e87acf1f13363::t_f1ce87939f3d33 9,22-26,122-133,205,342
+apps/web/tests/e2e/purchase-research-provenance.spec.ts
+  s_2e87acf1f13363::t_6ec72568121f7f 7-10,30,100,138-142
+apps/web/tests/e2e/vendor-order-mail-review.spec.ts
+  s_2e87acf1f13363::t_b5792d661b23a5 11,16-19,245-255,268
+apps/web/tooling/calendar-test-worker.ts
+  s_2e87acf1f13363::t_2e6614d88ad442 2-6,24-30
+apps/web/tooling/review-evidence-policies.ts
+  s_2e87acf1f13363::t_1897eeb2dfac9d 62
+apps/web/tooling/spending-classification-policy.ts
+  s_2e87acf1f13363::t_f913e577fe3a62 37
+apps/web/tooling/spending-classification-seed.ts
+  s_2e87acf1f13363::t_e0046be7576c02 112
+apps/web/tooling/workerd-runtime.integration.test.ts
+  s_2e87acf1f13363::t_cecd3ade95ac5b 43-46,286,296,301-307,496,501,504-510
+apps/web/wrangler.calendar-test.jsonc
+  s_2e87acf1f13363::t_a33b670471f31d 63-72
+docs/agents/domain-rules.md
+  s_2e87acf1f13363::t_29509eeca2dc89 140-151
+docs/agents/validation-tests.md
+  s_2e87acf1f13363::t_addebc4ae06aa0 247-250
+docs/agents/web-runtime.md
+  s_2e87acf1f13363::t_45f14cd23eb0df 10-12
+docs/infrastructure.md
+  s_2e87acf1f13363::t_dd6e6a3347a8b4 211-214
+docs/local-check-performance.md
+  s_2e87acf1f13363::t_7d71b22a896fe7 227,231-233
+package.json
+  s_2e87acf1f13363::t_c9e576d3cc3ccc 47
+packages/shared/src/ai/gateway-request.ts
+  s_2e87acf1f13363::t_c133a0db4f03c4 200-201,245-281,284-285,322-323,337-339,344-350,384-396,398,402,404
+packages/shared/src/ai/gateway-request.unit.test.ts
+  s_2e87acf1f13363::t_1ec6ed12ff3188 54-86,195-425
+packages/shared/src/ai/pricing.ts
+  s_2e87acf1f13363::t_13bf07ac29092c 101-102,106,109,123,154-169
+project.json
+  s_2e87acf1f13363::t_f8cb5ab14d3ca7 74
+scripts/ensure-wasm.ts
+  s_2e87acf1f13363::t_d6a770ef6dab61 9-11,43,66-67
+tools/oxlint/cubby/index.ts
+  s_2e87acf1f13363::t_9ce0bea7bf385f 18,37
+tools/oxlint/cubby/rules/worker-lazy-import-boundary.ts
+  s_2e87acf1f13363::t_9cfe507b33adc9 1-216
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "cd22f561abd46bcb373e7e829244b87c40e758ee",
+  "prompts": {},
+  "sessions": {
+    "s_2e87acf1f13363": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "31108f72-a141-4ae8-90c0-f38f0969a4e7",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "nicky <nicky@cloudflare.com>"
+    }
+  }
+}
