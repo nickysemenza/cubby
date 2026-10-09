@@ -1211,7 +1211,7 @@ describe("budgeted pre-output stream quota fallback", () => {
     const response = {
       ...created.response,
       user: null,
-      access_programs: [],
+      access_programs: { cyber: "standard" },
       frequency_penalty: 0,
       presence_penalty: 0,
       moderation: null,

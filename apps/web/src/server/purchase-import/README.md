@@ -80,7 +80,7 @@ complete error envelope separately from diagnostic extraction: a conflicting typ
 Response wrapper, output-bearing error or unrecognized metadata field replays
 unchanged. Recognized request-configuration fields remain metadata; future provider
 fields require explicit admission support. Current admitted configuration includes
-nullable `user`, empty/string-array access programs, numeric frequency/presence
+nullable `user`, the strict documented access-program object, numeric frequency/presence
 penalties, null moderation and reasoning context/mode settings. Context and mode
 are request configuration, not generated reasoning items; see the
 [Responses API contract](https://developers.openai.com/api/reference/resources/responses/methods/create).
