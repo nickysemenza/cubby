@@ -1,0 +1,19 @@
+apps/web/src/server/mcp/tool-failures.unit.test.ts
+  s_baac6c838b330d::t_23662c8e4aba36 160-165
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "5e5f7e133c79356ac53ba47ecf608fd4d7b5c4bc",
+  "prompts": {},
+  "sessions": {
+    "s_baac6c838b330d": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "4e072615-6da5-4add-8945-be01765ee61f",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "nicky <nicky@cloudflare.com>"
+    }
+  }
+}
