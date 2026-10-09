@@ -114,7 +114,7 @@ struct WardrobeView: View {
             } else if hasMore {
                 Button("Load more") { Task { await loadMore() } }
                     .disabled(isBusy)
-                    .padding()
+                    .padding(FieldGuideTokens.Space.md)
             }
         }
     }

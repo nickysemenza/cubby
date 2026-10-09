@@ -36,7 +36,7 @@ struct BrowserSyncPane: View {
                 }
                 Button("Browser & permissions…") { openSettings() }
             }
-            .padding()
+            .padding(FieldGuideTokens.Space.md)
             if let error = model.browserBridge.error {
                 Text(error).foregroundStyle(FieldGuideTokens.destructive)
                     .textSelection(.enabled).padding(.horizontal)
@@ -210,7 +210,7 @@ private struct BrowserSyncHistoryButton: View {
                         .keyboardShortcut(.defaultAction)
                     }
                 }
-                .padding().frame(width: 320)
+                .padding(FieldGuideTokens.Space.md).frame(width: 320)
             }
     }
 }

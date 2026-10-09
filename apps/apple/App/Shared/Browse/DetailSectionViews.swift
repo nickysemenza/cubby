@@ -58,13 +58,13 @@ struct EntityHeroView<Actions: View>: View {
             }
             HStack(alignment: .firstTextBaseline, spacing: FieldGuideTokens.Space.sm) {
                 if let emoji = descriptor.recordEmoji(in: row) {
-                    Text(emoji).font(.fieldGuideDisplay).accessibilityHidden(true)
+                    Text(emoji).font(Font.fieldGuideRecordTitle).accessibilityHidden(true)
                 } else if descriptor.recordIconEntityField != nil {
                     Image(systemName: descriptor.recordSymbol(in: row))
                         .font(.fieldGuideTitle).accessibilityHidden(true)
                 }
                 Text(row.title)
-                    .font(.fieldGuideDisplay)
+                    .font(Font.fieldGuideRecordTitle)
                     .tracking(-0.4)
                     .foregroundStyle(FieldGuideTokens.graphite)
                     .fixedSize(horizontal: false, vertical: true)
@@ -375,7 +375,7 @@ struct FieldExplanationLabel: View {
                 }
                 if field.key == "dataQuality", field.readKey == nil {
                     explanationSectionLabel("What this means")
-                    Text("Not assessed").font(.title3.weight(.semibold))
+                    Text("Not assessed").font(.headline)
                     Text(
                         "No quality checks are defined for this entity. Review its fields and supporting records directly."
                     )
@@ -396,7 +396,7 @@ struct FieldExplanationLabel: View {
                 } else if let resolved {
                     explanationSectionLabel("What this means")
                     if let interpretation = resolved.interpretation {
-                        Text(interpretation.result).font(.title3.weight(.semibold))
+                        Text(interpretation.result).font(.headline)
                         Text(interpretation.summary).font(.body)
                         ForEach(interpretation.caveats, id: \.self) { caveat in
                             Text(caveat).font(.callout).foregroundStyle(.secondary)
@@ -411,7 +411,7 @@ struct FieldExplanationLabel: View {
                         if let code = value.stringValue,
                             let option = field.valueOptions?.first(where: { $0.value == code })
                         {
-                            Text(option.label).font(.title3.weight(.semibold))
+                            Text(option.label).font(.headline)
                         } else {
                             ExplanationEvidenceValue(value: value)
                         }

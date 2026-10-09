@@ -3,9 +3,10 @@ import { cva, type VariantProps } from "class-variance-authority";
 /**
  * Layout-primitive cvas — the single home for the app's spacing vocabulary.
  *
- * Named `gap` scale (Tailwind spacing units → 0.25rem each):
+ * Named `gap` scale. `xs`–`lg` read the shared design-token steps
+ * (packages/design-tokens/tokens.json), so web and native tighten together:
  *
- *   tight = 0.5   snug = 1.5   xs = 1   sm = 2   md = 4   lg = 6
+ *   tight = 2px   snug = 6px   xs = 4px   sm = 8px   md = 12px   lg = 16px
  *
  * `tight` / `snug` are the two blessed sub-scale densities (icon+label rows,
  * dense list cells). Dense UI uses these named variants instead of scattering
@@ -19,10 +20,10 @@ import { cva, type VariantProps } from "class-variance-authority";
 const GAP = {
   tight: "gap-0.5",
   snug: "gap-1.5",
-  xs: "gap-1",
-  sm: "gap-2",
-  md: "gap-4",
-  lg: "gap-6",
+  xs: "gap-(--brand-space-1)",
+  sm: "gap-(--brand-space-2)",
+  md: "gap-(--brand-space-4)",
+  lg: "gap-(--brand-space-6)",
 } as const;
 
 /**
@@ -52,7 +53,7 @@ export const rowVariants = cva("flex", {
   },
 });
 
-/** Responsive card/thumbnail grid. Defaults to `gap-4` (md). */
+/** Responsive card/thumbnail grid. Defaults to the `md` gap. */
 export const gridVariants = cva("grid", {
   variants: {
     cols: {
@@ -81,7 +82,7 @@ export const gridVariants = cva("grid", {
  * blockifies every child (per CSS flex-item blockification), which is what
  * actually forces the line break; `space-y-*` still works unmodified on
  * blockified children since margins apply normally to flex items. Defaults
- * to `space-y-4` (md). Already-block children (`div`, `p`, `Row`, …) that
+ * to the `md` gap. Already-block children (`div`, `p`, `Row`, …) that
  * relied on filling the container's width are unaffected — they already did
  * under plain block layout, and `flex-col`'s default `align-items: stretch`
  * reproduces that. The exception is a child whose own `display` is
@@ -94,10 +95,10 @@ export const stackVariants = cva("flex flex-col", {
     gap: {
       tight: "space-y-0.5",
       snug: "space-y-1.5",
-      xs: "space-y-1",
-      sm: "space-y-2",
-      md: "space-y-4",
-      lg: "space-y-6",
+      xs: "space-y-(--brand-space-1)",
+      sm: "space-y-(--brand-space-2)",
+      md: "space-y-(--brand-space-4)",
+      lg: "space-y-(--brand-space-6)",
     },
   },
   defaultVariants: {

@@ -50,9 +50,10 @@ describe("application directory", () => {
       name: "Find an activity",
     });
     fireEvent.change(filter, { target: { value: "shopping" } });
-    expect(
-      screen.getByRole("link", { name: /Build a shopping list/ }),
-    ).toHaveAttribute("href", "/meals/shopping-list");
+    expect(screen.getByRole("link", { name: /Shopping list/ })).toHaveAttribute(
+      "href",
+      "/meals/shopping-list",
+    );
     expect(
       screen.queryByRole("heading", { name: "House", level: 2 }),
     ).not.toBeInTheDocument();

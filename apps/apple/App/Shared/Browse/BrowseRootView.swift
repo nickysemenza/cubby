@@ -212,17 +212,16 @@ private struct EntityBrowseRow: View {
     }
 }
 
+/// A row's record count: plain, muted, tabular digits at the trailing edge — no box, so a column
+/// of counts reads as quiet data rather than a stack of controls. Hierarchical `.secondary` (not a
+/// fixed color) so it stays legible on a selected sidebar row.
 struct NativeCountBadge: View {
     let count: Int
 
     var body: some View {
         Text(count.formatted())
-            .font(.fieldGuideData)
-            .foregroundStyle(FieldGuideTokens.graphiteSecondary)
-            .padding(.horizontal, FieldGuideTokens.Space.xs)
-            .padding(.vertical, 2)
-            .background(FieldGuideTokens.canvas, in: RoundedRectangle(cornerRadius: 4))
-            .overlay(RoundedRectangle(cornerRadius: 4).strokeBorder(.quaternary))
+            .font(.footnote.monospacedDigit())
+            .foregroundStyle(.secondary)
             .accessibilityLabel("\(count.formatted()) records")
     }
 }

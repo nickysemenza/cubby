@@ -255,7 +255,7 @@ struct PhotoImportRunSheet: View {
                 .font(.fieldGuideBody)
                 .foregroundStyle(FieldGuideTokens.graphiteSecondary)
         }
-        .padding()
+        .padding(FieldGuideTokens.Space.md)
     }
 
     @ToolbarContentBuilder private var toolbar: some ToolbarContent {
@@ -320,7 +320,7 @@ private struct RunningView: View {
             }
             statusAction
         }
-        .padding()
+        .padding(FieldGuideTokens.Space.md)
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
     }
 

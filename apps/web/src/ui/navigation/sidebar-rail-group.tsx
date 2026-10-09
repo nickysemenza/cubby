@@ -48,17 +48,12 @@ export function SidebarRailGroup({
                 <button
                   type="button"
                   className={cn(
-                    "mb-1 flex h-10 items-center border border-transparent text-muted-foreground transition-colors hover:bg-muted hover:text-foreground focus:outline-none",
+                    "mb-0.5 flex h-7 items-center rounded-md text-muted-foreground transition-colors hover:bg-muted/60 hover:text-foreground focus:outline-none",
                     expanded
                       ? "w-full justify-start gap-2 px-2"
-                      : "w-10 justify-center",
-                    active && "border-border bg-background text-foreground",
+                      : "w-7 justify-center",
+                    active && "bg-muted text-foreground hover:bg-muted",
                   )}
-                  style={
-                    domain
-                      ? { borderLeftColor: `var(${domain.accentToken})` }
-                      : undefined
-                  }
                   aria-label={group.label}
                   aria-current={active ? "page" : undefined}
                 />
@@ -66,8 +61,15 @@ export function SidebarRailGroup({
             />
           }
         >
-          <Icon className="size-3.5" weight={active ? "bold" : "regular"} />
-          {expanded && <span className="truncate text-xs">{group.label}</span>}
+          <span
+            style={domain ? { color: `var(${domain.accentToken})` } : undefined}
+            aria-hidden="true"
+          >
+            <Icon className="size-3.5" weight={active ? "bold" : "regular"} />
+          </span>
+          {expanded && (
+            <span className="truncate text-[0.8125rem]">{group.label}</span>
+          )}
         </TooltipTrigger>
         {!expanded && (
           <TooltipContent side="right" role="tooltip">
@@ -106,9 +108,8 @@ export function SidebarRailLeaf({
           <Link
             {...navItemLinkProps(item, active)}
             className={cn(
-              "mb-1 flex size-10 items-center justify-center rounded-lg border border-transparent text-muted-foreground transition-colors hover:bg-muted hover:text-foreground",
-              active &&
-                "bg-primary text-primary-foreground hover:bg-primary hover:text-primary-foreground",
+              "mb-0.5 flex size-7 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-muted/60 hover:text-foreground",
+              active && "bg-muted text-foreground hover:bg-muted",
             )}
             aria-label={item.label}
           />

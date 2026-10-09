@@ -484,7 +484,7 @@ struct EntityListView: View {
                 EntityShelfView(
                     descriptor: descriptor, rows: rows, density: cardDensity,
                     section: .browse)
-                loadMore(model).padding()
+                loadMore(model).padding(FieldGuideTokens.Space.md)
             }
         }
     }

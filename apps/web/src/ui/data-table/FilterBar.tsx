@@ -40,7 +40,7 @@ const INVALID_FILTER_OPTION: NonNullable<FilterBarField["options"]>[number] = {
 
 /** Chips shown before the rest collapse behind the ghost `More` control. */
 // Three declared chips plus the search input fit in one band beside the
-// 208px domain rail at 1440; a fourth wraps `More` onto a second line.
+// 176px domain rail at 1440; a fourth wraps `More` onto a second line.
 const CHIP_CAP = 3;
 
 /** A declared field is "active" (tints its chip, counts toward Clear N) once its filter has a real value. */

@@ -22,7 +22,7 @@ struct AIReviewSheet: View {
                     Text(provenance).font(.caption).foregroundStyle(.secondary)
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
-                .padding()
+                .padding(FieldGuideTokens.Space.md)
             }
             .navigationTitle(review.label)
             #if os(iOS)

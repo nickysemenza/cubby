@@ -386,7 +386,7 @@ struct PhotoDestinationSheet: View {
             destinationAction
             Spacer(minLength: 0)
         }
-        .padding()
+        .padding(FieldGuideTokens.Space.md)
         .frame(width: width)
     }
 

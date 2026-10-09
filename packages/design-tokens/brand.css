@@ -36,9 +36,9 @@
   --brand-space-1: 4px;
   --brand-space-2: 8px;
   --brand-space-3: 12px;
-  --brand-space-4: 16px;
-  --brand-space-5: 20px;
-  --brand-space-6: 24px;
+  --brand-space-4: 12px;
+  --brand-space-5: 16px;
+  --brand-space-6: 16px;
   --brand-motion-fast: 120ms;
   --brand-motion-standard: 180ms;
   --brand-ease-cozy: cubic-bezier(0.2, 0, 0, 1);

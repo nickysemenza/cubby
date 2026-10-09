@@ -80,13 +80,13 @@ export const activityViews = [
       recordDestination("cookbook", "Browse the recipe collections you keep."),
       {
         to: "/ingredients/workbench",
-        label: "Ingredient workbench",
+        label: "Workbench",
         description: "Resolve ingredient identity and measurement coverage.",
         icon: ListChecksIcon,
       },
       {
         to: "/ingredients/equivalences",
-        label: "Ingredient equivalences",
+        label: "Equivalences",
         description: "Review conversion paths between ingredient units.",
         icon: ArrowsLeftRightIcon,
       },
@@ -140,7 +140,7 @@ export const activityViews = [
       recordDestination("wish", "Keep track of items you may want to buy."),
       {
         to: "/calendar",
-        label: "Household calendar",
+        label: "Calendar",
         description: "Plan meals, tasks, and expected expenses by date.",
         icon: CalendarBlankIcon,
       },
@@ -152,7 +152,7 @@ export const activityViews = [
       },
       {
         to: "/meals/shopping-list",
-        label: "Build a shopping list",
+        label: "Shopping list",
         description: "Turn selected meals into reviewed shopping needs.",
         icon: ShoppingCartIcon,
       },
@@ -174,7 +174,7 @@ export const activityViews = [
       ),
       {
         to: "/garden-workbench",
-        label: "Garden workbench",
+        label: "Garden",
         description: "Compare planting timing, household practice, and plans.",
         icon: PlantIcon,
       },
@@ -195,13 +195,13 @@ export const activityViews = [
       recordDestination("purchase", "Review orders and their expense lines."),
       {
         to: "/household-contribution",
-        label: "Contribution ledger",
+        label: "Contributions",
         description: "Review shared costs and household positions.",
         icon: ArrowsLeftRightIcon,
       },
       {
         to: "/statement-rows",
-        label: "Reconcile statements",
+        label: "Reconcile",
         description: "Match imported statement evidence to recorded purchases.",
         icon: CurrencyCircleDollarIcon,
       },

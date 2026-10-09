@@ -130,7 +130,7 @@ struct PhotoPreview: View {
                         .accessibilityIdentifier("photo.preview.details")
                     }
                 }
-                .padding()
+                .padding(FieldGuideTokens.Space.md)
                 .navigationTitle(photo.filename)
                 .toolbar {
                     ToolbarItem(placement: .cancellationAction) {
