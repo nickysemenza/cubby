@@ -4,24 +4,18 @@ import { createFileRoute, notFound } from "@tanstack/react-router";
 import { USDAFoodDetail } from "~/features/usda/USDAFoodDetail";
 import { usdaFood } from "~/integrations/tanstack-query/generated/catalog.gen";
 import { pageTitle } from "~/lib/page-title";
-import { useDocumentTitle } from "~/ui/hooks/useDocumentTitle";
 import { Page } from "~/ui/page/Page";
 import { Empty, EmptyDescription, EmptyTitle } from "~/ui/primitives/empty";
 import { RouteErrorComponent } from "~/ui/route-error";
 import { DetailPagePending } from "~/ui/route-pending";
 
 export const Route = createFileRoute("/_authenticated/usda/$id")({
-  // Client-only for latency: this is the one de-flagged route whose loader
-  // blocks on an upstream rather than our own DB. The USDA detail projection
-  // waits on the release Durable Object, one region away, and server-rendering
-  // it holds the whole document for that long. A skeleton that fills in beats a
-  // blank wait on a rarely-visited detail route.
-  ssr: false,
   loader: async ({ params, context }) => {
     const data = await context.queryClient.ensureQueryData(
       usdaFood.detail.queryOptions({ id: parseInt(params.id, 10) }),
     );
     if (!data) throw notFound();
+    return { description: data.foodInfo.description };
   },
   pendingComponent: DetailPagePending,
   errorComponent: RouteErrorComponent,
@@ -35,7 +29,17 @@ export const Route = createFileRoute("/_authenticated/usda/$id")({
       </Empty>
     </Page>
   ),
-  head: ({ params }) => ({ meta: [{ title: pageTitle(`USDA ${params.id}`) }] }),
+  head: ({ params, loaderData }) => ({
+    meta: [
+      {
+        title: pageTitle(
+          loaderData?.description
+            ? `USDA: ${loaderData.description}`
+            : `USDA ${params.id}`,
+        ),
+      },
+    ],
+  }),
   component: USDAFoodDetailPage,
 });
 
@@ -49,12 +53,6 @@ function USDAFoodDetailPage() {
 
   // Loader throws notFound() for null — guaranteed non-null at runtime
   if (!food) throw notFound();
-
-  useDocumentTitle(
-    food.foodInfo.description
-      ? `USDA: ${food.foodInfo.description}`
-      : undefined,
-  );
 
   return <USDAFoodDetail id={numericId} food={food} />;
 }
