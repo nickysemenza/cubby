@@ -1,0 +1,49 @@
+apps/web/src/entity/actions/bulk-edit-dialog-body.tsx
+  s_2e87acf1f13363::t_0726d130479d39 1-393
+apps/web/src/entity/actions/bulk-edit-entity-action.tsx
+  s_2e87acf1f13363::t_b9cc55b8c0c405 1,3,7,12,18-24,27-39,155-166
+apps/web/src/entity/actions/bulk-edit-entity-action.unit.test.tsx
+  s_2e87acf1f13363::t_c391ff8e713174 18
+apps/web/src/entity/editing/entity-edit-dialog.expense-date.unit.test.tsx
+  s_2e87acf1f13363::t_150a5d81812082 3,13-16
+apps/web/src/entity/editing/entity-edit-dialog.garden-entry.unit.test.tsx
+  s_2e87acf1f13363::t_6d4f007db0d0d1 4-12,23-26
+apps/web/src/entity/editing/entity-edit-dialog.lifecycle.unit.test.tsx
+  s_2e87acf1f13363::t_8c829d8eda3307 4-12,25-28
+apps/web/src/entity/editing/entity-edit-dialog.media.unit.test.tsx
+  s_2e87acf1f13363::t_eb6608b4e1ef40 6-14,34-37
+apps/web/src/entity/editing/entity-edit-dialog.reorder.unit.test.tsx
+  s_2e87acf1f13363::t_8fa1cb3d4b17e4 4-12,23-26
+apps/web/src/entity/editing/entity-edit-dialog.tsx
+  s_2e87acf1f13363::t_e6a1a7959114ea 4,6,50-64,66-67
+apps/web/src/entity/editing/entity-edit-dialog.unit.test.tsx
+  s_2e87acf1f13363::t_0afadb1bfd0a1c 2,9-12
+apps/web/src/features/units/ConversionDialog.tsx
+  s_2e87acf1f13363::t_66177835c7db79 7,12,39,42-58
+apps/web/src/ui/combobox/with-search-hook.tsx
+  s_2e87acf1f13363::t_56d793da510ed7 14,319-332
+apps/web/src/ui/data-table/cell-data.ts
+  s_2e87acf1f13363::t_c36f0634f09b70 140-142
+apps/web/src/ui/data-table/editable-cell.tsx
+  s_2e87acf1f13363::t_75cb66359cd1bf 11,13,24,43,51-63,941-952
+apps/web/src/ui/forms/create-dialog-action.tsx
+  s_2e87acf1f13363::t_d5b3bbe63ee64c 3,6,79
+apps/web/src/ui/json-renderer.tsx
+  s_2e87acf1f13363::t_3429337115ee34 1-14,23-25,27-29,31
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "3d9d6761f496d1c9f371b39355b8a9feb64720b4",
+  "prompts": {},
+  "sessions": {
+    "s_2e87acf1f13363": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "31108f72-a141-4ae8-90c0-f38f0969a4e7",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "nicky <nicky@cloudflare.com>"
+    }
+  }
+}
