@@ -1,0 +1,31 @@
+apps/web/src/features/command-menu/command-menu-loader.ts
+  s_2e87acf1f13363::t_437020cc548d30 3-18
+apps/web/src/lib/request-id.ts
+  s_2e87acf1f13363::t_a26fb038a7a545 6
+apps/web/src/routes/auth.$authView.tsx
+  s_2e87acf1f13363::t_454ed5f1f5c584 53
+apps/web/src/ui/footer.tsx
+  s_2e87acf1f13363::t_a2a54273720e2b 31
+apps/web/tooling/dev/preview/main.tsx
+  s_2e87acf1f13363::t_a8406256f7943a 44
+docs/development.md
+  s_2e87acf1f13363::t_861e59d1f3ba68 41,153
+docs/infrastructure.md
+  s_2e87acf1f13363::t_288cf808bcdd60 213
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "1ccc115fbe8c1c2c764811deb852b0b013befa77",
+  "prompts": {},
+  "sessions": {
+    "s_2e87acf1f13363": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "31108f72-a141-4ae8-90c0-f38f0969a4e7",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "nicky <nicky@cloudflare.com>"
+    }
+  }
+}
