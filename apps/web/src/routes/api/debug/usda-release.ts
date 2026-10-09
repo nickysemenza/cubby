@@ -4,7 +4,10 @@ import { createFileRoute } from "@tanstack/react-router";
 import { auth } from "~/lib/auth";
 import { getErrorMessage } from "~/lib/error-utils";
 import { getUsdaReleaseEnv } from "~/server/cf-env";
-import { verifyHttpApiKeyActor } from "~/server/http-api-handler";
+import {
+  hasExplicitCredential,
+  verifyHttpApiKeyActor,
+} from "~/server/http-api-handler";
 import { authenticateHttpSession } from "~/server/http-session-cache";
 import { createRequestContext, requireActor } from "~/server/request-context";
 import type { RequestActor } from "~/server/request-context";
@@ -37,6 +40,7 @@ async function authenticate(request: Request): Promise<Response | null> {
     // A cookie-authenticated write must come from this origin.
     if (
       actor &&
+      !hasExplicitCredential(request) &&
       request.method !== "GET" &&
       request.headers.get("origin") !== new URL(request.url).origin
     )
