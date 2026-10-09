@@ -940,3 +940,169 @@ describe("bounded stream error evidence", () => {
     },
   );
 });
+
+// Regression: a provider SDK that requested `stream: true` parses SSE whatever
+// the response MIME says, so a refusal streamed under a missing or wrong
+// Content-Type reached the SDK as bare prose with no retained diagnostics.
+describe("requested stream diagnostics", () => {
+  const quota = "subscription_sharing_usage_limit_exceeded";
+  const refusal = `event: error\ndata: ${JSON.stringify({ error: { code: quota, message: "Synthetic quota" } })}\n\n`;
+  const streamed = JSON.stringify({ model: "synthetic", stream: true });
+
+  function upstream(text: string, contentType: string | undefined) {
+    const headers = new Headers({ "x-request-id": "synthetic-request" });
+    if (contentType) headers.set("content-type", contentType);
+    // A byte body sets no Content-Type of its own.
+    return new Response(new TextEncoder().encode(text), { headers });
+  }
+
+  it.each([undefined, "application/json", "text/plain; charset=utf-8"])(
+    "observes a subscription refusal under Content-Type %s without changing the response",
+    async (contentType) => {
+      const failures: Array<{ status: number; body: string }> = [];
+      const gateway = vi.fn();
+      const admission = vi.fn();
+      const send = gatewayFetchThrough({
+        provider: "openai",
+        subscriptionFallback: "budgeted",
+        beforePaidRequest: admission,
+        chatGpt: async () => upstream(refusal, contentType),
+        gateway,
+        onErrorResponse: (failure) => failures.push(failure),
+      });
+      const response = await send(`${gatewayBaseURL("openai")}/responses`, {
+        body: streamed,
+        method: "POST",
+      });
+      expect(response.status).toBe(200);
+      expect(response.headers.get("content-type")).toBe(contentType ?? null);
+      expect(response.headers.get("x-request-id")).toBe("synthetic-request");
+      expect(await response.text()).toBe(refusal);
+      expect(failures).toHaveLength(1);
+      expect(failures[0]?.body).toContain(quota);
+      expect(failures[0]?.body).toContain("synthetic-request");
+      expect(admission).not.toHaveBeenCalled();
+      expect(gateway).not.toHaveBeenCalled();
+    },
+  );
+
+  it("observes a paid-route stream the SDK requested from its raw string body", async () => {
+    const observer = vi.fn();
+    const send = gatewayFetchThrough({
+      provider: "openai",
+      gateway: async () => upstream(refusal, undefined),
+      onErrorResponse: observer,
+    });
+    const response = await send(`${gatewayBaseURL("openai")}/responses`, {
+      body: streamed,
+      method: "POST",
+    });
+    expect(await response.text()).toBe(refusal);
+    expect(observer).toHaveBeenCalledTimes(1);
+  });
+
+  it("does not pull ahead of the SDK or swallow cancellation for a mislabelled requested stream", async () => {
+    const pull = vi.fn();
+    const cancel = vi.fn();
+    const send = gatewayFetchThrough({
+      provider: "openai",
+      chatGpt: async () =>
+        new Response(
+          new ReadableStream({ pull, cancel }, { highWaterMark: 0 }),
+          { headers: { "content-type": "application/json" } },
+        ),
+      gateway: vi.fn(),
+      onErrorResponse: vi.fn(),
+    });
+    const response = await send(`${gatewayBaseURL("openai")}/responses`, {
+      body: streamed,
+      method: "POST",
+    });
+    expect(pull).not.toHaveBeenCalled();
+    await response.body?.cancel("synthetic cancellation");
+    expect(cancel).toHaveBeenCalledWith("synthetic cancellation");
+  });
+
+  it.each([
+    ["{}", "application/json", JSON.stringify({ error: { code: quota } })],
+    [JSON.stringify({ stream: false }), "text/plain", refusal],
+  ])(
+    "never observes an ordinary body when the request %s did not stream",
+    async (requestBody, contentType, text) => {
+      const observer = vi.fn();
+      const send = gatewayFetchThrough({
+        provider: "openai",
+        chatGpt: async () => upstream(text, contentType),
+        gateway: vi.fn(),
+        onErrorResponse: observer,
+      });
+      const response = await send(`${gatewayBaseURL("openai")}/responses`, {
+        body: requestBody,
+        method: "POST",
+      });
+      expect(await response.text()).toBe(text);
+      expect(observer).not.toHaveBeenCalled();
+    },
+  );
+
+  it("leaves a streamed request body for the route that transmits it", async () => {
+    const sent: string[] = [];
+    const send = gatewayFetchThrough({
+      provider: "anthropic",
+      gateway: async (request) => {
+        sent.push(await new Response(request.init?.body).text());
+        return upstream(refusal, "text/event-stream");
+      },
+      onErrorResponse: vi.fn(),
+    });
+    const response = await send(`${gatewayBaseURL("anthropic")}/messages`, {
+      body: new Blob([streamed]).stream(),
+      method: "POST",
+      // @ts-expect-error Node requires `duplex` for a streamed request body.
+      duplex: "half",
+    });
+    await response.text();
+    expect(sent).toEqual([streamed]);
+  });
+
+  it("retains a bounded JSON-string error event but not other JSON-string events", async () => {
+    const prose = `Synthetic usage limit ${"é".repeat(5_000)}`;
+    const text = `data: ${JSON.stringify("Synthetic private output")}\n\nevent: error\ndata: ${JSON.stringify(prose)}\n\n`;
+    const diagnostics: string[] = [];
+    const send = gatewayFetchThrough({
+      provider: "openai",
+      chatGpt: async () => upstream(text, undefined),
+      gateway: vi.fn(),
+      onErrorResponse: (failure) => diagnostics.push(failure.body),
+    });
+    const response = await send(`${gatewayBaseURL("openai")}/responses`, {
+      body: streamed,
+      method: "POST",
+    });
+    expect(await response.text()).toBe(text);
+    expect(diagnostics).toHaveLength(1);
+    expect(diagnostics[0]).toContain("Synthetic usage limit");
+    expect(diagnostics[0]).not.toContain("Synthetic private output");
+    expect(
+      new TextEncoder().encode(diagnostics[0]).byteLength,
+    ).toBeLessThanOrEqual(4_096);
+  });
+
+  it("reports wire metadata for every response without reading its body", async () => {
+    const wires: unknown[] = [];
+    const send = gatewayFetchThrough({
+      provider: "openai",
+      chatGpt: async () => upstream(refusal, undefined),
+      gateway: vi.fn(),
+      onResponse: (_info, wire) => wires.push(wire),
+    });
+    const response = await send(`${gatewayBaseURL("openai")}/responses`, {
+      body: streamed,
+      method: "POST",
+    });
+    expect(wires).toEqual([
+      { status: 200, contentType: null, requestId: "synthetic-request" },
+    ]);
+    expect(await response.text()).toBe(refusal);
+  });
+});
