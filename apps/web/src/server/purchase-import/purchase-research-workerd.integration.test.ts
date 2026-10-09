@@ -828,6 +828,21 @@ describe("purchase research through the built Worker", () => {
                 );
               if (!child) throw new Error("Automatic child Run missing.");
               expect(importRun?.status).toBe("completed");
+              const continuations = await database
+                .select({ state: runOperation.state })
+                .from(runOperation)
+                .where(
+                  and(
+                    eq(runOperation.runId, runEntityId.parse(runId)),
+                    eq(runOperation.kind, "research_continue"),
+                  ),
+                );
+              expect(continuations).toEqual(
+                mode === "retained" ? [{ state: "completed" }] : [],
+              );
+              evidence.push({
+                consumedHostContinuations: continuations.length,
+              });
               if (mode === "provider")
                 await verifyProviderAcquisition({
                   runtime,

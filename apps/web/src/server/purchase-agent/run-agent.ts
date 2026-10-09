@@ -292,7 +292,11 @@ export class PurchaseImportRunAgent
                 !this.readState(STATE_KEYS.researchGenerationStop) &&
                 last?.role === "user" &&
                 signal?.type === "cubby.research-continuation" &&
-                signal.attributes?.yieldRef
+                signal.attributes?.yieldRef &&
+                text?.success &&
+                this.readState(
+                  `research_continuation:${signal.attributes.yieldRef}`,
+                ) === text.data
               ) {
                 const existing = await api.memo<JsonValue>(
                   "research-continuation-consumed",
@@ -359,12 +363,17 @@ export class PurchaseImportRunAgent
                 .object({ status: z.literal("working") })
                 .safeParse(output);
               if (!active.success) return undefined;
+              const continuation = renderSignal({
+                type: "cubby.research-continuation",
+                attributes: { yieldRef: `yield:${api.taskId}` },
+                body: JSON.stringify(output),
+              });
+              this.writeState(
+                `research_continuation:yield:${api.taskId}`,
+                continuation,
+              );
               return {
-                continue: renderSignal({
-                  type: "cubby.research-continuation",
-                  attributes: { yieldRef: `yield:${api.taskId}` },
-                  body: JSON.stringify(output),
-                }),
+                continue: continuation,
               };
             },
           }),

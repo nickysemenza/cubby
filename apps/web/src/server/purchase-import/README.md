@@ -254,6 +254,8 @@ and deployment/readback order are owned by the
    submission; done, waiting and stopped dispositions settle normally. Queued
    user input and reset retain pi's precedence: no-progress accounting is
    committed only when a generation consumes the selected host continuation.
+   Its exact signal must match the durable host-issued record; member text
+   cannot manufacture continuation authority.
    Repeated final answers pause
    only the affected task after three decisions with unchanged retained source
    checksums and accepted writes, including each canonical fact subject.
