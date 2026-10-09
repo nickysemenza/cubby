@@ -50,10 +50,10 @@ accounting through the replacement research dispatch. No test case was deleted.
 Compiler/generator and hosted checks verify the removal; a declaration-only
 regression would not guard behavior. This does not retire the old Workflow.
 
-The retired Workflow slice removes **847 net handwritten production lines**
-(889 removed, 42 added), **433 net test lines** (605 removed, 172 added), one
+The retired Workflow slice removes **858 net handwritten production lines**
+(901 removed, 42 added), **433 net test lines** (605 removed, 172 added), one
 net generated line and 24 net documentation lines. The complete diff reduces
-**1,305 lines**. It deletes three engine files, their integration and wrapper unit suites and two
+**1,316 lines**. It deletes three engine files, their integration and wrapper unit suites and two
 obsolete runbooks, and adds no tables or data migration. All executable callers
 and bindings are removed; historical purpose values remain data. Review, hosted
 checks and deployment are pending. The generated-adapter slice has no defensible
