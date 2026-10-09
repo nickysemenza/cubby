@@ -65,7 +65,9 @@ the component chunks. Keep the generated entity maps and lazy slot registries
 shared: per-entity model registration adds initialization and cross-entity
 Suspense contracts without removing the all-entity list schemas. Scope
 `AuthUIProvider` to the auth/account views; ordinary session reads use
-`authClient.useSession()`. Editors and the JSON viewer use `browserOnlyLazy` at their interaction boundary.
+`authClient.useSession()`. The JSON viewer uses `browserOnlyLazy` at its interaction boundary. Keep the
+generic editor eager: a cold editor graph delays opening and adds a Suspense
+contract to every caller.
 Date-cell inputs stay eager so typing to edit keeps every keystroke while
 focus transfers to the input.
 Keep picker option rosters and Base UI label/equality functions stable across

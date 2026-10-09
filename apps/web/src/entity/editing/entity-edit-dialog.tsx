@@ -1,8 +1,6 @@
-import { Suspense, type ReactNode } from "react";
+import type { ReactNode } from "react";
 
-import { browserOnlyLazy } from "~/lib/browser-only-lazy";
-
-import type { EntityEditDialogContent as EntityEditDialogContentComponent } from "./entity-edit-dialog-content";
+import { EntityEditDialogContent } from "./entity-edit-dialog-content";
 import type {
   EntityEditIntent as TypedEntityEditIntent,
   EntityEditResultFor,
@@ -46,33 +44,10 @@ export interface EntityEditDialogProps<E extends EditableEntity> {
   mutationPort?: EntityMutationPort;
 }
 
-// Interaction-only: the editor graph (react-hook-form, react-dropzone, the
-// field registries) loads when a surface first opens a dialog.
-// SAFETY: the loader resolves to `EntityEditDialogContent` itself;
-// `browserOnlyLazy` only erases its generic signature.
-const EntityEditDialogContent = browserOnlyLazy<
-  EntityEditDialogProps<EditableEntity>
->(
-  import.meta.env.SSR
-    ? null
-    : () =>
-        import("./entity-edit-dialog-content").then((module) => ({
-          default: module.EntityEditDialogContent,
-        })),
-) as typeof EntityEditDialogContentComponent;
-
-/**
- * The typed shell every surface imports statically; the editor itself loads
- * behind the interaction boundary above.
- */
 export function EntityEditDialog<E extends EditableEntity>(
   props: EntityEditDialogProps<E>,
 ) {
   if (!props.open) return null;
 
-  return (
-    <Suspense fallback={null}>
-      <EntityEditDialogContent {...props} />
-    </Suspense>
-  );
+  return <EntityEditDialogContent {...props} />;
 }
