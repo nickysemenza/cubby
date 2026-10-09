@@ -620,6 +620,12 @@ async function eraseDisposableHistory(
   receipt: typeof researchRetention.$inferSelect,
 ) {
   const client = getDb(db);
+  // Exposure and late continuation hold source before Run/history locks.
+  const [source] = await client
+    .select()
+    .from(orderMail)
+    .where(eq(orderMail.id, receipt.orderMailId))
+    .for("update");
   const ids = receipt.plan.retiredRunIds.map((id) => runEntityId.parse(id));
   const keptEvidence = await preservedEvidenceIds(db, receipt.ledgerPartyId);
   const evidence = await client
@@ -733,11 +739,6 @@ async function eraseDisposableHistory(
       agentSessionId: null,
     })
     .where(inArray(run.id, ids));
-  const [source] = await client
-    .select()
-    .from(orderMail)
-    .where(eq(orderMail.id, receipt.orderMailId))
-    .for("update");
   if (source) {
     if (source.rawChecksum !== receipt.checksum)
       throw new Error(

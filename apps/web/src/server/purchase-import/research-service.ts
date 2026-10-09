@@ -447,6 +447,13 @@ export function researchServiceFor(
   const services: ResearchServices = {
     async researchContinue(callId, admitted = true) {
       return withTransactionDatabase(db, async (transactionDb) => {
+        // Both mail admission and the terminal Product sweep acquire member first.
+        const member = await owner(transactionDb);
+        await getDb(transactionDb)
+          .select({ id: ledgerParty.id })
+          .from(ledgerParty)
+          .where(eq(ledgerParty.id, member.ledgerPartyId!))
+          .for("no key update");
         // Source exposure/retirement locks mail before Runs; preserve that order.
         const sources = await loadMailResearchSources(transactionDb, runId);
         if (sources?.length)

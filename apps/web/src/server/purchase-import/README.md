@@ -267,8 +267,10 @@ and deployment/readback order are owned by the
    Continuation admission locks the Run and binds its next-work decisions to
    the same transaction, so cancellation cannot commit between its status check
    and ledger writes. Derived Product work dispatches after that transaction commits.
-   Mail continuations lock their frozen source set in ID order before the Run,
-   matching source exposure and retirement so those paths cannot invert locks.
+   Continuations acquire the owning member before sources and Runs, matching
+   mail admission and the terminal Product sweep. Mail continuations then lock
+   their frozen source set in ID order before the Run,
+   matching source exposure, retirement and history erasure so those paths cannot invert locks.
    Run status/ledger fences use key-preserving locks: cancellation still waits,
    while a concurrent child admission can check its parent foreign key.
    Retained mail observations present plain text and compact visible HTML with

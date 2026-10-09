@@ -18,12 +18,16 @@ import {
   runOperation,
   runTarget,
 } from "~/server/db/schema";
-import { getDb, withTransaction } from "~/server/repo/database-helpers";
+import {
+  databaseForTransaction,
+  getDb,
+  withTransaction,
+} from "~/server/repo/database-helpers";
 import { insertWithShortcode } from "~/server/repo/shortcode-utils";
 
 import { recordAcceptedFactEvidence } from "./fact-verification";
 import { resolveImportResearch } from "./research-import";
-import { startMailResearch } from "./research-run";
+import { admitMailResearch, startMailResearch } from "./research-run";
 import { researchServiceFor } from "./research-service";
 import { loadRunDetail, loadRunLog } from "./run-service";
 
@@ -744,6 +748,40 @@ describe("research host lifecycle", () => {
       expect(settled?.state).toBe("unresolved");
     },
   );
+  it("allows actual mail admission while a terminal continuation waits for the same member", async () => {
+    const { f } = await importPrimary(2);
+    await getDb(ctx.db)
+      .update(runTarget)
+      .set({ state: "unresolved", outcome: "temporarily_blocked" })
+      .where(
+        and(
+          eq(runTarget.runId, f.started.runId),
+          eq(runTarget.state, "pending"),
+        ),
+      );
+    let continuation: Promise<object> | undefined;
+    try {
+      await withTransaction(ctx.db, async (tx) => {
+        await tx
+          .select()
+          .from(ledgerParty)
+          .where(eq(ledgerParty.id, f.party.id))
+          .for("no key update");
+        continuation = f.services.researchContinue(crypto.randomUUID(), true);
+        await waitForBlockedBackend(tx);
+        await tx.execute(sql`set local lock_timeout = '250ms'`);
+        await admitMailResearch(databaseForTransaction(tx), {
+          ledgerPartyId: f.party.id,
+          userId: ctx.actor.userId,
+          mailboxId: f.mail.mailboxId,
+          messageIds: [f.mail.id],
+        });
+      });
+      expect(await continuation).toMatchObject({ status: "done" });
+    } finally {
+      await continuation;
+    }
+  });
   it("allows a concurrent child Run foreign-key check while continuation waits for member admission", async () => {
     const { f } = await importPrimary(2);
     await getDb(ctx.db)

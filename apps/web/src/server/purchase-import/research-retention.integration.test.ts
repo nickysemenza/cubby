@@ -26,7 +26,7 @@ import {
   runOperation,
   runTarget,
 } from "~/server/db/schema";
-import { getDb } from "~/server/repo/database-helpers";
+import { withTransaction, getDb } from "~/server/repo/database-helpers";
 import { insertWithShortcode } from "~/server/repo/shortcode-utils";
 
 import { resolveImportResearch } from "./research-import";
@@ -350,6 +350,57 @@ describe("unrelated research retention", () => {
     expect(await getDb(ctx.db).select().from(orderMail)).toHaveLength(0);
   });
 
+  it("locks the source before erasing retired Run history alongside late continuation", async () => {
+    const f = await fixture();
+    const receipt = await requestResearchRetention(ctx.db, {
+      runId: f.owner.id,
+      workRef: f.target.id,
+      callId: "synthetic-erasure-lock-order",
+      hasSupportedWrites: false,
+    });
+    let cleanup: Promise<unknown> | undefined;
+    try {
+      await withTransaction(ctx.db, async (tx) => {
+        await tx
+          .select()
+          .from(orderMail)
+          .where(eq(orderMail.id, f.source.id))
+          .for("update");
+        cleanup = processResearchRetention(ctx.db, receipt.receiptId, {
+          deleteObject: async () => {},
+          retireCoordinator: async () => ({ disposed: true }),
+          forgetBrowserRun: async () => {},
+          transferUnfinished: async () => [],
+        });
+        cleanup.catch(() => undefined);
+        await expect
+          .poll(
+            async () => {
+              await tx.execute(sql`select pg_stat_clear_snapshot()`);
+              const waiting = await tx.execute(
+                sql`select count(*)::integer as count from pg_stat_activity where pg_backend_pid() = any(pg_blocking_pids(pid))`,
+              );
+              return waiting.rows[0]?.count;
+            },
+            { timeout: 5000 },
+          )
+          .toBeGreaterThan(0);
+        await tx
+          .select()
+          .from(run)
+          .where(eq(run.id, f.owner.id))
+          .for("update", { noWait: true });
+      });
+      await cleanup;
+      const [completed] = await getDb(ctx.db)
+        .select()
+        .from(researchRetention)
+        .where(eq(researchRetention.id, receipt.receiptId));
+      expect(completed?.phase).toBe("completed");
+    } finally {
+      await cleanup;
+    }
+  });
   it("includes a heading reader's in-flight retained upload before acknowledging object deletion", async () => {
     const f = await fixture();
     const [target] = await getDb(ctx.db)
