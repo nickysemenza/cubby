@@ -1,0 +1,27 @@
+apps/web/src/lib/recipe-costing.ts
+  s_baac6c838b330d::t_106d8a9f81aaae 236
+apps/web/src/lib/unit-mapping-utils.ts
+  s_baac6c838b330d::t_c3cd542646a11f 29
+apps/web/src/routes/_authenticated/usda.$id.tsx
+  s_baac6c838b330d::t_5d4b940ff7729d 15-17
+apps/web/src/server/repo/product/helpers.ts
+  s_baac6c838b330d::t_50d5ba8d9c1ff5 12-13
+packages/usda/src/schemas.ts
+  s_baac6c838b330d::t_3fc9d9a2db5426 78
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "64b633aeca7a887b2148d507f8c33017b2f458cf",
+  "prompts": {},
+  "sessions": {
+    "s_baac6c838b330d": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "4e072615-6da5-4add-8945-be01765ee61f",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "nicky <nicky@cloudflare.com>"
+    }
+  }
+}
