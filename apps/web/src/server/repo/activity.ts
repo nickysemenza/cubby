@@ -142,7 +142,7 @@ function runProjection(): SQL {
       r.id AS internal_id,
       r.shortcode AS id,
       'run' AS "recordType",
-      NULL::text AS "parentRunId",
+      causal_parent.shortcode AS "parentRunId",
       r.purpose AS kind,
       r.trigger,
       account.shortcode AS "vendorAccountId",
@@ -188,7 +188,23 @@ function runProjection(): SQL {
     LEFT JOIN "Vendor" v ON v.id = r."vendorId"
     LEFT JOIN "VendorAccount" account ON account.id = r."vendorAccountId" AND account."deletedAt" IS NULL
     LEFT JOIN "LedgerParty" party ON party.id = r."ledgerPartyId"
+    LEFT JOIN "Run" causal_parent ON causal_parent.id = r."parentRunId" AND causal_parent."deletedAt" IS NULL
     WHERE r."deletedAt" IS NULL
+  `;
+}
+
+/** Only retained live parent edges group work; legacy null edges remain roots. */
+function groupedRunProjection(): SQL {
+  return sql`
+    WITH RECURSIVE projected AS (${runProjection()}),
+    lineage AS (
+      SELECT id, id AS "groupRootId" FROM projected WHERE "parentRunId" IS NULL
+      UNION ALL
+      SELECT child.id, lineage."groupRootId"
+      FROM projected child JOIN lineage ON child."parentRunId" = lineage.id
+    )
+    SELECT projected.*, coalesce(lineage."groupRootId", projected.id) AS "groupRootId"
+    FROM projected LEFT JOIN lineage ON lineage.id = projected.id
   `;
 }
 
@@ -460,6 +476,7 @@ export async function listActivity(
   db: Database,
   _partyId: string | null,
   input: ActivityListInput,
+  groupRootId?: string,
 ) {
   const cursor = decodeCursor(input.cursor);
   const ascending = input.sort === "oldest";
@@ -470,8 +487,9 @@ export async function listActivity(
       : sql`("createdAt", id) < ((${cursor.at}::timestamptz AT TIME ZONE 'UTC'), ${cursor.id})`
     : sql`true`;
   const query = await getDb(db).execute(sql`
-    WITH runs AS (${runProjection()}),
-    filtered AS (SELECT * FROM runs WHERE ${listPredicate(input)}),
+    WITH runs AS (${groupRootId ? groupedRunProjection() : runProjection()}),
+    filtered AS (SELECT * FROM runs WHERE ${listPredicate(input)}
+      ${groupRootId ? sql`AND "groupRootId" = ${groupRootId} AND id <> ${groupRootId}` : sql``}),
     page AS (
       SELECT *, to_char("createdAt", 'YYYY-MM-DD"T"HH24:MI:SS.US"Z"') AS "cursorAt"
       FROM filtered
@@ -525,16 +543,14 @@ export async function listActivityGroups(
       : sql`(aggregate."latestAt", aggregate."rootId") < ((${cursor.at}::timestamptz AT TIME ZONE 'UTC'), ${cursor.id})`
     : sql`true`;
   const query = await getDb(db).execute(sql`
-    WITH runs AS (${runProjection()}),
+    WITH runs AS (${groupedRunProjection()}),
     filtered AS (SELECT * FROM runs WHERE ${listPredicate(input)}),
     aggregate AS (
       SELECT
-        CASE WHEN "recordType" = 'image_job' AND "parentRunId" IS NOT NULL
-          THEN "parentRunId" ELSE id END AS "rootId",
+        "groupRootId" AS "rootId",
         max("createdAt") AS "latestAt",
-        count(*) FILTER (WHERE "recordType" = 'image_job' AND "parentRunId" IS NOT NULL)::int AS "childCount",
-        bool_or(id = CASE WHEN "recordType" = 'image_job' AND "parentRunId" IS NOT NULL
-          THEN "parentRunId" ELSE id END) AS "rootMatched"
+        count(*) FILTER (WHERE id <> "groupRootId")::int AS "childCount",
+        bool_or(id = "groupRootId") AS "rootMatched"
       FROM filtered
       GROUP BY 1
     ),
@@ -600,11 +616,7 @@ export async function listActivityGroupChildren(
   partyId: string | null,
   input: ActivityListInput & { rootId: string },
 ) {
-  return listActivity(db, partyId, {
-    ...input,
-    recordType: "image_job",
-    parentRunId: input.rootId,
-  });
+  return listActivity(db, partyId, input, input.rootId);
 }
 
 async function resolveActivity(

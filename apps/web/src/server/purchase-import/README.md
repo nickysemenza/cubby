@@ -13,6 +13,13 @@ links preserve the initiating member scope. Generic Run relations expose the
 parent and children, and a replay of an unfinished keyed starter preserves its
 null `endedAt`.
 
+The shared activity projection groups research descendants and their image jobs
+under the highest retained live causal parent. Group filters apply to matching
+work, while an unmatched root remains visible as context; expanded children use
+the same filters and cursor protocol. A deleted parent starts a new visible root
+at its live child. Historical null lineage stays independent, and retry
+predecessors do not become causal parents.
+
 Execution allowance is separate from causal lineage. A member's explicit
 approval is an immutable, completed background Run; completed RunOperation
 receipts retain every conservative paid reservation and distinct candidate or

@@ -249,9 +249,12 @@ readback were completed. Do not reapply that migration. The shared activity
 projection owns list/status presentation. Shipped schema is distinct from live
 research acceptance.
 
-- 🟢 **Group research children by root Run.** Starters already persist lineage;
-  the activity list's root grouping currently handles image jobs. Extend it to
-  research children without inventing lineage for historical null rows.
+- ⏳ **Accept research root grouping in the clients.** The shared activity
+  projection groups research descendants and image jobs through retained live
+  causal parents, with filtered, cursor-paged children. Persisted-state
+  regressions cover nested work, deleted ancestors and independent legacy rows.
+  Verify a small visible client journey after deployment; historical null
+  lineage remains independent and retry predecessors never imply parentage.
 
 - 🟢 **Derive research-purpose presentation consistently.** Audit the duplicated
   purpose sets in shared constants, agent inputs, Run declarations and Workflow
