@@ -1,0 +1,43 @@
+apps/web/src/server/background-tasks/handle.ts
+  s_2e87acf1f13363::t_140039811b3435 6,8-10,12-22,59
+apps/web/src/server/operations/maintenance.server.ts
+  s_2e87acf1f13363::t_fd8451d9de55bf 8
+apps/web/src/server/purchase-import/catch-up.integration.test.ts
+  s_2e87acf1f13363::t_7b3be46486f549 10-11
+apps/web/src/server/services/app-open-catch-up.service.ts
+  s_42bc277a440ed7::t_f8c5aa0c55b6fd 1-34
+apps/web/src/server/services/catch-up.service.ts
+  s_56da3ba45d5117::t_fc993b19c422fd 10,12-26,28-31
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "688f2567821110178ae08114b8cec96152315c8c",
+  "prompts": {},
+  "sessions": {
+    "s_2e87acf1f13363": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "31108f72-a141-4ae8-90c0-f38f0969a4e7",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "nicky <nicky@cloudflare.com>"
+    },
+    "s_42bc277a440ed7": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "e3d9b085-2b98-4c69-b73c-d699fda1c172",
+        "model": "claude-fable-5-1"
+      },
+      "human_author": "nicky <nicky@cloudflare.com>"
+    },
+    "s_56da3ba45d5117": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a12246-f9a6-7610-970c-e30daf75b706",
+        "model": "gpt-6-astra"
+      },
+      "human_author": "nicky <nicky@cloudflare.com>"
+    }
+  }
+}
