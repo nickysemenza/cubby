@@ -224,8 +224,9 @@ function observeStreamFailure(
   const parser = createParser({
     // Framing counts toward parser buffering, but not decoded error data.
     maxBufferSize: 65_536,
-    onError: () => {
-      observing = false;
+    onError: (error) => {
+      // SSE ignores unknown fields and invalid retry hints.
+      if (error.type === "max-buffer-size-exceeded") observing = false;
     },
     onEvent: (event) => {
       if (!observing) return;

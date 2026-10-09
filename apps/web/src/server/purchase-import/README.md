@@ -73,7 +73,8 @@ serialized error data. Nested provider error objects retain their fields; direct
 error events retain type/code/message/param. Failed-response output is excluded. Observation is bounded to 64 KiB of buffered SSE characters and ignores error
 data over 16 KiB regardless of chunk boundaries. It does
 not pull ahead or retain preceding output, and preserves original bytes and
-cancellation. Incomplete/oversized/malformed prefixes remain unobserved. Event
+cancellation. Incomplete/oversized/non-JSON error data remain unobserved; ignorable SSE field
+warnings do not suppress later errors. Event
 names alone do not prove absence of useful output. A stream error never grants
 paid replay; wire evidence is required before changing fallback eligibility. Interactive calls without this explicit policy retain their defaults.
 Pi can open before dispatch binds its Run, so the coordinator resolves transport

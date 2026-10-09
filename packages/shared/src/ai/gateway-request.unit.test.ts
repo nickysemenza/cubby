@@ -803,3 +803,27 @@ describe("stream diagnostic framing evidence", () => {
     expect(diagnostics[0]).not.toContain("synthetic keepalive");
   });
 });
+
+// SSE ignores unknown fields and invalid retry hints. Those warnings must not
+// suppress a later complete provider error or alter the original stream.
+it.each(["extension: synthetic", "retry: synthetic"])(
+  "retains a provider error after the ignorable SSE field %s",
+  async (prefix) => {
+    const text = `${prefix}\nevent: error\ndata: {"code":"synthetic_error","message":"Synthetic provider diagnostic"}\n\n`;
+    const observer = vi.fn();
+    const send = gatewayFetchThrough({
+      provider: "openai",
+      gateway: async () =>
+        new Response(text, {
+          headers: { "content-type": "text/event-stream" },
+        }),
+      onErrorResponse: observer,
+    });
+    const response = await send(`${gatewayBaseURL("openai")}/responses`, {
+      body: "{}",
+      method: "POST",
+    });
+    expect(await response.text()).toBe(text);
+    expect(observer).toHaveBeenCalledTimes(1);
+  },
+);
