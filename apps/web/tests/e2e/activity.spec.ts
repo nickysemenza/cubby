@@ -29,6 +29,8 @@ test("Grouped research refreshes collapsed roots and expanded or reopened childr
     name: `Expand jobs for ${sample.rootId}`,
   });
   await expect(expand).toBeVisible();
+  // The completed discovery parent must not hide its running research child.
+  await expect(table).toContainText("1 working · 1 completed");
   await setResearchHistoryStatus(sample.rootId, "failed");
   await expect(table.getByText("failed", { exact: true })).toBeVisible({
     timeout: 25_000,

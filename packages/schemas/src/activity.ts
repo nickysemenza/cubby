@@ -156,6 +156,15 @@ export const activityGroupsOutput = z.object({
       root: activityRun,
       /** Group liveness includes descendants, independently of the root's state. */
       active: z.boolean(),
+      /** Matching work in this group; completed attempts do not imply verified facts. */
+      workCounts: z.object({
+        working: z.int().nonnegative(),
+        waiting: z.int().nonnegative(),
+        needsReview: z.int().nonnegative(),
+        failed: z.int().nonnegative(),
+        completed: z.int().nonnegative(),
+        skipped: z.int().nonnegative(),
+      }),
       childCount: z.int().nonnegative(),
       contextOnly: z.boolean(),
       latestAt: z.iso.datetime(),
@@ -168,6 +177,22 @@ export const activityGroupsOutput = z.object({
 export const activityGroupChildrenInput = activityListInput.extend({
   rootId: z.string().regex(/^RUN-[A-Z0-9]+$/u),
 });
+
+/** Attempt states across matching related work, separate from target verification. */
+export function activityWorkSummary(
+  counts: z.infer<typeof activityGroupsOutput>["items"][number]["workCounts"],
+): string {
+  return [
+    counts.working ? `${counts.working} working` : null,
+    counts.waiting ? `${counts.waiting} waiting` : null,
+    counts.needsReview ? `${counts.needsReview} need review` : null,
+    counts.failed ? `${counts.failed} failed` : null,
+    counts.skipped ? `${counts.skipped} skipped` : null,
+    counts.completed ? `${counts.completed} completed` : null,
+  ]
+    .filter((part) => part !== null)
+    .join(" · ");
+}
 export const activityDetailInput = z.object({ id: activityRunId });
 export const activityAttempt = z.object({
   number: z.int().positive(),

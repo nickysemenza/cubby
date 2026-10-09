@@ -591,6 +591,26 @@ describe("unified Runs history", () => {
       expect.objectContaining({ parentRunId: parent.shortcode }),
     ]);
     expect(children.nextCursor).toBeNull();
+    // Filtering to an image child must count its terminal result, not its context root.
+    for (const [state, bucket] of [
+      ["ready", "completed"],
+      ["skipped", "skipped"],
+    ] as const) {
+      await getDb(ctx.db)
+        .update(imageProcessingJob)
+        .set({ state })
+        .where(eq(imageProcessingJob.id, linked));
+      const terminal = await listActivityGroups(ctx.db, null, {
+        executor: "all",
+        limit: 10,
+        sort: "newest",
+        kind: "describe_image",
+      });
+      expect(terminal.items[0]).toMatchObject({
+        contextOnly: true,
+        workCounts: { working: 0, waiting: 0, [bucket]: 1 },
+      });
+    }
     const contextual = await listActivityGroups(ctx.db, null, {
       executor: "all",
       limit: 10,
@@ -803,14 +823,52 @@ describe("unified Runs history", () => {
       sort: "newest" as const,
     };
     expect((await listActivityGroups(ctx.db, null, input)).items).toMatchObject(
-      [{ active: true, root: { active: false, state: "completed" } }],
+      [
+        {
+          active: true,
+          root: { active: false, state: "completed" },
+          workCounts: {
+            working: 1,
+            waiting: 0,
+            needsReview: 0,
+            failed: 0,
+            completed: 1,
+          },
+        },
+      ],
     );
+    for (const [status, bucket] of [
+      ["paused_auth", "waiting"],
+      ["needs_review", "needsReview"],
+      ["failed", "failed"],
+    ] as const) {
+      await getDb(ctx.db)
+        .update(runTable)
+        .set({ status })
+        .where(eq(runTable.id, childId));
+      const group = (await listActivityGroups(ctx.db, null, input)).items[0];
+      expect(group).toMatchObject({
+        workCounts: { working: 0, [bucket]: 1, completed: 1 },
+      });
+    }
     await getDb(ctx.db)
       .update(runTable)
       .set({ status: "completed", endedAt: new Date() })
       .where(eq(runTable.id, childId));
     expect((await listActivityGroups(ctx.db, null, input)).items).toMatchObject(
-      [{ active: false, root: { active: false, state: "completed" } }],
+      [
+        {
+          active: false,
+          root: { active: false, state: "completed" },
+          workCounts: {
+            working: 0,
+            waiting: 0,
+            needsReview: 0,
+            failed: 0,
+            completed: 2,
+          },
+        },
+      ],
     );
   });
 

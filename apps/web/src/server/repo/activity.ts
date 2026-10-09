@@ -574,6 +574,14 @@ export async function listActivityGroups(
         max("createdAt") AS "latestAt",
         count(*) FILTER (WHERE id <> "groupRootId")::int AS "childCount",
         bool_or("groupActive") AS active,
+        jsonb_build_object(
+          'working', count(*) FILTER (WHERE state IN ('running', 'pending', 'leased')),
+          'waiting', count(*) FILTER (WHERE state IN ('paused_auth', 'paused_offline', 'paused_approval', 'waiting_for_device')),
+          'needsReview', count(*) FILTER (WHERE state = 'needs_review'),
+          'failed', count(*) FILTER (WHERE state IN ('failed', 'dispatch_failed')),
+          'completed', count(*) FILTER (WHERE state IN ('completed', 'ready')),
+          'skipped', count(*) FILTER (WHERE state = 'skipped')
+        ) AS "workCounts",
         bool_or(id = "groupRootId") AS "rootMatched"
       FROM filtered
       GROUP BY 1
@@ -588,6 +596,7 @@ export async function listActivityGroups(
           ),
           'childCount', aggregate."childCount",
           'active', aggregate.active,
+          'workCounts', aggregate."workCounts",
           'contextOnly', NOT aggregate."rootMatched",
           'latestAt', to_char(aggregate."latestAt", 'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"')
         ) AS item,
