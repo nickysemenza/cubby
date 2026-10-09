@@ -120,8 +120,9 @@ export function TargetedProductBulkEnrichmentDialog({
       const first = result.runs.find(
         (entry) => entry.created && entry.run,
       )?.run;
+      if (!first) return;
       onFinished(true);
-      if (first) window.location.assign(runHref(first.id));
+      window.location.assign(runHref(first.id));
     },
   });
   return (
@@ -130,7 +131,7 @@ export function TargetedProductBulkEnrichmentDialog({
       onOpenChange={onOpenChange}
       size="lg"
       title="Enrich selected products"
-      description="Products are split into independent account runs. Busy accounts are refused with their blocking run."
+      description="Research selected Products using supported sources. Existing work is linked below."
       error={start.isError ? start.error.message : null}
       onCancel={() => {
         onOpenChange(false);
@@ -152,6 +153,7 @@ export function TargetedProductBulkEnrichmentDialog({
       {launch.products ? (
         <ProductTargetChecklist targets={targets} onChange={setTargets} />
       ) : null}
+      {start.data?.runs.length === 0 ? <EmptyResearchLaunchResult /> : null}
       {start.data?.runs
         .flatMap((entry) => (entry.blockingRun ? [entry.blockingRun] : []))
         .map((run) => (
@@ -278,13 +280,7 @@ export function TargetedImportLaunchDialog({
       {launch.data && purpose === "product_enrichment" ? (
         <ProductTargetChecklist targets={targets} onChange={setTargets} />
       ) : null}
-      {start.data?.runs.length === 0 ? (
-        <output aria-label="Research launch result" className="text-sm">
-          No new research Run was created. Unchanged research is not started
-          again automatically. Use the latest Run’s retry action for unresolved
-          work.
-        </output>
-      ) : null}
+      {start.data?.runs.length === 0 ? <EmptyResearchLaunchResult /> : null}
       {start.data?.runs.some((entry) => entry.blockingRun) ? (
         <div className="grid gap-1 border border-border bg-muted/30 p-3 text-sm">
           <div className="flex items-center gap-2 font-medium">
@@ -305,6 +301,15 @@ export function TargetedImportLaunchDialog({
         </div>
       ) : null}
     </WorkflowDialog>
+  );
+}
+
+function EmptyResearchLaunchResult() {
+  return (
+    <output aria-label="Research launch result" className="text-sm">
+      No new research Run was created. Unchanged research is not started again
+      automatically. Use the latest Run’s retry action for unresolved work.
+    </output>
   );
 }
 
