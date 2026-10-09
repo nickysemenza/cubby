@@ -1,0 +1,19 @@
+pnpm-lock.yaml
+  s_baac6c838b330d::t_9995dfd5705359 11915,15194-15195
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "a333dcde1b15d7f397cc159d6dd97f5df6bc8cac",
+  "prompts": {},
+  "sessions": {
+    "s_baac6c838b330d": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "4e072615-6da5-4add-8945-be01765ee61f",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "nicky <nicky@cloudflare.com>"
+    }
+  }
+}
