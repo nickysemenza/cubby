@@ -1,3 +1,4 @@
+import { createParser } from "eventsource-parser";
 import { z } from "zod";
 
 import type { AiGatewayMetadata } from "./gateway-metadata";
@@ -195,19 +196,121 @@ export interface GatewayResponseFailure {
 export interface GatewayResponseObservers {
   /** Every received response, without consuming its body. */
   onResponse?: (info: GatewayResponseInfo) => void;
-  /** Preserve a failed HTTP response even if the provider SDK replaces it. */
+  /** Preserve HTTP or bounded SSE error diagnostics before the SDK replaces them. */
   onErrorResponse?: (failure: GatewayResponseFailure) => void;
   /** An observed refusal is being recovered; it is no longer the terminal failure. */
   onRecoveredErrorResponse?: (failure: GatewayResponseFailure) => void;
 }
 
-/** Reports `response` to `observers` and returns it untouched. */
+/**
+ * Observe only the bounded prefix the SDK itself reads. Never clone/tee a live
+ * stream, pull ahead, retain model output, or make stream errors replayable.
+ */
+function observeStreamFailure(
+  response: Response,
+  onErrorResponse: NonNullable<GatewayResponseObservers["onErrorResponse"]>,
+): Response {
+  if (!response.body) return response;
+  const reader = response.body.getReader();
+  const decoder = new TextDecoder();
+  const priorEvents: string[] = [];
+  let eventsSeen = 0;
+  let remaining = 65_536;
+  let observing = true;
+  const parser = createParser({
+    maxBufferSize: 16_384,
+    onError: () => {
+      observing = false;
+    },
+    onEvent: (event) => {
+      if (!observing) return;
+      let decoded: unknown;
+      try {
+        decoded = JSON.parse(event.data);
+      } catch {
+        return;
+      }
+      const envelope = z
+        .looseObject({
+          type: z.string().optional(),
+          error: z.json().optional(),
+          response: z.looseObject({ error: z.json().optional() }).optional(),
+        })
+        .safeParse(decoded);
+      const type = event.event ?? envelope.data?.type ?? "unnamed";
+      if (
+        envelope.success &&
+        (type === "error" ||
+          type === "response.failed" ||
+          envelope.data.error != null ||
+          envelope.data.response?.error != null)
+      ) {
+        observing = false;
+        const raw = new TextDecoder().decode(
+          new TextEncoder().encode(event.data).subarray(0, 4_096),
+        );
+        onErrorResponse({
+          status: response.status,
+          statusText: response.statusText,
+          retryAfter: response.headers.get("retry-after"),
+          body: `SSE ${JSON.stringify({ event: type.slice(0, 200), contentType: response.headers.get("content-type"), requestId: response.headers.get("x-request-id"), priorEvents, eventsSeen })}\n${raw}`,
+        });
+      } else {
+        eventsSeen += 1;
+        if (priorEvents.length < 8) priorEvents.push(type.slice(0, 200));
+      }
+    },
+  });
+  const body = new ReadableStream<Uint8Array>(
+    {
+      async pull(controller) {
+        const part = await reader.read();
+        if (part.done) {
+          reader.releaseLock();
+          controller.close();
+          return;
+        }
+        if (observing && remaining > 0) {
+          const bytes = part.value.subarray(0, remaining);
+          remaining -= bytes.byteLength;
+          try {
+            parser.feed(decoder.decode(bytes, { stream: true }));
+          } catch {
+            observing = false; /* Diagnostics cannot replace the SDK's original stream. */
+          }
+          if (remaining === 0) observing = false;
+        }
+        controller.enqueue(part.value);
+      },
+      async cancel(reason) {
+        await reader.cancel(reason);
+        reader.releaseLock();
+      },
+    },
+    { highWaterMark: 0 },
+  );
+  return new Response(body, {
+    status: response.status,
+    statusText: response.statusText,
+    headers: response.headers,
+  });
+}
+
+/** Reports diagnostics while preserving the SDK’s response bytes and cancellation. */
 async function observeGatewayResponse(
   response: Response,
   observers: GatewayResponseObservers,
 ): Promise<Response> {
   observers.onResponse?.(gatewayResponseInfo(response));
-  if (response.ok || !observers.onErrorResponse) return response;
+  if (!observers.onErrorResponse) return response;
+  if (response.ok)
+    return response.headers
+      .get("content-type")
+      ?.split(";", 1)[0]
+      ?.trim()
+      .toLowerCase() === "text/event-stream"
+      ? observeStreamFailure(response, observers.onErrorResponse)
+      : response;
   const reader = response.clone().body?.getReader();
   const decoder = new TextDecoder();
   let body = "";
@@ -337,8 +440,8 @@ export interface GatewayFetchRoutes extends GatewayResponseObservers {
  * supplies one, else the connected ChatGPT plan for Responses calls, else the
  * gateway. Explicit budgeted fallback may replay a definitive quota refusal
  * only after durable paid admission. Every received
- * response is reported to the observers and returned untouched, so streaming
- * bodies pass straight through to the SDK.
+ * response is reported to observers. Streaming bytes pass through unchanged;
+ * passive error observation never authorizes replay.
  */
 export function gatewayFetchThrough(routes: GatewayFetchRoutes): typeof fetch {
   const budgetedFallback =
@@ -384,14 +487,17 @@ export function gatewayFetchThrough(routes: GatewayFetchRoutes): typeof fetch {
       if (subscription) {
         const recover =
           budgetedFallback && (await isSubscriptionQuotaRefusal(subscription));
-        await observeGatewayResponse(subscription, {
-          ...routes,
-          onErrorResponse: (failure) => {
-            routes.onErrorResponse?.(failure);
-            if (recover) routes.onRecoveredErrorResponse?.(failure);
+        const observedSubscription = await observeGatewayResponse(
+          subscription,
+          {
+            ...routes,
+            onErrorResponse: (failure) => {
+              routes.onErrorResponse?.(failure);
+              if (recover) routes.onRecoveredErrorResponse?.(failure);
+            },
           },
-        });
-        if (!recover) return subscription;
+        );
+        if (!recover) return observedSubscription;
         await subscription.body?.cancel();
       }
     }

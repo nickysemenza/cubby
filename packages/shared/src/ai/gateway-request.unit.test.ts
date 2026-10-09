@@ -520,3 +520,148 @@ describe("gateway REST request shaping", () => {
     });
   });
 });
+
+// SDKs can replace an HTTP 200 stream refusal with a status-less Error. Passive
+// diagnostics must retain that envelope without consuming, replaying, delaying
+// or changing the provider stream; incomplete/oversized frames stay unobserved.
+describe("subscription stream diagnostics", () => {
+  const quota = "subscription_sharing_usage_limit_exceeded";
+  const headers = {
+    "content-type": "text/event-stream",
+    "x-request-id": "synthetic-request",
+  };
+
+  it.each([
+    {
+      event: "error",
+      payload: { error: { code: quota, message: "Synthetic quota é" } },
+    },
+    {
+      event: "error",
+      payload: { type: "error", code: quota, message: "Synthetic quota é" },
+    },
+    {
+      event: "response.failed",
+      payload: {
+        type: "response.failed",
+        response: {
+          error: { code: quota, message: "Synthetic quota é" },
+          output: [],
+        },
+      },
+    },
+  ])(
+    "retains a fragmented $event refusal and forwards its exact bytes without paid replay",
+    async ({ event, payload }) => {
+      const text = `event: ${event}\r\ndata: ${JSON.stringify(payload)}\r\n\r\n`;
+      const bytes = new TextEncoder().encode(text);
+      let offset = 0;
+      const failures: Array<{ status: number; body: string }> = [];
+      const gateway = vi.fn();
+      const admission = vi.fn();
+      const send = gatewayFetchThrough({
+        provider: "openai",
+        subscriptionRequired: true,
+        subscriptionFallback: "budgeted",
+        beforePaidRequest: admission,
+        chatGpt: async (_query, options) => {
+          options?.onSelected?.();
+          return new Response(
+            new ReadableStream({
+              pull(controller) {
+                if (offset === bytes.length) controller.close();
+                else controller.enqueue(bytes.slice(offset, ++offset));
+              },
+            }),
+            { headers },
+          );
+        },
+        gateway,
+        onErrorResponse: (failure) => failures.push(failure),
+      });
+      const response = await send(`${gatewayBaseURL("openai")}/responses`, {
+        body: "{}",
+        method: "POST",
+      });
+      expect(failures).toEqual([]);
+      expect(await response.text()).toBe(text);
+      expect(response.status).toBe(200);
+      expect(response.headers.get("x-request-id")).toBe("synthetic-request");
+      expect(failures).toHaveLength(1);
+      expect(failures[0]?.status).toBe(200);
+      expect(failures[0]?.body).toContain(JSON.stringify(payload));
+      expect(failures[0]?.body).toContain("synthetic-request");
+      expect(failures[0]?.body).toContain(event);
+      expect(admission).not.toHaveBeenCalled();
+      expect(gateway).not.toHaveBeenCalled();
+    },
+  );
+
+  it("retains preceding activity without retaining its output in diagnostics", async () => {
+    const output = {
+      type: "response.output_text.delta",
+      delta: "Synthetic private output",
+    };
+    const failure = {
+      type: "response.failed",
+      response: { error: { code: quota }, output: [] },
+    };
+    const text = `data: ${JSON.stringify(output)}\n\ndata: ${JSON.stringify(failure)}\n\n`;
+    const diagnostics: string[] = [];
+    const send = gatewayFetchThrough({
+      provider: "openai",
+      chatGpt: async () => new Response(text, { headers }),
+      gateway: vi.fn(),
+      onErrorResponse: (f) => diagnostics.push(f.body),
+    });
+    const response = await send(`${gatewayBaseURL("openai")}/responses`, {
+      body: "{}",
+      method: "POST",
+    });
+    expect(await response.text()).toBe(text);
+    expect(diagnostics).toHaveLength(1);
+    expect(diagnostics[0]).toContain("response.output_text.delta");
+    expect(diagnostics[0]).not.toContain(output.delta);
+  });
+
+  it("does not pull ahead of the SDK and forwards cancellation to the original body", async () => {
+    const pull = vi.fn();
+    const cancel = vi.fn();
+    const send = gatewayFetchThrough({
+      provider: "openai",
+      chatGpt: async () =>
+        new Response(
+          new ReadableStream({ pull, cancel }, { highWaterMark: 0 }),
+          { headers },
+        ),
+      gateway: vi.fn(),
+      onErrorResponse: vi.fn(),
+    });
+    const response = await send(`${gatewayBaseURL("openai")}/responses`, {
+      body: "{}",
+      method: "POST",
+    });
+    expect(pull).not.toHaveBeenCalled();
+    await response.body?.cancel("synthetic cancellation");
+    expect(cancel).toHaveBeenCalledWith("synthetic cancellation");
+  });
+
+  it.each([
+    'event: error\ndata: {"error":',
+    `event: error\ndata: ${"x".repeat(70_000)}\n\n`,
+  ])("leaves incomplete or oversized envelopes untouched", async (text) => {
+    const observer = vi.fn();
+    const send = gatewayFetchThrough({
+      provider: "openai",
+      chatGpt: async () => new Response(text, { headers }),
+      gateway: vi.fn(),
+      onErrorResponse: observer,
+    });
+    const response = await send(`${gatewayBaseURL("openai")}/responses`, {
+      body: "{}",
+      method: "POST",
+    });
+    expect(await response.text()).toBe(text);
+    expect(observer).not.toHaveBeenCalled();
+  });
+});

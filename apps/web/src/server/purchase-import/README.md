@@ -66,7 +66,14 @@ transmission; budget exhaustion pauses the scope. A reservation is conservative
 and remains consumed even if cancellation or provider failure follows admission.
 Actual usage and reservations are distinct. A retry cannot reset the bucket.
 Other HTTP errors, network/abort errors and partial streaming failures do not
-fall back. Interactive calls without this explicit policy retain their defaults.
+fall back. Passive stream diagnostics retain a complete JSON error envelope from
+the first 64 KiB read by the SDK: actual HTTP status, content type, request ID,
+first eight preceding event names and their total count, plus up to 4 KiB of the
+error data. Observation is bounded to 16 KiB of buffered SSE characters, does
+not pull ahead or retain preceding output, and preserves original bytes and
+cancellation. Incomplete/oversized/malformed prefixes remain unobserved. Event
+names alone do not prove absence of useful output. A stream error never grants
+paid replay; wire evidence is required before changing fallback eligibility. Interactive calls without this explicit policy retain their defaults.
 Pi can open before dispatch binds its Run, so the coordinator resolves transport
 policy from its persisted identity at each request. Photo inventory keeps its
 existing transport policy; an unbound coordinator cannot bypass research admission.
