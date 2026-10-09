@@ -157,7 +157,12 @@ describe("MCP tool deadline", () => {
           return { ok: true };
         },
       },
-      { markCalendarDirty: vi.fn(), toolDeadlineMs: deadlines },
+      // The run outlasts the read budget; the write budget is wide so a slow
+      // CI runner cannot time it out (a 40 ms run once took 89 ms).
+      {
+        markCalendarDirty: vi.fn(),
+        toolDeadlineMs: { ...deadlines, write: 1_000 },
+      },
     );
 
     const result = await callMcpTool(server, "write_between_budgets", {
