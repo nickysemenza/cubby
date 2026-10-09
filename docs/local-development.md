@@ -264,6 +264,12 @@ accessibility helper also runs from one stable signed cache path; archived
 copies are evidence, not executables for driving the app. Its source, compiler
 and signed bytes determine reuse. Initial Accessibility consent is still a
 host setting, but new run directories no longer create a new helper identity.
+`pnpm apple mac --replace-signing-identity` explicitly transitions an installed
+TestFlight app to the development signing identity. Expect possible one-time
+privacy reapproval. It retains team/bundle verification and app data, but skips
+the old privacy requirement check for this invocation. Use plain `pnpm apple mac`
+for subsequent installs to preserve the development identity.
+
 `pnpm apple mac` builds and signs incrementally, checks the app's marketing
 version against `APPLE_CLIENT_COMPATIBILITY_VERSION`, installs it at
 `/Applications/Cubby.app`, and relaunches that installed copy without LLDB.
@@ -273,5 +279,5 @@ app's designated privacy requirement. The copied candidate is verified before st
 Cubby or replacing the installed app; a failed replacement restores the old
 bundle. If the previous bundle is root-owned and cannot be removed, its
 sibling backup path is reported after successful relaunch for manual cleanup.
-App data and privacy settings are retained. The command requires write
+App data is retained; privacy grants persist while the signing requirement stays compatible. The command requires write
 access to `/Applications`; it never invokes sudo or resets permissions.

@@ -193,6 +193,12 @@ their versions, and marked every native E2E bundle `dirty`. CubbyKit's
 lockfile holds only its own pins and changes through `swift package update`;
 an app package change shows up in `apps/apple/Package.resolved`.
 
+`pnpm apple mac --replace-signing-identity` explicitly transitions an installed
+TestFlight app to the development signing identity. Expect possible one-time
+privacy reapproval. It retains team/bundle verification and app data, but skips
+the old privacy requirement check for this invocation. Use plain `pnpm apple mac`
+for subsequent installs to preserve the development identity.
+
 `pnpm apple mac` builds and signs a Debug app, verifies its compatibility
 version, installs it at `/Applications/Cubby.app`, and relaunches the installed
 copy. It refuses built or existing installed apps that the project team did not

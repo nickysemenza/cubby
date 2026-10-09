@@ -50,7 +50,7 @@ const DERIVED = join(APPLE, "DerivedData");
 const BUNDLE_ID = "com.nickysemenza.cubby";
 const PRODUCT = "Cubby.app";
 
-const usage = `usage: pnpm apple <cli|mac|ios|sim|gen|test|check> [--device <name>] [--sim <name>] [--server <local origin>] [--verbose] [--timing] [-- <cli args>]`;
+const usage = `usage: pnpm apple <cli|mac|ios|sim|gen|test|check> [--device <name>] [--sim <name>] [--server <local origin>] [--verbose] [--timing] [--replace-signing-identity] [-- <cli args>]`;
 
 type Options = {
   command: string;
@@ -59,6 +59,7 @@ type Options = {
   server?: string;
   verbose: boolean;
   timing: boolean;
+  replaceSigningIdentity?: boolean;
   rest: string[];
 };
 
@@ -94,6 +95,11 @@ const parseArguments = (argv: readonly string[]): Options => {
         index += 1;
         break;
       }
+      case "--replace-signing-identity":
+        if (command !== "mac")
+          throw new Error(`--replace-signing-identity requires mac\n${usage}`);
+        options.replaceSigningIdentity = true;
+        break;
       case "--timing":
         if (!["mac", "ios", "sim"].includes(command)) {
           throw new Error(`--timing requires mac, ios, or sim\n${usage}`);
@@ -250,9 +256,10 @@ const mac = (options: Options) => {
       `Built app version ${version} differs from compatibility version ${APPLE_CLIENT_COMPATIBILITY_VERSION}`,
     );
   const installed = "/Applications/Cubby.app";
-  const verifyApproval = existsSync(installed)
-    ? installedApprovalVerifier(installed)
-    : undefined;
+  const verifyApproval =
+    existsSync(installed) && !options.replaceSigningIdentity
+      ? installedApprovalVerifier(installed)
+      : undefined;
   const retainedBackup = installMacApp(
     app,
     installed,
