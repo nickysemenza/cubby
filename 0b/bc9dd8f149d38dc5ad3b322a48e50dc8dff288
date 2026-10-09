@@ -1,0 +1,21 @@
+apps/web/src/lib/wasm-preload.ts
+  s_2e87acf1f13363::t_39856e8846c839 1-15
+apps/web/src/routes/_authenticated.tsx
+  s_2e87acf1f13363::t_a2e46864281585 4,19-20
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "0bbc9dd8f149d38dc5ad3b322a48e50dc8dff288",
+  "prompts": {},
+  "sessions": {
+    "s_2e87acf1f13363": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "31108f72-a141-4ae8-90c0-f38f0969a4e7",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "nicky <nicky@cloudflare.com>"
+    }
+  }
+}
