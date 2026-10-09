@@ -79,7 +79,13 @@ absent or empty output and absent/null error can qualify. Admission validates th
 complete error envelope separately from diagnostic extraction: a conflicting type,
 Response wrapper, output-bearing error or unrecognized metadata field replays
 unchanged. Recognized request-configuration fields remain metadata; future provider
-fields require explicit admission support. Any output, tool,
+fields require explicit admission support. Current admitted configuration includes
+nullable `user`, empty/string-array access programs, numeric frequency/presence
+penalties, null moderation and reasoning context/mode settings. Context and mode
+are request configuration, not generated reasoning items; see the
+[Responses API contract](https://developers.openai.com/api/reference/resources/responses/methods/create).
+The observed structural rejection reproduced in a synthetic regression; live
+paid recovery remains unverified. Any output, tool,
 reasoning, unknown/malformed event or other failure ends eligibility immediately.
 The probe holds at most the first 64 KiB for inspection and waits at most 30 s;
 non-refusals replay the original held chunks and unread remainder without changing

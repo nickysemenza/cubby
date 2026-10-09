@@ -1206,6 +1206,34 @@ describe("budgeted pre-output stream quota fallback", () => {
     };
   }
 
+  // Live admission rejected current request configuration despite empty output.
+  it("admits current response configuration before an exact quota refusal", async () => {
+    const response = {
+      ...created.response,
+      user: null,
+      access_programs: [],
+      frequency_penalty: 0,
+      presence_penalty: 0,
+      moderation: null,
+      reasoning: {
+        effort: "low",
+        summary: null,
+        context: "all_turns",
+        mode: "standard",
+      },
+    };
+    const stream =
+      frame("response.created", { ...created, response }) +
+      frame("response.in_progress", { ...inProgress, response }) +
+      frame("error", quota);
+    const f = routes(() => new Response(chunked(stream, 23)));
+    const result = await gatewayFetchThrough(f.fetchRoutes)(url, init);
+    expect(await result.text()).toBe("paid research");
+    expect(f.beforePaidRequest).toHaveBeenCalledTimes(1);
+    expect(f.gateway).toHaveBeenCalledTimes(1);
+    expect(f.events).toEqual(["chatgpt", "admitted", "gateway", "transmitted"]);
+  });
+
   // A rejected metadata frame currently hides why an otherwise exact quota
   // refusal was replayed. Diagnostics must preserve the first decision only,
   // expose structural issues, and never retain lifecycle values.
@@ -1215,7 +1243,7 @@ describe("budgeted pre-output stream quota fallback", () => {
         ...created,
         response: {
           ...created.response,
-          user: null,
+          user: 17,
           unknown_metadata: "PRIVATE_SYNTHETIC_VALUE",
         },
       }) + refusal();
