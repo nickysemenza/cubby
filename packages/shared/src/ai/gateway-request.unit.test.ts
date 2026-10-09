@@ -589,7 +589,8 @@ describe("subscription stream diagnostics", () => {
       expect(response.headers.get("x-request-id")).toBe("synthetic-request");
       expect(failures).toHaveLength(1);
       expect(failures[0]?.status).toBe(200);
-      expect(failures[0]?.body).toContain(JSON.stringify(payload));
+      expect(failures[0]?.body).toContain(quota);
+      expect(failures[0]?.body).toContain("Synthetic quota é");
       expect(failures[0]?.body).toContain("synthetic-request");
       expect(failures[0]?.body).toContain(event);
       expect(admission).not.toHaveBeenCalled();
@@ -664,4 +665,77 @@ describe("subscription stream diagnostics", () => {
     expect(await response.text()).toBe(text);
     expect(observer).not.toHaveBeenCalled();
   });
+});
+
+// Review regressions: failed-response output is not error evidence; a frame's
+// diagnostic eligibility must not depend on the upstream chunk boundaries.
+describe("stream diagnostic privacy and envelope bounds", () => {
+  const headers = { "content-type": "text/event-stream" };
+  it("retains only the provider error when the failed response embeds output", async () => {
+    const error = {
+      code: "synthetic_error",
+      message: "Synthetic provider diagnostic",
+      extra: "Original diagnostic field",
+    };
+    const payload = {
+      type: "response.failed",
+      response: {
+        error,
+        output: [
+          {
+            type: "message",
+            content: [{ text: "Synthetic private failed output" }],
+          },
+        ],
+      },
+    };
+    const text = `data: ${JSON.stringify(payload)}\n\n`;
+    const diagnostics: string[] = [];
+    const send = gatewayFetchThrough({
+      provider: "openai",
+      gateway: async () => new Response(text, { headers }),
+      onErrorResponse: (f) => diagnostics.push(f.body),
+    });
+    const response = await send(`${gatewayBaseURL("openai")}/responses`, {
+      body: "{}",
+      method: "POST",
+    });
+    expect(await response.text()).toBe(text);
+    expect(diagnostics).toHaveLength(1);
+    expect(diagnostics[0]).toContain(JSON.stringify(error));
+    expect(diagnostics[0]).not.toContain("Synthetic private failed output");
+  });
+
+  it.each([1_000, 65_536])(
+    "ignores the same complete oversized frame in %i-byte chunks",
+    async (chunkSize) => {
+      const text = `event: error\ndata: ${JSON.stringify({ code: "synthetic_error", message: "x".repeat(20_000) })}\n\n`;
+      const bytes = new TextEncoder().encode(text);
+      let offset = 0;
+      const observer = vi.fn();
+      const send = gatewayFetchThrough({
+        provider: "openai",
+        gateway: async () =>
+          new Response(
+            new ReadableStream({
+              pull(controller) {
+                if (offset >= bytes.length) controller.close();
+                else {
+                  controller.enqueue(bytes.slice(offset, offset + chunkSize));
+                  offset += chunkSize;
+                }
+              },
+            }),
+            { headers },
+          ),
+        onErrorResponse: observer,
+      });
+      const response = await send(`${gatewayBaseURL("openai")}/responses`, {
+        body: "{}",
+        method: "POST",
+      });
+      expect(await response.text()).toBe(text);
+      expect(observer).not.toHaveBeenCalled();
+    },
+  );
 });

@@ -224,6 +224,10 @@ function observeStreamFailure(
     },
     onEvent: (event) => {
       if (!observing) return;
+      if (event.data.length > 16_384) {
+        observing = false;
+        return;
+      }
       let decoded: unknown;
       try {
         decoded = JSON.parse(event.data);
@@ -246,8 +250,22 @@ function observeStreamFailure(
           envelope.data.response?.error != null)
       ) {
         observing = false;
+        // A failed Response may contain output; only its error is diagnostic.
+        const errorData =
+          envelope.data.error ??
+          envelope.data.response?.error ??
+          z
+            .object({
+              type: z.string().optional(),
+              code: z.json().optional(),
+              message: z.json().optional(),
+              param: z.json().optional(),
+            })
+            .parse(envelope.data);
         const raw = new TextDecoder().decode(
-          new TextEncoder().encode(event.data).subarray(0, 4_096),
+          new TextEncoder()
+            .encode(JSON.stringify(errorData))
+            .subarray(0, 4_096),
         );
         onErrorResponse({
           status: response.status,

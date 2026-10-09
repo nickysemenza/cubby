@@ -68,8 +68,10 @@ Actual usage and reservations are distinct. A retry cannot reset the bucket.
 Other HTTP errors, network/abort errors and partial streaming failures do not
 fall back. Passive stream diagnostics retain a complete JSON error envelope from
 the first 64 KiB read by the SDK: actual HTTP status, content type, request ID,
-first eight preceding event names and their total count, plus up to 4 KiB of the
-error data. Observation is bounded to 16 KiB of buffered SSE characters, does
+first eight preceding event names and their total count, plus up to 4 KiB of
+serialized error data. Nested provider error objects retain their fields; direct
+error events retain type/code/message/param. Failed-response output is excluded. Observation is bounded to 16 KiB of buffered SSE characters and ignores error
+data over 16 KiB regardless of chunk boundaries. It does
 not pull ahead or retain preceding output, and preserves original bytes and
 cancellation. Incomplete/oversized/malformed prefixes remain unobserved. Event
 names alone do not prove absence of useful output. A stream error never grants
