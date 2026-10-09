@@ -174,17 +174,22 @@ export type FoodInfo = z.infer<typeof foodInfo>;
 export type FoodSummary = z.infer<typeof foodSummary>;
 
 /**
- * `foodSummary` minus `nutritionInfo.nutrientSummary`, for MCP entity reads.
- * That field is the full ~115-row USDA nutrient table (every fatty acid, amino
- * acid and tocotrienol); embedded once per USDA-linked product it was most of
- * a 133KB `entity get ingredient`. The compact `nutrientsPer100` beside it
- * carries the same tier-1 nutrients keyed by code, and `usda_food.get` still
- * returns the whole table for the one food a caller settles on.
+ * `foodSummary` minus `nutritionInfo.nutrientSummary`: search and list rows
+ * and MCP entity reads. That field is the full ~115-row USDA nutrient table
+ * (every fatty acid, amino acid and tocotrienol); embedded once per row it was
+ * most of a 133KB `entity get ingredient`. The compact `nutrientsPer100`
+ * beside it carries the same tier-1 nutrients keyed by code, and a single-food
+ * read still returns the whole table for the one food a caller settles on.
  */
-export const foodSummaryMcpOut = foodSummary.extend({
+export const foodSummaryCompact = foodSummary.extend({
   nutritionInfo: nutritionInfo.omit({ nutrientSummary: true }),
 });
-export type FoodSummaryMcpOut = z.infer<typeof foodSummaryMcpOut>;
+export type FoodSummaryCompact = z.infer<typeof foodSummaryCompact>;
+
+export function toFoodSummaryCompact(food: FoodSummary): FoodSummaryCompact {
+  const { nutrientSummary: _dropped, ...compact } = food.nutritionInfo;
+  return { ...food, nutritionInfo: compact };
+}
 export type FoodPortion = z.infer<typeof foodPortion>;
 
 export const foodLookupParam = z.discriminatedUnion("kind", [

@@ -1,4 +1,4 @@
-import type { FoodSummaryWithLinkedProducts } from "@cubby/schemas/usda";
+import type { UsdaFoodListRow } from "@cubby/schemas/usda";
 import { type DataType } from "@cubby/usda";
 
 import { wasm } from "~/lib/wasm";
@@ -24,7 +24,7 @@ export interface UsdaLookupPort {
 export interface UsdaShortlistEntry {
   fdcId: number;
   line: string;
-  food: FoodSummaryWithLinkedProducts;
+  food: UsdaFoodListRow;
 }
 
 /**
@@ -76,13 +76,13 @@ const VARIANT_SEARCH_SPECS: {
 ];
 
 /** A product can only link a food by NDB number or UPC. */
-function isLinkable(food: FoodSummaryWithLinkedProducts): boolean {
+function isLinkable(food: UsdaFoodListRow): boolean {
   return (
     food.legacyFoodInfo?.ndb_number != null || !!food.brandedFoodInfo?.gtin_upc
   );
 }
 
-function formatShortlistLine(food: FoodSummaryWithLinkedProducts): string {
+function formatShortlistLine(food: UsdaFoodListRow): string {
   const brand = food.brandedFoodInfo?.brand_owner
     ? `, ${food.brandedFoodInfo.brand_owner}`
     : "";

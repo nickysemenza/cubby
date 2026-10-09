@@ -8,7 +8,6 @@ export async function batchEnrichWithFood<T extends object>(
   items: T[],
   getLookupParam: (item: T) => FoodLookupParam | null,
   usdaClient: UsdaFoodBatchPort,
-  options?: Parameters<UsdaFoodBatchPort["findFoodsBatch"]>[1],
 ): Promise<Array<T & { food: FoodSummary | null }>> {
   if (items.length === 0) {
     return [];
@@ -21,7 +20,7 @@ export async function batchEnrichWithFood<T extends object>(
 
   const results =
     validLookups.length > 0
-      ? await usdaClient.findFoodsBatch(validLookups, options)
+      ? await usdaClient.findFoodsBatch(validLookups)
       : [];
 
   // Walk the per-item params and the dense results in lockstep: each item with a

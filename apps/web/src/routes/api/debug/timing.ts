@@ -1,14 +1,13 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { z } from "zod";
 
-import { env } from "~/env";
 import { getErrorMessage } from "~/lib/error-utils";
-import { getBindingFetcher } from "~/server/cf-env";
 import { db } from "~/server/db";
 import {
   countProducts as countProductsRepo,
   pingDb,
 } from "~/server/repo/debug";
+import { requestUsdaRelease } from "~/server/usda-release/client";
 
 const timingResultSchema = z.object({
   label: z.string(),
@@ -69,38 +68,14 @@ export const Route = createFileRoute("/api/debug/timing")({
           durationMs: dbParallelMs,
         };
 
-        // Service binding fetch in prod, global fetch (public URL) in dev
-        const usdaFetch = getBindingFetcher("USDA_API");
-        const usdaVia = usdaFetch ? "binding" : "url";
-
-        const [usdaCounts, usdaBatch] = await Promise.all([
-          // 3. USDA API: health/counts endpoint
-          measure(
-            `usda (${usdaVia}): GET ${env.USDA_API_URL}counts`,
-            async () => {
-              const res = await (usdaFetch ?? fetch)(
-                `${env.USDA_API_URL}counts`,
-              );
-              if (!res.ok) throw new Error(`HTTP ${res.status}`);
-              await res.text();
-            },
+        const release = requestUsdaRelease();
+        const [usdaStatus, usdaBatch] = await Promise.all([
+          measure("usda release: status()", () =>
+            release.status().then(() => {}),
           ),
-
-          // 4. USDA API: single food lookup (batch of 0 — tests connection overhead)
-          measure(
-            `usda (${usdaVia}): POST ${env.USDA_API_URL}api/foods/search/batch (empty)`,
-            async () => {
-              const res = await (usdaFetch ?? fetch)(
-                `${env.USDA_API_URL}api/foods/search/batch`,
-                {
-                  method: "POST",
-                  headers: { "Content-Type": "application/json" },
-                  body: JSON.stringify({ lookups: [] }),
-                },
-              );
-              if (!res.ok) throw new Error(`HTTP ${res.status}`);
-              await res.text();
-            },
+          // An empty batch measures the Durable Object round trip alone.
+          measure("usda release: lookupBatch([])", () =>
+            release.lookupBatch([]).then(() => {}),
           ),
         ]);
 
@@ -108,7 +83,7 @@ export const Route = createFileRoute("/api/debug/timing")({
           selectOne,
           countProducts,
           dbParallelResult,
-          usdaCounts,
+          usdaStatus,
           usdaBatch,
         ];
 

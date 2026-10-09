@@ -14,7 +14,6 @@ import { and, eq } from "drizzle-orm";
 
 import { env } from "~/env";
 import { auth as betterAuth } from "~/lib/auth";
-import { getBindingFetcher } from "~/server/cf-env";
 import type { NotionClient } from "~/server/clients/notion";
 import type { USDAClient } from "~/server/clients/usda";
 import { readDatabaseFreshness } from "~/server/database-freshness/client";
@@ -35,6 +34,7 @@ import type { RecipeCostingService } from "~/server/services/recipe-costing.serv
 import { createUpcLookupService } from "~/server/services/upc";
 import type { USDAService } from "~/server/services/usda.service";
 import { annotateActiveSpan } from "~/server/tracing";
+import type { UsdaReleaseRpc } from "~/server/usda-release/rpc";
 import type { RequestOrigin } from "~/server/workload";
 
 const deferredRecipeCosting = (
@@ -81,7 +81,7 @@ const deferredRequestServices = (
 
 export const buildCrudServices = (
   database: Database,
-  opts?: { usdaFetcher?: typeof fetch },
+  opts?: { usdaRelease?: UsdaReleaseRpc },
 ) => {
   // Built on first use: each client's SDK would otherwise load into every
   // request, and most requests never call Notion or USDA.
@@ -95,12 +95,11 @@ export const buildCrudServices = (
         () => ({}),
       )
     : null;
-  const usdaFetcher = opts?.usdaFetcher ?? getBindingFetcher("USDA_API");
   const usdaClient = deferredService<USDAClient>(
     async () =>
       new (await import("~/server/clients/usda")).USDAClient(
-        env.USDA_API_URL,
-        usdaFetcher,
+        opts?.usdaRelease ??
+          (await import("~/server/usda-release/client")).requestUsdaRelease(),
       ),
     () => ({}),
   );

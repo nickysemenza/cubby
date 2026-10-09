@@ -160,29 +160,9 @@ export const getVectorIndex = (): VectorizeIndexBinding | undefined => {
   return cfEnv?.VECTORIZE as VectorizeIndexBinding | undefined;
 };
 
-type ServiceBindingName = "USDA_API";
-
 /** Static asset fetcher exposed by the Cloudflare Worker runtime. */
 export const getAssetsFetcher = (): typeof fetch | undefined => {
   const binding = cfEnv?.ASSETS;
-  if (!binding) return undefined;
-  // Wrap in an arrow — Fetcher["fetch"] isn't directly assignable to the
-  // global fetch type. SAFETY: this is the single Cloudflare Fetcher/global
-  // fetch overload boundary; both accept the same runtime Request inputs and
-  // return a Promise<Response>.
-  return ((input, init) =>
-    binding.fetch(input as never, init as never)) as typeof fetch;
-};
-
-/**
- * Returns a fetch-compatible function backed by a service binding, or
- * undefined when not running on CF Workers. Binding fetch still requires
- * absolute URLs; the hostname is ignored for routing.
- */
-export const getBindingFetcher = (
-  name: ServiceBindingName,
-): typeof fetch | undefined => {
-  const binding = cfEnv?.[name];
   if (!binding) return undefined;
   // Wrap in an arrow — Fetcher["fetch"] isn't directly assignable to the
   // global fetch type. SAFETY: this is the single Cloudflare Fetcher/global

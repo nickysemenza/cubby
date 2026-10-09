@@ -1,12 +1,13 @@
 import { z } from "zod";
-import type { ListFoodsArgs } from "../contract";
 import {
   dataTypeEnum,
   type FoodLookupParam,
   type FoodSummary,
-  type FoodSummaryMcpOut,
+  toFoodSummaryCompact,
+  type FoodSummaryCompact,
 } from "../schemas";
 import { toFtsFallbackQuery, toFtsQuery } from "./fts-query";
+import type { FoodSearchArgs } from "./search-args";
 import {
   dataTypePredicate,
   dataTypePriorityCase,
@@ -72,9 +73,7 @@ export const releaseCounts = releaseManifest.pick({
 });
 export type ReleaseCounts = z.infer<typeof releaseCounts>;
 
-/** A text-search result: the food without its full nutrient table. */
-export type FoodSearchRow = FoodSummaryMcpOut;
-export type FoodSearchPage = { data: FoodSearchRow[]; count: number };
+export type FoodSearchPage = { data: FoodSummaryCompact[]; count: number };
 
 // A shard that fails this many times in a row fails the release, so a missing
 // object or a persistent R2 error surfaces instead of loading forever.
@@ -144,11 +143,6 @@ function parseSummary(text: string): FoodSummary {
   // SAFETY: every stored summary passed `releaseShardLine` when its shard was
   // loaded into this same object; re-validating each read costs the hot path.
   return JSON.parse(text) as FoodSummary;
-}
-
-function toSearchRow(food: FoodSummary): FoodSearchRow {
-  const { nutrientSummary: _dropped, ...nutritionInfo } = food.nutritionInfo;
-  return { ...food, nutritionInfo };
 }
 
 function chunks<T>(items: T[], size: number): T[][] {
@@ -427,7 +421,7 @@ export class UsdaReleaseStore {
     return this.lookupBatch([{ kind: "fdc", fdc_id: fdcId }])[0] ?? null;
   }
 
-  search(args: ListFoodsArgs): FoodSearchPage {
+  search(args: FoodSearchArgs): FoodSearchPage {
     this.assertReady();
     const andQuery = toFtsQuery(args.nameFilter ?? "");
     let page = this.searchPage(args, andQuery);
@@ -440,7 +434,7 @@ export class UsdaReleaseStore {
     return page;
   }
 
-  private searchPage(args: ListFoodsArgs, ftsQuery: string): FoodSearchPage {
+  private searchPage(args: FoodSearchArgs, ftsQuery: string): FoodSearchPage {
     const types = dataTypePredicate(
       "f.data_type",
       args.dataTypeFilter,
@@ -485,7 +479,7 @@ export class UsdaReleaseStore {
       .toArray();
     return {
       data: rows.map((row) =>
-        toSearchRow(
+        toFoodSummaryCompact(
           parseSummary(z.object({ summary: z.string() }).parse(row).summary),
         ),
       ),

@@ -1,6 +1,6 @@
 import type { Confidence } from "@cubby/schemas/ai";
 import type { EnrichmentRow } from "@cubby/schemas/ingredient";
-import type { FoodSummaryWithLinkedProducts } from "@cubby/schemas/usda";
+import type { UsdaFoodListRow } from "@cubby/schemas/usda";
 import { CheckIcon } from "@phosphor-icons/react/dist/csr/Check";
 import { useQuery } from "@tanstack/react-query";
 
@@ -16,7 +16,7 @@ import type { EquivalenceDraft } from "./equivalence-workbench-link";
 
 /** An AI USDA suggestion for one row, kept at the workbench level for bulk review. */
 export type Suggestion = {
-  food: FoodSummaryWithLinkedProducts;
+  food: UsdaFoodListRow;
   confidence: Confidence;
   reasoning: string;
 };
@@ -32,7 +32,7 @@ export function EnrichmentWorkbenchInspector({
   onDone,
 }: {
   row: EnrichmentRow;
-  initialFood: FoodSummaryWithLinkedProducts | null;
+  initialFood: UsdaFoodListRow | null;
   initialConversion?: EquivalenceDraft;
   onDone: () => void;
 }) {

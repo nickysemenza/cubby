@@ -18,14 +18,17 @@ export async function getDashboardCounts({ db, usdaClient }: DashboardContext) {
   const [local, usda] = await Promise.all([
     getEntityCounts(db),
     usdaClient.getCounts().catch((error) => {
-      // USDA is ancillary: local counts remain useful when its worker is unavailable.
+      // USDA is ancillary: local counts remain useful while a release loads.
       log.warn("USDA count unavailable; using 0", { error });
       return null;
     }),
   ]);
   return dashboardCountsOut.parse({
     ...local,
-    usdaFoods: usda?.usda_food ?? 0,
+    usdaFoods: Object.values(usda?.foodsByDataType ?? {}).reduce(
+      (total, foods) => total + foods,
+      0,
+    ),
     usdaFoodsAvailable: usda !== null,
   });
 }

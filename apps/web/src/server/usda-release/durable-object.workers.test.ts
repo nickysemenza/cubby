@@ -1,5 +1,5 @@
 import type { FoodSummary } from "@cubby/usda";
-import type { ListFoodsArgs } from "@cubby/usda/contract";
+import type { FoodSearchArgs } from "@cubby/usda/release";
 import {
   manifestKey,
   MAX_SHARD_ATTEMPTS,
@@ -430,7 +430,7 @@ describe("USDA release Durable Object", () => {
     ]);
     const types = async (
       filters: Pick<
-        ListFoodsArgs,
+        FoodSearchArgs,
         "dataTypeFilter" | "dataTypes" | "foodsOnly"
       >,
     ) =>
@@ -449,13 +449,13 @@ describe("USDA release Durable Object", () => {
     expect(
       await types({
         foodsOnly: true,
-        dataTypes: "branded_food,sub_sample_food",
+        dataTypes: ["branded_food", "sub_sample_food"],
       }),
     ).toEqual([1102, 1103]);
     expect(
       await types({
         dataTypeFilter: "sub_sample_food",
-        dataTypes: "branded_food",
+        dataTypes: ["branded_food"],
       }),
     ).toEqual([1103]);
   });

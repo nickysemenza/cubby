@@ -3,8 +3,8 @@
 // tsc re-checks the whole program after an edit to anything it reaches
 // (docs/local-check-performance.md#typechecking).
 import type { FoodLookupParam, FoodSummary } from "@cubby/usda";
-import type { ListFoodsArgs } from "@cubby/usda/contract";
 import type {
+  FoodSearchArgs,
   FoodSearchPage,
   ReleaseCounts,
   ReleaseStatus,
@@ -18,5 +18,5 @@ export interface UsdaReleaseRpc {
   counts(): Promise<ReleaseCounts>;
   getFood(fdcId: number): Promise<FoodSummary | null>;
   lookupBatch(lookups: FoodLookupParam[]): Promise<Array<FoodSummary | null>>;
-  search(args: ListFoodsArgs): Promise<FoodSearchPage>;
+  search(args: FoodSearchArgs): Promise<FoodSearchPage>;
 }

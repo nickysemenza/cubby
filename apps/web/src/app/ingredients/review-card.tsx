@@ -1,5 +1,5 @@
 import type { EnrichmentRow } from "@cubby/schemas/ingredient";
-import type { FoodSummaryWithLinkedProducts } from "@cubby/schemas/usda";
+import type { UsdaFoodListRow } from "@cubby/schemas/usda";
 import { MagnifyingGlassIcon } from "@phosphor-icons/react/dist/csr/MagnifyingGlass";
 import { useQuery } from "@tanstack/react-query";
 import { type Ref, useEffect, useMemo, useRef, useState } from "react";
@@ -9,7 +9,6 @@ import { AiProposalCard, AiProvenance } from "~/features/ai/ai-proposal-card";
 import { QueuePassPosition } from "~/features/queue-pass/QueuePassProgress";
 import { UsdaFoodResultRow } from "~/features/usda/usda-food-result-row";
 import { usdaFood } from "~/integrations/tanstack-query/generated/catalog.gen";
-import { dedupeUsdaFoodsByUpc } from "~/lib/usda-food-stats";
 import type { EnrichmentProposal } from "~/server/services/ai-enrichment/proposals";
 import { UsdaFoodSearchField } from "~/ui/combobox/with-usda-food-search";
 import { Row, Stack } from "~/ui/layout";
@@ -54,8 +53,8 @@ function QueueUsdaPicker({
   proposalPending,
   rowName,
 }: {
-  food: FoodSummaryWithLinkedProducts | null;
-  setFood: (food: FoodSummaryWithLinkedProducts) => void;
+  food: UsdaFoodListRow | null;
+  setFood: (food: UsdaFoodListRow) => void;
   proposal: EnrichmentProposal | undefined;
   proposalPending: boolean;
   rowName: string;
@@ -66,7 +65,7 @@ function QueueUsdaPicker({
 
   // Seed the food from the proposal once it lands, unless the user already picked.
   const pickedRef = useRef(false);
-  const pick = (f: FoodSummaryWithLinkedProducts) => {
+  const pick = (f: UsdaFoodListRow) => {
     pickedRef.current = true;
     setFood(f);
   };
@@ -87,12 +86,13 @@ function QueueUsdaPicker({
       pagination: { pageIndex: 0, pageSize: 20 },
     }),
   );
-  const alternatives = useMemo(() => {
-    const deduped = dedupeUsdaFoodsByUpc(altData?.items ?? []);
-    return deduped
-      .filter((d) => d.food.fdc_id !== food?.fdc_id)
-      .slice(0, MAX_ALTERNATIVES);
-  }, [altData, food]);
+  const alternatives = useMemo(
+    () =>
+      (altData?.items ?? [])
+        .filter((alt) => alt.fdc_id !== food?.fdc_id)
+        .slice(0, MAX_ALTERNATIVES),
+    [altData, food],
+  );
 
   return (
     <Stack gap="sm">
@@ -144,15 +144,12 @@ function QueueUsdaPicker({
             <div className="divide-y border border-[var(--border)]">
               {alternatives.map((alt) => (
                 <button
-                  key={alt.food.fdc_id}
+                  key={alt.fdc_id}
                   type="button"
-                  onClick={() => pick(alt.food)}
+                  onClick={() => pick(alt)}
                   className="block w-full px-2 py-2 text-left hover:bg-accent/50"
                 >
-                  <UsdaFoodResultRow
-                    food={alt.food}
-                    duplicateCount={alt.duplicateCount}
-                  />
+                  <UsdaFoodResultRow food={alt} />
                 </button>
               ))}
             </div>

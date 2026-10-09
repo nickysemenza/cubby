@@ -1,7 +1,7 @@
 import type { IngredientOut } from "@cubby/schemas/ingredient";
 import type { EnrichmentRow } from "@cubby/schemas/ingredient";
 import type { UnitMapping } from "@cubby/schemas/unitmapping";
-import type { FoodSummaryWithLinkedProducts } from "@cubby/schemas/usda";
+import type { UsdaFoodListRow } from "@cubby/schemas/usda";
 import { TIER1_NUTRIENT_KEYS, TIER1_NUTRIENTS } from "@cubby/usda";
 import { CheckIcon } from "@phosphor-icons/react/dist/csr/Check";
 import { PlusIcon } from "@phosphor-icons/react/dist/csr/Plus";
@@ -397,8 +397,8 @@ interface EnrichmentEditorSlots {
   header?: ReactNode;
   /** The USDA picker, rendered only when the row isn't already linked. */
   usdaPicker: (api: {
-    food: FoodSummaryWithLinkedProducts | null;
-    setFood: (food: FoodSummaryWithLinkedProducts) => void;
+    food: UsdaFoodListRow | null;
+    setFood: (food: UsdaFoodListRow) => void;
   }) => ReactNode;
   /** Action bar (Browse: Save/Cancel; Queue: Apply). */
   actions: (api: { save: () => void; isPending: boolean }) => ReactNode;
@@ -425,7 +425,7 @@ export function EnrichmentEditor({
   ref,
 }: {
   row: EnrichmentRow;
-  initialFood?: FoodSummaryWithLinkedProducts | null;
+  initialFood?: UsdaFoodListRow | null;
   /** Seed the price unit (Queue carries the last-used unit across cards). */
   initialPriceUnit?: string;
   /** Candidate carried from the equivalences report; the user still saves it. */
@@ -442,9 +442,7 @@ export function EnrichmentEditor({
     product?.id ?? null,
   );
 
-  const [food, setFood] = useState<FoodSummaryWithLinkedProducts | null>(
-    initialFood,
-  );
+  const [food, setFood] = useState<UsdaFoodListRow | null>(initialFood);
   const [priceQty, setPriceQty] = useState("1");
   const [priceUnit, setPriceUnitState] = useState(
     initialPriceUnit ?? defaultPriceUnit(row),

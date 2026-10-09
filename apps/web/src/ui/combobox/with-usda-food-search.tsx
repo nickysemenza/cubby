@@ -1,5 +1,5 @@
 import type { Confidence } from "@cubby/schemas/ai";
-import type { FoodSummaryWithLinkedProducts } from "@cubby/schemas/usda";
+import type { UsdaFoodListRow } from "@cubby/schemas/usda";
 import type { DataType } from "@cubby/usda";
 import { useQuery } from "@tanstack/react-query";
 import { useCallback, useMemo, useState } from "react";
@@ -12,7 +12,6 @@ import {
   ai,
 } from "~/integrations/tanstack-query/generated/catalog.gen";
 import { parseUsdaFoodRef } from "~/lib/parse-usda-food-ref";
-import { type DedupedFood, dedupeUsdaFoodsByUpc } from "~/lib/usda-food-stats";
 import { showErrorToast } from "~/ui/feedback/error-details";
 import { FormFieldGroup } from "~/ui/forms/form-field-group";
 import { Row } from "~/ui/layout";
@@ -33,7 +32,7 @@ interface UsdaFoodSearchFieldProps {
   initialQuery?: string;
   label?: string;
   /** Called with the full enriched food when the user picks one. */
-  onSelect: (food: FoodSummaryWithLinkedProducts) => void;
+  onSelect: (food: UsdaFoodListRow) => void;
 }
 
 // Search scope → data types. "Generic" is the non-branded reference foods
@@ -70,7 +69,7 @@ export function UsdaFoodSearchField({
   const [value, setValue] = useState<ComboboxItem | null>(null);
   const [isSuggesting, setIsSuggesting] = useState(false);
   const [suggestion, setSuggestion] = useState<{
-    food: FoodSummaryWithLinkedProducts;
+    food: UsdaFoodListRow;
     confidence: Confidence;
     reasoning: string;
     at: Date;
@@ -102,9 +101,7 @@ export function UsdaFoodSearchField({
       },
       // Rank by FTS relevance so the best name match leads (not alphabetical).
       sort: [{ orderBy: "relevance", direction: "asc" }],
-      // Over-fetch: USDA returns many UPC-duplicate records, so we pull extra and
-      // collapse them client-side to still show a full list of distinct foods.
-      pagination: { pageIndex: 0, pageSize: 50 },
+      pagination: { pageIndex: 0, pageSize: 25 },
     }),
     // Skip FTS entirely when the input is a URL/id — getByID drives the list.
     enabled: parsedFdcId == null,
@@ -117,29 +114,24 @@ export function UsdaFoodSearchField({
     enabled: parsedFdcId != null,
   });
 
-  const deduped = useMemo(
-    () =>
-      parsedFdcId != null
-        ? byIdFood
-          ? [{ food: byIdFood, duplicateCount: 0 }]
-          : []
-        : dedupeUsdaFoodsByUpc(data?.items ?? []),
+  const foods = useMemo(
+    (): UsdaFoodListRow[] =>
+      parsedFdcId != null ? (byIdFood ? [byIdFood] : []) : (data?.items ?? []),
     [parsedFdcId, byIdFood, data],
   );
-  const foodsById = useMemo(() => {
-    const map = new Map<string, DedupedFood>();
-    for (const entry of deduped) map.set(String(entry.food.fdc_id), entry);
-    return map;
-  }, [deduped]);
+  const foodsById = useMemo(
+    () => new Map(foods.map((food) => [String(food.fdc_id), food])),
+    [foods],
+  );
 
-  const items: ComboboxItem[] = deduped.map((entry) => ({
-    id: String(entry.food.fdc_id),
-    name: entry.food.foodInfo.description,
+  const items: ComboboxItem[] = foods.map((food) => ({
+    id: String(food.fdc_id),
+    name: food.foodInfo.description,
   }));
 
   // Shared by manual pick and AI: reflect the choice in the combobox and notify parent.
   const applyFood = useCallback(
-    (food: FoodSummaryWithLinkedProducts) => {
+    (food: UsdaFoodListRow) => {
       setValue({ id: String(food.fdc_id), name: food.foodInfo.description });
       onSelect(food);
     },
@@ -202,23 +194,16 @@ export function UsdaFoodSearchField({
             value={value}
             wide
             renderItem={(item) => {
-              const entry = foodsById.get(item.id);
-              return entry ? (
-                <UsdaFoodResultRow
-                  food={entry.food}
-                  duplicateCount={entry.duplicateCount}
-                />
-              ) : (
-                item.name
-              );
+              const food = foodsById.get(item.id);
+              return food ? <UsdaFoodResultRow food={food} /> : item.name;
             }}
             setValue={(item) => {
               if (!item) {
                 setValue(null);
                 return;
               }
-              const entry = foodsById.get(item.id);
-              if (entry) applyFood(entry.food);
+              const food = foodsById.get(item.id);
+              if (food) applyFood(food);
               else setValue(item);
             }}
           />
