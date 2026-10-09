@@ -1,0 +1,119 @@
+apps/web/src/cf-server.ts
+  s_2e87acf1f13363::t_4441e44e21ac31 93,254,311,630
+apps/web/src/integrations/tanstack-query/start-transport.ts
+  s_2e87acf1f13363::t_d7bf7b16769ed2 115
+apps/web/src/routes/api/browser/dispatch.ts
+  s_2e87acf1f13363::t_67c7a778565b95 7
+apps/web/src/routes/api/import/agent/oauth.callback.ts
+  s_2e87acf1f13363::t_97f19cb1f28a73 95
+apps/web/src/routes/api/import/agent/socket.ts
+  s_2e87acf1f13363::t_f5c25d9ae9a1cb 10
+apps/web/src/routes/api/import/evidence.ts
+  s_2e87acf1f13363::t_daed7561c9957e 7
+apps/web/src/routes/api/v1/$resource.ts
+  s_2e87acf1f13363::t_ed9f5828bd5d49 6
+apps/web/src/routes/api/v1/$resource/$operation.ts
+  s_2e87acf1f13363::t_a16462b76837df 6
+apps/web/src/server/ai/smoke-run.ts
+  s_2e87acf1f13363::t_ee836be19d6bda 19-20,26
+apps/web/src/server/background-tasks/handle.ts
+  s_2e87acf1f13363::t_655cefb76ff502 7
+apps/web/src/server/calendar/durable-object.ts
+  s_2e87acf1f13363::t_9f4f27c13b28b2 79
+apps/web/src/server/database-freshness/durable-object.ts
+  s_2e87acf1f13363::t_952cf48c2c2db3 216
+apps/web/src/server/entity-list-runtime.server.ts
+  s_2e87acf1f13363::t_acc290864bd9f8 34
+apps/web/src/server/gmail-workflows.ts
+  s_2e87acf1f13363::t_e82100975d73e2 90
+apps/web/src/server/image-processing/cloud-description.ts
+  s_2e87acf1f13363::t_d9bc487406b0a7 77
+apps/web/src/server/mcp/http-handler.ts
+  s_2e87acf1f13363::t_4895d2f56de94f 12-16,18,122,204-205
+apps/web/src/server/operations/mcp.server.ts
+  s_2e87acf1f13363::t_ef54c2ff844052 7-10
+apps/web/src/server/operations/problem-counts.server.ts
+  s_2e87acf1f13363::t_4935573472e6ec 20
+apps/web/src/server/operations/recipe-line-reparse.ts
+  s_2e87acf1f13363::t_300a0a9ef76050 4
+apps/web/src/server/operations/run.server.ts
+  s_2e87acf1f13363::t_9b763e59f9b5f9 50
+apps/web/src/server/purchase-import/agent-host.ts
+  s_2e87acf1f13363::t_3072ac76c5da0e 118
+apps/web/src/server/purchase-import/agent-services.ts
+  s_baac6c838b330d::t_d64b5216dcd70b 7,49-50,235
+apps/web/src/server/purchase-import/gmail/discovery.ts
+  s_2e87acf1f13363::t_c90304c1e24047 415
+apps/web/src/server/purchase-import/gmail/import.ts
+  s_2e87acf1f13363::t_21dd5b0d6d1d89 76
+apps/web/src/server/purchase-import/gmail/ingest.ts
+  s_2e87acf1f13363::t_6c7fa1e373ea7f 63
+apps/web/src/server/purchase-import/gmail/search-job.ts
+  s_2e87acf1f13363::t_9262e3b29d1c75 301
+apps/web/src/server/purchase-import/research-import.ts
+  s_2e87acf1f13363::t_3508d9a9722815 86-89,955
+apps/web/src/server/purchase-import/research-product.ts
+  s_2e87acf1f13363::t_0d847b10e2706c 80-83,675
+apps/web/src/server/purchase-import/research-service.ts
+  s_2e87acf1f13363::t_2cc78ef4880bc3 63-68,92,718,774
+apps/web/src/server/purchase-import/run-service.ts
+  s_2e87acf1f13363::t_1f963f11f8ea3f 106,124,1060,1359
+apps/web/src/server/repo/entity-report/cookbook.ts
+  s_2e87acf1f13363::t_467d2ad92fc7ef 135
+apps/web/src/server/repo/entity-report/index.ts
+  s_2e87acf1f13363::t_3f6a376deb946c 34-35,63,81,91,179
+apps/web/src/server/repo/entity-report/recipe-walkthrough.ts
+  s_2e87acf1f13363::t_96299fe8b14d44 18
+apps/web/src/server/repo/entity-report/recipe.ts
+  s_2e87acf1f13363::t_16556e4e6d61a1 17
+apps/web/src/server/repo/entity-report/records.ts
+  s_2e87acf1f13363::t_355d5dd2dde271 21,64-68,70-71,170,225,230
+apps/web/src/server/repo/product-category.ts
+  s_2e87acf1f13363::t_712520aa673449 65,467
+apps/web/src/server/repo/search-document.ts
+  s_2e87acf1f13363::t_91ab8464f16d16 180
+apps/web/src/server/request-context.ts
+  s_2e87acf1f13363::t_59893df9069f7a 60
+apps/web/src/server/search-index-repair-workflow.ts
+  s_2e87acf1f13363::t_731301d55f602c 60
+apps/web/src/server/services/awaiting-work.service.ts
+  s_2e87acf1f13363::t_adf251b4878e80 86
+apps/web/src/server/services/catch-up.service.ts
+  s_2e87acf1f13363::t_1278162a8a9b74 45-46
+apps/web/src/server/operations/recipe.server.ts
+  s_f2c88ea0532d10::t_f69702c121cc8a 71,462
+apps/web/src/server/repo/image-processing-maintenance.ts
+  s_f2c88ea0532d10::t_21a65b990ae946 86,140,233
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "fe16e8e3e45f79c6b17d3c40ddf35320342b37f2",
+  "prompts": {},
+  "sessions": {
+    "s_2e87acf1f13363": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "31108f72-a141-4ae8-90c0-f38f0969a4e7",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "nicky <nicky@cloudflare.com>"
+    },
+    "s_baac6c838b330d": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "4e072615-6da5-4add-8945-be01765ee61f",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "nicky <nicky@cloudflare.com>"
+    },
+    "s_f2c88ea0532d10": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "agent-ac1aa547eb3a18c14",
+        "model": "unknown"
+      },
+      "human_author": "nicky <nicky@cloudflare.com>"
+    }
+  }
+}
