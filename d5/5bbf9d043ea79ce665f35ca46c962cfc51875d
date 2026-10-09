@@ -1,0 +1,31 @@
+apps/apple/AGENTS.md
+  s_2e87acf1f13363::t_f89fc51f3105b8 179,181-183
+apps/web/src/lib/display-format.unit.test.ts
+  s_2e87acf1f13363::t_766447302cb147 9,11-12,31
+apps/web/src/lib/number-format.ts
+  s_2e87acf1f13363::t_c8bd0eae64421e 16,41-45,57-63
+apps/web/src/lib/nutrition-compact-format.ts
+  s_2e87acf1f13363::t_eb4170f4b11316 7-9,14-24,33-42
+apps/web/vite.config.ts
+  s_2e87acf1f13363::t_2358ac53ac1100 117-128
+docs/agents/generic-paths.md
+  s_2e87acf1f13363::t_bc11d2899c9934 180-183
+packages/shared/golden-vectors/display-format.json
+  s_2e87acf1f13363::t_583ee447654931 2
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "d55bbf9d043ea79ce665f35ca46c962cfc51875d",
+  "prompts": {},
+  "sessions": {
+    "s_2e87acf1f13363": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "31108f72-a141-4ae8-90c0-f38f0969a4e7",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "nicky <nicky@cloudflare.com>"
+    }
+  }
+}
