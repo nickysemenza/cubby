@@ -263,6 +263,7 @@ and deployment/readback order are owned by the
    source bytes does not count as progress. The retained decision includes the
    last actual refusal/error, and other tasks continue. Failure, explicit abort
    and the generation ceiling retain the existing settlement backstop.
+   A late final answer after cancellation creates no continuation ledger writes.
    Retained mail observations present plain text and compact visible HTML with
    source links before applying the model-view size limit. Layout/CSS bytes never
    crowd receipt facts out of that view. The immutable original MIME content and

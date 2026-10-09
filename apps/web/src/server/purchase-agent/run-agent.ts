@@ -278,8 +278,10 @@ export class PurchaseImportRunAgent
               this.requestStartedAt = Date.now();
               this.requestTransport = "unknown";
               this.requestGateway = undefined;
-              const index = request.messages.findLastIndex(
-                (message) => message.role === "user",
+              const index = request.messages.reduce(
+                (latest, message, position) =>
+                  message.role === "user" ? position : latest,
+                -1,
               );
               const last = request.messages[index];
               const text =

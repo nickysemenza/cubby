@@ -726,6 +726,26 @@ describe("research host lifecycle", () => {
       expect(settled?.state).toBe("unresolved");
     },
   );
+  it("leaves a cancelled Run untouched when a late final answer proposes continuation", async () => {
+    const f = await admitted();
+    await getDb(ctx.db)
+      .update(run)
+      .set({
+        status: "failed",
+        failureCode: "user_cancelled",
+        endedAt: new Date(),
+      })
+      .where(eq(run.id, parseEntityId("run", f.started.runId)));
+    expect(
+      await f.services.researchContinue(crypto.randomUUID(), false),
+    ).toMatchObject({ status: "stopped", reason: "failed" });
+    expect(
+      await getDb(ctx.db)
+        .select()
+        .from(runOperation)
+        .where(eq(runOperation.runId, f.started.runId)),
+    ).toEqual([]);
+  });
   it("does not consume a proposed continuation before pi selects it over queued input or reset", async () => {
     const f = await admitted();
     const calls = Array.from({ length: 3 }, () => crypto.randomUUID());
@@ -782,7 +802,7 @@ describe("research host lifecycle", () => {
     const retain = (entityId: typeof first.id) =>
       withTransaction(ctx.db, (tx) =>
         recordAcceptedFactEvidence(tx, {
-          runId: f.started.runId,
+          runId: parseEntityId("run", f.started.runId),
           targetId: next.work.workRef,
           subject: { entityKind: "purchase", entityId },
           claims: [

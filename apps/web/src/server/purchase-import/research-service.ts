@@ -445,6 +445,10 @@ export function researchServiceFor(
 
   const services: ResearchServices = {
     async researchContinue(callId, admitted = true) {
+      await assertResearchRunExecutable(db, runId);
+      const scope = await owner();
+      if (!["running", "paused_offline"].includes(scope.status))
+        return { status: "stopped", reason: scope.status };
       const next = await services.researchNext({}, `${callId}:next`);
       // pi may discard a proposed continuation in favor of queued input/reset.
       if (!admitted) return next;
