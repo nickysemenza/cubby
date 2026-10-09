@@ -63,13 +63,14 @@ if (rawFlags.includes("--help") || rawFlags.includes("-h")) {
 Each run creates a fresh cubby_sim_<hex> database on localhost:55432, builds
 the web Worker (reused when provenance matches), and drops the database after.
 
-Modes (one per run; no mode = full native journey in the iOS simulator):
+Modes (one per run; no mode = search/detail smoke in the iOS simulator):
   --headless                 Swift CubbyKit CLI against the Worker, no simulator
     --photo [--purchase]     synthetic photo-inventory (+ wardrobe purchase) run
     --statement-csv          Swift CSV statement preview/import
     --watch                  stay up; press Enter to rerun
   --watch                    simulator app against real API data; Enter replays
-  --video                    full journey plus MP4 and contact sheet
+  --extended-journey         full native edit, view-switch and relation journey
+  --video                    selected journey plus MP4 and contact sheet
   --layout [--video]         layout probe screens
   --product-clarity [--video]  focused synthetic Product journey (Maestro)
   --input-journey [--video]  PhotosPicker/Files input acceptance
@@ -114,6 +115,7 @@ const inputJourney = flags.includes("--input-journey");
 const watch = flags.includes("--watch");
 const video = flags.includes("--video");
 const layout = flags.includes("--layout");
+const extendedJourney = flags.includes("--extended-journey");
 const productClarity = flags.includes("--product-clarity");
 const emojiReview = flags.includes("--emoji-review");
 const testerArmy = flags.includes("--tester-army");
@@ -138,6 +140,20 @@ const wrongName = flags.includes("--wrong") || flags.includes("--wrong-name");
 const qaPhotoCompletion = flags.includes("--qa-photo-completion");
 const qa = flags.includes("--qa") || qaPhotoCompletion;
 const qaHold = flags.includes("--hold");
+if (
+  extendedJourney &&
+  (headless ||
+    layout ||
+    productClarity ||
+    emojiReview ||
+    testerArmy ||
+    inputJourney ||
+    watch ||
+    qa)
+)
+  throw new Error(
+    "--extended-journey is a standalone simulator mode; it may add --video",
+  );
 if (
   (qa &&
     flags.some(
@@ -1744,7 +1760,9 @@ async function runNativeJourney(
             ? "apps/apple/e2e/product-clarity.yaml"
             : layout
               ? "apps/apple/e2e/native-layout.ad"
-              : "apps/apple/e2e/product-edit.ad",
+              : extendedJourney
+                ? "apps/apple/e2e/product-edit.ad"
+                : "apps/apple/e2e/product-browse.ad",
         ...common,
         ...(productClarity ? ["--maestro"] : []),
         "--artifacts-dir",
@@ -1773,7 +1791,7 @@ async function runNativeJourney(
   } finally {
     await stopRecording?.();
   }
-  if (!layout && !productClarity)
+  if (!layout && !productClarity && (extendedJourney || emojiReview))
     await assertNativeEdit(productId, undefined, null);
 }
 

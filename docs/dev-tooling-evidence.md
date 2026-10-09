@@ -55,6 +55,15 @@ Sol and Astra independently reviewed the change. Both confirmed the shared
 simulator target is selected/validated before mutation, and failed HMR fixture
 deletions retain ownership tracking while all deletions are attempted.
 
+The simulator bundle was built and later reused with `appBuild:
+reused-certified`; the warm native-build phase took 2.2 seconds. The legacy
+full UI journey failed on the visible edit field: the driver reported it covered.
+This establishes an interaction failure, not a completed UI edit or a conclusively
+external defect. Its sanitized failure bundle is retained under `artifacts/sim-e2e/`.
+Default smoke now checks search/detail identity; the headless lane checks native
+client writes. The full UI edit/view/relation journey remains under
+`--extended-journey` and is required for changes to those interactions.
+
 ## Natural CI sample
 
 A [green PR run](https://github.com/nickysemenza/cubby/actions/runs/37884151913)

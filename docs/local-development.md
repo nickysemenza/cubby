@@ -184,6 +184,11 @@ retry. Sanitized artifacts identify the source revision and fingerprint; source
 changes during the run fail provenance. HMR evidence helps local iteration;
 GitHub still gates the exact final head with built Workers.
 
+Default simulator smoke proves search and detail navigation, while headless
+proves native-client edits and stored values. UI editing and view switching
+require `pnpm test:e2e:sim -- --extended-journey` (or local lane `sim:extended`);
+the full journey and its named regressions remain available unchanged.
+
 ## Focused browser validation
 
 Use the persistent HMR session to explore fixtures. Acceptance uses a built

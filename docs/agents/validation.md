@@ -49,7 +49,8 @@ does not apply the intended filter. Likewise, use `pnpm db:generate
 
 Before a PR, run focused checks and the affected local-only native/simulator
 lane that CI cannot cover. `pnpm test:e2e:local` defaults to headless + simulator
-smoke; choose domain lanes by name or `--all` for the extended matrix
+smoke; UI editing/view-switch changes require `sim:extended` or
+`--extended-journey`. Choose domain lanes by name or `--all` for the extended matrix
 (one lane: `pnpm test:e2e:sim -- <flags>`; `-- --help` lists
 modes, env, and artifact paths; see the
 [local development](../local-development.md#native-iteration-and-validation)), plus focused tests for

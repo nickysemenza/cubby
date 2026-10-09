@@ -17,6 +17,7 @@ const simulatorLanes = [
   { name: "headless:statement-csv", args: ["--headless", "--statement-csv"] },
   { name: "headless:wardrobe", args: ["--headless", "--photo", "--purchase"] },
   { name: "sim", args: ["--video"] },
+  { name: "sim:extended", args: ["--extended-journey", "--video"] },
   { name: "sim:layout", args: ["--layout", "--video"] },
   { name: "sim:input", args: ["--input-journey"] },
 ];

@@ -12,7 +12,7 @@ booted and the relevant build artifacts warm while working on one feature.
 | App model or navigation logic                                          | Xcode MCP `RunSomeTests` for a focused app test                                                    | App-target code that the `CubbyKit` package tests and headless CLI do not compile or execute.                             |
 | Repeated simulator UI edits against real API data                      | `pnpm test:e2e:sim -- --watch`, then press Enter to replay                                         | One Debug app installation, workerd server, and disposable seeded database; a new product and database check each run.    |
 | Taps, navigation, sheets, keyboard, or accessibility                   | Use Xcode MCP device interaction or `agent-device` on an already installed simulator app           | The running app and its UI tree. Use `pnpm apple sim` to rebuild and install after code changes.                          |
-| A repeatable native user journey against a fresh database              | `pnpm test:e2e:sim`                                                                                | Debug iOS app, real auth, workerd, synthetic seed, agent-device assertions, and database readback.                        |
+| Search/detail smoke against a fresh database                           | `pnpm test:e2e:sim`                                                                                | Debug iOS app, real auth, workerd, synthetic seed, and visible search/detail identity. Headless covers client writes.     |
 | A reviewable recording of that journey                                 | `pnpm test:e2e:sim -- --video`                                                                     | The same flow plus `run.mp4` and a timestamped `contact-sheet.png` under `artifacts/sim-e2e/`. Open either file in Codex. |
 | Device-only behavior (camera, permissions, performance, installed app) | `pnpm apple ios` on a paired iPhone                                                                | Real device behavior; use Xcode/agent-device for interaction and diagnostics.                                             |
 | Mac-specific UI                                                        | `pnpm apple mac` and Mac previews/tests                                                            | The native macOS shell and window behavior.                                                                               |
@@ -156,7 +156,9 @@ the replay, edit `apps/apple/e2e/product-edit-warm.ad`; a failed replay leaves
 the server and database alive so you can inspect the screen, adjust the flow,
 and press Enter again. `agent-device replay --save-script` can capture a repaired
 flow, and `--from` can resume a divergent replay using the digest in its error.
-Use the full `test:e2e:sim` flow to check navigation through Search.
+Use `test:e2e:sim` for navigation through Search. Run
+`test:e2e:sim -- --extended-journey` for native UI editing, view switching and
+relation regressions; those interactions require that extended check.
 
 A runner watchdog timeout while typing is not by itself evidence of a slow app:
 sample both the app and the runner and check the runner's selected identifier
