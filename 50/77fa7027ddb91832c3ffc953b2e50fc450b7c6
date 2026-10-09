@@ -1,0 +1,37 @@
+apps/web/src/app/finance/possible-vendor.tsx
+  s_6da132381c4599::t_a8ae4d941cd20a 24-56,70
+apps/web/src/entity/components/reference-preview.tsx
+  s_6da132381c4599::t_0f934fa737c284 11-12,17-23,27-49
+apps/web/src/entity/detail-field-renderers/spending-category-summary.tsx
+  s_6da132381c4599::t_f60ccda255e7c0 19-37,43,59,66,72
+apps/web/src/entity/entity-display.tsx
+  s_6da132381c4599::t_269cca7c5435f0 598,607-622,1624-1626,1707-1709
+apps/web/src/entity/list-renderers/recipe.tsx
+  s_6da132381c4599::t_3bb4e4673e9004 15,112,123,129,131
+apps/web/src/features/statement-rows/statement-row-list.tsx
+  s_6da132381c4599::t_1458d27760a731 397-403,405,409
+apps/web/src/ui/data-table/DesktopDataRow.tsx
+  s_6da132381c4599::t_97af8f21b98fa0 29,190-200
+apps/web/src/ui/data-table/density.ts
+  s_6da132381c4599::t_125e9cdab1f7d5 6-11,16
+apps/web/tests/e2e/table-row-height.spec.ts
+  s_6da132381c4599::t_a878dbac82d32c 1-3,10-26,31-34,37-73
+docs/agents/web-ui-reference.md
+  s_6da132381c4599::t_17b541c7a22b29 124-127
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "5077fa7027ddb91832c3ffc953b2e50fc450b7c6",
+  "prompts": {},
+  "sessions": {
+    "s_6da132381c4599": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "3b25d3fe-73f0-492d-8b86-87f07e0b1ef7",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "nicky <nicky@cloudflare.com>"
+    }
+  }
+}
