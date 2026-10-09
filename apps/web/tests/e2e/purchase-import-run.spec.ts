@@ -172,7 +172,7 @@ async function runByShortcode(shortcode: string) {
 async function completedRun(shortcode: string) {
   const run = await runByShortcode(shortcode);
   if (["failed", "needs_review"].includes(run.status))
-    throw new Error(await workerdDiagnostic(getFixtureDb(), run.id));
+    throw new Error(await workerdDiagnostic(getFixtureDb(), run.id, undefined));
   return run.status;
 }
 
