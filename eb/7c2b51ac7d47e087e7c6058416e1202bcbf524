@@ -1,0 +1,25 @@
+apps/apple/App/Shared/Photo/Library/PhotoImportHero.swift
+  s_53c2b3e2ea9cb9::t_005c322c5654e6 348,363,384
+apps/web/src/styles.css
+  s_53c2b3e2ea9cb9::t_ace875913f9e2f 328,575-586
+apps/web/src/ui/navigation/authenticated-app-shell.tsx
+  s_53c2b3e2ea9cb9::t_044dcd6bd1d3e7 130,223,286,288,330,492-503
+apps/web/tests/e2e/console-ledger-overhaul.spec.ts
+  s_53c2b3e2ea9cb9::t_aaa49b74ecacd8 31-36,38-40
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "eb7c2b51ac7d47e087e7c6058416e1202bcbf524",
+  "prompts": {},
+  "sessions": {
+    "s_53c2b3e2ea9cb9": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "22e7134d-5a3f-4a9e-9825-697b97297b82",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "nicky <nicky@cloudflare.com>"
+    }
+  }
+}
