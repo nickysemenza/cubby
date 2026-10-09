@@ -1,0 +1,31 @@
+apps/apple/CubbyKit/Sources/CubbyKit/API/CubbyClient.swift
+  s_baac6c838b330d::t_eebbbf5b06bc94 1189,1220-1228
+apps/apple/CubbyKit/Tests/CubbyKitTests/NativeListAdaptersTests.swift
+  s_baac6c838b330d::t_583a149af1317d 226-233
+docs/agents/validation-tests.md
+  s_baac6c838b330d::t_ae8bad16121c69 296-298
+docs/development.md
+  s_baac6c838b330d::t_5f65ecde632c2b 43-48,88,107-108,112-127
+docs/terminology.md
+  s_baac6c838b330d::t_93108676739a6f 106,112
+docs/todos.md
+  s_baac6c838b330d::t_d6f2b3cb96229b 972-975
+packages/shared/src/apple-client-version.ts
+  s_baac6c838b330d::t_7e19a2c67632cb 8
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "1af5bb3baf41088ae94dc5d1289ea79ed76cb470",
+  "prompts": {},
+  "sessions": {
+    "s_baac6c838b330d": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "4e072615-6da5-4add-8945-be01765ee61f",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "nicky <nicky@cloudflare.com>"
+    }
+  }
+}
