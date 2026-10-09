@@ -446,6 +446,14 @@ unfinished-work transfer identities across storage errors, reconnects, and queue
 redelivery. Cleanup preserves accepted facts and independently associated source
 records. Completed, cancelled, and member-deleted Runs receive no successor;
 disposing their cached source content does not authorize restarting their work.
+
+Historical references are found by exact JSON string-value membership inside
+PostgreSQL, including root values, nested arrays/objects, and deleted Runs.
+Keys and substrings are not references. Discovery returns only matching Run IDs
+so source-locked cleanup does not transfer and recursively decode an entire
+member's research history. Runs remain locked before their evidence is read
+again and the deletion manifest is frozen.
+
 Overlapping source receipts share the first persisted browser-disposal identity
 and each retired Run's unfinished-work disposition, including an empty result.
 They reuse an existing successor even after its cancellation or after the

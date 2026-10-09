@@ -1195,7 +1195,7 @@ describe("unrelated mail retention through the built Worker", () => {
   }, HOLD_WORKERD_HARNESS_TIMEOUT_MS);
   afterAll(() => release?.());
 
-  it.each(["automatic", "recovery"] as const)(
+  it.each(["automatic", "recovery", "history"] as const)(
     "%s cleanup delivery retires unrelated content and continues remaining work with honest gaps",
     async (delivery) => {
       const database = getDb(ctx.db);
@@ -1424,6 +1424,80 @@ describe("unrelated mail retention through the built Worker", () => {
                 item.checksum,
               );
             }
+            let historicalReference: string | undefined;
+            let unrelatedHistory: string | undefined;
+            if (delivery === "history") {
+              const history = await insertWithShortcode(ctx.db, "run", {
+                ledgerPartyId: member.id,
+                actorUserId: ctx.actor.userId,
+                actorName: "Synthetic retention member",
+                actorEmail: "retention@example.test",
+                actorLedgerPartyShortcode: member.shortcode,
+                actorLedgerPartyName: member.name,
+                actorLedgerPartyKind: "member",
+                purpose: "mail_import",
+                trigger: "manual",
+                status: "completed",
+                deletedAt: new Date(),
+              });
+              historicalReference = history.id;
+              const unrelated = await insertWithShortcode(ctx.db, "run", {
+                ledgerPartyId: member.id,
+                actorUserId: ctx.actor.userId,
+                actorName: "Synthetic retention member",
+                actorEmail: "retention@example.test",
+                actorLedgerPartyShortcode: member.shortcode,
+                actorLedgerPartyName: member.name,
+                actorLedgerPartyKind: "member",
+                purpose: "mail_import",
+                trigger: "manual",
+                status: "completed",
+              });
+              unrelatedHistory = unrelated.id;
+              await database.insert(runOperation).values({
+                runId: history.id,
+                operationId: "synthetic-unregistered-source",
+                kind: "synthetic_history",
+                inputFingerprint: "a".repeat(64),
+                state: "completed",
+                result: { context: [{ original: { source: newsletter.id } }] },
+              });
+              // Similar-size historical JSON must not starve a current negative
+              // decision. Keys and strings containing an ID are not references.
+              const rows = Array.from({ length: 2000 }, (_, index) => ({
+                runId: unrelated.id,
+                operationId: `synthetic-history-${index}`,
+                kind: "synthetic_history",
+                inputFingerprint: "b".repeat(64),
+                state: "completed",
+                result: {
+                  [newsletter.id]: "A source-looking key is not a value.",
+                  archive: Array.from({ length: 40 }, (_, entry) => ({
+                    sequence: index * 40 + entry,
+                    reference: `prefix-${newsletter.id}-suffix`,
+                    observation: {
+                      title: `Synthetic history ${index} entry ${entry}`,
+                      details: Array.from({ length: 24 }).reduce<object>(
+                        (context) => ({ retained: context }),
+                        { text: "Synthetic historical context." },
+                      ),
+                    },
+                  })),
+                },
+              }));
+              for (let offset = 0; offset < rows.length; offset += 100)
+                await database
+                  .insert(runOperation)
+                  .values(rows.slice(offset, offset + 100));
+              observations.push({
+                boundary: "synthetic historical context",
+                operations: rows.length,
+                serializedBytes: rows.reduce(
+                  (total, row) => total + JSON.stringify(row.result).length,
+                  0,
+                ),
+              });
+            }
             expect(
               (
                 await post(
@@ -1451,6 +1525,12 @@ describe("unrelated mail retention through the built Worker", () => {
               .from(researchRetention)
               .where(eq(researchRetention.runId, runEntityId.parse(runId)));
             if (!receipt) throw new Error("Synthetic cleanup receipt missing.");
+            expect(
+              receipt.plan.retiredRunIds.includes(historicalReference ?? ""),
+            ).toBe(delivery === "history");
+            expect(
+              receipt.plan.retiredRunIds.includes(unrelatedHistory ?? ""),
+            ).toBe(false);
             observations.push({
               boundary: "negative decision",
               receiptId: receipt.id,

@@ -3,7 +3,15 @@ import { browserEvidenceReference } from "@cubby/schemas/purchase-import";
 import { mailResearchRunInput } from "@cubby/schemas/run-fields";
 import { ACTIVE_RUN_STATUSES } from "@cubby/shared/client-constants";
 import { sha256Uuid } from "@cubby/shared/sha256";
-import { and, asc, eq, inArray, isNull, sql } from "drizzle-orm";
+import {
+  and,
+  asc,
+  eq,
+  inArray,
+  isNull,
+  sql,
+  type SQLWrapper,
+} from "drizzle-orm";
 import { z } from "zod";
 
 import type { Database } from "~/server/db";
@@ -232,21 +240,17 @@ export async function exposeResearchSources(
 }
 
 /** Historical structured source references are conservative exposure, never proof. */
-const storedReferences = z.json();
 function referencesSource(
-  value: z.infer<typeof storedReferences>,
-  sourceId: string,
-): boolean {
-  if (value === sourceId) return true;
-  if (Array.isArray(value))
-    return value.some((entry) => referencesSource(entry, sourceId));
-  const record = z.record(z.string(), storedReferences).safeParse(value);
-  return (
-    record.success &&
-    Object.values(record.data).some((entry) =>
-      referencesSource(entry, sourceId),
-    )
-  );
+  column: SQLWrapper,
+  sourceId: typeof orderMail.$inferSelect.id,
+) {
+  // Search values (including the root), never keys or substrings. Keep history
+  // inside PostgreSQL rather than decoding it while holding source/Run locks.
+  return sql<boolean>`coalesce(jsonb_path_exists(
+    ${column},
+    'strict $.** ? (@.type() == "string" && @ == $sourceId)'::jsonpath,
+    jsonb_build_object('sourceId', ${sourceId}::text)
+  ), false)`;
 }
 
 async function preservedEvidenceIds(
@@ -269,7 +273,9 @@ async function preservedEvidenceIds(
     .where(eq(importSourceClaim.ledgerPartyId, partyId));
   const positiveChecksums = new Set(sources.map((source) => source.checksum));
   const evidence = await getDb(db)
-    .select({ evidence: runEvidence })
+    .select({
+      evidence: { id: runEvidence.id, checksum: runEvidence.checksum },
+    })
     .from(runEvidence)
     .innerJoin(run, eq(run.id, runEvidence.runId))
     .where(eq(run.ledgerPartyId, partyId));
@@ -317,18 +323,22 @@ async function assertNoPositiveSource(
       ),
     );
   const facts = await getDb(db)
-    .select({ metadata: runEvidence.sourceMetadata })
+    .select({ id: runEvidence.id })
     .from(runFactEvidence)
     .innerJoin(runEvidence, eq(runEvidence.id, runFactEvidence.evidenceId))
     .innerJoin(run, eq(run.id, runEvidence.runId))
-    .where(eq(run.ledgerPartyId, source.ledgerPartyId));
+    .where(
+      and(
+        eq(run.ledgerPartyId, source.ledgerPartyId),
+        referencesSource(runEvidence.sourceMetadata, source.id),
+      ),
+    )
+    .limit(1);
   if (
     associations.length ||
     decisions.length ||
     attachments.some((item) => item.imageId) ||
-    facts.some((fact) =>
-      referencesSource(storedReferences.parse(fact.metadata), source.id),
-    )
+    facts.length
   )
     throw new Error(
       "Unrelated cleanup refused: source has a protected positive association.",
@@ -365,12 +375,17 @@ export async function requestResearchRetention(
         reason: "unrelated_source" as const,
       };
     const candidates = await getDb(transactionDb)
-      .select()
+      .select({ id: run.id })
       .from(run)
       // includes-deleted: a Run tombstone can still retain exposed source bytes.
-      .where(eq(run.ledgerPartyId, scope.ledgerPartyId));
+      .where(
+        and(
+          eq(run.ledgerPartyId, scope.ledgerPartyId),
+          referencesSource(run.input, source.id),
+        ),
+      );
     const exposures = await getDb(transactionDb)
-      .select()
+      .select({ runId: researchSourceExposure.runId })
       .from(researchSourceExposure)
       .where(
         and(
@@ -380,48 +395,32 @@ export async function requestResearchRetention(
         ),
       );
     const evidenceBeforeFence = await getDb(transactionDb)
-      .select()
+      .selectDistinct({ runId: runEvidence.runId })
       .from(runEvidence)
+      .innerJoin(run, eq(run.id, runEvidence.runId))
       .where(
-        inArray(
-          runEvidence.runId,
-          candidates.map((candidate) => candidate.id),
+        and(
+          eq(run.ledgerPartyId, scope.ledgerPartyId),
+          referencesSource(runEvidence.sourceMetadata, source.id),
         ),
       );
     const operations = await getDb(transactionDb)
-      .select()
+      .selectDistinct({ runId: runOperation.runId })
       .from(runOperation)
+      .innerJoin(run, eq(run.id, runOperation.runId))
       .where(
-        inArray(
-          runOperation.runId,
-          candidates.map((candidate) => candidate.id),
+        and(
+          eq(run.ledgerPartyId, scope.ledgerPartyId),
+          referencesSource(runOperation.result, source.id),
         ),
       );
     const retiredRunIds = [
       ...new Set([
         scope.id,
         ...exposures.map((item) => item.runId),
-        ...candidates
-          .filter((candidate) =>
-            referencesSource(
-              storedReferences.parse(candidate.input),
-              source.id,
-            ),
-          )
-          .map((candidate) => candidate.id),
-        ...evidenceBeforeFence
-          .filter((item) =>
-            referencesSource(
-              storedReferences.parse(item.sourceMetadata),
-              source.id,
-            ),
-          )
-          .map((item) => item.runId),
-        ...operations
-          .filter((item) =>
-            referencesSource(storedReferences.parse(item.result), source.id),
-          )
-          .map((item) => item.runId),
+        ...candidates.map((candidate) => candidate.id),
+        ...evidenceBeforeFence.map((item) => item.runId),
+        ...operations.map((item) => item.runId),
       ]),
     ].sort();
     // Exposure holds the source first. Readers hold their Run through upload;
