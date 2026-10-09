@@ -554,6 +554,12 @@ export async function resolveRunFinding(
           finding,
           fix,
           input.reviewedFingerprint,
+          recipeCosting && {
+            recomputeForIngredients: (_db, ids) =>
+              recipeCosting.recomputeForIngredients(ids, {
+                source: "product.research",
+              }),
+          },
         );
       } else if (fix.kind === "validation_corrections") {
         const applied = await applyPurchaseValidationFinding(

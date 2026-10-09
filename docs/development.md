@@ -109,11 +109,11 @@ loads itself into its Durable Object:
 4. Open `/api/debug/usda-release` signed in (or with `x-api-key`): the first
    request starts the load and every request reports shard progress, size,
    or the raw failure. `?probe=1` on a ready release times a search and a
-   batch lookup. The daily cron also starts the load, and reports a failed
-   load to Sentry each day until it is resumed.
-5. Once ready, Product links to superseded food revisions advance to the
-   current revision on the next daily cron, or at once with a `POST` to the
-   same route; a `POST` on a failed load resumes it instead.
+   batch lookup.
+5. Once ready, `POST` to the same route: Product links to superseded food
+   revisions advance to the current revision, and the response lists each
+   advance. A `POST` on a failed load resumes it instead; on a loading one it
+   returns the progress. Re-running it advances nothing new.
 
 The dev Worker seeds its `USDA_RELEASES` bucket on its first request with the
 synthetic release `2000-01` (`apps/web/tooling/dev/usda-synthetic-release.ts`):

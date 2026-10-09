@@ -67,6 +67,41 @@ describe("MCP response policies", () => {
     },
   );
 
+  it("projects compact USDA search rows, which carry no nutrient summary", async () => {
+    const row = {
+      fdc_id: 9900001,
+      foodInfo: {
+        data_type: "foundation_food",
+        description: "Synthetic rolled oats",
+      },
+      brandedFoodInfo: null,
+      legacyFoodInfo: null,
+      nutritionInfo: { nutrientsPer100: { "208": 380 } },
+      portionInfoRaw: [],
+      linkedProducts: [],
+    };
+    const result = await callMcpTool(
+      createMcpServer(),
+      "usda_food",
+      { action: "search", query: "synthetic oats" },
+      {
+        usdaService: fromPartial({
+          listFoods: async () => ({ data: [row], count: 1 }),
+        }),
+      },
+    );
+    expect(result.isError).not.toBe(true);
+    expect(result.structuredContent).toMatchObject({
+      items: [
+        {
+          fdc_id: 9900001,
+          description: "Synthetic rolled oats",
+          nutrientsPer100: { "208": 380 },
+        },
+      ],
+    });
+  });
+
   it.each([
     ["activity", "problems"],
     ["usda_food", "search"],

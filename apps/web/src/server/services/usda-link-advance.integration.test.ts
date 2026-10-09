@@ -4,7 +4,7 @@ import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 
 import { USDAClient } from "~/server/clients/usda";
-import { getProductByID } from "~/server/repo/product/crud";
+import { getProductByID, updateProduct } from "~/server/repo/product/crud";
 import {
   createProductFixture,
   createSystemUserFixture,
@@ -12,10 +12,7 @@ import {
 } from "~/server/repo/repo.fixtures";
 import type { UsdaReleaseRpc } from "~/server/usda-release/rpc";
 
-import {
-  advanceLinksWhenReady,
-  advanceProductUsdaLinks,
-} from "./usda-link-advance.service";
+import { advanceProductUsdaLinks } from "./usda-link-advance.service";
 
 // A release where 9900101 was superseded by 9900105, 9900200 is current, and
 // 9900300 is not in the release at all.
@@ -86,17 +83,30 @@ describe("advanceProductUsdaLinks", () => {
     ).toEqual([]);
   });
 
-  it("reports a failed release load instead of skipping it", async () => {
-    const failed = fromPartial<UsdaReleaseRpc>({
-      status: async () =>
-        fromPartial<Awaited<ReturnType<UsdaReleaseRpc["status"]>>>({
-          release: "2000-01",
-          state: "failed",
-          error: "shard 3: unexpected end of gzip stream",
-        }),
+  it("leaves a link the household changed while the run was looking it up", async () => {
+    await createSystemUserFixture(ctx.db);
+    const edited = await createProductFixture(
+      ctx.db,
+      makeProductInput({ name: "Sample granola", fdc_id: 9900101 }),
+      ctx.actor,
+    );
+    const editingRelease = fromPartial<UsdaReleaseRpc>({
+      lookupBatch: async (lookups: FoodLookupParam[]) => {
+        await updateProduct(
+          ctx.db,
+          edited.entityId,
+          { fdc_id: 9900200 },
+          ctx.actor,
+        );
+        return release.lookupBatch(lookups);
+      },
     });
-    await expect(advanceLinksWhenReady(ctx.db, failed)).rejects.toThrowError(
-      "USDA release 2000-01 failed to load: shard 3: unexpected end of gzip stream",
+
+    expect(
+      await advanceProductUsdaLinks(ctx.db, new USDAClient(editingRelease)),
+    ).toEqual([]);
+    expect((await getProductByID(ctx.db, edited.entityId)).fdc_id).toBe(
+      9900200,
     );
   });
 });

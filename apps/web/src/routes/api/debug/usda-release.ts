@@ -12,7 +12,6 @@ import {
 import { authenticateHttpSession } from "~/server/http-session-cache";
 import { createRequestContext, requireActor } from "~/server/request-context";
 import type { RequestActor } from "~/server/request-context";
-import { advanceLinksWhenReady } from "~/server/services/usda-link-advance.service";
 import { activeUsdaRelease } from "~/server/usda-release/client";
 import type { UsdaReleaseRpc } from "~/server/usda-release/rpc";
 
@@ -87,7 +86,7 @@ async function withRelease(
  * release is activated starts its load; `?probe=1` on a ready release also
  * times one search and one batch lookup through the binding. POST resumes a
  * failed load from its last committed shard, or on a ready release advances
- * Product links from superseded food revisions (the daily cron does too).
+ * Product links from superseded food revisions.
  */
 export const Route = createFileRoute("/api/debug/usda-release")({
   server: {
@@ -129,9 +128,19 @@ export const Route = createFileRoute("/api/debug/usda-release")({
         withRelease(request, async (release) => {
           const status = await release.status();
           if (status.state === "failed") return await release.resume();
+          if (status.state !== "ready") return status;
+          // Lazy: product orchestration stays off the first-request bundle.
+          const [{ USDAClient }, { advanceProductUsdaLinks }] =
+            await Promise.all([
+              import("~/server/clients/usda"),
+              import("~/server/services/usda-link-advance.service"),
+            ]);
           return {
             ...status,
-            ...(await advanceLinksWhenReady(db, release)),
+            advanced: await advanceProductUsdaLinks(
+              db,
+              new USDAClient(release),
+            ),
           };
         }),
     },
