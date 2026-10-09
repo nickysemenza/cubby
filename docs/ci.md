@@ -88,12 +88,12 @@ fmt/clippy/test per crate (`recipebridge/project.json`,
 `cubby-ffi/project.json`); `verify:local(:full)` runs both projects' `rust`
 target regardless of what changed.
 
-`cubby-ffi` and the WASM package share the `recipebridge` Rust core and Cargo
-lockfile, but each target needs its own compiled artifacts. The EPUB cookbook
-dependency belongs to the WASM-only `epub` module; Cargo's
-target-specific dependency table keeps them out of native FFI and host test
-builds. This preserves the required WASM dependencies without compiling unused EPUB
-code for Apple targets.
+`cubby-ffi` and the WASM packages share the `recipebridge` Rust core and Cargo
+lockfile, but each target needs its own compiled artifacts. EPUB extraction is
+the separate wasm-only `recipebridge-cookbook` crate, and `cubby-ffi` turns off
+`recipebridge`'s Worker-only default features (`html`, `ai-usage`), so Apple
+targets compile neither the cookbook crate nor `page.rs`. The `rust` target
+also lints `recipebridge --no-default-features`, the browser build.
 The unused local Rust model-pricing export is removed; Cubby usage pricing
 reads `models.dev` in TypeScript. Cookbook's upstream pricing table remains
 transitive until the [pricing consolidation](todos.md#ai--search) is completed.

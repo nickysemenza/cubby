@@ -17,7 +17,8 @@ js-sys = "0.3"
 tsify-next = { version = "0.5", features = ["js"] }
 
 # Pin the shared upstream commit so every CI job builds identical Rust sources.
-# Renovate follows main weekly and updates all three refs together.
+# Renovate follows main weekly and updates every ref (here and in
+# recipebridge-cookbook) together.
 #
 # To build against a sibling ingredient-parser working copy, drop a gitignored
 # cubby/.cargo/config.toml with a
@@ -27,27 +28,32 @@ tsify-next = { version = "0.5", features = ["js"] }
 # strips `source =` from Cargo.lock on every build, which dirties the tree and
 # fails the clean-tree pre-push gate, and local builds silently diverge from
 # the pinned rev CI uses.
-ingredient = { git = "https://github.com/nickysemenza/ingredient-parser", rev = "71fb65e7e4eeb0ab18a7a22085e7b6672aab82b3" }
-recipe-scraper = { git = "https://github.com/nickysemenza/ingredient-parser", rev = "71fb65e7e4eeb0ab18a7a22085e7b6672aab82b3" }
+ingredient = { git = "https://github.com/nickysemenza/ingredient-parser", rev = "742f8d77e9f4f89aef0a830d6283eedf46fc1959" }
+recipe-scraper = { git = "https://github.com/nickysemenza/ingredient-parser", rev = "742f8d77e9f4f89aef0a830d6283eedf46fc1959" }
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
 # The same HTML parser recipe-scraper already compiles in; `page.rs` walks a
-# captured browser DOM with it.
-scraper = "0.27.0"
-url = "2"
+# captured browser DOM with it. Behind `html` (see [features]).
+scraper = { version = "0.27.0", optional = true }
+url = { version = "2", optional = true }
 serde-wasm-bindgen = "0.6"
 wasm-tracing = "2.0.0"
 tracing = "0.1.41"
 console_error_panic_hook = "0.1.7"
+# Only the model catalog, usage parsing, and pricing (`ai_usage.rs`). Never the
+# `wasm` feature: every `#[wasm_bindgen]` fn it adds would be exported from
+# this module too, putting the EPUB pipeline back in the Worker.
+cookbook = { git = "https://github.com/nickysemenza/ingredient-parser", rev = "742f8d77e9f4f89aef0a830d6283eedf46fc1959", default-features = false, optional = true }
 
-[target.'cfg(target_arch = "wasm32")'.dependencies]
-# EPUB cookbook extraction: the whole pipeline (open, chunk, model calls through
-# a JavaScript transport, validation, assembly, references) lives upstream in
-# `cookbook::wasm`; this crate only re-exports it. No native features (reqwest,
-# fs) reach the wasm build.
-cookbook = { git = "https://github.com/nickysemenza/ingredient-parser", rev = "71fb65e7e4eeb0ab18a7a22085e7b6672aab82b3", default-features = false, features = [
-  "wasm",
-] }
+
+[features]
+# Worker-only capabilities. HTML parsing (`compact_browser_page`,
+# `parse_scraped_recipe`) is ~0.8 MB of the wasm binary; `gateway_call_usage`
+# needs the cookbook model catalog. The browser build passes
+# --no-default-features; native builds (cubby-ffi, tests) keep both.
+default = ["html", "ai-usage"]
+html = ["dep:scraper", "dep:url"]
+ai-usage = ["dep:cookbook"]
 
 [dev-dependencies]
 # Native-target tests (cargo test): the costing + food-mapping modules are pure

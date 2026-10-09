@@ -1,0 +1,28 @@
+[package]
+name = "recipebridge-cookbook"
+version = "0.1.0"
+# Matches recipebridge: edition 2024, no `rust-version` floor (see its Cargo.toml).
+edition = "2024"
+publish = false
+
+# EPUB cookbook extraction as its own wasm package (`@cubby/recipebridge/cookbook`).
+# Only the browser's cookbook import loads it, so its ~1 MB stays out of the
+# Worker and out of every other page's recipebridge download.
+[lib]
+crate-type = ["cdylib"]
+
+[target.'cfg(target_arch = "wasm32")'.dependencies]
+wasm-bindgen = "0.2"
+console_error_panic_hook = "0.1.7"
+# The whole pipeline (open, chunk, model calls through a JavaScript transport,
+# validation, assembly, references) lives upstream in `cookbook::wasm`; this
+# crate only re-exports it. No native features (reqwest, fs) reach the wasm
+# build. Same rev as recipebridge's ingredient-parser crates.
+cookbook = { git = "https://github.com/nickysemenza/ingredient-parser", rev = "742f8d77e9f4f89aef0a830d6283eedf46fc1959", default-features = false, features = [
+  "wasm",
+] }
+
+[lints.clippy]
+unwrap_used = "deny"
+expect_used = "deny"
+panic = "deny"

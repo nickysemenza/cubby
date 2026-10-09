@@ -32,7 +32,10 @@ type ImmutableWasm<T> = {
     : T[K];
 };
 
-// Load WASM at module initialization (Vite handles top-level await)
+// Load WASM at module initialization (Vite handles top-level await). The
+// browser build resolves this to recipebridge without the `html` feature, so
+// its type is a superset there: wasm-browser-exports.unit.test.ts keeps
+// browser code off the Worker-only exports.
 const instance: WasmType = await import("@cubby/recipebridge");
 
 /**
@@ -56,11 +59,6 @@ export const wasmFormat = {
  * redundancy on a recipe page. Only the genuinely expensive methods are listed;
  * trivially cheap ones (is_valid_unit ~0.1µs, amount_kind ~0.5µs) cost less than
  * the cache key itself.
- *
- * `open_book` is excluded and must stay excluded: its key would be a whole
- * EPUB, and the `Book` it returns owns wasm memory with a lifecycle (`free`,
- * `cancel`, an extraction that runs once) that a shared cached instance would
- * corrupt. Its methods live on the instance, so they never reach this proxy.
  */
 const CACHEABLE_METHODS = [
   "parse_ingredient",

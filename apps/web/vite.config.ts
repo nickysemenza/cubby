@@ -172,6 +172,33 @@ function cfWasmPlugin(): Plugin {
 }
 
 /**
+ * Serve the browser the recipebridge build without the `html` feature
+ * (scripts/build-wasm.sh): HTML parsing is ~0.34 MB gzip that only the Worker
+ * calls. The SSR environment keeps the full build through cfWasmPlugin.
+ */
+function browserWasmPlugin(): Plugin {
+  const browserBuild = path.resolve(
+    __dirname,
+    "../../packages/wasm/browser/recipebridge.js",
+  );
+  return {
+    name: "browser-wasm-redirect",
+    enforce: "pre",
+    applyToEnvironment(env) {
+      return env.name === "client";
+    },
+    resolveId(source) {
+      if (
+        source === "@cubby/recipebridge" ||
+        source.endsWith("/packages/wasm/recipebridge.js")
+      ) {
+        return browserBuild;
+      }
+    },
+  };
+}
+
+/**
  * Redirect @sentry/tanstackstart-react to a @sentry/cloudflare-backed shim in
  * the SSR environment. Its server half re-exports @sentry/node, which pulls
  * @sentry/node-core, @sentry/opentelemetry, seven @opentelemetry/* packages and
@@ -393,6 +420,7 @@ export default defineConfig(async ({ command }) => {
       // CF Workers WASM instantiation plugin must run before vite-plugin-wasm
       cfPgNativeStub(),
       cfWasmPlugin(),
+      browserWasmPlugin(),
       cfSentryShim(),
       cfZodLocalesStub(),
       phosphorWeights(),

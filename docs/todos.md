@@ -1033,14 +1033,6 @@ are implemented. See [local development](local-development.md#fixture-previews-a
   `pnpm generate` (with a drift check) and delete the runtime dependency. Pick a
   renderer that runs without a browser first.
 
-- 🤔 **Move `recipebridge` WASM out of the web Worker.** The 3.4 MB module is
-  ~23% of every deploy's gzip upload but changes only with Rust edits. Callers:
-  `server/utils/scraper.ts`, `repo/import-recipe-convert.ts`,
-  `services/availability.service.ts`, `repo/problems/reparse.ts`. A
-  service-bound Worker deployed only on Rust changes removes it, at the cost of
-  an RPC hop and a second deploy unit. First measure whether workerd compiles
-  it at startup (part of the 179 ms) or lazily.
-
 - 🤔 **Trim duplicate and unused Worker dependencies (~0.4 MB gzip).**
   `agents` pins `@modelcontextprotocol/server`/`client` at exactly 2.0.0 next
   to the app's 2.2.0 (~210 kB duplicate; dedupe via override if the agent's API

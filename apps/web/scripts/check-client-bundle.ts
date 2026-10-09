@@ -42,6 +42,33 @@ export async function assertNoServerCodeInClient(
   );
 }
 
+// Each recipebridge package carries exports the others lack
+// (scripts/build-wasm.sh). Hashed asset names do not say which build an asset
+// is, so match on an export name in the binary instead.
+const WASM_EXCLUSIONS = [
+  { directory: "Worker", forbidden: "open_book" },
+  { directory: "client", forbidden: "compact_browser_page" },
+] as const;
+
+export async function assertWasmSplit(
+  clientDirectory: string,
+  workerDirectory: string,
+): Promise<void> {
+  const roots = { client: clientDirectory, Worker: workerDirectory };
+  const leaks: string[] = [];
+  for (const { directory, forbidden } of WASM_EXCLUSIONS) {
+    for (const file of walkFiles(roots[directory], { includeSymlinks: true })) {
+      if (path.extname(file) !== ".wasm") continue;
+      if ((await readFile(file)).includes(forbidden))
+        leaks.push(`${directory} ${path.basename(file)} exports ${forbidden}`);
+    }
+  }
+  if (leaks.length === 0) return;
+  throw new Error(
+    `A recipebridge wasm package landed in the wrong bundle:\n  ${leaks.join("\n  ")}`,
+  );
+}
+
 const DEV_ONLY_ROUTES = ["/__dev/", "/__local-storage/s3/", "/cdn-cgi/local/"];
 
 export async function assertNoDevRoutes(directory: string): Promise<void> {
@@ -61,6 +88,7 @@ const invokedPath = process.argv[1]
   : undefined;
 if (invokedPath === import.meta.url) {
   await assertNoServerCodeInClient(CLIENT_DIR);
+  await assertWasmSplit(CLIENT_DIR, WORKER_DIR);
   // Dev-only links (sign-in's dev login, the footer's Local Explorer) are gated
   // on import.meta.env.DEV, which every `vite build`, local preview included,
   // replaces with false.
@@ -68,6 +96,6 @@ if (invokedPath === import.meta.url) {
   if (process.env.CUBBY_DEV_PREVIEW_BUILD !== "true")
     await assertNoDevRoutes(WORKER_DIR);
   console.log(
-    "[check-client-bundle] no server-only code or dev routes in production output",
+    "[check-client-bundle] no server-only code, misplaced wasm, or dev routes in production output",
   );
 }

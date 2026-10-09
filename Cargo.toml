@@ -3,7 +3,7 @@
 # workspace; every profile lives here.
 [workspace]
 resolver = "3"
-members = ["recipebridge", "cubby-ffi"]
+members = ["recipebridge", "recipebridge-cookbook", "cubby-ffi"]
 
 # Line numbers are kept for backtraces; full DWARF only inflated the shared
 # target dir.

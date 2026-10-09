@@ -1,4 +1,4 @@
-import type { Progress } from "@cubby/recipebridge";
+import type { Progress } from "@cubby/recipebridge/cookbook";
 import type {
   CookbookExtraction,
   CookbookRunReport,
@@ -134,5 +134,5 @@ export type BookHandlers = {
   /** Stop an extraction in flight; the book returns to `opened`. */
   cancel: (source: string) => void;
   /** Re-open the book from its kept EPUB bytes and extract again. */
-  retryExtraction: (source: string) => void;
+  retryExtraction: (source: string) => void | Promise<void>;
 };

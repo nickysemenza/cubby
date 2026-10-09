@@ -1,4 +1,4 @@
-import type { Estimate, Extraction } from "@cubby/recipebridge";
+import type { Estimate, Extraction } from "@cubby/recipebridge/cookbook";
 import type {
   CookbookExtraction,
   CookbookRunReport,
