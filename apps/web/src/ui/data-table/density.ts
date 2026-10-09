@@ -3,8 +3,15 @@
 // cellClass/rowClass h-* pixel value — the virtualizer's spacer math and the
 // fast-scroll ghost-row guides both key off rowHeight, and a mismatch makes
 // them drift from the painted rows.
+//
+// A table cell grows to fit its content, so `h-8` alone is only a minimum.
+// `cellContentClass` holds every cell's content to the row height (centred,
+// overflow clipped) so one stacked cell cannot stretch its row; the inner
+// block keeps inline content flowing normally. Cells should still render a
+// single line rather than rely on the clip.
 export const ROW_DENSITY = {
   rowHeight: 32,
   cellClass: "h-8 px-2 py-0 text-[0.8125rem] leading-5",
   rowClass: "h-8",
+  cellContentClass: "flex h-8 flex-col justify-center overflow-hidden",
 } as const;
