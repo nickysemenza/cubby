@@ -81,11 +81,21 @@ for (const statementFirst of [true, false]) {
           orderEmailSenders,
           orderEvidence: "online_account",
         });
+    const vendorId = await resolveOrThrow(db, "vendor", canonicalVendor.id);
+    const existingAccount = await database.query.vendorAccount.findFirst({
+      where: and(
+        eq(schema.vendorAccount.vendorId, vendorId),
+        eq(schema.vendorAccount.ledgerPartyId, member.id),
+        notDeleted(schema.vendorAccount),
+      ),
+    });
     const prerequisites = await createConvergenceFixtures(
-      (entity, overrides) =>
-        entity === "vendor"
-          ? Promise.resolve(canonicalVendor)
-          : createEntityFixture(page, entity, overrides),
+      (entity, overrides) => {
+        if (entity === "vendor") return Promise.resolve(canonicalVendor);
+        if (entity === "vendorAccount" && existingAccount)
+          return Promise.resolve({ id: existingAccount.shortcode });
+        return createEntityFixture(page, entity, overrides);
+      },
       member.shortcode,
       names,
     );
@@ -99,11 +109,6 @@ for (const statementFirst of [true, false]) {
       );
       expect(allowed.ok(), await allowed.text()).toBe(true);
     }
-    const vendorId = await resolveOrThrow(
-      db,
-      "vendor",
-      prerequisites.vendor.id,
-    );
     const accountId = await resolveOrThrow(
       db,
       "vendorAccount",
