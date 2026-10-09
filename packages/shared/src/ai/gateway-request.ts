@@ -214,7 +214,7 @@ async function observeGatewayResponse(
   let remaining = 4_096;
   if (reader) {
     try {
-      while (true) {
+      while (remaining > 0) {
         const part = await reader.read();
         if (part.done) break;
         const bytes = part.value.subarray(0, remaining);

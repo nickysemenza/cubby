@@ -51,6 +51,39 @@ describe("gatewayResponseInfo", () => {
   });
 });
 
+it("returns bounded error diagnostics without waiting for an open upstream body to end", async () => {
+  const body = new ReadableStream<Uint8Array>({
+    start(controller) {
+      controller.enqueue(new Uint8Array(4_096).fill(65));
+    },
+  });
+  const observed: string[] = [];
+  const response = new Response(body, { status: 502 });
+  const send = gatewayFetchThrough({
+    provider: "openai",
+    gateway: async () => response,
+    onErrorResponse: (failure) => observed.push(failure.body),
+  });
+  try {
+    const returned = await Promise.race([
+      send(`${gatewayBaseURL("openai")}/responses`, {
+        method: "POST",
+        body: "{}",
+      }),
+      new Promise<never>((_resolve, reject) =>
+        setTimeout(
+          () => reject(new Error("Diagnostics waited for upstream EOF")),
+          250,
+        ),
+      ),
+    ]);
+    expect(returned).toBe(response);
+    expect(observed).toEqual(["A".repeat(4_096)]);
+  } finally {
+    void response.body?.cancel();
+  }
+});
+
 // A required disconnected plan must not silently spend through chat APIs;
 // reservations must finish before every actual paid request, including peers
 // and retries. Response/transport observers do not authorize a transmission.
