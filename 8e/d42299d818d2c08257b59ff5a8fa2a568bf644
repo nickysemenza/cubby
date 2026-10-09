@@ -1,0 +1,31 @@
+apps/usda-api/src/data/edge.ts
+  s_baac6c838b330d::t_e5a419885ae05b 409
+apps/web/src/routes/api/debug/usda-release.ts
+  s_baac6c838b330d::t_fde0cd2ef6ebcf 12,22-78,80-83,88-89,95,110-117,119-122
+apps/web/src/server/usda-release/durable-object.ts
+  s_baac6c838b330d::t_e290a49f2877ac 32,43-45,47-56,60-61,63-64,68,70,76-85,102-110
+apps/web/src/server/usda-release/durable-object.workers.test.ts
+  s_baac6c838b330d::t_0422c33413ad5c 5,11-15,77-81,103-104,201,203,205,210-258,261,314-331
+apps/web/src/server/usda-release/rpc.ts
+  s_baac6c838b330d::t_8b5e9798dd7458 16-17
+packages/usda/src/release/search-sql.ts
+  s_baac6c838b330d::t_3e5dfd323c0d19 55-58,62-63,68-70
+packages/usda/src/release/store.ts
+  s_baac6c838b330d::t_07ee2f76e9f466 111-117,169-173,191-192,202,206-209,225-231,234-252,302,304-305,461
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "8ed42299d818d2c08257b59ff5a8fa2a568bf644",
+  "prompts": {},
+  "sessions": {
+    "s_baac6c838b330d": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "4e072615-6da5-4add-8945-be01765ee61f",
+        "model": "unknown"
+      },
+      "human_author": "nicky <nicky@cloudflare.com>"
+    }
+  }
+}
