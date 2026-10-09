@@ -175,7 +175,11 @@ Retirement cleanup remains available independently of execution. A fresh,
 deliberately admitted successor is required for legacy work; legacy Runs are
 not classified as unrelated mail or automatically reopened. Contract validity
 is separate from active status, so completing its own work does not invalidate
-an operation's successful response.
+an operation's successful response. A started replacement-tool checkpoint may
+recover a pre-change import proposal only through its original hidden call ID
+and matching completed receipt. Receipt decoding preserves the old normalized
+fingerprint; new proposals still use the current strict tool schema. Removed
+operands never authorize new writes, and ownership/retirement fences still apply.
 Photo inventory keeps its explicitly selected shared owner and live initiating
 member; that permission never grants research another member's source scope.
 

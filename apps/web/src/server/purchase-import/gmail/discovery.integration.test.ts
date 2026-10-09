@@ -504,7 +504,6 @@ describe("scheduled Gmail discovery", () => {
             allShipmentsDelivered: false,
           },
           productResolutions: [],
-          defaultTrade: "other",
         },
       ],
       detail:

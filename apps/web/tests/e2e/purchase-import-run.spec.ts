@@ -81,7 +81,6 @@ const researchOrder = (
             ? { kind: "existing", lineIndex: 0, productId: productRef }
             : { kind: "new", lineIndex: 0 },
         ],
-        defaultTrade: "other",
       },
     ],
     detail: `Imported ${orderId} from the retained original without receiving stock.`,

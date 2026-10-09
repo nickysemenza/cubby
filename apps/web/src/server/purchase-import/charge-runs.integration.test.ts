@@ -231,7 +231,6 @@ describe("selected statement-charge runs", () => {
                 allShipmentsDelivered: true,
               },
               productResolutions: [{ kind: "expense_only", lineIndex: 0 }],
-              defaultTrade: "other",
             },
           ],
           detail: "Verified the allocated order from retained evidence.",

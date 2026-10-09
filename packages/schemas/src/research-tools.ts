@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { tradeSchema } from "./task-fields";
 import { externalIdKind } from "./external-id";
 import { purchaseShortcode, vendorShortcode } from "./identifier-fields";
 import {
@@ -170,6 +171,18 @@ export const researchWorkResolve = z.strictObject({
       "Scope coverage for an assigned frozen account-history or explicit backfill objective. Omit for an individual mail or Product task; one source does not establish broader scope exhaustion.",
     ),
   detail: z.string().trim().min(1).max(8_000),
+});
+/** Receipt decoding only: never mounted as a live tool input. Preserves the
+ * pre-change normalized operand order for immutable operation fingerprints. */
+export const archivedResearchWorkResolve = researchWorkResolve.extend({
+  orders: z
+    .array(
+      researchWorkResolve.shape.orders.unwrap().element.extend({
+        defaultTrade: tradeSchema.optional(),
+      }),
+    )
+    .max(100)
+    .default([]),
 });
 export const researchMailSearch = z.strictObject({
   workRef,

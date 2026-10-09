@@ -252,7 +252,6 @@ describe("apply a reviewed purchase-validation diff", () => {
               reasoning:
                 "The retained original supports these exact order lines.",
               candidate,
-              defaultTrade: "other",
               productResolutions: options.plan.flatMap((line, lineIndex) =>
                 (line.lineKind ?? "principal") === "principal"
                   ? [

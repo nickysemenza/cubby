@@ -458,7 +458,6 @@ describe("Purchase validation research", () => {
             allShipmentsDelivered: false,
           },
           productResolutions: [{ kind: "expense_only", lineIndex: 0 }],
-          defaultTrade: "other",
         },
       ],
       detail:

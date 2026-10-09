@@ -397,6 +397,79 @@ describe("supported retained-mail research writes", () => {
       ),
     ).rejects.toThrow(/settled|closed/);
   });
+  it("recovers a sealed pre-change import receipt without admitting removed fields for new writes", async () => {
+    const f = await fixture();
+    const input = {
+      runId: f.run.id,
+      workRef: f.target.id,
+      callId: "synthetic-archived-import",
+      proposal: f.proposal,
+    };
+    const committed = await resolveImportResearch(ctx.db, input, f.ports);
+    // A pre-deployment normalized proposal preserves the removed field at
+    // its original trailing position; archived fingerprints are immutable.
+    const archived = {
+      ...f.proposal,
+      orders: f.proposal.orders.map((order) => ({
+        ...order,
+        defaultTrade: "other",
+      })),
+    };
+    const fingerprint = await sha256Hex(JSON.stringify(archived));
+    const [receipt] = await getDb(ctx.db)
+      .select()
+      .from(runOperation)
+      .where(eq(runOperation.operationId, input.callId));
+    await getDb(ctx.db)
+      .update(runOperation)
+      .set({
+        inputFingerprint: fingerprint,
+        result: { ...committed, attempt: archived },
+      })
+      .where(eq(runOperation.id, receipt!.id));
+    const noAssessment = {
+      ...f.ports,
+      assess: async () => {
+        throw new Error("Replay must not reassess or write");
+      },
+    };
+    expect(
+      await resolveImportResearch(
+        ctx.db,
+        { ...input, proposal: archived },
+        noAssessment,
+      ),
+    ).toEqual(committed);
+    await expect(
+      resolveImportResearch(
+        ctx.db,
+        {
+          ...input,
+          proposal: { ...archived, detail: "Changed proposal" },
+        },
+        noAssessment,
+      ),
+    ).rejects.toThrow(/different input/);
+    await expect(
+      resolveImportResearch(
+        ctx.db,
+        {
+          ...input,
+          callId: "synthetic-new-obsolete-proposal",
+          proposal: archived,
+        },
+        noAssessment,
+      ),
+    ).rejects.toThrow(/defaultTrade|Unrecognized key/);
+    expect(await getDb(ctx.db).select().from(expense)).toHaveLength(2);
+    expect(await getDb(ctx.db).select().from(purchase)).toHaveLength(2);
+    const [unchanged] = await getDb(ctx.db)
+      .select()
+      .from(runOperation)
+      .where(eq(runOperation.id, receipt!.id));
+    expect(unchanged!.inputFingerprint).toBe(fingerprint);
+    expect(unchanged!.result).toEqual({ ...committed, attempt: archived });
+  });
   it("counts replayed accepted source orders and links with the same refusal as zero progress", async () => {
     const f = await fixture();
     const ports = {

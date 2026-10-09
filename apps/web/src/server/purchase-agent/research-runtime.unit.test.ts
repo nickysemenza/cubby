@@ -54,6 +54,55 @@ describe("bounded research runtime", () => {
     expect(observe).toHaveBeenCalledTimes(2);
   });
 
+  it("passes archived resolve arguments only for an already-started durable host call", async () => {
+    const proposal = {
+      workRef,
+      status: "verified",
+      identity: { evidenceIds: [], reasoning: "Previously supported original" },
+      orders: [
+        {
+          candidate: {
+            orderId: "SYNTHETIC-ORDER",
+            orderedAt: null,
+            merchant: "Synthetic service",
+            currency: "USD",
+            printedGrandTotal: 10,
+            lines: [],
+            payments: [],
+            allShipmentsDelivered: false,
+          },
+          evidenceIds: [],
+          reasoning: "Supported retained receipt",
+          defaultTrade: "other",
+        },
+      ],
+      detail: "Previously committed acquisition",
+    };
+    const resolve = vi.fn().mockResolvedValue({ state: "done" });
+    const tool = named(
+      "work_resolve",
+      fromPartial<RunServices>({ researchResolve: resolve }),
+    );
+    // pi-durable resumes execute checkpoints directly; the existing host
+    // memo is proof that this tool reached the service effect previously.
+    const execution = api();
+    await execution.memo(
+      "host-call-id",
+      { value: "synthetic-resumed-call" },
+      BACKGROUND_CONTEXT,
+    );
+    await tool.execute(proposal, execution, BACKGROUND_CONTEXT);
+    expect(resolve).toHaveBeenCalledWith(
+      expect.objectContaining({
+        orders: [expect.objectContaining({ defaultTrade: "other" })],
+      }),
+      "synthetic-resumed-call",
+    );
+    await expect(
+      tool.execute(proposal, api(), BACKGROUND_CONTEXT),
+    ).rejects.toThrow(/defaultTrade|Unrecognized key/);
+    expect(resolve).toHaveBeenCalledTimes(1);
+  });
   it("settles completed work automatically while offline browser work can yield to cloud work", async () => {
     const services = fromPartial<RunServices>({
       researchNext: vi.fn().mockResolvedValue({ state: "done" }),

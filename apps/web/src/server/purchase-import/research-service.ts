@@ -6,7 +6,10 @@ import {
   spendingCategoryShortcode,
   runEntityId,
 } from "@cubby/schemas/identifiers";
-import { researchToolInputs } from "@cubby/schemas/research-tools";
+import {
+  archivedResearchWorkResolve,
+  researchToolInputs,
+} from "@cubby/schemas/research-tools";
 import {
   mailResearchRunInput,
   purchaseValidationResearchRunInput,
@@ -700,7 +703,7 @@ export function researchServiceFor(
       });
     },
     async researchResolve(raw, callId) {
-      const proposal = researchToolInputs.work_resolve.parse(raw);
+      const proposal = archivedResearchWorkResolve.parse(raw);
       await assertResearchRunExecutable(db, runId);
       await owner();
       const [target] = await database

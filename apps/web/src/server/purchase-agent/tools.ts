@@ -2,7 +2,10 @@ import {
   photoInventoryToolInputs,
   purchaseAgentToolInputs,
 } from "@cubby/schemas/purchase-agent-services";
-import { researchAttachmentOriginal } from "@cubby/schemas/research-tools";
+import {
+  archivedResearchWorkResolve,
+  researchAttachmentOriginal,
+} from "@cubby/schemas/research-tools";
 import type { Context, JsonValue } from "@earendil-works/chord";
 import { Type, type TSchema } from "@earendil-works/pi-ai";
 import {
@@ -178,13 +181,23 @@ function tool<N extends ToolName>(
     // by the durable tool task.
     replay: "safe",
     ...definition,
-    execute: (args, api, context) =>
-      definition.execute(
-        // SAFETY: the same indexed schema parses this tool's input, including defaults.
-        toolInputs[name].parse(args) as z.input<ToolInputs[N]>,
+    execute: async (args, api, context) => {
+      const current = toolInputs[name].safeParse(args);
+      // pi-durable resumes execute checkpoints without revalidating their
+      // saved arguments. Only a previously started host call may decode the
+      // removed field; the service still requires its completed receipt.
+      const parsed = current.success
+        ? current.data
+        : name === "work_resolve" && (await api.memo("host-call-id", context))
+          ? archivedResearchWorkResolve.parse(args)
+          : toolInputs[name].parse(args);
+      return definition.execute(
+        // SAFETY: indexed current input or the same shape plus archived operands.
+        parsed as z.input<ToolInputs[N]>,
         api,
         context,
-      ),
+      );
+    },
   });
 }
 

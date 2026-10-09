@@ -113,7 +113,6 @@ const proposal = researchWorkResolve.parse({
         allShipmentsDelivered: false,
       },
       productResolutions: [{ kind: "expense_only", lineIndex: 0 }],
-      defaultTrade: "other",
     },
   ],
   progress: {

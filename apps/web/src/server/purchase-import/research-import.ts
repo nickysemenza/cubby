@@ -8,6 +8,7 @@ import {
 } from "@cubby/schemas/purchase-import";
 import { researchAssessment } from "@cubby/schemas/research-assessment";
 import {
+  archivedResearchWorkResolve,
   researchWorkResolve,
   type ResearchWorkResolveInput,
   type ResearchWorkResolution,
@@ -849,8 +850,8 @@ export async function resolveImportResearch(
   },
   ports: ImportResearchPorts = {},
 ) {
-  const proposal = researchWorkResolve.parse(input.proposal);
-  if (proposal.workRef !== input.workRef)
+  const receiptInput = archivedResearchWorkResolve.parse(input.proposal);
+  if (receiptInput.workRef !== input.workRef)
     throw new Error("Research proposal names a different work reference.");
   await assertResearchRunNotRetired(db, input.runId);
   // The callback keeps admission and assessment under one replay fence.
@@ -860,7 +861,7 @@ export async function resolveImportResearch(
       runId: runEntityId.parse(input.runId),
       operationId: input.callId,
       kind: "research_resolve_import",
-      payload: proposal,
+      payload: receiptInput,
       subject: "Research import",
       recordFailure: true,
       retainAttempt: true,
@@ -869,6 +870,8 @@ export async function resolveImportResearch(
     async (ledger) => {
       const replayed = await ledger.replay(getDb(db), researchImportResult);
       if (replayed) return replayed;
+      // Removed operands may recover their sealed receipt, never a new write.
+      const proposal = researchWorkResolve.parse(receiptInput);
       const { scope, target } = await assertResearchWork(
         db,
         input.runId,
