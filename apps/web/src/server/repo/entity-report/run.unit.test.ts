@@ -854,24 +854,12 @@ describe("liveProgressBlocks", () => {
   const progress = {
     status: "running" as const,
     progress: events([300, 200]),
-    gmail: {
-      status: "waiting" as const,
-      searched: 40,
-      skipped: 10,
-      reviewable: 3,
-      pagesScanned: 1,
-      after: "1970/01/01",
-      searchTerms: ["orders@fixture.test"],
-      startedFromOlderPage: false,
-      hasMorePages: true,
-      retryAt: null,
-      error: null,
-    },
     discovery: null,
+    savedState: null,
     orders: [{ orderId: "fixture-order", state: "pending" as const }],
     charges: [],
     workflow: {
-      purpose: "mail_search" as const,
+      purpose: "mail_discovery" as const,
       attempt: 2,
       instanceId: `${RUN_ID}-2`,
       instance: { state: "waiting" as const, error: null },
@@ -887,7 +875,6 @@ describe("liveProgressBlocks", () => {
   it("shows durable mailbox pages and routing outcomes while discovery continues", () => {
     const blocks = liveProgressBlocks(RUN_ID, {
       ...progress,
-      gmail: null,
       discovery: {
         pagesDone: 3,
         saved: 7,
@@ -910,10 +897,7 @@ describe("liveProgressBlocks", () => {
 
   // Report composition must select the right Workflow and preserve retry attempts;
   // the browser cannot verify Cloudflare destinations without dashboard authentication.
-  it.each([
-    ["mail_search", "cubby-vendor-mail-search"],
-    ["mail_discovery", "cubby-mail-discovery"],
-  ] as const)(
+  it.each([["mail_discovery", "cubby-mail-discovery"]] as const)(
     "deep-links %s to its current Workflow attempt",
     (purpose, name) => {
       const blocks = liveProgressBlocks(RUN_ID, {
@@ -936,7 +920,6 @@ describe("liveProgressBlocks", () => {
 
   it("names the Workflow attempt and offers cancel while it runs, retry once failed", () => {
     const running = liveProgressBlocks(RUN_ID, progress);
-    expect(notes(running)[0]).toBe("AI Gateway rate limited; waiting to retry");
     expect(recordsOf(running, "Workflow").rows[0]).toMatchObject({
       title: `Attempt 2 · ${RUN_ID}-2`,
       subtitle: "Workflow instance waiting",
@@ -972,15 +955,8 @@ describe("liveProgressBlocks", () => {
     ).toEqual([]);
   });
 
-  it("states the search inputs and the per-order outcomes", () => {
+  it("preserves per-order outcomes in generic progress", () => {
     const blocks = liveProgressBlocks(RUN_ID, progress);
-    expect(
-      recordsOf(blocks, "Search inputs").rows.map((r) => [r.title, r.subtitle]),
-    ).toEqual([
-      ["Date range", "All available mail"],
-      ["Sender search", "orders@fixture.test"],
-      ["Starting point", "Newest matching email"],
-    ]);
     expect(recordsOf(blocks, "Selected orders").rows[0]).toMatchObject({
       title: "fixture-order",
       statuses: [{ label: "Waiting" }],
@@ -993,7 +969,6 @@ describe("liveProgressBlocks", () => {
         liveProgressBlocks(RUN_ID, {
           ...progress,
           status: "completed",
-          gmail: null,
         }),
       )[0],
     ).toBe("Run completed");

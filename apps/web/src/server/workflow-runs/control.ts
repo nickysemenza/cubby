@@ -17,7 +17,6 @@ import {
 
 /** Progress a retry resets per purpose, so the Run reads as live again. */
 const RETRY_PROGRESS = {
-  mail_search: { phase: "queued", error: null, retryAt: null },
   mail_discovery: {},
 } satisfies Record<WorkflowRunPurpose, RunProgressPatch>;
 

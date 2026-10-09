@@ -26,14 +26,3 @@ export const vendorSearchTerms = (vendor: VendorMailIdentity): string[] => {
     ),
   ].sort();
 };
-
-/** Rebuild the sender rule captured when a search Run was queued. */
-export const identityFromSearchTerms = (
-  terms: readonly string[],
-): VendorMailIdentity => {
-  const domain = terms.find((term) => !term.includes("@"));
-  return {
-    website: domain ? `https://${domain}` : null,
-    orderEmailSenders: terms.filter((term) => term.includes("@")),
-  };
-};

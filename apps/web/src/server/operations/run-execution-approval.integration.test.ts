@@ -1,11 +1,11 @@
 import { executionAuthorizationInput } from "@cubby/schemas/execution-authorization";
-import { userId } from "@cubby/schemas/identifiers";
+import { runShortcode, userId } from "@cubby/schemas/identifiers";
 import {
   mailboxDiscoveryInput,
   mailboxDiscoveryProgress,
 } from "@cubby/schemas/mailbox-research";
 import { fromPartial } from "@total-typescript/shoehorn";
-import { eq } from "drizzle-orm";
+import { eq, sql } from "drizzle-orm";
 import { withTestDb } from "tooling/test-setup";
 import { afterEach, describe, expect, it } from "vitest";
 import type { JSONType } from "zod";
@@ -19,8 +19,10 @@ import {
 } from "~/server/purchase-import/gmail/discovery";
 import type { GmailProvider } from "~/server/purchase-import/gmail/types";
 import { getDb } from "~/server/repo/database-helpers";
+import { runReport } from "~/server/repo/entity-report/run";
 import { insertWithShortcode } from "~/server/repo/shortcode-utils";
 import { requireActor } from "~/server/request-context";
+import { ensureRun } from "~/server/runs/ensure-run";
 import { createStartOperationRunner } from "~/server/start-operation.server";
 import { createTestRequestContext } from "~/server/testing/request-context";
 import type { AppSpan } from "~/server/tracing";
@@ -124,6 +126,64 @@ describe("authenticated member execution approval", () => {
       ]);
     return party;
   };
+
+  // Retired execution must not restart or mutate preserved historical Runs.
+  it("refuses retired vendor-search retry without changing historical evidence", async () => {
+    const party = await seed();
+    const id = await ensureRun(ctx.db, ctx.actor, {
+      purpose: "mail_search",
+      trigger: "manual",
+    });
+    await getDb(ctx.db)
+      .update(run)
+      .set({
+        ledgerPartyId: party.id,
+        status: "failed",
+        endedAt: new Date(),
+        failureCode: "vendor_mail_search_failed",
+        dispatchError: "Synthetic retained failure",
+      })
+      .where(eq(run.id, id));
+    // Historical JSON is outside current executable input/progress types.
+    await getDb(ctx.db).execute(sql`
+      UPDATE "Run" SET input=${JSON.stringify({ after: "2025/01/01", searchTerms: ["synthetic vendor"] })}::jsonb,
+      progress=${JSON.stringify({ phase: "failed", pageToken: null, nextPageToken: "synthetic-next-page", pagesScanned: 1, searched: 2, reviewable: 0, attempt: 1 })}::jsonb
+      WHERE id=${id}
+    `);
+    const [before] = await getDb(ctx.db)
+      .select()
+      .from(run)
+      .where(eq(run.id, id));
+    if (!before) throw new Error("Synthetic historical Run missing");
+    const report = await runReport(
+      ctx.db,
+      "run.live-progress",
+      runShortcode.parse(before.shortcode),
+      undefined,
+    );
+    const visible = JSON.stringify(report);
+    expect(visible).toContain("synthetic vendor");
+    expect(visible).toContain("2025/01/01");
+    expect(visible).toContain("synthetic-next-page");
+    expect(visible).toContain("pagesScanned");
+    const result = await invoke("control", {
+      runId: before.shortcode,
+      action: "retry",
+    });
+    expect(result).toMatchObject({ ok: false });
+    const [after] = await getDb(ctx.db)
+      .select()
+      .from(run)
+      .where(eq(run.id, id));
+    expect(after).toMatchObject({
+      status: "failed",
+      input: before.input,
+      progress: before.progress,
+      failureCode: before.failureCode,
+      dispatchError: before.dispatchError,
+      endedAt: before.endedAt,
+    });
+  });
 
   it("derives the owner, persists a completed immutable root, and selects targeted discovery without full history", async () => {
     const party = await seed();

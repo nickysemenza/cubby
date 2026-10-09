@@ -39,7 +39,10 @@ import {
   revokeExecutionAuthorization,
 } from "~/server/runs/execution-authorization";
 import type { WorkflowLauncher } from "~/server/workflow-runs/launcher";
-import { launchWorkflowRun } from "~/server/workflow-runs/lifecycle";
+import {
+  launchWorkflowRun,
+  reconcileWorkflowRuns,
+} from "~/server/workflow-runs/lifecycle";
 
 import { resolveImportResearch } from "../research-import";
 import { startMailResearch } from "../research-run";
@@ -51,6 +54,7 @@ import {
   finishMailDiscovery,
   continueMailDiscovery,
   pruneRoutineRuns,
+  failMailDiscovery,
   type DiscoveryPorts,
 } from "./discovery";
 import { GmailAuthorizationError } from "./tokens";
@@ -177,6 +181,56 @@ describe("scheduled Gmail discovery", () => {
         expiresAt: new Date(Date.now() + 3_600_000).toISOString(),
       }),
     );
+  it("keeps a failed page's raw diagnostic and Sentry event on the retained discovery Run", async () => {
+    const state = await seed();
+    const reportError = vi.fn(() => "ffffffffffffffffffffffffffffffff");
+    await failMailDiscovery(
+      ctx.db,
+      state.params,
+      "HTTP 503: Synthetic upstream failure\nSynthetic provider response",
+      { reportError },
+    );
+    expect(reportError).toHaveBeenCalledTimes(1);
+    expect(await readRun(state.params.runId)).toMatchObject({
+      status: "failed",
+      failureCode: "mail_discovery_failed",
+      dispatchError: expect.stringContaining(
+        "HTTP 503: Synthetic upstream failure",
+      ),
+    });
+    expect((await readRun(state.params.runId)).dispatchError).toContain(
+      "Synthetic provider response",
+    );
+    expect((await readRun(state.params.runId)).dispatchError).toContain(
+      "Sentry event: ffffffffffffffffffffffffffffffff",
+    );
+  });
+
+  it("fails a quiet discovery Run whose instance ended and leaves a waiting one", async () => {
+    const state = await seed();
+    const later = new Date(Date.now() + 3_600_000);
+    const status = vi
+      .spyOn(state.launcher, "status")
+      .mockResolvedValue({ state: "waiting", error: null });
+    expect(await reconcileWorkflowRuns(ctx.db, state.launcher, later)).toBe(0);
+    expect((await readRun(state.params.runId)).status).toBe("running");
+    status.mockResolvedValue({
+      state: "errored",
+      error: "Synthetic ended instance",
+    });
+    expect(await reconcileWorkflowRuns(ctx.db, state.launcher, later)).toBe(1);
+    expect(await readRun(state.params.runId)).toMatchObject({
+      status: "failed",
+      failureCode: "workflow_instance_ended",
+    });
+    expect(
+      await getDb(ctx.db)
+        .select({ phase: runProgress.phase })
+        .from(runProgress)
+        .where(eq(runProgress.runId, runEntityId.parse(state.params.runId))),
+    ).toEqual(expect.arrayContaining([{ phase: "failed" }]));
+  });
+
   const baselineForAllowances = async () => {
     const state = await seed(false);
     const seam = ports(gmail());

@@ -2,8 +2,6 @@ import { runShortcode } from "@cubby/schemas/identifiers";
 import {
   chargeHuntOutcomeOf,
   mailDiscoveryRunProgress,
-  mailSearchRunInput,
-  mailSearchRunProgress,
   orderMailImportRunInput,
   runOrderCandidateState,
   runStatus,
@@ -79,13 +77,6 @@ export async function getRunLiveProgress(
     )
     .limit(1);
   if (!record) return null;
-  const search =
-    record.run.purpose === "mail_search"
-      ? {
-          input: mailSearchRunInput.parse(record.run.input),
-          progress: mailSearchRunProgress.parse(record.run.progress),
-        }
-      : null;
   const discovery =
     record.run.purpose === "mail_discovery"
       ? mailDiscoveryRunProgress.safeParse(record.run.progress).data
@@ -93,7 +84,7 @@ export async function getRunLiveProgress(
   const workflow = await workflowAttempt(
     launcher,
     record.run,
-    search?.progress.attempt ?? discovery?.attempt ?? 0,
+    discovery?.attempt ?? 0,
   );
   const events = await database
     .select({
@@ -145,6 +136,10 @@ export async function getRunLiveProgress(
     : [];
   return {
     status: runStatus.parse(record.run.status),
+    savedState:
+      record.run.purpose === "mail_search"
+        ? { input: record.run.input, progress: record.run.progress }
+        : null,
     charges: charges.map((charge) => ({
       chargeId: charge.chargeId,
       outcome: chargeHuntOutcomeOf(charge.state),
@@ -157,21 +152,6 @@ export async function getRunLiveProgress(
       ...event,
       createdAt: event.createdAt.toISOString(),
     })),
-    gmail: search
-      ? {
-          status: search.progress.phase,
-          searched: search.progress.searched,
-          skipped: record.run.skipped,
-          reviewable: search.progress.reviewable,
-          pagesScanned: search.progress.pagesScanned,
-          after: search.input.after,
-          searchTerms: search.input.searchTerms,
-          startedFromOlderPage: search.progress.pageToken !== null,
-          hasMorePages: search.progress.nextPageToken !== null,
-          retryAt: search.progress.retryAt ?? null,
-          error: search.progress.error ?? record.run.dispatchError,
-        }
-      : null,
     discovery: discovery
       ? {
           pagesDone: discovery.pagesDone,

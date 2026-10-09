@@ -1,4 +1,3 @@
-import type { ActorContext } from "@cubby/schemas/context";
 import type { MailboxScopedQuery } from "@cubby/schemas/mailbox-research";
 import { and, eq, isNotNull, isNull } from "drizzle-orm";
 
@@ -12,51 +11,8 @@ import {
   financialTransactionAllocation,
 } from "~/server/db/schema";
 import { getDb, notDeleted } from "~/server/repo/database-helpers";
-import { currentMemberLedgerParty } from "~/server/repo/member-login";
-import { resolveOrThrow } from "~/server/repo/shortcode-resolver";
 
 import { vendorSearchTerms } from "./vendor-identity";
-
-export async function resolveVendorMailSearchTarget(
-  db: Database,
-  vendorShortcode: string,
-  actor: ActorContext,
-) {
-  const vendorId = await resolveOrThrow(db, "vendor", vendorShortcode);
-  const [identity, member, google] = await Promise.all([
-    getDb(db)
-      .select({
-        id: vendor.id,
-        name: vendor.name,
-        website: vendor.website,
-        orderEmailSenders: vendor.orderEmailSenders,
-      })
-      .from(vendor)
-      .where(and(eq(vendor.id, vendorId), notDeleted(vendor)))
-      .limit(1),
-    currentMemberLedgerParty(db, actor),
-    getDb(db)
-      .select({ mailboxId: account.accountId })
-      .from(account)
-      .where(
-        and(eq(account.userId, actor.userId), eq(account.providerId, "google")),
-      )
-      .limit(1),
-  ]);
-  if (!identity[0]) throw new Error("Vendor is unavailable.");
-  if (!member)
-    throw new Error("Link your login to a member before searching Gmail.");
-  if (!google[0]?.mailboxId)
-    throw new Error("Connect Google before searching Gmail.");
-  return {
-    mailboxId: google[0].mailboxId,
-    vendorId,
-    identity: identity[0],
-    memberId: member.id,
-    memberShortcode: member.shortcode,
-    userId: actor.userId,
-  };
-}
 
 export type GmailSyncTarget = {
   ledgerPartyId: string;

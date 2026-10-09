@@ -9,37 +9,11 @@ import {
   vendorAccountShortcode,
   vendorShortcode,
 } from "./identifier-fields.js";
-import { chargeHuntOutcome, mailSearchPhase } from "./run-fields.js";
+import { chargeHuntOutcome } from "./run-fields.js";
 
 export const vendorOrderMailInput = z.object({
   vendorId: vendorShortcode,
   ledgerPartyId: ledgerPartyShortcode.nullable().optional(),
-});
-
-export const vendorSearchMailInput = z.object({
-  vendorId: vendorShortcode,
-  after: z
-    .string()
-    .regex(/^\d{4}\/\d{2}\/\d{2}$/u)
-    .optional(),
-  pageToken: z.string().min(1).max(2_000).optional(),
-});
-
-export const vendorSearchMailOut = z.object({
-  runShortcode,
-  status: mailSearchPhase,
-  searched: z.number().int().nonnegative(),
-  skipped: z.number().int().nonnegative(),
-  reviewable: z.number().int().nonnegative(),
-  after: z.string(),
-  nextPageToken: z.string().nullable(),
-  error: z.string().nullable(),
-  createdAt: z.iso.datetime(),
-});
-export type VendorSearchMailOut = z.infer<typeof vendorSearchMailOut>;
-
-export const vendorSearchMailStatusInput = z.object({
-  vendorId: vendorShortcode,
 });
 
 export const orderMailDecisionInput = z.object({

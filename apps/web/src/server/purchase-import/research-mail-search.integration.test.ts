@@ -5,6 +5,7 @@ import { withTestDb } from "tooling/test-setup";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { z } from "zod";
 
+import { wrapAiGatewayError } from "~/server/ai/gateway-error";
 import * as cloud from "~/server/cf-env";
 import { account } from "~/server/db/auth.schema";
 import {
@@ -212,6 +213,55 @@ describe("scoped research mail search", () => {
       deliveries,
     };
   }
+
+  it("retains the frozen page after an AI Gateway 429 without advancing scoped or broad coverage", async () => {
+    const f = await fixture();
+    const callId = crypto.randomUUID();
+    const failure = wrapAiGatewayError(
+      new Error("Synthetic quota"),
+      {
+        model: "synthetic-model",
+        provider: "openai",
+        route: "openai-responses",
+        feature: "mail-classification",
+        operation: "classify",
+      },
+      {
+        status: 429,
+        statusText: "Too Many Requests",
+        body: "Synthetic upstream refusal",
+        retryAfter: "45",
+      },
+    );
+    vi.mocked(routing.productionMailTriage).mockReturnValue(async () => {
+      throw failure;
+    });
+    await expect(f.service.researchMailSearch(f.input, callId)).rejects.toThrow(
+      "Synthetic upstream refusal",
+    );
+    expect(f.list).toHaveBeenCalledTimes(1);
+    expect(await getDb(ctx.db).select().from(mailboxCursor)).toEqual([]);
+    expect(await getDb(ctx.db).select().from(orderMail)).toEqual([]);
+    expect(f.deliveries).toEqual([]);
+    vi.mocked(routing.productionMailTriage).mockReturnValue(async (content) =>
+      content.includes("Synthetic promotion") ? "unrelated" : "related",
+    );
+    f.list.mockImplementation(async () => {
+      throw new Error("Frozen page must not list again");
+    });
+    const resumed = toolResult.parse(
+      await f.service.researchMailSearch(f.input, callId),
+    );
+    expect(resumed).toMatchObject({
+      moreAvailable: true,
+      sources: expect.arrayContaining([
+        expect.objectContaining({ subject: "Synthetic purchased variant" }),
+      ]),
+    });
+    expect(f.list).toHaveBeenCalledTimes(1);
+    expect(await getDb(ctx.db).select().from(mailboxCursor)).toEqual([]);
+    expect(f.deliveries).toHaveLength(1);
+  });
 
   it("lets Product research page full scoped history, admit related child work, and replay without claiming parent write authority or broad coverage", async () => {
     const f = await fixture();

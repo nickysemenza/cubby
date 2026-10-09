@@ -817,16 +817,10 @@ const CHARGE_OUTCOME = {
   not_found: "Order not found",
 } as const;
 
-type GmailProgress = NonNullable<RunLiveProgress["gmail"]>;
-
 /** The status sentence over the progress rows: what the run is doing, or how it ended. */
 function progressHeadline(progress: RunLiveProgress): string {
   const active = progress.status === "running";
   const last = progress.progress.at(-1);
-  if (active && progress.gmail?.status === "waiting")
-    return progress.gmail.retryAt
-      ? `AI Gateway rate limited; retrying at ${dateTimeLabel(progress.gmail.retryAt)}`
-      : "AI Gateway rate limited; waiting to retry";
   if (active) return last?.detail ?? "Working…";
   if (progress.status === "completed")
     return progress.discovery?.routine ? "Nothing new" : "Run completed";
@@ -899,7 +893,7 @@ function workflowBlocks(
         row("workflow", {
           externalLink: {
             label: "Open in Cloudflare",
-            url: `https://dash.cloudflare.com/${CF_ACCOUNT_ID}/workers/workflows/${workflow.purpose === "mail_search" ? "cubby-vendor-mail-search" : "cubby-mail-discovery"}/instance/${encodeURIComponent(workflow.instanceId)}`,
+            url: `https://dash.cloudflare.com/${CF_ACCOUNT_ID}/workers/workflows/cubby-mail-discovery/instance/${encodeURIComponent(workflow.instanceId)}`,
           },
           title: `Attempt ${workflow.attempt} · ${workflow.instanceId}`,
           body: `Workflow instance ${instance}${workflow.instance?.error ? `: ${workflow.instance.error}` : ""}`,
@@ -962,55 +956,6 @@ function discoveryCountsBlock(
   ]);
 }
 
-function gmailCountsBlock(
-  gmail: GmailProgress,
-  status: RunLiveProgress["status"],
-): ReportBlock {
-  const sentence = (id: string, text: string) => row(id, { title: text });
-  return records([
-    sentence(
-      "pages",
-      `${gmail.pagesScanned} ${gmail.pagesScanned === 1 ? "page" : "pages"} scanned`,
-    ),
-    sentence(
-      "messages",
-      `${gmail.searched} messages ${status === "completed" ? "checked" : "found"}`,
-    ),
-    sentence("skipped", `${gmail.skipped} already saved`),
-    sentence(
-      "reviewable",
-      `${gmail.reviewable} order ${gmail.reviewable === 1 ? "email" : "emails"} to review`,
-    ),
-  ]);
-}
-
-function searchInputsBlock(gmail: GmailProgress): ReportBlock {
-  return records(
-    [
-      row("date-range", {
-        title: "Date range",
-        body:
-          gmail.after === "1970/01/01"
-            ? "All available mail"
-            : `Since ${gmail.after.replaceAll("/", "-")}`,
-      }),
-      row("sender-search", {
-        title: "Sender search",
-        body: gmail.searchTerms.length
-          ? gmail.searchTerms.join(", ")
-          : "Criteria were not saved for this earlier Run",
-      }),
-      row("starting-point", {
-        title: "Starting point",
-        body: gmail.startedFromOlderPage
-          ? "Older Gmail page"
-          : "Newest matching email",
-      }),
-    ],
-    { title: "Search inputs" },
-  );
-}
-
 /** The selected orders and charges a targeted mail or charge-search run works through. */
 function selectionBlocks(progress: RunLiveProgress): ReportBlock[] {
   const blocks: ReportBlock[] = [];
@@ -1054,23 +999,30 @@ export function liveProgressBlocks(
   progress: RunLiveProgress,
 ): ReportBlock[] {
   const active = progress.status === "running";
-  const gmail = progress.gmail;
   const age = progressAge(progress);
   return [
     note(progressHeadline(progress), undefined, true),
     ...(age ? [note(age)] : []),
-    ...(gmail?.hasMorePages && active
-      ? [note("Continuing to older messages")]
-      : []),
     ...workflowBlocks(runId, progress),
-    ...(gmail ? [gmailCountsBlock(gmail, progress.status)] : []),
     ...(progress.discovery
       ? [discoveryCountsBlock(progress.discovery, active)]
       : []),
     ...selectionBlocks(progress),
-    ...(gmail ? [searchInputsBlock(gmail)] : []),
-    ...(gmail?.error
-      ? [note(gmail.error, gmail.status === "failed" ? "destructive" : "muted")]
+    ...(progress.savedState
+      ? [
+          records(
+            Object.entries(progress.savedState).map(([key, value]) =>
+              row(key, {
+                title: phaseLabel(key),
+                detail: {
+                  label: "Saved data",
+                  text: JSON.stringify(value, null, 2),
+                },
+              }),
+            ),
+            { title: "Saved Run data" },
+          ),
+        ]
       : []),
     records(
       progress.progress.map((event) =>

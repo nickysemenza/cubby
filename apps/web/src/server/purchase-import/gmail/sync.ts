@@ -10,7 +10,7 @@ import { normalizeHistoryPage } from "./normalize";
 import type { GmailProvider } from "./types";
 
 export const GMAIL_PAGE_SIZE = 25;
-export const ELIGIBLE_MAIL_QUERY = "-in:spam -in:trash";
+const ELIGIBLE_MAIL_QUERY = "-in:spam -in:trash";
 
 /** The later of two Gmail history ids; a cursor never moves backwards. */
 export const maxHistoryId = (

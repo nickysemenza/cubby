@@ -1,8 +1,5 @@
 import { runEntityId, type RunId } from "@cubby/schemas/identifiers";
-import type {
-  MailDiscoveryRunProgress,
-  MailSearchRunProgress,
-} from "@cubby/schemas/run-fields";
+import type { MailDiscoveryRunProgress } from "@cubby/schemas/run-fields";
 import { and, eq, inArray, lt, sql } from "drizzle-orm";
 
 import {
@@ -27,9 +24,7 @@ import {
 } from "./launcher";
 
 /** Progress a new attempt resets, in its purpose's own shape. */
-export type RunProgressPatch =
-  | Partial<MailSearchRunProgress>
-  | Partial<MailDiscoveryRunProgress>;
+export type RunProgressPatch = Partial<MailDiscoveryRunProgress>;
 
 /**
  * A failure as the Run keeps it: a one-line headline (HTTP status, error
