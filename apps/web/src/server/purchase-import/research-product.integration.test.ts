@@ -63,7 +63,10 @@ import { loadRunDetail } from "./run-service";
 // catalog promotion displaces an explicit member cover or never replaces a
 // known provisional order-line thumbnail; concurrent finding approval must
 // not block a Product-holder's owner FK, and Ingredient corrections invalidate
-// recipes using both the previous and replacement Ingredient.
+// recipes using both the previous and replacement Ingredient; byte-identical
+// assets at different URLs or staged concurrently must reuse one item member
+// without losing either source's support, changing gallery intent, or adopting
+// a label as an item. Only redundant newly staged images may be discarded.
 describe("supported Product research writes", () => {
   const ctx = withTestDb();
   const support = {
@@ -90,17 +93,20 @@ describe("supported Product research writes", () => {
       >
     > = {},
     sourceText = retainedText,
+    existingEntity?: Awaited<ReturnType<typeof createProductFixture>>,
   ) {
-    const entity = await createProductFixture(
-      ctx.db,
-      makeProductInput({
-        name: "Example small device",
-        manufacturer,
-        model: "",
-        ...fields,
-      }),
-      ctx.actor,
-    );
+    const entity =
+      existingEntity ??
+      (await createProductFixture(
+        ctx.db,
+        makeProductInput({
+          name: "Example small device",
+          manufacturer,
+          model: "",
+          ...fields,
+        }),
+        ctx.actor,
+      ));
     const [member] = await getDb(ctx.db)
       .select()
       .from(ledgerParty)
@@ -780,8 +786,10 @@ describe("supported Product research writes", () => {
       ]);
     },
   );
-  async function retainImage(f: Awaited<ReturnType<typeof fixture>>) {
-    const sourceUrl = "https://cdn.example.test/selected-small.png";
+  async function retainImage(
+    f: Awaited<ReturnType<typeof fixture>>,
+    sourceUrl = "https://cdn.example.test/selected-small.png",
+  ) {
     const candidateRef = crypto.randomUUID();
     const retained = {
       evidenceId: f.evidence.id,
@@ -1732,6 +1740,198 @@ describe("supported Product research writes", () => {
       .where(eq(image.id, own.id));
     expect(original?.source).toBe("own");
   });
+  it.each(["reimport", "concurrent"] as const)(
+    "reuses byte-identical research images from different URLs during %s without changing gallery intent or source support",
+    async (mode) => {
+      const first = await fixture();
+      const hash = await sha256Hex("synthetic exact-variant catalog bytes");
+      const own = await createImageFixture(ctx.db, "byte-reuse-owned-cover", {
+        source: "own",
+        sha256: await sha256Hex("synthetic member photo bytes"),
+      });
+      const memberPhoto = await createImageFixture(
+        ctx.db,
+        "byte-reuse-member-gallery",
+        {
+          source: "catalog",
+          sourceAssetUrl: "https://cdn.example.test/member-selected.png",
+          sha256: await sha256Hex("synthetic member-selected alternate view"),
+        },
+      );
+      const label = await createImageFixture(ctx.db, "byte-reuse-label", {
+        source: "own",
+        sha256: hash,
+      });
+      for (const [index, photo] of [own, memberPhoto, label].entries())
+        await insertEntityAttachments(ctx.db, {
+          entityId: first.entity.entityId,
+          imageId: photo.id,
+          purpose: photo.id === label.id ? "label" : "item",
+          sortOrder: index,
+        });
+      const before = await getDb(ctx.db)
+        .select()
+        .from(entityAttachment)
+        .where(eq(entityAttachment.entityId, first.entity.entityId))
+        .orderBy(entityAttachment.sortOrder);
+      const current = await productEnrichmentTarget(
+        getDb(ctx.db),
+        first.entity.entityId,
+      );
+      await getDb(ctx.db)
+        .update(runTarget)
+        .set({ targetFingerprint: current!.fingerprint })
+        .where(eq(runTarget.id, first.target.id));
+      const second = await fixture(
+        "Example Works",
+        {},
+        retainedText,
+        first.entity,
+      );
+      const attempts = await Promise.all(
+        [first, second].map(async (f, index) => {
+          const retained = await retainImage(
+            f,
+            `https://cdn.example.test/catalog-${index}.png`,
+          );
+          const imported = await createImageFixture(
+            ctx.db,
+            `byte-reuse-staged-${index}`,
+            {
+              source: "catalog",
+              sourceAssetUrl: retained.sourceUrl,
+              sourcePageUrl: "https://shop.example.test/device?size=small",
+              sourceName: "Example shop",
+              sha256: hash,
+            },
+          );
+          return { f, retained, imported };
+        }),
+      );
+      const staged = Promise.withResolvers<void>();
+      let arrivals = 0;
+      const deletedKeys: string[] = [];
+      async function resolve(attempt: (typeof attempts)[number]) {
+        return resolveProductResearch(
+          ctx.db,
+          {
+            runId: attempt.f.run.id,
+            callId: crypto.randomUUID(),
+            proposal: {
+              ...attempt.f.proposal,
+              facts: [],
+              imageCandidates: [
+                {
+                  candidateRef: attempt.retained.candidateRef,
+                  evidenceIds: [attempt.f.evidence.id],
+                  support,
+                },
+              ],
+            },
+          },
+          {
+            ...attempt.f.ports,
+            assess: async () => ({
+              identityVerified: true,
+              acceptedFacts: [],
+              acceptedIdentifiers: [],
+              acceptedImages: [0],
+              rejected: [],
+            }),
+            importImage: async () => {
+              if (mode === "concurrent") {
+                if (++arrivals === 2) staged.resolve();
+                await staged.promise;
+              }
+              return {
+                imageId: attempt.imported.shortcode,
+                key: attempt.imported.key,
+                url: attempt.imported.url,
+                created: true,
+              };
+            },
+            deleteImageObjects: async (keys) => {
+              deletedKeys.push(...keys);
+            },
+          },
+        );
+      }
+      const results =
+        mode === "concurrent"
+          ? await Promise.all(attempts.map(resolve))
+          : [await resolve(attempts[0]!), await resolve(attempts[1]!)];
+      const attachments = await getDb(ctx.db)
+        .select()
+        .from(entityAttachment)
+        .where(
+          and(
+            eq(entityAttachment.entityId, first.entity.entityId),
+            notDeleted(entityAttachment),
+          ),
+        )
+        .orderBy(entityAttachment.sortOrder, entityAttachment.createdAt);
+      expect(attachments).toHaveLength(4);
+      for (const original of before)
+        expect(attachments.find((row) => row.id === original.id)).toEqual(
+          original,
+        );
+      const representative = attachments.find(
+        (row) => !before.some((original) => original.id === row.id),
+      )!;
+      expect(representative).toMatchObject({ purpose: "item", sortOrder: 2 });
+      const winner = attempts.find(
+        (attempt) => attempt.imported.id === representative.imageId,
+      )!;
+      const redundant = attempts.find((attempt) => attempt !== winner)!;
+      expect(
+        results.filter((result) => result.changedFields.includes("images")),
+      ).toHaveLength(1);
+      const proof = await getDb(ctx.db)
+        .select()
+        .from(runFactEvidence)
+        .where(
+          eq(
+            runFactEvidence.fieldPath,
+            `images.i${representative.id.replaceAll("-", "")}`,
+          ),
+        );
+      expect(proof).toHaveLength(2);
+      expect(proof.map((row) => row.evidenceId).sort()).toEqual(
+        attempts.map((attempt) => attempt.f.evidence.id).sort(),
+      );
+      for (const row of proof)
+        expect(row).toMatchObject({
+          support,
+          value: {
+            imageId: winner.imported.shortcode,
+            sourceAssetUrl: winner.retained.sourceUrl,
+            contentHash: hash,
+          },
+        });
+      const [preserved] = await getDb(ctx.db)
+        .select()
+        .from(image)
+        .where(eq(image.id, winner.imported.id));
+      expect({ ...preserved, url: winner.imported.url }).toEqual(
+        winner.imported,
+      );
+      expect(
+        await getDb(ctx.db)
+          .select()
+          .from(image)
+          .where(eq(image.id, redundant.imported.id)),
+      ).toEqual([]);
+      expect(deletedKeys).toContain(redundant.imported.key);
+      expect(deletedKeys).not.toContain(winner.imported.key);
+      for (const photo of [own, memberPhoto, label]) {
+        const [saved] = await getDb(ctx.db)
+          .select()
+          .from(image)
+          .where(eq(image.id, photo.id));
+        expect({ ...saved, url: photo.url }).toEqual(photo);
+      }
+    },
+  );
   it("preserves populated contradictions while accepting independent supported facts", async () => {
     const f = await fixture();
     const contradictory = researchWorkResolve.parse({

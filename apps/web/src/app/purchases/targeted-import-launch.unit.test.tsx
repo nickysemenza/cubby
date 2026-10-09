@@ -4,7 +4,10 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { overrideStartDispatch } from "~/integrations/tanstack-query/start-transport";
 import { createBrowserTestHarness } from "~/lib/test/browser-harness";
 
-import { TargetedImportLaunchDialog } from "./targeted-import-launch";
+import {
+  TargetedImportLaunchDialog,
+  TargetedProductBulkEnrichmentDialog,
+} from "./targeted-import-launch";
 
 let harness: ReturnType<typeof createBrowserTestHarness>;
 let restoreDispatch: (() => void) | undefined;
@@ -19,6 +22,61 @@ afterEach(() => {
 });
 
 describe("TargetedImportLaunchDialog", () => {
+  it.each(["detail", "bulk"])(
+    "explains an unchanged Product launch through %s",
+    async (surface) => {
+      restoreDispatch = overrideStartDispatch(async (operation) => ({
+        ok: true,
+        data:
+          operation === "run.targetedLaunch"
+            ? {
+                purpose: "product_enrichment",
+                purchase: null,
+                products: [
+                  {
+                    productId: "PRD-4K7M",
+                    productName: "Fixture widget",
+                    sourceId: null,
+                    sourceLabel: null,
+                    vendorAccountId: null,
+                    vendorAccountLabel: null,
+                    needsAccountChoice: false,
+                    selected: true,
+                    accountChoices: [],
+                    reason: null,
+                  },
+                ],
+              }
+            : { runs: [] },
+      }));
+      const onFinished = vi.fn();
+      render(
+        surface === "bulk" ? (
+          <TargetedProductBulkEnrichmentDialog
+            open
+            onOpenChange={vi.fn()}
+            products={[{ id: "PRD-4K7M", name: "Fixture widget" }]}
+            onFinished={onFinished}
+          />
+        ) : (
+          <TargetedImportLaunchDialog
+            open
+            onOpenChange={vi.fn()}
+            targetId="PRD-4K7M"
+            targetLabel="Fixture widget"
+            purpose="product_enrichment"
+          />
+        ),
+        { wrapper: harness.wrapper },
+      );
+      await screen.findByRole("checkbox");
+      fireEvent.click(screen.getByRole("button", { name: "Start enrichment" }));
+      expect(
+        await screen.findByRole("status", { name: "Research launch result" }),
+      ).toHaveTextContent("No new research Run was created");
+      expect(onFinished).not.toHaveBeenCalled();
+    },
+  );
   it("defaults to browser evidence and links a busy account's blocking run", async () => {
     restoreDispatch = overrideStartDispatch(async (operation) => {
       if (operation === "run.targetedLaunch")

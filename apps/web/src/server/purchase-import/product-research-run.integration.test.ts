@@ -39,6 +39,7 @@ import {
   researchMemberPath,
 } from "./research-projection";
 import { researchServiceFor } from "./research-service";
+import { controlRun } from "./run-service";
 
 // Admission failures: duplicate/replayed/overlapping launches, foreign parent,
 // unchanged failed attempts looping, changed retained evidence never revisited.
@@ -268,6 +269,44 @@ describe("cloud Product research admission", () => {
       .set({ state: "completed", outcome: "verified", completedAt: new Date() })
       .where(eq(runTarget.id, target.id));
     expect(await startProductResearch(ctx.db, input, queue)).toEqual([]);
+    // Field coverage can be complete while purchased-variant research still
+    // has gaps. An explicit retry must admit fresh work without rewriting history.
+    await getDb(ctx.db)
+      .update(run)
+      .set({ status: "needs_review" })
+      .where(eq(run.id, first.runId));
+    await getDb(ctx.db)
+      .update(runTarget)
+      .set({ state: "unresolved", outcome: "partially_verified" })
+      .where(eq(runTarget.id, target.id));
+    const [predecessor] = await getDb(ctx.db)
+      .select()
+      .from(run)
+      .where(eq(run.id, first.runId));
+    if (!predecessor) throw new Error("Research predecessor missing");
+    const retry = await controlRun(ctx.db, ctx.actor, {
+      runPublicId: predecessor.shortcode,
+      action: "retry",
+    });
+    expect(retry).toMatchObject({ created: true });
+    if (!("successorRunId" in retry) || !retry.successorRunId)
+      throw new Error("Explicit research retry missing");
+    const [successor] = await getDb(ctx.db)
+      .select()
+      .from(run)
+      .where(eq(run.id, retry.successorRunId));
+    if (!successor) throw new Error("Research successor missing");
+    expect(successor.predecessorRunId).toBe(first.runId);
+    expect(
+      await getDb(ctx.db)
+        .select()
+        .from(runTarget)
+        .where(eq(runTarget.id, target.id)),
+    ).toMatchObject([{ state: "unresolved", outcome: "partially_verified" }]);
+    await getDb(ctx.db)
+      .update(run)
+      .set({ status: "failed", endedAt: new Date() })
+      .where(eq(run.id, successor.id));
     await getDb(ctx.db)
       .update(importSourceClaim)
       .set({ checksum: "f".repeat(64) })

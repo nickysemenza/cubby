@@ -123,6 +123,10 @@ account; a Vendor URL or awake Mac is not a prerequisite for research.
 Each explicit member retry retains that catalog-research permission, including
 later attempts whose causal label is `retry`. It still loads only owned original
 purchase context and cannot fabricate a purchase or bypass supported writes.
+Complete field provenance does not suppress an explicit continuation: unresolved
+variant research can need another attempt even when every declared field has
+support. Automatic admission still skips unchanged attempts and complete coverage.
+An unchanged manual launch that admits no Run reports that outcome in the dialog.
 Older Product Runs with null input derive their scope from an exact saved
 Product-only target roster. A retry can carry historical skipped work; restart
 can reverify the saved roster in new tasks. Wrong-kind or duplicate rosters are
@@ -378,6 +382,12 @@ and deployment/readback order are owned by the
    unmarked historical covers preserve their order. Ordinary gallery requests
    record intent even when the member reselects the existing order; catalog
    provenance alone never establishes permission to change a cover.
+   Under the existing Product lock, same-byte research images reuse a live item
+   attachment by SHA-256 even when source URLs differ. New observations add
+   support to that same member path using the original image's canonical metadata.
+   Labels never qualify as item matches. Only newly staged unreferenced images
+   are discarded; historical attachments, own photos and their ordering remain.
+   Historical images without SHA-256 cannot establish different-URL byte equality.
    Work iteration and completion accounting belong to the host. Unresolved
    targets remain visible; a settled conversation does not imply verification.
    Failed model turns retain their upstream diagnostic as ordinary conversation
