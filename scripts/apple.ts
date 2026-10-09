@@ -7,7 +7,7 @@
 // wall-clock time so a regression in one of them is visible.
 //
 //   pnpm apple cli <args…>   build the CLI incrementally and run it
-//   pnpm apple mac           build Cubby-macOS and open the .app (no LLDB)
+//   pnpm apple mac           build, sign, install and relaunch /Applications/Cubby.app
 //   pnpm apple ios           build Cubby-iOS, install + launch on the iPhone
 //   pnpm apple sim           build Cubby-iOS, install + launch on a simulator
 //   pnpm apple gen           build-rust.sh → pnpm generate → xcodegen
@@ -23,10 +23,13 @@
 // use the regular `Cubby-*` schemes with ~/.lldbinit-Xcode (apps/apple/AGENTS.md
 // "Debugging on device"). This covers the "just put it on the phone" case the
 // `-NoDebugger` schemes exist for.
+import { APPLE_CLIENT_COMPATIBILITY_VERSION } from "../packages/shared/src/apple-client-version.ts";
+import { installedApprovalVerifier } from "./lib/mac-app-approval.ts";
+import { installMacApp } from "./lib/mac-app-install.ts";
 import { spawnSync } from "node:child_process";
 
 import { captureSyncChecked, runSyncChecked } from "./lib/run.ts";
-import { mkdtempSync, readFileSync, rmSync } from "node:fs";
+import { existsSync, mkdtempSync, readFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -47,7 +50,7 @@ const DERIVED = join(APPLE, "DerivedData");
 const BUNDLE_ID = "com.nickysemenza.cubby";
 const PRODUCT = "Cubby.app";
 
-const usage = `usage: pnpm apple <cli|mac|ios|sim|gen|test|check> [--device <name>] [--sim <name>] [--server <local origin>] [--verbose] [--timing] [-- <cli args>]`;
+const usage = `usage: pnpm apple <cli|mac|ios|sim|gen|test|check> [--device <name>] [--sim <name>] [--server <local origin>] [--verbose] [--timing] [--replace-signing-identity] [-- <cli args>]`;
 
 type Options = {
   command: string;
@@ -56,6 +59,7 @@ type Options = {
   server?: string;
   verbose: boolean;
   timing: boolean;
+  replaceSigningIdentity?: boolean;
   rest: string[];
 };
 
@@ -91,6 +95,11 @@ const parseArguments = (argv: readonly string[]): Options => {
         index += 1;
         break;
       }
+      case "--replace-signing-identity":
+        if (command !== "mac")
+          throw new Error(`--replace-signing-identity requires mac\n${usage}`);
+        options.replaceSigningIdentity = true;
+        break;
       case "--timing":
         if (!["mac", "ios", "sim"].includes(command)) {
           throw new Error(`--timing requires mac, ios, or sim\n${usage}`);
@@ -209,17 +218,29 @@ const cli = (options: Options) => {
 // a CODE_SIGNING_ALLOWED=NO command into this DerivedData) has a per-build
 // cdhash requirement, so launching it replaces every grant and the next signed
 // build prompts again.
-const assertTeamSigned = (app: string) => {
+const assertTeamSigned = (app: string, allowTestFlight = false) => {
   const team = readFileSync(join(APPLE, "project.yml"), "utf8").match(
     /^\s*DEVELOPMENT_TEAM:\s*([A-Z\d]{10})\s*$/mu,
   )?.[1];
   if (!team) throw new Error("apps/apple/project.yml has no DEVELOPMENT_TEAM");
+  // TestFlight's leaf belongs to Apple, not the project team. Only an explicit
+  // transition may accept its protected bundle team metadata instead.
+  let signer = `certificate leaf[subject.OU] = "${team}"`;
+  if (allowTestFlight) {
+    const displayed = spawnSync("codesign", ["-dvv", app], {
+      encoding: "utf8",
+    });
+    if (displayed.error || displayed.status !== 0)
+      throw displayed.error ?? new Error(displayed.stderr.trim());
+    if (displayed.stderr.split("\n").includes(`TeamIdentifier=${team}`))
+      signer = `(${signer} or certificate leaf[field.1.2.840.113635.100.6.1.25.1])`;
+  }
   const verified = spawnSync(
     "codesign",
     [
       "--verify",
       "--strict",
-      `-R=anchor apple generic and identifier "${BUNDLE_ID}" and certificate leaf[subject.OU] = "${team}"`,
+      `-R=anchor apple generic and identifier "${BUNDLE_ID}" and ${signer}`,
       app,
     ],
     { encoding: "utf8" },
@@ -233,16 +254,51 @@ const assertTeamSigned = (app: string) => {
 
 const mac = (options: Options) => {
   ensureFfi();
+  run("node", [join(ROOT, "scripts/generator/ensure.ts")]);
   ensureProject();
   xcodebuild("Cubby-macOS", "platform=macOS,arch=arm64", options);
   const app = productPath("Debug");
-  assertTeamSigned(app);
+  const version = capture("/usr/libexec/PlistBuddy", [
+    "-c",
+    "Print :CFBundleShortVersionString",
+    join(app, "Contents/Info.plist"),
+  ]).trim();
+  if (version !== APPLE_CLIENT_COMPATIBILITY_VERSION)
+    throw new Error(
+      `Built app version ${version} differs from compatibility version ${APPLE_CLIENT_COMPATIBILITY_VERSION}`,
+    );
+  const installed = "/Applications/Cubby.app";
+  const verifyApproval =
+    existsSync(installed) && !options.replaceSigningIdentity
+      ? installedApprovalVerifier(installed)
+      : undefined;
+  const retainedBackup = installMacApp(
+    app,
+    installed,
+    (candidate) => {
+      assertTeamSigned(
+        candidate,
+        candidate === installed && !!options.replaceSigningIdentity,
+      );
+      verifyApproval?.(candidate);
+    },
+    () => {
+      const result = spawnSync("pkill", ["-x", "Cubby"], { stdio: "ignore" });
+      if (result.error || (result.status !== 0 && result.status !== 1))
+        throw (
+          result.error ?? new Error(`Could not stop Cubby: ${result.status}`)
+        );
+    },
+  );
   // `open` on a running app only activates it, so the old binary would keep
   // running; pkill exits 1 when nothing matched, which is fine. Launch a new
   // instance explicitly because LaunchServices may still consider the
   // terminating process active for a short time after pkill.
-  spawnSync("pkill", ["-x", "Cubby"], { stdio: "ignore" });
-  run("open", ["-n", app]);
+  run("open", ["-n", installed]);
+  if (retainedBackup)
+    process.stdout.write(
+      `Installed and relaunched Cubby; previous app retained because cleanup failed: ${retainedBackup}\n`,
+    );
 };
 
 // `devicectl` only writes JSON to a file, never stdout.

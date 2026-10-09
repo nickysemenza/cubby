@@ -193,8 +193,19 @@ their versions, and marked every native E2E bundle `dirty`. CubbyKit's
 lockfile holds only its own pins and changes through `swift package update`;
 an app package change shows up in `apps/apple/Package.resolved`.
 
-`pnpm apple mac` refuses to open a Debug app that the project team did not
-sign. macOS privacy grants (Photos, browser automation, notifications) record
+`pnpm apple mac --replace-signing-identity` explicitly transitions an installed
+TestFlight app to the development signing identity. Expect possible one-time
+privacy reapproval. It retains team/bundle verification and app data, but skips
+the old privacy requirement check for this invocation. Use plain `pnpm apple mac`
+for subsequent installs to preserve the development identity.
+
+`pnpm apple mac` builds and signs a Debug app, verifies its compatibility
+version, installs it at `/Applications/Cubby.app`, and relaunches the installed
+copy. It refuses built or existing installed apps that the project team did not
+sign, or a candidate that does not satisfy the installed app's privacy
+requirement. Staged verification precedes termination and replacement, with rollback
+if replacement fails. A previous bundle that cannot be removed is retained
+as a reported sibling backup; it does not prevent relaunch. macOS privacy grants (Photos, browser automation, notifications) record
 the approving app's designated requirement; an ad-hoc build from a
 `CODE_SIGNING_ALLOWED=NO` command has a per-build requirement, so opening it
 resets those grants and the next signed build asks again.
