@@ -7,6 +7,9 @@ hook-result defaults use module-level constants (not `= []`/`{}`), and
 query-key, clipboard, form-field, database, merge, and shortcode helpers over
 hand-rolled equivalents; raw mutation is reserved for the documented dynamic
 invalidation/inline-error/multi-mutation cases.
+Pass the displayed selection as mutation variables at the action boundary.
+A mutation function must not read changing selection state from its closure:
+observer options can lag the render that enabled the action.
 For hook-default and `useQueries` examples, load the relevant heading in the
 [web UI reference](web-ui-reference.md).
 

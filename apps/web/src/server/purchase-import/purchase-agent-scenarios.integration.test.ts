@@ -91,6 +91,8 @@ import { completedCapture } from "./browser.fixtures";
 import { startSelectedChargeRun } from "./charge-runs";
 import {
   authorizePurchaseAgent,
+  authorizeSyntheticBackfill,
+  authorizeSyntheticRunInference,
   startScenarioHarness,
   waitFor,
   workerdDiagnostic,
@@ -597,6 +599,11 @@ describe("current purchase-agent system boundaries", () => {
     if (!started.created || !started.row.dispatchEventId)
       throw new Error("Expected current validation dispatch generation");
     const runId = started.row.id;
+    await authorizeSyntheticRunInference(
+      ctx,
+      runId,
+      "synthetic-validation-mailbox",
+    );
     scenarioRunId = runId;
     const before = await protectedBusinessSnapshot(ctx.db, {
       purchaseId: targetPurchase.id,
@@ -823,6 +830,11 @@ describe("current purchase-agent system boundaries", () => {
     if (!supported || !ambiguous)
       throw new Error("Synthetic partial sources missing");
     const events: PurchaseAgentEvent[] = [];
+    await authorizeSyntheticBackfill(
+      ctx,
+      party.id,
+      "synthetic-partial-mailbox",
+    );
     const [started] = await startMailResearch(
       ctx.db,
       {
@@ -1079,6 +1091,11 @@ describe("current purchase-agent system boundaries", () => {
       .where(eq(runTable.shortcode, started.runId));
     if (!scope || events.length !== 1)
       throw new Error("Synthetic selected-charge admission missing");
+    await authorizeSyntheticRunInference(
+      ctx,
+      scope.id,
+      "synthetic-charges-mailbox",
+    );
     const objectives = researchObjectivesOf(scope.input);
     if (!objectives)
       throw new Error("Selected charges were not typed objectives");

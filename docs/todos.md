@@ -269,13 +269,15 @@ research acceptance.
   calls, but source freshness and authenticated-page needs still decide the tool.
 
 - ⏳ **Finish actual research and visible-proof acceptance.** Complete the
-  authorized external roster through new Runs once subscription inference is
-  available. Prove original-order/selected-variant identity, matching-value
+  authorized external roster through new Runs using subscription inference or
+  explicitly authorized AI Gateway fallback within the existing allowance. Prove original-order/selected-variant identity, matching-value
   provenance, reviewed contradictions and representative images. Populated fields
   and terminal Runs do not establish verification. Use `ImportSourceOrder` /
   `ImportSourceProduct`, including order-history evidence when mail omits the
   variant. Preserve immutable settled targets and report unsupported facts as gaps.
-  No subscription reauthorization or paid fallback is implied by a usage limit.
+  A usage limit does not require reauthorization. Paid fallback must reserve
+  the existing durable allowance before every transmission; unknown prices or
+  insufficient budget refuse it. Verify actual spend separately from reservations.
 
 - 🤔 **Link enriched seed Products to Plants.** `growsPlantId` is supported,
   but deciding which growing facts belong on Plant versus a purchased seed

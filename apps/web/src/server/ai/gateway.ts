@@ -46,7 +46,10 @@ const GATEWAY_MAX_CACHE_TTL_SECONDS = 30 * 24 * 60 * 60;
 export interface GatewayCallOptions
   extends
     GatewayResponseObservers,
-    Pick<GatewayFetchRoutes, "subscriptionRequired" | "beforePaidRequest"> {
+    Pick<
+      GatewayFetchRoutes,
+      "subscriptionRequired" | "subscriptionFallback" | "beforePaidRequest"
+    > {
   metadata: GatewayMetadata;
   collectPayload?: boolean;
   skipCache?: boolean;
@@ -185,10 +188,12 @@ export function gatewayFetch(
     provider,
     onResponse: opts.onResponse,
     onErrorResponse: opts.onErrorResponse,
+    onRecoveredErrorResponse: opts.onRecoveredErrorResponse,
     onTransport: opts.onTransport,
     requestTimeoutMs: opts.requestTimeoutMs,
     chatGpt: chatGptInference,
     subscriptionRequired: opts.subscriptionRequired,
+    subscriptionFallback: opts.subscriptionFallback,
     beforePaidRequest: opts.beforePaidRequest,
     testPeer: () => {
       const testGateway = getTestAiGateway();

@@ -43,7 +43,7 @@ scope, and launch does not reissue approval or start global catch-up work. An
 already running discovery returns `running: 1` without another Workflow launch.
 Scheduled global discovery continues to visit all connected member mailboxes.
 
-Paid decision inference reserves the exact catalog model's full billing bound
+Paid research inference reserves the exact catalog model's full billing bound
 before each physical transmission, including retries. Unknown pricing or token
 bounds refuse the request. Reservations commit independently before network
 work; timeout, interruption and gateway-cache hits never refund them. Pilot
@@ -56,8 +56,37 @@ transmission, while an already admitted request can finish. A reservation
 committed before cancellation remains spent conservatively. Exhausted discovery stays in review;
 scheduled passes reuse its approval and wait for a new explicit lifetime grant
 or the next continuous calendar bucket rather than restarting the same failure.
-Production research chat requires the connected ChatGPT subscription;
-disconnect or selected-plan failure cannot switch to paid chat inference.
+Research prefers the connected ChatGPT subscription. Explicit budgeted fallback
+permits a disconnected plan or its exact HTTP 429
+`subscription_sharing_usage_limit_exceeded` refusal to use AI Gateway. Every
+physical paid call first reserves its complete catalog-priced input/output
+billing bounds against the Run's existing execution authorization. Unknown
+prices/bounds, missing authority, cancellation or insufficient allowance prevent
+transmission; budget exhaustion pauses the scope. A reservation is conservative
+and remains consumed even if cancellation or provider failure follows admission.
+Actual usage and reservations are distinct. A retry cannot reset the bucket.
+Other HTTP errors, network/abort errors and partial streaming failures do not
+fall back. Interactive calls without this explicit policy retain their defaults.
+Pi can open before dispatch binds its Run, so the coordinator resolves transport
+policy from its persisted identity at each request. Photo inventory keeps its
+existing transport policy; an unbound coordinator cannot bypass research admission.
+New mail and Product research Runs without inherited authority can bind the
+existing backfill approval only when every target has retained original mail in
+the member's single connected Google mailbox. Canonical sources must match the
+raw checksum. Historical `gmail:synthetic-message:order:EXAMPLE-101` sources
+instead bind through their message identity and the owned retained original:
+their old checksum describes derived order data, not raw mail. This proves
+budget ownership only; it does not revalidate old claims, rewrite source history,
+or make historical identities writable. Selected Product sources constrain that
+check. Missing, foreign, ambiguous or sources without a retained original remain
+unpaid. The latest approval is authoritative even if revoked or expired;
+inherited authority always wins, keeping retry buckets stable. Settled Run inputs
+are never rewritten. Both launch paths use the same evidence/ownership check.
+Retirement receipts fence originals before cleanup finishes. Mail identity and
+a preserved checksum alone do not prove retained content: cleared content
+tombstones and fenced originals cannot grant new paid authority, for either
+historical or canonical keys.
+No caps, provider credentials or billing arrangements change.
 
 Gmail discovery initializes a new-mail history baseline even without historical
 approval. Targeted approval permits only host-derived known-Vendor and unmatched
@@ -252,7 +281,7 @@ and deployment/readback order are owned by the
    exhausted attempts and unrelated-source retirement do not upgrade another
    task. Schema exceptions and transport failures do not trigger this policy;
    escalation preserves the existing attempt/generation limits and
-   subscription-only transport without paid fallback.
+   subscription preference and the same approved per-call paid allowance.
    A normal final answer yields to the host's next-work decision before pi
    settles the submission. Runnable work continues within that same durable
    submission; done, waiting and stopped dispositions settle normally. Queued

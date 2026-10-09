@@ -193,6 +193,19 @@ export default {
     // Never used by production or peers that perform live inference.
     if (isModelPricingRead(request))
       return Response.json({
+        openai: {
+          id: "openai",
+          models: Object.fromEntries(
+            ["gpt-6-sol", "gpt-6-luna"].map((model) => [
+              model,
+              {
+                id: model,
+                cost: { input: 1, output: 2 },
+                limit: { context: 10_000, input: 9_000, output: 1_000 },
+              },
+            ]),
+          ),
+        },
         "cloudflare-ai-gateway": {
           id: "cloudflare-ai-gateway",
           models: {

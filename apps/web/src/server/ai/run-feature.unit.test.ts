@@ -190,6 +190,38 @@ it("keeps the model, gateway route, operation, and provider cause on a failed ca
   });
 });
 
+it("keeps paid admission refusal as the terminal cause after a recovered subscription quota response", async () => {
+  const budgetError = new Error("Synthetic durable allowance exhausted");
+  const refusal = {
+    status: 429,
+    statusText: "Too Many Requests",
+    body: "Synthetic subscription quota",
+    retryAfter: "60",
+  };
+  const faux = fauxProvider();
+  const ports: StructuredRunPorts = {
+    callTarget: (_model, call) => ({
+      model: faux.getModel(),
+      complete: async () => {
+        call.onErrorResponse?.(refusal);
+        call.onRecoveredErrorResponse?.(refusal);
+        throw budgetError;
+      },
+    }),
+  };
+  await expect(
+    runStructuredFeature(
+      PURCHASE_IMPORT_REPAIR_FEATURE,
+      request,
+      { runId, operation: "purchaseImport.repair" },
+      ports,
+    ),
+  ).rejects.toMatchObject({
+    message: expect.stringContaining("Synthetic durable allowance exhausted"),
+    cause: budgetError,
+  });
+});
+
 describe("runStructuredFeature", () => {
   it("passes transient inline receipt bytes to the provider without fetching a URL", async () => {
     const { calls, ports } = fakePorts([

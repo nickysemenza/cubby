@@ -6,7 +6,7 @@ import type {
   UserId,
   VendorAccountId,
 } from "@cubby/schemas/identifiers";
-import { runEntityId, userId } from "@cubby/schemas/identifiers";
+import { parseEntityId, runEntityId, userId } from "@cubby/schemas/identifiers";
 import {
   coordinatorModelFor,
   importRunAgentIdentity,
@@ -45,7 +45,10 @@ import {
 import { runAfterCommit } from "~/server/repo/database-helpers/core";
 import { insertWithShortcode } from "~/server/repo/shortcode-utils";
 import { assertRunParent } from "~/server/runs/ensure-run";
-import { inheritExecutionAuthorization } from "~/server/runs/execution-context";
+import {
+  bindRetainedMailBackfill,
+  inheritExecutionAuthorization,
+} from "~/server/runs/execution-context";
 
 import { dispatchRunEvent, recordRunDispatchAttempt } from "./dispatch";
 import { productEnrichmentTarget } from "./product-enrichment-target";
@@ -705,6 +708,31 @@ export async function admitProductResearch(
         continuation,
         `product-research:${owner.id}:${await sha256Hex(JSON.stringify(typedInput))}`,
       );
+      const inheritedInput = productResearchRunInput.parse(
+        await inheritExecutionAuthorization(tx, typedInput, metadata),
+      );
+      const authorizedInput = await bindRetainedMailBackfill(
+        tx,
+        inheritedInput,
+        { userId: input.userId, ledgerPartyId: owner.id },
+        typedInput.products.map((entry) =>
+          sourcesFor(parseEntityId("product", entry.productId)).flatMap(
+            (source) =>
+              "sourceOrderId" in source &&
+              source.sourceKind === "mail_message" &&
+              (!selectedSources.some(
+                (choice) => choice.productId === entry.productId,
+              ) ||
+                selectedSources.some(
+                  (choice) =>
+                    choice.productId === entry.productId &&
+                    choice.sourceOrderId === source.sourceOrderId,
+                ))
+                ? [{ externalKey: source.sourceKey, checksum: source.checksum }]
+                : [],
+          ),
+        ),
+      );
       const created = await insertWithShortcode(tx, "run", {
         id,
         ledgerPartyId: owner.id,
@@ -717,9 +745,7 @@ export async function admitProductResearch(
         purpose: "product_enrichment",
         ...metadata,
         vendorAccountId: preferredBrowserAccountId,
-        input:
-          (await inheritExecutionAuthorization(tx, typedInput, metadata)) ??
-          null,
+        input: authorizedInput,
         dispatchEventId: crypto.randomUUID(),
         coordinatorModel: coordinatorModelFor("product_enrichment"),
         agentSessionId: importRunAgentIdentity(id, "product_enrichment"),

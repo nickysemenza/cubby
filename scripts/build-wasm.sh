@@ -23,9 +23,6 @@ export CARGO_PROFILE_RELEASE_CODEGEN_UNITS=1
 export CARGO_PROFILE_RELEASE_PANIC=abort
 export CARGO_PROFILE_RELEASE_INCREMENTAL=false
 
-# ensure-wasm.ts stamps a fresh marker only after all three builds succeed;
-# an interrupted build must not keep the old one.
-rm -f "$OUT/.fingerprint"
 wasm-pack build --no-pack --out-dir "$OUT/worker" "$ROOT/recipebridge"
 wasm-pack build --no-pack --out-dir "$OUT/browser" "$ROOT/recipebridge" -- --no-default-features
 wasm-pack build --no-pack --out-dir "$OUT/cookbook" "$ROOT/recipebridge/cookbook"
