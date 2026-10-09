@@ -121,6 +121,10 @@ Three layers — pick by what the surface is, never hand-roll table styling:
   - Two defaults are tuned for `<RTable>`'s explicitly-sized columns: `<Table>` is **`table-fixed`** and `<TableCell>` is **`whitespace-nowrap`**. For content-sized columns pass `className="table-auto"`; for wrapping prose cells add `whitespace-normal`. Suppress an unwanted row divider with `border-b-0` (e.g. grouped/`rowSpan` clusters). Keep the bordered-card wrapper via `containerClassName`.
 - **Raw `<table>`** only when those defaults actively fight the layout: **matrices / cross-tabs** (entities as columns, sticky panes, per-cell heatmap/stat styling — e.g. `RecipeCompareGrid`, `IngredientComponentGrid`), **dev/debug-only** surfaces (`perf-overlay`, costing-debug card), and **external-content** rendering (`markdown.tsx`).
 
+### Row height
+
+- **`<RTable>` rows are one fixed height (`ROW_DENSITY` in `ui/data-table/density.ts`).** The virtualizer and the fast-scroll ghost rows place rows at `rowHeight`; a taller painted row makes scrolling jump. `DesktopDataRow` holds every cell's content to that height and clips overflow, so a stacked cell gets cut off rather than stretching the row. Render list cells on one line: put secondary facts inline in muted text, show a remaining-count instead of an expander, and leave stacked detail to the record page. `table-row-height.spec.ts` covers a stacked USDA cell and the shared multi-reference cell.
+
 ### Column widths
 
 - **`useTableColumnLayout` seeds order, pinning, visibility, and sizing; TanStack holds them in session state.** Reloading or reopening restores declared defaults; do not add browser or account persistence for column layouts.

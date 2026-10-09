@@ -394,22 +394,19 @@ export function StatementRowList() {
             cell: (info) => {
               const row = info.row.original;
               return (
-                <Stack gap="tight" className="min-w-0">
-                  <span
-                    className="block truncate"
-                    title={row.accountDescriptor}
-                  >
-                    {row.accountDescriptor}
-                  </span>
+                <span
+                  className="block truncate"
+                  title={[row.accountDescriptor, row.accountName]
+                    .filter(Boolean)
+                    .join(" · ")}
+                >
+                  {row.accountDescriptor}
                   {row.accountName && (
-                    <span
-                      className="block truncate text-2xs text-muted-foreground"
-                      title={row.accountName}
-                    >
+                    <span className="ml-1.5 text-2xs text-muted-foreground">
                       {row.accountName}
                     </span>
                   )}
-                </Stack>
+                </span>
               );
             },
           }),

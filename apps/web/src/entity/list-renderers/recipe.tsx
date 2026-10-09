@@ -12,7 +12,7 @@ import { formatEstimate } from "~/lib/nutrition-format";
 import { formatCurrency } from "~/lib/utils";
 import { createCubbyColumnCollection } from "~/ui/data-table/table-features";
 import { useActionMutation } from "~/ui/hooks/useActionMutation";
-import { Row, Stack } from "~/ui/layout";
+import { Row } from "~/ui/layout";
 import { Button } from "~/ui/primitives/button";
 
 import type { ListRenderer, ListRowOf } from "../list-renderer-types";
@@ -109,7 +109,7 @@ const estimateColumn =
                 );
               const perItem = getServingBasis(recipe);
               return (
-                <Stack gap="xs">
+                <span className="whitespace-nowrap">
                   <span
                     title={
                       hasKnownEstimate(estimate)
@@ -120,15 +120,15 @@ const estimateColumn =
                     {recipe[labelKey]}
                   </span>
                   {perItem && hasKnownEstimate(estimate) && (
-                    <div className="text-2xs text-muted-foreground">
+                    <span className="ml-1.5 text-2xs text-muted-foreground">
                       {formatEstimate(
                         scaleEstimate(estimate, 1 / perItem.divisor),
                         format,
                       )}{" "}
                       {perUnitSuffix(perItem.noun, { short: true })}
-                    </div>
+                    </span>
                   )}
-                </Stack>
+                </span>
               );
             },
           },
