@@ -1,0 +1,39 @@
+apps/web/src/entity/editing/editor-presentations.tsx
+  s_2e87acf1f13363::t_bc505c2a92a1b9 1,699
+apps/web/src/entity/entity-detail/entity-relation-table.tsx
+  s_2e87acf1f13363::t_3f315570113768 4-7,285,657
+apps/web/src/entity/entity-list/resolve-list-view.ts
+  s_2e87acf1f13363::t_95c3f70d82589a 26
+packages/schemas/src/entity-index-types.ts
+  s_2e87acf1f13363::t_15e93b2a93cccb 43-46
+scripts/generator/entities/render/entity-models.ts
+  s_2e87acf1f13363::t_cdfc9e4a1ee858 146
+apps/web/src/entity/entity-model.ts
+  s_074df88488ca39::t_57b624460a6a11 59-63,66-68,72-89
+docs/adr/0009-per-entity-client-manifests.md
+  s_074df88488ca39::t_eb4259c11d4f7f 49-53
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "b6d9722ad51400464899c2d48bd4efbb633e9825",
+  "prompts": {},
+  "sessions": {
+    "s_074df88488ca39": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "agent-a9a609d5512078ddd",
+        "model": "unknown"
+      },
+      "human_author": "nicky <nicky@cloudflare.com>"
+    },
+    "s_2e87acf1f13363": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "31108f72-a141-4ae8-90c0-f38f0969a4e7",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "nicky <nicky@cloudflare.com>"
+    }
+  }
+}
