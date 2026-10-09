@@ -21,6 +21,39 @@ export function PossibleVendor({
   )
     return null;
 
+  if (compact) {
+    // Dense list rows: one line; the detail page shows the full evidence.
+    if (inference.status === "suggested") {
+      const candidate = inference.candidates[0];
+      return (
+        <Row gap="sm" className="min-w-0">
+          <EntityRefLink
+            variant="table"
+            to={entities.vendor.routes.detail}
+            params={entityDetailParams(candidate.vendorId)}
+            className="min-w-0 truncate"
+          >
+            {candidate.vendorName}
+          </EntityRefLink>
+          <span
+            className="shrink-0 text-2xs text-muted-foreground"
+            title={supportCopy(candidate.supportingTransactionCount)}
+          >
+            {candidate.supportingTransactionCount} settled
+          </span>
+        </Row>
+      );
+    }
+    return (
+      <span
+        className="block truncate text-xs text-muted-foreground"
+        title={inference.candidates.map((c) => c.vendorName).join(", ")}
+      >
+        {inference.candidates.length} possible vendors
+      </span>
+    );
+  }
+
   if (inference.status === "suggested") {
     const candidate = inference.candidates[0];
     return (
@@ -34,9 +67,7 @@ export function PossibleVendor({
           {candidate.vendorName}
         </EntityRefLink>
         <span className="text-2xs text-muted-foreground">
-          {compact
-            ? supportCopy(candidate.supportingTransactionCount)
-            : `Based on ${supportCopy(candidate.supportingTransactionCount)}.`}
+          Based on {supportCopy(candidate.supportingTransactionCount)}.
         </span>
       </Stack>
     );

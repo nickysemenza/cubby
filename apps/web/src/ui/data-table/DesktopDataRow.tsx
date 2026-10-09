@@ -26,6 +26,7 @@ import { CellFrame } from "./cell-frame";
 import { NON_SELECTABLE_COLUMN_IDS } from "./cell-selection-context";
 import { columnWidthValue } from "./column-layout";
 import { DebugDialog } from "./DebugDialog";
+import { ROW_DENSITY } from "./density";
 import { RelationFieldWorkbench } from "./relation-field-workbench";
 import {
   RowActiveProvider,
@@ -186,13 +187,17 @@ function DesktopDataCell<TItem extends RowData>({
       )}
       style={{ width, minWidth: width, maxWidth: width, ...inset }}
     >
-      <RecordFieldSuggestion
-        record={cell.row.original}
-        field={cell.column.id}
-        surface="cell"
-      >
-        {explained}
-      </RecordFieldSuggestion>
+      <div className={ROW_DENSITY.cellContentClass}>
+        <div className="min-w-0">
+          <RecordFieldSuggestion
+            record={cell.row.original}
+            field={cell.column.id}
+            surface="cell"
+          >
+            {explained}
+          </RecordFieldSuggestion>
+        </div>
+      </div>
     </TableCell>
   );
 }

@@ -595,6 +595,7 @@ export function renderCompactFieldValue<TRecord extends object>(
   entity: Entity,
   record: TRecord,
   field: DisplayField,
+  { singleLine = false }: { singleLine?: boolean } = {},
 ): ReactNode {
   const domainRenderer = compactFieldRendererFor(entity, field.key);
   const domainValue = domainRenderer?.(record);
@@ -603,6 +604,22 @@ export function renderCompactFieldValue<TRecord extends object>(
   if (reference !== null) {
     if (reference.items.length === 0)
       return reference.incomplete ? <span>Unclassified</span> : <NoneValue />;
+    if (singleLine)
+      return (
+        <ReferencePreview
+          items={reference.items}
+          limit={field.display.referencePreviewLimit}
+          renderItem={(item) => referenceLink(reference.entity, item)}
+          singleLine
+          trailing={
+            reference.incomplete ? (
+              <span className="text-muted-foreground">Partly unclassified</span>
+            ) : (
+              referenceBrowse(record, field)
+            )
+          }
+        />
+      );
     return (
       <>
         {referenceBrowse(record, field)}
@@ -1604,7 +1621,9 @@ export function createEntityDisplayColumns<TRecord extends object>(
                       entity,
                       field.key,
                     )?.(row.original) ??
-                    renderCompactFieldValue(entity, row.original, field)
+                    renderCompactFieldValue(entity, row.original, field, {
+                      singleLine: true,
+                    })
                   );
                 }}
               />
@@ -1685,7 +1704,9 @@ export function createEntityDisplayColumns<TRecord extends object>(
             }),
             cell: ({ row }) =>
               readable ? (
-                renderCompactFieldValue(entity, row.original, field)
+                renderCompactFieldValue(entity, row.original, field, {
+                  singleLine: true,
+                })
               ) : (
                 <NoneValue />
               ),

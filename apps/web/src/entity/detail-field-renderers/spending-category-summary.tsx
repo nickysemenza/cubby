@@ -16,12 +16,31 @@ export function SpendingCategorySummaryValue({
   contextOnly?: boolean;
   compact?: boolean;
 }) {
+  if (compact)
+    // Dense list rows: state and category chips on one line.
+    return (
+      <Row gap="sm" className="min-w-0 overflow-hidden whitespace-nowrap">
+        <span className="shrink-0 font-medium">
+          {spendingCategorySummaryLabels[summary.state]}
+        </span>
+        {summary.categories.map((category) => (
+          <EntityRefLink
+            key={category.id}
+            variant="chip"
+            entity="spendingCategory"
+            id={category.id}
+            name={category.name}
+            displayImage={null}
+          />
+        ))}
+      </Row>
+    );
   return (
     <Stack gap="xs">
       <span className="text-sm font-medium">
         {spendingCategorySummaryLabels[summary.state]}
       </span>
-      {!compact && summary.state !== "not_applicable" && (
+      {summary.state !== "not_applicable" && (
         <p className="text-xs text-muted-foreground">
           {summary.lineCount === 0
             ? "No linked expense lines."
@@ -37,21 +56,20 @@ export function SpendingCategorySummaryValue({
             name={category.name}
             displayImage={null}
           />
-          {!compact && !contextOnly && category.amount !== null && (
+          {!contextOnly && category.amount !== null && (
             <span className="shrink-0 tabular-nums">
               {formatCurrency(category.amount)}
             </span>
           )}
         </Row>
       ))}
-      {!compact && summary.categories.length > 0 && contextOnly && (
+      {summary.categories.length > 0 && contextOnly && (
         <p className="text-xs text-muted-foreground">
           Categories describe linked expenses. Settlement amounts are not
           attributed to categories.
         </p>
       )}
-      {!compact &&
-        summary.categories.length > 0 &&
+      {summary.categories.length > 0 &&
         !contextOnly &&
         !summary.amountsKnown && (
           <p className="text-xs text-muted-foreground">
