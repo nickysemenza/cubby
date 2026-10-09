@@ -242,11 +242,6 @@ change the shape of the pipeline. The browser bridge contract is in
   BigCommerce, a marketplace) and assert what `derivePageCapture` and the
   extractor read from each, including variant groups and truncation.
 
-- 🟢 **One-command Mac app install.** Build, sign, install to
-  `/Applications`, and relaunch with one command, so the installed app
-  matches `APPLE_CLIENT_COMPATIBILITY_VERSION` and a protocol release is one step.
-  Today the household app runs from a Debug build folder.
-
 - 🟢 **Account status from the server.** Mac Settings shows "Connected" from
   its own socket state. Show the server's view per account: browser sync on,
   socket connected, the current run and its last step, and the last

@@ -264,5 +264,14 @@ accessibility helper also runs from one stable signed cache path; archived
 copies are evidence, not executables for driving the app. Its source, compiler
 and signed bytes determine reuse. Initial Accessibility consent is still a
 host setting, but new run directories no longer create a new helper identity.
-`pnpm apple mac` refuses an ad-hoc or foreign-team app before opening it under
-the real bundle ID, which protects the normal app's existing privacy grants.
+`pnpm apple mac` builds and signs incrementally, checks the app's marketing
+version against `APPLE_CLIENT_COMPATIBILITY_VERSION`, installs it at
+`/Applications/Cubby.app`, and relaunches that installed copy without LLDB.
+It verifies both the built app and any existing installed app against the
+project team and bundle ID, and checks the candidate against the installed
+app's designated privacy requirement. The copied candidate is verified before stopping
+Cubby or replacing the installed app; a failed replacement restores the old
+bundle. If the previous bundle is root-owned and cannot be removed, its
+sibling backup path is reported after successful relaunch for manual cleanup.
+App data and privacy settings are retained. The command requires write
+access to `/Applications`; it never invokes sudo or resets permissions.

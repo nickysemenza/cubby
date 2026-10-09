@@ -7,7 +7,7 @@
 // wall-clock time so a regression in one of them is visible.
 //
 //   pnpm apple cli <args…>   build the CLI incrementally and run it
-//   pnpm apple mac           build Cubby-macOS and open the .app (no LLDB)
+//   pnpm apple mac           build, sign, install and relaunch /Applications/Cubby.app
 //   pnpm apple ios           build Cubby-iOS, install + launch on the iPhone
 //   pnpm apple sim           build Cubby-iOS, install + launch on a simulator
 //   pnpm apple gen           build-rust.sh → pnpm generate → xcodegen
@@ -23,10 +23,13 @@
 // use the regular `Cubby-*` schemes with ~/.lldbinit-Xcode (apps/apple/AGENTS.md
 // "Debugging on device"). This covers the "just put it on the phone" case the
 // `-NoDebugger` schemes exist for.
+import { APPLE_CLIENT_COMPATIBILITY_VERSION } from "../packages/shared/src/apple-client-version.ts";
+import { installedApprovalVerifier } from "./lib/mac-app-approval.ts";
+import { installMacApp } from "./lib/mac-app-install.ts";
 import { spawnSync } from "node:child_process";
 
 import { captureSyncChecked, runSyncChecked } from "./lib/run.ts";
-import { mkdtempSync, readFileSync, rmSync } from "node:fs";
+import { existsSync, mkdtempSync, readFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -233,16 +236,47 @@ const assertTeamSigned = (app: string) => {
 
 const mac = (options: Options) => {
   ensureFfi();
+  run("node", [join(ROOT, "scripts/generator/ensure.ts")]);
   ensureProject();
   xcodebuild("Cubby-macOS", "platform=macOS,arch=arm64", options);
   const app = productPath("Debug");
-  assertTeamSigned(app);
+  const version = capture("/usr/libexec/PlistBuddy", [
+    "-c",
+    "Print :CFBundleShortVersionString",
+    join(app, "Contents/Info.plist"),
+  ]).trim();
+  if (version !== APPLE_CLIENT_COMPATIBILITY_VERSION)
+    throw new Error(
+      `Built app version ${version} differs from compatibility version ${APPLE_CLIENT_COMPATIBILITY_VERSION}`,
+    );
+  const installed = "/Applications/Cubby.app";
+  const verifyApproval = existsSync(installed)
+    ? installedApprovalVerifier(installed)
+    : undefined;
+  const retainedBackup = installMacApp(
+    app,
+    installed,
+    (candidate) => {
+      assertTeamSigned(candidate);
+      verifyApproval?.(candidate);
+    },
+    () => {
+      const result = spawnSync("pkill", ["-x", "Cubby"], { stdio: "ignore" });
+      if (result.error || (result.status !== 0 && result.status !== 1))
+        throw (
+          result.error ?? new Error(`Could not stop Cubby: ${result.status}`)
+        );
+    },
+  );
   // `open` on a running app only activates it, so the old binary would keep
   // running; pkill exits 1 when nothing matched, which is fine. Launch a new
   // instance explicitly because LaunchServices may still consider the
   // terminating process active for a short time after pkill.
-  spawnSync("pkill", ["-x", "Cubby"], { stdio: "ignore" });
-  run("open", ["-n", app]);
+  run("open", ["-n", installed]);
+  if (retainedBackup)
+    process.stdout.write(
+      `Installed and relaunched Cubby; previous app retained because cleanup failed: ${retainedBackup}\n`,
+    );
 };
 
 // `devicectl` only writes JSON to a file, never stdout.
