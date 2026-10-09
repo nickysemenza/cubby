@@ -188,9 +188,16 @@ export function RunHistory({
     () => groups.data?.pages.flatMap((page) => page.items) ?? [],
     [groups.data],
   );
+  const childGroups = useMemo(
+    () =>
+      groupRows.filter(
+        (group) => group.root.recordType === "run" && group.childCount > 0,
+      ),
+    [groupRows],
+  );
   const childQueryOptions = useMemo(
     () =>
-      groupRows.map((group) => ({
+      childGroups.map((group) => ({
         ...activity.groupChildren.queryOptions({
           ...input,
           rootId: group.root.id,
@@ -222,7 +229,7 @@ export function RunHistory({
             : false,
         staleTime: 0,
       })),
-    [groupRows, input, grouped, expanded],
+    [childGroups, input, grouped, expanded],
   );
   const childPages = useQueries({
     queries: childQueryOptions,
@@ -231,32 +238,32 @@ export function RunHistory({
   const children = useMemo(
     () =>
       Object.fromEntries(
-        groupRows.map((group, index) => [
+        childGroups.map((group, index) => [
           group.root.id,
           childPages[index]?.data?.items ?? [],
         ]),
       ),
-    [groupRows, childPages],
+    [childGroups, childPages],
   );
   const loading = useMemo(
     () =>
       Object.fromEntries(
-        groupRows.map((group, index) => [
+        childGroups.map((group, index) => [
           group.root.id,
           childPages[index]?.loading ?? false,
         ]),
       ),
-    [groupRows, childPages],
+    [childGroups, childPages],
   );
   const childErrors = useMemo(
     () =>
       Object.fromEntries(
-        groupRows.map((group, index) => [
+        childGroups.map((group, index) => [
           group.root.id,
           childPages[index]?.error ?? "",
         ]),
       ),
-    [groupRows, childPages],
+    [childGroups, childPages],
   );
   const rows = useMemo<HistoryRow[]>(
     () =>
