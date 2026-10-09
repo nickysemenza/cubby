@@ -30,8 +30,6 @@ export {
   dataTypePredicate,
   dataTypePriorityCase,
   FOOD_DATA_TYPES,
-  matchQualityBindings,
-  matchQualityCase,
 } from "@cubby/usda/release";
 export { normalizeUpc } from "./edge-bundle-loader.js";
 
