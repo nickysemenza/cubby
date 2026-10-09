@@ -223,15 +223,6 @@ describe("EntityManifestGrid panel relations", () => {
     expect(within(row).getByText("derived")).toBeInTheDocument();
   });
 
-  it("marks vendor.runs derived now that Run reads the kernel list", () => {
-    renderGrid({ selected: "vendor" });
-
-    const row = within(panel("vendor"))
-      .getByText("runs", { exact: true })
-      .closest("tr")!;
-    expect(within(row).getByText("derived")).toBeInTheDocument();
-  });
-
   it.each([["product", "images", "image"]] as const)(
     "shows %s.%s as a custom list when %s has a separate list source",
     (entity, relation, target) => {

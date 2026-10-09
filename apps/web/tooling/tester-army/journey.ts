@@ -1,8 +1,10 @@
 import { readFileSync } from "node:fs";
 import { isDeepStrictEqual } from "node:util";
+import { unique } from "e2e";
 import { Pool } from "pg";
 import { z } from "zod";
 import { pollUntil } from "@cubby/shared/retry";
+import { parseShortcode } from "@cubby/shared";
 
 /**
  * A Tester Army journey is described once and executed by both engines.
@@ -14,7 +16,7 @@ export type Engine = "web" | "ios";
 /** A journey's seeded codes; reading one that was not seeded is a journey bug, so it throws. */
 export class JourneyIds {
   constructor(
-    private readonly codes: Readonly<Record<string, string>>,
+    readonly codes: Readonly<Record<string, string>>,
     private readonly journey: string,
   ) {}
   get(key: string): string {
@@ -117,6 +119,23 @@ export type Journey = {
   absent?: (ids: JourneyIds) => string[];
   db: DbCheck[];
 };
+
+/**
+ * `agent.act` params naming the journey's seeded codes as `unique()`. Every
+ * run seeds fresh codes and the SDK reads `/PRD-4K7M` as a literal route
+ * segment, so without the slots a recording never matches the next run's
+ * start screen and `--replay` always misses. Only shortcodes are marked: an
+ * ordinary seeded string would be templated wherever a recording spells it.
+ */
+export function replayParams(ids: JourneyIds) {
+  return {
+    records: Object.fromEntries(
+      Object.entries(ids.codes)
+        .filter(([, value]) => parseShortcode(value)?.shortcode === value)
+        .map(([key, value]) => [key, unique(value)]),
+    ),
+  };
+}
 
 export function stepGoal(step: JourneyStep, engine: Engine) {
   return step[engine] ?? step.goal;

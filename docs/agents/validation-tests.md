@@ -405,9 +405,10 @@ Playwright, at the widths the app actually ships — a phone (402x874) and a
 desktop (1440x900) — and asserts layout facts jsdom cannot see: bounding-box
 sizes, whether a rerender changed an element's height (a layout-shift
 regression), and which `min-width`/media-query breakpoint actually applies.
-The `ui` (jsdom) tier is right for everything else a rendered component needs
-— events, text content, ARIA roles, conditional rendering — since it starts
-far faster; reach for `preview` only when the behavior under test IS the
+Use the `ui` (jsdom) tier for a distinct event, accessibility or conditional
+rendering failure that the retained journey cannot reasonably expose. Keep
+copy-only and DOM-structure assertions out of both tiers. Reach for `preview`
+only when the behavior under test IS the
 layout (a fixed-footprint glyph across states, an inline review folding
 instead of growing the page, a headline that must not wrap). It is opt-in
 (not part of `pnpm test`) because a real browser launch is slower than the

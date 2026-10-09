@@ -13,6 +13,10 @@ import { pollUntil } from "../../packages/shared/src/retry.ts";
 export interface ContainerListEntry {
   id: string;
   status: { state: string };
+  configuration?: {
+    image?: { reference?: string };
+    mounts?: unknown[];
+  };
 }
 
 /** Run a `container` subcommand and resolve with trimmed stdout, or reject on non-zero exit. */
@@ -54,7 +58,7 @@ export function containerCli(
   });
 }
 
-async function listContainers(): Promise<ContainerListEntry[]> {
+export async function listContainers(): Promise<ContainerListEntry[]> {
   const raw = JSON.parse(
     await containerCli(["list", "--all", "--format", "json"]),
   );

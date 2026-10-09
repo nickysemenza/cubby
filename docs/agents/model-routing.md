@@ -20,6 +20,11 @@ tokens, so each spawn should be a deliberate choice. Parallel lanes suit
 read-heavy work; write lanes own disjoint worktrees or stay in the main thread.
 The per-PR review below is the one routine spawn.
 
+The [2026-10-08 recheck](../dev-tooling-evidence.md#routing-measurement) recorded
+44.6% of sessions delegating and 56.2% of recorded token usage in subagents.
+It mostly predates this rule and does not establish a speed/quality improvement;
+the 47% figure above is the historical baseline, not a current measurement.
+
 ## Lanes
 
 Preserve an explicit user model choice and the current main session. Provider

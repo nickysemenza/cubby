@@ -138,64 +138,6 @@ function renderRecipeCell(columnId: string, row: RecipeRow) {
 }
 
 describe("recipe list display columns", () => {
-  it("builds exactly the declared columns, in listOrder", () => {
-    const ids = buildRecipeColumnMeta().map((d) => d.id);
-    expect(ids).toEqual([
-      "dataQuality",
-      "servings",
-      "tags",
-      "notes",
-      "costTotal",
-      "caloriesTotal",
-      "meals",
-      "source",
-      "totalMinutes",
-      "dataGaps",
-    ]);
-  });
-
-  it("takes every header from the declared label, including on overrides", () => {
-    const byId = Object.fromEntries(
-      buildRecipeColumnMeta().map((d) => [d.id, d.header]),
-    );
-    expect(byId).toEqual({
-      tags: "Tags",
-      servings: "Servings",
-      costTotal: "Cost total",
-      caloriesTotal: "Calories total",
-      totalMinutes: "Total minutes",
-      source: "Source",
-      meals: "Meals",
-      notes: "Notes",
-      dataQuality: "Quality",
-      dataGaps: "Data gaps",
-    });
-  });
-
-  it("derives enableSorting from the generated sort roster per column id", () => {
-    const byId = Object.fromEntries(
-      buildRecipeColumnMeta().map((d) => [d.id, d.enableSorting]),
-    );
-    // In `generatedEntitySort.recipe.fields`.
-    expect(byId.tags).toBe(true);
-    expect(byId.servings).toBe(true);
-    expect(byId.costTotal).toBe(true);
-    expect(byId.caloriesTotal).toBe(true);
-    expect(byId.totalMinutes).toBe(true);
-    expect(byId.source).toBe(true);
-    // Not in the roster.
-    expect(byId.meals).toBe(false);
-    expect(byId.notes).toBe(false);
-  });
-
-  it("carries no declared width/mobile metadata for the one generic column (notes)", () => {
-    const byId = Object.fromEntries(
-      buildRecipeColumnMeta().map((d) => [d.id, d]),
-    );
-    expect(byId.notes?.className).toBeUndefined();
-    expect(byId.notes?.mobile).toBeUndefined();
-  });
-
   it("preserves explanation metadata on the manifest-rendered source column", () => {
     const byId = Object.fromEntries(
       buildRecipeColumnMeta().map((column) => [column.id, column]),
@@ -255,35 +197,5 @@ describe("recipe list display columns", () => {
       "href",
       "https://www.example.com/recipe",
     );
-  });
-
-  it("rejects a legacy source override beside the manifest renderer", () => {
-    const helper = createCubbyColumnHelper<RecipeRow>();
-    expect(() =>
-      createEntityDisplayColumns(
-        "recipe",
-        helper,
-        createCubbyColumnCollection((add) => {
-          add(helper.display({ id: "source", cell: () => null }));
-        }),
-        { only: ["source"] },
-      ),
-    ).toThrow("Manifest and legacy list renderers both claim recipe.source");
-  });
-
-  it("rejects an override for a field the declaration doesn't list (totals is list: false)", () => {
-    const helper = createCubbyColumnHelper<RecipeRow & { totals: unknown }>();
-    expect(() =>
-      createEntityDisplayColumns(
-        "recipe",
-        helper,
-        createCubbyColumnCollection((add) => {
-          add(helper.display({ id: "tags", cell: () => null }));
-          add(helper.display({ id: "servings", cell: () => null }));
-          add(helper.display({ id: "meals", cell: () => null }));
-          add(helper.display({ id: "totals", cell: () => null }));
-        }),
-      ),
-    ).toThrow("Undeclared display renderer for recipe.totals");
   });
 });

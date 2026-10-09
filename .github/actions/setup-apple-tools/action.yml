@@ -45,7 +45,7 @@ runs:
       uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6
       with:
         path: apps/apple/SourcePackages
-        key: spm-clones-v2-${{ runner.os }}-${{ hashFiles('apps/apple/CubbyKit/Package.resolved', 'apps/apple/packages.yml') }}
+        key: spm-clones-v2-${{ runner.os }}-${{ hashFiles('apps/apple/CubbyKit/Package.resolved', 'apps/apple/Package.resolved', 'apps/apple/packages.yml') }}
         restore-keys: |
           spm-clones-v2-${{ runner.os }}-
           spm-clones-v1-${{ runner.os }}-

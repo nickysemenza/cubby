@@ -7,9 +7,12 @@ and reports readiness only after the database, fixtures, and Worker agree.
 
 ## Start and discover
 
-Install dependencies with `pnpm install`. Local development requires macOS and
-Apple `container`; run `container system start`. Docker is used by CI test
-services, not the local development supervisor. Then run:
+Install dependencies with `pnpm install`. On macOS, local development defaults
+to Apple `container`; run `container system start`. Linux defaults to Docker.
+To use Docker on macOS, start its daemon and export
+`CUBBY_DEV_SERVICES=docker` for development commands. Both backends use the same
+loopback port, owned named volume and checkout database guards. A backend has
+its own volume; switching does not transfer existing local data. Then run:
 
 ```sh
 pnpm dev
@@ -34,11 +37,12 @@ and rejects redirects; it is absent from release app builds.
 A real checkout path determines a stable development id. Its database is
 `cubby_dev_<id>` at `localhost:55432`, and its Worker resources are named with
 that id. PostgreSQL's container is shared; databases, D1/R2/DO/queue state, and
-session files belong to each checkout. Four settings are meant for people:
+session files belong to each checkout. Runtime settings are meant for people:
 `PORT` (default 3000), `CUBBY_DEV_PROFILE` (`offline`, or `integrations` with
 `CUBBY_DEV_VECTORIZE_INDEX`), `CUBBY_DEV_INSTANCE`
 (another isolated instance within the same checkout), and `CUBBY_DEV_DB_NAME`
-(a branch's own `cubby_dev_<name>` database). Everything else, including
+(a branch's own `cubby_dev_<name>` database), and `CUBBY_DEV_SERVICES`
+(`apple` or `docker`). Everything else, including
 `CUBBY_DEV_ID` and the database name the Worker verifies, is derived by one
 resolved profile (`scripts/lib/dev-profile.ts`) and should not be set by hand.
 Unset inherited application
@@ -154,6 +158,40 @@ and sanitized replay artifacts; see [validation](agents/validation.md) and
 [Apple iteration](../apps/apple/ITERATION.md). A manual local session does not
 replace the exact-head GitHub merge gate.
 
+For finite simulator smoke or QA journeys in the shared T3 Device panel, set
+`CUBBY_E2E_AGENT_DEVICE` to the JSON `{command,targetArgs}` returned by
+`device_open`, The harness selects the returned simulator automatically and rejects a conflicting
+`CUBBY_SIM_DEVICE` before setup.
+The harness keeps the returned launcher, host configuration and session on
+every driver command, and leaves the shared session and daemon running.
+Single-file `.ad` journeys use `replay` in that session; `test` would fork an
+attempt session and conflict with an already-open panel. Replay diagnostics and
+root scenario results remain in the sanitized harness bundle.
+Watch, input and Tester Army modes keep their owned driver lifecycle and
+reject this override.
+
+## Fixture previews and warm HMR validation
+
+The dev-only `/__dev/preview?entity=task&state=edge` route renders the generic
+entity list from declaration-backed fixtures. Select a list entity and loading,
+error, empty or edge state without creating database rows. The preview entry and
+Faker are outside the production import graph.
+
+With this checkout's `pnpm dev` ready, run `pnpm --dir apps/web test:e2e:hmr`.
+Configuration inspection needs no live session. Runtime fixtures bind the profile
+environment before importing server modules, which capture database settings
+at import time. The optional lane discovers the supervisor and verifies its local origin,
+checkout id and database before writing. It creates run-owned synthetic records
+and deletes only those records after each case, retaining failed deletions for
+retry. Sanitized artifacts identify the source revision and fingerprint; source
+changes during the run fail provenance. HMR evidence helps local iteration;
+GitHub still gates the exact final head with built Workers.
+
+Default simulator smoke proves search and detail navigation, while headless
+proves native-client edits and stored values. UI editing and view switching
+require `pnpm test:e2e:sim -- --extended-journey` (or local lane `sim:extended`);
+the full journey and its named regressions remain available unchanged.
+
 ## Focused browser validation
 
 Use the persistent HMR session to explore fixtures. Acceptance uses a built
@@ -211,13 +249,20 @@ produced substantially slower startup samples. Physical-device networking,
 live provider quality, CDN transformations, and production signature enforcement
 need separate validation.
 
-Native E2E app builds preserve `CubbyKit/Package.resolved` as the package's
-owned lockfile. Xcode can write its app graph (including app-only dependencies
-from `apps/apple/packages.yml`) into that local package file while resolving.
-`withKitPackageResolution` verifies every Kit pin remains unchanged, permits
-only added package URLs declared by the app, and restores the original Kit
-serialization after success or failure. A changed Kit pin fails acceptance;
-update Kit pins through its package workflow, rather than accepting build
-churn. The generated Xcode project owns its app resolution state. Build
-fingerprints and simulator cache certification are recorded after restoring
-the Kit file, so clean final-head artifacts remain replayable.
+`apps/apple/Package.resolved` owns the app graph (including Nuke and Sentry);
+`CubbyKit/Package.resolved` owns only the Swift package graph. XcodeGen links the
+app lockfile into the generated workspace, so app resolution leaves the Kit
+file unchanged and deliberate app pin changes appear in Git. Simulator build
+certificates and CI dependency caches include both lockfiles. Local simulator
+runs reuse the same certified bundle as CI when sources, pins, compiler settings,
+toolchain and bundle bytes match. Run bundles distinguish `compiled` from
+`reused-certified` and report build time separately. The composed Mac import
+lane retains its Kit-pin verification wrapper as a defensive acceptance check.
+
+Mac fixture apps retain their stable Developer ID identity. The presentation
+accessibility helper also runs from one stable signed cache path; archived
+copies are evidence, not executables for driving the app. Its source, compiler
+and signed bytes determine reuse. Initial Accessibility consent is still a
+host setting, but new run directories no longer create a new helper identity.
+`pnpm apple mac` refuses an ad-hoc or foreign-team app before opening it under
+the real bundle ID, which protects the normal app's existing privacy grants.

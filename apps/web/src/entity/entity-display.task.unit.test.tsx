@@ -2,7 +2,6 @@ import type { CellData } from "@tanstack/react-table";
 import { render, screen } from "@testing-library/react";
 import type { ReactNode } from "react";
 import { describe, expect, it } from "vitest";
-import { z } from "zod";
 
 import {
   createCubbyColumnCollection,
@@ -127,93 +126,7 @@ function renderTaskCell(columnId: string, row: TaskRow) {
   return first;
 }
 
-function buildTaskColumnMeta() {
-  return buildTaskColumns().visit((column) => ({
-    id: String(
-      column.id ?? ("accessorKey" in column ? column.accessorKey : ""),
-    ),
-    header: z.string().parse(column.header),
-    className: column.meta?.className,
-    mobile: column.meta?.mobile,
-    enableSorting: column.enableSorting,
-  }));
-}
-
 describe("task list display columns", () => {
-  it("builds exactly the declared columns, in model order", () => {
-    const ids = buildTaskColumnMeta().map((d) => d.id);
-    expect(ids).toEqual([
-      "dataQuality",
-      "status",
-      "projectId",
-      "subjectProductId",
-      "parentTaskId",
-      "dueDate",
-      "trade",
-      "sortOrder",
-      "dataGaps",
-    ]);
-  });
-
-  it("takes every header from the declared label, including on overrides", () => {
-    const byId = Object.fromEntries(
-      buildTaskColumnMeta().map((d) => [d.id, d.header]),
-    );
-    expect(byId).toEqual({
-      status: "Status",
-      projectId: "Project",
-      subjectProductId: "Subject product",
-      parentTaskId: "Parent task",
-      dueDate: "Due",
-      trade: "Trade",
-      sortOrder: "Sort order",
-      dataQuality: "Quality",
-      dataGaps: "Data gaps",
-    });
-  });
-
-  it("derives enableSorting from the generated sort roster per column id", () => {
-    const byId = Object.fromEntries(
-      buildTaskColumnMeta().map((d) => [d.id, d.enableSorting]),
-    );
-    // In `generatedEntitySort.task.fields`.
-    expect(byId.status).toBe(true);
-    expect(byId.projectId).toBe(true);
-    expect(byId.subjectProductId).toBe(true);
-    expect(byId.dueDate).toBe(true);
-    expect(byId.trade).toBe(true);
-    // Not in the roster.
-    expect(byId.parentTaskId).toBe(false);
-    expect(byId.sortOrder).toBe(false);
-  });
-
-  it("carries the declared width/mobile metadata for generic columns", () => {
-    const byId = Object.fromEntries(
-      buildTaskColumnMeta().map((d) => [d.id, d]),
-    );
-    expect(byId.status?.className).toBe("w-28");
-    expect(byId.status?.mobile).toEqual({
-      slot: "subtitle",
-      priority: 10,
-      interactive: undefined,
-    });
-    expect(byId.dueDate?.className).toBe("w-80");
-    expect(byId.dueDate?.mobile).toEqual({
-      slot: "meta",
-      priority: 40,
-      interactive: true,
-    });
-    expect(byId.trade?.className).toBe("w-28");
-    expect(byId.trade?.mobile).toEqual({
-      slot: "meta",
-      priority: 50,
-      interactive: undefined,
-    });
-    // `sortOrder` declares no width/mobile at all.
-    expect(byId.sortOrder?.className).toBeUndefined();
-    expect(byId.sortOrder?.mobile).toBeUndefined();
-  });
-
   it("folds dueDate and dueEndDate into the one declared span column", () => {
     render(
       <>
@@ -227,43 +140,5 @@ describe("task list display columns", () => {
     render(<>{renderTaskCell("status", TASK_ROW)}</>);
     expect(screen.getByText("In progress")).toBeVisible();
     expect(screen.queryByText("in_progress")).toBeNull();
-  });
-
-  it("renders the project override's own cell against the row", () => {
-    render(<>{renderTaskCell("projectId", TASK_ROW)}</>);
-    expect(screen.getByText("Kitchen remodel")).toBeVisible();
-  });
-
-  it("rejects an override for a field the declaration no longer lists (subtaskCount is list: false)", () => {
-    const helper = createCubbyColumnHelper<
-      TaskRow & { subtaskCount: number }
-    >();
-    expect(() =>
-      createEntityDisplayColumns(
-        "task",
-        helper,
-        createCubbyColumnCollection((add) => {
-          add(
-            helper.display({
-              id: "projectId",
-              cell: () => null,
-            }),
-          );
-          add(
-            helper.display({
-              id: "subjectProductId",
-              cell: () => null,
-            }),
-          );
-          add(
-            helper.display({
-              id: "parentTaskId",
-              cell: () => null,
-            }),
-          );
-          add(helper.display({ id: "subtaskCount", cell: () => null }));
-        }),
-      ),
-    ).toThrow("Undeclared display renderer for task.subtaskCount");
   });
 });

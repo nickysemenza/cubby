@@ -1,0 +1,11 @@
+context platform=ios timeout=60000
+
+open com.nickysemenza.cubby
+wait "role=Button label=Find" 30000
+click "role=Button label=Find"
+wait "role=SearchField label=\"Search Cubby\" editable=true" 30000
+fill "role=SearchField label=\"Search Cubby\" editable=true" "${PRODUCT_ID}"
+wait "id=search.result.${PRODUCT_ID}" 30000
+click "id=search.result.${PRODUCT_ID}"
+wait "role=Button id=detail.product.edit" 30000
+wait text "Synthetic Atlas Lantern" 30000

@@ -203,11 +203,40 @@ const cli = (options: Options) => {
   process.exit(result.status ?? 1);
 };
 
+// macOS privacy grants (Photos, browser automation, notifications) record the
+// approving app's designated requirement. A team-signed Debug build keeps one
+// requirement across rebuilds and worktrees; an ad-hoc build (for example from
+// a CODE_SIGNING_ALLOWED=NO command into this DerivedData) has a per-build
+// cdhash requirement, so launching it replaces every grant and the next signed
+// build prompts again.
+const assertTeamSigned = (app: string) => {
+  const team = readFileSync(join(APPLE, "project.yml"), "utf8").match(
+    /^\s*DEVELOPMENT_TEAM:\s*([A-Z\d]{10})\s*$/mu,
+  )?.[1];
+  if (!team) throw new Error("apps/apple/project.yml has no DEVELOPMENT_TEAM");
+  const verified = spawnSync(
+    "codesign",
+    [
+      "--verify",
+      "--strict",
+      `-R=anchor apple generic and identifier "${BUNDLE_ID}" and certificate leaf[subject.OU] = "${team}"`,
+      app,
+    ],
+    { encoding: "utf8" },
+  );
+  if (verified.status !== 0)
+    throw new Error(
+      `${app} is not signed by team ${team}; launching it would reset macOS privacy approvals. ` +
+        `Remove apps/apple/DerivedData/Build/Products/Debug/${PRODUCT} and rerun.\n${verified.stderr.trim()}`,
+    );
+};
+
 const mac = (options: Options) => {
   ensureFfi();
   ensureProject();
   xcodebuild("Cubby-macOS", "platform=macOS,arch=arm64", options);
   const app = productPath("Debug");
+  assertTeamSigned(app);
   // `open` on a running app only activates it, so the old binary would keep
   // running; pkill exits 1 when nothing matched, which is fine. Launch a new
   // instance explicitly because LaunchServices may still consider the

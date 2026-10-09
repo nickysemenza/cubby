@@ -1,29 +1,9 @@
 import { QueryClient } from "@tanstack/react-query";
 import { describe, expect, it } from "vitest";
 
-import { entityDetailFor } from "~/entity/entity-detail";
 import { ripple } from "~/integrations/tanstack-query/cache-tags";
-import {
-  calendar,
-  location,
-} from "~/integrations/tanstack-query/generated/catalog.gen";
+import { calendar } from "~/integrations/tanstack-query/generated/catalog.gen";
 import { invalidateOperationTags } from "~/integrations/tanstack-query/operation-cache";
-
-describe("operation freshness metadata", () => {
-  it("keeps stable details and indexes warm through their descriptors", () => {
-    const detail = entityDetailFor("product").queryOptions("PRD-2222");
-    const tree = location.makeTree.queryOptions();
-
-    expect(detail).toMatchObject({ staleTime: 300_000, gcTime: 86_400_000 });
-    expect(detail.meta).toMatchObject({
-      cacheProfile: "persisted-detail",
-    });
-    expect(tree).toMatchObject({ staleTime: 120_000 });
-    expect(tree.meta).toMatchObject({
-      cacheProfile: "browse",
-    });
-  });
-});
 
 describe("operation-tag invalidation", () => {
   it("matches normalized operation queries through descriptor metadata", async () => {

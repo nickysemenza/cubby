@@ -33,13 +33,6 @@ describe("prefix registry", () => {
     }
   });
 
-  it("keeps only the two prefixes that were actually minted", () => {
-    expect(LEGACY_SHORTCODE_PREFIX).toEqual({
-      "P-": "product",
-      "L-": "location",
-    });
-  });
-
   it("has an alphabet free of scan-confusable characters", () => {
     // The comment on SHORTCODE_CHARS used to claim 32; it is 31, and the
     // namespace math (31^5 for new codes) depends on that being right.

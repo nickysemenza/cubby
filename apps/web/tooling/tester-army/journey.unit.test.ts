@@ -1,3 +1,6 @@
+import { createRequire } from "node:module";
+import path from "node:path";
+import { pathToFileURL } from "node:url";
 import { afterEach, expect, it, vi } from "vitest";
 
 import { z } from "zod";
@@ -6,6 +9,7 @@ import {
   JourneyIds,
   type Journey,
   assertScreenRead,
+  replayParams,
   selectedJourneys,
 } from "./journey";
 
@@ -57,4 +61,49 @@ it("compares what the agent read exactly", () => {
   expect(() => assertScreenRead({ id: "read" }, read, same, ids, true)).toThrow(
     /unexpectedly matched/u,
   );
+});
+
+// Regression: `--replay` reported `replayed 0, missed 1` on every warm run.
+// Each run seeds fresh codes, and the SDK reads `/PRD-4K7M` as a literal
+// route segment, so a recording's start screen never matched the next run's
+// (`wrong-context`). Marking the seeded codes `unique()` templates them out
+// of the cache key and the recorded paths. Uses the pinned SDK's own cache
+// modules, which its package exports do not expose.
+it("lets a recording replay against the next seed's codes", async () => {
+  const dist = path.dirname(createRequire(import.meta.url).resolve("e2e"));
+  const load = (file: string) =>
+    import(pathToFileURL(path.join(dist, file)).href);
+  const { routeOf, compareRoutes } = await load("cache/route.js");
+  const { templateParams, templateText, expandText } =
+    await load("cache/template.js");
+  const { validateParams } = await load("agent/act-validation.js");
+  const templateList = z.array(
+    z.object({ pointer: z.string(), value: z.string() }),
+  );
+  const seed = (product: string) => {
+    const ids = new JourneyIds(
+      { product, origin: "http://localhost:8787" },
+      "replay",
+    );
+    const { projected, templates } = validateParams(replayParams(ids));
+    return { projected, templates: templateList.parse(templates) };
+  };
+  const recorded = seed("PRD-4K7M");
+  const next = seed("PRD-ZZZZ");
+  expect(compareRoutes(routeOf("/PRD-4K7M"), routeOf("/PRD-ZZZZ"))).toBe(
+    "undecided",
+  );
+  expect(templateParams(next.projected, next.templates)).toEqual(
+    templateParams(recorded.projected, recorded.templates),
+  );
+  const replayed = expandText(
+    templateText("/PRD-4K7M/edit", recorded.templates),
+    new Map(next.templates.map((t) => [t.pointer, t.value])),
+  );
+  expect(compareRoutes(routeOf(replayed), routeOf("/PRD-ZZZZ/edit"))).toBe(
+    "same",
+  );
+  // A non-code seed value stays out: marking it would template every
+  // occurrence of an ordinary string in the recording.
+  expect(next.templates.map((t) => t.value)).toEqual(["PRD-ZZZZ"]);
 });

@@ -6,13 +6,13 @@ import { execFileSync, spawn } from "node:child_process";
 import { pollUntil } from "@cubby/shared/retry";
 import { walkFiles } from "../../../scripts/lib/tree-digest.ts";
 import { spawnToExit } from "../../../scripts/lib/run.ts";
+import { sharedDeviceCommand } from "../../../scripts/lib/shared-device-command.ts";
 import {
   hasMatchingSimulatorBuild,
-  hostedSimulatorBuildArgs,
+  simulatorBuildArgs,
   simulatorBuildFingerprint,
   stampSimulatorBuild,
 } from "../../../scripts/apple-simulator-build-cache.ts";
-import { withKitPackageResolution } from "../../../scripts/apple-package-resolution.ts";
 import { createHash, randomBytes } from "node:crypto";
 import {
   appendFileSync,
@@ -63,13 +63,14 @@ if (rawFlags.includes("--help") || rawFlags.includes("-h")) {
 Each run creates a fresh cubby_sim_<hex> database on localhost:55432, builds
 the web Worker (reused when provenance matches), and drops the database after.
 
-Modes (one per run; no mode = full native journey in the iOS simulator):
+Modes (one per run; no mode = search/detail smoke in the iOS simulator):
   --headless                 Swift CubbyKit CLI against the Worker, no simulator
     --photo [--purchase]     synthetic photo-inventory (+ wardrobe purchase) run
     --statement-csv          Swift CSV statement preview/import
     --watch                  stay up; press Enter to rerun
   --watch                    simulator app against real API data; Enter replays
-  --video                    full journey plus MP4 and contact sheet
+  --extended-journey         full native edit, view-switch and filter journey
+  --video                    selected journey plus MP4 and contact sheet
   --layout [--video]         layout probe screens
   --product-clarity [--video]  focused synthetic Product journey (Maestro)
   --input-journey [--video]  PhotosPicker/Files input acceptance
@@ -83,6 +84,7 @@ Modes (one per run; no mode = full native journey in the iOS simulator):
 
 Environment:
   CUBBY_SIM_DEVICE           simulator name or UDID to prefer
+  CUBBY_E2E_AGENT_DEVICE     JSON {command,targetArgs} returned by T3 device_open
   CUBBY_SIM_DB_EXTERNAL=1    skip starting PostgreSQL (already running)
   CUBBY_E2E_PREBUILT_WEB=1   trust the existing web build
   TESTER_ARMY_*              Tester Army model/journey settings
@@ -113,14 +115,45 @@ const inputJourney = flags.includes("--input-journey");
 const watch = flags.includes("--watch");
 const video = flags.includes("--video");
 const layout = flags.includes("--layout");
+const extendedJourney = flags.includes("--extended-journey");
 const productClarity = flags.includes("--product-clarity");
 const emojiReview = flags.includes("--emoji-review");
 const testerArmy = flags.includes("--tester-army");
+if (process.env.CUBBY_E2E_AGENT_DEVICE && (inputJourney || testerArmy || watch))
+  throw new Error(
+    "Shared device launcher supports finite simulator journeys; input, watch and AI lanes own their driver lifecycle",
+  );
+if (process.env.CUBBY_E2E_AGENT_DEVICE) {
+  const driver = sharedDeviceCommand("pnpm", [
+    "exec",
+    "agent-device",
+    "snapshot",
+  ]);
+  if (!driver) throw new Error("Shared device launcher is unavailable");
+  const udid = driver.args[driver.args.indexOf("--udid") + 1]!;
+  if (process.env.CUBBY_SIM_DEVICE && process.env.CUBBY_SIM_DEVICE !== udid)
+    throw new Error("Shared driver targets a different device");
+  process.env.CUBBY_SIM_DEVICE = udid;
+}
 const testerArmyReplay = flags.includes("--replay");
 const wrongName = flags.includes("--wrong") || flags.includes("--wrong-name");
 const qaPhotoCompletion = flags.includes("--qa-photo-completion");
 const qa = flags.includes("--qa") || qaPhotoCompletion;
 const qaHold = flags.includes("--hold");
+if (
+  extendedJourney &&
+  (headless ||
+    layout ||
+    productClarity ||
+    emojiReview ||
+    testerArmy ||
+    inputJourney ||
+    watch ||
+    qa)
+)
+  throw new Error(
+    "--extended-journey is a standalone simulator mode; it may add --video",
+  );
 if (
   (qa &&
     flags.some(
@@ -164,6 +197,7 @@ if (
   flags.some(
     (argument) =>
       ![
+        "--extended-journey",
         "--emoji-review",
         "--input-journey",
         "--headless",
@@ -185,7 +219,7 @@ if (
   )
 )
   throw new Error(
-    "Usage (see --help): sim-e2e.ts [--emoji-review [--video] | --input-journey [--video] | --tester-army [--journey a,b] [--replay] [--wrong] | --video | --layout [--video] | --product-clarity [--video] | --qa [--hold] [--video] [--journey qa-a,qa-b] | --watch | --headless [--watch | --photo [--purchase] | --statement-csv]]",
+    "Usage (see --help): sim-e2e.ts [--emoji-review [--video] | --input-journey [--video] | --tester-army [--journey a,b] [--replay] [--wrong] | --extended-journey [--video] | --video | --layout [--video] | --product-clarity [--video] | --qa [--hold] [--video] [--journey qa-a,qa-b] | --watch | --headless [--watch | --photo [--purchase] | --statement-csv]]",
   );
 const lane = qa
   ? "sim-qa-e2e"
@@ -241,6 +275,8 @@ let phase = "setup";
 let testerArmyDriverModel: string | undefined;
 let nativeBuildBinary: string | undefined;
 let nativeBuildSourceVersion: string | undefined;
+/** Whether the run installed a certified bundle instead of compiling one. */
+let nativeBuildReused: boolean | undefined;
 let currentNativeSourceVersion: (() => string) | undefined;
 let nativeBuildReady = false;
 const scenarioEvidence: string[] = [];
@@ -546,6 +582,10 @@ async function run(
 ): Promise<void> {
   if (interrupted && !allowInterrupted)
     throw new Error(`${lane} interrupted by ${interrupted}`);
+  const routed = sharedDeviceCommand(command, args, environment);
+  if (!routed) return;
+  command = routed.command;
+  args = routed.args;
   appendFileSync(
     path.join(artifacts, "commands.log"),
     `${command} ${args.join(" ")}\n`,
@@ -1174,6 +1214,9 @@ function nativeBuildMetadata() {
     ...(fingerprint && {
       [headless ? "cliBinarySha256" : "appBinarySha256"]: fingerprint,
     }),
+    ...(nativeBuildReused !== undefined && {
+      appBuild: nativeBuildReused ? "reused-certified" : "compiled",
+    }),
   };
   return {
     build: {
@@ -1718,7 +1761,9 @@ async function runNativeJourney(
             ? "apps/apple/e2e/product-clarity.yaml"
             : layout
               ? "apps/apple/e2e/native-layout.ad"
-              : "apps/apple/e2e/product-edit.ad",
+              : extendedJourney
+                ? "apps/apple/e2e/product-edit.ad"
+                : "apps/apple/e2e/product-browse.ad",
         ...common,
         ...(productClarity ? ["--maestro"] : []),
         "--artifacts-dir",
@@ -1747,7 +1792,7 @@ async function runNativeJourney(
   } finally {
     await stopRecording?.();
   }
-  if (!layout && !productClarity)
+  if (!layout && !productClarity && (extendedJourney || emojiReview))
     await assertNativeEdit(productId, undefined, null);
 }
 
@@ -2026,37 +2071,25 @@ async function main(): Promise<void> {
       const install = async () => {
         const buildStarted = performance.now();
         await run("pnpm", ["apple", "gen"]);
-        const hosted = process.env.GITHUB_ACTIONS === "true";
         nativeBuildSourceVersion = nativeSourceFingerprint(true);
         currentNativeSourceVersion = () => nativeSourceFingerprint(true);
-        const buildArgs = hosted
-          ? hostedSimulatorBuildArgs
-          : [
-              "-project",
-              "apps/apple/Cubby.xcodeproj",
-              "-scheme",
-              "Cubby-iOS",
-              "-configuration",
-              "Debug",
-              "-destination",
-              `platform=iOS Simulator,id=${device.udid}`,
-              "-derivedDataPath",
-              "apps/apple/DerivedData",
-              "-skipPackagePluginValidation",
-              "-skipMacroValidation",
-              "CODE_SIGNING_ALLOWED=NO",
-              "COMPILER_INDEX_STORE_ENABLE=NO",
-            ];
+        // Local and hosted lanes share one simulator-generic profile, so a
+        // certified bundle is reusable across lanes, worktree restarts, and
+        // disposable simulators. The certificate binds the resolved package
+        // state, compiler inputs, toolchain, and bundle bytes; resolve and
+        // build only when one of them no longer matches.
+        const buildArgs = simulatorBuildArgs;
         let certifiedInput: string | undefined;
-        // A certificate already binds the resolved package state to this app.
-        // Resolve again only when current inputs or bundle bytes do not match.
-        let reuseCertifiedApp =
-          hosted &&
-          hasMatchingSimulatorBuild(repoRoot, nativeToolchain, buildArgs);
-        if (hosted && !reuseCertifiedApp) {
-          await withKitPackageResolution(repoRoot, () =>
-            run("xcodebuild", [...buildArgs, "-resolvePackageDependencies"]),
-          );
+        let reuseCertifiedApp = hasMatchingSimulatorBuild(
+          repoRoot,
+          nativeToolchain,
+          buildArgs,
+        );
+        if (!reuseCertifiedApp) {
+          await run("xcodebuild", [
+            ...buildArgs,
+            "-resolvePackageDependencies",
+          ]);
           try {
             certifiedInput = simulatorBuildFingerprint(
               repoRoot,
@@ -2077,9 +2110,7 @@ async function main(): Promise<void> {
         if (reuseCertifiedApp) {
           console.log(`[${lane}] Reusing the verified simulator app bundle`);
         } else {
-          await withKitPackageResolution(repoRoot, () =>
-            run("xcodebuild", [...buildArgs, "build"]),
-          );
+          await run("xcodebuild", [...buildArgs, "build"]);
           if (certifiedInput)
             stampSimulatorBuild(
               repoRoot,
@@ -2088,6 +2119,7 @@ async function main(): Promise<void> {
               buildArgs,
             );
         }
+        nativeBuildReused = reuseCertifiedApp;
         nativeBuildBinary = path.join(appPath, "Cubby");
         nativeBuildReady = true;
         phases.push({

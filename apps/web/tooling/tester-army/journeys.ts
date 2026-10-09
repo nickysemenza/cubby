@@ -888,7 +888,22 @@ export const journeys: Journey[] = [
       },
     ],
     visible: () => [],
-    db: [purchaseParts(2, 1001)],
+    db: [
+      purchaseParts(2, 1001),
+      {
+        // The sum alone accepts any pair that conserves it (5.00 + 5.01).
+        label: "each part keeps the cents the member entered",
+        sql: `SELECT e.name, round(e.cost * 100)::int AS cents
+              FROM "Expense" e JOIN "Purchase" p ON p.id = e."purchaseId"
+              WHERE p.shortcode = $1 AND e."deletedAt" IS NULL
+              ORDER BY e.cost DESC`,
+        params: only("purchase"),
+        rows: () => [
+          { name: "Synthetic part one", cents: 600 },
+          { name: "Synthetic part two", cents: 401 },
+        ],
+      },
+    ],
   },
   {
     id: "finance-split-unknown-cost",

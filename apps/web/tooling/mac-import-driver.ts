@@ -1,11 +1,21 @@
 import { execFileSync } from "node:child_process";
 import { createHash } from "node:crypto";
-import { appendFileSync, readFileSync, writeFileSync } from "node:fs";
+import {
+  appendFileSync,
+  copyFileSync,
+  readFileSync,
+  writeFileSync,
+} from "node:fs";
 import { homedir } from "node:os";
 import path from "node:path";
 import { pollUntil } from "@cubby/shared/retry";
 import { setTimeout } from "node:timers/promises";
 import { z } from "zod";
+import { ensureMacPresentationHelper } from "../../../scripts/mac-presentation-helper.ts";
+import {
+  macFixturePaths,
+  macFixtureSigningIdentity,
+} from "./mac-fixture-identity";
 
 const nodeSchema = z.object({
   index: z.number(),
@@ -54,6 +64,7 @@ export class MacImportDriver {
   private pid: number | undefined;
   private nodes: Node[] = [];
   private aborted = false;
+  private presentationBinary: string | undefined;
   readonly evidence: string[] = [];
   private readonly helper =
     process.env.AGENT_DEVICE_MACOS_HELPER_BIN ??
@@ -69,7 +80,9 @@ export class MacImportDriver {
   ) {}
 
   private get presentationHelper(): string {
-    return path.join(this.artifacts, "mac-presentation-ax");
+    if (!this.presentationBinary)
+      throw new Error("Presentation helper is not prepared");
+    return this.presentationBinary;
   }
 
   private presentationAction(
@@ -115,11 +128,14 @@ export class MacImportDriver {
       this.repoRoot,
       "apps/web/tooling/mac-presentation-ax.swift",
     );
-    execFileSync(
-      "xcrun",
-      ["swiftc", presentationSource, "-o", this.presentationHelper],
-      { timeout: 30000 },
+    const prepared = ensureMacPresentationHelper(
+      presentationSource,
+      path.join(macFixturePaths().root, "PresentationHelper"),
+      macFixtureSigningIdentity(this.repoRoot),
     );
+    this.presentationBinary = prepared.binary;
+    const archivedHelper = path.join(this.artifacts, "mac-presentation-ax");
+    copyFileSync(prepared.binary, archivedHelper);
     const presentationBuild = path.join(
       this.artifacts,
       "presentation-helper-build.json",
@@ -132,18 +148,15 @@ export class MacImportDriver {
     writeFileSync(
       presentationBuild,
       JSON.stringify({
-        sourceSHA256: createHash("sha256")
-          .update(readFileSync(presentationSource))
-          .digest("hex"),
-        binarySHA256: createHash("sha256")
-          .update(readFileSync(this.presentationHelper))
-          .digest("hex"),
+        sourceSHA256: prepared.sourceSHA256,
+        binarySHA256: prepared.binarySHA256,
+        reused: prepared.reused,
       }),
     );
     this.evidence.push(
       presentationBuild,
       presentationSourceEvidence,
-      this.presentationHelper,
+      archivedHelper,
     );
     if (!process.env.AGENT_DEVICE_MACOS_HELPER_BIN) {
       const entry = import.meta.resolve("agent-device");

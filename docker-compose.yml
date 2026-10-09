@@ -1,6 +1,6 @@
 services:
   integresql:
-    image: ghcr.io/allaboutapps/integresql:latest
+    image: ghcr.io/allaboutapps/integresql@sha256:66b7433399f1907bad9e4b7cc7bd528ed4ebfccddecb8fd65da4af4d06a68c5a
     ports:
       - "5000:5000"
     depends_on:

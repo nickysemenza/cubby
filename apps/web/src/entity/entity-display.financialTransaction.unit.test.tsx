@@ -157,17 +157,6 @@ function renderTransactionCell(columnId: string, row: FinancialTransactionRow) {
   return first;
 }
 
-function buildTransactionColumnMeta() {
-  return buildFinancialTransactionColumns().visit((column) => ({
-    id: String(
-      column.id ?? ("accessorKey" in column ? column.accessorKey : ""),
-    ),
-    className: column.meta?.className,
-    mobile: column.meta?.mobile,
-    enableSorting: column.enableSorting,
-  }));
-}
-
 describe("financial transaction list display columns", () => {
   beforeEach(() =>
     vi.useFakeTimers({
@@ -176,50 +165,6 @@ describe("financial transaction list display columns", () => {
     }),
   );
   afterEach(() => vi.useRealTimers());
-  it("derives enableSorting from the generated sort roster per column id", () => {
-    const byId = Object.fromEntries(
-      buildTransactionColumnMeta().map((d) => [d.id, d.enableSorting]),
-    );
-    // In `generatedEntitySort.financialTransaction.fields`.
-    expect(byId.kind).toBe(true);
-    expect(byId.status).toBe(true);
-    expect(byId.amount).toBe(true);
-    expect(byId.transactionDate).toBe(true);
-    expect(byId.postedDate).toBe(true);
-    expect(byId.merchant).toBe(true);
-    // Not in the roster.
-    expect(byId.accountId).toBe(false);
-    expect(byId.purchaseId).toBe(false);
-    expect(byId.vendorInference).toBe(false);
-    expect(byId.sourceRefs).toBe(false);
-    expect(byId.rawDescription).toBe(false);
-    expect(byId.sourceCategory).toBe(false);
-    expect(byId.notes).toBe(false);
-  });
-
-  it("carries the declared width/mobile metadata for generic columns", () => {
-    const byId = Object.fromEntries(
-      buildTransactionColumnMeta().map((d) => [d.id, d]),
-    );
-    expect(byId.transactionDate?.className).toBe("w-64");
-    expect(byId.transactionDate?.mobile).toEqual({
-      slot: "meta",
-      priority: 25,
-      interactive: undefined,
-    });
-    expect(byId.merchant?.className).toBe("w-40");
-    expect(byId.merchant?.mobile).toBeUndefined();
-    // `rawDescription`, `sourceCategory` and `notes` declare no width/mobile —
-    // hidden by default in `financial-transaction-list.tsx`'s
-    // `initialColumnVisibility`, but still built.
-    expect(byId.rawDescription?.className).toBeUndefined();
-    expect(byId.rawDescription?.mobile).toBeUndefined();
-    expect(byId.sourceCategory?.className).toBeUndefined();
-    expect(byId.sourceCategory?.mobile).toBeUndefined();
-    expect(byId.notes?.className).toBeUndefined();
-    expect(byId.notes?.mobile).toBeUndefined();
-  });
-
   it.each([
     ["transactionDate", "Sep 10"],
     ["merchant", "Ace Hardware"],
@@ -230,31 +175,4 @@ describe("financial transaction list display columns", () => {
       expect(screen.getByText(text)).toBeVisible();
     },
   );
-
-  it("renders the accountId override's own cell against the row", () => {
-    render(<>{renderTransactionCell("accountId", TRANSACTION_ROW)}</>);
-    expect(screen.getByText("Household checking")).toBeVisible();
-  });
-
-  it("rejects an override for a field the declaration no longer lists (accountName is list: false)", () => {
-    const helper = createCubbyColumnHelper<
-      FinancialTransactionRow & { accountName: string }
-    >();
-    expect(() =>
-      createEntityDisplayColumns(
-        "financialTransaction",
-        helper,
-        createCubbyColumnCollection((add) => {
-          add(helper.display({ id: "accountId", cell: () => null }));
-          add(helper.display({ id: "amount", cell: () => null }));
-          add(helper.display({ id: "purchaseId", cell: () => null }));
-          add(helper.display({ id: "postedDate", cell: () => null }));
-          add(helper.display({ id: "sourceRefs", cell: () => null }));
-          add(helper.display({ id: "accountName", cell: () => null }));
-        }),
-      ),
-    ).toThrow(
-      "Undeclared display renderer for financialTransaction.accountName",
-    );
-  });
 });

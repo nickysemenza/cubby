@@ -41,6 +41,13 @@
   only assert types, declarations, constants, or mock behavior; consolidate
   duplicate cases. Preserve a named regression in a stronger test before
   removing its old assertion.
+- Keep the feedback loop outcome-driven: headless service/API checks establish
+  persisted state, money, provenance and ownership; a small Tester Army journey
+  establishes navigation and supported visible outcomes. Assert semantic states
+  and actions rather than incidental copy, ordering or DOM structure. Use
+  fingerprint-verified builds and the current HMR/device session for iteration;
+  retain exact-revision disposable runs for acceptance. See
+  [validation](docs/agents/validation.md) for test retention and deletion evidence.
 - Never write unit tests after writing the code they test. Before testing a
   system in isolation, write down all plausible ways it could fail, then write a failing
   test for the relevant behavior before implementation. Prefer E2E as the sole

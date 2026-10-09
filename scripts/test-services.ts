@@ -5,6 +5,7 @@ import {
   containerAddress,
   findContainer,
   httpReady,
+  listContainers,
   runDetached,
   stopAndRemove,
   tcpReady,
@@ -60,6 +61,36 @@ function usesAppleServices(
 
 function logPhase(label: string, startedAt: number): void {
   console.log(`[test-services] ${label} in ${Date.now() - startedAt}ms`);
+}
+
+/** SIGKILL cannot run finally. Recover only unmounted disposable test services
+ * whose owner PID is gone; persistent dev/warm services and live runs survive. */
+export async function pruneAbandonedServices(): Promise<void> {
+  for (const entry of await listContainers()) {
+    const match = /^cubby-([1-9]\d*)-[0-9a-f]{8}-(postgres|integresql)$/.exec(
+      entry.id,
+    );
+    if (!match) continue;
+    const image = match[2] === "postgres" ? postgresImage : integresqlImage;
+    if (
+      entry.configuration?.image?.reference !== image ||
+      !Array.isArray(entry.configuration.mounts) ||
+      entry.configuration.mounts.length !== 0
+    )
+      continue;
+    try {
+      process.kill(Number(match[1]), 0);
+      continue;
+    } catch (error) {
+      // EPERM also means a process exists. Unknown errors cannot prove abandonment.
+      if (
+        !(error instanceof Error && "code" in error && error.code === "ESRCH")
+      )
+        continue;
+    }
+    await stopAndRemove(entry.id);
+    console.log(`[test-services] Recovered abandoned ${entry.id}`);
+  }
 }
 
 /** Remove the fixed-name warm containers. Used by `pnpm test:services:down`. */
@@ -334,6 +365,7 @@ export async function runWithTestServices(
   }
 
   try {
+    if (managed) await pruneAbandonedServices();
     const childEnv = managed
       ? { ...env, ...(await startDatabaseServices()) }
       : env;
@@ -354,8 +386,10 @@ export async function runWithTestServices(
 
 if (import.meta.main) {
   const args = process.argv.slice(2);
-  if (args[0] === "--down") {
-    process.exitCode = await stopWarmServices().then(
+  if (args[0] === "--down" || args[0] === "--prune") {
+    process.exitCode = await (
+      args[0] === "--down" ? stopWarmServices() : pruneAbandonedServices()
+    ).then(
       () => 0,
       (error) => {
         console.error(error);

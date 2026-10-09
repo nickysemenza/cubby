@@ -1,8 +1,10 @@
+import type { AgentParams } from "e2e";
 import {
   assertDatabase,
   assertScreenRead,
   awaitRun,
   loadJourneyIds,
+  replayParams,
   stepGoal,
   type Engine,
   type Journey,
@@ -18,7 +20,7 @@ type Fixtures = {
     ios?: string;
   }) => Promise<void>;
   agent: {
-    act(goal: string): Promise<void | object>;
+    act(goal: string, options: { params: AgentParams }): Promise<void | object>;
     extract(
       instruction: string,
       options: { schema: ScreenRead["schema"] },
@@ -48,13 +50,14 @@ async function runJourneyBody(
   const ids = loadJourneyIds(journey.id);
   const wrong = process.env.TESTER_ARMY_WRONG === "1";
   const entity = journey.start ? ids.get(journey.start) : undefined;
+  const params = replayParams(ids);
   if (journey.viewport) await fixtures.setViewport?.(journey.viewport);
   await fixtures.open({ entity, ...journey.open?.(ids) });
   for (const step of journey.steps) {
     if (step.ready) await assertDatabase(journey, [step.ready], ids, false);
     if (step.awaitRun) await awaitRun(journey, step.awaitRun, ids);
     if (step.ready || step.awaitRun) await fixtures.reload();
-    await fixtures.agent.act(stepGoal(step, engine));
+    await fixtures.agent.act(stepGoal(step, engine), { params });
     await expectTexts(fixtures, step.check?.visible?.(ids) ?? [], true);
     if (step.check?.db)
       await assertDatabase(journey, step.check.db, ids, false);

@@ -12,7 +12,7 @@ booted and the relevant build artifacts warm while working on one feature.
 | App model or navigation logic                                          | Xcode MCP `RunSomeTests` for a focused app test                                                    | App-target code that the `CubbyKit` package tests and headless CLI do not compile or execute.                             |
 | Repeated simulator UI edits against real API data                      | `pnpm test:e2e:sim -- --watch`, then press Enter to replay                                         | One Debug app installation, workerd server, and disposable seeded database; a new product and database check each run.    |
 | Taps, navigation, sheets, keyboard, or accessibility                   | Use Xcode MCP device interaction or `agent-device` on an already installed simulator app           | The running app and its UI tree. Use `pnpm apple sim` to rebuild and install after code changes.                          |
-| A repeatable native user journey against a fresh database              | `pnpm test:e2e:sim`                                                                                | Debug iOS app, real auth, workerd, synthetic seed, agent-device assertions, and database readback.                        |
+| Search/detail smoke against a fresh database                           | `pnpm test:e2e:sim`                                                                                | Debug iOS app, real auth, workerd, synthetic seed, and visible search/detail identity. Headless covers client writes.     |
 | A reviewable recording of that journey                                 | `pnpm test:e2e:sim -- --video`                                                                     | The same flow plus `run.mp4` and a timestamped `contact-sheet.png` under `artifacts/sim-e2e/`. Open either file in Codex. |
 | Device-only behavior (camera, permissions, performance, installed app) | `pnpm apple ios` on a paired iPhone                                                                | Real device behavior; use Xcode/agent-device for interaction and diagnostics.                                             |
 | Mac-specific UI                                                        | `pnpm apple mac` and Mac previews/tests                                                            | The native macOS shell and window behavior.                                                                               |
@@ -156,7 +156,9 @@ the replay, edit `apps/apple/e2e/product-edit-warm.ad`; a failed replay leaves
 the server and database alive so you can inspect the screen, adjust the flow,
 and press Enter again. `agent-device replay --save-script` can capture a repaired
 flow, and `--from` can resume a divergent replay using the digest in its error.
-Use the full `test:e2e:sim` flow to check navigation through Search.
+Use `test:e2e:sim` for navigation through Search. Run
+`test:e2e:sim -- --extended-journey` for native UI editing, view switching and
+filter regressions; those interactions require that extended check.
 
 A runner watchdog timeout while typing is not by itself evidence of a slow app:
 sample both the app and the runner and check the runner's selected identifier
@@ -172,6 +174,30 @@ detached watchdog closes the session and drops that database if the runner is
 killed. Simulator runs leave evidence under `artifacts/sim-dev/<database>/`,
 including a screenshot and UI tree after replay failure; use
 `test:e2e:sim -- --video` when a reviewable MP4 and contact sheet are needed.
+
+## Build reuse and a clean checkout
+
+Every simulator lane, local or hosted, builds one simulator-generic profile
+(`scripts/apple-simulator-build-cache.ts`) and stamps the bundle with a
+certificate of its compiler inputs, resolved packages, toolchain, and bundle
+bytes. A later lane, worktree restart, or disposable simulator installs that
+bundle without compiling when the certificate still matches; the run bundle
+records `runtime.appBuild` as `reused-certified` or `compiled`. Its
+`native-build` phase includes `pnpm apple gen`, so setup and scenario time
+stay separate in `phases`.
+
+Xcode resolves the app graph into the tracked `apps/apple/Package.resolved`,
+linked into the generated project's workspace by `project.yml`. Without that
+link Xcode wrote Nuke and Sentry into `CubbyKit/Package.resolved`, floated
+their versions, and marked every native E2E bundle `dirty`. CubbyKit's
+lockfile holds only its own pins and changes through `swift package update`;
+an app package change shows up in `apps/apple/Package.resolved`.
+
+`pnpm apple mac` refuses to open a Debug app that the project team did not
+sign. macOS privacy grants (Photos, browser automation, notifications) record
+the approving app's designated requirement; an ad-hoc build from a
+`CODE_SIGNING_ALLOWED=NO` command has a per-build requirement, so opening it
+resets those grants and the next signed build asks again.
 
 ## Timing on one local Mac
 

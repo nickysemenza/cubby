@@ -53,27 +53,28 @@ contracts separately.
 
 ## Commands
 
-| Command                                                            | What it does                                                        |
-| ------------------------------------------------------------------ | ------------------------------------------------------------------- |
-| `pnpm dev`                                                         | Local workerd HMR session with isolated persistent resources        |
-| `pnpm build`                                                       | Build the production Worker bundles                                 |
-| `pnpm check`                                                       | Generate, TypeScript, lint, format, Knip                            |
-| `pnpm check:all`                                                   | `check` plus Worker/OpenAPI, script tests and security validation   |
-| `pnpm generate` / `pnpm check:clean`                               | Regenerate entity/contract/OpenAPI artifacts, then prove them clean |
-| `pnpm typecheck` · `lint` · `lint:fix` · `format` · `format:check` | Individual checks                                                   |
-| `pnpm test`                                                        | Fast unit, UI, contract and auxiliary-package tests                 |
-| `pnpm test:postgres`                                               | Authoritative PostgreSQL contracts                                  |
-| `pnpm test:e2e`                                                    | PostgreSQL-backed Playwright tests                                  |
-| `pnpm test:all`                                                    | Fast tests, then PostgreSQL, then Playwright (sequential)           |
-| `pnpm test:e2e:local`                                              | Every local-only E2E lane (headless, photo, wardrobe, simulator)    |
-| `pnpm test:e2e:sim [-- --headless\|--watch\|--video\|--layout]`    | iOS simulator or headless CLI journey against a disposable DB       |
-| `pnpm --filter @cubby/web test:e2e:watch`                          | Warm services + `vite build --watch` + Playwright `--ui`            |
-| `pnpm test:services:down`                                          | Remove warm test containers                                         |
-| `pnpm db:generate` / `pnpm db:check`                               | Generate a migration from `schema.ts` / prove migrations match it   |
-| `pnpm --filter @cubby/web db:migrate --target=production`          | Apply migrations; needs `PRODUCTION_DIRECT_DATABASE_URL`            |
-| `pnpm deploy:all`                                                  | Deploy web, purchase-agent, then usda-api                           |
-| `pnpm wasm`                                                        | Rebuild `@cubby/recipebridge` from Rust, uncached                   |
-| `pnpm apple <cli\|mac\|ios\|sim\|gen\|test>`                       | Native app products                                                 |
+| Command                                                            | What it does                                                                |
+| ------------------------------------------------------------------ | --------------------------------------------------------------------------- |
+| `pnpm dev`                                                         | Local workerd HMR session with isolated persistent resources                |
+| `pnpm build`                                                       | Build the production Worker bundles                                         |
+| `pnpm check`                                                       | Generate, TypeScript, lint, format, Knip                                    |
+| `pnpm check:all`                                                   | `check` plus Worker/OpenAPI, script tests and security validation           |
+| `pnpm generate` / `pnpm check:clean`                               | Regenerate entity/contract/OpenAPI artifacts, then prove them clean         |
+| `pnpm typecheck` · `lint` · `lint:fix` · `format` · `format:check` | Individual checks                                                           |
+| `pnpm test`                                                        | Fast unit, UI, contract and auxiliary-package tests                         |
+| `pnpm test:postgres`                                               | Authoritative PostgreSQL contracts                                          |
+| `pnpm test:e2e`                                                    | PostgreSQL-backed Playwright tests                                          |
+| `pnpm test:all`                                                    | Fast tests, then PostgreSQL, then Playwright (sequential)                   |
+| `pnpm test:e2e:local`                                              | Headless + simulator smoke; choose lanes or `--all` for extended acceptance |
+| `pnpm test:e2e:sim [-- --headless\|--watch\|--video\|--layout]`    | iOS simulator or headless CLI journey against a disposable DB               |
+| `pnpm --filter @cubby/web test:e2e:watch`                          | Warm services + `vite build --watch` + Playwright `--ui`                    |
+| `pnpm test:services:down`                                          | Remove warm test containers                                                 |
+| `pnpm test:services:prune`                                         | Recover abandoned disposable test containers                                |
+| `pnpm db:generate` / `pnpm db:check`                               | Generate a migration from `schema.ts` / prove migrations match it           |
+| `pnpm --filter @cubby/web db:migrate --target=production`          | Apply migrations; needs `PRODUCTION_DIRECT_DATABASE_URL`                    |
+| `pnpm deploy:all`                                                  | Deploy web, purchase-agent, then usda-api                                   |
+| `pnpm wasm`                                                        | Rebuild `@cubby/recipebridge` from Rust, uncached                           |
+| `pnpm apple <cli\|mac\|ios\|sim\|gen\|test>`                       | Native app products                                                         |
 
 Test suffixes: `*.unit.test.ts` (Vitest), `*.integration.test.ts` (PostgreSQL
 contracts, Vitest), `*.spec.ts` (Playwright). Which tier to use is set by the
@@ -112,6 +113,10 @@ restarts; interpret them after representative traffic. See the
   churn after a parser bump.
 - `pnpm dev` gives each checkout its own database and Worker namespace on free
   ports. Discover the session with `pnpm dev:status -- --json`.
+  Local development defaults to Apple `container` on macOS and Docker on Linux;
+  select Docker on macOS with `CUBBY_DEV_SERVICES=docker`. See
+  [local development](local-development.md#start-and-discover) for volume and
+  runtime ownership. Test services use their separate setting below.
 - To sign in locally, click **Continue as local dev user** on the sign-in page,
   or open `<origin>/__dev/login?next=/some/path`. Both sign in the seeded
   synthetic dev user (`apps/web/tooling/dev/state.ts`) through better-auth.
@@ -125,7 +130,11 @@ restarts; interpret them after representative traffic. See the
     services (`docker compose -p cubby up -d` for local Linux setup). For another
     service, override `INTEGRESQL_URL`, `INTEGRESQL_DATABASE_HOST` and
     `INTEGRESQL_DATABASE_PORT` together.
-  - After a SIGKILL, find leftovers with `container list --all`.
+  - SIGKILL cannot execute exit cleanup. The next managed run recovers abandoned
+    per-run services, or run `pnpm test:services:prune`. Recovery requires a dead
+    owner PID, the expected image and no mounts; it preserves active runs,
+    `cubby-dev-pg`, warm services and unrelated containers. A reused PID is
+    conservatively treated as live, so inspect remaining containers manually.
 - Parallelism overrides: `VITEST_MAX_WORKERS` for Vitest and Playwright's
   `--workers` flag (for example, `pnpm test:e2e --workers=2`).
 - In dev, `await __jsProfile(5000)` in the browser console summarizes the

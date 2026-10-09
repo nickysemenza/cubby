@@ -3,6 +3,7 @@ import {
   type DevSession as Session,
 } from "./state";
 import { localSimulatorServer } from "../../../../scripts/lib/simulator-server.ts";
+import { devContainerBackend } from "../../../../scripts/lib/dev-container.ts";
 import { spawn, execFileSync, type ChildProcess } from "node:child_process";
 import {
   mkdirSync,
@@ -490,7 +491,11 @@ async function diagnostics(
     checks.diagnostic = String(error);
   }
   if (command === "doctor") {
-    for (const tool of ["node", "pnpm", "container"]) {
+    for (const tool of [
+      "node",
+      "pnpm",
+      devContainerBackend() === "docker" ? "docker" : "container",
+    ]) {
       try {
         execFileSync(tool, ["--version"], { stdio: "ignore" });
         checks.tools[tool] = true;

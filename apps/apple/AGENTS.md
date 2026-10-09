@@ -8,7 +8,7 @@ Swift tests or previews for failures native E2E cannot observe,
 `test:e2e:sim -- --headless --watch` for API behavior, and
 `test:e2e:sim -- --watch` for repeated simulator UI interactions. The warm simulator
 runner owns its disposable database and agent-device session; stop it with
-Ctrl-C when done. Run `test:e2e:sim` for the full Search journey (flags: `--video`, `--layout`, `--headless [--photo [--purchase]]`, `--watch`).
+Ctrl-C when done. Run `test:e2e:sim` for search/detail smoke; editing, view switching and filtering require `--extended-journey` (other flags: `--video`, `--layout`, `--headless [--photo [--purchase]]`, `--watch`).
 
 ## Build order
 
@@ -258,6 +258,13 @@ Test on the simulator with `xcrun simctl openurl booted https://cubby.nickysemen
 - `build-rust.sh --targets sim` writes a ONE-slice xcframework; a macOS build or CLI link then
   fails "no library for this platform". Run `--targets all` first. Never run two cargo commands
   against the shared `CARGO_TARGET_DIR` at once.
+- Without a workspace lockfile Xcode serializes the app graph into the local
+  `CubbyKit/Package.resolved`. `project.yml` links the tracked
+  `apps/apple/Package.resolved` into the generated workspace; keep app pins
+  there and Kit pins in CubbyKit's file ([ITERATION.md](ITERATION.md#build-reuse-and-a-clean-checkout)).
+- Never open an unsigned (`CODE_SIGNING_ALLOWED=NO`) Mac build under
+  `com.nickysemenza.cubby`: its cdhash requirement replaces the macOS privacy
+  grants and the next team-signed build prompts again. `pnpm apple mac` checks.
 - The CLI's ad-hoc signature changes every rebuild, so Keychain re-prompts; it uses a file token
   store under Application Support instead. `URL.path()` percent-encodes — use
   `path(percentEncoded: false)` for FileManager.
