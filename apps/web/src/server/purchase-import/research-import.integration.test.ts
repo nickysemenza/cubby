@@ -39,6 +39,7 @@ import {
   runFinding,
   runFactEvidence,
   runTarget,
+  spendingCategory,
   vendor,
 } from "~/server/db/schema";
 import { getDb, withTransaction } from "~/server/repo/database-helpers";
@@ -53,6 +54,7 @@ import { insertWithShortcode } from "~/server/repo/shortcode-utils";
 import { loadCurrentFactEvidence } from "./fact-verification";
 import { resolveImportResearch } from "./research-import";
 import { researchObjectiveKey } from "./research-objective";
+import type { ResearchAssessor } from "./research-support";
 import { startTargetedImport } from "./targeted-run";
 import * as writer from "./writer";
 
@@ -770,6 +772,146 @@ describe("supported retained-mail research writes", () => {
         f.ports,
       ),
     ).rejects.toThrow(/settled|closed/);
+  });
+  it("refuses an accepted Purchase reference whose live catalog branch has no complete assessment mapping", async () => {
+    const f = await fixture(
+      "ORDER-ONE establishes a supported annual service for USD 10.",
+    );
+    const category = await insertWithShortcode(ctx.db, "spendingCategory", {
+      name: "Synthetic annual service purpose",
+    });
+    // A malformed persisted branch must fail closed even when its leaf is live.
+    await getDb(ctx.db)
+      .update(spendingCategory)
+      .set({ parentId: category.id })
+      .where(eq(spendingCategory.id, category.id));
+    const input = {
+      runId: f.run.id,
+      workRef: f.target.id,
+      callId: "synthetic-incomplete-reference-meaning",
+      proposal: researchWorkResolve.parse({
+        ...f.proposal,
+        facts: [
+          {
+            evidenceId: f.evidence.id,
+            orderIndex: 0,
+            fieldPath: "spendingCategoryId",
+            value: category.shortcode,
+            support: {
+              observation: "Annual service",
+              reasoning: "The source establishes this service purpose.",
+            },
+          },
+        ],
+      }),
+    };
+    const result = await resolveImportResearch(ctx.db, input, {
+      ...f.ports,
+      assess: async (assessment: Parameters<ResearchAssessor>[0]) => {
+        expect(assessment.context).toMatchObject({ referenceValues: [] });
+        return {
+          ...(await f.ports.assess()),
+          acceptedOrders: [0],
+          acceptedFacts: [0],
+        };
+      },
+    });
+    const [saved] = await getDb(ctx.db).select().from(purchase);
+    expect(saved?.spendingCategoryId).toBeNull();
+    expect(await getDb(ctx.db).select().from(runFactEvidence)).toEqual([]);
+    expect(result.refusals).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ path: "orders[0].spendingCategoryId" }),
+      ]),
+    );
+  });
+  it("scopes live Purchase reference meaning to each original order without merging identical catalog leaf labels", async () => {
+    const f = await fixture(
+      "ORDER-ONE: Synthetic home repairs > Annual service, USD 10. ORDER-TWO: Synthetic vehicle repairs > Annual service, USD 20.",
+    );
+    const categories = await Promise.all(
+      ["Synthetic home repairs", "Synthetic vehicle repairs"].map(
+        async (name) => {
+          const parent = await insertWithShortcode(ctx.db, "spendingCategory", {
+            name,
+          });
+          const category = await insertWithShortcode(
+            ctx.db,
+            "spendingCategory",
+            {
+              name: "Annual service",
+              parentId: parent.id,
+            },
+          );
+          return { parent, category };
+        },
+      ),
+    );
+    const input = {
+      runId: f.run.id,
+      workRef: f.target.id,
+      callId: "synthetic-scoped-reference-meaning",
+      proposal: researchWorkResolve.parse({
+        ...f.proposal,
+        facts: categories.map(({ parent, category }, orderIndex) => ({
+          evidenceId: f.evidence.id,
+          orderIndex,
+          fieldPath: "spendingCategoryId",
+          value: category.shortcode,
+          support: {
+            observation: `${parent.name} > Annual service`,
+            reasoning:
+              "The original identifies this exact acquisition's service purpose.",
+          },
+        })),
+      }),
+    };
+    let assessments = 0;
+    const ports = {
+      ...f.ports,
+      assess: async (assessment: Parameters<ResearchAssessor>[0]) => {
+        assessments++;
+        expect(assessment.context).toMatchObject({
+          referenceValues: categories.map(({ parent, category }, index) => ({
+            factIndex: index,
+            entityKind: "purchase",
+            orderIndex: index,
+            fieldPath: "spendingCategoryId",
+            reference: {
+              id: category.shortcode,
+              name: "Annual service",
+              path: [
+                { id: parent.shortcode, name: parent.name },
+                { id: category.shortcode, name: "Annual service" },
+              ],
+            },
+          })),
+        });
+        expect(assessment.observations[0]?.content).toBe(f.content);
+        return { ...(await f.ports.assess()), acceptedFacts: [0, 1] };
+      },
+    };
+    const result = await resolveImportResearch(ctx.db, input, ports);
+    const rows = await getDb(ctx.db).select().from(purchase);
+    for (const [index, { category }] of categories.entries()) {
+      const saved = rows.find(
+        (row) => row.orderId === (index === 0 ? "ORDER-ONE" : "ORDER-TWO"),
+      );
+      expect(saved?.spendingCategoryId).toBe(category.id);
+      const proof = await loadCurrentFactEvidence(ctx.db, {
+        entityKind: "purchase",
+        entityId: saved!.shortcode,
+        fieldPath: "spendingCategoryId",
+        ledgerPartyId: f.party.id,
+      });
+      expect(proof).toMatchObject([
+        { value: category.id, support: input.proposal.facts[index]?.support },
+      ]);
+    }
+    expect(rows).toHaveLength(2);
+    expect(await resolveImportResearch(ctx.db, input, ports)).toEqual(result);
+    expect(assessments).toBe(1);
+    expect(await getDb(ctx.db).select().from(expense)).toHaveLength(2);
   });
   it.each(["distinct_purposes", "shared_purpose", "filtered_order"] as const)(
     "binds accepted purpose facts to their exact original order and retains discoverable Purchase proof (%s)",

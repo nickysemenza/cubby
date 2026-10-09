@@ -201,6 +201,172 @@ describe("supported Product research writes", () => {
     };
     return { entity, run, target, evidence, proposal, ports };
   }
+  // Catalog references need host-owned meaning; identical leaf labels do not
+  // prove the same branch, and a live lookup never replaces retained support.
+  it.each([
+    "supported",
+    "different_branch",
+    "deleted",
+    "wrong_kind",
+    "invalid",
+    "deleted_after_assessment",
+    "renamed_after_assessment",
+    "reparented_after_assessment",
+    "revived_after_assessment",
+  ] as const)(
+    "assesses proposed Product references against live catalog meaning and retained support (%s)",
+    async (mode) => {
+      const parent = await insertWithShortcode(ctx.db, "productCategory", {
+        name:
+          mode === "different_branch"
+            ? "Synthetic heating equipment"
+            : "Synthetic cooling equipment",
+      });
+      const category = await insertWithShortcode(ctx.db, "productCategory", {
+        name: "Portable fans",
+        parentId: parent.id,
+      });
+      const wrongKind = await insertWithShortcode(ctx.db, "spendingCategory", {
+        name: "Portable fans",
+      });
+      const replacementParent =
+        mode === "reparented_after_assessment"
+          ? await insertWithShortcode(ctx.db, "productCategory", {
+              name: "Synthetic heating equipment",
+            })
+          : null;
+      if (mode === "deleted" || mode === "revived_after_assessment")
+        await getDb(ctx.db)
+          .update(productCategory)
+          .set({ deletedAt: new Date() })
+          .where(eq(productCategory.id, category.id));
+      const original = `${retainedText}; Synthetic cooling equipment > Portable fans`;
+      const f = await fixture("Example Works", { categoryId: null }, original);
+      const input = {
+        runId: f.run.id,
+        callId: "synthetic-reference-meaning",
+        proposal: {
+          ...f.proposal,
+          facts: [
+            {
+              evidenceId: f.evidence.id,
+              fieldPath: "categoryId",
+              value:
+                mode === "wrong_kind"
+                  ? wrongKind.shortcode
+                  : mode === "invalid"
+                    ? "not-a-catalog-reference"
+                    : category.shortcode,
+              support: {
+                ...support,
+                observation: "Synthetic cooling equipment > Portable fans",
+              },
+            },
+          ],
+        },
+      };
+      const mapped = [
+        "supported",
+        "different_branch",
+        "deleted_after_assessment",
+        "renamed_after_assessment",
+        "reparented_after_assessment",
+      ].includes(mode);
+      let assessments = 0;
+      const ports = {
+        ...f.ports,
+        assess: async (assessment: Parameters<ResearchAssessor>[0]) => {
+          assessments++;
+          expect(assessment.context).toMatchObject({
+            referenceValues: mapped
+              ? [
+                  {
+                    factIndex: 0,
+                    entityKind: "product",
+                    fieldPath: "categoryId",
+                    reference: {
+                      id: category.shortcode,
+                      name: "Portable fans",
+                      path: [
+                        { id: parent.shortcode, name: parent.name },
+                        { id: category.shortcode, name: "Portable fans" },
+                      ],
+                    },
+                  },
+                ]
+              : [],
+          });
+          expect(assessment.observations[0]?.content).toBe(original);
+          if (mode === "deleted_after_assessment")
+            await getDb(ctx.db)
+              .update(productCategory)
+              .set({ deletedAt: new Date() })
+              .where(eq(productCategory.id, category.id));
+          if (mode === "renamed_after_assessment")
+            await getDb(ctx.db)
+              .update(productCategory)
+              .set({ name: "Synthetic heating equipment" })
+              .where(eq(productCategory.id, parent.id));
+          if (mode === "reparented_after_assessment")
+            await getDb(ctx.db)
+              .update(productCategory)
+              .set({ parentId: replacementParent!.id })
+              .where(eq(productCategory.id, category.id));
+          if (mode === "revived_after_assessment")
+            await getDb(ctx.db)
+              .update(productCategory)
+              .set({ deletedAt: null })
+              .where(eq(productCategory.id, category.id));
+          return {
+            identityVerified: true,
+            acceptedFacts: mode === "different_branch" ? [] : [0],
+            acceptedIdentifiers: [],
+            acceptedImages: [],
+            rejected:
+              mode === "different_branch"
+                ? [
+                    {
+                      path: "facts.0",
+                      reason:
+                        "The source supports cooling, not this heating catalog branch.",
+                    },
+                  ]
+                : [],
+          };
+        },
+      };
+      const result = await resolveProductResearch(ctx.db, input, ports);
+      const [saved] = await getDb(ctx.db)
+        .select({ categoryId: product.categoryId })
+        .from(product)
+        .where(eq(product.id, f.entity.entityId));
+      expect(saved?.categoryId).toBe(mode === "supported" ? category.id : null);
+      const proofs = await getDb(ctx.db)
+        .select()
+        .from(runFactEvidence)
+        .where(eq(runFactEvidence.targetId, f.target.id));
+      expect(result.verifiedFields).toEqual(
+        mode === "supported" ? ["categoryId"] : [],
+      );
+      expect(proofs).toMatchObject(
+        mode === "supported"
+          ? [
+              {
+                fieldPath: "categoryId",
+                value: category.id,
+                support: input.proposal.facts[0]?.support,
+              },
+            ]
+          : [],
+      );
+      expect(proofs).toHaveLength(mode === "supported" ? 1 : 0);
+      expect(result.refusals.length > 0).toBe(mode !== "supported");
+      expect(await resolveProductResearch(ctx.db, input, ports)).toEqual(
+        result,
+      );
+      expect(assessments).toBe(1);
+    },
+  );
   // Reference writes must use the ordinary food policy, preserve member values,
   // retain canonical matching-value proof, and never invent catalog records.
   it("applies the ordinary food rule to an unclassified Product with a supported Ingredient and proves only the accepted fact", async () => {

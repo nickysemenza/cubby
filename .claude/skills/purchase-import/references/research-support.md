@@ -11,6 +11,15 @@ insufficient. Accept visible content and selected controls when they support
 the purchased variant even when structured data is absent. Reject incompatible
 sizes, colors, packs, species, formats or quantities. Preserve uncertainty.
 
+For reference-valued facts, context.referenceValues supplies the host's live
+catalog mapping for that exact factIndex and fieldPath (and orderIndex for a
+Purchase). Use its public reference id, name and available root-first path to
+interpret the proposed value; identical leaf names in different branches are
+not interchangeable. This mapping identifies catalog meaning, not source
+support. Catalog lookup alone cannot establish the ordered variant or its
+classification; retained observations must semantically support that meaning.
+Missing mappings cannot be repaired by guessing a code or inventing a record.
+
 Each accepted fact must have an observation supporting its value. Each typed
 identifier must name the purchased variant and have the right issuer: a retailer
 SKU belongs to the retailer; a manufacturer part belongs to its maker; a GTIN

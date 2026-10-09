@@ -60,6 +60,7 @@ import { receiptHuntSourceIdentity } from "./receipt-evidence";
 import {
   acceptedPurchaseField,
   commitAcceptedResearchFields,
+  loadResearchReferenceContext,
 } from "./research-accepted-fields";
 import { attachmentAssessmentContext } from "./research-attachment-content";
 import { researchAttemptDisposition } from "./research-attempt";
@@ -918,6 +919,10 @@ export async function resolveImportResearch(
           ...context,
           objective: await loadResearchObjectiveContext(db, scope, target),
           validation: validationContext,
+          referenceValues: await loadResearchReferenceContext(db, {
+            entityKind: "purchase",
+            facts: proposal.facts,
+          }),
         },
         observations,
         proposal,
@@ -1480,6 +1485,10 @@ export async function resolveImportResearch(
               live: current,
               claims,
               actor,
+              referenceAssessment: {
+                facts: proposal.facts,
+                values: assessmentInput.context.referenceValues,
+              },
             });
             hasMemberContradictions ||= committed.contradictions.length > 0;
             factRefusals.push(

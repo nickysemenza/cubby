@@ -58,6 +58,7 @@ import { productEnrichmentTarget } from "./product-enrichment-target";
 import {
   acceptedProductField,
   commitAcceptedResearchFields,
+  loadResearchReferenceContext,
 } from "./research-accepted-fields";
 import { researchAttemptDisposition } from "./research-attempt";
 import { loadProductPurchaseContext } from "./research-context";
@@ -623,7 +624,14 @@ export async function resolveProductResearch(
         ledgerPartyId: parseEntityId("ledgerParty", scope.ledgerPartyId!),
       });
       const assessmentInput = {
-        context: { product: current.live, orderedVariant },
+        context: {
+          product: current.live,
+          orderedVariant,
+          referenceValues: await loadResearchReferenceContext(db, {
+            entityKind: "product",
+            facts: proposal.facts,
+          }),
+        },
         observations,
         proposal,
       };
@@ -757,6 +765,10 @@ export async function resolveProductResearch(
             live: locked.live,
             claims: accepted,
             actor,
+            referenceAssessment: {
+              facts: proposal.facts,
+              values: assessmentInput.context.referenceValues,
+            },
           });
           refusals.push(...domainRefusals);
           let refused = false;

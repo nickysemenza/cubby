@@ -37,6 +37,9 @@ operand's shared schema.
 Validate that operand before starting SQL or Worker infrastructure. Resolve work
 through the declared output or a durable ownership relation; do not assume an
 admission call returns a Run reference.
+Check evaluation budget overrides against the harness's declared limits before
+starting containers or inference. Rejected configuration executes no scenarios
+and supplies neither regression nor real-model acceptance evidence.
 When parsing an opaque tool reply with a partial Zod object, declare every field
 the regression later inspects: undeclared fields are stripped, so parsing only
 `status` can erase issued work and manufacture a missing-task failure. A fixture
