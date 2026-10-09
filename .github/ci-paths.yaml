@@ -3,7 +3,7 @@
 full:
   - "**"
   - &notMarkdown "!**/*.@([mM][dD]|[mM][dD][xX]|[mM][aA][rR][kK][dD][oO][wW][nN])"
-  - "!apps/{apple,web,mcp-apps,usda-api}/**"
+  - "!apps/{apple,web,mcp-apps}/**"
   - "!packages/**"
   - "!cubby-ffi/**"
   - "!recipebridge/**"
@@ -11,7 +11,7 @@ full:
   - "!docker-compose*"
 
 validation:
-  - "apps/{web,mcp-apps,usda-api}/**"
+  - "apps/{web,mcp-apps}/**"
   - "packages/**"
   - "recipebridge/**"
   - "Cargo.{toml,lock}"
@@ -35,7 +35,7 @@ webMarkdown:
   - ".claude/skills/{purchase-import,product-enrichment,photo-inventory-import}/**"
 
 auxiliary:
-  - "apps/{mcp-apps,usda-api}/**"
+  - "apps/mcp-apps/**"
   - "packages/**"
   - "recipebridge/**"
   - "Cargo.{toml,lock}"

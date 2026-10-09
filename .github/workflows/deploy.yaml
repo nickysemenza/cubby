@@ -37,27 +37,3 @@ jobs:
           deploy-command: "pnpm --filter @cubby/web exec wrangler deploy --config dist/server/wrangler.json"
           cloudflare-api-token: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           cloudflare-account-id: ${{ env.CLOUDFLARE_ACCOUNT_ID }}
-
-  deploy-worker:
-    name: Deploy ${{ matrix.pkg }} Worker
-    runs-on: ubuntu-latest
-    timeout-minutes: 15
-    strategy:
-      fail-fast: false
-      matrix:
-        pkg: [usda-api]
-    concurrency:
-      group: deploy-${{ matrix.pkg }}-production
-      cancel-in-progress: false
-    environment:
-      name: cloudflare
-    steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
-      - uses: ./.github/actions/deploy-worker
-        with:
-          package: "@cubby/${{ matrix.pkg }}"
-          workspace-filter: "@cubby/${{ matrix.pkg }}..."
-          wasm: "false"
-          deploy-command: "pnpm --filter @cubby/${{ matrix.pkg }} run deploy"
-          cloudflare-api-token: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-          cloudflare-account-id: ${{ env.CLOUDFLARE_ACCOUNT_ID }}

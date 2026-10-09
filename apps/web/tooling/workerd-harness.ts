@@ -2,11 +2,17 @@ import { readFileSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
+import type { R2Bucket } from "@cloudflare/workers-types";
 import { createTestHarness, type TestHarnessOptions } from "wrangler";
 import { z } from "zod";
 
+import { SYNTHETIC_USDA_RELEASE } from "../../../scripts/lib/dev-profile.ts";
 import { acquireHarnessLock } from "../../../scripts/lib/harness-lock.ts";
 
+import {
+  seedUsdaRelease,
+  syntheticUsdaReleaseFiles,
+} from "./dev/usda-synthetic-release";
 import { COUPLED_WORKER_BUILDS, ensureWorkerBuilds } from "./worker-builds";
 
 const webRoot = path.resolve(
@@ -222,11 +228,7 @@ function compiledWebWorkerConfig(
   config.main = `dist/server/${config.main ?? "index.js"}`;
   if (config.assets) config.assets.directory = "dist/client";
   config.services = [
-    ...(config.services ?? []).map((service) =>
-      service.binding === "USDA_API"
-        ? { ...service, service: "local-offline-peers" }
-        : service,
-    ),
+    ...(config.services ?? []),
     ...(profile.purchaseAgentPeers
       ? [
           // Harness-only bindings: the agent's model provider and the
@@ -357,7 +359,8 @@ export function workerdHarnessOptions(
           R2_KEY_PREFIX: "e2e",
           R2_ACCESS_KEY_ID: "dummy",
           R2_SECRET_ACCESS_KEY: "dummy",
-          USDA_API_URL: "http://127.0.0.1:9/",
+          // Seeded into the harness's USDA_RELEASES bucket after listen().
+          USDA_ACTIVE_RELEASE: SYNTHETIC_USDA_RELEASE,
           UPC_UPSTREAM_DISABLED: "true",
           // Keyless and deterministic like CI; a model peer, when present,
           // takes precedence over the Gateway transport anyway.
@@ -496,6 +499,15 @@ export async function startWorkerdHarness(options: WorkerdHarnessOptions) {
       harness.debug();
       throw error;
     }
+    // The release object loads on its first read, so seeding after listen()
+    // still precedes any USDA request.
+    const { USDA_RELEASES } = await harness
+      .getWorker<{ USDA_RELEASES: R2Bucket }>()
+      .getEnv();
+    await seedUsdaRelease(
+      USDA_RELEASES,
+      syntheticUsdaReleaseFiles(SYNTHETIC_USDA_RELEASE),
+    );
     return Object.assign(harness, { close: cleanup.close });
   });
 }

@@ -20,7 +20,7 @@ dependency.
 | PostgreSQL                    | Neon through Cloudflare Hyperdrive | One Neon origin, two Hyperdrive configurations                                           |
 | Images and documents          | Cloudflare R2                      | Bucket `foo`, public origin `https://media.nickysemenza.com`                             |
 | Product lookup                | Main Worker + PostgreSQL           | `UpcLookupCache` table, upcitemdb fallback (no key)                                      |
-| USDA food data                | Cloudflare Workers                 | Worker `usda-api`, D1 `usda-api-index`, R2 `usda-api-bundles`                            |
+| USDA food data                | Cloudflare Workers + R2            | Worker `cubby`: Durable Object `UsdaReleaseDurableObject`, R2 `cubby-usda-releases`      |
 | AI routing                    | Cloudflare AI Gateway              | Gateway `cubby`, Workers AI binding `AI`                                                 |
 | ChatGPT plan usage            | OpenAI OAuth + Responses API       | Worker `cubby`, SQLite Durable Object `ChatGptPlanDurableObject`, binding `CHATGPT_PLAN` |
 | Semantic vectors              | Cloudflare Vectorize               | `cubby-openai-text-embedding-3-small-1536`                                               |
@@ -33,7 +33,6 @@ dependency.
 The checked-in provider configurations are:
 
 - [`apps/web/wrangler.jsonc`](../apps/web/wrangler.jsonc)
-- [`apps/usda-api/wrangler.jsonc`](../apps/usda-api/wrangler.jsonc)
 - [`.github/workflows/deploy.yaml`](../.github/workflows/deploy.yaml)
 
 ## Cloudflare
@@ -47,11 +46,14 @@ Account ID: `9f10f078d35d86c78dedece2300a6b88`.
 - Custom domain `cubby.nickysemenza.com`; `workers.dev` production routing is
   disabled and preview URLs are enabled.
 - Smart Placement and static assets.
-- Service binding `USDA_API` -> `usda-api`.
 - SQLite Durable Objects `DatabaseFreshnessDurableObject`,
   `CalendarFeedDurableObject`, `PurchaseImportDurableObject`,
-  `ImageProcessingDurableObject`, `AiResponseCacheDurableObject`, and the
-  purchase agent's `PurchaseImportRunAgent` (below).
+  `ImageProcessingDurableObject`, `AiResponseCacheDurableObject`, the
+  purchase agent's `PurchaseImportRunAgent` (below), and
+  `UsdaReleaseDurableObject` (binding `USDA_RELEASE`): one object per USDA
+  release, loaded from R2 bucket `cubby-usda-releases` (binding
+  `USDA_RELEASES`) and selected by the plaintext variable
+  `USDA_ACTIVE_RELEASE` ([ADR 0008](adr/0008-usda-release-durable-object.md)).
 - Workflows `cubby-search-index-repair`, `cubby-vendor-mail-search`, and
   `cubby-mail-discovery`. The two Gmail Workflows each execute one Run
   attempt (see [Workflow-backed Runs](#workflow-backed-runs)).
@@ -433,33 +435,22 @@ The main app uses the S3-compatible R2 endpoint for account
 public origin `https://media.nickysemenza.com`. The R2 access-key pair is scoped
 for that bucket and stored only as Worker secrets.
 
-The `usda-api` auxiliary Worker uses a native R2 binding: `USDA_BUNDLES`, bucket
-`usda-api-bundles`.
+USDA releases live in a second bucket, `cubby-usda-releases`, read through the
+main Worker's native R2 binding `USDA_RELEASES`. Each release is a `YYYY-MM/`
+prefix of gzipped NDJSON shards and a `manifest.json`; the release Durable
+Object copies the active one into its own SQLite storage. Publishing a release
+is in [development](development.md).
 
 Cloudflare DNS and the R2 custom-domain configuration must route
 `media.nickysemenza.com` to the main bucket. Image delivery depends on
 Cloudflare Image Resizing at that origin.
 
-### D1 and auxiliary Workers
+### Retired auxiliary Workers
 
-| Worker     | D1 database      | Database ID                            | Other state           |
-| ---------- | ---------------- | -------------------------------------- | --------------------- |
-| `usda-api` | `usda-api-index` | `e2e0037c-6046-4b66-85d9-03ceb0770db6` | R2 `usda-api-bundles` |
-
-The retired `upc-lookup` Worker (D1 `upc-lookup-db`, R2 `upc-images`) is
-replaced by the main Worker's `UpcLookupCache`; see
+The retired `usda-api` Worker (D1 `usda-api-index`, R2 `usda-api-bundles`) is
+replaced by the USDA release Durable Object above. The retired `upc-lookup` Worker (D1 `upc-lookup-db`, R2
+`upc-images`) is replaced by the main Worker's `UpcLookupCache`; see
 [the D1 migration runbook](runbooks/upc-d1-migration.md).
-
-D1 migrations live beside each Worker and are an explicit operator step; the
-package deploy scripts do not apply them:
-
-```bash
-pnpm --filter @cubby/usda-api run edge:d1:migrate:remote
-```
-
-Apply a migration before deploying code that requires it. The main
-Worker uses service bindings in production and checked-in public URLs as
-development fallbacks.
 
 ### Secrets and plaintext variables
 
@@ -756,7 +747,7 @@ hosted native deployment in this repository.
 For a new account or disaster recovery:
 
 1. Restore PostgreSQL and R2 before accepting writes.
-2. Recreate auxiliary D1/R2 resources and deploy `usda-api`.
+2. Recreate R2 bucket `cubby-usda-releases` and upload the active USDA release.
 3. Recreate Hyperdrive, queues, Vectorize, AI Gateway/provider access, and
    observability destinations; update checked-in IDs if they changed.
 4. Restore Worker and GitHub secrets through their providers.

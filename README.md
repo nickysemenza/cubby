@@ -149,7 +149,7 @@ flowchart TB
 | **Recipe** `RCP-`     | Something we cook                                                                  | 1:N sections → 1:N lines (ingredient + amount); N:1 Cookbook; forked from another Recipe | Scaling, cost and calorie totals, prep sheets, guided cooking |
 | **Cookbook** `CKB-`   | The book an EPUB-imported recipe set came from                                     | 1:N Recipe; N:1 Product (the physical copy, human-confirmed)                             | EPUB import, recipe provenance                                |
 | **Meal** `MEL-`       | One eating occasion on a day: cooked, eating out, takeout                          | N:M Recipe via MealRecipe (with scale); portions and direct food entries per LedgerParty | Planning calendar, shopping list, per-person nutrition        |
-| **USDA food**         | A FoodData Central reference food, served by the `usda-api` Worker                 | Linked loosely from Product by `fdc_id` or barcode                                       | Nutrition facts                                               |
+| **USDA food**         | A FoodData Central reference food, served from a per-release Durable Object        | Linked loosely from Product by `fdc_id` or barcode                                       | Nutrition facts                                               |
 
 ### Garden
 
@@ -232,7 +232,6 @@ SwiftUI app.
 | ----------------------------------------------------------------------------- | ------------------------------------------------------ |
 | [apps/web](apps/web)                                                          | The main app, HTTP API and MCP server (Worker `cubby`) |
 | [apps/apple](apps/apple)                                                      | Native iOS/macOS app, `CubbyKit`, `cubby` CLI          |
-| [apps/usda-api](apps/usda-api)                                                | USDA lookup Worker                                     |
 | [apps/mcp-apps](apps/mcp-apps)                                                | Interactive MCP UIs, inlined into `web`                |
 | [packages/](packages), [recipebridge/](recipebridge), [cubby-ffi/](cubby-ffi) | Shared schemas, WASM and Swift FFI                     |
 

@@ -39,11 +39,7 @@
       "inputs": ["repo"]
     },
     "bindings": {
-      "command": "pnpm --filter @cubby/web --filter @cubby/usda-api --workspace-concurrency=2 types:check",
-      "cache": false
-    },
-    "openapi": {
-      "command": "pnpm --filter @cubby/usda-api generate:openapi:check",
+      "command": "pnpm --filter @cubby/web types:check",
       "cache": false
     },
     "script-tests": {
@@ -55,8 +51,7 @@
       "cache": false
     },
     "fast-tests": {
-      // Aux packages (apps/mcp-apps, apps/usda-api,
-      // packages/*) run through their own cached `test` target
+      // Aux packages (apps/mcp-apps, packages/*) run through their own cached `test` target
       // (targetDefaults above) instead of `pnpm -r --workspace-concurrency=2
       // test`: an aux-untouched run replays from cache instead of competing
       // with the heavier web Vitest run for CPU. This orchestration target is

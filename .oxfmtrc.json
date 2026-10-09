@@ -42,7 +42,6 @@
     "**/drizzle/**",
     "pnpm-lock.yaml",
     "**/node_modules/**",
-    "apps/usda-api/data/**",
     "apps/web/src/ui/reui/**",
     "apps/web/src/ui/primitives/**",
     "apps/web/wasm/**",

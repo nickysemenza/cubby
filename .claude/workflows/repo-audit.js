@@ -48,7 +48,7 @@ const rootGateResults =
     : null;
 
 const COMMON = `
-You are auditing the cubby monorepo at ${ROOT}. It is a personal (single-user) pantry/recipe/meal-planning app: TanStack Start + tRPC + Drizzle/Postgres web app on Cloudflare Workers (apps/web), a Rust WASM crate (recipebridge), two smaller CF Workers (apps/usda-api), and shared packages (packages/*).
+You are auditing the cubby monorepo at ${ROOT}. It is a personal (single-user) pantry/recipe/meal-planning app: TanStack Start + tRPC + Drizzle/Postgres web app on Cloudflare Workers (apps/web), a Rust WASM crate (recipebridge), and shared packages (packages/*).
 
 HARD RULES:
 - NEVER look inside .claude/, node_modules/, target/, dist/, or generated files (routeTree.gen.ts, *.gen.*). Findings there are invalid.
@@ -123,7 +123,7 @@ const LANES = [
     codexEffort: "high",
     prompt: `${COMMON}
 LANE: Security audit.
-Scope: apps/web/src/server (tRPC routers/procedures in server/api, auth middleware, MCP server in server/mcp, agent endpoints in server/agent, AI endpoints in server/ai), apps/usda-api.
+Scope: apps/web/src/server (tRPC routers/procedures in server/api, auth middleware, MCP server in server/mcp, agent endpoints in server/agent, AI endpoints in server/ai), the USDA release Durable Object in apps/web/src/server/usda-release.
 Look for: missing auth checks on mutating tRPC procedures or server routes (compare against the _authenticated guard pattern); SQL injection (raw sql\`\` with interpolation in server/repo or server/db); secrets committed or logged; SSRF in URL-fetching endpoints (recipe scraping/import takes user URLs); unvalidated external input reaching the DB or WASM; MCP tools that bypass auth; overly permissive CORS. Auth is better-auth with passkeys — check the guard actually covers all mutation surfaces including MCP and /api routes.`,
   },
   {
@@ -180,7 +180,7 @@ Look for: unwrap/expect/panic/indexing that could panic in prod paths; #[tracing
     codexEffort: "high",
     prompt: `${COMMON}
 LANE: Performance.
-Scope: apps/web/src/server (repo queries, routers, services), apps/web/src/app list pages, apps/usda-api.
+Scope: apps/web/src/server (repo queries, routers, services), apps/web/src/app list pages, apps/web/src/server/usda-release.
 Known context: runs on Cloudflare Workers with strict cpu_ms limits and ~6-connection Hyperdrive limit; per-request pg.Pool max 5; Promise.all does NOT parallelize CPU on workerd; the workerd clock freezes during sync CPU so timing logs lie.
 Look for: N+1 query patterns in repos (loop of awaited queries where one IN query works); missing pagination on unbounded list queries; queries selecting * / heavy jsonb columns (Recipe.totals) on list endpoints that do not need them; sequential awaits that should be Promise.all (real I/O, not CPU); missing DB indexes for hot predicates visible in schema.ts vs query patterns; oversized client bundles (heavy imports at route top-level that should be lazy); React list pages rendering unvirtualized huge lists. Verify each with actual code reading.`,
   },
@@ -237,8 +237,8 @@ Look for: README claims that contradict the actual code (commands that no longer
     codexEffort: "high",
     prompt: `${COMMON}
 LANE: Cloudflare Workers apps & config.
-Scope: apps/usda-api, apps/web wrangler config + cf-server.ts + cf-env.ts, packages/worker-tracing, packages/wasm.
-Look for: floating promises (unawaited async without ctx.waitUntil — silently dropped on workerd); global mutable state shared across requests in a reused isolate (caches without bounds, per-request data leaking); missing error handling on D1/R2/KV calls; wrangler.toml/jsonc drift (bindings declared but unused, or code reading env keys not declared); compatibility-date issues; response streams not consumed/cancelled (connection leak); secrets read at module scope. The usda-api uses D1+R2; upc-lookup has a negative cache on a separate D1 needing db:migrate:remote on deploy — check migrations are consistent with schema.`,
+Scope: apps/web wrangler config + cf-server.ts + cf-env.ts, packages/worker-tracing, packages/wasm.
+Look for: floating promises (unawaited async without ctx.waitUntil — silently dropped on workerd); global mutable state shared across requests in a reused isolate (caches without bounds, per-request data leaking); missing error handling on D1/R2/KV calls; wrangler.toml/jsonc drift (bindings declared but unused, or code reading env keys not declared); compatibility-date issues; response streams not consumed/cancelled (connection leak); secrets read at module scope. The USDA release Durable Object loads its SQLite tables from R2 shards — check the load is resumable and idempotent.`,
   },
 ];
 

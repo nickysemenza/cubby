@@ -138,17 +138,6 @@
       // Consumed by `src/app.css`'s @import, which knip doesn't follow.
       "ignoreDependencies": ["@cubby/design-tokens"]
     },
-    "apps/usda-api": {
-      "entry": [
-        "src/worker.ts!",
-        "src/local-dev.ts!",
-        "src/db/import-usda.ts!",
-        "src/**/*.test.ts!",
-        "scripts/**/*.ts!",
-        "drizzle.config.ts!"
-      ],
-      "project": ["src/**/*.ts!"]
-    },
     "packages/schemas": {
       "entry": [
         "src/index.ts!",
