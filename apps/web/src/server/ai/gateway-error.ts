@@ -1,4 +1,7 @@
-import type { GatewayResponseFailure } from "@cubby/shared/ai/gateway-request";
+import type {
+  GatewayResponseFailure,
+  GatewayResponseWire,
+} from "@cubby/shared/ai/gateway-request";
 
 import { describeErrorCauses } from "~/lib/error-diagnostics";
 import type { UnparsedError } from "~/lib/error-utils";
@@ -42,6 +45,7 @@ export function wrapAiGatewayError(
     operation: string;
     gatewayLogId?: string | null;
     recoveredFailures?: readonly GatewayResponseFailure[];
+    responseWire?: GatewayResponseWire;
   },
   responseFailure?: GatewayResponseFailure,
 ): Error {
@@ -55,8 +59,16 @@ export function wrapAiGatewayError(
   const recovered = context.recoveredFailures?.length
     ? `; recovered refusals: ${context.recoveredFailures.map((failure) => `${failure.status} ${failure.statusText}: ${failure.body}`).join("; ")}`
     : "";
+  const wire =
+    context.responseWire && !responseFailure
+      ? `; response wire: ${JSON.stringify({
+          status: context.responseWire.status,
+          contentType: context.responseWire.contentType?.slice(0, 128) ?? null,
+          requestId: context.responseWire.requestId?.slice(0, 128) ?? null,
+        })}`
+      : "";
   return new AiGatewayRequestError(
-    `AI Gateway request failed (model: ${context.model}, provider: ${context.provider}, route: ${context.route}, feature: ${context.feature}, operation: ${context.operation}${log}): ${reason}${recovered}`,
+    `AI Gateway request failed (model: ${context.model}, provider: ${context.provider}, route: ${context.route}, feature: ${context.feature}, operation: ${context.operation}${log}): ${reason}${recovered}${wire}`,
     cause,
   );
 }

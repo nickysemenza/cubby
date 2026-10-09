@@ -69,7 +69,15 @@ Other HTTP errors, network/abort errors and partial streaming failures do not
 fall back. Passive stream diagnostics retain a complete JSON error envelope from
 the first 64 KiB read by the SDK: actual HTTP status, content type, request ID,
 first eight preceding event names and their total count, plus serialized error
-data. The complete diagnostic is capped at 4 KiB at a UTF-8 boundary. Nested provider error objects retain their fields; direct
+data. Observation follows a decoded request's `stream: true` or an SSE response
+Content-Type; missing or incorrect response MIME does not hide a requested
+stream's error. Stream/blob request bodies remain unread. A JSON-string
+`event: error` is retained within the same bounds; strings in other events are
+never retained as diagnostics. Structured-feature failures without an observed
+error envelope retain response status, Content-Type and request ID separately
+from usage accounting, with each displayed header capped at 128 characters.
+Recovered responses do not label a later admission or network failure.
+The complete diagnostic is capped at 4 KiB at a UTF-8 boundary. Nested provider error objects retain their fields; direct
 error events retain type/code/message/param. Failed-response output is excluded. Observation is bounded to 64 KiB of buffered SSE characters and ignores error
 data over 16 KiB regardless of chunk boundaries. Oversized preceding events are
 counted without retaining their data; later bounded errors remain observable.

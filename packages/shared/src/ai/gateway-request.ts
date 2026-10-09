@@ -192,10 +192,20 @@ export interface GatewayResponseFailure {
   retryAfter: string | null;
 }
 
+/** Bounded wire evidence for a response that carries no error envelope. */
+export interface GatewayResponseWire {
+  status: number;
+  contentType: string | null;
+  requestId: string | null;
+}
+
 /** Observers every transport branch reports each received response to. */
 export interface GatewayResponseObservers {
-  /** Every received response, without consuming its body. */
-  onResponse?: (info: GatewayResponseInfo) => void;
+  /**
+   * Every received response, without consuming its body. `wire` is always
+   * supplied here; it stays optional so test doubles may report `info` alone.
+   */
+  onResponse?: (info: GatewayResponseInfo, wire?: GatewayResponseWire) => void;
   /** Preserve HTTP or bounded SSE error diagnostics before the SDK replaces them. */
   onErrorResponse?: (failure: GatewayResponseFailure) => void;
   /** An observed refusal is being recovered; it is no longer the terminal failure. */
@@ -222,6 +232,21 @@ function observeStreamFailure(
     eventsSeen += 1;
     if (priorEvents.length < 8) priorEvents.push(type.slice(0, 200));
   };
+  const report = (type: string, errorData: GatewayQuery[string]) => {
+    observing = false;
+    const diagnostic = `SSE ${JSON.stringify({ event: type.slice(0, 200), contentType: response.headers.get("content-type"), requestId: response.headers.get("x-request-id"), priorEvents, eventsSeen })}\n${JSON.stringify(errorData)}`;
+    // Streaming decode drops an incomplete trailing UTF-8 sequence.
+    const body = new TextDecoder().decode(
+      new TextEncoder().encode(diagnostic).subarray(0, 4_096),
+      { stream: true },
+    );
+    onErrorResponse({
+      status: response.status,
+      statusText: response.statusText,
+      retryAfter: response.headers.get("retry-after"),
+      body,
+    });
+  };
   const parser = createParser({
     // Framing counts toward parser buffering, but not decoded error data.
     maxBufferSize: 65_536,
@@ -242,6 +267,12 @@ function observeStreamFailure(
         recordPriorEvent(event.event ?? "unnamed");
         return;
       }
+      // A JSON-string `event: error` is the error itself; other strings are output.
+      const message = z.string().safeParse(decoded);
+      if (event.event === "error" && message.success) {
+        report(event.event, message.data);
+        return;
+      }
       const envelope = z
         .looseObject({
           type: z.string().optional(),
@@ -257,31 +288,20 @@ function observeStreamFailure(
           envelope.data.error != null ||
           envelope.data.response?.error != null)
       ) {
-        observing = false;
         // A failed Response may contain output; only its error is diagnostic.
-        const errorData =
+        report(
+          type,
           envelope.data.error ??
-          envelope.data.response?.error ??
-          z
-            .object({
-              type: z.string().optional(),
-              code: z.json().optional(),
-              message: z.json().optional(),
-              param: z.json().optional(),
-            })
-            .parse(envelope.data);
-        const diagnostic = `SSE ${JSON.stringify({ event: type.slice(0, 200), contentType: response.headers.get("content-type"), requestId: response.headers.get("x-request-id"), priorEvents, eventsSeen })}\n${JSON.stringify(errorData)}`;
-        // Streaming decode drops an incomplete trailing UTF-8 sequence.
-        const body = new TextDecoder().decode(
-          new TextEncoder().encode(diagnostic).subarray(0, 4_096),
-          { stream: true },
+            envelope.data.response?.error ??
+            z
+              .object({
+                type: z.string().optional(),
+                code: z.json().optional(),
+                message: z.json().optional(),
+                param: z.json().optional(),
+              })
+              .parse(envelope.data),
         );
-        onErrorResponse({
-          status: response.status,
-          statusText: response.statusText,
-          retryAfter: response.headers.get("retry-after"),
-          body,
-        });
       } else {
         recordPriorEvent(type);
       }
@@ -329,19 +349,29 @@ function observeStreamFailure(
   });
 }
 
-/** Reports diagnostics while preserving the SDK’s response bytes and cancellation. */
+/**
+ * Reports diagnostics while preserving the SDK’s response bytes and cancellation.
+ * A provider SDK that requested a stream parses SSE whatever the response MIME
+ * says, so the request — not only `Content-Type` — decides stream observation.
+ */
 async function observeGatewayResponse(
   response: Response,
   observers: GatewayResponseObservers,
+  streamRequested: boolean,
 ): Promise<Response> {
-  observers.onResponse?.(gatewayResponseInfo(response));
+  observers.onResponse?.(gatewayResponseInfo(response), {
+    status: response.status,
+    contentType: response.headers.get("content-type"),
+    requestId: response.headers.get("x-request-id"),
+  });
   if (!observers.onErrorResponse) return response;
   if (response.ok)
-    return response.headers
-      .get("content-type")
-      ?.split(";", 1)[0]
-      ?.trim()
-      .toLowerCase() === "text/event-stream"
+    return streamRequested ||
+      response.headers
+        .get("content-type")
+        ?.split(";", 1)[0]
+        ?.trim()
+        .toLowerCase() === "text/event-stream"
       ? observeStreamFailure(response, observers.onErrorResponse)
       : response;
   const reader = response.clone().body?.getReader();
@@ -498,8 +528,20 @@ export function gatewayFetchThrough(routes: GatewayFetchRoutes): typeof fetch {
           (query) => routes.rewriteQuery?.(query) ?? query,
         )),
     };
-    const observe = (response: Response) =>
-      observeGatewayResponse(response, routes);
+    // Reads the already-decoded query or a string body; never consumes a stream body.
+    const streamRequested = async () => {
+      let query: unknown = await decoded;
+      const body = z.string().safeParse(init?.body);
+      if (!decoded && body.success)
+        try {
+          query = JSON.parse(body.data);
+        } catch {
+          // SILENT: an undecodable body falls back to the response MIME.
+        }
+      return z.object({ stream: z.literal(true) }).safeParse(query).success;
+    };
+    const observe = async (response: Response) =>
+      observeGatewayResponse(response, routes, await streamRequested());
 
     const testPeer = routes.testPeer?.();
     if (testPeer) {
@@ -529,6 +571,7 @@ export function gatewayFetchThrough(routes: GatewayFetchRoutes): typeof fetch {
               if (recover) routes.onRecoveredErrorResponse?.(failure);
             },
           },
+          await streamRequested(),
         );
         if (!recover) return observedSubscription;
         await subscription.body?.cancel();

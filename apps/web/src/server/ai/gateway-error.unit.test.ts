@@ -24,6 +24,21 @@ const rateLimited = (retryAfter: string | null) =>
   });
 
 describe("AI Gateway error context", () => {
+  it("bounds wire headers without changing the original cause or implying a retry", () => {
+    const cause = new Error("Synthetic stream failure");
+    const error = wrapAiGatewayError(cause, {
+      ...context,
+      responseWire: {
+        status: 200,
+        contentType: "x".repeat(10_000),
+        requestId: "y".repeat(10_000),
+      },
+    });
+    expect(error.cause).toBe(cause);
+    expect(error.message).toContain('response wire: {"status":200');
+    expect(error.message.length).toBeLessThan(1000);
+    expect(isAiGatewayRateLimit(error)).toBe(false);
+  });
   it("shows the HTTP failure when the provider adapter only reports a generic message", () => {
     const error = wrapAiGatewayError(
       new Error("An error occurred while processing the request."),

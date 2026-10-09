@@ -190,6 +190,40 @@ it("keeps the model, gateway route, operation, and provider cause on a failed ca
   });
 });
 
+it("retains response headers when a requested stream fails outside an observed error envelope", async () => {
+  const providerError = new Error("Synthetic stream refusal");
+  const faux = fauxProvider();
+  const ports: StructuredRunPorts = {
+    callTarget: (_model, call) => ({
+      model: faux.getModel(),
+      complete: async () => {
+        call.onResponse?.(
+          { gatewayLogId: null, gatewayCacheStatus: null },
+          {
+            status: 200,
+            contentType: "application/json",
+            requestId: "synthetic-request",
+          },
+        );
+        throw providerError;
+      },
+    }),
+  };
+  await expect(
+    runStructuredFeature(
+      PURCHASE_IMPORT_REPAIR_FEATURE,
+      request,
+      { runId, operation: "purchaseImport.repair" },
+      ports,
+    ),
+  ).rejects.toMatchObject({
+    message: expect.stringContaining(
+      'response wire: {"status":200,"contentType":"application/json","requestId":"synthetic-request"}',
+    ),
+    cause: providerError,
+  });
+});
+
 it("keeps paid admission refusal as the terminal cause after a recovered subscription quota response", async () => {
   const budgetError = new Error("Synthetic durable allowance exhausted");
   const refusal = {
@@ -203,6 +237,14 @@ it("keeps paid admission refusal as the terminal cause after a recovered subscri
     callTarget: (_model, call) => ({
       model: faux.getModel(),
       complete: async () => {
+        call.onResponse?.(
+          { gatewayLogId: null, gatewayCacheStatus: null },
+          {
+            status: 429,
+            contentType: "application/json",
+            requestId: "recovered-request",
+          },
+        );
         call.onErrorResponse?.(refusal);
         call.onRecoveredErrorResponse?.(refusal);
         throw budgetError;

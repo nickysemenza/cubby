@@ -3,6 +3,7 @@ import type { AiUsageTransport } from "@cubby/schemas/telemetry";
 import type {
   GatewayResponseFailure,
   GatewayResponseInfo,
+  GatewayResponseWire,
 } from "@cubby/shared/ai/gateway-request";
 import type { OpenAiEffort } from "@cubby/shared/ai/models";
 import {
@@ -707,6 +708,7 @@ export async function runStructuredFeature<T>(
     let response: AssistantMessage | undefined;
     // pi-ai may retry inside one call; the last response is the answer's.
     let gateway: GatewayResponseInfo | undefined;
+    let responseWire: GatewayResponseWire | undefined;
     const call: GatewayCallOptions = {
       ...plan.call,
       onErrorResponse: (failure) => {
@@ -715,12 +717,15 @@ export async function runStructuredFeature<T>(
       onRecoveredErrorResponse: (failure) => {
         recoveredFailures.push(failure);
         responseFailure = undefined;
+        responseWire = undefined;
       },
-      onResponse: (info) => {
+      onResponse: (info, wire) => {
         gateway = info;
+        responseWire = wire;
       },
       onTransport: (selected) => {
         transport = selected;
+        responseWire = undefined;
       },
     };
     const startedAt = performance.now();
@@ -774,6 +779,7 @@ export async function runStructuredFeature<T>(
           operation: ctx.operation,
           gatewayLogId: gateway?.gatewayLogId,
           recoveredFailures,
+          responseWire,
         },
         responseFailure,
       );
@@ -860,14 +866,17 @@ export async function runEmbeddingFeature(
   const startedAt = performance.now();
   let transport: AiUsageTransport = "unknown";
   let gateway: GatewayResponseInfo | undefined;
+  let responseWire: GatewayResponseWire | undefined;
   const usageCtx = ctx.runId ? { ...ctx, runId: ctx.runId } : null;
   const result = await args
     .embed({
       onTransport: (selected) => {
         transport = selected;
+        responseWire = undefined;
       },
-      onResponse: (info) => {
+      onResponse: (info, wire) => {
         gateway = info;
+        responseWire = wire;
       },
     })
     .catch(async (error: UnparsedError) => {
@@ -887,6 +896,7 @@ export async function runEmbeddingFeature(
         feature: spec.feature,
         operation: ctx.operation,
         gatewayLogId: gateway?.gatewayLogId,
+        responseWire,
       });
     });
   if (usageCtx) {
