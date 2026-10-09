@@ -1,0 +1,25 @@
+apps/web/src/lib/sentry-cf-shim.ts
+  s_2e87acf1f13363::t_3a083e1bf8152b 17
+apps/web/src/lib/sentry-client.ts
+  s_2e87acf1f13363::t_7d6342b7515258 1-99
+apps/web/src/router.tsx
+  s_2e87acf1f13363::t_55dc24580d4e9b 7,48,52
+apps/web/src/ui/route-error.tsx
+  s_2e87acf1f13363::t_a7b72f0b5864e7 22,130,133
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "9e8e78e73134bb86136e6174ea3627e4a69fb342",
+  "prompts": {},
+  "sessions": {
+    "s_2e87acf1f13363": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "31108f72-a141-4ae8-90c0-f38f0969a4e7",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "nicky <nicky@cloudflare.com>"
+    }
+  }
+}
