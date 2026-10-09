@@ -49,11 +49,11 @@ mod parse;
 mod reconcile;
 mod scaling;
 
+#[cfg(feature = "ai-usage")]
+pub use ai_usage::*;
 pub use availability::*;
 pub use conversion::*;
 pub use costing::*;
-#[cfg(feature = "ai-usage")]
-pub use ai_usage::*;
 pub use display_format::*;
 pub use estimates::*;
 pub use food_calculation::*;
