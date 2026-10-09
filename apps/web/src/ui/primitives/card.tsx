@@ -29,7 +29,7 @@ function CardHeader({ className, ...props }: React.ComponentProps<"div">) {
     <div
       data-slot="card-header"
       className={cn(
-        "group/card-header @container/card-header grid auto-rows-min items-start gap-1 px-3.5 sm:px-4 group-data-[size=sm]/card:px-3 has-data-[slot=card-action]:grid-cols-[1fr_auto] has-data-[slot=card-description]:grid-rows-[auto_auto] [.border-b]:pb-3 group-data-[size=sm]/card:[.border-b]:pb-2.5",
+        "group/card-header @container/card-header grid auto-rows-min items-start gap-1 px-3 group-data-[size=sm]/card:px-2.5 has-data-[slot=card-action]:grid-cols-[1fr_auto] has-data-[slot=card-description]:grid-rows-[auto_auto] [.border-b]:pb-3 group-data-[size=sm]/card:[.border-b]:pb-2.5",
         className,
       )}
       {...props}
@@ -90,7 +90,7 @@ function CardContent({ className, ...props }: React.ComponentProps<"div">) {
       // / `px-4 py-1` overrides — they fight the container and were the source of
       // the per-card padding drift. `space-y-*` for inner spacing is fine; use
       // `p-0` only to deliberately run content flush to the card edge (tables).
-      className={cn("px-3.5 sm:px-4 group-data-[size=sm]/card:px-3", className)}
+      className={cn("px-3 group-data-[size=sm]/card:px-2.5", className)}
       {...props}
     />
   );

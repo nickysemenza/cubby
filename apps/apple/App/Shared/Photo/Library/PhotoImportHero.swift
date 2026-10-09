@@ -345,7 +345,7 @@ private struct PhotoImportFullScreenViewer: View {
                             item: item, maxPixelSize: 1_800, fullResolution: true
                         )
                         .frame(maxWidth: .infinity, maxHeight: .infinity)
-                        .padding()
+                        .padding(FieldGuideTokens.Space.md)
                     }
                     HStack {
                         Button("Previous", systemImage: "chevron.left") {
@@ -360,7 +360,7 @@ private struct PhotoImportFullScreenViewer: View {
                         }
                         .disabled(selectedIndex >= items.count - 1)
                     }
-                    .padding()
+                    .padding(FieldGuideTokens.Space.md)
                 }
                 .background(.black)
                 .navigationTitle(title)
@@ -381,7 +381,7 @@ private struct PhotoImportFullScreenViewer: View {
                             item: item, maxPixelSize: 1_800, fullResolution: true
                         )
                         .tag(item.id)
-                        .padding()
+                        .padding(FieldGuideTokens.Space.md)
                         .accessibilityLabel(
                             "Photo \(items.firstIndex(where: { $0.id == item.id }).map { $0 + 1 } ?? 0) of \(items.count)"
                         )

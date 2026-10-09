@@ -110,7 +110,7 @@ CubbyAPI plugin's OpenAPI inputs) → `xcodegen generate --spec apps/apple/proje
   parameters, never strings.
 - Every SwiftUI view gets a `#Preview`, fed by `PreviewFixtures` where practical; API-typed
   fixtures are generated (see Generated files).
-- Screen density (inline titles, system spacing, toolbar-placed actions, hero sizing): see
+- Screen density (inline titles, compact token spacing, count style, toolbar-placed actions, hero sizing): see
   `apps/apple/DESIGN.md` § Density.
 - `#Playground` blocks (`import Playgrounds`) only under `#if DEBUG`. They are exploration
   aids for Xcode, not a verification tier.

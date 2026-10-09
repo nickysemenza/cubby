@@ -36,7 +36,8 @@ enum FieldGuideTokens {
     static let radiusChip = FieldGuideMetrics.radiusChip
     static let hairlineWidth: CGFloat = 1
 
-    /// The 4/8/12/16/20/24 rhythm. Phone content is normal density; targets stay >= 44pt.
+    /// The compact 4/8/12/12/16/16 rhythm: `lg` equals `md` and `xxl` equals `xl`, so screen edges
+    /// and section gaps stay tight. Density never shrinks a phone target below 44pt.
     enum Space {
         static let xs = FieldGuideMetrics.space1
         static let sm = FieldGuideMetrics.space2
@@ -110,10 +111,19 @@ extension EntityKey {
 
 /// Editorial headings use a system serif; all reading and controls retain Dynamic Type.
 extension Font {
-    /// Detail identity only.
+    /// Dashboard and sign-in identity (Mac Today, Login), and a record title on Mac.
     static let fieldGuideDisplay = Font.system(.largeTitle, design: .serif).weight(.semibold)
     /// Page identity and major regions.
     static let fieldGuideHeadline = Font.system(.title2, design: .serif).weight(.semibold)
+    /// A record detail's hero title. Phone steps down to the headline size so the title does not
+    /// push the record's data below the first screen; Mac keeps the display size.
+    static var fieldGuideRecordTitle: Font {
+        #if os(iOS)
+            fieldGuideHeadline
+        #else
+            fieldGuideDisplay
+        #endif
+    }
     /// Panels, rows, and section titles.
     static let fieldGuideTitle = Font.subheadline.weight(.semibold)
     /// Explanations and continuous reading.

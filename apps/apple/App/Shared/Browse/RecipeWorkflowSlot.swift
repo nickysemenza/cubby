@@ -282,7 +282,7 @@ struct RecipeCookModeView: View {
                 }
             }
         }
-        .padding()
+        .padding(FieldGuideTokens.Space.md)
         .navigationTitle(plan.title)
         #if os(iOS)
             .navigationBarTitleDisplayMode(.inline)

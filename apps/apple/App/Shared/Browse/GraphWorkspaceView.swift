@@ -237,11 +237,11 @@ private struct GraphExplorerPane: View {
                     .foregroundStyle(.secondary)
             }
         }
-        .padding(embedded ? 0 : 16)
+        .padding(embedded ? 0 : FieldGuideTokens.Space.md)
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
         .sheet(isPresented: Binding(get: { inspecting && !wide }, set: { inspecting = $0 })) {
             NavigationStack {
-                inspector.padding().navigationTitle("Graph inspector")
+                inspector.padding(FieldGuideTokens.Space.md).navigationTitle("Graph inspector")
                     .toolbar {
                         ToolbarItem(placement: .confirmationAction) { Button("Done") { inspecting = false } }
                     }

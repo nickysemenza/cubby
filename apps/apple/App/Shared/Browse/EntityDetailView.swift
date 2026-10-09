@@ -179,7 +179,7 @@ struct EntityDetailView: View {
                 if let error = model.refreshError {
                     InlineLoadFailure(message: error) { await model.refresh(id: row.id) }
                         .frame(maxWidth: .infinity, alignment: .leading)
-                        .padding()
+                        .padding(FieldGuideTokens.Space.md)
                 }
                 EntityDetailContent(
                     descriptor: descriptor, row: row,

@@ -397,9 +397,10 @@ private struct PhotoLibraryBrowser: View {
 
     private var permissionFallback: some View {
         ScrollView {
-            VStack(alignment: .leading, spacing: 20) {
-                Image(systemName: "photo.on.rectangle.angled").font(.largeTitle)
-                Text("Your Photos library, alongside Cubby").font(.title2)
+            VStack(alignment: .leading, spacing: FieldGuideTokens.Space.md) {
+                Image(systemName: "photo.on.rectangle.angled").font(.title2)
+                    .foregroundStyle(.secondary).accessibilityHidden(true)
+                Text("Your Photos library, alongside Cubby").font(.headline)
                 Text(
                     "Allow full Photos access to browse your camera roll and see which photos are represented in Cubby. Uploads happen only when you choose a destination and add them."
                 )
@@ -414,7 +415,7 @@ private struct PhotoLibraryBrowser: View {
                     .foregroundStyle(.secondary)
                 }
                 PhotoSourceButtons(maxSelectionCount: maxSelectionCount ?? 100, onSelection: onSelection)
-            }.padding(24).frame(maxWidth: 560)
+            }.padding(FieldGuideTokens.Space.lg).frame(maxWidth: 560)
         }
     }
 

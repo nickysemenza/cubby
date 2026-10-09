@@ -48,7 +48,7 @@ describe("WorkspaceNavigator interactions", () => {
       screen.getAllByRole("link", { name: /Projects/ })[0],
     ).toHaveTextContent("0 records");
     expect(
-      screen.getAllByRole("link", { name: "Household calendar" }).length,
+      screen.getAllByRole("link", { name: "Calendar" }).length,
     ).toBeGreaterThan(0);
   });
 

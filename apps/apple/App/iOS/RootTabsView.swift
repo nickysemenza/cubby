@@ -9,20 +9,20 @@ struct LibraryHomeView: View {
 
     var body: some View {
         ScrollView {
-            VStack(alignment: .leading, spacing: 24) {
-                Text("Library").font(.largeTitle.bold())
+            // The inline navigation title names the screen; no second in-content title.
+            Group {
                 if dynamicTypeSize.isAccessibilitySize {
-                    VStack(alignment: .leading, spacing: 20) {
+                    VStack(alignment: .leading, spacing: FieldGuideTokens.Space.lg) {
                         photosPanel
                         catalogPanel
                     }
                 } else {
                     ViewThatFits(in: .horizontal) {
-                        HStack(alignment: .top, spacing: 20) {
+                        HStack(alignment: .top, spacing: FieldGuideTokens.Space.lg) {
                             photosPanel.frame(minWidth: 280)
                             catalogPanel.frame(minWidth: 280)
                         }
-                        VStack(alignment: .leading, spacing: 20) {
+                        VStack(alignment: .leading, spacing: FieldGuideTokens.Space.lg) {
                             photosPanel
                             catalogPanel
                         }
@@ -31,7 +31,7 @@ struct LibraryHomeView: View {
             }
             .frame(maxWidth: 960, alignment: .leading)
             .frame(maxWidth: .infinity, alignment: .top)
-            .padding(20)
+            .padding(FieldGuideTokens.Space.lg)
         }
         .navigationTitle("Library")
         .task { loadRecentAssets() }
@@ -39,7 +39,7 @@ struct LibraryHomeView: View {
 
     private var photosPanel: some View {
         GroupBox {
-            VStack(alignment: .leading, spacing: 14) {
+            VStack(alignment: .leading, spacing: FieldGuideTokens.Space.md) {
                 if canReadPhotos && !recentAssets.isEmpty {
                     ScrollView(.horizontal) {
                         HStack(spacing: 8) {
@@ -67,7 +67,7 @@ struct LibraryHomeView: View {
 
     private var catalogPanel: some View {
         GroupBox {
-            VStack(alignment: .leading, spacing: 14) {
+            VStack(alignment: .leading, spacing: FieldGuideTokens.Space.md) {
                 Text("Browse records by kind, with counts and filters.")
                     .foregroundStyle(.secondary)
                 NavigationLink(value: Route.browseCatalog) {

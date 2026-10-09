@@ -4,6 +4,9 @@ import SwiftUI
 struct RootSplitView: View {
     @Environment(AppModel.self) private var model
     @SceneStorage("cubby.selectedSection") private var storedSection = AppSection.today.rawValue
+    /// Comma-joined `AppDomain` raw values whose sidebar section the user collapsed. App-wide, so
+    /// a new window opens with the same sections folded.
+    @AppStorage("cubby.sidebar.collapsedDomains") private var collapsedDomains = ""
     @State private var didRestoreSection = false
     @State private var browsing: NativeBrowserSession?
 
@@ -90,7 +93,7 @@ struct RootSplitView: View {
                 }
             }
             ForEach(AppDomain.allCases) { domain in
-                Section(domain.title) {
+                Section(domain.title, isExpanded: isExpanded(domain)) {
                     ForEach(
                         EntityCatalog.all.filter {
                             $0.key.domain == domain && $0.key.nativeActions.contains(.list)
@@ -103,8 +106,24 @@ struct RootSplitView: View {
             }
         }
         .listStyle(.sidebar)
+        .environment(\.sidebarRowSize, .small)
         .accessibilityIdentifier("sidebar.destinations")
-        .navigationSplitViewColumnWidth(min: 180, ideal: 220, max: 280)
+        .navigationSplitViewColumnWidth(min: 170, ideal: 200, max: 260)
+    }
+
+    private func isExpanded(_ domain: AppDomain) -> Binding<Bool> {
+        Binding(
+            get: { !collapsedDomainSet.contains(domain.rawValue) },
+            set: { expanded in
+                var collapsed = collapsedDomainSet
+                if expanded { collapsed.remove(domain.rawValue) } else { collapsed.insert(domain.rawValue) }
+                collapsedDomains = collapsed.sorted().joined(separator: ",")
+            }
+        )
+    }
+
+    private var collapsedDomainSet: Set<String> {
+        Set(collapsedDomains.split(separator: ",").map(String.init))
     }
 
     private func entitySidebarLabel(_ descriptor: EntityDescriptor) -> some View {

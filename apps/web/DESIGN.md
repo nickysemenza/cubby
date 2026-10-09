@@ -17,15 +17,16 @@ Cubby is a household field guide: a place to find a record, understand its evide
 - Interaction uses ink and a light label. Citron `#C9F45B` is a small signal dot, focus mark, or subtle selected-row wash. It is not a success, warning, or domain state.
 - Five stable domain marks come from the entity declaration: Cook, Pantry, Plan, House, and Finance. Put them on navigation and record identity, not every card edge.
 - Use a system serif or Georgia for page and record identity only. Body, labels, controls, and tables use Inter with system fallbacks; shortcodes use mono. Quantities and money use tabular numbers.
+- Spacing comes from the shared token steps 4/8/12/12/16/16px (`packages/design-tokens/tokens.json`); the layout gap scale reads them, so web and native density move together. Desktop inputs, selects, and tab lists are 32px, matching the default button; menu items are 28px.
 - Panels have a 16px radius; controls 8px; compact chips 7px. Nested surfaces follow concentric radii. Resting surfaces use tone and 1px structural rules, with shadow only for floating overlays.
 - Images use a faint neutral outline. Give real record photos room in detail; use the declared entity symbol when there is no image. Never place an unrelated illustration in an empty hero.
 - Motion explains state or space. High-frequency search, keyboard, table, and navigation actions respond immediately. Transitions name only changed properties and respect reduced motion.
 
 ## App frame
 
-Wide web uses the existing 208px expanded or 56px collapsed rail, 48px command band, central work surface, and optional 400px modeless inspector at 1280px and wider. Intermediate widths use the inspector sheet. Phone uses contextual route navigation and complete detail routes. Preserve safe-area, virtual-keyboard, and history behavior.
+Wide web uses a compact 176px expanded or 40px collapsed rail, a 40px command band, central work surface, and optional 400px modeless inspector at 1280px and wider. Intermediate widths use the inspector sheet. Phone uses contextual route navigation and complete detail routes. Preserve safe-area, virtual-keyboard, and history behavior.
 
-The active rail item is an ink pill with a small citron mark. Group headings and small domain icons retain the five domain identities. Search, account, utility, and Settings remain reachable. Page headings use the editorial face; workbench controls, labels, and table headers remain functional sans text.
+Chrome is dense: expanded rail routes are 26px rows with 13px labels, collapsed rail and footer controls are 28px, and roster counts are plain muted tabular numbers rather than chips. The active rail item is a quiet muted fill with ink text and a bold icon. Domain sections fold from their heading, and the fold persists per person; a domain dot on the heading and domain-colored icons in the collapsed rail retain the five domain identities. Search, account, utility, and Settings remain reachable. Page headings use the editorial face; workbench controls, labels, and table headers remain functional sans text.
 
 Today/Home uses only the existing task, problem, meal, activity, nutrition, inventory, and expense data. Put current work first, supporting household context second, and exploration behind disclosure. Summary cards must report real query values. No invented progress score, risk prediction, or AI panel.
 

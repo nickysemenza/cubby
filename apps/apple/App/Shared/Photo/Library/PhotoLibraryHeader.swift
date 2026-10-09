@@ -440,7 +440,7 @@ private struct PhotoBadgeKey: View {
                 )
                 .font(.caption).foregroundStyle(.secondary)
             }
-            .padding()
+            .padding(FieldGuideTokens.Space.md)
             .frame(maxWidth: .infinity, alignment: .leading)
         }
         .frame(idealWidth: 330, idealHeight: 340)

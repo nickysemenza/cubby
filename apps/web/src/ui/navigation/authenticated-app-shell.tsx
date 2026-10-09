@@ -1,12 +1,15 @@
+import { CaretDownIcon } from "@phosphor-icons/react/dist/csr/CaretDown";
 import { CaretLeftIcon } from "@phosphor-icons/react/dist/csr/CaretLeft";
 import { CaretRightIcon } from "@phosphor-icons/react/dist/csr/CaretRight";
 import { MagnifyingGlassIcon } from "@phosphor-icons/react/dist/csr/MagnifyingGlass";
+import { SidebarSimpleIcon } from "@phosphor-icons/react/dist/csr/SidebarSimple";
 import { WrenchIcon } from "@phosphor-icons/react/dist/csr/Wrench";
 import { Link, useLocation, useRouter } from "@tanstack/react-router";
 import {
   type ReactNode,
   Suspense,
   useEffect,
+  useId,
   useMemo,
   useState,
   useSyncExternalStore,
@@ -50,6 +53,7 @@ import { WorkspaceNavigator } from "./workspace-navigator";
 
 const LOGO_SRC = import.meta.env.DEV ? "/favicon-dev.svg" : "/favicon.svg";
 const collapsedPreferenceSchema = z.boolean();
+const foldedGroupsSchema = z.array(z.string());
 let lastCatchUpRequestAt = 0;
 let catchUpRequestPending = false;
 
@@ -85,7 +89,7 @@ type AuthenticatedAppShellProps = {
 /**
  * The authenticated workspace frame. The md rail is intentionally forced: a
  * person's wide/compact preference applies only when there is space for the
- * full 208px sidebar, and a tablet visit must never overwrite that preference.
+ * full 176px sidebar, and a tablet visit must never overwrite that preference.
  */
 export function AuthenticatedAppShell({
   children,
@@ -123,7 +127,7 @@ export function AuthenticatedAppShell({
       data-hydrated={hydrated ? "true" : "false"}
       data-mobile-keyboard={keyboardOpen ? "open" : "closed"}
       className={cn(
-        "min-h-dvh bg-background [--app-chrome-bottom:calc(3.5rem+1px+env(safe-area-inset-bottom))] [--app-chrome-top:calc(3rem+1px+env(safe-area-inset-top))] md:flex md:[--app-chrome-bottom:0rem] md:[--app-chrome-top:3rem]",
+        "min-h-dvh bg-background [--app-chrome-bottom:calc(3.5rem+1px+env(safe-area-inset-bottom))] [--app-chrome-top:calc(3rem+1px+env(safe-area-inset-top))] md:flex md:[--app-chrome-bottom:0rem] md:[--app-chrome-top:var(--app-command-band-height)]",
         keyboardOpen && "[--app-chrome-bottom:0rem]",
       )}
     >
@@ -216,7 +220,7 @@ function DesktopCommandHeader({
   navigationProgress,
 }: Pick<AuthenticatedAppShellProps, "onSearchClick" | "navigationProgress">) {
   return (
-    <header className="sticky top-0 z-40 hidden h-12 items-center border-b border-border bg-card px-4 md:flex md:px-6 print:hidden">
+    <header className="sticky top-0 z-40 hidden h-(--app-command-band-height) items-center border-b border-border bg-card px-4 md:flex md:px-6 print:hidden">
       <p className="text-xs font-medium text-muted-foreground">Cubby</p>
       <Button
         variant="ghost"
@@ -225,7 +229,7 @@ function DesktopCommandHeader({
         onPointerEnter={preloadCommandMenu}
         onFocus={preloadCommandMenu}
         onTouchStart={preloadCommandMenu}
-        className="ml-auto h-8 px-2 lg:hidden"
+        className="ml-auto h-7 px-2 lg:hidden"
         aria-label="Search"
         title="Search"
       >
@@ -239,7 +243,7 @@ function DesktopCommandHeader({
         onPointerEnter={preloadCommandMenu}
         onFocus={preloadCommandMenu}
         onTouchStart={preloadCommandMenu}
-        className="ml-auto hidden h-8 min-w-52 justify-start px-2 text-muted-foreground lg:flex"
+        className="ml-auto hidden h-7 min-w-52 justify-start px-2 text-muted-foreground lg:flex"
         aria-label="Search"
       >
         <MagnifyingGlassIcon className="size-3.5" />
@@ -264,6 +268,11 @@ function WorkspaceSidebar({
   const activeTo = useActiveTo();
   const [utilityOpen, setUtilityOpen] = useState(false);
   const [utilityMounted, setUtilityMounted] = useState(false);
+  const [foldedGroups, setFoldedGroups] = useLocalStorage(
+    "app-shell:sidebar-folded-groups",
+    foldedGroupsSchema,
+    [],
+  );
 
   return (
     <aside
@@ -274,16 +283,17 @@ function WorkspaceSidebar({
           : "lg:w-[var(--app-sidebar-collapsed-width)]",
       )}
       aria-label="Workspace navigation"
+      data-app-rail
     >
-      <div className="flex h-12 items-center border-b border-border px-2">
+      <div className="flex h-(--app-command-band-height) shrink-0 items-center border-b border-border px-2.5">
         <Link
           to="/"
           aria-label="Cubby home"
           className="flex min-w-0 items-center gap-2"
         >
-          <img src={LOGO_SRC} alt="" className="size-6 shrink-0" />
+          <img src={LOGO_SRC} alt="" className="size-5 shrink-0" />
           {expanded && (
-            <span className="hidden truncate font-heading text-lg font-semibold tracking-tight lg:block">
+            <span className="hidden truncate font-heading text-base font-semibold tracking-tight lg:block">
               cubby
             </span>
           )}
@@ -293,7 +303,7 @@ function WorkspaceSidebar({
         // `relative`: the nav's sr-only counts are absolutely positioned; without
         // a positioned scroller they escape its clip and stretch the document
         // past the shell, so scrolling a button into view drags the shell up.
-        className="relative min-h-0 flex-1 overflow-y-auto px-2 py-2"
+        className="relative min-h-0 flex-1 overflow-y-auto px-1.5 py-1.5"
         aria-label="Cubby"
       >
         <SidebarHome active={activeTo === homeNavItem.to} expanded={expanded} />
@@ -303,28 +313,64 @@ function WorkspaceSidebar({
             group={group}
             expanded={expanded}
             activeTo={activeTo}
+            folded={foldedGroups.includes(group.label)}
+            onToggleFolded={() =>
+              setFoldedGroups((labels) =>
+                labels.includes(group.label)
+                  ? labels.filter((label) => label !== group.label)
+                  : [...labels, group.label],
+              )
+            }
           />
         ))}
       </nav>
-      <div className="border-t border-border p-2">
-        <SidebarUtilityLinks
-          expanded={expanded}
-          activeTo={activeTo}
-          onOpenUtility={() => {
-            setUtilityMounted(true);
-            setUtilityOpen(true);
-          }}
+      <div
+        className={cn(
+          "flex flex-col items-center gap-0.5 border-t border-border p-1.5",
+          expanded && "lg:min-h-10 lg:flex-row lg:py-0",
+        )}
+      >
+        <Suspense fallback={<div className="size-7" aria-hidden="true" />}>
+          <ShellAccount />
+        </Suspense>
+        <span
+          className={cn("hidden", expanded && "lg:block lg:flex-1")}
+          aria-hidden="true"
         />
+        <Suspense fallback={<SidebarRailLeafFallback item={settingsNavItem} />}>
+          <RailLeaf
+            item={settingsNavItem}
+            active={activeTo === settingsNavItem.to}
+          />
+        </Suspense>
         <Button
           type="button"
           variant="ghost"
-          size="sm"
+          size="icon"
+          onClick={() => {
+            setUtilityMounted(true);
+            setUtilityOpen(true);
+          }}
+          className="size-7 text-muted-foreground"
+          aria-label="Tools & data"
+          title="Tools & data"
+        >
+          <WrenchIcon className="size-3.5" />
+        </Button>
+        <Button
+          type="button"
+          variant="ghost"
+          size="icon"
           onClick={onToggle}
-          className="hidden h-8 w-full justify-center px-2 lg:flex"
+          className="hidden size-7 text-muted-foreground lg:flex"
           aria-label={expanded ? "Collapse sidebar" : "Expand sidebar"}
           title={expanded ? "Collapse sidebar" : "Expand sidebar"}
         >
-          {expanded ? <CaretLeftIcon /> : <CaretRightIcon />}
+          {expanded ? (
+            <SidebarSimpleIcon className="size-3.5" />
+          ) : (
+            <CaretRightIcon className="size-3.5" />
+          )}
         </Button>
       </div>
       {utilityMounted && (
@@ -338,69 +384,6 @@ function WorkspaceSidebar({
         </Suspense>
       )}
     </aside>
-  );
-}
-
-function SidebarUtilityLinks({
-  expanded,
-  activeTo,
-  onOpenUtility,
-}: {
-  expanded: boolean;
-  activeTo: string | undefined;
-  onOpenUtility: () => void;
-}) {
-  return (
-    <div className="mb-1 border-b border-border pb-1">
-      <div className={cn("md:block", expanded && "lg:hidden")}>
-        <Suspense fallback={<SidebarRailLeafFallback item={settingsNavItem} />}>
-          <RailLeaf
-            item={settingsNavItem}
-            active={activeTo === settingsNavItem.to}
-          />
-        </Suspense>
-        <Button
-          type="button"
-          variant="ghost"
-          size="icon"
-          onClick={onOpenUtility}
-          className="mb-1 size-10"
-          aria-label="Tools & data"
-          title="Tools & data"
-        >
-          <WrenchIcon />
-        </Button>
-        <div className="flex size-10 items-center justify-center">
-          <Suspense fallback={<div className="size-7" aria-hidden="true" />}>
-            <ShellAccount />
-          </Suspense>
-        </div>
-      </div>
-      {expanded && (
-        <div className="hidden lg:block">
-          <SidebarFullLeaf
-            item={settingsNavItem}
-            active={activeTo === settingsNavItem.to}
-          />
-          <Button
-            type="button"
-            variant="ghost"
-            size="sm"
-            onClick={onOpenUtility}
-            className="mb-1 h-8 w-full justify-start gap-2 px-2 text-muted-foreground"
-          >
-            <WrenchIcon className="size-3.5" />
-            <span className="truncate">Tools & data</span>
-          </Button>
-          <div className="flex h-8 items-center gap-2 px-2 text-xs text-muted-foreground">
-            <Suspense fallback={<div className="size-7" aria-hidden="true" />}>
-              <ShellAccount />
-            </Suspense>
-            <span>Account</span>
-          </div>
-        </div>
-      )}
-    </div>
   );
 }
 
@@ -431,10 +414,14 @@ function SidebarGroup({
   group,
   expanded,
   activeTo,
+  folded,
+  onToggleFolded,
 }: {
   group: NavGroup;
   expanded: boolean;
   activeTo: string | undefined;
+  folded: boolean;
+  onToggleFolded: () => void;
 }) {
   return (
     <>
@@ -445,42 +432,76 @@ function SidebarGroup({
       </div>
       {expanded && (
         <div className="hidden lg:block">
-          <SidebarExpandedDomainGroup group={group} activeTo={activeTo} />
+          <SidebarExpandedDomainGroup
+            group={group}
+            activeTo={activeTo}
+            folded={folded}
+            onToggleFolded={onToggleFolded}
+          />
         </div>
       )}
     </>
   );
 }
 
-/** The expanded rail is a direct route index; collapsed mode keeps the flyout. */
+/**
+ * The expanded rail is a direct route index whose sections fold; collapsed
+ * mode keeps the flyout. The domain dot carries the domain mark.
+ */
 function SidebarExpandedDomainGroup({
   group,
   activeTo,
+  folded,
+  onToggleFolded,
 }: {
   group: NavGroup;
   activeTo: string | undefined;
+  folded: boolean;
+  onToggleFolded: () => void;
 }) {
   const domain = group.domain ? domainWayfinding(group.domain) : null;
-  const Icon = group.icon;
+  const routesId = useId();
 
   return (
-    <section className="mb-5" aria-label={group.label}>
-      <div className="mb-1 flex h-6 items-center gap-2 px-2 text-[11px] font-semibold tracking-wide text-muted-foreground uppercase">
+    <section className="mt-3" aria-label={group.label}>
+      <button
+        type="button"
+        onClick={onToggleFolded}
+        aria-expanded={!folded}
+        aria-controls={routesId}
+        className="flex h-6 w-full items-center gap-1.5 rounded-md px-2 text-xs font-medium text-muted-foreground transition-colors hover:text-foreground"
+      >
         <span
-          style={domain ? { color: `var(${domain.accentToken})` } : undefined}
+          className="size-1.5 shrink-0 rounded-full bg-muted-foreground"
+          style={
+            domain
+              ? { backgroundColor: `var(${domain.accentToken})` }
+              : undefined
+          }
           aria-hidden="true"
-        >
-          <Icon className="size-3.5" />
-        </span>
-        <span>{group.label}</span>
-      </div>
-      {group.children.map((item) => (
-        <SidebarFullLeaf
-          key={item.to}
-          item={item}
-          active={activeTo === item.to}
         />
-      ))}
+        {group.label}
+        <CaretDownIcon
+          className={cn(
+            "size-2.5 transition-transform",
+            folded && "-rotate-90",
+          )}
+          aria-hidden="true"
+        />
+      </button>
+      {/* A folded section still shows its current route, so the rail never
+          loses the you-are-here cue. */}
+      <div id={routesId}>
+        {group.children
+          .filter((item) => !folded || item.to === activeTo)
+          .map((item) => (
+            <SidebarFullLeaf
+              key={item.to}
+              item={item}
+              active={activeTo === item.to}
+            />
+          ))}
+      </div>
     </section>
   );
 }
@@ -490,7 +511,7 @@ function SidebarRailGroupFallback({ group }: { group: NavGroup }) {
   return (
     <button
       type="button"
-      className="mb-1 flex size-10 items-center justify-center border border-transparent text-muted-foreground"
+      className="mb-0.5 flex size-7 items-center justify-center text-muted-foreground"
       aria-label={group.label}
       title={group.label}
       disabled
@@ -506,23 +527,16 @@ function SidebarFullLeaf({ item, active }: { item: NavItem; active: boolean }) {
     <Link
       {...navItemLinkProps(item, active)}
       className={cn(
-        "group mb-1 flex h-9 min-w-0 items-center gap-2 rounded-lg border border-transparent px-2.5 text-xs transition-colors hover:bg-muted hover:text-foreground",
-        !active && "text-muted-foreground",
-        active &&
-          "bg-primary font-medium text-primary-foreground hover:bg-primary hover:text-primary-foreground",
+        "flex h-6.5 min-w-0 items-center gap-2 rounded-md px-2 text-[0.8125rem] transition-colors hover:bg-muted/60 hover:text-foreground",
+        !active && "text-foreground/80",
+        active && "bg-muted font-medium text-foreground hover:bg-muted",
       )}
     >
       <Icon
-        className="size-3.5 shrink-0"
+        className={cn("size-3.5 shrink-0", !active && "text-muted-foreground")}
         weight={active ? "bold" : "regular"}
       />
       <span className="min-w-0 truncate">{item.label}</span>
-      {active && (
-        <span
-          className="size-1.5 shrink-0 rounded-full bg-signal"
-          aria-hidden
-        />
-      )}
       {item.entity && <NavigationCountBadge entity={item.entity} />}
     </Link>
   );
@@ -533,7 +547,7 @@ function SidebarRailLeafFallback({ item }: { item: NavItem }) {
   return (
     <button
       type="button"
-      className="mb-1 flex size-10 items-center justify-center border border-transparent text-muted-foreground"
+      className="mb-0.5 flex size-7 items-center justify-center text-muted-foreground"
       aria-label={item.label}
       title={item.label}
       disabled
