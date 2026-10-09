@@ -536,6 +536,23 @@ export function researchServiceFor(
               db,
               current,
             );
+            const purchasedItems = await loadProductPurchaseContext(db, {
+              productId: current.id,
+              ledgerPartyId: parseEntityId("ledgerParty", scope.ledgerPartyId!),
+            });
+            await exposeResearchSources(db, {
+              runId,
+              sources: purchasedItems.flatMap(({ originalMail }) =>
+                originalMail
+                  ? [
+                      {
+                        orderMailId: originalMail.messageRef,
+                        checksum: originalMail.checksum,
+                      },
+                    ]
+                  : [],
+              ),
+            });
             return {
               status: "working",
               work: {
@@ -548,13 +565,7 @@ export function researchServiceFor(
                   categoryContext,
                   ...values,
                 },
-                purchasedItems: await loadProductPurchaseContext(db, {
-                  productId: current.id,
-                  ledgerPartyId: parseEntityId(
-                    "ledgerParty",
-                    scope.ledgerPartyId!,
-                  ),
-                }),
+                purchasedItems,
               },
             };
           }

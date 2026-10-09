@@ -40,7 +40,13 @@ For seed packets, apply the manufacturer rule in the
 [research workflow](references/research-run-workflow.md): distinguish the packet
 brand from credited seed growers before proposing a manufacturer claim.
 
-Prove the exact variant before writing: existing external-ID URL, deterministic
+Start with the purchased item: original email and order-line links, then the
+member's authenticated order details/history. Recover missing saved originals
+through owned mail and account history before assuming only a name is available.
+Do not begin with generic name search when usable purchase sources exist. Use
+broader search for unavailable sources or facts those sources cannot establish.
+
+Prove the exact variant before writing: accepted purchased-item URL, existing external-ID URL, deterministic
 UPC lookup, manufacturer page, then exact retailer page. An Amazon ASIN can use
 `https://www.amazon.com/dp/<ASIN>`; confirm the selected variant. General search
 and aggregators may find a primary page but cannot overwrite a populated fact.

@@ -286,6 +286,14 @@ research acceptance.
   Imports saved view intentionally cover different capabilities; finish their
   audit before consolidating additional purpose declarations.
 
+- ⏳ **Accept purchase-source-first Product research.** Supply usable original-mail
+  selectors and existing order-detail URLs with accepted order lines. The maintained
+  skill should recover missing originals through owned email and authenticated
+  account history before broader name search. Validate a real plant and a real
+  hardware-retailer Product after deployment; old per-order source associations
+  remain explicit gaps until a supported original is recovered. Do not invent
+  historical mappings or treat a search match as proof of the purchased variant.
+
 - 🤔 **Verify automatic enrichment dispatch after import commit.** Imports now
   admit Product research through `startProductResearch`, which obtains the
   configured producer when none is supplied. Verify real completion and restart

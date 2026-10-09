@@ -13,6 +13,8 @@ import {
   importPreparedOrder,
   importSourceOrder,
   inventoryEntry,
+  orderMail,
+  mailboxMessage,
   product,
   productCategory,
   project,
@@ -711,6 +713,35 @@ describe("research order writes", () => {
         },
       ],
     };
+    // Exact original acquisition must survive missing legacy line snapshots;
+    // an unrelated, excluded or changed original must never be offered to research.
+    const [mail] = await getDb(ctx.db)
+      .insert(orderMail)
+      .values({
+        ledgerPartyId: party.id,
+        mailboxId: "synthetic-mailbox",
+        messageId: "variant-receipt",
+        sender: "seller@example.test",
+        subject: "Synthetic variant receipt",
+        rawChecksum: "d".repeat(64),
+        content: {
+          snippet: null,
+          bodyHtml: null,
+          bodyText: candidate.lines[0]!.productUrl,
+        },
+      })
+      .returning();
+    if (!mail) throw new Error("Expected original mail");
+    await getDb(ctx.db).insert(mailboxMessage).values({
+      ledgerPartyId: party.id,
+      mailboxId: mail.mailboxId,
+      messageId: mail.messageId,
+      checksum: mail.rawChecksum,
+      orderMailId: mail.id,
+      classification: "related",
+      classificationVersion: "synthetic-v1",
+      status: "completed",
+    });
     const input: ImportWriterInput = {
       runId,
       ledgerPartyId: party.id,
@@ -749,6 +780,7 @@ describe("research order writes", () => {
       }),
     ).toMatchObject([
       {
+        originalMail: { messageRef: mail.id, checksum: mail.rawChecksum },
         orderedLine: candidate.lines[0],
         originalExtractions: [{ status: "ready", candidate }],
         currentLine: {

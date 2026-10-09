@@ -762,3 +762,19 @@ Scoped pagination remains task/query/account-bound and replayable. An interrupte
 classification or dispatch reuses its frozen page without advancing mailbox-wide
 coverage. Mechanical mailbox discovery retains its own exact checkpoints,
 cancellation, dispatch-failure handling and ended-instance reconciliation.
+
+### Original purchase sources lead Product research
+
+`work_next` supplies accepted order lines, current ledger context, and the
+existing `purchaseOrderUrl` projection. It resolves canonical owned retained mail
+into an explicit `originalMail.messageRef`; an order association is not a mail
+selector. Issued originals are exposed through the existing retention fence
+before delivery. The mail reader still enforces ownership, current checksum,
+classification and disposal rules. Missing originals remain null and are
+recovered through owned mail search or authenticated order history, without
+inventing a mapping or rewriting historical source associations.
+
+The maintained Product skill prioritizes those sources and exact item URLs.
+Broader search resolves unavailable sources or remaining facts. Pi keeps hosting
+the adaptive conversation; shared tools keep retaining observations and enforcing
+writes. No new workflow, transport, status model or table is introduced.

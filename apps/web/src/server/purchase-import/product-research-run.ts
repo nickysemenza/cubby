@@ -69,7 +69,7 @@ import {
 } from "./source-claim-family";
 
 /** Bump when the curated Product research instructions materially change. */
-const PRODUCT_RESEARCH_INSTRUCTION_REVISION = 1;
+const PRODUCT_RESEARCH_INSTRUCTION_REVISION = 2;
 
 type Executor = DrizzleClient | DrizzleTransaction;
 
