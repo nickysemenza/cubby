@@ -458,17 +458,11 @@ for (const statementFirst of [true, false]) {
       .getByRole("article")
       .filter({ hasText: `Order ${names.orderId}` });
     // Exact-order mail is already linked before following its canonical Purchase.
-    await expect(
-      mail.getByRole("link", { name: names.orderId, exact: true }),
-    ).toBeVisible();
-    await expect(mail.getByText("Linked", { exact: true })).toBeVisible();
-    await expect(
-      mail.getByRole("button", { name: "Link", exact: true }),
-    ).toHaveCount(0);
     const purchaseLink = mail.getByRole("link", {
-      name: names.orderId,
+      name: purchaseCode,
       exact: true,
     });
+    await expect(purchaseLink).toBeVisible();
     await expect(purchaseLink).toHaveAttribute(
       "href",
       `/purchases/${purchaseCode}`,
@@ -479,9 +473,15 @@ for (const statementFirst of [true, false]) {
     expect(await page.evaluate(() => performance.timeOrigin)).toBe(
       documentOrigin,
     );
-    await expect(
-      page.getByRole("link", { name: "Open Gmail conversation", exact: true }),
-    ).toBeVisible();
+    const originalMail = page.getByRole("link", {
+      name: "Open Gmail original",
+      exact: true,
+    });
+    await expect(originalMail).toBeVisible();
+    await expect(originalMail).toHaveAttribute(
+      "href",
+      `https://mail.google.com/mail/u/0/#all/synthetic-thread-${token}`,
+    );
     await expect(
       page.getByRole("link", { name: names.productName, exact: true }).first(),
     ).toBeVisible();

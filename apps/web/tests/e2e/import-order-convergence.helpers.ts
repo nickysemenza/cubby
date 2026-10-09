@@ -405,12 +405,17 @@ export async function createConvergenceHarness(
       .getByRole("article")
       .filter({ hasText: orderId });
     // The exact-order mail links itself to the booked Purchase; no click.
-    await expect(mail.getByText("Linked", { exact: true })).toBeVisible({
+    const acceptedPurchase = mail.getByRole("link", {
+      name: purchase.shortcode,
+      exact: true,
+    });
+    await expect(acceptedPurchase).toBeVisible({
       timeout: 30_000,
     });
-    await expect(
-      mail.getByRole("button", { name: "Link", exact: true }),
-    ).toHaveCount(0);
+    await expect(acceptedPurchase).toHaveAttribute(
+      "href",
+      `/purchases/${purchase.shortcode}`,
+    );
     const { rows: links } = await database.execute(sql`
       SELECT p.shortcode AS "purchaseCode"
       FROM "OrderMailCandidateDecision" d
