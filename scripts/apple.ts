@@ -25,9 +25,8 @@
 // `-NoDebugger` schemes exist for.
 import { APPLE_CLIENT_COMPATIBILITY_VERSION } from "../packages/shared/src/apple-client-version.ts";
 import { installedApprovalVerifier } from "./lib/mac-app-approval.ts";
-import { installMacApp } from "./lib/mac-app-install.ts";
+import { installMacApp, stopMacAppProcesses } from "./lib/mac-app-install.ts";
 import { spawnSync } from "node:child_process";
-import { setTimeout as delay } from "node:timers/promises";
 
 import { captureSyncChecked, runSyncChecked } from "./lib/run.ts";
 import { existsSync, mkdtempSync, readFileSync, rmSync } from "node:fs";
@@ -291,29 +290,7 @@ const mac = async (options: Options) => {
           const match = /^\s*(\d+)\s+(.+)$/u.exec(line);
           return match?.[2] === executable ? [Number(match[1])] : [];
         });
-      const isAlive = (pid: number) => {
-        try {
-          process.kill(pid, 0);
-          return true;
-        } catch (error) {
-          if (
-            error instanceof Error &&
-            "code" in error &&
-            error.code === "ESRCH"
-          )
-            return false;
-          throw error;
-        }
-      };
-      for (const pid of pids) if (isAlive(pid)) process.kill(pid, "SIGTERM");
-      const deadline = Date.now() + 10_000;
-      while (pids.some(isAlive)) {
-        if (Date.now() >= deadline)
-          throw new Error(
-            "Cubby did not exit within 10 seconds; installed bundle was not moved",
-          );
-        await delay(50);
-      }
+      await stopMacAppProcesses(pids);
     },
   );
   // Launch the verified installed copy explicitly, after the old process exits.

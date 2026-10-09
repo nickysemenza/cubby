@@ -14,7 +14,7 @@ import { join } from "node:path";
 import test from "node:test";
 import { spawn } from "node:child_process";
 import { once } from "node:events";
-import { installMacApp } from "./lib/mac-app-install.ts";
+import { installMacApp, stopMacAppProcesses } from "./lib/mac-app-install.ts";
 
 // A signalled app can still capture while shutdown drains. Its bundle must
 // remain at the approved path until its process has actually exited.
@@ -148,4 +148,26 @@ test("Mac installation reports retained backups without failing a successful rep
     }
     rmSync(root, { recursive: true, force: true });
   }
+});
+
+// OS process exit may race the synchronous liveness check and signal syscall.
+// This external syscall seam deterministically represents ESRCH at SIGTERM.
+test("Mac shutdown accepts exit between liveness check and termination but preserves permission errors", async () => {
+  let exited = false;
+  await stopMacAppProcesses([123], (_pid, signal) => {
+    if (signal === "SIGTERM") exited = true;
+    if (exited)
+      throw Object.assign(new Error("process exited"), { code: "ESRCH" });
+    return true;
+  });
+  const denied = Object.assign(new Error("permission denied"), {
+    code: "EPERM",
+  });
+  await assert.rejects(
+    () =>
+      stopMacAppProcesses([123], () => {
+        throw denied;
+      }),
+    denied,
+  );
 });

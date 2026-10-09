@@ -281,7 +281,9 @@ app's designated privacy requirement. The copied candidate is verified before st
 Cubby or replacing the installed app. Stop only processes launched from the
 installed executable, and await their exit before renaming its bundle: signalling
 termination alone can let a final capture resolve the app at an installer backup
-path. A shutdown timeout refuses replacement without moving the installed bundle.
+path. A process exiting before the termination signal counts as successful shutdown;
+other signal errors remain visible. A shutdown timeout refuses replacement
+without moving the installed bundle.
 A failed replacement restores the old
 bundle. If the previous bundle is root-owned and cannot be removed, its
 sibling backup path is reported after successful relaunch for manual cleanup.
