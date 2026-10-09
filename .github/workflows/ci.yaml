@@ -235,8 +235,6 @@ jobs:
           CUBBY_SOURCE_COMMIT: ${{ github.sha }}
           CUBBY_SOURCE_BRANCH: ${{ github.ref_name }}
         run: |
-          # wasm-pack may add a trailing newline to the tracked package metadata.
-          git restore -- packages/wasm/package.json
           pnpm --filter @cubby/web run build:cf
       # One artifact keeps the three outputs at their repository paths, so
       # consumers extract it over the checkout.
@@ -254,7 +252,6 @@ jobs:
       # checkout, dependency setup and artifact download.
       - name: Run workerd PostgreSQL integration tests
         run: |
-          git restore -- packages/wasm/package.json
           pnpm --dir apps/web exec vitest run --project integration-workerd
 
   # One four-worker job avoids repeating database and dependency setup.
@@ -339,8 +336,6 @@ jobs:
           CUBBY_SOURCE_COMMIT: ${{ github.sha }}
           CUBBY_SOURCE_BRANCH: ${{ github.ref_name }}
         run: |
-          # wasm-pack may add a trailing newline to the tracked package metadata.
-          git restore -- packages/wasm/package.json
           pnpm --filter @cubby/web run build:cf
       - name: Run Playwright tests
         run: |
@@ -395,8 +390,6 @@ jobs:
           path: .
       - name: Run purchase import browser E2E
         run: |
-          # The downloaded WASM package may carry regenerated metadata.
-          git restore -- packages/wasm/package.json
           pnpm --filter @cubby/web run test:e2e:ci:purchase-import
       - name: Save Playwright run bundle
         if: always()
@@ -616,8 +609,6 @@ jobs:
           CI: "1"
           SIMULATOR_JOURNEY: ${{ inputs.simulator_journey }}
         run: |
-          # Keep generated WASM metadata identical to this checkout, as in Build Workers.
-          git restore -- packages/wasm/package.json
           if [[ "$SIMULATOR_JOURNEY" == "inputs" ]]; then
             pnpm test:e2e:sim -- --input-journey
           else

@@ -13,8 +13,7 @@
 // ensure-apple-ffi.ts does for the xcframework, the key is also written inside
 // the package (it restores with the cache) and a matching marker short-circuits
 // before Nx is involved. The marker is deliberately not an Nx input — it is an
-// output of the build, like packages/wasm/.gitignore, which wasm-pack
-// rewrites byte-identically so the cache key stays stable.
+// output of the build, so hashing it would change the key it records.
 import { existsSync, readFileSync, writeFileSync } from "node:fs";
 import { join, resolve } from "node:path";
 import { homedir } from "node:os";
