@@ -591,6 +591,26 @@ describe("unified Runs history", () => {
       expect.objectContaining({ parentRunId: parent.shortcode }),
     ]);
     expect(children.nextCursor).toBeNull();
+    // Filtering to an image child must count its terminal result, not its context root.
+    for (const [state, bucket] of [
+      ["ready", "completed"],
+      ["skipped", "skipped"],
+    ] as const) {
+      await getDb(ctx.db)
+        .update(imageProcessingJob)
+        .set({ state })
+        .where(eq(imageProcessingJob.id, linked));
+      const terminal = await listActivityGroups(ctx.db, null, {
+        executor: "all",
+        limit: 10,
+        sort: "newest",
+        kind: "describe_image",
+      });
+      expect(terminal.items[0]).toMatchObject({
+        contextOnly: true,
+        workCounts: { working: 0, waiting: 0, [bucket]: 1 },
+      });
+    }
     const contextual = await listActivityGroups(ctx.db, null, {
       executor: "all",
       limit: 10,

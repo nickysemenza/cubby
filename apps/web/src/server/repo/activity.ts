@@ -579,7 +579,8 @@ export async function listActivityGroups(
           'waiting', count(*) FILTER (WHERE state IN ('paused_auth', 'paused_offline', 'paused_approval', 'waiting_for_device')),
           'needsReview', count(*) FILTER (WHERE state = 'needs_review'),
           'failed', count(*) FILTER (WHERE state IN ('failed', 'dispatch_failed')),
-          'completed', count(*) FILTER (WHERE state = 'completed')
+          'completed', count(*) FILTER (WHERE state IN ('completed', 'ready')),
+          'skipped', count(*) FILTER (WHERE state = 'skipped')
         ) AS "workCounts",
         bool_or(id = "groupRootId") AS "rootMatched"
       FROM filtered

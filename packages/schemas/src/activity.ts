@@ -163,6 +163,7 @@ export const activityGroupsOutput = z.object({
         needsReview: z.int().nonnegative(),
         failed: z.int().nonnegative(),
         completed: z.int().nonnegative(),
+        skipped: z.int().nonnegative(),
       }),
       childCount: z.int().nonnegative(),
       contextOnly: z.boolean(),
@@ -186,6 +187,7 @@ export function activityWorkSummary(
     counts.waiting ? `${counts.waiting} waiting` : null,
     counts.needsReview ? `${counts.needsReview} need review` : null,
     counts.failed ? `${counts.failed} failed` : null,
+    counts.skipped ? `${counts.skipped} skipped` : null,
     counts.completed ? `${counts.completed} completed` : null,
   ]
     .filter((part) => part !== null)
