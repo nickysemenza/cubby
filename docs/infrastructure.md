@@ -447,8 +447,8 @@ Cloudflare Image Resizing at that origin.
 
 ### Retired auxiliary Workers
 
-The retired `usda-api` Worker (D1 `usda-api-index`, R2 `usda-api-bundles`) is
-replaced by the USDA release Durable Object above. The retired `upc-lookup` Worker (D1 `upc-lookup-db`, R2
+The retired `usda-api` Worker is replaced by the USDA release Durable Object
+above; it and its D1 database and R2 bucket are deleted. The retired `upc-lookup` Worker (D1 `upc-lookup-db`, R2
 `upc-images`) is replaced by the main Worker's `UpcLookupCache`; see
 [the D1 migration runbook](runbooks/upc-d1-migration.md).
 
