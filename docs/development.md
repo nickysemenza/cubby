@@ -142,6 +142,13 @@ restarts; interpret them after representative traffic. See the
 
 ## Worktrees and test services
 
+GitHub's Linux database lanes share a digest-pinned PostgreSQL 17/pgvector
+image from Google's public Docker Hub mirror. The digest preserves the tested
+image contents while avoiding Docker Hub's shared unauthenticated pull quota.
+An image-pull failure is infrastructure setup, not a scenario result; inspect
+the registry diagnostic before rerunning tests. Local test-service images and
+native PostgreSQL installation remain owned by their existing runners.
+
 - Fresh worktrees run `pnpm agent:setup`: a frozen install, then a WASM build
   restored from the shared Nx cache. Gitignored env comes from
   [.worktreeinclude](../.worktreeinclude). Every `pnpm install` re-verifies
