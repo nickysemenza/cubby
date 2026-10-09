@@ -811,7 +811,7 @@ describe("research host lifecycle", () => {
         await tx.execute(sql`set local lock_timeout = '250ms'`);
         await tx.insert(run).values({
           ...parent,
-          id: crypto.randomUUID(),
+          id: parseEntityId("run", crypto.randomUUID()),
           shortcode: "RUN-4K7M",
           clientKey: crypto.randomUUID(),
           agentSessionId: crypto.randomUUID(),

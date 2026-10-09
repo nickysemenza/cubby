@@ -60,6 +60,8 @@ inventing a minimally attributed row. A dispatch-failed Run uses the public
 Repository create fixtures retain the public shortcode in `id` and attach the
 branded database UUID as `entityId`. Use `entityId` for internal admissions,
 repository mutations and row predicates; use `id` for public operation inputs.
+Direct Drizzle fixtures need the table's branded UUID type too. Parse a generated
+UUID at fixture creation; a plain `crypto.randomUUID()` is not a branded Run ID.
 Create Products with `createProductFixture(db, makeProductInput({...}), actor)`;
 use its `entityId` internally and `id` in public calls. Do not construct a
 minimal Product with `insertWithShortcode`: database fields such as
