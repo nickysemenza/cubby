@@ -162,9 +162,17 @@ backfills, full-history coverage and separately verified continuous new-mail
 processing. A quota/auth/admission failure is not model-quality evidence.
 Budgeted Gateway fallback is separately authorized within the existing pilot,
 historical and continuous caps. Each paid transmission still requires durable
-admission and known pricing. The current transport recognizes the exact HTTP 429
-quota code; the live refusal’s wire envelope is not yet captured, so an HTTP 200
-stream refusal remains a hypothesis. This proposal grants no additional spend,
+admission and known pricing. A bounded live attempt on main `fa218505e`
+confirmed HTTP 200 with missing Content-Type: `event: error` carrying the exact
+quota code followed two metadata event names (`response.created`,
+`response.in_progress`). It was canceled after one failed subscription call with
+zero metered API cost. This is now protocol evidence, but event names alone do
+not prove empty output. The shared router now inspects a complete bounded
+pre-output refusal and qualifying metadata before the SDK receives bytes,
+then runs the existing durable paid admission. Non-refusal chunks are returned
+unchanged; any output, tool, reasoning, unknown event or `response.failed`
+prevents recovery. Exact-head review, hosted checks and live paid acceptance
+remain required. This proposal grants no additional spend,
 production migration or household cleanup.
 
 The forward image fix reuses a same-byte item attachment under the existing

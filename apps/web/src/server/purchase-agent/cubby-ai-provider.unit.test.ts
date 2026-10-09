@@ -126,46 +126,78 @@ describe("createCubbyGatewayFetch", () => {
 
   // Selecting the plan precedes quota refusal. Marking pi unbilled at that
   // selection would incorrectly erase the final paid fallback's catalog cost.
-  it("keeps paid fallback costs after a selected subscription refuses quota", async () => {
-    const transports: string[] = [];
-    const admitted = vi.fn(async () => {});
-    const run = vi.fn(async () =>
-      completedResponse({ "cf-aig-log-id": "synthetic-paid-log" }),
-    );
-    const models = createModels();
-    for (const provider of cubbyAgentProviders({
-      gateway: () => gateway(run),
-      recorder: createContextRecorder(),
-      subscriptionRequired: true,
-      subscriptionFallback: "budgeted",
-      beforePaidRequest: admitted,
-      subscription: async (_body, options) => {
-        options?.onSelected?.();
-        return new Response(
-          JSON.stringify({
-            error: {
-              code: "subscription_sharing_usage_limit_exceeded",
-              message: "Synthetic plan allowance exhausted",
-            },
-          }),
-          { status: 429 },
-        );
-      },
-      onTransport: (transport) => transports.push(transport),
-    }))
-      models.setProvider(provider);
-    const model = models.getModel("openai", "gpt-6-sol");
-    if (!model) throw new Error("Missing test model");
-    const stream = models.stream(model, { messages: [] });
-    let terminalCost: number | undefined;
-    for await (const event of stream)
-      if (event.type === "done") terminalCost = event.message.usage.cost.total;
-    expect(terminalCost).toBeGreaterThan(0);
-    expect((await stream.result()).usage.cost.total).toBeGreaterThan(0);
-    expect(transports).toEqual(["chatgpt", "gateway"]);
-    expect(admitted).toHaveBeenCalledOnce();
-    expect(run).toHaveBeenCalledOnce();
-  });
+  it.each(["http429", "pre-output-stream"] as const)(
+    "keeps paid fallback costs after a selected subscription refuses quota through %s",
+    async (protocol) => {
+      const transports: string[] = [];
+      const admitted = vi.fn(async () => {});
+      const run = vi.fn(async () =>
+        completedResponse({ "cf-aig-log-id": "synthetic-paid-log" }),
+      );
+      const models = createModels();
+      for (const provider of cubbyAgentProviders({
+        gateway: () => gateway(run),
+        recorder: createContextRecorder(),
+        subscriptionRequired: true,
+        subscriptionFallback: "budgeted",
+        beforePaidRequest: admitted,
+        subscription: async (_body, options) => {
+          options?.onSelected?.();
+          if (protocol === "pre-output-stream") {
+            const events = [
+              {
+                type: "response.created",
+                response: { status: "in_progress", output: [] },
+              },
+              {
+                type: "response.in_progress",
+                response: { status: "in_progress", output: [] },
+              },
+              {
+                type: "invalid_request_error",
+                code: "subscription_sharing_usage_limit_exceeded",
+                message: "Synthetic plan allowance exhausted",
+                param: null,
+              },
+            ];
+            return new Response(
+              new TextEncoder().encode(
+                events
+                  .map(
+                    (event) =>
+                      `event: ${event.type === "invalid_request_error" ? "error" : event.type}\ndata: ${JSON.stringify(event)}\n\n`,
+                  )
+                  .join(""),
+              ),
+            );
+          }
+          return new Response(
+            JSON.stringify({
+              error: {
+                code: "subscription_sharing_usage_limit_exceeded",
+                message: "Synthetic plan allowance exhausted",
+              },
+            }),
+            { status: 429 },
+          );
+        },
+        onTransport: (transport) => transports.push(transport),
+      }))
+        models.setProvider(provider);
+      const model = models.getModel("openai", "gpt-6-sol");
+      if (!model) throw new Error("Missing test model");
+      const stream = models.stream(model, { messages: [] });
+      let terminalCost: number | undefined;
+      for await (const event of stream)
+        if (event.type === "done")
+          terminalCost = event.message.usage.cost.total;
+      expect(terminalCost).toBeGreaterThan(0);
+      expect((await stream.result()).usage.cost.total).toBeGreaterThan(0);
+      expect(transports).toEqual(["chatgpt", "gateway"]);
+      expect(admitted).toHaveBeenCalledOnce();
+      expect(run).toHaveBeenCalledOnce();
+    },
+  );
   // A gateway cache HIT is not billed, but it still rode the gateway and its
   // log id is the usage row's correlation handle.
   it("zeroes a cached generation's cost, keeps gateway transport, and reports the log id", async () => {

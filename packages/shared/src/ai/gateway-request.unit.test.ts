@@ -6,6 +6,8 @@ import {
   gatewayResponseInfo,
   gatewayBaseURL,
   gatewayFetchThrough,
+  type GatewayFetchRoutes,
+  type GatewayQuery,
 } from "./gateway-request";
 
 // Failure modes: a cached gateway answer is booked as a fresh paid call; a
@@ -964,7 +966,6 @@ describe("requested stream diagnostics", () => {
       const admission = vi.fn();
       const send = gatewayFetchThrough({
         provider: "openai",
-        subscriptionFallback: "budgeted",
         beforePaidRequest: admission,
         chatGpt: async () => upstream(refusal, contentType),
         gateway,
@@ -1105,4 +1106,526 @@ describe("requested stream diagnostics", () => {
     ]);
     expect(await response.text()).toBe(refusal);
   });
+});
+
+// Observed: the ChatGPT plan answers a requested stream with HTTP 200, no
+// Content-Type, `response.created`/`response.in_progress`, then an `event: error`
+// quota envelope. Budgeted fallback may replay only that pre-output refusal.
+// Failure modes: output/tool/reasoning/unknown or malformed activity precedes
+// the refusal and is replayed through a paid route; held bytes are altered,
+// lost, or reordered; an idle, oversized, incomplete, failed, aborted or late
+// stream is held forever or recovered; the paid route or a peer is probed;
+// fallback skips opt-in or durable admission; diagnostics are lost.
+describe("budgeted pre-output stream quota fallback", () => {
+  const url = `${gatewayBaseURL("openai")}/responses`;
+  const init = {
+    method: "POST",
+    body: JSON.stringify({ model: "gpt-6-sol", input: [], stream: true }),
+  };
+  const quota = {
+    type: "invalid_request_error",
+    code: "subscription_sharing_usage_limit_exceeded",
+    message: "Synthetic usage limit",
+    param: null,
+  };
+  const rawFrame = (event: string | undefined, data: string, eol = "\n") =>
+    `${event ? `event: ${event}${eol}` : ""}data: ${data}${eol}${eol}`;
+  const frame = (
+    event: string | undefined,
+    data: GatewayQuery[string],
+    eol = "\n",
+  ) => rawFrame(event, JSON.stringify(data), eol);
+  const created = {
+    type: "response.created",
+    response: { id: "resp_synthetic", status: "in_progress", output: [] },
+  };
+  const inProgress = {
+    type: "response.in_progress",
+    response: { id: "resp_synthetic", status: "in_progress", output: [] },
+  };
+  const metadata = (eol = "\n") =>
+    frame("response.created", created, eol) +
+    frame("response.in_progress", inProgress, eol);
+  const refusal = (eol = "\n") => metadata(eol) + frame("error", quota, eol);
+
+  function chunked(
+    text: string,
+    size: number,
+    extra: UnderlyingDefaultSource<Uint8Array> = {},
+  ) {
+    const bytes = new TextEncoder().encode(text);
+    let offset = 0;
+    return new ReadableStream<Uint8Array>(
+      {
+        pull(controller) {
+          if (offset >= bytes.length) controller.close();
+          else {
+            controller.enqueue(bytes.slice(offset, offset + size));
+            offset += size;
+          }
+        },
+        ...extra,
+      },
+      { highWaterMark: 0 },
+    );
+  }
+
+  function routes(subscription: () => Response) {
+    const events: string[] = [];
+    const failures: Array<{ status: number; body: string }> = [];
+    const recovered: Array<{ status: number; body: string }> = [];
+    const gateway = vi.fn(async () => {
+      events.push("transmitted");
+      return new Response("paid research");
+    });
+    const beforePaidRequest = vi.fn(async () => {
+      events.push("admitted");
+    });
+    return {
+      events,
+      failures,
+      recovered,
+      gateway,
+      beforePaidRequest,
+      fetchRoutes: {
+        provider: "openai",
+        subscriptionRequired: true,
+        subscriptionFallback: "budgeted" as const,
+        chatGpt: async (_query, options) => {
+          options?.onSelected?.();
+          return subscription();
+        },
+        beforePaidRequest,
+        onTransport: (transport: string) => events.push(transport),
+        onErrorResponse: (failure: { status: number; body: string }) =>
+          failures.push(failure),
+        onRecoveredErrorResponse: (failure: { status: number; body: string }) =>
+          recovered.push(failure),
+        gateway,
+      } satisfies GatewayFetchRoutes,
+    };
+  }
+
+  it.each(["\n", "\r\n"])(
+    "recovers the observed MIME-less fragmented pre-output refusal (%j)",
+    async (eol) => {
+      const cancel = vi.fn();
+      const r = routes(
+        () => new Response(chunked(refusal(eol), 1, { cancel }), {}),
+      );
+      const response = await gatewayFetchThrough(r.fetchRoutes)(url, init);
+      expect(await response.text()).toBe("paid research");
+      expect(r.events).toEqual([
+        "chatgpt",
+        "admitted",
+        "gateway",
+        "transmitted",
+      ]);
+      expect(r.failures).toHaveLength(1);
+      expect(r.recovered).toEqual(r.failures);
+      expect(r.failures[0]?.status).toBe(200);
+      expect(r.failures[0]?.body).toContain(
+        '"priorEvents":["response.created","response.in_progress"]',
+      );
+      expect(r.failures[0]?.body).toContain(quota.code);
+      expect(r.failures[0]?.body).toContain(quota.message);
+      expect(r.failures[0]?.body).toContain('"contentType":null');
+    },
+  );
+
+  it("forwards a normal output stream byte-for-byte without waiting for its end", async () => {
+    const text =
+      metadata("\r\n") +
+      frame("response.output_text.delta", {
+        type: "response.output_text.delta",
+        delta: "Synthetic output é",
+      });
+    const tail = frame("response.completed", {
+      type: "response.completed",
+      response: { status: "completed" },
+    });
+    const head = new TextEncoder().encode(text);
+    const rest = new TextEncoder().encode(tail);
+    let step = 0;
+    let releaseTail: () => void = () => {};
+    const tailReady = new Promise<void>((resolve) => {
+      releaseTail = resolve;
+    });
+    const headers = {
+      "content-type": "text/event-stream",
+      "x-request-id": "synthetic-request",
+    };
+    const r = routes(
+      () =>
+        new Response(
+          new ReadableStream<Uint8Array>(
+            {
+              async pull(controller) {
+                step += 1;
+                if (step === 1) controller.enqueue(head.slice(0, 7));
+                else if (step === 2) controller.enqueue(head.slice(7));
+                else if (step === 3) {
+                  await tailReady;
+                  controller.enqueue(rest);
+                } else controller.close();
+              },
+            },
+            { highWaterMark: 0 },
+          ),
+          { status: 200, statusText: "Synthetic OK", headers },
+        ),
+    );
+    const response = await gatewayFetchThrough(r.fetchRoutes)(url, init);
+    expect(response.status).toBe(200);
+    expect(response.statusText).toBe("Synthetic OK");
+    expect(response.headers.get("x-request-id")).toBe("synthetic-request");
+    releaseTail();
+    expect(await response.text()).toBe(text + tail);
+    expect(r.beforePaidRequest).not.toHaveBeenCalled();
+    expect(r.gateway).not.toHaveBeenCalled();
+    expect(r.events).toEqual(["chatgpt"]);
+  });
+
+  it.each([
+    [
+      "output text",
+      frame("response.output_text.delta", {
+        type: "response.output_text.delta",
+        delta: "Synthetic output",
+      }),
+    ],
+    [
+      "tool activity",
+      frame("response.output_item.added", {
+        type: "response.output_item.added",
+        item: { type: "function_call", name: "synthetic_tool" },
+      }),
+    ],
+    [
+      "reasoning",
+      frame("response.reasoning_summary_text.delta", {
+        type: "response.reasoning_summary_text.delta",
+        delta: "Synthetic reasoning",
+      }),
+    ],
+    [
+      "unknown event",
+      frame("response.synthetic", { type: "response.synthetic" }),
+    ],
+    ["unnamed unknown data", frame(undefined, { type: "response.synthetic" })],
+    ["malformed metadata", rawFrame("response.created", "{not json")],
+    ["string data", rawFrame(undefined, JSON.stringify("Synthetic output"))],
+    [
+      "metadata carrying output",
+      frame("response.created", {
+        ...created,
+        response: { ...created.response, output: [{ type: "message" }] },
+      }),
+    ],
+    [
+      "metadata of a finished response",
+      frame("response.in_progress", {
+        ...inProgress,
+        response: { ...inProgress.response, status: "completed" },
+      }),
+    ],
+    [
+      "metadata whose event name disagrees with its type",
+      frame("response.created", { ...created, type: "response.output_text" }),
+    ],
+    [
+      "unnamed metadata",
+      frame(undefined, { ...created, response: { output: [] } }),
+    ],
+    [
+      "unexpected top-level metadata output",
+      frame("response.created", { ...created, delta: "Synthetic output" }),
+    ],
+    [
+      "unexpected nested metadata output",
+      frame("response.created", {
+        ...created,
+        response: { ...created.response, delta: "Synthetic output" },
+      }),
+    ],
+    [
+      "metadata carrying an error",
+      frame("response.created", {
+        ...created,
+        response: { ...created.response, error: { code: "synthetic" } },
+      }),
+    ],
+  ])("never recovers a quota refusal after %s", async (_name, prior) => {
+    const text = prior + frame("error", quota);
+    // Small chunks and one whole chunk: the first semantic event decides.
+    for (const size of [3, 1 << 20]) {
+      const r = routes(() => new Response(chunked(text, size)));
+      const response = await gatewayFetchThrough(r.fetchRoutes)(url, init);
+      expect(await response.text()).toBe(text);
+      expect(r.beforePaidRequest).not.toHaveBeenCalled();
+      expect(r.gateway).not.toHaveBeenCalled();
+      expect(r.recovered).toEqual([]);
+    }
+  });
+
+  it.each([
+    ["another error code", frame("error", { ...quota, code: "rate_limit" })],
+    ["a JSON-string error", rawFrame("error", JSON.stringify(quota.code))],
+    [
+      "an error with a conflicting failed-response type",
+      frame("error", {
+        type: "response.failed",
+        response: { output: [], error: quota },
+      }),
+    ],
+    [
+      "an error containing a function call",
+      frame("error", {
+        type: "error",
+        response: {
+          output: [{ type: "function_call", name: "synthetic_tool" }],
+          error: quota,
+        },
+      }),
+    ],
+    [
+      "a quota error carrying unexpected output",
+      frame("error", { ...quota, delta: "Synthetic output" }),
+    ],
+    [
+      "a failed response",
+      frame("response.failed", {
+        type: "response.failed",
+        response: { error: { code: quota.code }, output: [] },
+      }),
+    ],
+    [
+      "an incomplete frame at EOF",
+      `event: error\ndata: ${JSON.stringify(quota)}\n`,
+    ],
+    [
+      "oversized metadata",
+      frame("response.created", {
+        ...created,
+        response: { ...created.response, instructions: "x".repeat(70_000) },
+      }) + frame("error", quota),
+    ],
+    ["an empty stream", ""],
+  ])("returns the original stream for %s", async (_name, tail) => {
+    const text = metadata() + tail;
+    // A single oversized delivery must not bypass the held-prefix bound.
+    for (const size of [4_096, 1 << 20]) {
+      const r = routes(() => new Response(chunked(text, size)));
+      const response = await gatewayFetchThrough(r.fetchRoutes)(url, init);
+      expect(await response.text()).toBe(text);
+      expect(r.beforePaidRequest).not.toHaveBeenCalled();
+      expect(r.gateway).not.toHaveBeenCalled();
+      expect(r.recovered).toEqual([]);
+    }
+  });
+
+  it("recovers a refusal completed within the byte bound despite a larger delivery", async () => {
+    const text = refusal() + `: ${"x".repeat(70_000)}\n\n`;
+    const r = routes(() => new Response(chunked(text, 1 << 20)));
+    const response = await gatewayFetchThrough(r.fetchRoutes)(url, init);
+    expect(await response.text()).toBe("paid research");
+    expect(r.recovered).toHaveLength(1);
+  });
+
+  it("replays held bytes and then the original read failure", async () => {
+    const failure = new Error("Synthetic network reset");
+    const head = new TextEncoder().encode(metadata());
+    let step = 0;
+    const r = routes(
+      () =>
+        new Response(
+          new ReadableStream<Uint8Array>(
+            {
+              pull(controller) {
+                step += 1;
+                if (step === 1) controller.enqueue(head);
+                else controller.error(failure);
+              },
+            },
+            { highWaterMark: 0 },
+          ),
+        ),
+    );
+    const response = await gatewayFetchThrough(r.fetchRoutes)(url, init);
+    const reader = response.body!.getReader();
+    expect(await reader.read()).toEqual({ done: false, value: head });
+    await expect(reader.read()).rejects.toBe(failure);
+    expect(r.gateway).not.toHaveBeenCalled();
+    expect(r.beforePaidRequest).not.toHaveBeenCalled();
+  });
+
+  it("rejects with the caller's abort and cancels the held subscription stream", async () => {
+    const controller = new AbortController();
+    const reason = new Error("Synthetic caller cancelled");
+    const cancel = vi.fn();
+    const head = new TextEncoder().encode(metadata());
+    let step = 0;
+    const r = routes(
+      () =>
+        new Response(
+          new ReadableStream<Uint8Array>(
+            {
+              pull(c) {
+                step += 1;
+                if (step === 1) c.enqueue(head);
+                else controller.abort(reason);
+                // Otherwise idle: no further bytes.
+              },
+              cancel,
+            },
+            { highWaterMark: 0 },
+          ),
+        ),
+    );
+    await expect(
+      gatewayFetchThrough(r.fetchRoutes)(url, {
+        ...init,
+        signal: controller.signal,
+      }),
+    ).rejects.toBe(reason);
+    expect(cancel).toHaveBeenCalledWith(reason);
+    expect(r.beforePaidRequest).not.toHaveBeenCalled();
+    expect(r.gateway).not.toHaveBeenCalled();
+  });
+
+  it("stops holding an idle stream, then forwards a late refusal and cancellation unchanged", async () => {
+    vi.useFakeTimers();
+    try {
+      const head = new TextEncoder().encode(metadata());
+      const late = new TextEncoder().encode(frame("error", quota));
+      let step = 0;
+      let releaseLate: () => void = () => {};
+      const lateReady = new Promise<void>((resolve) => {
+        releaseLate = resolve;
+      });
+      const cancel = vi.fn();
+      const r = routes(
+        () =>
+          new Response(
+            new ReadableStream<Uint8Array>(
+              {
+                async pull(c) {
+                  step += 1;
+                  if (step === 1) c.enqueue(head);
+                  else if (step === 2) {
+                    await lateReady;
+                    c.enqueue(late);
+                  }
+                },
+                cancel,
+              },
+              { highWaterMark: 0 },
+            ),
+          ),
+      );
+      let settled = false;
+      const pending = gatewayFetchThrough(r.fetchRoutes)(url, init).finally(
+        () => {
+          settled = true;
+        },
+      );
+      await vi.advanceTimersByTimeAsync(1_000);
+      expect(settled).toBe(false);
+      await vi.advanceTimersByTimeAsync(60_000);
+      const response = await pending;
+      releaseLate();
+      const reader = response.body!.getReader();
+      expect(await reader.read()).toEqual({ done: false, value: head });
+      expect(await reader.read()).toEqual({ done: false, value: late });
+      await reader.cancel("synthetic cancellation");
+      expect(cancel).toHaveBeenCalledWith("synthetic cancellation");
+      expect(r.beforePaidRequest).not.toHaveBeenCalled();
+      expect(r.gateway).not.toHaveBeenCalled();
+      expect(r.recovered).toEqual([]);
+      expect(r.failures).toHaveLength(1);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it.each(["not opted in", "no admission"] as const)(
+    "does not probe or recover a streamed refusal when %s",
+    async (mode) => {
+      const r = routes(() => new Response(refusal()));
+      const response = await gatewayFetchThrough({
+        ...r.fetchRoutes,
+        subscriptionFallback: mode === "not opted in" ? undefined : "budgeted",
+        beforePaidRequest:
+          mode === "no admission" ? undefined : r.beforePaidRequest,
+      })(url, init);
+      expect(await response.text()).toBe(refusal());
+      expect(r.gateway).not.toHaveBeenCalled();
+      expect(r.recovered).toEqual([]);
+    },
+  );
+
+  it("does not probe a stream the request did not ask for", async () => {
+    const r = routes(() => new Response(refusal()));
+    const response = await gatewayFetchThrough(r.fetchRoutes)(url, {
+      ...init,
+      body: JSON.stringify({ model: "gpt-6-sol", input: [] }),
+    });
+    expect(await response.text()).toBe(refusal());
+    expect(r.gateway).not.toHaveBeenCalled();
+  });
+
+  it("does not probe an HTTP auth failure carrying the quota code", async () => {
+    const r = routes(() => new Response(refusal(), { status: 401 }));
+    const response = await gatewayFetchThrough(r.fetchRoutes)(url, init);
+    expect(response.status).toBe(401);
+    expect(await response.text()).toBe(refusal());
+    expect(r.gateway).not.toHaveBeenCalled();
+    expect(r.recovered).toEqual([]);
+  });
+
+  it.each(["gateway", "testPeer"] as const)(
+    "never probes or replays a paid %s stream",
+    async (route) => {
+      const paid = vi.fn(async () => new Response(refusal()));
+      const r = routes(() => new Response(""));
+      const response = await gatewayFetchThrough({
+        ...r.fetchRoutes,
+        chatGpt: async () => null,
+        testPeer: route === "testPeer" ? () => paid : undefined,
+        gateway: paid,
+      })(url, init);
+      expect(await response.text()).toBe(refusal());
+      expect(paid).toHaveBeenCalledOnce();
+      expect(r.beforePaidRequest).toHaveBeenCalledOnce();
+      expect(r.recovered).toEqual([]);
+    },
+  );
+
+  it.each(["refused", "aborted"] as const)(
+    "reports the recovered quota separately when admission is %s",
+    async (mode) => {
+      const controller = new AbortController();
+      const r = routes(() => new Response(chunked(refusal("\r\n"), 5)));
+      const order: string[] = [];
+      const send = gatewayFetchThrough({
+        ...r.fetchRoutes,
+        onErrorResponse: () => order.push("quota"),
+        onRecoveredErrorResponse: () => order.push("recovered"),
+        beforePaidRequest: async () => {
+          order.push("admission");
+          if (mode === "refused") throw new Error("Synthetic budget exhausted");
+          controller.abort(new Error("Synthetic caller cancelled"));
+        },
+      });
+      await expect(
+        send(url, { ...init, signal: controller.signal }),
+      ).rejects.toThrow(
+        mode === "refused"
+          ? "Synthetic budget exhausted"
+          : "Synthetic caller cancelled",
+      );
+      expect(order).toEqual(["quota", "recovered", "admission"]);
+      expect(r.gateway).not.toHaveBeenCalled();
+    },
+  );
 });
