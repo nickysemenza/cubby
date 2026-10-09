@@ -1270,6 +1270,41 @@ describe("budgeted pre-output stream quota fallback", () => {
     expect(diagnostic).not.toContain("PRIVATE_SYNTHETIC_VALUE");
   });
 
+  it("reports nested quota-envelope rejection paths without envelope values", async () => {
+    const source =
+      metadata() +
+      frame("error", {
+        error: {
+          ...quota,
+          param: 17,
+          unknown_error_field: "PRIVATE_SYNTHETIC_VALUE",
+        },
+      });
+    const r = routes(() => new Response(chunked(source, 17)));
+    const response = await gatewayFetchThrough(r.fetchRoutes)(url, init);
+    expect(await response.text()).toBe(source);
+    expect(r.beforePaidRequest).not.toHaveBeenCalled();
+    const diagnostic =
+      (r.failures[0]?.body ?? "").split("Subscription stream admission: ")[1] ??
+      "";
+    const evidence = JSON.parse(diagnostic);
+    expect(evidence).toMatchObject({
+      reason: "quota_schema",
+      issues: expect.arrayContaining([
+        expect.objectContaining({
+          code: "invalid_type",
+          path: ["error", "param"],
+        }),
+        expect.objectContaining({
+          code: "unrecognized_keys",
+          path: ["error"],
+          keys: ["unknown_error_field"],
+        }),
+      ]),
+    });
+    expect(diagnostic).not.toContain("PRIVATE_SYNTHETIC_VALUE");
+  });
+
   it.each(["\n", "\r\n"])(
     "recovers the observed MIME-less fragmented pre-output refusal (%j)",
     async (eol) => {

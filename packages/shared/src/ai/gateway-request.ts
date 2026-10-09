@@ -559,6 +559,24 @@ const streamQuotaEnvelope = z.union([
 const STREAM_ADMISSION_BYTES = 65_536;
 const STREAM_ADMISSION_MS = 30_000;
 
+/** Union branches contain structural errors too; never project input values. */
+function streamAdmissionIssues(
+  issues: z.core.$ZodIssue[],
+  depth = 0,
+): z.core.$ZodIssue[] {
+  return issues
+    .slice(0, 16)
+    .flatMap((issue) =>
+      issue.code === "invalid_union" && depth < 2
+        ? streamAdmissionIssues(
+            issue.errors.slice(0, 2).flatMap((branch) => branch.slice(0, 8)),
+            depth + 1,
+          )
+        : [issue],
+    )
+    .slice(0, 16);
+}
+
 function streamAdmissionDecision(
   reason: string,
   event?: string,
@@ -567,14 +585,21 @@ function streamAdmissionDecision(
   return {
     reason,
     event: event?.slice(0, 80),
-    issues: issues?.slice(0, 4).map((issue) => ({
-      code: issue.code,
-      path: issue.path.slice(0, 4).map((part) => String(part).slice(0, 40)),
-      keys:
-        issue.code === "unrecognized_keys"
-          ? issue.keys.slice(0, 4).map((key) => key.slice(0, 40))
-          : undefined,
-    })),
+    issues: issues
+      ? streamAdmissionIssues(issues)
+          .sort((left, right) => right.path.length - left.path.length)
+          .slice(0, 4)
+          .map((issue) => ({
+            code: issue.code,
+            path: issue.path
+              .slice(0, 4)
+              .map((part) => String(part).slice(0, 40)),
+            keys:
+              issue.code === "unrecognized_keys"
+                ? issue.keys.slice(0, 4).map((key) => key.slice(0, 40))
+                : undefined,
+          }))
+      : undefined,
   };
 }
 
