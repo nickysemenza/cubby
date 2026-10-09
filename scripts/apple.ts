@@ -218,17 +218,29 @@ const cli = (options: Options) => {
 // a CODE_SIGNING_ALLOWED=NO command into this DerivedData) has a per-build
 // cdhash requirement, so launching it replaces every grant and the next signed
 // build prompts again.
-const assertTeamSigned = (app: string) => {
+const assertTeamSigned = (app: string, allowTestFlight = false) => {
   const team = readFileSync(join(APPLE, "project.yml"), "utf8").match(
     /^\s*DEVELOPMENT_TEAM:\s*([A-Z\d]{10})\s*$/mu,
   )?.[1];
   if (!team) throw new Error("apps/apple/project.yml has no DEVELOPMENT_TEAM");
+  // TestFlight's leaf belongs to Apple, not the project team. Only an explicit
+  // transition may accept its protected bundle team metadata instead.
+  let signer = `certificate leaf[subject.OU] = "${team}"`;
+  if (allowTestFlight) {
+    const displayed = spawnSync("codesign", ["-dvv", app], {
+      encoding: "utf8",
+    });
+    if (displayed.error || displayed.status !== 0)
+      throw displayed.error ?? new Error(displayed.stderr.trim());
+    if (displayed.stderr.split("\n").includes(`TeamIdentifier=${team}`))
+      signer = `(${signer} or certificate leaf[field.1.2.840.113635.100.6.1.25.1])`;
+  }
   const verified = spawnSync(
     "codesign",
     [
       "--verify",
       "--strict",
-      `-R=anchor apple generic and identifier "${BUNDLE_ID}" and certificate leaf[subject.OU] = "${team}"`,
+      `-R=anchor apple generic and identifier "${BUNDLE_ID}" and ${signer}`,
       app,
     ],
     { encoding: "utf8" },
@@ -264,7 +276,10 @@ const mac = (options: Options) => {
     app,
     installed,
     (candidate) => {
-      assertTeamSigned(candidate);
+      assertTeamSigned(
+        candidate,
+        candidate === installed && !!options.replaceSigningIdentity,
+      );
       verifyApproval?.(candidate);
     },
     () => {
