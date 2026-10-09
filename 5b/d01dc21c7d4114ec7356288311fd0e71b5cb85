@@ -1,0 +1,95 @@
+.github/actions/setup-node-with-deps/action.yml
+  s_9e37542d401f69::t_47bcfba9af4543 50,73,87
+.github/renovate.json
+  s_9e37542d401f69::t_794edb8cc67343 44
+Cargo.lock
+  s_9e37542d401f69::t_7520194f952684 224,783,797,1179,1189,1206,1234-1242,1659,1661,1668,1670,2157-2166
+Cargo.toml
+  s_9e37542d401f69::t_f2f3c004882ffb 6
+README.md
+  s_9e37542d401f69::t_e9ecec9a5fe274 231-237
+apps/web/scripts/check-client-bundle.ts
+  s_9e37542d401f69::t_2f011e9f4b191f 45-71,91,99
+apps/web/scripts/check-client-bundle.unit.test.ts
+  s_9e37542d401f69::t_054afe832e7b1c 2,9,44-75
+apps/web/src/features/recipes/cookbook-import/extract-status.tsx
+  s_9e37542d401f69::t_44020e2d456d93 1
+apps/web/src/features/recipes/cookbook-import/extraction-result.ts
+  s_9e37542d401f69::t_3401500c261d13 1
+apps/web/src/features/recipes/cookbook-import/gateway-transport.ts
+  s_9e37542d401f69::t_7e641524ae6991 1
+apps/web/src/features/recipes/cookbook-import/gateway-transport.unit.test.ts
+  s_9e37542d401f69::t_5264ceab2556fa 1
+apps/web/src/features/recipes/cookbook-import/index.tsx
+  s_baac6c838b330d::t_808b2031ce867f 5,63,268-273,364,369,482,548,559,565,817
+apps/web/src/features/recipes/cookbook-import/types.ts
+  s_9e37542d401f69::t_50406124f0a784 1,137
+apps/web/src/lib/cookbook-types.ts
+  s_9e37542d401f69::t_f976e393fc57bd 1
+apps/web/src/lib/wasm-browser-exports.unit.test.ts
+  s_9e37542d401f69::t_cfd5777d9e3b8d 1-47
+cubby-ffi/Cargo.toml
+  s_9e37542d401f69::t_72b4cca71501a0 12-14
+docs/ci.md
+  s_9e37542d401f69::t_192aef7d2b0f03 91-96
+docs/development.md
+  s_9e37542d401f69::t_7e9f4b0e4177bb 34-42,85
+package.json
+  s_9e37542d401f69::t_6b4fff1b853273 47
+project.json
+  s_9e37542d401f69::t_5c5b5f7917cbdd 74,78,84
+recipebridge-cookbook/Cargo.toml
+  s_9e37542d401f69::t_37671295bc47ef 1-28
+recipebridge-cookbook/src/lib.rs
+  s_9e37542d401f69::t_b168a9d3711093 11-13,15-20
+recipebridge/Cargo.toml
+  s_9e37542d401f69::t_66828b6e6239ad 20-21,31-32,36-38,43-46,48-56
+recipebridge/project.json
+  s_9e37542d401f69::t_0d29300e240cca 6
+recipebridge/src/ai_usage.rs
+  s_9e37542d401f69::t_239dc768699485 1-70
+recipebridge/src/lib.rs
+  s_9e37542d401f69::t_2e90a444568a0d 5,12-13,35-36,46,55-56,63
+recipebridge/src/parse.rs
+  s_9e37542d401f69::t_1593d9156ab40a 485
+scripts/build-wasm.sh
+  s_9e37542d401f69::t_5b3d89d7633188 1-30
+scripts/ensure-wasm.test.ts
+  s_9e37542d401f69::t_d362eaabf90ded 92,98,100-104
+scripts/ensure-wasm.ts
+  s_9e37542d401f69::t_048bbc9d531738 42-47,62,64,66-69,79,81
+apps/web/src/lib/wasm.ts
+  s_9e37542d401f69::t_c443bb4cbbbb5c 35-38
+apps/web/vite.config.ts
+  s_9e37542d401f69::t_688b95c0e7c33d 174-200,423
+packages/schemas/src/cookbook.ts
+  s_9e37542d401f69::t_aa2db91605e8e1 4-6
+apps/web/src/features/recipes/cookbook-import/cookbook-wasm.ts
+  s_9e37542d401f69::t_f502fbbe47845e 1-22
+packages/wasm/package.json
+  s_9e37542d401f69::t_466f56c8bc1aaa 8-10,12,15-16,18-31
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "5bd01dc21c7d4114ec7356288311fd0e71b5cb85",
+  "prompts": {},
+  "sessions": {
+    "s_9e37542d401f69": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "0e86f572-b00a-4385-9ba9-59a84e2730f0",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "nicky <nicky@cloudflare.com>"
+    },
+    "s_baac6c838b330d": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "4e072615-6da5-4add-8945-be01765ee61f",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "nicky <nicky@cloudflare.com>"
+    }
+  }
+}
