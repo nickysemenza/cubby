@@ -31,6 +31,7 @@ import { insertWithShortcode } from "~/server/repo/shortcode-utils";
 import { ensureRun } from "~/server/runs/ensure-run";
 
 import { sweepPendingEnrichment } from "./enrichment-sweep";
+import { HISTORICAL_MAIL_SOURCE_IDENTITY_VERSION } from "./mail-source-identity";
 import { loadProductPurchaseContext } from "./research-context";
 import { importVendorOrder } from "./writer";
 
@@ -802,6 +803,20 @@ describe("research order writes", () => {
           ),
         ),
     ).toEqual([{ name: "Member's renamed device" }]);
+    // A checksum match cannot resolve ownership blocked during historical cutover.
+    await getDb(ctx.db)
+      .update(mailboxMessage)
+      .set({
+        status: "blocked",
+        classificationVersion: HISTORICAL_MAIL_SOURCE_IDENTITY_VERSION,
+      })
+      .where(eq(mailboxMessage.orderMailId, mail.id));
+    expect(
+      await loadProductPurchaseContext(ctx.db, {
+        productId: item.id,
+        ledgerPartyId: party.id,
+      }),
+    ).toMatchObject([{ originalMail: null, orderedLine: candidate.lines[0] }]);
   });
 
   it("excludes another member's prepared extraction sharing a source key and checksum", async () => {

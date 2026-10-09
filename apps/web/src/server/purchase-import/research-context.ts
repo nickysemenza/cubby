@@ -34,6 +34,7 @@ import {
 } from "~/server/db/schema";
 import { getDb, notDeleted } from "~/server/repo/database-helpers";
 
+import { HISTORICAL_MAIL_SOURCE_IDENTITY_VERSION } from "./mail-source-identity";
 import { loadImportSourceClaimRoots } from "./source-claim-family";
 
 /** Same-run source associations survive replay and precede asynchronous search indexing. */
@@ -207,6 +208,10 @@ export async function loadProductPurchaseContext(
             eq(orderMail.ledgerPartyId, input.ledgerPartyId),
             inArray(mailKey, keys),
             ne(mailboxMessage.classification, "unrelated"),
+            ne(
+              mailboxMessage.classificationVersion,
+              HISTORICAL_MAIL_SOURCE_IDENTITY_VERSION,
+            ),
             notInArray(mailboxMessage.status, ["excluded", "deleted"]),
           ),
         )
