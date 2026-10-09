@@ -1,0 +1,23 @@
+apps/web/src/routes/_authenticated/usda.$id.tsx
+  s_baac6c838b330d::t_302163a227febe 18,32-42
+docs/infrastructure.md
+  s_baac6c838b330d::t_bb7b67174a1177 450-451
+packages/schemas/src/entity-definitions/00-product.entity.ts
+  s_baac6c838b330d::t_bb77b59b5ec02c 3064
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "80f437220c64c91be00ca32613d1f049ef60cc6b",
+  "prompts": {},
+  "sessions": {
+    "s_baac6c838b330d": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "4e072615-6da5-4add-8945-be01765ee61f",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "nicky <nicky@cloudflare.com>"
+    }
+  }
+}
