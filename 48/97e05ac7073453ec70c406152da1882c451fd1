@@ -1,0 +1,39 @@
+apps/web/src/contracts/mcp-projections.ts
+  s_baac6c838b330d::t_9d2833c7ef3317 13,134-136,138-142,175,177,196-201,208,213-220
+apps/web/src/routes/api/debug/usda-release.ts
+  s_baac6c838b330d::t_12feebdb986ed6 89,131-137,140-143
+apps/web/src/server/mcp/mcp-response-policies.unit.test.ts
+  s_baac6c838b330d::t_bfd89494c2ba68 70-104
+apps/web/src/server/purchase-import/findings.ts
+  s_baac6c838b330d::t_f7defc73cf3be6 557-562
+apps/web/src/server/purchase-import/research-field-corrections.ts
+  s_baac6c838b330d::t_93def1938417d2 38-41,362,451
+apps/web/src/server/purchase-import/research-product.integration.test.ts
+  s_baac6c838b330d::t_7d3f13f71a745b 1-4,16,52-53,213-219
+apps/web/src/server/services/usda-link-advance.integration.test.ts
+  s_baac6c838b330d::t_db0bc80ea3fcac 7,15,86-102,104-109
+apps/web/src/server/services/usda-link-advance.service.ts
+  s_baac6c838b330d::t_f853cb1cb9b87a 3,5,28,59-63,70-72
+apps/web/src/server/testing/request-context.ts
+  s_baac6c838b330d::t_14b917c4b5d8f7 10
+apps/web/tooling/workerd-harness.ts
+  s_baac6c838b330d::t_4d12903af38728 6,500-506,508-511,516-536
+docs/development.md
+  s_baac6c838b330d::t_c71afffb2bc549 112-116
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "4897e05ac7073453ec70c406152da1882c451fd1",
+  "prompts": {},
+  "sessions": {
+    "s_baac6c838b330d": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "4e072615-6da5-4add-8945-be01765ee61f",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "nicky <nicky@cloudflare.com>"
+    }
+  }
+}
