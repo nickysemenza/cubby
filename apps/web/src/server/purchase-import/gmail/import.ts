@@ -19,7 +19,7 @@ import {
 import type { PurchaseAgentQueueProducer } from "~/server/purchase-agent-queue-types";
 import { getDb, notDeleted } from "~/server/repo/database-helpers";
 
-import { startMailResearch } from "../research-run";
+import type { startMailResearch } from "../research-run";
 
 type ResearchPorts = { research?: typeof startMailResearch };
 
@@ -72,7 +72,8 @@ async function startSelectedSources(
   if (!head) throw new Error("Select at least one order email.");
   if (rows.some((row) => row.mail.ledgerPartyId !== head.mail.ledgerPartyId))
     throw new Error("Select email from one member.");
-  const research = ports.research ?? startMailResearch;
+  const research =
+    ports.research ?? (await import("../research-run")).startMailResearch;
   const results = await research(
     db,
     {

@@ -11,11 +11,8 @@ import {
   rippleFor,
   type InvalidationTagSet,
 } from "./cache-tags";
+import * as catalog from "./generated/catalog.gen";
 import type { OperationCacheTag } from "./operation-meta";
-
-const catalogModules = import.meta.glob<object>("./generated/*.gen.ts", {
-  eager: true,
-});
 
 /**
  * Tag matching is prefix-only: an invalidation `I` matches a query's declared
@@ -74,19 +71,17 @@ const isInvalidationPolicy = (
 /**
  * There is no runtime registry of operation descriptors — `defineOperationDomain`
  * only records mutation invalidation policies — so the catalog is reassembled by
- * walking the domain objects every generated `generated/<module>.gen.ts`
- * exports. `path` is the domain's export name.
+ * walking the domain objects the generated `catalog.gen.ts` exports. `path` is
+ * the domain's export name.
  */
 const descriptors: ReadonlyArray<{ path: string; descriptor: AnyDescriptor }> =
-  Object.values(catalogModules)
-    .flatMap((module) => Object.entries(module))
-    .flatMap(([path, domain]) => {
-      const parsed = moduleExportsSchema.safeParse(domain);
-      if (!parsed.success) return [];
-      return Object.values(parsed.data)
-        .filter(isDescriptor)
-        .map((descriptor) => ({ path, descriptor }));
-    });
+  Object.entries(catalog).flatMap(([path, domain]) => {
+    const parsed = moduleExportsSchema.safeParse(domain);
+    if (!parsed.success) return [];
+    return Object.values(parsed.data)
+      .filter(isDescriptor)
+      .map((descriptor) => ({ path, descriptor }));
+  });
 
 /**
  * SOURCE-declared tags, not `meta.cacheTags`: `descriptorMeta` appends `[[entity]]`

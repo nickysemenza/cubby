@@ -11,7 +11,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
 import { z } from "zod";
 
-import { imageUpload } from "~/integrations/tanstack-query/generated/image-upload.gen";
+import { imageUpload } from "~/integrations/tanstack-query/generated/catalog.gen";
 import { getErrorMessage } from "~/lib/error-utils";
 import { putPresignedObject } from "~/lib/presigned-upload";
 import { cn } from "~/lib/utils";

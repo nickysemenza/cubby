@@ -1,4 +1,4 @@
-import { collectionSlug } from "@cubby/schemas/collection-fields";
+import { collectionSlug } from "@cubby/schemas/collection";
 import { formatCollectionLabel } from "@cubby/shared/collection-tag";
 import {
   createFileRoute,

@@ -1,4 +1,4 @@
-import { dataQualityStatus } from "@cubby/schemas/data-quality-shape";
+import { dataQualityStatus } from "@cubby/schemas/data-quality";
 import { displayImagesField } from "@cubby/schemas/display-images";
 import { entitySchema } from "@cubby/schemas/entity";
 import { z } from "zod";

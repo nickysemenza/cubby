@@ -112,7 +112,6 @@ async function dispatchServerOperation<Input>(
   input: Input,
   transport: { signal?: AbortSignal; headers: HeadersInit },
 ): Promise<StartOperationResult<UnparsedStartOperationData>> {
-  // Server-only modules: this transport also ships in the client bundle.
   const [
     { getRequest },
     { dispatchStartOperation: dispatchOnServer },

@@ -3,7 +3,7 @@ import {
   type ProductShortcode,
   parseShortcodeFor,
 } from "@cubby/schemas/identifiers";
-import type { RecommendationKind } from "@cubby/schemas/recommendation-search";
+import type { RecommendationKind } from "@cubby/schemas/recommendations";
 import { XIcon } from "@phosphor-icons/react/dist/csr/X";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
@@ -18,9 +18,11 @@ import {
 } from "~/entity/entity-media/entity-display-images";
 import { RelatedProductRow } from "~/entity/relatedness/related-product-row";
 import { ripple } from "~/integrations/tanstack-query/cache-tags";
-import { entityMedia } from "~/integrations/tanstack-query/generated/entity-media.gen";
-import { inventory } from "~/integrations/tanstack-query/generated/inventory.gen";
-import { recommendations } from "~/integrations/tanstack-query/generated/recommendations.gen";
+import {
+  inventory,
+  entityMedia,
+  recommendations,
+} from "~/integrations/tanstack-query/generated/catalog.gen";
 import { invalidateOperationTags } from "~/integrations/tanstack-query/operation-cache";
 import { ErrorDisplay } from "~/ui/feedback/error-display";
 import { Row, Stack } from "~/ui/layout";

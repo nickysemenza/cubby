@@ -1,9 +1,12 @@
+import { CalendarFeedDurableObject } from "~/server/calendar/durable-object";
+
+export { CalendarFeedDurableObject };
+
 /**
- * The Worker pool exercises the production Durable Object classes — the entry
- * shells in `server/worker-entrypoints.ts` and the implementations they load —
- * through their normal HTTP entrypoint. Production routing has unrelated
- * application bindings, so this deliberately narrow entrypoint keeps calendar
- * tests hermetic while preserving the actual DO runtime and SQLite storage.
+ * The Worker pool exercises the production Durable Object class through its
+ * normal HTTP entrypoint. Production routing has unrelated application
+ * bindings, so this deliberately narrow entrypoint keeps calendar tests
+ * hermetic while preserving the actual DO runtime and SQLite storage.
  */
 export default {
   async fetch(request: Request, env: Env): Promise<Response> {
@@ -20,11 +23,8 @@ export default {
   },
 };
 
+export { DatabaseFreshnessDurableObject } from "~/server/database-freshness/durable-object";
+export { PurchaseImportDurableObject } from "~/server/purchase-import/durable-object";
 export { AiResponseCacheDurableObject } from "~/server/ai/response-cache-durable-object";
-export {
-  CalendarFeedDurableObject,
-  ChatGptPlanDurableObject,
-  DatabaseFreshnessDurableObject,
-  PurchaseImportDurableObject,
-  UsdaReleaseDurableObject,
-} from "~/server/worker-entrypoints";
+export { ChatGptPlanDurableObject } from "~/server/ai/chatgpt/durable-object";
+export { UsdaReleaseDurableObject } from "~/server/usda-release/durable-object";

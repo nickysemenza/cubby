@@ -13,7 +13,7 @@ import { toast } from "sonner";
 import { z } from "zod";
 
 import { EntityPrimitiveFields } from "~/entity/editing/entity-primitive-fields";
-import { recipe as recipeOperations } from "~/integrations/tanstack-query/generated/recipe.gen";
+import { recipe as recipeOperations } from "~/integrations/tanstack-query/generated/catalog.gen";
 import { getErrorMessage } from "~/lib/error-utils";
 import { wasm } from "~/lib/wasm";
 import { showErrorToast } from "~/ui/feedback/error-details";

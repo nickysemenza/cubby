@@ -17,8 +17,10 @@ import {
   useEntityDisplayImages,
 } from "~/entity/entity-media/entity-display-images";
 import { RelatedProductRow } from "~/entity/relatedness/related-product-row";
-import { entityMedia } from "~/integrations/tanstack-query/generated/entity-media.gen";
-import { recommendations } from "~/integrations/tanstack-query/generated/recommendations.gen";
+import {
+  entityMedia,
+  recommendations,
+} from "~/integrations/tanstack-query/generated/catalog.gen";
 import { getErrorMessage } from "~/lib/error-utils";
 import { ErrorDisplay } from "~/ui/feedback/error-display";
 import { useHydratedLoading } from "~/ui/hooks/useHydrated";

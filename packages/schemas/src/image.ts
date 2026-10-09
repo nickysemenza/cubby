@@ -32,7 +32,7 @@ import {
   type GalleryEntity,
   type LogoEntity,
   type ShortcodeEntity,
-} from "./entity-index";
+} from "./entity-manifest";
 import { anyShortcodeSchema } from "./identifiers";
 import { entityImage } from "./entity";
 import {

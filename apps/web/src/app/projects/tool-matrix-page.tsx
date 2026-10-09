@@ -48,7 +48,7 @@ import {
   useHydratedProductImages,
 } from "~/features/products/product-image-summaries";
 import { ripple } from "~/integrations/tanstack-query/cache-tags";
-import { project } from "~/integrations/tanstack-query/generated/project.gen";
+import { project } from "~/integrations/tanstack-query/generated/catalog.gen";
 import { invalidateOperationTags } from "~/integrations/tanstack-query/operation-cache";
 import { toolTimelineConflict } from "~/lib/tool-timeline";
 import { cn, formatCurrency } from "~/lib/utils";

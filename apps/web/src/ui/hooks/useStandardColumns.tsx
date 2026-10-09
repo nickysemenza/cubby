@@ -1,8 +1,7 @@
 import type { DisplayImageSummary } from "@cubby/schemas/display-images";
-import {
-  type BrowserRoutedEntity,
-  entityIndex,
-} from "@cubby/schemas/entity-index";
+import { entityFieldModels } from "@cubby/schemas/entity-fields";
+import type { BrowserRoutedEntity } from "@cubby/schemas/entity-manifest";
+import { entitySummary } from "@cubby/schemas/entity-summary";
 import type { UnitMapping } from "@cubby/schemas/unitmapping";
 import type { CellData } from "@tanstack/react-table";
 import type { ReactNode } from "react";
@@ -13,7 +12,6 @@ import type { EntityActionSubject } from "~/entity/actions/entity-actions";
 import { browserEntityDefinition, getSortableFields } from "~/entity/entities";
 import { createEntityDisplayColumns } from "~/entity/entity-display";
 import { identityWidthClassName } from "~/entity/entity-list/identity-list-config";
-import { entityFieldModel } from "~/entity/entity-model";
 import { manifestFilterConfig } from "~/entity/filter-manifest";
 import { createUnitMappingsColumn } from "~/features/units/unit-mappings-column";
 import { type FilterConfig } from "~/ui/data-table/table-meta";
@@ -193,8 +191,8 @@ export function useStandardColumns<TData extends BaseListRow>({
   // Memoize entity config to prevent re-renders when entity doesn't change
   const { standardColumns, shouldUseMappings, titleField } = useMemo(() => {
     const listConfig = browserEntityDefinition(entity).list;
-    const resolvedTitleField = entityIndex[entity].titleField;
-    const standardColumns = entityFieldModel(entity).fields.filter(
+    const resolvedTitleField = entitySummary[entity].titleField;
+    const standardColumns = entityFieldModels[entity].fields.filter(
       (field) => field.display.list && field.display.standard,
     );
     const listHasUnitMappings = listConfig?.hasUnitMappings ?? false;
@@ -205,7 +203,7 @@ export function useStandardColumns<TData extends BaseListRow>({
     };
   }, [entity, hasUnitMappings]);
   const identityWidth = useMemo(() => {
-    const titleFieldModel = entityFieldModel(entity).fields.find(
+    const titleFieldModel = entityFieldModels[entity].fields.find(
       (field) => field.key === titleField,
     );
     return identityWidthClassName(titleFieldModel?.display.width ?? null);
@@ -309,7 +307,7 @@ export function useStandardColumns<TData extends BaseListRow>({
           const identityFilterConfig = getFilterConfig(titleField);
           const identityColumnOptions = {
             id: titleField,
-            header: entityIndex[entity].singular,
+            header: entitySummary[entity].singular,
             filterConfig: identityFilterConfig,
             enableSorting: getSortableFields(entity).includes(titleField),
             className: nameClassName ?? identityWidth,

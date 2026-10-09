@@ -8,7 +8,7 @@ import { KeyIcon } from "@phosphor-icons/react/dist/csr/Key";
 import { useQuery } from "@tanstack/react-query";
 import { useRef, useState } from "react";
 
-import { calendar } from "~/integrations/tanstack-query/generated/calendar.gen";
+import { calendar } from "~/integrations/tanstack-query/generated/catalog.gen";
 import { copyTextWithToast } from "~/lib/clipboard";
 import { cn } from "~/lib/utils";
 import { WorkflowDialog } from "~/ui/dialogs/workflow-dialog";

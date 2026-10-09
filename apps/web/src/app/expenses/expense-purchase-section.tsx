@@ -9,7 +9,7 @@ import {
   entityDisplayImageKey,
   useEntityDisplayImages,
 } from "~/entity/entity-media/entity-display-images";
-import { expense as expenseOperations } from "~/integrations/tanstack-query/generated/expense.gen";
+import { expense as expenseOperations } from "~/integrations/tanstack-query/generated/catalog.gen";
 import { formatCalendarDay } from "~/lib/date-format";
 import { formatCurrency } from "~/lib/utils";
 import { ErrorDisplay } from "~/ui/feedback/error-display";

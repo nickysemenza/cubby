@@ -210,10 +210,10 @@ binding was cast rather than checked; the boundary is now type-checked and
 linted instead of a deployment topology.
 
 The agent runtime (Agents SDK, pi-durable, MCP client) stays off every page
-request: the exported Durable Object is a shell (`server/worker-entrypoints.ts`)
-that loads its host and `server/purchase-agent/run-agent.ts` on its first
-event, and the queue handler loads the consumer when a `cubby-purchase-agent`
-batch arrives.
+request: the exported Durable Object is a shell that loads
+`server/purchase-agent/run-agent.ts` on its first event, and the queue handler
+loads the consumer when a `cubby-purchase-agent` batch arrives
+(`apps/web/scripts/check-server-closure.ts` budgets both paths).
 
 Purchase research mounts the focused typed tools in
 `server/purchase-agent/tools.ts`, narrowed by the shared purpose manifest.

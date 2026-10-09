@@ -6,7 +6,7 @@ import { useQuery } from "@tanstack/react-query";
 import { useRouter } from "@tanstack/react-router";
 import { useMemo } from "react";
 
-import { project } from "~/integrations/tanstack-query/generated/project.gen";
+import { project } from "~/integrations/tanstack-query/generated/catalog.gen";
 import { householdLocalDate } from "~/lib/household-date";
 import { effectiveTaskDueDate } from "~/lib/task-dates";
 import { ErrorDisplay } from "~/ui/feedback/error-display";

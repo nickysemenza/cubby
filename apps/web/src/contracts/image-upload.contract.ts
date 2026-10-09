@@ -14,7 +14,7 @@ import {
   initiateUploadWithoutEntityResponseSchema,
   initiateUploadWithoutEntitySchema,
 } from "@cubby/schemas/image";
-import { parseShortcode } from "@cubby/shared/shortcode";
+import { parseShortcode } from "@cubby/shared";
 import { z } from "zod";
 
 import { defineContract, mutation } from "~/contracts/define";

@@ -15,7 +15,7 @@ import {
   LocationDestinationPicker,
   refuseSourceLocations,
 } from "~/features/locations/location-move-dialog";
-import { inventory } from "~/integrations/tanstack-query/generated/inventory.gen";
+import { inventory } from "~/integrations/tanstack-query/generated/catalog.gen";
 import { getErrorMessage } from "~/lib/error-utils";
 import type { ComboboxItem } from "~/ui/combobox/combobox-types";
 import { BulkActionDialog } from "~/ui/dialogs/bulk-action-dialog";

@@ -28,7 +28,7 @@ import { basisValueOf } from "~/features/ai/field-suggestion";
 import { ExternalIdKindSuggestion } from "~/features/products/external-id-kind-suggestion";
 import { IdentifyProductButton } from "~/features/products/identify-product-with-ai";
 import { UnitMappingPairField } from "~/features/units/unit-mapping-pair-field";
-import { upc as upcLookup } from "~/integrations/tanstack-query/generated/upc.gen";
+import { upc as upcLookup } from "~/integrations/tanstack-query/generated/catalog.gen";
 import { UsdaFoodSearchField } from "~/ui/combobox/with-usda-food-search";
 import { showErrorToast } from "~/ui/feedback/error-details";
 import {

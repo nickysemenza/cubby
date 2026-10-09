@@ -63,6 +63,7 @@
         "src/lib/recipebridge-cf.ts!",
         "src/lib/sentry-cf-shim.ts!",
         "src/integrations/**/*.{ts,tsx}!",
+        "src/contracts/index.ts!",
         "src/lib/generated/http-resources.gen.ts!",
         // The `<entity>ListItem` exports name the OpenAPI components; the
         // generator reads them, nothing in the web app does.
@@ -74,7 +75,9 @@
         // Opt-in `live-eval` vitest project (billed model evals).
         "src/**/*.live-eval.ts!",
         "tests/**/*.{ts,tsx}!",
+        "scripts/check-client-bundle.ts!",
         "scripts/worker-type-imports.ts!",
+        "scripts/check-server-closure.ts!",
         "scripts/read-performance.ts!",
         "scripts/apple-preview-fixtures.ts!",
         "tooling/**/*.{ts,tsx}!",

@@ -28,7 +28,7 @@ export function AppFooter({ metadata }: { metadata: BuildMetadata }) {
             </a>
           </span>
           {/* Statically false in every build, so the link never reaches a
-              production bundle. */}
+              production bundle (enforced by scripts/check-client-bundle.ts). */}
           {import.meta.env.DEV && (
             <>
               <span aria-hidden="true" className="text-muted-foreground/40">

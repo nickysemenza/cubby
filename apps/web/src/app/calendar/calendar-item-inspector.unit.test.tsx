@@ -6,7 +6,7 @@ import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
 import { createEntityMutationPort } from "~/entity/editing/use-entity-commands";
 import type { EntityMutationTransport } from "~/entity/entity-mutation-command";
-import { entityMutation } from "~/integrations/tanstack-query/generated/entity-mutation.gen";
+import { entityMutation } from "~/integrations/tanstack-query/generated/catalog.gen";
 import { createBrowserTestHarness } from "~/lib/test/browser-harness";
 import {
   entityBrowserMutationCommandSchema,

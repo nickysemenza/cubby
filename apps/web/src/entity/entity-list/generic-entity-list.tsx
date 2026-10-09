@@ -1,5 +1,8 @@
 import { isSlotListView } from "@cubby/schemas/entity-definitions/definition";
-import type { BrowserRoutedEntity } from "@cubby/schemas/entity-index";
+import { entityFieldModels } from "@cubby/schemas/entity-fields";
+import type { BrowserRoutedEntity } from "@cubby/schemas/entity-manifest";
+import { entityManifest } from "@cubby/schemas/entity-manifest";
+import { entitySummary } from "@cubby/schemas/entity-summary";
 import { useNavigate, useSearch } from "@tanstack/react-router";
 import {
   createContext,
@@ -22,12 +25,6 @@ import {
 import { entityListBaseFor } from "~/entity/entity-list";
 import { identityListConfig } from "~/entity/entity-list/identity-list-config";
 import { ListTotalSummary } from "~/entity/entity-list/list-total-summary";
-import {
-  entityDescriptorOf,
-  entityFieldModel,
-  entitySummaryOf,
-  useEntityModel,
-} from "~/entity/entity-model";
 import {
   type ListEntity,
   listEntities,
@@ -81,7 +78,7 @@ import {
   listSearchSchema,
   type ListSlotProps,
 } from "./list-slot-types";
-import type { ListSlotComponent } from "./list-slot-types";
+import { listSlotFor } from "./list-slots";
 import { manifestTree } from "./manifest-tree";
 import { resolveListView } from "./resolve-list-view";
 
@@ -209,10 +206,10 @@ function useListColumns(
     const composed = compose
       ? assertSpecialistColumnProvenance(entity, declared, compose(declared))
       : declared;
-    const policy = entityDescriptorOf(entity).images;
+    const policy = entityManifest[entity].images;
     if (policy.storage === false && policy.displaySources.length === 0)
       return composed;
-    const imageId = entityFieldModel(entity).fields.some(
+    const imageId = entityFieldModels[entity].fields.some(
       (field) => field.key === "images" && field.display.list,
     )
       ? "images"
@@ -243,31 +240,27 @@ function useListColumns(
 
 export interface GenericEntityListProps {
   entity: BrowserRoutedEntity;
-  /** The entity's list slot views, from its generated list client. */
-  slots?: Readonly<Partial<Record<string, ListSlotComponent>>>;
   /** Test seam: replaces the entity's generic list read. */
   operations?: { list?: ListQueryOptionsFn<object, BaseListRow> };
   override?: AnyEntityListOverride;
 }
 
 /**
- * The one list page: rendered from the entity's summary
- * (`entitySummaryOf(entity).list`) over `useEntityList` + `ListWorkbench`,
- * with the entity's hand-written half (`entities/list-columns/<entity>`) and
- * slot views (its list client's `slots`) plugged in by its route component. The view switcher and header live in `listPage`.
+ * The one list page: rendered from `entitySummary[entity].list` over
+ * `useEntityList` + `ListWorkbench`, with the entity's hand-written half
+ * (`entities/list-columns/<entity>`) and slot views (`listSlots`) plugged
+ * in by its route component. The view switcher and header live in `listPage`.
  */
 export function GenericEntityList({
   entity,
-  slots = {},
   operations,
   override = NO_OVERRIDE,
 }: GenericEntityListProps) {
-  useEntityModel(entity);
   const { search, navigate } = useListSearch();
   const { view } = resolveListView(entity, search);
 
   if (isSlotListView(view)) {
-    const Slot = slots[view.id];
+    const Slot = listSlotFor(entity, view.id);
     return Slot ? <Slot search={search} navigate={navigate} /> : null;
   }
   if (override.mode === "client") {
@@ -342,9 +335,9 @@ function ServerListBody({
     [entity],
   );
   const additionalReadFields = useMemo(() => {
-    const parentField = entitySummaryOf(entity).list.tree?.parentField;
+    const parentField = entitySummary[entity].list.tree?.parentField;
     const parentReadKey = parentField
-      ? entityFieldModel(entity).fields.find(
+      ? entityFieldModels[entity].fields.find(
           (field) => field.key === parentField,
         )?.readKey
       : undefined;
@@ -354,7 +347,7 @@ function ServerListBody({
       ...(renderedView === "shelf"
         ? [
             "displayImages",
-            ...(entitySummaryOf(entity).list.shelf?.subtitle ?? []),
+            ...(entitySummary[entity].list.shelf?.subtitle ?? []),
           ]
         : []),
       ...(parts.tree
@@ -434,7 +427,7 @@ function ServerListBody({
     <>
       {parts.above?.(list)}
       <ListTotalSummary
-        totals={entitySummaryOf(entity).list.totals}
+        totals={entitySummary[entity].list.totals}
         sums={list.sums}
         state={list.summaryState}
         onRetry={list.retrySummary}

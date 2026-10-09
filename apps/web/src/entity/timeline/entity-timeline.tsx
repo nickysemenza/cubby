@@ -28,7 +28,7 @@ import {
   type EntityTimelineWindowByEntity,
 } from "~/entity/entity-timeline";
 import type { TimelineEntity } from "~/entity/generated/entity-timelines.gen";
-import { entityTimeline } from "~/integrations/tanstack-query/generated/entity-timeline.gen";
+import { entityTimeline } from "~/integrations/tanstack-query/generated/catalog.gen";
 import { formatCalendarDay } from "~/lib/date-format";
 import { parsePlainDate } from "~/lib/plain-date";
 import { cn, formatCount, formatCurrency } from "~/lib/utils";

@@ -3,6 +3,7 @@ import { CaretDownIcon } from "@phosphor-icons/react/dist/csr/CaretDown";
 import { SignInIcon } from "@phosphor-icons/react/dist/csr/SignIn";
 import { WarningCircleIcon } from "@phosphor-icons/react/dist/csr/WarningCircle";
 import { WifiSlashIcon } from "@phosphor-icons/react/dist/csr/WifiSlash";
+import * as Sentry from "@sentry/tanstackstart-react";
 import {
   type ErrorComponentProps,
   Link,
@@ -19,7 +20,6 @@ import {
   isSupersededViewTransitionError,
   type UnparsedError,
 } from "~/lib/error-utils";
-import { captureClientException } from "~/lib/sentry-client";
 import { ErrorDetails } from "~/ui/feedback/error-details";
 import { Row, Stack } from "~/ui/layout";
 import { Button } from "~/ui/primitives/button";
@@ -127,10 +127,11 @@ export function RouteErrorComponent({ error, reset }: ErrorComponentProps) {
       category === "network" ||
       category === "staleBuild"
     ) {
-      void captureClientException(
+      const eventId = Sentry.captureException(
         error,
         requestId ? { tags: { request_id: requestId } } : undefined,
-      ).then(setSentryEventId);
+      );
+      setSentryEventId(eventId);
     }
   }, [error, category, requestId, diagnostics?.origin]);
 

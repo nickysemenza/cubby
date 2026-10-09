@@ -7,7 +7,7 @@ import {
   type EntityGraphNode,
   type EntityGraphOutput,
 } from "@cubby/schemas/entity-graph";
-import { allEntities, entityIndex } from "@cubby/schemas/entity-index";
+import { allEntities, entityManifest } from "@cubby/schemas/entity-manifest";
 import { ArrowClockwiseIcon } from "@phosphor-icons/react/dist/csr/ArrowClockwise";
 import { ArrowLeftIcon } from "@phosphor-icons/react/dist/csr/ArrowLeft";
 import { ArrowRightIcon } from "@phosphor-icons/react/dist/csr/ArrowRight";
@@ -15,14 +15,7 @@ import { ListIcon } from "@phosphor-icons/react/dist/csr/List";
 import { NetworkIcon } from "@phosphor-icons/react/dist/csr/Network";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link, useRouter } from "@tanstack/react-router";
-import {
-  Suspense,
-  useEffect,
-  useEffectEvent,
-  useMemo,
-  useRef,
-  useState,
-} from "react";
+import { useEffect, useEffectEvent, useMemo, useRef, useState } from "react";
 
 import {
   entities,
@@ -35,7 +28,6 @@ import {
   entityMutationOptionsFactory,
   type EntityMutationOptionsFactory,
 } from "~/entity/entity-contracts";
-import { useEntityModel } from "~/entity/entity-model";
 import {
   EntityRecommendations,
   type EntityRecommendationOperations,
@@ -43,8 +35,10 @@ import {
 import { EntityGraphPicker } from "~/entity/relationships/entity-graph-picker";
 import { PhysicalConnectionsPanel } from "~/entity/relationships/physical-connections";
 import { useInventoryPlacementAction } from "~/features/inventory/inventory-placement-suggestion";
-import { entityGraph } from "~/integrations/tanstack-query/generated/entity-graph.gen";
-import { inventory } from "~/integrations/tanstack-query/generated/inventory.gen";
+import {
+  inventory,
+  entityGraph,
+} from "~/integrations/tanstack-query/generated/catalog.gen";
 import { formatCurrency } from "~/lib/utils";
 import { ErrorDisplay } from "~/ui/feedback/error-display";
 import { useHydratedLoading } from "~/ui/hooks/useHydrated";
@@ -74,8 +68,8 @@ const VIEW_OPTIONS = [
 ] as const;
 export function supportsEntityGraph(entity: Entity) {
   return (
-    entityIndex[entity].dbTable !== null &&
-    entityIndex[entity].shortcodePrefix !== null
+    entityManifest[entity].dbTable !== null &&
+    "shortcodePrefix" in entityManifest[entity]
   );
 }
 
@@ -651,12 +645,10 @@ function EntityRelationsContent(
         </output>
       )}
       {selectedEdge && (
-        <Suspense fallback={null}>
-          <EdgeInspector
-            edge={selectedEdge}
-            onClose={() => setSelectedEdgeId(undefined)}
-          />
-        </Suspense>
+        <EdgeInspector
+          edge={selectedEdge}
+          onClose={() => setSelectedEdgeId(undefined)}
+        />
       )}
       <RelationshipBranches
         data={data}
@@ -915,13 +907,10 @@ function graphFacts(node: EntityGraphNode): string[] {
     ? [`${quantity}${unit ? ` ${unit}` : ""}`, ...values]
     : values;
 }
-function useGraphSourceLabel(edge: EntityGraphEdge) {
-  // The edge may start at any entity; its model loads on demand.
-  const relationship = useEntityModel(
-    edge.source.entityKind,
-  ).manifest.relationships.find(
-    (candidate) => candidate.key === edge.relationshipKey,
-  );
+function graphSourceLabel(edge: EntityGraphEdge) {
+  const relationship = entityManifest[
+    edge.source.entityKind
+  ].relationships.find((candidate) => candidate.key === edge.relationshipKey);
   return (
     relationship?.sources.find((source) => source.key === edge.sourceKey)
       ?.label ??
@@ -936,7 +925,6 @@ function EdgeInspector({
   edge: EntityGraphEdge;
   onClose: () => void;
 }) {
-  const sourceLabel = useGraphSourceLabel(edge);
   return (
     <aside
       className="rounded-md border border-border p-3"
@@ -952,7 +940,7 @@ function EdgeInspector({
         {edge.source.entityId} → {edge.target.entityId}
       </p>
       <p className="text-xs text-muted-foreground">
-        Evidence: {sourceLabel}
+        Evidence: {graphSourceLabel(edge)}
         {edge.provenance.length ? ` · ${edge.provenance.join(" · ")}` : ""}
       </p>
     </aside>

@@ -5,14 +5,14 @@ import {
   dataQualityException,
 } from "@cubby/schemas/data-quality";
 import type { Entity } from "@cubby/schemas/entity";
+import { entityFieldModels } from "@cubby/schemas/entity-fields";
 import {
   fieldExplanationSource,
   type FieldExplanationOutput,
 } from "@cubby/schemas/field-explanation";
 import type { FieldResolution } from "@cubby/schemas/field-resolution";
 import { inventoryShortcode } from "@cubby/schemas/identifiers";
-import { parseShortcode } from "@cubby/shared/shortcode";
-import { humanize } from "@cubby/shared/text-case";
+import { humanize, parseShortcode } from "@cubby/shared";
 import { InfoIcon } from "@phosphor-icons/react/dist/csr/Info";
 import { useQuery } from "@tanstack/react-query";
 import { useState } from "react";
@@ -20,9 +20,10 @@ import { z } from "zod";
 
 import { EntityRefLink } from "~/entity/components/entity-ref-link";
 import { isBrowserRoutedEntity } from "~/entity/entities";
-import { entityFieldModel, isEntityModelLoaded } from "~/entity/entity-model";
-import { fieldExplanation } from "~/integrations/tanstack-query/generated/field-explanation.gen";
-import { inventory } from "~/integrations/tanstack-query/generated/inventory.gen";
+import {
+  inventory,
+  fieldExplanation,
+} from "~/integrations/tanstack-query/generated/catalog.gen";
 import { dataQualityStatusLabel } from "~/lib/data-quality-options";
 import { formatInstant } from "~/lib/date-format";
 import { formatCurrency } from "~/lib/utils";
@@ -317,7 +318,7 @@ function UnassessedQualityExplanation({
   entity,
   id,
 }: Pick<FieldExplanationProps, "entity" | "id">) {
-  const rule = entityFieldModel(entity).fields.find(
+  const rule = entityFieldModels[entity].fields.find(
     (field) => field.key === "dataQuality",
   )?.explanation;
 
@@ -744,12 +745,9 @@ export function FieldVerificationEvidence({
           </div>
           <div className="grid gap-1">
             <h4 className="text-xs font-medium text-muted-foreground">
-              {(isEntityModelLoaded(verification.subject.entityKind)
-                ? entityFieldModel(verification.subject.entityKind).fields.find(
-                    (field) =>
-                      field.key === verification.fieldPath.split(".")[0],
-                  )?.label
-                : undefined) ?? "Verified value"}
+              {entityFieldModels[verification.subject.entityKind].fields.find(
+                (field) => field.key === verification.fieldPath.split(".")[0],
+              )?.label ?? "Verified value"}
             </h4>
             <ReadableExplanationValue
               value={visibleVerificationValue(verification.value)}

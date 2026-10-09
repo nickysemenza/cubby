@@ -4,8 +4,7 @@ import {
   hasValidExpenseDate,
   EXPENSE_DATE_REQUIRED_MESSAGE,
 } from "./expense-fields";
-import { inventoryPlacementValues } from "@cubby/shared/category-theme";
-import { locationTypeValues } from "@cubby/shared/location-type-theme";
+import { inventoryPlacementValues, locationTypeValues } from "@cubby/shared";
 import { amount } from "./codec";
 import { financialReconciliationSummary } from "./financial-reconciliation";
 import {
@@ -70,7 +69,7 @@ export {
   type ExpenseListItemOut,
 } from "./generated/expense.gen";
 export { TRADE_LABELS } from "./task-fields";
-import type { ShortcodeEntity } from "./entity-index";
+import type { ShortcodeEntity } from "./entity-manifest";
 import {
   anyShortcodeSchema,
   expenseShortcode,

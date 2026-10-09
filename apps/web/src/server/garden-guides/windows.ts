@@ -1,7 +1,3 @@
-import {
-  type GardenCropKey,
-  gardenCropKeys,
-} from "@cubby/schemas/garden-fields";
 /**
  * Sow/transplant recommendations derived on read from a Plant's crop key
  * (`gardenGuideKey`), for the household's own microclimate (falling back to
@@ -16,6 +12,8 @@ import type {
 } from "@cubby/schemas/garden-guide";
 import { plantingGuides } from "@cubby/schemas/garden-guides";
 import {
+  type GardenCropKey,
+  gardenCropKeys,
   gardenCropLabel,
   gardenPractice,
   gardenPracticeSources,

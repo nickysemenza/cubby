@@ -5,12 +5,14 @@ import { useInfiniteQuery, useQuery } from "@tanstack/react-query";
 import { useState } from "react";
 import { z } from "zod";
 
-import { DetailAction } from "~/entity/entity-detail/detail-action-context";
-import type { DetailSlotComponent } from "~/entity/entity-detail/detail-hooks";
+import { DetailAction } from "~/entity/entity-detail/detail-action-bar";
+import type { DetailSlotComponent } from "~/entity/entity-detail/detail-slots";
 import { cursorQueryOptions } from "~/integrations/tanstack-query/cursor-query-options";
-import { activity } from "~/integrations/tanstack-query/generated/activity.gen";
-import { imageProcessing } from "~/integrations/tanstack-query/generated/image-processing.gen";
-import { image as imageOperations } from "~/integrations/tanstack-query/generated/image.gen";
+import {
+  image as imageOperations,
+  activity,
+  imageProcessing,
+} from "~/integrations/tanstack-query/generated/catalog.gen";
 import { ErrorDisplay } from "~/ui/feedback/error-display";
 import { useActionMutation } from "~/ui/hooks/useActionMutation";
 import { Button, buttonVariants } from "~/ui/primitives/button";

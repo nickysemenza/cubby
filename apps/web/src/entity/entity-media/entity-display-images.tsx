@@ -8,7 +8,7 @@ import { useQueries } from "@tanstack/react-query";
 import { chunk } from "es-toolkit";
 import { createContext, type ReactNode, useContext, useMemo } from "react";
 
-import { entityMedia } from "~/integrations/tanstack-query/generated/entity-media.gen";
+import { entityMedia } from "~/integrations/tanstack-query/generated/catalog.gen";
 
 export type EntityDisplayImageMap = EntityDisplayImagesOutput;
 export type EntityDisplayImagesQueryOptions =

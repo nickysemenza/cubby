@@ -1,8 +1,8 @@
 import type { Entity } from "@cubby/schemas/entity";
 import {
-  type BrowserRoutedEntity,
   browserRoutedEntities,
-} from "@cubby/schemas/entity-index";
+  type BrowserRoutedEntity,
+} from "@cubby/schemas/entity-manifest";
 import { PlusIcon } from "@phosphor-icons/react/dist/csr/Plus";
 import { ShoppingCartIcon } from "@phosphor-icons/react/dist/csr/ShoppingCart";
 import { SparkleIcon } from "@phosphor-icons/react/dist/csr/Sparkle";

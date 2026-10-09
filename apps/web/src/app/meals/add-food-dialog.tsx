@@ -20,8 +20,10 @@ import { useId, useMemo, useState } from "react";
 import { toast } from "sonner";
 
 import { entityDetailFor } from "~/entity/entity-detail";
-import { entityFilterOptions } from "~/integrations/tanstack-query/generated/entity-filter-options.gen";
-import { meal } from "~/integrations/tanstack-query/generated/meal.gen";
+import {
+  entityFilterOptions,
+  meal,
+} from "~/integrations/tanstack-query/generated/catalog.gen";
 import { getErrorMessage } from "~/lib/error-utils";
 import { calculateFoodAmount } from "~/lib/meal-food-nutrition";
 import {

@@ -2,7 +2,8 @@ import type { generatedEntityEditIntents } from "@cubby/schemas/entity-edit-inte
 import type { ExpenseCreateInput } from "@cubby/schemas/project";
 import type { z } from "zod";
 
-import type { EntityEditInputMap } from "../generated/entity-edit-inputs.gen";
+import type { EntitySchemaBindingMap } from "~/server/generated/entity-bindings.gen";
+
 import type { EntityMutationOutputByEntity } from "../generated/entity-mutation-results.gen";
 
 type FinancialAccountEditorFields = {
@@ -29,19 +30,19 @@ type SchemaOutput<S> = S extends z.ZodType ? z.infer<S> : never;
 
 /**
  * Create/update input types per editable entity, read off the generated
- * edit inputs — the same `createInput`/`updateInput` schemas
+ * schema bindings — the same `createInput`/`updateInput` schemas
  * `mutation-data.ts` parses with at runtime, so the editor's types and its
- * validation cannot disagree.
+ * validation cannot disagree. Type-only: nothing from `~/server` is loaded.
  */
 type EntityEditCreateInputMap = {
   [E in TypedEditableEntity]: SchemaOutput<
-    EntityEditInputMap[E]["createInput"]
+    EntitySchemaBindingMap[E]["createInput"]
   >;
 };
 
 type EntityEditUpdateInputMap = {
   [E in TypedEditableEntity]: SchemaOutput<
-    EntityEditInputMap[E]["updateInput"]
+    EntitySchemaBindingMap[E]["updateInput"]
   >;
 };
 

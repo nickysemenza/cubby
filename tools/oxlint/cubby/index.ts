@@ -9,13 +9,11 @@ import {
   noRawTableRule,
   noUnboundedPageSizeRule,
 } from "./rules/generic-paths.ts";
-import { noClientEntityAggregateRule } from "./rules/no-client-entity-aggregate.ts";
 import { noErrorToastInHandlerRule } from "./rules/no-error-toast-in-handler.ts";
 import { noSwallowedCatchRule } from "./rules/no-swallowed-catch.ts";
 import { noUnsafeIdentifiersRule } from "./rules/no-unsafe-identifiers.ts";
 import { purchaseAgentBoundaryRule } from "./rules/purchase-agent-boundary.ts";
 import { requireSoftDeleteFilterRule } from "./rules/require-soft-delete-filter.ts";
-import { workerLazyImportBoundaryRule } from "./rules/worker-lazy-import-boundary.ts";
 
 /** Cubby-specific Oxlint rules ported from one-off `scripts/check-*.ts` gates. */
 const cubbyPlugin = eslintCompatPlugin({
@@ -23,7 +21,6 @@ const cubbyPlugin = eslintCompatPlugin({
   rules: {
     "no-ad-hoc-calendar-day": noAdHocCalendarDayRule,
     "no-ad-hoc-number-format": noAdHocNumberFormatRule,
-    "no-client-entity-aggregate": noClientEntityAggregateRule,
     "no-error-toast-in-handler": noErrorToastInHandlerRule,
     "no-hand-parsed-create-input": noHandParsedCreateInputRule,
     "no-kernel-action-guard": noKernelActionGuardRule,
@@ -34,7 +31,6 @@ const cubbyPlugin = eslintCompatPlugin({
     "no-unsafe-identifiers": noUnsafeIdentifiersRule,
     "purchase-agent-boundary": purchaseAgentBoundaryRule,
     "require-soft-delete-filter": requireSoftDeleteFilterRule,
-    "worker-lazy-import-boundary": workerLazyImportBoundaryRule,
   },
 });
 

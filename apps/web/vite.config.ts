@@ -114,18 +114,6 @@ const clientCodeSplittingGroups = [
     entriesAwareMergeThreshold: 65536,
   },
   {
-    // Leaf app UI: these modules import only React, class utilities and
-    // single CSR icons, never other app code, so grouping them cannot form an
-    // initialization cycle. Keep non-leaf primitives (Base UI wrappers,
-    // dialogs) out — grouping those stalled /products hydration.
-    name: "ui-atoms",
-    test: /[\\/]apps[\\/]web[\\/]src[\\/](?:ui[\\/]primitives[\\/](?:alert|bulk-progress-bar|description|eyebrow|icon-tile|input-group|kbd|label|native-select|none-value|progress|section-rule|skeleton|spinner|status-text|table|textarea|toggle)|ui[\\/]hooks[\\/](?:focus-on-mount|infinite-page-utils|useContainerDimensions|useHydrated|useLongPress|useMobile)|ui[\\/]layout[\\/](?:muted-box|page-wrapper)|lib[\\/]page-title)\.tsx?$/,
-    entriesAware: true,
-    entriesAwareMergeThreshold: 32768,
-    minShareCount: 2,
-    includeDependenciesRecursively: false,
-  },
-  {
     name: "small-runtime-utils",
     test: /[\\/]clsx[\\/]|[\\/]goober[\\/]|[\\/]pluralize[\\/]/,
     entriesAware: true,

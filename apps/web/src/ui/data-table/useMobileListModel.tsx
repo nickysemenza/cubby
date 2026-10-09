@@ -1,6 +1,6 @@
 import type { Entity } from "@cubby/schemas/entity";
-import { parseShortcode } from "@cubby/shared/shortcode";
-import { humanize } from "@cubby/shared/text-case";
+import { humanize } from "@cubby/shared";
+import { parseShortcode } from "@cubby/shared";
 import type { CellData, RowData } from "@tanstack/react-table";
 import { flexRender } from "@tanstack/react-table";
 import { isValidElement, type ReactNode, useMemo } from "react";

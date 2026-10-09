@@ -20,8 +20,11 @@ import {
   entityFilterList,
   presenceFilter,
 } from "./pagination";
-import { locationIdentityProductOut } from "./entity-definitions/field-primitives";
-import { locationType, locationValuation } from "./location-fields";
+import {
+  locationIdentityProductOut,
+  locationType,
+  locationValuation,
+} from "./location-fields";
 import { displayImagesField } from "./display-images";
 import { locationBaseFilterFields } from "./generated/location.gen";
 
@@ -33,12 +36,15 @@ export {
   type LocationUpdateInput,
 } from "./generated/location.gen";
 
-export { locationIdentityProductOut } from "./entity-definitions/field-primitives";
-export { locationType, locationValuation } from "./location-fields";
+export {
+  locationIdentityProductOut,
+  locationType,
+  locationValuation,
+} from "./location-fields";
 
 export type LocationType = z.infer<typeof locationType>;
 
-export { locationTypeValues } from "@cubby/shared/location-type-theme";
+export { locationTypeValues } from "@cubby/shared";
 
 export const locationFilterFields = {
   ...locationBaseFilterFields,

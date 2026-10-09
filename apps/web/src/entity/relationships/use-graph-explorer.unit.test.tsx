@@ -4,7 +4,7 @@ import { testShortcode } from "@cubby/schemas/testing";
 import { act, renderHook, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
-import { entityGraph } from "~/integrations/tanstack-query/generated/entity-graph.gen";
+import { entityGraph } from "~/integrations/tanstack-query/generated/catalog.gen";
 import { createBrowserTestHarness } from "~/lib/test/browser-harness";
 
 import { graphBranchKey, graphRefKey } from "./entity-graph-state";

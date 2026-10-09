@@ -19,7 +19,7 @@ import { liveLinks } from "~/server/repo/entity-links";
 import {
   getCategoryFeature,
   resolveProductCategory,
-} from "~/server/repo/product-category-feature";
+} from "~/server/repo/product-category";
 
 import { externalIdsContainIsbn } from "./update-helpers";
 

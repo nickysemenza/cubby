@@ -3,10 +3,7 @@
  * isometric-geometry and isometric-scene; canvas lifecycle and pointer/touch
  * interaction live in use-isometric-pantry.
  */
-import {
-  formatCategoryLabel,
-  getCategoryColor,
-} from "@cubby/shared/category-theme";
+import { formatCategoryLabel, getCategoryColor } from "@cubby/shared";
 import { ArrowLeftIcon } from "@phosphor-icons/react/dist/csr/ArrowLeft";
 import { ArrowsOutSimpleIcon } from "@phosphor-icons/react/dist/csr/ArrowsOutSimple";
 import { CircleNotchIcon } from "@phosphor-icons/react/dist/csr/CircleNotch";

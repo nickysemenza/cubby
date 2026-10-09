@@ -1,4 +1,4 @@
-import type { ActivityExecutor } from "@cubby/schemas/activity-fields";
+import type { ActivityExecutor } from "@cubby/schemas/activity";
 import type { ImageId } from "@cubby/schemas/identifiers";
 import { and, eq, inArray, sql } from "drizzle-orm";
 import { z } from "zod";

@@ -60,9 +60,6 @@ const fetchMessage = async (
   }
 };
 
-// Heavy library: the triage model (AI SDK) loads only when a message needs it.
-const triageModel = () => import("./triage-model");
-
 const routingPorts = (db: Database, input: IngestInput) =>
   ({
     triage:
@@ -70,7 +67,7 @@ const routingPorts = (db: Database, input: IngestInput) =>
       (async (content) => {
         if (!input.runId)
           throw new Error("Gmail triage requires its discovery or search Run");
-        const { productionMailTriage } = await triageModel();
+        const { productionMailTriage } = await import("./triage-model");
         return productionMailTriage(db, input.runId)(content);
       }),
     relevance:
@@ -80,7 +77,7 @@ const routingPorts = (db: Database, input: IngestInput) =>
           throw new Error(
             "Gmail relevance interpretation requires its discovery or search Run",
           );
-        const { productionMailRelevance } = await triageModel();
+        const { productionMailRelevance } = await import("./triage-model");
         return productionMailRelevance(db, input.runId)(request);
       }),
   }) satisfies { triage: MailTriage; relevance: MailRelevance };

@@ -9,9 +9,11 @@ import type { ReactNode } from "react";
 
 import { openRecipeRecomputeAllStream } from "~/app/recipes/recipe-streams";
 import { ripple } from "~/integrations/tanstack-query/cache-tags";
-import { maintenance } from "~/integrations/tanstack-query/generated/maintenance.gen";
-import { problems } from "~/integrations/tanstack-query/generated/problems.gen";
-import { recipe } from "~/integrations/tanstack-query/generated/recipe.gen";
+import {
+  maintenance,
+  recipe,
+  problems,
+} from "~/integrations/tanstack-query/generated/catalog.gen";
 import { countLabel } from "~/lib/pluralize";
 import {
   openProblemsPruneAliasesStream,

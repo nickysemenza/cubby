@@ -1,4 +1,4 @@
-import { entityIndex } from "@cubby/schemas/entity-index";
+import { entitySummary } from "@cubby/schemas/entity-summary";
 import {
   parseShortcodeFor,
   type SpendingCategoryShortcode,
@@ -12,8 +12,10 @@ import {
   type MergeCommand,
 } from "~/entity/entity-mutation";
 import { generatedBrowserCrudEntities } from "~/entity/generated/entity-routes.gen";
-import { ingredient } from "~/integrations/tanstack-query/generated/ingredient.gen";
-import { vendor } from "~/integrations/tanstack-query/generated/vendor.gen";
+import {
+  ingredient,
+  vendor,
+} from "~/integrations/tanstack-query/generated/catalog.gen";
 import { savedWithBackgroundWork } from "~/lib/recompute-summary";
 import {
   Dialog,
@@ -49,7 +51,7 @@ const BESPOKE_MERGE = new Set<string>([
 const isKernelMergeEntity = (
   entity: (typeof generatedBrowserCrudEntities)[number],
 ): entity is MergeCommand["entity"] =>
-  entityIndex[entity].merge && !BESPOKE_MERGE.has(entity);
+  entitySummary[entity].merge && !BESPOKE_MERGE.has(entity);
 
 /** Every kernel-merged entity without a bespoke handler gets the generic merge. */
 const kernelMergeEntities =

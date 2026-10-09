@@ -120,4 +120,5 @@ export interface EntityDefinition {
   color: EntityColor;
   routes: EntityRoutes;
   list?: EntityListConfig;
+  mergeable?: MergeableConfig;
 }

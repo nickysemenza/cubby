@@ -7,13 +7,15 @@ import {
   releaseAssignedImageProcessingJob,
 } from "~/server/repo/image-processing";
 import { resolveOrThrow } from "~/server/repo/shortcode-resolver";
-import { scheduleImageProcessingJobs } from "~/server/services/image-processing-wakeups";
 import {
   pullCompanionImageProcessing,
   completeAssignedCompanionImageProcessing,
 } from "~/server/services/image-processing.service";
 import { retryImageProcessingFailures } from "~/server/services/image-processing.service";
-import { scheduleAppleImageDescriptionEvaluation } from "~/server/services/image-processing.service";
+import {
+  scheduleAppleImageDescriptionEvaluation,
+  scheduleImageProcessingJobs,
+} from "~/server/services/image-processing.service";
 
 export const imageProcessingHandlers = implementOperationDomain(
   imageProcessingContract,

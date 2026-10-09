@@ -44,7 +44,7 @@ import {
   runFailureText,
 } from "~/server/workflow-runs/lifecycle";
 
-import { startMailResearch } from "../research-run";
+import type { startMailResearch } from "../research-run";
 import type { OrderMailAttachmentStorage } from "./attachment-storage";
 import { ingestGmailMessages } from "./ingest";
 import {
@@ -412,7 +412,9 @@ export async function saveMailDiscoveryBatch(
     if (!(await claimDiscovery(db, params))) return { kind: "stopped" };
     for (let offset = 0; offset < ingested.orderMailIds.length; offset += 50) {
       if (!(await claimDiscovery(db, params))) return { kind: "stopped" };
-      const results = await (ports.research ?? startMailResearch)(db, {
+      const results = await (
+        ports.research ?? (await import("../research-run")).startMailResearch
+      )(db, {
         ledgerPartyId: claimed.ledgerPartyId,
         userId: claimed.row.actorUserId,
         parentRunId: claimed.row.id,

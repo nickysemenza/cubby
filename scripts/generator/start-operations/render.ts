@@ -14,7 +14,6 @@ import {
   validateStrongQueryOperations,
   collectStartOperations,
   type HandlerDefinition,
-  loadContracts,
   SOURCE_ROOT,
 } from "./collect.ts";
 import { renderClientCatalog } from "./client-catalog.ts";
@@ -135,7 +134,6 @@ const renderHttpContract = async (
   );
   const wire = await loadWire();
   const domains = new Map<string, string[]>();
-  const referenced = new Set<string>();
   for (const [id, declaration] of declarations) {
     if (declaration.kind === "subscription" || !declaration.http) continue;
     const domain = id.slice(0, id.length - declaration.member.length - 1);
@@ -147,20 +145,11 @@ const renderHttpContract = async (
           ? "rpcQueryPost"
           : queryHelper(wire, declaration.input)
         : "rpcMutation";
-    referenced.add(declaration.exportName);
     const members = domains.get(domain) ?? [];
     members.push(
-      `${JSON.stringify(declaration.member)}: ${helper}(${JSON.stringify(domain)}, ${JSON.stringify(declaration.member)}, ${declaration.exportName}.ops[${JSON.stringify(declaration.member)}]),`,
+      `${JSON.stringify(declaration.member)}: ${helper}(${JSON.stringify(domain)}, ${JSON.stringify(declaration.member)}, contracts.${declaration.exportName}.ops[${JSON.stringify(declaration.member)}]),`,
     );
     domains.set(domain, members);
-  }
-  const contractModules = new Map<string, string[]>();
-  for (const { exportName, module } of await loadContracts()) {
-    if (!referenced.has(exportName)) continue;
-    contractModules.set(module, [
-      ...(contractModules.get(module) ?? []),
-      exportName,
-    ]);
   }
   const resourceRoutes = Object.entries(resources)
     .map(
@@ -175,13 +164,7 @@ const renderHttpContract = async (
     .join("\n");
   return (
     generatedHeader +
-    [...contractModules]
-      .sort(([a], [b]) => a.localeCompare(b))
-      .map(
-        ([module, exports]) =>
-          `import { ${exports.join(", ")} } from "~/contracts/${module}.contract";\n`,
-      )
-      .join("") +
+    `import * as contracts from "~/contracts/index";\n` +
     `import { httpContractBuilder, httpRouterOptions, rpcMutation, rpcQuery, rpcQueryPost, resourceCreate, resourceDelete, resourceGet, resourceList, resourceTimeline, resourceUpdate } from "~/lib/http-api/router";\n` +
     `export const httpContract = httpContractBuilder.router({\n` +
     [...domains]
@@ -196,7 +179,7 @@ const renderHttpContract = async (
 
 /**
  * Stage 2 of `pnpm generate`: the Start operation registry, the lazy handler
- * loaders, the per-contract-module browser client catalog, and the ts-rest HTTP contract. Runs after stage 1's files are on
+ * loaders, the browser client catalog, and the ts-rest HTTP contract. Runs after stage 1's files are on
  * disk (the contracts runtime-import `~/entity/generated/*.gen.ts`) and
  * takes stage 1's `HTTP_RESOURCES` in memory rather than re-parsing its
  * artifact.
@@ -219,7 +202,11 @@ export const renderStartOperationArtifacts = async (
         "apps/web/src/server/generated/start-operation-handlers.gen.ts",
       source: await renderStartOperationHandlers(),
     },
-    ...(await renderClientCatalog()),
+    {
+      relativePath:
+        "apps/web/src/integrations/tanstack-query/generated/catalog.gen.ts",
+      source: await renderClientCatalog(),
+    },
     {
       relativePath: "apps/web/src/lib/generated/http-contract.gen.ts",
       source: await renderHttpContract(resources),

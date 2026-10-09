@@ -16,7 +16,7 @@ import {
   recipesUsingIngredientOut,
   recipeTagsOut,
 } from "@cubby/schemas/recipe";
-import { parseShortcode } from "@cubby/shared/shortcode";
+import { parseShortcode } from "@cubby/shared";
 import { z } from "zod";
 
 import { auditLogContract } from "~/contracts/audit-log.contract";

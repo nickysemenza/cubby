@@ -1,9 +1,11 @@
 import {
   type BrowserRoutedEntity,
-  WAYFINDING_DOMAINS,
   browserRoutedEntities,
-  entityIndex,
-} from "@cubby/schemas/entity-index";
+} from "@cubby/schemas/entity-manifest";
+import {
+  WAYFINDING_DOMAINS,
+  entitySummary,
+} from "@cubby/schemas/entity-summary";
 import { ArrowsLeftRightIcon } from "@phosphor-icons/react/dist/csr/ArrowsLeftRight";
 import { BookOpenTextIcon } from "@phosphor-icons/react/dist/csr/BookOpenText";
 import { CalendarBlankIcon } from "@phosphor-icons/react/dist/csr/CalendarBlank";
@@ -219,7 +221,7 @@ const recordView = (entity: BrowserRoutedEntity): RecordViewDefinition => ({
   domain: recordDomain(entity),
   to: entities[entity].routes.list,
   label: entities[entity].pluralLabel,
-  description: entityIndex[entity].description,
+  description: entitySummary[entity].description,
   icon: entities[entity].phosphorIcon,
 });
 

@@ -11,7 +11,7 @@ import { useQueries } from "@tanstack/react-query";
 import { useVirtualizer } from "@tanstack/react-virtual";
 import { useCallback, useId, useMemo, useRef } from "react";
 
-import { recipe } from "~/integrations/tanstack-query/generated/recipe.gen";
+import { recipe } from "~/integrations/tanstack-query/generated/catalog.gen";
 import { flattenRecipes } from "~/lib/cookbook-graph";
 import { cookbookRecipeSignature } from "~/lib/recipe-signature";
 import { Row } from "~/ui/layout/row";

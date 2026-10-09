@@ -1,7 +1,7 @@
 import { useState } from "react";
 
 import { VerbButton } from "~/entity/actions/action-verb-ui";
-import type { SectionActionComponent } from "~/entity/entity-detail/detail-hooks";
+import type { SectionActionComponent } from "~/entity/entity-detail/section-actions";
 
 import { ReceiveExpenseDialog } from "./receive-expense-dialog";
 import { SplitExpenseDialog } from "./split-expense-dialog";

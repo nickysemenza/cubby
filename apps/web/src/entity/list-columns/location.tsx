@@ -3,7 +3,7 @@ import {
   type LocationListItemOut,
   locationType,
 } from "@cubby/schemas/location";
-import { getLocationTypeColor } from "@cubby/shared/location-type-theme";
+import { getLocationTypeColor } from "@cubby/shared";
 import { useMemo } from "react";
 
 import { entityMutationOptionsFactory } from "~/entity/entity-contracts";

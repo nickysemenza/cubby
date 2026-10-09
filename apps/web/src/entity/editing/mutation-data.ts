@@ -1,6 +1,6 @@
 import type { z } from "zod";
 
-import { ENTITY_EDIT_INPUTS } from "~/entity/generated/entity-edit-inputs.gen";
+import { ENTITY_SCHEMA_BINDINGS } from "~/server/generated/entity-bindings.gen";
 
 import type {
   EntityEditCreateInput,
@@ -18,7 +18,7 @@ export function parseEntityEditCreateInput(
   entity: TypedEditableEntity,
   value: UnparsedEntityEditData,
 ): EntityEditCreateInput<TypedEditableEntity> {
-  const schema = ENTITY_EDIT_INPUTS[entity].createInput;
+  const schema = ENTITY_SCHEMA_BINDINGS[entity].createInput;
   if (!schema) throw new Error(`${entity} does not support create`);
   return schema.parse(value);
 }
@@ -31,7 +31,7 @@ export function parseEntityEditUpdateInput(
   entity: TypedEditableEntity,
   value: UnparsedEntityEditData,
 ): EntityEditUpdateInput<TypedEditableEntity> {
-  const schema = ENTITY_EDIT_INPUTS[entity].updateInput;
+  const schema = ENTITY_SCHEMA_BINDINGS[entity].updateInput;
   if (!schema) throw new Error(`${entity} does not support update`);
   return schema.parse(value);
 }
@@ -42,7 +42,7 @@ type SchemaOutput<S> = S extends {
   ? Output
   : never;
 export type EntityEditBulkUpdateInput<E extends TypedEditableEntity> =
-  SchemaOutput<(typeof ENTITY_EDIT_INPUTS)[E]["bulkUpdateInput"]>;
+  SchemaOutput<(typeof ENTITY_SCHEMA_BINDINGS)[E]["bulkUpdateInput"]>;
 
 export function parseEntityEditBulkUpdateInput<E extends TypedEditableEntity>(
   entity: E,
@@ -52,7 +52,7 @@ export function parseEntityEditBulkUpdateInput(
   entity: TypedEditableEntity,
   value: UnparsedEntityEditData,
 ): EntityEditBulkUpdateInput<TypedEditableEntity> {
-  const schema = ENTITY_EDIT_INPUTS[entity].bulkUpdateInput;
+  const schema = ENTITY_SCHEMA_BINDINGS[entity].bulkUpdateInput;
   if (!schema) throw new Error(`${entity} does not support bulk update`);
   return schema.parse(value);
 }

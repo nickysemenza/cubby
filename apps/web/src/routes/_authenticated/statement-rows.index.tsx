@@ -1,7 +1,7 @@
 import {
   statementRowDisposition,
   statementRowMatchState,
-} from "@cubby/schemas/statement-row-fields";
+} from "@cubby/schemas/statement-row";
 import { createFileRoute, stripSearchParams } from "@tanstack/react-router";
 import { Link } from "@tanstack/react-router";
 import { z } from "zod";

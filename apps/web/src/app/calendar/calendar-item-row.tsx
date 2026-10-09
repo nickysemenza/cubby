@@ -1,5 +1,5 @@
 import type { CalendarItem } from "@cubby/schemas/calendar";
-import { capitalize } from "@cubby/shared/text-case";
+import { capitalize } from "@cubby/shared";
 
 import { EntityCover } from "~/entity/components/entity-cover";
 import { estimateStatusText, formatEstimate } from "~/lib/nutrition-format";

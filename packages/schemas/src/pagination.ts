@@ -1,4 +1,4 @@
-import { UNRESOLVABLE_ENTITY_FILTER } from "@cubby/shared/filter";
+import { UNRESOLVABLE_ENTITY_FILTER } from "@cubby/shared";
 import { z } from "zod";
 
 /** The one page-size ceiling and default every list boundary shares. */

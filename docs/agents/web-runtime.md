@@ -40,11 +40,9 @@ route under a no-`<Outlet/>` detail route renders the parent invisibly — use t
 trailing-underscore segment (`$shortcode_.export`) to un-nest. Client chunking
 is Rolldown `codeSplitting.groups` in `vite.config.ts`; never group `@base-ui`
 or do a naive vendor split — it drags lazy-route code into first paint. Detail
-and list slot fills and verbs live in each entity's hook module
-(`entity/clients/<entity>.{detail,list}.tsx`), bound by its generated client
-module, which only that entity's route component imports — so a slot ships
-with its own entity's page and nowhere else. Never gather fills into an
-all-entities registry.
+and list slot fills stay `lazy` in their registries (`detail-slots.tsx`,
+`list-slots.ts`): every generic list route shares one closure, so one static
+slot import ships to every list.
 Specialist list columns are declared as `route.listColumns` source references.
 The generated route component imports only its own override and passes it to
 `listPage`; the generic list must never import an all-entity column registry.
@@ -52,44 +50,29 @@ Shared cells live with their generic feature (for example, the unit-mappings
 column lives in `features/units`), so generic hooks do not import a specialist
 list module merely to reuse one renderer.
 Timeline rendering loads only when its view is selected.
-Browser code never value-imports the all-entities model aggregates
-(`entity-manifest`, `entity-summary`, `entity-fields`, the inspector map) or
-server code that collects every entity's schemas (`~/server/generated`,
-`~/server/entity-kernel`; `cubby/no-client-entity-aggregate`,
-[ADR 0009](../adr/0009-per-entity-client-manifests.md)). The editor parses a
-draft with `~/entity/generated/entity-edit-inputs.gen`; the server re-parses
-every mutation command, so the browser sends it unparsed.
-Read names, titles, icons, traits, `shortcodePrefix`, resolved
-`primarySearch`, `list.initialFilter`, and the `bulkUpdate` flag from
-`@cubby/schemas/entity-index`; a loaded entity's field model, summary and
-descriptor through `~/entity/entity-model`; and filter
+Ordinary browser surfaces never import `entityInspectorMetadata`: it carries the
+compiler's filter descriptors, port refs, and a duplicate of the summary, and
+one import ships all of it to every list. Read names, titles, resolved
+`primarySearch`, `list.initialFilter`, and `bulkUpdate` from `entitySummary`;
+`shortcodePrefix`/`searchable` from `entityManifest`; and filter
 `field`/`columnId`/`kind`/URL key/`referenceEntity` from `getEntityFilters`
 with `filterUrlKey` (a runtime spec omits `urlKey` when it equals
-`columnId`). Only the schema surfaces (`features/entity-platform`: the
-Entities schema sheet and the `/entities/schema/$entity` page) load the
-per-entity inspector modules, through `useEntityInspectors`.
+`columnId`). The server and the lazily loaded schema surfaces
+(`features/entity-platform`: the Entities schema sheet and the
+`/entities/schema/$entity` page) keep the full inspector.
+Route loaders split through TanStack Router's `defaultBehavior` alongside
+the component chunks. Keep the generated entity maps and lazy slot registries
+shared: per-entity model registration adds initialization and cross-entity
+Suspense contracts without removing the all-entity list schemas. Scope
+`AuthUIProvider` to the auth/account views; ordinary session reads use
+`authClient.useSession()`. Editors and the JSON viewer use `browserOnlyLazy` at their interaction boundary.
+Date-cell inputs stay eager so typing to edit keeps every keystroke while
+focus transfers to the input.
 Keep list page factories (`list-page.tsx`) separate from detail factories
 (`detail-page.tsx`) so lists do not import generic detail sections. Bind each
 factory result to a module-level constant referenced by a splittable property
 in the route's literal options object; loader-time helpers stay React-free in
 `detail-loader.ts`.
-Everything in a route file except its component and loader — `validateSearch`,
-search middlewares, `beforeLoad`, `head`, `params`, and the imports they use —
-ships in the app entry for every page. Those parts import only leaf modules:
-an enum or id schema comes from its `*-fields.ts` module (or a dedicated
-`*-search.ts`), never from a module holding read/response schemas, generated
-entity field schemas, or an entity declaration. Import `@cubby/shared` through
-its subpaths; the barrel re-exports modules a page does not need.
-better-auth-ui's provider wraps only the auth and account views
-(`app/auth/auth-ui-provider.tsx`).
-App code reaches a page through its route and per-entity modules, never a
-`lazy()` boundary. Load manually only (a) a heavy or browser-only third-party
-library behind the interaction that needs it, (b) dev-only tooling, or (c)
-code kept out of the Worker; use `browserOnlyLazy` for a component or a
-per-feature `import()` at the interaction, with a one-line reason. The edit
-dialog shell (`entity-edit-dialog.tsx`) is the one boundary for the editor
-graph (react-hook-form, react-dropzone): import the shell statically and never
-wrap it again.
 
 List actions must accept the base row before progressive enrichment arrives.
 Merge row guards validate the owner identifier and required display fields;

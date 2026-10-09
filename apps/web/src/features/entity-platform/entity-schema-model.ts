@@ -1,48 +1,35 @@
 import type { Entity } from "@cubby/schemas/entity";
-import { allEntities, entityIndex } from "@cubby/schemas/entity-index";
-import type {
-  EntityDescriptor,
-  EntityInspectorMetadata,
+import {
+  allEntities,
+  type EntityDescriptor,
+  type EntityInspectorMetadata,
+  entityInspectorMetadata,
+  entityManifest,
 } from "@cubby/schemas/entity-manifest";
-import { LEGACY_SHORTCODE_PREFIX } from "@cubby/shared/shortcode";
+import { LEGACY_SHORTCODE_PREFIX } from "@cubby/shared";
 
 import type { EntityInspectorHealth } from "~/entity/entity-inspector-health";
-import {
-  entityDescriptorOf,
-  entityInspector,
-  useEntityInspectors,
-  useEntityModels,
-} from "~/entity/entity-model";
 import { entityOverrideComparisons } from "~/entity/generated/entity-override-comparisons.gen";
 import { ENTITY_NATIVE_COVERAGE } from "~/lib/generated/entity-native-coverage.gen";
 
 /**
- * The schema surfaces read every entity's model and inspector, so their root
- * components suspend on `useEntityModels(allEntities)` and
- * `useEntityInspectors(allEntities)` before calling these.
- *
- * `entityDescriptorOf(entity)`'s generated literal type omits an `optional()`
+ * `entityManifest[entity]`'s generated literal type omits an `optional()`
  * schema key entirely for an entity that leaves it unset, rather than typing
  * it `| undefined` — so a union-wide read of `relationships[i].derived` /
  * `.inverseOmit` doesn't type-check against every member. Widen back to the
  * zod-inferred shape, which `parsedEntityManifest` in `entity-manifest.ts`
  * already verifies every entry satisfies.
  */
-export function useSchemaSurfaceModels(): void {
-  useEntityModels(allEntities);
-  useEntityInspectors(allEntities);
-}
-
 export function extendedManifest(entity: Entity): EntityDescriptor {
-  // SAFETY: see doc comment above — every generated descriptor
+  // SAFETY: see doc comment above — `entityManifest[entity]` always
   // satisfies `entityDescriptor`, just not through a type TS can see here.
-  return entityDescriptorOf(entity) as EntityDescriptor;
+  return entityManifest[entity] as EntityDescriptor;
 }
 
 export type Relationship = EntityDescriptor["relationships"][number];
 
 /**
- * Same widening trap as `extendedManifest`, one level up: `entityInspector(entity)`
+ * Same widening trap as `extendedManifest`, one level up: `entityInspectorMetadata[entity]`
  * indexed by the union `Entity` type collapses tuple-typed fields
  * (`kernelActions`, `detail.sections`, …) to `never` because each entity's
  * generated literal narrows them differently. Widen back to the exported
@@ -52,7 +39,7 @@ export function metadataFor(entity: Entity): EntityInspectorMetadata {
   // SAFETY: see doc comment above — every entity's generated record already
   // satisfies `EntityInspectorMetadata`, just not through a type TS can see
   // when indexed by a union key.
-  return entityInspector(entity) as EntityInspectorMetadata;
+  return entityInspectorMetadata[entity] as EntityInspectorMetadata;
 }
 
 export type OverrideComparison =
@@ -247,13 +234,13 @@ export function schemaRow(
     domain: metadata.domain,
     code: emittedCode(entity),
     legacy: legacyCode(entity),
-    table: entityIndex[entity].dbTable ?? null,
-    rows: entityIndex[entity].countable ? counts?.[entity] : undefined,
+    table: entityManifest[entity].dbTable ?? null,
+    rows: entityManifest[entity].countable ? counts?.[entity] : undefined,
     crud,
     extras,
     search: !metadata.searchable
       ? null
-      : entityIndex[entity].embeddable
+      : entityManifest[entity].embeddable
         ? ("semantic" as const)
         : ("lexical" as const),
     /** Served by its own workflow, with no kernel repository (USDA). */

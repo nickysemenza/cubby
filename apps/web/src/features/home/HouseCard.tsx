@@ -12,7 +12,7 @@ import {
   EntityDisplayImagesProvider,
   useEntityDisplayImage,
 } from "~/entity/entity-media/entity-display-images";
-import { task } from "~/integrations/tanstack-query/generated/task.gen";
+import { task } from "~/integrations/tanstack-query/generated/catalog.gen";
 import { getErrorMessage } from "~/lib/error-utils";
 import { CalendarDate } from "~/ui/common/calendar-date";
 import { Button } from "~/ui/primitives/button";

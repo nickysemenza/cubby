@@ -1,7 +1,7 @@
 import { useQuery } from "@tanstack/react-query";
 import { useMemo } from "react";
 
-import { ingredient as ingredientOperations } from "~/integrations/tanstack-query/generated/ingredient.gen";
+import { ingredient as ingredientOperations } from "~/integrations/tanstack-query/generated/catalog.gen";
 
 // "250 g flour in cups" / "1.5 cups sugar to g" / "2 tbsp butter as oz"
 const CONVERSION_RE =

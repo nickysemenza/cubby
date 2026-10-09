@@ -1,36 +1,40 @@
+import { importRunIdFromAgentIdentity } from "@cubby/schemas/import-run-agent";
+import { CUBBY_AI_GATEWAY_ID } from "@cubby/shared/ai/gateway-metadata";
+import { createLogger } from "@cubby/worker-tracing";
 /**
- * The purchase agent's host: the `PurchaseImportRunAgent` Durable Object's
- * implementation (its entry shell is in `server/worker-entrypoints.ts`) and the
- * narrowed environment that is the agent's only view of this Worker.
+ * The purchase agent's host: the exported Durable Object and the narrowed
+ * environment that is the agent's only view of this Worker.
  *
  * The agent (`server/purchase-agent/`) reads untrusted vendor pages, mail, and
  * photos. It receives no `env`, database, binding, or secret — only
  * `purchaseAgentEnvironment` below, whose services are bound to one Run — and
  * the `cubby/purchase-agent-boundary` lint rule keeps its directory from
  * importing anything that could reach them.
+ *
+ * Its runtime (Agents SDK, pi, MCP client, ~1.5 MB) stays off every page
+ * request: this module is on the Worker entry's static graph, so it holds only
+ * a shell that loads the agent on its first event.
  */
-import type { DurableObjectState } from "@cloudflare/workers-types";
-import { importRunIdFromAgentIdentity } from "@cubby/schemas/import-run-agent";
-import { CUBBY_AI_GATEWAY_ID } from "@cubby/shared/ai/gateway-metadata";
-import { createLogger } from "@cubby/worker-tracing";
+import * as Sentry from "@sentry/cloudflare";
+import { DurableObject } from "cloudflare:workers";
 
 import {
   assertNotInMaintenance,
   isMaintenanceMode,
   maintenanceResponse,
 } from "~/server/maintenance";
-import { purchaseAgentToolCatalog } from "~/server/mcp/agent-tool-catalog";
 import type {
   DispatchInput,
   PurchaseAgentEnvironment,
+  PurchaseAgentQueueEnvironment,
   PurchaseImportRunAgentRpc,
 } from "~/server/purchase-agent/environment";
-import { PurchaseImportRunAgent } from "~/server/purchase-agent/run-agent";
 import { withInvocationTrace } from "~/server/tracing";
 
 import { connectedChatGptInference } from "../ai/chatgpt/client";
 import { gatewayEnvironment } from "../ai/gateway";
-import { runServicesFor } from "./agent-services";
+import { workerSentryOptions } from "../worker-sentry";
+import { purchaseAgentMcpTools, runServicesFor } from "./agent-services";
 
 type HostContext = { waitUntil(promise: Promise<unknown>): void };
 const retirementLog = createLogger("purchase-agent.retirement");
@@ -65,29 +69,39 @@ function purchaseAgentEnvironment(
       };
     },
     services: runServicesFor(env, ctx, runId),
-    // The purpose's Cubby MCP tools, described exactly as the MCP server
-    // lists them to that purpose's agent.
-    mcpTools: async (purpose) => purchaseAgentToolCatalog(purpose),
+    mcpTools: purchaseAgentMcpTools,
     ...(testModel && { testModel }),
   };
 }
 
+/** The queue consumer's environment: any Run's services and coordinator. */
+export function purchaseAgentQueueEnvironment(
+  env: Env,
+  ctx: HostContext,
+): PurchaseAgentQueueEnvironment {
+  return {
+    run: (runId) => runServicesFor(env, ctx, runId),
+    coordinator: (agentId) => env.PURCHASE_IMPORT_RUN.getByName(agentId),
+  };
+}
+
+type RunAgent =
+  import("~/server/purchase-agent/run-agent").PurchaseImportRunAgent;
+
 /**
  * One import Run's coordinator Durable Object. Every entry point checks its
- * external retirement fence before constructing the agent; its Lifecycle jobs
+ * external retirement fence before loading the agent; its Lifecycle jobs
  * wake it through `alarm`. The SDK initializes the agent inside its own
  * `fetch` and `alarm` (the alarm's memory-limit circuit breaker covers boot
  * hydration), so only the `dispatch` RPC initializes it here. Retirement
  * authorizes its receipt without hydration, then uses public SDK disposal.
  */
-export class PurchaseImportRunAgentHost implements PurchaseImportRunAgentRpc {
-  private agent: PurchaseImportRunAgent | undefined;
+class PurchaseImportRunAgentHost
+  extends DurableObject<Env>
+  implements PurchaseImportRunAgentRpc
+{
+  private agent: Promise<RunAgent> | undefined;
   private disposalAttempted = false;
-
-  constructor(
-    private readonly ctx: DurableObjectState,
-    private readonly env: Env,
-  ) {}
 
   private runId(): string {
     const runId = importRunIdFromAgentIdentity(this.ctx.id.name);
@@ -100,11 +114,18 @@ export class PurchaseImportRunAgentHost implements PurchaseImportRunAgentRpc {
     return runServicesFor(this.env, this.ctx, this.runId());
   }
 
-  private loaded(): PurchaseImportRunAgent {
-    this.agent ??= new PurchaseImportRunAgent(
-      this.ctx,
-      purchaseAgentEnvironment(this.env, this.ctx, this.runId()),
-    );
+  private loaded(): Promise<RunAgent> {
+    this.agent ??= import("~/server/purchase-agent/run-agent")
+      .then(({ PurchaseImportRunAgent }) => {
+        return new PurchaseImportRunAgent(
+          this.ctx,
+          purchaseAgentEnvironment(this.env, this.ctx, this.runId()),
+        );
+      })
+      .catch((error) => {
+        this.agent = undefined;
+        throw error;
+      });
     return this.agent;
   }
 
@@ -120,7 +141,7 @@ export class PurchaseImportRunAgentHost implements PurchaseImportRunAgentRpc {
       return new Response(`Research coordinator execution fenced: ${status}.`, {
         status: 409,
       });
-    return this.loaded().fetch(request);
+    return (await this.loaded()).fetch(request);
   }
 
   async retire(input: { receiptId: string }): Promise<{ disposed: boolean }> {
@@ -162,7 +183,7 @@ export class PurchaseImportRunAgentHost implements PurchaseImportRunAgentRpc {
     if (!keys.size && !rows && alarm === null)
       return { disposed: !this.disposalAttempted };
     this.disposalAttempted = true;
-    const agent = this.loaded();
+    const agent = await this.loaded();
     await agent.abortForRetirement();
     await agent.destroy();
     // Public destroy aborts this isolate. Only a later cold empty inventory acknowledges it.
@@ -179,7 +200,7 @@ export class PurchaseImportRunAgentHost implements PurchaseImportRunAgentRpc {
       async () => {
         if ((await this.services().researchCoordinatorStatus()) !== "ready")
           return;
-        await this.loaded().alarm();
+        await (await this.loaded()).alarm();
       },
       {
         "cubby.workload": "alarm",
@@ -196,7 +217,7 @@ export class PurchaseImportRunAgentHost implements PurchaseImportRunAgentRpc {
       async () => {
         if ((await this.services().researchCoordinatorStatus()) !== "ready")
           return { accepted: false };
-        const agent = this.loaded();
+        const agent = await this.loaded();
         await agent.__unsafe_ensureInitialized();
         return agent.dispatch(input);
       },
@@ -208,3 +229,13 @@ export class PurchaseImportRunAgentHost implements PurchaseImportRunAgentRpc {
     );
   }
 }
+
+// The Worker's own Sentry configuration (`withSentry` in cf-server.ts covers
+// the queue consumer); the tag separates the agent's issues.
+export const PurchaseImportRunAgent = Sentry.instrumentDurableObjectWithSentry(
+  (env: Env) => ({
+    ...workerSentryOptions(env),
+    initialScope: { tags: { service: "purchase-agent" } },
+  }),
+  PurchaseImportRunAgentHost,
+);

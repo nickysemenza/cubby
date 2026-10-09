@@ -5,11 +5,12 @@ import { describe, expect, it } from "vitest";
 import { formatCalendarDay } from "~/lib/date-format";
 import { formatCurrency } from "~/lib/number-format";
 import { compactEstimateText } from "~/lib/nutrition-compact-format";
+import { wasmFormat } from "~/lib/wasm";
 
-// Native formats currency, numbers, and compact estimates with the Rust
+// Currency, number, and compact estimates are formatted by one Rust
 // implementation (recipebridge `display_format`, which also reads this file);
-// the web formats them in TypeScript off the WASM load path, so these cases
-// keep the two identical. CubbyKit DisplayFormatTests read the file too.
+// these cases check the web bindings. Native reads the file too (CubbyKit
+// DisplayFormatTests). Dates are platform code, pinned only by the vectors.
 describe("display-format golden vectors", () => {
   it.each(vectors.currency)("currency $value -> $out", ({ value, out }) => {
     expect(formatCurrency(value)).toBe(out);
@@ -28,9 +29,10 @@ describe("display-format golden vectors", () => {
 
   // The generic renderer hands a bare number field to React, which prints
   // String(n); the vector pins what that prints, and the Rust formatter
-  // native calls agrees with it (checked in display_format.rs).
+  // native calls must agree with it.
   it.each(vectors.number)("number $value -> $out", ({ value, out }) => {
     expect(String(value)).toBe(out);
+    expect(wasmFormat.format_number(value)).toBe(out);
   });
 
   it.each(vectors.compactEstimate)(

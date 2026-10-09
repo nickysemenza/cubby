@@ -5,33 +5,28 @@
  * second set of nodes, edges, or coordinates.
  */
 
-import type { Entity } from "@cubby/schemas/entity";
-import { allEntities, entityIndex } from "@cubby/schemas/entity-index";
-import type { EntityDescriptor } from "@cubby/schemas/entity-manifest";
-
-import { entityDescriptorOf, useEntityModels } from "~/entity/entity-model";
+import { allEntities, entityManifest } from "@cubby/schemas/entity-manifest";
+import { entitySummary } from "@cubby/schemas/entity-summary";
 
 const ROW_HEIGHT = 34;
 const HEADER_HEIGHT = 38;
 
-type Relation = EntityDescriptor["relationships"][number];
+const LOGICAL_EDGES = allEntities.flatMap((source) =>
+  entityManifest[source].relationships.map((relation) => ({
+    source,
+    relation,
+  })),
+);
 
-const logicalEdges = (): readonly { source: Entity; relation: Relation }[] =>
-  allEntities.flatMap((source) => {
-    const relationships: readonly Relation[] =
-      entityDescriptorOf(source).relationships;
-    return relationships.map((relation) => ({ source, relation }));
-  });
-
-const provenanceLabel = (relation: Relation) =>
+const provenanceLabel = (
+  relation: (typeof LOGICAL_EDGES)[number]["relation"],
+) =>
   [relation.sourceKey, ...relation.sources.map((source) => source.key)].join(
     " + ",
   );
 
 export function EntityRelationshipsDiagram() {
-  useEntityModels(allEntities);
-  const edges = logicalEdges();
-  const height = HEADER_HEIGHT + edges.length * ROW_HEIGHT;
+  const height = HEADER_HEIGHT + LOGICAL_EDGES.length * ROW_HEIGHT;
   return (
     <svg
       viewBox={`0 0 960 ${height}`}
@@ -50,7 +45,7 @@ export function EntityRelationshipsDiagram() {
         TARGET
       </text>
 
-      {edges.map(({ source, relation }, index) => {
+      {LOGICAL_EDGES.map(({ source, relation }, index) => {
         const y = HEADER_HEIGHT + index * ROW_HEIGHT;
         return (
           <g key={`${source}.${relation.key}`}>
@@ -63,7 +58,7 @@ export function EntityRelationshipsDiagram() {
               fillOpacity={0.28}
             />
             <text x={16} y={y + 21} fontSize={12} fill="var(--foreground)">
-              {entityIndex[source].singular}
+              {entitySummary[source].singular}
             </text>
             <text x={220} y={y + 21} fontSize={12} fill="var(--foreground)">
               {relation.label} · {relation.cardinality} ·{" "}
@@ -81,7 +76,7 @@ export function EntityRelationshipsDiagram() {
               strokeWidth={1.25}
             />
             <text x={790} y={y + 21} fontSize={12} fill="var(--foreground)">
-              {entityIndex[relation.target].singular}
+              {entitySummary[relation.target].singular}
             </text>
           </g>
         );

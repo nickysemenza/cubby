@@ -3,7 +3,7 @@ import { z } from "zod";
 import type { GeneratedEntitySortField } from "./generated/entity-sort.gen";
 import { ingredientShortcode, plantShortcode } from "./identifiers";
 import { createPaginatedResponseSchema, oneOrMany } from "./pagination";
-import { gardenCropKey } from "./garden-fields";
+import { gardenCropKey } from "./garden-practice";
 import { plantBaseFilterFields, plantOut } from "./generated/plant.gen";
 
 export {

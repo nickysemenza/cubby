@@ -6,9 +6,11 @@ import { Link } from "@tanstack/react-router";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { z } from "zod";
 
-import { DetailAction } from "~/entity/entity-detail/detail-action-context";
-import { recommendations } from "~/integrations/tanstack-query/generated/recommendations.gen";
-import { search } from "~/integrations/tanstack-query/generated/search.gen";
+import { DetailAction } from "~/entity/entity-detail/detail-action-bar";
+import {
+  recommendations,
+  search,
+} from "~/integrations/tanstack-query/generated/catalog.gen";
 import { Row, Stack } from "~/ui/layout";
 import { Button, buttonVariants } from "~/ui/primitives/button";
 

@@ -1,9 +1,9 @@
 import type { ProductLabelNutrition } from "@cubby/schemas/nutrition";
-import { isNonFoodCategory } from "@cubby/shared/category-theme";
+import { isNonFoodCategory } from "@cubby/shared";
 import { type FunctionComponent, useMemo } from "react";
 
-import type { CollectionActionProps } from "~/entity/entity-detail/detail-hooks";
-import type { DetailSlotComponent } from "~/entity/entity-detail/detail-hooks";
+import type { CollectionActionProps } from "~/entity/entity-detail/collection-actions";
+import type { DetailSlotComponent } from "~/entity/entity-detail/detail-slots";
 import { EntityReportSlot } from "~/entity/entity-detail/report-slot";
 import { RelatednessRail } from "~/entity/relatedness/relatedness-rail";
 import { FullNutrientBreakdown } from "~/features/nutrition/FullNutrientBreakdown";

@@ -1,4 +1,4 @@
-import { activityRunId } from "@cubby/schemas/activity-fields";
+import { activityRunId } from "@cubby/schemas/activity";
 import { createFileRoute, Link } from "@tanstack/react-router";
 
 import { ActivityRunDetail } from "~/app/activity/activity-run-detail";

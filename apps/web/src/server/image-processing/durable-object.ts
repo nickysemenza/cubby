@@ -1,7 +1,4 @@
-import type {
-  DurableObjectState,
-  WebSocket as CfWebSocket,
-} from "@cloudflare/workers-types";
+import type { WebSocket as CfWebSocket } from "@cloudflare/workers-types";
 import {
   imageProcessingClientMessage,
   imageProcessingServerMessage,
@@ -10,21 +7,15 @@ import {
 } from "@cubby/schemas/image-processing";
 import { backgroundTaskMessageSchema } from "@cubby/schemas/queue-messages";
 import { createLogger } from "@cubby/worker-tracing";
+import { DurableObject } from "cloudflare:workers";
 import { z } from "zod";
 
 import { db, withRequestDbClient } from "~/server/db";
-import { upsertDeviceFromHello } from "~/server/repo/device-participation";
-import {
-  assignImageProcessingExecutor,
-  findImageProcessingDeviceAssignment,
-} from "~/server/repo/image-processing-history";
-import { claimCompanionImageCommand } from "~/server/services/image-processing.service";
 
 import {
   COMPANION_LEASE_MS,
   type ImageProcessingCompanionRpc,
 } from "./contracts";
-import { reserveCompanionAnalysisOutput } from "./dispatch";
 import { safeImageProcessingError } from "./safe-error";
 
 const log = createLogger("image-processing");
@@ -69,17 +60,13 @@ function decode(message: string | ArrayBuffer) {
 }
 
 /**
- * `ImageProcessingDurableObject`'s implementation
- * (`server/worker-entrypoints.ts`). Connection/replay transport only. Postgres
- * job state and leases decide what is executable; this object does not
- * persist an independent command queue.
+ * Connection/replay transport only. Postgres job state and leases decide what
+ * is executable; this object does not persist an independent command queue.
  */
-export class ImageProcessingObject implements ImageProcessingCompanionRpc {
-  constructor(
-    private readonly ctx: DurableObjectState,
-    private readonly env: Env,
-  ) {}
-
+export class ImageProcessingDurableObject
+  extends DurableObject<Env>
+  implements ImageProcessingCompanionRpc
+{
   async fetch(request: Request): Promise<Response> {
     if (request.headers.get("upgrade")?.toLowerCase() !== "websocket")
       return new Response("WebSocket upgrade required", { status: 426 });
@@ -143,6 +130,8 @@ export class ImageProcessingObject implements ImageProcessingCompanionRpc {
       );
     const target = compatible[0];
     if (!target) return false;
+    const { assignImageProcessingExecutor } =
+      await import("~/server/repo/image-processing-history");
     const assigned = await withRequestDbClient(
       this.env.HYPERDRIVE.connectionString,
       async () => {
@@ -161,6 +150,7 @@ export class ImageProcessingObject implements ImageProcessingCompanionRpc {
           connectionId: target.attachment.connectionId,
         });
         if (!assigned) return false;
+        const { reserveCompanionAnalysisOutput } = await import("./dispatch");
         return reserveCompanionAnalysisOutput(db, command);
       },
     );
@@ -191,6 +181,8 @@ export class ImageProcessingObject implements ImageProcessingCompanionRpc {
       // The `Device` row is the durable half of participation — the
       // installationId (this hello's `deviceId`) is its unique key. The name
       // is a creation hint; a later hello refreshes versions and liveness.
+      const { upsertDeviceFromHello } =
+        await import("~/server/repo/device-participation");
       const { automaticWork, remotePaused } = await withRequestDbClient(
         this.env.HYPERDRIVE.connectionString,
         () =>
@@ -234,6 +226,8 @@ export class ImageProcessingObject implements ImageProcessingCompanionRpc {
         new Error(result.outcome.reason),
       );
     const deviceId = connection.deviceId;
+    const { findImageProcessingDeviceAssignment } =
+      await import("~/server/repo/image-processing-history");
     const assignment = deviceId
       ? await withRequestDbClient(this.env.HYPERDRIVE.connectionString, () =>
           findImageProcessingDeviceAssignment(db, {
@@ -303,6 +297,8 @@ export class ImageProcessingObject implements ImageProcessingCompanionRpc {
       !isParticipating(connection)
     )
       return;
+    const { claimCompanionImageCommand } =
+      await import("~/server/services/image-processing.service");
     const command = await withRequestDbClient(
       this.env.HYPERDRIVE.connectionString,
       () =>

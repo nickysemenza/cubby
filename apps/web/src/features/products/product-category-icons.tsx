@@ -1,4 +1,4 @@
-import type { ProductCategory } from "@cubby/shared/category-theme";
+import type { ProductCategory } from "@cubby/shared";
 
 import { getCategoryColor, getCategoryIcon } from "./category-theme";
 

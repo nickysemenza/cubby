@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { MAX_EXTERNAL_HTML_BYTES } from "@cubby/shared/external-fetch";
+import { MAX_EXTERNAL_HTML_BYTES } from "@cubby/shared";
 import { amount } from "./codec";
 import {
   cookbookShortcode,

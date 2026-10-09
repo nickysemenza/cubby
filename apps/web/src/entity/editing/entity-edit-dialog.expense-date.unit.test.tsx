@@ -1,18 +1,14 @@
 import { expenseOut } from "@cubby/schemas/project";
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
-import { afterEach, beforeAll, beforeEach, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, expect, it, vi } from "vitest";
 
-import { entityMutation } from "~/integrations/tanstack-query/generated/entity-mutation.gen";
+import { entityMutation } from "~/integrations/tanstack-query/generated/catalog.gen";
 import { createBrowserTestHarness } from "~/lib/test/browser-harness";
 import { mock } from "~/lib/test/mock-schema";
 import { entityBrowserMutationResultSchema } from "~/server/entity-kernel/contracts";
 
 import { EntityEditDialog } from "./entity-edit-dialog";
 import { createEntityMutationPort } from "./use-entity-commands";
-
-// The editor loads lazily when a dialog opens; warm its module so each
-// `findBy*` waits only for render.
-beforeAll(() => import("./entity-edit-dialog-content"));
 
 let harness: ReturnType<typeof createBrowserTestHarness>;
 beforeEach(() => {

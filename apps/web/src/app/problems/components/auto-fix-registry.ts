@@ -7,8 +7,10 @@ import {
   ripple,
   type InvalidationTagSet,
 } from "~/integrations/tanstack-query/cache-tags";
-import { imageUpload } from "~/integrations/tanstack-query/generated/image-upload.gen";
-import { maintenance } from "~/integrations/tanstack-query/generated/maintenance.gen";
+import {
+  imageUpload,
+  maintenance,
+} from "~/integrations/tanstack-query/generated/catalog.gen";
 import { backfillLocationDescriptionsStream } from "~/lib/ai-streams";
 import { collectBulkStream } from "~/lib/bulk-progress";
 import { countLabel } from "~/lib/pluralize";

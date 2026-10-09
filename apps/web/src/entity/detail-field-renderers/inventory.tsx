@@ -1,3 +1,4 @@
+import { entityFieldModels } from "@cubby/schemas/entity-fields";
 import {
   type LedgerPartyShortcode,
   ledgerPartyShortcode,
@@ -7,8 +8,7 @@ import { inventoryOwnershipMode } from "@cubby/schemas/inventory-ownership";
 import { useState } from "react";
 
 import type { DetailRecordOf } from "~/entity/entity-detail/detail-record";
-import { entityFieldModel } from "~/entity/entity-model";
-import { inventory } from "~/integrations/tanstack-query/generated/inventory.gen";
+import { inventory } from "~/integrations/tanstack-query/generated/catalog.gen";
 import { EntityReferencePicker } from "~/ui/combobox/entity-reference-picker";
 import { useActionMutation } from "~/ui/hooks/useActionMutation";
 import { Stack } from "~/ui/layout";
@@ -20,19 +20,16 @@ import { referenceScopeFor } from "../editing/reference-scope";
 import type { EntityDetailFieldRenderers } from "./index";
 import { InventoryExpenseActions } from "./inventory-expense";
 
-// Read on render: the inventory model registers with the route, after import.
-function ownershipControls() {
-  const fields = entityFieldModel("inventory").fields;
-  const modeField = fields.find((field) => field.key === "ownershipMode");
-  const ownerField = fields.find((field) => field.key === "ownerLedgerPartyId");
-  return {
-    ownerScope: referenceScopeFor(ownerField?.reference, {}),
-    modeOptions: modeField?.control?.options ?? [],
-  };
-}
+const modeField = entityFieldModels.inventory.fields.find(
+  (field) => field.key === "ownershipMode",
+);
+const ownerField = entityFieldModels.inventory.fields.find(
+  (field) => field.key === "ownerLedgerPartyId",
+);
+const ownerScope = referenceScopeFor(ownerField?.reference, {});
+const modeOptions = modeField?.control?.options ?? [];
 
 function OwnershipControl({ record }: { record: DetailRecordOf<"inventory"> }) {
-  const { ownerScope, modeOptions } = ownershipControls();
   const ownership = record.effectiveOwnership;
   const [mode, setMode] = useState(ownership.mode);
   const [owner, setOwner] = useState<{

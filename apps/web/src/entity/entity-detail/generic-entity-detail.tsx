@@ -1,8 +1,12 @@
-import { connectedViews } from "@cubby/schemas/connected-view-definitions";
+import { connectedViews } from "@cubby/schemas/connected-views";
 import type { CompiledEntityPresentation } from "@cubby/schemas/entity-definitions/definition";
-import type { EntityFieldModel } from "@cubby/schemas/entity-fields";
-import { isGalleryEntity } from "@cubby/schemas/entity-index";
+import {
+  entityFieldModels,
+  type EntityFieldModel,
+} from "@cubby/schemas/entity-fields";
+import { isGalleryEntity } from "@cubby/schemas/entity-manifest";
 import { entityAttachmentRead } from "@cubby/schemas/entity-read-media";
+import { entitySummary } from "@cubby/schemas/entity-summary";
 import { imageOut, partitionEntityFiles } from "@cubby/schemas/image";
 import { ClockIcon } from "@phosphor-icons/react/dist/csr/Clock";
 import { FileTextIcon } from "@phosphor-icons/react/dist/csr/FileText";
@@ -37,11 +41,6 @@ import {
   renderDetailFieldValue,
   type DetailFieldRenderer,
 } from "~/entity/entity-display";
-import {
-  entityFieldModel,
-  entitySummaryOf,
-  useEntityModel,
-} from "~/entity/entity-model";
 import {
   readRecordField,
   readDisplayReferenceField,
@@ -83,11 +82,10 @@ import {
   type EntityTimelineOperations,
 } from "../timeline/entity-timeline";
 import { ConnectedRecordsTable } from "./connected-records-table";
-import { DetailActionTarget } from "./detail-action-bar";
-import { DetailActionProvider } from "./detail-action-context";
+import { DetailActionProvider, DetailActionTarget } from "./detail-action-bar";
 import { detailEditOverrideFor } from "./detail-edit-overrides";
-import { type ErasedDetailHooks, useDetailHooks } from "./detail-hooks";
 import type { DetailRecordOf, GenericDetailEntity } from "./detail-record";
+import { detailSlotsFor } from "./detail-slots";
 import {
   EntityRelationTable,
   type EntityRelationTableOperations,
@@ -112,7 +110,7 @@ type DisplayField = EntityFieldModel["fields"][number];
  */
 const presentationOf = (
   entity: GenericDetailEntity,
-): CompiledEntityPresentation & { singular: string } => entitySummaryOf(entity);
+): CompiledEntityPresentation & { singular: string } => entitySummary[entity];
 
 const sectionIcon = (kind: DeclaredSection["kind"]) => {
   switch (kind) {
@@ -147,7 +145,7 @@ function inlineEditableKeys(
   fields: readonly string[],
 ): string[] {
   if (!isGeneratedBrowserCrudEntity(entity)) return [];
-  const model: EntityFieldModel = entityFieldModel(entity);
+  const model: EntityFieldModel = entityFieldModels[entity];
   const updateRoster: readonly string[] = model.update;
   const editable = new Set<string>(
     model.fields
@@ -230,7 +228,7 @@ function heroOf<E extends GenericDetailEntity>(
   record: DetailRecordOf<E>,
 ) {
   const { hero } = presentationOf(entity).detail;
-  const fields: readonly DisplayField[] = entityFieldModel(entity).fields;
+  const fields: readonly DisplayField[] = entityFieldModels[entity].fields;
   const field = (key: string) =>
     fields.find((candidate) => candidate.key === key);
   const chipField = hero.chip === null ? undefined : field(hero.chip);
@@ -363,9 +361,9 @@ function declaredSections<E extends GenericDetailEntity>(
   record: DetailRecordOf<E>,
   bag: DetailRecordBag,
   operations: GenericEntityDetailOperations,
-  slots: ErasedDetailHooks["slots"],
 ): DetailSection[] {
   const { detail, singular } = presentationOf(entity);
+  const slots = detailSlotsFor(entity);
   const built = detail.sections.flatMap((section): DetailSection[] => {
     const base = {
       id: section.id,
@@ -442,7 +440,7 @@ function declaredSections<E extends GenericDetailEntity>(
         ];
       case "slot": {
         const slot = slots?.[section.id];
-        // SAFETY: the page's detail hooks are this entity's own slots, each
+        // SAFETY: `detailSlotsFor` hands back this entity's own slots, each
         // typed against the record this page received.
         if (slot === undefined || slot.applies?.(record as never) === false)
           return [];
@@ -526,9 +524,8 @@ function detailWayfinding<E extends GenericDetailEntity>(
 
 /**
  * The one detail page: every section, the hero and the edit affordance come
- * from the entity's summary (`entitySummaryOf(entity).detail`); a slot is the
- * only hand-written fill and renders only where the entity's detail hooks
- * (`entity/clients/<entity>.detail.tsx`, via `DetailHooksProvider`) provide it.
+ * from `entitySummary[entity].detail`; a slot is the only hand-written fill
+ * and renders only where `detailSlots` provides it.
  */
 export function GenericEntityDetail<E extends GenericDetailEntity>({
   entity,
@@ -539,8 +536,6 @@ export function GenericEntityDetail<E extends GenericDetailEntity>({
   record: DetailRecordOf<E>;
   operations?: GenericEntityDetailOperations;
 }) {
-  useEntityModel(entity);
-  const { slots } = useDetailHooks();
   const { detail, titleField, singular } = presentationOf(entity);
   const bag = detailRecordSchema.parse(record);
   const title =
@@ -555,7 +550,7 @@ export function GenericEntityDetail<E extends GenericDetailEntity>({
 
   const { images, documents } = detailFiles(entity, record, bag);
   const heroImages = detail.hero.images ? images : undefined;
-  const sections = declaredSections(entity, record, bag, operations, slots);
+  const sections = declaredSections(entity, record, bag, operations);
   for (const view of connectedViews[entity]) {
     sections.push({
       id: `connected-${view.key}`,
@@ -687,8 +682,8 @@ export function GenericEntityDetail<E extends GenericDetailEntity>({
         <RecordSuggestionsProvider
           entity={entity}
           records={[record]}
-          fieldKeys={entityFieldModel(entity)
-            .fields.filter((field) => field.display.detail)
+          fieldKeys={entityFieldModels[entity].fields
+            .filter((field) => field.display.detail)
             .map((field) => field.key)}
         >
           <DetailSections

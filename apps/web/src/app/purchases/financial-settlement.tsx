@@ -1,3 +1,4 @@
+import { entityFieldModels } from "@cubby/schemas/entity-fields";
 import type { FinancialTransactionOut } from "@cubby/schemas/financial-transaction";
 import { parseShortcodeFor } from "@cubby/schemas/identifiers";
 import type { PurchaseOut } from "@cubby/schemas/purchase";
@@ -11,7 +12,6 @@ import {
   EntityEditDialog,
   type EntityEditDialogRequest,
 } from "~/entity/editing/entity-edit-dialog";
-import { entityFieldModel } from "~/entity/entity-model";
 import { fieldEnumOptions } from "~/entity/enum-field-display";
 import { formatFieldProvenance } from "~/entity/field-provenance";
 import { formatCurrency } from "~/lib/utils";
@@ -35,16 +35,15 @@ type FinancialPurchase = PurchaseOut & {
     delta: number | null;
   };
 };
-// Read on render: the purchase model registers with the route, after import.
-function settlementProvenanceDescription() {
-  const settlementField = entityFieldModel("purchase").fields.find(
-    (field) => field.key === "financialReconciliation",
-  );
-  if (!settlementField?.provenance) {
-    throw new Error("Purchase financial settlement requires provenance");
-  }
-  return formatFieldProvenance(settlementField.provenance);
+const settlementField = entityFieldModels.purchase.fields.find(
+  (field) => field.key === "financialReconciliation",
+);
+if (!settlementField?.provenance) {
+  throw new Error("Purchase financial settlement requires provenance");
 }
+const settlementProvenanceDescription = formatFieldProvenance(
+  settlementField.provenance,
+);
 
 export function FinancialSettlementStatus({
   purchase,
@@ -140,7 +139,7 @@ export function FinancialSettlementCell({
     <>
       <TableCellWorkbench
         title="Financial settlement"
-        description={settlementProvenanceDescription()}
+        description={settlementProvenanceDescription}
         summary={<FinancialSettlementStatus purchase={purchase} />}
         open={workbenchOpen}
         onOpenChange={setWorkbenchOpen}

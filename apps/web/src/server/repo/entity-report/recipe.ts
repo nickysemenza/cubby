@@ -14,7 +14,7 @@ import type { Database } from "~/server/db";
 import { resolveOrThrow } from "~/server/repo/shortcode-resolver";
 import type { RequestServices } from "~/server/request-services";
 
-import { formatAmount } from "./records";
+import { amountFormatter } from "./records";
 
 type Records = Extract<ReportBlock, { kind: "records" }>;
 type Services = RequestServices["services"];
@@ -75,6 +75,7 @@ export async function recipeAvailabilityReport(
   const availability = await services.availability.getRecipeAvailability(
     recipeShortcode.parse(code),
   );
+  const formatAmount = await amountFormatter();
   const { assumedNames, hasQuantityIssues, shortfalls, ready } =
     recipeAvailabilityVerdict(
       availability.ingredients,

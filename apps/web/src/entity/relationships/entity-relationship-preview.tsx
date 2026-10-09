@@ -2,7 +2,7 @@ import type { Entity } from "@cubby/schemas/entity";
 import { useQuery } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
 
-import { entityGraph } from "~/integrations/tanstack-query/generated/entity-graph.gen";
+import { entityGraph } from "~/integrations/tanstack-query/generated/catalog.gen";
 import { Row } from "~/ui/layout";
 import { Button } from "~/ui/primitives/button";
 

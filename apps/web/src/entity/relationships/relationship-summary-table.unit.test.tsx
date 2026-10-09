@@ -2,7 +2,7 @@ import { relatedSummaryOutput } from "@cubby/schemas/related-view";
 import { act, render, screen } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
-import { relatedData } from "~/integrations/tanstack-query/generated/related-data.gen";
+import { relatedData } from "~/integrations/tanstack-query/generated/catalog.gen";
 import { createBrowserTestHarness } from "~/lib/test/browser-harness";
 
 import {

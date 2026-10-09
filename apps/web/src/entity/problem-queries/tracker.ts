@@ -1,5 +1,4 @@
-import { FILTER_NONE } from "@cubby/schemas/filter-sentinel-fields";
-
+import { FILTER_NONE } from "~/entity/filters";
 import { defineProblem, type ProblemQuery } from "~/entity/problem-query";
 
 /**

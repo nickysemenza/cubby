@@ -1,4 +1,4 @@
-import { type BrowserRoutedEntity } from "@cubby/schemas/entity-index";
+import type { BrowserRoutedEntity } from "@cubby/schemas/entity-manifest";
 import type { UseMutationOptions } from "@tanstack/react-query";
 import { useMemo } from "react";
 
@@ -8,7 +8,7 @@ import {
   isGeneratedBrowserCrudEntity,
 } from "~/entity/entity-contracts";
 import type { GeneratedBrowserCrudEntity } from "~/entity/generated/entity-routes.gen";
-import { image } from "~/integrations/tanstack-query/generated/image.gen";
+import { image } from "~/integrations/tanstack-query/generated/catalog.gen";
 
 type DeletableEntity = GeneratedBrowserCrudEntity | "image";
 

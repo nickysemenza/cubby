@@ -18,7 +18,6 @@ import { runPurpose } from "@cubby/schemas/run-fields";
 import { and, asc, eq } from "drizzle-orm";
 
 import { computeParseDrift, driftAxes } from "~/lib/parse-drift";
-import { wasm } from "~/lib/wasm";
 import type { Database } from "~/server/db";
 import {
   cookbook,
@@ -61,14 +60,20 @@ const records = (
   { kind: "records", rows, empty, actions: [...actions], thumbnail },
 ];
 
-/** The WASM formatter web and native share, for reports that word recipe lines. */
-export const formatAmount = (amount: Amount) => {
-  const request: Parameters<typeof wasm.format_amount_labeled>[0] = {
-    value: amount.value,
-    unit: amount.unit,
+/**
+ * Loaded on demand: the WASM formatter (the one web and native share) is only needed once a
+ * report has recipe lines to word.
+ */
+export const amountFormatter = async () => {
+  const { wasm } = await import("~/lib/wasm");
+  return (amount: Amount) => {
+    const request: Parameters<typeof wasm.format_amount_labeled>[0] = {
+      value: amount.value,
+      unit: amount.unit,
+    };
+    if (amount.upperValue != null) request.upper_value = amount.upperValue;
+    return wasm.format_amount_labeled(request);
   };
-  if (amount.upperValue != null) request.upper_value = amount.upperValue;
-  return wasm.format_amount_labeled(request);
 };
 
 const liveProductId = (db: Database, code: string) =>
@@ -167,10 +172,11 @@ export const productCookbooksReport = async (db: Database, code: string) => {
  * once for the whole report. The command carries only the line's ids: the server re-parses and
  * decides what to write (`reparseRecipeLine`), so no client composes a patch.
  */
-const driftExtras = (
+const driftExtras = async (
   usages: readonly UsageForItems[],
   knownNames: readonly string[],
 ) => {
+  const { wasm } = await import("~/lib/wasm");
   const fresh = wasm.parse_ingredient_lines(
     usages.map((usage) => usage.rawLine ?? ""),
   );
@@ -222,12 +228,12 @@ const recipeUsagesReport = async (
   const usages = (await getRecipeUsagesForIngredient(db, ingredient.id))
     .recipeUsages;
   if (usages.length === 0) return records([], "Not used in any recipes yet.");
-  const { badgesOf, commandsOf } = driftExtras(usages, [
+  const { badgesOf, commandsOf } = await driftExtras(usages, [
     ingredient.name,
     ...ingredient.aliases,
   ]);
   return records(
-    recipeUsageItems(usages, formatAmount, badgesOf, commandsOf),
+    recipeUsageItems(usages, await amountFormatter(), badgesOf, commandsOf),
     "Not used in any recipes yet.",
   );
 };

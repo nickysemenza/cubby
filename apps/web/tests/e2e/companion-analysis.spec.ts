@@ -23,7 +23,7 @@ import { createUploadedImageRecord } from "~/server/repo/image";
 import { saveImageDescriptionAnalysis } from "~/server/repo/image-processing";
 import { updateImageProcessingSettings } from "~/server/repo/image-processing-maintenance";
 import { imageDescriptionInputFingerprint } from "~/server/services/image-description.service";
-import { scheduleImageProcessingJobs } from "~/server/services/image-processing-wakeups";
+import { scheduleImageProcessingJobs } from "~/server/services/image-processing.service";
 import { ensureRun } from "~/server/runs/ensure-run";
 import { createEvidenceHarnessContext } from "./fixtures-core";
 import { expect, test } from "./e2e-test";

@@ -11,10 +11,9 @@ import {
   completeImageProcessingJob,
   findImageProcessingWakeupsForImage,
 } from "~/server/repo/image-processing";
+import { refreshDirectImageOwnerSearchDocuments } from "~/server/repo/search-document";
 import { ensureRun, systemActor } from "~/server/runs/ensure-run";
 import { describeOriginalImage } from "~/server/services/image-description.service";
-import { publishImageProcessingWakeups } from "~/server/services/image-processing-wakeups";
-import { refreshDirectImageOwnerSearchDocuments } from "~/server/services/mutation-side-effects";
 
 /** The same cloud policy, immutable history, and followups for edge and companion JPEG inputs. */
 export async function completeCloudImageDescription(
@@ -75,6 +74,8 @@ export async function completeCloudImageDescription(
   });
   if (!completion.adopted) return false;
   await refreshDirectImageOwnerSearchDocuments(db, input.imageId);
+  const { publishImageProcessingWakeups } =
+    await import("~/server/services/image-processing.service");
   await publishImageProcessingWakeups(
     db,
     await findImageProcessingWakeupsForImage(db, input.imageId),

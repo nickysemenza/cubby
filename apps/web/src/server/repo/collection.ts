@@ -3,18 +3,16 @@ import {
   collectionMatrixRowOut,
   type CollectionCellState,
   type CollectionDetailOut,
+  type CollectionMatrixMembership,
   type CollectionMatrixOut,
+  type CollectionMatrixSort,
   type CollectionProductPlacementOut,
   type CollectionProductPurchaseOut,
+  type CollectionSlug,
   type CollectionSummaryOut,
   type CollectionTagSetInput,
-} from "@cubby/schemas/collection";
-import {
-  type CollectionMatrixMembership,
-  type CollectionMatrixSort,
-  type CollectionSlug,
   type SmartCollectionDefinition,
-} from "@cubby/schemas/collection-fields";
+} from "@cubby/schemas/collection";
 import type { ActorContext } from "@cubby/schemas/context";
 import {
   type InventoryId,

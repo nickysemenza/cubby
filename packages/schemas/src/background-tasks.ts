@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { searchableEntities } from "./entity-index";
+import { searchableEntities } from "./entity-manifest";
 import {
   imageId,
   locationId,

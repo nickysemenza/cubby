@@ -1,5 +1,5 @@
 import { scoredEntities } from "@cubby/schemas/data-quality";
-import { shortcodeEntities } from "@cubby/schemas/entity-index";
+import { shortcodeEntities } from "@cubby/schemas/entity-manifest";
 import { keepPreviousData, useQuery } from "@tanstack/react-query";
 import {
   functionalUpdate,
@@ -24,7 +24,7 @@ import {
   entityLabel,
   isBrowserRoutedEntity,
 } from "~/entity/entities";
-import { entityGraph } from "~/integrations/tanstack-query/generated/entity-graph.gen";
+import { entityGraph } from "~/integrations/tanstack-query/generated/catalog.gen";
 import { renderScalarValue } from "~/ui/common/scalar-value";
 import {
   numberCellData,

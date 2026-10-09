@@ -1,6 +1,7 @@
 import type { Entity } from "@cubby/schemas/entity";
-import { entityIndex } from "@cubby/schemas/entity-index";
-import { UNRESOLVABLE_ENTITY_FILTER } from "@cubby/shared/filter";
+import { entityManifest } from "@cubby/schemas/entity-manifest";
+import { entitySummary } from "@cubby/schemas/entity-summary";
+import { UNRESOLVABLE_ENTITY_FILTER } from "@cubby/shared";
 import { useQuery } from "@tanstack/react-query";
 import { z } from "zod";
 
@@ -24,7 +25,7 @@ function shortcodeEntity(value: string): DetailEntity | undefined {
   const prefix = value.slice(0, value.indexOf("-") + 1);
   if (!prefix) return undefined;
   return detailEntities.find(
-    (entity) => entityIndex[entity].shortcodePrefix === prefix,
+    (entity) => entityManifest[entity].shortcodePrefix === prefix,
   );
 }
 
@@ -58,7 +59,7 @@ function ResolvedScopeChip({
   const title =
     target && query.data
       ? recordTitle.parse(
-          z.looseObject({}).parse(query.data)[entityIndex[target].titleField],
+          z.looseObject({}).parse(query.data)[entitySummary[target].titleField],
         )
       : null;
   // A resolvable id shows nothing until its name arrives, never the raw code.

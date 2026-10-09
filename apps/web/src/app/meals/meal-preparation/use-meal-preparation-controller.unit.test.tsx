@@ -14,8 +14,10 @@ import { act, renderHook } from "@testing-library/react";
 import type { ReactNode } from "react";
 import { expect, it } from "vitest";
 
-import { entityFilterOptions } from "~/integrations/tanstack-query/generated/entity-filter-options.gen";
-import { meal } from "~/integrations/tanstack-query/generated/meal.gen";
+import {
+  entityFilterOptions,
+  meal,
+} from "~/integrations/tanstack-query/generated/catalog.gen";
 import { mock } from "~/lib/test/mock-schema";
 
 import { useMealPreparationController } from "./use-meal-preparation-controller";

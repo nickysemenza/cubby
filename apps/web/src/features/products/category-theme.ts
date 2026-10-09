@@ -1,7 +1,4 @@
-import {
-  getCategoryColor,
-  getFeatureColor,
-} from "@cubby/shared/category-theme";
+import { getCategoryColor, getFeatureColor } from "@cubby/shared";
 import { ArchiveIcon } from "@phosphor-icons/react/dist/csr/Archive";
 import { BookOpenIcon } from "@phosphor-icons/react/dist/csr/BookOpen";
 import { CouchIcon } from "@phosphor-icons/react/dist/csr/Couch";

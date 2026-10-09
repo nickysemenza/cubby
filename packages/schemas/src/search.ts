@@ -1,12 +1,12 @@
 import { z } from "zod";
-import { inventoryPlacementValues } from "@cubby/shared/category-theme";
+import { inventoryPlacementValues } from "@cubby/shared";
 import { amount } from "./codec";
 import {
   embeddableEntities,
   type EmbeddableEntity,
   searchableEntities,
   type ShortcodeEntity,
-} from "./entity-index";
+} from "./entity-manifest";
 import {
   anyShortcodeSchema,
   inventoryShortcode,
@@ -19,8 +19,8 @@ import {
   relatednessPairRegistry,
 } from "./relatedness";
 
-export { embeddableEntities, searchableEntities } from "./entity-index";
-export type { EmbeddableEntity } from "./entity-index";
+export { embeddableEntities, searchableEntities } from "./entity-manifest";
+export type { EmbeddableEntity } from "./entity-manifest";
 
 export const searchableEntitySchema = z.enum(searchableEntities);
 export type SearchableEntity = z.infer<typeof searchableEntitySchema>;
@@ -44,6 +44,10 @@ export const searchableEntityRefFields = {
 
 export const searchableEntityRefSchema = z.object(searchableEntityRefFields);
 export type SearchableEntityRef = z.infer<typeof searchableEntityRefSchema>;
+
+export const searchTypeOptions = ["all", ...searchableEntities] as const;
+export const searchTypeSchema = z.enum(searchTypeOptions);
+export type SearchType = z.infer<typeof searchTypeSchema>;
 
 /**
  * The shared lexical-search request. Entity scopes are an array so Explore,

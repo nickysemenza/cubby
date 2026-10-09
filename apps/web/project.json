@@ -138,7 +138,6 @@
         "{projectRoot}/src/server/database-freshness/**",
         "{projectRoot}/src/server/purchase-import/**/*.workers.test.ts",
         "{projectRoot}/src/server/ai/**",
-        "{projectRoot}/src/server/worker-entrypoints.ts",
         "{projectRoot}/tooling/calendar-test-worker.ts",
         "{projectRoot}/wrangler.calendar-test.jsonc",
         "{workspaceRoot}/packages/schemas/src/chatgpt.ts",

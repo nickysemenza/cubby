@@ -6,7 +6,6 @@ import {
   entityListEnrichmentOutputSchema,
   entityListSummaryOutputSchema,
 } from "~/entity/generated/entity-lists.gen";
-import { executeEntityAs } from "~/server/entity-kernel";
 import { ENTITY_LIST_READ_OPERATIONS } from "~/server/generated/entity-list-read-bindings.gen";
 import { implementOperationDomain } from "~/server/operation-domain.server";
 
@@ -32,6 +31,7 @@ export const entityListHandlers = implementOperationDomain(entityListContract, {
     input: entityListInputSchema,
     output: (input) => getEntityListOutputSchema(input.entity),
     run: async (context, input) => {
+      const { executeEntityAs } = await import("~/server/entity-kernel");
       const result = await executeEntityAs(context, "list", input);
       return getEntityListOutputSchema(input.entity).parse({
         items: result.items,

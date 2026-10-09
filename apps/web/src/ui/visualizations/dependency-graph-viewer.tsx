@@ -1,4 +1,4 @@
-import { humanize } from "@cubby/shared/text-case";
+import { humanize } from "@cubby/shared";
 import { type ComponentProps, useMemo } from "react";
 
 import { browserOnlyLazy } from "~/lib/browser-only-lazy";

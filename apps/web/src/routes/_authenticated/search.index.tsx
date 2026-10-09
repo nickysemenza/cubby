@@ -1,4 +1,4 @@
-import { searchTypeSchema } from "@cubby/schemas/search-fields";
+import { searchTypeSchema } from "@cubby/schemas/search";
 import { createFileRoute, stripSearchParams } from "@tanstack/react-router";
 import { z } from "zod";
 

@@ -1,9 +1,11 @@
-import { parseShortcode } from "@cubby/shared/shortcode";
+import { parseShortcode } from "@cubby/shared";
 import { useQuery } from "@tanstack/react-query";
 import { useMemo } from "react";
 
-import { location } from "~/integrations/tanstack-query/generated/location.gen";
-import { product } from "~/integrations/tanstack-query/generated/product.gen";
+import {
+  location,
+  product,
+} from "~/integrations/tanstack-query/generated/catalog.gen";
 
 import type { LabelItem } from "./sheet-layouts";
 

@@ -29,7 +29,7 @@ import { Controller, useForm } from "react-hook-form";
 import { z } from "zod";
 
 import { DiscardLineFields } from "~/features/inventory/discard-line-fields";
-import { product as productOperations } from "~/integrations/tanstack-query/generated/product.gen";
+import { product as productOperations } from "~/integrations/tanstack-query/generated/catalog.gen";
 import { WorkflowDialog } from "~/ui/dialogs/workflow-dialog";
 import { useActionMutation } from "~/ui/hooks/useActionMutation";
 import { Row, Stack } from "~/ui/layout";

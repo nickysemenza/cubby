@@ -8,9 +8,7 @@ import { PencilIcon } from "@phosphor-icons/react/dist/csr/Pencil";
 import { XIcon } from "@phosphor-icons/react/dist/csr/X";
 import type React from "react";
 import {
-  type ComponentProps,
   createContext,
-  Suspense,
   useCallback,
   useContext,
   useEffect,
@@ -21,7 +19,6 @@ import { toast } from "sonner";
 
 import type { FieldSuggestionSource } from "~/features/ai/field-suggestion";
 import { FieldSuggestionApply } from "~/features/ai/field-suggestion-apply";
-import { browserOnlyLazy } from "~/lib/browser-only-lazy";
 import { getErrorMessage } from "~/lib/error-utils";
 import { cn } from "~/lib/utils";
 import { focusOnMount } from "~/ui/hooks/focus-on-mount";
@@ -40,26 +37,13 @@ import {
   tryFormatAmount,
 } from "../../features/inventory/format-amount";
 import { StaticPicker } from "../combobox/static-picker";
-import type { DatePickerInput as DatePickerInputComponent } from "../date-picker-input";
+import { DatePickerInput } from "../date-picker-input";
 import type { CellClipboardSpec, CellPastePayload } from "./cell-clipboard";
 import { CellEditTrigger } from "./cell-edit-trigger";
 import { CellEditorOverlay } from "./cell-editor-overlay";
 import { CELL_EDIT_GROUP_CLASS, CELL_EDIT_PENCIL_CLASS } from "./cell-frame";
 import { CellSelectionContext } from "./cell-selection-context";
 import { useRowActive } from "./row-activity";
-
-// Interaction-only: chrono-node (the date-expression parser) loads when a date
-// cell enters edit mode.
-const DatePickerInput = browserOnlyLazy<
-  ComponentProps<typeof DatePickerInputComponent>
->(
-  import.meta.env.SSR
-    ? null
-    : () =>
-        import("../date-picker-input").then((module) => ({
-          default: module.DatePickerInput,
-        })),
-);
 
 export type { FilterableComboboxItem };
 
@@ -938,18 +922,16 @@ function EditableDateEditor({
       className="inline-flex items-center gap-1"
       onClick={(e) => e.stopPropagation()}
     >
-      <Suspense fallback={null}>
-        <DatePickerInput
-          value={value}
-          onChange={(next) => void handleChange(next)}
-          placeholder={placeholder}
-          initialText={initialText}
-          clearable={clearable}
-          required={!clearable}
-          focusOnMount
-          className={cn("w-40", isPending && "pointer-events-none opacity-50")}
-        />
-      </Suspense>
+      <DatePickerInput
+        value={value}
+        onChange={(next) => void handleChange(next)}
+        placeholder={placeholder}
+        initialText={initialText}
+        clearable={clearable}
+        required={!clearable}
+        focusOnMount
+        className={cn("w-40", isPending && "pointer-events-none opacity-50")}
+      />
       {clearable && clearLabel ? (
         <Button
           type="button"

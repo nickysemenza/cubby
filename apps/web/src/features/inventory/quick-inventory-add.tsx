@@ -8,7 +8,7 @@ import {
   productCategoryShortcode,
 } from "@cubby/schemas/identifiers";
 import { unitMappingInput } from "@cubby/schemas/unitmapping";
-import { UNSPECIFIED_MANUFACTURER } from "@cubby/shared/constants";
+import { UNSPECIFIED_MANUFACTURER } from "@cubby/shared";
 import { fdcId, upc } from "@cubby/usda";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { CaretDownIcon } from "@phosphor-icons/react/dist/csr/CaretDown";
@@ -22,7 +22,7 @@ import { z } from "zod";
 
 import { EntityIntentFields } from "~/entity/editing/entity-primitive-fields";
 import { FieldSuggestionProvider } from "~/features/ai/field-suggestion-provider";
-import { product } from "~/integrations/tanstack-query/generated/product.gen";
+import { product } from "~/integrations/tanstack-query/generated/catalog.gen";
 import { savedWithBackgroundWork } from "~/lib/recompute-summary";
 import { cn } from "~/lib/utils";
 import { wasm } from "~/lib/wasm";

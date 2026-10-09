@@ -1,6 +1,6 @@
 import type { RecipeUsage } from "@cubby/schemas/recipe";
 
-import { recipe } from "~/integrations/tanstack-query/generated/recipe.gen";
+import { recipe } from "~/integrations/tanstack-query/generated/catalog.gen";
 import { useActionMutation } from "~/ui/hooks/useActionMutation";
 
 /**

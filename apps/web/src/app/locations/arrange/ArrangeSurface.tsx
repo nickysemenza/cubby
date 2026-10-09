@@ -6,7 +6,7 @@ import { useEffect, useId, useMemo, useRef, useState } from "react";
 
 import { collectTreeProductIds } from "~/features/locations/location-gallery-data";
 import { ProductImageSummariesProvider } from "~/features/products/product-image-summaries";
-import { location } from "~/integrations/tanstack-query/generated/location.gen";
+import { location } from "~/integrations/tanstack-query/generated/catalog.gen";
 import { useHydrated } from "~/ui/hooks/useHydrated";
 import { Row, Stack } from "~/ui/layout";
 import {

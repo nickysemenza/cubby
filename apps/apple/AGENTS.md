@@ -176,11 +176,10 @@ CubbyAPI plugin's OpenAPI inputs) → `xcodegen generate --spec apps/apple/proje
   `ImageTransformTests`, `BinPlanTests`, `DisplayFormatTests`, `HouseholdDayTests`) and the
   web/Rust tests read the same files; change a rule by editing the vector first, then both
   implementations.
-- Native value formatting lives in Rust (`recipebridge/src/display_format.rs` plus
+- Value formatting is single-sourced in Rust (`recipebridge/src/display_format.rs` plus
   `format_amount_labeled`): `currency`, `signedCurrency`, bare numbers, `{value, unit}` amounts, and
-  the compact nutrition cell (UniFFI `format_*` in `cubby-ffi`, wrapped by `CubbyKit`
-  `ValueFormat`). The web formats currency and the compact cell in TypeScript to keep WASM off page
-  load; the shared vectors keep the two identical. The Rust tests read `display-format.json`
+  the compact nutrition cell run the same code as web (WASM) and native (UniFFI `format_*` in
+  `cubby-ffi`, wrapped by `CubbyKit` `ValueFormat`). The Rust tests read `display-format.json`
   directly; `DisplayFormatTests` and the web `display-format.unit.test.ts` are binding checks. Only
   `plainDate` stays per platform (no timezone database in Rust; `DisplayFormat.plainDate` /
   `formatCalendarDay`) and timestamps stay locale-aware platform code. Never format a catalog value

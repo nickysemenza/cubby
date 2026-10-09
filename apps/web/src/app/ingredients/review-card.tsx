@@ -8,7 +8,7 @@ import { verbDef } from "~/entity/actions/action-verbs";
 import { AiProposalCard, AiProvenance } from "~/features/ai/ai-proposal-card";
 import { QueuePassPosition } from "~/features/queue-pass/QueuePassProgress";
 import { UsdaFoodResultRow } from "~/features/usda/usda-food-result-row";
-import { usdaFood } from "~/integrations/tanstack-query/generated/usda.gen";
+import { usdaFood } from "~/integrations/tanstack-query/generated/catalog.gen";
 import type { EnrichmentProposal } from "~/server/services/ai-enrichment/proposals";
 import { UsdaFoodSearchField } from "~/ui/combobox/with-usda-food-search";
 import { Row, Stack } from "~/ui/layout";

@@ -2,7 +2,10 @@ import type { Amount } from "@cubby/schemas/codec";
 import type { DisplayImageSummary } from "@cubby/schemas/display-images";
 import type { Entity, EntityRef } from "@cubby/schemas/entity";
 import type { EntityFieldProvenance } from "@cubby/schemas/entity-fields";
-import { type ShortcodeEntity, entityIndex } from "@cubby/schemas/entity-index";
+import {
+  entityInspectorMetadata,
+  type ShortcodeEntity,
+} from "@cubby/schemas/entity-manifest";
 import { parseShortcodeFor } from "@cubby/schemas/identifiers";
 import { isDisplayableImageFile } from "@cubby/schemas/image";
 import { locationType, type LocationType } from "@cubby/schemas/location";
@@ -259,7 +262,7 @@ export function createNameColumn<T extends BaseRow>(
         .object({ emoji: z.string().nullable().optional() })
         .parse(info.row.original).emoji;
       const prefix =
-        recordEmoji || entityIndex[entity].recordIconEntityField ? (
+        recordEmoji || entityInspectorMetadata[entity].recordIconEntityField ? (
           <RecordEmoji
             entity={entity}
             emoji={recordEmoji}

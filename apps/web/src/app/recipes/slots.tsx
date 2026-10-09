@@ -3,8 +3,8 @@ import { PrinterIcon } from "@phosphor-icons/react/dist/csr/Printer";
 import { Link, useNavigate, useSearch } from "@tanstack/react-router";
 
 import { AddToMeal } from "~/app/meals/add-to-meal";
-import { DetailAction } from "~/entity/entity-detail/detail-action-context";
-import type { DetailSlotComponent } from "~/entity/entity-detail/detail-hooks";
+import { DetailAction } from "~/entity/entity-detail/detail-action-bar";
+import type { DetailSlotComponent } from "~/entity/entity-detail/detail-slots";
 import { EntityReportSlot } from "~/entity/entity-detail/report-slot";
 import { CopyRecipeParseButton } from "~/features/recipes/copy-corpus-button";
 import RecipeDetail, {

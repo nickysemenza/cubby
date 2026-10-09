@@ -8,7 +8,7 @@ import { useMutation } from "@tanstack/react-query";
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 
-import { meal } from "~/integrations/tanstack-query/generated/meal.gen";
+import { meal } from "~/integrations/tanstack-query/generated/catalog.gen";
 import { createBrowserTestHarness } from "~/lib/test/browser-harness";
 
 import { PortionSheet } from "./portion-sheet";

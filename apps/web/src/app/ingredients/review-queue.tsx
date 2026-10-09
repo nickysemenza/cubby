@@ -5,7 +5,7 @@ import { toast } from "sonner";
 import { entityMutationOptionsFactory } from "~/entity/entity-contracts";
 import { EntityMergeDialog } from "~/entity/merge/entity-merge-dialog";
 import { useQueuePass } from "~/features/queue-pass/useQueuePass";
-import { ingredient } from "~/integrations/tanstack-query/generated/ingredient.gen";
+import { ingredient } from "~/integrations/tanstack-query/generated/catalog.gen";
 import { getErrorMessage } from "~/lib/error-utils";
 import { savedWithBackgroundWork } from "~/lib/recompute-summary";
 import {

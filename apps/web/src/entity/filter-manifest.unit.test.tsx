@@ -1,6 +1,5 @@
 import { entitySchema } from "@cubby/schemas/entity";
 import { browserRoutedEntities } from "@cubby/schemas/entity-manifest";
-import { FILTER_ANY, FILTER_NONE } from "@cubby/schemas/filter-sentinel-fields";
 import { testShortcode } from "@cubby/schemas/testing";
 import { describe, expect, it } from "vitest";
 
@@ -9,6 +8,8 @@ import {
   buildFiltersFromManifest,
   decodeFilters,
   encodeFilters,
+  FILTER_ANY,
+  FILTER_NONE,
   filterGetterFromSearch,
   partitionFilterSpecs,
 } from "./filters";

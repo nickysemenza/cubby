@@ -1,4 +1,4 @@
-import { type ParsedShortcode, parseShortcode } from "@cubby/shared/shortcode";
+import { type ParsedShortcode, parseShortcode } from "@cubby/shared";
 
 interface PastedShortcodeInput {
   currentValue: string;

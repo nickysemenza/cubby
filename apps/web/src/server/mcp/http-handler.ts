@@ -9,15 +9,7 @@ import { type JSONType, z } from "zod";
 import { scrubErrorMessage } from "~/lib/error-diagnostics";
 import { AppError } from "~/server/errors/app-error";
 import { withErrorReporting } from "~/server/errors/report-error";
-import { MCP_TOOL_BINDINGS } from "~/server/generated/mcp-tools.gen";
-import { unauthorizedResponse, verifyMcpToken } from "~/server/mcp/auth";
-import { McpOperationContext } from "~/server/mcp/operation-context";
-import { handleMcpRequest } from "~/server/mcp/server";
-import { findActivePurchaseAgentGrant } from "~/server/purchase-import/agent-auth";
-import { loadRunScope } from "~/server/purchase-import/run-service";
-import { createRequestContext, requireActor } from "~/server/request-context";
 import { normalizeStartOperationError } from "~/server/start-operation.server";
-import { emitTelemetry } from "~/server/telemetry";
 import { getRequestId } from "~/server/tracing";
 
 const log = createLogger("MCP");
@@ -116,11 +108,13 @@ const toolAction = z.object({
  * Whether `tool.action` writes, from the generated bindings; a call naming no
  * known action falls back to the tool's own read-only flag.
  */
-function callWrites(
+async function callWrites(
   tool: string | undefined,
   action: string | undefined,
-): boolean | undefined {
+): Promise<boolean | undefined> {
   if (!tool) return undefined;
+  const { MCP_TOOL_BINDINGS } =
+    await import("~/server/generated/mcp-tools.gen");
   const binding = Object.entries(MCP_TOOL_BINDINGS).find(
     ([name]) => name === tool,
   )?.[1];
@@ -168,7 +162,7 @@ async function jsonRpcFailure<TError>(failure: {
     { operation: "mcp", authenticated, headers },
   ).publicError;
   const tooLarge = detail.reason === "MCP_REQUEST_TOO_LARGE";
-  const writes = callWrites(tool, action);
+  const writes = await callWrites(tool, action).catch(() => undefined);
   const request = detail.requestId ? `; Cubby request ${detail.requestId}` : "";
   // Present only when the failure was captured (not sampled out, DSN set).
   const sentry = detail.diagnostics?.sentryEventId
@@ -200,6 +194,17 @@ async function serveAuthenticatedMcp(
   request: Request,
   progress: McpRequestProgress,
 ): Promise<Response> {
+  const { handleMcpRequest } = await import("~/server/mcp/server");
+  const { unauthorizedResponse, verifyMcpToken } =
+    await import("~/server/mcp/auth");
+  const { McpOperationContext } =
+    await import("~/server/mcp/operation-context");
+  const { createRequestContext, requireActor } =
+    await import("~/server/request-context");
+  const { emitTelemetry } = await import("~/server/telemetry");
+  const { findActivePurchaseAgentGrant } =
+    await import("~/server/purchase-import/agent-auth");
+
   const actor = await verifyMcpToken(request);
   if (!actor) return unauthorizedResponse();
   progress.authenticated();
@@ -230,6 +235,8 @@ async function serveAuthenticatedMcp(
         )
       : null;
     if (!grant) return unauthorizedResponse();
+    const { loadRunScope } =
+      await import("~/server/purchase-import/run-service");
     const [scope, party] = await Promise.all([
       loadRunScope(ctx.db, actor.purchaseAgentRunId),
       ctx.currentParty(),

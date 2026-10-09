@@ -7,7 +7,7 @@ import type {
   ReferentialLivenessViolation,
   RelationshipProvenance,
 } from "@cubby/schemas/entity-integrity";
-import { humanize } from "@cubby/shared/text-case";
+import { humanize } from "@cubby/shared";
 import { DatabaseIcon } from "@phosphor-icons/react/dist/csr/Database";
 import { HeartbeatIcon } from "@phosphor-icons/react/dist/csr/Heartbeat";
 import { PathIcon } from "@phosphor-icons/react/dist/csr/Path";
@@ -20,7 +20,7 @@ import { REFERENTIAL_LIVENESS_INPUT } from "~/entity/entity-integrity";
 import {
   entityIntegrity,
   integrityProblems,
-} from "~/integrations/tanstack-query/generated/entity-integrity.gen";
+} from "~/integrations/tanstack-query/generated/catalog.gen";
 import { SimpleLoading } from "~/ui/feedback/loading-skeletons";
 import { Grid, Row, Stack } from "~/ui/layout";
 import { Badge, type BadgeVariant } from "~/ui/primitives/badge";

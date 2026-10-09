@@ -1,4 +1,4 @@
-import { type BrowserRoutedEntity } from "@cubby/schemas/entity-index";
+import type { BrowserRoutedEntity } from "@cubby/schemas/entity-manifest";
 
 /** The typed compact-preview capability roster, shared by every inspector. */
 export const hoverPreviewEntities = [

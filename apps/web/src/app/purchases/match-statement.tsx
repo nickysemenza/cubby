@@ -16,7 +16,7 @@ import { z } from "zod";
 
 import { entityMutationOptionsFactory } from "~/entity/entity-contracts";
 import { entityRipple } from "~/integrations/tanstack-query/cache-tags";
-import { purchase as purchaseOperations } from "~/integrations/tanstack-query/generated/purchase.gen";
+import { purchase as purchaseOperations } from "~/integrations/tanstack-query/generated/catalog.gen";
 import { invalidateOperationTags } from "~/integrations/tanstack-query/operation-cache";
 import { formatCurrency } from "~/lib/utils";
 import { useUpdateMutation } from "~/ui/hooks/useUpdateMutation";

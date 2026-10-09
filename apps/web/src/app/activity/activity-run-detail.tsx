@@ -4,7 +4,7 @@ import { useEffect, useMemo } from "react";
 
 import { RunWorkFacts } from "~/app/runs/run-work-summary";
 import { cursorQueryOptions } from "~/integrations/tanstack-query/cursor-query-options";
-import { activity } from "~/integrations/tanstack-query/generated/activity.gen";
+import { activity } from "~/integrations/tanstack-query/generated/catalog.gen";
 import { copyText } from "~/lib/clipboard";
 import { formatInstant } from "~/lib/date-format";
 import { formatCurrency } from "~/lib/utils";

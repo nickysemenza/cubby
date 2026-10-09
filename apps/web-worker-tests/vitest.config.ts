@@ -1,17 +1,7 @@
-import { createRequire } from "node:module";
 import { fileURLToPath } from "node:url";
 
 import { cloudflareTest } from "@cloudflare/vitest-plugin";
 import { defineConfig } from "vitest/config";
-
-// The Durable Object implementations import the database module statically.
-// `pg` is CommonJS, and the pool resolves its `require("pg-protocol")` with
-// the `import` condition (ESM), which CommonJS cannot evaluate; point it at
-// the package's CommonJS build.
-const pgRequire = createRequire(
-  createRequire(new URL("../web/package.json", import.meta.url)).resolve("pg"),
-);
-const pgProtocolCommonJs = pgRequire.resolve("pg-protocol");
 
 /**
  * Cloudflare's test plugin still relies on Vitest 4 internals. Keep this
@@ -48,20 +38,7 @@ export default defineConfig({
       },
     }),
   ],
-  // The Worker build's define (`vite.config.ts`): these suites run in workerd.
-  define: { __CF_WORKERS__: "true" },
-  resolve: {
-    tsconfigPaths: true,
-    alias: [
-      { find: /^pg-protocol$/u, replacement: pgProtocolCommonJs },
-      {
-        find: /^@cubby\/recipebridge$/u,
-        replacement: fileURLToPath(
-          new URL("./recipebridge.js", import.meta.url),
-        ),
-      },
-    ],
-  },
+  resolve: { tsconfigPaths: true },
   test: {
     name: "calendar-worker",
     include: [

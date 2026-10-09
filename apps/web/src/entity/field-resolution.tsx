@@ -1,11 +1,11 @@
 import { auditEntitySchema } from "@cubby/schemas/audit";
-import { entityIndex } from "@cubby/schemas/entity-index";
+import { entityFieldModels } from "@cubby/schemas/entity-fields";
+import { entitySummary } from "@cubby/schemas/entity-summary";
 import {
   fieldResolutionsSchema,
   type FieldResolution,
 } from "@cubby/schemas/field-resolution";
-import { parseShortcode } from "@cubby/shared/shortcode";
-import { capitalize } from "@cubby/shared/text-case";
+import { capitalize, parseShortcode } from "@cubby/shared";
 import { ArrowBendDownRightIcon } from "@phosphor-icons/react/dist/csr/ArrowBendDownRight";
 import { ArrowCounterClockwiseIcon } from "@phosphor-icons/react/dist/csr/ArrowCounterClockwise";
 import { ChartPieIcon } from "@phosphor-icons/react/dist/csr/ChartPie";
@@ -22,7 +22,6 @@ import { EntityRefLink } from "~/entity/components/entity-ref-link";
 import { parseEntityEditUpdateInput } from "~/entity/editing/mutation-data";
 import { useEntityCommands } from "~/entity/editing/use-entity-commands";
 import type { StandardEntity } from "~/entity/entity-contracts";
-import { entityFieldModel } from "~/entity/entity-model";
 import { generatedBrowserCrudEntities } from "~/entity/generated/entity-routes.gen";
 import { getErrorMessage } from "~/lib/error-utils";
 import { cn } from "~/lib/utils";
@@ -65,7 +64,7 @@ function redundantResetPatch(
       !resolution.canReset
     )
       continue;
-    const policy = entityFieldModel(entity).fields.find(
+    const policy = entityFieldModels[entity].fields.find(
       (candidate) => candidate.key === field,
     )?.resolution;
     if (policy?.redundancy === "eligible") Object.assign(patch, policy.reset);
@@ -82,7 +81,7 @@ export function useRedundantOverrideBulkAction<TData extends { id: string }>(
   return useMemo(() => {
     if (
       !entity ||
-      !entityFieldModel(entity).fields.some(
+      !entityFieldModels[entity].fields.some(
         (field) => field.resolution?.redundancy === "eligible",
       )
     )
@@ -197,7 +196,7 @@ function resolutionPhrase(resolution: FieldResolution): string {
   switch (resolution.mode) {
     case "inherit":
       return resolution.sourceEntity
-        ? `From ${resolution.sourceEntity.entityKind === "task" ? "parent task" : entityIndex[resolution.sourceEntity.entityKind].singular.toLowerCase()}`
+        ? `From ${resolution.sourceEntity.entityKind === "task" ? "parent task" : entitySummary[resolution.sourceEntity.entityKind].singular.toLowerCase()}`
         : capitalize(resolution.source);
     case "allocated":
       return resolution.sourceEntity
@@ -300,7 +299,7 @@ export function FieldResolutionEntityActions({
     (candidate) => candidate === candidateEntity,
   );
   if (!entity) return null;
-  const policy = entityFieldModel(entity).fields.find(
+  const policy = entityFieldModels[entity].fields.find(
     (candidate) => candidate.key === field,
   )?.resolution;
   if (!policy) return null;

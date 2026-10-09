@@ -1,4 +1,4 @@
-import { type ShortcodeEntity } from "@cubby/schemas/entity-index";
+import type { ShortcodeEntity } from "@cubby/schemas/entity-manifest";
 import type {
   FilterOptionItem,
   FilterOptionProjection,
@@ -7,7 +7,7 @@ import type { ExpenseShortcode } from "@cubby/schemas/identifiers";
 import { useQuery } from "@tanstack/react-query";
 import { useMemo } from "react";
 
-import { entityFilterOptions } from "~/integrations/tanstack-query/generated/entity-filter-options.gen";
+import { entityFilterOptions } from "~/integrations/tanstack-query/generated/catalog.gen";
 
 const NO_ITEMS: FilterOptionItem[] = [];
 

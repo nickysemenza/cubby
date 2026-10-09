@@ -1,10 +1,10 @@
-import { type BrowserRoutedEntity } from "@cubby/schemas/entity-index";
+import type { BrowserRoutedEntity } from "@cubby/schemas/entity-manifest";
 import type {
   SearchableEntity,
   SearchDestination,
   SearchHit,
 } from "@cubby/schemas/search";
-import { locationTypeValues } from "@cubby/shared/location-type-theme";
+import { locationTypeValues } from "@cubby/shared";
 
 import { EntityCover } from "~/entity/components/entity-cover";
 import { RecordEmoji } from "~/entity/components/record-emoji";

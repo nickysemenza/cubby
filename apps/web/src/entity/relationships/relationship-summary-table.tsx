@@ -17,7 +17,7 @@ import { z } from "zod";
 
 import { EntityRefLink } from "~/entity/components/entity-ref-link";
 import { VendorMark } from "~/entity/components/vendor-cell";
-import { relatedData } from "~/integrations/tanstack-query/generated/related-data.gen";
+import { relatedData } from "~/integrations/tanstack-query/generated/catalog.gen";
 import { formatCurrency } from "~/lib/utils";
 import { Stack } from "~/ui/layout";
 import { Description } from "~/ui/primitives/description";

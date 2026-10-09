@@ -2,11 +2,7 @@ import {
   type PublicImpactItem,
   publicImpactItemSchema,
 } from "@cubby/schemas/entity-integrity";
-import {
-  AppErrors,
-  getErrorMessage,
-  type AppErrorReason,
-} from "@cubby/shared/error-utils";
+import { AppErrors, getErrorMessage, type AppErrorReason } from "@cubby/shared";
 import { z } from "zod";
 
 import type { PublicStartValidationIssue } from "~/server/start-operation.contract";
@@ -17,7 +13,7 @@ import {
 } from "./error-diagnostics";
 
 // Re-export from shared for convenience (22+ consumers)
-export { getErrorMessage } from "@cubby/shared/error-utils";
+export { getErrorMessage } from "@cubby/shared";
 
 export const SUPERSEDED_VIEW_TRANSITION_MESSAGE =
   "Old view transition aborted by new view transition.";

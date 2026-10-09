@@ -661,10 +661,7 @@ export const runChildren = [
       },
     ],
     types: [
-      {
-        module: "@cubby/schemas/activity-fields",
-        exports: ["ActivityExecutor"],
-      },
+      { module: "@cubby/schemas/activity", exports: ["ActivityExecutor"] },
     ],
     indexes: [
       {

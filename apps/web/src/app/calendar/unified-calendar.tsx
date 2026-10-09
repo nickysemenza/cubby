@@ -22,8 +22,7 @@ import {
 import { toast } from "sonner";
 
 import { useEntityCommands } from "~/entity/editing/use-entity-commands";
-import { useEntityModels } from "~/entity/entity-model";
-import { calendar } from "~/integrations/tanstack-query/generated/calendar.gen";
+import { calendar } from "~/integrations/tanstack-query/generated/catalog.gen";
 import { browserOnlyLazy } from "~/lib/browser-only-lazy";
 import { formatCalendarDay } from "~/lib/date-format";
 import { HOUSEHOLD_TIMEZONE, householdLocalDate } from "~/lib/household-date";
@@ -273,14 +272,6 @@ function CalendarScheduleRead({ input }: { input: CalendarRangeInput }) {
   );
 }
 
-const CALENDAR_ENTITIES = [
-  "meal",
-  "task",
-  "project",
-  "planting",
-  "expense",
-] as const;
-
 export function UnifiedCalendar({
   period,
   date,
@@ -292,9 +283,6 @@ export function UnifiedCalendar({
   onDayChange,
   periodActions,
 }: UnifiedCalendarProps) {
-  // The calendar spans entities whose own routes are not loaded here; its
-  // filters, inspector and edit flows read these models synchronously.
-  useEntityModels(CALENDAR_ENTITIES);
   const today = householdLocalDate();
   useHouseholdToday(today);
   const anchorDate = date ?? today;

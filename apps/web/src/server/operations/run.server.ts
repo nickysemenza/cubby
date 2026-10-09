@@ -47,7 +47,6 @@ import { resolveOrThrow } from "~/server/repo/shortcode-resolver";
 import type { AuthenticatedRequestContext } from "~/server/request-context";
 import { issueExecutionAuthorization } from "~/server/runs/execution-authorization";
 import { isWorkflowRunPurpose } from "~/server/workflow-runs/contract";
-import { controlWorkflowRun } from "~/server/workflow-runs/control";
 
 /** Import runs belong to a household member's ledger party. */
 async function memberParty(context: AuthenticatedRequestContext) {
@@ -179,6 +178,8 @@ export const runHandlers = implementOperationDomain(runContract, {
       .limit(1);
     // A Workflow executes these Runs: cancel and retry act on its instance.
     if (target && isWorkflowRunPurpose(target.purpose)) {
+      const { controlWorkflowRun } =
+        await import("~/server/workflow-runs/control");
       await controlWorkflowRun(
         context.db,
         context.actorContext,

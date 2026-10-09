@@ -1,16 +1,7 @@
 import { allEntities } from "@cubby/schemas/entity-manifest";
 import { fireEvent, render, screen, within } from "@testing-library/react";
-import {
-  afterEach,
-  beforeAll,
-  beforeEach,
-  describe,
-  expect,
-  it,
-  vi,
-} from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-import { loadEntityInspector } from "~/entity/entity-model";
 import { createBrowserTestHarness } from "~/lib/test/browser-harness";
 
 import { overridesFor } from "./entity-schema-model";
@@ -20,10 +11,6 @@ import { SavedViewChips } from "./EntitySchemaInspector";
 // The grid reads live row counts and the panel renders router links; render
 // with `active={false}` inside a memory router so no query ever fires.
 let harness: ReturnType<typeof createBrowserTestHarness>;
-// The schema surfaces suspend until every inspector module has loaded.
-beforeAll(async () => {
-  await Promise.all(allEntities.map((entity) => loadEntityInspector(entity)));
-});
 beforeEach(() => {
   harness = createBrowserTestHarness();
 });

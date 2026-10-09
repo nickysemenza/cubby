@@ -1,4 +1,4 @@
-import { parseShortcode } from "@cubby/shared/shortcode";
+import { parseShortcode } from "@cubby/shared";
 import { Link } from "@tanstack/react-router";
 import type { ReactNode } from "react";
 

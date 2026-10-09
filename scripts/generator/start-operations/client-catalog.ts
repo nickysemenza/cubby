@@ -2,7 +2,6 @@ import { join } from "node:path";
 import { pathToFileURL } from "node:url";
 import { z } from "zod";
 import { generatedHeader } from "../artifacts.ts";
-import type { EntityArtifacts } from "../entities/declarations.ts";
 import {
   type ContractMember,
   type LoadedContract,
@@ -68,7 +67,6 @@ const domainExportName = (contractExport: string): string => {
 type UsedImports = {
   entityRootTags: boolean;
   operationOverrides: boolean;
-  ripple: boolean;
   rippleFor: boolean;
 };
 
@@ -76,7 +74,6 @@ class CatalogRenderer {
   readonly used: UsedImports = {
     entityRootTags: false,
     operationOverrides: false,
-    ripple: false,
     rippleFor: false,
   };
   private readonly entityRootsJson: string;
@@ -112,6 +109,7 @@ class CatalogRenderer {
       JSON.stringify(tags.slice(tags.length - roots)) === this.entityRootsJson;
     if (!endsWithRoots)
       return `[${tags.map((tag) => JSON.stringify(tag)).join(", ")}]`;
+    this.used.entityRootTags = true;
     const prefix = tags
       .slice(0, tags.length - roots)
       .map((tag) => JSON.stringify(tag));
@@ -131,6 +129,7 @@ class CatalogRenderer {
     const [only, ...rest] = keys;
     if (only === undefined) return "ripple.none";
     if (rest.length === 0) return property("ripple", only);
+    this.used.rippleFor = true;
     return `rippleFor(${JSON.stringify(keys)})`;
   }
 
@@ -179,17 +178,9 @@ class CatalogRenderer {
       return undefined;
     }
     // A field the override defines is not also emitted from contract data.
-    const kept = this.dataFields(domain, member, definition).filter(
-      ([name]) => override === undefined || !(name in override),
-    );
-    // Imports follow the emitted code, not the computed data: an overridden
-    // field's helpers would otherwise be imported and never read.
-    for (const [, code] of kept) {
-      if (code.includes("...ENTITY_ROOT_TAGS")) this.used.entityRootTags = true;
-      if (code.startsWith("ripple.")) this.used.ripple = true;
-      if (code.startsWith("rippleFor(")) this.used.rippleFor = true;
-    }
-    const fields = kept.map(([name, code]) => `${name}: ${code}`);
+    const fields = this.dataFields(domain, member, definition)
+      .filter(([name]) => override === undefined || !(name in override))
+      .map(([name, code]) => `${name}: ${code}`);
     if (override !== undefined) {
       this.used.operationOverrides = true;
       fields.push(
@@ -221,25 +212,18 @@ class CatalogRenderer {
             : overrideMembersSchema.parse(overrides[member]),
         ) ?? [],
     );
-    return `export const ${name} = /* @__PURE__ */ defineOperationDomain(${exportName}${
+    return `export const ${name} = /* @__PURE__ */ defineOperationDomain(contracts.${exportName}${
       members.length > 0 ? `, {\n${members.join("\n")}\n}` : ""
     });\n`;
   }
 
-  imports(module: string, contractExports: readonly string[]): string[] {
+  imports(): string[] {
     return [
-      `import { ${contractExports.join(", ")} } from "~/contracts/${module}.contract";`,
+      `import * as contracts from "~/contracts/index";`,
       ...(this.used.entityRootTags
         ? [`import { ENTITY_ROOT_TAGS } from "~/contracts/cache-policy";`]
         : []),
-      ...(this.used.ripple || this.used.rippleFor
-        ? [
-            `import { ${[
-              ...(this.used.ripple ? ["ripple"] : []),
-              ...(this.used.rippleFor ? ["rippleFor"] : []),
-            ].join(", ")} } from "~/integrations/tanstack-query/cache-tags";`,
-          ]
-        : []),
+      `import { ripple${this.used.rippleFor ? ", rippleFor" : ""} } from "~/integrations/tanstack-query/cache-tags";`,
       `import { defineOperationDomain } from "~/integrations/tanstack-query/operation-catalog";`,
       ...(this.used.operationOverrides
         ? [
@@ -250,23 +234,18 @@ class CatalogRenderer {
   }
 }
 
-const CLIENT_CATALOG_DIRECTORY =
-  "apps/web/src/integrations/tanstack-query/generated";
-
 /**
- * The browser catalog: one module per contract module
- * (`generated/<module>.gen.ts`), importing only that contract module, so a
- * route bundles only the domains it calls. Each exports one domain object per
- * contract, each query member carrying its resolved cache tags and each
- * mutation its invalidation fan-out. Fails generation on a name collision, an
- * `invalidates` row `ripple` does not have, a malformed tag, or an override
- * that matches no contract member.
+ * The browser catalog: one domain object per contract, in contract declaration
+ * order, each query member carrying its resolved cache tags and each mutation
+ * its invalidation fan-out. Fails generation on a name collision, an
+ * `invalidates` row `ripple` does not have, a malformed tag, or an override that
+ * matches no contract member.
  */
-export const renderClientCatalog = async (): Promise<EntityArtifacts[]> => {
+export const renderClientCatalog = async (): Promise<string> => {
   const modules = await loadClientModules();
+  const renderer = new CatalogRenderer(modules);
   const names = new Map<string, string>();
-  const byModule = new Map<string, LoadedContract[]>();
-  for (const loaded of await loadContracts()) {
+  const blocks = (await loadContracts()).map((loaded) => {
     const name = domainExportName(loaded.exportName);
     const existing = names.get(name);
     if (existing !== undefined)
@@ -274,11 +253,8 @@ export const renderClientCatalog = async (): Promise<EntityArtifacts[]> => {
         `${loaded.exportName} and ${existing} both map to the client catalog export ${name}.`,
       );
     names.set(name, loaded.exportName);
-    byModule.set(loaded.module, [
-      ...(byModule.get(loaded.module) ?? []),
-      loaded,
-    ]);
-  }
+    return renderer.renderDomain(loaded);
+  });
   const unknownDomain = Object.keys(modules.overrides).find(
     (domain) => !names.has(domain),
   );
@@ -286,28 +262,14 @@ export const renderClientCatalog = async (): Promise<EntityArtifacts[]> => {
     throw new Error(
       `operationOverrides.${unknownDomain} does not match any contract export named ${unknownDomain}Contract.`,
     );
-  return [...byModule]
-    .sort(([a], [b]) => a.localeCompare(b))
-    .map(([module, contracts]) => {
-      const renderer = new CatalogRenderer(modules);
-      const blocks = contracts.map((loaded) => renderer.renderDomain(loaded));
-      return {
-        relativePath: `${CLIENT_CATALOG_DIRECTORY}/${module}.gen.ts`,
-        source:
-          generatedHeader +
-          `// The browser catalog for contracts/${module}.contract.ts: one domain\n` +
-          `// object per contract, each member carrying its resolved cache tags\n` +
-          `// (defaulting to [domain, member]) or invalidation fan-out. Cache policy\n` +
-          `// is authored as data on the contract members (contracts/cache-policy.ts);\n` +
-          `// policy that reads the call's input lives in operation-overrides.ts and\n` +
-          `// is spread onto its member here.\n\n` +
-          `${renderer
-            .imports(
-              module,
-              contracts.map(({ exportName }) => exportName),
-            )
-            .join("\n")}\n\n` +
-          blocks.join("\n"),
-      };
-    });
+  return (
+    generatedHeader +
+    `// The browser catalog: one domain object per contract, each member carrying\n` +
+    `// its resolved cache tags (defaulting to [domain, member]) or invalidation\n` +
+    `// fan-out. Cache policy is authored as data on the contract members\n` +
+    `// (contracts/cache-policy.ts); policy that reads the call's input lives in\n` +
+    `// operation-overrides.ts and is spread onto its member here.\n\n` +
+    `${renderer.imports().join("\n")}\n\n` +
+    blocks.join("\n")
+  );
 };

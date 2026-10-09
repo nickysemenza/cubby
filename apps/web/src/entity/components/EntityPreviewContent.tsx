@@ -1,5 +1,6 @@
 import { entitySchema } from "@cubby/schemas/entity";
-import { entityIndex } from "@cubby/schemas/entity-index";
+import { entityFieldModels } from "@cubby/schemas/entity-fields";
+import { entitySummary } from "@cubby/schemas/entity-summary";
 import type { ImageAssociation, ImageWithEntity } from "@cubby/schemas/image";
 import type { CookbookSummary } from "@cubby/schemas/recipe";
 import type { FoodSummaryWithLinkedProducts } from "@cubby/schemas/usda";
@@ -18,11 +19,6 @@ import {
 } from "~/entity/entities";
 import { entityDetailFor } from "~/entity/entity-detail";
 import { entityPreviewFacts } from "~/entity/entity-display";
-import {
-  EntityModelBoundary,
-  entityFieldModel,
-  entitySummaryOf,
-} from "~/entity/entity-model";
 import { fdcIdFromParam } from "~/entity/entity-query";
 import {
   readDisplayReferenceField,
@@ -30,7 +26,7 @@ import {
 } from "~/entity/entity-references";
 import { enumFieldLabel, heroChipLabel } from "~/entity/enum-field-display";
 import type { EntityDetailByEntity } from "~/entity/generated/entity-details.gen";
-import { usdaFood } from "~/integrations/tanstack-query/generated/usda.gen";
+import { usdaFood } from "~/integrations/tanstack-query/generated/catalog.gen";
 import { dataTypeColor, UsdaDataTypeDot } from "~/lib/usda-data-type";
 
 import {
@@ -103,9 +99,9 @@ export function manifestPreviewCard<E extends ManifestPreviewEntity>(
   entity: E,
   data: EntityDetailByEntity[E],
 ): ManifestCardProps {
-  const presentation = entitySummaryOf(entity);
+  const presentation = entitySummary[entity];
   const { hero } = presentation.detail;
-  const fields = entityFieldModel(entity).fields;
+  const fields = entityFieldModels[entity].fields;
   const field = (key: string | null) =>
     key === null
       ? undefined
@@ -351,7 +347,7 @@ function ManifestPreviewContent<E extends ManifestPreviewEntity>({
   return (
     <PreviewQuery
       query={query}
-      label={entityIndex[entity].singular}
+      label={entitySummary[entity].singular}
       onUnavailable={onRecordResolved}
     >
       {(data) => (
@@ -438,16 +434,14 @@ export function EntityPreviewContent({
       />
     );
   return (
-    <EntityModelBoundary entities={[entity]}>
-      <ManifestPreviewContent
-        key={entity}
-        entity={entity}
-        id={id}
-        showOpenAction={showOpenAction}
-        showIdentityHeader={showIdentityHeader}
-        onNameResolved={onNameResolved}
-        onRecordResolved={onRecordResolved}
-      />
-    </EntityModelBoundary>
+    <ManifestPreviewContent
+      key={entity}
+      entity={entity}
+      id={id}
+      showOpenAction={showOpenAction}
+      showIdentityHeader={showIdentityHeader}
+      onNameResolved={onNameResolved}
+      onRecordResolved={onRecordResolved}
+    />
   );
 }

@@ -12,8 +12,10 @@ import {
   imageProcessingOrphan,
   imageProcessingSubmissionJob,
 } from "~/server/db/schema";
-import { scheduleImageProcessingJobs } from "~/server/services/image-processing-wakeups";
-import { completeCompanionImageProcessingResult } from "~/server/services/image-processing.service";
+import {
+  scheduleImageProcessingJobs,
+  completeCompanionImageProcessingResult,
+} from "~/server/services/image-processing.service";
 import * as storage from "~/server/utils/s3";
 
 import {

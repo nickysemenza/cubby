@@ -4,7 +4,7 @@ import type { ProjectStatus } from "@cubby/schemas/project-fields";
 import type {
   StatementRowDisposition,
   StatementRowMatchState,
-} from "@cubby/schemas/statement-row-fields";
+} from "@cubby/schemas/statement-row";
 import type { TaskStatus } from "@cubby/schemas/task-fields";
 import type { McpToolUsageStatus } from "@cubby/schemas/telemetry";
 

@@ -67,24 +67,6 @@ unsupported capabilities. Generated files are never committed:
 `pnpm check:clean` proves a generate run leaves the tree unchanged. Typecheck
 verifies declaration types and referenced exports.
 
-Browser code loads one entity's generated model at a time
-([ADR 0009](adr/0009-per-entity-client-manifests.md)). Each entity has a model
-module (`@cubby/schemas/entity-models/<entity>`: field model, summary,
-manifest descriptor) and an inspector module; the slim
-`@cubby/schemas/entity-index` carries what eager code reads for every entity
-(names, icons, wayfinding, traits, relation targets, the list's opening views
-and filter). The all-entities aggregates (`entity-manifest`, `entity-summary`,
-`entity-fields`, `connected-views`) are server-side;
-`cubby/no-client-entity-aggregate` rejects a value import of them from
-`apps/web/src`. A routed entity's generated client module
-(`apps/web/src/entity/generated/clients/<entity>.{detail,list}.gen.ts`)
-registers its model and binds its typed hook module
-(`apps/web/src/entity/clients/<entity>.{detail,list}.tsx`); the route's
-component chunk imports it. Generic code reads a loaded model through
-`entityFieldModel` / `entitySummaryOf` / `entityDescriptorOf`
-(`~/entity/entity-model`), and a surface that renders another entity waits on
-`EntityModelBoundary` or `useEntityModel(s)` first.
-
 Progressive list enrichment reuses one exported error schema across entities,
 so OpenAPI and Swift emit one shared error type while each entity retains its
 own successful enrichment shape. Base-list responses likewise share one
@@ -223,19 +205,17 @@ today. `domain` (a `WAYFINDING_DOMAINS` line or
 `null` for an entity on no line), `description`, `emptyState` copy, and icon
 names (`phosphor` is checked against the browser registry's icon map at compile
 time; `sfSymbol` reaches the native catalog verbatim). The generator emits it
-as part of each entity's summary (in its `@cubby/schemas/entity-models/<entity>`
-module), copies the names, icons, wayfinding and copy into the slim
-`@cubby/schemas/entity-index` that eager client code reads, spreads it into the
-inspector, and writes `domain`/`sfSymbol` onto the Swift `EntityDescriptor`.
-The summary also carries the resolved `primarySearch` (the declared one, else
+as part of `entitySummary` (`packages/schemas/src/generated/entity-summary.gen.ts`,
+data only, safe for eagerly-loaded client code), spreads it into the inspector,
+and writes `domain`/`sfSymbol` onto the Swift `EntityDescriptor`. The summary
+also carries the resolved `primarySearch` (the declared one, else
 `searchQuery` for a searchable entity with a contract) and the `bulkUpdate`
 field roster, from the same generator helpers the inspector uses
-(`scripts/generator/entities/render/shared.ts`); the index keeps
-`primarySearch` and a `bulkUpdate` flag. `bulkUpdate` is the capability's own
-roster, not the field model's `bulk` marks (Expense bulk-updates `date`, which
-the field model does not mark bulk). Navigation grouping, the Records catalog,
-empty states and the native shell's sections all read it; none of them keep a
-per-entity list of their own.
+(`scripts/generator/entities/render/shared.ts`). `bulkUpdate` is the
+capability's own roster, not `entityFieldModels[entity].bulk` (Expense
+bulk-updates `date`, which the field model does not mark bulk). Navigation
+grouping, the Records catalog, empty states and the native shell's sections
+all read it; none of them keep a per-entity list of their own.
 
 `presentation.detail`, `.list` and `.edit` are the one declaration both the
 web and the native renderers draw from. A `*Override` name is reserved for a
@@ -252,14 +232,13 @@ follow the gallery capability. Actions derive from capabilities: the hero gets
 Web record-level slot actions render once in the detail header through
 `DetailActionTarget` (`apps/web/src/entity/entity-detail/detail-action-bar.tsx`).
 Collection verbs derive from the declared sections and `reportSlotActions`;
-the entity's detail hook module (`apps/web/src/entity/clients/<entity>.detail.tsx`,
-`headerActions`) supplies specialist controls (meal food capture,
+the typed header hook registry supplies specialist controls (meal food capture,
 cookbook source import/reprocess, inventory expense capture, Run diagnostics,
 recipe meal-planning/parse-copy/export actions, walkthrough generation, product
 enrichment, wardrobe navigation, photo grouping, image processing, vendor mail
-search, and section-scoped finance verbs). `defineDetailHooks` preserves each
-entity's record type; `defineDetailClient` erases both the component and its
-record at one documented boundary for the generic page.
+search, and section-scoped finance verbs). Registry declarations preserve each
+entity's record type; generic JSX dispatch erases both the component and its
+record at one documented boundary, matching the existing detail-slot renderer.
 The header owns component lifetime, so switching Overview, Relations, or a
 dedicated tab does not remove controls or abandon an open dialog. Section consumers use `DetailAction` to retain local
 controls only when rendered outside the full detail page. Report header reads
@@ -281,11 +260,9 @@ linked entity/identifier values remain facts rather than header actions.
 placed exactly once), `relation` (the target entity's list filtered by an
 id/idMulti descriptor on the target whose `brandRef` points back here, with
 optional `columns`/`sort`/`limit`), `timeline` (the entity's timeline
-capability) and `slot` (the one per-platform hand-written fill — on web the
-entity's hook module, `DetailHooks<E>` / `ListHooks<E>` keyed by
-`DetailSlotId<E>` / `ListSlotId<E>`, so a declared slot without its fill fails
-to compile and the generator refuses a slot declaration with no hook module).
-A relation section may also
+capability) and `slot` (the one per-platform hand-written fill, rendered
+only where a registry provides it — `DetailSlotId<E>` / `ListSlotId<E>` in
+`entity-manifest.ts` type those registries). A relation section may also
 declare `hideWhenEmpty: true` to skip itself entirely when its first page
 reads empty (web `GenericEntityDetail`/`entity-relation-table.tsx` and native
 `EntityDetailView` both honor it; the generator emits it onto the Swift
@@ -719,9 +696,8 @@ controls, and display membership. `EntityBasicInfo` reads `display.detail`;
 renderer while the declaration continues to own membership, labels, ordering,
 and widths. The generator emits narrowed TypeScript renderer IDs and Swift
 renderer enums. Each platform keeps an exhaustive registry that marks every
-declared renderer (and, natively, slot) as implemented, generic, owned by its
-container, or unsupported with a reason; web slot fills are exhaustive by type
-in each entity's hook module. Executable queries, runtime option providers,
+declared renderer and slot as implemented, generic, owned by its container, or
+unsupported with a reason. Executable queries, runtime option providers,
 heterogeneous trees (rows of another entity nested under a row), dialogs, and
 workflows remain handwritten. A self-referencing tree is declared:
 `presentation.list.tree.parentField` names a readable single reference to the
@@ -868,9 +844,8 @@ shortcode contracts (the inbound-only `P-`/`L-` label aliases live only in
 `packages/shared/src/shortcode.ts`, never in the manifest), schema bindings,
 inspector metadata (server and the `features/entity-platform` schema surfaces only), browser route roster, the typed list search
 schema per entity (`entity/generated/entity-search.gen.ts`: manifest filter
-keys, table keys and `create`, with `defaults` derived from every schema key
-for `stripSearchParams`; the filter-assembly URL key roster is
-`entity-filter-url-keys.gen.ts`, kept out of the entry), kernel and MCP action capabilities, relation-specific
+keys, table keys and `create`, with `defaults` naming every key for
+`stripSearchParams`), kernel and MCP action capabilities, relation-specific
 command schemas, repository/relation-adapter assembly, and contract cases.
 Two rosters follow from the declaration. The **list roster** is every routed
 entity whose generated index reads the kernel's progressive list: every entity

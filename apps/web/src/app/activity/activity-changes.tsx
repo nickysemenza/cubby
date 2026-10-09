@@ -4,7 +4,7 @@ import {
   type AuditChannel,
   auditChannelSchema,
 } from "@cubby/schemas/context";
-import { auditableEntities } from "@cubby/schemas/entity-index";
+import { auditableEntities } from "@cubby/schemas/entity-manifest";
 
 import { entityPluralLabel } from "~/entity/entities";
 import { AuditLogList } from "~/features/audit-log/audit-log-list";

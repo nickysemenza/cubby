@@ -1,5 +1,5 @@
 import type { Entity } from "@cubby/schemas/entity";
-import { isAuditableEntity } from "@cubby/schemas/entity-index";
+import { isAuditableEntity } from "@cubby/schemas/entity-manifest";
 import { type ReactNode, useCallback, useState } from "react";
 
 import {

@@ -4,7 +4,7 @@ import { useState, type FC } from "react";
 
 import { ReceiveExpenseDialog } from "~/app/expenses/receive-expense-dialog";
 import { VerbButton } from "~/entity/actions/action-verb-ui";
-import type { DetailSlotComponent } from "~/entity/entity-detail/detail-hooks";
+import type { DetailSlotComponent } from "~/entity/entity-detail/detail-slots";
 import { entityListFor } from "~/entity/entity-list";
 import { Row, Stack } from "~/ui/layout";
 import { Description } from "~/ui/primitives/description";

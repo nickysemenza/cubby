@@ -6,7 +6,7 @@ import { researchWorkResolve } from "@cubby/schemas/research-tools";
 import { researchServiceFor } from "~/server/purchase-import/research-service";
 import { resolveImportResearch } from "~/server/purchase-import/research-import";
 import { testUserId } from "@cubby/schemas/testing";
-import { generateShortcode } from "@cubby/shared/shortcode";
+import { generateShortcode } from "@cubby/shared";
 import type { Pool } from "pg";
 
 import { parseEntityId } from "@cubby/schemas/identifiers";

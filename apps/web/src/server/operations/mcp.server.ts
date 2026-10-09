@@ -4,16 +4,14 @@ import {
 } from "@cubby/schemas/telemetry";
 
 import { mcpContract } from "~/contracts/mcp.contract";
-import {
-  listMcpToolCatalog,
-  MCP_SERVER_INSTRUCTIONS,
-} from "~/server/mcp/server";
 import { implementOperationDomain } from "~/server/operation-domain.server";
 import { listMcpUsageActivity } from "~/server/repo/mcp-usage";
 import { getMcpUsageDashboard } from "~/server/services/mcp-usage.service";
 
 export const mcpHandlers = implementOperationDomain(mcpContract, {
   listTools: async () => {
+    const { listMcpToolCatalog, MCP_SERVER_INSTRUCTIONS } =
+      await import("~/server/mcp/server");
     const catalog = await listMcpToolCatalog();
     return mcpToolCatalogOut.parse({
       tools: catalog.tools,

@@ -1,7 +1,4 @@
-import {
-  projectKindSchema,
-  projectStatusSchema,
-} from "@cubby/schemas/project-fields";
+import { projectKindSchema, projectStatusSchema } from "@cubby/schemas/project";
 import { z } from "zod";
 
 import { urlStringParam } from "~/lib/search-params";

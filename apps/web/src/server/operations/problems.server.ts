@@ -17,53 +17,59 @@ import { readProblemCounts } from "~/server/operations/problem-counts.server";
 import { resolveOrThrow } from "~/server/repo/shortcode-resolver";
 import { implementSubscriptionDomain } from "~/server/subscription-domain.server";
 
-// Heavy library: the detector graph reaches WASM, and the homepage counts read
-// (the common call) ends at the Durable Object without it.
-const problemReports = () => import("./problem-reports.server");
+// The homepage counts read normally ends at the Durable Object. Keep the
+// detector graph out of its cold path: every module below is imported only by
+// the operations that need it.
+const problemWorkflows = () =>
+  import("~/server/operations/problem-workflows.server");
+const problemDetectors = () => import("~/server/services/problems.service");
 
 /** Problem reads are authoritative so fixes disappear on the next fetch. */
 export const problemsHandlers = implementOperationDomain(problemsContract, {
   getFast: async (context) =>
-    (await problemReports()).findFastProblems(context.db),
+    (await problemDetectors()).findFastProblems(context.db),
   getCounts: (context) => readProblemCounts(context),
   getViews: async (context) =>
-    (await problemReports()).findViewProblems(context.db),
+    (await import("~/server/services/problem-views.service")).findViewProblems(
+      context.db,
+    ),
   getCoverage: async (context) =>
-    (await problemReports()).findCoverageProblems(
+    (await problemDetectors()).findCoverageProblems(
       context.db,
       context.usdaClient,
     ),
   getUpc: async (context) =>
-    (await problemReports()).findUpcProblems(
+    (await problemDetectors()).findUpcProblems(
       context.db,
       context.upcLookupClient,
     ),
   getTracker: async (context) =>
-    (await problemReports()).findTrackerProblems(context.db),
+    (await problemDetectors()).findTrackerProblems(context.db),
   getCoverageTotals: async (context) =>
-    (await problemReports()).findCoverageTotals(context.db),
+    (await problemDetectors()).findCoverageTotals(context.db),
   getMaintenanceCounts: async (context) =>
-    (await problemReports()).findMaintenanceCounts(context.db),
+    (await problemDetectors()).findMaintenanceCounts(context.db),
   dryRunReparse: async (context) =>
-    (await problemReports()).dryRunReparse(context.db),
+    (await problemDetectors()).dryRunReparse(context.db),
   dryRunPruneAliases: async (context) =>
-    (await problemReports()).dryRunPruneAliases(context.db),
+    (await problemDetectors()).dryRunPruneAliases(context.db),
   recipeUsageByProduct: async (context, input) =>
-    (await problemReports()).recipeUsageCountsByProduct(
-      context.db,
-      input.productShortcodes,
-    ),
+    (
+      await import("~/server/repo/problems/detectors-product")
+    ).recipeUsageCountsByProduct(context.db, input.productShortcodes),
   deleteUnused: async (context, input) =>
-    (await problemReports()).deleteUnusedIngredientsWorkflow(context, input),
+    (await problemWorkflows()).deleteUnusedIngredientsWorkflow(context, input),
   resolveRunFinding: async (context, input) =>
-    (await problemReports()).resolveRunFinding(
+    (await import("~/server/purchase-import/findings")).resolveRunFinding(
       context.db,
       input,
       context.actorContext,
       context.services.recipeCosting,
     ),
   resolveArrivedFindings: async (context, input) =>
-    (await problemReports()).resolveArrivedFindingsForPurchase(
+    (
+      await import("~/server/purchase-import/findings")
+    ).resolveArrivedFindingsForPurchase(
       context.db,
       {
         purchaseId: await resolveOrThrow(
@@ -76,9 +82,10 @@ export const problemsHandlers = implementOperationDomain(problemsContract, {
     ),
   report: async (context, input) => {
     if (problemReportWantsCounts(input)) return readProblemCounts(context);
-    const detectors = await problemReports();
+    const detectors = await problemDetectors();
     if (input.type !== undefined) {
-      const { expectedProblemKeys, problemQuery } = detectors;
+      const { expectedProblemKeys, problemQuery } =
+        await import("~/entity/problem-registry");
       const key = z.enum(expectedProblemKeys).safeParse(input.type);
       if (!key.success)
         return {
@@ -102,7 +109,9 @@ export const problemsHandlers = implementOperationDomain(problemsContract, {
       detectors.findCoverageProblems(context.db, context.usdaClient),
       detectors.findUpcProblems(context.db, context.upcLookupClient),
       detectors.findTrackerProblems(context.db),
-      detectors.findViewProblems(context.db),
+      import("~/server/services/problem-views.service").then((views) =>
+        views.findViewProblems(context.db),
+      ),
     ]);
     return allProblemsMcpSchema.parse(
       assembleAllProblems({ fast, coverage, upc, tracker, views }),
@@ -148,7 +157,7 @@ export const integrityProblemsHandlers = implementOperationDomain(
     getByType: async (context, input) =>
       integrityProblemsContract.ops.getByType.output.parse(
         await (
-          await problemReports()
+          await problemDetectors()
         ).findProblemByType(
           context.db,
           input.key,
@@ -163,9 +172,13 @@ export const problemsStreamHandlers = implementSubscriptionDomain(
   problemsStreamsContract,
   {
     reparseStale: async (context, _input, signal) =>
-      (await problemReports()).reparseStaleWorkflow(context, undefined, signal),
+      (await problemWorkflows()).reparseStaleWorkflow(
+        context,
+        undefined,
+        signal,
+      ),
     pruneAllUnusedAliases: async (context, _input, signal) =>
-      (await problemReports()).pruneAllUnusedAliasesWorkflow(
+      (await problemWorkflows()).pruneAllUnusedAliasesWorkflow(
         context,
         undefined,
         signal,

@@ -1,4 +1,4 @@
-import { type BrowserRoutedEntity } from "@cubby/schemas/entity-index";
+import { type BrowserRoutedEntity } from "@cubby/schemas/entity-manifest";
 import { useDebouncedValue } from "@tanstack/react-pacer";
 import { useQueries } from "@tanstack/react-query";
 import { useCallback, useMemo, useRef, useState } from "react";
@@ -7,7 +7,7 @@ import {
   getEntityFilters,
   referenceFilterOptionsKey,
 } from "~/entity/filter-manifest";
-import { entityFilterOptions } from "~/integrations/tanstack-query/generated/entity-filter-options.gen";
+import { entityFilterOptions } from "~/integrations/tanstack-query/generated/catalog.gen";
 
 import type { RuntimeFilterOptions } from "./filter-option-types";
 

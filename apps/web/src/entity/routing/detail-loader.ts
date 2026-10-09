@@ -1,4 +1,4 @@
-import { parseShortcode } from "@cubby/shared/shortcode";
+import { parseShortcode } from "@cubby/shared";
 import type {
   EnsureQueryDataOptions,
   QueryClient,
@@ -10,10 +10,11 @@ import { z } from "zod";
 /**
  * Prefetch a `$shortcode` route's record, and 404 on an unknown code.
  *
- * ⚠️ `loader` splits into its own chunk (`codeSplittingOptions` in
- * `vite.config.ts`), apart from the component chunk, so a navigation fetches
- * it before the page body. This module stays React-free on purpose: page
- * bodies belong in `./list-page` and `./detail-page`, never in a loader's chunk.
+ * ⚠️ `loader` is deliberately NOT in the router plugin's split groupings — it
+ * has to run before the route's chunk loads, which is the whole point of a
+ * prefetching loader. So everything reachable from here is eager, and this
+ * module stays React-free on purpose. Page bodies belong in `./list-page` and `./detail-page`,
+ * which no unsplittable route property may reference.
  */
 export async function ensureDetailRecord<
   TQueryFnData,

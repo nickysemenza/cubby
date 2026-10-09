@@ -6,7 +6,7 @@ import { z } from "zod";
 import { ActivityChanges } from "~/app/activity/activity-changes";
 import { listChromePage } from "~/entity/routing/list-page";
 import { cursorQueryOptions } from "~/integrations/tanstack-query/cursor-query-options";
-import { auditLog } from "~/integrations/tanstack-query/generated/audit-log.gen";
+import { auditLog } from "~/integrations/tanstack-query/generated/catalog.gen";
 import { pageTitle } from "~/lib/page-title";
 
 const searchSchema = z.object({

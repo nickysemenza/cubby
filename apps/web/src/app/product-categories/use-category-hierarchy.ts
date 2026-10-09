@@ -2,7 +2,7 @@ import { useQuery } from "@tanstack/react-query";
 import { useMemo } from "react";
 
 import { getFeatureColor } from "~/features/products/category-theme";
-import { product } from "~/integrations/tanstack-query/generated/product.gen";
+import { product } from "~/integrations/tanstack-query/generated/catalog.gen";
 import { useProductCategories } from "~/ui/hooks/useProductCategories";
 
 import {

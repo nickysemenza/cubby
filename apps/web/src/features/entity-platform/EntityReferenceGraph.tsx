@@ -1,5 +1,9 @@
 import type { Entity } from "@cubby/schemas/entity";
-import { allEntities, entityReferences } from "@cubby/schemas/entity-index";
+import {
+  allEntities,
+  entityManifest,
+  entityReferences,
+} from "@cubby/schemas/entity-manifest";
 import * as d3Force from "d3-force";
 import {
   useCallback,
@@ -15,10 +19,6 @@ import { cn } from "~/lib/utils";
 import { useContainerDimensions } from "~/ui/hooks/useContainerDimensions";
 
 import { VizOverlay } from "../../ui/visualizations/viz-overlay";
-import {
-  extendedManifest,
-  useSchemaSurfaceModels,
-} from "./entity-schema-model";
 
 interface GraphNode extends d3Force.SimulationNodeDatum {
   id: Entity;
@@ -75,7 +75,6 @@ export function EntityReferenceGraph({
   lens = "logical",
   unhealthyEntities = EMPTY_UNHEALTHY,
 }: EntityReferenceGraphProps = {}) {
-  useSchemaSurfaceModels();
   const containerRef = useRef<HTMLDivElement>(null);
   const arrowId = useId().replace(/:/g, "");
   const arrowActiveId = `${arrowId}a`;
@@ -95,8 +94,8 @@ export function EntityReferenceGraph({
   const links = useMemo(
     () =>
       allEntities.flatMap((from) =>
-        extendedManifest(from)
-          .relationships.filter(({ target }) => target !== from)
+        entityManifest[from].relationships
+          .filter(({ target }) => target !== from)
           .map((relation) => ({
             source: from,
             target: relation.target,
@@ -113,8 +112,8 @@ export function EntityReferenceGraph({
   const selfLoops = useMemo(
     () =>
       allEntities.flatMap((source) =>
-        extendedManifest(source)
-          .relationships.filter(({ target }) => target === source)
+        entityManifest[source].relationships
+          .filter(({ target }) => target === source)
           .map((relation) => ({ source, relation })),
       ),
     [],

@@ -10,7 +10,7 @@ import {
   executeEntityMutationCommand,
   type EntityMutationTransport,
 } from "~/entity/entity-mutation-command";
-import { entityMutation } from "~/integrations/tanstack-query/generated/entity-mutation.gen";
+import { entityMutation } from "~/integrations/tanstack-query/generated/catalog.gen";
 import { getAppErrorDetails } from "~/lib/error-utils";
 
 import type { StandardEntity } from "../entity-contracts";

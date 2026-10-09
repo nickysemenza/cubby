@@ -1,4 +1,4 @@
-import type { DetailSlotComponent } from "~/entity/entity-detail/detail-hooks";
+import type { DetailSlotComponent } from "~/entity/entity-detail/detail-slots";
 import { EntityReportSlot } from "~/entity/entity-detail/report-slot";
 import { RelationshipSummaryTable } from "~/entity/relationships/relationship-summary-table";
 

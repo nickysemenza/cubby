@@ -53,7 +53,8 @@ function AuthPage() {
         <AuthView pathname={authView} />
       </AuthUIProvider>
       {/* Statically false in every build, so the link never reaches a
-          production bundle. The route itself exists only in tooling/dev/worker.ts. */}
+          production bundle (enforced by scripts/check-client-bundle.ts). The
+          route itself exists only in tooling/dev/worker.ts. */}
       {import.meta.env.DEV && authView === "sign-in" ? (
         <a
           href={`/__dev/login?${new URLSearchParams({ next: redirect ?? "/" })}`}

@@ -17,7 +17,7 @@ import {
 } from "react";
 
 import { cursorQueryOptions } from "~/integrations/tanstack-query/cursor-query-options";
-import { mcp } from "~/integrations/tanstack-query/generated/mcp.gen";
+import { mcp } from "~/integrations/tanstack-query/generated/catalog.gen";
 import { formatInstant } from "~/lib/date-format";
 import { nivoBarChrome, nivoChartTheme } from "~/lib/nivo-theme";
 import { statusTone } from "~/lib/status-tone";

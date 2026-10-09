@@ -1,13 +1,11 @@
 import type {
+  StatementRowDisposition,
   StatementRowFilters,
+  StatementRowMatchState,
   StatementRowOut,
 } from "@cubby/schemas/statement-row";
 import { statementRowSortableFields } from "@cubby/schemas/statement-row";
-import type {
-  StatementRowDisposition,
-  StatementRowMatchState,
-} from "@cubby/schemas/statement-row-fields";
-import { capitalize } from "@cubby/shared/text-case";
+import { capitalize } from "@cubby/shared";
 import { useDebouncedValue } from "@tanstack/react-pacer";
 import { useQuery } from "@tanstack/react-query";
 import { getRouteApi, Link } from "@tanstack/react-router";
@@ -16,7 +14,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { z } from "zod";
 
 import { PossibleVendor } from "~/app/finance/possible-vendor";
-import { statementRow } from "~/integrations/tanstack-query/generated/statement-row.gen";
+import { statementRow } from "~/integrations/tanstack-query/generated/catalog.gen";
 import { statusTone } from "~/lib/status-tone";
 import { formatCurrency } from "~/lib/utils";
 import { DatePickerInput } from "~/ui/date-picker-input";

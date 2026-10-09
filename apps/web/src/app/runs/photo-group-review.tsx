@@ -28,7 +28,7 @@ import { EntityRefLink } from "~/entity/components/entity-ref-link";
 import { PhotoGrid } from "~/features/photos/photo-grid";
 import { ProductVariantEvidence } from "~/features/products/product-variant-evidence";
 import { ripple } from "~/integrations/tanstack-query/cache-tags";
-import { photoImport } from "~/integrations/tanstack-query/generated/photo-import.gen";
+import { photoImport } from "~/integrations/tanstack-query/generated/catalog.gen";
 import { invalidateOperationTags } from "~/integrations/tanstack-query/operation-cache";
 import {
   RUN_TARGET_STATE_LABEL,

@@ -26,8 +26,10 @@ import {
   useEntityDisplayImages,
 } from "~/entity/entity-media/entity-display-images";
 import { type ProjectImageSummaries } from "~/entity/image-queries";
-import { image } from "~/integrations/tanstack-query/generated/image.gen";
-import { project } from "~/integrations/tanstack-query/generated/project.gen";
+import {
+  image,
+  project,
+} from "~/integrations/tanstack-query/generated/catalog.gen";
 import { cn, formatCurrency } from "~/lib/utils";
 import { CalendarDate } from "~/ui/common/calendar-date";
 import { SavedViewsMenu } from "~/ui/data-table/DataTableViews";

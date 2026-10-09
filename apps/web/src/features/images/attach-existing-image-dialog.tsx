@@ -1,12 +1,14 @@
-import { galleryEntities } from "@cubby/schemas/entity-index";
+import { galleryEntities } from "@cubby/schemas/entity-manifest";
 import type { ImageWithEntity } from "@cubby/schemas/image";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
 import { toast } from "sonner";
 
 import { ripple } from "~/integrations/tanstack-query/cache-tags";
-import { image as imageOperations } from "~/integrations/tanstack-query/generated/image.gen";
-import { search } from "~/integrations/tanstack-query/generated/search.gen";
+import {
+  image as imageOperations,
+  search,
+} from "~/integrations/tanstack-query/generated/catalog.gen";
 import { invalidateOperationTags } from "~/integrations/tanstack-query/operation-cache";
 import { getErrorMessage } from "~/lib/error-utils";
 import { DialogFormActions } from "~/ui/primitives/dialog-form-actions";

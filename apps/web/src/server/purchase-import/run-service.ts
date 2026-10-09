@@ -103,7 +103,6 @@ import {
   vendor,
   vendorAccount,
 } from "~/server/db/schema";
-import { purchaseAgentTargetFingerprint } from "~/server/mcp/purchase-agent-protocol";
 import {
   databaseForTransaction,
   getDb,
@@ -121,12 +120,11 @@ import {
   readOperation,
   setOperationResult,
 } from "~/server/repo/run-operation";
-import { lookupEntityLabels } from "~/server/repo/shortcode-resolver";
 import {
   findOrCreateWithShortcode,
   insertWithShortcode,
 } from "~/server/repo/shortcode-utils";
-import { publishImageProcessingWakeups } from "~/server/services/image-processing-wakeups";
+import { publishImageProcessingWakeups } from "~/server/services/image-processing.service";
 import {
   productionPhotoImportCommitPorts,
   verifyStagedImages,
@@ -140,7 +138,6 @@ import { CAPTURE_INTERIM_NOTE } from "./capture-interim-note";
 import { notHeldByChargeRun } from "./charge-hunt-state";
 import type { PurchaseImportDurableObjectRpc } from "./contracts";
 import { resolveRunFinding } from "./findings";
-import { researchBrowserSettlement } from "./research-browser-service";
 import { continueResearchRun } from "./research-continuation";
 import { PRIVATE_RESEARCH_OPERATION_KINDS } from "./research-operation-visibility";
 import {
@@ -986,7 +983,11 @@ async function unreceivedWake(
   db: Database,
   scope: Awaited<ReturnType<typeof loadRunScope>>,
   received: ReadonlySet<string>,
-  browsers: Awaited<ReturnType<typeof researchBrowserSettlement>>,
+  browsers: Awaited<
+    ReturnType<
+      typeof import("./research-browser-service").researchBrowserSettlement
+    >
+  >,
   brokers: Map<string, ReturnType<PurchaseImportNamespace["getByName"]>>,
 ): Promise<boolean> {
   const runId = scope.public.runId;
@@ -1054,6 +1055,8 @@ export async function reconcileSettledRun(
   const scope = await loadRunScope(db, input.runId);
   if (scope.public.status !== "running")
     return { reconciled: false as const, status: scope.public.status };
+  const { researchBrowserSettlement } =
+    await import("./research-browser-service");
   const browsers =
     scope.public.purpose === "photo_inventory"
       ? { accounts: [], commands: [], deliveryPending: false }
@@ -1350,7 +1353,6 @@ export async function auditImportBatch(
   );
   if (renderedBatch.length === 0) return { findings: 0, nextOffset: null };
   const purchaseIds = renderedBatch.map(({ id }) => id);
-  // The extraction agent loads only when a batch is audited.
   const { auditPurchaseImportBatch } =
     await import("~/server/agents/purchase-import/extract");
   const audit = await auditPurchaseImportBatch({
@@ -1947,6 +1949,8 @@ export async function loadRunDetail(
       ),
     selectRestartTargets(database, run.id),
   ]);
+  const { lookupEntityLabels } =
+    await import("~/server/repo/shortcode-resolver");
   const targetNames = await lookupEntityLabels(
     db,
     targets.map((target) => parseEntityRef(target.entityKind, target.entityId)),
@@ -3016,6 +3020,8 @@ export async function controlRun(
       )
         throw new Error(`Approval is already ${existing.state}`);
       if (operation.kind.startsWith("mcp:")) {
+        const { purchaseAgentTargetFingerprint } =
+          await import("~/server/mcp/purchase-agent-protocol");
         const currentTarget = await purchaseAgentTargetFingerprint(
           databaseForTransaction(tx),
           z.json().parse(proposal.args),

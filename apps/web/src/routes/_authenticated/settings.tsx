@@ -14,9 +14,11 @@ import { PurchaseImportAgentConnection } from "~/app/activity/purchase-import-ag
 import { CalendarConnectDialog } from "~/app/calendar/calendar-connect-dialog";
 import { AwaitingWorkCard } from "~/app/problems/components/awaiting-work-card";
 import { MaintenanceCard } from "~/app/problems/components/maintenance-card";
-import { calendar } from "~/integrations/tanstack-query/generated/calendar.gen";
-import { ledgerParty } from "~/integrations/tanstack-query/generated/finance.gen";
-import { run as runOperations } from "~/integrations/tanstack-query/generated/run.gen";
+import {
+  calendar,
+  ledgerParty,
+  run as runOperations,
+} from "~/integrations/tanstack-query/generated/catalog.gen";
 import { authClient } from "~/lib/auth-client";
 import { copyTextWithToast } from "~/lib/clipboard";
 import { formatInstant } from "~/lib/date-format";

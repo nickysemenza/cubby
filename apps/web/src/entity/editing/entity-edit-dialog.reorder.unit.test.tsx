@@ -1,28 +1,16 @@
 import { imageOut } from "@cubby/schemas/image";
 import { locationOut } from "@cubby/schemas/location";
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
-import {
-  afterEach,
-  beforeAll,
-  beforeEach,
-  describe,
-  expect,
-  it,
-  vi,
-} from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import type { EntityMutationTransport } from "~/entity/entity-mutation-command";
-import { entityMutation } from "~/integrations/tanstack-query/generated/entity-mutation.gen";
+import { entityMutation } from "~/integrations/tanstack-query/generated/catalog.gen";
 import { createBrowserTestHarness } from "~/lib/test/browser-harness";
 import { mock } from "~/lib/test/mock-schema";
 import { entityBrowserMutationResultSchema } from "~/server/entity-kernel/contracts";
 
 import { EntityEditDialog } from "./entity-edit-dialog";
 import { createEntityMutationPort } from "./use-entity-commands";
-
-// The editor loads lazily when a dialog opens; warm its module so each
-// `findBy*` waits only for render.
-beforeAll(() => import("./entity-edit-dialog-content"));
 
 const images = ["IMG-AAAA", "IMG-BBBB", "IMG-CCCC"].map((id, index) =>
   mock(imageOut, {

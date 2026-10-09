@@ -2,7 +2,7 @@ import type { ExpenseAnalyzeReadyOut } from "@cubby/schemas/project";
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
-import { expense as expenseOperations } from "~/integrations/tanstack-query/generated/expense.gen";
+import { expense as expenseOperations } from "~/integrations/tanstack-query/generated/catalog.gen";
 import { createBrowserTestHarness } from "~/lib/test/browser-harness";
 
 import {

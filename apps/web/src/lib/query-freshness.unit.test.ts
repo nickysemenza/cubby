@@ -2,7 +2,7 @@ import { QueryClient } from "@tanstack/react-query";
 import { describe, expect, it } from "vitest";
 
 import { ripple } from "~/integrations/tanstack-query/cache-tags";
-import { calendar } from "~/integrations/tanstack-query/generated/calendar.gen";
+import { calendar } from "~/integrations/tanstack-query/generated/catalog.gen";
 import { invalidateOperationTags } from "~/integrations/tanstack-query/operation-cache";
 
 describe("operation-tag invalidation", () => {

@@ -1,4 +1,4 @@
-import { UNRESOLVABLE_ENTITY_FILTER } from "@cubby/shared/filter";
+import { UNRESOLVABLE_ENTITY_FILTER } from "@cubby/shared";
 import { CaretDownIcon } from "@phosphor-icons/react/dist/csr/CaretDown";
 import { CheckIcon } from "@phosphor-icons/react/dist/csr/Check";
 import { FunnelIcon } from "@phosphor-icons/react/dist/csr/Funnel";

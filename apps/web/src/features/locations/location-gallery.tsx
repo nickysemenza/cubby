@@ -14,7 +14,7 @@ import {
   useState,
 } from "react";
 
-import { location } from "~/integrations/tanstack-query/generated/location.gen";
+import { location } from "~/integrations/tanstack-query/generated/catalog.gen";
 import { SimpleLoading } from "~/ui/feedback/loading-skeletons";
 import { useHydratedLoading } from "~/ui/hooks/useHydrated";
 import { useIsMobile } from "~/ui/hooks/useMobile";

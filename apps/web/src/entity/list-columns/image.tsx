@@ -7,7 +7,7 @@ import { useMemo } from "react";
 
 import { labeledFieldProvenance } from "~/entity/field-provenance";
 import { ImageAssociationLinks } from "~/features/images/image-associations";
-import { image } from "~/integrations/tanstack-query/generated/image.gen";
+import { image } from "~/integrations/tanstack-query/generated/catalog.gen";
 import {
   createCubbyColumnCollection,
   createCubbyColumnHelper,

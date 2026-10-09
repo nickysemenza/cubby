@@ -5,8 +5,10 @@ import type { ProductPurchaseOut } from "@cubby/schemas/purchase";
 import { useQuery } from "@tanstack/react-query";
 import { createContext, useContext, type ReactNode } from "react";
 
-import { product as productOperations } from "~/integrations/tanstack-query/generated/product.gen";
-import { purchase as purchaseOperations } from "~/integrations/tanstack-query/generated/purchase.gen";
+import {
+  product as productOperations,
+  purchase as purchaseOperations,
+} from "~/integrations/tanstack-query/generated/catalog.gen";
 import { Badge } from "~/ui/primitives/badge";
 
 import { CellFrame } from "../../ui/data-table/cell-frame";

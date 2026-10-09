@@ -15,7 +15,6 @@ import { executeEntity, executeEntityAs } from "~/server/entity-kernel";
 import type { EntityKernelContext } from "~/server/entity-kernel/adapter";
 import { createAppError } from "~/server/errors/app-error";
 import { implementOperationDomain } from "~/server/operation-domain.server";
-import { searchProducts } from "~/server/operations/product.server";
 import { listPurchaseOrderMail } from "~/server/purchase-import/gmail/review";
 import {
   getPurchaseByShortcode,
@@ -225,6 +224,9 @@ export const purchaseHandlers = implementOperationDomain(purchaseContract, {
       context.db,
       input.purchaseId,
     );
+    // Loaded on demand: the product search pulls in the semantic fallback.
+    const { searchProducts } =
+      await import("~/server/operations/product.server");
     const found = await searchProducts(context, {
       filters: { nameFilter: input.search?.trim() || undefined },
       pagination: {

@@ -1,5 +1,5 @@
-import type { ShortcodeFor } from "@cubby/shared/shortcode";
-import { SHORTCODE_CHARS, SHORTCODE_PREFIX } from "@cubby/shared/shortcode";
+import type { ShortcodeFor } from "@cubby/shared";
+import { SHORTCODE_CHARS, SHORTCODE_PREFIX } from "@cubby/shared";
 import type { DataQuality } from "../data-quality";
 import {
   parseEntityId,

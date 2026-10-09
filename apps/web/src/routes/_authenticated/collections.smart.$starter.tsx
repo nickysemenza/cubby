@@ -1,7 +1,7 @@
 import {
   SMART_COLLECTION_STARTERS,
   smartCollectionKey,
-} from "@cubby/schemas/collection-fields";
+} from "@cubby/schemas/collection";
 import {
   createFileRoute,
   notFound,

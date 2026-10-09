@@ -1,12 +1,12 @@
-import { type CollectionCellState } from "@cubby/schemas/collection";
 import {
   collectionMatrixMembership,
   collectionMatrixSort,
   collectionSlug,
+  type CollectionCellState,
   type CollectionMatrixMembership,
   type CollectionMatrixSort,
   type CollectionSlug,
-} from "@cubby/schemas/collection-fields";
+} from "@cubby/schemas/collection";
 import {
   formatCollectionLabel,
   normalizeCollectionSlug,
@@ -23,7 +23,7 @@ import { toast } from "sonner";
 
 import { type CollectionMatrixRow } from "~/app/collections/collection-types";
 import { EntityIcon, entityDetailLink } from "~/entity/entities";
-import { collection as collectionOperations } from "~/integrations/tanstack-query/generated/collection.gen";
+import { collection as collectionOperations } from "~/integrations/tanstack-query/generated/catalog.gen";
 import { IDEMPOTENT_MUTATION_RETRY } from "~/integrations/tanstack-query/query-policy";
 import { cn, formatCount } from "~/lib/utils";
 import { showErrorToast } from "~/ui/feedback/error-details";

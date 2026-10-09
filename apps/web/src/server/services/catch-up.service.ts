@@ -1,39 +1,60 @@
 import { createLogger } from "@cubby/worker-tracing";
 import * as Sentry from "@sentry/tanstackstart-react";
 
+import { publishBackgroundTasks } from "~/server/background-tasks/publish";
 import {
   getPurchaseAgentQueue,
   getPurchaseImportNamespace,
   isCloudflareRuntime,
 } from "~/server/cf-env";
 import type { Database } from "~/server/db";
-import { sweepPendingEnrichment } from "~/server/purchase-import/enrichment-sweep";
 import {
-  pruneRoutineRuns,
-  startMailDiscovery,
-} from "~/server/purchase-import/gmail/discovery";
-import { gmailOAuthConfigured } from "~/server/purchase-import/gmail/provider";
-import {
-  discoverImportHunts,
-  dispatchImportHunts,
-} from "~/server/purchase-import/hunts";
-import { publishPendingResearchRetention } from "~/server/purchase-import/research-retention-delivery";
-import {
-  expireOfflineRuns,
-  expireStaleRuns,
-} from "~/server/purchase-import/run-service";
-import { repairImageProcessingWork } from "~/server/repo/image-processing-maintenance";
-import { reconcileWorkflowRuns } from "~/server/workflow-runs/lifecycle";
+  claimCatchUp,
+  releaseCatchUpClaim,
+} from "~/server/repo/catch-up-claim";
 
-/**
- * The queue- and cron-run catch-up passes. The app-open request only queues
- * them (`app-open-catch-up.service.ts`).
- */
 const log = createLogger("catch-up");
 
 export { claimCatchUp } from "~/server/repo/catch-up-claim";
 
+export async function requestCatchUp(
+  db: Database,
+): Promise<{ status: "queued" | "recent" }> {
+  const claimedAt = new Date();
+  if (!(await claimCatchUp(db, claimedAt))) return { status: "recent" };
+  try {
+    await publishBackgroundTasks(
+      db,
+      [
+        { kind: "maintenance.recover", requestedAt: claimedAt.toISOString() },
+        {
+          kind: "maintenance.purchase-discovery",
+          requestedAt: claimedAt.toISOString(),
+        },
+      ],
+      { source: "maintenance.app-open" },
+    );
+  } catch (error) {
+    await releaseCatchUpClaim(db, claimedAt);
+    throw error;
+  }
+  return { status: "queued" };
+}
+
 export async function recoverMissedWork(db: Database) {
+  const [
+    { repairImageProcessingWork },
+    { expireOfflineRuns, expireStaleRuns },
+    { reconcileWorkflowRuns },
+    { pruneRoutineRuns },
+    { publishPendingResearchRetention },
+  ] = await Promise.all([
+    import("~/server/repo/image-processing-maintenance"),
+    import("~/server/purchase-import/run-service"),
+    import("~/server/workflow-runs/lifecycle"),
+    import("~/server/purchase-import/gmail/discovery"),
+    import("~/server/purchase-import/research-retention-delivery"),
+  ]);
   const namespace = getPurchaseImportNamespace();
   const [
     image,
@@ -93,6 +114,19 @@ export async function recoverMissedWork(db: Database) {
  * for imported Products an earlier pass left behind.
  */
 export async function discoverPurchases(db: Database) {
+  const [
+    { discoverImportHunts, dispatchImportHunts },
+    { startMailDiscovery },
+    { gmailOAuthConfigured },
+    { reconcileWorkflowRuns },
+    { sweepPendingEnrichment },
+  ] = await Promise.all([
+    import("~/server/purchase-import/hunts"),
+    import("~/server/purchase-import/gmail/discovery"),
+    import("~/server/purchase-import/gmail/provider"),
+    import("~/server/workflow-runs/lifecycle"),
+    import("~/server/purchase-import/enrichment-sweep"),
+  ]);
   const gmailConfigured = gmailOAuthConfigured();
   if (!gmailConfigured)
     log.info("Gmail discovery skipped: Google OAuth is not configured");

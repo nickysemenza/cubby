@@ -1,4 +1,4 @@
-import type { ProductCategory } from "@cubby/shared/category-theme";
+import type { ProductCategory } from "@cubby/shared";
 import type { CellData } from "@tanstack/react-table";
 import { render, screen } from "@testing-library/react";
 import type { ReactNode } from "react";

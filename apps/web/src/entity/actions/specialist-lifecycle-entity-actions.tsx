@@ -2,8 +2,10 @@ import { parseShortcodeFor } from "@cubby/schemas/identifiers";
 import { useNavigate } from "@tanstack/react-router";
 import { useCallback, useState } from "react";
 
-import { image } from "~/integrations/tanstack-query/generated/image.gen";
-import { recipe } from "~/integrations/tanstack-query/generated/recipe.gen";
+import {
+  recipe,
+  image,
+} from "~/integrations/tanstack-query/generated/catalog.gen";
 import { getErrorMessage } from "~/lib/error-utils";
 import { savedWithBackgroundWork } from "~/lib/recompute-summary";
 

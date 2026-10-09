@@ -1,12 +1,11 @@
 import { defineEntity } from "./definition.js";
 import { ingredientShortcode, plantShortcode } from "../identifier-fields.js";
+import { plantBreeding, plantVerdict } from "@cubby/schemas/garden-fields";
 import {
   gardenCropKey,
   gardenCropKeys,
-  plantBreeding,
-  plantVerdict,
-} from "@cubby/schemas/garden-fields";
-import { gardenCropLabel } from "@cubby/schemas/garden-practice";
+  gardenCropLabel,
+} from "@cubby/schemas/garden-practice";
 import { z } from "zod";
 
 const optionalText = z.string().trim().min(1).nullable();
@@ -367,7 +366,7 @@ export default defineEntity({
         deriveSchema: true,
         stored: true,
         schemaRef: {
-          module: "@cubby/schemas/garden-fields",
+          module: "@cubby/schemas/garden-practice",
           export: "gardenCropKey",
         },
         options: gardenCropKeys.map((key) => ({

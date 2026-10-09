@@ -1,5 +1,5 @@
 import type { inventoryListItemOut } from "@cubby/schemas/inventory";
-import { isMiscProduct } from "@cubby/shared/constants";
+import { isMiscProduct } from "@cubby/shared";
 import type { z } from "zod";
 
 export type InventoryItem = z.infer<typeof inventoryListItemOut>;

@@ -1,6 +1,6 @@
 import { Link } from "@tanstack/react-router";
 
-import { DetailAction } from "~/entity/entity-detail/detail-action-context";
+import { DetailAction } from "~/entity/entity-detail/detail-action-bar";
 import type { DetailRecordOf } from "~/entity/entity-detail/detail-record";
 import { Button } from "~/ui/primitives/button";
 

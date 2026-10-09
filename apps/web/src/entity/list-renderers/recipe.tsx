@@ -6,7 +6,7 @@ import {
   getServingBasis,
   perUnitSuffix,
 } from "~/features/recipes/recipe-utils";
-import { recipe as recipeOperations } from "~/integrations/tanstack-query/generated/recipe.gen";
+import { recipe as recipeOperations } from "~/integrations/tanstack-query/generated/catalog.gen";
 import { scaleEstimate } from "~/lib/nutrition-estimates";
 import { formatEstimate } from "~/lib/nutrition-format";
 import { formatCurrency } from "~/lib/utils";

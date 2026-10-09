@@ -1,10 +1,10 @@
 import type { Entity } from "@cubby/schemas/entity";
 import type { EntityFieldProvenance } from "@cubby/schemas/entity-fields";
+import { localRelationshipByKey } from "@cubby/schemas/entity-manifest";
 import { LinkIcon } from "@phosphor-icons/react/dist/csr/Link";
 import type React from "react";
 
 import { EntityIcon, entityLabel, entityPluralLabel } from "./entities";
-import { entityDescriptorOf } from "./entity-model";
 
 type ProvenanceSource = EntityFieldProvenance["sources"][number];
 
@@ -14,11 +14,7 @@ export function relationshipFieldProvenance(
   relationKey: string,
   kind: "derived" | "reference" | "relation" = "derived",
 ): EntityFieldProvenance {
-  const relationships: readonly { key: string; target: Entity }[] =
-    entityDescriptorOf(sourceEntity).relationships;
-  const relation = relationships.find(({ key }) => key === relationKey);
-  if (relation === undefined)
-    throw new Error(`Unknown relationship ${sourceEntity}.${relationKey}`);
+  const relation = localRelationshipByKey(sourceEntity, relationKey);
   return {
     kind,
     sources: [

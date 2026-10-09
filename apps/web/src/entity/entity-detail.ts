@@ -1,7 +1,7 @@
-import { parseShortcode } from "@cubby/shared/shortcode";
+import { parseShortcode } from "@cubby/shared";
 import { queryOptions } from "@tanstack/react-query";
 
-import { entityDetail } from "~/integrations/tanstack-query/generated/entity-detail.gen";
+import { entityDetail } from "~/integrations/tanstack-query/generated/catalog.gen";
 import type { OperationQueryKey } from "~/integrations/tanstack-query/operation-catalog";
 
 import {

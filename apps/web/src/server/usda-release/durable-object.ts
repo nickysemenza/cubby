@@ -11,6 +11,7 @@ import {
   type ReleaseId,
   type ReleaseManifest,
 } from "@cubby/usda/release";
+import { DurableObject } from "cloudflare:workers";
 
 import { getErrorMessage } from "~/lib/error-utils";
 
@@ -19,20 +20,20 @@ import type { UsdaReleaseRpc } from "./rpc";
 const RETRY_DELAY_MS = 30_000;
 
 /**
- * `UsdaReleaseDurableObject`'s implementation (`server/worker-entrypoints.ts`):
- * one immutable USDA release (ADR 0008). The first touch reads the release
+ * One immutable USDA release (ADR 0008). The first touch reads the release
  * manifest and starts an alarm loop that loads one R2 shard per alarm; reads
  * throw the raw load state until every shard is in.
  */
-export class UsdaReleaseObject implements UsdaReleaseRpc {
+export class UsdaReleaseDurableObject
+  extends DurableObject<Env>
+  implements UsdaReleaseRpc
+{
   private readonly release: ReleaseId;
   private readonly store: UsdaReleaseStore;
   private alarmRunning = false;
 
-  constructor(
-    private readonly ctx: DurableObjectState,
-    private readonly env: Env,
-  ) {
+  constructor(ctx: DurableObjectState, env: Env) {
+    super(ctx, env);
     this.release = releaseFromObjectName(ctx.id.name ?? "");
     this.store = new UsdaReleaseStore(ctx.storage.sql, (fn) =>
       ctx.storage.transactionSync(fn),

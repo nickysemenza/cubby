@@ -158,6 +158,30 @@ export async function findDirectImageSearchOwnerRefs(
   return result.rows.filter((row) => searchable.has(row.entityKind));
 }
 
+/** Refresh docs and semantic work after an analysis/correction changes text. */
+export async function refreshDirectImageOwnerSearchDocuments(
+  db: Database,
+  imageId: string,
+): Promise<void> {
+  const refs = await findDirectImageSearchOwnerRefs(db, imageId);
+  await refreshCapturedImageSearchOwnerRefs(
+    db,
+    refs,
+    "image-processing.search-text",
+  );
+}
+
+/** Refresh image owners captured before an attachment edge is removed. */
+export async function refreshCapturedImageSearchOwnerRefs(
+  db: Database,
+  refs: SearchableEntityRef[],
+  source: string,
+): Promise<void> {
+  const { refreshDerivedSearchRefs } =
+    await import("~/server/services/mutation-side-effects");
+  await refreshDerivedSearchRefs(db, refs, source);
+}
+
 /** Internal query boundary for the search service's indexed retrieval SQL. */
 export async function executeSearchDocumentSql<Schema extends z.ZodType>(
   db: Database | DrizzleTransaction,

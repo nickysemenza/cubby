@@ -3,7 +3,7 @@ import { testShortcode } from "@cubby/schemas/testing";
 import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-import { recipe } from "~/integrations/tanstack-query/generated/recipe.gen";
+import { recipe } from "~/integrations/tanstack-query/generated/catalog.gen";
 import { createBrowserTestHarness } from "~/lib/test/browser-harness";
 
 import { BookGroupCard } from "./book-group-card";

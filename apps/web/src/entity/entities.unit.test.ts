@@ -1,8 +1,17 @@
-import { shortcodeEntities } from "@cubby/schemas/entity-index";
+import {
+  browserRoutedEntities,
+  shortcodeEntities,
+} from "@cubby/schemas/entity-manifest";
+import { entitySummary } from "@cubby/schemas/entity-summary";
 import { ENTITY_LABEL } from "@cubby/schemas/identifiers";
-import { describe, expect, it } from "vitest";
+import { describe, expect, expectTypeOf, it } from "vitest";
 
-import { entityLabel, isBrowserRoutedEntity } from "./entities";
+import {
+  type EntityDetailRoute,
+  entities,
+  entityLabel,
+  isBrowserRoutedEntity,
+} from "./entities";
 
 describe("entity label parity", () => {
   it("title-cases ENTITY_LABEL for every shortcode entity with a browser route", () => {
@@ -31,5 +40,28 @@ describe("entity label parity", () => {
     for (const entity of covered) {
       expect(entityLabel(entity)).toBe(titleCase(ENTITY_LABEL[entity]));
     }
+  });
+});
+
+describe("entity names come from the key", () => {
+  it("stamps every routed entity from its own manifest declaration", () => {
+    // `withEntityNames` reads both names off the key, so a definition can no
+    // longer name a different entity than the one it sits under. This walks
+    // the registry against the manifest to prove the stamping is real rather
+    // than 17 lucky coincidences.
+    for (const entity of browserRoutedEntities) {
+      expect(entities[entity].label).toBe(entitySummary[entity].singular);
+      expect(entities[entity].pluralLabel).toBe(entitySummary[entity].plural);
+    }
+  });
+
+  it("keeps the definitions' literal types through the wrapper", () => {
+    // The silent failure mode: a wrapper that widens these to `string` still
+    // typechecks, and `EntityDetailRoute` quietly stops protecting links from
+    // drifting. Nothing at runtime would notice, so pin it at the type level.
+    expectTypeOf<EntityDetailRoute>().not.toEqualTypeOf<string>();
+    expectTypeOf<"/wishes/$shortcode">().toMatchTypeOf<EntityDetailRoute>();
+    expectTypeOf(entities.wish.pluralLabel).toEqualTypeOf<"Wishlist">();
+    expectTypeOf(entities.inventory.label).toEqualTypeOf<"Inventory Item">();
   });
 });

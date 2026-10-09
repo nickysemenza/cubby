@@ -1,6 +1,6 @@
-import { FILTER_ANY } from "@cubby/schemas/filter-sentinel-fields";
 import { PROBLEM_CLASS } from "@cubby/schemas/problems";
 
+import { FILTER_ANY } from "~/entity/filters";
 import { defineProblem, type ProblemQuery } from "~/entity/problem-query";
 
 /**

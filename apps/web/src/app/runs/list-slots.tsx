@@ -1,5 +1,5 @@
-import { activityKind, activityRunId } from "@cubby/schemas/activity-fields";
-import { entityIndex } from "@cubby/schemas/entity-index";
+import { activityKind, activityRunId } from "@cubby/schemas/activity";
+import { entitySummary } from "@cubby/schemas/entity-summary";
 import { runTrigger } from "@cubby/schemas/run-fields";
 import { z } from "zod";
 
@@ -44,7 +44,7 @@ const searchSchema = z.object({
  * a filter of its own or records clearing the default (`filters=none`), like
  * every declared list.
  */
-const declaredFilter = entityIndex.run.list.initialFilter;
+const declaredFilter = entitySummary.run.list.initialFilter;
 const runFilterUrlKeys = getEntityFilters("run").map(filterUrlKey);
 const declaredTriggers = declaredFilter.flatMap((filter) =>
   filter.id === "trigger" && Array.isArray(filter.value) ? [filter.value] : [],

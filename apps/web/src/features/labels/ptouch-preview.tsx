@@ -1,4 +1,4 @@
-import { getShortcodeUrl } from "@cubby/shared/shortcode";
+import { getShortcodeUrl } from "@cubby/shared";
 
 import { Card, CardContent } from "~/ui/primitives/card";
 import { Description } from "~/ui/primitives/description";

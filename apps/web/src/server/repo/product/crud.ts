@@ -139,8 +139,10 @@ import {
 } from "~/server/repo/list-projection";
 import { locationDescendantsSql } from "~/server/repo/location/descendants-sql";
 import { loadLocationAncestorsWithIds } from "~/server/repo/location/tree";
-import { loadCategorySummaries } from "~/server/repo/product-category";
-import { resolveProductCategory } from "~/server/repo/product-category-feature";
+import {
+  resolveProductCategory,
+  loadCategorySummaries,
+} from "~/server/repo/product-category";
 import {
   categorySummarySql,
   categoryFeatureSql,

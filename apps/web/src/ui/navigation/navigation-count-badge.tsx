@@ -2,10 +2,10 @@ import {
   dashboardLocalCounts,
   type DashboardCountsOut,
 } from "@cubby/schemas/dashboard";
-import { type BrowserRoutedEntity } from "@cubby/schemas/entity-index";
+import type { BrowserRoutedEntity } from "@cubby/schemas/entity-manifest";
 import { useQuery } from "@tanstack/react-query";
 
-import { dashboard } from "~/integrations/tanstack-query/generated/dashboard.gen";
+import { dashboard } from "~/integrations/tanstack-query/generated/catalog.gen";
 import { formatCount } from "~/lib/utils";
 
 const localCountKeys = dashboardLocalCounts.keyof();

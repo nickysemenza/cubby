@@ -1,7 +1,7 @@
 import type { VendorOut } from "@cubby/schemas/vendor";
 import { ImageIcon } from "@phosphor-icons/react/dist/csr/Image";
 
-import { vendor as vendorOperations } from "~/integrations/tanstack-query/generated/vendor.gen";
+import { vendor as vendorOperations } from "~/integrations/tanstack-query/generated/catalog.gen";
 import { useActionMutation } from "~/ui/hooks/useActionMutation";
 import { Button } from "~/ui/primitives/button";
 

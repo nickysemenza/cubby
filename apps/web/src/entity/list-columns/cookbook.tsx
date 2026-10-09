@@ -7,7 +7,7 @@ import {
   EntityDisplayImagesProvider,
   useEntityDisplayImage,
 } from "~/entity/entity-media/entity-display-images";
-import { cookbook } from "~/integrations/tanstack-query/generated/cookbook.gen";
+import { cookbook } from "~/integrations/tanstack-query/generated/catalog.gen";
 import {
   createCubbyColumnCollection,
   createCubbyColumnHelper,

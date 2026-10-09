@@ -3,7 +3,7 @@ import { relatedViewsFor } from "@cubby/schemas/related-view";
 import { act, renderHook, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
-import { relatedData } from "~/integrations/tanstack-query/generated/related-data.gen";
+import { relatedData } from "~/integrations/tanstack-query/generated/catalog.gen";
 import { createBrowserTestHarness } from "~/lib/test/browser-harness";
 
 import { createCubbyColumnHelper } from "../data-table/table-features";

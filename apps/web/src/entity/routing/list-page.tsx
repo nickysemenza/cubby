@@ -4,7 +4,8 @@ import {
   listPresentationLabel,
   listViewId,
 } from "@cubby/schemas/entity-definitions/definition";
-import type { BrowserRoutedEntity } from "@cubby/schemas/entity-index";
+import type { BrowserRoutedEntity } from "@cubby/schemas/entity-manifest";
+import { entitySummary } from "@cubby/schemas/entity-summary";
 import { CalendarCheckIcon } from "@phosphor-icons/react/dist/csr/CalendarCheck";
 import { CheckIcon } from "@phosphor-icons/react/dist/csr/Check";
 import { GridFourIcon } from "@phosphor-icons/react/dist/csr/GridFour";
@@ -22,9 +23,7 @@ import {
   useEntityListCardDensity,
   useListSearch,
 } from "~/entity/entity-list/generic-entity-list";
-import type { ListClient } from "~/entity/entity-list/list-hooks";
 import { resolveListView } from "~/entity/entity-list/resolve-list-view";
-import { entitySummaryOf } from "~/entity/entity-model";
 import type { PageLayout } from "~/ui/layout/page-wrapper";
 import { Page } from "~/ui/page/Page";
 import { Button } from "~/ui/primitives/button";
@@ -42,9 +41,9 @@ import { ViewSwitcher } from "~/ui/primitives/view-switcher";
  * ⚠️ These build **components**, never a `createFileRoute(...)` option object.
  * That is a hard constraint, not a style choice: the router plugin's code
  * splitter only fires when the argument to `createFileRoute(path)(…)` is a
- * literal object expression, and it splits exactly the `component`,
- * `errorComponent`, and `notFoundComponent` properties out of the eager bundle
- * (`defaultCodeSplitGroupings`). Hand it a call expression — a factory that
+ * literal object expression. `defaultBehavior` groups `component`,
+ * `errorComponent`, and `notFoundComponent` together, and splits `loader`
+ * separately out of the eager bundle. Hand it a call expression — a factory that
  * returns the whole options object — and it silently splits nothing, so every
  * route body lands in the first-load app shell.
  *
@@ -54,7 +53,7 @@ import { ViewSwitcher } from "~/ui/primitives/view-switcher";
  * ```tsx
  * const VendorsPage = listPage({ entity: "vendor" });
  * export const Route = createFileRoute("/_authenticated/vendors/")({
- *   loader: …,              // stays eager, by design — it prefetches
+ *   loader: …,              // split separately — it prefetches
  *   component: VendorsPage, // split
  * });
  * ```
@@ -69,13 +68,8 @@ import { ViewSwitcher } from "~/ui/primitives/view-switcher";
  */
 
 interface EntityListPageOptions {
-  /**
-   * The entity's generated client module (`entity/generated/clients/<entity>.list.gen.ts`),
-   * whose manifest (`entitySummaryOf(entity).list`) drives the page. The
-   * route's component chunk imports it, so the model is registered before
-   * the page renders and its list slots arrive with it.
-   */
-  client: ListClient<BrowserRoutedEntity>;
+  /** The entity whose manifest (`entitySummary[entity].list`) drives the page. */
+  entity: BrowserRoutedEntity;
   /**
    * The route's own trigger beside the manifest's header links (the create
    * dialog, an upload dialog). A thunk so nothing in it — a capture-request
@@ -186,20 +180,18 @@ function useListBodyGutter(entity: BrowserRoutedEntity): "none" | "standard" {
  * list. `actions` adds the route's own trigger beside the links.
  */
 export function listPage({
-  client,
+  entity,
   actions,
   operations,
   override,
 }: EntityListPageOptions) {
-  const { entity } = client;
-  const { singular, plural, list } = entitySummaryOf(entity);
+  const { singular, plural, list } = entitySummary[entity];
   return listChromePage({
     entity,
     title: plural ?? singular,
     page: () => (
       <GenericEntityList
         entity={entity}
-        slots={client.slots}
         operations={operations}
         override={override}
       />

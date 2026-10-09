@@ -1,7 +1,6 @@
 import { createFileRoute, stripSearchParams } from "@tanstack/react-router";
 
 import { UploadImageDialog } from "~/app/images/upload-image-dialog";
-import { imageListClient } from "~/entity/generated/clients/image.list.gen";
 import { entitySearch } from "~/entity/generated/entity-search.gen";
 import { imageListOverride } from "~/entity/list-columns/image";
 import { listPage } from "~/entity/routing/list-page";
@@ -11,7 +10,7 @@ import { pageTitle } from "~/lib/page-title";
 // `route.list` is null; the generic list reads it through the image override
 // module's own source, and the upload dialog is this route's create trigger.
 const ImagesPage = listPage({
-  client: imageListClient,
+  entity: "image",
   override: imageListOverride,
   actions: () => <UploadImageDialog />,
 });

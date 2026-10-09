@@ -4,7 +4,7 @@ import {
 } from "@cubby/schemas/identifiers";
 import { useQuery } from "@tanstack/react-query";
 
-import { cookbook } from "~/integrations/tanstack-query/generated/cookbook.gen";
+import { cookbook } from "~/integrations/tanstack-query/generated/catalog.gen";
 import { Row } from "~/ui/layout";
 import { NativeSelect } from "~/ui/primitives/native-select";
 

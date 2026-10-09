@@ -76,9 +76,7 @@ export const calendarFilterSpecs: readonly FilterSpec[] = [
     kind: "multiselect",
     label: "Task status",
     placeholder: "Filter by task status...",
-    get options() {
-      return fieldEnumOptions("task", "status");
-    },
+    options: fieldEnumOptions("task", "status"),
   },
   {
     columnId: "taskTrade",
@@ -113,9 +111,7 @@ export const calendarFilterSpecs: readonly FilterSpec[] = [
     kind: "multiselect",
     label: "Project status",
     placeholder: "Filter by project status...",
-    get options() {
-      return fieldEnumOptions("project", "status");
-    },
+    options: fieldEnumOptions("project", "status"),
   },
   {
     // Keeps the pre-existing `?projectKinds=` URL key so old links still
@@ -127,9 +123,7 @@ export const calendarFilterSpecs: readonly FilterSpec[] = [
     kind: "multiselect",
     label: "Project kind",
     placeholder: "Filter by project kind...",
-    get options() {
-      return fieldEnumOptions("project", "kind");
-    },
+    options: fieldEnumOptions("project", "kind"),
     nullable: { field: "projectKindPresenceFilter", label: "kind" },
   },
 ];

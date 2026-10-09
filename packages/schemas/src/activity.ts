@@ -1,20 +1,16 @@
 import { z } from "zod";
 import { dataQuality } from "./data-quality";
-import { parseShortcode } from "@cubby/shared/shortcode";
+import { parseShortcode } from "@cubby/shared";
 import { imageShortcode } from "./identifiers";
 import { entitySchema, type Entity } from "./entity";
 import { imageDescriptionAnalysis } from "./image-processing";
 import { imageUrlSummary } from "./image-summary";
 import { runTrigger } from "./run-fields";
-import {
-  activityExecutor,
-  activityKind,
-  activityRunId,
-  type ActivityKind,
-} from "./activity-fields";
+import { activityKind, type ActivityKind } from "./activity-fields";
 export { ACTIVITY_KIND_LABEL, activityKind } from "./activity-fields";
 export type { ActivityKind } from "./activity-fields";
 
+export const activityRunId = z.string().regex(/^(?:IPR|RUN)-[A-Z0-9]+$/u);
 export const activitySubmissionId = z.string().regex(/^IPS-[A-Z0-9]+$/u);
 const activityIconFallback = {
   account_sync: "vendor",
@@ -46,6 +42,15 @@ export function activityIconEntity(input: {
   const entity = entitySchema.safeParse(subject?.type);
   return entity.success ? entity.data : activityIconFallback[input.kind];
 }
+export const activityExecutor = z.object({
+  kind: z.enum(["cloud", "device"]),
+  deviceId: z.uuid().nullable(),
+  name: z.string().max(200),
+  platform: z.enum(["cloud", "macos", "ios"]),
+  appVersion: z.string().max(100).nullable(),
+  osVersion: z.string().max(100).nullable(),
+});
+export type ActivityExecutor = z.infer<typeof activityExecutor>;
 export const activityRun = z.object({
   id: activityRunId,
   recordType: z.enum(["run", "image_job"]),

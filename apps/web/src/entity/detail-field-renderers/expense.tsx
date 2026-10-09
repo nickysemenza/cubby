@@ -1,27 +1,23 @@
+import { entityFieldModels } from "@cubby/schemas/entity-fields";
 import type { ExpenseOut } from "@cubby/schemas/project";
 
 import { ProjectSuggestionChips } from "~/app/expenses/project-suggestion-chips";
 import { EntityRefLink } from "~/entity/components/entity-ref-link";
 import { entityMutationOptionsFactory } from "~/entity/entity-contracts";
 import { renderDetailFieldValue } from "~/entity/entity-display";
-import { entityFieldModel } from "~/entity/entity-model";
 import { formatCurrency } from "~/lib/utils";
 import { useUpdateMutation } from "~/ui/hooks/useUpdateMutation";
 import { Stack } from "~/ui/layout";
 
 import type { EntityDetailFieldRenderers } from "./index";
 
-// Read on render: the expense model registers with the route, after import.
-const expenseField = (key: "spendingCategoryId" | "projectId") =>
-  entityFieldModel("expense").fields.find((field) => field.key === key);
+const categoryField = entityFieldModels.expense.fields.find(
+  (field) => field.key === "spendingCategoryId",
+);
 
-function renderExpenseField(
-  expense: ExpenseOut,
-  key: "spendingCategoryId" | "projectId",
-) {
-  const field = expenseField(key);
-  return field ? renderDetailFieldValue("expense", expense, field) : null;
-}
+const projectField = entityFieldModels.expense.fields.find(
+  (field) => field.key === "projectId",
+);
 
 /**
  * The project link plus the relationship-discovery suggestions for it: an
@@ -68,9 +64,9 @@ function ExpenseProjectField({ expense }: { expense: ExpenseOut }) {
             </p>
           ) : null}
         </Stack>
-      ) : (
-        renderExpenseField(expense, "projectId")
-      )}
+      ) : projectField ? (
+        renderDetailFieldValue("expense", expense, projectField)
+      ) : null}
       {expense.lineKind === "principal" ? (
         <ProjectSuggestionChips
           expense={expense}
@@ -86,7 +82,9 @@ function ExpenseProjectField({ expense }: { expense: ExpenseOut }) {
 
 export const expenseDetailFields = {
   "expense-spending-category": (expense) => ({
-    value: renderExpenseField(expense, "spendingCategoryId"),
+    value: categoryField
+      ? renderDetailFieldValue("expense", expense, categoryField)
+      : null,
   }),
   "expense-project": (expense) => ({
     value: <ExpenseProjectField expense={expense} />,

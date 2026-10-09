@@ -7,7 +7,7 @@ import type { ShortcodeFor } from "@cubby/schemas/identifiers";
 import { useMutation } from "@tanstack/react-query";
 import { useState } from "react";
 
-import { financialTransaction } from "~/integrations/tanstack-query/generated/finance.gen";
+import { financialTransaction } from "~/integrations/tanstack-query/generated/catalog.gen";
 import { formatCurrency } from "~/lib/utils";
 import type { ComboboxItem } from "~/ui/combobox/combobox-types";
 import { EntityPicker } from "~/ui/combobox/entity-picker";

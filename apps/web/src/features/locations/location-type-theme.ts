@@ -1,8 +1,5 @@
-import type { ProductCategory } from "@cubby/shared/category-theme";
-import {
-  getLocationTypeColor,
-  type LocationType,
-} from "@cubby/shared/location-type-theme";
+import type { ProductCategory } from "@cubby/shared";
+import { getLocationTypeColor, type LocationType } from "@cubby/shared";
 import { CubeIcon } from "@phosphor-icons/react/dist/csr/Cube";
 import { FileArchiveIcon } from "@phosphor-icons/react/dist/csr/FileArchive";
 import { FlowerIcon } from "@phosphor-icons/react/dist/csr/Flower";

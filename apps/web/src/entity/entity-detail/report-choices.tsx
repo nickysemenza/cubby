@@ -1,4 +1,4 @@
-import { type BrowserRoutedEntity } from "@cubby/schemas/entity-index";
+import type { BrowserRoutedEntity } from "@cubby/schemas/entity-manifest";
 import type { ReportChoice, ReportForm } from "@cubby/schemas/entity-report";
 import {
   type ChoiceAnswer,

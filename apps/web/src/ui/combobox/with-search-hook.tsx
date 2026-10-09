@@ -1,4 +1,4 @@
-import { entityIndex } from "@cubby/schemas/entity-index";
+import { entityManifest } from "@cubby/schemas/entity-manifest";
 import type {
   LocationShortcode,
   ProductShortcode,
@@ -7,15 +7,20 @@ import type {
 import { infLocation } from "@cubby/schemas/location";
 import { productTopLevelOut } from "@cubby/schemas/product";
 import { useQuery } from "@tanstack/react-query";
+import type { ComponentProps } from "react";
 import type { ReactNode } from "react";
+import { Suspense } from "react";
 import type { z } from "zod";
 
 import { captureRequest } from "~/entity/editing/editor-requests";
-import { EntityEditDialog } from "~/entity/editing/entity-edit-dialog";
+import type { EntityEditDialog as EntityEditDialogComponent } from "~/entity/editing/entity-edit-dialog";
 import { entityListFor, type EntityListParams } from "~/entity/entity-list";
 import { useUpcAwareCreate } from "~/features/products/use-upc-aware-create";
-import { location } from "~/integrations/tanstack-query/generated/location.gen";
-import { product } from "~/integrations/tanstack-query/generated/product.gen";
+import {
+  location,
+  product,
+} from "~/integrations/tanstack-query/generated/catalog.gen";
+import { browserOnlyLazy } from "~/lib/browser-only-lazy";
 
 import {
   buildLocationComboboxItem,
@@ -37,6 +42,17 @@ import {
   type PickerSearchEntity,
   type UseEntitySearchConfig,
 } from "./entity-search-hooks";
+
+const EntityEditDialog = browserOnlyLazy<
+  ComponentProps<typeof EntityEditDialogComponent>
+>(
+  import.meta.env.SSR
+    ? null
+    : () =>
+        import("~/entity/editing/entity-edit-dialog").then((module) => ({
+          default: module.EntityEditDialog,
+        })),
+);
 
 /** What a picker search source hands its combobox. */
 export interface EntitySearchResult<TId extends string> {
@@ -75,7 +91,7 @@ export interface SearchProviderProps<TId extends string = string> {
 export type EntitySearchEntity = Exclude<PickerSearchEntity, "vendor">;
 
 const detailPlaceholder = (entity: PickerSearchEntity) =>
-  `${entityIndex[entity].shortcodePrefix}2222`;
+  `${entityManifest[entity].shortcodePrefix}2222`;
 
 function parseCreated<T>(schema: z.ZodType<T>): CreatedResultParser<T> {
   return (result: unknown) => schema.safeParse(result).data;
@@ -154,7 +170,7 @@ function manifestConfig<E extends ManifestPickerEntity>(
   return {
     detailPlaceholder: detailPlaceholder(entity),
     splitBlankTyped: true,
-    supportsGlobalSearch: entityIndex[entity].searchable,
+    supportsGlobalSearch: entityManifest[entity].searchable,
     useListSource: manifestListSource(entity),
     build,
     buildDetail: build,
@@ -316,20 +332,22 @@ export function useEntityListSource<E extends EntitySearchEntity>(
   } = useEntitySearchRows(entity, config, scope);
   const dialog =
     isDialogOpen && dialogCreateEntities.has(entity) ? (
-      <EntityEditDialog
-        open
-        onOpenChange={setIsDialogOpen}
-        // SAFETY: gated on `dialogCreateEntities`, the three editable
-        // entities whose configs declare `createNew: "dialog"`.
-        request={captureRequest(entity as "ingredient", {
-          name: pendingName,
-        })}
-        onSuccess={(result) => {
-          const parsed = config.parseCreatedResult?.(result);
-          if (parsed !== undefined)
-            resolveWithEntity(config.buildDetail(parsed));
-        }}
-      />
+      <Suspense fallback={null}>
+        <EntityEditDialog
+          open
+          onOpenChange={setIsDialogOpen}
+          // SAFETY: gated on `dialogCreateEntities`, the three editable
+          // entities whose configs declare `createNew: "dialog"`.
+          request={captureRequest(entity as "ingredient", {
+            name: pendingName,
+          })}
+          onSuccess={(result) => {
+            const parsed = config.parseCreatedResult?.(result);
+            if (parsed !== undefined)
+              resolveWithEntity(config.buildDetail(parsed));
+          }}
+        />
+      </Suspense>
     ) : null;
   return {
     items,

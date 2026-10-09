@@ -211,45 +211,6 @@
       }
     },
     {
-      // Browser code loads one entity's generated model at a time
-      // (docs/adr/0009-per-entity-client-manifests.md); server code keeps the
-      // all-entities aggregates and the server-generated bindings.
-      "files": ["apps/web/src/**/*.ts", "apps/web/src/**/*.tsx"],
-      "excludeFiles": [
-        "**/*.test.ts",
-        "**/*.test.tsx",
-        "**/*.live-eval.ts",
-        "**/*.server.ts",
-        "apps/web/src/server/**",
-        "apps/web/src/cf-server.ts",
-        "apps/web/src/contracts/mcp-projections.ts",
-        // The HTTP API router and OpenAPI wiring run only on the server.
-        "apps/web/src/lib/http-api/**"
-      ],
-      "rules": {
-        "cubby/no-client-entity-aggregate": "error"
-      }
-    },
-    {
-      // workerd evaluates the entry's whole static graph at startup; import()
-      // stays at entry points (docs/agents/domain-rules.md).
-      "files": [
-        "apps/web/src/cf-server.ts",
-        "apps/web/src/server/**/*.ts",
-        "apps/web/src/routes/api/**/*.ts"
-      ],
-      "excludeFiles": [
-        "**/*.test.ts",
-        "**/*.live-eval.ts",
-        "**/*.fixtures.ts",
-        "apps/web/src/server/testing/**",
-        "apps/web/src/server/generated/**"
-      ],
-      "rules": {
-        "cubby/worker-lazy-import-boundary": "error"
-      }
-    },
-    {
       "files": ["apps/web/src/**/*.ts", "apps/web/src/**/*.tsx"],
       "excludeFiles": [
         "**/*.test.ts",

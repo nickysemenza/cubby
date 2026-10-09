@@ -7,10 +7,10 @@ import { ReceiptIcon } from "@phosphor-icons/react/dist/csr/Receipt";
 import { useQuery } from "@tanstack/react-query";
 import { useState } from "react";
 
-import { DetailAction } from "~/entity/entity-detail/detail-action-context";
+import { DetailAction } from "~/entity/entity-detail/detail-action-bar";
 import type { DetailRecordOf } from "~/entity/entity-detail/detail-record";
 import { entityListFor } from "~/entity/entity-list";
-import { expense } from "~/integrations/tanstack-query/generated/expense.gen";
+import { expense } from "~/integrations/tanstack-query/generated/catalog.gen";
 import { ErrorDisplay } from "~/ui/feedback/error-display";
 import { useActionMutation } from "~/ui/hooks/useActionMutation";
 import { Button } from "~/ui/primitives/button";

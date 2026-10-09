@@ -1,5 +1,6 @@
-import { connectedViews } from "@cubby/schemas/connected-view-definitions";
-import { type Entity, entitySchema } from "@cubby/schemas/entity";
+import { connectedViews } from "@cubby/schemas/connected-views";
+import { entitySchema } from "@cubby/schemas/entity";
+import { entityManifest } from "@cubby/schemas/entity-manifest";
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { z } from "zod";
 
@@ -9,7 +10,6 @@ import {
   isBrowserRoutedEntity,
 } from "~/entity/entities";
 import { ConnectedRecordsTable } from "~/entity/entity-detail/connected-records-table";
-import { useEntityModel } from "~/entity/entity-model";
 import { pageTitle } from "~/lib/page-title";
 
 // A hand-typed or truncated link renders the unknown-view message instead of
@@ -29,25 +29,8 @@ export const Route = createFileRoute("/_authenticated/connections")({
 function ConnectionsPage() {
   const { source, id, view } = Route.useSearch();
   if (!source || !id || !view) return <UnknownConnectionView />;
-  return <ConnectionView source={source} id={id} view={view} />;
-}
-
-function ConnectionView({
-  source,
-  id,
-  view,
-}: {
-  source: Entity;
-  id: string;
-  view: string;
-}) {
-  const relationships: readonly {
-    key: string;
-    target: Entity;
-    cardinality: string;
-  }[] = useEntityModel(source).manifest.relationships;
   const relation = view.startsWith("relation:")
-    ? relationships.find(
+    ? entityManifest[source].relationships.find(
         (item) => item.key === view.slice(9) && item.cardinality === "many",
       )
     : undefined;

@@ -1,11 +1,10 @@
 import type { Entity } from "@cubby/schemas/entity";
-import { entityKeys } from "@cubby/schemas/entity-index";
-import { entitySavedViews } from "@cubby/schemas/entity-saved-views";
-import type { entitySummary } from "@cubby/schemas/entity-summary";
-import { FILTER_NONE } from "@cubby/schemas/filter-sentinel-fields";
+import { entityKeys, entitySummary } from "@cubby/schemas/entity-summary";
 import type { ProblemKey } from "@cubby/schemas/problems";
 import { PROBLEM_CLASS } from "@cubby/schemas/problems";
 import { z } from "zod";
+
+import { FILTER_NONE } from "~/entity/filters";
 
 import {
   defineProblem,
@@ -123,7 +122,7 @@ const toViewDefinition = (view: DeclaredView): ViewDefinition => {
 };
 
 const savedViewsOf = (entity: Entity): readonly DeclaredView[] =>
-  entitySavedViews[entity];
+  entitySummary[entity].list.savedViews;
 
 const buildViewManifest = () => {
   const manifest: Partial<Record<Entity, ViewDefinition[]>> = {};

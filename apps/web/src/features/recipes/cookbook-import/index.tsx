@@ -24,11 +24,11 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
 import { z } from "zod";
 
-import { imageUpload } from "~/integrations/tanstack-query/generated/image-upload.gen";
 import {
   recipe,
   recipeStreams,
-} from "~/integrations/tanstack-query/generated/recipe.gen";
+  imageUpload,
+} from "~/integrations/tanstack-query/generated/catalog.gen";
 import {
   addWithDependencies,
   flattenRecipes,

@@ -7,7 +7,7 @@ import {
 import { useQueries } from "@tanstack/react-query";
 
 import type { ProblemExecutionLane } from "~/entity/problem-query";
-import { problems } from "~/integrations/tanstack-query/generated/problems.gen";
+import { problems } from "~/integrations/tanstack-query/generated/catalog.gen";
 
 import type { ProblemLaneState } from "./problem-lane-state";
 import { PROBLEMS_QUERY_STALE_TIME } from "./problem-query-freshness";

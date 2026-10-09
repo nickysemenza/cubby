@@ -14,7 +14,7 @@ import Foundation
 /// - `cubby://dev` opens the Dev screen.
 /// - `cubby://activity` opens the Activity list; `cubby://activity/<IPR-…|RUN-…>` opens one run
 /// - `cubby://activity/local/<id>` opens one running device-local activity.
-///   (the server `ActivityRun` id shape — `packages/schemas/src/activity-fields.ts`'s `activityRunId` —
+///   (the server `ActivityRun` id shape — `packages/schemas/src/activity.ts`'s `activityRunId` —
 ///   is not a catalog entity shortcode, so it is validated here rather than through `CubbyLabel`).
 ///
 /// A Universal Link also resolves: `https://<any host>/<SHORTCODE>` or

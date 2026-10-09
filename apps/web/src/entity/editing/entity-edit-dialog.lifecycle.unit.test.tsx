@@ -1,18 +1,10 @@
 import { vendorOut } from "@cubby/schemas/vendor";
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { useState } from "react";
-import {
-  afterEach,
-  beforeAll,
-  beforeEach,
-  describe,
-  expect,
-  it,
-  vi,
-} from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import type { EntityMutationTransport } from "~/entity/entity-mutation-command";
-import { entityMutation } from "~/integrations/tanstack-query/generated/entity-mutation.gen";
+import { entityMutation } from "~/integrations/tanstack-query/generated/catalog.gen";
 import { StartOperationError } from "~/integrations/tanstack-query/start-transport";
 import { createBrowserTestHarness } from "~/lib/test/browser-harness";
 import { mock } from "~/lib/test/mock-schema";
@@ -21,10 +13,6 @@ import { entityBrowserMutationResultSchema } from "~/server/entity-kernel/contra
 import { EntityEditDialog } from "./entity-edit-dialog";
 import type { EntityMutationPort } from "./types";
 import { createEntityMutationPort } from "./use-entity-commands";
-
-// The editor loads lazily when a dialog opens; warm its module so each
-// `findBy*` waits only for render.
-beforeAll(() => import("./entity-edit-dialog-content"));
 
 const record = mock(vendorOut, {
   seed: 7,

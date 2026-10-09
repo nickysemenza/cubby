@@ -12,7 +12,7 @@ import { ripple } from "~/integrations/tanstack-query/cache-tags";
 import {
   recipe,
   recipeStreams,
-} from "~/integrations/tanstack-query/generated/recipe.gen";
+} from "~/integrations/tanstack-query/generated/catalog.gen";
 import { invalidateOperationTags } from "~/integrations/tanstack-query/operation-cache";
 import { getErrorMessage } from "~/lib/error-utils";
 import { useBulkStream } from "~/ui/hooks/useBulkStream";

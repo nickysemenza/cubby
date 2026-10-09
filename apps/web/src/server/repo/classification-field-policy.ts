@@ -13,7 +13,6 @@ import { parseEntityId } from "@cubby/schemas/identifiers";
 import type { SQL } from "drizzle-orm";
 
 import type { Database, DrizzleTransaction } from "~/server/db";
-import { getCategoryFeature } from "~/server/repo/product-category-feature";
 import { categoryFeatureInSql } from "~/server/repo/product-category-sql";
 import { resolveLiveShortcode } from "~/server/repo/shortcode-resolver";
 
@@ -35,8 +34,12 @@ type ClassificationSource<Id extends DeclaredClassificationPolicyId> = {
 const classificationSources = {
   "productCategory.feature": {
     owner: "productCategory",
-    resolve: (db, id) =>
-      getCategoryFeature(db, parseEntityId("productCategory", id)),
+    // Late import: data-quality checks read this module, and the category
+    // repository imports the list scaffold that loads those checks.
+    resolve: async (db, id) => {
+      const { getCategoryFeature } = await import("./product-category");
+      return getCategoryFeature(db, parseEntityId("productCategory", id));
+    },
     valueInSql: categoryFeatureInSql,
   },
 } satisfies {

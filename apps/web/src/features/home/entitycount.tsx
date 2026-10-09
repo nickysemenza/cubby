@@ -1,12 +1,12 @@
 import {
   type CountableEntity,
   countableEntities,
-} from "@cubby/schemas/entity-index";
+} from "@cubby/schemas/entity-manifest";
 import { useQuery } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
 
 import { entities } from "~/entity/entities";
-import { dashboard } from "~/integrations/tanstack-query/generated/dashboard.gen";
+import { dashboard } from "~/integrations/tanstack-query/generated/catalog.gen";
 import { authClient } from "~/lib/auth-client";
 import { formatCompactCount } from "~/lib/utils";
 import { useHydrated } from "~/ui/hooks/useHydrated";

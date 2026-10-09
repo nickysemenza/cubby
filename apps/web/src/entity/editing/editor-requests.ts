@@ -1,3 +1,4 @@
+import { entityFieldModels } from "@cubby/schemas/entity-fields";
 import { EXPENSE_DISPOSITION_COST_TYPE } from "@cubby/schemas/expense-fields";
 import type { FinancialAccountOut } from "@cubby/schemas/financial-account";
 import type { FinancialTransactionOut } from "@cubby/schemas/financial-transaction";
@@ -10,8 +11,6 @@ import type { InfLocation } from "@cubby/schemas/location";
 import type { TaskStatus, Trade } from "@cubby/schemas/project";
 import type { WishOut } from "@cubby/schemas/wish";
 import type { z } from "zod";
-
-import { entityFieldModel } from "~/entity/entity-model";
 
 import { readReferenceField } from "../entity-references";
 import type { EntityEditDraft } from "./intent-types";
@@ -297,7 +296,7 @@ export function detailEditRequest<E extends EditableEntity>(
     return built;
   }
   const seed: Partial<Record<string, string | null>> = {};
-  for (const field of entityFieldModel(entity).fields) {
+  for (const field of entityFieldModels[entity].fields) {
     if (field.reference === null || field.reference.multiple) continue;
     const reference = readReferenceField(record, field);
     if (reference === null) continue;

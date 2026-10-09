@@ -20,9 +20,11 @@ import { fieldEnumOptions } from "~/entity/enum-field-display";
 import { useEntitySuggestionsQuery } from "~/features/ai/field-suggestion";
 import { FieldSuggestionHint } from "~/features/ai/field-suggestion-hint";
 import { SuggestionVisitProvider } from "~/features/ai/suggestion-review";
-import { ai } from "~/integrations/tanstack-query/generated/ai.gen";
-import { entityMutation } from "~/integrations/tanstack-query/generated/entity-mutation.gen";
-import { meal } from "~/integrations/tanstack-query/generated/meal.gen";
+import {
+  entityMutation,
+  ai,
+  meal,
+} from "~/integrations/tanstack-query/generated/catalog.gen";
 import { formatCalendarDay } from "~/lib/date-format";
 import type { EntityBrowserMutationResult } from "~/server/entity-kernel/contracts";
 import { StaticPicker } from "~/ui/combobox/static-picker";

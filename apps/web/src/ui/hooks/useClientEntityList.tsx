@@ -1,4 +1,4 @@
-import { entityIndex } from "@cubby/schemas/entity-index";
+import { entitySummary } from "@cubby/schemas/entity-summary";
 import { useCallback, useEffect, useMemo } from "react";
 
 import {
@@ -176,7 +176,7 @@ export function useClientEntityList<TData extends BaseListRow>({
     selectionScope: (state) => state.allFilters,
   });
   const { tableState } = presentationState;
-  const primarySearchKey = entityIndex[entity].primarySearch?.key;
+  const primarySearchKey = entitySummary[entity].primarySearch?.key;
   const primarySearchQuery = primarySearchKey
     ? tableState.getColumnFilter(primarySearchKey)
     : undefined;

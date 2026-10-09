@@ -1,9 +1,6 @@
 import { z } from "zod";
 import imageDefinition from "./18-image.entity";
 import { readFieldSchemas } from "./definition";
-import { productShortcode } from "../identifier-fields";
-import { moneyNullable } from "../money";
-import { productCategorySummary } from "../product-category-fields";
 
 export const imageOut = z.object(readFieldSchemas(imageDefinition));
 
@@ -31,19 +28,3 @@ export const productAttachmentImageOut = imageOut.extend({
   // list read leaves this absent to keep list cost flat.
   analysisSummary: imageAnalysisSummarySchema.nullable().optional(),
 });
-
-/** A Location's identity Product. Here rather than `location-fields.ts`, which
- * a list route's search validation loads, because the cover image reads the
- * Image declaration. */
-export const locationIdentityProductOut = z.object({
-  id: productShortcode,
-  name: z.string(),
-  manufacturer: z.string(),
-  model: z.string().nullable(),
-  category: productCategorySummary.nullable(),
-  coverImage: imageOut.nullable(),
-  price: moneyNullable,
-});
-export type LocationIdentityProductOut = z.infer<
-  typeof locationIdentityProductOut
->;

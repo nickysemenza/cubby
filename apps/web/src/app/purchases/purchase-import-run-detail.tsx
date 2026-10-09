@@ -8,8 +8,8 @@ import {
 import { agentImportRunPurpose } from "@cubby/schemas/import-run-agent";
 import { initiateRunEvidenceUploadInput } from "@cubby/schemas/purchase-import";
 import type { RunOut } from "@cubby/schemas/run";
+import { humanize } from "@cubby/shared";
 import { sha256Hex } from "@cubby/shared/sha256";
-import { humanize } from "@cubby/shared/text-case";
 import { ArrowSquareOutIcon } from "@phosphor-icons/react/dist/csr/ArrowSquareOut";
 import { CheckCircleIcon } from "@phosphor-icons/react/dist/csr/CheckCircle";
 import { CircleIcon } from "@phosphor-icons/react/dist/csr/Circle";
@@ -37,11 +37,13 @@ import {
   PhotoRunGroupingAction,
 } from "~/app/runs/photo-run-detail";
 import type { RunDetail } from "~/contracts/run.contract";
-import { DetailAction } from "~/entity/entity-detail/detail-action-context";
+import { DetailAction } from "~/entity/entity-detail/detail-action-bar";
 import { EntityReportSlot } from "~/entity/entity-detail/report-slot";
 import { ripple } from "~/integrations/tanstack-query/cache-tags";
-import { purchaseImport } from "~/integrations/tanstack-query/generated/purchase-import.gen";
-import { run as runOperations } from "~/integrations/tanstack-query/generated/run.gen";
+import {
+  purchaseImport,
+  run as runOperations,
+} from "~/integrations/tanstack-query/generated/catalog.gen";
 import { invalidateOperationTags } from "~/integrations/tanstack-query/operation-cache";
 import { putPresignedObject } from "~/lib/presigned-upload";
 import { formatCurrency } from "~/lib/utils";

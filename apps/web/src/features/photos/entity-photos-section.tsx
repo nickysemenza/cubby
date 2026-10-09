@@ -1,4 +1,4 @@
-import { type GalleryEntity } from "@cubby/schemas/entity-index";
+import type { GalleryEntity } from "@cubby/schemas/entity-manifest";
 import type { ImageOut } from "@cubby/schemas/image";
 import { CameraPlusIcon } from "@phosphor-icons/react/dist/csr/CameraPlus";
 import { useRef } from "react";
@@ -9,7 +9,7 @@ import {
   type EntityMutationVariables,
 } from "~/entity/entity-contracts";
 import { type EntityMutationTransport } from "~/entity/entity-mutation-command";
-import type { imageUpload } from "~/integrations/tanstack-query/generated/image-upload.gen";
+import type { imageUpload } from "~/integrations/tanstack-query/generated/catalog.gen";
 import { showErrorToast } from "~/ui/feedback/error-details";
 import { Stack } from "~/ui/layout";
 import { Button } from "~/ui/primitives/button";

@@ -2,8 +2,10 @@ import { testShortcode } from "@cubby/schemas/testing";
 import { render, screen } from "@testing-library/react";
 import { afterEach, describe, expect, it } from "vitest";
 
-import { entityMedia } from "~/integrations/tanstack-query/generated/entity-media.gen";
-import { recommendations } from "~/integrations/tanstack-query/generated/recommendations.gen";
+import {
+  entityMedia,
+  recommendations,
+} from "~/integrations/tanstack-query/generated/catalog.gen";
 import { createBrowserTestHarness } from "~/lib/test/browser-harness";
 
 import { EntityRecommendations } from "./entity-recommendations";

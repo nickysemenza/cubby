@@ -1,10 +1,6 @@
-import type { entityFieldModels } from "@cubby/schemas/entity-fields";
-import {
-  type BrowserRoutedEntity,
-  entityIndex,
-} from "@cubby/schemas/entity-index";
-
-import { entityFieldModel } from "~/entity/entity-model";
+import { entityFieldModels } from "@cubby/schemas/entity-fields";
+import type { BrowserRoutedEntity } from "@cubby/schemas/entity-manifest";
+import { entitySummary } from "@cubby/schemas/entity-summary";
 
 const DEFAULT_IDENTITY_WIDTH = "w-64";
 
@@ -42,8 +38,8 @@ export function identityListConfig(
     flatRows: boolean;
   },
 ): IdentityListConfig {
-  const titleField = entityIndex[entity].titleField;
-  const field = entityFieldModel(entity).fields.find(
+  const titleField = entitySummary[entity].titleField;
+  const field = entityFieldModels[entity].fields.find(
     (candidate) => candidate.key === titleField,
   );
   const canAutoEdit =
@@ -52,7 +48,7 @@ export function identityListConfig(
     field?.kind === "text" &&
     field.readKey === titleField &&
     !field.nullable &&
-    entityFieldModel(entity).update.some((key) => key === titleField);
+    entityFieldModels[entity].update.some((key) => key === titleField);
 
   return {
     titleField,

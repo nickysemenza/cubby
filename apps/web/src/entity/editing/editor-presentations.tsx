@@ -1,4 +1,4 @@
-import { entityIndex } from "@cubby/schemas/entity-index";
+import { entitySummary } from "@cubby/schemas/entity-summary";
 import { EXPENSE_DISPOSITION_EDITOR } from "@cubby/schemas/expense-fields";
 import { useDebouncedValue } from "@tanstack/react-pacer";
 import { useQuery } from "@tanstack/react-query";
@@ -254,13 +254,12 @@ function ProductFields({ record }: EntityEditorFieldsProps) {
   );
 }
 
-// Read on render: the financial-account model loads with its edit dialog.
-const financialAccountFieldModels = () => ({
+const financialAccountFieldModels = {
   identity: requiredFieldModel("financialAccount", "identity"),
   cardNumbers: requiredFieldModel("financialAccount", "cardNumbers"),
   providerVendorId: requiredFieldModel("financialAccount", "providerVendorId"),
   sourceAliases: requiredFieldModel("financialAccount", "sourceAliases"),
-});
+};
 
 /**
  * The account's identity (an explicit kind, no default) and dated card numbers are the generic
@@ -268,7 +267,6 @@ const financialAccountFieldModels = () => ({
  * alone carries, and the evidence aliases keep their own fields.
  */
 function FinancialAccountFields({ form, record }: EntityEditorFieldsProps) {
-  const fieldModels = financialAccountFieldModels();
   const mode = record ? "edit" : "create";
   const idPrefix = useId();
   const kind = z
@@ -297,10 +295,12 @@ function FinancialAccountFields({ form, record }: EntityEditorFieldsProps) {
           notes: { placeholder: "Optional evidence" },
         }}
       />
-      {render(fieldModels.identity)}
-      {render(fieldModels.cardNumbers)}
-      {kind === "stored_value" ? render(fieldModels.providerVendorId) : null}
-      {render(fieldModels.sourceAliases)}
+      {render(financialAccountFieldModels.identity)}
+      {render(financialAccountFieldModels.cardNumbers)}
+      {kind === "stored_value"
+        ? render(financialAccountFieldModels.providerVendorId)
+        : null}
+      {render(financialAccountFieldModels.sourceAliases)}
     </>
   );
 }
@@ -696,7 +696,7 @@ function genericPresentation<E extends EditableEntity>(input: {
   operation: EntityEditOperation;
   intent: string;
 }): EntityEditorPresentation<E> {
-  const { singular } = entityIndex[input.entity];
+  const { singular } = entitySummary[input.entity];
   const isUpdate = input.operation === "update";
   const Fields = ({ record }: EntityEditorFieldsProps) => (
     <EntityIntentFields

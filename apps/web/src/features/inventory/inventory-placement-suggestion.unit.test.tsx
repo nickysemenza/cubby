@@ -8,8 +8,10 @@ import {
   type EntityRecommendationOperations,
   EntityRecommendations,
 } from "~/entity/relatedness/entity-recommendations";
-import { inventory } from "~/integrations/tanstack-query/generated/inventory.gen";
-import { recommendations } from "~/integrations/tanstack-query/generated/recommendations.gen";
+import {
+  inventory,
+  recommendations,
+} from "~/integrations/tanstack-query/generated/catalog.gen";
 import { createBrowserTestHarness } from "~/lib/test/browser-harness";
 
 import { categorySummaryFixture } from "../../../tooling/product-category-fixtures";

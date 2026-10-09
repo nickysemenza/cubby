@@ -12,7 +12,7 @@ import { Link } from "@tanstack/react-router";
 import type React from "react";
 import { lazy, Suspense, useMemo, useState } from "react";
 
-import { DetailAction } from "~/entity/entity-detail/detail-action-context";
+import { DetailAction } from "~/entity/entity-detail/detail-action-bar";
 import { scaleNutrition } from "~/lib/nutrition-estimates";
 import { formatEstimate } from "~/lib/nutrition-format";
 import { PerfProfiler } from "~/lib/perf/PerfProfiler";

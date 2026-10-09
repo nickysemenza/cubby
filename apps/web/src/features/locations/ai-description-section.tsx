@@ -9,7 +9,7 @@ import {
   AiTextDiff,
 } from "~/features/ai/ai-proposal-card";
 import { useAiProposal } from "~/features/ai/use-ai-proposal";
-import { ai } from "~/integrations/tanstack-query/generated/ai.gen";
+import { ai } from "~/integrations/tanstack-query/generated/catalog.gen";
 import { useActionMutation } from "~/ui/hooks/useActionMutation";
 import { Stack } from "~/ui/layout";
 import { Description } from "~/ui/primitives/description";

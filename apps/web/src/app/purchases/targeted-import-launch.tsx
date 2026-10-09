@@ -17,7 +17,7 @@ import type {
   TargetedImportStartInput,
   TargetedProductCandidate,
 } from "~/contracts/run.contract";
-import { run as runOperations } from "~/integrations/tanstack-query/generated/run.gen";
+import { run as runOperations } from "~/integrations/tanstack-query/generated/catalog.gen";
 import { WorkflowDialog } from "~/ui/dialogs/workflow-dialog";
 import { Button } from "~/ui/primitives/button";
 import { Input } from "~/ui/primitives/input";

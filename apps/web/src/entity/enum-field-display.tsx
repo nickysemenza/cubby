@@ -1,9 +1,11 @@
 import type { Entity } from "@cubby/schemas/entity";
-import type { EntityFieldModel } from "@cubby/schemas/entity-fields";
-import { type ShortcodeEntity } from "@cubby/schemas/entity-index";
+import {
+  entityFieldModels,
+  type EntityFieldModel,
+} from "@cubby/schemas/entity-fields";
+import type { ShortcodeEntity } from "@cubby/schemas/entity-manifest";
 import { z } from "zod";
 
-import { entityFieldModel } from "~/entity/entity-model";
 import {
   fieldSuggestionBasisFromRecord,
   suggestTargetsFor,
@@ -58,7 +60,7 @@ export function fieldEnumOptions(
   entity: Entity,
   key: string,
 ): EntitySelectOption[] {
-  const field = entityFieldModel(entity).fields.find(
+  const field = entityFieldModels[entity].fields.find(
     (candidate) => candidate.key === key,
   );
   if (!field) throw new Error(`${entity}.${key} is not a declared field`);
@@ -105,7 +107,7 @@ export function enumFieldLabel(
   raw: string | null | undefined,
 ): string | null {
   if (raw == null || raw === "") return null;
-  const field = entityFieldModel(entity).fields.find(
+  const field = entityFieldModels[entity].fields.find(
     (candidate) => candidate.key === key,
   );
   if (!field) return raw;

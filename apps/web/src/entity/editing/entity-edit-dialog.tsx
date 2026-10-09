@@ -1,6 +1,5 @@
 import { Suspense, type ReactNode } from "react";
 
-import { EntityModelBoundary } from "~/entity/entity-model";
 import { browserOnlyLazy } from "~/lib/browser-only-lazy";
 
 import type { EntityEditDialogContent as EntityEditDialogContentComponent } from "./entity-edit-dialog-content";
@@ -73,9 +72,7 @@ export function EntityEditDialog<E extends EditableEntity>(
 
   return (
     <Suspense fallback={null}>
-      <EntityModelBoundary entities={[props.request.entity]}>
-        <EntityEditDialogContent {...props} />
-      </EntityModelBoundary>
+      <EntityEditDialogContent {...props} />
     </Suspense>
   );
 }

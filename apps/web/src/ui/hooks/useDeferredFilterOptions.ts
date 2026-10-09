@@ -3,7 +3,7 @@ import { useDebouncedValue } from "@tanstack/react-pacer";
 import { useQuery } from "@tanstack/react-query";
 import { useCallback, useMemo, useRef, useState } from "react";
 
-import { entityFilterOptions } from "~/integrations/tanstack-query/generated/entity-filter-options.gen";
+import { entityFilterOptions } from "~/integrations/tanstack-query/generated/catalog.gen";
 
 import type { DeferredFilterOptionSource } from "./filter-option-types";
 

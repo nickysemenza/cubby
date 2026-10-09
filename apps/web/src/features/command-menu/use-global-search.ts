@@ -6,7 +6,7 @@ import { useDebouncedValue } from "@tanstack/react-pacer";
 import { keepPreviousData, useQuery } from "@tanstack/react-query";
 import { useEffect, useMemo, useRef } from "react";
 
-import { search } from "~/integrations/tanstack-query/generated/search.gen";
+import { search } from "~/integrations/tanstack-query/generated/catalog.gen";
 import { recordCommandSearch } from "~/lib/perf/perf-store";
 
 import { type QuickAction, quickActions } from "./quick-actions";

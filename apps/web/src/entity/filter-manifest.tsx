@@ -1,6 +1,6 @@
 import type { Entity } from "@cubby/schemas/entity";
-import { type ShortcodeEntity } from "@cubby/schemas/entity-index";
-import { humanize } from "@cubby/shared/text-case";
+import type { ShortcodeEntity } from "@cubby/schemas/entity-manifest";
+import { humanize } from "@cubby/shared";
 
 import {
   barFieldFromConfig,
@@ -21,6 +21,7 @@ import {
   nullableSentinelOptions,
 } from "./filters";
 import { generatedEntityFilters } from "./generated/entity-filter-bindings.gen";
+import { entityFilterFieldMaps } from "./generated/entity-filter-fields.gen";
 
 export interface FilterSpec extends FilterSpecCore {
   placeholder: string;
@@ -30,6 +31,8 @@ export interface FilterSpec extends FilterSpecCore {
   /** Declared target for the shortcode-native reference, when applicable. */
   referenceEntity?: ShortcodeEntity;
 }
+
+export { entityFilterFieldMaps };
 
 export const getEntityFilters = (entity: Entity): readonly FilterSpec[] =>
   generatedEntityFilters[entity];

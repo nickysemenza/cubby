@@ -1,7 +1,7 @@
 import { locationShortcode } from "@cubby/schemas/identifiers";
 import type { infLocation, LocationType } from "@cubby/schemas/location";
 import type { unitMappingWithMetadata } from "@cubby/schemas/unitmapping";
-import { SHORTCODE_CHARS } from "@cubby/shared/shortcode";
+import { SHORTCODE_CHARS } from "@cubby/shared";
 import { z } from "zod";
 
 // Deterministic ids/shortcodes for these static demo fixtures. We must NOT call

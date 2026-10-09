@@ -1,7 +1,7 @@
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { toast } from "sonner";
 
-import { run } from "~/integrations/tanstack-query/generated/run.gen";
+import { run } from "~/integrations/tanstack-query/generated/catalog.gen";
 import { formatInstant } from "~/lib/date-format";
 import { getErrorMessage } from "~/lib/error-utils";
 import type { PurchaseAgentConnectionStatus } from "~/lib/purchase-import-debug";

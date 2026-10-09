@@ -1,4 +1,4 @@
-import { recommendationWorkbenchSearch } from "@cubby/schemas/recommendation-search";
+import { recommendationWorkbenchSearch } from "@cubby/schemas/recommendations";
 import { createFileRoute } from "@tanstack/react-router";
 
 import { RecommendationWorkbench } from "~/app/recommendations/recommendation-workbench";

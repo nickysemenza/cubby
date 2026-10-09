@@ -2,7 +2,7 @@ import { vendorSpendingProfile } from "./spending-classification";
 import { z } from "zod";
 import { fieldResolutionsSchema } from "./field-resolution";
 import { mutationSideEffectsSchema } from "./mutation-side-effects";
-import { shortcodeEntities } from "./entity-index";
+import { shortcodeEntities } from "./entity-manifest";
 import { moneyNullable } from "./money";
 import {
   runShortcode,

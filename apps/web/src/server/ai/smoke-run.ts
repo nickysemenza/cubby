@@ -16,14 +16,11 @@ import type { z } from "zod";
 import {
   auditPurchaseImportBatch,
   extractPurchaseEvidence,
-  orderMailRequest,
-  purchaseRepairRequest,
 } from "~/server/agents/purchase-import/extract";
 import { purchaseExtractionPrompt } from "~/server/agents/purchase-import/prompts";
 import { suggestExternalIdKind } from "~/server/ai/external-id-kind";
 import {
   ENTITY_EMBEDDING_FEATURE,
-  IMAGE_DESCRIPTION_FEATURE,
   MAILBOX_TRIAGE_FEATURE,
   MAILBOX_RELEVANCE_FEATURE,
   RESEARCH_SUPPORT_FEATURE,
@@ -348,6 +345,8 @@ async function runCase(
           "Select an uploaded image that passed integrity checks.",
         );
       const url = imageAnalysisRenditionUrl(getR2PublicUrl(source.key));
+      const { IMAGE_DESCRIPTION_FEATURE } =
+        await import("~/server/ai/features");
       return {
         result: await runStructuredFeature(
           IMAGE_DESCRIPTION_FEATURE,
@@ -567,6 +566,8 @@ async function runCase(
     }
     case "purchaseMail": {
       const { fixture } = aiSmokeInputs.purchaseMail.parse(raw);
+      const { orderMailRequest } =
+        await import("~/server/agents/purchase-import/extract");
       return {
         result: await runStructuredFeature(
           PURCHASE_IMPORT_MAIL_FEATURE,
@@ -638,6 +639,8 @@ async function runCase(
     }
     case "purchaseRepair": {
       const { fixture } = aiSmokeInputs.purchaseRepair.parse(raw);
+      const { purchaseRepairRequest } =
+        await import("~/server/agents/purchase-import/extract");
       return {
         result: await runStructuredFeature(
           PURCHASE_IMPORT_REPAIR_FEATURE,

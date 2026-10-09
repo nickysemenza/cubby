@@ -1,12 +1,12 @@
 import { searchableEntitySchema, type SearchHit } from "@cubby/schemas/search";
-import { parseShortcode } from "@cubby/shared/shortcode";
+import { parseShortcode } from "@cubby/shared";
 import { useQuery } from "@tanstack/react-query";
 import { useCallback, useRef, useState } from "react";
 
 import { entityDetailFor } from "~/entity/entity-detail";
 import { getEntityFilters } from "~/entity/filter-manifest";
 import type { EntityDetailByEntity } from "~/entity/generated/entity-details.gen";
-import { search } from "~/integrations/tanstack-query/generated/search.gen";
+import { search } from "~/integrations/tanstack-query/generated/catalog.gen";
 
 import type { ComboboxItem } from "./combobox-types";
 

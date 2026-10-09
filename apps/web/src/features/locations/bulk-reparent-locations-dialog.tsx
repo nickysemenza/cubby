@@ -10,7 +10,7 @@ import { FormProvider, useForm } from "react-hook-form";
 import { toast } from "sonner";
 import { z } from "zod";
 
-import { location } from "~/integrations/tanstack-query/generated/location.gen";
+import { location } from "~/integrations/tanstack-query/generated/catalog.gen";
 import { referenceEntitySearch } from "~/ui/combobox/reference-entity-search";
 import { BulkActionDialog } from "~/ui/dialogs/bulk-action-dialog";
 import { requiredLocationCode } from "~/ui/form-fields";

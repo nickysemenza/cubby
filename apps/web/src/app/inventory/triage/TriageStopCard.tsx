@@ -10,8 +10,10 @@ import { ProductBulkAddToInventoryDialog } from "~/features/products/product-bul
 import { ProductDiscardDialog } from "~/features/products/product-discard-dialog";
 import { defaultStockAmount } from "~/features/products/product-hero-presence";
 import { QueuePassPosition } from "~/features/queue-pass/QueuePassProgress";
-import { inventory } from "~/integrations/tanstack-query/generated/inventory.gen";
-import { location } from "~/integrations/tanstack-query/generated/location.gen";
+import {
+  inventory,
+  location,
+} from "~/integrations/tanstack-query/generated/catalog.gen";
 import { formatCurrency } from "~/lib/utils";
 import { showErrorToast } from "~/ui/feedback/error-details";
 import { useActionMutation } from "~/ui/hooks/useActionMutation";

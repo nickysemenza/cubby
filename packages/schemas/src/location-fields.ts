@@ -1,7 +1,10 @@
-import { locationTypeValues } from "@cubby/shared/location-type-theme";
+import { productCategorySummary } from "./product-category-fields";
+import { locationTypeValues } from "@cubby/shared";
 import { z } from "zod";
 
-import { money } from "./money";
+import { imageOut } from "./entity-definitions/field-primitives";
+import { productShortcode } from "./identifier-fields";
+import { money, moneyNullable } from "./money";
 
 export const locationType = z
   .enum(locationTypeValues)
@@ -39,3 +42,16 @@ export const locationValuation = z.object({
     .optional(),
 });
 export type LocationValuation = z.infer<typeof locationValuation>;
+
+export const locationIdentityProductOut = z.object({
+  id: productShortcode,
+  name: z.string(),
+  manufacturer: z.string(),
+  model: z.string().nullable(),
+  category: productCategorySummary.nullable(),
+  coverImage: imageOut.nullable(),
+  price: moneyNullable,
+});
+export type LocationIdentityProductOut = z.infer<
+  typeof locationIdentityProductOut
+>;

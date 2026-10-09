@@ -1,4 +1,4 @@
-import { recipeStreams } from "~/integrations/tanstack-query/generated/recipe.gen";
+import { recipeStreams } from "~/integrations/tanstack-query/generated/catalog.gen";
 
 export const openRecipeRecomputeAllStream = (signal?: AbortSignal) =>
   recipeStreams.recomputeAllDurable.open(undefined, { signal });

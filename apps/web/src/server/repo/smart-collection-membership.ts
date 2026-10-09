@@ -1,8 +1,8 @@
 import type {
+  SmartCollectionDefinition,
   SmartCollectionMatch,
   SmartCollectionSummary,
 } from "@cubby/schemas/collection";
-import type { SmartCollectionDefinition } from "@cubby/schemas/collection-fields";
 import type { ProductCategorySummary } from "@cubby/schemas/product-category-fields";
 import { TRADE_LABELS, type Trade } from "@cubby/schemas/project";
 

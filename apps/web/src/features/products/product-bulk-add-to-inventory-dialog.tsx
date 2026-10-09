@@ -39,8 +39,10 @@ import {
   AmountFieldGroup,
   DEFAULT_AMOUNT_UNIT,
 } from "~/features/inventory/amount-field-group";
-import { inventory } from "~/integrations/tanstack-query/generated/inventory.gen";
-import { product as productOperations } from "~/integrations/tanstack-query/generated/product.gen";
+import {
+  inventory,
+  product as productOperations,
+} from "~/integrations/tanstack-query/generated/catalog.gen";
 import { savedWithBackgroundWork } from "~/lib/recompute-summary";
 import { referenceEntitySearch } from "~/ui/combobox/reference-entity-search";
 import { requiredLocationCode } from "~/ui/form-fields";

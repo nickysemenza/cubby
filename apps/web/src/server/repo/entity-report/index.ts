@@ -17,7 +17,6 @@ import {
 } from "./cookbook";
 import { expenseSettlementReport } from "./expense-settlement";
 import { locationContentsValuationReport } from "./location";
-import { mealCompositionReport } from "./meal";
 import {
   vendorOrderMailReport,
   vendorAccountOrderMailReport,
@@ -32,8 +31,6 @@ import {
 import { purchaseFinancialSettlementReport } from "./purchase-financial-settlement";
 import { purchaseProjectAllocationReport } from "./purchase-project-allocation";
 import { purchaseReconciliationReport } from "./purchase-reconciliation";
-import * as recipeReports from "./recipe";
-import { recipeWalkthroughReport } from "./recipe-walkthrough";
 import {
   imageAssociationsReport,
   ingredientRecipeUsagesReport,
@@ -44,7 +41,7 @@ import {
   purchaseRunsReport,
   type ReportViewer,
 } from "./records";
-import { runReport, runReports, type RunReportSlot } from "./run";
+import type { RunReportSlot } from "./run";
 import { vendorAccountChargeSearchReport } from "./vendor-account-charge-search";
 import { vendorAccountSyncReport } from "./vendor-account-sync";
 
@@ -61,11 +58,16 @@ const runBuilder =
     _actor: ActorContext,
     cursor?: string,
   ): Promise<EntityReportOut> => {
+    const { runReport } = await import("./run");
     return runReport(db, slot, runShortcode.parse(code), cursor);
   };
 
 type ReportServices = RequestServices["services"];
 
+/**
+ * Recipe reports load the costing and availability engines; keep them off every other report's
+ * closure, and off the Worker's first-request path.
+ */
 const recipeBuilder =
   (name: "recipeAvailabilityReport" | "recipeCostingCoverageReport") =>
   async (
@@ -77,7 +79,7 @@ const recipeBuilder =
     services?: ReportServices,
   ): Promise<ReportBlock[]> => {
     if (!services) throw new Error("This report needs the request's services.");
-    return recipeReports[name](db, code, services);
+    return (await import("./recipe"))[name](db, code, services);
   };
 
 const BUILDERS = {
@@ -87,11 +89,14 @@ const BUILDERS = {
   "project.schedule": projectScheduleReport,
   "recipe.availability": recipeBuilder("recipeAvailabilityReport"),
   "recipe.costing-coverage": recipeBuilder("recipeCostingCoverageReport"),
-  "recipe.walkthrough": recipeWalkthroughReport,
+  // The stored flow's AI service stays off every other report's closure.
+  "recipe.walkthrough": async (db, id) =>
+    (await import("./recipe-walkthrough")).recipeWalkthroughReport(db, id),
   "location.contents-valuation": locationContentsValuationReport,
+  // Costs the batch for its portions, so the meal service stays off every other report's closure.
   "meal.composition": async (db, id, _viewer, _actor, _cursor, services) => {
     if (!services) throw new Error("This report needs the request's services.");
-    return mealCompositionReport(db, id, services);
+    return (await import("./meal")).mealCompositionReport(db, id, services);
   },
   "product.labels": productLabelsReport,
   "product.cookbooks": productCookbooksReport,
@@ -174,6 +179,7 @@ export async function buildEntityReports(
 ): Promise<EntityReportManyOut> {
   const runSlots = input.slots.filter(isRunSlot);
   if (runSlots.length === input.slots.length) {
+    const { runReports } = await import("./run");
     return {
       reports: await runReports(
         db,

@@ -222,7 +222,7 @@ const resolveMcpTools = async (): Promise<ResolvedTool[]> => {
         const member = members.get(spec.op);
         if (!member)
           throw new Error(
-            `MCP action ${name}.${action} does not name a member of a contract exported from apps/web/src/contracts/*.contract.ts`,
+            `MCP action ${name}.${action} does not name a member of a contract exported from apps/web/src/contracts/index.ts`,
           );
         if (member.kind !== "query" && member.kind !== "mutation")
           throw new Error(

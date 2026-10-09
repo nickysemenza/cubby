@@ -4,8 +4,10 @@
  * research factory; lifecycle and photo-only effects retain their existing
  * host contracts. Research authority, evidence, and replay belong to that factory. Flow: `server/purchase-import/README.md`.
  */
-import { runEntityId } from "@cubby/schemas/identifiers";
-import { agentImportRunPurpose } from "@cubby/schemas/import-run-agent";
+import {
+  agentImportRunPurpose,
+  type AgentImportRunPurpose,
+} from "@cubby/schemas/import-run-agent";
 import {
   agentProgressReport,
   agentUsageEvent,
@@ -17,54 +19,15 @@ import {
 } from "@cubby/schemas/purchase-agent-services";
 import { sha256Uuid } from "@cubby/shared/sha256";
 
-import { recordAiUsage } from "~/server/ai/usage";
-import type { Database } from "~/server/db";
-import { handleMcpHttpRequest } from "~/server/mcp/http-handler";
-import type {
-  PurchaseAgentQueueBatch,
-  PurchaseAgentQueueEnvironment,
-  RunServices,
-} from "~/server/purchase-agent/environment";
-import { consumePurchaseAgentQueue } from "~/server/purchase-agent/queue";
-import { paidResearchPreflight } from "~/server/runs/execution-transport";
-import * as operation from "~/server/runs/operation";
+import { assertNotInMaintenance } from "~/server/maintenance";
+import type { RunServices } from "~/server/purchase-agent/environment";
 
-import { getTestAiGateway } from "../cf-env";
-import {
-  findActivePurchaseAgentGrant,
-  issuePurchaseAgentDelegation,
-} from "./agent-auth";
-import { withHostDatabase } from "./host-database";
-import {
-  assertResearchRunExecutable,
-  researchCoordinatorStatus,
-} from "./research-execution";
-import { authorizeResearchCoordinatorRetirement } from "./research-retention";
-import { processBoundResearchRetention } from "./research-retention-runtime";
-import { researchServiceFor } from "./research-service";
-import { researchFixtureSources } from "./research-source-transport";
-import * as runService from "./run-service";
+import { getTestAiGateway, runWithExecutionCtx, setCfEnv } from "../cf-env";
 
 /** The MCP endpoint the delegation bearer's audience names. */
 const MCP_URL = "https://cubby.internal/api/mcp";
 
 type HostContext = { waitUntil(promise: Promise<unknown>): void };
-
-/**
- * The Worker entry's `cubby-purchase-agent` consumer. It holds no database
- * client: each Run service it calls opens its own.
- */
-export function consumePurchaseAgentBatch(
-  batch: PurchaseAgentQueueBatch,
-  env: Env,
-  ctx: HostContext,
-) {
-  const environment: PurchaseAgentQueueEnvironment = {
-    run: (runId) => runServicesFor(env, ctx, runId),
-    coordinator: (agentId) => env.PURCHASE_IMPORT_RUN.getByName(agentId),
-  };
-  return consumePurchaseAgentQueue(batch, environment);
-}
 
 /** The services of `runId`, executing with this Worker's bindings. */
 export function runServicesFor(
@@ -74,16 +37,28 @@ export function runServicesFor(
 ): RunServices {
   const withDatabase = <T>(
     fn: (
-      database: Database,
-      service: typeof runService,
-      leased: typeof operation,
+      database: typeof import("~/server/db").db,
+      service: typeof import("./run-service"),
+      operation: typeof import("~/server/runs/operation"),
     ) => Promise<T>,
-  ): Promise<T> =>
-    withHostDatabase(env, ctx, (db) => fn(db, runService, operation));
+  ): Promise<T> => {
+    assertNotInMaintenance(env);
+    setCfEnv(env);
+    return runWithExecutionCtx(ctx, async () => {
+      const { db, withRequestDbClient } = await import("~/server/db");
+      return withRequestDbClient(env.HYPERDRIVE.connectionString, async () =>
+        fn(
+          db,
+          await import("./run-service"),
+          await import("~/server/runs/operation"),
+        ),
+      );
+    });
+  };
 
   const requirePhotoScope = async (
-    db: Database,
-    service: typeof runService,
+    db: typeof import("~/server/db").db,
+    service: typeof import("./run-service"),
   ) => {
     const scope = await service.loadRunScope(db, runId);
     if (scope.public.purpose !== "photo_inventory")
@@ -98,10 +73,19 @@ export function runServicesFor(
       return fn(db, service, operation);
     });
   const withResearch = <T>(
-    fn: (service: ReturnType<typeof researchServiceFor>) => Promise<T>,
+    fn: (
+      service: ReturnType<
+        typeof import("./research-service").researchServiceFor
+      >,
+    ) => Promise<T>,
   ) =>
     withDatabase(async (db) => {
+      const { assertResearchRunExecutable } =
+        await import("./research-execution");
       await assertResearchRunExecutable(db, runId);
+      const { researchServiceFor } = await import("./research-service");
+      const { researchFixtureSources } =
+        await import("./research-source-transport");
       return fn(
         researchServiceFor(db, env, runId, {
           observations: await researchFixtureSources(getTestAiGateway()),
@@ -111,17 +95,29 @@ export function runServicesFor(
 
   return {
     processResearchRetention: (receiptId) =>
-      withDatabase((db) =>
-        processBoundResearchRetention(db, env, { runId, receiptId }),
-      ),
+      withDatabase(async (db) => {
+        const { processBoundResearchRetention } =
+          await import("./research-retention-runtime");
+        return processBoundResearchRetention(db, env, { runId, receiptId });
+      }),
     admitPaidInference: (request) =>
       withDatabase(async (db) => {
+        const [{ paidResearchPreflight }, { runEntityId }] = await Promise.all([
+          import("~/server/runs/execution-transport"),
+          import("@cubby/schemas/identifiers"),
+        ]);
         await paidResearchPreflight(db, runEntityId.parse(runId))(request);
       }),
     researchCoordinatorStatus: () =>
-      withDatabase((db) => researchCoordinatorStatus(db, runId)),
+      withDatabase(async (db) => {
+        const { researchCoordinatorStatus } =
+          await import("./research-execution");
+        return researchCoordinatorStatus(db, runId);
+      }),
     authorizeResearchRetirement: (receiptId) =>
       withDatabase(async (db) => {
+        const { authorizeResearchCoordinatorRetirement } =
+          await import("./research-retention");
         await authorizeResearchCoordinatorRetirement(db, { runId, receiptId });
       }),
     loadScope: () =>
@@ -152,6 +148,7 @@ export function runServicesFor(
     authorize: () =>
       withDatabase(async (db, service) => {
         const scope = await service.loadRunScope(db, runId);
+        const { findActivePurchaseAgentGrant } = await import("./agent-auth");
         if (await findActivePurchaseAgentGrant(db, scope.actorUserId)) return;
         await service.pauseRunForAuthorization(db, runId);
         throw new Error("Purchase Agent authorization is required");
@@ -169,6 +166,13 @@ export function runServicesFor(
           : await request.arrayBuffer();
       return withDatabase(async (db, service) => {
         const scope = await requirePhotoScope(db, service);
+        const [
+          { findActivePurchaseAgentGrant, issuePurchaseAgentDelegation },
+          { handleMcpHttpRequest },
+        ] = await Promise.all([
+          import("./agent-auth"),
+          import("~/server/mcp/http-handler"),
+        ]);
         const grant = await findActivePurchaseAgentGrant(db, scope.actorUserId);
         if (!grant) {
           await service.pauseRunForAuthorization(db, runId);
@@ -233,6 +237,10 @@ export function runServicesFor(
     recordAgentUsage: (input) => {
       const event = agentUsageEvent.parse(input);
       return withDatabase(async (db) => {
+        const [{ recordAiUsage }, { runEntityId }] = await Promise.all([
+          import("~/server/ai/usage"),
+          import("@cubby/schemas/identifiers"),
+        ]);
         await recordAiUsage(db, {
           ...event,
           eventId: await sha256Uuid(`purchase-agent:${runId}:${event.eventId}`),
@@ -293,4 +301,15 @@ export function runServicesFor(
       );
     },
   };
+}
+
+/**
+ * The purpose's Cubby MCP tools, described exactly as the MCP server lists
+ * them to that purpose's agent: the same compiled catalog narrowed to the
+ * manifest's actions (`purchaseAgentToolCatalog`).
+ */
+export async function purchaseAgentMcpTools(purpose: AgentImportRunPurpose) {
+  const { purchaseAgentToolCatalog } =
+    await import("~/server/mcp/agent-tool-catalog");
+  return purchaseAgentToolCatalog(purpose);
 }

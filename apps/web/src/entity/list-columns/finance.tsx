@@ -12,8 +12,10 @@ import { useQuery } from "@tanstack/react-query";
 import { useMemo } from "react";
 
 import { entityMutationOptionsFactory } from "~/entity/entity-contracts";
-import { entityFilterOptions } from "~/integrations/tanstack-query/generated/entity-filter-options.gen";
-import { financialTransaction } from "~/integrations/tanstack-query/generated/finance.gen";
+import {
+  financialTransaction,
+  entityFilterOptions,
+} from "~/integrations/tanstack-query/generated/catalog.gen";
 import { useDeletableConfig } from "~/ui/hooks/useDeletableConfig";
 import { useFilterOptions } from "~/ui/hooks/useFilterOptions";
 

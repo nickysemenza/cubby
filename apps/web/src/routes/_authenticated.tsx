@@ -1,7 +1,6 @@
 import { createFileRoute, Outlet, redirect } from "@tanstack/react-router";
 
 import { SmartCollectionProvider } from "~/app/collections/smart-collection-state";
-import { recipebridgeWasmPreload } from "~/lib/wasm-preload";
 
 export const Route = createFileRoute("/_authenticated")({
   beforeLoad: ({ context }) => {
@@ -16,8 +15,6 @@ export const Route = createFileRoute("/_authenticated")({
       });
     }
   },
-  // Nearly every authenticated page renders amounts or units through WASM.
-  head: () => ({ links: [recipebridgeWasmPreload] }),
   component: () => (
     <SmartCollectionProvider>
       <Outlet />

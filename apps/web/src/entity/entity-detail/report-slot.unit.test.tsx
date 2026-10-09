@@ -9,7 +9,7 @@ import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { overrideStartDispatch } from "~/integrations/tanstack-query/start-transport";
 import { createBrowserTestHarness } from "~/lib/test/browser-harness";
 
-import { DetailActionProvider } from "./detail-action-context";
+import { DetailActionProvider } from "./detail-action-bar";
 import { EntityReportSlot, ReportDetailActions } from "./report-slot";
 
 const RUN_ID = runShortcode.parse("RUN-4K7M");

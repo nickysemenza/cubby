@@ -9,6 +9,7 @@ import {
   type BrowserBridgeRequest,
 } from "@cubby/schemas/purchase-import";
 import { createLogger } from "@cubby/worker-tracing";
+import { DurableObject } from "cloudflare:workers";
 import { z } from "zod";
 
 import {
@@ -23,7 +24,6 @@ import {
   type BrowserBridgeResult,
   type PurchaseImportDurableObjectRpc,
 } from "./contracts";
-import { withHostDatabase } from "./host-database";
 import { PurchaseImportSqlStore, type RunCompletionSummary } from "./sql-store";
 
 const log = createLogger("purchase-import.bridge");
@@ -41,14 +41,14 @@ const socketAttachment = z.object({
 });
 type SocketAttachment = z.infer<typeof socketAttachment>;
 
-/** `PurchaseImportDurableObject`'s implementation (`server/worker-entrypoints.ts`). */
-export class PurchaseImportObject implements PurchaseImportDurableObjectRpc {
+export class PurchaseImportDurableObject
+  extends DurableObject<Env>
+  implements PurchaseImportDurableObjectRpc
+{
   private readonly store: PurchaseImportSqlStore;
 
-  constructor(
-    private readonly ctx: DurableObjectState,
-    private readonly env: Env,
-  ) {
+  constructor(ctx: DurableObjectState, env: Env) {
+    super(ctx, env);
     this.store = new PurchaseImportSqlStore(ctx.storage);
     this.store.migrate();
   }
@@ -102,13 +102,12 @@ export class PurchaseImportObject implements PurchaseImportDurableObjectRpc {
       .parse(input);
     // External member-owned receipt authorizes physical erasure before any
     // broker lookup. Never initialize the disposed coordinator to authorize it.
-    // Retirement's receipt graph serves only this call; bridge traffic reaches
-    // the object without it.
-    const { authorizeResearchCoordinatorRetirement } =
-      await import("./research-retention");
-    await withHostDatabase(this.env, this.ctx, (db) =>
-      authorizeResearchCoordinatorRetirement(db, parsed),
-    );
+    const { runServicesFor } = await import("./agent-services");
+    await runServicesFor(
+      this.env,
+      this.ctx,
+      parsed.runId,
+    ).authorizeResearchRetirement(parsed.receiptId);
     const result = this.store.forgetRun(parsed.runId, parsed.receiptId);
     for (const socket of this.ctx.getWebSockets()) this.sendForgets(socket);
     return result;

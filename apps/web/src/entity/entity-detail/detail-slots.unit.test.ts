@@ -2,10 +2,7 @@ import type { RunOut } from "@cubby/schemas/run";
 import { fromPartial } from "@total-typescript/shoehorn";
 import { describe, expect, it } from "vitest";
 
-import type { DetailSlot } from "~/entity/entity-detail/detail-hooks";
-import type { DetailRecordOf } from "~/entity/entity-detail/detail-record";
-
-import { runDetailHooks } from "./run.detail";
+import { detailSlotsFor } from "./detail-slots";
 
 // A Run's page is the generic detail; its purpose and status decide which slots render. AI runs
 // (no vendor, orders or transcript) once had no page at all, so the import slots must never
@@ -27,15 +24,14 @@ const IMPORT_SLOTS = [
 ];
 
 describe("Run detail slots", () => {
-  const slots: Readonly<Record<string, DetailSlot<"run">>> =
-    runDetailHooks.slots;
+  const slots = detailSlotsFor("run") ?? {};
   const applying = (purpose: RunOut["purpose"], status: RunOut["status"]) =>
     Object.entries(slots)
       .filter(
         ([, slot]) =>
-          slot.applies?.(
-            fromPartial<DetailRecordOf<"run">>({ purpose, status }),
-          ) !== false,
+          // SAFETY: the erased map takes `never`; this is a Run record.
+          slot.applies?.(fromPartial<RunOut>({ purpose, status }) as never) !==
+          false,
       )
       .map(([id]) => id);
 

@@ -61,23 +61,15 @@ import {
 } from "./purchase-validation-research";
 import { readReceiptResearchOriginal } from "./receipt-evidence";
 import {
-  acknowledgeResearchBrowserObservation,
-  readResearchBrowserTasks,
-  researchBrowserFor,
-  waitForPendingBrowserWork,
-} from "./research-browser-service";
-import {
   loadProductPurchaseContext,
   loadRunPurchaseContext,
 } from "./research-context";
 import { assertResearchWork } from "./research-evidence";
 import { assertResearchRunExecutable } from "./research-execution";
-import { resolveImportResearch } from "./research-import";
 import {
   loadMailAttachmentOriginal,
   type ResearchAttachmentReader,
 } from "./research-mail-attachments";
-import { searchResearchMail } from "./research-mail-search";
 import { loadResearchObjectiveContext } from "./research-objective-context";
 import {
   retainResearchObservation,
@@ -85,14 +77,12 @@ import {
   webSearchResearch,
   type ResearchObservationPorts,
 } from "./research-observations";
-import { resolveProductResearch } from "./research-product";
 import {
   assertResearchRunNotRetired,
   exposeResearchSources,
 } from "./research-retention";
 import { publishPendingResearchRetention } from "./research-retention-delivery";
 import { loadMailResearchSources } from "./research-run";
-import { continueResearchWork } from "./research-yield";
 
 type ResearchServices = Pick<
   RunServices,
@@ -377,6 +367,7 @@ export function researchServiceFor(
       throw new Error(
         "Mail source is unavailable or no longer retained for purchase research.",
       );
+    const { exposeResearchSources } = await import("./research-retention");
     await exposeResearchSources(db, {
       runId,
       sources: [{ orderMailId: mail.id, checksum: mail.rawChecksum }],
@@ -491,6 +482,7 @@ export function researchServiceFor(
         const next = await scoped.researchNext({}, `${callId}:next`);
         // pi may discard a proposed continuation in favor of queued input/reset.
         if (!admitted) return next;
+        const { continueResearchWork } = await import("./research-yield");
         const decision = await continueResearchWork(transactionDb, {
           runId,
           callId,
@@ -511,6 +503,8 @@ export function researchServiceFor(
           .from(runTarget)
           .where(eq(runTarget.runId, runId))
           .orderBy(asc(runTarget.createdAt), asc(runTarget.id));
+        const { readResearchBrowserTasks, waitForPendingBrowserWork } =
+          await import("./research-browser-service");
         const browserTasks = await readResearchBrowserTasks(db, runId);
         const pendingBrowser = browserTasks.blockedWorkRefs;
         const target = targets.find(
@@ -718,6 +712,7 @@ export function researchServiceFor(
       const input = researchToolInputs.mail_search.parse(raw);
       return call("mail_search", callId, input, async () => {
         const { scope } = await cloudWork(input.workRef);
+        const { searchResearchMail } = await import("./research-mail-search");
         return searchResearchMail(db, { runId, scope, input, callId });
       });
     },
@@ -773,6 +768,7 @@ export function researchServiceFor(
       // a response lost after commit remains replayable after settlement.
       const resolution = await (async () => {
         if (target.entityKind === "product") {
+          const { resolveProductResearch } = await import("./research-product");
           return await resolveProductResearch(
             db,
             { runId, callId, proposal },
@@ -784,6 +780,7 @@ export function researchServiceFor(
               : {},
           );
         }
+        const { resolveImportResearch } = await import("./research-import");
         return await resolveImportResearch(db, {
           runId,
           workRef: proposal.workRef,
@@ -914,6 +911,8 @@ export function researchServiceFor(
           });
         }
         if (scope.purpose === "purchase_validation") {
+          const { readResearchBrowserTasks } =
+            await import("./research-browser-service");
           const browser = await readResearchBrowserTasks(db, runId);
           if (!browser.retainedByWork.has(target.id))
             return json({
@@ -924,6 +923,7 @@ export function researchServiceFor(
             });
         }
       }
+      const { researchBrowserFor } = await import("./research-browser-service");
       return json(
         await researchBrowserFor(db, env, runId, ports.observations).observe(
           input,
@@ -933,6 +933,7 @@ export function researchServiceFor(
     },
     async researchResume(signal) {
       await assertResearchRunExecutable(db, runId);
+      const { researchBrowserFor } = await import("./research-browser-service");
       const result = await researchBrowserFor(
         db,
         env,
@@ -943,6 +944,8 @@ export function researchServiceFor(
     },
     async researchAcknowledge(signal) {
       await assertResearchRunExecutable(db, runId);
+      const { acknowledgeResearchBrowserObservation } =
+        await import("./research-browser-service");
       await acknowledgeResearchBrowserObservation(db, runId, signal);
     },
   };

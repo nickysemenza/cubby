@@ -1,19 +1,85 @@
 import type { CompiledEntityPresentation } from "@cubby/schemas/entity-definitions/definition";
 import { slotActionsOf } from "@cubby/schemas/entity-report";
-import { Suspense } from "react";
+import type { ReportSlot } from "@cubby/schemas/entity-report";
+import { entitySummary } from "@cubby/schemas/entity-summary";
+import {
+  createContext,
+  useContext,
+  lazy,
+  Suspense,
+  type ReactNode,
+  type LazyExoticComponent,
+} from "react";
 
-import { entitySummaryOf } from "~/entity/entity-model";
-
-import { DetailActionScope } from "./detail-action-context";
-import { useDetailHooks } from "./detail-hooks";
 import type { DetailRecordOf, GenericDetailEntity } from "./detail-record";
+import type { DetailSlotComponent } from "./detail-slots";
 import { ReportVerb } from "./records-block";
 
-/**
- * The detail header's action target: the entity's specialist header controls
- * (its hook module's `headerActions`) and the collection verbs its declared
- * report slots offer.
- */
+const DetailActionContext = createContext(false);
+
+/** Section controls are supplied once by the header, independent of the selected tab. */
+export function DetailActionProvider({ children }: { children: ReactNode }) {
+  return (
+    <DetailActionContext.Provider value={true}>
+      {children}
+    </DetailActionContext.Provider>
+  );
+}
+
+/** Standalone slot consumers retain their local controls. */
+export function DetailAction({ children }: { children: ReactNode }) {
+  return useContext(DetailActionContext) ? null : children;
+}
+
+const action = <E extends GenericDetailEntity>(
+  load: () => Promise<{ default: DetailSlotComponent<E> }>,
+) => lazy(load);
+type HeaderActionRegistry = Partial<{
+  [E in GenericDetailEntity]: LazyExoticComponent<DetailSlotComponent<E>>;
+}>;
+const headerActions: HeaderActionRegistry = {
+  purchase: action<"purchase">(() =>
+    import("./report-slot").then((m) => ({ default: m.PurchaseDetailActions })),
+  ),
+  expense: action<"expense">(() =>
+    import("./report-slot").then((m) => ({ default: m.ExpenseDetailActions })),
+  ),
+  product: action<"product">(() =>
+    import("~/app/products/product-runs").then((m) => ({
+      default: m.ProductDetailActions,
+    })),
+  ),
+  ledgerParty: action<"ledgerParty">(() =>
+    import("~/app/collections/wardrobe-link").then((m) => ({
+      default: m.WardrobeAction,
+    })),
+  ),
+  image: action<"image">(() =>
+    import("~/app/images/image-processing-panel").then((m) => ({
+      default: m.ImageDetailActions,
+    })),
+  ),
+  run: action<"run">(() =>
+    import("./report-slot").then((m) => ({ default: m.RunDetailActions })),
+  ),
+  inventory: action<"inventory">(() =>
+    import("~/entity/detail-field-renderers/inventory-expense").then((m) => ({
+      default: m.InventoryRecordExpenseAction,
+    })),
+  ),
+  recipe: action<"recipe">(() =>
+    import("~/app/recipes/slots").then((m) => ({ default: m.RecipeActions })),
+  ),
+  cookbook: action<"cookbook">(() =>
+    import("~/app/cookbooks/slots").then((m) => ({
+      default: m.CookbookActions,
+    })),
+  ),
+  meal: action<"meal">(() =>
+    import("~/app/meals/slots").then((m) => ({ default: m.MealActions })),
+  ),
+};
+
 export function DetailActionTarget<E extends GenericDetailEntity>({
   entity,
   record,
@@ -21,11 +87,15 @@ export function DetailActionTarget<E extends GenericDetailEntity>({
   entity: E;
   record: DetailRecordOf<E>;
 }) {
-  const Custom = useDetailHooks().headerActions;
-  // SAFETY: the hooks belong to this page's entity, whose loaded record this is.
+  // SAFETY: declarations pair each component with its entity; this render passes the
+  // record loaded for that same entity, matching the detail-slot registry boundary.
+  const Custom = headerActions[entity] as
+    | LazyExoticComponent<DetailSlotComponent<never>>
+    | undefined;
+  // SAFETY: the typed registry correlates each component with this entity's detail record.
   const customRecord = record as never;
   return (
-    <DetailActionScope>
+    <DetailActionContext.Provider value={false}>
       <fieldset
         aria-label="Entity actions"
         className="flex min-w-0 flex-wrap items-center gap-2 empty:hidden"
@@ -35,7 +105,7 @@ export function DetailActionTarget<E extends GenericDetailEntity>({
           <ReportCollectionActions entity={entity} record={record} />
         </Suspense>
       </fieldset>
-    </DetailActionScope>
+    </DetailActionContext.Provider>
   );
 }
 
@@ -46,7 +116,7 @@ function ReportCollectionActions<E extends GenericDetailEntity>({
   entity: E;
   record: DetailRecordOf<E>;
 }) {
-  const presentation: CompiledEntityPresentation = entitySummaryOf(entity);
+  const presentation: CompiledEntityPresentation = entitySummary[entity];
   const actions = new Set(
     presentation.detail.sections.flatMap((section) =>
       section.kind === "slot" ? slotActionsOf(`${entity}.${section.id}`) : [],
@@ -59,4 +129,26 @@ function ReportCollectionActions<E extends GenericDetailEntity>({
       ))}
     </>
   );
+}
+
+/** Explicit row exceptions: an attempt is diagnostic context for its owning Run. */
+export type ReportDetailActionPlacement = {
+  rows?: readonly string[];
+  commands?: boolean;
+  verbs?: boolean;
+};
+type ReportDetailActionRegistry = Partial<
+  Record<ReportSlot, ReportDetailActionPlacement>
+>;
+const reportDetailActions = {
+  "purchase.financial-settlement": { verbs: true },
+  "purchase.reconciliation": { verbs: true },
+  "expense.settlement": { verbs: true },
+  "run.live-progress": { rows: ["workflow"] },
+} satisfies ReportDetailActionRegistry;
+
+export function reportDetailActionsFor(
+  slot: ReportSlot,
+): ReportDetailActionPlacement | undefined {
+  return Object.entries(reportDetailActions).find(([key]) => key === slot)?.[1];
 }

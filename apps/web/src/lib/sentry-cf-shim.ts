@@ -14,13 +14,15 @@
  * `cf-server.ts`.
  *
  * This must export every binding the SSR graph reaches:
- *   - `captureException` — server workflow handlers.
+ *   - `captureException` — server workflow handlers, components/route-error.tsx.
  *     Genuinely used on the server; forwards to the Cloudflare SDK, which
  *     shares `@sentry/core`'s scope with the `withSentry` init.
  *   - `captureMessage` — catch-up.service.ts warnings. Same forwarding.
  *   - `getClient` — report-error.ts returns a Sentry event id only when the
  *     installed client will send it; on the worker that is the
  *     `@sentry/cloudflare` client `withSentry` installs.
+ *   - `init` — router.tsx, behind `if (!router.isServer)`, so it is never
+ *     called during SSR; this exists only so the module shape matches.
  *   - `wrapFetchWithSentry` — server.ts, behind `isCfBuild ? … : …`, so also
  *     never called in this build. Identity is the correct fallback regardless:
  *     `withSentry` already wraps the worker's fetch.
@@ -34,6 +36,11 @@ export {
   captureMessage,
   getClient,
 } from "@sentry/cloudflare";
+
+type SentryBrowserApi = typeof import("@sentry/tanstackstart-react");
+type SentryInitOptions = Parameters<SentryBrowserApi["init"]>[0];
+/** No-op: client-only, guarded by `!router.isServer` in router.tsx. */
+export function init(_options?: SentryInitOptions): void {}
 
 /** Identity: the worker's fetch is already wrapped by `withSentry`. */
 export function wrapFetchWithSentry<T>(handler: T): T {

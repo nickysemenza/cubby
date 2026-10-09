@@ -26,12 +26,7 @@
     "./ai/pricing": "./src/ai/pricing.ts",
     "./ai/gateway-request": "./src/ai/gateway-request.ts",
     "./ai/gateway-metadata": "./src/ai/gateway-metadata.ts",
-    "./ai/pi-providers": "./src/ai/pi-providers.ts",
-    "./shortcode": "./src/shortcode.ts",
-    "./record": "./src/record.ts",
-    "./filter": "./src/filter.ts",
-    "./error-utils": "./src/error-utils.ts",
-    "./category-theme": "./src/category-theme.ts"
+    "./ai/pi-providers": "./src/ai/pi-providers.ts"
   },
   "scripts": {
     "typecheck": "node ../../scripts/generator/ensure.ts && tsc --noEmit",

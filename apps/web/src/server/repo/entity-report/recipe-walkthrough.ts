@@ -2,9 +2,7 @@ import type { ReportBlock, ReportCommand } from "@cubby/schemas/entity-report";
 import { recipeShortcode } from "@cubby/schemas/identifiers";
 
 import type { Database } from "~/server/db";
-import { getRecipeByID } from "~/server/repo/recipe/crud";
 import { resolveOrThrow } from "~/server/repo/shortcode-resolver";
-import { getRecipeFlowState } from "~/server/services/recipe-flow/recipe-flow.service";
 
 /**
  * The AI walkthrough, read from the stored flow (a read never generates one): the overview, what
@@ -17,6 +15,10 @@ export async function recipeWalkthroughReport(
   code: string,
 ): Promise<ReportBlock[]> {
   const id = await resolveOrThrow(db, "recipe", code);
+  const [{ getRecipeFlowState }, { getRecipeByID }] = await Promise.all([
+    import("~/server/services/recipe-flow/recipe-flow.service"),
+    import("~/server/repo/recipe/crud"),
+  ]);
   const [state, recipe] = await Promise.all([
     getRecipeFlowState(db, id),
     getRecipeByID(db, id),

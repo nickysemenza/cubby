@@ -1,4 +1,4 @@
-import { entityIndex } from "@cubby/schemas/entity-index";
+import { entitySummary } from "@cubby/schemas/entity-summary";
 import {
   type LocationShortcode,
   parseShortcodeFor,
@@ -17,8 +17,8 @@ import type { SearchableEntity, SearchHit } from "@cubby/schemas/search";
 import {
   formatCategoryLabel,
   type ProductCategory,
-} from "@cubby/shared/category-theme";
-import { type ShortcodeType } from "@cubby/shared/shortcode";
+  type ShortcodeType,
+} from "@cubby/shared";
 import { z } from "zod";
 
 import { RecordEmoji } from "~/entity/components/record-emoji";
@@ -395,7 +395,7 @@ export function buildRecordComboboxItem<E extends ShortcodeType>(
   record: PickerRecord,
 ): ComboboxItem<ShortcodeFor<E>> {
   const shortcode = parseShortcodeFor(entity, record.id);
-  const title = record[entityIndex[entity].titleField];
+  const title = record[entitySummary[entity].titleField];
   const aliases = pickerAliases.safeParse(record.aliases).data;
   return {
     id: shortcode,

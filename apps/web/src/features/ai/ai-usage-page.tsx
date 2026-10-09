@@ -5,14 +5,14 @@ import type {
   AiUsageTransport,
 } from "@cubby/schemas/ai";
 import { AI_USAGE_TRANSPORT_LABELS as transportLabels } from "@cubby/schemas/telemetry";
-import { parseShortcode } from "@cubby/shared/shortcode";
+import { parseShortcode } from "@cubby/shared";
 import { useDebouncedValue } from "@tanstack/react-pacer";
 import { keepPreviousData, useQuery } from "@tanstack/react-query";
 import type { RowData } from "@tanstack/react-table";
 import { type ReactNode, useId, useMemo, useState } from "react";
 
 import { EntityRefLink } from "~/entity/components/entity-ref-link";
-import { ai } from "~/integrations/tanstack-query/generated/ai.gen";
+import { ai } from "~/integrations/tanstack-query/generated/catalog.gen";
 import { formatInstant } from "~/lib/date-format";
 import { formatCount, formatCurrency } from "~/lib/utils";
 import { useTableColumnLayout } from "~/ui/data-table/column-layout";

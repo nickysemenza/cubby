@@ -15,7 +15,7 @@ import {
   buildFiltersFromManifest,
   filterGetterFromColumnFilters,
 } from "~/entity/filters";
-import { usdaFood } from "~/integrations/tanstack-query/generated/usda.gen";
+import { usdaFood } from "~/integrations/tanstack-query/generated/catalog.gen";
 import { USDA_KINDS } from "~/lib/conversion-coverage";
 import { dataTypeColor, UsdaDataTypeDot } from "~/lib/usda-data-type";
 import { nutrientCount } from "~/lib/usda-food-stats";

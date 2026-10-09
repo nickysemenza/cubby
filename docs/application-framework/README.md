@@ -93,12 +93,10 @@ declares them only when they differ (`tags: []` opts out of tagging).
 The vocabulary types live in `contracts/cache-policy.ts`, which contracts may
 import; no contract holds React, query-client, or input-dependent code.
 
-The Start operation stage of `pnpm generate` resolves that data into the
-generated browser catalog: one module per contract module,
-`integrations/tanstack-query/generated/<module>.gen.ts`, importing only its own
-`contracts/<module>.contract.ts` and exporting a domain object per contract
-(`product`, `recipe`, ...) that call sites import. There is no contracts barrel
-and no all-domains catalog, so a route bundles only the contracts it calls. Policy that must read the call's input (the per-entity output schema and
+The Start operation stage of `pnpm generate` resolves that data into one
+generated browser catalog, `integrations/tanstack-query/generated/catalog.gen.ts`,
+with a domain object per contract (`product`, `recipe`, ...) that call sites
+import. Policy that must read the call's input (the per-entity output schema and
 cache profile of `entity.list`/`entity.detail`/`entity.timeline`, the payload-keyed
 fan-out of `entity.mutate`) cannot be data; it lives in
 `integrations/tanstack-query/operation-overrides.ts`, and the catalog spreads it

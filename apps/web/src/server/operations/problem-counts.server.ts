@@ -17,8 +17,7 @@ export async function resolveProblemCounts(
 
 export const readProblemCounts = (context: ProblemCountsContext) =>
   resolveProblemCounts(readProblemCountsFromDurableObject, async () => {
-    // Heavy library: the WASM-backed detectors load only when the Durable
-    // Object has no counts.
-    const { findProblemCounts } = await import("./problem-reports.server");
+    const { findProblemCounts } =
+      await import("~/server/services/problems.service");
     return findProblemCounts(context.db, context.upcLookupClient);
   });

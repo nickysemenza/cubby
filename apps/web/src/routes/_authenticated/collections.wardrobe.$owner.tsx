@@ -5,7 +5,7 @@ import { z } from "zod";
 
 import { CollectionProductsTable } from "~/app/collections/collection-detail-page";
 import { entityDetailFor } from "~/entity/entity-detail";
-import { collection } from "~/integrations/tanstack-query/generated/collection.gen";
+import { collection } from "~/integrations/tanstack-query/generated/catalog.gen";
 import { urlStringParam } from "~/lib/search-params";
 import { ErrorDisplay } from "~/ui/feedback/error-display";
 import { Stack } from "~/ui/layout";

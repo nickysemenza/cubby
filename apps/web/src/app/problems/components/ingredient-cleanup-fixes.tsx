@@ -1,7 +1,7 @@
 import { TrashIcon } from "@phosphor-icons/react/dist/csr/Trash";
 import { type ReactNode, useState } from "react";
 
-import { problems } from "~/integrations/tanstack-query/generated/problems.gen";
+import { problems } from "~/integrations/tanstack-query/generated/catalog.gen";
 import { countLabel } from "~/lib/pluralize";
 import { useActionMutation } from "~/ui/hooks/useActionMutation";
 import { Stack } from "~/ui/layout";

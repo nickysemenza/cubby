@@ -13,7 +13,7 @@ import {
   encodeFilters,
 } from "./filters";
 import type { FilterSpecCore } from "./filters";
-import { entityFilterUrlKeys } from "./generated/entity-filter-url-keys.gen";
+import { entityFilterUrlKeys } from "./generated/entity-search.gen";
 import { problemActionsFor } from "./problem-actions";
 import {
   compileProblemFilters,

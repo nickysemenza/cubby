@@ -10,11 +10,13 @@ import { ProblemsBanner } from "~/features/home/problems-banner";
 import { DailyPasses } from "~/features/home/QuickActionsCard";
 import { RecentActivityFeed } from "~/features/home/RecentActivityFeed";
 import { RecordedSpendCard } from "~/features/home/RecordedSpendCard";
-import { expense } from "~/integrations/tanstack-query/generated/expense.gen";
-import { location } from "~/integrations/tanstack-query/generated/location.gen";
-import { meal } from "~/integrations/tanstack-query/generated/meal.gen";
-import { problems } from "~/integrations/tanstack-query/generated/problems.gen";
-import { task } from "~/integrations/tanstack-query/generated/task.gen";
+import {
+  expense,
+  location,
+  meal,
+  task,
+  problems,
+} from "~/integrations/tanstack-query/generated/catalog.gen";
 import { authClient } from "~/lib/auth-client";
 import { formatInstant } from "~/lib/date-format";
 import { CollapsibleSection, Grid, Section } from "~/ui/layout";

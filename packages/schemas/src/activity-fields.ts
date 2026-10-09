@@ -1,21 +1,6 @@
 import { z } from "zod";
 
 // Generator inputs and runtime schemas share this cycle-safe vocabulary.
-
-/** An ActivityRun id; not a catalog entity shortcode. */
-export const activityRunId = z.string().regex(/^(?:IPR|RUN)-[A-Z0-9]+$/u);
-
-/** The cloud worker or device that executed a run. */
-export const activityExecutor = z.object({
-  kind: z.enum(["cloud", "device"]),
-  deviceId: z.uuid().nullable(),
-  name: z.string().max(200),
-  platform: z.enum(["cloud", "macos", "ios"]),
-  appVersion: z.string().max(100).nullable(),
-  osVersion: z.string().max(100).nullable(),
-});
-export type ActivityExecutor = z.infer<typeof activityExecutor>;
-
 export const runPurpose = z.enum([
   "account_sync",
   "mail_import",

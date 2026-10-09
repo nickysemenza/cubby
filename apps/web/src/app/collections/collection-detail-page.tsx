@@ -1,8 +1,8 @@
 import type {
   CollectionProductOut,
+  CollectionSlug,
   SmartCollectionMatch,
 } from "@cubby/schemas/collection";
-import type { CollectionSlug } from "@cubby/schemas/collection-fields";
 import { formatCollectionLabel } from "@cubby/shared/collection-tag";
 import { CubeFocusIcon } from "@phosphor-icons/react/dist/csr/CubeFocus";
 import { MagnifyingGlassIcon } from "@phosphor-icons/react/dist/csr/MagnifyingGlass";
@@ -18,7 +18,7 @@ import { useCallback, useEffect, useId, useMemo } from "react";
 
 import { EntityCover } from "~/entity/components/entity-cover";
 import { tryFormatAmount } from "~/features/inventory/format-amount";
-import { collection as collectionOperations } from "~/integrations/tanstack-query/generated/collection.gen";
+import { collection as collectionOperations } from "~/integrations/tanstack-query/generated/catalog.gen";
 import { useTableColumnLayout } from "~/ui/data-table/column-layout";
 import {
   createImageColumn,

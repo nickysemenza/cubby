@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { entityKeys } from "./generated/entity-index.gen";
+import { entityKeys } from "./generated/entity-summary.gen";
 
 /**
  * The closed entity vocabulary, from the generated roster of declarations.

@@ -3,7 +3,7 @@ import {
   smartCollectionDefinition,
   smartCollectionRule,
   type SmartCollectionDefinition,
-} from "@cubby/schemas/collection-fields";
+} from "@cubby/schemas/collection";
 import { describe, expect, it } from "vitest";
 
 import { categorySummaryFixture } from "../../../tooling/product-category-fixtures";
