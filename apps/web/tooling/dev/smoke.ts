@@ -488,7 +488,7 @@ try {
   );
 
   await check(
-    "real USDA service binding reads persisted synthetic D1/R2 fixtures",
+    "the USDA release object loads the persisted synthetic R2 release",
     async () => {
       const countsResponse = await context.request.get(
         "/api/v1/dashboard/counts",
@@ -496,7 +496,8 @@ try {
       assert.equal(countsResponse.status(), 200);
       const counts = dashboardCountsOut.parse(await countsResponse.json());
       assert.equal(counts.usdaFoodsAvailable, true);
-      assert.equal(counts.usdaFoods, 3);
+      // Three foundation foods and one branded food (usda-synthetic-release.ts).
+      assert.equal(counts.usdaFoods, 4);
       const foodResponse = await context.request.get(
         "/api/v1/usda-food/detail?id=9900001",
       );

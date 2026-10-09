@@ -169,9 +169,6 @@ jobs:
       - name: Run auxiliary package tests
         if: needs.scope.outputs.auxiliary == 'true'
         run: pnpm -r --no-sort --workspace-concurrency=2 --no-bail --filter '!@cubby/web' --if-present run test --maxWorkers=1
-      - name: Build USDA API
-        if: needs.scope.outputs.auxiliary == 'true'
-        run: pnpm --filter @cubby/usda-api run build
 
   test-rust:
     name: Rust - recipebridge and cubby-ffi

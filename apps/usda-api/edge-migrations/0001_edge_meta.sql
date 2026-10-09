@@ -1,4 +1,0 @@
-CREATE TABLE IF NOT EXISTS usda_edge_meta (
-  key TEXT PRIMARY KEY NOT NULL,
-  value TEXT NOT NULL
-);
