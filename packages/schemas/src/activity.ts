@@ -154,6 +154,8 @@ export const activityGroupsOutput = z.object({
   items: z.array(
     z.object({
       root: activityRun,
+      /** Group liveness includes descendants, independently of the root's state. */
+      active: z.boolean(),
       childCount: z.int().nonnegative(),
       contextOnly: z.boolean(),
       latestAt: z.iso.datetime(),

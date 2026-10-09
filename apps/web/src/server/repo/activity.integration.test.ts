@@ -1,9 +1,10 @@
 import { parseEntityId } from "@cubby/schemas/identifiers";
 import { runPurpose } from "@cubby/schemas/run-fields";
 import { generateShortcode } from "@cubby/shared";
-import { eq } from "drizzle-orm";
+import { eq, sql } from "drizzle-orm";
 import { withTestDb } from "tooling/test-setup";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
+import { z } from "zod";
 
 import {
   imageProcessingAttempt,
@@ -620,6 +621,246 @@ describe("unified Runs history", () => {
 
   // The Runs list hides routine passes by default; a productive or failed
   // scheduled pass and every other Run must stay.
+  // Failures: research descendants split into separate roots, an image stops at
+  // its immediate research parent, filtered roots vanish, or child paging loses rows.
+  it("groups nested research and image work by retained Run lineage with filtered child pagination", async () => {
+    await insertWithShortcode(ctx.db, "ledgerParty", {
+      name: "Synthetic lineage member",
+      kind: "member",
+      userId: ctx.actor.userId,
+    });
+    const rootId = await ensureRun(ctx.db, ctx.actor, {
+      trigger: "manual",
+      status: "completed",
+      purpose: "mail_discovery",
+    });
+    const receiptId = await ensureRun(ctx.db, ctx.actor, {
+      trigger: "manual",
+      status: "completed",
+      purpose: "mail_import",
+      parentRunId: rootId,
+    });
+    const productId = await ensureRun(ctx.db, ctx.actor, {
+      trigger: "manual",
+      status: "completed",
+      purpose: "product_enrichment",
+      parentRunId: receiptId,
+    });
+    const rows = await getDb(ctx.db).select().from(runTable);
+    const root = rows.find((row) => row.id === rootId)!;
+    const receipt = rows.find((row) => row.id === receiptId)!;
+    const productRun = rows.find((row) => row.id === productId)!;
+    const uploaded = await createUploadedImageRecord(ctx.db, {
+      key: `lineage/${crypto.randomUUID()}.jpg`,
+      filename: "synthetic-lineage.jpg",
+      contentType: "image/jpeg",
+      size: 100,
+    });
+    await getDb(ctx.db)
+      .update(image)
+      .set({ sha256: "c".repeat(64) })
+      .where(eq(image.id, uploaded.id));
+    const job = await createImageProcessingJob(ctx.db, {
+      imageId: parseEntityId("image", uploaded.id),
+      kind: "describe_image",
+      sourceContentHash: "c".repeat(64),
+      processorRevision: IMAGE_DESCRIPTION_PROCESSOR_REVISION,
+      runId: productId,
+    });
+    if (!job) throw new Error("Expected lineage image job");
+    const input = {
+      executor: "all" as const,
+      limit: 100,
+      sort: "newest" as const,
+    };
+    const groups = await listActivityGroups(ctx.db, null, input);
+    expect(groups).toMatchObject({
+      total: 1,
+      totalItems: 4,
+      items: [
+        { root: { id: root.shortcode }, childCount: 3, contextOnly: false },
+      ],
+    });
+    const filtered = await listActivityGroups(ctx.db, null, {
+      ...input,
+      kind: "product_enrichment",
+    });
+    expect(filtered).toMatchObject({
+      total: 1,
+      totalItems: 1,
+      items: [
+        { root: { id: root.shortcode }, childCount: 1, contextOnly: true },
+      ],
+    });
+    const childIds = new Set<string>();
+    let cursor: string | undefined;
+    do {
+      const page = await listActivityGroupChildren(ctx.db, null, {
+        ...input,
+        rootId: root.shortcode,
+        limit: 1,
+        cursor,
+      });
+      expect(page.total).toBe(3);
+      for (const child of page.items) childIds.add(child.id);
+      cursor = page.nextCursor ?? undefined;
+    } while (cursor);
+    expect(childIds.size).toBe(3);
+    expect(childIds.has(receipt.shortcode)).toBe(true);
+    expect(childIds.has(productRun.shortcode)).toBe(true);
+    const products = await listActivityGroupChildren(ctx.db, null, {
+      ...input,
+      rootId: root.shortcode,
+      kind: "product_enrichment",
+    });
+    expect(products.items.map((row) => row.id)).toEqual([productRun.shortcode]);
+  });
+
+  // A tombstoned ancestor must not hide live work; null legacy lineage stays independent.
+  it("keeps legacy roots and research below a deleted parent visible without inventing lineage", async () => {
+    await insertWithShortcode(ctx.db, "ledgerParty", {
+      name: "Synthetic legacy member",
+      kind: "member",
+      userId: ctx.actor.userId,
+    });
+    const deletedId = await ensureRun(ctx.db, ctx.actor, {
+      trigger: "manual",
+      status: "completed",
+      purpose: "mail_discovery",
+    });
+    const childId = await ensureRun(ctx.db, ctx.actor, {
+      trigger: "manual",
+      status: "completed",
+      purpose: "mail_import",
+      parentRunId: deletedId,
+    });
+    const grandchildId = await ensureRun(ctx.db, ctx.actor, {
+      trigger: "manual",
+      status: "completed",
+      purpose: "product_enrichment",
+      parentRunId: childId,
+    });
+    const legacyId = await ensureRun(ctx.db, ctx.actor, {
+      trigger: "manual",
+      status: "completed",
+      purpose: "mail_import",
+    });
+    await getDb(ctx.db)
+      .update(runTable)
+      .set({ deletedAt: new Date() })
+      .where(eq(runTable.id, deletedId));
+    const rows = await getDb(ctx.db).select().from(runTable);
+    const child = rows.find((row) => row.id === childId)!;
+    const legacy = rows.find((row) => row.id === legacyId)!;
+    const input = {
+      executor: "all" as const,
+      limit: 100,
+      sort: "newest" as const,
+    };
+    const groups = await listActivityGroups(ctx.db, null, input);
+    expect(groups.total).toBe(2);
+    expect(groups.items).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          root: expect.objectContaining({ id: child.shortcode }),
+          childCount: 1,
+        }),
+        expect.objectContaining({
+          root: expect.objectContaining({ id: legacy.shortcode }),
+          childCount: 0,
+        }),
+      ]),
+    );
+    const children = await listActivityGroupChildren(ctx.db, null, {
+      ...input,
+      rootId: child.shortcode,
+    });
+    expect(children.items.map((row) => row.id)).toEqual([
+      rows.find((row) => row.id === grandchildId)!.shortcode,
+    ]);
+    expect(rows.find((row) => row.id === legacyId)?.parentRunId).toBeNull();
+  });
+
+  it("keeps completed research roots refreshable while a descendant is running", async () => {
+    await insertWithShortcode(ctx.db, "ledgerParty", {
+      name: "Synthetic active lineage member",
+      kind: "member",
+      userId: ctx.actor.userId,
+    });
+    const rootId = await ensureRun(ctx.db, ctx.actor, {
+      purpose: "mail_discovery",
+      trigger: "manual",
+      status: "completed",
+    });
+    const childId = await ensureRun(ctx.db, ctx.actor, {
+      purpose: "mail_import",
+      trigger: "discovery",
+      parentRunId: rootId,
+    });
+    const input = {
+      executor: "all" as const,
+      limit: 100,
+      sort: "newest" as const,
+    };
+    expect((await listActivityGroups(ctx.db, null, input)).items).toMatchObject(
+      [{ active: true, root: { active: false, state: "completed" } }],
+    );
+    await getDb(ctx.db)
+      .update(runTable)
+      .set({ status: "completed", endedAt: new Date() })
+      .where(eq(runTable.id, childId));
+    expect((await listActivityGroups(ctx.db, null, input)).items).toMatchObject(
+      [{ active: false, root: { active: false, state: "completed" } }],
+    );
+  });
+
+  it("does not evaluate unrelated Run accounting when paging one research group", async () => {
+    const rootId = await ensureRun(ctx.db, ctx.actor, {
+      purpose: "background",
+    });
+    await ensureRun(ctx.db, ctx.actor, {
+      purpose: "background",
+      parentRunId: rootId,
+    });
+    for (let index = 0; index < 100; index += 1)
+      await ensureRun(ctx.db, ctx.actor, { purpose: "background" });
+    const [root] = await getDb(ctx.db)
+      .select()
+      .from(runTable)
+      .where(eq(runTable.id, rootId));
+    if (!root) throw new Error("Expected synthetic accounting root");
+    const execute = vi.spyOn(getDb(ctx.db), "execute");
+    await listActivityGroupChildren(ctx.db, null, {
+      rootId: root.shortcode,
+      executor: "all",
+      limit: 1,
+      sort: "newest",
+    });
+    const statement = execute.mock.calls[0]?.[0];
+    execute.mockRestore();
+    if (!statement) throw new Error("Expected real child page query");
+    const explained = await getDb(ctx.db).execute(
+      sql`EXPLAIN (ANALYZE, FORMAT JSON) ${statement}`,
+    );
+    const plan = z
+      .array(z.object({ Plan: z.unknown() }))
+      .parse(explained.rows[0]?.["QUERY PLAN"])[0]!.Plan;
+    const subplanLoops = (raw: unknown): number => {
+      const node = z
+        .object({
+          "Actual Loops": z.number(),
+          "Parent Relationship": z.string().optional(),
+          Plans: z.array(z.unknown()).optional(),
+        })
+        .parse(raw);
+      return Math.max(
+        node["Parent Relationship"] === "SubPlan" ? node["Actual Loops"] : 0,
+        ...(node.Plans ?? []).map(subplanLoops),
+      );
+    };
+    expect(subplanLoops(plan)).toBeLessThanOrEqual(2);
+  });
+
   it("says what a run is doing and which records it worked on", async () => {
     const vendor = await insertWithShortcode(ctx.db, "vendor", {
       name: "Seed fixture vendor",

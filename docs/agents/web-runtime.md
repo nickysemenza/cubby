@@ -13,6 +13,10 @@ observer options can lag the render that enabled the action.
 For hook-default and `useQueries` examples, load the relevant heading in the
 [web UI reference](web-ui-reference.md).
 
+Catalog query options validate input before `enabled` is evaluated. Construct
+child queries only for roots their identifier contract accepts; disabling an
+image-root query does not make its ID a valid Run ID.
+
 The server render uses TanStack Start's local function execution, never an HTTP
 request to itself. Keep `~/server` imports behind the `.server()` branch of an
 isomorphic function. `ssr: false` is a measured cost choice, not a correctness

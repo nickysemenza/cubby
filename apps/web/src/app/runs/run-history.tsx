@@ -5,7 +5,12 @@ import {
   type ActivityListInput,
 } from "@cubby/schemas/activity";
 import { runTrigger } from "@cubby/schemas/run-fields";
-import { useInfiniteQuery, useQuery } from "@tanstack/react-query";
+import {
+  useInfiniteQuery,
+  useQueries,
+  useQuery,
+  type QueryObserverResult,
+} from "@tanstack/react-query";
 import { useNavigate } from "@tanstack/react-router";
 import {
   useCallback,
@@ -37,6 +42,18 @@ import { Button } from "~/ui/primitives/button";
 import { Input } from "~/ui/primitives/input";
 import { NativeSelect } from "~/ui/primitives/native-select";
 import { Sheet, SheetContent, SheetTitle } from "~/ui/primitives/sheet";
+
+const combineChildPages = (
+  results: QueryObserverResult<
+    Awaited<ReturnType<typeof activity.groupChildren.call>>,
+    Error
+  >[],
+) =>
+  results.map((result) => ({
+    data: result.data,
+    loading: result.isLoading,
+    error: result.error?.message ?? "",
+  }));
 
 export interface RunHistoryFilters extends Partial<ActivityListInput> {
   selected?: string;
@@ -115,9 +132,6 @@ export function RunHistory({
   const grouped = filters.group === "run";
   const [more, setMore] = useState(false);
   const [expanded, setExpanded] = useState<Record<string, boolean>>({});
-  const [children, setChildren] = useState<Record<string, ActivityRun[]>>({});
-  const [loading, setLoading] = useState<Record<string, boolean>>({});
-  const [childErrors, setChildErrors] = useState<Record<string, string>>({});
   const devices = useQuery(activity.devices.queryOptions({}));
   const input = useMemo<ActivityListInput>(
     () => ({
@@ -161,8 +175,6 @@ export function RunHistory({
   const filterKey = JSON.stringify(input);
   useEffect(() => {
     setExpanded({});
-    setChildren({});
-    setChildErrors({});
   }, [filterKey]);
   const flat = useInfiniteQuery({
     ...cursorQueryOptions(activity.list, input),
@@ -176,12 +188,89 @@ export function RunHistory({
     () => groups.data?.pages.flatMap((page) => page.items) ?? [],
     [groups.data],
   );
+  const childGroups = useMemo(
+    () =>
+      groupRows.filter(
+        (group) => group.root.recordType === "run" && group.childCount > 0,
+      ),
+    [groupRows],
+  );
+  const childQueryOptions = useMemo(
+    () =>
+      childGroups.map((group) => ({
+        ...activity.groupChildren.queryOptions({
+          ...input,
+          rootId: group.root.id,
+          limit: 100,
+        }),
+        enabled:
+          grouped && Boolean(expanded[group.root.id]) && group.childCount > 0,
+        queryFn: async ({ signal }: { signal: AbortSignal }) => {
+          const items: ActivityRun[] = [];
+          let cursor: string | undefined;
+          let page;
+          do {
+            page = await activity.groupChildren.call(
+              { ...input, rootId: group.root.id, limit: 100, cursor },
+              { signal },
+            );
+            items.push(...page.items);
+            cursor = page.nextCursor ?? undefined;
+          } while (cursor);
+          return { ...page, items };
+        },
+        refetchInterval: (query: {
+          state: {
+            data?: Awaited<ReturnType<typeof activity.groupChildren.call>>;
+          };
+        }) =>
+          group.active || query.state.data?.items.some((item) => item.active)
+            ? 15_000
+            : false,
+        staleTime: 0,
+      })),
+    [childGroups, input, grouped, expanded],
+  );
+  const childPages = useQueries({
+    queries: childQueryOptions,
+    combine: combineChildPages,
+  });
+  const children = useMemo(
+    () =>
+      Object.fromEntries(
+        childGroups.map((group, index) => [
+          group.root.id,
+          childPages[index]?.data?.items ?? [],
+        ]),
+      ),
+    [childGroups, childPages],
+  );
+  const loading = useMemo(
+    () =>
+      Object.fromEntries(
+        childGroups.map((group, index) => [
+          group.root.id,
+          childPages[index]?.loading ?? false,
+        ]),
+      ),
+    [childGroups, childPages],
+  );
+  const childErrors = useMemo(
+    () =>
+      Object.fromEntries(
+        childGroups.map((group, index) => [
+          group.root.id,
+          childPages[index]?.error ?? "",
+        ]),
+      ),
+    [childGroups, childPages],
+  );
   const rows = useMemo<HistoryRow[]>(
     () =>
       grouped
         ? groupRows.flatMap(({ root, childCount, contextOnly }) => [
             { ...root, childCount, contextOnly },
-            ...(expanded[root.id]
+            ...(expanded[root.id] && childCount > 0
               ? (children[root.id] ?? []).map((item) => ({ ...item, depth: 1 }))
               : []),
           ])
@@ -192,46 +281,20 @@ export function RunHistory({
     grouped ? groups.data?.pages[0]?.totalItems : flat.data?.pages[0]?.total,
   );
   const query = grouped ? groups : flat;
-  const active = rows.some((row) => row.active);
+  const active = grouped
+    ? groupRows.some((group) => group.active)
+    : rows.some((row) => row.active);
+  const refetch = query.refetch;
   useEffect(() => {
     if (!active) return;
     const interval = window.setInterval(() => {
-      if (document.visibilityState === "visible") void query.refetch();
+      if (document.visibilityState === "visible") void refetch();
     }, 15_000);
     return () => window.clearInterval(interval);
-  }, [active, query]);
-  const toggle = useCallback(
-    async (root: HistoryRow) => {
-      if (expanded[root.id]) {
-        setExpanded((value) => ({ ...value, [root.id]: false }));
-        return;
-      }
-      setExpanded((value) => ({ ...value, [root.id]: true }));
-      if (children[root.id] || !root.childCount) return;
-      setLoading((value) => ({ ...value, [root.id]: true }));
-      try {
-        const collected: ActivityRun[] = [];
-        let cursor: string | undefined;
-        do {
-          const page = await activity.groupChildren.call({
-            ...input,
-            rootId: root.id,
-            limit: 100,
-            cursor,
-          });
-          collected.push(...page.items);
-          cursor = page.nextCursor ?? undefined;
-        } while (cursor);
-        setChildren((value) => ({ ...value, [root.id]: collected }));
-        setChildErrors((value) => ({ ...value, [root.id]: "" }));
-      } catch (error) {
-        setChildErrors((value) => ({ ...value, [root.id]: String(error) }));
-      } finally {
-        setLoading((value) => ({ ...value, [root.id]: false }));
-      }
-    },
-    [expanded, children, input],
-  );
+  }, [active, refetch]);
+  const toggle = useCallback((root: HistoryRow) => {
+    setExpanded((value) => ({ ...value, [root.id]: !value[root.id] }));
+  }, []);
   const select = (row: HistoryRow) => {
     if (mode === "mobile") {
       void navigate({
