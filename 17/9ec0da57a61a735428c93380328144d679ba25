@@ -1,0 +1,19 @@
+apps/web/src/lib/number-format.ts
+  s_2e87acf1f13363::t_922d0816b197b3 16,44,61-63
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "179ec0da57a61a735428c93380328144d679ba25",
+  "prompts": {},
+  "sessions": {
+    "s_2e87acf1f13363": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "31108f72-a141-4ae8-90c0-f38f0969a4e7",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "nicky <nicky@cloudflare.com>"
+    }
+  }
+}
