@@ -16,6 +16,21 @@ export const runPurpose = z.enum([
   "mail_discovery",
 ]);
 export type RunPurpose = z.infer<typeof runPurpose>;
+
+/** Report presentation only; agent execution and discovery purposes are separate capabilities. */
+export const IMPORT_REPORT_RUN_PURPOSES = [
+  "account_sync",
+  "mail_import",
+  "purchase_validation",
+  "product_enrichment",
+  "file_import",
+] as const satisfies readonly RunPurpose[];
+const importReportPurposes: ReadonlySet<RunPurpose> = new Set(
+  IMPORT_REPORT_RUN_PURPOSES,
+);
+export const hasImportRunReports = (purpose: RunPurpose): boolean =>
+  importReportPurposes.has(purpose);
+
 export const imageProcessingJobKind = z.enum([
   "subject_lift",
   "describe_image",

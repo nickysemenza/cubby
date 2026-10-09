@@ -1,6 +1,11 @@
 import { z } from "zod";
 import { RUN_PURPOSE_LABEL, runPurpose } from "./activity-fields";
-export { RUN_PURPOSE_LABEL, runPurpose } from "./activity-fields";
+export {
+  RUN_PURPOSE_LABEL,
+  runPurpose,
+  IMPORT_REPORT_RUN_PURPOSES,
+  hasImportRunReports,
+} from "./activity-fields";
 export type { RunPurpose } from "./activity-fields";
 import type { ExecutionAuthorizationInput } from "./execution-authorization.js";
 import { executionAuthorizationRef } from "./execution-authorization.js";

@@ -1,11 +1,8 @@
 import type { DetailSlotId } from "@cubby/schemas/entity-manifest";
 import type { ReportSlot } from "@cubby/schemas/entity-report";
 import type { RunOut } from "@cubby/schemas/run";
-import type { RunPurpose } from "@cubby/schemas/run-fields";
-import {
-  ACTIVE_RUN_STATUSES,
-  IMPORT_WORKFLOW_PURPOSES as IMPORT_PURPOSES,
-} from "@cubby/shared/client-constants";
+import { hasImportRunReports } from "@cubby/schemas/run-fields";
+import { ACTIVE_RUN_STATUSES } from "@cubby/shared/client-constants";
 import { type FunctionComponent, lazy, type LazyExoticComponent } from "react";
 
 import {
@@ -29,15 +26,11 @@ export interface DetailSlot<E extends GenericDetailEntity> {
   applies?(record: DetailRecordOf<E>): boolean;
 }
 
-const IMPORT_WORKFLOW_PURPOSES: ReadonlySet<RunPurpose> = new Set(
-  IMPORT_PURPOSES,
-);
-
 /** The Run slots that are nothing but their server-composed report. */
 type RunReportSlotId = keyof typeof import("~/app/runs/slots").runReportSlots;
 
 const isImportRun = (run: { purpose: RunPurpose }) =>
-  IMPORT_WORKFLOW_PURPOSES.has(run.purpose);
+  hasImportRunReports(run.purpose);
 
 const isLiveRun = (run: { status: string }) =>
   ACTIVE_RUN_STATUSES.some((status) => status === run.status);

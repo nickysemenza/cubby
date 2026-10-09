@@ -87,18 +87,21 @@ const notes = (blocks: ReportBlock[]) =>
   blocks.flatMap((block) => (block.kind === "note" ? [block.text] : []));
 
 describe("import report blocks", () => {
-  it("reports the four order counts as figures", () => {
-    const [stats] = importReportBlocks("run.import-stats", run());
-    expect(stats).toEqual({
-      kind: "stats",
-      figures: [
-        { label: "Orders seen", value: 3, format: "count" },
-        { label: "Imported", value: 1, format: "count" },
-        { label: "Updated", value: 1, format: "count" },
-        { label: "Skipped", value: 1, format: "count" },
-      ],
-    });
-  });
+  it.each(["purchase_validation", "mail_import"] as const)(
+    "reports the four order counts as figures for %s",
+    (purpose) => {
+      const [stats] = importReportBlocks("run.import-stats", run({ purpose }));
+      expect(stats).toEqual({
+        kind: "stats",
+        figures: [
+          { label: "Orders seen", value: 3, format: "count" },
+          { label: "Imported", value: 1, format: "count" },
+          { label: "Updated", value: 1, format: "count" },
+          { label: "Skipped", value: 1, format: "count" },
+        ],
+      });
+    },
+  );
 
   it("composes nothing for a run that is not an import workflow", () => {
     for (const purpose of ["ai_suggest", "mail_search"] as const)

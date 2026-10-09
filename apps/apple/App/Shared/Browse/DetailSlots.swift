@@ -75,7 +75,7 @@ enum DetailSlotRegistry {
         // Native has no control command (pause, resume and stop are web's), so a paused import
         // says what it waits for and hands off to web; other states have nothing to show.
         .runImportControls: { row in
-            guard SharedConstants.importWorkflowPurposes.contains(row.raw["purpose"]?.stringValue ?? ""),
+            guard SharedConstants.importReportRunPurposes.contains(row.raw["purpose"]?.stringValue ?? ""),
                 let paused = RunPausedHandoff.Reason(rawValue: row.raw["status"]?.stringValue ?? "")
             else { return nil }
             return AnyView(RunPausedHandoff(runID: row.id, reason: paused))
@@ -96,14 +96,14 @@ enum DetailSlotRegistry {
     }
 
     /// A run's report slot; nil (the section is skipped) when the run does not take it. The
-    /// import slots are for the purchase agent's runs, and the live and stopped progress
+    /// import slots follow shared report presentation, independently of execution capability. Live and stopped progress
     /// variants split on whether the run is still moving; the server enforces the same rules.
     @MainActor
     private static func runReportSlot(
         _ slot: ReportSlot, _ row: EntityRow, imports: Bool = true, liveness: Bool? = nil
     ) -> AnyView? {
         if imports,
-            !SharedConstants.importWorkflowPurposes.contains(row.raw["purpose"]?.stringValue ?? "")
+            !SharedConstants.importReportRunPurposes.contains(row.raw["purpose"]?.stringValue ?? "")
         {
             return nil
         }

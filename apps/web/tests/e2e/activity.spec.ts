@@ -3,6 +3,7 @@ import {
   seedPagedActivityHistory,
   seedActiveResearchHistory,
   setResearchHistoryStatus,
+  seedMailImportReportRun,
 } from "./fixtures-photos";
 import {
   expectViewportBounded,
@@ -45,6 +46,26 @@ test("Grouped research refreshes collapsed roots and expanded or reopened childr
   await setResearchHistoryStatus(sample.childId, "failed");
   await expand.click();
   await expect(table.getByText("failed", { exact: true })).toHaveCount(2);
+});
+
+test("Mail import exposes its persisted counts in the shared Run detail", async ({
+  page,
+}) => {
+  const id = await seedMailImportReportRun(
+    page,
+    uniqueName(test.info(), "Mail report"),
+  );
+  await gotoAuthenticatedPage(page, `/runs/${id}`);
+  await expect(
+    page.getByRole("heading", { name: "Counts", exact: true }),
+  ).toBeVisible();
+  await expect(page.getByText("Orders seen", { exact: true })).toBeVisible();
+  await expect(
+    page.getByRole("heading", { name: "Purchases changed", exact: true }),
+  ).toBeVisible();
+  await expect(
+    page.getByRole("heading", { name: "Run progress", exact: true }),
+  ).toBeVisible();
 });
 
 /**

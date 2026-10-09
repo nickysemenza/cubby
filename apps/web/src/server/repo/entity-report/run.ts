@@ -11,14 +11,13 @@ import {
   countRunTargets,
   runTargetState,
 } from "@cubby/schemas/purchase-import";
-import { runStatus } from "@cubby/schemas/run-fields";
+import { hasImportRunReports, runStatus } from "@cubby/schemas/run-fields";
 import { TRADE_LABELS, tradeValues } from "@cubby/schemas/task-fields";
 import { AI_USAGE_TRANSPORT_LABELS } from "@cubby/schemas/telemetry";
 import { CF_ACCOUNT_ID } from "@cubby/shared/ai/gateway-metadata";
 import {
   ACTIVE_RUN_STATUSES,
   HOUSEHOLD_TIMEZONE,
-  IMPORT_WORKFLOW_PURPOSES,
 } from "@cubby/shared/client-constants";
 import { z } from "zod";
 
@@ -70,7 +69,6 @@ interface RowFields {
 }
 
 const LIVE_STATUSES: ReadonlySet<string> = new Set(ACTIVE_RUN_STATUSES);
-const IMPORT_PURPOSES: ReadonlySet<string> = new Set(IMPORT_WORKFLOW_PURPOSES);
 
 /** A run that is still moving: clients poll and offer controls only while this holds. */
 export const isLiveRunStatus = (status: string): boolean =>
@@ -802,7 +800,7 @@ export function importReportBlocks(
 ): ReportBlock[] {
   if (run.purpose === "photo_inventory")
     return slot === "run.import-timeline" ? importTimeline(run) : [];
-  return IMPORT_PURPOSES.has(run.purpose) ? IMPORT_BUILDERS[slot](run) : [];
+  return hasImportRunReports(run.purpose) ? IMPORT_BUILDERS[slot](run) : [];
 }
 
 const ORDER_OUTCOME = {
