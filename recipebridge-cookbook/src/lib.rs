@@ -8,5 +8,13 @@
 //! `sha256()`; plus `usage_from_response(model, body)` for AI-usage
 //! accounting, `default_ladder()`, and `model_catalog()`. Re-exported here so
 //! wasm-bindgen emits them from this cdylib and tsify writes their types into
-//! the generated `.d.ts`.
+//! the generated `.d.ts`. Upstream compiles `cookbook::wasm` only for wasm32.
+
+#[cfg(target_arch = "wasm32")]
 pub use cookbook::wasm::*;
+
+#[cfg(target_arch = "wasm32")]
+#[wasm_bindgen::prelude::wasm_bindgen(start)]
+pub fn init() {
+    console_error_panic_hook::set_once();
+}

@@ -9,7 +9,9 @@ name = "cubby_ffi"
 crate-type = ["staticlib", "cdylib", "rlib"]
 
 [dependencies]
-recipebridge = { path = "../recipebridge" }
+# No default features: `html` and `ai-usage` are Worker-only, and `ai-usage`
+# would compile the cookbook crate into every Apple target.
+recipebridge = { path = "../recipebridge", default-features = false }
 uniffi = "0.32"
 
 # `cli` pulls in `uniffi_bindgen` + `clap`, needed only by the `uniffi-bindgen`

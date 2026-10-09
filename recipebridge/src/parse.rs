@@ -482,6 +482,7 @@ pub fn singularize_unit(unit: String) -> String {
     ingredient::unit::singular(&unit).to_string()
 }
 
+#[cfg(feature = "html")]
 #[wasm_bindgen]
 pub fn parse_scraped_recipe(body: &str, url: &str) -> Result<WScrapedRecipe, String> {
     recipe_scraper::scrape(body, url)

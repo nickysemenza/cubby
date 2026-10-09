@@ -2,14 +2,15 @@
 //!
 //! This file holds the wasm init and the shared boundary primitives (`WAmount`,
 //! `WUnitMapping`); the exports live in focused modules:
-//! - [`parse`] — ingredient lines, rich instruction text, scraped recipes, yields
+//! - [`parse`] — ingredient lines, rich instruction text, scraped recipes (`html`), yields
 //! - [`conversion`] — unit-kind conversion, explained paths, graph debugging
 //! - [`food_mappings`] — USDA food/product → unit-mapping synthesis
 //! - [`food_calculation`] — live product, ingredient, recipe, and manual food totals
 //! - [`costing`] — the recipe costing engine (consumption model, two-pass totals)
 //! - [`scaling`] — scale-factor anchors and scaled-count rounding shared with native
 //! - [`needs`] — sub-recipe expansion into flat, scaled ingredient needs
-//! - [`epub`] — EPUB cookbook extraction (re-exported from upstream `cookbook::wasm`)
+//! - [`page`] — captured browser page compaction (`html`)
+//! - [`ai_usage`] — gateway-call token usage and catalog cost (`ai-usage`)
 //! - [`display_format`] — currency, bare-number, and compact nutrition cell text shared with native
 //! - [`isbn`] — ISBN-10/ISBN-13 validation and GTIN-14 normalization
 //!
@@ -31,35 +32,35 @@ use wasm_bindgen::prelude::*;
 #[macro_use]
 mod macros;
 
+#[cfg(feature = "ai-usage")]
+mod ai_usage;
 mod availability;
 mod conversion;
 mod costing;
 mod display_format;
-// Upstream compiles `cookbook::wasm` only for wasm32, so the native
-// `cargo test` build of this crate has no EPUB module to re-export.
-#[cfg(target_arch = "wasm32")]
-mod epub;
 mod estimates;
 mod food_calculation;
 mod food_mappings;
 mod isbn;
 mod needs;
+#[cfg(feature = "html")]
 mod page;
 mod parse;
 mod reconcile;
 mod scaling;
 
+#[cfg(feature = "ai-usage")]
+pub use ai_usage::*;
 pub use availability::*;
 pub use conversion::*;
 pub use costing::*;
 pub use display_format::*;
-#[cfg(target_arch = "wasm32")]
-pub use epub::*;
 pub use estimates::*;
 pub use food_calculation::*;
 pub use food_mappings::*;
 pub use isbn::*;
 pub use needs::*;
+#[cfg(feature = "html")]
 pub use page::*;
 pub use parse::*;
 pub use scaling::*;

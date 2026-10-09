@@ -3,7 +3,7 @@
   "name": "recipebridge",
   "targets": {
     "rust": {
-      "command": "cargo fmt --check && cargo clippy --all-targets -- -D warnings && cargo test",
+      "command": "cargo fmt --check && cargo clippy --all-targets -- -D warnings && cargo clippy --no-default-features -- -D warnings && cargo test",
       "options": {
         "cwd": "{projectRoot}"
       },

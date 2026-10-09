@@ -39,7 +39,12 @@ export const cargoMetadataSchema = z.object({
 });
 
 const WASM_DIR = join(ROOT, "packages/wasm");
-const BINARY = "recipebridge_bg.wasm";
+// scripts/build-wasm.sh emits all three; any one missing means a partial build.
+const BINARIES = [
+  "recipebridge_bg.wasm",
+  "browser/recipebridge_bg.wasm",
+  "cookbook/recipebridge_cookbook_bg.wasm",
+];
 const MARKER = ".fingerprint";
 
 const WASM_RELEASE_PROFILE = {
@@ -54,12 +59,14 @@ const fingerprint = () => {
   // Match pnpm wasm's build environment before hashing. Otherwise its stamp
   // includes the default target directory but every startup computes another key.
   process.env.CARGO_TARGET_DIR ??= join(homedir(), ".cache/cubby/cargo-target");
-  // The `wasm` script sets the release profile through CARGO_PROFILE_RELEASE_*
+  // scripts/build-wasm.sh sets the release profile through CARGO_PROFILE_RELEASE_*
   // (member profiles are ignored in the workspace, and wasm-pack only takes
-  // --release). Mirror it here so the key tracks the profile. Keep in sync with
-  // package.json and setup-node-with-deps.
+  // --release). Mirror it here so the key tracks the profile.
   Object.assign(process.env, WASM_RELEASE_PROFILE);
-  const extra = [command("wasm-pack", ["--version"])];
+  const extra = [
+    command("wasm-pack", ["--version"]),
+    readFileSync(join(ROOT, "scripts/build-wasm.sh"), "utf8"),
+  ];
   // wasm-pack can provision its own optimizer when none is installed on PATH.
   try {
     extra.push(command("wasm-opt", ["--version"]));
@@ -69,9 +76,9 @@ const fingerprint = () => {
   return rustFingerprint(resolve(ROOT, "Cargo.toml"), extra);
 };
 
-// The binary must exist too: a marker alone survives a partial clean.
+// The binaries must exist too: a marker alone survives a partial clean.
 export const wasmIsCurrent = (key: string, directory = WASM_DIR) =>
-  existsSync(join(directory, BINARY)) &&
+  BINARIES.every((binary) => existsSync(join(directory, binary))) &&
   existsSync(join(directory, MARKER)) &&
   readFileSync(join(directory, MARKER), "utf8").trim() === key;
 

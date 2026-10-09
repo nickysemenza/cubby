@@ -1,4 +1,4 @@
-import type { HttpRequest, HttpResponse } from "@cubby/recipebridge";
+import type { HttpRequest, HttpResponse } from "@cubby/recipebridge/cookbook";
 import type { gatewayForwardInput } from "@cubby/schemas/import-recipe";
 import type { z } from "zod";
 

@@ -89,13 +89,19 @@ test("cargo metadata ingress requires package source and manifest path", () => {
   );
 });
 
-test("the in-package marker short-circuits only when it matches and the binary exists", (t) => {
+test("the in-package marker short-circuits only when it matches and every binary exists", (t) => {
   const pkg = mkdtempSync(join(tmpdir(), "cubby-wasm-marker-"));
   t.after(() => rmSync(pkg, { recursive: true, force: true }));
   assert.equal(wasmIsCurrent("key", pkg), false);
   stampWasm("key", pkg);
   assert.equal(wasmIsCurrent("key", pkg), false);
+  // A build interrupted after the first wasm-pack run is still stale.
   writeFileSync(join(pkg, "recipebridge_bg.wasm"), "binary");
+  mkdirSync(join(pkg, "browser"));
+  writeFileSync(join(pkg, "browser/recipebridge_bg.wasm"), "binary");
+  assert.equal(wasmIsCurrent("key", pkg), false);
+  mkdirSync(join(pkg, "cookbook"));
+  writeFileSync(join(pkg, "cookbook/recipebridge_cookbook_bg.wasm"), "binary");
   assert.equal(wasmIsCurrent("key", pkg), true);
   assert.equal(wasmIsCurrent("other", pkg), false);
   stampWasm("other", pkg);

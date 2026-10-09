@@ -2,7 +2,7 @@ import type {
   Book as WasmBook,
   ExtractOptions,
   Progress,
-} from "@cubby/recipebridge";
+} from "@cubby/recipebridge/cookbook";
 import {
   cookbookExtractionSchema,
   cookbookRunReportSchema,
@@ -60,6 +60,7 @@ import { BookGroupCard } from "./book-group-card";
 import { runTwoAtATime } from "./bundle";
 import type { CookbookBundleWorker } from "./bundle-worker";
 import { CookbookDropzone } from "./cookbook-dropzone";
+import { loadCookbookWasm, type LoadCookbookWasm } from "./cookbook-wasm";
 import { asStoredExtraction, toBookEstimate } from "./extraction-result";
 import { createGatewaySend } from "./gateway-transport";
 import { deriveBookName } from "./import-helpers";
@@ -114,9 +115,12 @@ const cookbookJsonFile = z.union([
 
 export function CookbookImport({
   loadCookbookId,
+  loadEpubModule = loadCookbookWasm,
 }: {
   /** When set, re-open this cookbook's stored extraction for selective re-import. */
   loadCookbookId?: string;
+  /** The lazily loaded EPUB package. */
+  loadEpubModule?: LoadCookbookWasm;
 }) {
   const upsertCookbook = useMutation(recipe.upsertCookbook.mutationOptions());
   const forwardGateway = useMutation(
@@ -153,6 +157,16 @@ export function CookbookImport({
   const coverUrlsRef = useRef<Map<string, string>>(new Map());
   const bundleWorkersRef = useRef(new Map<string, CookbookBundleWorker>());
   const bundleUploadsRef = useRef(new Map<string, AbortController>());
+  // Opening waits on the lazily loaded EPUB module. Each open takes a fresh
+  // generation; removal, unmount, or a newer open of the same source retires
+  // it, so a late continuation creates no handle nobody would free.
+  const openGenerationRef = useRef(0);
+  const currentOpensRef = useRef(new Map<string, number>());
+  const beginOpen = useCallback((source: string) => {
+    const generation = ++openGenerationRef.current;
+    currentOpensRef.current.set(source, generation);
+    return () => currentOpensRef.current.get(source) === generation;
+  }, []);
 
   // Extraction (minutes of concurrent LLM calls) and import both live entirely in
   // this component's state — there's no server-side record to resume from. Warn
@@ -189,6 +203,7 @@ export function CookbookImport({
   );
 
   const discardBookResources = useCallback((source: string) => {
+    currentOpensRef.current.delete(source);
     bundleUploadsRef.current.get(source)?.abort();
     bundleUploadsRef.current.delete(source);
     bundleWorkersRef.current.get(source)?.close();
@@ -212,6 +227,7 @@ export function CookbookImport({
   // megabytes of wasm memory alive for the rest of the session.
   useEffect(
     () => () => {
+      currentOpensRef.current.clear();
       for (const abort of bundleUploadsRef.current.values()) abort.abort();
       for (const worker of bundleWorkersRef.current.values()) worker.close();
       for (const handle of bookHandlesRef.current.values()) handle.free();
@@ -264,6 +280,12 @@ export function CookbookImport({
     : [];
   const [source] = useQueries({ queries: sourceQueries });
   const [seeded, setSeeded] = useState(false);
+  // Opening an EPUB waits on this module; warming it on mount keeps a click
+  // right after choosing a file (e.g. Retry photo) from racing the bind.
+  useEffect(() => {
+    // SILENT: opening a book loads it again and reports the failure there.
+    loadEpubModule().catch(() => undefined);
+  }, [loadEpubModule]);
   useEffect(() => {
     if (!source?.data || seeded) return;
     const { id, name, cookbook, report } = source.data;
@@ -354,13 +376,17 @@ export function CookbookImport({
    * reused, which is why the raw bytes are kept around.
    */
   const openBook = useCallback(
-    (source: string, bytes: Uint8Array): WasmBook | null => {
-      bookHandlesRef.current.get(source)?.free();
-      bookHandlesRef.current.delete(source);
+    async (source: string, bytes: Uint8Array): Promise<WasmBook | null> => {
+      const isCurrent = beginOpen(source);
       let handle: WasmBook;
       try {
-        handle = wasm.open_book(bytes, source);
+        const cookbookWasm = await loadEpubModule();
+        if (!isCurrent()) return null;
+        bookHandlesRef.current.get(source)?.free();
+        bookHandlesRef.current.delete(source);
+        handle = cookbookWasm.open_book(bytes, source);
       } catch (error) {
+        if (!isCurrent()) return null;
         setExtract(source, {
           status: "error",
           message: getErrorMessage(error),
@@ -426,7 +452,7 @@ export function CookbookImport({
       }));
       return handle;
     },
-    [setExtract, updateBook],
+    [beginOpen, loadEpubModule, setExtract, updateBook],
   );
 
   /**
@@ -472,7 +498,7 @@ export function CookbookImport({
           // book a second time — so hand back a fresh handle on the same bytes,
           // returning the card to its estimate with an Extract button.
           const bytes = epubBytesRef.current.get(source);
-          if (bytes) openBook(source, bytes);
+          if (bytes) await openBook(source, bytes);
           else setExtract(source, { status: "error", message: "Cancelled" });
           toast.message(`Cancelled ${deriveBookName(source)}`);
           return;
@@ -538,7 +564,7 @@ export function CookbookImport({
       if (newBooks.length) setBooks((prev) => [...prev, ...newBooks]);
       for (const name of toOpen) {
         const bytes = bytesBySource.get(name);
-        if (bytes) openBook(name, bytes);
+        if (bytes) await openBook(name, bytes);
       }
     },
     [books, openBook],
@@ -549,13 +575,13 @@ export function CookbookImport({
   // downstream (import upserts by (cookbook, name)), so a retry that now reads
   // the previously-failed chunks simply adds the recovered recipes.
   const retryExtraction = useCallback(
-    (source: string) => {
+    async (source: string) => {
       const bytes = epubBytesRef.current.get(source);
       if (!bytes) {
         toast.error("Original file unavailable — re-drop the .epub to retry.");
         return;
       }
-      if (openBook(source, bytes)) void extractBook(source);
+      if (await openBook(source, bytes)) await extractBook(source);
     },
     [extractBook, openBook],
   );
@@ -796,6 +822,15 @@ export function CookbookImport({
         return;
       }
       const bytes = new Uint8Array(await file.arrayBuffer());
+      const isCurrent = beginOpen(source);
+      let cookbookWasm: Awaited<ReturnType<LoadCookbookWasm>>;
+      try {
+        cookbookWasm = await loadEpubModule();
+      } catch (error) {
+        if (isCurrent()) showErrorToast(error, "Could not read that EPUB");
+        return;
+      }
+      if (!isCurrent()) return;
       bookHandlesRef.current.get(source)?.free();
       bookHandlesRef.current.delete(source);
       discardBookPhotoResources(
@@ -807,7 +842,7 @@ export function CookbookImport({
       clearBookPhotoPreviews(source);
       let handle: WasmBook;
       try {
-        handle = wasm.open_book(bytes, source);
+        handle = cookbookWasm.open_book(bytes, source);
       } catch (error) {
         showErrorToast(error, "Could not read that EPUB");
         return;
@@ -820,8 +855,10 @@ export function CookbookImport({
       toast.message(`Original EPUB ready for ${file.name}`);
     },
     [
+      beginOpen,
       books,
       clearBookPhotoPreviews,
+      loadEpubModule,
       prepareSelectedPhotos,
       updateBook,
       loadBundle,

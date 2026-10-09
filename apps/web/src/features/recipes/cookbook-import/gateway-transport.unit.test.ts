@@ -1,4 +1,4 @@
-import type { HttpRequest } from "@cubby/recipebridge";
+import type { HttpRequest } from "@cubby/recipebridge/cookbook";
 import { describe, expect, it, vi } from "vitest";
 
 import {

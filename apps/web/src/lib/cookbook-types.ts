@@ -1,4 +1,4 @@
-import type { Cookbook, RunReport } from "@cubby/recipebridge";
+import type { Cookbook, RunReport } from "@cubby/recipebridge/cookbook";
 import type {
   CookbookExtraction,
   CookbookRunReport,

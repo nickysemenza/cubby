@@ -41,7 +41,7 @@
     },
     {
       "matchManagers": ["cargo"],
-      "matchPackageNames": ["ingredient", "recipe-scraper", "recipe-epub"],
+      "matchPackageNames": ["ingredient", "recipe-scraper", "cookbook"],
       "enabled": true,
       "groupName": "ingredient-parser upstream",
       "groupSlug": "ingredient-parser-upstream"

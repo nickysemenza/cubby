@@ -55,6 +55,8 @@ it.each(["source-edit", "commit", "output-edit", "unchanged"])(
     put("apps/web/dist/client/main.js");
     put("apps/web/dist/server/index.js");
     put("packages/wasm/recipebridge_bg.wasm");
+    put("packages/wasm/browser/recipebridge_bg.wasm");
+    put("packages/wasm/cookbook/recipebridge_cookbook_bg.wasm");
     writeWebBuildProvenance(root);
     const started = captureE2ERunIdentity(root);
     if (change === "output-edit")

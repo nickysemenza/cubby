@@ -31,6 +31,15 @@ JSONL routes    →  cancellable workflow streams
   `wasm` from `~/lib/wasm` (sync) on the client and `wasmServer` (async) on the
   server. Conversions chain through a product's unit mappings, e.g.
   `2 cups → $5.00 → 333g`.
+- [scripts/build-wasm.sh](../scripts/build-wasm.sh) builds three packages into
+  `packages/wasm`. The Worker and Vitest load the full build. The browser
+  loads `browser/`, built without the Worker-only `html` and `ai-usage`
+  features (`compact_browser_page`, `parse_scraped_recipe`,
+  `gateway_call_usage`). Only the cookbook import loads
+  `@cubby/recipebridge/cookbook` (the `recipebridge-cookbook` crate). Put a new
+  Worker-only export behind one of those features; browser code must not call
+  it, which `wasm-browser-exports.unit.test.ts` enforces, and
+  `check-client-bundle.ts` checks each package lands in the right bundle.
 - USDA data comes from the `usda-api` Worker through the ts-rest contract
   `@cubby/usda/contract`. Its client is `apps/web/src/server/clients/usda.ts`.
 - Purchase imports run in the web Worker, which binds both the purchase
@@ -73,7 +82,7 @@ contracts separately.
 | `pnpm db:generate` / `pnpm db:check`                               | Generate a migration from `schema.ts` / prove migrations match it           |
 | `pnpm --filter @cubby/web db:migrate --target=production`          | Apply migrations; needs `PRODUCTION_DIRECT_DATABASE_URL`                    |
 | `pnpm deploy:all`                                                  | Deploy web, purchase-agent, then usda-api                                   |
-| `pnpm wasm`                                                        | Rebuild `@cubby/recipebridge` from Rust, uncached                           |
+| `pnpm wasm`                                                        | Rebuild the `@cubby/recipebridge` packages from Rust, uncached              |
 | `pnpm apple <cli\|mac\|ios\|sim\|gen\|test>`                       | Native app products                                                         |
 
 Test suffixes: `*.unit.test.ts` (Vitest), `*.integration.test.ts` (PostgreSQL

@@ -47,7 +47,7 @@ runs:
         # WASM/JS outputs are portable; retain the existing Linux cache namespace
         # so native lanes reuse main's exact source revision without Rust compilation.
         # Exact key only: a prefix hit would restore the wrong parser revision.
-        key: wasm-pkg-Linux-${{ hashFiles('Cargo.toml', 'Cargo.lock', 'recipebridge/Cargo.toml', 'recipebridge/src/**', 'rust-toolchain.toml') }}
+        key: wasm-pkg-Linux-${{ hashFiles('Cargo.toml', 'Cargo.lock', 'recipebridge/Cargo.toml', 'recipebridge/src/**', 'recipebridge-cookbook/**', 'scripts/build-wasm.sh', 'packages/wasm/package.json', 'rust-toolchain.toml') }}
 
     - uses: actions-rust-lang/setup-rust-toolchain@ecabd13d1c56bd1345c230e542e9144811ad706f # v2
       if: inputs.wasm == 'restore' && steps.wasm-cache.outputs.cache-hit != 'true'
@@ -70,16 +70,9 @@ runs:
 
       # pnpm 12 otherwise installs dependencies before running this script,
       # breaking the WASM-before-install ordering above.
-      run: wasm-pack build --scope cubby --out-dir ../packages/wasm recipebridge
+      run: bash scripts/build-wasm.sh
       env:
         RUSTFLAGS: '--cfg getrandom_backend="wasm_js"'
-        # Same release profile as the root `wasm` script (member profiles are
-        # ignored in the workspace and wasm-pack takes only --release).
-        CARGO_PROFILE_RELEASE_OPT_LEVEL: z
-        CARGO_PROFILE_RELEASE_LTO: "true"
-        CARGO_PROFILE_RELEASE_CODEGEN_UNITS: "1"
-        CARGO_PROFILE_RELEASE_PANIC: abort
-        CARGO_PROFILE_RELEASE_INCREMENTAL: "false"
         # Match rust-cache's cache-workspaces above.
         CARGO_TARGET_DIR: ${{ github.workspace }}/target
 
@@ -91,7 +84,7 @@ runs:
       uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6
       with:
         path: packages/wasm
-        key: wasm-pkg-Linux-${{ hashFiles('Cargo.toml', 'Cargo.lock', 'recipebridge/Cargo.toml', 'recipebridge/src/**', 'rust-toolchain.toml') }}
+        key: wasm-pkg-Linux-${{ hashFiles('Cargo.toml', 'Cargo.lock', 'recipebridge/Cargo.toml', 'recipebridge/src/**', 'recipebridge-cookbook/**', 'scripts/build-wasm.sh', 'packages/wasm/package.json', 'rust-toolchain.toml') }}
 
     # packages/wasm now matches the exact recipebridge sources in the cache
     # key (restored or just built), so the Nx `wasm` target need not rebuild

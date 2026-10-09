@@ -1,4 +1,4 @@
-import type { Progress } from "@cubby/recipebridge";
+import type { Progress } from "@cubby/recipebridge/cookbook";
 import { ProhibitIcon } from "@phosphor-icons/react/dist/csr/Prohibit";
 import { WarningCircleIcon } from "@phosphor-icons/react/dist/csr/WarningCircle";
 
