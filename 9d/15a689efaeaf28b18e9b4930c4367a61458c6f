@@ -1,0 +1,21 @@
+apps/web/src/cf-server.ts
+  s_2e87acf1f13363::t_27bf697f4f59c1 13-17,48-49,594,600-606
+docs/agents/domain-rules.md
+  s_2e87acf1f13363::t_f3717e7b05ef2c 145-146
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "9d15a689efaeaf28b18e9b4930c4367a61458c6f",
+  "prompts": {},
+  "sessions": {
+    "s_2e87acf1f13363": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "31108f72-a141-4ae8-90c0-f38f0969a4e7",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "nicky <nicky@cloudflare.com>"
+    }
+  }
+}
