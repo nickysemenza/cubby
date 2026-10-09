@@ -217,8 +217,13 @@ function observeStreamFailure(
   let eventsSeen = 0;
   let remaining = 65_536;
   let observing = true;
+  const recordPriorEvent = (type: string) => {
+    eventsSeen += 1;
+    if (priorEvents.length < 8) priorEvents.push(type.slice(0, 200));
+  };
   const parser = createParser({
-    maxBufferSize: 16_384,
+    // Framing counts toward parser buffering, but not decoded error data.
+    maxBufferSize: 65_536,
     onError: () => {
       observing = false;
     },
@@ -232,6 +237,7 @@ function observeStreamFailure(
       try {
         decoded = JSON.parse(event.data);
       } catch {
+        recordPriorEvent(event.event ?? "unnamed");
         return;
       }
       const envelope = z
@@ -274,8 +280,7 @@ function observeStreamFailure(
           body: `SSE ${JSON.stringify({ event: type.slice(0, 200), contentType: response.headers.get("content-type"), requestId: response.headers.get("x-request-id"), priorEvents, eventsSeen })}\n${raw}`,
         });
       } else {
-        eventsSeen += 1;
-        if (priorEvents.length < 8) priorEvents.push(type.slice(0, 200));
+        recordPriorEvent(type);
       }
     },
   });

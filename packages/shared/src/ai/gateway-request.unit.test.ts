@@ -739,3 +739,67 @@ describe("stream diagnostic privacy and envelope bounds", () => {
     },
   );
 });
+
+// Framing overhead and non-JSON keepalives must not change the diagnostic
+// evidence when the transport delivers a different valid chunk layout.
+describe("stream diagnostic framing evidence", () => {
+  const headers = { "content-type": "text/event-stream" };
+  it.each(["coalesced", "before-newline"])(
+    "observes the same near-limit error with %s framing",
+    async (layout) => {
+      const base = JSON.stringify({ code: "synthetic_error", message: "" });
+      const payload = JSON.stringify({
+        code: "synthetic_error",
+        message: "x".repeat(16_382 - base.length),
+      });
+      const text = `event: error\ndata: ${payload}\n\n`;
+      const bytes = new TextEncoder().encode(text);
+      let offset = 0;
+      const firstEnd = layout === "coalesced" ? bytes.length : bytes.length - 2;
+      const observer = vi.fn();
+      const send = gatewayFetchThrough({
+        provider: "openai",
+        gateway: async () =>
+          new Response(
+            new ReadableStream({
+              pull(controller) {
+                if (offset === bytes.length) controller.close();
+                else {
+                  const end = offset === 0 ? firstEnd : bytes.length;
+                  controller.enqueue(bytes.slice(offset, end));
+                  offset = end;
+                }
+              },
+            }),
+            { headers },
+          ),
+        onErrorResponse: observer,
+      });
+      const response = await send(`${gatewayBaseURL("openai")}/responses`, {
+        body: "{}",
+        method: "POST",
+      });
+      expect(await response.text()).toBe(text);
+      expect(observer).toHaveBeenCalledTimes(1);
+    },
+  );
+
+  it("counts non-JSON events without retaining their data", async () => {
+    const text =
+      'event: ping\ndata: synthetic keepalive\n\nevent: error\ndata: {"code":"synthetic_error"}\n\n';
+    const diagnostics: string[] = [];
+    const send = gatewayFetchThrough({
+      provider: "openai",
+      gateway: async () => new Response(text, { headers }),
+      onErrorResponse: (f) => diagnostics.push(f.body),
+    });
+    const response = await send(`${gatewayBaseURL("openai")}/responses`, {
+      body: "{}",
+      method: "POST",
+    });
+    expect(await response.text()).toBe(text);
+    expect(diagnostics[0]).toContain('"priorEvents":["ping"]');
+    expect(diagnostics[0]).toContain('"eventsSeen":1');
+    expect(diagnostics[0]).not.toContain("synthetic keepalive");
+  });
+});
