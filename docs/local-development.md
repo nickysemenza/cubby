@@ -175,7 +175,9 @@ error, empty or edge state without creating database rows. The preview entry and
 Faker are outside the production import graph.
 
 With this checkout's `pnpm dev` ready, run `pnpm --dir apps/web test:e2e:hmr`.
-The optional lane discovers the supervisor and verifies its local origin,
+Configuration inspection needs no live session. Runtime fixtures bind the profile
+environment before importing server modules, which capture database settings
+at import time. The optional lane discovers the supervisor and verifies its local origin,
 checkout id and database before writing. It creates run-owned synthetic records
 and deletes only those records after each case, retaining failed deletions for
 retry. Sanitized artifacts identify the source revision and fingerprint; source

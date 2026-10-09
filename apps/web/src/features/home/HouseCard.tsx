@@ -18,7 +18,7 @@ import { CalendarDate } from "~/ui/common/calendar-date";
 import { Button } from "~/ui/primitives/button";
 import { Skeleton } from "~/ui/primitives/skeleton";
 
-export const TODAY_ENTITY_LINK_CLASS = "min-h-11 items-center sm:min-h-0";
+const TODAY_ENTITY_LINK_CLASS = "min-h-11 items-center sm:min-h-0";
 type TodayBriefingCounts = Pick<
   TaskTodayBriefingOut,
   | "nextCount"

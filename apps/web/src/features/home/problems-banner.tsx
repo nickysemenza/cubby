@@ -17,7 +17,7 @@ import { cn, formatCount } from "~/lib/utils";
  * backlog trails it as quiet context, which is the difference between "this is
  * wrong" and "this hasn't been filed yet".
  */
-export function problemsBannerMessage(defects: number): string {
+function problemsBannerMessage(defects: number): string {
   return defects > 0
     ? `${defects === 1 ? "problem needs" : "problems need"} attention`
     : "No defects found.";

@@ -1,22 +1,14 @@
 import { defineConfig, devices } from "@playwright/test";
 
-import { discoverHmrSession } from "./tests/e2e/hmr-session";
-
 /**
  * Optional lane against this checkout's running `pnpm dev` origin
  * (`pnpm --dir apps/web test:e2e:hmr`). It reuses the warm HMR session instead
  * of a built Worker and disposable database, so it is local iteration evidence
  * only; the exact-head CI suite stays the merge gate.
  *
- * Kernel fixtures run in this process against the session database, so the
- * process takes the session profile's own local environment — never the
- * synthetic acceptance defaults in playwright.config.ts.
+ * The worker fixture discovers and binds the local environment before any
+ * writes. Configuration inspection itself needs no running development session.
  */
-const { profile, session } = discoverHmrSession();
-Object.assign(process.env, profile.vars, {
-  E2E_DATABASE_URL: profile.databaseUrl,
-});
-
 export default defineConfig({
   testDir: "./tests/e2e",
   testMatch: /\.hmr\.ts$/,
@@ -34,7 +26,6 @@ export default defineConfig({
   expect: { timeout: 15_000 },
   use: {
     ...devices["Desktop Chrome"],
-    baseURL: session.origin,
     reducedMotion: "reduce",
     trace: "retain-on-failure",
     screenshot: "only-on-failure",

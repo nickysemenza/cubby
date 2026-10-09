@@ -1,15 +1,12 @@
 import { randomUUID } from "node:crypto";
 import { test as base, expect, request } from "@playwright/test";
 
-import { executeEntity } from "~/server/entity-kernel";
 import type {
   CreatableEntity,
   EntityOverrides,
 } from "../../tooling/factories/build";
-import { createEntity } from "../../tooling/factories/create";
 import { fakerFromSeed, hashSeed } from "../../tooling/factories/faker";
 
-import { fixtureKernelContext } from "./fixtures-core";
 import {
   assertHmrRuntimeIdentity,
   discoverHmrSession,
@@ -42,6 +39,9 @@ export const test = base.extend<
     // eslint-disable-next-line no-empty-pattern
     async ({}, provide) => {
       const session = discoverHmrSession();
+      Object.assign(process.env, session.profile.vars, {
+        E2E_DATABASE_URL: session.profile.databaseUrl,
+      });
       await assertHmrRuntimeIdentity(session);
       await provide(session);
     },
@@ -64,7 +64,16 @@ export const test = base.extend<
       await context.dispose();
     }
   },
-  owned: async ({ page }, provide, testInfo) => {
+  owned: async ({ page, hmrSession }, provide, testInfo) => {
+    await assertHmrRuntimeIdentity(hmrSession);
+    // Server modules capture environment at import time; load only after the
+    // session worker fixture binds this checkout's verified profile.
+    const [{ executeEntity }, { createEntity }, { fixtureKernelContext }] =
+      await Promise.all([
+        import("~/server/entity-kernel"),
+        import("../../tooling/factories/create"),
+        import("./fixtures-core"),
+      ]);
     const run = randomUUID().slice(0, 8);
     const faker = fakerFromSeed(hashSeed(...testInfo.titlePath, run));
     const created: Array<{ entity: CreatableEntity; id: string }> = [];
