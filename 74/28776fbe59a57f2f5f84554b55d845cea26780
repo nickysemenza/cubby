@@ -1,0 +1,49 @@
+apps/web/src/routes/api/import/evidence.ts
+  s_2e87acf1f13363::t_2ab4b2d526c0d0 8-10
+apps/web/src/server/entity-list-runtime.server.ts
+  s_2e87acf1f13363::t_25c4c73ea4bb78 9
+apps/web/src/server/mcp/http-handler.ts
+  s_2e87acf1f13363::t_e8dcee75dbf27b 12,15,119,122,171
+apps/web/src/server/operations/problem-counts.server.ts
+  s_2e87acf1f13363::t_a49452a68e91e1 20-22
+apps/web/src/server/operations/problem-reports.server.ts
+  s_2e87acf1f13363::t_ed517b9de7fbc7 1-28
+apps/web/src/server/operations/problems.server.ts
+  s_2e87acf1f13363::t_c167d5e4c2771a 20-22,27,30,32,37,42,44,46,48,50,52-55,57,59,66,79,81,105,151,166,168
+apps/web/src/server/operations/purchase.server.ts
+  s_2e87acf1f13363::t_54028bb36e82e5 18
+apps/web/src/server/purchase-import/gmail/discovery.ts
+  s_2e87acf1f13363::t_00645dd4264cc8 47,415
+apps/web/src/server/purchase-import/gmail/import.ts
+  s_2e87acf1f13363::t_112e8093b804bb 22,75
+apps/web/src/server/purchase-import/gmail/ingest.ts
+  s_2e87acf1f13363::t_2f2873b94dc747 63-65,73,83
+apps/web/src/server/purchase-import/gmail/search-job.ts
+  s_2e87acf1f13363::t_6974f48759b3f4 28,234,297,299
+apps/web/src/server/purchase-import/research-service.ts
+  s_2e87acf1f13363::t_7df61fe16ff638 75,80,88
+apps/web/src/server/purchase-import/run-evidence.ts
+  s_2e87acf1f13363::t_c71f2361fe5cb3 17,141-144
+apps/web/src/server/repo/entity-report/cookbook.ts
+  s_2e87acf1f13363::t_1311e0f6b79b74 3,9
+apps/web/src/server/repo/entity-report/index.ts
+  s_2e87acf1f13363::t_cd513e060dbce9 20,47,94
+apps/web/src/server/repo/entity-report/recipe-walkthrough.ts
+  s_2e87acf1f13363::t_5b51be8f5783ce 5,7
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "7428776fbe59a57f2f5f84554b55d845cea26780",
+  "prompts": {},
+  "sessions": {
+    "s_2e87acf1f13363": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "31108f72-a141-4ae8-90c0-f38f0969a4e7",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "nicky <nicky@cloudflare.com>"
+    }
+  }
+}
