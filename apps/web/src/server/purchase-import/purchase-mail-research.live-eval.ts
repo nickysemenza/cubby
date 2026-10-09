@@ -546,13 +546,38 @@ describe("bounded real Gmail purchase and Product research", () => {
                 ingredientId: null,
                 growsPlantId: null,
               });
-              for (const identifier of state.identifiers.filter(
+              const productIdentifiers = state.identifiers.filter(
                 (row) =>
                   row.entityKind === "product" &&
                   row.entityId === savedProduct.id,
-              )) {
-                expect(identifier.kind).toBe("retailer_sku");
-                expect(identifier.externalId).toBe("FAN-SM-BL");
+              );
+              expect(
+                productIdentifiers.some(
+                  (identifier) =>
+                    identifier.kind === "retailer_sku" &&
+                    identifier.externalId === "FAN-SM-BL",
+                ),
+              ).toBe(true);
+              for (const identifier of productIdentifiers) {
+                // The maker assigns its own exact small-blue model number;
+                // neither the alternate variant nor cross-kind IDs are valid.
+                expect([
+                  {
+                    kind: "retailer_sku",
+                    externalId: "FAN-SM-BL",
+                    source: "host-6d616b65722e6578616d706c652e74657374",
+                  },
+                  {
+                    kind: "manufacturer_part",
+                    externalId: "P-20-SB",
+                    source: "example-works",
+                  },
+                ]).toContainEqual({
+                  kind: identifier.kind,
+                  externalId: identifier.externalId,
+                  source: identifier.source,
+                });
+                expect(identifier.url).toBe(mailEvalPage.url);
               }
               const child = state.runs.find(
                 (row) =>
