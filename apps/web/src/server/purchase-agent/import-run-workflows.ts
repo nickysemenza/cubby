@@ -74,7 +74,6 @@ export function workflowForRun(purpose: AgentImportRunPurpose, runId: string) {
             settlementRules
               .split("## Authority and signs\n")[1]
               ?.split("**Verify the normalization")[0] ?? "",
-            "Map source extraction gaps to work_resolve research statuses. The host validates settlement; submit source observations and order candidates through work_resolve.",
           ].join("\n\n"),
   };
 }

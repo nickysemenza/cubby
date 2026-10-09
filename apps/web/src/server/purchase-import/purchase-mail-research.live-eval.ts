@@ -469,7 +469,6 @@ describe("bounded real Gmail purchase and Product research", () => {
                   )
                     return "failed";
                   return mail.length &&
-                    children.length &&
                     [...mail, ...children].every(
                       (row) => row.endedAt && ended.has(row.status),
                     )

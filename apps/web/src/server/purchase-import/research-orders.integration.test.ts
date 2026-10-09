@@ -3,6 +3,7 @@ import { userId } from "@cubby/schemas/identifiers";
 import type { ImportWriterInput } from "@cubby/schemas/purchase-import";
 import type { PurchaseAgentEvent } from "@cubby/schemas/purchase-import";
 import { researchWorkResolve } from "@cubby/schemas/research-tools";
+import { testShortcode } from "@cubby/schemas/testing";
 import { and, eq } from "drizzle-orm";
 import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
@@ -13,6 +14,8 @@ import {
   importSourceOrder,
   inventoryEntry,
   product,
+  productCategory,
+  project,
   purchase,
   purchasePaymentEvidence,
   run,
@@ -52,6 +55,115 @@ describe("research order writes", () => {
     });
     return { party, vendor, runId };
   }
+
+  // A Purchase-wide fallback would mask the member's food Project purpose in
+  // a mixed order. Only genuinely unassigned newly imported lines get Other.
+  it("fills unassigned imported lines after resolving Product purpose inheritance", async () => {
+    const { party, vendor, runId } = await scope();
+    await getDb(ctx.db)
+      .insert(project)
+      .values({
+        shortcode: testShortcode("project", "PRJ-HSHD"),
+        name: "Synthetic household purpose",
+        defaultTrade: "building",
+      });
+    const [food] = await getDb(ctx.db)
+      .select()
+      .from(productCategory)
+      .where(eq(productCategory.feature, "food"));
+    if (!food) throw new Error("Synthetic taxonomy lacks the food feature.");
+    const item = await insertWithShortcode(ctx.db, "product", {
+      name: "Synthetic ingredient",
+      manufacturer: "",
+      categoryId: food.id,
+    });
+    const input: ImportWriterInput = {
+      runId,
+      ledgerPartyId: party.id,
+      vendorId: vendor.id,
+      vendorAccountId: null,
+      source: {
+        kind: "mail_message",
+        externalKey: "gmail:synthetic:mixed-purpose",
+        checksum: "c".repeat(64),
+      },
+      extraction: {
+        status: "ready",
+        candidate: {
+          orderId: "EXAMPLE-MIXED-PURPOSE",
+          orderedAt: "2026-09-01",
+          merchant: vendor.name,
+          currency: "USD",
+          printedGrandTotal: 15,
+          lines: [
+            {
+              title: item.name,
+              amount: 10,
+              quantity: 1,
+              lineKind: "principal",
+            },
+            {
+              title: "Synthetic service",
+              amount: 4,
+              quantity: 1,
+              lineKind: "principal",
+            },
+            { title: "Printed shipping", amount: 1, lineKind: "shipping" },
+          ],
+          payments: [],
+          allShipmentsDelivered: false,
+        },
+      },
+      productResolutions: [
+        { kind: "existing", productId: item.id, lineIndex: 0 },
+        { kind: "expense_only", lineIndex: 1 },
+      ],
+      primaryDocumentImageId: null,
+      screenshotImageId: null,
+    };
+    const result = await importVendorOrder(ctx.db, input, ctx.actor.userId, {
+      applyUnassignedPurposeFallback: true,
+    });
+    const [saved] = await getDb(ctx.db)
+      .select()
+      .from(purchase)
+      .where(eq(purchase.id, parseEntityId("purchase", result.purchaseId!)));
+    expect(saved?.defaultTrade).toBeNull();
+    const lines = await getDb(ctx.db)
+      .select({
+        name: expense.name,
+        cost: expense.cost,
+        trade: expense.trade,
+        effectiveTrade: effectiveExpenseTradeSql(),
+      })
+      .from(expense)
+      .where(eq(expense.purchaseId, saved!.id));
+    expect(lines).toEqual(
+      expect.arrayContaining([
+        { name: item.name, cost: 10, trade: null, effectiveTrade: "building" },
+        {
+          name: "Synthetic service",
+          cost: 4,
+          trade: "other",
+          effectiveTrade: "other",
+        },
+        {
+          name: "Printed shipping",
+          cost: 1,
+          trade: null,
+          effectiveTrade: null,
+        },
+      ]),
+    );
+    expect(lines).toHaveLength(3);
+    expect(await getDb(ctx.db).select().from(inventoryEntry)).toHaveLength(0);
+    expect(
+      await importVendorOrder(ctx.db, input, ctx.actor.userId, {
+        applyUnassignedPurposeFallback: true,
+      }),
+    ).toMatchObject({ outcome: "replayed", purchaseId: result.purchaseId });
+    expect(await getDb(ctx.db).select().from(expense)).toHaveLength(3);
+  });
 
   it("imports a supported receipt without inventing purpose or replacing member attribution", async () => {
     const { party, vendor, runId } = await scope();
@@ -103,7 +215,6 @@ describe("research order writes", () => {
         ledgerPartyId: party.id,
         vendorId: vendor.id,
         vendorAccountId: null,
-        defaultTrade: order.defaultTrade,
         targetPurchaseId: existing.id,
         source: {
           kind: "mail_message",
@@ -121,7 +232,6 @@ describe("research order writes", () => {
       .select()
       .from(purchase)
       .where(eq(purchase.id, parseEntityId("purchase", result.purchaseId!)));
-    expect(order.defaultTrade).toBeUndefined();
     expect(saved?.defaultTrade).toBe("other");
     const lines = await getDb(ctx.db)
       .select()

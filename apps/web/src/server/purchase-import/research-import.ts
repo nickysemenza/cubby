@@ -892,6 +892,22 @@ export async function resolveImportResearch(
         scope.purpose === "purchase_validation"
           ? await loadPurchaseValidationContext(db, scope, target)
           : null;
+      if (scope.purpose !== "purchase_validation") {
+        for (const [orderIndex, order] of proposal.orders.entries()) {
+          const missing = order.candidate.lines.flatMap((line, lineIndex) =>
+            line.lineKind === "principal" &&
+            !order.productResolutions?.some(
+              (resolution) => resolution.lineIndex === lineIndex,
+            )
+              ? [lineIndex]
+              : [],
+          );
+          if (!order.productResolutions || missing.length)
+            throw new Error(
+              `orders[${orderIndex}].productResolutions requires a decision for each principal candidate.lines row; missing indices: ${missing.join(", ") || "none (supply [] for an incomplete order)"}.`,
+            );
+        }
+      }
       const evidenceIds = [
         ...new Set([
           ...proposal.identity.evidenceIds,
@@ -1038,10 +1054,6 @@ export async function resolveImportResearch(
           )
             throw new Error(
               "Automatic financial reversal/refund writes are forbidden; link lifecycle evidence instead.",
-            );
-          if (!order.productResolutions)
-            throw new Error(
-              "Accepted order requires explicit supported item resolutions.",
             );
         }
       // Source fences, domain writes, and work completion commit together.
@@ -1339,7 +1351,6 @@ export async function resolveImportResearch(
               source: sourceIdentity(firstSource),
               extraction: { status: "ready", candidate: order.candidate },
               productResolutions,
-              defaultTrade: order.defaultTrade,
               primaryDocumentImageId:
                 selectedSources.find((source) => source.receiptImage)
                   ?.receiptImage?.id ?? null,
@@ -1352,6 +1363,7 @@ export async function resolveImportResearch(
               transactionDb,
               writerInput,
               scope.actorUserId,
+              { applyUnassignedPurposeFallback: true },
             );
             if (!imported.purchaseId || imported.outcome === "conflict")
               throw new Error(

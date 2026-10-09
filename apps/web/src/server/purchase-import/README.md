@@ -230,11 +230,13 @@ and deployment/readback order are owned by the
    Unknown source currency remains null. Unknown or foreign-unit totals and
    payments stay in the immutable original, outside canonical USD financial
    writes. Unpriced item descriptions remain retained source evidence until
-   priced itemization is available. A new or unassigned Purchase uses the
-   approved `other` trade fallback when no household purpose is established;
-   this policy default is not a source-verified fact. Existing direct or inherited
-   member attribution remains authoritative, and principal Expenses require the shared
-   effective trade.
+   priced itemization is available. The researcher supplies an explicit Product
+   decision for every principal order line. Missing decisions return exact
+   per-order paths before source assessment. The host applies the approved
+   `other` trade fallback only to new principal Expense rows whose shared
+   effective trade remains null after Product/Project inheritance. This policy
+   is separate from source-verified facts, preserves member attribution and
+   leaves Purchase defaults and adjustments intact.
    Retained mail observations present plain text and compact visible HTML with
    source links before applying the model-view size limit. Layout/CSS bytes never
    crowd receipt facts out of that view. The immutable original MIME content and

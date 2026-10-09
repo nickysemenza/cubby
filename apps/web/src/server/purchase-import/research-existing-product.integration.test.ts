@@ -219,7 +219,6 @@ describe("research public existing-Product admission", () => {
           productResolutions: [
             { kind: "existing", lineIndex: 0, productId: hit.id },
           ],
-          defaultTrade: "other",
         },
       ],
       detail:
