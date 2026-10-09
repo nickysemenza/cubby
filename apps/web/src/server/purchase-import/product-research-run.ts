@@ -417,7 +417,7 @@ function assertProductSourceScope(
 
 function launchMetadata(
   input: ResearchStartInput,
-  continuation: Awaited<ReturnType<typeof researchRetirementAdmission>>,
+  continuation: Awaited<ReturnType<typeof researchContinuationAdmission>>,
   clientKey: string,
 ): Pick<
   typeof run.$inferInsert,

@@ -128,7 +128,10 @@ export function researchRetirementAdmission(
 
 export async function readResearchRetirementSuccessor(
   client: DrizzleClient | DrizzleTransaction,
-  admission: Awaited<ReturnType<typeof researchRetirementAdmission>>,
+  admission: Pick<
+    NonNullable<Awaited<ReturnType<typeof researchRetirementAdmission>>>,
+    "predecessor"
+  > | null,
 ) {
   if (!admission) return;
   return readResearchPredecessorSuccessor(client, admission.predecessor);
