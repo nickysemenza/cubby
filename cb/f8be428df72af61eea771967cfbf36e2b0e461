@@ -1,0 +1,85 @@
+apps/usda-api/src/data/edge.ts
+  s_baac6c838b330d::t_28fa7a409a1370 6,20,36
+apps/usda-api/src/search/fts-query.sqlite.test.ts
+  s_baac6c838b330d::t_0bcface4710d0b 3
+apps/web-worker-tests/vitest.config.ts
+  s_baac6c838b330d::t_517f0a0868be2f 49
+apps/web/src/cf-server.ts
+  s_baac6c838b330d::t_435b5eebbd74fe 839
+apps/web/src/routes/api/debug/usda-release.ts
+  s_baac6c838b330d::t_678c62407e4c35 1-106
+apps/web/src/server/cf-env.ts
+  s_baac6c838b330d::t_dda691657bd4df 119-123
+apps/web/src/server/usda-release/client.ts
+  s_baac6c838b330d::t_5a647c32400adf 1-19
+apps/web/src/server/usda-release/durable-object.ts
+  s_baac6c838b330d::t_af0276a55f85d8 1-110
+apps/web/src/server/usda-release/durable-object.workers.test.ts
+  s_baac6c838b330d::t_11e1f75d6c9629 1-399
+apps/web/src/server/usda-release/rpc.ts
+  s_baac6c838b330d::t_7eb3f4bfcea00f 1-20
+apps/web/src/server/worker-bindings.ts
+  s_baac6c838b330d::t_d7f9671d984954 17,35-36
+apps/web/tooling/calendar-test-worker.ts
+  s_baac6c838b330d::t_742809dd53cbdd 30
+apps/web/tooling/dev/config.ts
+  s_baac6c838b330d::t_fe779be65adbac 53
+apps/web/worker-configuration.d.ts
+  s_baac6c838b330d::t_c2e5f217b16c9b 2,4,20,38,47,56
+apps/web/wrangler.calendar-test.jsonc
+  s_baac6c838b330d::t_63efdb244b12e0 28-31,55-58,60-62
+apps/web/wrangler.jsonc
+  s_baac6c838b330d::t_ae532f256a6849 112-117,122-125,286-293
+docs/adr/0008-usda-release-durable-object.md
+  s_baac6c838b330d::t_46902d4e00a19c 1-50
+docs/development.md
+  s_baac6c838b330d::t_0edef45b0045c1 36-38,93-110
+docs/terminology.md
+  s_baac6c838b330d::t_5b90b038dff6b7 111-121
+docs/todos.md
+  s_baac6c838b330d::t_c3f8b7adec0a24 1015-1023
+packages/usda/package.json
+  s_baac6c838b330d::t_998d6457d0548d 10-11,16-17,25-29
+packages/usda/scripts/build-release.ts
+  s_baac6c838b330d::t_d1f8bad3fecf58 1-64
+packages/usda/src/release/builder/assemble.ts
+  s_baac6c838b330d::t_16993dc3ae87c4 1-108
+packages/usda/src/release/builder/build-release.test.ts
+  s_baac6c838b330d::t_94bb024f8d0263 1-399
+packages/usda/src/release/builder/build-release.ts
+  s_baac6c838b330d::t_f76cfc6d2205a1 1-199
+packages/usda/src/release/builder/csv.ts
+  s_baac6c838b330d::t_c72ec846aa45f0 1-60
+packages/usda/src/release/builder/staging.ts
+  s_baac6c838b330d::t_27e2e3ba8b9880 1-263
+packages/usda/src/release/index.ts
+  s_baac6c838b330d::t_51e19dded3c2fa 1-4
+packages/usda/src/release/search-sql.ts
+  s_baac6c838b330d::t_4d9935534689af 1-2
+packages/usda/src/release/shard.ts
+  s_baac6c838b330d::t_1899f7312f1d6b 1-44
+packages/usda/src/release/store.ts
+  s_baac6c838b330d::t_515d15e06676d9 1-472
+packages/usda/tsconfig.json
+  s_baac6c838b330d::t_14a65871e4b05c 3
+pnpm-lock.yaml
+  s_baac6c838b330d::t_b7253b5099962b 866-880,6073-6077,11920,15199-15200
+scripts/lib/dev-profile.ts
+  s_baac6c838b330d::t_4d9ed3e848391f 141
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "cbf8be428df72af61eea771967cfbf36e2b0e461",
+  "prompts": {},
+  "sessions": {
+    "s_baac6c838b330d": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "4e072615-6da5-4add-8945-be01765ee61f",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "nicky <nicky@cloudflare.com>"
+    }
+  }
+}
