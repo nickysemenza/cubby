@@ -28,8 +28,16 @@ test("desktop workspace sidebar marks the current page and collapses", async ({
   await expect(
     sidebar.getByRole("button", { name: "Cook", exact: true }),
   ).toHaveAttribute("aria-expanded", "false");
+  // The current route stays visible inside its folded section.
+  await gotoAuthenticatedPage(page, "/recipes");
+  await expect(recipes).toHaveAttribute("aria-current", "page");
+  await expect(
+    sidebar.getByRole("link", { name: /^Cookbooks\b/ }),
+  ).toBeHidden();
   await sidebar.getByRole("button", { name: "Cook", exact: true }).click();
-  await expect(recipes).toBeVisible();
+  await expect(
+    sidebar.getByRole("link", { name: /^Cookbooks\b/ }),
+  ).toBeVisible();
 
   await page.getByRole("button", { name: "Collapse sidebar" }).click();
   await expect.poll(async () => (await sidebar.boundingBox())?.width).toBe(40);

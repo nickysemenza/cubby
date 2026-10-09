@@ -127,7 +127,7 @@ export function AuthenticatedAppShell({
       data-hydrated={hydrated ? "true" : "false"}
       data-mobile-keyboard={keyboardOpen ? "open" : "closed"}
       className={cn(
-        "min-h-dvh bg-background [--app-chrome-bottom:calc(3.5rem+1px+env(safe-area-inset-bottom))] [--app-chrome-top:calc(3rem+1px+env(safe-area-inset-top))] md:flex md:[--app-chrome-bottom:0rem] md:[--app-chrome-top:2.5rem]",
+        "min-h-dvh bg-background [--app-chrome-bottom:calc(3.5rem+1px+env(safe-area-inset-bottom))] [--app-chrome-top:calc(3rem+1px+env(safe-area-inset-top))] md:flex md:[--app-chrome-bottom:0rem] md:[--app-chrome-top:var(--app-command-band-height)]",
         keyboardOpen && "[--app-chrome-bottom:0rem]",
       )}
     >
@@ -220,7 +220,7 @@ function DesktopCommandHeader({
   navigationProgress,
 }: Pick<AuthenticatedAppShellProps, "onSearchClick" | "navigationProgress">) {
   return (
-    <header className="sticky top-0 z-40 hidden h-10 items-center border-b border-border bg-card px-4 md:flex md:px-6 print:hidden">
+    <header className="sticky top-0 z-40 hidden h-(--app-command-band-height) items-center border-b border-border bg-card px-4 md:flex md:px-6 print:hidden">
       <p className="text-xs font-medium text-muted-foreground">Cubby</p>
       <Button
         variant="ghost"
@@ -283,8 +283,9 @@ function WorkspaceSidebar({
           : "lg:w-[var(--app-sidebar-collapsed-width)]",
       )}
       aria-label="Workspace navigation"
+      data-app-rail
     >
-      <div className="flex h-10 items-center border-b border-border px-2.5">
+      <div className="flex h-(--app-command-band-height) shrink-0 items-center border-b border-border px-2.5">
         <Link
           to="/"
           aria-label="Cubby home"
@@ -326,7 +327,7 @@ function WorkspaceSidebar({
       <div
         className={cn(
           "flex flex-col items-center gap-0.5 border-t border-border p-1.5",
-          expanded && "lg:h-10 lg:flex-row lg:py-0",
+          expanded && "lg:min-h-10 lg:flex-row lg:py-0",
         )}
       >
         <Suspense fallback={<div className="size-7" aria-hidden="true" />}>
@@ -488,14 +489,18 @@ function SidebarExpandedDomainGroup({
           aria-hidden="true"
         />
       </button>
-      <div id={routesId} hidden={folded}>
-        {group.children.map((item) => (
-          <SidebarFullLeaf
-            key={item.to}
-            item={item}
-            active={activeTo === item.to}
-          />
-        ))}
+      {/* A folded section still shows its current route, so the rail never
+          loses the you-are-here cue. */}
+      <div id={routesId}>
+        {group.children
+          .filter((item) => !folded || item.to === activeTo)
+          .map((item) => (
+            <SidebarFullLeaf
+              key={item.to}
+              item={item}
+              active={activeTo === item.to}
+            />
+          ))}
       </div>
     </section>
   );

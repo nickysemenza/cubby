@@ -325,6 +325,7 @@
   --sidebar-ring: var(--brand-ultramarine);
   --app-sidebar-expanded-width: 11rem;
   --app-sidebar-collapsed-width: 2.5rem;
+  --app-command-band-height: 2.5rem;
 }
 /*
   ---break---
@@ -567,6 +568,18 @@
     [role="option"],
     [role="menuitem"]
   ) {
+    min-width: 2.75rem;
+    min-height: 2.75rem;
+  }
+
+  /* Compact chrome is sized for fine pointers; touch gets room for 44px
+     targets so rail and command-band controls never overflow their frame. */
+  :root {
+    --app-sidebar-collapsed-width: 3.5rem;
+    --app-command-band-height: 3rem;
+  }
+
+  :where([data-app-rail] a, [data-app-rail] button) {
     min-width: 2.75rem;
     min-height: 2.75rem;
   }
