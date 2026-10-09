@@ -402,8 +402,8 @@ export async function createConvergenceHarness(
     await gotoAuthenticatedPage(page, `/vendors/${vendor.id}`);
     const mail = page
       .locator("#order-mail")
-      .getByRole("article")
-      .filter({ hasText: orderId });
+      .getByRole("listitem")
+      .filter({ has: page.getByText(`Order ${orderId}`, { exact: true }) });
     // The exact-order mail links itself to the booked Purchase; no click.
     const acceptedPurchase = mail.getByRole("link", {
       name: purchase.shortcode,

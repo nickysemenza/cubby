@@ -455,8 +455,11 @@ for (const statementFirst of [true, false]) {
 
     await gotoAuthenticatedPage(page, `/vendors/${prerequisites.vendor.id}`);
     const mail = page
-      .getByRole("article")
-      .filter({ hasText: `Order ${names.orderId}` });
+      .locator("#order-mail")
+      .getByRole("listitem")
+      .filter({
+        has: page.getByText(`Order ${names.orderId}`, { exact: true }),
+      });
     // Exact-order mail is already linked before following its canonical Purchase.
     const purchaseLink = mail.getByRole("link", {
       name: purchaseCode,
