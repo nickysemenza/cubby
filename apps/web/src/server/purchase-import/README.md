@@ -264,6 +264,9 @@ and deployment/readback order are owned by the
    last actual refusal/error, and other tasks continue. Failure, explicit abort
    and the generation ceiling retain the existing settlement backstop.
    A late final answer after cancellation creates no continuation ledger writes.
+   Continuation admission locks the Run and binds its next-work decisions to
+   the same transaction, so cancellation cannot commit between its status check
+   and ledger writes. Derived Product work dispatches after that transaction commits.
    Retained mail observations present plain text and compact visible HTML with
    source links before applying the model-view size limit. Layout/CSS bytes never
    crowd receipt facts out of that view. The immutable original MIME content and

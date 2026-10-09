@@ -35,6 +35,7 @@ import {
   getDb,
   notDeleted,
   withTransaction,
+  withTransactionDatabase,
 } from "~/server/repo/database-helpers";
 import { readCanonicalEntityIds } from "~/server/repo/entity-identity";
 import {
@@ -284,8 +285,8 @@ export function researchServiceFor(
       });
     return owned;
   };
-  const owner = async () => {
-    const [owned] = await database
+  const owner = async (ownedDb: Database = db) => {
+    const [owned] = await getDb(ownedDb)
       .select({ run })
       .from(run)
       .innerJoin(
@@ -445,17 +446,30 @@ export function researchServiceFor(
 
   const services: ResearchServices = {
     async researchContinue(callId, admitted = true) {
-      await assertResearchRunExecutable(db, runId);
-      const scope = await owner();
-      if (!["running", "paused_offline"].includes(scope.status))
-        return { status: "stopped", reason: scope.status };
-      const next = await services.researchNext({}, `${callId}:next`);
-      // pi may discard a proposed continuation in favor of queued input/reset.
-      if (!admitted) return next;
-      const { continueResearchWork } = await import("./research-yield");
-      const decision = await continueResearchWork(db, { runId, callId, next });
-      if (!decision.settled) return decision.next;
-      return services.researchNext({}, `${callId}:after-stop`);
+      return withTransactionDatabase(db, async (transactionDb) => {
+        // Cancellation and continuation admission share the Run write boundary.
+        await getDb(transactionDb)
+          .select({ id: run.id })
+          .from(run)
+          .where(and(eq(run.id, runId), notDeleted(run)))
+          .for("update");
+        await assertResearchRunExecutable(transactionDb, runId);
+        const scope = await owner(transactionDb);
+        if (!["running", "paused_offline"].includes(scope.status))
+          return { status: "stopped", reason: scope.status };
+        const scoped = researchServiceFor(transactionDb, env, runId, ports);
+        const next = await scoped.researchNext({}, `${callId}:next`);
+        // pi may discard a proposed continuation in favor of queued input/reset.
+        if (!admitted) return next;
+        const { continueResearchWork } = await import("./research-yield");
+        const decision = await continueResearchWork(transactionDb, {
+          runId,
+          callId,
+          next,
+        });
+        if (!decision.settled) return decision.next;
+        return scoped.researchNext({}, `${callId}:after-stop`);
+      });
     },
     researchNext(raw, callId) {
       const input = researchToolInputs.work_next.parse(raw);

@@ -2,7 +2,7 @@ import { parseEntityId } from "@cubby/schemas/identifiers";
 import type { PurchaseAgentEvent } from "@cubby/schemas/purchase-import";
 import { researchWorkResolve } from "@cubby/schemas/research-tools";
 import { fromPartial } from "@total-typescript/shoehorn";
-import { and, eq } from "drizzle-orm";
+import { and, eq, sql } from "drizzle-orm";
 import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 import { z } from "zod";
@@ -726,6 +726,54 @@ describe("research host lifecycle", () => {
       expect(settled?.state).toBe("unresolved");
     },
   );
+  it("serializes continuation admission with a cancellation still committing", async () => {
+    const f = await admitted();
+    let continuation:
+      | ReturnType<typeof f.services.researchContinue>
+      | undefined;
+    await withTransaction(ctx.db, async (tx) => {
+      await tx
+        .select()
+        .from(run)
+        .where(eq(run.id, parseEntityId("run", f.started.runId)))
+        .for("update");
+      await tx
+        .update(run)
+        .set({
+          status: "failed",
+          failureCode: "user_cancelled",
+          endedAt: new Date(),
+        })
+        .where(eq(run.id, parseEntityId("run", f.started.runId)));
+      continuation = f.services.researchContinue(crypto.randomUUID(), false);
+      const deadline = Date.now() + 5_000;
+      while (true) {
+        await tx.execute(sql`select pg_stat_clear_snapshot()`);
+        const blocked = await tx.execute(
+          sql`select count(*)::integer as count from pg_stat_activity where pg_backend_pid() = any(pg_blocking_pids(pid))`,
+        );
+        const waiting = z
+          .array(z.object({ count: z.number() }))
+          .parse(blocked.rows);
+        if (waiting[0]?.count) break;
+        if (Date.now() >= deadline)
+          throw new Error(
+            "Synthetic continuation did not reach the cancellation lock",
+          );
+        await new Promise((resolve) => setTimeout(resolve, 10));
+      }
+    });
+    expect(await continuation).toMatchObject({
+      status: "stopped",
+      reason: "failed",
+    });
+    expect(
+      await getDb(ctx.db)
+        .select()
+        .from(runOperation)
+        .where(eq(runOperation.runId, f.started.runId)),
+    ).toEqual([]);
+  });
   it("leaves a cancelled Run untouched when a late final answer proposes continuation", async () => {
     const f = await admitted();
     await getDb(ctx.db)
