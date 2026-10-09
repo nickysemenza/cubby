@@ -63,9 +63,10 @@ function fakePort(
               output_tokens: 5,
               cache_read_input_tokens: promptCache.read,
               cache_creation_input_tokens: promptCache.write,
+              reasoning_tokens: 0,
             },
           }
-        : null,
+        : undefined,
     recordUsage: (database, input) =>
       recordAiUsage(database, input, {
         emit: (_db, event) => {

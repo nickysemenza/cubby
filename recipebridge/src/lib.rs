@@ -29,9 +29,6 @@ use serde::{Deserialize, Serialize};
 use tsify_next::Tsify;
 use wasm_bindgen::prelude::*;
 
-#[macro_use]
-mod macros;
-
 #[cfg(feature = "ai-usage")]
 mod ai_usage;
 mod availability;

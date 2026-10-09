@@ -75,7 +75,6 @@
       "cache": true,
       "inputs": [
         "{workspaceRoot}/recipebridge/**/*",
-        "{workspaceRoot}/recipebridge-cookbook/**/*",
         "{workspaceRoot}/Cargo.toml",
         "{workspaceRoot}/Cargo.lock",
         "{workspaceRoot}/packages/wasm/package.json",

@@ -68,8 +68,8 @@ function buildFingerprint(repoRoot: string): BuildFingerprint {
   const required = [
     path.join(webRoot, "dist/client"),
     path.join(webRoot, "dist/server/index.js"),
-    path.join(repoRoot, "packages/wasm/recipebridge_bg.wasm"),
-    // The browser and cookbook packages (scripts/build-wasm.sh), bundled whole.
+    // The wasm packages (scripts/build-wasm.sh), bundled whole.
+    path.join(repoRoot, "packages/wasm/worker"),
     path.join(repoRoot, "packages/wasm/browser"),
     path.join(repoRoot, "packages/wasm/cookbook"),
   ];
@@ -84,8 +84,6 @@ function buildFingerprint(repoRoot: string): BuildFingerprint {
   const files = [
     ...required.flatMap(filesUnder),
     ...filesUnder(path.join(webRoot, "dist/server/assets")),
-    ...filesUnder(path.join(repoRoot, "packages/wasm/recipebridge.js")),
-    ...filesUnder(path.join(repoRoot, "packages/wasm/recipebridge_bg.js")),
     ...filesUnder(path.join(repoRoot, "packages/wasm/package.json")),
   ].sort();
   return {
@@ -111,7 +109,6 @@ const WEB_BUILD_SOURCE = {
     "apps/mcp-apps/**",
     "packages/**",
     "recipebridge/**",
-    "recipebridge-cookbook/**",
     "scripts/**",
     "docs/**/*.md",
     AGENT_SKILLS,

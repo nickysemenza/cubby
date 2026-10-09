@@ -228,13 +228,13 @@ TanStack Start + React on Cloudflare Workers, Drizzle + PostgreSQL (Neon via
 Hyperdrive), R2, Rust → WASM for ingredient parsing and unit conversion, and a
 SwiftUI app.
 
-| Path                                                                                                                           | What                                                   |
-| ------------------------------------------------------------------------------------------------------------------------------ | ------------------------------------------------------ |
-| [apps/web](apps/web)                                                                                                           | The main app, HTTP API and MCP server (Worker `cubby`) |
-| [apps/apple](apps/apple)                                                                                                       | Native iOS/macOS app, `CubbyKit`, `cubby` CLI          |
-| [apps/usda-api](apps/usda-api)                                                                                                 | USDA lookup Worker                                     |
-| [apps/mcp-apps](apps/mcp-apps)                                                                                                 | Interactive MCP UIs, inlined into `web`                |
-| [packages/](packages), [recipebridge/](recipebridge), [recipebridge-cookbook/](recipebridge-cookbook), [cubby-ffi/](cubby-ffi) | Shared schemas, WASM and Swift FFI                     |
+| Path                                                                          | What                                                   |
+| ----------------------------------------------------------------------------- | ------------------------------------------------------ |
+| [apps/web](apps/web)                                                          | The main app, HTTP API and MCP server (Worker `cubby`) |
+| [apps/apple](apps/apple)                                                      | Native iOS/macOS app, `CubbyKit`, `cubby` CLI          |
+| [apps/usda-api](apps/usda-api)                                                | USDA lookup Worker                                     |
+| [apps/mcp-apps](apps/mcp-apps)                                                | Interactive MCP UIs, inlined into `web`                |
+| [packages/](packages), [recipebridge/](recipebridge), [cubby-ffi/](cubby-ffi) | Shared schemas, WASM and Swift FFI                     |
 
 ```sh
 pnpm install

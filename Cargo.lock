@@ -1219,6 +1219,7 @@ dependencies = [
  "ingredient",
  "js-sys",
  "recipe-scraper",
+ "recipe-types",
  "rstest",
  "scraper",
  "serde",

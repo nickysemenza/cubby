@@ -3,13 +3,12 @@
 # and by CI's setup-node-with-deps, which runs before `pnpm install` — so this
 # stays dependency-free.
 #
-#   packages/wasm           full build (`html` feature): the Worker and Vitest
+#   packages/wasm/worker    full build (`html`, `ai-usage`): the Worker and Vitest
 #   packages/wasm/browser   --no-default-features: what the browser loads
-#   packages/wasm/cookbook  recipebridge-cookbook: the browser's EPUB import
+#   packages/wasm/cookbook  recipebridge/cookbook: the browser's EPUB import
 #
-# wasm-pack rewrites package.json in each --out-dir (and removes it before a
-# step that can fail), so the tracked one — which adds the `./cookbook`
-# export — is restored on every exit, success or not.
+# wasm-pack replaces its --out-dir's package.json, so none of them is
+# packages/wasm itself, whose tracked package.json exports these.
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
@@ -24,12 +23,9 @@ export CARGO_PROFILE_RELEASE_CODEGEN_UNITS=1
 export CARGO_PROFILE_RELEASE_PANIC=abort
 export CARGO_PROFILE_RELEASE_INCREMENTAL=false
 
-# Fall back to the committed manifest if an older failed build removed it.
-manifest="$(cat "$OUT/package.json" 2>/dev/null || git -C "$ROOT" show HEAD:packages/wasm/package.json)"
-trap 'printf "%s\n" "$manifest" >"$OUT/package.json"' EXIT
 # ensure-wasm.ts stamps a fresh marker only after all three builds succeed;
 # an interrupted build must not keep the old one.
 rm -f "$OUT/.fingerprint"
-wasm-pack build --scope cubby --out-dir "$OUT" "$ROOT/recipebridge"
-wasm-pack build --scope cubby --out-dir "$OUT/browser" "$ROOT/recipebridge" -- --no-default-features
-wasm-pack build --scope cubby --out-dir "$OUT/cookbook" "$ROOT/recipebridge-cookbook"
+wasm-pack build --no-pack --out-dir "$OUT/worker" "$ROOT/recipebridge"
+wasm-pack build --no-pack --out-dir "$OUT/browser" "$ROOT/recipebridge" -- --no-default-features
+wasm-pack build --no-pack --out-dir "$OUT/cookbook" "$ROOT/recipebridge/cookbook"

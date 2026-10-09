@@ -1213,7 +1213,10 @@ fn estimated_rows_carry_the_estimate_and_flag() {
 
     let oil_row = &r.rows[1];
     assert!(oil_row.estimated);
-    assert_eq!(oil_row.usage, recipebridge::WIngredientUsage::FryingMedium);
+    assert_eq!(
+        oil_row.usage,
+        ingredient::usage::IngredientUsage::FryingMedium
+    );
     assert_measure_close(&oil_row.gram, 15.0, 0.5, "oil est gram");
     match &oil_row.nutrients {
         WNutrientsResult::Ok(n) => {
@@ -1348,7 +1351,7 @@ fn records_usage_fired_rule_basis_and_values_in_input_order() {
     let flour_diag = &r.rows[0];
     assert_eq!(flour_diag.name, "flour");
     assert_eq!(flour_diag.kind, WRowKind::Ingredient);
-    assert_eq!(flour_diag.usage, recipebridge::WIngredientUsage::Normal);
+    assert_eq!(flour_diag.usage, ingredient::usage::IngredientUsage::Normal);
     assert!(flour_diag.measured);
     assert_eq!(flour_diag.basis_grams, None);
     assert_eq!(flour_diag.plan.cost, ComponentSource::OwnFull);
@@ -1362,7 +1365,10 @@ fn records_usage_fired_rule_basis_and_values_in_input_order() {
 
     let oil_diag = &r.rows[1];
     assert_eq!(oil_diag.name, "neutral oil");
-    assert_eq!(oil_diag.usage, recipebridge::WIngredientUsage::FryingMedium);
+    assert_eq!(
+        oil_diag.usage,
+        ingredient::usage::IngredientUsage::FryingMedium
+    );
     assert!(!oil_diag.measured);
     assert_eq!(oil_diag.basis_grams, Some(100.0));
     assert_eq!(

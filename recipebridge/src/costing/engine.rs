@@ -1285,7 +1285,7 @@ impl<'a> Engine<'a> {
                 name: p.row.name.clone(),
                 section_name: p.row.section_name.clone(),
                 kind: p.row.kind,
-                usage: p.usage.into(),
+                usage: p.usage,
                 measured: !p.row.amounts.is_empty(),
                 plan: p.plan,
                 basis_grams: basis,

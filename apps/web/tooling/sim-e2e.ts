@@ -1273,14 +1273,6 @@ function retainRunDiagnostics(failure: Error | undefined): string[] {
     execFileSync("git", ["status", "--porcelain"], { cwd: repoRoot }),
   );
   evidenceFiles.push(sourceStatus);
-  const wasmDiff = path.join(artifacts, "wasm-package-diff.patch");
-  writeFileSync(
-    wasmDiff,
-    execFileSync("git", ["diff", "--", "packages/wasm/package.json"], {
-      cwd: repoRoot,
-    }),
-  );
-  evidenceFiles.push(wasmDiff);
   for (const name of [
     "failure.txt",
     "failure.png",

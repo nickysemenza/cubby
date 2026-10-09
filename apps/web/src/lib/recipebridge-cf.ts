@@ -5,8 +5,8 @@
 // ?init pattern (supported by @cloudflare/vite-plugin) to manually instantiate
 // the WASM module with the correct JS bindings.
 
-import * as bg from "../../../../packages/wasm/recipebridge_bg.js";
-import initWasm from "../../../../packages/wasm/recipebridge_bg.wasm?init";
+import * as bg from "../../../../packages/wasm/worker/recipebridge_bg.js";
+import initWasm from "../../../../packages/wasm/worker/recipebridge_bg.wasm?init";
 
 // Instantiate WASM with the JS bindings it imports from _bg.js
 const instance: WebAssembly.Instance = await initWasm({
@@ -28,4 +28,4 @@ if (!isCallableExport(start)) {
 start();
 
 // Re-export the public API (same exports as @cubby/recipebridge)
-export * from "../../../../packages/wasm/recipebridge_bg.js";
+export * from "../../../../packages/wasm/worker/recipebridge_bg.js";

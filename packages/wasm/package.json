@@ -1,27 +1,20 @@
 {
   "name": "@cubby/recipebridge",
   "version": "0.1.0",
-  "files": [
-    "recipebridge_bg.wasm",
-    "recipebridge.js",
-    "recipebridge_bg.js",
-    "recipebridge.d.ts",
-    "browser",
-    "cookbook"
-  ],
+  "private": true,
   "type": "module",
   "sideEffects": [
-    "./recipebridge.js",
+    "./worker/recipebridge.js",
     "./browser/recipebridge.js",
     "./cookbook/recipebridge_cookbook.js",
-    "./snippets/*"
+    "./*/snippets/*"
   ],
-  "main": "recipebridge.js",
-  "types": "recipebridge.d.ts",
+  "main": "worker/recipebridge.js",
+  "types": "worker/recipebridge.d.ts",
   "exports": {
     ".": {
-      "types": "./recipebridge.d.ts",
-      "default": "./recipebridge.js"
+      "types": "./worker/recipebridge.d.ts",
+      "default": "./worker/recipebridge.js"
     },
     "./cookbook": {
       "types": "./cookbook/recipebridge_cookbook.d.ts",

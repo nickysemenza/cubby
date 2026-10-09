@@ -6,14 +6,14 @@ full:
   - "!apps/{apple,web,mcp-apps,usda-api}/**"
   - "!packages/**"
   - "!cubby-ffi/**"
-  - "!recipebridge*/**"
+  - "!recipebridge/**"
   - "!Cargo.{toml,lock}"
   - "!docker-compose*"
 
 validation:
   - "apps/{web,mcp-apps,usda-api}/**"
   - "packages/**"
-  - "recipebridge*/**"
+  - "recipebridge/**"
   - "Cargo.{toml,lock}"
   - "docker-compose*"
   - *notMarkdown
@@ -24,7 +24,7 @@ generation:
 web:
   - "apps/{web,mcp-apps}/**"
   - "packages/**"
-  - "recipebridge*/**"
+  - "recipebridge/**"
   - "Cargo.{toml,lock}"
   - "docker-compose*"
   - *notMarkdown
@@ -37,13 +37,13 @@ webMarkdown:
 auxiliary:
   - "apps/{mcp-apps,usda-api}/**"
   - "packages/**"
-  - "recipebridge*/**"
+  - "recipebridge/**"
   - "Cargo.{toml,lock}"
   - *notMarkdown
 
 rust:
   - "cubby-ffi/**"
-  - "recipebridge*/**"
+  - "recipebridge/**"
   - "Cargo.{toml,lock}"
   - *notMarkdown
 

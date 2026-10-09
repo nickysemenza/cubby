@@ -49,7 +49,7 @@ function fixture() {
     ],
     { cwd: root },
   );
-  put("packages/wasm/recipebridge_bg.wasm");
+  put("packages/wasm/worker/recipebridge_bg.wasm");
   put("packages/wasm/browser/recipebridge_bg.wasm");
   put("packages/wasm/cookbook/recipebridge_cookbook_bg.wasm");
   const build = () => {

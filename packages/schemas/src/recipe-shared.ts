@@ -35,7 +35,7 @@ export type StoredRecipeTotals = z.infer<typeof storedNutritionTotals>;
 // Mirrors the diagnostics calculateTotals produces (lib/recipe-costing.ts) —
 // the zod shapes are the wire contract; the lib types are the source.
 
-/** The role the usage classifier assigned to a row (mirrors WIngredientUsage). */
+/** The role the usage classifier assigned to a row (mirrors recipebridge's IngredientUsage). */
 export const ingredientUsage = z.enum([
   "normal",
   "frying_medium",
