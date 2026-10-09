@@ -16,7 +16,7 @@ import {
 import { assembleFood } from "./assemble";
 import { stageRelease } from "./staging";
 
-export const FOODS_PER_SHARD = 2000;
+const FOODS_PER_SHARD = 2000;
 
 export interface BuildReleaseOptions {
   csvDir: string;
