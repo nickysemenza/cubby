@@ -1,0 +1,29 @@
+apps/web/src/server/usda-release/durable-object.workers.test.ts
+  s_baac6c838b330d::t_fa9bbdc06f7450 21,466
+apps/web/tooling/dev/usda-synthetic-release.ts
+  s_baac6c838b330d::t_e188a8b0ad27e7 2,84,110-111,114-115,117
+apps/web/tooling/dev/worker.ts
+  s_baac6c838b330d::t_16dddb3dba44cf 15,33-37,145,177
+apps/web/tooling/workerd-harness.ts
+  s_baac6c838b330d::t_d58b0c4309ab67 12,504
+docs/development.md
+  s_baac6c838b330d::t_0f92c32668d6bb 117-118,121-124
+scripts/lib/dev-profile.ts
+  s_baac6c838b330d::t_d45ebe7ae25d83 143
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "3ebe1fb90c650ac0d0cf2f5b59bd8022535e06c7",
+  "prompts": {},
+  "sessions": {
+    "s_baac6c838b330d": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "4e072615-6da5-4add-8945-be01765ee61f",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "nicky <nicky@cloudflare.com>"
+    }
+  }
+}
