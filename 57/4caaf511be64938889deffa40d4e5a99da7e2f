@@ -1,0 +1,21 @@
+apps/web/tooling/build-cf.unit.test.ts
+  s_9e37542d401f69::t_4e9c4b6da78bc2 53-54
+apps/web/tooling/e2e-run-bundle.unit.test.ts
+  s_9e37542d401f69::t_1e22e297d3df34 58-59
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "574caaf511be64938889deffa40d4e5a99da7e2f",
+  "prompts": {},
+  "sessions": {
+    "s_9e37542d401f69": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "0e86f572-b00a-4385-9ba9-59a84e2730f0",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "nicky <nicky@cloudflare.com>"
+    }
+  }
+}
