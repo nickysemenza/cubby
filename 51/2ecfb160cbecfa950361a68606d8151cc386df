@@ -1,0 +1,25 @@
+apps/web/src/entity/view-manifest.ts
+  s_2e87acf1f13363::t_4d4fd87b373285 2-3,127
+packages/schemas/package.json
+  s_2e87acf1f13363::t_842d97a492af78 43
+packages/schemas/src/entity-index-types.ts
+  s_2e87acf1f13363::t_8592b9d61a5efb 43
+scripts/generator/entities/render/entity-models.ts
+  s_2e87acf1f13363::t_138a818b4bfdea 252-272
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "512ecfb160cbecfa950361a68606d8151cc386df",
+  "prompts": {},
+  "sessions": {
+    "s_2e87acf1f13363": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "31108f72-a141-4ae8-90c0-f38f0969a4e7",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "nicky <nicky@cloudflare.com>"
+    }
+  }
+}
