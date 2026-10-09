@@ -1,0 +1,19 @@
+recipebridge/src/lib.rs
+  s_9e37542d401f69::t_3975ef8b00eb78 52-53
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "bb90a55996541349dc5114bb2e1def02097f976e",
+  "prompts": {},
+  "sessions": {
+    "s_9e37542d401f69": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "0e86f572-b00a-4385-9ba9-59a84e2730f0",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "nicky <nicky@cloudflare.com>"
+    }
+  }
+}
