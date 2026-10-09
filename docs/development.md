@@ -40,11 +40,12 @@ JSONL routes    →  cancellable workflow streams
   Worker-only export behind one of those features; browser code must not call
   it, which `wasm-browser-exports.unit.test.ts` enforces, and
   `check-client-bundle.ts` checks each package lands in the right bundle.
-- USDA data comes from the `usda-api` Worker through the ts-rest contract
-  `@cubby/usda/contract`. Its client is `apps/web/src/server/clients/usda.ts`.
-  Its replacement is one `USDA_RELEASE` SQLite Durable Object per USDA release
-  in the web Worker ([ADR 0008](adr/0008-usda-release-durable-object.md)),
-  loaded from R2 but not read by any caller yet.
+- USDA data comes from one `USDA_RELEASE` SQLite Durable Object per USDA
+  release in the web Worker, called over typed RPC
+  ([ADR 0008](adr/0008-usda-release-durable-object.md)). The request-scoped
+  client is `apps/web/src/server/clients/usda.ts`; it memoizes lookups within
+  a request and nothing else caches USDA reads. List and search rows omit the
+  full nutrient table (`usdaFoodListRow`); a single-food read returns it.
 - Purchase imports run in the web Worker, which binds both the purchase
   agent's and the browser bridge's Durable Objects, and in a Mac browser. The
   map of queue events, Run services and owning files is
@@ -84,7 +85,7 @@ contracts separately.
 | `pnpm test:services:prune`                                         | Recover abandoned disposable test containers                                |
 | `pnpm db:generate` / `pnpm db:check`                               | Generate a migration from `schema.ts` / prove migrations match it           |
 | `pnpm --filter @cubby/web db:migrate --target=production`          | Apply migrations; needs `PRODUCTION_DIRECT_DATABASE_URL`                    |
-| `pnpm deploy:all`                                                  | Deploy web, purchase-agent, then usda-api                                   |
+| `pnpm deploy:all`                                                  | Deploy web and purchase-agent                                               |
 | `pnpm wasm`                                                        | Rebuild the `@cubby/recipebridge` packages from Rust, uncached              |
 | `pnpm apple <cli\|mac\|ios\|sim\|gen\|test>`                       | Native app products                                                         |
 
@@ -95,10 +96,6 @@ CI scoping is in [CI](ci.md). Provider resources and secrets are in
 [infrastructure](infrastructure.md). Pinned dependency exceptions are in
 [dependency exceptions](dependency-exceptions.md).
 
-The `usda-api` D1 database does not use the web migration
-workflow. Apply remote D1 migrations before deploying code that depends on
-them.
-
 A USDA release is built locally from FoodData Central's CSV download and
 loads itself into its Durable Object:
 
@@ -107,11 +104,27 @@ loads itself into its Durable Object:
 2. Upload them to the `cubby-usda-releases` bucket under `YYYY-MM/`, the
    manifest last (`cf r2 objects put YYYY-MM/<file> --bucket-name
    cubby-usda-releases --file <path>`).
-3. Set `USDA_ACTIVE_RELEASE` in `apps/web/wrangler.jsonc` and deploy.
+3. Set `USDA_ACTIVE_RELEASE` in `apps/web/wrangler.jsonc` and deploy. Reads
+   fail with the load's progress until the release is ready.
 4. Open `/api/debug/usda-release` signed in (or with `x-api-key`): the first
    request starts the load and every request reports shard progress, size,
    or the raw failure. `?probe=1` on a ready release times a search and a
-   batch lookup.
+   batch lookup. The daily cron also starts the load.
+5. Once ready, Product links to superseded food revisions advance to the
+   current revision on the next daily cron, or at once with a `POST` to the
+   same route; a `POST` on a failed load resumes it instead.
+
+Development seeds the dev Worker's `USDA_RELEASES` bucket before Vite starts
+with the synthetic release `2000-01` (`apps/web/tooling/dev/usda-synthetic-release.ts`):
+three foundation foods (9900001–9900003) and one branded food (9900010, UPC
+`299000000106`, superseding 9900009). The E2E harness seeds the same release.
+To develop against real data, build a release and start with
+`CUBBY_DEV_USDA_RELEASE_DIR=<dir>/YYYY-MM pnpm dev`; dev uploads that
+directory (skipping objects already stored at the same size) and uses the
+release id from its manifest. `/__dev/ready` stays 503 with `usdaReady: false`
+while the release loads and reports the raw error if the load fails. Changing
+the synthetic foods needs a new release id or `pnpm dev:reset`, because a
+loaded release object keeps its data.
 
 Changing the release tables bumps `USDA_RELEASE_GENERATION` in
 `packages/usda/src/release/store.ts`, which reloads the release from the same

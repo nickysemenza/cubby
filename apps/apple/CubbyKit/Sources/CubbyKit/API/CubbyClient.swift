@@ -1186,7 +1186,7 @@ public actor CubbyClient {
         }
     }
 
-    private func usdaFoodJSON(_ food: FoodSummaryWithLinkedProducts) throws -> JSONValue {
+    private func usdaFoodJSON(_ food: some USDAFoodRow) throws -> JSONValue {
         try normalizedJSON(food) { object in
             object["id"] = .string(String(food.fdcId))
             object["description"] = .string(food.foodInfo.description)
@@ -1217,3 +1217,12 @@ public actor CubbyClient {
 }
 
 extension CubbyClient: EntityRelationshipsClient {}
+
+/// A USDA list row (no full nutrient table) or a single-food read.
+protocol USDAFoodRow: Encodable {
+    var fdcId: FdcId { get }
+    var foodInfo: FoodInfo { get }
+}
+
+extension FoodSummaryWithLinkedProducts: USDAFoodRow {}
+extension UsdaFoodListRow: USDAFoodRow {}

@@ -223,7 +223,14 @@ struct NativeListAdaptersTests {
             nutrientSummary: [], nutrientsPer100: NutrientsPer100()),
         portionInfoRaw: [], inferredUnitMappings: [], linkedProducts: [])
 
-    nonisolated private static let usdaPage: Data = pagePayload([usdaFood])
+    nonisolated private static let usdaPage: Data = pagePayload([
+        UsdaFoodListRow(
+            fdcId: 12345,
+            description: "Numeric food",
+            foodInfo: FoodInfo(dataType: .brandedFood, description: "Numeric food"),
+            nutritionInfo: .init(nutrientsPer100: NutrientsPer100()),
+            portionInfoRaw: [], inferredUnitMappings: [], linkedProducts: [])
+    ])
 
     nonisolated private static let usdaDetailPayload: Data = {
         try! JSONEncoder.cubby().encode(usdaFood)
