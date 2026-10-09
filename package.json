@@ -44,7 +44,7 @@
     "test:e2e:agent:preflight": "pnpm --dir apps/web exec tsx tooling/tester-army/preflight.ts",
     "test:all": "pnpm test && node scripts/test-services.ts -- sh -c 'pnpm test:postgres && pnpm test:e2e'",
     "apple": "node scripts/apple.ts",
-    "wasm": "bash scripts/build-wasm.sh && node scripts/ensure-wasm.ts --stamp",
+    "wasm": "bash scripts/build-wasm.sh",
     "deploy:all": "pnpm run wasm && pnpm --filter @cubby/web run deploy:cf && pnpm --filter @cubby/usda-api run deploy",
     "prepare": "husky",
     "test:services:down": "node scripts/test-services.ts --down",
