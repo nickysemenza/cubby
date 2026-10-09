@@ -107,6 +107,7 @@ async function retirementAdmission(
     predecessorRunId: scope.parent.id,
     parentRunId: scope.parent.parentRunId,
     predecessor: scope.parent,
+    retiredRunIds: scope.receipt.plan.retiredRunIds,
   };
 }
 
@@ -127,7 +128,10 @@ export function researchRetirementAdmission(
 
 export async function readResearchRetirementSuccessor(
   client: DrizzleClient | DrizzleTransaction,
-  admission: Awaited<ReturnType<typeof researchRetirementAdmission>>,
+  admission: Pick<
+    NonNullable<Awaited<ReturnType<typeof researchRetirementAdmission>>>,
+    "predecessor"
+  > | null,
 ) {
   if (!admission) return;
   return readResearchPredecessorSuccessor(client, admission.predecessor);
