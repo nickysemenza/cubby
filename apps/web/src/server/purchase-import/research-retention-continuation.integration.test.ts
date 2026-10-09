@@ -723,11 +723,36 @@ describe("retired research successor admission", () => {
       retiredAt: null,
     });
   });
-  it.each(["same_receipt", "outside_receipt", "changed_owner_scope"])(
+  it.each([
+    "same_receipt",
+    "outside_receipt",
+    "changed_owner_scope",
+    "earlier_receipt",
+    "earlier_missing_work",
+  ])(
     "preserves canonical mail dispositions when an older exposed Run is cleaned first (%s)",
     async (mode) => {
       const f = await fixture(true);
       if (!f.surviving) throw new Error("Synthetic surviving source missing.");
+      const [otherUnrelated] = mode.startsWith("earlier")
+        ? await getDb(ctx.db)
+            .insert(orderMail)
+            .values({
+              ledgerPartyId: f.party.id,
+              mailboxId: f.primary.mailboxId,
+              messageId: "synthetic-canonical-only-unrelated",
+              sender: "orders@example.test",
+              subject: "Synthetic canonical-only unrelated message",
+              receivedAt: new Date("2026-10-01T00:00:00Z"),
+              rawChecksum: await sha256Hex("Synthetic other unrelated message"),
+              content: {
+                snippet: null,
+                bodyText: "Synthetic other unrelated message",
+                bodyHtml: null,
+              },
+            })
+            .returning()
+        : [];
       // An older failed investigation may retain pending descriptors after
       // discovery assigns its originals to a different frozen batch.
       await getDb(ctx.db)
@@ -751,7 +776,11 @@ describe("retired research successor admission", () => {
         {
           ledgerPartyId: f.party.id,
           userId: ctx.actor.userId,
-          messageIds: [f.remaining.id, f.surviving.id],
+          messageIds: [
+            f.remaining.id,
+            f.surviving.id,
+            ...(otherUnrelated ? [otherUnrelated.id] : []),
+          ],
         },
         f.queue,
       );
@@ -826,7 +855,47 @@ describe("retired research successor admission", () => {
       });
       const deletion = vi.spyOn(s3, "deleteS3Object").mockResolvedValue();
       try {
-        if (mode !== "same_receipt") {
+        if (otherUnrelated) {
+          const [otherTarget] = await getDb(ctx.db)
+            .select()
+            .from(runTarget)
+            .where(
+              and(
+                eq(runTarget.runId, canonicalId),
+                eq(runTarget.workKey, otherUnrelated.id),
+              ),
+            );
+          if (!otherTarget)
+            throw new Error("Synthetic other primary work missing.");
+          const earlier = await requestResearchRetention(ctx.db, {
+            runId: canonicalId,
+            workRef: otherTarget.id,
+            callId: "synthetic-canonical-only-retirement",
+            hasSupportedWrites: false,
+          });
+          // The other receipt may finish while the first receipt still awaits the older Run.
+          // oxlint-disable-next-line vitest/no-conditional-expect
+          expect(
+            await processBoundResearchRetention(ctx.db, env, {
+              runId: canonicalId,
+              receiptId: earlier.receiptId,
+            }),
+          ).toEqual({ completed: true });
+          if (mode === "earlier_missing_work")
+            await getDb(ctx.db)
+              .delete(runTarget)
+              .where(
+                and(
+                  eq(runTarget.runId, canonicalId),
+                  eq(runTarget.workKey, f.remaining.id),
+                ),
+              );
+        }
+        if (
+          mode === "outside_receipt" ||
+          mode === "changed_owner_scope" ||
+          mode === "earlier_missing_work"
+        ) {
           // These negative admission modes must fail before any disposition is recorded.
           // oxlint-disable-next-line vitest/no-conditional-expect
           await expect(

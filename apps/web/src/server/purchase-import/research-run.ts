@@ -8,7 +8,7 @@ import { importRunAgentIdentity } from "@cubby/schemas/import-run-agent";
 import { MAILBOX_RESEARCH_VERSION } from "@cubby/schemas/mailbox-research";
 import { mailResearchRunInput } from "@cubby/schemas/run-fields";
 import { sha256Hex } from "@cubby/shared/sha256";
-import { and, asc, eq, inArray, or } from "drizzle-orm";
+import { and, asc, eq, inArray, or, sql } from "drizzle-orm";
 
 import { getPurchaseAgentQueue } from "~/server/cf-env";
 import type { Database, DrizzleTransaction } from "~/server/db";
@@ -91,6 +91,46 @@ function receiptCoversRetiredMailOwner(
   );
 }
 
+async function retainedMailOwnerMatches(
+  tx: Parameters<typeof retainedMailResearchOwners>[0],
+  owner: typeof run.$inferSelect,
+  source: typeof orderMail.$inferSelect,
+  input: Parameters<typeof retainedMailResearchOwners>[3],
+) {
+  if (frozenOwnerMatches(owner, source)) return true;
+  if (
+    owner.input !== null ||
+    !owner.retiredAt ||
+    !receiptCoversRetiredMailOwner(owner, input)
+  )
+    return false;
+  // A completed overlapping receipt erases frozen input. The locked mailbox
+  // ledger still proves exact source/checksum ownership; require its admitted
+  // task and completed transfer disposition before accepting that erasure.
+  const [disposed] = await tx
+    .select({ id: researchRetention.id })
+    .from(researchRetention)
+    .innerJoin(
+      runTarget,
+      and(
+        eq(runTarget.runId, owner.id),
+        eq(runTarget.entityKind, "run"),
+        eq(runTarget.entityId, owner.id),
+        eq(runTarget.workKey, source.id),
+      ),
+    )
+    .where(
+      and(
+        eq(researchRetention.ledgerPartyId, input.partyId),
+        eq(researchRetention.phase, "completed"),
+        sql`${researchRetention.plan}->'retiredRunIds' @> ${JSON.stringify([owner.id])}::jsonb`,
+        sql`${researchRetention.plan}->'successors' @> ${JSON.stringify([{ runId: owner.id }])}::jsonb`,
+      ),
+    )
+    .limit(1);
+  return Boolean(disposed);
+}
+
 async function retainedMailResearchOwners(
   tx: Pick<DrizzleTransaction, "select">,
   sources: (typeof orderMail.$inferSelect)[],
@@ -171,7 +211,7 @@ async function retainedMailResearchOwners(
         (owner.retiredAt && !receiptCoversRetiredMailOwner(owner, input)) ||
         message.checksum !== source.rawChecksum ||
         !["researching", "completed", "blocked"].includes(message.status) ||
-        !frozenOwnerMatches(owner, source)
+        !(await retainedMailOwnerMatches(tx, owner, source, input))
       )
         throw new Error(
           "Mail research ownership does not match its retained source.",

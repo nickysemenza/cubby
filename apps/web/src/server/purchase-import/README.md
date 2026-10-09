@@ -508,6 +508,10 @@ validated receipt, cleanup leaves its disposition with that owner and transfers
 only its unfinished tasks. Settled or blocked mail is not imported again.
 Owners outside the receipt, changed frozen checksums and missing ownership
 remain refusals.
+If another completed receipt already erased that owner's frozen input, its
+locked mailbox ledger's exact source/checksum, admitted task and completed
+transfer disposition establish ownership. A missing task or an unproved erasure
+still refuses cleanup.
 Modern screenshot references remain authorized by their exact receipt manifest.
 If an earlier receipt already completed this fenced Run's physical disposal,
 later receipts can reuse that recorded result after disposable evidence rows
