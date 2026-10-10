@@ -27,6 +27,7 @@ test("Runs summarize matching attempts without claiming Product verification", a
   const summary = page.getByRole("status", { name: "Matching attempts" });
   await expect(summary).toContainText("1 working");
   await expect(summary).toContainText("1 completed");
+  await page.getByRole("button", { name: "More", exact: true }).click();
   await page.getByRole("textbox", { name: "Filter state" }).fill("failed");
   await expect(summary).toContainText("No matching attempts");
   await expectViewportBounded(page);
