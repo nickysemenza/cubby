@@ -147,7 +147,10 @@
             }
         }
 
-        func receive(timeout: Duration = .seconds(600)) async throws -> URL {
+        /// Waits for the callback until `expiry` returns, which bounds an abandoned sign-in.
+        func receive(
+            expiry: @escaping @Sendable () async throws -> Void = { try await Task.sleep(for: .seconds(600)) }
+        ) async throws -> URL {
             let stream = stream
             return try await withThrowingTaskGroup(of: URL.self) { group in
                 defer { group.cancelAll() }
@@ -156,7 +159,7 @@
                     throw CancellationError()
                 }
                 group.addTask {
-                    try await Task.sleep(for: timeout)
+                    try await expiry()
                     throw ChatGptSignInError.timedOut
                 }
                 guard let url = try await group.next() else { throw CancellationError() }
