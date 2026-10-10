@@ -44,6 +44,7 @@ export async function attachmentAssessmentContext(
   const context: SourceObservation[] = [];
   const parts: ContentPart[] = [];
   let byteCount = 0;
+  const suppliedOriginals = new Set<string>();
   for (const observation of observations) {
     const metadata = binding.safeParse(observation.metadata);
     if (!metadata.success) {
@@ -77,6 +78,16 @@ export async function attachmentAssessmentContext(
       type: "text",
       content: `Original attachment for observation ${observation.evidenceId}; attachmentRef ${original.attachmentRef}; checksum ${original.checksum}; filename ${original.filename}. Inspect these original bytes for source support.`,
     });
+    // Every observation is validated above, including a duplicate original.
+    const originalKey = `${original.mimeType}:${original.checksum}`;
+    if (suppliedOriginals.has(originalKey)) {
+      parts.push({
+        type: "text",
+        content: `This observation uses the same ${original.mimeType} original bytes already supplied for checksum ${original.checksum}.`,
+      });
+      continue;
+    }
+    suppliedOriginals.add(originalKey);
     parts.push({
       type: original.mimeType === "application/pdf" ? "document" : "image",
       source: {

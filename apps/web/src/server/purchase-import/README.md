@@ -539,6 +539,12 @@ and deployment/readback order are owned by the
    `agent-proxy.ts` to the run's agent Durable Object. Member controls go
    through `controlRun` and `recordRunControlEvent`.
 
+Independent support assessment delivers identical retained attachment bytes once
+per MIME type and checksum in a request. Every observation keeps its evidence
+reference, attachment descriptor and binding validation; repeated observations
+refer to the already supplied original. The summed original-byte admission limit
+remains unchanged. This changes model delivery only, never retained evidence.
+
 ## Run evidence uploads
 
 `run-evidence.ts` allocates an immutable target-scoped storage manifest before
