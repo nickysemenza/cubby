@@ -327,6 +327,13 @@ jobs:
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
       - uses: ./.github/actions/setup-node-with-deps
+      - name: "DEBUG: Apple key inputs"
+        run: |
+          git status --porcelain
+          git ls-files -o --exclude-standard -- apps/apple cubby-ffi recipebridge packages/shared/golden-vectors .github
+          git ls-files -o -i --exclude-standard -- apps/apple/App/Shared/Previews/Fixtures apps/apple/CubbyKit/Sources apps/apple/Generated ':!apps/apple/CubbyKit/Sources/CubbyFFI' | sort | xargs shasum -a 256
+          git ls-files -s -- apps/apple cubby-ffi recipebridge Cargo.toml Cargo.lock rust-toolchain.toml scripts/apple-check.sh scripts/ensure-apple-ffi.ts scripts/rust-fingerprint.ts scripts/lib/tree-digest.ts packages/shared/golden-vectors .github/workflows/ci.yaml .github/actions | git hash-object --stdin
+          NX_DAEMON=false pnpm exec nx show project apple --json | jq -c '.targets["host-tests"] | {inputs, dependsOn, options, command}'
       - name: Reuse a cached pass
         id: cached
         if: github.event_name != 'schedule'
