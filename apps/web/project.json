@@ -160,8 +160,7 @@
       ],
       "outputs": ["{projectRoot}/playwright-report"]
     },
-    // Informative only (never a merge gate), so its key is the import
-    // agent's own surface and harness rather than the broad gate.
+    // Informative only (never a merge gate); keyed like the other web lanes.
     "e2e-purchase-import": {
       "command": "pnpm exec tsx tooling/build-cf.ts --ensure && pnpm run test:e2e:ci:purchase-import",
       "options": {
@@ -174,23 +173,7 @@
           "target": "wasm"
         }
       ],
-      "inputs": [
-        "{projectRoot}/src/server/purchase-import/**",
-        "{projectRoot}/src/server/purchase-agent/**",
-        "{projectRoot}/src/app/purchases/**",
-        "{projectRoot}/src/app/runs/**",
-        "{projectRoot}/src/app/vendors/order-mail*",
-        "{projectRoot}/src/routes/_authenticated/runs.*",
-        "{projectRoot}/tooling/purchase-agent-*",
-        "{projectRoot}/tooling/workerd-{harness,runtime}.ts",
-        "{projectRoot}/tests/e2e/harness-services/purchase-*",
-        "{projectRoot}/tests/e2e/purchase-import-run.spec.ts",
-        "{projectRoot}/tests/e2e/e2e-{test,worker-runtime}.ts",
-        "{projectRoot}/tests/e2e/fixtures-{core,mail}.ts",
-        "{projectRoot}/playwright.config.ts",
-        "{workspaceRoot}/.claude/skills/{purchase-import,product-enrichment}/**",
-        "sharedGlobals"
-      ],
+      "inputs": ["webGate"],
       "outputs": ["{projectRoot}/playwright-report"]
     },
     "workers-tests": {
