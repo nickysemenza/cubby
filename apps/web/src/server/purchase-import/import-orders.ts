@@ -41,7 +41,7 @@ import {
 import { sha256Hex } from "@cubby/shared/sha256";
 import { createLogger } from "@cubby/worker-tracing";
 import * as Sentry from "@sentry/tanstackstart-react";
-import { and, asc, eq, ilike, inArray, or, sql } from "drizzle-orm";
+import { and, asc, eq, inArray, sql } from "drizzle-orm";
 import { z } from "zod";
 
 import { wasm } from "~/lib/wasm";
@@ -78,6 +78,7 @@ import {
   type ProductHit,
   type ExternalIdPair,
 } from "~/server/repo/product/find-by-external-ids";
+import { findProductNameCandidates } from "~/server/repo/product/resolve-names";
 import { readOperation } from "~/server/repo/run-operation";
 import { resolveOrThrow } from "~/server/repo/shortcode-resolver";
 import { executeAtomicOperation } from "~/server/runs/operation";
@@ -126,7 +127,6 @@ import {
   amazonAsin,
   buildPurchaseImportPlan,
   importVendorOrder,
-  productSearchPatterns,
 } from "./writer";
 
 const operationArgs = (input: {
@@ -224,26 +224,7 @@ async function productCandidates(
         .map((hit) => [hit.id, hit]),
     ).values(),
   ];
-  const patterns = productSearchPatterns(line.title);
-  const fuzzy = patterns.length
-    ? await database
-        .select({
-          id: product.id,
-          shortcode: product.shortcode,
-          name: product.name,
-          manufacturer: product.manufacturer,
-          model: product.model,
-        })
-        .from(product)
-        .where(
-          and(
-            notDeleted(product),
-            or(...patterns.map((pattern) => ilike(product.name, pattern))),
-          ),
-        )
-        .orderBy(asc(product.name))
-        .limit(20)
-    : [];
+  const fuzzy = await findProductNameCandidates(db, line.title);
   const exactProductIds = new Set(exact.map(({ id }) => id));
   const modelTokens = modelStyleTokens(line.title).map((token) =>
     token.toLowerCase(),

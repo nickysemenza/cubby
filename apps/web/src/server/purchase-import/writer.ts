@@ -20,16 +20,7 @@ import {
   type AcceptedSourceOrder,
 } from "@cubby/schemas/purchase-import";
 import { sha256Hex } from "@cubby/shared/sha256";
-import {
-  and,
-  eq,
-  ilike,
-  inArray,
-  isNotNull,
-  isNull,
-  or,
-  sql,
-} from "drizzle-orm";
+import { and, eq, inArray, isNotNull, isNull, or, sql } from "drizzle-orm";
 
 import { householdLocalDate } from "~/lib/household-date";
 import {
@@ -74,6 +65,7 @@ import {
   externalIdKey,
   findProductsByExternalIds,
 } from "~/server/repo/product/find-by-external-ids";
+import { findProductNameCandidates } from "~/server/repo/product/resolve-names";
 import { attachPurchaseProducts } from "~/server/repo/purchase-products";
 import { insertWithShortcode } from "~/server/repo/shortcode-utils";
 
@@ -402,14 +394,6 @@ export async function chooseLineStage(
   });
 }
 
-/** Letter/number tokens never carry LIKE wildcards, so they need no escaping. */
-export const productSearchPatterns = (title: string) =>
-  title
-    .split(/[^\p{L}\p{N}]+/u)
-    .filter((token) => token.length >= 3)
-    .slice(0, 3)
-    .map((token) => `%${token}%`);
-
 // The staged decision pipeline intentionally keeps all five model decisions and
 // deterministic short-circuits in one ordered pass over each source line.
 // eslint-disable-next-line complexity
@@ -417,7 +401,6 @@ async function decideLineIdentities(
   db: Database,
   input: ImportWriterInput,
 ): Promise<LineIdentityDecision[]> {
-  const database = getDb(db);
   const decisions: LineIdentityDecision[] = [];
   const decisionsByExternalIdentity = new Map<string, LineIdentityDecision>();
   const candidate = input.extraction.candidate;
@@ -508,25 +491,7 @@ async function decideLineIdentities(
       if (identity) decisionsByExternalIdentity.set(identity, decision);
       continue;
     }
-    const patterns = productSearchPatterns(line.title);
-    const candidates = patterns.length
-      ? await database
-          .select({
-            id: product.id,
-            name: product.name,
-            manufacturer: product.manufacturer,
-            model: product.model,
-          })
-          .from(product)
-          .where(
-            and(
-              notDeleted(product),
-              or(...patterns.map((pattern) => ilike(product.name, pattern))),
-            ),
-          )
-          .orderBy(product.name)
-          .limit(20)
-      : [];
+    const candidates = await findProductNameCandidates(db, line.title);
     if (candidates.length === 0) {
       const decision = {
         productId: null,

@@ -34,6 +34,15 @@ SKU belongs to the retailer; a manufacturer part belongs to its maker; a GTIN
 retains barcode semantics. Images must represent the purchased variant. A
 collection's single supported member does not verify its other members.
 
+For each proposed `new` Product, context.newProductCandidates names ranked live
+Product references for that exact orderIndex and lineIndex; context.products
+supplies their identity and typed identifiers. Check those existing Products
+against the retained order line before accepting creation. If an existing
+Product is the supported purchased variant, reject the order's `new` resolution
+and explain the existing reference to reuse in a revised proposal. Similar
+names, a shared model or rank alone do not prove identity; distinct variants
+may still justify creation. Never rewrite the proposal yourself.
+
 Assess proposed order itemization, dates, totals and vendor identity against
 their original sources. Assess each order's proposed mail `event` as well as
 events on links to existing Purchases; a shipping-first import must establish

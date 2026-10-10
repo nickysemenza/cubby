@@ -450,6 +450,14 @@ and deployment/readback order are owned by the
    association succeeds, and rereads that Purchase under lock for each group.
    A rejected or member-refused order cannot acquire facts or provenance.
    Existing Product line resolutions use public references from `cubby_find`.
+   Preparation and automatic line matching use the shared declaration-driven
+   Product name/alias resolver: full-title lexical relevance is ranked before
+   its bounded candidate limit. Broad leading brand/category words never select
+   an alphabetical shortlist. Typed identifier hits retain priority; a ranked
+   name, alias or shared-model candidate is not proof of exact variant identity.
+   Hosted `new` resolutions also expose the ranked live candidates and their
+   typed identity to source assessment. Supported existing variants require a
+   revised `existing` proposal; the assessor never repairs a proposed write.
    Search supplies candidates; retained-original assessment verifies the selected
    identity with bounded live metadata and canonically ordered typed identifiers.
    Settlement rereads that projection under sorted Product, matching Entity-parent

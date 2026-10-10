@@ -742,6 +742,52 @@ describe("research public existing-Product admission", () => {
     expect(await getDb(ctx.db).select().from(inventoryEntry)).toEqual([]);
   });
 
+  it("exposes existing variant candidates to source assessment when research proposes a new Product", async () => {
+    const f = await fixture();
+    const proposal = researchWorkResolve.parse({
+      ...f.proposal,
+      orders: f.proposal.orders.map((order) => ({
+        ...order,
+        productResolutions: [{ kind: "new", lineIndex: 0 }],
+      })),
+    });
+    let request: AiChatRequest | undefined;
+    supportedAssessment(undefined, [], (value) => {
+      request = value;
+    });
+    await f.services.researchResolve(proposal, crypto.randomUUID());
+    if (!request) throw new Error("Source support was not assessed.");
+    const text = request.messages[0]?.content;
+    if (!Array.isArray(text) || text[0]?.type !== "text")
+      throw new Error("Assessment context missing.");
+    const payload = z
+      .object({
+        context: z.object({
+          newProductCandidates: z.array(
+            z.object({
+              orderIndex: z.number(),
+              lineIndex: z.number(),
+              productRefs: z.array(z.string()),
+            }),
+          ),
+          products: z.array(
+            z.object({ productRef: z.string(), model: z.string().nullable() }),
+          ),
+        }),
+      })
+      .parse(JSON.parse(text[0].content));
+    expect(payload.context.newProductCandidates).toEqual([
+      { orderIndex: 0, lineIndex: 0, productRefs: [f.selected.id] },
+    ]);
+    expect(payload.context.products).toContainEqual({
+      productRef: f.selected.id,
+      model: "COPPER-XL",
+    });
+    expect(await getDb(ctx.db).select().from(product)).toHaveLength(2);
+    expect(await getDb(ctx.db).select().from(expense)).toEqual([]);
+    expect(await getDb(ctx.db).select().from(inventoryEntry)).toEqual([]);
+  });
+
   it("reads the original, finds a public Product, and reuses its supported identity without duplicates or stock", async () => {
     const f = await fixture();
     let request: AiChatRequest | undefined;
