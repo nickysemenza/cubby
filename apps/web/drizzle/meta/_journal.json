@@ -218,6 +218,13 @@
       "when": 1791617029126,
       "tag": "0030_familiar_vargas",
       "breakpoints": true
+    },
+    {
+      "idx": 31,
+      "version": "7",
+      "when": 1791620225426,
+      "tag": "0031_derived_ddl",
+      "breakpoints": true
     }
   ]
 }
