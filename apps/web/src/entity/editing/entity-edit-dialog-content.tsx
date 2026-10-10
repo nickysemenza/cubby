@@ -26,7 +26,10 @@ import {
   getEntityEditorPresentation,
 } from "./editor-presentations";
 import type { EntityEditDialogProps } from "./entity-edit-dialog";
-import { EntityEditFieldScopeProvider } from "./entity-primitive-fields";
+import {
+  EntityEditFieldScopeProvider,
+  EntityIntentFields,
+} from "./entity-primitive-fields";
 import { isResolvedEntityEdit, resolveEntityEdit } from "./kernel";
 import { mergeOwnedIds } from "./shared-id-field";
 import type {
@@ -396,11 +399,20 @@ export function EntityEditDialogContent<E extends EditableEntity>({
           ])}
         >
           <EntityEditFieldScopeProvider fieldScope={request.fieldScope}>
-            <presentation.Fields
-              form={session.form}
-              context={context}
-              record={record}
-            />
+            {request.fieldScope ? (
+              <EntityIntentFields
+                entity={request.entity}
+                intent={request.intent}
+                mode="edit"
+                record={record}
+              />
+            ) : (
+              <presentation.Fields
+                form={session.form}
+                context={context}
+                record={record}
+              />
+            )}
           </EntityEditFieldScopeProvider>
         </FieldSuggestionProvider>
         {showPendingImageUpload && (

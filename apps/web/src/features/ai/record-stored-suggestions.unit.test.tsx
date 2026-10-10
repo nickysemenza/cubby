@@ -183,6 +183,128 @@ describe("stored suggestions in generic list cells", () => {
     harness.dispose();
   });
 
+  it("keeps presentation-only fields out of a scoped correction editor", async () => {
+    const harness = createBrowserTestHarness();
+    const location = {
+      id: testShortcode("location", "suggestion-editor"),
+      name: "Synthetic room",
+      type: "room",
+      tags: [],
+    };
+    const operations = validatedStoredOperations([
+      suggestion({
+        entity: "location",
+        recordId: location.id,
+        field: "type",
+        currentValue: "room",
+        suggestedValue: "storage",
+      }),
+    ]);
+    const reject = vi.fn(async () => ({
+      id: rowId,
+      status: "rejected" as const,
+    }));
+    operations.reject = reject;
+    render(
+      <RecordSuggestionsProvider
+        entity="location"
+        records={[location]}
+        fieldKeys={["type"]}
+        operations={{
+          suggestFields: ai.suggestFields.withTransport(async () => ({
+            suggestions: {},
+            outcomes: {},
+          })),
+        }}
+        storedSuggestionOperations={operations}
+      >
+        <RecordFieldSuggestion record={location} field="type">
+          <span>Current type</span>
+        </RecordFieldSuggestion>
+      </RecordSuggestionsProvider>,
+      { wrapper: harness.wrapper },
+    );
+
+    fireEvent.click(
+      await screen.findByRole("button", { name: "Suggestion actions" }),
+    );
+    fireEvent.click(
+      await screen.findByRole("menuitem", { name: "Use a different value" }),
+    );
+    expect(await screen.findByRole("dialog")).toBeInTheDocument();
+    expect(screen.getByLabelText("Type")).toBeInTheDocument();
+    expect(screen.queryByText("Collections")).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Save changes" }));
+    await waitFor(() =>
+      expect(reject).toHaveBeenCalledWith(
+        { id: rowId, correctValue: "room" },
+        expect.anything(),
+      ),
+    );
+    harness.dispose();
+  });
+
+  it("renders a suggested field omitted by its bespoke presentation", async () => {
+    const harness = createBrowserTestHarness();
+    const transaction = {
+      id: testShortcode("financialTransaction", "suggestion-editor"),
+      amount: 10,
+      transactionDate: new Date("2025-01-01T00:00:00.000Z"),
+      evidenceExpectation: "receipt",
+    };
+    const operations = validatedStoredOperations([
+      suggestion({
+        entity: "financialTransaction",
+        recordId: transaction.id,
+        field: "evidenceExpectation",
+        currentValue: "receipt",
+        suggestedValue: "invoice",
+      }),
+    ]);
+    const reject = vi.fn(async () => ({
+      id: rowId,
+      status: "rejected" as const,
+    }));
+    operations.reject = reject;
+    render(
+      <RecordSuggestionsProvider
+        entity="financialTransaction"
+        records={[transaction]}
+        fieldKeys={["evidenceExpectation"]}
+        operations={{
+          suggestFields: ai.suggestFields.withTransport(async () => ({
+            suggestions: {},
+            outcomes: {},
+          })),
+        }}
+        storedSuggestionOperations={operations}
+      >
+        <RecordFieldSuggestion record={transaction} field="evidenceExpectation">
+          <span>Current expectation</span>
+        </RecordFieldSuggestion>
+      </RecordSuggestionsProvider>,
+      { wrapper: harness.wrapper },
+    );
+
+    fireEvent.click(
+      await screen.findByRole("button", { name: "Suggestion actions" }),
+    );
+    fireEvent.click(
+      await screen.findByRole("menuitem", { name: "Use a different value" }),
+    );
+    expect(await screen.findByRole("dialog")).toBeInTheDocument();
+    expect(screen.getByLabelText("Evidence expectation")).toBeInTheDocument();
+    expect(screen.queryByLabelText("Amount")).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Save transaction" }));
+    await waitFor(() =>
+      expect(reject).toHaveBeenCalledWith(
+        { id: rowId, correctValue: "receipt" },
+        expect.anything(),
+      ),
+    );
+    harness.dispose();
+  });
+
   it("loads a shortcode-only list row, renders its stored ghost, and bulk accepts it", async () => {
     const publicId = record.id;
     const harness = createBrowserTestHarness();
