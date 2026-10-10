@@ -964,3 +964,14 @@ Mac Browser Sync renders account status through the generic manifest enum labels
 beside the shared admission plan and its Run links. Connection, sign-in and Run-completion
 events refresh the projection; the visible pane also refreshes every ten seconds for
 server-side changes. Closing the pane cancels that read-only refresh loop.
+
+## Restarted import audits
+
+The existing read-only audit batch includes a successor's writes and matching
+unaudited predecessor writes. It stops at an audited predecessor and does not
+cross owner, actor, account, vendor or purpose boundaries. Distinct Purchase
+ids preserve the existing 25-row pagination when retries wrote the same record.
+Cycle detection terminates malformed lineage. The successor records its own
+findings; historical Run records and write receipts remain unchanged. Inherited
+findings are report-only: the host clears proposed fixes unless the current Run
+also wrote that Purchase. Retry lineage never grants additional write rights.
