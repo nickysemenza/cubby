@@ -202,6 +202,7 @@ async function recordFor(label: DecisionLabel) {
     entity: label.entity,
     field: label.field,
     recordId: label.recordId,
+    entityId: record.shortcode,
     basis,
   };
 }
@@ -238,7 +239,7 @@ describe("live decision prompt evaluation", () => {
             targets: [label.field],
             basisMode: "provided",
             basis: saved.basis,
-            entityId: label.recordId,
+            entityId: saved.entityId,
           }),
           {
             decisionModel: model,

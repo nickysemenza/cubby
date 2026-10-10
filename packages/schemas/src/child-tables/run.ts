@@ -1318,6 +1318,7 @@ export const runChildren = [
       { key: "entity", kind: "text", notNull: true },
       { key: "recordId", kind: "uuid", notNull: true },
       { key: "field", kind: "text", notNull: true },
+      { key: "financeReviewFingerprint", kind: "text" },
       { key: "currentValue", kind: "jsonb" },
       { key: "suggestedValue", kind: "jsonb", notNull: true },
       { key: "confidence", kind: "real", notNull: true },

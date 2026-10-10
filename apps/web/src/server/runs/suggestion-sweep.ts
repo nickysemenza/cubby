@@ -10,7 +10,7 @@ import {
 } from "@cubby/schemas/run-fields";
 import type { SupportedDecisionModel } from "@cubby/shared/ai/models";
 import { selectDecisionModel } from "@cubby/shared/ai/models";
-import { and, eq } from "drizzle-orm";
+import { and, eq, sql } from "drizzle-orm";
 import { z } from "zod";
 
 import {
@@ -65,6 +65,11 @@ const suggestionValueSchema: z.ZodType<SuggestionValue> = z.lazy(() =>
     z.record(z.string(), suggestionValueSchema),
   ]),
 );
+const processedTargetIdsSchema = z
+  .object({
+    processedTargetIds: z.array(z.string()).default([]),
+  })
+  .passthrough();
 const sweepListRowSchema = z.object({ id: z.string() }).passthrough();
 const jsonValue = (value: unknown): SuggestionValue =>
   suggestionValueSchema.parse(value);
@@ -88,7 +93,7 @@ async function suggestTarget(
   const recommend = ports.suggest ?? suggestFields;
   const fieldInput: FieldSuggestionsInput = {
     entity: input.entity,
-    entityId: target.entityId,
+    entityId: target.id,
     basisMode: "suggested",
     targets: [input.field],
     basis: target.basis,
@@ -100,7 +105,7 @@ async function suggestTarget(
   const decision = decisions.suggestions[input.field];
   if (!decision) {
     const entries: SweepSuggestion[] = [];
-    return { primary: null, entries };
+    return { primary: null, entries, financeReviewFingerprint: null };
   }
   const primary = makeSweepSuggestion({
     currentValue: target.currentValue,
@@ -139,7 +144,11 @@ async function suggestTarget(
       });
     if (pairedRow) entries.push(pairedRow);
   }
-  return { primary, entries };
+  return {
+    primary,
+    entries,
+    financeReviewFingerprint: decision.financeReview?.fingerprint ?? null,
+  };
 }
 
 async function insertSuggestions(
@@ -149,6 +158,7 @@ async function insertSuggestions(
   field: string,
   recordId: string,
   entries: readonly SweepSuggestion[],
+  financeReviewFingerprint: string | null,
 ) {
   const typedRecordId = parseEntityId(entity, recordId);
   for (const entry of entries) {
@@ -157,6 +167,7 @@ async function insertSuggestions(
       entity,
       recordId: typedRecordId,
       field,
+      financeReviewFingerprint,
       currentValue: entry.currentValue,
       suggestedValue: entry.suggestedValue,
       confidence: entry.confidence,
@@ -165,7 +176,7 @@ async function insertSuggestions(
       model: entry.model,
       pairKey: entry.pairKey,
       kind: entry.kind,
-      status: entry.status,
+      status: "pending",
     });
   }
 }
@@ -186,6 +197,8 @@ async function executeSweep(
   ports: SuggestionSweepPorts,
 ) {
   const saved = await savedSweep(db, runId);
+  if (saved.status === "completed")
+    throw new Error("Completed suggestion sweep cannot be resumed");
   const input = sweepRunInputSchema.parse(saved.input);
   if (input.paused) return saved.progress;
   let pageIndex = 0;
@@ -223,17 +236,15 @@ async function executeSweep(
     }
     pageIndex++;
   } while (rowsSeen < totalCount);
-  const prior = await getDb(db)
-    .select({ recordId: suggestionTable.recordId })
-    .from(suggestionTable)
-    .where(eq(suggestionTable.runId, runId));
-  const processed = new Set(prior.map(({ recordId }) => recordId));
+  const processed = new Set(
+    processedTargetIdsSchema.parse(saved.progress ?? {}).processedTargetIds,
+  );
   const pending = targets.filter(({ entityId }) => !processed.has(entityId));
   const progress =
     saved.progress === null
       ? null
       : suggestionSweepRunProgress.parse(saved.progress);
-  const totalTargets = targets.length;
+  const totalTargets = Math.max(targets.length, processed.size);
   const batchPorts: PacedBatchPorts = {
     isPaused: async () => {
       if (
@@ -247,16 +258,18 @@ async function executeSweep(
       return sweepRunInputSchema.parse(current.input).paused;
     },
     saveProgress: async (p) => {
+      const progressSnapshot = {
+        total: totalTargets,
+        done: (progress?.done ?? 0) + p.done,
+        applied: (progress?.applied ?? 0) + p.applied,
+        queued: (progress?.queued ?? 0) + p.queued,
+        failed: (progress?.failed ?? 0) + p.failed,
+        processedTargetIds: [...processed],
+      };
       await getDb(db)
         .update(runTable)
         .set({
-          progress: {
-            total: totalTargets,
-            done: (progress?.done ?? 0) + p.done,
-            applied: (progress?.applied ?? 0) + p.applied,
-            queued: (progress?.queued ?? 0) + p.queued,
-            failed: (progress?.failed ?? 0) + p.failed,
-          },
+          progress: sql`${JSON.stringify(progressSnapshot)}::jsonb`,
         })
         .where(eq(runTable.id, runId));
     },
@@ -271,51 +284,69 @@ async function executeSweep(
     pacePerMinute: ports.pacePerMinute,
     ports: batchPorts,
     work: async (target) => {
-      const pairKey = stablePair(target.entityId) ? crypto.randomUUID() : null;
-      const { primary, entries } = await suggestTarget(
-        db,
-        runId,
-        input,
-        target,
-        pairKey,
-        ports,
-      );
-      await insertSuggestions(
-        db,
-        runId,
-        input.entity,
-        input.field,
-        target.entityId,
-        entries,
-      );
-      let outcome: "applied" | "queued" | "failed" =
-        primary?.status === "applied" ? "applied" : "queued";
-      if (primary?.status === "applied") {
-        try {
-          const command = entityCommandSchema.parse({
-            action: "update",
-            entity: input.entity,
-            id: target.id,
-            data: { [input.field]: primary.suggestedValue },
-          });
-          await executeEntity(ports.context, command);
-        } catch {
-          // SILENT: preserve the candidate for review and count the failed auto-apply in Run progress.
-          const recordId = parseEntityId(input.entity, target.entityId);
-          await getDb(db)
-            .update(suggestionTable)
-            .set({ status: "pending" })
-            .where(
-              and(
-                eq(suggestionTable.runId, runId),
-                eq(suggestionTable.recordId, recordId),
-              ),
-            );
-          outcome = "failed";
+      try {
+        const pairKey = stablePair(target.entityId)
+          ? crypto.randomUUID()
+          : null;
+        const { primary, entries, financeReviewFingerprint } =
+          await suggestTarget(db, runId, input, target, pairKey, ports);
+        await insertSuggestions(
+          db,
+          runId,
+          input.entity,
+          input.field,
+          target.entityId,
+          entries,
+          financeReviewFingerprint,
+        );
+        let outcome: "applied" | "queued" | "failed" =
+          primary?.status === "applied" ? "applied" : "queued";
+        if (primary?.status === "applied") {
+          try {
+            const command = entityCommandSchema.parse({
+              action: "update",
+              entity: input.entity,
+              id: target.id,
+              data: { [input.field]: primary.suggestedValue },
+            });
+            await executeEntity(ports.context, command);
+            await getDb(db)
+              .update(suggestionTable)
+              .set({ status: "applied" })
+              .where(
+                and(
+                  eq(suggestionTable.runId, runId),
+                  eq(
+                    suggestionTable.recordId,
+                    parseEntityId(input.entity, target.entityId),
+                  ),
+                  eq(suggestionTable.model, primary.model),
+                ),
+              );
+          } catch {
+            // SILENT: preserve the candidate for review and count the failed auto-apply in Run progress.
+            const recordId = parseEntityId(input.entity, target.entityId);
+            await getDb(db)
+              .update(suggestionTable)
+              .set({ status: "pending" })
+              .where(
+                and(
+                  eq(suggestionTable.runId, runId),
+                  eq(suggestionTable.recordId, recordId),
+                ),
+              );
+            outcome = "failed";
+          }
         }
+        processed.add(target.entityId);
+        return outcome;
+      } catch {
+        // SILENT: failed inference is still checkpointed so resume cannot rebill it.
+        return "failed";
+      } finally {
+        processed.add(target.entityId);
+        batchDone++;
       }
-      batchDone++;
-      return outcome;
     },
   });
   const latest = await savedSweep(db, runId);

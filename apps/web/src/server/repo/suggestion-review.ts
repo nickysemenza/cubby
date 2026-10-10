@@ -1,5 +1,8 @@
-import { fieldSuggestionsInput, suggestionMissesOut } from "@cubby/schemas/ai";
-import { spendingCategoryShortcode } from "@cubby/schemas/identifiers";
+import {
+  fieldSuggestionsInput,
+  financeCategoryApplyInput,
+  suggestionMissesOut,
+} from "@cubby/schemas/ai";
 import type { RunId } from "@cubby/schemas/identifiers";
 import { parseEntityId } from "@cubby/schemas/identifiers";
 import { and, desc, eq, gte } from "drizzle-orm";
@@ -15,10 +18,7 @@ import type { EntityKernelContext } from "~/server/entity-kernel/adapter";
 import { entityCommandSchema } from "~/server/entity-kernel/contracts";
 import { getDb } from "~/server/repo/database-helpers";
 import { spendingClassificationRevision } from "~/server/repo/expense-category-resolution";
-import {
-  loadFinanceSuggestionContext,
-  applyFinanceCategorySuggestion,
-} from "~/server/repo/finance-suggestion-context";
+import { applyFinanceCategorySuggestion } from "~/server/repo/finance-suggestion-context";
 import { SHORTCODE_TABLE } from "~/server/repo/generated/shortcode-tables.gen";
 import { resolveLiveShortcode } from "~/server/repo/shortcode-resolver";
 
@@ -37,6 +37,7 @@ const suggestionRowSchema = z.object({
   entity: fieldSuggestionsInput.shape.entity,
   recordId: z.string().uuid(),
   field: z.string(),
+  financeReviewFingerprint: z.string().nullable(),
   currentValue: jsonSchema.nullable(),
   suggestedValue: jsonSchema,
   confidence: z.number(),
@@ -113,21 +114,36 @@ async function writeSuggestedValue(
     .where(eq(table.id, row.recordId))
     .limit(1);
   if (!record) throw new Error(`Suggestion record not found: ${row.recordId}`);
-  if (
-    (entity === "expense" || entity === "purchase") &&
-    row.field === "spendingCategoryId"
-  ) {
-    const review = await loadFinanceSuggestionContext(
-      db,
-      entity,
-      record.shortcode,
-    );
-    await applyFinanceCategorySuggestion(context, {
+  const reviewedField =
+    ((entity === "expense" || entity === "purchase") &&
+      row.field === "spendingCategoryId") ||
+    (entity === "vendor" &&
+      (row.field === "defaultSpendingCategoryId" ||
+        row.field === "spendingProfile"));
+  if (reviewedField) {
+    if (!row.financeReviewFingerprint)
+      throw new Error(
+        "Suggestion is missing its finance review fingerprint; request a fresh suggestion.",
+      );
+    const financeField = z
+      .enum([
+        "spendingCategoryId",
+        "defaultSpendingCategoryId",
+        "spendingProfile",
+      ])
+      .parse(row.field);
+    const financeInput = financeCategoryApplyInput.parse({
       entity,
       entityId: record.shortcode,
-      fingerprint: review.fingerprint,
-      spendingCategoryId: spendingCategoryShortcode.parse(typedValue),
+      fingerprint: row.financeReviewFingerprint,
+      field: financeField,
+      ...(financeField === "spendingCategoryId"
+        ? { spendingCategoryId: typedValue }
+        : financeField === "defaultSpendingCategoryId"
+          ? { defaultSpendingCategoryId: typedValue }
+          : { spendingProfile: typedValue }),
     });
+    await applyFinanceCategorySuggestion(context, financeInput);
     return;
   }
   await executeEntity(
