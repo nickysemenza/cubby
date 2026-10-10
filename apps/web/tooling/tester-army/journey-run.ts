@@ -5,7 +5,7 @@ import {
   awaitRun,
   loadJourneyIds,
   replayParams,
-  stepGoal,
+  stepGoals,
   type Engine,
   type Journey,
   type Json,
@@ -57,7 +57,9 @@ async function runJourneyBody(
     if (step.ready) await assertDatabase(journey, [step.ready], ids, false);
     if (step.awaitRun) await awaitRun(journey, step.awaitRun, ids);
     if (step.ready || step.awaitRun) await fixtures.reload();
-    await fixtures.agent.act(stepGoal(step, engine), { params });
+    for (const goal of stepGoals(step, engine)) {
+      await fixtures.agent.act(goal, { params });
+    }
     await expectTexts(fixtures, step.check?.visible?.(ids) ?? [], true);
     if (step.check?.db)
       await assertDatabase(journey, step.check.db, ids, false);

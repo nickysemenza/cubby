@@ -17,34 +17,47 @@ struct EntityFieldControl: View {
         EntityReferenceScope.pickerScope(field: field, draft: model.draft)
     }
 
+    /// A structured value draws one Form row per input (see `StructuredValueControl`), so its
+    /// footer follows as sibling rows rather than wrapping the field in one tall cell.
+    @ViewBuilder
     var body: some View {
-        VStack(alignment: .leading, spacing: FieldGuideTokens.Space.xs) {
+        if field.controlKind == .specialized, field.valueSchema != nil {
             control
-            if let resolved = model.resolutionForEditor(field) {
-                Text("Effective: \(EntityFieldValue.text(resolved.effectiveValue, field: field) ?? "None")")
-                    .font(.caption).foregroundStyle(.secondary)
-                EntityFieldResolutionLabel(resolved: resolved)
-                if resolved.resetPayload(field: field) != nil {
-                    Button(resolved.resetLabel) { model.stageResolutionReset(key) }
-                        .accessibilityIdentifier("editor.\(model.descriptor.key.rawValue).\(key).reset")
-                    Text("Save commits the reset.").font(.caption).foregroundStyle(.secondary)
-                }
-            } else if let original = model.original,
-                FieldResolutionPresentation(raw: original, field: field) != nil
-            {
-                Text("Saved resolution is out of date for this draft. Save to refresh.")
-                    .font(.caption).foregroundStyle(.secondary)
+            footer
+        } else {
+            VStack(alignment: .leading, spacing: FieldGuideTokens.Space.xs) {
+                control
+                footer
             }
-            if field.resolution?.none != nil {
-                Button("Use no value") { model.stageResolutionNone(key) }
-                    .accessibilityIdentifier("editor.\(model.descriptor.key.rawValue).\(key).none")
+        }
+    }
+
+    @ViewBuilder
+    private var footer: some View {
+        if let resolved = model.resolutionForEditor(field) {
+            Text("Effective: \(EntityFieldValue.text(resolved.effectiveValue, field: field) ?? "None")")
+                .font(.caption).foregroundStyle(.secondary)
+            EntityFieldResolutionLabel(resolved: resolved)
+            if resolved.resetPayload(field: field) != nil {
+                Button(resolved.resetLabel) { model.stageResolutionReset(key) }
+                    .accessibilityIdentifier("editor.\(model.descriptor.key.rawValue).\(key).reset")
+                Text("Save commits the reset.").font(.caption).foregroundStyle(.secondary)
             }
-            if let error = model.fieldErrors[key] {
-                Text(error)
-                    .font(.caption)
-                    .foregroundStyle(FieldGuideTokens.destructive)
-                    .accessibilityLabel("\(field.label) error: \(error)")
-            }
+        } else if let original = model.original,
+            FieldResolutionPresentation(raw: original, field: field) != nil
+        {
+            Text("Saved resolution is out of date for this draft. Save to refresh.")
+                .font(.caption).foregroundStyle(.secondary)
+        }
+        if field.resolution?.none != nil {
+            Button("Use no value") { model.stageResolutionNone(key) }
+                .accessibilityIdentifier("editor.\(model.descriptor.key.rawValue).\(key).none")
+        }
+        if let error = model.fieldErrors[key] {
+            Text(error)
+                .font(.caption)
+                .foregroundStyle(FieldGuideTokens.destructive)
+                .accessibilityLabel("\(field.label) error: \(error)")
         }
     }
 

@@ -73,7 +73,7 @@ it("lets a recording replay against the next seed's codes", async () => {
   const dist = path.dirname(createRequire(import.meta.url).resolve("e2e"));
   const load = (file: string) =>
     import(pathToFileURL(path.join(dist, file)).href);
-  const { routeOf, compareRoutes } = await load("cache/route.js");
+  const { sameRoute } = await load("cache/route.js");
   const { templateParams, templateText, expandText } =
     await load("cache/template.js");
   const { validateParams } = await load("agent/act-validation.js");
@@ -90,9 +90,7 @@ it("lets a recording replay against the next seed's codes", async () => {
   };
   const recorded = seed("PRD-4K7M");
   const next = seed("PRD-ZZZZ");
-  expect(compareRoutes(routeOf("/PRD-4K7M"), routeOf("/PRD-ZZZZ"))).toBe(
-    "undecided",
-  );
+  expect(sameRoute("/PRD-4K7M", "/PRD-ZZZZ")).toBe(false);
   expect(templateParams(next.projected, next.templates)).toEqual(
     templateParams(recorded.projected, recorded.templates),
   );
@@ -100,9 +98,7 @@ it("lets a recording replay against the next seed's codes", async () => {
     templateText("/PRD-4K7M/edit", recorded.templates),
     new Map(next.templates.map((t) => [t.pointer, t.value])),
   );
-  expect(compareRoutes(routeOf(replayed), routeOf("/PRD-ZZZZ/edit"))).toBe(
-    "same",
-  );
+  expect(sameRoute(replayed, "/PRD-ZZZZ/edit")).toBe(true);
   // A non-code seed value stays out: marking it would template every
   // occurrence of an ordinary string in the recording.
   expect(next.templates.map((t) => t.value)).toEqual(["PRD-ZZZZ"]);

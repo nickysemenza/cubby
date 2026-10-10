@@ -671,6 +671,7 @@ export function UnifiedTextField<
   form,
   name,
   label,
+  hideLabel,
   description,
   placeholder,
   nullable = false,
@@ -681,6 +682,7 @@ export function UnifiedTextField<
   form: UseFormReturn<TFieldValues>;
   name: FieldPathByValue<TFieldValues, string | null | undefined>;
   label: string;
+  hideLabel?: boolean;
   description?: ReactNode;
   placeholder: string;
   nullable?: boolean;
@@ -701,6 +703,7 @@ export function UnifiedTextField<
           <FormFieldGroup
             htmlFor={name}
             label={label}
+            hideLabel={hideLabel}
             description={description}
             descriptionId={descriptionId}
             invalid={fieldState.invalid}
@@ -755,6 +758,7 @@ export function SelectField<TFieldValues extends FieldValues = FieldValues>({
   form,
   name,
   label,
+  hideLabel,
   options,
   placeholder,
   nullable = false,
@@ -765,6 +769,7 @@ export function SelectField<TFieldValues extends FieldValues = FieldValues>({
   form: UseFormReturn<TFieldValues>;
   name: Path<TFieldValues>;
   label: string;
+  hideLabel?: boolean;
   options: readonly {
     value: string;
     label: string;
@@ -797,6 +802,7 @@ export function SelectField<TFieldValues extends FieldValues = FieldValues>({
         <FormFieldGroup
           htmlFor={controlId}
           label={label}
+          hideLabel={hideLabel}
           description={description}
           descriptionId={descriptionId}
           invalid={fieldState.invalid}

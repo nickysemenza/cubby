@@ -12,6 +12,10 @@ for (const journey of selectedJourneys(journeys, "web"))
     { timeout: journey.timeoutMs, agentContext: journey.context },
     async ({ app, agent, screen, browser }) => {
       await browser.setCookies(readBrowserCookies());
+      // The semantic decision table omits disabled controls. Streamed SSR
+      // buttons stay disabled until their own React boundary hydrates.
+      const ready = () =>
+        expect(browser.locator("[data-hydrating]")).toHaveCount(0);
       await runJourney(journey, "web", {
         agent,
         expectText: async (text, visible) => {
@@ -19,8 +23,14 @@ for (const journey of selectedJourneys(journeys, "web"))
           if (visible) await expect(target).toBeVisible();
           else await expect(target).toBeHidden();
         },
-        open: ({ entity, web }) => app.open(web ?? `/${entity}`),
-        reload: () => browser.reload(),
+        open: async ({ entity, web }) => {
+          await app.open(web ?? `/${entity}`);
+          await ready();
+        },
+        reload: async () => {
+          await browser.reload();
+          await ready();
+        },
         setViewport: (size) => browser.setViewport(size),
       });
     },

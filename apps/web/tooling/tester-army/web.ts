@@ -28,8 +28,9 @@ import {
  * turn and merges their summaries.
  */
 const flags = process.argv.slice(2).filter((argument) => argument !== "--");
-applyJourneyFlags(flags, "test:e2e:agent:web", ["--services-ready"]);
+applyJourneyFlags(flags, "test:e2e:agent:web", ["--services-ready", "--debug"]);
 process.env.E2E_TELEMETRY_DISABLED = "1";
+if (flags.includes("--debug")) process.env.TESTER_ARMY_DEBUG = "1";
 const { output, rawOutput } = laneOutput("web");
 const tracker = childTracker();
 const selected = selectedJourneys(journeys, "web");
@@ -79,7 +80,14 @@ async function runJourneys(harness: Harness, runtime: Runtime) {
     mkdirSync(phaseOutput(harness), { recursive: true });
     await runOrThrow(
       "pnpm",
-      ["exec", "e2e", "run", "--output", phaseOutput(harness)],
+      [
+        "exec",
+        "e2e",
+        "run",
+        "--output",
+        phaseOutput(harness),
+        ...(process.env.TESTER_ARMY_DEBUG === "1" ? ["--debug"] : []),
+      ],
       {
         ...tracker,
         cwd: webRoot,

@@ -74,7 +74,7 @@
     "@tanstack/router-generator": "1.167.40",
     "@ts-rest/open-api": "3.53.0-rc.1",
     "@types/node": "^26.6.3",
-    "agent-device": "0.21.20",
+    "agent-device": "0.21.22",
     "concurrently": "^10.0.5",
     "husky": "^9.1.7",
     "knip": "^6.39.0",

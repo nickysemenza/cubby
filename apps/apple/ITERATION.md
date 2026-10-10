@@ -36,7 +36,8 @@ evidence through the usual QA artifact path. This guard also runs in the full QA
 `pnpm test:e2e:sim -- --qa` seeds a synthetic household (`tooling/scenarios/native-qa.ts`) and replays
 every `apps/apple/e2e/qa-*.ad` journey against it: hero Discard with a shelf choice, statement match
 save, Run approval, approving only the selected ready group of a photo Run, a structured
-unit-mapping edit, recipe scaling in cook mode, and scoped entity picking after a location change
+unit-mapping edit, external-ID Source/Identifier keyboard entry with saved-value reopen,
+recipe scaling in cook mode, and scoped entity picking after a location change
 with selections across two pages. After the replays it reads the database back
 (one unit from the chosen shelf only, both allocations, the granted approval, the one committed
 photo group and its Product, and exactly the selected location and two plantings) before writing the usual checksummed bundle under `artifacts/sim-qa-e2e/`. Add

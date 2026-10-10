@@ -4,8 +4,7 @@ import { mobile } from "@e2e-dev/mobile";
 import { z } from "zod";
 import {
   modelConfiguration,
-  testerArmyModel,
-  testerArmyProviderOptions,
+  testerArmyAgent,
 } from "./tooling/tester-army/model";
 import { testerArmyReporter } from "./tooling/tester-army/report";
 import { readBrowserCookies } from "./tooling/tester-army/scenario";
@@ -15,8 +14,6 @@ const target = z.enum(["web", "ios"]).parse(process.env.TESTER_ARMY_TARGET);
 const origin = z.url().parse(process.env.TESTER_ARMY_ORIGIN);
 const cookies = target === "web" ? readBrowserCookies() : [];
 const inferenceToken = modelConfiguration().TESTER_ARMY_CF_API_TOKEN;
-// Only the gateway provider has a token to mask; the ChatGPT login stays in
-// `~/.config/e2e/oauth.json` and never enters the run.
 const inferenceSecret: Record<string, string> = {};
 if (inferenceToken) inferenceSecret.inferenceToken = inferenceToken;
 
@@ -64,12 +61,11 @@ export default {
   },
   agents: {
     default: {
-      model: testerArmyModel(),
-      providerOptions: testerArmyProviderOptions,
+      ...testerArmyAgent(),
       maxSteps: 40,
       maxModelCalls: 40,
       context:
-        "Cubby household inventory. Use only the synthetic records named in each goal. On web, the global search palette can find products by name. On iOS, Find searches the catalog. Save closes the editor. Names and amounts in quotes are exact.",
+        "Cubby household inventory. Use only the synthetic records named in each goal. On web, the global search palette can find products by name. On iOS, Find searches the catalog; Save closes the editor. Names and amounts in quotes are exact.",
     },
   },
 } satisfies E2EConfig;
