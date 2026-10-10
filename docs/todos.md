@@ -216,9 +216,15 @@ mailbox and authenticated-device acceptance only after explicit resumption.
   bridge. Model classification alone must not broaden browser permissions.
 
 - 🟢 **Notify when a Run needs the member.** Extend the Mac's existing notifier
-  beyond prolonged offline waits and completion: sign-in, Screen Recording and
-  Apple Events pauses name the fix and raise the exact owned Cubby window.
-  Coordinate with the activity strip and attention-first workspace below.
+  beyond prolonged offline waits and completion. The local change persists
+  account/Run/reason pause edges, names sign-in, Screen Recording and Apple
+  Events fixes, and raises the owned account window for a fresh permission
+  pause. Synchronous dispatch validity is invalidated when a pause resolves or
+  its controller is replaced, so an earlier actor check cannot raise a stale
+  window. Headless persistence and suspension regressions pass after intended RED;
+  final Mac App compilation, independent review, hosted gates, merge/deployment and
+  real notification/owned-window delivery remain pending. Coordinate with the
+  activity strip and attention-first workspace below.
 
 - 🟢 **Re-derive retained captures without rewriting committed history.**
   `PAGE_DERIVATION_REVISION` stamps captures. The local shared

@@ -235,5 +235,5 @@ public protocol BrowserCommandExecuting: AnyObject, Sendable {
     func execute(_ command: BrowserBridgeCommand) async -> BrowserBridgeCommandOutcome
     func cancel(commandID: UUID)
     func forget(runID: String) async throws
-    func raiseAuthenticationWindow()
+    func raiseAuthenticationWindow(isCurrent: @escaping @MainActor () -> Bool)
 }
