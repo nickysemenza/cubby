@@ -15,6 +15,7 @@ import {
   waitFor,
   within,
 } from "@testing-library/react";
+import { useContext } from "react";
 import { renderToString } from "react-dom/server";
 import { toast } from "sonner";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -37,6 +38,7 @@ import {
   RecordFieldSuggestion,
   RecordSuggestionBoundary,
   RecordSuggestionsBulkAction,
+  RecordSuggestionScope,
   type StoredSuggestionOperations,
 } from "./record-suggestions";
 
@@ -329,9 +331,14 @@ describe("record suggestions", () => {
             surface="cell"
           >
             <span>Empty category</span>
+            <ScopeProbe />
           </RecordFieldSuggestion>
         </RecordSuggestionsProvider>
       );
+    }
+    // A nested inline editor reads the row scope to reuse this row's answer.
+    function ScopeProbe() {
+      return useContext(RecordSuggestionScope) ? <span>row scoped</span> : null;
     }
     const view = render(<Cell name="red apple" />, {
       wrapper: harness.wrapper,
@@ -366,6 +373,7 @@ describe("record suggestions", () => {
 
     view.rerender(<Cell name="steel wrench" />);
     await screen.findByText("No suggestions · 1 field checked");
+    expect(screen.getByText("row scoped")).toBeInTheDocument();
     expect(screen.queryByLabelText(/Food/)).toBeNull();
     expect(
       screen.queryByRole("button", { name: "Accept suggested value" }),

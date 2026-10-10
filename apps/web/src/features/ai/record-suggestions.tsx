@@ -1085,7 +1085,12 @@ function ResolvedFieldSuggestion({
           </LiveSuggestionCell>
         </RecordSuggestionScope>
       );
-    if (suggestion?.operation !== "remove") return children;
+    // Keep the row scope: a nested FieldSuggestionApply (an inline cell
+    // editor) reads it to reuse this row's answer instead of asking again.
+    if (suggestion?.operation !== "remove")
+      return (
+        <RecordSuggestionScope value={row}>{children}</RecordSuggestionScope>
+      );
   }
   return (
     <RecordSuggestionScope value={row}>
