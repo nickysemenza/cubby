@@ -57,9 +57,10 @@ pending: nothing here starts Product research.
    and destroys settled Runs' transcripts (`run-retirement.ts`), stamping
    `Run.retiredAt`. Runs of retired purposes are destroyed by their stored
    coordinator identity without loading the current agent. Once disposal is
-   authorized the coordinator refuses every entry point and drains admitted
-   ones before deleting, so nothing recreates storage before `retiredAt` is
-   stamped. A stored finding whose fix kind is retired reads as having no
+   authorized the coordinator writes a durable fence table, refuses every
+   entry point (also after a restart) and drains admitted ones before
+   deleting, so nothing recreates storage before `retiredAt` is stamped; an
+   inventory holding only the fence is empty. A stored finding whose fix kind is retired reads as having no
    executable fix (`storedImportFix`).
 
 ## Member imports

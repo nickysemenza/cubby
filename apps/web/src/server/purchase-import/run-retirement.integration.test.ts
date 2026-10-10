@@ -467,20 +467,23 @@ describe("coordinator host retirement", () => {
   }, 90_000);
 
   // Regression: the empty-storage acknowledgement precedes the retiredAt
-  // stamp, so an entry point in that gap once passed the fence and recreated
-  // SDK storage that the stamped Run then never disposed.
-  it("refuses entry points once retirement begins, before retiredAt is stamped", async () => {
+  // stamp, so an entry point in that gap — even on an instance restarted
+  // after the acknowledgement — once passed the fence and recreated SDK
+  // storage that the stamped Run then never disposed.
+  it("refuses entry points once retirement begins, across a restart before retiredAt is stamped", async () => {
     const runId = await agentRun();
     await retirePurpose(runId);
     runtime = await startScenarioHarness(ctx.databaseUrl, { steps: [] });
-    const peer = runtime.harness.getWorker("cubby-queue-producer");
+    const { harness } = runtime;
     const agentId = importRunAgentIdentity(runId, "mail_import");
     const request = (pathname: string) =>
-      peer.fetch(new URL(pathname, "https://queue.test"), {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({ agentId }),
-      });
+      harness
+        .getWorker("cubby-queue-producer")
+        .fetch(new URL(pathname, "https://queue.test"), {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({ agentId }),
+        });
     const retireCall = async () => {
       const response = await request("/coordinator-retire");
       if (!response.ok) throw new Error(await response.text());
@@ -492,6 +495,8 @@ describe("coordinator host retirement", () => {
     expect(await retireCall()).toEqual({ disposed: true });
     // The caller has the acknowledgement but has not stamped retiredAt yet.
     expect(await coordinatorRetired(ctx.db, runId)).toBe(false);
+    // A deploy reloads every Worker, so the coordinator restarts cold.
+    await harness.update((options) => options);
     const gapFetch = (await request("/coordinator-fetch")).status;
     observations.push({
       boundary: "fetch between acknowledgement and retiredAt",
