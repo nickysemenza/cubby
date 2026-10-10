@@ -4,7 +4,7 @@ import SwiftUI
 
 @Observable
 @MainActor
-private final class ActivityListModel {
+final class ActivityListModel {
     enum Execution: Hashable {
         case all
         case thisDevice
@@ -33,7 +33,12 @@ private final class ActivityListModel {
         }
     }
 
-    private(set) var runs: [ActivityRun] = []
+    private(set) var children: [String: ActivityListOutput] = [:]
+    private(set) var childLoading: [String: Int] = [:]
+    private(set) var childErrors: [String: String] = [:]
+    var expandedRoots: Set<String> = []
+    private(set) var groups: ActivityGroupsOutput?
+    var runs: [ActivityRun] { groups?.items.map(\.root) ?? [] }
     private(set) var total = 0
     private(set) var workSummary: String?
     private(set) var nextCursor: String?
@@ -69,27 +74,34 @@ private final class ActivityListModel {
     func load(client: CubbyClient, reset: Bool = true) async {
         guard reset || !loading else { return }
         let requestedFilters = filters
-        if reset { workSummary = nil }
-        requestGeneration += 1
+        if reset {
+            workSummary = nil
+            requestGeneration += 1
+            childLoading.removeAll()
+            children.removeAll()
+            childErrors.removeAll()
+            expandedRoots.removeAll()
+        }
         let generation = requestGeneration
         loading = true
         defer { if generation == requestGeneration { loading = false } }
         do {
-            let page = try await client.activityRuns(
+            var page = try await client.activityGroups(
                 filters: requestedFilters, cursor: reset ? nil : nextCursor)
             guard generation == requestGeneration, requestedFilters == filters else { return }
-            if reset {
-                runs = page.items
-            } else {
+            if !reset {
                 let known = Set(runs.map(\.id))
-                runs += page.items.filter { !known.contains($0.id) }
+                page.items = (groups?.items ?? []) + page.items.filter { !known.contains($0.root.id) }
             }
+            groups = page
             total = page.total
             workSummary = page.workSummary
             nextCursor = page.nextCursor
             error = nil
         } catch {
-            guard !Task.isCancelled else { return }
+            guard !Task.isCancelled, generation == requestGeneration, requestedFilters == filters else {
+                return
+            }
             self.error = error.localizedDescription
             Diagnostics.report(error, context: "activity.list")
         }
@@ -100,22 +112,26 @@ private final class ActivityListModel {
         let requestedFilters = filters
         let targetCount = max(20, runs.count)
         requestGeneration += 1
+        childLoading.removeAll()
         let generation = requestGeneration
         loading = true
         defer { if generation == requestGeneration { loading = false } }
         do {
-            var refreshed: [ActivityRun] = []
+            var refreshed = groups?.items ?? []
+            refreshed.removeAll()
+            var lastPage: ActivityGroupsOutput?
             var seen: Set<String> = []
             var cursor: String?
             var total = 0
             var workSummary: String?
             repeat {
-                let page = try await client.activityRuns(
+                let page = try await client.activityGroups(
                     filters: requestedFilters, cursor: cursor,
                     limit: min(100, targetCount - refreshed.count))
                 total = page.total
+                lastPage = page
                 workSummary = page.workSummary
-                for run in page.items where seen.insert(run.id).inserted {
+                for run in page.items where seen.insert(run.root.id).inserted {
                     refreshed.append(run)
                     if refreshed.count == targetCount { break }
                 }
@@ -130,15 +146,61 @@ private final class ActivityListModel {
                 cursor = page.nextCursor
             } while cursor != nil
             guard generation == requestGeneration, requestedFilters == filters else { return }
-            runs = refreshed
+            lastPage?.items = refreshed
+            groups = lastPage
             self.total = total
             self.workSummary = workSummary
             nextCursor = cursor
             error = nil
+            for rootID in expandedRoots where runs.contains(where: { $0.id == rootID }) {
+                await loadChildren(rootID: rootID, client: client, preserveLoaded: true)
+            }
         } catch {
             guard !Task.isCancelled, generation == requestGeneration else { return }
             self.error = error.localizedDescription
             Diagnostics.report(error, context: context)
+        }
+    }
+
+    func loadChildren(
+        rootID: String, client: CubbyClient, reset: Bool = true, preserveLoaded: Bool = true
+    ) async {
+        let generation = requestGeneration
+        guard childLoading[rootID] != generation, runs.contains(where: { $0.id == rootID }) else { return }
+        let requestedFilters = filters
+        let existing = children[rootID]
+        guard reset || existing?.nextCursor != nil else { return }
+        childLoading[rootID] = generation
+        defer { if childLoading[rootID] == generation { childLoading[rootID] = nil } }
+        do {
+            var rows: [ActivityRun] = reset ? [] : (existing?.items ?? [])
+            var seen = Set(rows.map(\.id))
+            var cursor = reset ? nil : existing?.nextCursor
+            let desired = max(20, existing?.items.count ?? 0)
+            var lastPage: ActivityListOutput?
+            repeat {
+                let page = try await client.activityGroupChildren(
+                    rootID: rootID, filters: requestedFilters, cursor: cursor)
+                lastPage = page
+                rows += page.items.filter { seen.insert($0.id).inserted }
+                let previous = cursor
+                cursor = page.nextCursor
+                if cursor != nil, cursor == previous {
+                    lastPage?.nextCursor = nil
+                    break
+                }
+                if !reset || existing == nil || !preserveLoaded || rows.count >= desired { break }
+            } while cursor != nil
+            guard generation == requestGeneration, requestedFilters == filters else { return }
+            lastPage?.items = rows
+            children[rootID] = lastPage
+            childErrors[rootID] = nil
+        } catch {
+            guard !Task.isCancelled, generation == requestGeneration, requestedFilters == filters else {
+                return
+            }
+            childErrors[rootID] = error.localizedDescription
+            Diagnostics.report(error, context: "activity.groupChildren")
         }
     }
 
@@ -152,7 +214,13 @@ private final class ActivityListModel {
 
     func pollActive(client: CubbyClient) async {
         while !Task.isCancelled {
-            if !loading, runs.contains(where: \.active) {
+            if !loading,
+                groups?.items.contains(where: { group in
+                    group.active
+                        || (group.childCount > 0 && expandedRoots.contains(group.root.id)
+                            && children[group.root.id]?.items.contains(where: \.active) == true)
+                }) == true
+            {
                 await refreshLoaded(client: client, context: "activity.poll")
             }
             do {
@@ -190,14 +258,59 @@ struct ActivityView: View {
                     ContentUnavailableView(
                         "No activity", systemImage: "clock.arrow.trianglehead.counterclockwise.rotate.90")
                 }
-                ForEach(model.runs, id: \.id) { run in
-                    Button {
-                        appModel.navigator.selectedActivity = .serverRun(run.id)
-                    } label: {
-                        ActivityRunRow(run: run)
+                ForEach(model.groups?.items ?? [], id: \.root.id) { group in
+                    if group.childCount > 0 {
+                        DisclosureGroup(
+                            isExpanded: Binding(
+                                get: { model.expandedRoots.contains(group.root.id) },
+                                set: { expanded in
+                                    if expanded {
+                                        model.expandedRoots.insert(group.root.id)
+                                        Task {
+                                            await model.loadChildren(
+                                                rootID: group.root.id, client: appModel.client)
+                                        }
+                                    } else {
+                                        model.expandedRoots.remove(group.root.id)
+                                    }
+                                }
+                            )
+                        ) {
+                            if let error = model.childErrors[group.root.id] {
+                                LoadFailureView(title: "Couldn’t load related work", message: error) {
+                                    await model.loadChildren(rootID: group.root.id, client: appModel.client)
+                                }
+                            }
+                            ForEach(model.children[group.root.id]?.items ?? [], id: \.id) { child in
+                                runButton(child)
+                            }
+                            if model.childLoading[group.root.id] != nil {
+                                ProgressView("Loading related work")
+                            } else if model.children[group.root.id]?.nextCursor != nil {
+                                Button("Load more related work") {
+                                    Task {
+                                        await model.loadChildren(
+                                            rootID: group.root.id, client: appModel.client, reset: false)
+                                    }
+                                }
+                            }
+                        } label: {
+                            VStack(alignment: .leading) {
+                                runButton(group.root)
+                                Text(group.workSummary)
+                                    .font(.caption).foregroundStyle(.secondary)
+                                if group.contextOnly {
+                                    Text("Parent shown for context; related work matches the filters")
+                                        .font(.caption).foregroundStyle(.secondary)
+                                }
+                                Text("\(group.childCount) related work records")
+                                    .font(.caption).foregroundStyle(.secondary)
+                            }
+                        }
+                        .accessibilityIdentifier("activity.group.\(group.root.id)")
+                    } else {
+                        runButton(group.root)
                     }
-                    .buttonStyle(.plain)
-                    .accessibilityIdentifier("activity.run.\(run.id)")
                 }
                 if model.nextCursor != nil {
                     Button("Load more") {
@@ -206,7 +319,7 @@ struct ActivityView: View {
                     .disabled(model.loading)
                 }
             } header: {
-                Text(model.total == 1 ? "1 work record" : "\(model.total) work records")
+                Text(model.total == 1 ? "1 work group" : "\(model.total) work groups")
             }
         }
         .navigationTitle("Activity")
@@ -229,6 +342,16 @@ struct ActivityView: View {
                     .inspectorColumnWidth(min: 300, ideal: 380, max: 540)
             }
         }
+    }
+
+    private func runButton(_ run: ActivityRun) -> some View {
+        Button {
+            appModel.navigator.selectedActivity = .serverRun(run.id)
+        } label: {
+            ActivityRunRow(run: run)
+        }
+        .buttonStyle(.plain)
+        .accessibilityIdentifier("activity.run.\(run.id)")
     }
 
     private var filters: some View {

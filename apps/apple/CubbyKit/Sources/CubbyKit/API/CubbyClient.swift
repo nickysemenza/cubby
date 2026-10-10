@@ -522,6 +522,15 @@ public actor CubbyClient {
             case cloud
             case unknown
             case device(String)
+
+            fileprivate var query: (name: String, deviceID: String?) {
+                switch self {
+                case .all: ("all", nil)
+                case .cloud: ("cloud", nil)
+                case .unknown: ("unknown", nil)
+                case .device(let id): ("device", id)
+                }
+            }
         }
 
         public var kind: ActivityKind?
@@ -550,29 +559,44 @@ public actor CubbyClient {
     public func activityRuns(
         filters: ActivityFilters = .init(), cursor: String? = nil, limit: Int = 20
     ) async throws -> ActivityListOutput {
-        let executor: Operations.Activity_list.Input.Query.ExecutorPayload
-        let deviceID: String?
-        switch filters.executor {
-        case .all:
-            executor = .all
-            deviceID = nil
-        case .cloud:
-            executor = .cloud
-            deviceID = nil
-        case .unknown:
-            executor = .unknown
-            deviceID = nil
-        case .device(let id):
-            executor = .device
-            deviceID = id
-        }
         return try await perform {
             try await api.activity_list(
                 query: .init(
                     kind: filters.kind.map(activityListKind), state: filters.state,
                     subjectId: filters.subjectID, submissionId: filters.submissionID,
-                    executor: executor, deviceId: deviceID, from: filters.from, to: filters.to,
+                    executor: .init(rawValue: filters.executor.query.name),
+                    deviceId: filters.executor.query.deviceID, from: filters.from, to: filters.to,
                     sort: .newest, cursor: cursor, limit: limit)
+            ).ok.body.json
+        }
+    }
+
+    public func activityGroups(
+        filters: ActivityFilters = .init(), cursor: String? = nil, limit: Int = 20
+    ) async throws -> ActivityGroupsOutput {
+        return try await perform {
+            try await api.activity_groups(
+                query: .init(
+                    kind: filters.kind.flatMap { .init(rawValue: $0.rawValue) }, state: filters.state,
+                    subjectId: filters.subjectID, submissionId: filters.submissionID,
+                    executor: .init(rawValue: filters.executor.query.name),
+                    deviceId: filters.executor.query.deviceID, from: filters.from, to: filters.to,
+                    sort: .newest, cursor: cursor, limit: limit)
+            ).ok.body.json
+        }
+    }
+
+    public func activityGroupChildren(
+        rootID: String, filters: ActivityFilters = .init(), cursor: String? = nil, limit: Int = 20
+    ) async throws -> ActivityListOutput {
+        return try await perform {
+            try await api.activity_groupChildren(
+                query: .init(
+                    kind: filters.kind.flatMap { .init(rawValue: $0.rawValue) }, state: filters.state,
+                    subjectId: filters.subjectID, submissionId: filters.submissionID,
+                    executor: .init(rawValue: filters.executor.query.name),
+                    deviceId: filters.executor.query.deviceID, from: filters.from, to: filters.to,
+                    sort: .newest, cursor: cursor, limit: limit, rootId: rootID)
             ).ok.body.json
         }
     }

@@ -71,6 +71,52 @@ struct ClientQueryTests {
         return data
     }
 
+    @Test func groupedActivityPreservesFiltersAndCursor() async throws {
+        let payload = Data(
+            #"{"items":[],"total":3,"totalItems":7,"nextCursor":"next-groups","workCounts":{"working":0,"waiting":0,"needsReview":0,"failed":0,"completed":0,"skipped":0},"workSummary":""}"#
+                .utf8)
+        let request = try await capture(returning: payload) { client in
+            let page = try await client.activityGroups(
+                filters: .init(kind: .productEnrichment, state: "paused_offline", executor: .cloud),
+                cursor: "previous-groups", limit: 7)
+            #expect(page.total == 3)
+            #expect(page.totalItems == 7)
+            #expect(page.nextCursor == "next-groups")
+        }
+        #expect(request.url?.path == "/api/v1/activity/groups")
+        #expect(request.value(forHTTPHeaderField: "Authorization") == "Bearer tok")
+        let query = queryItems(of: request)
+        #expect(query.contains(URLQueryItem(name: "kind", value: "product_enrichment")))
+        #expect(query.contains(URLQueryItem(name: "state", value: "paused_offline")))
+        #expect(query.contains(URLQueryItem(name: "executor", value: "cloud")))
+        #expect(query.contains(URLQueryItem(name: "cursor", value: "previous-groups")))
+        #expect(query.first { $0.name == "limit" }?.value.flatMap(Int.init) == 7)
+    }
+
+    @Test func groupedActivityChildrenPreserveRootDeviceAndCursor() async throws {
+        let deviceID = "00000000-0000-4000-8000-000000000007"
+        let payload = Data(
+            #"{"items":[],"total":2,"nextCursor":"next-children","workCounts":{"working":0,"waiting":0,"needsReview":0,"failed":0,"completed":0,"skipped":0},"workSummary":""}"#
+                .utf8)
+        let request = try await capture(returning: payload) { client in
+            let page = try await client.activityGroupChildren(
+                rootID: "RUN-4K7M",
+                filters: .init(state: "running", executor: .device(deviceID)),
+                cursor: "previous-children", limit: 5)
+            #expect(page.total == 2)
+            #expect(page.nextCursor == "next-children")
+        }
+        #expect(request.url?.path == "/api/v1/activity/groupChildren")
+        #expect(request.value(forHTTPHeaderField: "Authorization") == "Bearer tok")
+        let query = queryItems(of: request)
+        #expect(query.contains(URLQueryItem(name: "rootId", value: "RUN-4K7M")))
+        #expect(query.contains(URLQueryItem(name: "state", value: "running")))
+        #expect(query.contains(URLQueryItem(name: "executor", value: "device")))
+        #expect(query.contains(URLQueryItem(name: "deviceId", value: deviceID)))
+        #expect(query.contains(URLQueryItem(name: "cursor", value: "previous-children")))
+        #expect(query.first { $0.name == "limit" }?.value.flatMap(Int.init) == 5)
+    }
+
     @Test func auditHistoryUsesTypedPagedRead() async throws {
         let request = try await capture(returning: Data(#"{"entries":[],"nextCursor":"page-3"}"#.utf8)) {
             client in

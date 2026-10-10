@@ -20,10 +20,19 @@ the same filters and cursor protocol. A deleted parent starts a new visible root
 at its live child. Historical null lineage stays independent, and retry
 predecessors do not become causal parents.
 Group liveness includes retained descendants without changing the root's own
-state. Collapsed active groups continue refreshing; expanded child pages use
+state. Each group carries a server-formatted matching-attempt summary shared by
+web and native, with context-only parents identified separately from matching work. Collapsed active groups continue refreshing; expanded child pages use
 the shared query cache, refresh through settlement, and reload when reopened.
 Child pagination traverses lightweight lineage before evaluating accounting
-and activity details for the selected group's members.
+and activity details for the selected group's members. Native Activity uses these
+same grouped and child reads, refreshes from group liveness, and retains the
+Activity inspector action for both parent and child rows. Expanded child pages
+refresh through settlement; parent pagination preserves pending child reads, and
+child refresh/retry preserves loaded depth. Expanded children that still report
+active work keep polling until their settlement refresh completes, even after
+parent-group liveness settles. Only rendered, expandable groups contribute child
+liveness; hidden cached children cannot keep polling. Filter changes discard old child responses. Native
+visible acceptance remains separate from model/transport tests and compilation.
 Flat and grouped history return one server-composed work summary and typed status
 counts across all matching attempts, before cursor paging. Both use the same
 state policy as individual groups. Filters bound those totals; an empty result

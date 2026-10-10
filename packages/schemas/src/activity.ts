@@ -174,6 +174,7 @@ export const activityGroupsOutput = z.object({
       active: z.boolean(),
       /** Matching work in this group; completed attempts do not imply verified facts. */
       workCounts: activityWorkCounts,
+      workSummary: z.string(),
       childCount: z.int().nonnegative(),
       contextOnly: z.boolean(),
       latestAt: z.iso.datetime(),

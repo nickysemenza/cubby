@@ -1,7 +1,6 @@
 import {
   ACTIVITY_KIND_LABEL,
   activityKind,
-  activityWorkSummary,
   type ActivityRun,
   type ActivityListInput,
 } from "@cubby/schemas/activity";
@@ -270,17 +269,22 @@ export function RunHistory({
   const rows = useMemo<HistoryRow[]>(
     () =>
       grouped
-        ? groupRows.flatMap(({ root, childCount, contextOnly, workCounts }) => [
-            {
-              ...root,
-              childCount,
-              contextOnly,
-              groupSummary: activityWorkSummary(workCounts),
-            },
-            ...(expanded[root.id] && childCount > 0
-              ? (children[root.id] ?? []).map((item) => ({ ...item, depth: 1 }))
-              : []),
-          ])
+        ? groupRows.flatMap(
+            ({ root, childCount, contextOnly, workSummary }) => [
+              {
+                ...root,
+                childCount,
+                contextOnly,
+                groupSummary: workSummary,
+              },
+              ...(expanded[root.id] && childCount > 0
+                ? (children[root.id] ?? []).map((item) => ({
+                    ...item,
+                    depth: 1,
+                  }))
+                : []),
+            ],
+          )
         : (flat.data?.pages.flatMap((page) => page.items) ?? []),
     [grouped, groupRows, expanded, children, flat.data],
   );

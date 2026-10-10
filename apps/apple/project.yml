@@ -286,6 +286,7 @@ targets:
       - path: App/Tests/Photos/PhotoTestStores.swift
       - path: App/Tests/Participation/AppInstallationIDTests.swift
       - path: App/Tests/PurchaseImport
+      - path: App/Tests/Activity/ActivityListModelTests.swift
     dependencies:
       - target: Cubby-macOS
     settings:
