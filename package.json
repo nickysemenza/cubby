@@ -29,7 +29,6 @@
     "test:unit": "pnpm --filter @cubby/web test:unit",
     "test:ui": "pnpm --filter @cubby/web test:ui",
     "test:postgres": "pnpm --filter @cubby/web test:postgres",
-    "test:changed:postgres": "pnpm --filter @cubby/web test:changed:postgres",
     "test:file": "pnpm --filter @cubby/web test:file",
     "knip:production": "knip --production --no-gitignore --include files,dependencies",
     "test:scripts": "node --test scripts/*.test.ts",

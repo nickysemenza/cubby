@@ -267,8 +267,7 @@ jobs:
 
   # Informative only: the purchase agent driven through the browser against a
   # scripted model and gateway. It is deliberately absent from `web-checks`
-  # and branch protection, so a failure never blocks a merge. Its Nx key is
-  # the agent's own surface, so an unrelated change replays the last result.
+  # and branch protection, so a failure never blocks a merge.
   test-e2e-purchase-import:
     name: E2E tests (purchase import agent, optional)
     if: *verification
@@ -344,6 +343,13 @@ jobs:
     if: *verification
     runs-on: macos-26
     timeout-minutes: 40
+    env:
+      # The restore and save steps must name the same paths.
+      HOST_BUILD_CACHE_PATHS: |
+        apps/apple/CubbyKit/.build/*
+        !apps/apple/CubbyKit/.build/xcode
+        apps/apple/CubbyKit/.build/xcode/CompilationCache.noindex
+        apps/apple/CubbyKit/.build/xcode/SourcePackages
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
       - uses: ./.github/actions/select-xcode
@@ -373,11 +379,7 @@ jobs:
         id: host-build
         uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6
         with:
-          path: |
-            apps/apple/CubbyKit/.build/*
-            !apps/apple/CubbyKit/.build/xcode
-            apps/apple/CubbyKit/.build/xcode/CompilationCache.noindex
-            apps/apple/CubbyKit/.build/xcode/SourcePackages
+          path: ${{ env.HOST_BUILD_CACHE_PATHS }}
           key: xcode-host-v1-${{ runner.os }}-${{ steps.host-xcode-version.outputs.hash }}-${{ hashFiles('apps/apple/CubbyKit/Package.resolved') }}-${{ hashFiles('apps/apple/CubbyKit/**', '!apps/apple/CubbyKit/.build/**') }}-${{ hashFiles('apps/apple/scripts/check-openapi-warnings.sh') }}
           restore-keys: |
             xcode-host-v1-${{ runner.os }}-${{ steps.host-xcode-version.outputs.hash }}-${{ hashFiles('apps/apple/CubbyKit/Package.resolved') }}-
@@ -390,11 +392,7 @@ jobs:
         if: steps.cached.outcome != 'success'
         uses: ./.github/actions/save-cache-main-only
         with:
-          path: |
-            apps/apple/CubbyKit/.build/*
-            !apps/apple/CubbyKit/.build/xcode
-            apps/apple/CubbyKit/.build/xcode/CompilationCache.noindex
-            apps/apple/CubbyKit/.build/xcode/SourcePackages
+          path: ${{ env.HOST_BUILD_CACHE_PATHS }}
           key: ${{ steps.host-build.outputs.cache-primary-key }}
           cache-hit: ${{ steps.host-build.outputs.cache-hit }}
           matched-key: ${{ steps.host-build.outputs.cache-matched-key }}

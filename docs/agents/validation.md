@@ -24,7 +24,7 @@ declarations, constants, source spelling and mocks, repeated cases of the same
 shared primitive, and copy-only assertions. An accessible action name used to
 drive a real interaction still has value; incidental wording is not an outcome.
 For every deletion, record either the stronger retained regression or why the
-test guarded no runtime behavior. Preserve named regressions before removal.
+test guarded no runtime behavior in the commit message that deletes it. Preserve named regressions before removal.
 
 Reuse a healthy HMR session for iteration and fingerprint-verified native
 builds. Report setup separately from scenario time. A failed provenance/startup

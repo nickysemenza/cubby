@@ -12,7 +12,6 @@
     "test:ui": "NODE_OPTIONS=--no-experimental-webstorage vitest run --project ui",
     "test:preview": "vitest run --project preview",
     "test:postgres": "node ../../scripts/test-services.ts -- vitest run --project integration --project integration-workerd",
-    "test:changed:postgres": "CUBBY_TEST_INTEGRATION=1 node ../../scripts/test-services.ts -- vitest run --changed",
     "test:file": "pnpm test:prepare && vitest run",
     "test:watch": "pnpm test:prepare && vitest --ui",
     "test:e2e": "NODE_ENV=test node ../../scripts/test-services.ts -- playwright test",

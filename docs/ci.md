@@ -314,10 +314,8 @@ or credentials.
 that name (`purchase-import-run.spec.ts`: the purchase agent with a scripted
 model and gateway, driven through the browser) through the
 `e2e-purchase-import` target, building its own Worker. It is informative only:
-it is not in `Web checks` or the ruleset. Its key is narrow on purpose (the
-agent, purchase import, the Run, Purchase and vendor order-mail UI, its harness,
-and the bundled skills), so an unrelated change replays its last result. It
-saves the same run bundle as the desktop shards.
+it is not in `Web checks` or the ruleset. It uses the same `webGate` key as the
+other web lanes and uploads the same Playwright report.
 The `integration` Vitest project runs as two `postgres` target shards
 (`CUBBY_POSTGRES_SHARD`, Vitest `--shard`), each with four fork workers. The
 `integration-workerd` project (the files that start the built Worker, listed in
