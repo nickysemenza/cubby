@@ -45,14 +45,16 @@ public actor CubbyClient {
     /// Private report media keeps the existing session credentials on the evidence endpoint.
     /// Public cover images continue to use the public image pipeline.
     public func reportMediaRequest(_ reference: String) async throws -> URLRequest {
-        guard let url = URL(string: reference, relativeTo: baseURL)?.absoluteURL,
+        guard let route = OperationRoute.all["run.readEvidenceMedia"],
+            let url = URL(string: reference, relativeTo: baseURL)?.absoluteURL,
             url.scheme == baseURL.scheme, url.host == baseURL.host, url.port == baseURL.port,
             url.user == nil, url.password == nil, url.fragment == nil,
-            url.path == "/api/import/evidence"
+            url.path == route.path
         else {
             throw CubbyAPIError(status: 0, operationID: "report.media", detail: nil)
         }
         var request = URLRequest(url: url, cachePolicy: .reloadIgnoringLocalCacheData)
+        request.httpMethod = route.method.rawValue
         var fields = HTTPFields()
         CubbyAuthMiddleware.apply(await credentials.requestState(), identity: .unknown, to: &fields)
         for field in fields {
@@ -64,12 +66,14 @@ public actor CubbyClient {
     /// Retained originals use the same response authentication and raw error handling as RPCs.
     public func reportMedia(_ reference: String) async throws -> Data {
         let prepared = try await reportMediaRequest(reference)
-        guard let url = prepared.url else {
+        guard let url = prepared.url, let rawMethod = prepared.httpMethod,
+            let method = HTTPRequest.Method(rawValue: rawMethod)
+        else {
             throw CubbyAPIError(status: 0, operationID: "report.media", detail: nil)
         }
         let components = URLComponents(url: url, resolvingAgainstBaseURL: false)!
         var request = HTTPRequest(
-            method: .get, scheme: nil, authority: nil,
+            method: method, scheme: nil, authority: nil,
             path: components.percentEncodedPath + (components.percentEncodedQuery.map { "?" + $0 } ?? ""))
         request.headerFields[.cacheControl] = "no-store"
         let transport = mediaTransport

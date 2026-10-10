@@ -86,8 +86,9 @@ const reachableComponents = (
   for (const item of Object.values(document.paths)) {
     for (const [method, raw] of Object.entries(item)) {
       if (!httpVerbs.has(method)) continue;
+      const { operationId } = z.object({ operationId: z.string() }).parse(raw);
+      if (!nativeOperationIds.has(operationId)) continue;
       const operation = routedOperation.parse(raw);
-      if (!nativeOperationIds.has(operation.operationId)) continue;
       contentRefs(operation.requestBody, roots);
       for (const response of Object.values(operation.responses))
         contentRefs(response, roots);

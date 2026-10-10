@@ -1,6 +1,7 @@
 import CoreGraphics
 import CubbyKit
 import Foundation
+import ImageIO
 import SwiftUI
 
 /// Models and sample data for `#Preview` blocks. Nothing here touches the Keychain or the
@@ -100,6 +101,26 @@ enum PreviewFixtures {
         context.setFillColor(CGColor(red: 0.85, green: 0.87, blue: 0.91, alpha: 1))
         context.fill(CGRect(x: 0, y: 0, width: size, height: size))
         return context.makeImage()!
+    }()
+
+    static let sampleMediaPNG: Data = {
+        let bytes = NSMutableData()
+        let destination = CGImageDestinationCreateWithData(bytes, "public.png" as CFString, 1, nil)!
+        CGImageDestinationAddImage(destination, sampleProbeImage, nil)
+        precondition(CGImageDestinationFinalize(destination))
+        return bytes as Data
+    }()
+
+    static let sampleMediaPDF: Data = {
+        let bytes = NSMutableData()
+        var page = CGRect(x: 0, y: 0, width: 320, height: 240)
+        let context = CGContext(consumer: CGDataConsumer(data: bytes)!, mediaBox: &page, nil)!
+        context.beginPDFPage(nil)
+        context.setFillColor(CGColor(gray: 0.8, alpha: 1))
+        context.fill(page.insetBy(dx: 20, dy: 20))
+        context.endPDFPage()
+        context.closePDF()
+        return bytes as Data
     }()
 
     /// `task.todayBriefing`'s `next` rows, for `TodayView`'s preview.

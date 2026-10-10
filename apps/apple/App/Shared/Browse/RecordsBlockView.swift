@@ -33,7 +33,7 @@ struct RecordRowView: View {
         HStack(alignment: .top, spacing: FieldGuideTokens.Space.sm) {
             if let url = row.imageURL {
                 if url.path == "/api/import/evidence" {
-                    ReportMediaImage(url: url).frame(width: large ? 112 : 48, height: large ? 112 : 48)
+                    ReportRetainedMedia(url: url).frame(width: large ? 112 : 48, height: large ? 112 : 48)
                 } else {
                     Thumb(
                         url: url, size: large ? 112 : 48,
@@ -293,61 +293,19 @@ extension ReportPresentation.Tone {
     }
 }
 
-/// A `records` report block: the server's rows and the slot's declared verbs, which the one
-/// generic hero-action runner executes from their plans. Nothing here is per entity: the server
-/// says which rows and which verbs; the plans say which operations.
 private struct ReportOriginalMedia: View {
     let url: URL
-    @Environment(AppModel.self) private var appModel
+    var fixture: ReportRetainedMedia.Phase?
     @Environment(\.dismiss) private var dismiss
-    @State private var document: PDFDocument?
-    @State private var bytes: Data?
-    @State private var error: String?
 
     var body: some View {
         VStack {
             HStack {
                 Text("Retained original").font(.headline); Spacer(); Button("Done") { dismiss() }
             }
-            if let document {
-                RetainedPDFView(document: document)
-            } else if let bytes {
-                LazyImage(
-                    request: ImageRequest(
-                        id: url.absoluteString, data: { bytes },
-                        options: [.disableMemoryCache, .disableDiskCache])
-                ) { state in
-                    if let image = state.image {
-                        image.resizable().scaledToFit()
-                    } else if let error = state.error {
-                        Text(error.localizedDescription).textSelection(.enabled)
-                    } else {
-                        ProgressView()
-                    }
-                }
-                .onCompletion { result in
-                    if case .failure(let error) = result {
-                        Diagnostics.report(error, context: "Retained original")
-                    }
-                }
-            } else if let error {
-                Text(error).textSelection(.enabled)
-            } else {
-                ProgressView()
-            }
+            ReportRetainedMedia(url: url, allowsPDF: true, fixture: fixture)
         }
         .padding()
-        .task(id: url) {
-            do {
-                let data = try await appModel.client.reportMedia(url.absoluteString)
-                try Task.checkCancellation()
-                document = PDFDocument(data: data)
-                if document == nil { bytes = data }
-            } catch is CancellationError {} catch {
-                Diagnostics.report(error, context: "Retained original")
-                self.error = error.localizedDescription
-            }
-        }
     }
 }
 
@@ -369,20 +327,37 @@ private struct ReportOriginalMedia: View {
     }
 #endif
 
-private struct ReportMediaImage: View {
+/// One authenticated in-memory loader for report thumbnails and original documents.
+private struct ReportRetainedMedia: View {
+    enum Phase {
+        case loading, image(Data), pdf(PDFDocument), failure(String)
+    }
+
     let url: URL
+    var allowsPDF = false
+    var fixture: Phase?
     @Environment(AppModel.self) private var appModel
-    @State private var request: ImageRequest?
-    @State private var error: String?
+    @State private var phase: Phase = .loading
 
     var body: some View {
         Group {
-            if let request {
-                LazyImage(request: request) { state in
+            switch fixture ?? phase {
+            case .loading:
+                ProgressView()
+            case .failure(let message):
+                Text(message).textSelection(.enabled)
+            case .pdf(let document):
+                RetainedPDFView(document: document)
+            case .image(let bytes):
+                LazyImage(
+                    request: ImageRequest(
+                        id: url.absoluteString, data: { bytes },
+                        options: [.disableMemoryCache, .disableDiskCache])
+                ) { state in
                     if let image = state.image {
                         image.resizable().scaledToFit()
-                    } else if let failure = state.error {
-                        Text(failure.localizedDescription).font(.caption)
+                    } else if let error = state.error {
+                        Text(error.localizedDescription).textSelection(.enabled)
                     } else {
                         ProgressView()
                     }
@@ -392,30 +367,64 @@ private struct ReportMediaImage: View {
                         Diagnostics.report(error, context: "Retained report media")
                     }
                 }
-            } else if let error {
-                Text(error).font(.caption)
-            } else {
-                ProgressView()
             }
         }
         .task(id: url) {
-            request = nil
-            error = nil
+            guard fixture == nil else { return }
+            phase = .loading
             do {
-                let client = appModel.client
+                let bytes = try await appModel.client.reportMedia(url.absoluteString)
                 try Task.checkCancellation()
-                request = ImageRequest(
-                    id: url.absoluteString,
-                    data: { try await client.reportMedia(url.absoluteString) },
-                    options: [.disableMemoryCache, .disableDiskCache])
+                if allowsPDF, let document = PDFDocument(data: bytes) {
+                    phase = .pdf(document)
+                } else {
+                    phase = .image(bytes)
+                }
             } catch is CancellationError {} catch {
                 Diagnostics.report(error, context: "Retained report media")
-                self.error = error.localizedDescription
+                phase = .failure(error.userMessage)
             }
         }
     }
 }
 
+#Preview("Retained original loading") {
+    ReportOriginalMedia(url: PreviewFixtures.previewURL, fixture: .loading)
+        .environment(PreviewFixtures.signedInModel())
+}
+
+#Preview("Retained original failure") {
+    ReportOriginalMedia(
+        url: PreviewFixtures.previewURL, fixture: .failure("HTTP_503: Synthetic storage refusal")
+    )
+    .environment(PreviewFixtures.signedInModel())
+}
+
+#Preview("Retained original image") {
+    ReportOriginalMedia(url: PreviewFixtures.previewURL, fixture: .image(PreviewFixtures.sampleMediaPNG))
+        .environment(PreviewFixtures.signedInModel())
+}
+
+#Preview("Retained original PDF") {
+    ReportOriginalMedia(
+        url: PreviewFixtures.previewURL, fixture: .pdf(PDFDocument(data: PreviewFixtures.sampleMediaPDF)!)
+    )
+    .environment(PreviewFixtures.signedInModel())
+}
+
+#Preview("Retained thumbnail") {
+    ReportRetainedMedia(url: PreviewFixtures.previewURL, fixture: .image(PreviewFixtures.sampleMediaPNG))
+        .frame(width: 160, height: 100)
+        .environment(PreviewFixtures.signedInModel())
+}
+
+#Preview("Retained PDF") {
+    RetainedPDFView(document: PDFDocument(data: PreviewFixtures.sampleMediaPDF)!)
+}
+
+/// A `records` report block: the server's rows and the slot's declared verbs, which the one
+/// generic hero-action runner executes from their plans. Nothing here is per entity: the server
+/// says which rows and which verbs; the plans say which operations.
 struct RecordsBlockView: View {
     let records: ReportPresentation.Records
     let host: ReportHost?
@@ -500,7 +509,7 @@ struct RecordsBlockView: View {
             }
             if let selected {
                 if let url = selected.imageURL {
-                    ReportMediaImage(url: url).frame(maxWidth: .infinity, maxHeight: 500)
+                    ReportRetainedMedia(url: url).frame(maxWidth: .infinity, maxHeight: 500)
                         .accessibilityLabel(selected.title)
                 }
                 RecordRowView(row: selected, model: model)

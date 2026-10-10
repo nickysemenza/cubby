@@ -896,7 +896,8 @@ removed. Apple compatibility 2.17 ships the changed paths.
 ### Retained capture media
 
 Original screenshot and document bytes are served by authenticated GET on the
-existing evidence endpoint. Explicit API keys and bearer credentials are verified
+existing evidence endpoint. Its shared byte-transport declaration generates the
+OpenAPI and native route metadata; original bytes stay outside JSON RPC. Explicit API keys and bearer credentials are verified
 through the shared HTTP authentication boundary; a cached browser session cannot
 replace their identity. Reads bind the initiating actor and member to the
 Run, target and evidence row, including completed targets. Retirement takes the
@@ -914,8 +915,8 @@ support and other targets are excluded. Referenced screenshots appear with
 their source page rather than as duplicate captures. Sources without displayable
 previews remain ordinary records. Displayable sources retain an Open original
 action, MIME type and checksum independently of the live source link. Native
-originals use the shared response-authentication middleware and in-memory PDF
-or image presentation, without writing private documents to disk. Retained evidence is distinct from the live
+originals and thumbnails use one retained-media loader, the shared response-authentication
+middleware and in-memory PDF or image presentation, without writing private documents to disk. Retained evidence is distinct from the live
 browser preview and does not establish research completion.
 Media refusals use the canonical API error shape, preserving checksum, storage
 and admission diagnostics in both clients; only credential-shaped values are scrubbed.

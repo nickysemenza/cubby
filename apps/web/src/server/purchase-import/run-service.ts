@@ -1,5 +1,6 @@
 import { buildActorContext, type ActorContext } from "@cubby/schemas/context";
 import { entityRefKey } from "@cubby/schemas/entity";
+import { runEvidenceMediaRead } from "@cubby/schemas/http-byte-transports";
 import {
   anyShortcodeSchema,
   parseEntityId,
@@ -2057,7 +2058,7 @@ export async function loadRunDetail(
       targetId: item.targetId,
       evidenceId: item.id,
     });
-    return `/api/import/evidence?${query}`;
+    return `${runEvidenceMediaRead.path}?${query}`;
   };
   const factsByEvidence = new Map<
     string,

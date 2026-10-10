@@ -1,3 +1,4 @@
+import { runEvidenceMediaRead } from "@cubby/schemas/http-byte-transports";
 import { runEntityId, userId } from "@cubby/schemas/identifiers";
 import {
   initiateRunEvidenceUploadInput,
@@ -116,7 +117,7 @@ export async function initiateRunEvidenceUpload(
       expiresIn,
     );
     const uploadUrl = new URL(
-      "/api/import/evidence",
+      runEvidenceMediaRead.path,
       getExecutionCtx()?.origin ?? env.BETTER_AUTH_URL ?? APP_ORIGIN,
     );
     uploadUrl.searchParams.set("grant", grant);
@@ -235,21 +236,14 @@ export async function receiveRunEvidenceUpload(
   });
 }
 
-const retainedMediaSelection = initiateRunEvidenceUploadInput
-  .pick({
-    runId: true,
-    targetId: true,
-  })
-  .extend({ evidenceId: z.uuid() });
-
 /** Read immutable originals through the same ownership and retirement fence as uploads. */
 export async function readRunEvidenceMedia(
   db: Database,
-  selection: z.input<typeof retainedMediaSelection>,
+  selection: z.input<typeof runEvidenceMediaRead.input>,
   actorUserId: string,
   readObject: (key: string) => Promise<Response> = getS3Object,
 ): Promise<Response> {
-  const input = retainedMediaSelection.parse(selection);
+  const input = runEvidenceMediaRead.input.parse(selection);
   const actor = userId.parse(actorUserId);
   const headers = {
     "Cache-Control": "private, no-store",

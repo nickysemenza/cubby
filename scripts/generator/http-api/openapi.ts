@@ -2,6 +2,7 @@ import { join } from "node:path";
 import { pathToFileURL } from "node:url";
 import { generateOpenApi, type SchemaTransformerSync } from "@ts-rest/open-api";
 import { z } from "zod";
+import { httpByteReads } from "../../../packages/schemas/src/http-byte-transports.ts";
 import type {
   CompiledEntity,
   EntityArtifacts,
@@ -319,6 +320,46 @@ const buildOpenApiDocument = async (): Promise<{
       },
     },
   );
+
+  function addByteReadOperations(document: OpenApiDocument): void {
+    for (const transport of httpByteReads) {
+      const parameters = parameterObject(
+        inlineSchema(transport.input, "input"),
+      );
+      document.paths[transport.path] = {
+        get: {
+          operationId: transport.operationId,
+          tags: [transport.operationId.split(".")[0]!],
+          parameters: Object.entries(parameters.properties ?? {}).map(
+            ([name, schema]) => ({
+              name,
+              in: "query",
+              required: parameters.required?.includes(name) ?? false,
+              schema,
+            }),
+          ),
+          responses: {
+            200: {
+              description: "Owned immutable original bytes",
+              content: {
+                "*/*": { schema: { type: "string", format: "binary" } },
+              },
+            },
+            default: {
+              description: "Error",
+              content: {
+                "application/json": {
+                  schema: { $ref: "#/components/schemas/ApiError" },
+                },
+              },
+            },
+          },
+        },
+      };
+    }
+  }
+
+  addByteReadOperations(document);
 
   /** `…/input___shared#/definitions/schema0` -> `…/input_schema0`. */
   const nameSharedDefinitions = (schemas: Record<string, JsonSchema>) =>
