@@ -409,6 +409,7 @@ describe("MCP protocol smoke", () => {
         attachments: [],
         redirectedFrom: null,
         previousShortcodes: [],
+        sources: [],
       },
     });
 
@@ -452,6 +453,7 @@ describe("MCP protocol smoke", () => {
         attachments: [],
         redirectedFrom: null,
         previousShortcodes: [],
+        sources: [],
       },
     });
     const [summary, full] = await Promise.all([
@@ -575,6 +577,7 @@ describe("MCP protocol smoke", () => {
               attachments: [],
               redirectedFrom: null,
               previousShortcodes: [],
+              sources: [],
             },
           }
         : {
@@ -586,6 +589,7 @@ describe("MCP protocol smoke", () => {
               attachments: [],
               redirectedFrom: null,
               previousShortcodes: [],
+              sources: [],
             },
           };
     const server = kernelServer(runEntity);

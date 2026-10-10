@@ -4,7 +4,6 @@ import type {
   ReportCommand,
   ReportRecordRow,
 } from "@cubby/schemas/entity-report";
-import { vendorShortcode } from "@cubby/schemas/identifiers";
 import type { VendorOrderMailOut } from "@cubby/schemas/order-mail-review";
 import { and, eq } from "drizzle-orm";
 
@@ -248,7 +247,6 @@ const composeMailReport = async (
   db: Database,
   mail: VendorOrderMailOut,
   actor: ActorContext,
-  vendorId?: string,
 ): Promise<ReportBlock[]> => {
   const member = await currentMemberLedgerParty(db, actor);
   return [
@@ -260,20 +258,6 @@ const composeMailReport = async (
       kind: "records",
       rows: mail.items.flatMap((item) => mailRows(item, member?.shortcode)),
       empty: "No retained email evidence is associated with this record.",
-      commands: vendorId
-        ? [
-            {
-              id: "research-purchases",
-              label: "Research purchases",
-              prominent: true,
-              confirm: null,
-              request: {
-                kind: "research-vendor-purchases",
-                vendorId: vendorShortcode.parse(vendorId),
-              },
-            },
-          ]
-        : [],
     },
   ];
 };
@@ -283,12 +267,7 @@ export const vendorOrderMailReport = async (
   id: string,
   actor: ActorContext,
 ) =>
-  composeMailReport(
-    db,
-    await listVendorOrderMail(db, { vendorId: id }),
-    actor,
-    id,
-  );
+  composeMailReport(db, await listVendorOrderMail(db, { vendorId: id }), actor);
 
 export const purchaseOrderMailReport = async (
   db: Database,
@@ -317,10 +296,5 @@ export async function vendorAccountOrderMailReport(
     .where(and(eq(vendorAccount.id, accountId), notDeleted(vendorAccount)))
     .limit(1);
   if (!account) throw new Error("Vendor account no longer exists");
-  return composeMailReport(
-    db,
-    await listVendorOrderMail(db, account),
-    actor,
-    account.vendorId,
-  );
+  return composeMailReport(db, await listVendorOrderMail(db, account), actor);
 }

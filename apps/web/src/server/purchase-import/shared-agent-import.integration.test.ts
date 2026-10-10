@@ -1,9 +1,10 @@
+import { parseShortcodeFor } from "@cubby/schemas/identifiers";
 import {
+  type ExtractedOrderCandidate,
   commitPurchaseImportInput,
   aggregateReplacementSnapshot,
   proposedImportFix,
 } from "@cubby/schemas/purchase-import";
-import { fromPartial } from "@total-typescript/shoehorn";
 import { and, eq, inArray, isNull } from "drizzle-orm";
 import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
@@ -14,12 +15,14 @@ import {
   auditLog,
   expense,
   financialTransactionAllocation,
+  importSourceClaim,
+  importSourceProduct,
+  inventoryEntry,
   product,
   purchase,
   runFinding,
-  runEvidence,
   runOperation,
-  runTarget,
+  vendor as vendorTable,
 } from "~/server/db/schema";
 import { getDb, withTransaction } from "~/server/repo/database-helpers";
 import { ensureExternalSources } from "~/server/repo/entity-external-ids";
@@ -35,11 +38,12 @@ import {
 } from "./aggregate-replacement";
 import { resolveRunFinding } from "./findings";
 import { commitPurchaseImport, preparePurchaseImport } from "./import-orders";
-import { admitPurchaseValidationResearch } from "./purchase-validation-research";
-import { resolveImportResearch } from "./research-import";
-import { retainResearchObservation } from "./research-observations";
-import { researchServiceFor } from "./research-service";
-import { startOrResumeRun } from "./run-service";
+import { startImportRunFixture } from "./import-run.fixtures";
+import {
+  memberImport,
+  prepareMemberImport,
+  type MemberImportOrder,
+} from "./order-import.fixtures";
 
 const checksum = (digit: string) => digit.repeat(64);
 
@@ -88,7 +92,7 @@ describe("shared purchase-import prepare and commit", () => {
         isPrimary: true,
       });
     });
-    const run = await startOrResumeRun(ctx.db, {
+    const run = await startImportRunFixture(ctx.db, {
       ledgerPartyId: party.id,
       vendorAccountId: account.id,
       trigger: "manual",
@@ -125,7 +129,7 @@ describe("shared purchase-import prepare and commit", () => {
           stableOrderId: "amazon-order-1",
           itemOperationId: "prepare-item:amazon-order-1",
           source: {
-            kind: "browser_order" as const,
+            kind: "vendor_export" as const,
             externalKey: "amazon:order:111-2222222-3333333",
             checksum: checksum("a"),
           },
@@ -172,12 +176,13 @@ describe("shared purchase-import prepare and commit", () => {
       exactIdentifierMatch: true,
     });
 
-    const missingDefaultsInput = commitPurchaseImportInput.parse({
+    const commitInput = commitPurchaseImportInput.parse({
       _runExecution: {
         runId: run.id,
         operationId: "commit:amazon-order-1",
       },
       prepareOperationId: prepareInput._runExecution.operationId,
+      defaultTrade: "other",
       resolutions: [
         {
           stableOrderId: "amazon-order-1",
@@ -188,32 +193,6 @@ describe("shared purchase-import prepare and commit", () => {
           },
         },
       ],
-    });
-    await expect(
-      commitPurchaseImport(ctx.db, missingDefaultsInput, ctx.actor),
-    ).rejects.toMatchObject({
-      reason: "CONSTRAINT_VIOLATION",
-      message:
-        "A principal Expense requires a trade from the Expense, its Purchase, or its effective Project.",
-    });
-    expect(
-      await getDb(ctx.db)
-        .select({ id: purchase.id })
-        .from(purchase)
-        .where(eq(purchase.orderId, "111-2222222-3333333")),
-    ).toHaveLength(0);
-
-    // A fresh operationId for the corrected retry: the failed attempt above
-    // now leaves its own `failed` RunOperation row (see the dedicated
-    // failure test below), so replaying "commit:amazon-order-1" with
-    // different args is a fenced conflict, not a retry.
-    const commitInput = commitPurchaseImportInput.parse({
-      ...missingDefaultsInput,
-      _runExecution: {
-        ...missingDefaultsInput._runExecution,
-        operationId: "commit:amazon-order-1-retry",
-      },
-      defaultTrade: "other",
     });
     const first = await commitPurchaseImport(ctx.db, commitInput, ctx.actor);
     const replay = await commitPurchaseImport(ctx.db, commitInput, ctx.actor);
@@ -307,7 +286,7 @@ describe("shared purchase-import prepare and commit", () => {
         isPrimary: true,
       });
     });
-    const run = await startOrResumeRun(ctx.db, {
+    const run = await startImportRunFixture(ctx.db, {
       ledgerPartyId: party.id,
       vendorAccountId: account.id,
       trigger: "manual",
@@ -326,7 +305,7 @@ describe("shared purchase-import prepare and commit", () => {
             stableOrderId: "barcode-order-1",
             itemOperationId: "prepare-item:barcode-order-1",
             source: {
-              kind: "browser_order" as const,
+              kind: "vendor_export" as const,
               externalKey: "example:order:barcode-1",
               checksum: checksum("c"),
             },
@@ -366,179 +345,6 @@ describe("shared purchase-import prepare and commit", () => {
     });
   });
 
-  it("refuses foreign-currency semantic replay and distinguishes raw evidence drift", async () => {
-    const party = await insertWithShortcode(ctx.db, "ledgerParty", {
-      name: "Validation member",
-      kind: "member",
-      userId: ctx.actor.userId,
-    });
-    const vendor = await insertWithShortcode(ctx.db, "vendor", {
-      name: `Validation vendor ${crypto.randomUUID()}`,
-      website: "https://shop.example.test",
-      browserDomains: ["shop.example.test"],
-    });
-    const existingProduct = await createProductFixture(
-      ctx.db,
-      makeProductInput({ name: "Validation product" }),
-      ctx.actor,
-    );
-    const [productRow] = await getDb(ctx.db)
-      .select({ shortcode: product.shortcode })
-      .from(product)
-      .where(eq(product.id, existingProduct.entityId));
-    if (!productRow) throw new Error("Product fixture was not created");
-    const existingPurchase = await insertWithShortcode(ctx.db, "purchase", {
-      vendorId: vendor.id,
-      orderId: "ORDER-VALIDATE-1",
-      date: "2026-09-20",
-      statedTotal: 12.34,
-    });
-    await insertWithShortcode(ctx.db, "expense", {
-      purchaseId: existingPurchase.id,
-      name: "Validation product",
-      cost: 12.34,
-      date: "2026-09-20",
-      lineKind: "principal",
-      costType: "materials",
-      trade: "other",
-      future: false,
-      productId: existingProduct.entityId,
-      productQuantity: 1,
-    });
-
-    const runValidation = async (
-      currency: "USD" | "EUR",
-      sourceChecksum: string,
-    ) => {
-      const started = await admitPurchaseValidationResearch(ctx.db, {
-        ledgerPartyId: party.id,
-        userId: ctx.actor.userId,
-        purchaseIds: [existingPurchase.id],
-      });
-      if (!started.created) throw new Error("Validation run was blocked");
-      const [work] = await getDb(ctx.db)
-        .select()
-        .from(runTarget)
-        .where(eq(runTarget.runId, started.row.id));
-      if (!work) throw new Error("Current validation task missing");
-      const body = `<p>Order ORDER-VALIDATE-1: Validation product, ${currency} 12.34.</p>`;
-      const retained = await retainResearchObservation(
-        ctx.db,
-        {
-          runId: started.row.id,
-          workRef: work.id,
-          callId: `original:${currency}:${sourceChecksum}`,
-          kind: "web_page",
-          sourceMetadata: {
-            sourceURL: "https://shop.example.test/orders/ORDER-VALIDATE-1",
-          },
-          content: body,
-        },
-        {
-          keyPrefix: "synthetic/shared-validation",
-          storage: {
-            put: async () => {},
-            get: async () => body,
-          },
-        },
-      );
-      if (sourceChecksum !== checksum("a"))
-        await getDb(ctx.db)
-          .update(runEvidence)
-          .set({ checksum: sourceChecksum })
-          .where(eq(runEvidence.id, retained.evidenceId));
-      const result = await resolveImportResearch(
-        ctx.db,
-        {
-          runId: started.row.id,
-          workRef: work.id,
-          callId: `validate:${currency}:${sourceChecksum}`,
-          proposal: {
-            workRef: work.id,
-            status: "verified",
-            identity: {
-              evidenceIds: [retained.evidenceId],
-              reasoning: "The original identifies this recorded order.",
-            },
-            orders: [
-              {
-                purchaseRef: existingPurchase.shortcode,
-                vendorRef: vendor.shortcode,
-                evidenceIds: [retained.evidenceId],
-                reasoning:
-                  "The original supports the exact stated currency and total.",
-                candidate: {
-                  orderId: "ORDER-VALIDATE-1",
-                  orderedAt: "2026-09-20T12:00:00.000Z",
-                  merchant: vendor.name,
-                  currency,
-                  printedGrandTotal: 12.34,
-                  lines: [
-                    {
-                      title: "Validation product",
-                      amount: 12.34,
-                      lineKind: "principal",
-                      quantity: 1,
-                    },
-                  ],
-                  payments: [],
-                  allShipmentsDelivered: false,
-                },
-                productResolutions: [
-                  {
-                    lineIndex: 0,
-                    kind: "existing",
-                    productId: productRow.shortcode,
-                  },
-                ],
-              },
-            ],
-            detail:
-              "Compared the original to the recorded Purchase without writing money.",
-          },
-        },
-        {
-          readEvidence: async () => body,
-          assess: async () => ({
-            identityVerified: true,
-            acceptedOrders: [0],
-            acceptedEmailLinks: [],
-            acceptedFacts: [],
-            acceptedIdentifiers: [],
-            acceptedIdentifierClaims: [],
-            acceptedImages: [],
-            rejected: [],
-          }),
-        },
-      );
-      await researchServiceFor(
-        ctx.db,
-        fromPartial<Env>({}),
-        started.row.id,
-      ).researchNext({}, `settle:${currency}`);
-      const [target] = await getDb(ctx.db)
-        .select({ warning: runTarget.warning, diff: runTarget.diff })
-        .from(runTarget)
-        .where(eq(runTarget.runId, started.row.id));
-      return { result, target };
-    };
-
-    const foreign = await runValidation("EUR", checksum("a"));
-    expect(foreign.result).toMatchObject({ status: "researched_with_gaps" });
-    expect(foreign.target?.diff).toMatchObject({ corrections: [] });
-    await expect(runValidation("USD", checksum("d"))).rejects.toThrow(
-      /checksum|retained.*changed/u,
-    );
-    expect(
-      (
-        await getDb(ctx.db)
-          .select()
-          .from(expense)
-          .where(eq(expense.purchaseId, existingPurchase.id))
-      ).map((row) => row.cost),
-    ).toEqual([12.34]);
-  });
-
   it("commits tax and shipping lines using only the principal line's resolution", async () => {
     const party = await insertWithShortcode(ctx.db, "ledgerParty", {
       name: "Adjustment lines member",
@@ -566,7 +372,7 @@ describe("shared purchase-import prepare and commit", () => {
       .where(eq(product.id, existingProduct.entityId));
     if (!productRow) throw new Error("Product fixture was not created");
 
-    const run = await startOrResumeRun(ctx.db, {
+    const run = await startImportRunFixture(ctx.db, {
       ledgerPartyId: party.id,
       vendorAccountId: account.id,
       trigger: "manual",
@@ -582,7 +388,7 @@ describe("shared purchase-import prepare and commit", () => {
           stableOrderId: "adjustments-order-1",
           itemOperationId: "prepare-item:adjustments-order-1",
           source: {
-            kind: "browser_order" as const,
+            kind: "vendor_export" as const,
             externalKey: "adjustments:order:1",
             checksum: checksum("e"),
           },
@@ -686,7 +492,7 @@ describe("shared purchase-import prepare and commit", () => {
       vendorId: vendor.id,
       ledgerPartyId: party.id,
     });
-    const run = await startOrResumeRun(ctx.db, {
+    const run = await startImportRunFixture(ctx.db, {
       ledgerPartyId: party.id,
       vendorAccountId: account.id,
       trigger: "manual",
@@ -702,7 +508,7 @@ describe("shared purchase-import prepare and commit", () => {
           stableOrderId: "failing-order-1",
           itemOperationId: "prepare-item:failing-order-1",
           source: {
-            kind: "browser_order" as const,
+            kind: "vendor_export" as const,
             externalKey: "failing:order:1",
             checksum: checksum("1"),
           },
@@ -835,7 +641,7 @@ describe("shared purchase-import prepare and commit", () => {
       .where(eq(product.id, existingProduct.entityId));
     if (!productRow) throw new Error("Product fixture was not created");
 
-    const run = await startOrResumeRun(ctx.db, {
+    const run = await startImportRunFixture(ctx.db, {
       ledgerPartyId: party.id,
       vendorAccountId: account.id,
       trigger: "manual",
@@ -854,7 +660,7 @@ describe("shared purchase-import prepare and commit", () => {
             : undefined,
           itemOperationId: "prepare-item:manual-order-1",
           source: {
-            kind: "browser_order" as const,
+            kind: "vendor_export" as const,
             externalKey: "manual-then-import:order:1",
             checksum: checksum("5"),
           },
@@ -1198,7 +1004,7 @@ describe("shared purchase-import prepare and commit", () => {
       productQuantity: 1,
     });
 
-    const run = await startOrResumeRun(ctx.db, {
+    const run = await startImportRunFixture(ctx.db, {
       ledgerPartyId: party.id,
       vendorAccountId: account.id,
       trigger: "manual",
@@ -1214,7 +1020,7 @@ describe("shared purchase-import prepare and commit", () => {
           stableOrderId: "manual-order-2",
           itemOperationId: "prepare-item:manual-order-2",
           source: {
-            kind: "browser_order" as const,
+            kind: "vendor_export" as const,
             externalKey: "manual-conflict:order:1",
             checksum: checksum("7"),
           },
@@ -1295,5 +1101,189 @@ describe("shared purchase-import prepare and commit", () => {
       .from(runFinding)
       .where(eq(runFinding.entityId, manualPurchase.id));
     expect(findings.some((row) => row.kind === "duplicate_lines")).toBe(true);
+  });
+});
+
+// A no-ID original erases a known order id or splits from its reviewed
+// Purchase; two identical no-ID orders through Vendor aliases collapse into
+// one; an unfamiliar Vendor is created twice; a Product or Vendor removed
+// after prepare still receives a Purchase, Expenses, or source bindings.
+describe("member prepare and commit identity fences", () => {
+  const ctx = withTestDb();
+
+  async function scope() {
+    const party = await insertWithShortcode(ctx.db, "ledgerParty", {
+      name: "Identity fence member",
+      kind: "member",
+      userId: ctx.actor.userId,
+    });
+    const vendor = await insertWithShortcode(ctx.db, "vendor", {
+      name: "Synthetic service merchant",
+    });
+    return { party, vendor };
+  }
+
+  const candidate = (
+    orderId: string | null,
+    amount = 10,
+    title = "Synthetic annual service",
+  ): ExtractedOrderCandidate => ({
+    orderId,
+    orderedAt: "2026-10-01T12:00:00Z",
+    merchant: "Synthetic service merchant",
+    currency: "USD",
+    printedGrandTotal: amount,
+    lines: [{ title, amount, quantity: 1, lineKind: "principal" }],
+    payments: [],
+    allShipmentsDelivered: true,
+  });
+  const source = {
+    kind: "receipt_photo" as const,
+    externalKey: "synthetic:identity-fence",
+    checksum: checksum("a"),
+  };
+
+  it("converges a fresh no-ID original on the existing Purchase without erasing its order identity", async () => {
+    const { vendor } = await scope();
+    const existing = await insertWithShortcode(ctx.db, "purchase", {
+      vendorId: vendor.id,
+      orderId: "ORDER-ONE",
+    });
+    const { committed } = await memberImport(ctx.db, ctx.actor, {
+      key: "no-id-original",
+      defaultTrade: "other",
+      orders: [
+        {
+          stableOrderId: "no-id-original",
+          vendorId: vendor.shortcode,
+          targetPurchaseId: existing.shortcode,
+          source,
+          extraction: { status: "ready", candidate: candidate(null) },
+        },
+      ],
+    });
+    expect(committed.items[0]?.purchaseId).toBe(existing.shortcode);
+    const rows = await getDb(ctx.db).select().from(purchase);
+    expect(rows.map(({ orderId }) => orderId)).toEqual(["ORDER-ONE"]);
+    expect(await getDb(ctx.db).select().from(product)).toEqual([]);
+  });
+
+  it("refuses identical no-ID orders reached through different aliases of the same Vendor", async () => {
+    const { vendor } = await scope();
+    await expect(
+      prepareMemberImport(ctx.db, ctx.actor, {
+        key: "no-id-aliases",
+        orders: [
+          {
+            stableOrderId: "by-id",
+            vendorId: vendor.shortcode,
+            source,
+            extraction: { status: "ready", candidate: candidate(null) },
+          },
+          {
+            stableOrderId: "by-name",
+            vendor: { name: vendor.name },
+            source,
+            extraction: { status: "ready", candidate: candidate(null) },
+          },
+        ],
+      }),
+    ).rejects.toThrow(/same Vendor and order id/);
+    expect(await getDb(ctx.db).select().from(expense)).toEqual([]);
+    expect(await getDb(ctx.db).select().from(purchase)).toEqual([]);
+    expect(await getDb(ctx.db).select().from(importSourceClaim)).toEqual([]);
+  });
+
+  it("creates one unfamiliar Vendor for two distinct orders and no physical service Products", async () => {
+    await scope();
+    const { committed } = await memberImport(ctx.db, ctx.actor, {
+      key: "unfamiliar-vendor",
+      defaultTrade: "other",
+      orders: ["ORDER-ONE", "ORDER-TWO"].map((orderId, index) => ({
+        stableOrderId: orderId.toLowerCase(),
+        vendor: { name: "Synthetic unfamiliar merchant" },
+        source,
+        extraction: {
+          status: "ready" as const,
+          candidate: candidate(orderId, 10 + index * 10),
+        },
+      })),
+    });
+    expect(new Set(committed.items.map((item) => item.purchaseId)).size).toBe(
+      2,
+    );
+    expect(
+      await getDb(ctx.db)
+        .select({ id: vendorTable.id })
+        .from(vendorTable)
+        .where(eq(vendorTable.name, "Synthetic unfamiliar merchant")),
+    ).toHaveLength(1);
+    expect(await getDb(ctx.db).select().from(product)).toEqual([]);
+  });
+
+  async function preparedProductOrder() {
+    const { vendor } = await scope();
+    const selected = await createProductFixture(
+      ctx.db,
+      makeProductInput({ name: "Synthetic copper instrument" }),
+      ctx.actor,
+    );
+    const [row] = await getDb(ctx.db)
+      .select({ shortcode: product.shortcode })
+      .from(product)
+      .where(eq(product.id, selected.entityId));
+    const order: MemberImportOrder = {
+      stableOrderId: "selected-product",
+      vendorId: vendor.shortcode,
+      source,
+      extraction: {
+        status: "ready",
+        candidate: candidate(
+          "SYNTHETIC-REUSE",
+          24,
+          "Synthetic copper instrument",
+        ),
+      },
+      resolutions: [
+        {
+          kind: "existing",
+          productId: parseShortcodeFor("product", row!.shortcode),
+        },
+      ],
+    };
+    const preparation = await prepareMemberImport(ctx.db, ctx.actor, {
+      key: "selected-product",
+      orders: [order],
+      defaultTrade: "other",
+    });
+    return { vendor, selected, preparation };
+  }
+
+  async function expectNothingWritten() {
+    expect(await getDb(ctx.db).select().from(purchase)).toEqual([]);
+    expect(await getDb(ctx.db).select().from(expense)).toEqual([]);
+    expect(await getDb(ctx.db).select().from(importSourceClaim)).toEqual([]);
+    expect(await getDb(ctx.db).select().from(importSourceProduct)).toEqual([]);
+    expect(await getDb(ctx.db).select().from(inventoryEntry)).toEqual([]);
+  }
+
+  it("refuses a Product deleted after prepare before committing Purchase, expenses, or source bindings", async () => {
+    const { selected, preparation } = await preparedProductOrder();
+    await getDb(ctx.db)
+      .update(product)
+      .set({ deletedAt: new Date() })
+      .where(eq(product.id, selected.entityId));
+    await expect(preparation.commit()).rejects.toThrow(/Product/);
+    await expectNothingWritten();
+  });
+
+  it("refuses a Vendor deleted after prepare before committing Purchase, expenses, or source bindings", async () => {
+    const { vendor, preparation } = await preparedProductOrder();
+    await getDb(ctx.db)
+      .update(vendorTable)
+      .set({ deletedAt: new Date() })
+      .where(eq(vendorTable.id, vendor.id));
+    await expect(preparation.commit()).rejects.toThrow(/deleted or merged/);
+    await expectNothingWritten();
   });
 });

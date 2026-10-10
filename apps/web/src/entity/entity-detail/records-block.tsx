@@ -14,7 +14,6 @@ import { CloudflareIcon } from "~/ui/icons/cloudflare";
 import { Row, Stack } from "~/ui/layout";
 import { Badge } from "~/ui/primitives/badge";
 import { Button, buttonVariants } from "~/ui/primitives/button";
-import { Checkbox } from "~/ui/primitives/checkbox";
 import { Description } from "~/ui/primitives/description";
 import { Eyebrow } from "~/ui/primitives/eyebrow";
 import { Image } from "~/ui/primitives/image";
@@ -240,9 +239,6 @@ function RecordRow({
   inDetailBar,
   record,
   large,
-  selectable,
-  checked,
-  onCheckedChange,
   commands,
   choices,
   choicesLocked,
@@ -255,23 +251,11 @@ function RecordRow({
   row: ReportRecordRow;
   record: object | undefined;
   large: boolean;
-  /** Whether a selection verb is offered, so rows carry a checkbox. */
-  selectable: boolean;
-  checked: boolean;
-  onCheckedChange: (checked: boolean) => void;
 }) {
   const listEntity = routedEntity(row.listLink?.entity ?? null);
   return (
     <li className="flex items-start justify-between gap-3 py-2">
       <Row gap="sm" className="min-w-0 flex-1 items-start">
-        {selectable && row.key !== undefined ? (
-          <Checkbox
-            aria-label={`Select ${row.title}`}
-            checked={checked}
-            disabled={row.disabledReason != null}
-            onCheckedChange={(next) => onCheckedChange(next === true)}
-          />
-        ) : null}
         {row.imageUrl ? (
           <a
             href={row.imageUrl}
@@ -433,9 +417,6 @@ function RecordFilmstrip({
             inDetailBar={false}
             record={undefined}
             large={false}
-            selectable={false}
-            checked={false}
-            onCheckedChange={() => {}}
           />
         </ul>
       </section>
@@ -463,7 +444,6 @@ export function RecordsBlockView({
   /** Replaces the generic rows and footer (a sortable table, thumbnails). */
   list?: ReactNode;
 }) {
-  const [selection, setSelection] = useState<ReadonlySet<string>>(new Set());
   const commands = useReportCommands();
   const choices = useChoiceAnswers();
   const { form } = block;
@@ -474,8 +454,6 @@ export function RecordsBlockView({
     entity === undefined || record === undefined
       ? {}
       : sectionActionsFor(entity);
-  const selectable = verbs.some((verb) => verb.scope === "selection");
-  const clearSelection = () => setSelection(new Set());
   // SAFETY: the verb registry is keyed by this entity, so it takes this entity's record.
   const erasedRecord = record as never;
   return (
@@ -505,17 +483,6 @@ export function RecordsBlockView({
                 }
                 record={record}
                 large={block.thumbnail === "large"}
-                selectable={selectable}
-                checked={row.key !== undefined && selection.has(row.key)}
-                onCheckedChange={(checked) =>
-                  setSelection((current) => {
-                    const next = new Set(current);
-                    if (row.key === undefined) return next;
-                    if (checked) next.add(row.key);
-                    else next.delete(row.key);
-                    return next;
-                  })
-                }
               />
             ))}
           </ul>
@@ -565,17 +532,8 @@ export function RecordsBlockView({
                 key={verb.id}
                 fallback={<Skeleton className="h-8 w-24" />}
               >
-                <RowActionPlacement
-                  inDetailBar={
-                    verb.scope === "section" && (detailActions?.verbs ?? false)
-                  }
-                >
-                  <Verb
-                    record={erasedRecord}
-                    action={verb}
-                    selection={[...selection]}
-                    clearSelection={clearSelection}
-                  />
+                <RowActionPlacement inDetailBar={detailActions?.verbs ?? false}>
+                  <Verb record={erasedRecord} action={verb} />
                 </RowActionPlacement>
               </Suspense>
             ) : null;
@@ -623,23 +581,16 @@ export function RecordsDetailActions({
           />
         ))}
       {detailActions?.verbs && record
-        ? (block.verbs ?? [])
-            .filter((verb) => verb.scope === "section")
-            .map((verb) => {
-              const Verb = available[verb.id];
-              return Verb ? (
-                <Suspense key={verb.id} fallback={null}>
-                  <span title={verb.disabledReason ?? undefined}>
-                    <Verb
-                      record={erasedRecord}
-                      action={verb}
-                      selection={[]}
-                      clearSelection={() => {}}
-                    />
-                  </span>
-                </Suspense>
-              ) : null;
-            })
+        ? (block.verbs ?? []).map((verb) => {
+            const Verb = available[verb.id];
+            return Verb ? (
+              <Suspense key={verb.id} fallback={null}>
+                <span title={verb.disabledReason ?? undefined}>
+                  <Verb record={erasedRecord} action={verb} />
+                </span>
+              </Suspense>
+            ) : null;
+          })
         : null}
       {detailActions?.commands
         ? (block.commands ?? []).map((command) => (

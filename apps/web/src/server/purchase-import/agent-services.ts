@@ -1,8 +1,8 @@
 /**
- * The purchase agent's only authority over Cubby: one Run's services. Each
- * call opens its own database scope. Research effects delegate to the bound
- * research factory; lifecycle and photo-only effects retain their existing
- * host contracts. Research authority, evidence, and replay belong to that factory. Flow: `server/purchase-import/README.md`.
+ * The import agent's only authority over Cubby: one Run's services. Each call
+ * opens its own database scope. Domain writes travel through the Run's
+ * delegated Cubby MCP actions; these services own lifecycle, progress and
+ * accounting. Flow: `server/purchase-import/README.md`.
  */
 import {
   agentImportRunPurpose,
@@ -22,7 +22,7 @@ import { sha256Uuid } from "@cubby/shared/sha256";
 import { assertNotInMaintenance } from "~/server/maintenance";
 import type { RunServices } from "~/server/purchase-agent/environment";
 
-import { getTestAiGateway, runWithExecutionCtx, setCfEnv } from "../cf-env";
+import { runWithExecutionCtx, setCfEnv } from "../cf-env";
 
 /** The MCP endpoint the delegation bearer's audience names. */
 const MCP_URL = "https://cubby.internal/api/mcp";
@@ -56,50 +56,26 @@ export function runServicesFor(
     });
   };
 
-  const requirePhotoScope = async (
+  const requireAgentScope = async (
     db: typeof import("~/server/db").db,
     service: typeof import("./run-service"),
   ) => {
     const scope = await service.loadRunScope(db, runId);
-    if (scope.public.purpose !== "photo_inventory")
+    if (
+      scope.public.purpose !== "photo_inventory" &&
+      scope.public.purpose !== "mail_import"
+    )
       throw new Error(
-        "This host service is available only to photo inventory Runs",
+        "This host service is available only to Mail import and photo inventory Runs",
       );
     return scope;
   };
-  const withPhotoDatabase: typeof withDatabase = (fn) =>
+  const withAgentDatabase: typeof withDatabase = (fn) =>
     withDatabase(async (db, service, operation) => {
-      await requirePhotoScope(db, service);
+      await requireAgentScope(db, service);
       return fn(db, service, operation);
     });
-  const withResearch = <T>(
-    fn: (
-      service: ReturnType<
-        typeof import("./research-service").researchServiceFor
-      >,
-    ) => Promise<T>,
-  ) =>
-    withDatabase(async (db) => {
-      const { assertResearchRunExecutable } =
-        await import("./research-execution");
-      await assertResearchRunExecutable(db, runId);
-      const { researchServiceFor } = await import("./research-service");
-      const { researchFixtureSources } =
-        await import("./research-source-transport");
-      return fn(
-        researchServiceFor(db, env, runId, {
-          observations: await researchFixtureSources(getTestAiGateway()),
-        }),
-      );
-    });
-
   return {
-    processResearchRetention: (receiptId) =>
-      withDatabase(async (db) => {
-        const { processBoundResearchRetention } =
-          await import("./research-retention-runtime");
-        return processBoundResearchRetention(db, env, { runId, receiptId });
-      }),
     admitPaidInference: (request) =>
       withDatabase(async (db) => {
         const [{ paidResearchPreflight }, { runEntityId }] = await Promise.all([
@@ -108,17 +84,15 @@ export function runServicesFor(
         ]);
         await paidResearchPreflight(db, runEntityId.parse(runId))(request);
       }),
-    researchCoordinatorStatus: () =>
+    coordinatorRetired: () =>
       withDatabase(async (db) => {
-        const { researchCoordinatorStatus } =
-          await import("./research-execution");
-        return researchCoordinatorStatus(db, runId);
+        const { coordinatorRetired } = await import("./run-retirement");
+        return coordinatorRetired(db, runId);
       }),
-    authorizeResearchRetirement: (receiptId) =>
+    authorizeRetirement: () =>
       withDatabase(async (db) => {
-        const { authorizeResearchCoordinatorRetirement } =
-          await import("./research-retention");
-        await authorizeResearchCoordinatorRetirement(db, { runId, receiptId });
+        const { assertRetirableRun } = await import("./run-retirement");
+        return assertRetirableRun(db, runId);
       }),
     loadScope: () =>
       withDatabase(async (db, service) => {
@@ -165,7 +139,7 @@ export function runServicesFor(
           ? undefined
           : await request.arrayBuffer();
       return withDatabase(async (db, service) => {
-        const scope = await requirePhotoScope(db, service);
+        const scope = await requireAgentScope(db, service);
         const [
           { findActivePurchaseAgentGrant, issuePurchaseAgentDelegation },
           { handleMcpHttpRequest },
@@ -195,33 +169,11 @@ export function runServicesFor(
       });
     },
 
-    researchNext: (input, callId) =>
-      withResearch((service) => service.researchNext(input, callId)),
-    researchContinue: (callId, admitted) =>
-      withResearch((service) => service.researchContinue(callId, admitted)),
-    researchObserve: (input, callId) =>
-      withResearch((service) => service.researchObserve(input, callId)),
-    researchResolve: (input, callId) =>
-      withResearch((service) => service.researchResolve(input, callId)),
-    researchMailSearch: (input, callId) =>
-      withResearch((service) => service.researchMailSearch(input, callId)),
-    researchMailRead: (input, callId) =>
-      withResearch((service) => service.researchMailRead(input, callId)),
-    researchWebSearch: (input, callId) =>
-      withResearch((service) => service.researchWebSearch(input, callId)),
-    researchWebRead: (input, callId) =>
-      withResearch((service) => service.researchWebRead(input, callId)),
-    researchFind: (input, callId) =>
-      withResearch((service) => service.researchFind(input, callId)),
-    researchResume: (signal) =>
-      withResearch((service) => service.researchResume(signal)),
-    researchAcknowledge: (signal) =>
-      withResearch((service) => service.researchAcknowledge(signal)),
-
     claimNextWork: (input) => {
       const ref = purchaseAgentOperationRef.parse(input);
-      return withPhotoDatabase((db, service, operation) =>
-        operation.executeLeasedOperation(
+      return withAgentDatabase(async (db, service, operation) => {
+        const scope = await service.loadRunScope(db, runId);
+        return operation.executeLeasedOperation(
           db,
           {
             runId,
@@ -229,9 +181,12 @@ export function runServicesFor(
             kind: "claim_next_work",
             payload: { runId, ...ref },
           },
-          () => service.claimPhotoInventoryWork(db, runId),
-        ),
-      );
+          async () =>
+            scope.public.purpose === "mail_import"
+              ? (await import("./mail-tool")).claimMailImportWork(db, runId)
+              : service.claimPhotoInventoryWork(db, runId),
+        );
+      });
     },
 
     recordAgentUsage: (input) => {
@@ -260,7 +215,7 @@ export function runServicesFor(
 
     stopForReview: (input) => {
       const payload = { runId, ...stopForReviewInput.parse(input) };
-      return withPhotoDatabase((db, service, operation) =>
+      return withAgentDatabase((db, service, operation) =>
         operation.executeLeasedOperation(
           db,
           { ...payload, kind: "stop_for_review", payload },
@@ -297,7 +252,7 @@ export function runServicesFor(
         receivedEventIds: new Set(parsed.receivedEventIds),
       };
       return withDatabase((db, service) =>
-        service.reconcileSettledRun(db, env.PURCHASE_IMPORT, payload),
+        service.reconcileSettledRun(db, payload),
       );
     },
   };

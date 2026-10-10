@@ -22,7 +22,6 @@ import {
   imageDescriptionCorrection,
   imageProcessingJob,
   imageSighting,
-  importHunt,
   importPreparedOrder,
   importSourceClaim,
   importSourceOrder,
@@ -48,12 +47,8 @@ import {
   run as runTable,
   runApproval,
   runControlEvent,
-  runEvidence,
-  researchSourceExposure,
-  researchRetention,
   runFinding,
   runOperation,
-  runOrderCandidate,
   runProgress,
   runTarget,
   statementImport,
@@ -416,35 +411,6 @@ const mkImportSourceClaim = async (
   });
 };
 
-const mkImportHunt = async (
-  db: Database,
-  values: Partial<
-    Pick<
-      typeof importHunt.$inferInsert,
-      | "ledgerPartyId"
-      | "financialTransactionId"
-      | "vendorId"
-      | "vendorAccountId"
-      | "receiptImageId"
-      | "receiptRunId"
-    >
-  > = {},
-) => {
-  const party = values.ledgerPartyId ?? (await mkLedgerParty(db)).id;
-  const transaction =
-    values.financialTransactionId ?? (await mkFinancialTransaction(db)).id;
-  return insertAndReturn(db, importHunt, {
-    ledgerPartyId: party,
-    financialTransactionId: transaction,
-    vendorId: values.vendorId,
-    vendorAccountId: values.vendorAccountId,
-    receiptImageId: values.receiptImageId,
-    receiptRunId: values.receiptRunId,
-    dateFrom: "2026-01-01",
-    dateTo: "2026-01-02",
-  });
-};
-
 const mkOrderMail = async (
   db: Database,
   values: Partial<
@@ -626,9 +592,6 @@ const SOURCE_FACTORIES = {
       entityKind: await runTargetKindOf(db, targetId),
     }),
 
-  "ImportHunt.receiptImageId": (db, targetId) =>
-    mkImportHunt(db, { receiptImageId: targetId }),
-
   "OrderMailAttachment.imageId": async (db, targetId) => {
     const mail = await mkOrderMail(db);
     return insertAndReturn(db, orderMailAttachment, {
@@ -671,11 +634,6 @@ const SOURCE_FACTORIES = {
     });
   },
 
-  "ImportHunt.ledgerPartyId": (db, targetId) =>
-    mkImportHunt(db, {
-      ledgerPartyId: parseEntityId("ledgerParty", targetId),
-    }),
-
   "MerchantVendorRule.ledgerPartyId": async (db, targetId) => {
     const [vendor, actor] = await Promise.all([mkVendor(db), mkUser(db)]);
     return insertAndReturn(db, merchantVendorRule, {
@@ -703,46 +661,6 @@ const SOURCE_FACTORIES = {
       status: "pending",
     }),
 
-  "ResearchSourceExposure.ledgerPartyId": async (db, targetId) => {
-    const partyId = parseEntityId("ledgerParty", targetId);
-    const scope = await mkRun(db);
-    return insertAndReturn(db, researchSourceExposure, {
-      runId: scope.id,
-      ledgerPartyId: partyId,
-      orderMailId: crypto.randomUUID(),
-      checksum: uniq("synthetic-exposure-checksum"),
-    });
-  },
-
-  "ResearchRetention.ledgerPartyId": async (db, targetId) => {
-    const partyId = parseEntityId("ledgerParty", targetId);
-    const scope = await mkRun(db);
-    const work = await mkRunTarget(db, {
-      runId: scope.id,
-      entityId: scope.id,
-      entityKind: "run",
-    });
-    return insertAndReturn(db, researchRetention, {
-      id: crypto.randomUUID(),
-      runId: scope.id,
-      workRef: work.id,
-      ledgerPartyId: partyId,
-      orderMailId: crypto.randomUUID(),
-      mailboxId: uniq("synthetic-mailbox"),
-      messageId: uniq("synthetic-message"),
-      checksum: uniq("synthetic-retention-checksum"),
-      phase: "completed",
-      completedAt: new Date(),
-      plan: {
-        originOperationId: uniq("synthetic-retention-operation"),
-        objectKeys: [],
-        screenshotRefs: [],
-        retiredRunIds: [scope.id],
-        successors: [],
-      },
-    });
-  },
-
   "OrderMail.ledgerPartyId": (db, targetId) =>
     mkOrderMail(db, {
       ledgerPartyId: parseEntityId("ledgerParty", targetId),
@@ -766,9 +684,6 @@ const SOURCE_FACTORIES = {
 
   "Run.vendorId": (db, targetId) =>
     mkRun(db, { vendorId: parseEntityId("vendor", targetId) }),
-
-  "ImportHunt.vendorId": (db, targetId) =>
-    mkImportHunt(db, { vendorId: parseEntityId("vendor", targetId) }),
 
   "MerchantVendorRule.vendorId": async (db, targetId) => {
     const [party, actor] = await Promise.all([mkLedgerParty(db), mkUser(db)]);
@@ -803,11 +718,6 @@ const SOURCE_FACTORIES = {
       evidenceIndex: 0,
     });
   },
-
-  "ImportHunt.financialTransactionId": (db, targetId) =>
-    mkImportHunt(db, {
-      financialTransactionId: parseEntityId("financialTransaction", targetId),
-    }),
 
   "Purchase.vendorAccountId": async (db, targetId) => {
     const vendor = await mkVendor(db);
@@ -844,9 +754,6 @@ const SOURCE_FACTORIES = {
 
   "ImportSourceClaim.vendorAccountId": (db, targetId) =>
     mkImportSourceClaim(db, { vendorAccountId: targetId }),
-
-  "ImportHunt.vendorAccountId": (db, targetId) =>
-    mkImportHunt(db, { vendorAccountId: targetId }),
 
   "ExpenseAttribution.expenseId": async (db, targetId) => {
     const party = await mkLedgerParty(db);
@@ -1633,28 +1540,6 @@ const SOURCE_FACTORIES = {
     });
   },
 
-  "RunOrderCandidate.runId": (db, targetId) =>
-    insertAndReturn(db, runOrderCandidate, {
-      runId: parseEntityId("run", targetId),
-      orderId: uniq("order"),
-    }),
-
-  "RunEvidence.runId": async (db, targetId) => {
-    const product = await mkProduct(db);
-    const evidenceTarget = await mkRunTarget(db, {
-      entityId: product.id,
-      entityKind: "product",
-    });
-    return insertAndReturn(db, runEvidence, {
-      runId: parseEntityId("run", targetId),
-      targetId: evidenceTarget.id,
-      kind: "manual_upload",
-      objectKey: uniq("test/evidence-object"),
-      checksum: uniq("evidence-checksum"),
-      mediaType: "application/pdf",
-    });
-  },
-
   "RunOperation.runId": (db, targetId) =>
     insertAndReturn(db, runOperation, {
       runId: parseEntityId("run", targetId),
@@ -1738,11 +1623,6 @@ const SOURCE_FACTORIES = {
       evidenceFingerprint: uniq("finding"),
     });
   },
-
-  "ImportHunt.receiptRunId": (db, targetId) =>
-    mkImportHunt(db, {
-      receiptRunId: parseEntityId("run", targetId),
-    }),
 
   "Device.ledgerPartyId": (db, targetId) =>
     insertWithShortcode(db, "device", {

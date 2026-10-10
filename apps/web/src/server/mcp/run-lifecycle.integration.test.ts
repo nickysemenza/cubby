@@ -8,15 +8,11 @@ import { z } from "zod";
 
 import { setCfEnv } from "~/server/cf-env";
 import { user } from "~/server/db/auth.schema";
-import { run as runTable } from "~/server/db/schema";
+import { orderMail, run as runTable } from "~/server/db/schema";
 import { entityKernelContextSchema } from "~/server/entity-kernel";
 import { createMcpServer } from "~/server/mcp/server";
-import { admitProductResearch } from "~/server/purchase-import/product-research-run";
+import { admitMailImport } from "~/server/purchase-import/mail-import-run";
 import { getDb } from "~/server/repo/database-helpers";
-import {
-  createProductFixture,
-  makeProductInput,
-} from "~/server/repo/repo.fixtures";
 import { insertWithShortcode } from "~/server/repo/shortcode-utils";
 import { requireActor } from "~/server/request-context";
 import { createTestRequestContext } from "~/server/testing/request-context";
@@ -61,26 +57,34 @@ describe("Run lifecycle through MCP", () => {
 
   const prepare = async () => {
     const member = await insertWithShortcode(ctx.db, "ledgerParty", {
-      name: "Synthetic research member",
+      name: "Synthetic import member",
       kind: "member",
       userId: ctx.actor.userId,
     });
-    const target = await createProductFixture(
-      ctx.db,
-      makeProductInput({ name: "Synthetic catalog hand tool" }),
-      ctx.actor,
-    );
-    const [admission] = await admitProductResearch(ctx.db, {
+    const [mail] = await getDb(ctx.db)
+      .insert(orderMail)
+      .values({
+        ledgerPartyId: member.id,
+        mailboxId: "synthetic-mailbox",
+        messageId: "synthetic-order",
+        sender: "orders@example.test",
+        subject: "Synthetic order",
+        receivedAt: new Date("2026-09-01T18:00:00Z"),
+        rawChecksum: "a".repeat(64),
+        content: { snippet: null, bodyText: "Synthetic order", bodyHtml: null },
+      })
+      .returning();
+    if (!mail) throw new Error("Synthetic retained mail did not persist");
+    const [admission] = await admitMailImport(ctx.db, {
       ledgerPartyId: member.id,
       userId: ctx.actor.userId,
-      productIds: [target.entityId],
-      cause: "member_request",
+      messageIds: [mail.id],
     });
     if (!admission) throw new Error("Synthetic Run was not admitted");
-    return admission.run;
+    return admission.row;
   };
 
-  it("stops owned research and reuses one immutable retry successor before restarting", async () => {
+  it("stops an owned agent Run and reuses one immutable retry successor before restarting", async () => {
     const original = await prepare();
     const stopped = await call(original.shortcode, "cancel");
     expect(stopped.isError).not.toBe(true);

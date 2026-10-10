@@ -1,7 +1,4 @@
-import { Link } from "@tanstack/react-router";
-
 import type { RunDetail } from "~/contracts/run.contract";
-import { entityDetailLink } from "~/entity/entities";
 import { problems as problemOperations } from "~/integrations/tanstack-query/generated/catalog.gen";
 import { formatCurrency } from "~/lib/utils";
 import { useActionMutation } from "~/ui/hooks/useActionMutation";
@@ -9,10 +6,7 @@ import { Row, Stack } from "~/ui/layout";
 import { Button } from "~/ui/primitives/button";
 
 function canApplyFinding(fix: RunDetail["findings"][number]["proposedFix"]) {
-  return (
-    fix !== null &&
-    !["receive_purchase", "research_field_correction"].includes(fix.kind)
-  );
+  return fix !== null && fix.kind !== "receive_purchase";
 }
 
 export function RunFindingActions({
@@ -27,20 +21,13 @@ export function RunFindingActions({
         ? "Applied import correction"
         : "Dismissed import finding",
   });
-  const correction =
-    finding.proposedFix?.kind === "research_field_correction"
-      ? finding.proposedFix
-      : null;
   const canApply = canApplyFinding(finding.proposedFix);
   const replacement =
     finding.proposedFix?.kind === "replace_aggregate_line"
       ? finding.proposedFix
       : null;
   const snapshot = replacement?.reviewSnapshot;
-  const reviewFingerprint =
-    finding.proposedFix?.kind === "validation_corrections"
-      ? finding.proposedFix.reviewSnapshot.fingerprint
-      : snapshot?.fingerprint;
+  const reviewFingerprint = snapshot?.fingerprint;
   const reviewLines =
     replacement?.lines.map((line, ordinal) => ({
       ...line,
@@ -86,15 +73,6 @@ export function RunFindingActions({
         </Stack>
       ) : null}
       <Row className="gap-2">
-        {correction ? (
-          <Button
-            size="sm"
-            nativeButton={false}
-            render={<Link {...entityDetailLink("run", correction.runRef)} />}
-          >
-            Review correction
-          </Button>
-        ) : null}
         {canApply && (!replacement || snapshot) ? (
           <Button
             size="sm"

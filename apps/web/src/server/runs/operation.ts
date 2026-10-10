@@ -113,17 +113,12 @@ export type AtomicOperationLedger = {
   /** Claim the operation `started` ahead of the business writes that follow. */
   start(client: LedgerClient): Promise<void>;
   /** Record the replayable result: completes a started row, else inserts it completed. */
-  complete(
-    client: LedgerClient,
-    result: RecordedResult,
-    options?: { retirementReceiptId?: string },
-  ): Promise<void>;
+  complete(client: LedgerClient, result: RecordedResult): Promise<void>;
 };
 
 /**
  * The atomic replay policy for writers whose ledger row commits or rolls back
- * with their business writes: purchase prepare, commit, and validation,
- * Product enrichment, and validation corrections. A completed operation
+ * with their business writes: purchase prepare and commit. A completed operation
  * replays its recorded result; any other row under the id throws, because an
  * attempt that did not complete has an unknown outcome.
  *
@@ -172,8 +167,8 @@ export async function executeAtomicOperation<T>(
       await insertOperation(client, row);
       started = true;
     },
-    async complete(client, result, options) {
-      if (started) await completeOperation(client, key, result, options);
+    async complete(client, result) {
+      if (started) await completeOperation(client, key, result);
       else
         await insertOperation(client, { ...row, state: "completed", result });
     },

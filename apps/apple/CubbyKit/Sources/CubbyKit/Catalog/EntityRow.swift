@@ -36,6 +36,15 @@ public struct EntityRow: Identifiable, Sendable, Hashable {
         try JSONDecoder.cubby().decode(T.self, from: JSONEncoder.cubby().encode(raw))
     }
 
+    /// Where facts about this record were seen (the detail read's `sources`); a list row, or a
+    /// record with none, answers `[]`.
+    public var sources: [EntitySourceRead] {
+        guard let sources = raw["sources"], sources != .null else { return [] }
+        return
+            (try? JSONDecoder.cubby().decode(
+                [EntitySourceRead].self, from: JSONEncoder.cubby().encode(sources))) ?? []
+    }
+
     /// The entity's image ids in display order — the order `setImageOrder` rewrites. Read from a
     /// detail payload's `attachments`; a list row carries none and answers `[]`.
     public var imageIDs: [ImageCode] {

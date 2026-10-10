@@ -1,6 +1,5 @@
 import { imageId as parseImageId } from "@cubby/schemas/identifiers";
 import { mealCreateInput } from "@cubby/schemas/meal";
-import { runPurpose } from "@cubby/schemas/purchase-import";
 import { vendorCreateInput } from "@cubby/schemas/vendor";
 import { fromPartial } from "@total-typescript/shoehorn";
 import { createRepoEntity } from "tooling/factories/repo";
@@ -107,6 +106,7 @@ describe("MCP catalog", () => {
       spending_classification_read: readOnly(),
       spending_classification_write: write(),
       imports_read: readOnly(true),
+      mail: write(),
       activity: readOnly(),
       statement_rows: write({ destructive: true }),
       purchase_import: write(),
@@ -431,74 +431,47 @@ describe("MCP catalog", () => {
     ).toHaveProperty("proposals");
   });
 
-  it("refuses legacy purchase_import mutations for a focused research run purpose", async () => {
-    const party = await insertWithShortcode(ctx.db, "ledgerParty", {
+  it("refuses purchase_import mutations for a run purpose that does not mount them", async () => {
+    await insertWithShortcode(ctx.db, "ledgerParty", {
       name: "Catalog gate member",
       kind: "member",
       userId: ctx.actor.userId,
     });
-    const run = await insertWithShortcode(ctx.db, "run", {
-      ledgerPartyId: party.id,
+    const run = await startPhotoInventoryRun(ctx.db, {
       actorUserId: ctx.actor.userId,
-      actorName: "Catalog gate actor",
-      actorEmail: "catalog-gate-actor@example.test",
-      actorLedgerPartyShortcode: party.shortcode,
-      actorLedgerPartyName: party.name,
-      actorLedgerPartyKind: party.kind,
-      trigger: "manual",
-      agentSessionId: "catalog-gate-run",
-      purpose: runPurpose.parse("purchase_validation"),
-      status: "running",
     });
     const kernel = entityKernelContextSchema.parse(
       createTestRequestContext(ctx.db, { auth: { userId: ctx.actor.userId } }),
     );
-    const trusted = {
-      entityKernel: kernel,
-      purchaseAgent: { runId: run.id, grantId: "catalog-grant" },
-    };
-    const execution = { runId: run.id, operationId: "commit:catalog-order" };
     const commit = await callMcpTool(
       createMcpServer(),
       "purchase_import",
       {
         action: "commit",
-        _runExecution: execution,
+        _runExecution: { runId: run.id, operationId: "commit:catalog-order" },
         prepareOperationId: "prepare:catalog-order",
         resolutions: [],
       },
       kernelRequestContext(kernel),
-      trusted,
+      {
+        entityKernel: kernel,
+        purchaseAgent: { runId: run.id, grantId: "catalog-grant" },
+      },
     );
     expect(commit.isError).toBe(true);
     expect(JSON.stringify(commit.content)).toContain(
       "does not mount purchase_import.commit",
     );
-
-    // Legacy validation is refused by the same purpose gate before its writer.
-    const validate = await callMcpTool(
-      createMcpServer(),
-      "purchase_import",
-      {
-        action: "validate",
-        _runExecution: { ...execution, operationId: "validate:catalog-order" },
-        prepareOperationId: "prepare:catalog-order",
-        resolutions: [],
-      },
-      kernelRequestContext(kernel),
-      trusted,
-    );
-    const stage = (result: typeof commit) =>
+    // The purpose gate refuses before the writer runs.
+    expect(
       z
         .object({
           "cubby/error": z.object({
             diagnostics: z.object({ stage: z.string() }),
           }),
         })
-        .parse(result._meta)["cubby/error"].diagnostics.stage;
-    expect(stage(commit)).toBe("context");
-    expect(validate.isError).toBe(true);
-    expect(stage(validate)).toBe("context");
+        .parse(commit._meta)["cubby/error"].diagnostics.stage,
+    ).toBe("context");
   });
 
   it("shows a purchase agent only its run purpose's actions", async () => {
@@ -532,15 +505,15 @@ describe("MCP catalog", () => {
         .action.enum;
 
     expect(tools.map((tool) => tool.name).sort()).toEqual([
+      "entity",
       "entity_read",
       "imports_read",
       "photo_run",
-      "product_enrichment",
       "search",
     ]);
+    expect(actionsOf("entity")).toEqual(["update"]);
     expect(actionsOf("entity_read")).toEqual(["resolve"]);
     expect(actionsOf("photo_run")).toEqual(["propose_groups"]);
-    expect(actionsOf("product_enrichment")).toEqual(["patch_external_ids"]);
     expect(actionsOf("imports_read").sort()).toEqual([
       "image_processing",
       "photo_candidates",

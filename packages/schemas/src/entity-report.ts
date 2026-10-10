@@ -19,7 +19,7 @@ import {
   orderMailDecisionInput,
   orderMailImportInput,
 } from "./order-mail-review";
-import { purchaseShortcode, vendorShortcode } from "./identifier-fields";
+import { purchaseShortcode } from "./identifier-fields";
 
 /**
  * The generic read a detail slot draws on every client. The server composes
@@ -56,8 +56,6 @@ export const reportSlots = [
   "purchase.project-allocation",
   "purchase.financial-settlement",
   "expense.settlement",
-  "vendorAccount.charge-search",
-  "vendorAccount.sync",
   // A Run's detail: progress, approvals, findings, transcript, log, AI usage and changes.
   "run.live-progress",
   "run.import-stats",
@@ -67,7 +65,6 @@ export const reportSlots = [
   "run.import-approvals",
   "run.import-findings",
   "run.import-targets",
-  "run.import-evidence",
   "run.import-prepared-orders",
   "run.import-timeline",
   "run.import-debug-log",
@@ -83,8 +80,6 @@ export const reportSlot = z.enum(reportSlots);
 export const reportSlotActions = {
   "image.associations": ["attachImage"],
   "location.ai-description": ["analyzeLocation"],
-  "purchase.runs": ["validatePurchase"],
-  "product.runs": ["enrichProduct"],
 } as const satisfies Partial<
   Record<(typeof reportSlots)[number], readonly CollectionActionId[]>
 >;
@@ -233,10 +228,6 @@ export const reportCommandRequest = z.discriminatedUnion("kind", [
     purchaseId: purchaseShortcode.nullable(),
   }),
   orderMailImportInput.extend({ kind: z.literal("research-order-mail") }),
-  z.object({
-    kind: z.literal("research-vendor-purchases"),
-    vendorId: vendorShortcode,
-  }),
   z.object({
     kind: z.literal("run-control"),
     runId: runShortcode,
@@ -522,16 +513,16 @@ const reportRecords = z.object({
   footer: z.string().optional(),
   /**
    * Finance verbs (`SECTION_ACTION_IDS`) with the server's word on each: a verb with a
-   * `disabledReason` is shown unavailable with it, and a `selection` verb acts on the checked
-   * rows (never a row with a `disabledReason`). Each runs an existing operation on every client
-   * that implements it; `native-coverage.ts` classifies the rest.
+   * `disabledReason` is shown unavailable with it. Each acts on the section's record and runs an
+   * existing operation on every client that implements it; `native-coverage.ts` classifies the
+   * rest.
    */
   verbs: z
     .array(
       z.object({
         id: z.enum(SECTION_ACTION_IDS),
         label: z.string(),
-        scope: z.enum(["section", "selection"]),
+        scope: z.literal("section"),
         disabledReason: z.string().nullable(),
       }),
     )

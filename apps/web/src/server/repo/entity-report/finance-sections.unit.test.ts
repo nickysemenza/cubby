@@ -4,7 +4,6 @@ import {
   financialTransactionShortcode,
   productShortcode,
   purchaseShortcode,
-  runShortcode,
   vendorShortcode,
 } from "@cubby/schemas/identifiers";
 import type { ExpenseOut } from "@cubby/schemas/project";
@@ -15,7 +14,6 @@ import { describe, expect, it } from "vitest";
 import { composeExpenseSettlementSection } from "./expense-settlement";
 import { composeFinancialSettlementSection } from "./purchase-financial-settlement";
 import { composeReconciliationSection } from "./purchase-reconciliation";
-import { composeChargeSearchSection } from "./vendor-account-charge-search";
 
 const pur = purchaseShortcode.parse("PUR-2345");
 const ftx = (suffix: string) =>
@@ -287,86 +285,5 @@ describe("composeExpenseSettlementSection", () => {
       "This is the only expense in the purchase.",
     ]);
     expect(section.footer).toBe("1 expense · $30.00");
-  });
-});
-
-const hunt = (
-  suffix: string,
-  overrides: Partial<
-    Parameters<typeof composeChargeSearchSection>[0]["items"][number]
-  > = {},
-): Parameters<typeof composeChargeSearchSection>[0]["items"][number] => ({
-  transactionId: ftx(suffix),
-  merchant: "Example Hardware",
-  amount: 42.5,
-  transactionDate: "2026-03-03",
-  state: "pending_browser",
-  reason: null,
-  runId: null,
-  outcome: null,
-  ...overrides,
-});
-
-describe("composeChargeSearchSection", () => {
-  it("lets a waiting charge be selected and names the verb for the selection", () => {
-    const section = composeChargeSearchSection({ items: [hunt("4K7M")] });
-    expect(section.items).toEqual([
-      {
-        id: ftx("4K7M"),
-        title: "Example Hardware · 2026-03-03",
-        lines: [],
-        amount: 42.5,
-        amountNote: null,
-        badge: null,
-        link: null,
-        disabledReason: null,
-      },
-    ]);
-    expect(section.actions).toEqual([
-      {
-        id: "searchCharges",
-        label: "Search selected charges",
-        scope: "selection",
-        disabledReason: null,
-      },
-    ]);
-  });
-
-  it("refuses a charge the server says is not searchable, with its reason or run", () => {
-    const section = composeChargeSearchSection({
-      items: [
-        hunt("4K7M", {
-          merchant: null,
-          transactionDate: null,
-          reason: "Dismissed.",
-        }),
-        hunt("5N8P", {
-          reason: "A search is already running for this charge.",
-          runId: runShortcode.parse("RUN-4K7M"),
-          outcome: "pending",
-        }),
-      ],
-    });
-    expect(section.items?.[0]).toMatchObject({
-      title: "Unknown merchant · Undated",
-      lines: ["Dismissed."],
-      disabledReason: "Dismissed.",
-      badge: null,
-    });
-    expect(section.items?.[1]).toMatchObject({
-      lines: [],
-      badge: "Searching",
-      disabledReason: "A search is already running for this charge.",
-      link: { entity: "run", id: "RUN-4K7M", label: "RUN-4K7M" },
-    });
-  });
-
-  it("says when no charge is waiting", () => {
-    const section = composeChargeSearchSection({ items: [] });
-    expect(section.items).toEqual([]);
-    expect(section.emptyText).toBe(
-      "No statement charge is waiting for an order on this account.",
-    );
-    expect(section.actions).toEqual([]);
   });
 });

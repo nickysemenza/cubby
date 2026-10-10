@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest";
 import { z } from "zod";
 
 import { loadEntityDeclarations } from "../../../scripts/generator/entities/declarations";
+import { valueSchemaForField } from "../../../scripts/generator/entities/render/structured-value-schemas";
 import {
   type EntityForPrefix,
   valueSchemaOf,
@@ -222,10 +223,13 @@ describe("declared structured editors", () => {
     for (const entity of await loadEntityDeclarations()) {
       for (const field of entity.fieldModel.fields) {
         if (!drawsFromValueSchema(entity.key, field)) continue;
-        const schema = field.validation.update ?? field.validation.create;
-        if (!schema) throw new Error(`${entity.key}.${field.key} has no input`);
         expect(() =>
-          valueSchemaOf(schema, `${entity.key}.${field.key}`, noEntity),
+          valueSchemaForField(
+            entity.key,
+            field,
+            `${entity.key}.${field.key}`,
+            noEntity,
+          ),
         ).not.toThrow();
         structured.push(`${entity.key}.${field.key}`);
       }

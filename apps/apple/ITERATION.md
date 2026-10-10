@@ -89,17 +89,15 @@ unlocked Mac session with Accessibility permission is required. Run Mac and
 simulator UI lanes sequentially.
 
 Keep import workflow state in `CubbyKit`: CSV preview and decisions, transaction
-booking/correction review, Run/photo review commands, and the macOS browser bridge
-are shared with the CLI. Matching, categorization, receipt expectations, and
-economic writes remain backend operations. SwiftUI owns presentation, pickers,
+booking/correction review, and Run/photo review commands are shared with the
+CLI. Matching, categorization, receipt expectations, and economic writes remain
+backend operations. SwiftUI owns presentation, pickers,
 confirmation dialogs, and navigation.
 
 Use headless CLI journeys for import behavior and retry coverage. Keep Mac smoke
 tests for file selection, navigation, sign-in controls, and review/save actions;
 use the longer composed Mac journey when a change crosses those UI boundaries.
-The browser CLI shares the real executor and bridge, but browser Apple Events
-still need a permissioned graphical macOS session. CLI/server workflows do not
-need an unlocked screen.
+CLI/server workflows do not need an unlocked screen.
 
 `pnpm test:e2e:sim -- --headless --photo` uploads through Swift, saves the shared
 Run review, and approves those exact proposals through the CLI. It checks the
@@ -205,7 +203,7 @@ copy. It refuses built or existing installed apps that the project team did not
 sign, or a candidate that does not satisfy the installed app's privacy
 requirement. Staged verification precedes termination and replacement, with rollback
 if replacement fails. A previous bundle that cannot be removed is retained
-as a reported sibling backup; it does not prevent relaunch. macOS privacy grants (Photos, browser automation, notifications) record
+as a reported sibling backup; it does not prevent relaunch. macOS privacy grants (Photos) record
 the approving app's designated requirement; an ad-hoc build from a
 `CODE_SIGNING_ALLOWED=NO` command has a per-build requirement, so opening it
 resets those grants and the next signed build asks again.

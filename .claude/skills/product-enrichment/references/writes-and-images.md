@@ -22,17 +22,18 @@ description, source page) for human review — see [product
 identity](product-identity.md) for the exact-id-vs-descriptive rule.
 Enrichment itself never merges without that human confirmation.
 
-For a hosted research resolution, cite the retained exact-variant observation
-and its server-issued image candidate. Establish the purchased item → selected
-variant → representative asset connection. Structured data may help, but a
-visible selected variant can supply that connection. A group-level image alone
-does not prove the ordered variant. The host rechecks current facts, dimensions,
-integrity, identifier ownership and image order before accepting writes. Inspect
-per-claim refusals and preserve the proposed pair when an identifier collides.
+Record why: every fact you write carries a Source (`fieldPath`, `url`, the
+relevant `quote`, `observedAt`, `selectedVariant`), and an attached catalog image
+carries a record-level Source for its page. Establish the purchased item →
+selected variant → representative asset connection; a group-level image alone
+does not prove the ordered variant. Cubby rechecks identifier ownership, gallery
+count and image integrity; inspect per-item refusals and propose a match when an
+identifier collides.
 
-For identifier-only work, each `product_enrichment.patch_external_ids` item upserts one precise
-source/kind slot and removes only an explicitly obsolete value with its exact
-`expectedExternalId`; unrelated IDs survive and a changed live slot refuses the
+For identifier-only work, `entity.update product` with `externalIds` patch items
+adds or replaces one precise source/kind slot (`isPrimary: false` adds a
+secondary) and removes only an explicitly obsolete value whose current ID you
+pass as `expect`; unrelated IDs survive and a changed live slot refuses the
 patch. A full `entity.update product` external-ID set is a deliberate complete
 replacement: preserve every intended ID and remove MCP-only timestamps first.
 

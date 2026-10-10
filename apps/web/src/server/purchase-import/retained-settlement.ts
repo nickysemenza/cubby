@@ -6,12 +6,11 @@ import {
 } from "@cubby/schemas/financial-transaction";
 import {
   parseEntityId,
-  type FinancialTransactionId,
   type LedgerPartyId,
   type PurchaseId,
 } from "@cubby/schemas/identifiers";
 import { createLogger } from "@cubby/worker-tracing";
-import { and, asc, between, eq, inArray, notInArray, sql } from "drizzle-orm";
+import { and, asc, between, eq, inArray, sql } from "drizzle-orm";
 
 import type { Database, DrizzleTransaction } from "~/server/db";
 import {
@@ -19,7 +18,6 @@ import {
   financialAccount,
   financialTransaction,
   financialTransactionAllocation,
-  importHunt,
   importSourceClaim,
   importSourceOrder,
   ledgerParty,
@@ -527,31 +525,12 @@ async function writePlan(
     before,
     actor,
   });
-  await resolveSettledHunts(tx, chargeIds);
   return true;
 }
 
-/** A hunt for a charge that is now settled has nothing left to find. */
-async function resolveSettledHunts(
-  tx: DrizzleTransaction,
-  transactionIds: readonly FinancialTransactionId[],
-) {
-  if (transactionIds.length === 0) return;
-  await tx
-    .update(importHunt)
-    .set({ state: "resolved", updatedAt: new Date() })
-    .where(
-      and(
-        inArray(importHunt.financialTransactionId, [...transactionIds]),
-        notInArray(importHunt.state, ["resolved", "exhausted"]),
-      ),
-    );
-}
-
 /**
- * Before any mailbox or browser hunt, settle each unsettled Purchase whose
- * retained payment lines now meet a charge that arrived later (a statement
- * imported after the order). Only Purchases with an unallocated charge of a
+ * Settle each unsettled Purchase whose retained payment lines now meet a
+ * charge that arrived later (a statement imported after the order). Only Purchases with an unallocated charge of a
  * matching amount near a payment date are visited, each in its own
  * transaction; one failure is logged and never stops the pass.
  */

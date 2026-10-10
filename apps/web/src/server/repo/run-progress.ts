@@ -1,22 +1,9 @@
 import { runShortcode } from "@cubby/schemas/identifiers";
-import {
-  chargeHuntOutcomeOf,
-  mailDiscoveryRunProgress,
-  orderMailImportRunInput,
-  runOrderCandidateState,
-  runStatus,
-} from "@cubby/schemas/run-fields";
-import { and, asc, desc, eq, inArray, sql } from "drizzle-orm";
+import { mailDiscoveryRunProgress, runStatus } from "@cubby/schemas/run-fields";
+import { and, desc, eq, sql } from "drizzle-orm";
 
 import type { Database } from "~/server/db";
-import {
-  financialTransaction,
-  importHunt,
-  run,
-  runOrderCandidate,
-  runProgress,
-} from "~/server/db/schema";
-import { researchChargeHuntIds } from "~/server/purchase-import/research-objective";
+import { run, runProgress } from "~/server/db/schema";
 import { getDb, notDeleted } from "~/server/repo/database-helpers";
 import {
   isWorkflowRunPurpose,
@@ -98,56 +85,8 @@ export async function getRunLiveProgress(
     .where(eq(runProgress.runId, record.run.id))
     .orderBy(desc(runProgress.createdAt), desc(runProgress.id))
     .limit(100);
-  const selected = orderMailImportRunInput.safeParse(record.run.input);
-  const orders =
-    selected.success && "orders" in selected.data
-      ? await database
-          .select({
-            orderId: runOrderCandidate.orderId,
-            state: runOrderCandidate.state,
-          })
-          .from(runOrderCandidate)
-          .where(eq(runOrderCandidate.runId, record.run.id))
-          .orderBy(
-            asc(runOrderCandidate.orderedAt),
-            asc(runOrderCandidate.orderId),
-          )
-      : [];
-  const huntIds = researchChargeHuntIds(record.run.input);
-  const charges = huntIds?.length
-    ? await database
-        .select({
-          chargeId: financialTransaction.shortcode,
-          state: importHunt.state,
-        })
-        .from(importHunt)
-        .innerJoin(
-          financialTransaction,
-          and(
-            eq(financialTransaction.id, importHunt.financialTransactionId),
-            notDeleted(financialTransaction),
-          ),
-        )
-        .where(inArray(importHunt.id, huntIds))
-        .orderBy(
-          asc(financialTransaction.transactionDate),
-          asc(financialTransaction.shortcode),
-        )
-    : [];
   return {
     status: runStatus.parse(record.run.status),
-    savedState:
-      record.run.purpose === "mail_search"
-        ? { input: record.run.input, progress: record.run.progress }
-        : null,
-    charges: charges.map((charge) => ({
-      chargeId: charge.chargeId,
-      outcome: chargeHuntOutcomeOf(charge.state),
-    })),
-    orders: orders.map((order) => ({
-      orderId: order.orderId,
-      state: runOrderCandidateState.parse(order.state),
-    })),
     progress: events.reverse().map((event) => ({
       ...event,
       createdAt: event.createdAt.toISOString(),

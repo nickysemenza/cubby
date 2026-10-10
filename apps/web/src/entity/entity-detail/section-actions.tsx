@@ -6,13 +6,10 @@ import type { DetailRecordOf, GenericDetailEntity } from "./detail-record";
 
 interface SectionActionProps<E extends GenericDetailEntity> {
   record: DetailRecordOf<E>;
-  /** The server's word on the verb: its label, scope and why it is unavailable. */
+  /** The server's word on the verb: its label and why it is unavailable. */
   action: NonNullable<
     Extract<ReportBlock, { kind: "records" }>["verbs"]
   >[number];
-  /** The checked rows, for a `selection` verb. */
-  selection: readonly string[];
-  clearSelection: () => void;
 }
 
 export type SectionActionComponent<E extends GenericDetailEntity> =
@@ -57,18 +54,6 @@ const sectionActions = {
     receiveExpense: action(() =>
       import("~/app/expenses/section-actions").then((m) => ({
         default: m.ReceiveExpenseAction,
-      })),
-    ),
-  },
-  vendorAccount: {
-    syncAccount: action(() =>
-      import("~/app/vendors/account-sync").then((m) => ({
-        default: m.SyncAccountAction,
-      })),
-    ),
-    searchCharges: action(() =>
-      import("~/app/vendors/charge-search").then((m) => ({
-        default: m.SearchChargesAction,
       })),
     ),
   },

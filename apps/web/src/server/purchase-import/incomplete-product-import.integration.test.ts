@@ -1,8 +1,4 @@
-import {
-  userId,
-  parseEntityId,
-  parseShortcodeFor,
-} from "@cubby/schemas/identifiers";
+import { parseEntityId, parseShortcodeFor } from "@cubby/schemas/identifiers";
 import {
   acceptedSourceOrder,
   type ImportWriterInput,
@@ -20,7 +16,6 @@ import {
   product,
   purchase,
   runFinding,
-  user,
 } from "~/server/db/schema";
 import { getDb } from "~/server/repo/database-helpers";
 import { findOrphanedProducts } from "~/server/repo/problems/detectors-product";
@@ -33,16 +28,12 @@ import {
 import { insertWithShortcode } from "~/server/repo/shortcode-utils";
 import { ensureRun } from "~/server/runs/ensure-run";
 
-import {
-  purchasedResearchProducts,
-  startProductResearch,
-} from "./product-research-run";
-import { loadProductPurchaseContext } from "./research-context";
+import { memberImport, type MemberImportOrder } from "./order-import.fixtures";
 import { importVendorOrder } from "./writer";
 
 // Missing money/date must not suppress supported Product identity or manufacture
 // financial/stock rows; replay, an existing identity, and a competing identity
-// must retain their source binding and member visibility fences. A Product merge
+// must retain their source binding. A Product merge
 // must preserve the original variant; removing an editable Purchase link must
 // neither orphan nor permit deleting a Product still named by original evidence.
 // A printed calendar day must not shift through UTC parsing; a true instant uses
@@ -59,7 +50,7 @@ describe("incomplete itemized purchase identity", () => {
       name: "Example variant maker",
     });
     const runId = await ensureRun(ctx.db, ctx.actor, {
-      purpose: "account_sync",
+      purpose: "file_import",
       trigger: "manual",
       status: "running",
     });
@@ -177,9 +168,9 @@ describe("incomplete itemized purchase identity", () => {
   );
 
   it.each(["new", "existing"] as const)(
-    "retains a supported %s Product and original ordered context without an Expense, then admits cloud research",
+    "retains a supported %s Product and original ordered context without an Expense",
     async (kind) => {
-      const { party, input } = await scope();
+      const { input } = await scope();
       const existing =
         kind === "existing"
           ? await insertWithShortcode(ctx.db, "product", {
@@ -240,58 +231,10 @@ describe("incomplete itemized purchase identity", () => {
           .where(eq(importSourceProduct.sourceOrderId, association!.id)),
       ).toMatchObject([{ lineIndex: 0, productId: item.id }]);
       expect(
-        await loadProductPurchaseContext(ctx.db, {
-          productId: item.id,
-          ledgerPartyId: party.id,
-        }),
-      ).toMatchObject([
-        {
-          orderedLine: input.extraction.candidate?.lines[0],
-          currentLine: null,
-          source: { checksum: input.source.checksum },
-          originalExtractions: [input.extraction],
-        },
-      ]);
-      expect(
-        await purchasedResearchProducts(getDb(ctx.db), {
-          productIds: [item.id],
-        }),
-      ).toMatchObject([
-        { productId: item.id, ledgerPartyId: party.id, expenseId: null },
-      ]);
-      const launched = await startProductResearch(
-        ctx.db,
-        {
-          ledgerPartyId: party.id,
-          userId: ctx.actor.userId,
-          productIds: [item.id],
-          cause: "scheduled",
-        },
-        { send: async () => {} },
-      );
-      expect(launched).toHaveLength(1);
-      expect(
         await importVendorOrder(ctx.db, input, ctx.actor.userId),
       ).toMatchObject({ outcome: "replayed", purchaseId: first.purchaseId });
       expect(await getDb(ctx.db).select().from(product)).toHaveLength(1);
       expect(await getDb(ctx.db).select().from(expense)).toEqual([]);
-      const foreignUser = userId.parse(crypto.randomUUID());
-      await getDb(ctx.db).insert(user).values({
-        id: foreignUser,
-        name: "Other example member",
-        email: "incomplete-other@example.test",
-      });
-      const foreign = await insertWithShortcode(ctx.db, "ledgerParty", {
-        name: "Other source owner",
-        kind: "member",
-        userId: foreignUser,
-      });
-      expect(
-        await loadProductPurchaseContext(ctx.db, {
-          productId: item.id,
-          ledgerPartyId: foreign.id,
-        }),
-      ).toEqual([]);
     },
   );
 
@@ -330,8 +273,8 @@ describe("incomplete itemized purchase identity", () => {
     expect(await getDb(ctx.db).select().from(importSourceProduct)).toEqual([]);
   });
 
-  it("preserves original ordered variant and source-only research visibility when the Product merges", async () => {
-    const { party, input } = await scope();
+  it("preserves the original ordered variant when the Product merges", async () => {
+    const { input } = await scope();
     const imported = await importVendorOrder(ctx.db, input, ctx.actor.userId);
     if (!imported.purchaseId) throw new Error("Synthetic Purchase missing");
     const savedPurchaseId = parseEntityId("purchase", imported.purchaseId);
@@ -349,36 +292,6 @@ describe("incomplete itemized purchase identity", () => {
       },
       ctx.actor,
     );
-    expect(
-      await loadProductPurchaseContext(ctx.db, {
-        productId: keeper.id,
-        ledgerPartyId: party.id,
-      }),
-    ).toMatchObject([
-      {
-        orderedLine: {
-          title: "Q-17 blue small device",
-          sku: "Q17-BLUE-SMALL",
-          productUrl: "https://maker.example.test/q17?size=small&color=blue",
-        },
-        currentLine: null,
-        source: { checksum: input.source.checksum },
-        originalExtractions: [input.extraction],
-      },
-    ]);
-    expect(
-      await purchasedResearchProducts(getDb(ctx.db), {
-        productIds: [keeper.id],
-      }),
-    ).toMatchObject([
-      {
-        productId: keeper.id,
-        purchaseId: imported.purchaseId,
-        ledgerPartyId: party.id,
-        expenseId: null,
-        name: "Q-17 blue small device",
-      },
-    ]);
     expect(await listProductPurchases(ctx.db, keeper.id)).toMatchObject([
       { source: "link", movementKinds: [] },
     ]);
@@ -403,12 +316,6 @@ describe("incomplete itemized purchase identity", () => {
       outcome: "replayed",
       purchaseId: imported.purchaseId,
     });
-    expect(
-      await loadProductPurchaseContext(ctx.db, {
-        productId: keeper.id,
-        ledgerPartyId: party.id,
-      }),
-    ).toHaveLength(1);
   });
 
   it("retains a Product through original line evidence when its editable Purchase link is removed", async () => {
@@ -436,4 +343,134 @@ describe("incomplete itemized purchase identity", () => {
       }),
     ).toMatchObject({ deletedAt: null });
   });
+
+  it("keeps expense-only shared-SKU lines stock-neutral", async () => {
+    const { vendor } = await scope();
+    const page = "https://shop.example.test/products/example-jar";
+    const jar = (title: string) => ({
+      title,
+      amount: 5,
+      quantity: 1,
+      sku: "EXAMPLE-JAR-SMALL",
+      productUrl: page,
+      lineKind: "principal" as const,
+    });
+    const { committed } = await memberImport(ctx.db, ctx.actor, {
+      key: "shared-variant",
+      defaultTrade: "other",
+      orders: [
+        {
+          stableOrderId: "shared-variant",
+          vendorId: vendor.shortcode,
+          source: {
+            kind: "receipt_photo",
+            externalKey: "synthetic:shared-variant",
+            checksum: "d".repeat(64),
+          },
+          extraction: {
+            status: "ready",
+            candidate: {
+              orderId: "EXAMPLE-SHARED-VARIANT",
+              orderedAt: "2026-09-01T18:00:00Z",
+              merchant: vendor.name,
+              currency: "USD",
+              printedGrandTotal: 12,
+              lines: [
+                jar("Example small jar"),
+                jar("Example jar, small size"),
+                {
+                  title: "Example meal preparation service",
+                  amount: 2,
+                  quantity: 1,
+                  sku: "EXAMPLE-JAR-SMALL",
+                  lineKind: "principal",
+                },
+              ],
+              payments: [],
+              allShipmentsDelivered: true,
+            },
+          },
+          resolutions: [{ kind: "new" }, { kind: "new" }],
+        },
+      ],
+    });
+    const [saved] = await getDb(ctx.db)
+      .select({ id: purchase.id, runId: purchase.runId })
+      .from(purchase)
+      .where(eq(purchase.shortcode, committed.items[0]!.purchaseId!));
+    const lines = await getDb(ctx.db)
+      .select()
+      .from(expense)
+      .where(eq(expense.purchaseId, saved!.id));
+    const service = lines.find((line) => line.name.endsWith("service"));
+    const physical = lines.filter((line) => line.id !== service?.id);
+    expect(service).toMatchObject({ productId: null, productQuantity: null });
+    expect(physical).toHaveLength(2);
+    const productId = physical[0]?.productId;
+    expect(productId).not.toBeNull();
+    expect(physical).toMatchObject([
+      { productId, productQuantity: 1, url: page },
+      { productId, productQuantity: 1, url: page },
+    ]);
+    expect(lines.reduce((sum, line) => sum + (line.cost ?? 0), 0)).toBe(12);
+    expect(await getDb(ctx.db).select().from(product)).toHaveLength(1);
+    expect(await getDb(ctx.db).select().from(inventoryEntry)).toEqual([]);
+    expect(
+      await getDb(ctx.db)
+        .select({ kind: runFinding.kind })
+        .from(runFinding)
+        .where(eq(runFinding.runId, saved!.runId!)),
+    ).toEqual([{ kind: "arrived" }]);
+  });
+
+  it.each(["date", "total"] as const)(
+    "retains a supported incomplete Purchase with unknown %s without inventing money, Products, or an order identity",
+    async (missing) => {
+      const { vendor } = await scope();
+      const order: MemberImportOrder = {
+        stableOrderId: "incomplete-service",
+        vendorId: vendor.shortcode,
+        source: {
+          kind: "receipt_photo",
+          externalKey: "synthetic:incomplete-service",
+          checksum: "b".repeat(64),
+        },
+        extraction: {
+          status: "ready",
+          candidate: {
+            orderId: null,
+            orderedAt: missing === "date" ? null : "2026-10-01T12:00:00Z",
+            merchant: vendor.name,
+            currency: "USD",
+            printedGrandTotal: missing === "total" ? null : 10,
+            lines: [
+              {
+                title: "Synthetic annual service",
+                amount: 10,
+                quantity: 1,
+                lineKind: "principal",
+              },
+            ],
+            payments: [],
+            allShipmentsDelivered: true,
+          },
+        },
+      };
+      const { committed, commit } = await memberImport(ctx.db, ctx.actor, {
+        key: `incomplete-${missing}`,
+        orders: [order],
+        defaultTrade: "other",
+      });
+      expect(committed.items[0]?.purchaseId).toBeTruthy();
+      expect(await getDb(ctx.db).select().from(expense)).toEqual([]);
+      expect(await getDb(ctx.db).select().from(product)).toEqual([]);
+      expect(await getDb(ctx.db).select().from(importSourceOrder)).toHaveLength(
+        1,
+      );
+      expect(await commit()).toEqual(committed);
+      expect(
+        (await getDb(ctx.db).select().from(purchase))[0]?.orderId,
+      ).toBeNull();
+    },
+  );
 });

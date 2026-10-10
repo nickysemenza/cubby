@@ -11,25 +11,10 @@ export const JOURNEY_NAMES = {
   inventoryShelf: "Synthetic Inventory Shelf",
   boardProjectA: "Synthetic Board Project A",
   boardProjectB: "Synthetic Board Project B",
-  syncVendor: "Synthetic Sync Journey Seeds",
-  restartVendor: "Synthetic Restart Seeds",
-  restartOrderId: "SYN-RESTART-7",
-  enrichVendor: "Synthetic Enrichment Seeds",
-  enrichPhoneVendor: "Synthetic Pocket Seeds",
-  enrichDetailVendor: "Synthetic Ledger Seeds",
-  enrichTargets: [
-    "Synthetic Nasturtium Seed Packet",
-    "Synthetic Tomato Seed Mix",
-    "Synthetic Pepper Seed Packet",
-  ],
-  enrichStep: "Reading Synthetic Pepper Seed Packet",
-  enrichSkip: "The page lists several variants",
 } as const;
 
 /**
- * Synthetic sources the coupled journeys import through the live agent. The
- * account-sync order id is unhyphenated: the order-history classifier only
- * reads `[A-Z0-9]{6,20}` after an "Order" label.
+ * Synthetic sources the coupled journeys import through the live agent.
  */
 export const LIVE_IMPORT = {
   mail: {
@@ -41,21 +26,6 @@ export const LIVE_IMPORT = {
     cents: 500,
     host: "seed-supply.example.test",
     productUrl: "https://seed-supply.example.test/products/genovese-basil-1g",
-  },
-  enrich: {
-    vendor: "Synthetic Sprout Supply",
-    orderId: "SYN-CONFIRM-LIVE-2",
-    item: "Synthetic Sprout Supply Thai basil seed packet, 1 g",
-    cents: 500,
-    host: "sprout-supply.example.test",
-    productUrl: "https://sprout-supply.example.test/products/thai-basil-1g",
-  },
-  sync: {
-    vendor: "Synthetic Trowel Works",
-    host: "shop.example.test",
-    orderId: "SYNSYNC01",
-    item: "Synthetic garden trowel",
-    cents: 1_500,
   },
   // JPEG: cloud description requires a JPEG rendition, and local storage
   // serves `/cdn-cgi/image/` as the original bytes.

@@ -54,10 +54,6 @@ final class AppModel {
     /// accessory, the macOS sidebar, and Activity's "This device" section (replaces the old
     /// `localExecutionLabel`).
     let backgroundActivity = BackgroundActivityCenter()
-    #if os(macOS)
-        let browserBridge = BrowserBridgeSettingsModel()
-        @ObservationIgnored private var browserBridgeController: MacBrowserBridgeController?
-    #endif
     @ObservationIgnored private var companionImageWorker: CompanionImageWorker?
     @ObservationIgnored private var companionImageWorkerGeneration = UUID()
     private(set) var companionImageActivity = CompanionImageWorkerActivity(phase: .stopped)
@@ -234,9 +230,6 @@ final class AppModel {
         self.client = CubbyClient(
             baseURL: url, credentials: credentials, identity: Self.identity, requestObserver: requestTrace)
         self.auth = AuthFlow(baseURL: url, credentials: credentials, identity: Self.identity)
-        #if os(macOS)
-            configureBrowserBridge()
-        #endif
         configureCompanionImageWorker()
         configureBackgroundActivitySources()
         applyParticipationToGates()
@@ -248,8 +241,8 @@ final class AppModel {
         ClientIdentity.currentApp(product: "cubby-apple", installationID: AppInstallationID.current)
     }
 
-    /// Registers this model's long-lived activity sources once. `photoLibrary`/`photoMatches`/
-    /// `browserBridge` are `let` constants that outlive host switches and sign-out (they `reset()`
+    /// Registers this model's long-lived activity sources once. `photoLibrary`/`photoMatches`
+    /// are `let` constants that outlive host switches and sign-out (they `reset()`
     /// in place), so registering them here — rather than in `rebindClients()` — never produces a
     /// stale or duplicate registration. The companion adapter closes over `self` weakly and reads
     /// `companionImageActivity` fresh on every access, so it too survives `configureCompanionImageWorker()`
@@ -268,9 +261,6 @@ final class AppModel {
         backgroundActivity.register(
             cancel: { [weak self] in self?.storedLibraryMetadataSync?.cancel() },
             for: "library-metadata-sync")
-        #if os(macOS)
-            backgroundActivity.register(browserBridge)
-        #endif
     }
 
     /// Opens the SQLite cache at `Application Support/Cubby/PhotoAnalysis.sqlite`, falling back
@@ -304,9 +294,6 @@ final class AppModel {
         model.client = CubbyClient(
             baseURL: baseURL, credentials: model.credentials, identity: Self.identity,
             session: PreviewURLProtocol.session(), requestObserver: model.requestTrace)
-        #if os(macOS)
-            model.configureBrowserBridge()
-        #endif
         model.configureCompanionImageWorker()
         model.credential = signedIn ? credential : nil
         model.phase = signedIn ? .signedIn : .signedOut
@@ -325,9 +312,6 @@ final class AppModel {
         if current != nil {
             warmBrowseCounts()
             await companionImageWorker?.start()
-            #if os(macOS)
-                if participation.automaticWork { await browserBridge.connectConfigured() }
-            #endif
             await syncDeviceParticipation()
             storedLibraryMetadataSync?.setSignedIn(true)
             if participation.automaticWork && UserDefaults.standard.bool(forKey: Self.photoMatchingPendingKey)
@@ -416,9 +400,6 @@ final class AppModel {
         phase = .signedIn
         warmBrowseCounts()
         await companionImageWorker?.start()
-        #if os(macOS)
-            if participation.automaticWork { await browserBridge.connectConfigured() }
-        #endif
         await syncDeviceParticipation()
         storedLibraryMetadataSync?.setSignedIn(true)
         if participation.automaticWork && UserDefaults.standard.bool(forKey: Self.photoMatchingPendingKey) {
@@ -438,9 +419,6 @@ final class AppModel {
         } catch {
             Diagnostics.report(error, context: "imageProcessing.outbox.signOut")
         }
-        #if os(macOS)
-            await browserBridge.disconnect()
-        #endif
         do {
             try await auth.signOut()
         } catch {
@@ -477,9 +455,6 @@ final class AppModel {
                 Task {
                     try? await companionImageWorker?.stopAndDiscardPendingResults()
                 }
-                #if os(macOS)
-                    Task { await browserBridge.disconnect() }
-                #endif
             }
         } else {
             lastError = String(describing: error)
@@ -515,8 +490,8 @@ final class AppModel {
     }
 
     /// The master switch: persists, answers the first-sign-in question if it hasn't been answered
-    /// yet, fans out to every gate (companion socket, library matching, background analysis, the
-    /// macOS browser bridge autoconnect), and mirrors the change onto this install's `Device` row.
+    /// yet, fans out to every gate (companion socket, library matching, background analysis), and
+    /// mirrors the change onto this install's `Device` row.
     /// `photoAnalysisPaused` (Settings' "Pause analysis" toggle) is a separate, temporary pause
     /// within library processing — this never touches it.
     func setParticipation(automaticWork: Bool) {
@@ -587,9 +562,6 @@ final class AppModel {
             baseURL: baseURL, credentials: credentials, identity: Self.identity,
             requestObserver: requestTrace)
         auth = AuthFlow(baseURL: baseURL, credentials: credentials, identity: Self.identity)
-        #if os(macOS)
-            configureBrowserBridge()
-        #endif
         configureCompanionImageWorker()
         // A new host means a new `CubbyClient`/`host` pair — rebuild rather than reuse, same as
         // `configureCompanionImageWorker()` above. Only when the photo subsystem has already
@@ -607,12 +579,6 @@ final class AppModel {
     func setCompanionSceneActive(_ active: Bool) {
         companionSceneActive = active
         Task { await companionImageWorker?.setForeground(active) }
-        #if os(macOS)
-            // The same gate that connects the bridge at sign-in; activation re-lists its roster.
-            if active, phase == .signedIn, participation.automaticWork {
-                browserBridge.appDidBecomeActive()
-            }
-        #endif
     }
 
     func runCompanionJobsInBackground() async -> Bool {
@@ -656,18 +622,6 @@ final class AppModel {
         }
         if let previous { Task { await previous.stop() } }
     }
-
-    #if os(macOS)
-        private func configureBrowserBridge() {
-            let previous = browserBridgeController
-            previous?.invalidateAttention()
-            let controller = MacBrowserBridgeController(
-                baseURL: baseURL, client: client, credentials: credentials, settings: browserBridge)
-            browserBridgeController = controller
-            browserBridge.install(controller: controller)
-            if let previous { Task { await previous.retire() } }
-        }
-    #endif
 
     /// Starts the one cheap dashboard-count request without delaying authentication UI.
     private func warmBrowseCounts() {

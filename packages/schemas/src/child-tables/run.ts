@@ -949,6 +949,12 @@ export const runChildren = [
         reference: { table: "run", column: "id" },
       },
       {
+        key: "vendorId",
+        kind: "uuid",
+        type: "VendorId",
+        reference: { table: "vendor", column: "id" },
+      },
+      {
         key: "targetPurchaseId",
         kind: "uuid",
         type: "PurchaseId",
@@ -982,7 +988,12 @@ export const runChildren = [
         default: { now: true },
       },
     ],
-    types: [{ module: "@cubby/schemas/identifiers", exports: ["PurchaseId"] }],
+    types: [
+      {
+        module: "@cubby/schemas/identifiers",
+        exports: ["PurchaseId", "VendorId"],
+      },
+    ],
     indexes: [
       {
         name: "ImportPreparedOrder_run_item_operation_key",

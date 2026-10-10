@@ -2,7 +2,7 @@ import { writeFileSync } from "node:fs";
 import path from "node:path";
 import type { Pool } from "pg";
 
-import { startSyntheticSyncRun } from "./native-qa";
+import { startSyntheticRun } from "./native-qa";
 
 /**
  * The ordinary-Run "see it stop" guard for the native QA lane. Native has no stop command, so
@@ -18,7 +18,7 @@ export async function runNativeRunStopJourney(input: {
   /** Replays one `apps/apple/e2e` journey with these `-e` variables, without relaunching. */
   replay: (journey: string, variables: Record<string, string>) => Promise<void>;
 }): Promise<string> {
-  const run = await startSyntheticSyncRun(input.pool, input.userId, "Stop");
+  const run = await startSyntheticRun(input.pool, input.userId, "Stop");
   const variables = { STOP_RUN_ID: run.publicId };
   await input.replay("run-stop-live.ad", variables);
   // The same transition a household cancel makes (`controlRun` "cancel").
@@ -36,7 +36,7 @@ export async function runNativeRunStopJourney(input: {
     `${JSON.stringify(
       {
         run: run.publicId,
-        purpose: "account_sync",
+        purpose: "photo_inventory",
         transition: "running -> failed (user_cancelled), server-side",
         observed: "the open native Run detail redrew the stopped state",
       },

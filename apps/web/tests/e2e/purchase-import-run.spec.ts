@@ -14,7 +14,10 @@ import { BROWSER_OPERATION_PATH } from "~/lib/browser-operation-path";
 import { getDb } from "~/server/repo/database-helpers";
 
 import {
+  call,
   from,
+  mcp,
+  mcpRead,
   type ScriptStep,
   type ScriptValue,
 } from "../../tooling/purchase-agent-script";
@@ -28,90 +31,121 @@ import { seedUnimportedOrderMail } from "./fixtures-mail";
 import { gotoAuthenticatedPage } from "./e2e-helpers";
 import { expect, test } from "./e2e-test";
 
-// Only external model judgment is scripted. The shared admission, researcher
-// tools, retained source checks, report commands and writer run in the Worker.
+// Only external model judgment is scripted. Admission, Pi's tools, in-process
+// MCP (imports_read.mail, purchase_import, mail.resolve), the report commands
+// and the writer run in the Worker.
 test.use({ workerdProfile: "purchase-agent" });
 
-const step = (
-  id: string,
-  tool: string,
-  args: Record<string, ScriptValue> = {},
-): ScriptStep => ({ call: id, tool, args });
-const researchOrder = (
+type Seed = Awaited<ReturnType<typeof seedUnimportedOrderMail>>;
+
+type Source = { mailboxId: string; messageId: string; orderId: string };
+
+/** Claim the next Email, read it, then prepare and commit its one order. */
+function importOrder(
   prefix: string,
-  { vendor, itemTitle }: Awaited<ReturnType<typeof seedUnimportedOrderMail>>,
-  orderId: string,
-  gate?: string,
-  productRef?: ScriptValue,
-): ScriptStep[] => [
-  step(`${prefix}-next`, "work_next"),
-  step(`${prefix}-read`, "mail_read", {
-    workRef: from(`${prefix}-next`, "work.workRef"),
-    messageRef: from(`${prefix}-next`, "work.sources.0.messageRef"),
-  }),
-  ...(gate ? [{ gate }] : []),
-  step(`${prefix}-resolve`, "work_resolve", {
-    workRef: from(`${prefix}-next`, "work.workRef"),
-    status: "verified",
-    identity: {
-      evidenceIds: [from(`${prefix}-read`, "evidenceId")],
-      reasoning:
-        "The retained itemized original identifies this order and its printed total.",
-    },
-    orders: [
+  { vendor, itemTitle }: Seed,
+  source: Source,
+  options: { gate?: string; productId?: ScriptValue } = {},
+): ScriptStep[] {
+  const checksum = from(`${prefix}-read`, "checksum");
+  return [
+    call(`${prefix}-claim`, "claim_next_import_work"),
+    { check: `${prefix}-claim`, includes: source.messageId },
+    mcpRead(`${prefix}-read`, "imports_read", {
+      action: "mail",
+      mailboxId: source.mailboxId,
+      messageId: source.messageId,
+    }),
+    ...(options.gate ? [{ gate: options.gate }] : []),
+    mcp(
+      `${prefix}-prepare`,
+      "purchase_import",
+      { $runId: true },
       {
-        vendorRef: vendor.shortcode,
-        evidenceIds: [from(`${prefix}-read`, "evidenceId")],
-        reasoning: `The original supports ${orderId}, one herb packet and its printed five-dollar total.`,
-        candidate: {
-          orderId,
-          orderedAt: "2026-09-10T15:00:00Z",
-          merchant: vendor.name,
-          currency: "USD",
-          printedGrandTotal: 5,
-          lines: [
-            {
-              title: itemTitle,
-              amount: 5,
-              lineKind: "principal",
-              quantity: 1,
-              sku: "HERB-1",
+        action: "prepare",
+        orders: [
+          {
+            vendorId: vendor.shortcode,
+            stableOrderId: `${prefix}-order`,
+            itemOperationId: `${prefix}-prepare:order`,
+            source: {
+              kind: "mail_message",
+              externalKey: `gmail:${source.mailboxId}:${source.messageId}`,
+              checksum,
             },
-          ],
-          payments: [],
-          allShipmentsDelivered: false,
-        },
-        productResolutions: [
-          productRef
-            ? { kind: "existing", lineIndex: 0, productId: productRef }
-            : { kind: "new", lineIndex: 0 },
+            evidenceChecksum: checksum,
+            extractionRevision: "synthetic@1",
+            extraction: {
+              status: "ready",
+              candidate: {
+                orderId: source.orderId,
+                orderedAt: "2026-09-10T15:00:00.000Z",
+                merchant: vendor.name,
+                currency: "USD",
+                printedGrandTotal: 5,
+                lines: [
+                  {
+                    title: itemTitle,
+                    amount: 5,
+                    lineKind: "principal",
+                    quantity: 1,
+                    sku: "HERB-1",
+                  },
+                ],
+                payments: [],
+                allShipmentsDelivered: false,
+              },
+            },
+            lineIds: [`${prefix}-order:line-1`],
+            primaryDocumentImageId: null,
+            screenshotImageId: null,
+          },
         ],
       },
-    ],
-    detail: `Imported ${orderId} from the retained original without receiving stock.`,
-  }),
-];
-const supportedOrder = {
-  identityVerified: true,
-  acceptedFacts: [],
-  acceptedIdentifiers: [],
-  acceptedImages: [],
-  acceptedOrders: [0],
-  acceptedEmailLinks: [],
-  rejected: [],
-};
-const productGapSteps: ScriptStep[] = [
-  step("product-next", "work_next"),
-  step("product-gap", "work_resolve", {
-    workRef: from("product-next", "work.workRef"),
-    status: "no_source_found",
-    identity: {
-      evidenceIds: [],
-      reasoning:
-        "Synthetic catalog gap: this fixture supplies no catalog original.",
-    },
-    detail: "Synthetic catalog gap: no product enrichment source was supplied.",
-  }),
+    ),
+    mcp(
+      `${prefix}-commit`,
+      "purchase_import",
+      { $runId: true },
+      {
+        action: "commit",
+        prepareOperationId: `${prefix}-prepare`,
+        defaultTrade: "other",
+        resolutions: [
+          {
+            stableOrderId: `${prefix}-order`,
+            stableLineId: `${prefix}-order:line-1`,
+            resolution: options.productId
+              ? { kind: "existing", productId: options.productId }
+              : { kind: "new" },
+          },
+        ],
+      },
+    ),
+    { check: `${prefix}-commit`, includes: "created" },
+  ];
+}
+/** Retained originals in the order Pi claims them (received time, then id). */
+async function claimOrder(seed: Seed): Promise<Source[]> {
+  const rows = await getDb(getFixtureDb())
+    .select()
+    .from(schema.orderMail)
+    .where(
+      inArray(
+        schema.orderMail.id,
+        seed.events.map(({ orderMailId }) => orderMailId),
+      ),
+    )
+    .orderBy(schema.orderMail.receivedAt, schema.orderMail.id);
+  return rows.map((row) => ({
+    mailboxId: row.mailboxId,
+    messageId: row.messageId,
+    orderId: seed.events.find((event) => event.orderMailId === row.id)!.orderId,
+  }));
+}
+const finished = (prefix: string): ScriptStep[] => [
+  call(`${prefix}-done`, "claim_next_import_work"),
+  { check: `${prefix}-done`, includes: "none" },
 ];
 
 function controls(purchaseAgent: ScenarioControls | undefined) {
@@ -121,7 +155,7 @@ function controls(purchaseAgent: ScenarioControls | undefined) {
 
 async function authorizeSeed(
   context: Awaited<ReturnType<typeof createEvidenceHarnessContext>>,
-  seed: Awaited<ReturnType<typeof seedUnimportedOrderMail>>,
+  seed: Seed,
 ) {
   const [source] = await getDb(context.db)
     .select()
@@ -160,7 +194,6 @@ async function vendorPurchases(
     ? await db
         .select({
           purchaseId: schema.importSourceOrder.purchaseId,
-          sourceClaimId: schema.importSourceClaim.id,
           externalKey: schema.importSourceClaim.externalKey,
         })
         .from(schema.importSourceOrder)
@@ -203,48 +236,13 @@ test("imports saved order mail from the generic Vendor report and follows the li
   );
   await authorizePurchaseAgent(getFixtureDb(), await fixtureUserId(page));
   await authorizeSeed(await createEvidenceHarnessContext(page), seed);
+  const [claimed] = await claimOrder(seed);
+  if (!claimed) throw new Error("Seeded original is missing");
   await agent.configure({
-    expectedInference: {
-      model: "gpt-6-luna",
-      effort: "medium",
-      afterCall: { call: "mail-refused", model: "gpt-6-sol", effort: "low" },
-    },
+    expectedInference: { model: "gpt-6-luna", effort: "medium" },
     steps: [
-      ...researchOrder("mail", seed, "SYN-CONFIRM-1", "original-read").slice(
-        0,
-        -1,
-      ),
-      step("mail-refused", "work_resolve", {
-        workRef: from("mail-next", "work.workRef"),
-        status: "verified",
-        identity: {
-          evidenceIds: [from("mail-read", "evidenceId")],
-          reasoning:
-            "Synthetic first identity refusal: identity remains unsupported.",
-        },
-        detail: "The first observation needs further identity research.",
-      }),
-      ...researchOrder("mail", seed, "SYN-CONFIRM-1").slice(-1),
-    ],
-    purposeSteps: { product_enrichment: productGapSteps },
-    assessments: [
-      {
-        match: "Synthetic first identity refusal",
-        output: {
-          ...supportedOrder,
-          identityVerified: false,
-          acceptedOrders: [],
-        },
-      },
-      { match: "printed five-dollar total", output: supportedOrder },
-      {
-        match: "Synthetic catalog gap",
-        output: {
-          ...supportedOrder,
-          identityVerified: false,
-          acceptedOrders: [],
-        },
-      },
+      ...importOrder("mail", seed, claimed, { gate: "original-read" }),
+      ...finished("mail"),
     ],
   });
   await gotoAuthenticatedPage(
@@ -261,6 +259,7 @@ test("imports saved order mail from the generic Vendor report and follows the li
     .from(schema.orderMail)
     .where(eq(schema.orderMail.id, seed.events[0]!.orderMailId));
   if (!source?.content?.bodyText) throw new Error("Seeded original is missing");
+  // A changed original refuses the stale command and admits nothing.
   const bodyText = `${source.content.bodyText} Reference reissued.`;
   const checksum = await sha256Hex(bodyText);
   await db
@@ -297,7 +296,7 @@ test("imports saved order mail from the generic Vendor report and follows the li
     "/runs/",
     "",
   );
-  if (!runShortcode) throw new Error("Research result has no Run");
+  if (!runShortcode) throw new Error("Import result has no Run");
   await runLink.click();
   await expect(page).toHaveURL(new RegExp(`/runs/${runShortcode}$`, "u"));
   await expect(
@@ -307,18 +306,18 @@ test("imports saved order mail from the generic Vendor report and follows the li
   expect((await vendorPurchases(seed.vendor.id)).purchases).toEqual([]);
   await agent.release("original-read");
   await expect
-    .poll(async () => completedRun(runShortcode), {
-      timeout: 30_000,
-    })
+    .poll(async () => completedRun(runShortcode), { timeout: 30_000 })
     .toBe("completed");
   const run = await runByShortcode(runShortcode);
   const graph = await vendorPurchases(seed.vendor.id);
   expect(graph.purchases).toMatchObject([{ orderId: "SYN-CONFIRM-1" }]);
   expect(graph.expenses).toMatchObject([{ cost: 5, lineKind: "principal" }]);
-  expect(graph.claims).toHaveLength(1);
-  expect(graph.claims[0]?.externalKey).toBe(
-    `gmail:${source.mailboxId}:${source.messageId}`,
-  );
+  expect(graph.claims).toEqual([
+    {
+      purchaseId: graph.purchases[0]!.id,
+      externalKey: `gmail:${source.mailboxId}:${source.messageId}`,
+    },
+  ]);
   expect(
     await db
       .select({
@@ -329,6 +328,12 @@ test("imports saved order mail from the generic Vendor report and follows the li
       .from(schema.mailboxMessage)
       .where(eq(schema.mailboxMessage.orderMailId, source.id)),
   ).toEqual([{ runId: run.id, status: "completed", checksum }]);
+  expect(
+    await db
+      .select({ state: schema.runTarget.state })
+      .from(schema.runTarget)
+      .where(eq(schema.runTarget.runId, run.id)),
+  ).toEqual([{ state: "completed" }]);
   const productId = graph.expenses[0]?.productId;
   if (!productId) throw new Error("The imported line has no Product");
   expect(
@@ -337,7 +342,6 @@ test("imports saved order mail from the generic Vendor report and follows the li
       .from(schema.inventoryEntry)
       .where(eq(schema.inventoryEntry.productId, productId)),
   ).toEqual([]);
-  await expect.poll(async () => agent.emitted()).toContain("product-gap");
   expect(await agent.violations()).toEqual([]);
   const purchase = graph.purchases[0];
   if (!purchase) throw new Error("No Purchase was committed");
@@ -356,7 +360,7 @@ test("imports saved order mail from the generic Vendor report and follows the li
   ).toHaveAttribute("href", `/runs/${runShortcode}`);
 });
 
-test("admits several retained confirmations as separate tasks in the same research Run", async ({
+test("admits several retained confirmations as separate tasks in the same Run", async ({
   page,
   e2eRuntime,
 }) => {
@@ -366,47 +370,22 @@ test("admits several retained confirmations as separate tasks in the same resear
     `Synthetic batch import vendor ${Date.now()}`,
     2,
   );
-  const [first, second] = seed.events;
-  if (!first || !second) throw new Error("Missing seeded confirmations");
   await authorizePurchaseAgent(getFixtureDb(), await fixtureUserId(page));
   await authorizeSeed(await createEvidenceHarnessContext(page), seed);
+  const [first, second] = await claimOrder(seed);
+  if (!first || !second) throw new Error("Missing seeded confirmations");
   await agent.configure({
-    steps: researchOrder("first", seed, first.orderId).slice(0, 2),
-    sourceSteps: [
-      ...seed.events.map(({ orderId }) => ({
-        call: "second-read",
-        path: "observation.readableText",
-        includes: orderId,
-        steps: researchOrder(
-          "second",
-          seed,
-          orderId,
-          undefined,
-          from("first-resolve", "resolution.productRefs.0"),
-        ).slice(2),
-      })),
-      ...seed.events.map(({ orderId }) => ({
-        call: "first-read",
-        path: "observation.readableText",
-        includes: orderId,
-        steps: [
-          { gate: "batch-admitted" },
-          ...researchOrder("first", seed, orderId).slice(2),
-          ...researchOrder("second", seed, orderId).slice(0, 2),
-        ],
-      })),
-    ],
-    purposeSteps: { product_enrichment: productGapSteps },
-    assessments: [
-      { match: "printed five-dollar total", output: supportedOrder },
-      {
-        match: "Synthetic catalog gap",
-        output: {
-          ...supportedOrder,
-          identityVerified: false,
-          acceptedOrders: [],
-        },
-      },
+    steps: [
+      ...importOrder("first", seed, first, { gate: "batch-admitted" }),
+      // The second order reuses the Product the first created: prepare
+      // returns it as the line's candidate.
+      ...importOrder("second", seed, second, {
+        productId: from(
+          "second-prepare",
+          "orders.0.lines.0.candidates.0.productId",
+        ),
+      }),
+      ...finished("batch"),
     ],
   });
   const response = await page.request.post(BROWSER_OPERATION_PATH, {
@@ -429,14 +408,15 @@ test("admits several retained confirmations as separate tasks in the same resear
   const runShortcode = runIds[0]!;
   const run = await runByShortcode(runShortcode);
   const db = getDb(getFixtureDb());
+  // One RunTarget per admitted Email.
   expect(
     await db
-      .select({ sourceId: schema.runTarget.sourceExternalKey })
+      .select({ workKey: schema.runTarget.workKey })
       .from(schema.runTarget)
       .where(eq(schema.runTarget.runId, run.id)),
   ).toEqual(
     expect.arrayContaining(
-      seed.events.map(({ orderMailId }) => ({ sourceId: orderMailId })),
+      seed.events.map(({ orderMailId }) => ({ workKey: orderMailId })),
     ),
   );
   await gotoAuthenticatedPage(
@@ -451,15 +431,12 @@ test("admits several retained confirmations as separate tasks in the same resear
   await expect(page).toHaveURL(new RegExp(`/runs/${runShortcode}$`, "u"));
   await agent.release("batch-admitted");
   await expect
-    .poll(async () => completedRun(runShortcode), {
-      timeout: 30_000,
-    })
+    .poll(async () => completedRun(runShortcode), { timeout: 30_000 })
     .toBe("completed");
   const graph = await vendorPurchases(seed.vendor.id);
-  expect(graph.purchases.map(({ orderId }) => orderId)).toEqual([
-    first.orderId,
-    second.orderId,
-  ]);
+  expect(graph.purchases.map(({ orderId }) => orderId)).toEqual(
+    seed.events.map(({ orderId }) => orderId).sort(),
+  );
   expect(graph.expenses.map(({ cost }) => cost)).toEqual([5, 5]);
   expect(new Set(graph.expenses.map(({ productId }) => productId)).size).toBe(
     1,

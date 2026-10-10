@@ -1,14 +1,10 @@
 import {
-  chargeRunStartInput,
-  chargeRunStartOut,
   orderMailImportInput,
   orderMailImportOut,
   orderMailImportSelectedInput,
   orderMailDecisionInput,
   orderMailDecisionOut,
   purchaseOrderMailOut,
-  vendorChargeHuntsInput,
-  vendorChargeHuntsOut,
   vendorOrderMailInput,
 } from "@cubby/schemas/order-mail-review";
 import {
@@ -19,18 +15,10 @@ import {
   vendorCoverageOut,
   vendorOut,
 } from "@cubby/schemas/vendor";
-import { browserBridgeAccountsOut } from "@cubby/schemas/vendor-account";
-import { z } from "zod";
 
 import { defineContract, mutation, query } from "~/contracts/define";
 
 export const vendorContract = defineContract("vendor", {
-  browserAccounts: query({
-    native: "List this member's eligible browser bridge accounts",
-    mcp: { omit: "device_protocol" },
-    input: z.object({}),
-    output: browserBridgeAccountsOut,
-  }),
   orderMail: query({
     mcp: {
       omit: "deferred_capability",
@@ -61,17 +49,6 @@ export const vendorContract = defineContract("vendor", {
     input: orderMailImportSelectedInput,
     output: orderMailImportOut,
     invalidates: ["vendor"],
-  }),
-  chargeHunts: query({
-    input: vendorChargeHuntsInput,
-    output: vendorChargeHuntsOut,
-    cache: { tags: [["vendor"], ["run"]] },
-  }),
-  startChargeRun: mutation({
-    native: "Start one browser run for the selected statement charges",
-    input: chargeRunStartInput,
-    output: chargeRunStartOut,
-    invalidates: ["vendor", "runOnly"],
   }),
   decideOrderMail: mutation({
     mcp: {

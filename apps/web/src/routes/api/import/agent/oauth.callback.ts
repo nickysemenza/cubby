@@ -1,3 +1,4 @@
+import { agentImportRunPurpose } from "@cubby/schemas/import-run-agent";
 import type { PurchaseAgentEvent } from "@cubby/schemas/purchase-import";
 import { createFileRoute } from "@tanstack/react-router";
 import { z } from "zod";
@@ -129,9 +130,7 @@ async function dispatchResumedRuns(
         await queue.send({
           version: 1,
           runId: run.id,
-          purpose: z
-            .enum(["account_sync", "product_enrichment", "purchase_validation"])
-            .parse(run.purpose),
+          purpose: agentImportRunPurpose.parse(run.purpose),
           eventId: run.eventId,
           type: "start_or_resume",
         });

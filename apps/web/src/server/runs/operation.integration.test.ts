@@ -1,21 +1,11 @@
-import {
-  commitProductEnrichmentInput,
-  commitPurchaseImportInput,
-  validatePurchaseImportInput,
-} from "@cubby/schemas/purchase-import";
+import { commitPurchaseImportInput } from "@cubby/schemas/purchase-import";
 import { sha256Hex, sha256Uuid } from "@cubby/shared/sha256";
 import { fromPartial } from "@total-typescript/shoehorn";
 import { and, eq, sql } from "drizzle-orm";
 import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 
-import {
-  product,
-  run as runTable,
-  runApproval,
-  runOperation,
-  runTarget,
-} from "~/server/db/schema";
+import { run as runTable, runApproval, runOperation } from "~/server/db/schema";
 import { McpOperationContext } from "~/server/mcp/operation-context";
 import {
   executePurchaseAgentMutation,
@@ -23,23 +13,12 @@ import {
 } from "~/server/mcp/purchase-agent-protocol";
 import type { ToolExtra } from "~/server/mcp/tools/tool-registration";
 import {
-  commitProductEnrichment,
   commitPurchaseImport,
   preparePurchaseImport,
-  validatePurchaseImport,
 } from "~/server/purchase-import/import-orders";
-import { admitProductResearch } from "~/server/purchase-import/product-research-run";
-import { admitPurchaseValidationResearch } from "~/server/purchase-import/purchase-validation-research";
-import {
-  controlRun,
-  startOrResumeRun,
-} from "~/server/purchase-import/run-service";
-import { applyValidationCorrections } from "~/server/purchase-import/validation-corrections";
+import { startAgentRunFixture } from "~/server/purchase-import/import-run.fixtures";
+import { controlRun } from "~/server/purchase-import/run-service";
 import { getDb } from "~/server/repo/database-helpers";
-import {
-  createProductFixture,
-  makeProductInput,
-} from "~/server/repo/repo.fixtures";
 import { insertDebugEventOperations } from "~/server/repo/run-operation";
 import { insertWithShortcode } from "~/server/repo/shortcode-utils";
 import { requireActor } from "~/server/request-context";
@@ -64,20 +43,8 @@ describe("RunOperation rows written by earlier code", () => {
       kind: "member",
       userId: ctx.actor.userId,
     });
-    const vendor = await insertWithShortcode(ctx.db, "vendor", {
-      name: `Synthetic ledger vendor ${crypto.randomUUID()}`,
-      website: "https://shop.example.test/orders",
-      browserDomains: ["shop.example.test"],
-    });
-    const account = await insertWithShortcode(ctx.db, "vendorAccount", {
-      label: "Synthetic ledger account",
-      vendorId: vendor.id,
+    const run = await startAgentRunFixture(ctx.db, {
       ledgerPartyId: party.id,
-    });
-    const run = await startOrResumeRun(ctx.db, {
-      ledgerPartyId: party.id,
-      vendorAccountId: account.id,
-      trigger: "manual",
     });
     return { party, run };
   };
@@ -242,6 +209,7 @@ describe("RunOperation rows written by earlier code", () => {
       actorLedgerPartyShortcode: party.shortcode,
       actorLedgerPartyName: party.name,
       actorLedgerPartyKind: party.kind,
+      purpose: "mail_import",
       trigger: "manual",
       agentSessionId: "synthetic-paused-session",
       status: "paused_approval",
@@ -401,71 +369,6 @@ describe("RunOperation rows written by earlier code", () => {
     expect(executions()).toBe(1);
   });
 
-  it("replays a product enrichment commit by its parsed-input fingerprint", async () => {
-    const { party } = await startRun();
-    const vendor = await insertWithShortcode(ctx.db, "vendor", {
-      name: `Synthetic enrichment vendor ${crypto.randomUUID()}`,
-      website: "https://shop.example.test",
-      browserDomains: ["shop.example.test"],
-    });
-    const target = await createProductFixture(
-      ctx.db,
-      makeProductInput({ name: `Synthetic enrichment ${crypto.randomUUID()}` }),
-      ctx.actor,
-    );
-    const [productRow] = await getDb(ctx.db)
-      .select({ shortcode: product.shortcode })
-      .from(product)
-      .where(eq(product.id, target.entityId));
-    const account = await insertWithShortcode(ctx.db, "vendorAccount", {
-      label: "Synthetic replay transport",
-      vendorId: vendor.id,
-      ledgerPartyId: party.id,
-      browserSyncEnabled: true,
-    });
-    const [started] = await admitProductResearch(ctx.db, {
-      ledgerPartyId: party.id,
-      userId: ctx.actor.userId,
-      productIds: [target.entityId],
-      preferredBrowserAccountId: account.id,
-      cause: "member_request",
-    });
-    if (!started?.created) throw new Error("Expected enrichment admission");
-    const input = commitProductEnrichmentInput.parse({
-      _runExecution: { runId: started.run.id, operationId: "enrich:1" },
-      productId: productRow!.shortcode,
-      targetFingerprint: "c".repeat(64),
-      changes: { manufacturer: "Synthetic Works" },
-    });
-    const recorded = {
-      runId: started.run.shortcode,
-      operationId: "enrich:1",
-      productId: productRow!.shortcode,
-      status: "running",
-      changedFields: ["manufacturer"],
-      skippedIdentifiers: [],
-    };
-    await seed({
-      runId: started.run.id,
-      operationId: "enrich:1",
-      kind: "commit_product_enrichment",
-      inputFingerprint: await sha256Hex(JSON.stringify(input)),
-      state: "completed",
-      result: recorded,
-      completedAt: new Date(),
-    });
-
-    await expect(
-      commitProductEnrichment(ctx.db, input, ctx.actor),
-    ).resolves.toEqual(recorded);
-    // Replay performed no write: the Product keeps its blank manufacturer.
-    const [after] = await getDb(ctx.db)
-      .select({ manufacturer: product.manufacturer })
-      .from(product)
-      .where(eq(product.id, target.entityId));
-    expect(after?.manufacturer ?? "").not.toBe("Synthetic Works");
-  });
-
   it("ignores a re-sent device debug-event batch instead of duplicating it", async () => {
     const { run } = await startRun();
     const event = {
@@ -510,7 +413,7 @@ describe("RunOperation rows written by earlier code", () => {
         stableOrderId: "order-1",
         itemOperationId: "prepare-item:order-1",
         source: {
-          kind: "browser_order" as const,
+          kind: "vendor_export" as const,
           externalKey: "shop:order:1",
           checksum: "a".repeat(64),
         },
@@ -587,139 +490,5 @@ describe("RunOperation rows written by earlier code", () => {
       .from(runTable)
       .where(eq(runTable.id, run.id));
     expect(after?.status).toBe("needs_review");
-  });
-
-  it("replays validation and correction rows by their own fingerprints without writing", async () => {
-    const { party } = await startRun();
-    const vendor = await insertWithShortcode(ctx.db, "vendor", {
-      name: `Synthetic validation vendor ${crypto.randomUUID()}`,
-      website: "https://shop.example.test",
-      browserDomains: ["shop.example.test"],
-    });
-    const target = await insertWithShortcode(ctx.db, "purchase", {
-      vendorId: vendor.id,
-      orderId: "ORDER-LEDGER-1",
-      date: "2026-09-20",
-      statedTotal: 10,
-    });
-    const started = await admitPurchaseValidationResearch(ctx.db, {
-      ledgerPartyId: party.id,
-      userId: ctx.actor.userId,
-      purchaseIds: [target.id],
-    });
-    if (!started.created) throw new Error("Expected validation admission");
-    const setStatus = (status: "running" | "needs_review") =>
-      getDb(ctx.db)
-        .update(runTable)
-        .set({ status })
-        .where(eq(runTable.id, started.row.id));
-    const targetRow = () =>
-      getDb(ctx.db)
-        .select({
-          state: runTarget.state,
-          outcome: runTarget.outcome,
-          diff: runTarget.diff,
-        })
-        .from(runTarget)
-        .where(eq(runTarget.runId, started.row.id));
-    const targetBefore = await targetRow();
-
-    // Validation fingerprints its whole parsed input, envelope first.
-    await setStatus("running");
-    const validationResult = {
-      runId: started.row.shortcode,
-      operationId: "validate:1",
-      status: "completed",
-      targets: [{ stableOrderId: "order-1", outcome: "replayed", diff: null }],
-    };
-    await seed({
-      runId: started.row.id,
-      operationId: "validate:1",
-      kind: "validate_purchase_import",
-      inputFingerprint: await sha256Hex(
-        JSON.stringify({
-          _runExecution: { runId: started.row.id, operationId: "validate:1" },
-          prepareOperationId: "prepare:1",
-          resolutions: [],
-        }),
-      ),
-      state: "completed",
-      result: validationResult,
-      completedAt: new Date(),
-    });
-    const validate = (prepareOperationId: string) =>
-      validatePurchaseImport(
-        ctx.db,
-        validatePurchaseImportInput.parse({
-          _runExecution: { runId: started.row.id, operationId: "validate:1" },
-          prepareOperationId,
-          resolutions: [],
-        }),
-        ctx.actor,
-      );
-    await expect(validate("prepare:1")).resolves.toEqual(validationResult);
-    await expect(validate("prepare:2")).rejects.toThrow(
-      "Operation id was replayed with different input",
-    );
-
-    // Corrections fingerprint the input with its selection deduplicated and
-    // sorted in place, so a reordered selection is the same operation.
-    await setStatus("needs_review");
-    const correctionResult = {
-      status: "applied",
-      runId: started.row.shortcode,
-      purchaseId: target.shortcode,
-      operationId: "apply:1",
-      applied: ["expense:add:a", "purchase:statedTotal"],
-      outcome: "replayed",
-      remainingCorrections: 0,
-    };
-    await seed({
-      runId: started.row.id,
-      operationId: "apply:1",
-      kind: "apply_validation_corrections",
-      inputFingerprint: await sha256Hex(
-        JSON.stringify({
-          runId: started.row.shortcode,
-          purchaseId: target.shortcode,
-          operationId: "apply:1",
-          correctionIds: ["expense:add:a", "purchase:statedTotal"],
-        }),
-      ),
-      state: "completed",
-      result: correctionResult,
-      completedAt: new Date(),
-    });
-    const apply = (correctionIds: string[]) =>
-      applyValidationCorrections(
-        ctx.db,
-        {
-          runId: started.row.shortcode,
-          purchaseId: target.shortcode,
-          operationId: "apply:1",
-          correctionIds,
-        },
-        ctx.actor,
-      );
-    await expect(
-      apply(["purchase:statedTotal", "expense:add:a", "purchase:statedTotal"]),
-    ).resolves.toEqual({
-      result: correctionResult,
-      priceAffectedProductIds: [],
-    });
-    await expect(apply(["purchase:statedTotal"])).rejects.toThrow(
-      "Operation id was replayed with different input",
-    );
-
-    // Neither replay touched the target or added a ledger row.
-    expect(await targetRow()).toEqual(targetBefore);
-    const rows = await getDb(ctx.db)
-      .select({ operationId: runOperation.operationId })
-      .from(runOperation)
-      .where(eq(runOperation.runId, started.row.id));
-    expect(rows.map((row) => row.operationId).sort()).toEqual([
-      "apply:1",
-      "validate:1",
-    ]);
   });
 });

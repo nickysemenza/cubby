@@ -495,15 +495,13 @@ describe("MCP catalog schemas", () => {
       "purchase_import.prepareOperationId",
       "purchase_import.resolutions[].stableOrderId",
       "purchase_import.resolutions[].stableLineId",
-      // Run-scoped evidence ids address immutable operational captures, not
-      // public Cubby entities.
-      "product_enrichment.changes.identifiers[].evidenceId",
-      "product_enrichment.changes.image.evidenceId",
-      // An import source claim has no shortcode; imports_read.run_launch_preview
-      // returns its opaque id, and the start re-checks it against the
-      // member's own claims.
-      "run.sourceId",
-      "run.targets[].sourceId",
+      // Email is addressed by its connected mailbox and Gmail message and
+      // attachment ids, so a caller's own Gmail connector can correlate it.
+      "imports_read.mailboxId",
+      "imports_read.messageId",
+      "imports_read.attachmentId",
+      "mail.mailboxId",
+      "mail.messageId",
     ]);
     const freeTextIds = new Set([
       "orderId",

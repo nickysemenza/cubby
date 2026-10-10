@@ -225,6 +225,13 @@
       "when": 1791622186137,
       "tag": "0031_derived_ddl",
       "breakpoints": true
+    },
+    {
+      "idx": 32,
+      "version": "7",
+      "when": 1791661337457,
+      "tag": "0032_entity_source_and_mail_stage",
+      "breakpoints": true
     }
   ]
 }

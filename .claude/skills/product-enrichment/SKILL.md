@@ -1,24 +1,25 @@
 ---
 name: product-enrichment
-description: Enrich Cubby Products with verified identity facts and representative cover images. Use for missing product metadata/images, specific Products from purchase import, or source-backed corrections.
+description: Burn down Cubby's Research queue - enrich Products with verified identity facts, Sources and representative cover images using your own browser. Use for missing product metadata/images, specific Products from purchase import, or source-backed corrections.
 ---
 
 # Enrich Cubby products
 
-Research exact Product identity and representative images from retained sources.
-Interactive Claude/Codex research and automatic Cubby Runs share these domain
-contracts. For a hosted Run, use the [research workflow](references/research-run-workflow.md)
-and its mounted tools. In an interactive session, use the available research and
-bounded Cubby write tools; verify what their results persisted before reporting
-success. A populated field or source link alone does not establish retained
-verification.
+Research exact Product identity and representative images, then write them with
+the Sources that support them. This is Burn-down (ADR 0008): your Claude or Codex
+session owns the browser, the searching and the judgment; Cubby owns ownership,
+identifier collisions, image integrity and safe writes. Nothing researches
+Products unattended, so an absent session leaves the Research queue as it is.
+Verify what each write persisted before reporting success; a populated field
+alone does not establish verification.
 
 ## Worklist and read shape
 
 Use supplied `PRD-` identifiers regardless of inventory. Enrichment never
 decides whether an import line becomes a Product and never receives inventory.
 Enrichment never invents a price or date; a historical acquisition of unknown cost is an Expense with `cost: null` and no `date`.
-For a backlog, `entity_read.list product` with `sort=dataQuality` ascending puts the
+The Research queue is the `research-queue` saved view on Products (and on
+Purchases and Expenses for import gaps). For a backlog, `entity_read.list product` with `sort=dataQuality` ascending puts the
 weakest identity first (heavier identity checks — manufacturer, external ID —
 outweigh lighter ones), in pages of 25. Narrow to a specific gap with
 `filters.dataGap` on a check id: `product_manufacturer`, `product_external_id`,
@@ -36,13 +37,19 @@ adding another image; skip redundant catalog views.
 
 ## Research and identity
 
-For seed packets, apply the manufacturer rule in the
-[research workflow](references/research-run-workflow.md): distinguish the packet
-brand from credited seed growers before proposing a manufacturer claim.
+For branded seed packets, `manufacturer` is the packet brand established by the
+packet or exact product source. A credited seed grower stays in the Source quote;
+it does not replace the packet brand, and a retailer's name alone does not
+establish it. When the brand is unclear, keep the current value or leave it
+blank and report the gap.
 
-Start with the purchased item: original email and order-line links, then the
-member's authenticated order details/history. Recover missing saved originals
-through owned mail and account history before assuming only a name is available.
+Start with the purchased item: the original order Email (`imports_read.mail`, by
+the Gmail ids in the Purchase's Email history, or your own Gmail connector) and
+its order-line links, then the member's authenticated order details/history in
+your browser. Recover missing saved originals
+through owned mail (`mail.search` retains each match as an `uncertain`
+candidate; settle every one with `mail.resolve`) and account history before
+assuming only a name is available.
 Do not begin with generic name search when usable purchase sources exist. Use
 broader search for unavailable sources or facts those sources cannot establish.
 
@@ -58,34 +65,24 @@ SKUs in their typed slot. Use lowercase kebab-case source slugs. A source/kind/
 external-ID tuple has one live owner; do not invent, relabel, or choose between
 variants. Preserve ambiguity as unresolved work with its competing candidates.
 
-A hosted Run retains observations against its explicit task. Connect the ordered
-item to the observed selected variant, then support each fact and image with its
-issued evidence reference. Structured Product data is useful evidence; retained
-visible content and selected-variant state can also establish facts when JSON-LD
-is missing or describes a group. A quotation establishes what was observed, not
-which purchased variant it belongs to. Reject contradictions and preserve
+Connect the ordered item to the observed selected variant, then record each fact
+with a Source: `sources: [{fieldPath, url, quote, observedAt, selectedVariant}]`
+on `entity.update` (and record-level `sources` on `image.attach_files`). Quote the
+relevant text, not the page; screenshots and full HTML are optional. Structured
+Product data is useful evidence; visible content and selected-variant state can
+also establish facts when JSON-LD is missing or describes a group. A quotation
+establishes what was observed, not which purchased variant it belongs to. Preserve
 identifier kinds and issuer ownership. An identifier another Product owns
 requires review, never reassignment.
 
-Imported Products acquire automatic research work. Public-page research can
-continue without a Mac; authenticated browser work waits for the connected
-browser. Matching existing values can gain provenance without changing the
-value. Supported contradictions appear in the Run's generic findings report
-with saved and proposed values and retained support. Review and explicitly
-approve the atomic proposal there; approval rechecks its accepted assessment,
-admission, identity, source bytes and current Product before writing. A stale
-proposal refuses without replacing member edits. Automatic research promotes a
-verified image only over an explicitly marked provisional import thumbnail,
-preserving own photos, member-selected gallery order and unknown historical
-cover intent. Reselecting the same gallery order still records member intent;
+Your writes are the member's: a supported value may replace an existing one, and
+the earlier value's Sources stay visible as "earlier value". When a fact cannot
+be established, set a `data_exception` on that gap (`reason: unavailable` with a
+note naming what you checked) so the Product leaves the Research queue until new
+evidence changes it; do not loop on unchanged failures. Promote a verified image
+to cover only over a provisional import thumbnail, preserving own photos,
+member-selected gallery order and unknown historical cover intent;
 `source: catalog` alone never authorizes promotion.
-A resolved attempt with gaps is not full verification; relevant
-new evidence or changed instructions can make those gaps eligible again, while
-unchanged failures pause rather than loop.
-To start one yourself, read `imports_read.run_launch_preview` for the Product's
-`sourceId`, then call `run.start` with purpose `product_enrichment`; a
-`blockingRun` answer reports the launch constraint. Read
-`entity_read.get` on the RUN- id with `resultDetail: "full"` for its status.
 
 Read [source mechanics](references/sources.md) only for the source in hand.
 Read [write and image rules](references/writes-and-images.md) when preparing a
@@ -103,9 +100,10 @@ Set `kind` (`consumable` or `durable`) only when the published product or the
 order context makes it clear; never guess, and leave it unset when uncertain. It
 only informs project suggestions and is independent of `stockTracked`.
 
-Use `product_enrichment.patch_external_ids` for exact slot changes and preserve unrelated
-IDs; use a full `entity.update product` external-ID set only when deliberately
-replacing it. Check `imports_read.external_id_collisions` before each new ID. Only an
+Change identifier slots with `entity.update product` collection patches on
+`externalIds` (`{op: "add"|"replace"|"remove", key, value?, expect?}`), which
+preserve unrelated IDs; a full `externalIds` array is a deliberate complete
+replacement. Check `imports_read.external_id_collisions` before each new ID. Only an
 exact-variant part number goes in as `manufacturer_part` (source = manufacturer
 slug); a family/style number stays in `model`.
 A collision needs manual resolution, normally a proven merge, never a silent

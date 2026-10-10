@@ -143,11 +143,6 @@ struct HeroActionSheet: View {
                 Text("Choose a shelf").tag("")
                 ForEach(model.shelfOptions, id: \.value) { Text($0.label).tag($0.value) }
             }
-        case .evidence:
-            Picker(field.label, selection: stringBinding(field.key)) {
-                Text("Search automatically").tag("")
-                ForEach(model.evidenceOptions, id: \.value) { Text($0.label).tag($0.value) }
-            }
         }
     }
 

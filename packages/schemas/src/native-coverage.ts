@@ -272,8 +272,6 @@ export const nativeCoverage = {
       "purchase.project-allocation",
       "purchase.financial-settlement",
       "expense.settlement",
-      "vendorAccount.charge-search",
-      "vendorAccount.sync",
       // A run's progress, approvals, findings, transcript, log, usage and changes: the same report
       // view draws the server's `records` rows, polls (one batched read) while the run is live,
       // and runs the commands the server offers (approve, reject, apply, dismiss, retry) only
@@ -283,7 +281,6 @@ export const nativeCoverage = {
       "run.changes",
       "run.import-approvals",
       "run.import-debug-log",
-      "run.import-evidence",
       "run.import-findings",
       // Approve-and-import: the server's prepared lines are `records` rows with a `choice`
       // each (ranked Product candidates, the existing-Product picker, new, or unresolved with a
@@ -315,8 +312,6 @@ export const nativeCoverage = {
   sectionAction: {
     ...implemented([
       "matchStatement",
-      "searchCharges",
-      "syncAccount",
       "receiveExpense",
       "splitExpense",
       "linkExpenses",
@@ -408,9 +403,7 @@ type HeroActionField = {
     | "location"
     | "amount"
     /** Options come from the plan's preview (`shelves`), never a guess. */
-    | "shelf"
-    /** Options are the plan preview's replayable evidence sources, never a guess. */
-    | "evidence";
+    | "shelf";
   /** `today` seeds a date field; `one` seeds an amount with a single `each`. */
   readonly default?: string | number | boolean | "today" | "one";
   readonly options?: readonly {
@@ -677,57 +670,6 @@ export const nativeCollectionActionPlans = {
     fields: [],
     body: { id: "$item.id" },
     continueWith: { kind: "editRecord", field: "labelNutrition" },
-  },
-  enrichProduct: {
-    label: "Enrich Product",
-    symbol: "sparkle.magnifyingglass",
-    kind: "operation",
-    operation: "run.startTargeted",
-    entities: ["product"],
-    confirmation: "none",
-    preview: {
-      operation: "run.targetedLaunch",
-      body: { purpose: "product_enrichment", targetId: "$row.id" },
-    },
-    fields: [
-      {
-        key: "sourceId",
-        label: "Evidence to replay",
-        kind: "evidence",
-        optional: true,
-      },
-    ],
-    body: {
-      purpose: "product_enrichment",
-      targets: [{ productId: "$row.id", sourceId: "$field.sourceId" }],
-    },
-  },
-  validatePurchase: {
-    label: "Validate ingestion",
-    symbol: "checkmark.circle",
-    kind: "operation",
-    operation: "run.startTargeted",
-    entities: ["purchase"],
-    confirmation: "none",
-    preview: {
-      operation: "run.targetedLaunch",
-      body: { purpose: "purchase_validation", targetId: "$row.id" },
-    },
-    fields: [
-      // The server allows no chosen source (it then searches for evidence itself), so the
-      // field is optional exactly as on web.
-      {
-        key: "sourceId",
-        label: "Evidence to replay",
-        kind: "evidence",
-        optional: true,
-      },
-    ],
-    body: {
-      purpose: "purchase_validation",
-      purchaseId: "$row.id",
-      sourceId: "$field.sourceId",
-    },
   },
 } as const satisfies Record<
   CollectionActionId,

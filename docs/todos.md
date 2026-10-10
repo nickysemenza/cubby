@@ -123,415 +123,106 @@ See also the image operational passes at the end of this file.
 
 ### Import and resume orders reliably
 
-- ⏳ **Conditional purchase-import browser extension.** Promote only if the
-  Apple-event browser bridge repeatedly fails to background its window, cannot
-  avoid Chrome's JavaScript-from-Apple-Events setting, or cannot provide
-  reliable capture. Thin: window ownership and capture only, no Cubby
-  credentials or business writes.
-
-- ⏳ **True full-page browser evidence.** Promote a stitched full-page capture
-  only when the viewport snapshot misses evidence a real import needs; never
-  label viewport capture as full-page.
-
 - ⏳ **Gmail discovery re-authentication.** Promote when production Gmail
   returns 401/403 after refresh-token expiry or revocation: actionable
   reconnect, resumable Problem, never an "empty mailbox".
-
-- ⏳ **Finish terminal browser cleanup.** Promote when logs show browser
-  commands surviving a terminal run or an owned window left visible.
-  Terminalize queued commands by run generation, send one terminal signal,
-  minimize only Cubby's window, and log discarded work.
-
-- ⏳ **Typed pagination and final grocery evidence.** Promote when a vendor
-  exposes pagination or grocery pages whose last page the hints miss.
 
 ### Reconcile charges and refunds
 
 ### Review and apply corrections
 
-- ⏳ **Re-run the purchase decision evaluation before rerouting.** Run
-  `pnpm --dir apps/web eval:purchase-decisions` (opt-in, billed) before
-  changing matching or purchase-run model routing. Baseline, 2026-10-03:
-  GPT-6 Sol high 12/12 correct, 0 unsafe, about $0.58 per run; GPT-6 Luna
-  high 8/12, 1 unsafe (duplicate Product) and three runs that misread the
-  extractor result. That historical result does not establish quality for the
-  current source-first researcher. The selected runtime starts purchase and
-  Product work on Luna/medium and escalates a continuing domain refusal to
-  Sol/low. Recheck those candidates against the same sources and budgets;
-  scripted provider-boundary coverage proves routing, not model judgment.
-- 🔭 **Grow the purchase evals from member dismissals.** A dismissed mail
-  link, a dismissed import finding, or a cancelled automatic import is a
-  labeled mistake. A scheduled worker skill would read recent ones and draft
-  synthetic look-alike cases for `purchase-decision-eval.fixtures.ts` (never
-  real household data), opening a PR for review. Dismiss stays one tap with
-  no reason field, and nothing tunes itself.
-
----
-
 ## Import pipeline architecture
 
-The model owns adaptive investigation and semantic judgments. Code owns source
-retention, admission, durable recovery, replay, ownership and domain writes.
-Pi already hosts the researcher; the [simplification audit](plans/research-simplification.md)
-records the remaining deletion candidates and SDK comparisons. The first two
-slices merged in [#1784](https://github.com/nickysemenza/cubby/pull/1784) and
-[#1797](https://github.com/nickysemenza/cubby/pull/1797), removing 1,534 net
-tracked lines including tests and documentation. The retired vendor-search
-Workflow, binding, schemas and bespoke progress presentation are gone; historical
-Runs remain readable through generic reports and cannot execute again. No tables,
-household data or compatibility adapter were removed or introduced by these
-slices. Review, exact-head hosted checks and deployment completed; live mailbox
-acceptance remains open. Browser transport contracts remain in
-[infrastructure](infrastructure.md#browser-bridge).
+[ADR 0008](adr/0008-mail-import-unattended-burn-down-interactive.md) settles the
+split: Pi runs unattended Mail import (Email only, Luna/Sol/Jev routing, existing
+paid caps), and every browser, logged-in or adaptive research task is a member's
+Claude/Codex Burn-down over the Research queue (`research-queue` saved views on
+existing data-quality gaps), writing through ordinary MCP writes that carry
+Sources. Both use the same public tools (`imports_read.mail`, `mail.search`,
+`mail.resolve`, `purchase_import.prepare/commit`, generic entity/image writes).
+The Mac browser bridge, account sync, charge and receipt hunts, unattended
+Product enrichment, the research service family and its independent assessor
+were deleted in the [caller-driven research plan](plans/caller-driven-research.md);
+historical Runs stay readable through generic reports.
 
-Delivery order: finish economical requests and deterministic execution bounds,
-then household and record-level status visibility, then the remaining source,
-browser and schema consolidation. Live research and new automation are paused
-at the member's request. Keep their retained progress; perform real-model,
-mailbox and authenticated-device acceptance only after explicit resumption.
+- ⏳ **Drop the retired research tables.** No feature reads `RunFactEvidence`,
+  `RunEvidence`, `RunOrderCandidate`, `ResearchSourceExposure`,
+  `ResearchRetention` or `ImportHunt` any more; their edges preserve rows on
+  soft-deleted subjects and skip the liveness audit. The contract PR ships its
+  code with the drop migration (the edge registry and Drizzle declarations still
+  name these tables until then) and must:
+  - Run the data step first: copy supported `RunFactEvidence` into
+    `EntitySource` (facts on a Product or Purchase merged away after this
+    deploy stay on its tombstone), dismiss retired findings, stop unfinished
+    retired-purpose Runs, and let retirement destroy their coordinators.
+    Record the private R2/DO manifest outside the repository first.
+  - Drop the six tables, `RunEvidence` R2 objects not referenced by an Image,
+    their `child-tables/run.ts` declarations, `entity-edges.ts` edges
+    (`RETIRED_RESEARCH_LIVENESS`, `researchFactSubjectEdges`),
+    `entity-edge-owners.ts` exclusions, every `preserve-retired-research`
+    disposition, the `RunFactEvidence`/`ImportHunt` entries in
+    `IMAGE_HARD_DELETE`, `imageReferenceCondition` and `PROCESSING_EDGES`, and
+    the delete-policy matrix seeds.
+  - Delete the writes that exist only for those FKs: image deletion nulling
+    `RunEvidence.targetId` (`repo/image.ts`) and `mergeRunTargets` moving facts
+    and evidence off a folded RunTarget (`repo/run-target-merge.ts`).
+  - Drop VendorAccount `browser`, `browserSyncEnabled`, `cursor` and the
+    `paused_*` statuses from the manifest, `repo/vendor-account.ts` and the
+    Gmail account default, then regenerate clients.
 
-- 🟢 **Stop repeated logical failures across a Run.** One browser-command retry
-  and the current 256-generation Run limit do not bound repeated commands under
-  new operation IDs early enough. [#1808](https://github.com/nickysemenza/cubby/pull/1808)
-  adds a reviewed three-distinct-call bound for identical thrown service failures
-  using existing durable Run state. Its exact-head hosted checks and scripted
-  acceptance passed, it merged and production deployment succeeded. Returned
-  browser `blocked` replies share that bound in
-  [#1813](https://github.com/nickysemenza/cubby/pull/1813), independently reviewed,
-  exact-head hosted tested, merged and deployed. Corrective resolution refusals
-  already have a three-zero-progress-attempt allowance per task, retained through
-  completed operation receipts. Bound Mac command receipt duration and distinct retry links now ship through
-  the shared Run operation shape and generic report in
-  [#1820](https://github.com/nickysemenza/cubby/pull/1820), independently reviewed,
-  exact-head hosted tested, merged and deployed. It never substitutes suspended
-  operation wall time. Visible acceptance and total active-time accounting remain
-  open. Pause
-  repeated unchanged failures with their raw last observation. Member sign-in,
-  permissions and Mac-offline waits do not consume active time. Reuse Run state
-  and existing usage/cost authorization; do not introduce another job engine.
+- 🤔 **Server-side web search for Mail import.** Reintroduce `web_*` for Pi on
+  [Cloudflare web search](https://developers.cloudflare.com/web-search/) to fill
+  logged-out gaps an Email leaves (manufacturer, model, image), within the paid
+  caps. It cannot reach logged-in order pages; those stay Burn-down work.
+  Compare filled-at-import quality against Burn-down cost before adopting.
 
-- ⏳ **Accept reviewed Vendor capture profiles.**
-  [#1831](https://github.com/nickysemenza/cubby/pull/1831) ships typed proposals
-  through the shared research resolver and existing Run review for learned
-  order-history URLs, sign-in hosts, reviewed additional hosts and pagination
-  hints. Source/account/current-profile binding, explicit member host
-  authorization and stale-review refusal remain deterministic. Generation,
-  focused regressions, independent review, synthetic UI acceptance, exact-head
-  hosted checks, merge and production deployment completed. Installed-client
-  review and real-source acceptance remain open while live research is paused;
-  page content cannot grant itself host authorization.
+- 🤔 **Settle a member search's abandoned matches.** A member's `mail.search`
+  runs only the free rule stage, so every non-Spam/Trash match is retained as
+  `uncertain` until the session settles it with `mail.resolve`. A session that
+  ends early leaves those copies retained. Either expire unsettled member
+  matches or let members retain one Email by Gmail id instead of searching.
 
-- 🤔 **Recognize email-code and hosted sign-in.** Combine retained page
-  interpretation with deterministic host/path checks. Exercise a hosted customer
-  account, redirects, email-code login and slow navigation through the real Mac
-  bridge. Model classification alone must not broaden browser permissions.
+- ⏳ **Accept live Mail import and Burn-down.** Live work stays paused until the
+  member resumes it. Remaining acceptance: the approved 26-Product scope, the
+  remaining evidence-supported facts and the separate Row 7 naming question,
+  the reported duplicate Product creation, known-vendor and unmatched-transaction
+  backfills, full Gmail history excluding Spam/Trash, separately verified
+  continuous new-mail processing, and persisted Purchases, Products, related
+  Emails, financial events, Sources and images, plus Spending and installed
+  clients. Paid Gateway fallback stays within the existing caps ($10 pilot, $10
+  historical backfill, $10/month continuous) with durable known-price admission
+  before every paid transmission; prefer subscription inference. Populated
+  fields and terminal Runs do not establish verification.
 
-- 🟢 **Notify when a Run needs the member.** Extend the Mac's existing notifier
-  beyond prolonged offline waits and completion.
-  [#1819](https://github.com/nickysemenza/cubby/pull/1819) persists
-  account/Run/reason pause edges, names sign-in, Screen Recording and Apple
-  Events fixes, and raises the owned account window for a fresh permission
-  pause. Synchronous dispatch validity is invalidated when a pause resolves or
-  its controller is replaced, so an earlier actor check cannot raise a stale
-  window. Headless persistence and suspension regressions pass after intended RED;
-  Mac App compilation, independent review, exact-head hosted checks, merge and
-  deployment passed. Real notification/owned-window delivery remains pending. Coordinate with the
-  activity strip and attention-first workspace below.
+- ⏳ **Measure paid fallback recovery.** A bounded live attempt saw the exact
+  quota refusal inside an HTTP 200 stream; the shared router now qualifies it
+  before admission, but live paid recovery after that refusal is unproven.
 
-- 🟢 **Re-derive retained captures without rewriting committed history.**
-  `PAGE_DERIVATION_REVISION` stamps captures.
-  [#1818](https://github.com/nickysemenza/cubby/pull/1818) ships the shared
-  `run.rederiveCapture` operation appends revision-keyed interpretation receipts
-  under the original command host authority, reports changed capture fields and
-  source-supported fact fields in the generic Run log, and preserves original
-  bytes, checksums, accepted claims and replay results. Its settled-capture and
-  checksum regressions, synthetic browser acceptance, independent review,
-  exact-head hosted checks, merge and deployment passed. Installed-client and
-  live acceptance remain pending. Fresh research remains a separate Run.
-
-- 🤔 **One source contract, without a second extractor.** Mail, browser, file
-  and photo readers should return retained text, links, media, typed identifiers
-  and selected-variant context through the existing research observation spine.
-  Generate adapters over shared domain services. Retained mail now exposes exact
-  HTTPS links through the shared typed observation in
-  [#1835](https://github.com/nickysemenza/cubby/pull/1835), independently of
-  readable-text truncation. The existing WASM reader supplies both text and links;
-  there is no second extractor. Persisted unsafe-link rejection,
-  original-byte and replay checks, independent review, exact-head hosted checks
-  and deployment passed. Original-media delivery and source-specific retention
-  remain required; source-first real-model acceptance remains paused.
-
-- 🤔 **Repeatable real Mac/browser acceptance.** The fixture-retailer journey
-  still requires a signed app and persistent Automation/Screen Recording grants.
-  The #1775 guarded installer was exercised against clean main `fa218505e`:
-  the signed 2.15.0 app replaced 2.14.0, retained its session and existing
-  Automation/Screen Recording grants, loaded server-backed Today, and reconnected
-  Browser Sync. That establishes installed-client compatibility and permission
-  continuity; authenticated capture and screenshot roundtrips remain unverified.
-  Reuse this path before adding signing infrastructure. Choose a self-hosted runner or a harness that removes those prerequisites,
-  then cover redirect readiness, email-code sign-in and slow navigation with
-  sanitized exact-revision artifacts. Installed-app behavior remains an
-  acceptance requirement even when a signed build succeeds.
-
-- 🟢 **Vendor-platform page-reading regressions.** Keep synthetic storefront
-  captures for Shopify, WooCommerce, BigCommerce and a marketplace. Assert
-  supported variant semantics and truncation rather than incidental DOM markup.
-
-- 🟢 **Server-owned account status in Mac Settings.** Project browser-sync
-  authorization, socket connectivity, current Run/step and last successful sync
-  through the existing server status contract instead of local socket state alone. Local
-  browser execution now derives Run links from the existing command registry; the
-  connection and import-plan columns remain distinct, and last commands link their
-  actual Run. The shared sync plan separates server broker connectivity from
-  persisted account status and reuses the VendorAccount last-completed-Run
-  derivation. Native account labels use the generic manifest.
-  [#1830](https://github.com/nickysemenza/cubby/pull/1830) completed focused
-  persisted-state regressions for pause visibility, failed-attempt history and
-  owned broker reads, independent review, exact-head hosted checks, merge,
-  deployment and synthetic UI acceptance. Current target/step and installed
-  authenticated-device acceptance remain open.
-
-- 🟢 **Generate remaining Mac agent-route contracts.** Accounts and debug batches
-  now use shared generated Vendor/Run operations in
-  [#1817](https://github.com/nickysemenza/cubby/pull/1817);
-  both Mac callers migrated, the old HTTP routes/request helper were deleted,
-  and debug schemas moved into the shared package. Persisted eligibility,
-  mixed-owner rejection and replay regressions, native compilation, independent
-  review, exact-head hosted checks, merge and deployment passed. The wire break
-  requires Apple compatibility 2.17; installed-client acceptance remains pending. Keep the separately owned MCP HTTP handler out of this work.
-
-- 🤔 **Separate debug observations from replayable operations.** Replace
-  `__debug_event` special cases with an existing bounded event/report path if it
-  removes storage/read code. Preserve raw diagnostics, retention and historical
-  rendering. The [current storage audit](plans/research-simplification.md#debug-observation-storage)
-  found no equivalent reusable event store; moving these rows to RunProgress
-  would add contracts and a preserving migration without demonstrated reduction.
-  Keep this conditional; do not introduce another log table merely to remove the
-  projection branches.
-
-- 🟢 **Complete Run cost/time explanations.** The Runs list shows cost,
-  duration and attempts, and detail shows model timing. Browser command receipt
-  time and distinct retry attribution ship through the shared projection in
-  [#1820](https://github.com/nickysemenza/cubby/pull/1820). Total active-time
-  accounting and subscription savings remain open; reuse the existing AI usage
-  ledger. Unknown intervals and prices stay unknown, and suspended wall time
-  never substitutes for active work.
+- 🤔 **Gmail push for continuous new mail.** The daily cron plus backfill
+  covers new mail today; Gmail push notifications would shorten the delay.
+  Decide only after continuous processing is verified.
 
 ## Runs, enrichment & browser capture
 
-Run remains the one unit of unattended work. Parent/child lineage, retry
-predecessors, causes, attempts, `mail_import` and `mail_discovery` shipped with
-`0025_purchase_research`; its approved preserving production cutover and schema
-readback were completed. Do not reapply that migration. The shared activity
-projection owns list/status presentation. Shipped schema is distinct from live
-research acceptance.
+Run is the one unit of unattended work (Mail import, photo inventory, a member's
+import) and the attempt history the shared activity projection presents.
+Burn-down writes are not Runs: they are audited member writes with Sources.
 
-- 🟢 **Explain household work before listing its attempts.** Show what is working
-  now, waiting and why, needs a member decision, and what happens next. Group
-  related discovery, purchase research, enrichment and retries using existing
-  lineage. Grouped matching working, waiting, review, failed and completed
-  attempt counts now ship independently of root status and Product verification.
-  All-page matching-attempt totals now use the same state policy in flat and
-  grouped queries, with one server-composed summary in web and native. Persisted
-  pagination/filter/empty-result coverage and synthetic web acceptance passed.
-  Independent review, exact-head hosted checks, merge and deployment completed
-  in [#1826](https://github.com/nickysemenza/cubby/pull/1826). The web attention
-  preview now reuses the paged projection for scoped waiting, review and failed
-  attempts, retained reasons and direct inspector actions. Persisted pagination
-  and UI acceptance, independent review and delivery are in progress. Native and
-  installed-household overview acceptance remain open. Finish a
-  record-level view of processed emails, matched orders, linked
-  Purchases and enriched Products with processing time, outcome, evidence and
-  links. Include supported unchanged facts and unresolved work, not only audit
-  writes. Keep classification, linking, financial review and verification
-  distinct. Reuse shared entity/report presentation; disclose count scope rather
-  than extrapolating loaded pages into household totals.
-  The existing Vendor, VendorAccount and Purchase email-evidence report now
-  separates owned classification/processing, first accepted source links and
-  reviewed event links with their authoritative timestamps. It discloses the
-  retained email count and marks missing legacy processing history unknown.
-  This record-scoped view does not establish mailbox-wide processing coverage;
-  independent review, hosted delivery and live acceptance remain pending.
+- ⏳ **Show the Research queue count where the household looks.** Surface the
+  `research-queue` saved-view counts on Home or Activity, linking to the views,
+  so Burn-down happens; no notifications or scheduling.
 
-- ⏳ **Accept research root grouping in the clients.** The shared activity
-  projection groups research descendants and image jobs through retained live
-  causal parents, with filtered, cursor-paged children. Persisted-state
-  regressions cover nested work, deleted ancestors and independent legacy rows.
-  Native Activity now uses the shared grouped/child reads, expandable related
-  rows and the existing inspector. Focused transport and isolated model
-  regressions passed after RED; the Mac UI compiled. Independent review,
-  exact-head hosted checks, a sanitized isolated Mac journey and deployment
-  completed in [#1828](https://github.com/nickysemenza/cubby/pull/1828). The
-  journey covers filtered parent context, descendant failure and child-inspector
-  navigation. Installed household acceptance remains pending. Historical null
-  lineage remains independent and retry predecessors never imply parentage.
-
-- 🟢 **Derive research-purpose presentation consistently.** Audit the duplicated
-  purpose sets in shared constants, agent inputs, Run declarations and Workflow
-  contracts. Import report eligibility now comes from the shared Run schema, including
-  `mail_import`, with generated Swift and one web/server predicate. Exact-head
-  hosted checks and checksum-verified E2E artifacts passed before PR #1793
-  merged; production deployment succeeded on `01dda8634`. Native visible
-  report acceptance remains pending. The [completed purpose audit](plans/research-simplification.md#run-purpose-audit)
-  confirms that agent execution, discovery, targeted launch, report eligibility,
-  write rights and the Imports saved view intentionally cover different
-  capabilities. No additional purpose-list consolidation is justified.
-
-- ⏳ **Accept purchase-source-first Product research.** Supply usable original-mail
-  selectors and existing order-detail URLs with accepted order lines shipped in
-  [#1801](https://github.com/nickysemenza/cubby/pull/1801). The maintained skill
-  recovers missing originals through owned email and authenticated account history
-  before broader name search. Mail HTML links now use the shared bounded typed
-  observation links as well as readable text, so text truncation cannot hide exact
-  order/item leads. [#1835](https://github.com/nickysemenza/cubby/pull/1835)
-  completed persisted original/replay and URL-policy coverage, independent
-  review, exact-head hosted checks, merge and production deployment.
-  Real-model acceptance remains pending. Validate a real plant and a real
-  hardware-retailer Product after deployment; old per-order source associations
-  remain explicit gaps until a supported original is recovered. Do not invent
-  historical mappings or treat a search match as proof of the purchased variant.
-
-- 🤔 **Verify automatic enrichment dispatch after import commit.** Imports now
-  admit Product research through `startProductResearch`, which obtains the
-  configured producer when none is supplied. Verify real completion and restart
-  behavior; do not restore the removed inline enrichment path or add a second
-  completion scheduler.
-
-- 🤔 **Measured fetch/browser routing.** Public reads and authenticated Mac
-  capture are separate research tools. Investigate repeated host-specific public
-  refusals using retained operation results; a learned routing hint may save
-  calls, but source freshness and authenticated-page needs still decide the tool.
-
-- ⏳ **Finish actual research and visible-proof acceptance.** Complete the
-  authorized external roster through new Runs using subscription inference or
-  explicitly authorized AI Gateway fallback within the existing allowance. Prove original-order/selected-variant identity, matching-value
-  provenance, reviewed contradictions and representative images. Populated fields
-  and terminal Runs do not establish verification. Use `ImportSourceOrder` /
-  `ImportSourceProduct`, including order-history evidence when mail omits the
-  variant. Preserve immutable settled targets and report unsupported facts as gaps.
-  A usage limit does not require reauthorization. Paid fallback must reserve
-  the existing durable allowance before every transmission; unknown prices or
-  insufficient budget refuse it. Verify actual spend separately from reservations.
-  The bounded live attempt on main `fa218505e` exposed the exact quota code in
-  an HTTP 200 `event: error` after `response.created` and `response.in_progress`,
-  with no Content-Type. It was canceled after one failed subscription call ($0),
-  before further inference. HTTP 429 fallback therefore does not establish live
-  paid recovery. A bounded pre-output probe now qualifies the exact stream
-  refusal through the shared router and existing admission. #1794 completed
-  independent Sol/high and Astra/high review, exact-head hosted checks and merge.
-  A fresh bounded attempt on deployed main `01dda8634` still returned the quota
-  without paid admission or transmission; it was canceled after one failed call.
-  The actual stream-admission rejection and live paid recovery remain unresolved;
-  do not infer eligibility from preceding event names alone.
-
-- ⏳ **Accept economical research requests and routing.** Mail routing now uses
-  bounded visible text, exact links and retained media descriptors instead of
-  HTML layout; incomplete views remain uncertain and original retention is
-  unchanged. The independent support assessor now uses Sol/low. The researcher
-  starts on Luna/medium and escalates continuing domain refusals to Sol/low.
-  [#1806](https://github.com/nickysemenza/cubby/pull/1806) merged and deployed
-  request-only delivery of repeated attachment bytes once, preserving every
-  observation binding and the existing admission limit. Complete repeated order
-  context sharing in [#1807](https://github.com/nickysemenza/cubby/pull/1807)
-  has independent review, exact-head hosted checks and scripted acceptance;
-  merge and production deployment completed. Real-model comparison remains
-  pending while live research is paused.
-  Request-sharing changes must preserve every source binding and complete order
-  context. Compare supported outcomes, physical calls and transmitted bytes on
-  unchanged synthetic sources, then verify real-model quality only when live
-  research is authorized. Lower effort and fewer bytes do not establish correct
-  purchased-variant judgments or a measured subscription-quota saving.
-
-- 🟢 **Reuse supported existing Products before creation.**
-  [#1810](https://github.com/nickysemenza/cubby/pull/1810) replaces bounded
-  alphabetical brand-token candidate searches with shared name/alias relevance
-  and exposes live candidates when assessing a proposed new Product. Focused
-  persisted-state regressions, independent review and checksum-verified
-  final-head hosted acceptance passed; merge and deployment completed. Verify real-model reuse after explicit
-  research resumption. Existing duplicates require a supported, preserving
-  merge plan before household cleanup; matching names alone never prove variants.
+- ⏳ **Accept research root grouping and record-level history in the
+  clients.** The grouped Activity reads and the Vendor/VendorAccount/Purchase
+  Email reports ship on web and native; installed-household acceptance remains.
 
 - 🤔 **Link enriched seed Products to Plants.** `growsPlantId` is supported,
-  but deciding which growing facts belong on Plant versus a purchased seed
-  Product remains separate from completing Product identity research.
+  but which growing facts belong on Plant versus a purchased seed Product is a
+  separate domain decision.
 
-- 🤔 **Controlled-browser preview.** Show Cubby's Chrome window in a small
-  floating monitor that stays visible while browsing other records, like a
-  picture-in-picture view. Make it movable, resizable, collapsible, and dockable
-  beside Browser Sync or the run console without covering primary actions.
-  Support following the active run or pinning one account, with keyboard
-  actions to expand, switch runs, and raise or return from Chrome.
-  Include account, page title, domain, capture time, and a "Show browser" action.
-  Investigate reuse of the latest screenshot versus a low-rate local preview;
-  update only
-  while visible and never capture unrelated windows or bring Chrome forward
-  for a refresh. Distinguish a live view, a last capture, and an unavailable
-  preview with its reason. Preview frames become evidence only through the
-  existing run capture path. The [browser bridge](infrastructure.md#browser-bridge)
-  owns window identity and capture permissions.
-
-- 🟢 **Run activity strip with the next action.** Show the current Run,
-  target, latest step, time in that step, and completed/known target counts
-  from the shared status projection; avoid invented percentage progress.
-  Distinguish working, waiting, retrying, needs-member, and offline states,
-  including the last activity time and next retry when known.
-  Keep it visible beside the browser preview, link to the run console, and
-  show a direct sign-in or permission action when member attention is needed.
-  Coordinate with the run-attention notification item above.
-
-- 🤔 **Browser handoff and return.** Make the preview's "Show browser"
-  action a clear handoff for sign-in or inspecting a stuck page, with a return
-  to Cubby and visible confirmation that automation has resumed. Decide how
-  manual interaction suspends commands and resumes through the existing run
-  lifecycle before adding controls; preserve background operation by default.
-
-- ⏳ **Accept captured pages beside their results.** Shared Run records now
-  present a bounded, newest-first capture filmstrip beside source-bound accepted
-  Product facts, capture time and live source links. Retained screenshots and PDF
-  originals use authenticated, checksum-verified delivery; native originals stay
-  in memory. Synthetic persisted-state regressions and the focused web journey
-  cover ownership, retirement, supported-fact binding and bounded navigation;
-  the native client and viewer compile. Independent review, exact-head hosted
-  checks, checksum-verified hosted artifacts and production deployment completed
-  in [#1825](https://github.com/nickysemenza/cubby/pull/1825). Synthetic native
-  viewing also passed. Installed household viewing and real-source acceptance remain open while
-  live research is paused. Retained evidence remains distinct from current preview
-  and does not establish research completion.
-
-- 🟢 **Attention-first browser workspace.** Put accounts needing sign-in,
-  permissions, or review ahead of routine background work, with an explicit
-  reason and one action opening the exact owned window or relevant run detail.
-  Keep active, waiting, and finished work easy to filter as the vendor list
-  grows; show which run owns each window before switching the preview.
-
-- 🟢 **Results as browser work lands.** Show newly imported orders and
-  committed Product updates beside the preview, with covers, changed fields,
-  and links to the resulting records and captured sources. Keep proposed work
-  distinct from committed changes and end with a concise result summary,
-  including unresolved targets and the next useful action.
-
-- ⏳ **Accept skipped import-audit recovery after an outdated-Mac stop.**
-  The shared audit batch now includes matching unaudited predecessor purchases,
-  bounded by owner, actor, account, vendor, purpose and audited history. Stable
-  distinct pagination and cycle detection preserve replay neutrality. Inherited
-  findings are report-only unless the current Run also wrote the Purchase;
-  predecessor history and write rights remain unchanged. Focused persisted-state
-  regressions reproduced the missing batch and inherited-fix admission before
-  their fixes. Independent review, hosted delivery and real recovery acceptance
-  remain pending; live research is paused.
-
-- 🟢 **Stop and restart runs over MCP.** [#1814](https://github.com/nickysemenza/cubby/pull/1814)
-  exposes cancel, retry and restart through the existing control/dispatch path;
-  `imports_read.run_status` remains the detailed read. Shared research controls
-  enforce member ownership, while photo inventory retains shared-household
-  control. Approve/reject and budget grants remain human-only. Independent review,
-  exact-head hosted checks, merge and deployment passed; live acceptance remains
-  pending while research stays paused.
-
-- 🤔 **Measure capture model routing before changing it.** Keep the current
-  evaluated routing until a controlled comparison establishes safe purchased-
-  variant judgments. Jev's bounded routing does not prove exact identity;
-  compare the same model version, effort, budget, sources and acceptance rules.
+- 🤔 **Measure Mail import model routing before changing it.** Keep Luna by
+  default until a controlled comparison on the same sources shows a safe
+  alternative for purchased-variant judgments.
 
 ## Ingredients, recipes & nutrition
 
@@ -652,7 +343,7 @@ research acceptance.
   `/api/import/runs/{id}/agent/*` (`apps/web/src/routes/api/import/`), not a
   Cubby operation, so nothing in the OpenAPI client reaches it. Native needs an
   agent client in CubbyKit (authenticated SSE read, prompt POST, the abort that
-  cancels the run and its browser commands), reconnect with resume after a
+  cancels the run), reconnect with resume after a
   suspended or dropped connection, and a transcript model that folds stream
   events into the durable timeline (which native already draws from
   `run.import-timeline`). Promote when a household member needs to prompt or
@@ -790,19 +481,6 @@ research acceptance.
 
 ## Entity platform & data model
 
-- 🧱 **Audit for deletion and consolidation after the research rewrite.** Review
-  the whole codebase, including database tables, import/browser execution, review
-  surfaces, and tests. Identify unused functionality, duplicate services and
-  policies, redundant persisted state, and code that can move into shared
-  declarations or maintained Markdown skills. The model should own adaptive
-  investigation and semantic interpretation; justify each code layer by evidence
-  retention, recovery/replay, ownership, or safe domain writes. Prefer existing
-  Expense/domain services over a second accounting framework. Propose concrete
-  deletions and table consolidation with preserved invariants and data-transforming
-  migrations; measure the resulting code and schema reduction. The initial
-  [audit and concrete migration proposal](plans/research-simplification.md) is
-  recorded; implementation and historical/in-flight readback remain open.
-
 - 🤔 **Product Category feature expectations.** Decide whether Food _expects_
   an ingredient and Books an ISBN (both `unknown` today, so no data-quality
   gap) and whether a Food Product may carry an ISBN outright rather than only
@@ -910,20 +588,12 @@ consume the declarations.
 
 ## AI & search
 
-- 🤔 **Assess Agents SDK capabilities after the purchase rewrite.** Compare
-  Cubby's existing plumbing with the [SDK feature table](https://github.com/cloudflare/agents#features),
-  especially state/RPC synchronization, scheduling, child-agent timelines, and
-  bounded Code Mode research composition. Generate typed composition methods
-  from the existing research contracts and reuse their domain services; keep
-  lifecycle/browser waits and original-media delivery explicit. Preserve Pi's
-  recovery ownership, task-scoped evidence, per-call admission, and replay
-  fences. Adopt capabilities where they remove duplicate code or demonstrate
-  better research behavior. Evaluate a persistent Computer workspace only for
-  a concrete document-processing need, including source disposal and production
-  readiness. This follow-up does not expand the current rewrite or the separately
-  owned MCP enrichment workstream. See the current
-  [feature-by-feature assessment](plans/research-simplification.md#sdk-feature-assessment);
-  experiments and measured code removal remain open.
+- 🤔 **Assess Agents SDK capabilities for Pi.** Pi now runs only Mail import
+  and photo inventory on generic agent tools and mounted MCP actions. Adopt an
+  [SDK capability](https://github.com/cloudflare/agents#features) only where it
+  deletes existing lifecycle code (dispatch acknowledgement, settlement watch,
+  stale-run expiry) or improves demonstrated behavior; do not add a second
+  execution engine.
 
 - 🟢 **Show estimated API spend avoided by subscription inference.** Retain
   each ChatGPT-plan call's catalog-priced API equivalent alongside its zero
@@ -960,8 +630,6 @@ consume the declarations.
   to expose it, then drop the group when it ships:
   - Order mail: `vendor.orderMail`, `vendor.importOrderMail`,
     `vendor.importSelectedOrderMail`.
-  - Targeted runs and their evidence:
-    `purchaseImport.initiateRunEvidenceUpload`.
   - Inventory receiving: `inventory.receiveExpense`,
     `inventory.receivingContext`, `problems.resolveArrivedFindings`.
   - Discarding units: `inventory.bulkDiscard`, `product.discard`.
@@ -1045,7 +713,7 @@ are implemented. See [local development](local-development.md#fixture-previews-a
 - 🤔 **Maintenance mode.** The `MAINTENANCE_MODE` Worker secret makes the web
   Worker answer 503 and skips the cron (`server/maintenance.ts`); purchase
   coordinator callbacks and tool effects now defer/refuse before DB/model
-  access, and browser brokers close without acknowledging unprocessed results.
+  access.
   Queues are paused by hand. Remaining:
   status in a Durable Object checked per request (503
   page except a new health route and the switch), by every queue consumer
@@ -1057,10 +725,7 @@ are implemented. See [local development](local-development.md#fixture-previews-a
   the Queues pause-delivery API from the toggle or retry with long delays.
 
 - 🤔 **Move mechanical backfills onto existing Workflow-backed Runs.**
-  Scheduled Gmail discovery uses a Workflow; vendor mail-search's former
-  production starter has been removed, while its Workflow and synthetic tests
-  remain. Audit that orphaned chain before preserving it as precedent (see the
-  [deletion proposal](plans/research-simplification.md)). Long, page-oriented
+  Scheduled Gmail discovery uses a Workflow. Long, page-oriented
   mechanical backfills are the next fit: give each a
   Run whose progress is the cursor and reuse `server/workflow-runs/`. Evaluated
   and kept as they are: `cubby-background` tasks (single, freshness-gated and
@@ -1308,12 +973,11 @@ counts are dated observations from the 2026-09 consolidation, not current
 usage measurements or proof of obsolescence. (The contribution ledger left
 this list: attribution prefill now reads it.)
 
-- **Historical Run machinery.** Audit `RunOrderCandidate` and legacy approval /
-  control storage only after checking current readers, historical state and
-  in-flight recovery. `RunEvidence`, `ImportHunt`, `ImportPreparedOrder` and
-  `ImportPreparedLine` are active contracts, not dormant tables. Recheck against
-  [import and resume orders](#import-and-resume-orders-reliably) before deciding
-  whether to use or remove these tables.
+- **Historical Run machinery.** `RunOrderCandidate`, `RunEvidence`,
+  `RunFactEvidence` and `ImportHunt` are scheduled for the contract migration in
+  [import pipeline architecture](#import-pipeline-architecture).
+  `ImportPreparedOrder` and `ImportPreparedLine` are active contracts. Audit
+  legacy approval/control storage only after checking current readers.
 - **Review queues.** `SuggestionDismissal`, `ProductMatchCandidate`,
   `ImageDescriptionCorrection`, `OrderMailCandidateDecision`,
   `MerchantVendorRule` (historical counts: all 0). `MailboxCursor` is active in

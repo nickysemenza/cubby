@@ -5,6 +5,8 @@ import {
 } from "@cubby/shared/upc";
 import { z } from "zod";
 
+import { keyedCollectionPatch } from "./entity-collection";
+
 export const externalIdSource = z
   .string()
   .trim()
@@ -225,6 +227,66 @@ const uniqueExternalIdSlots = <T extends z.ZodType<ExternalIdSlot>>(item: T) =>
   });
 
 export const externalIdInputs = uniqueExternalIdSlots(externalIdInput);
+
+/** An identifier's collection identity: one live `(source, kind, externalId)`. */
+const externalIdKey = z.strictObject({
+  source: externalIdValueFields.source,
+  kind: externalIdKind,
+  externalId: externalIdValueFields.externalId,
+});
+const externalIdAttributes = z.strictObject({
+  url: externalIdValueFields.url,
+  isPrimary: z
+    .boolean()
+    .optional()
+    .describe(
+      "Omitted or true on add: the identifier becomes its slot's primary, replacing the current one. false: added as a secondary.",
+    ),
+});
+
+/**
+ * `externalIds` patch items (`entity.update`). The Product repository applies
+ * them: an add is an upsert that takes the slot's primary unless
+ * `isPrimary: false`, a remove must name the live identifier exactly, and
+ * removing a primary promotes the slot's oldest secondary.
+ */
+export const externalIdPatch = keyedCollectionPatch(
+  "ExternalIdPatch",
+  externalIdKey,
+  externalIdAttributes,
+).superRefine((items, ctx) => {
+  // Scoped to the identifier, not the slot: a slot holds one primary and any
+  // number of secondaries, so patching two of its rows in one call is
+  // ordinary. What must stay unique is the row each item addresses — and,
+  // separately, the single primary.
+  const addressed = new Set<string>();
+  const primaries = new Set<string>();
+  for (const [index, item] of items.entries()) {
+    const slot = `${item.key.source.trim().toLowerCase()}\u0000${item.key.kind}`;
+    const identity = `${slot}\u0000${item.key.externalId}`;
+    if (addressed.has(identity))
+      ctx.addIssue({
+        code: "custom",
+        path: [index, "key"],
+        message: "Each external ID may be patched only once",
+      });
+    addressed.add(identity);
+    const takesPrimary =
+      item.op === "add"
+        ? item.value?.isPrimary !== false
+        : item.op === "replace" && item.value.isPrimary === true;
+    if (!takesPrimary) continue;
+    if (primaries.has(slot))
+      ctx.addIssue({
+        code: "custom",
+        path: [index, "value", "isPrimary"],
+        message:
+          "Each external-ID slot may take only one PRIMARY per call; mark the others isPrimary: false",
+      });
+    primaries.add(slot);
+  }
+});
+export type ExternalIdPatch = z.infer<typeof externalIdPatch>;
 export const externalIdValues = uniqueExternalIdSlots(externalIdValueInput);
 
 export const externalIdOut = z.object({

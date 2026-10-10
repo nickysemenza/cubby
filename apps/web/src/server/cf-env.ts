@@ -105,8 +105,6 @@ export const getGmailOAuthCredentials = () => {
 export const getCalendarFeedNamespace = (): Env["CALENDAR_FEED"] | undefined =>
   cfEnv?.CALENDAR_FEED;
 
-export const getPurchaseImportNamespace = () => cfEnv?.PURCHASE_IMPORT;
-
 /** The purchase agent's per-Run coordinators (`server/purchase-import/agent-host`). */
 export const getPurchaseImportRunAgentNamespace = () =>
   cfEnv?.PURCHASE_IMPORT_RUN;

@@ -131,10 +131,7 @@ test("reviews CSV charge groups and refunds against captured retailer orders", a
     .parse(await (await page.request.get("/api/auth/get-session")).json())
     .user.email;
   const purchaseCodes: string[] = [];
-  for (const [index, account] of [
-    prerequisites.account,
-    prerequisites.account,
-  ].entries()) {
+  for (const index of [0, 1]) {
     const orderToken = `${token}-${index}`;
     const orderNames = convergenceNames(orderToken);
     const url = `https://${names.host}/orders/${orderNames.orderId}`;
@@ -181,13 +178,10 @@ test("reviews CSV charge groups and refunds against captured retailer orders", a
     );
     expect(allowlist.ok(), await allowlist.text()).toBe(true);
     const run = await prepareCapturedRetailerOrder({
-      page,
       db,
       actor,
       runtime: e2eRuntime,
-      ledgerPartyId: member.id,
-      vendorAccountId: await resolveOrThrow(db, "vendorAccount", account.id),
-      accountCode: account.id,
+      vendorId: prerequisites.vendor.id,
       token: orderToken,
       url,
       productUrl,
@@ -214,11 +208,12 @@ test("reviews CSV charge groups and refunds against captured retailer orders", a
       .selectOption("other");
     await expect(approve).toBeEnabled();
     await approve.click();
+    // Each captured order is a member's own import Run.
     await expect(
       page.getByText("Prepared import approved and committed.", {
         exact: true,
       }),
-    ).toHaveCount(index + 1);
+    ).toBeVisible();
     const purchase = await database.query.purchase.findFirst({
       where: and(
         eq(schema.purchase.vendorId, vendorId),

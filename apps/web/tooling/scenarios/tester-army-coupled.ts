@@ -1,27 +1,15 @@
 import { createHash } from "node:crypto";
 import { readFileSync } from "node:fs";
-import {
-  imageShortcode,
-  type LedgerPartyId,
-  runShortcode,
-} from "@cubby/schemas/identifiers";
+import { imageShortcode, runShortcode } from "@cubby/schemas/identifiers";
 import type { photoImportCreateRunInput } from "@cubby/schemas/photo-import-run";
 import { parseEntityId } from "@cubby/schemas/identifiers";
-import type { BrowserBridgeResult } from "@cubby/schemas/purchase-import";
 import { testUserId } from "@cubby/schemas/testing";
 import { and, eq, isNull } from "drizzle-orm";
 import type { Pool } from "pg";
 import { z } from "zod";
 
-import {
-  ledgerParty,
-  orderMail,
-  orderMailEvent,
-  run as runTable,
-} from "~/server/db/schema";
-import { completedCapture } from "~/server/purchase-import/browser.fixtures";
+import { ledgerParty, orderMail, orderMailEvent } from "~/server/db/schema";
 import { authorizePurchaseAgent } from "~/server/purchase-import/purchase-agent-workerd.fixtures";
-import { startOrResumeRun } from "~/server/purchase-import/run-service";
 import type {
   PhotoImportFinalizeInput,
   PhotoImportStageInput,
@@ -42,13 +30,6 @@ type CoupledServices = {
   /** The harness's web origin and the member's session, for the native HTTP API. */
   origin: string;
   cookies: ReadonlyArray<{ name: string; value: string }>;
-  /** Connects the simulated Mac browser; it answers each command by URL. */
-  connectBrowser: (input: {
-    vendorAccountId: string;
-    ledgerPartyId: string;
-    userId: string;
-    outcomes: Record<string, BrowserBridgeResult["outcome"]>;
-  }) => Promise<void>;
 };
 
 /**
@@ -82,28 +63,17 @@ export async function seedCoupledJourneys(
   const seed: JourneySeed = {};
 
   // A saved, itemized confirmation the member imports from the vendor page,
-  // plus its later shipping notice; once mail-only, once on a synced account.
-  seed["import-order-mail"] = await seedSavedConfirmation(db, member.id, {
-    ...LIVE_IMPORT.mail,
-    synced: false,
-  });
-  seed["import-order-mail-enrich"] = await seedSavedConfirmation(
+  // plus its later shipping notice.
+  seed["import-order-mail"] = await seedSavedConfirmation(
     db,
     member.id,
-    { ...LIVE_IMPORT.enrich, synced: true },
+    LIVE_IMPORT.mail,
   );
 
   // A fresh database starts with image processing paused; finalize would
   // schedule descriptions that no wakeup ever claims.
   await updateImageProcessingSettings(db, { enabled: true, paused: false });
   seed["import-photo-inventory"] = { run: await uploadPhotoRun(services) };
-
-  seed["import-account-sync"] = await seedAccountSync(
-    pool,
-    member.id,
-    userId,
-    services,
-  );
   return seed;
 }
 
@@ -206,88 +176,14 @@ async function uploadPhotoRun(services: CoupledServices) {
 }
 
 /**
- * A browser-synced vendor account with one finished sync, and the simulated
- * Mac browser serving its order history and one order by URL. The member
- * starts the account's next sync from that finished run.
- */
-async function seedAccountSync(
-  pool: Pool,
-  memberId: LedgerPartyId,
-  userId: string,
-  services: CoupledServices,
-) {
-  const { sync } = LIVE_IMPORT;
-  const db = buildScenarioDatabase(pool);
-  const historyUrl = `https://${sync.host}/order-history`;
-  const orderUrl = `https://${sync.host}/orders/details?orderID=${sync.orderId}`;
-  const vendor = await insertWithShortcode(db, "vendor", {
-    name: sync.vendor,
-    website: historyUrl,
-    browserDomains: [sync.host],
-    orderEvidence: "online_account",
-  });
-  const account = await insertWithShortcode(db, "vendorAccount", {
-    label: "Synthetic trowel account",
-    vendorId: vendor.id,
-    ledgerPartyId: memberId,
-    browserSyncEnabled: true,
-    browser: "chrome",
-  });
-  const prior = await startOrResumeRun(db, {
-    ledgerPartyId: memberId,
-    vendorAccountId: account.id,
-    trigger: "manual",
-  });
-  await getDb(db)
-    .update(runTable)
-    .set({
-      status: "completed",
-      coordinatorStartedAt: new Date(),
-      endedAt: new Date(),
-      historyExhaustedAt: new Date(),
-    })
-    .where(eq(runTable.id, prior.id));
-  const capture = (
-    sourceURL: string,
-    title: string,
-    text: string,
-    links: Array<{ url: string; label: string }>,
-  ) => completedCapture(sourceURL, { title, text, links });
-  const dollars = (cents: number) => `$${(cents / 100).toFixed(2)}`;
-  const principal = sync.cents - 100;
-  await services.connectBrowser({
-    vendorAccountId: account.id,
-    ledgerPartyId: memberId,
-    userId,
-    outcomes: {
-      [historyUrl]: await capture(
-        historyUrl,
-        "Your Orders",
-        `Your orders\nOrder placed September 20, 2026 Order # ${sync.orderId} Total ${dollars(sync.cents)}`,
-        [{ url: orderUrl, label: "View order details" }],
-      ),
-      [orderUrl]: await capture(
-        orderUrl,
-        `Order ${sync.orderId}`,
-        `Order ${sync.orderId} placed September 20, 2026. ${sync.item} (SKU TROWEL-1) qty 1 ${dollars(principal)}. Sales tax $1.00. Order total ${dollars(sync.cents)}.`,
-        [],
-      ),
-    },
-  });
-  return { run: prior.publicId, vendor: vendor.shortcode };
-}
-
-/**
  * One Vendor with a saved itemized confirmation (a product link on the
  * Vendor's own site in its HTML) and a shipping notice for the same order.
- * `synced` gives the member a browser-synced account, so the import's new
- * Product starts follow-up enrichment; otherwise the import creates the
- * member's mail-only account itself.
+ * The import creates the member's mail-only account itself.
  */
 async function seedSavedConfirmation(
   db: ReturnType<typeof buildScenarioDatabase>,
   memberId: string,
-  source: (typeof LIVE_IMPORT)["mail" | "enrich"] & { synced: boolean },
+  source: (typeof LIVE_IMPORT)["mail"],
 ) {
   const party = parseEntityId("ledgerParty", memberId);
   const vendor = await insertWithShortcode(db, "vendor", {
@@ -295,12 +191,6 @@ async function seedSavedConfirmation(
     website: `https://${source.host}`,
     browserDomains: [source.host],
   });
-  if (source.synced)
-    await insertWithShortcode(db, "vendorAccount", {
-      label: source.vendor,
-      vendorId: vendor.id,
-      ledgerPartyId: party,
-    });
   const save = async (
     event: "placed" | "shipped",
     receivedAt: string,

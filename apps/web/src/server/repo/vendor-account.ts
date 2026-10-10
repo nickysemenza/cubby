@@ -16,7 +16,6 @@ import type {
 import { vendorAccountOut } from "@cubby/schemas/vendor-account";
 import { and, eq, inArray, max, sql } from "drizzle-orm";
 
-import { publishInBackground } from "~/server/background-tasks/publish";
 import type { Database, DrizzleTransaction } from "~/server/db";
 import type { IncomingEdgePolicy } from "~/server/db/entity-incoming-edges";
 import { ledgerParty, run, vendor, vendorAccount } from "~/server/db/schema";
@@ -75,9 +74,10 @@ const VENDOR_ACCOUNT_DELETE_EDGE_POLICY = {
     description: "Replay-safe source claims retain their vendor-account scope.",
   },
   "ImportHunt.vendorAccountId": {
-    code: "block-hunts",
-    effect: "block",
-    description: "Import hunts retain their assigned vendor account.",
+    code: "preserve-retired-research",
+    effect: "preserve",
+    description:
+      "Retired research history stays on the tombstone until the contract migration drops it.",
   },
 } as const satisfies IncomingEdgePolicy<"vendorAccount", OperationDisposition>;
 
@@ -347,7 +347,7 @@ async function updateVendorAccount(
     browserSyncEnabled: data.browserSyncEnabled,
     ...refs,
   };
-  const browsing = await withTransaction(db, async (tx) => {
+  await withTransaction(db, async (tx) => {
     await patchEntityRows(
       tx,
       actor,
@@ -372,26 +372,7 @@ async function updateVendorAccount(
       .limit(1);
     if (row?.status === "active" && row.browserSyncEnabled)
       await classifyOnlineAccountVendor(tx, actor, row.vendorId);
-    return row?.status !== "disabled" && row?.browserSyncEnabled === true;
   });
-  // Turning browser sync on (or re-enabling the account) is when Products its
-  // mail-only imports left unenriched can start; the sweep skips Products a
-  // run already finished, so a replay starts nothing new.
-  if (
-    browsing &&
-    (data.browserSyncEnabled === true || data.status !== undefined)
-  )
-    await publishInBackground(
-      db,
-      [
-        {
-          kind: "purchase-import.enrichment-sweep",
-          requestedAt: new Date().toISOString(),
-          vendorAccountId: id,
-        },
-      ],
-      { source: "vendorAccount.update" },
-    );
   return { output: await reader.getByID(db, id), entityId: id };
 }
 

@@ -84,21 +84,6 @@ export async function readImportSourceClaimFamily(
   return { root, members };
 }
 
-/** Resolve projection identities through the same ownership checks as the writer. */
-export async function loadImportSourceClaimRoots(
-  db: Reader,
-  claims: readonly (FamilyIdentity & Pick<Claim, "id">)[],
-) {
-  const roots = new Map<Claim["id"], Claim>();
-  for (const claim of claims) {
-    if (roots.has(claim.id)) continue;
-    const family = await readImportSourceClaimFamily(db, claim);
-    if (!family) throw new Error("Retained source claim no longer exists.");
-    for (const member of family.members) roots.set(member.id, family.root);
-  }
-  return roots;
-}
-
 /** Current raw-source bytes belong to the root; historical aliases retain their own history. */
 export async function lockImportSourceClaimFamily(
   tx: Pick<DrizzleTransaction, "select" | "insert" | "update">,

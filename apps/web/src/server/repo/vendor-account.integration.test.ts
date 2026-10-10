@@ -5,7 +5,7 @@ import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 
 import { ledgerParty, run, vendor as vendorTable } from "~/server/db/schema";
-import { startOrResumeRun } from "~/server/purchase-import/run-service";
+import { startImportRunFixture } from "~/server/purchase-import/import-run.fixtures";
 import { getDb } from "~/server/repo/database-helpers";
 import {
   findOrCreateWithShortcode,
@@ -45,10 +45,9 @@ describe("vendor account run activity", () => {
     expect(before?.lastRunAt).toBeNull();
     expect(before?.lastSuccessAt).toBeNull();
 
-    const started = await startOrResumeRun(ctx.db, {
+    const started = await startImportRunFixture(ctx.db, {
       ledgerPartyId: party.id,
       vendorAccountId: account.id,
-      trigger: "manual",
     });
     const [row] = await getDb(ctx.db)
       .select({ startedAt: run.startedAt })

@@ -1,7 +1,7 @@
 import { parseEntityId } from "@cubby/schemas/identifiers";
 import { eq } from "drizzle-orm";
 /** Failures: shipment/no-ID/attachment-only sources remain confirmation-gated;
- * stale or foreign source bytes launch research; multi-source context is split. */
+ * stale or foreign source bytes launch a Mail import; multi-source context is split. */
 import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it, vi } from "vitest";
 
@@ -9,10 +9,10 @@ import { orderMail, orderMailEvent, ledgerParty } from "~/server/db/schema";
 import { getDb } from "~/server/repo/database-helpers";
 import { insertWithShortcode } from "~/server/repo/shortcode-utils";
 
-import type { startMailResearch } from "../research-run";
+import type { startMailImport } from "../mail-import-run";
 import { startOrderMailImport, startSelectedOrderMailImport } from "./import";
 
-describe("member-owned mail research launches", () => {
+describe("member-owned Mail import launches", () => {
   const ctx = withTestDb();
   const queue = { send: async () => undefined };
   const seed = async (owned = true) => {
@@ -59,7 +59,7 @@ describe("member-owned mail research launches", () => {
       .where(eq(ledgerParty.id, ledgerPartyId));
     if (!party) throw new Error("Synthetic actor member missing");
     const row = await insertWithShortcode(ctx.db, "run", {
-      purpose: "account_sync",
+      purpose: "mail_import",
       ledgerPartyId,
       actorLedgerPartyShortcode: party.shortcode,
       actorUserId: ctx.actor.userId,
@@ -69,7 +69,7 @@ describe("member-owned mail research launches", () => {
       trigger: "manual",
     });
     const research = vi.fn(
-      async (..._args: Parameters<typeof startMailResearch>) => [
+      async (..._args: Parameters<typeof startMailImport>) => [
         { runId: row.id, status: row.status },
       ],
     );
@@ -100,7 +100,7 @@ describe("member-owned mail research launches", () => {
     const source = await seed();
     const first = await starter(source.party.id);
     const second = await starter(source.party.id);
-    const research: typeof startMailResearch = async () => [
+    const research: typeof startMailImport = async () => [
       { runId: first.row.id, status: "running" },
       { runId: second.row.id, status: "running" },
     ];

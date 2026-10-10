@@ -8,16 +8,16 @@ import { getDb } from "~/server/repo/database-helpers";
 import { insertWithShortcode } from "~/server/repo/shortcode-utils";
 
 import { loadPurchaseAuditBatch } from "./audit-batch";
-import { productResearchFixture } from "./product-research.fixtures";
+import { importedPurchaseFixture } from "./import-run.fixtures";
 import { auditImportBatch } from "./run-service";
 
 describe("purchase audit restart recovery", () => {
   const ctx = withTestDb();
   const successorFor = async (
-    f: Awaited<ReturnType<typeof productResearchFixture>>,
+    f: Awaited<ReturnType<typeof importedPurchaseFixture>>,
   ) => {
     return await insertWithShortcode(ctx.db, "run", {
-      purpose: "account_sync",
+      purpose: "mail_import",
       trigger: "manual",
       status: "running",
       agentSessionId: "synthetic-audit-agent",
@@ -25,7 +25,7 @@ describe("purchase audit restart recovery", () => {
       ledgerPartyId: f.party.id,
       actorUserId: ctx.actor.userId,
       actorName: f.party.name,
-      actorEmail: "research@example.test",
+      actorEmail: "import@example.test",
       actorLedgerPartyShortcode: f.party.shortcode,
       actorLedgerPartyName: f.party.name,
       actorLedgerPartyKind: "member",
@@ -33,7 +33,9 @@ describe("purchase audit restart recovery", () => {
   };
 
   it("includes unaudited predecessor purchases when the successor has no new writes", async () => {
-    const f = await productResearchFixture(ctx.db, ctx.actor, { legacy: true });
+    const f = await importedPurchaseFixture(ctx.db, ctx.actor, {
+      auditLogged: true,
+    });
     const successor = await successorFor(f);
 
     const batch = await loadPurchaseAuditBatch(ctx.db, successor.id);
@@ -43,7 +45,9 @@ describe("purchase audit restart recovery", () => {
   });
 
   it("keeps unique stable pages across repeated writes and a malformed retry cycle", async () => {
-    const f = await productResearchFixture(ctx.db, ctx.actor, { legacy: true });
+    const f = await importedPurchaseFixture(ctx.db, ctx.actor, {
+      auditLogged: true,
+    });
     const successor = await successorFor(f);
     const ids = [f.order.id];
     for (let index = 0; index < 26; index++) {
@@ -91,8 +95,8 @@ describe("purchase audit restart recovery", () => {
   ] as const)(
     "does not inherit predecessor writes across the %s boundary",
     async (boundary) => {
-      const f = await productResearchFixture(ctx.db, ctx.actor, {
-        legacy: true,
+      const f = await importedPurchaseFixture(ctx.db, ctx.actor, {
+        auditLogged: true,
       });
       const successor = await successorFor(f);
       const foreignOwner = await insertWithShortcode(ctx.db, "ledgerParty", {
@@ -136,7 +140,9 @@ describe("purchase audit restart recovery", () => {
   );
 
   it("retains inherited findings without granting a fix on predecessor records", async () => {
-    const f = await productResearchFixture(ctx.db, ctx.actor, { legacy: true });
+    const f = await importedPurchaseFixture(ctx.db, ctx.actor, {
+      auditLogged: true,
+    });
     const successor = await successorFor(f);
     const batch = await loadPurchaseAuditBatch(ctx.db, successor.id);
     const expenseId = batch[0]?.expenses[0]?.id;
@@ -177,7 +183,9 @@ describe("purchase audit restart recovery", () => {
     });
   });
   it("keeps a mismatched inherited expense fix report-only beside a writable purchase", async () => {
-    const f = await productResearchFixture(ctx.db, ctx.actor, { legacy: true });
+    const f = await importedPurchaseFixture(ctx.db, ctx.actor, {
+      auditLogged: true,
+    });
     const successor = await successorFor(f);
     const writable = await insertWithShortcode(ctx.db, "purchase", {
       vendorId: f.order.vendorId,

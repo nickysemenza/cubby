@@ -17,7 +17,7 @@ struct DeviceWorkLiveSelection: Equatable {
             switch activity.kind {
             case .libraryScan, .hashRepair, .classificationSweep, .metadataSync, .upload:
                 now.timeIntervalSince(activity.startedAt) >= 30
-            case .companionJob, .browserBridgeSync:
+            case .companionJob:
                 false
             }
         }

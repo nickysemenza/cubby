@@ -19,9 +19,9 @@ import {
 import type { PurchaseAgentQueueProducer } from "~/server/purchase-agent-queue-types";
 import { getDb, notDeleted } from "~/server/repo/database-helpers";
 
-import type { startMailResearch } from "../research-run";
+import type { startMailImport } from "../mail-import-run";
 
-type ResearchPorts = { research?: typeof startMailResearch };
+type ResearchPorts = { research?: typeof startMailImport };
 
 /** Selection authorizes original sources, rather than a inferred order or Vendor. */
 async function startSelectedSources(
@@ -73,7 +73,7 @@ async function startSelectedSources(
   if (rows.some((row) => row.mail.ledgerPartyId !== head.mail.ledgerPartyId))
     throw new Error("Select email from one member.");
   const research =
-    ports.research ?? (await import("../research-run")).startMailResearch;
+    ports.research ?? (await import("../mail-import-run")).startMailImport;
   const results = await research(
     db,
     {

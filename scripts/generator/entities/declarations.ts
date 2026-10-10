@@ -184,6 +184,7 @@ export type EntityField = Readonly<{
     filters: readonly Readonly<{ field: string; values: readonly string[] }>[];
   }> | null;
   provenance: EntityFieldProvenance | null;
+  collection?: Readonly<{ key: "value" | readonly string[] }>;
   explanation: Readonly<{
     ruleId: string;
     version: number;

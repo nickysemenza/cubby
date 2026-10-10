@@ -1017,10 +1017,9 @@ Run uses the shared quality score, filters, sorting, and explanation. Its
 progressive list declares quality and media enrichment groups, so base identity
 arrives first and web and native request scores through the shared loader. Its
 checks assess recorded actor attribution, a consistent timeline, and terminal
-target outcomes for completed validation, product enrichment, and photo
-inventory runs. A skipped or unavailable target needs a recorded reason.
-Running or paused work does not need finished targets; account sync can
-legitimately discover no orders. Execution status remains separate from
+target outcomes for completed Mail import and photo inventory runs (and
+historical validation and enrichment runs). A skipped or unavailable target
+needs a recorded reason. Running or paused work does not need finished targets. Execution status remains separate from
 quality of the recorded facts. Activity feed rows hydrate the same Run quality,
 including the main Runs page and native activity rows; image-processing jobs
 carry null quality and remain unassessed. Scored and unscored web renderer
@@ -1037,6 +1036,12 @@ the entity may record `DataException` rows), `related` (other
 scored entities whose gaps roll up into this one), and `listOrder`. `id` must
 be globally unique across every entity's checks — it doubles as the `dataGap`
 filter option value.
+
+The Research queue ([GLOSSARY](../GLOSSARY.md)) is no table: it is the
+`research-queue` saved views on Product, Purchase and Expense, which filter
+`dataGaps` to the checks research can close and sort by `dataQuality`
+ascending. A `DataException` bound to the evidence fingerprint removes an item
+until its inputs change.
 
 The compiler (`scripts/generator/entities/data-quality.ts`) synthesizes two
 model fields (`dataQuality`, `dataGaps`) with the `data-quality` list
@@ -1211,6 +1216,23 @@ table each (ADR 0007):
   `retailer_sku`, `gtin_14`, …), `settlement_ref` on financial transactions,
   `page` (Notion) and `folder` (Drive). A live `(source, kind, externalId)`
   names one entity; rows soft-delete with their entity.
+- `EntitySource(entityId/entityKind, fieldPath, url, quote, observedAt,
+  selectedVariant, valueFingerprint, recorder)` records where a fact about an
+  entity was seen ([GLOSSARY](../GLOSSARY.md) "Source";
+  `repo/entity-source.ts`). Every create/update command and image attach
+  accepts `sources[]`; the kernel validates `fieldPath` against the manifest,
+  writes the rows in the mutation's transaction, takes the recorder from the
+  actor (never input) and fingerprints the post-write field value. Detail
+  reads return `sources` with `supportsCurrentValue`, so a Source for an
+  overwritten value reads as an earlier value. Merge moves and de-duplicates
+  Sources to the survivor (`finalizeMerge`); a soft delete keeps them.
+
+A field declared with `collection: { key }` accepts patch items on
+`entity.update` as well as a full replacement: `{op: "add" | "replace" |
+"remove", key, value?, expect?}`. All preconditions are checked before any
+change. Text arrays (Product `aliases`, `tags`) patch in the kernel; Product
+`externalIds` patches through the Product repository, which keeps primary and
+secondary slots, GTIN normalization and global identifier ownership.
 
 ## Classification field policies
 

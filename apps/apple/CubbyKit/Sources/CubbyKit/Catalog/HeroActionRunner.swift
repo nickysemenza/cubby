@@ -74,64 +74,6 @@ public enum HeroActionPreview: Sendable {
     case discard(ProductDiscardPreviewOut)
     case addToInventory(ProductAddToInventoryPreviewOut)
     case deleteImpact(EntityConnectionsOut)
-    case launch(TargetedLaunchPreview)
-}
-
-/// What a targeted purchase-validation launch can replay: whether validation may start, why not,
-/// and the evidence sources to choose from.
-public struct TargetedLaunchPreview: Sendable, Equatable {
-    public struct Source: Sendable, Equatable, Identifiable {
-        public let id: String
-        public let label: String
-        public let kind: String
-        public let accountLabel: String?
-        public let usable: Bool
-        public let reason: String?
-        public let isDefault: Bool
-
-        public var detail: String {
-            [kind, accountLabel, reason].compactMap { $0 }.filter { !$0.isEmpty }.joined(separator: " · ")
-        }
-    }
-
-    public let canStart: Bool
-    public let reason: String?
-    public let sources: [Source]
-
-    init(_ output: RunTargetedLaunchOutput) throws {
-        let value = try JSONValue(encoding: output)
-        if value["purpose"]?.stringValue == "product_enrichment" {
-            let target = value["products"]?.arrayValue?.first { $0["selected"]?.boolValue == true }
-            canStart = target != nil && target?["needsAccountChoice"]?.boolValue == false
-            reason = target?["reason"]?.stringValue
-            if let id = target?["sourceId"]?.stringValue,
-                let label = target?["sourceLabel"]?.stringValue
-            {
-                sources = [
-                    Source(
-                        id: id, label: label, kind: "",
-                        accountLabel: target?["vendorAccountLabel"]?.stringValue,
-                        usable: canStart, reason: reason, isDefault: true)
-                ]
-            } else {
-                sources = []
-            }
-            return
-        }
-        let purchase = value["purchase"]
-        canStart = purchase?["canValidate"]?.boolValue ?? false
-        reason = purchase?["reason"]?.stringValue
-        sources = (purchase?["sources"]?.arrayValue ?? []).compactMap { source in
-            guard let id = source["id"]?.stringValue, let label = source["label"]?.stringValue else {
-                return nil
-            }
-            return Source(
-                id: id, label: label, kind: source["kind"]?.stringValue ?? "",
-                accountLabel: source["vendorAccountLabel"]?.stringValue,
-                usable: source["usable"]?.boolValue ?? false, reason: source["reason"]?.stringValue,
-                isDefault: source["default"]?.boolValue ?? false)
-        }
-    }
 }
 
 /// The one generic native path for manifest hero actions. The verb picks a `HeroActionPlan`
@@ -179,10 +121,10 @@ public struct HeroActionRunner: Sendable {
     /// Operation ids with a typed handler in `perform`, and previews in `preview`.
     public static let handledOperations: Set<String> = [
         "product.discard", "inventory.bulkAdd", "ai.describeLocation", "image.attachExisting",
-        "imageProcessing.status", "run.startTargeted",
+        "imageProcessing.status",
     ]
     public static let handledPreviews: Set<String> = [
-        "product.discardPreview", "product.addToInventoryPreview", "run.targetedLaunch",
+        "product.discardPreview", "product.addToInventoryPreview",
     ]
 
     // MARK: - Form
@@ -289,17 +231,6 @@ public struct HeroActionRunner: Sendable {
                 return .addToInventory(
                     try await client.addToInventoryPreview(
                         .init(productId: rowID, locationId: body["locationId"]?.stringValue)))
-            case "run.targetedLaunch":
-                guard let targetID = body["targetId"]?.stringValue else {
-                    throw HeroActionError.missing("targetId")
-                }
-                let enrichment = body["purpose"]?.stringValue == "product_enrichment"
-                return .launch(
-                    try TargetedLaunchPreview(
-                        try await client.targetedRunLaunch(
-                            .init(
-                                purpose: enrichment ? .productEnrichment : .purchaseValidation,
-                                targetId: targetID))))
             default: throw HeroActionError.unsupported(preview.operation)
             }
         case .create, .setField, .toggleField:
@@ -355,8 +286,6 @@ public struct HeroActionRunner: Sendable {
                 }
                 return try await reviewDetectedValue(
                     row: row, entity: entity, imageID: itemID, continuation: continuation)
-            case "run.startTargeted":
-                return try await startTargetedRun(body)
             default: throw HeroActionError.unsupported(operation.operation)
             }
         case .create(let target, let seed, let editor):
@@ -432,14 +361,4 @@ public struct HeroActionRunner: Sendable {
         return .object(facts)
     }
 
-    private func startTargetedRun(_ body: JSONValue) async throws -> HeroActionOutcome {
-        let result = try JSONValue(encoding: try await client.sending(body, client.startTargetedRun))
-        let runs = result["runs"]?.arrayValue ?? []
-        if let blocking = runs.compactMap({ $0["blockingRun"] }).first(where: { $0 != .null }) {
-            let id = blocking["id"]?.stringValue ?? "another run"
-            throw HeroActionError.unavailable(
-                "\(id) (\(blocking["status"]?.stringValue ?? "running")) is already using this account.")
-        }
-        return .completed("Validation started", changed: [.run, .purchase])
-    }
 }

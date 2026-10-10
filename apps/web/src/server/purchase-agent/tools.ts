@@ -1,11 +1,4 @@
-import {
-  photoInventoryToolInputs,
-  purchaseAgentToolInputs,
-} from "@cubby/schemas/purchase-agent-services";
-import {
-  archivedResearchWorkResolve,
-  researchAttachmentOriginal,
-} from "@cubby/schemas/research-tools";
+import { photoInventoryToolInputs } from "@cubby/schemas/purchase-agent-services";
 import type { Context, JsonValue } from "@earendil-works/chord";
 import { Type, type TSchema } from "@earendil-works/pi-ai";
 import {
@@ -18,15 +11,9 @@ import { z } from "zod";
 
 import type { RunServices } from "./environment";
 
-const toolInputs = { ...purchaseAgentToolInputs, ...photoInventoryToolInputs };
+const toolInputs = photoInventoryToolInputs;
 type ToolInputs = typeof toolInputs;
 type ToolName = keyof ToolInputs;
-
-/** The lifecycle fields of a browser command result. */
-const browserCommandState = z.looseObject({
-  status: z.string().optional(),
-  state: z.string().optional(),
-});
 
 const claimStopped = (output: JsonValue) =>
   z.object({ kind: z.literal("stopped") }).safeParse(output).success;
@@ -57,28 +44,6 @@ function result(
   const content = [{ type: "text" as const, text: JSON.stringify(output) }];
   if (!terminate) return { content };
   return { content, control: { terminate: true } };
-}
-
-function originalMediaResult(
-  output: JsonValue,
-  terminate: boolean,
-): ToolExecutionResult {
-  const parsed = z
-    .looseObject({ originalAttachment: researchAttachmentOriginal.optional() })
-    .parse(output);
-  if (!parsed.originalAttachment) return result(output, terminate);
-  const { dataBase64, ...descriptor } = parsed.originalAttachment;
-  const text = result(
-    z.json().parse({ ...parsed, originalAttachment: descriptor }),
-    terminate,
-  );
-  return {
-    ...text,
-    content: [
-      ...text.content,
-      { type: "image", data: dataBase64, mimeType: descriptor.mimeType },
-    ],
-  };
 }
 
 type JsonSchema = z.core.JSONSchema._JSONSchema;
@@ -182,17 +147,11 @@ function tool<N extends ToolName>(
     replay: "safe",
     ...definition,
     execute: async (args, api, context) => {
-      const current = toolInputs[name].safeParse(args);
       // pi-durable resumes execute checkpoints without revalidating their
-      // saved arguments. Only a previously started host call may decode the
-      // removed field; the service still requires its completed receipt.
-      const parsed = current.success
-        ? current.data
-        : name === "work_resolve" && (await api.memo("host-call-id", context))
-          ? archivedResearchWorkResolve.parse(args)
-          : toolInputs[name].parse(args);
+      // saved arguments.
+      const parsed = toolInputs[name].parse(args);
       return definition.execute(
-        // SAFETY: indexed current input or the same shape plus archived operands.
+        // SAFETY: the indexed tool's own parsed input.
         parsed as z.input<ToolInputs[N]>,
         api,
         context,
@@ -202,152 +161,14 @@ function tool<N extends ToolName>(
 }
 
 /**
- * Typed run services are deliberately limited to seams that cannot travel
- * through MCP: browser commands must end the run while the user's browser
- * works, progress must be visible before another model turn completes, and
- * lifecycle transitions stay behind the host's crash-safe guards.
- *
- * A terminating tool ends the run only when it is the round's sole call; the
- * agent's transport disables parallel tool calls so that always holds.
+ * The host-owned tools every import Run's agent mounts beside its Cubby MCP
+ * actions: claim the next admitted item, publish progress, stop for review.
  */
-export function purchaseImportTools(
-  services: () => RunServices,
-  retainOutput?: (output: JsonValue) => Promise<void>,
-  beforeEffect?: () => Promise<void>,
-  recordOutcome?: (
-    tool: string,
-    args: JsonValue,
-    callId: string,
-    error?: string,
-  ) => Promise<string | undefined>,
-): ToolRegistration[] {
-  const run = <N extends keyof typeof purchaseAgentToolInputs>(
-    name: N,
-    description: string,
-    effect: (
-      service: RunServices,
-      args: z.input<(typeof purchaseAgentToolInputs)[N]>,
-      callId: string,
-    ) => Promise<object>,
-  ) =>
-    tool(name, {
-      description,
-      execute: async (args, api, context) => {
-        await beforeEffect?.();
-        const stored = await api.memo<{ value: string }>(
-          "host-call-id",
-          context,
-        );
-        const callId =
-          stored?.value ??
-          (
-            await api.memo(
-              "host-call-id",
-              { value: crypto.randomUUID() },
-              context,
-            )
-          ).value;
-        let output: JsonValue;
-        try {
-          output = await step(api, context, "service-result", () =>
-            effect(services(), args, callId),
-          );
-        } catch (error) {
-          const detail = await recordOutcome?.(
-            name,
-            z.json().parse(args),
-            callId,
-            error instanceof Error ? error.message : String(error),
-          );
-          if (detail)
-            return { ...result({ failure: detail }, true), isError: true };
-          throw error;
-        }
-        const state = browserCommandState.safeParse(output);
-        const detail = await recordOutcome?.(
-          name,
-          z.json().parse(args),
-          callId,
-          state.success && state.data.status === "blocked"
-            ? JSON.stringify(output)
-            : undefined,
-        );
-        await retainOutput?.(output);
-        if (detail)
-          return {
-            ...result({ failure: detail, observation: output }, true),
-            isError: true,
-          };
-        return originalMediaResult(output, researchTerminated(output));
-      },
-    });
-  return [
-    run(
-      "work_next",
-      "Get the next bounded research task. No remaining work automatically settles the Run.",
-      (service, args, callId) => service.researchNext(args, callId),
-    ),
-    run(
-      "work_observe",
-      "Read the selected receipt original, or observe and interact with the assigned browser source using retained observation references. browser_pending retains the offline command: investigate public or mail sources for this task, or request another task with work_next. waiting ends this turn.",
-      (service, args, callId) => service.researchObserve(args, callId),
-    ),
-    run(
-      "work_resolve",
-      "Resolve the assigned research task with semantic identity reasoning, evidence-backed facts and retained candidates. The host validates safe writes and returns next work or done.",
-      (service, args, callId) => service.researchResolve(args, callId),
-    ),
-    run(
-      "mail_search",
-      "Search connected Gmail for any assigned task. Select an issued mailboxRef if several are available. Continue the same query with the issued continuationRef until exhausted. Related discoveries enter child mail research; returned message references provide context and do not grant this task write ownership. A Gmail reconnect result leaves other research available; use a new call after reconnecting.",
-      (service, args, callId) => service.researchMailSearch(args, callId),
-    ),
-    run(
-      "mail_read",
-      "Read an authorized message and list its attachment references. Supply an attachmentRef from that result to inspect its full original PDF/image (up to 3 MiB) as retained evidence for this task.",
-      (service, args, callId) => service.researchMailRead(args, callId),
-    ),
-    run(
-      "web_search",
-      "Search public web sources for the assigned task.",
-      (service, args, callId) => service.researchWebSearch(args, callId),
-    ),
-    run(
-      "web_read",
-      "Read a public web source and retain its observation as evidence for this task.",
-      (service, args, callId) => service.researchWebRead(args, callId),
-    ),
-    run(
-      "cubby_find",
-      "Find existing Cubby context relevant to this task.",
-      (service, args, callId) => service.researchFind(args, callId),
-    ),
-  ];
-}
-
-function researchTerminated(output: JsonValue): boolean {
-  const parsed = browserCommandState.safeParse(output);
-  return (
-    claimStopped(output) ||
-    (parsed.success &&
-      [parsed.data.state, parsed.data.status].some(
-        (state) =>
-          state === "waiting" ||
-          state === "done" ||
-          state === "stopped" ||
-          state === "paused_auth",
-      ))
-  );
-}
-
-/** Photo inventory keeps its restricted existing tools and replay keys. */
-export function photoInventoryTools(
-  services: () => RunServices,
-): ToolRegistration[] {
+export function runAgentTools(services: () => RunServices): ToolRegistration[] {
   return [
     tool("claim_next_import_work", {
       description:
-        "Claim and describe the run's next bounded work item. Use this before choosing saved mail, receipt or browser evidence work, and again after each committed item. For settlement_verification, verify the named existing Purchase against saved statement evidence, then finish or stop for review rather than claiming this item repeatedly. Otherwise continue until none.",
+        "Claim and describe the run's next admitted work item (an Email for Mail import, a photo group for photo inventory). Call it again after resolving each item; continue until it returns done.",
       execute: async (args, api, context) => {
         const output = await step(
           api,

@@ -3,8 +3,10 @@ import { defineEntity } from "./definition.js";
 import { PRODUCT_UNCLASSIFIED_GROUP_KEY } from "../group-keys";
 import { UNSPECIFIED_MANUFACTURER } from "@cubby/shared/constants";
 import { plainDate } from "@cubby/schemas/base-entity";
+import { valueCollectionPatch } from "@cubby/schemas/entity-collection";
 import {
   externalIdInputs,
+  externalIdPatch,
   externalIdOut,
   gtin,
 } from "@cubby/schemas/external-id";
@@ -143,6 +145,29 @@ export default defineEntity({
     },
     list: {
       savedViews: [
+        {
+          id: "research-queue",
+          label: "Research queue",
+          description:
+            "Products whose identity, image or category research could improve, weakest first",
+          // The Research queue (GLOSSARY): a Burn-down session works these with
+          // its own browser and writes Sources. "Searched, not available" is a
+          // DataException on the gap, so it leaves until new evidence appears.
+          filters: [
+            {
+              id: "dataGaps",
+              value: [
+                "product_manufacturer",
+                "product_model",
+                "product_external_id",
+                "product_category",
+                "product_image",
+              ],
+            },
+          ],
+          sort: [{ id: "dataQuality", desc: false }],
+          layout: { columnVisibility: { dataGaps: true } },
+        },
         {
           id: "shelf-disagrees",
           label: "Shelf disagrees",
@@ -666,16 +691,20 @@ export default defineEntity({
       {
         key: "aliases",
         kind: "text-array",
+        collection: { key: "value" },
         control: { kind: "specialized", renderer: "tag-list" },
         validation: {
           read: z.array(z.string()),
           create: z.array(z.string()).default([]),
-          update: z.array(z.string()).optional(),
+          update: z
+            .union([z.array(z.string()), valueCollectionPatch])
+            .optional(),
         },
       },
       {
         key: "tags",
         kind: "text-array",
+        collection: { key: "value" },
         description:
           "Compatibility or ecosystem tokens only — battery platform, mount, thread, size standard. Never the manufacturer, a classification word, or a path node; those belong in manufacturer/categoryId. `collection:*` entries are managed by Collections. Leave empty when nothing fits.",
         control: {
@@ -710,7 +739,7 @@ Rules:
               "Compatibility or ecosystem tokens only — battery platform, mount, thread, size standard. Never the manufacturer, a classification word, or a path node; those belong in manufacturer/categoryId. `collection:*` entries are managed by Collections. Leave empty when nothing fits.",
             ),
           update: z
-            .array(z.string())
+            .union([z.array(z.string()), valueCollectionPatch])
             .optional()
             .describe(
               "Compatibility or ecosystem tokens only — battery platform, mount, thread, size standard. Never the manufacturer, a classification word, or a path node; those belong in manufacturer/categoryId. `collection:*` entries are managed by Collections. Leave empty when nothing fits.",
@@ -1068,6 +1097,7 @@ Rules:
       },
       {
         key: "externalIds",
+        collection: { key: ["source", "kind", "externalId"] },
         // Stays `text-array`: the field kind only gates the pruning
         // (`control.suggest.mode: "prune"`) and section-coverage machinery,
         // neither of which cares that the array holds objects rather than
@@ -1100,7 +1130,7 @@ Rules:
         validation: {
           read: z.array(externalIdOut),
           create: externalIdInputs.default([]),
-          update: externalIdInputs.optional(),
+          update: z.union([externalIdInputs, externalIdPatch]).optional(),
         },
       },
       {

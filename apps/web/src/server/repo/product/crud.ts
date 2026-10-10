@@ -1,11 +1,18 @@
 import type { ActorContext } from "@cubby/schemas/context";
 import { entityRefKey } from "@cubby/schemas/entity";
+import {
+  isCollectionPatch,
+  type ValueCollectionPatch,
+} from "@cubby/schemas/entity-collection";
 import { entityFieldModels } from "@cubby/schemas/entity-fields";
 import type { EntityLinkKind } from "@cubby/schemas/entity-links";
 import { generatedEntitySort } from "@cubby/schemas/entity-sort";
 import {
   displayGtin,
+  type ExternalIdInput,
   type ExternalIdKind,
+  type ExternalIdPatch,
+  GTIN_KIND,
   GTIN_SOURCE,
   storedExternalIdUrl,
 } from "@cubby/schemas/external-id";
@@ -76,7 +83,6 @@ import {
   productConversionCoverage,
   productUnitMappings,
   runTarget,
-  runFactEvidence,
   task,
 } from "~/server/db/schema";
 import { createAppError } from "~/server/errors/app-error";
@@ -94,7 +100,6 @@ import {
   imageJoinBindings,
   insertAndReturn,
   type ListReadIntent,
-  lockAndValidateForDelete,
   mapImages,
   notDeleted,
   shortcodeSetCondition,
@@ -225,6 +230,7 @@ import {
   externalIdSlotUnchanged,
   externalIdsContainIsbn,
   foldGtinIntoExternalIds,
+  requireCanonicalGtin,
   resolvePrimaryProductCodeInput,
   syncPrimaryGtin,
   syncProductExternalIds,
@@ -2083,6 +2089,19 @@ export const createProduct = async (
   }
 };
 
+/** The entity kernel resolves text-collection patches before a repository sees them. */
+const resolvedTextCollection = (
+  field: string,
+  value: string[] | ValueCollectionPatch | undefined,
+): string[] | undefined => {
+  if (value === undefined || !isCollectionPatch(value)) return value;
+  throw new Error(`Product ${field} patch reached the repository unresolved`);
+};
+
+const isExternalIdPatch = (
+  value: ExternalIdInput[] | ExternalIdPatch,
+): value is ExternalIdPatch => isCollectionPatch(value);
+
 /**
  * `detachedImageKeys` are R2 objects that `removeImageIds` reaped. They have no
  * rollback, so they ride out of the transaction rather than being dropped inside
@@ -2097,13 +2116,22 @@ export const updateProduct = async (
   const {
     ingredientId,
     unitMappings,
-    externalIds,
+    externalIds: externalIdsInput,
     pendingImageIds,
     pendingImagePurposes,
     removeImageIds,
     imageOrder,
     ...productData
   } = data;
+  // `externalIds` is a full replacement or a patch list (collection patching).
+  const externalIdPatchItems =
+    externalIdsInput !== undefined && isExternalIdPatch(externalIdsInput)
+      ? externalIdsInput
+      : undefined;
+  const externalIds =
+    externalIdsInput !== undefined && !isExternalIdPatch(externalIdsInput)
+      ? externalIdsInput
+      : undefined;
 
   let detachedImageKeys: string[] = [];
 
@@ -2123,7 +2151,7 @@ export const updateProduct = async (
     beforeExternalIds: Array<typeof entityExternalId.$inferSelect>,
   ) => {
     if (unitMappings !== undefined) assertNoCanonicalPriceMapping(unitMappings);
-    const { upc, isbn, ...columnData } = productData;
+    const { upc, isbn, aliases, tags, ...columnData } = productData;
     const incomingGtin = resolvePrimaryProductCodeInput({ upc, isbn });
     const desiredExternalIds =
       externalIds === undefined
@@ -2136,11 +2164,14 @@ export const updateProduct = async (
       manufacturer: columnData.manufacturer ?? beforeProduct.manufacturer,
       upc: incomingGtin ?? undefined,
     };
-    const updateData: Partial<typeof product.$inferInsert> = { ...columnData };
+    const updateData: Partial<typeof product.$inferInsert> = {
+      ...columnData,
+      aliases: resolvedTextCollection("aliases", aliases),
+      tags: resolvedTextCollection("tags", tags),
+    };
     if (ingredientId !== undefined) updateData.ingredientId = ingredientId;
-    const resultingExternalIds =
-      desiredExternalIds ??
-      (incomingGtin === undefined
+    const resultingExternalIds = desiredExternalIds ?? [
+      ...(incomingGtin === undefined
         ? beforeExternalIds
         : incomingGtin === null
           ? beforeExternalIds.filter((entry) => !entry.isPrimary)
@@ -2149,7 +2180,11 @@ export const updateProduct = async (
                 (entry) => entry.externalId !== incomingGtin,
               ),
               { source: GTIN_SOURCE, externalId: incomingGtin },
-            ]);
+            ]),
+      ...(externalIdPatchItems ?? []).flatMap((item) =>
+        item.op === "add" ? [item.key] : [],
+      ),
+    ];
     const impliedFeature = impliedProductFeature({
       fdc_id:
         updateData.fdc_id === undefined
@@ -2197,9 +2232,11 @@ export const updateProduct = async (
       const desired = desiredExternalIds ?? [];
       await assertExternalIdsAvailable(tx, desired, id);
       await syncProductExternalIds(tx, id, desired);
-    } else if (incomingGtin !== undefined) {
-      await syncPrimaryGtin(tx, id, incomingGtin);
+      return;
     }
+    if (externalIdPatchItems !== undefined)
+      await applyProductExternalIdPatch(tx, id, externalIdPatchItems);
+    if (incomingGtin !== undefined) await syncPrimaryGtin(tx, id, incomingGtin);
   };
 
   try {
@@ -2395,216 +2432,267 @@ export const setProductsStockTracked = async (
   return getProductsByShortcodes(db, updatedShortcodes);
 };
 
-export const patchProductExternalIds = async (
-  db: Database,
+type ExternalIdRow = typeof entityExternalId.$inferSelect;
+type ExternalIdPatchItem = ExternalIdPatch[number];
+
+/** Source slugs lowercase; barcodes in their one canonical GTIN-14 form. */
+const normalizedExternalIdPatch = (patch: ExternalIdPatch) =>
+  patch.map((item) => ({
+    ...item,
+    key: {
+      ...item.key,
+      source: item.key.source.trim().toLowerCase(),
+      externalId:
+        item.key.kind === GTIN_KIND
+          ? requireCanonicalGtin(item.key.externalId)
+          : item.key.externalId,
+    },
+  }));
+
+const liveExternalIdRow = (
+  rows: readonly ExternalIdRow[],
+  key: ExternalIdPatchItem["key"],
+) =>
+  rows.find(
+    (row) =>
+      row.source === key.source &&
+      row.kind === key.kind &&
+      row.externalId === key.externalId,
+  );
+
+/** Every remove/replace names a live identifier holding what `expect` says. */
+const assertExternalIdPatchPreconditions = (
+  rows: readonly ExternalIdRow[],
+  items: readonly ExternalIdPatchItem[],
+) => {
+  for (const item of items) {
+    if (item.op === "add") continue;
+    const { source, kind, externalId } = item.key;
+    const row = liveExternalIdRow(rows, item.key);
+    const inSlot = rows.filter(
+      (candidate) => candidate.source === source && candidate.kind === kind,
+    );
+    if (!row)
+      throw createAppError(
+        "PRODUCT_EXTERNAL_ID_PRECONDITION_FAILED",
+        inSlot.length > 0
+          ? `Product external ID ${source}/${kind} holds ${inSlot
+              .map((candidate) => candidate.externalId)
+              .join(", ")}, not the expected ${externalId}.`
+          : `Product has no live external ID in slot ${source}/${kind}.`,
+      );
+    const expected = item.expect;
+    const primaryDiffers =
+      expected?.isPrimary !== undefined && expected.isPrimary !== row.isPrimary;
+    const urlDiffers =
+      expected?.url !== undefined && (expected.url ?? null) !== row.url;
+    if (primaryDiffers || urlDiffers)
+      throw createAppError(
+        "PRODUCT_EXTERNAL_ID_PRECONDITION_FAILED",
+        `Product external ID ${source}/${kind}/${externalId} is ${row.isPrimary ? "primary" : "secondary"} with url ${row.url ?? "none"}, not the expected ${JSON.stringify(expected)}.`,
+      );
+  }
+};
+
+// Demote BEFORE promoting or inserting: the one-primary partial unique is a
+// plain non-deferrable index, so two primaries may never coexist.
+const demoteSlotPrimary = (
+  tx: DrizzleTransaction,
   id: ProductId,
-  input: {
-    upsert: Array<{
-      source: string;
-      kind: ExternalIdKind;
-      externalId: string;
-      url?: string | null;
-      isPrimary?: boolean;
-    }>;
-    remove: Array<{
-      source: string;
-      kind: ExternalIdKind;
-      expectedExternalId: string;
-    }>;
-  },
-  actor: ActorContext,
-): Promise<ProductTopLevelOut> =>
-  await withTransaction(db, async (tx) => {
-    await lockAndValidateForDelete(tx, product, [id], "Product");
-    await lockExternalIdentifierParents(tx, [
-      { entityId: id, entityKind: "product" },
-    ]);
-    const before = await tx.query.product.findFirst({
-      where: and(eq(product.id, id), notDeleted(product)),
-    });
-    if (!before)
-      throw createAppError("PRODUCT_NOT_FOUND", `Product ${id} not found`);
-    const beforeIds = await tx.query.entityExternalId.findMany({
-      where: and(
+  source: string,
+  kind: ExternalIdKind,
+) =>
+  tx
+    .update(entityExternalId)
+    .set({ isPrimary: false, updatedAt: new Date() })
+    .where(
+      and(
         eq(entityExternalId.entityId, id),
+        eq(entityExternalId.source, source),
+        eq(entityExternalId.kind, kind),
+        eq(entityExternalId.isPrimary, true),
         notDeleted(entityExternalId),
       ),
-    });
-
-    for (const entry of input.remove) {
-      const source = entry.source.trim().toLowerCase();
-      const inSlot = beforeIds.filter(
-        (externalId) =>
-          externalId.source === source && externalId.kind === entry.kind,
-      );
-      if (!inSlot.some((row) => row.externalId === entry.expectedExternalId)) {
-        throw createAppError(
-          "PRODUCT_EXTERNAL_ID_PRECONDITION_FAILED",
-          inSlot.length > 0
-            ? `Product external ID ${source}/${entry.kind} holds ${inSlot
-                .map((row) => row.externalId)
-                .join(", ")}, not the expected ${entry.expectedExternalId}.`
-            : `Product has no live external ID in slot ${source}/${entry.kind}.`,
-        );
-      }
-    }
-
-    await assertExternalIdsAvailable(tx, input.upsert, id);
-    await ensureExternalSources(
-      tx,
-      input.upsert.map((entry) => entry.source.trim().toLowerCase()),
     );
 
-    // Slots this call is explicitly removing must never be short-circuited by
-    // the unchanged-value check below, even if their pre-removal value
-    // happens to match an incoming upsert for the same slot.
-    const removedSlots = new Set(
-      input.remove.map((r) => `${r.source.trim().toLowerCase()}\0${r.kind}`),
-    );
+/** `replace`: change a live identifier's url and/or primary flag in place. */
+const replaceExternalIdAttributes = async (
+  tx: DrizzleTransaction,
+  id: ProductId,
+  row: ExternalIdRow,
+  item: Extract<ExternalIdPatchItem, { op: "replace" }>,
+) => {
+  if (item.value.isPrimary === true && !row.isPrimary)
+    await demoteSlotPrimary(tx, id, item.key.source, item.key.kind);
+  await tx
+    .update(entityExternalId)
+    .set({
+      isPrimary: item.value.isPrimary ?? row.isPrimary,
+      url:
+        item.value.url === undefined
+          ? row.url
+          : storedExternalIdUrl({ ...item.key, url: item.value.url }),
+      updatedAt: new Date(),
+    })
+    .where(eq(entityExternalId.id, row.id));
+};
 
-    for (const entry of input.remove) {
-      const source = entry.source.trim().toLowerCase();
+/**
+ * `add`: an upsert. Unless `isPrimary: false` the identifier takes the slot's
+ * primary, overwriting the current primary in place; an identifier already
+ * present as a secondary is promoted, and a secondary add of a present
+ * identifier only refreshes its url.
+ */
+const addExternalIdToSlot = async (
+  tx: DrizzleTransaction,
+  id: ProductId,
+  item: Extract<ExternalIdPatchItem, { op: "add" }>,
+  slotIsBeingRemoved: boolean,
+) => {
+  const { source, kind, externalId } = item.key;
+  const entry = { ...item.key, ...item.value };
+  const isPrimary = item.value?.isPrimary ?? true;
+  const slotRows = await tx.query.entityExternalId.findMany({
+    where: and(
+      eq(entityExternalId.entityId, id),
+      eq(entityExternalId.source, source),
+      eq(entityExternalId.kind, kind),
+      notDeleted(entityExternalId),
+    ),
+  });
+  const sameValue = slotRows.find((row) => row.externalId === externalId);
+  const liveSlot = isPrimary
+    ? slotRows.find((row) => row.isPrimary)
+    : sameValue;
+  // A slot this call removes from is never short-circuited, even when the
+  // add names its old value.
+  if (
+    liveSlot &&
+    !slotIsBeingRemoved &&
+    externalIdSlotUnchanged(liveSlot, entry)
+  )
+    return;
+  if (!isPrimary || (sameValue && !sameValue.isPrimary)) {
+    // The global (source, kind, externalId) unique allows one row per
+    // identifier, so a present secondary is updated, never duplicated.
+    if (isPrimary) await demoteSlotPrimary(tx, id, source, kind);
+    if (sameValue) {
       await tx
         .update(entityExternalId)
-        .set({ deletedAt: new Date() })
-        .where(
-          and(
-            eq(entityExternalId.entityId, id),
-            eq(entityExternalId.source, source),
-            eq(entityExternalId.kind, entry.kind),
-            eq(entityExternalId.externalId, entry.expectedExternalId),
-            notDeleted(entityExternalId),
-          ),
-        );
-    }
-    for (const entry of input.upsert) {
-      const source = entry.source.trim().toLowerCase();
-      const isPrimary = entry.isPrimary ?? true;
-      const slotRows = await tx.query.entityExternalId.findMany({
-        where: and(
-          eq(entityExternalId.entityId, id),
-          eq(entityExternalId.source, source),
-          eq(entityExternalId.kind, entry.kind),
-          notDeleted(entityExternalId),
-        ),
-      });
-      const liveSlot = isPrimary
-        ? slotRows.find((e) => e.isPrimary)
-        : slotRows.find((e) => e.externalId === entry.externalId);
-      if (
-        liveSlot &&
-        !removedSlots.has(`${source}\0${entry.kind}`) &&
-        externalIdSlotUnchanged(liveSlot, { ...entry, source })
-      ) {
-        continue;
-      }
-      if (!isPrimary) {
-        // Secondaries have no per-slot unique to conflict on, so there is
-        // nothing to infer; the global (source, kind, externalId) unique is
-        // already enforced by `assertExternalIdsAvailable` above.
-        if (liveSlot) {
-          await tx
-            .update(entityExternalId)
-            .set({
-              url: storedExternalIdUrl({ ...entry, source }),
-              isPrimary: false,
-              updatedAt: new Date(),
-            })
-            .where(eq(entityExternalId.id, liveSlot.id));
-        } else {
-          await tx.insert(entityExternalId).values({
-            entityId: id,
-            entityKind: "product" as const,
-            source,
-            kind: entry.kind,
-            externalId: entry.externalId,
-            url: storedExternalIdUrl({ ...entry, source }),
-            isPrimary: false,
-          });
-        }
-        continue;
-      }
-      await tx
-        .insert(entityExternalId)
-        .values({
-          entityId: id,
-          entityKind: "product" as const,
-          source,
-          kind: entry.kind,
-          externalId: entry.externalId,
-          url: storedExternalIdUrl({ ...entry, source }),
-          isPrimary: true,
+        .set({
+          url: storedExternalIdUrl(entry),
+          isPrimary,
+          updatedAt: new Date(),
         })
-        .onConflictDoUpdate({
-          // Must match the index predicate exactly: Postgres infers the arbiter
-          // index from this, and `deletedAt IS NULL` alone no longer describes
-          // any unique index on these columns.
-          target: [
-            entityExternalId.entityId,
-            entityExternalId.source,
-            entityExternalId.kind,
-          ],
-          targetWhere: sql`${entityExternalId.isPrimary} AND ${entityExternalId.deletedAt} IS NULL`,
-          set: {
-            externalId: entry.externalId,
-            url: storedExternalIdUrl({ ...entry, source }),
-            updatedAt: new Date(),
-          },
-        });
+        .where(eq(entityExternalId.id, sameValue.id));
+      return;
     }
-    // Restore the one-primary-per-slot invariant after every write. See
-    // `ensureSlotPrimaries` for why this is a repair keyed on live state rather
-    // than promotion logic inside the loops.
-    await ensureSlotPrimaries(tx, id, [...input.upsert, ...input.remove]);
+    await tx.insert(entityExternalId).values({
+      entityId: id,
+      entityKind: "product" as const,
+      source,
+      kind,
+      externalId,
+      url: storedExternalIdUrl(entry),
+      isPrimary: false,
+    });
+    return;
+  }
+  await tx
+    .insert(entityExternalId)
+    .values({
+      entityId: id,
+      entityKind: "product" as const,
+      source,
+      kind,
+      externalId,
+      url: storedExternalIdUrl(entry),
+      isPrimary: true,
+    })
+    .onConflictDoUpdate({
+      // Must match the index predicate exactly: Postgres infers the arbiter
+      // index from this, and `deletedAt IS NULL` alone no longer describes
+      // any unique index on these columns.
+      target: [
+        entityExternalId.entityId,
+        entityExternalId.source,
+        entityExternalId.kind,
+      ],
+      targetWhere: sql`${entityExternalId.isPrimary} AND ${entityExternalId.deletedAt} IS NULL`,
+      set: {
+        externalId,
+        url: storedExternalIdUrl(entry),
+        updatedAt: new Date(),
+      },
+    });
+};
 
-    const externalIds = await tx.query.entityExternalId.findMany({
-      where: and(
-        eq(entityExternalId.entityId, id),
-        notDeleted(entityExternalId),
-      ),
-    });
-    const changes = computeChanges(
-      { externalIds: beforeIds },
-      { externalIds },
-      ["externalIds"],
-    );
-    // Every upsert may have been an unchanged-slot no-op (see above) and
-    // `remove` may have targeted nothing live; only bump updatedAt / log an
-    // audit entry when something actually changed.
-    let updatedAt = before.updatedAt;
-    if (changes) {
-      updatedAt = new Date();
-      await tx
-        .update(product)
-        .set({ updatedAt })
-        .where(and(eq(product.id, id), notDeleted(product)));
-      await logAuditEntry(tx, actor, {
-        entityKind: "product",
-        entityId: id,
-        action: "update",
-        changes,
-      });
-    }
-    const pricing = await loadProductPricing(tx, [before]);
-    // Data quality depends on the external IDs this call just changed (the
-    // amazon_asin and product_external_id checks), so it must be recomputed
-    // here rather than reused from `before`.
-    const qualities = await loadProductDataQualities(tx, [before.id]);
-    return dbProductToTopLevelAPI({
-      classificationEvidence: await getProductClassificationEvidence(
-        tx,
-        before.id,
-      ),
-      category:
-        (await loadCategorySummaries(tx)).get(before.categoryId!) ?? null,
-      ...before,
-      pricing: pricing.get(before.id) ?? resolveProductPricing(before.price),
-      dataQuality: qualities.get(before.id)!,
-      updatedAt,
-      externalIds,
-      images: [],
-    });
+/**
+ * The Product repository's `externalIds` collection hook: applies
+ * `entity.update` patch items (`externalIdPatch`) inside the update's
+ * transaction. Every remove/replace precondition is checked against the live
+ * rows before any row changes; global uniqueness is checked before any add.
+ * The one-primary-per-slot repair (`ensureSlotPrimaries`) runs last, so
+ * removing or demoting a primary promotes the slot's oldest survivor.
+ */
+const applyProductExternalIdPatch = async (
+  tx: DrizzleTransaction,
+  id: ProductId,
+  patch: ExternalIdPatch,
+): Promise<void> => {
+  await lockExternalIdentifierParents(tx, [
+    { entityId: id, entityKind: "product" },
+  ]);
+  const items = normalizedExternalIdPatch(patch);
+  const before = await tx.query.entityExternalId.findMany({
+    where: and(eq(entityExternalId.entityId, id), notDeleted(entityExternalId)),
   });
+  assertExternalIdPatchPreconditions(before, items);
+  const adds = items.flatMap((item) => (item.op === "add" ? [item] : []));
+  await assertExternalIdsAvailable(
+    tx,
+    adds.map((item) => item.key),
+    id,
+  );
+  await ensureExternalSources(
+    tx,
+    adds.map((item) => item.key.source),
+  );
+
+  const removedSlots = new Set<string>();
+  for (const item of items) {
+    if (item.op !== "remove") continue;
+    removedSlots.add(`${item.key.source}\0${item.key.kind}`);
+    await tx
+      .update(entityExternalId)
+      .set({ deletedAt: new Date() })
+      .where(eq(entityExternalId.id, liveExternalIdRow(before, item.key)!.id));
+  }
+  for (const item of items) {
+    if (item.op !== "replace") continue;
+    await replaceExternalIdAttributes(
+      tx,
+      id,
+      liveExternalIdRow(before, item.key)!,
+      item,
+    );
+  }
+  for (const item of adds)
+    await addExternalIdToSlot(
+      tx,
+      id,
+      item,
+      removedSlots.has(`${item.key.source}\0${item.key.kind}`),
+    );
+  // Restore the one-primary-per-slot invariant after every write. See
+  // `ensureSlotPrimaries` for why this is a repair keyed on live state rather
+  // than promotion logic inside the loops.
+  await ensureSlotPrimaries(
+    tx,
+    id,
+    items.map((item) => item.key),
+  );
+};
 
 export const quickCreateProduct = async (
   db: Database,
@@ -2736,20 +2824,6 @@ const liveLinksToProducts =
     ).map((row) => ({ productId: parseEntityId("product", row.productId) }));
 
 const PRODUCT_RETAINING_DEPENDENTS = {
-  "RunFactEvidence.entityId": async (tx, ids) => {
-    const rows = await tx
-      .select({ entityId: runFactEvidence.entityId })
-      .from(runFactEvidence)
-      .where(
-        and(
-          eq(runFactEvidence.entityKind, "product"),
-          inArray(runFactEvidence.entityId, ids),
-        ),
-      );
-    return rows.map(({ entityId }) => ({
-      productId: parseEntityId("product", entityId),
-    }));
-  },
   "ImportSourceProduct.productId": (tx, ids) =>
     tx
       .select({ productId: importSourceProduct.productId })

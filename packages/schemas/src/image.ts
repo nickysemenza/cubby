@@ -12,6 +12,7 @@ import { generatedEntitySort } from "./generated/entity-sort.gen";
 import type { GeneratedEntitySortField } from "./generated/entity-sort.gen";
 import { nonEmptyTuple } from "./identifiers";
 import { mutationSideEffectsSchema } from "./mutation-side-effects";
+import { entityRecordSourceInputs } from "./entity-source";
 import {
   createPaginatedResponseSchemaWithContext,
   createSortPaginationFields,
@@ -416,6 +417,7 @@ export const attachFileFields = {
     .string()
     .regex(/^[a-f0-9]{64}$/)
     .optional(),
+  sources: entityRecordSourceInputs.optional(),
   expectedBytes: z.int().positive().max(MAX_IMAGE_UPLOAD_BYTES).optional(),
   purpose: productImagePurpose
     .optional()

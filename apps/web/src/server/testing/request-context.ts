@@ -7,7 +7,7 @@ import type { UsdaReleaseRpc } from "~/server/usda-release/rpc";
 import type { RequestOrigin } from "~/server/workload";
 
 /** A loaded release holding no foods: every lookup misses, every search is empty. */
-export const emptyUsdaRelease: UsdaReleaseRpc = {
+const emptyUsdaRelease: UsdaReleaseRpc = {
   status: async () => {
     throw new Error("Test USDA release has no load status");
   },

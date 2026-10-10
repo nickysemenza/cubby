@@ -91,7 +91,8 @@ describe("records reports", () => {
     expect(block.rows[0]?.subtitle).toContain(
       "Exact model remains unsupported",
     );
-    expect(block.actions).toContain("enrichProduct");
+    // Historical attempts stay readable; there is no unattended relaunch.
+    expect(block.actions).not.toContain("enrichProduct");
   });
 
   const recordsOf = async (

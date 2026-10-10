@@ -1,34 +1,27 @@
-import { runEntityId } from "@cubby/schemas/identifiers";
 import { runShortcode } from "@cubby/schemas/identifiers";
 import { runPurpose, runStatus } from "@cubby/schemas/run-fields";
-import { inArray } from "drizzle-orm";
 import { and, eq, isNull } from "drizzle-orm";
 import type { z } from "zod";
 
 import { runContract } from "~/contracts/run.contract";
-import {
-  getPurchaseImportNamespace,
-  getPurchaseAgentQueue,
-} from "~/server/cf-env";
+import { getPurchaseAgentQueue } from "~/server/cf-env";
 import { account } from "~/server/db/auth.schema";
 import { oauthRefreshToken, run as runTable } from "~/server/db/schema";
 import { implementOperationDomain } from "~/server/operation-domain.server";
 import {
-  loadSyncPlan,
-  startAccountSync,
-} from "~/server/purchase-import/account-sync";
-import {
   findActivePurchaseAgentGrant,
   PURCHASE_AGENT_OAUTH_CLIENT_ID,
 } from "~/server/purchase-import/agent-auth";
-import { rederiveRetainedCapture } from "~/server/purchase-import/capture-maintenance";
-import { dispatchRunEvent } from "~/server/purchase-import/dispatch";
+import {
+  dispatchRunEvent,
+  dispatchStartedRun,
+} from "~/server/purchase-import/dispatch";
 import { startMailDiscovery } from "~/server/purchase-import/gmail/discovery";
+import { commitPurchaseImport } from "~/server/purchase-import/import-orders";
 import {
   confirmMerchantVendorRule,
   listMerchantVendorRules,
-} from "~/server/purchase-import/hunts";
-import { commitPurchaseImport } from "~/server/purchase-import/import-orders";
+} from "~/server/purchase-import/merchant-vendor-rules";
 import {
   approvalWakeEvent,
   controlRun,
@@ -43,14 +36,8 @@ import {
   resolveProductImportTarget,
   resolvePurchaseImportTarget,
 } from "~/server/purchase-import/run-target";
-import {
-  dispatchStartedRun,
-  loadTargetedImportLaunch,
-  startTargetedImport,
-} from "~/server/purchase-import/targeted-run";
 import { listAiUsageForRun } from "~/server/repo/ai-usage";
 import { getDb } from "~/server/repo/database-helpers";
-import { insertDebugEventOperations } from "~/server/repo/run-operation";
 import { resolveOrThrow } from "~/server/repo/shortcode-resolver";
 import type { AuthenticatedRequestContext } from "~/server/request-context";
 import { issueExecutionAuthorization } from "~/server/runs/execution-authorization";
@@ -122,40 +109,6 @@ async function controlRunOperation(
 }
 
 export const runHandlers = implementOperationDomain(runContract, {
-  rederiveCapture: async (context, input) => {
-    await memberParty(context);
-    return rederiveRetainedCapture(context.db, {
-      actor: context.actorContext,
-      key: {
-        runId: await resolveOrThrow(context.db, "run", input.runId),
-        operationId: input.operationId,
-      },
-    });
-  },
-  browserDebugEvents: async (context, input) => {
-    const party = await memberParty(context);
-    const database = getDb(context.db);
-    const runIds = [...new Set(input.events.map((event) => event.runId))];
-    const ownedRuns = await database
-      .select({ id: runTable.id })
-      .from(runTable)
-      .where(
-        and(
-          inArray(
-            runTable.id,
-            runIds.map((id) => runEntityId.parse(id)),
-          ),
-          eq(runTable.ledgerPartyId, party.id),
-          eq(runTable.actorUserId, context.auth.userId),
-        ),
-      );
-    const ownedRunIds = new Set<string>(ownedRuns.map((scope) => scope.id));
-    if (runIds.some((id) => !ownedRunIds.has(id)))
-      throw new Error("Import run was not found");
-    return {
-      accepted: await insertDebugEventOperations(database, input.events),
-    };
-  },
   executionMailboxes: async (context) => {
     await memberParty(context);
     const mailboxes = await getDb(context.db)
@@ -187,24 +140,6 @@ export const runHandlers = implementOperationDomain(runContract, {
         mailboxId: input.mailboxId,
       },
     }),
-  syncPlan: async (context, input) => {
-    const namespace = getPurchaseImportNamespace();
-    return loadSyncPlan(
-      context.db,
-      (await memberParty(context)).id,
-      input,
-      namespace
-        ? { connected: (id) => namespace.getByName(id).connected() }
-        : undefined,
-    );
-  },
-  startSync: async (context, input) =>
-    startAccountSync(
-      context.db,
-      (await memberParty(context)).id,
-      input,
-      getPurchaseAgentQueue(),
-    ),
   workSnapshot: async (context, input) => {
     const run = await loadRunDetail(context.db, input.runId);
     return {
@@ -269,10 +204,7 @@ export const runHandlers = implementOperationDomain(runContract, {
       context.db,
       {
         ...input,
-        _runExecution: {
-          runId: await resolveOrThrow(context.db, "run", runId),
-          operationId,
-        },
+        _runExecution: { run: runId, operationId },
       },
       context.actorContext,
     );
@@ -284,15 +216,6 @@ export const runHandlers = implementOperationDomain(runContract, {
     await memberParty(context);
     return loadRunLog(context.db, input.runId);
   },
-  targetedLaunch: async (context, input) =>
-    loadTargetedImportLaunch(
-      context.db,
-      (await memberParty(context)).id,
-      input.purpose,
-      input.targetId,
-    ),
-  startTargeted: async (context, input) =>
-    startTargetedImport(context.db, (await memberParty(context)).id, input),
   agentConnection: async (context) => {
     const grant = await findActivePurchaseAgentGrant(
       context.db,

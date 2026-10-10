@@ -33,8 +33,8 @@ removal is queued for every image automatically; cutouts appear only while
 image processing is enabled and a paired Apple device is connected, so a
 missing cutout is not an import failure.
 
-Record a legible barcode with `product_enrichment.patch_external_ids` (`source: "gtin"`,
-`kind: "gtin_14"`) so a later order line matches it exactly — see
+Record a legible barcode with an `entity.update product` `externalIds` add patch
+(`source: "gtin"`, `kind: "gtin_14"`) so a later order line matches it exactly — see
 [product identity](../product-enrichment/references/product-identity.md).
 
 ## Group and identify

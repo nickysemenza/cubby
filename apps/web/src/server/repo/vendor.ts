@@ -115,9 +115,10 @@ export const VENDOR_DELETE_EDGE_POLICY = {
     description: "Vendor accounts retain their configured vendor.",
   },
   "ImportHunt.vendorId": {
-    code: "block-import-hunts",
-    effect: "block",
-    description: "Import hunts retain their routed vendor.",
+    code: "preserve-retired-research",
+    effect: "preserve",
+    description:
+      "Retired research history stays on the tombstone until the contract migration drops it.",
   },
   "MerchantVendorRule.vendorId": {
     code: "block-merchant-rules",
@@ -140,6 +141,12 @@ export const VENDOR_DELETE_EDGE_POLICY = {
     effect: "soft-delete",
     description:
       "The logo association is soft-deleted with the vendor; the image is reaped when nothing else uses it.",
+  },
+  "ImportPreparedOrder.vendorId": {
+    code: "preserve-prepared-vendor",
+    effect: "preserve",
+    description:
+      "An import preparation keeps the Vendor it named; its commit refuses a deleted Vendor.",
   },
   "ExternalSource.vendorId": {
     code: "clear-source-vendor",
@@ -168,9 +175,10 @@ export const VENDOR_MERGE_EDGE_POLICY = {
       "Vendor accounts must be reassigned explicitly before merging vendors.",
   },
   "ImportHunt.vendorId": {
-    code: "block-import-hunts",
-    effect: "block",
-    description: "Historical import hunts prevent an ambiguous vendor merge.",
+    code: "preserve-retired-research",
+    effect: "preserve",
+    description:
+      "Retired research history stays on the tombstone until the contract migration drops it.",
   },
   "MerchantVendorRule.vendorId": {
     code: "block-merchant-rules",
@@ -194,6 +202,12 @@ export const VENDOR_MERGE_EDGE_POLICY = {
     effect: "repoint",
     description:
       "A loser's logo becomes the survivor's when the survivor has none; any other loser logo is detached and reaped unless shared.",
+  },
+  "ImportPreparedOrder.vendorId": {
+    code: "preserve-prepared-vendor",
+    effect: "preserve",
+    description:
+      "An import preparation keeps the Vendor it named; its commit refuses a merged-away Vendor, which is prepared again.",
   },
   "ExternalSource.vendorId": {
     code: "repoint-source-vendor",

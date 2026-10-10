@@ -10,7 +10,6 @@ struct BackgroundActivity: Identifiable, Hashable, Sendable {
         case hashRepair
         case classificationSweep
         case metadataSync
-        case browserBridgeSync
         case upload
     }
 
@@ -22,7 +21,7 @@ struct BackgroundActivity: Identifiable, Hashable, Sendable {
 
     /// Where tapping this activity should take the user. Only `.serverRun` deep-links into the
     /// shared Activity list's server-side run detail — device-local work (a library scan, a hash
-    /// repair, a classification sweep, a browser-bridge sync, a manual photo upload) links to its
+    /// repair, a classification sweep, a manual photo upload) links to its
     /// own `.localActivity` id instead, resolved against whatever is currently reporting activities.
     enum Link: Hashable, Sendable {
         case serverRun(String)

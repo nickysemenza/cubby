@@ -120,7 +120,6 @@ const run: RunDetail = {
       completedAt: null,
     },
   ],
-  evidence: [],
   progress: [],
   latestProgress: null,
   approvals: [],

@@ -187,8 +187,6 @@ function liveGatewayWorker(swap?: typeof agentModel): WorkerdModelWorker {
 async function runCoupled() {
   const { createE2EWorkerRuntime } =
     await import("../../tests/e2e/e2e-worker-runtime");
-  const { scenarioControls } =
-    await import("../purchase-agent-workerd-harness");
   const { seedCoupledJourneys } =
     await import("../scenarios/tester-army-coupled");
   const runtime = await createE2EWorkerRuntime({
@@ -212,7 +210,6 @@ async function runCoupled() {
         seedCoupledJourneys(pool, userId, {
           origin,
           cookies: storageState.cookies,
-          connectBrowser: scenarioControls(harness).connectBrowser,
         }),
     });
   } catch (error) {

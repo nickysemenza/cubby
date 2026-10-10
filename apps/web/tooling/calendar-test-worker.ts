@@ -24,7 +24,6 @@ export default {
 };
 
 export { DatabaseFreshnessDurableObject } from "~/server/database-freshness/durable-object";
-export { PurchaseImportDurableObject } from "~/server/purchase-import/durable-object";
 export { AiResponseCacheDurableObject } from "~/server/ai/response-cache-durable-object";
 export { ChatGptPlanDurableObject } from "~/server/ai/chatgpt/durable-object";
 export { UsdaReleaseDurableObject } from "~/server/usda-release/durable-object";

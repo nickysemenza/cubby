@@ -14,13 +14,11 @@ import { z } from "zod";
 import { digestTree } from "../../../scripts/lib/tree-digest.ts";
 
 export const macFixtureBundleID = "com.nickysemenza.cubby.e2e";
-export const macFixtureBrowserBundleID = "com.cubby.fixture.browser";
 export function macFixturePaths() {
   const root = path.join(homedir(), "Library/Caches/CubbyMacImportFixture");
   return {
     root,
     app: path.join(root, "Cubby.app"),
-    browser: path.join(root, "FixtureBrowser.app"),
   };
 }
 
@@ -119,7 +117,7 @@ export function assertMacFixturesIdle(): void {
   const apps = macFixturePaths();
   assertFixtureProcessesAbsent(
     execFileSync("ps", ["-axo", "pid=,command="], { encoding: "utf8" }),
-    [apps.app, apps.browser],
+    [apps.app],
   );
 }
 

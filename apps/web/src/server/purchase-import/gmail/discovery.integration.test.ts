@@ -3,7 +3,7 @@ import {
   type ExecutionAuthorizationInput,
 } from "@cubby/schemas/execution-authorization";
 /** Plausible failures: baseline capture follows listing; pages checkpoint before
- * source/research dispatch; interrupted pages duplicate sources; retries replay a
+ * source/Mail import dispatch; interrupted pages duplicate sources; retries replay a
  * changed manifest; revoked auth becomes negative; stale attempts move coverage;
  * bounded passes wait a day instead of scheduling the next durable pass;
  * scheduled connection starts unapproved historical scans; a newer approval
@@ -12,9 +12,6 @@ import {
 import { runEntityId } from "@cubby/schemas/identifiers";
 import { mailboxDiscoveryInput } from "@cubby/schemas/mailbox-research";
 import type { PurchaseAgentEvent } from "@cubby/schemas/purchase-import";
-import { retainedResearchObservation } from "@cubby/schemas/research";
-import { researchWorkResolve } from "@cubby/schemas/research-tools";
-import { fromPartial } from "@total-typescript/shoehorn";
 import { eq } from "drizzle-orm";
 import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it, vi } from "vitest";
@@ -25,8 +22,6 @@ import {
   mailboxMessage,
   orderMail,
   orderMailAttachment,
-  expense,
-  purchase,
   run,
   runTarget,
   runProgress,
@@ -44,9 +39,7 @@ import {
   reconcileWorkflowRuns,
 } from "~/server/workflow-runs/lifecycle";
 
-import { resolveImportResearch } from "../research-import";
-import { startMailResearch } from "../research-run";
-import { researchServiceFor } from "../research-service";
+import { startMailImport } from "../mail-import-run";
 import {
   startMailDiscovery,
   listMailDiscovery,
@@ -243,7 +236,7 @@ describe("scheduled Gmail discovery", () => {
     return state;
   };
 
-  it("keeps targeted, incremental and broad discovery pages and research children on independent allowances", async () => {
+  it("keeps targeted, incremental and broad discovery pages and Mail import children on independent allowances", async () => {
     const state = await baselineForAllowances();
     const mailboxId = "synthetic-google-subject";
     const pilot = await approve(state.party.id, {
@@ -297,7 +290,7 @@ describe("scheduled Gmail discovery", () => {
     const seam: DiscoveryPorts = {
       ...ports(provider),
       research: (db, input) =>
-        startMailResearch(db, input, {
+        startMailImport(db, input, {
           send: async (event) => {
             events.push(event);
           },
@@ -409,8 +402,8 @@ describe("scheduled Gmail discovery", () => {
   });
 
   // A classifier's uncertainty must remain actionable after the page checkpoint;
-  // otherwise an unfamiliar acquisition is lost without capable investigation.
-  it("retains still-uncertain discovery mail for capable research and supported incomplete Purchase resolution", async () => {
+  // otherwise an unfamiliar acquisition is lost without a Mail import owner.
+  it("retains still-uncertain discovery mail with its attachment for one Mail import that page replay does not duplicate", async () => {
     const state = await seed();
     const provider = gmail({
       getMessage: async (id) => ({
@@ -465,7 +458,7 @@ describe("scheduled Gmail discovery", () => {
       },
       triage: async () => "uncertain",
       relevance: async () => ({ classification: "uncertain" }),
-      research: (db, input) => startMailResearch(db, input, queue),
+      research: (db, input) => startMailImport(db, input, queue),
     };
     await listMailDiscovery(ctx.db, state.params, seam);
     await saveMailDiscoveryBatch(ctx.db, state.params, 0, seam);
@@ -479,6 +472,7 @@ describe("scheduled Gmail discovery", () => {
     expect(await getDb(ctx.db).select().from(orderMailAttachment)).toHaveLength(
       1,
     );
+    expect(attachmentBytes.size).toBe(1);
     const [message] = await getDb(ctx.db).select().from(mailboxMessage);
     expect(message).toMatchObject({
       classification: "uncertain",
@@ -486,135 +480,22 @@ describe("scheduled Gmail discovery", () => {
       orderMailId: original.id,
     });
     if (!message?.runId)
-      throw new Error("Uncertain original has no research owner");
-    const [target] = await getDb(ctx.db)
-      .select()
-      .from(runTarget)
-      .where(eq(runTarget.runId, message.runId));
-    if (!target) throw new Error("Uncertain original has no research task");
+      throw new Error("Uncertain original has no Mail import owner");
+    expect(await readRun(message.runId)).toMatchObject({
+      purpose: "mail_import",
+      ledgerPartyId: state.party.id,
+    });
+    expect(
+      await getDb(ctx.db)
+        .select()
+        .from(runTarget)
+        .where(eq(runTarget.runId, message.runId)),
+    ).toHaveLength(1);
     expect(events).toHaveLength(1);
     expect(
       (await getDb(ctx.db).select().from(mailboxCursor))[0]?.coverage?.broad
         .pageToken,
     ).toBe("page-two");
-    const retained = new Map<string, Uint8Array>();
-    const services = researchServiceFor(
-      ctx.db,
-      fromPartial<Env>({ R2_KEY_PREFIX: "synthetic/uncertain-discovery" }),
-      message.runId,
-      {
-        queue,
-        observations: {
-          storage: {
-            put: async (key, bytes) => {
-              retained.set(key, bytes);
-            },
-            get: async (key) => {
-              const bytes = retained.get(key);
-              if (!bytes)
-                throw new Error("Synthetic observed original bytes missing");
-              return new TextDecoder().decode(bytes);
-            },
-          },
-        },
-      },
-    );
-    expect(await services.researchNext({}, crypto.randomUUID())).toMatchObject({
-      status: "working",
-      work: {
-        workRef: target.id,
-        kind: "mail",
-        sources: [{ messageRef: original.id }],
-      },
-    });
-    const observed = retainedResearchObservation.parse(
-      await services.researchMailRead(
-        { workRef: target.id, messageRef: original.id },
-        crypto.randomUUID(),
-      ),
-    );
-    const proposal = researchWorkResolve.parse({
-      workRef: target.id,
-      status: "researched_with_gaps",
-      identity: {
-        evidenceIds: [observed.evidenceId],
-        reasoning:
-          "The retained original identifies this merchant and order; unknown itemization and date remain absent.",
-      },
-      orders: [
-        {
-          vendor: { name: "Synthetic uncertain merchant" },
-          evidenceIds: [observed.evidenceId],
-          reasoning:
-            "The unfamiliar original explicitly identifies this actual order.",
-          candidate: {
-            orderId: "SYNTHETIC-UNCERTAIN-ORDER",
-            orderedAt: null,
-            merchant: "Synthetic uncertain merchant",
-            currency: "USD",
-            printedGrandTotal: null,
-            lines: [],
-            payments: [],
-            allShipmentsDelivered: false,
-          },
-          productResolutions: [],
-        },
-      ],
-      detail:
-        "The original supports an incomplete Purchase; itemization, date and money remain unknown.",
-    });
-    const callId = crypto.randomUUID();
-    const attachedSources: string[] = [];
-    const result = await resolveImportResearch(
-      ctx.db,
-      { runId: message.runId, workRef: target.id, callId, proposal },
-      {
-        attachSource: async (db, input) => {
-          const [attachment] = await getDb(db)
-            .select()
-            .from(orderMailAttachment)
-            .where(eq(orderMailAttachment.orderMailId, input.orderMailId));
-          if (!attachment?.pendingObjectKey)
-            throw new Error("Synthetic retained attachment missing");
-          expect(attachmentBytes.get(attachment.pendingObjectKey)).toEqual(
-            Buffer.from("pdf"),
-          );
-          attachedSources.push(input.orderMailId);
-        },
-        readEvidence: async (row) => {
-          const bytes = retained.get(row.objectKey);
-          if (!bytes)
-            throw new Error("Synthetic observed original bytes missing");
-          return new TextDecoder().decode(bytes);
-        },
-        assess: async () => ({
-          identityVerified: true,
-          acceptedFacts: [],
-          acceptedIdentifiers: [],
-          acceptedImages: [],
-          acceptedOrders: [0],
-          acceptedEmailLinks: [],
-          rejected: [],
-        }),
-      },
-    );
-    expect(result.purchaseIds).toHaveLength(1);
-    expect(attachedSources).toEqual([original.id]);
-    const {
-      purchaseIds: _purchaseIds,
-      productIds: _productIds,
-      eventIds: _eventIds,
-      ...publicResolution
-    } = result;
-    expect(await services.researchResolve(proposal, callId)).toMatchObject({
-      status: "done",
-      summary: { researchedWithGaps: 1 },
-      resolution: publicResolution,
-    });
-    expect(await getDb(ctx.db).select().from(purchase)).toMatchObject([
-      { orderId: "SYNTHETIC-UNCERTAIN-ORDER", date: null, statedTotal: null },
-    ]);
-    expect(await getDb(ctx.db).select().from(expense)).toEqual([]);
     await saveMailDiscoveryBatch(ctx.db, state.params, 0, seam);
     expect(await getDb(ctx.db).select().from(runTarget)).toHaveLength(1);
     expect(events).toHaveLength(1);
@@ -668,7 +549,7 @@ describe("scheduled Gmail discovery", () => {
       mailboxId: "synthetic-second-google-subject",
     });
   });
-  it("persists baseline before freezing only one page and checkpoints only after research dispatch", async () => {
+  it("persists baseline before freezing only one page and checkpoints only after Mail import dispatch", async () => {
     const state = await seed();
     let listed = 0;
     const provider = gmail({

@@ -1,141 +1,105 @@
-import { z } from "zod";
-import { fromPartial } from "@total-typescript/shoehorn";
-import { researchServiceFor } from "~/server/purchase-import/research-service";
-import type { Page } from "@playwright/test";
-import { preparePurchaseImportInput } from "@cubby/schemas/purchase-import";
+import {
+  importExtractionModelOutput,
+  normalizeImportExtractionModelOutput,
+  preparePurchaseImportInput,
+} from "@cubby/schemas/purchase-import";
 import type { Database } from "~/server/db";
 import { preparePurchaseImport } from "~/server/purchase-import/import-orders";
-import { extractPurchaseCapture } from "~/server/agents/purchase-import/extract";
-import { startOrResumeRun } from "~/server/purchase-import/run-service";
 import {
   sha256Hex,
   syntheticOrderIds,
 } from "../../tooling/convergence-harness";
-import { connectRetailerBrowserPeer } from "./retailer-browser-peer";
 import type { E2EWorkerRuntime } from "./e2e-worker-runtime";
 import { expect } from "./e2e-test";
 
-/** External pages/model responses enter the production broker, capture, extraction and preparation. */
+const readableText = (html: string) =>
+  html
+    .replaceAll(/<title>[^<]*<\/title>/gu, "")
+    .replaceAll(/<[^>]+>/gu, " ")
+    .replaceAll(/\s+/gu, " ")
+    .trim();
+
+/**
+ * A retailer order a member's caller read from its own pages and extracted:
+ * preparation opens the import Run, where it waits for review.
+ */
 export async function prepareCapturedRetailerOrder(input: {
-  page: Page;
   db: Database;
   actor: Parameters<typeof preparePurchaseImport>[2];
-  runtime: Pick<
-    E2EWorkerRuntime,
-    "baseURL" | "browserNamespace" | "googleProvider"
-  >;
-  ledgerPartyId: Parameters<typeof startOrResumeRun>[1]["ledgerPartyId"];
-  vendorAccountId: NonNullable<
-    Parameters<typeof startOrResumeRun>[1]["vendorAccountId"]
-  >;
-  accountCode: string;
+  runtime: Pick<E2EWorkerRuntime, "googleProvider">;
+  /** The retailer's Vendor shortcode: a member's import names its Vendor. */
+  vendorId: string;
   targetPurchaseId?: string;
   token: string;
   url: string;
   productUrl: string;
   expectedProductText: string;
-  retailerPages: Parameters<
-    typeof connectRetailerBrowserPeer
-  >[0]["retailerPages"];
+  retailerPages: Record<string, string>;
 }) {
-  const { page, db, actor, runtime, token, url, productUrl } = input;
+  const { db, actor, runtime, token, url, productUrl } = input;
   const providerURL = runtime.googleProvider?.url;
   if (!providerURL)
     throw new Error("Retailer extraction requires its local provider");
-  const run = await startOrResumeRun(db, {
-    ledgerPartyId: input.ledgerPartyId,
-    vendorAccountId: input.vendorAccountId,
-    trigger: "manual",
-  });
-  const namespace = await runtime.browserNamespace();
-  const services = researchServiceFor(
-    db,
-    fromPartial<Env>({ R2_KEY_PREFIX: "synthetic/retailer" }),
-    run.id,
-    { queue: { send: async () => {} } },
-  );
-  const next = z
-    .object({
-      status: z.literal("working"),
-      work: z.object({ workRef: z.uuid() }),
-    })
-    .parse(await services.researchNext({}, `retailer-next:${token}`));
-  const peer = await connectRetailerBrowserPeer({
-    page,
-    db,
-    namespace,
-    baseURL: runtime.baseURL,
-    accountCode: input.accountCode,
-    accountId: input.vendorAccountId,
-    runId: run.id,
-    workRef: next.work.workRef,
-    retailerPages: input.retailerPages,
-  });
   const ids = syntheticOrderIds(token);
-  try {
-    const captured = await peer.capture(url, `capture-order:${token}`);
-    const capturedProduct = await peer.capture(
-      productUrl,
-      `capture-product:${token}`,
+  const orderHtml = input.retailerPages[url];
+  const productHtml = input.retailerPages[productUrl];
+  if (orderHtml === undefined || productHtml === undefined)
+    throw new Error(
+      "Synthetic retailer pages must include the order and product",
     );
-    expect(capturedProduct.readableText).toContain(input.expectedProductText);
-    const capture = {
-      url: captured.sourceURL,
-      title: captured.title,
-      text: captured.readableText,
-      capturedAt: captured.capturedAt,
-      links: captured.links.map((link) => ({
-        id: link.id,
-        href: link.url,
-        text: link.label ?? "",
-      })),
-      images: captured.images.map((image) => ({
-        src: image.url,
-        alt: image.alt ?? "",
-      })),
-    };
-    const extraction = await extractPurchaseCapture(
-      { db, runId: run.id, capture },
-      {
-        runStructured: async (feature) => {
-          const response = await fetch(`${providerURL}/model/extract-capture`, {
-            method: "POST",
-            headers: { "content-type": "application/json" },
-            body: JSON.stringify(capture),
-          });
-          if (!response.ok) throw new Error(await response.text());
-          return feature.schema.parse(await response.json());
-        },
-      },
-    );
-    const checksum = sha256Hex(JSON.stringify({ captured, capturedProduct }));
-    await preparePurchaseImport(
-      db,
-      preparePurchaseImportInput.parse({
-        _runExecution: {
-          runId: run.id,
-          operationId: ids.prepare,
-          itemOperationIds: [ids.item],
-        },
-        orders: [
-          {
-            targetPurchaseId: input.targetPurchaseId,
-            stableOrderId: ids.order,
-            itemOperationId: ids.item,
-            source: { kind: "browser_order", externalKey: url, checksum },
-            evidenceChecksum: checksum,
-            extractionRevision: "synthetic-provider@1",
-            extraction,
-            lineIds: [ids.line],
-            primaryDocumentImageId: null,
-            screenshotImageId: null,
-          },
-        ],
+  expect(readableText(productHtml)).toContain(input.expectedProductText);
+  // The member's own caller reads the retailer page; the server receives only
+  // its readable capture, never a browser session.
+  const capture = {
+    url,
+    title: /<title>([^<]*)<\/title>/u.exec(orderHtml)?.[1] ?? "",
+    text: readableText(orderHtml),
+    capturedAt: new Date().toISOString(),
+    links: [...orderHtml.matchAll(/<a href="([^"]+)">([^<]*)<\/a>/gu)].map(
+      ([, href, text], index) => ({
+        id: `link-${index}`,
+        href: href ?? "",
+        text: text ?? "",
       }),
-      actor,
-    );
-  } finally {
-    await peer.close();
-  }
-  return run;
+    ),
+    images: [],
+  };
+  // The caller extracts and normalizes its own reading, as the production
+  // extractor does; the server validates and prepares it.
+  const response = await fetch(`${providerURL}/model/extract-capture`, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify(capture),
+  });
+  if (!response.ok) throw new Error(await response.text());
+  const extraction = normalizeImportExtractionModelOutput(
+    importExtractionModelOutput.parse(await response.json()),
+  );
+  const checksum = sha256Hex(JSON.stringify({ orderHtml, productHtml }));
+  const prepared = await preparePurchaseImport(
+    db,
+    preparePurchaseImportInput.parse({
+      _runExecution: {
+        operationId: ids.prepare,
+        itemOperationIds: [ids.item],
+      },
+      orders: [
+        {
+          vendorId: input.vendorId,
+          targetPurchaseId: input.targetPurchaseId,
+          stableOrderId: ids.order,
+          itemOperationId: ids.item,
+          source: { kind: "vendor_export", externalKey: url, checksum },
+          evidenceChecksum: checksum,
+          extractionRevision: "synthetic-provider@1",
+          extraction,
+          lineIds: [ids.line],
+          primaryDocumentImageId: null,
+          screenshotImageId: null,
+        },
+      ],
+    }),
+    actor,
+  );
+  return { publicId: prepared.runId };
 }

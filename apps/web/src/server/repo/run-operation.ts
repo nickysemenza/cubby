@@ -15,7 +15,7 @@ import { and, asc, eq, inArray } from "drizzle-orm";
 import type { z } from "zod";
 
 import type { DrizzleClient, DrizzleTransaction } from "~/server/db";
-import { researchRetention, run, runOperation } from "~/server/db/schema";
+import { run, runOperation } from "~/server/db/schema";
 
 type Client = DrizzleClient | DrizzleTransaction;
 
@@ -56,9 +56,7 @@ export async function readOperation(
     .from(run)
     .where(eq(run.id, key.runId));
   if (scope?.retiredAt)
-    throw new Error(
-      "Research coordinator permanently retired: unrelated_source.",
-    );
+    throw new Error("This Run is retired; its operations are closed.");
   const query = client
     .select({
       kind: runOperation.kind,
@@ -109,9 +107,7 @@ export async function insertOperation(
       .for("no key update");
     if (scopes.some((scope) => scope.retiredAt !== null)) {
       if (options.ifAbsent) return 0;
-      throw new Error(
-        "Research coordinator permanently retired: unrelated_source.",
-      );
+      throw new Error("This Run is retired; its operations are closed.");
     }
     const insert = tx.insert(runOperation).values(
       list.map((row) => ({
@@ -193,47 +189,21 @@ export async function reclaimOperation(
   return claimed.length > 0;
 }
 
-/**
- * Store the operation's replayable result and mark it `completed`, clearing a
- * previous attempt's error unless `keepError` (a re-dispatched browser command
- * whose recorded terminal failure the broker still holds).
- */
+/** Store the operation's replayable result and mark it `completed`. */
 export async function completeOperation(
   client: Client,
   key: OperationKey,
   result: OperationResult,
-  options: { keepError?: boolean; retirementReceiptId?: string } = {},
 ) {
   await client.transaction(async (tx) => {
-    if (await lockOperationRun(tx, key)) {
-      const [permit] = options.retirementReceiptId
-        ? await tx
-            .select({ receipt: researchRetention, kind: runOperation.kind })
-            .from(researchRetention)
-            .innerJoin(runOperation, matchesKey(key))
-            .where(
-              and(
-                eq(researchRetention.id, options.retirementReceiptId),
-                eq(researchRetention.runId, key.runId),
-              ),
-            )
-        : [];
-      if (
-        !permit ||
-        permit.kind !== "research_resolve_import" ||
-        permit.receipt.plan.originOperationId !== key.operationId ||
-        permit.receipt.phase !== "fenced"
-      )
-        throw new Error(
-          "Research coordinator permanently retired: unrelated_source.",
-        );
-    }
+    if (await lockOperationRun(tx, key))
+      throw new Error("This Run is retired; its operations are closed.");
     await tx
       .update(runOperation)
       .set({
         state: "completed",
         result,
-        error: options.keepError ? undefined : null,
+        error: null,
         completedAt: new Date(),
         updatedAt: new Date(),
       })

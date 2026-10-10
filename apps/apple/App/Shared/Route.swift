@@ -76,18 +76,12 @@ enum PhoneTab: String, CaseIterable, Identifiable {
 /// Top-level sections. The Mac exposes all in its sidebar; iOS maps them into `PhoneTab`.
 enum AppSection: String, CaseIterable, Identifiable {
     case today, activity, capture, photos, browse, search, graph, dev, settings
-    #if os(macOS)
-        case browserSync
-    #endif
 
     var id: String { rawValue }
 
     var title: String {
         switch self {
         case .today: "Today"
-        #if os(macOS)
-            case .browserSync: "Browser Sync"
-        #endif
         case .activity: "Activity"
         case .capture: "Capture"
         case .photos: "Photos"
@@ -102,9 +96,6 @@ enum AppSection: String, CaseIterable, Identifiable {
     var symbol: String {
         switch self {
         case .today: "sun.horizon"
-        #if os(macOS)
-            case .browserSync: "arrow.triangle.2.circlepath"
-        #endif
         case .activity: "clock.arrow.trianglehead.counterclockwise.rotate.90"
         case .capture: "barcode.viewfinder"
         case .photos: "photo.on.rectangle.angled"

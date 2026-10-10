@@ -46,15 +46,6 @@ export function useReportCommands() {
     error: "Could not research the original email",
     success: ({ runIds }) => `Research Runs: ${runIds.join(", ")}`,
   });
-  const vendorResearch = useActionMutation({
-    mutationFn: run.startTargeted.mutationOptions,
-    error: "Could not research purchases",
-    onSuccess: ({ runs }) => {
-      const first = runs[0];
-      const created = first?.run ?? first?.blockingRun;
-      if (created) window.location.assign(runHref(created.id));
-    },
-  });
   const control = useActionMutation({
     mutationFn: run.control.mutationOptions,
     error: "Could not update the Run",
@@ -119,23 +110,11 @@ export function useReportCommands() {
         mailResearch.variables.evidenceChecksum === request.evidenceChecksum
       )
         return mailResearch.data?.runIds ?? [];
-      if (
-        request.kind === "research-vendor-purchases" &&
-        vendorResearch.variables?.purpose === "account_sync" &&
-        vendorResearch.variables.vendorId === request.vendorId
-      )
-        return (
-          vendorResearch.data?.runs.flatMap((result) => {
-            const started = result.run?.id ?? result.blockingRun?.id;
-            return started ? [started] : [];
-          }) ?? []
-        );
       return [];
     },
     pending:
       mailDecision.isPending ||
       mailResearch.isPending ||
-      vendorResearch.isPending ||
       control.isPending ||
       finding.isPending ||
       reparse.isPending ||
@@ -172,12 +151,6 @@ export function useReportCommands() {
           mailResearch.mutate({
             eventId: r.eventId,
             evidenceChecksum: r.evidenceChecksum,
-          }),
-        )
-        .with({ kind: "research-vendor-purchases" }, (r) =>
-          vendorResearch.mutate({
-            purpose: "account_sync",
-            vendorId: r.vendorId,
           }),
         )
         .with({ kind: "run-control" }, (r) => {

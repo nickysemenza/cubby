@@ -4,7 +4,7 @@ import Observation
 
 /// A live source of device-local background work. Adopted by the stores that already track their
 /// own progress (`PhotoLibraryStore`'s scan, `PhotoMatchStore`'s repair,
-/// `PhotoClassificationSweep`'s sweep, `BrowserBridgeSettingsModel`'s sync) so
+/// `PhotoClassificationSweep`'s sweep) so
 /// `BackgroundActivityCenter` never duplicates their state — it only reads `currentActivities`
 /// fresh on every access.
 @MainActor
@@ -237,37 +237,6 @@ extension PhotoClassificationSweep: BackgroundActivitySource {
                 isUserInitiated: false,
                 isCancellable: false)
         ]
-    }
-}
-
-/// The purchase-import browser bridge only exists on macOS, but `BrowserBridgeSettingsModel`
-/// itself compiles on every platform (it simply never connects on iOS) — see
-/// `apps/apple/App/Shared/PurchaseImport/BrowserBridgeSettingsModel.swift`.
-extension BrowserBridgeSettingsModel: BackgroundActivitySource {
-    var currentActivities: [BackgroundActivity] {
-        let starts = accountStates.reduce(into: [String: Date]()) { result, account in
-            for (runID, startedAt) in account.executingRuns {
-                result[runID] = min(result[runID] ?? startedAt, startedAt)
-            }
-        }
-        var activities = starts.keys.sorted().map { runID in
-            BackgroundActivity(
-                id: "browser-run-\(runID)", kind: .browserBridgeSync,
-                title: "Browser research", phase: .running, progress: nil,
-                detail: "Executing browser commands on this Mac",
-                startedAt: starts[runID]!, link: .serverRun(runID),
-                isUserInitiated: false, isCancellable: false)
-        }
-        if isSyncing {
-            activities.append(
-                BackgroundActivity(
-                    id: "browser-bridge-sync", kind: .browserBridgeSync,
-                    title: "Submitting purchase import", phase: .running,
-                    progress: nil, detail: nil, startedAt: syncStartedAt ?? .now,
-                    link: .localActivity("browser-bridge-sync"),
-                    isUserInitiated: true, isCancellable: false))
-        }
-        return activities
     }
 }
 

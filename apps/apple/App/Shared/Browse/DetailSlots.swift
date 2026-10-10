@@ -47,8 +47,6 @@ enum DetailSlotRegistry {
         .purchaseProjectAllocation: { reportSlot(.purchase_projectAllocation, $0) },
         .purchaseFinancialSettlement: { reportSlot(.purchase_financialSettlement, $0) },
         .expenseSettlement: { reportSlot(.expense_settlement, $0) },
-        .vendorAccountSync: { reportSlot(.vendorAccount_sync, $0) },
-        .vendorAccountChargeSearch: { reportSlot(.vendorAccount_chargeSearch, $0) },
         .ledgerPartyWardrobe: { AnyView(WardrobeDetailSlot(ownerID: $0.id, ownerName: $0.title)) },
         .vendorOrderMail: { reportSlot(.vendor_orderMail, $0) },
         .vendorSpendingClassification: { AnyView(SpendingClassificationView(key: .vendor, row: $0)) },
@@ -66,19 +64,18 @@ enum DetailSlotRegistry {
         .runImportApprovals: { runReportSlot(.run_importApprovals, $0) },
         .runImportFindings: { runReportSlot(.run_importFindings, $0) },
         .runImportTargets: { runReportSlot(.run_importTargets, $0) },
-        .runImportEvidence: { runReportSlot(.run_importEvidence, $0) },
         .runImportPreparedOrders: { runReportSlot(.run_importPreparedOrders, $0) },
         .runImportTimeline: { runReportSlot(.run_importTimeline, $0) },
         .runImportDebugLog: { runReportSlot(.run_importDebugLog, $0) },
         .runAiUsage: { runReportSlot(.run_aiUsage, $0, imports: false) },
         .runChanges: { runReportSlot(.run_changes, $0, imports: false) },
-        // Native has no control command (pause, resume and stop are web's), so a paused import
-        // says what it waits for and hands off to web; other states have nothing to show.
+        // Native has no control command (resume and stop are web's), so a paused import says so
+        // and hands off to web; other states have nothing to show.
         .runImportControls: { row in
             guard SharedConstants.importReportRunPurposes.contains(row.raw["purpose"]?.stringValue ?? ""),
-                let paused = RunPausedHandoff.Reason(rawValue: row.raw["status"]?.stringValue ?? "")
+                RunPausedHandoff.pausedStatuses.contains(row.raw["status"]?.stringValue ?? "")
             else { return nil }
-            return AnyView(RunPausedHandoff(runID: row.id, reason: paused))
+            return AnyView(RunPausedHandoff(runID: row.id))
         },
         .runPhotoBatch: { row in
             guard row.raw["purpose"]?.stringValue == "photo_inventory" else { return nil }
@@ -180,32 +177,19 @@ private struct ProductJourneySummaryView: View {
     }
 }
 
-/// `run.import-controls` for a paused import: what the Run waits for, and the web controls that
-/// resume it.
+/// `run.import-controls` for a paused import: the Run is paused, and web holds the controls that
+/// resume or stop it. Approval pauses are answered in `run.import-approvals` instead.
 private struct RunPausedHandoff: View {
-    enum Reason: String {
-        case pausedAuth = "paused_auth"
-        case pausedOffline = "paused_offline"
-    }
+    static let pausedStatuses: Set<String> = ["paused_auth", "paused_offline"]
 
     let runID: String
-    let reason: Reason
     @Environment(AppModel.self) private var appModel
 
     var body: some View {
         VStack(alignment: .leading, spacing: FieldGuideTokens.Space.xs) {
-            Label(
-                reason == .pausedAuth ? "Waiting for retailer sign-in" : "Waiting for Mac browser",
-                systemImage: "person.crop.circle.badge.clock"
-            )
-            .font(.subheadline.weight(.medium))
-            Text(
-                reason == .pausedAuth
-                    ? "Finish sign-in in the Cubby-managed Chrome tab on your Mac, then resume this run."
-                    : "Reconnect the Cubby Mac browser and leave the retailer tab open before resuming."
-            )
-            .font(.caption).foregroundStyle(.secondary)
-            Link("Open sign-in and resume controls", destination: appModel.webURL(for: .run, id: runID))
+            Label("Run paused", systemImage: "pause.circle")
+                .font(.subheadline.weight(.medium))
+            Link("Open run controls", destination: appModel.webURL(for: .run, id: runID))
         }
     }
 }

@@ -12,8 +12,6 @@ import { purchaseLabel } from "~/lib/purchase-label";
 import { Stack } from "~/ui/layout";
 import { StatusText } from "~/ui/primitives/status-text";
 
-import { TargetedImportLaunchButton } from "../purchases/targeted-import-launch";
-
 function JourneyStep({
   label,
   detail,
@@ -125,23 +123,10 @@ export const ProductRuns: DetailSlotComponent<"product"> = ({ record }) => (
   <EntityReportSlot slot="product.runs" id={record.id} record={record} />
 );
 
-export const ProductEnrichmentAction: DetailSlotComponent<"product"> = ({
-  record: product,
-}) => (
-  <TargetedImportLaunchButton
-    targetId={product.id}
-    targetLabel={product.name}
-    purpose="product_enrichment"
-  />
-);
-
 export const ProductDetailActions: DetailSlotComponent<"product"> = ({
   record,
 }) => (
-  <>
-    <ProductEnrichmentAction record={record} />
-    <ProductRelatednessActions
-      productId={parseShortcodeFor("product", record.id)}
-    />
-  </>
+  <ProductRelatednessActions
+    productId={parseShortcodeFor("product", record.id)}
+  />
 );

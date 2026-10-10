@@ -219,15 +219,26 @@ function edges<T extends Record<string, EntityEdge>>(t: T & WellKeyed<T>): T {
   return t;
 }
 
+/**
+ * Retired research tables are neither read nor audited; the contract
+ * migration drops them with these edges.
+ */
+const RETIRED_RESEARCH_LIVENESS = {
+  kind: "allow-target-deleted",
+  reason: "Retired research history is dropped by the contract migration.",
+} as const;
+
 const researchFactSubjectEdges = (entityKind: RunTargetEntityKind) =>
   edges({
     "RunFactEvidence.entityId": {
       column: runFactEvidence.entityId,
       scope: { column: runFactEvidence.entityKind, value: entityKind },
-      role: "history",
+      // Retired: it no longer retains its subject; the contract migration
+      // copies supported facts into EntitySource and drops the table.
+      role: "metadata",
       label: "accepted research facts",
       description:
-        "An accepted field value names its canonical subject independently of the research task and retained original that proved it.",
+        "A retired research fact names its canonical subject until the contract migration drops it.",
       liveness: {
         kind: "allow-target-deleted",
         reason:
@@ -424,7 +435,7 @@ export const ENTITY_EDGES = {
       role: "media",
       label: "receipt hunt evidence",
       description: "A receipt photo submitted to resolve an import hunt.",
-      liveness: { kind: "must-target-live" },
+      liveness: RETIRED_RESEARCH_LIVENESS,
     },
     "OrderMailAttachment.imageId": {
       column: orderMailAttachment.imageId,
@@ -603,7 +614,7 @@ export const ENTITY_EDGES = {
       role: "history",
       label: "import hunts",
       description: "The member whose evidence is being sought.",
-      liveness: { kind: "must-target-live" },
+      liveness: RETIRED_RESEARCH_LIVENESS,
     },
     "MerchantVendorRule.ledgerPartyId": {
       column: merchantVendorRule.ledgerPartyId,
@@ -633,14 +644,14 @@ export const ENTITY_EDGES = {
       label: "research source exposure",
       description:
         "Content-free source checksum exposure in the authenticated member scope.",
-      liveness: { kind: "must-target-live" },
+      liveness: RETIRED_RESEARCH_LIVENESS,
     },
     "ResearchRetention.ledgerPartyId": {
       column: researchRetention.ledgerPartyId,
       role: "metadata",
       label: "research retention receipts",
       description: "A disposal receipt retains its authenticated member scope.",
-      liveness: { kind: "must-target-live" },
+      liveness: RETIRED_RESEARCH_LIVENESS,
     },
     "OrderMail.ledgerPartyId": {
       column: orderMail.ledgerPartyId,
@@ -1099,7 +1110,19 @@ export const ENTITY_EDGES = {
       role: "history",
       label: "import hunts",
       description: "A charge-side evidence search routed to this vendor.",
-      liveness: { kind: "must-target-live" },
+      liveness: RETIRED_RESEARCH_LIVENESS,
+    },
+    "ImportPreparedOrder.vendorId": {
+      column: importPreparedOrder.vendorId,
+      role: "history",
+      label: "prepared import orders",
+      description:
+        "The Vendor a purchase import named while preparing an order.",
+      liveness: {
+        kind: "allow-target-deleted",
+        reason:
+          "Preparation is an immutable capture; commit refuses a deleted or merged Vendor and the order must be prepared again.",
+      },
     },
     "MerchantVendorRule.vendorId": {
       column: merchantVendorRule.vendorId,
@@ -1230,7 +1253,7 @@ export const ENTITY_EDGES = {
         role: "history",
         label: "import hunts",
         description: "An evidence hunt opened for an unallocated transaction.",
-        liveness: { kind: "must-target-live" },
+        liveness: RETIRED_RESEARCH_LIVENESS,
       },
       "FinancialTransactionAllocation.transactionId": {
         column: financialTransactionAllocation.transactionId,
@@ -1357,7 +1380,7 @@ export const ENTITY_EDGES = {
       role: "history",
       label: "import hunts",
       description: "An evidence hunt assigned to this vendor account.",
-      liveness: { kind: "must-target-live" },
+      liveness: RETIRED_RESEARCH_LIVENESS,
     },
   }),
   // The read-only run record itself has no delete/merge operation
@@ -1467,14 +1490,14 @@ export const ENTITY_EDGES = {
       label: "order candidates",
       description:
         "An account-sync order-history worklist row belonging to this run.",
-      liveness: { kind: "must-target-live" },
+      liveness: RETIRED_RESEARCH_LIVENESS,
     },
     "RunEvidence.runId": {
       column: runEvidence.runId,
       role: "owned-child",
       label: "evidence",
       description: "Captured evidence filed under this run.",
-      liveness: { kind: "must-target-live" },
+      liveness: RETIRED_RESEARCH_LIVENESS,
     },
     "ResearchSourceExposure.runId": {
       column: researchSourceExposure.runId,
@@ -1570,7 +1593,7 @@ export const ENTITY_EDGES = {
       role: "history",
       label: "receipt hunts",
       description: "An evidence hunt whose receipt this run captured.",
-      liveness: { kind: "must-target-live" },
+      liveness: RETIRED_RESEARCH_LIVENESS,
     },
   }),
   "usda-food": edges({}),

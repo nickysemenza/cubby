@@ -1,71 +1,33 @@
 import { purchaseImportContract } from "~/contracts/purchase-import.contract";
-import { getPurchaseAgentQueue } from "~/server/cf-env";
 import { implementOperationDomain } from "~/server/operation-domain.server";
-import { confirmMerchantVendorRule } from "~/server/purchase-import/hunts";
 import {
-  commitProductEnrichment,
-  skipProductEnrichment,
   commitPurchaseImport,
-  overwriteProductEnrichment,
   preparePurchaseImport,
   purchaseImportOperationStatus,
-  validatePurchaseImport,
 } from "~/server/purchase-import/import-orders";
 import {
-  listReceiptHunts,
-  submitReceiptEvidence,
-} from "~/server/purchase-import/receipt-evidence";
-import { initiateRunEvidenceUpload } from "~/server/purchase-import/run-evidence";
-import { applyValidationCorrections } from "~/server/purchase-import/validation-corrections";
-import { recomputeRecipesForPriceAffectedProducts } from "~/server/services/expense-pricing.service";
+  readMail,
+  resolveMail,
+  searchMail,
+} from "~/server/purchase-import/mail-tool";
+import { confirmMerchantVendorRule } from "~/server/purchase-import/merchant-vendor-rules";
 
 export const purchaseImportHandlers = implementOperationDomain(
   purchaseImportContract,
   {
-    initiateRunEvidenceUpload: (context, input) =>
-      initiateRunEvidenceUpload(context.db, input, context.auth.userId),
-    listReceiptHunts: (context) =>
-      listReceiptHunts(context.db, context.actorContext),
-    submitReceiptEvidence: (context, input) => {
-      const queue = getPurchaseAgentQueue();
-      if (!queue) throw new Error("Purchase Agent queue is unavailable");
-      return submitReceiptEvidence(
-        context.db,
-        input,
-        context.actorContext,
-        queue,
-      );
-    },
-    applyValidationCorrections: async (context, input) => {
-      const { result, priceAffectedProductIds } =
-        await applyValidationCorrections(
-          context.db,
-          input,
-          context.actorContext,
-        );
-      await recomputeRecipesForPriceAffectedProducts(
-        context.db,
-        context.services.recipeCosting,
-        priceAffectedProductIds,
-        "purchase_import.apply_validation_corrections",
-      );
-      return result;
-    },
     prepare: (context, input) =>
       preparePurchaseImport(context.db, input, context.actorContext),
-    validate: (context, input) =>
-      validatePurchaseImport(context.db, input, context.actorContext),
     commit: (context, input) =>
       commitPurchaseImport(context.db, input, context.actorContext),
     operationStatus: (context, input) =>
       purchaseImportOperationStatus(context.db, input, context.actorContext),
     confirmMerchantVendor: (context, input) =>
       confirmMerchantVendorRule(context.db, input, context.actorContext),
-    commitProductEnrichment: (context, input) =>
-      commitProductEnrichment(context.db, input, context.actorContext),
-    skipProductEnrichment: (context, input) =>
-      skipProductEnrichment(context.db, input, context.actorContext),
-    overwriteProductEnrichment: (context, input) =>
-      overwriteProductEnrichment(context.db, input, context.actorContext),
+    mailRead: (context, input) =>
+      readMail(context.db, input, context.actorContext),
+    mailSearch: (context, input) =>
+      searchMail(context.db, input, context.actorContext),
+    mailResolve: (context, input) =>
+      resolveMail(context.db, input, context.actorContext),
   },
 );

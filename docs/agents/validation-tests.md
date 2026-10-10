@@ -98,15 +98,6 @@ of the regression.
 Exact-identifier fixtures use the canonical issuer resolver and source
 registration. A familiar retailer name or a Vendor-shaped source slug does not
 establish domain authority or identifier ownership.
-For Run-scoped fact assertions, follow `RunFactEvidence.targetId` through
-`RunTarget.runId`; fact evidence has no direct Run column. Apply that same
-declared ownership join to diagnostics. Diagnostic queries must not prevent
-the harness from closing or the failed-run artifact from being written.
-Retention receipt fixtures bind `ResearchRetention.workRef` to the exact
-primary-source work: its `RunTarget.entityKind` is `run`, its `entityId` is the
-owning Run, and its `workKey` matches the receipt's `orderMailId`. Selecting an
-arbitrary target can attach cleanup authority to a disposable image task.
-
 Before a focused browser replay, run `pnpm --filter @cubby/web run build:cf
 --ensure` after changing the recorded source revision. The prebuilt provenance
 gate can reject a run after workflow or documentation edits too; a
@@ -346,8 +337,9 @@ excluded from the required desktop shards and runs in CI as an optional job
 starts has no id until the click, so scripts use `currentRunId`. Prefer it over
 a UI-less scenario for anything the Run or Purchase page shows; keep scenarios
 for server fences the UI cannot observe.
-Branch on the current public tool-result shape (mail content is under
-`observation.readableText`). Generate an item title once per fixture and reuse
+Branch on the current public tool-result shape (`imports_read.mail` returns
+the retained Email's `content` and `checksum`; `purchase_import.commit` and
+`mail.resolve` settle it). Generate an item title once per fixture and reuse
 it in the retained original and proposal: tests share a worker database, so
 unrelated fixtures must not collide on Product name/manufacturer. Repeated
 orders for the same item reuse the Product reference returned by resolution.

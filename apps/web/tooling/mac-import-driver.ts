@@ -694,11 +694,7 @@ export class MacImportDriver {
     this.aborted = true;
   }
   async open(bundleID: string, expectedPID: number): Promise<string> {
-    if (
-      !/^(?:com\.nickysemenza\.cubby\.e2e|com\.cubby\.fixture\.browser)(?:\.[a-f\d]{16})?$/.test(
-        bundleID,
-      )
-    )
+    if (!/^com\.nickysemenza\.cubby\.e2e(?:\.[a-f\d]{16})?$/.test(bundleID))
       throw new Error("Native driver requires an isolated fixture bundle");
     if (!Number.isInteger(expectedPID) || expectedPID <= 0)
       throw new Error("Native driver requires a verified fixture PID");
@@ -900,11 +896,6 @@ export class MacImportDriver {
     await this.action(["type", "\n"]);
     await this.click('label="Open" role=Button');
   }
-  async openBrowserSync(): Promise<void> {
-    await this.clickSidebar("Browser Sync");
-    await this.wait("id=browserSync.accounts");
-    await this.wait("id=browserSync.syncAll");
-  }
   async importStatement(file: string): Promise<void> {
     await this.click("id=statement.csv.chooseFile");
     await this.chooseFile(file);
@@ -940,39 +931,6 @@ export class MacImportDriver {
         "Fixture deep link changed the owned app process arguments",
       );
     this.record(["production-deep-link", code], 0, await this.snapshot());
-  }
-  async pickBookingEntity(control: string, title: string): Promise<void> {
-    await this.click(`id=${control}`);
-    await this.action(["picker-search", title]);
-    await this.wait(`contains="${title}" role=Button`);
-    await this.click(`contains="${title}" role=Button`);
-  }
-  async addPhotosToImportRun(directory: string): Promise<void> {
-    await this.clickSidebar("Photos");
-    await this.click("id=photo.source.files");
-    await this.wait('label="Open" role=Button');
-    await this.action(["type", "/"]);
-    await this.wait("id=PathTextField");
-    await this.action(["fill", "id=PathTextField", directory]);
-    await this.wait(`id="${directory}"`);
-    await this.action(["type", "\n"]);
-    await this.wait('contains="synthetic-shirt.png"');
-    await this.action(["select-files"]);
-    await this.click('label="Open" role=Button');
-    await this.wait("id=photos.review.continue");
-    await this.click("id=photos.review.continue");
-    await this.wait('label="Add to import run…"');
-    await this.click('label="Add to import run…"');
-    await this.wait("id=photos.run.startNew");
-    await this.click("id=photos.run.startNew");
-  }
-  async approveAllPhotoGroups(): Promise<void> {
-    await this.wait("id=review.workspace");
-    await this.click('label="Approve all"');
-    const snapshot = await this.snapshot(),
-      target = snapshot.match(/(@e\d+(?:~s\d+)?)\s+[^\n]*Approve \d+ items/);
-    if (!target?.[1]) throw new Error("Photo approval confirmation missing");
-    await this.click(target[1]);
   }
   async close(): Promise<void> {
     if (!this.bundleID) return;

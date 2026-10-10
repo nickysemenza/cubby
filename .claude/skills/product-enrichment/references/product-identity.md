@@ -59,8 +59,8 @@ and color", never as `exactIdentifierMatch`.
 
 Purchase prep only reports `exactIdentifierMatch` for identifiers stored as
 external ids, never for text in `notes`. When a photo shows a legible barcode,
-record it with `product_enrichment.patch_external_ids` (`source: "gtin"`,
-`kind: "gtin_14"`); prep matches a numeric order-line SKU against it. A
+record it with an `entity.update product` `externalIds` add patch
+(`source: "gtin"`, `kind: "gtin_14"`); prep matches a numeric order-line SKU against it. A
 direct-selling brand's per-variant SKU printed on its own tag may be stored as
 `retailer_sku` under that brand's vendor source slug.
 

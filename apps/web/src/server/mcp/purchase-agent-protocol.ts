@@ -29,11 +29,10 @@ import type { ToolExtra } from "./tools/tool-registration";
  * per-call human approval. Batch actions govern each item the same way.
  */
 const SELF_GOVERNED_ACTIONS = new Set<string>([
+  "mail.search",
+  "mail.resolve",
   "purchase_import.prepare",
-  "purchase_import.validate",
   "purchase_import.commit",
-  "product_enrichment.commit",
-  "product_enrichment.skip",
   "photo_run.propose_groups",
   "photo_run.commit_group",
 ] satisfies CubbyMcpMutationAction[]);

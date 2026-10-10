@@ -23,7 +23,6 @@ import {
   setMemberLoginParty,
 } from "~/server/repo/member-login";
 import { resolveOrThrow } from "~/server/repo/shortcode-resolver";
-import { startOrResumeRun } from "~/server/purchase-import/run-service";
 import {
   createEvidenceHarnessContext,
   createEntityFixture,
@@ -84,14 +83,13 @@ export async function createConvergenceHarness(
   if (!member) throw new Error("Authenticated reviewer member binding missing");
   const names = convergenceNames(token);
   const { productName, orderId } = names;
-  const { vendor, account, card, location, category, productCategory } =
+  const { vendor, card, location, category, productCategory } =
     await createConvergenceFixtures(
       (entity, overrides) => createEntityFixture(page, entity, overrides),
       member.shortcode,
       names,
     );
   const vendorId = await resolveOrThrow(db, "vendor", vendor.id);
-  const accountId = await resolveOrThrow(db, "vendorAccount", account.id);
   const cardId = await resolveOrThrow(db, "financialAccount", card.id);
   let bookedPurchaseCode: string | undefined;
   let retailerDone = false;
@@ -140,17 +138,12 @@ export async function createConvergenceHarness(
   };
 
   async function retailer() {
-    // Source-order permutations enter at the importer; input-first journeys
-    // cover the browser capture and extraction boundary.
+    // Source-order permutations enter at the importer as a member caller's
+    // order; input-first journeys cover the extraction boundary.
     const html = names.retailerHtml;
-    const run = await startOrResumeRun(db, {
-      ledgerPartyId: member!.id,
-      vendorAccountId: accountId,
-      trigger: "manual",
-    });
     const committed = await importBrowserOrder(db, {
-      runId: run.id,
       actor,
+      vendorId: vendor.id,
       ids: syntheticOrderIds(token),
       externalKey: `history:${orderId}`,
       checksum: sha256Hex(html),
@@ -163,7 +156,7 @@ export async function createConvergenceHarness(
     if (bookedPurchaseCode) {
       await gotoAuthenticatedPage(
         page,
-        `/runs/${run.publicId}#import-findings`,
+        `/runs/${committed.runId}#import-findings`,
       );
       const apply = page.getByRole("button", {
         name: "Apply fix",

@@ -74,9 +74,6 @@ struct RunConsoleView: View {
                             .textSelection(.enabled)
                     }
                 }
-                if snapshot.purpose == .purchaseValidation {
-                    PurchaseValidationReviewSection(runID: runID)
-                }
                 ForEach(sections) { section in
                     if let view = DetailSlotRegistry.view(slot: section.id, row: row) {
                         // A full-width slot draws its own sections.

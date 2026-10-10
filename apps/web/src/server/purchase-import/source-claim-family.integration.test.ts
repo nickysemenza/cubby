@@ -14,7 +14,7 @@ import { getDb } from "~/server/repo/database-helpers";
 import { insertWithShortcode } from "~/server/repo/shortcode-utils";
 
 import { preparePurchaseImport } from "./import-orders";
-import { startOrResumeRun } from "./run-service";
+import { startImportRunFixture } from "./import-run.fixtures";
 import {
   loadImportSourceFamilyOrders,
   readImportSourceClaimFamily,
@@ -48,7 +48,7 @@ describe("canonical source claim families", () => {
       ledgerPartyId: party.id,
       vendorId: vendor.id,
     });
-    const run = await startOrResumeRun(ctx.db, {
+    const run = await startImportRunFixture(ctx.db, {
       ledgerPartyId: party.id,
       vendorAccountId: account.id,
       trigger: "manual",
@@ -65,7 +65,7 @@ describe("canonical source claim families", () => {
         vendorId: vendor.id,
         vendorAccountId: account.id,
         defaultTrade: "other",
-        source: { kind: "browser_order", externalKey, checksum },
+        source: { kind: "vendor_export", externalKey, checksum },
         extraction: {
           status: "ready",
           candidate: {
@@ -120,7 +120,7 @@ describe("canonical source claim families", () => {
       .values({
         ledgerPartyId: party.id,
         vendorAccountId: account.id,
-        kind: "browser_order",
+        kind: "vendor_export",
         externalKey: canonicalKey,
         checksum: first.source.checksum,
         firstRunId: run.id,
@@ -143,7 +143,7 @@ describe("canonical source claim families", () => {
             {
               stableOrderId: `${operationId}:order`,
               itemOperationId: `${operationId}:item`,
-              source: value.source,
+              source: { ...value.source, kind: "vendor_export" },
               evidenceChecksum: value.source.checksum,
               extractionRevision: "example-family-v1",
               extraction: value.extraction,

@@ -102,7 +102,7 @@ struct ClientQueryTests {
                 .utf8)
         let request = try await capture(returning: payload) { client in
             let page = try await client.activityGroups(
-                filters: .init(kind: .productEnrichment, state: "paused_offline", executor: .cloud),
+                filters: .init(kind: .photoInventory, state: "needs_review", executor: .cloud),
                 cursor: "previous-groups", limit: 7)
             #expect(page.total == 3)
             #expect(page.totalItems == 7)
@@ -111,8 +111,8 @@ struct ClientQueryTests {
         #expect(request.url?.path == "/api/v1/activity/groups")
         #expect(request.value(forHTTPHeaderField: "Authorization") == "Bearer tok")
         let query = queryItems(of: request)
-        #expect(query.contains(URLQueryItem(name: "kind", value: "product_enrichment")))
-        #expect(query.contains(URLQueryItem(name: "state", value: "paused_offline")))
+        #expect(query.contains(URLQueryItem(name: "kind", value: "photo_inventory")))
+        #expect(query.contains(URLQueryItem(name: "state", value: "needs_review")))
         #expect(query.contains(URLQueryItem(name: "executor", value: "cloud")))
         #expect(query.contains(URLQueryItem(name: "cursor", value: "previous-groups")))
         #expect(query.first { $0.name == "limit" }?.value.flatMap(Int.init) == 7)

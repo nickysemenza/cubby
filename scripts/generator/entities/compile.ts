@@ -515,6 +515,8 @@ const compileFieldModel = (
           : field.readKey,
       reference: field.reference,
       provenance,
+      // Left undefined (so not emitted) unless declared, like detailLabelPath.
+      collection: field.collection ?? undefined,
       explanation:
         field.explanation ??
         (provenance?.kind === "derived"

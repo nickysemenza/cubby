@@ -2,7 +2,6 @@ import { describe, expect, it } from "vitest";
 import { z } from "zod";
 
 import {
-  browserBridgeRequest,
   importExtractionModelOutput,
   importAuditModelOutput,
   importExtractionOutcome,
@@ -151,44 +150,6 @@ describe("purchase import contracts", () => {
         checksum: "not-a-checksum",
       }),
     ).toThrow("Too small");
-  });
-
-  it("does not expose arbitrary click or script browser operations", () => {
-    expect(() =>
-      browserBridgeRequest.parse({
-        requestId: crypto.randomUUID(),
-        operation: "evaluate",
-        script: "document.forms[0].submit()",
-      }),
-    ).toThrow("Invalid input");
-    expect(() =>
-      browserBridgeRequest.parse({
-        requestId: crypto.randomUUID(),
-        operation: "click",
-        selector: "button",
-      }),
-    ).toThrow("Invalid input");
-  });
-
-  it("preserves the recovery URL for a restart-safe read", () => {
-    const request = browserBridgeRequest.parse({
-      protocolVersion: 4,
-      id: crypto.randomUUID(),
-      operationId: "capture-after-restart",
-      runID: crypto.randomUUID(),
-      deadline: "2026-09-21T12:00:00.000Z",
-      operation: {
-        type: "read",
-        allowedHosts: ["orders.example.test"],
-        screenshot: "preferred",
-        recoveryURL: "https://orders.example.test/history",
-      },
-    });
-
-    expect(request.operation).toMatchObject({
-      type: "read",
-      recoveryURL: "https://orders.example.test/history",
-    });
   });
 
   it("allows only a negative refund proposal", () => {

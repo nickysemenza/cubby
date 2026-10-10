@@ -43,7 +43,6 @@ import {
   type RecipeFlowArtifact,
   recipeFlowArtifactSchema,
 } from "@cubby/schemas/recipe-flow";
-import { researchAssessment } from "@cubby/schemas/research-assessment";
 import {
   type AiModel,
   DECISION_MODEL,
@@ -214,17 +213,6 @@ export const MAILBOX_RELEVANCE_FEATURE = defineFeature({
   effort: "medium",
   maxTokens: 1500,
   schema: mailboxRelevanceDecision,
-});
-
-export const RESEARCH_SUPPORT_FEATURE = defineFeature({
-  feature: "research-source-support",
-  promptVersion: "2026-10-09.3",
-  cache: false,
-  collectPayload: false,
-  tier: "quality",
-  effort: "low",
-  maxTokens: 6_000,
-  schema: researchAssessment,
 });
 
 export const PURCHASE_IMPORT_PRODUCT_IDENTITY_FEATURE = defineFeature({
@@ -444,7 +432,6 @@ export const ENTITY_EMBEDDING_FEATURE = defineFeature({
 
 /** Every declared feature, for the registry assertions in the unit test. */
 export const AI_FEATURES = [
-  RESEARCH_SUPPORT_FEATURE,
   MAILBOX_TRIAGE_FEATURE,
   MAILBOX_RELEVANCE_FEATURE,
   USDA_FOOD_SUGGEST_FEATURE,

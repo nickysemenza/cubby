@@ -1,7 +1,7 @@
 import { z } from "zod";
 import { dataExceptionReason, dataQualityStatus } from "./data-quality-shape";
 import { entityRefSchema } from "./entity";
-import { researchClaimSupport } from "./research";
+import { entitySourceRead } from "./entity-source";
 import {
   fieldResolutionSchema,
   fieldResolutionSourceSchema,
@@ -18,21 +18,17 @@ export const fieldExplanationSource = z.object({
   value: z.json(),
 });
 
-export const fieldExplanationVerification = z.object({
-  key: z.string(),
-  run: entityRefSchema,
-  subject: entityRefSchema,
-  fieldPath: z.string(),
-  value: z.json(),
-  verifiedAt: z.iso.datetime(),
-  support: researchClaimSupport.nullable(),
-  supportRetiredAt: z.iso.datetime().nullable(),
-  source: z.object({
-    label: z.string(),
-    url: z.url().nullable(),
-    kind: z.string(),
-  }),
-});
+/**
+ * A Source recorded for this field: where its value was seen, and whether the
+ * field still holds the value that Source supported.
+ */
+export const fieldExplanationVerification = entitySourceRead
+  .omit({ observedAt: true, createdAt: true })
+  .extend({
+    key: z.string(),
+    observedAt: z.iso.datetime().nullable(),
+    createdAt: z.iso.datetime(),
+  });
 export type FieldExplanationVerification = z.infer<
   typeof fieldExplanationVerification
 >;

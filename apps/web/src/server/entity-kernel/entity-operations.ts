@@ -1,4 +1,5 @@
 import type { ShortcodeEntity } from "@cubby/schemas/entity-manifest";
+import type { EntitySourceInput } from "@cubby/schemas/entity-source";
 import {
   ENTITY_LABEL,
   ENTITY_NOT_FOUND_REASON,
@@ -40,6 +41,11 @@ import {
   isShortcodeEntity,
   resolveEntityIdentity,
 } from "~/server/repo/entity-identity";
+import {
+  assertEntitySourceFieldPaths,
+  entityDetailJson,
+  recordEntitySources,
+} from "~/server/repo/entity-source";
 import { deleteStoredObjects } from "~/server/services/image-storage.service";
 import {
   isMutationSideEffectRef,
@@ -55,6 +61,7 @@ import type {
   EntityKernelContext,
   EntityKernelCoreBinding,
 } from "./adapter";
+import { resolveValueCollectionPatches } from "./collection-patch";
 import {
   type EntityKernelEntity,
   entityBrowserMutationResultSchema,
@@ -183,6 +190,40 @@ const runSideEffects = async <
     projection: "skip",
   });
 };
+
+/**
+ * Caller sources ride the write's transaction. A field-scoped source is
+ * fingerprinted against the entity's detail read after the write, the same
+ * shape the detail read compares against later.
+ */
+const recordWriteSources = async <
+  E extends EntityKernelEntity,
+  S extends EntityBindingSchemas,
+>(
+  context: EntityKernelContext,
+  binding: EntityKernelCoreBinding<E, S>,
+  entityId: EntityInternalId<E>,
+  code: string,
+  sources: readonly EntitySourceInput[],
+): Promise<void> => {
+  const detail = sources.some((source) => source.fieldPath !== undefined)
+    ? entityDetailJson.parse(
+        await binding.repository.get(
+          context,
+          parseSchema<S["id"], string>(binding.schemas.id, code),
+        ),
+      )
+    : undefined;
+  await recordEntitySources(context.db, {
+    entityKind: binding.entity,
+    entityId,
+    sources,
+    recorder: context.actorContext,
+    detail,
+  });
+};
+
+const writtenCode = z.object({ id: z.string() });
 
 export const defineEntityOperations = <
   const E extends EntityKernelEntity,
@@ -334,7 +375,10 @@ export const defineEntityOperations = <
       ),
   ),
   create: bindWorkflow(
-    workflow<EntityKernelContext, unknown>(`${binding.entity}.create`)
+    workflow<
+      EntityKernelContext,
+      { data: unknown; sources?: EntitySourceInput[] }
+    >(`${binding.entity}.create`)
       .call("validated", async (_, { input }) => {
         const schema = binding.schemas.createInput;
         const run = binding.repository.create;
@@ -343,11 +387,13 @@ export const defineEntityOperations = <
             "CONSTRAINT_VIOLATION",
             `${ENTITY_LABEL[binding.entity]} does not support create`,
           );
+        assertEntitySourceFieldPaths(binding.entity, input.sources);
         return {
           run,
+          sources: input.sources ?? [],
           data: parseSchema(
             presentSchema<S["createInput"]>(schema),
-            normalizeRecordEmoji(binding.entity, input),
+            normalizeRecordEmoji(binding.entity, input.data),
           ),
         };
       })
@@ -371,6 +417,14 @@ export const defineEntityOperations = <
               created.entityId,
               validated.data,
             );
+            if (validated.sources.length > 0)
+              await recordWriteSources(
+                writeContext,
+                binding,
+                created.entityId,
+                writtenCode.parse(created.output).id,
+                validated.sources,
+              );
             return {
               ...created,
               output: (
@@ -407,9 +461,10 @@ export const defineEntityOperations = <
       ),
   ),
   update: bindWorkflow(
-    workflow<EntityKernelContext, { id: string; data: unknown }>(
-      `${binding.entity}.update`,
-    )
+    workflow<
+      EntityKernelContext,
+      { id: string; data: unknown; sources?: EntitySourceInput[] }
+    >(`${binding.entity}.update`)
       .call("validated", async ({ context }, { input }) => {
         const schema = binding.schemas.updateInput;
         const run = binding.repository.update;
@@ -418,8 +473,10 @@ export const defineEntityOperations = <
             "CONSTRAINT_VIOLATION",
             `${ENTITY_LABEL[binding.entity]} does not support update`,
           );
+        assertEntitySourceFieldPaths(binding.entity, input.sources);
         return {
           run,
+          sources: input.sources ?? [],
           id: parseSchema<S["id"], string>(binding.schemas.id, input.id),
           data: parseSchema(
             presentSchema<S["updateInput"]>(schema),
@@ -445,12 +502,24 @@ export const defineEntityOperations = <
               z.string().parse(validated.id),
               validated.data,
             );
+            const data = Object.assign(
+              {},
+              validated.data,
+              Object.fromEntries(
+                await resolveValueCollectionPatches(
+                  writeContext,
+                  binding,
+                  validated.id,
+                  validated.data,
+                ),
+              ),
+            );
             const updated = await validated.run(
               writeContext,
               validated.id,
               parseSchema(
                 presentSchema<S["updateInput"]>(binding.schemas.updateInput),
-                repositoryRecordInput(binding.entity, validated.data),
+                repositoryRecordInput(binding.entity, data),
               ),
             );
             const changedFields = Object.keys(
@@ -483,6 +552,14 @@ export const defineEntityOperations = <
               previousEmoji,
               validated.data,
             );
+            if (validated.sources.length > 0)
+              await recordWriteSources(
+                writeContext,
+                binding,
+                updated.entityId,
+                z.string().parse(validated.id),
+                validated.sources,
+              );
             return {
               ...updated,
               output: (

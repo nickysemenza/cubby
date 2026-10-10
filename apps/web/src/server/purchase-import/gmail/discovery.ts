@@ -44,7 +44,7 @@ import {
   runFailureText,
 } from "~/server/workflow-runs/lifecycle";
 
-import type { startMailResearch } from "../research-run";
+import type { startMailImport } from "../mail-import-run";
 import type { OrderMailAttachmentStorage } from "./attachment-storage";
 import { ingestGmailMessages } from "./ingest";
 import {
@@ -159,7 +159,7 @@ export type DiscoveryPorts = {
   storage?: OrderMailAttachmentStorage;
   triage?: MailTriage;
   relevance?: MailRelevance;
-  research?: typeof startMailResearch;
+  research?: typeof startMailImport;
 };
 const attemptIs = (attempt: number) =>
   sql`coalesce((${runTable.progress}->>'attempt')::int, 0) = ${attempt}`;
@@ -413,7 +413,7 @@ export async function saveMailDiscoveryBatch(
     for (let offset = 0; offset < ingested.orderMailIds.length; offset += 50) {
       if (!(await claimDiscovery(db, params))) return { kind: "stopped" };
       const results = await (
-        ports.research ?? (await import("../research-run")).startMailResearch
+        ports.research ?? (await import("../mail-import-run")).startMailImport
       )(db, {
         ledgerPartyId: claimed.ledgerPartyId,
         userId: claimed.row.actorUserId,

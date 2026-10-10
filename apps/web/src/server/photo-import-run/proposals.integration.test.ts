@@ -154,15 +154,10 @@ describe("photo group proposals", () => {
       groups: [createGroup("shirt", codes)],
     });
 
-    const settled = await reconcileSettledRun(
-      ctx.db,
-      {
-        getByName: () => {
-          throw new Error("A photo run has no vendor browser");
-        },
-      },
-      { runId: run.id, operationId: "synthetic-photo-settle" },
-    );
+    const settled = await reconcileSettledRun(ctx.db, {
+      runId: run.id,
+      operationId: "synthetic-photo-settle",
+    });
     expect(settled).toEqual({ reconciled: false, status: "running" });
     expect(
       (await loadRunDetail(ctx.db, run.shortcode)).latestProgress,

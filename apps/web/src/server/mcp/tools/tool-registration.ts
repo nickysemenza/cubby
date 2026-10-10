@@ -827,7 +827,10 @@ function registerCompiledTool(
               mutation,
             );
           const governed = selfGoverned(action);
-          if (trusted && mutation && governed) {
+          // A self-governed writer that reads the envelope must name the
+          // delegated Run; one without it (mail.*) is bound by the actor's
+          // delegated runId instead.
+          if (trusted && mutation && governed && action.keepsRunExecution) {
             if (!execution)
               throw new Error(
                 "Purchase-agent writes require the run execution envelope",

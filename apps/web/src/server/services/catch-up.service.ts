@@ -3,8 +3,7 @@ import * as Sentry from "@sentry/tanstackstart-react";
 
 import { publishBackgroundTasks } from "~/server/background-tasks/publish";
 import {
-  getPurchaseAgentQueue,
-  getPurchaseImportNamespace,
+  getPurchaseImportRunAgentNamespace,
   isCloudflareRuntime,
 } from "~/server/cf-env";
 import type { Database } from "~/server/db";
@@ -44,58 +43,72 @@ export async function requestCatchUp(
 export async function recoverMissedWork(db: Database) {
   const [
     { repairImageProcessingWork },
-    { expireOfflineRuns, expireStaleRuns },
+    { expireStaleRuns },
     { reconcileWorkflowRuns },
     { pruneRoutineRuns },
-    { publishPendingResearchRetention },
+    { retireSettledCoordinators },
+    { disposeUnrelatedOriginals },
+    { productionOrderMailAttachmentStorage },
   ] = await Promise.all([
     import("~/server/repo/image-processing-maintenance"),
     import("~/server/purchase-import/run-service"),
     import("~/server/workflow-runs/lifecycle"),
     import("~/server/purchase-import/gmail/discovery"),
-    import("~/server/purchase-import/research-retention-delivery"),
+    import("~/server/purchase-import/run-retirement"),
+    import("~/server/purchase-import/gmail/persistence"),
+    import("~/server/purchase-import/gmail/attachment-storage"),
   ]);
-  const namespace = getPurchaseImportNamespace();
+  const coordinators = getPurchaseImportRunAgentNamespace();
   const [
     image,
-    offlineResult,
     staleResult,
     workflowResult,
     pruneResult,
-    retentionResult,
+    retireResult,
+    disposalResult,
   ] = await Promise.allSettled([
     repairImageProcessingWork(db),
-    expireOfflineRuns(db),
-    namespace
-      ? expireStaleRuns(db, namespace)
-      : isCloudflareRuntime()
-        ? Promise.reject(new Error("PURCHASE_IMPORT binding is unavailable"))
-        : Promise.resolve(null),
+    expireStaleRuns(db),
     reconcileWorkflowRuns(db),
     pruneRoutineRuns(db),
-    publishPendingResearchRetention(db),
+    // A settled agent Run's transcript (including Email text it read) is
+    // destroyed after a day, leaving time to read the conversation.
+    coordinators
+      ? retireSettledCoordinators(
+          db,
+          (agentId) => coordinators.getByName(agentId),
+          new Date(Date.now() - 24 * 60 * 60_000),
+        )
+      : isCloudflareRuntime()
+        ? Promise.reject(
+            new Error("PURCHASE_IMPORT_RUN binding is unavailable"),
+          )
+        : Promise.resolve(null),
+    // Retries an unrelated Email's disposal lost after its disposition.
+    disposeUnrelatedOriginals(db, productionOrderMailAttachmentStorage),
   ]);
   const errors = [
     image,
-    offlineResult,
     staleResult,
     workflowResult,
     pruneResult,
-    retentionResult,
+    retireResult,
+    disposalResult,
   ]
     .filter((result) => result.status === "rejected")
     .map((result) => String(result.reason));
-  const offline =
-    offlineResult.status === "fulfilled" ? offlineResult.value : null;
   const stale = staleResult.status === "fulfilled" ? staleResult.value : null;
   log.info("purchase runs expired", {
-    offlineExpired: offline?.expired,
     staleExpired: stale?.expired,
     staleFailures: stale?.failures.length,
     workflowRunsFailed:
       workflowResult.status === "fulfilled" ? workflowResult.value : null,
     routineRunsPruned:
       pruneResult.status === "fulfilled" ? pruneResult.value : null,
+    coordinatorsRetired:
+      retireResult.status === "fulfilled" ? retireResult.value?.retired : null,
+    unrelatedDisposalsChecked:
+      disposalResult.status === "fulfilled" ? disposalResult.value : null,
   });
   for (const failure of stale?.failures ?? [])
     Sentry.captureMessage(
@@ -103,72 +116,36 @@ export async function recoverMissedWork(db: Database) {
       "warning",
     );
   if (errors.length) throw new Error(errors.join("; "));
-  return { offline, stale };
+  return { stale };
 }
 
 /**
- * Find new purchase evidence: open charge hunts, start one Gmail discovery
- * Workflow per connected mailbox, and dispatch browser hunts. Gmail work runs
- * in its Workflow, not here; a hunt waiting on mail has a grace period before
- * it goes to the browser, which covers the pass's lag. Then start enrichment
- * for imported Products an earlier pass left behind.
+ * Start one Gmail discovery Workflow per connected mailbox; Mail import Runs
+ * follow from discovery. Product research is never started here: it is a
+ * member's Burn-down (ADR 0008).
  */
 export async function discoverPurchases(db: Database) {
   const [
-    { discoverImportHunts, dispatchImportHunts },
     { startMailDiscovery },
     { gmailOAuthConfigured },
     { reconcileWorkflowRuns },
-    { sweepPendingEnrichment },
   ] = await Promise.all([
-    import("~/server/purchase-import/hunts"),
     import("~/server/purchase-import/gmail/discovery"),
     import("~/server/purchase-import/gmail/provider"),
     import("~/server/workflow-runs/lifecycle"),
-    import("~/server/purchase-import/enrichment-sweep"),
   ]);
-  const gmailConfigured = gmailOAuthConfigured();
-  if (!gmailConfigured)
+  if (!gmailOAuthConfigured()) {
     log.info("Gmail discovery skipped: Google OAuth is not configured");
-  const [huntResult, gmailResult] = await Promise.allSettled([
-    discoverImportHunts(db),
-    gmailConfigured
-      ? // Fail a stranded pass first: recovery runs concurrently, and a
-        // stranded `running` Run would otherwise hold its mailbox's slot
-        // until the next trigger.
-        reconcileWorkflowRuns(db).then(() => startMailDiscovery(db))
-      : Promise.resolve(null),
-  ]);
-  const queue = getPurchaseAgentQueue();
-  const dispatchResult = await Promise.allSettled([
-    queue
-      ? dispatchImportHunts(db, queue)
-      : isCloudflareRuntime()
-        ? Promise.reject(
-            new Error("PURCHASE_AGENT_QUEUE binding is unavailable"),
-          )
-        : Promise.resolve(0),
-  ]);
-  const [enrichmentResult] = await Promise.allSettled([
-    sweepPendingEnrichment(db),
-  ]);
-  const huntsCreated =
-    huntResult.status === "fulfilled" ? huntResult.value : null;
-  const mail = gmailResult.status === "fulfilled" ? gmailResult.value : null;
-  const huntsDispatched =
-    dispatchResult[0]?.status === "fulfilled" ? dispatchResult[0].value : 0;
-  const enrichment =
-    enrichmentResult?.status === "fulfilled" ? enrichmentResult.value : null;
+    return { mail: null };
+  }
+  // Fail a stranded pass first: recovery runs concurrently, and a stranded
+  // `running` Run would otherwise hold its mailbox's slot until the next
+  // trigger.
+  await reconcileWorkflowRuns(db);
+  const mail = await startMailDiscovery(db);
   log.info("purchase discovery", {
-    huntsCreated,
-    huntsDispatched,
-    mailPassesStarted: mail?.started,
-    mailPassesRunning: mail?.running,
-    enrichmentRunsStarted: enrichment?.started.length,
+    mailPassesStarted: mail.started,
+    mailPassesRunning: mail.running,
   });
-  const errors = [huntResult, gmailResult, ...dispatchResult, enrichmentResult]
-    .filter((result) => result.status === "rejected")
-    .map((result) => String(result.reason));
-  if (errors.length) throw new Error(errors.join("; "));
-  return { huntsCreated, huntsDispatched, mail, enrichment };
+  return { mail };
 }

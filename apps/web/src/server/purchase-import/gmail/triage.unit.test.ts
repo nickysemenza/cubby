@@ -29,7 +29,7 @@ describe("transient Gmail triage", () => {
           normalizeMessage("google-subject", raw),
           choose,
         ),
-      ).toBe("uncertain");
+      ).toMatchObject({ classification: "uncertain", stage: "rule" });
     }
     expect(choose).not.toHaveBeenCalled();
   });
@@ -43,7 +43,7 @@ describe("transient Gmail triage", () => {
         normalizeMessage("google-subject", raw),
         choose,
       ),
-    ).toBe("uncertain");
+    ).toMatchObject({ classification: "uncertain", stage: "rule" });
     expect(choose).not.toHaveBeenCalled();
   });
   it("routes readable original content including unfamiliar shared senders", async () => {
@@ -55,7 +55,7 @@ describe("transient Gmail triage", () => {
         normalizeMessage("google-subject", raw),
         choose,
       ),
-    ).toBe("related");
+    ).toMatchObject({ classification: "related", stage: "jev" });
     expect(choose.mock.calls[0]?.[0]).toContain("Forge Services");
   });
 });

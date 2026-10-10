@@ -19,7 +19,7 @@ import { getDb } from "~/server/repo/database-helpers";
 import { insertWithShortcode } from "~/server/repo/shortcode-utils";
 import { ensureRun } from "~/server/runs/ensure-run";
 
-import { productResearchFixture } from "../product-research.fixtures";
+import { importedPurchaseFixture } from "../import-run.fixtures";
 import { ingestGmailMessages } from "./ingest";
 import { createBetterAuthGmailAccountStore } from "./persistence";
 import { GmailAuthorizationError } from "./tokens";
@@ -71,7 +71,7 @@ describe("Gmail acquisition retention and replay", () => {
   // Current raw bytes must advance canonical freshness without a successful
   // researcher write. Routine rediscovery cannot erase an ownership block.
   it("advances only the canonical checksum when a related original refreshes before research", async () => {
-    const f = await productResearchFixture(ctx.db, ctx.actor);
+    const f = await importedPurchaseFixture(ctx.db, ctx.actor);
     if (!f.association) throw new Error("Synthetic accepted order missing");
     const input = {
       ledgerPartyId: f.party.id,

@@ -16,12 +16,8 @@ type Capability =
   | "commit_purchase_import"
   | "generic_mutation"
   | "attachment"
-  | "audit_repair"
   | "business_writer"
-  | "evidence"
-  | "browser"
   | "finalize"
-  | "enrichment_commit"
   | "photo_commit"
   /** Review-queue metadata only: never changes household records. */
   | "match_proposal"
@@ -30,37 +26,10 @@ type Capability =
 
 const capabilityMatrix = {
   mail_import: new Set([
-    "business_writer",
-    "evidence",
-    "browser",
-    "finalize",
-    "match_proposal",
-  ]),
-  account_sync: new Set([
     "prepare",
     "commit_purchase_import",
-    "generic_mutation",
-    "attachment",
-    "audit_repair",
     "business_writer",
-    "evidence",
-    "browser",
     "finalize",
-    "match_proposal",
-  ]),
-  purchase_validation: new Set([
-    "prepare",
-    "evidence",
-    "browser",
-    "finalize",
-    "match_proposal",
-  ]),
-  product_enrichment: new Set([
-    "prepare",
-    "evidence",
-    "browser",
-    "finalize",
-    "enrichment_commit",
     "match_proposal",
   ]),
   photo_inventory: new Set([
@@ -70,11 +39,22 @@ const capabilityMatrix = {
     "finalize",
     "match_proposal",
   ]),
+  // Retired purposes (ADR 0008) keep readable history and authorize nothing.
+  account_sync: new Set(),
+  purchase_validation: new Set(),
+  product_enrichment: new Set(),
   // Runs that only group AI work never authorize purchase-agent writes.
   ai_suggest: new Set(),
   suggestion_sweep: new Set(),
   background: new Set(),
-  file_import: new Set(),
+  // A member's own import (a receipt, an order Email, a vendor export).
+  file_import: new Set([
+    "prepare",
+    "commit_purchase_import",
+    "business_writer",
+    "attachment",
+    "finalize",
+  ]),
   mail_search: new Set(),
   mail_discovery: new Set(),
 } satisfies Record<RunPurpose, ReadonlySet<Capability>>;
@@ -101,26 +81,20 @@ const actionCapability = {
   "statement_rows.record": "generic_mutation",
   "statement_rows.update": "generic_mutation",
   "statement_rows.delete": "generic_mutation",
+  "mail.search": "prepare",
+  "mail.resolve": "commit_purchase_import",
   "purchase_import.prepare": "prepare",
-  "purchase_import.validate": "prepare",
   "purchase_import.commit": "commit_purchase_import",
   "purchase_import.confirm_vendor": "generic_mutation",
   "purchase_import.reclassify": "generic_mutation",
   "expenses.link_to_purchase": "generic_mutation",
   "expenses.split": "generic_mutation",
-  "product_enrichment.commit": "enrichment_commit",
-  "product_enrichment.skip": "enrichment_commit",
-  "product_enrichment.overwrite": "enrichment_commit",
   "product_enrichment.verify_images": "generic_mutation",
   "product_enrichment.propose_match": "match_proposal",
-  "product_enrichment.patch_external_ids": "generic_mutation",
   "upc.find_or_create": "generic_mutation",
   "photo_run.propose_groups": "photo_commit",
   "photo_run.commit_group": "photo_commit",
-  "run.start": "start_run",
   "run.lifecycle": "start_run",
-  "run.start_sync": "start_run",
-  "run.start_charge_run": "start_run",
   "meal_recipe.add": "generic_mutation",
   "meal_recipe.update": "generic_mutation",
   "meal_recipe.remove": "generic_mutation",
@@ -186,12 +160,19 @@ export async function assertPurchaseAgentAction(
   assertRunCapability(purpose, capabilityForPurchaseAgentAction(action));
 }
 
+export function runHasCapability(
+  purpose: RunPurpose,
+  capability: Capability,
+): boolean {
+  const allowed: ReadonlySet<Capability> = capabilityMatrix[purpose];
+  return allowed.has(capability);
+}
+
 export function assertRunCapability(
   purpose: RunPurpose,
   capability: Capability,
 ): void {
-  const allowed: ReadonlySet<Capability> = capabilityMatrix[purpose];
-  if (allowed.has(capability)) return;
+  if (runHasCapability(purpose, capability)) return;
   throw new Error(
     `Import run purpose ${purpose} forbids ${capability}; this cannot be overridden by approval`,
   );

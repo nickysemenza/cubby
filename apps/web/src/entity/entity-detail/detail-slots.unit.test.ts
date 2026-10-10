@@ -16,7 +16,6 @@ const IMPORT_SLOTS = [
   "import-approvals",
   "import-findings",
   "import-targets",
-  "import-evidence",
   "import-prepared-orders",
   "import-agent-stopped",
   "import-timeline",
@@ -48,6 +47,7 @@ describe("Run detail slots", () => {
   });
 
   it.each<[RunOut["purpose"]]>([
+    ["mail_import"],
     ["account_sync"],
     ["purchase_validation"],
     ["product_enrichment"],
@@ -64,7 +64,7 @@ describe("Run detail slots", () => {
   );
 
   it("a running import run shows live progress, not the stopped variant", () => {
-    const ids = applying("account_sync", "running");
+    const ids = applying("mail_import", "running");
     expect(ids).toContain("import-progress-live");
     expect(ids).not.toContain("import-progress-stopped");
   });

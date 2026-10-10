@@ -1,5 +1,4 @@
 import { executionAuthorizationInput } from "@cubby/schemas/execution-authorization";
-import { researchWorkResolve } from "@cubby/schemas/research-tools";
 import { gatewayFetchThrough } from "@cubby/shared/ai/gateway-request";
 import { fromPartial } from "@total-typescript/shoehorn";
 import { eq } from "drizzle-orm";
@@ -9,10 +8,9 @@ import { z } from "zod";
 
 import { setCfEnv } from "~/server/cf-env";
 import { account } from "~/server/db/auth.schema";
-import { run, aiUsage } from "~/server/db/schema";
+import { run } from "~/server/db/schema";
 import { startMailDiscovery } from "~/server/purchase-import/gmail/discovery";
 import { productionMailTriage } from "~/server/purchase-import/gmail/triage-model";
-import { assessResearchProposal } from "~/server/purchase-import/research-support";
 import { getDb } from "~/server/repo/database-helpers";
 import { insertWithShortcode } from "~/server/repo/shortcode-utils";
 import { controlWorkflowRun } from "~/server/workflow-runs/control";
@@ -251,90 +249,6 @@ describe("mail routing at the paid transport boundary", () => {
         condition === "active" ? { ok: true } : refused,
       );
       expect(transmit).toHaveBeenCalledTimes(condition === "active" ? 1 : 0);
-    },
-  );
-  it.each(["active", "unapproved"] as const)(
-    "admits independent source assessment through the bound paid allowance: %s",
-    async (condition) => {
-      const { runId } = await routing(condition);
-      const assessment = {
-        identityVerified: false,
-        acceptedFacts: [],
-        acceptedIdentifiers: [],
-        acceptedImages: [],
-        rejected: [],
-      };
-      const item = {
-        type: "function_call",
-        id: "synthetic-call",
-        call_id: "synthetic-call",
-        name: "respond",
-        arguments: JSON.stringify(assessment),
-      };
-      const response = {
-        id: "synthetic-assessment",
-        status: "completed",
-        output: [item],
-        usage: { input_tokens: 1, output_tokens: 1, total_tokens: 2 },
-      };
-      const transmit = vi.fn(
-        async () =>
-          new Response(
-            [
-              { type: "response.created", response: { id: response.id } },
-              { type: "response.output_item.added", output_index: 0, item },
-              { type: "response.output_item.done", output_index: 0, item },
-              { type: "response.completed", response },
-            ]
-              .map((event) => `data: ${JSON.stringify(event)}\n\n`)
-              .join(""),
-            { headers: { "content-type": "text/event-stream" } },
-          ),
-      );
-      setCfEnv(
-        fromPartial<Env>({ AI: { gateway: () => ({ run: transmit }) } }),
-      );
-      const pending = assessResearchProposal({
-        db: ctx.db,
-        runId,
-        context: {},
-        observations: [],
-        proposal: researchWorkResolve.parse({
-          workRef: crypto.randomUUID(),
-          status: "no_source_found",
-          identity: {
-            evidenceIds: [],
-            reasoning: "Synthetic retained-source gap.",
-          },
-          detail: "Synthetic source gap.",
-        }),
-      });
-      const result = await pending
-        .then((value) => ({ value }))
-        .catch((error: unknown) => ({
-          error: z.instanceof(Error).parse(error).message,
-        }));
-      const refused = {
-        error: expect.stringMatching(/explicit execution authorization/iu),
-      };
-      const expected = condition === "active" ? { value: assessment } : refused;
-      expect(result).toMatchObject(expected);
-      expect(transmit).toHaveBeenCalledTimes(condition === "active" ? 1 : 0);
-      const usage = await getDb(ctx.db)
-        .select({
-          transport: aiUsage.transport,
-          estimatedCost: aiUsage.estimatedCost,
-        })
-        .from(aiUsage)
-        .where(eq(aiUsage.runId, runId));
-      const paidUsage = [
-        { transport: "gateway", estimatedCost: expect.any(Number) },
-      ];
-      const expectedUsage =
-        condition === "active"
-          ? paidUsage
-          : [{ transport: "unknown", estimatedCost: null }];
-      expect(usage).toMatchObject(expectedUsage);
     },
   );
 });

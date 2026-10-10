@@ -1,22 +1,8 @@
-import { z } from "zod";
-import { fromPartial } from "@total-typescript/shoehorn";
-import { sha256Hex } from "@cubby/shared/sha256";
-import { retainedResearchObservation } from "@cubby/schemas/research";
-import { researchWorkResolve } from "@cubby/schemas/research-tools";
-import { researchServiceFor } from "~/server/purchase-import/research-service";
-import { resolveImportResearch } from "~/server/purchase-import/research-import";
 import { testUserId } from "@cubby/schemas/testing";
-import { generateShortcode } from "@cubby/shared";
 import type { Pool } from "pg";
 
 import { parseEntityId } from "@cubby/schemas/identifiers";
-import { buildActorContext } from "@cubby/schemas/context";
-import { eq } from "drizzle-orm";
-import { orderMail, orderMailEvent, run as runTable } from "~/server/db/schema";
-import { startOrderMailImport } from "~/server/purchase-import/gmail/import";
-import { startOrResumeRun } from "~/server/purchase-import/run-service";
-import { getDb } from "~/server/repo/database-helpers";
-import { insertWithShortcode } from "~/server/repo/shortcode-utils";
+import { startPhotoInventoryRun } from "~/server/purchase-import/run-service";
 
 import { seedBaseWorld } from "../factories/base-world";
 import { createEntity } from "../factories/create";
@@ -303,40 +289,15 @@ export async function seedJourneyWorld(
   );
   const memberId = member.rows[0]?.id;
   if (!memberId) throw new Error("Synthetic member party is missing");
-  const runVendor = await insertWithShortcode(db, "vendor", {
-    name: "Synthetic Run Vendor",
-    website: "https://shop.example.test",
-    browserDomains: ["shop.example.test"],
-  });
-  const runAccount = await insertWithShortcode(db, "vendorAccount", {
-    label: "Synthetic run account",
-    vendorId: runVendor.id,
+  // A live photo Run is the generic vehicle for the console's progress and finding.
+  const consoleRun = await startPhotoInventoryRun(db, {
     ledgerPartyId: parseEntityId("ledgerParty", memberId),
+    actorUserId: testUserId(userId),
   });
-  // Its own vendor and account: the console Run keeps `runAccount` busy, and validation refuses a
-  // busy account (one account per vendor and member).
-  const validateVendor = await insertWithShortcode(db, "vendor", {
-    name: "Synthetic Validation Vendor",
-    website: "https://validate.example.test",
-    browserDomains: ["validate.example.test"],
-  });
-  const validateAccount = await insertWithShortcode(db, "vendorAccount", {
-    label: "Synthetic validation account",
-    vendorId: validateVendor.id,
-    ledgerPartyId: parseEntityId("ledgerParty", memberId),
-  });
-  const validatePurchase = await createEntity(c, "purchase", {
-    vendorId: validateVendor.shortcode,
-    vendorAccountId: validateAccount.shortcode,
-    orderId: "SYN-VALIDATE-1",
+  const consolePurchase = await createEntity(c, "purchase", {
+    vendorId: vendor.id,
+    orderId: "SYN-CONSOLE-1",
     date: "2026-06-06",
-  });
-  seed["related-purchase-validate"] = { purchase: validatePurchase.id };
-
-  const consoleRun = await startOrResumeRun(db, {
-    ledgerPartyId: parseEntityId("ledgerParty", memberId),
-    vendorAccountId: runAccount.id,
-    trigger: "manual",
   });
   const runRow = await pool.query<{ id: string }>(
     'SELECT id FROM "Run" WHERE shortcode = $1',
@@ -345,7 +306,7 @@ export async function seedJourneyWorld(
   const runUuid = runRow.rows[0]?.id;
   const purchaseRow = await pool.query<{ id: string }>(
     'SELECT id FROM "Purchase" WHERE shortcode = $1',
-    [validatePurchase.id],
+    [consolePurchase.id],
   );
   await pool.query(
     `INSERT INTO "RunProgress" ("runId", "eventId", phase, "currentItem", detail)
@@ -362,238 +323,6 @@ export async function seedJourneyWorld(
     "running",
   ]);
   seed["run-console"] = { run: consoleRun.publicId };
-
-  // A mail-only account (created by order mail) the member turns into a
-  // browser-synced one; its vendor's order evidence is still unclassified.
-  const syncVendor = await insertWithShortcode(db, "vendor", {
-    name: JOURNEY_NAMES.syncVendor,
-    website: "https://sync-journey.example.test",
-    browserDomains: ["sync-journey.example.test"],
-  });
-  const mailOnly = await insertWithShortcode(db, "vendorAccount", {
-    label: `${JOURNEY_NAMES.syncVendor} mail`,
-    vendorId: syncVendor.id,
-    ledgerPartyId: parseEntityId("ledgerParty", memberId),
-    status: "disabled",
-    browserSyncEnabled: false,
-  });
-  seed["vendor-account-browser-sync"] = {
-    account: mailOnly.shortcode,
-    vendor: syncVendor.shortcode,
-  };
-
-  // Retained original and immutable terminal attempt remain inspectable before restart.
-  const restartVendor = await insertWithShortcode(db, "vendor", {
-    name: JOURNEY_NAMES.restartVendor,
-  });
-  const restartBody = `Order ${JOURNEY_NAMES.restartOrderId}. Synthetic seed packet, qty 1, $7.00. Grand total $7.00 USD. Order date unavailable.`;
-  const [restartMail] = await getDb(db)
-    .insert(orderMail)
-    .values({
-      ledgerPartyId: parseEntityId("ledgerParty", memberId),
-      mailboxId: "synthetic-restart-mailbox",
-      vendorId: restartVendor.id,
-      messageId: `synthetic-restart-${crypto.randomUUID()}`,
-      sender: "orders@restart.example.test",
-      subject: "Synthetic restart confirmation",
-      receivedAt: new Date("2026-09-12T15:00:00Z"),
-      rawChecksum: await sha256Hex(restartBody),
-      content: {
-        snippet: null,
-        bodyHtml: null,
-        bodyText: restartBody,
-      },
-    })
-    .returning();
-  if (!restartMail) throw new Error("Synthetic restart mail was not saved");
-  const [restartEvent] = await getDb(db)
-    .insert(orderMailEvent)
-    .values({
-      orderMailId: restartMail.id,
-      event: "placed",
-      orderId: JOURNEY_NAMES.restartOrderId,
-      amount: 7,
-      currency: "USD",
-      sourceKey: `synthetic:${restartMail.id}`,
-    })
-    .returning();
-  if (!restartEvent) throw new Error("Synthetic restart event was not saved");
-  const restartRun = await startOrderMailImport(
-    db,
-    { eventId: restartEvent.id, evidenceChecksum: restartMail.rawChecksum },
-    buildActorContext(testUserId(userId)),
-    { send: async () => {} },
-  );
-  const [restartRunRef] = restartRun.runIds;
-  if (!restartRunRef || restartRun.runIds.length !== 1)
-    throw new Error("Synthetic restart source did not admit exactly one Run");
-  const [admitted] = await getDb(db)
-    .select()
-    .from(runTable)
-    .where(eq(runTable.shortcode, restartRunRef));
-  if (!admitted) throw new Error("Synthetic restart Run is missing");
-  const retained = new Map<string, string>();
-  const services = researchServiceFor(
-    db,
-    fromPartial<Env>({ R2_KEY_PREFIX: "synthetic/journeys" }),
-    admitted.id,
-    {
-      observations: {
-        storage: {
-          put: async (key, bytes) => {
-            retained.set(key, new TextDecoder().decode(bytes));
-          },
-          get: async (key) => {
-            const content = retained.get(key);
-            if (content === undefined)
-              throw new Error(`Synthetic original missing: ${key}`);
-            return content;
-          },
-        },
-      },
-      queue: { send: async () => {} },
-    },
-  );
-  const next = z
-    .object({
-      status: z.literal("working"),
-      work: z.object({ workRef: z.uuid() }),
-    })
-    .parse(await services.researchNext({}, "synthetic-restart-next"));
-  const original = retainedResearchObservation.parse(
-    await services.researchMailRead(
-      { workRef: next.work.workRef, messageRef: restartMail.id },
-      "synthetic-restart-read",
-    ),
-  );
-  await resolveImportResearch(
-    db,
-    {
-      runId: admitted.id,
-      workRef: next.work.workRef,
-      callId: "synthetic-restart-resolve",
-      proposal: researchWorkResolve.parse({
-        workRef: next.work.workRef,
-        status: "ambiguous",
-        identity: {
-          evidenceIds: [original.evidenceId],
-          reasoning:
-            "The retained confirmation omits its order date; review remains required.",
-        },
-        detail:
-          "Synthetic original retained; unresolved order date requires member review.",
-      }),
-    },
-    {
-      readEvidence: (row) => {
-        const content = retained.get(row.objectKey);
-        if (content === undefined)
-          throw new Error(`Synthetic original missing: ${row.objectKey}`);
-        return Promise.resolve(content);
-      },
-      assess: async () => ({
-        identityVerified: false,
-        acceptedFacts: [],
-        acceptedIdentifiers: [],
-        acceptedImages: [],
-        acceptedOrders: [],
-        acceptedEmailLinks: [],
-        rejected: [],
-      }),
-    },
-  );
-  const finished = z
-    .object({ status: z.literal("done") })
-    .parse(await services.researchNext({}, "synthetic-restart-finish"));
-  if (finished.status !== "done")
-    throw new Error("Synthetic restart tasks remain open");
-  const [settled] = await getDb(db)
-    .select()
-    .from(runTable)
-    .where(eq(runTable.id, admitted.id));
-  if (settled?.status !== "needs_review" || !settled.endedAt)
-    throw new Error("Synthetic unresolved original did not settle honestly");
-  seed["run-restart-inputs"] = {
-    run: restartRunRef,
-    sourceSubject: restartMail.subject ?? "Synthetic restart confirmation",
-  };
-
-  // A live Product enrichment run, as the Runs list shows it: one target
-  // enriched (with a write), one skipped, one still open, and a progress line.
-  const enrichmentRun = async (vendorName: string) => {
-    const enrichVendor = await insertWithShortcode(db, "vendor", {
-      name: vendorName,
-    });
-    const targets = [];
-    for (const name of JOURNEY_NAMES.enrichTargets)
-      targets.push(await product(`${name} (${vendorName})`));
-    const party = await pool.query<{
-      shortcode: string;
-      name: string;
-      kind: string;
-    }>('SELECT shortcode, name, kind FROM "LedgerParty" WHERE id = $1', [
-      memberId,
-    ]);
-    const actor = party.rows[0];
-    if (!actor) throw new Error("Synthetic member party is missing");
-    const shortcode = generateShortcode("run");
-    const inserted = await pool.query<{ id: string }>(
-      `INSERT INTO "Run" (shortcode, "ledgerPartyId", "actorUserId", "actorName", "actorEmail",
-         "actorLedgerPartyShortcode", "actorLedgerPartyName", "actorLedgerPartyKind",
-         purpose, trigger, status, "vendorId", "startedAt")
-       VALUES ($1, $2, $3, 'Synthetic member', 'member@example.test', $4, $5, $6,
-         'product_enrichment', 'scheduled', 'running', $7, now() - interval '5 minutes')
-       RETURNING id`,
-      [
-        shortcode,
-        memberId,
-        userId,
-        actor.shortcode,
-        actor.name,
-        actor.kind,
-        enrichVendor.id,
-      ],
-    );
-    const runUuid = inserted.rows[0]?.id;
-    if (!runUuid) throw new Error("Synthetic enrichment run was not saved");
-    const states = ["completed", "skipped", "pending"] as const;
-    for (const [position, target] of targets.entries())
-      await pool.query(
-        `INSERT INTO "RunTarget" ("runId", "entityKind", "entityId", position, state, outcome, warning, "targetFingerprint")
-         SELECT $1, 'product', p.id, $3, $4, $5, $6, $7 FROM "Product" p WHERE p.shortcode = $2`,
-        [
-          runUuid,
-          target.id,
-          position,
-          states[position],
-          position === 0 ? "enriched" : position === 1 ? "skipped" : null,
-          position === 1 ? JOURNEY_NAMES.enrichSkip : null,
-          String(position + 1).repeat(64),
-        ],
-      );
-    await pool.query(
-      `INSERT INTO "RunProgress" ("runId", "eventId", phase, detail) VALUES ($1, $2, 'reading', $3)`,
-      [runUuid, `synthetic-enrich-${shortcode}`, JOURNEY_NAMES.enrichStep],
-    );
-    await pool.query(
-      `INSERT INTO "AuditLog" ("runId", "entityKind", "entityId", action, changes, "userId", channel)
-       SELECT $1, 'product', p.id, 'update', '{"brand":{"from":null,"to":"Synthetic Seeds"}}'::jsonb, $3, 'system'
-         FROM "Product" p WHERE p.shortcode = $2`,
-      [runUuid, targets[0]?.id, userId],
-    );
-    return {
-      run: shortcode,
-      vendor: enrichVendor.shortcode,
-      enriched: targets[0]?.id ?? "",
-    };
-  };
-  seed["runs-list-facts"] = await enrichmentRun(JOURNEY_NAMES.enrichVendor);
-  seed["run-detail-enrichment"] = await enrichmentRun(
-    JOURNEY_NAMES.enrichDetailVendor,
-  );
-  seed["runs-list-phone"] = await enrichmentRun(
-    JOURNEY_NAMES.enrichPhoneVendor,
-  );
 
   return seed;
 }

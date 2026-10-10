@@ -46,9 +46,10 @@ JSONL routes    →  cancellable workflow streams
   client is `apps/web/src/server/clients/usda.ts`; it memoizes lookups within
   a request and nothing else caches USDA reads. List and search rows omit the
   full nutrient table (`usdaFoodListRow`); a single-food read returns it.
-- Purchase imports run in the web Worker, which binds both the purchase
-  agent's and the browser bridge's Durable Objects, and in a Mac browser. The
-  map of queue events, Run services and owning files is
+- Purchase imports run in the web Worker: Pi's Mail import and photo agents
+  (one Durable Object per Run), and a member's Claude/Codex Burn-down through
+  the public MCP tools ([ADR 0008](adr/0008-mail-import-unattended-burn-down-interactive.md)).
+  The map of queue events, Run services and owning files is
   [`apps/web/src/server/purchase-import/README.md`](../apps/web/src/server/purchase-import/README.md).
 - OpenAI Responses calls use the household's ChatGPT plan when connected in
   Settings, retaining the declared Luna/Sol choices. `CHATGPT_PLAN` owns OAuth

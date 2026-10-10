@@ -135,16 +135,17 @@ export type ProductDeleteDisposition =
   // deletion as a device with no linked hardware. Deliberately narrow (only
   // this effect, not a general escape hatch) — see the `Cookbook.productId`
   // comment below for why every other optional back-reference still blocks.
-  | (OperationDisposition & { effect: "detach" });
+  | (OperationDisposition & { effect: "detach" })
+  // Retired research history keeps pointing at the tombstone until the
+  // contract migration drops its table.
+  | (OperationDisposition & { effect: "preserve" });
 
 export const PRODUCT_DELETE_EDGE_POLICY = {
   "RunFactEvidence.entityId": {
-    code: "block-accepted-research-history",
-    effect: "block",
+    code: "preserve-retired-research",
+    effect: "preserve",
     description:
-      "A Product retained by accepted research proof cannot be deleted; a supported merge preserves that proof.",
-    reason: "CONSTRAINT_VIOLATION",
-    label: "accepted research facts",
+      "Retired research facts stay on the Product tombstone until the contract migration drops them.",
   },
   "ImportSourceProduct.productId": {
     code: "block-original-order-evidence",

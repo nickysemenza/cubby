@@ -53,7 +53,6 @@ const baseRun: RunDetail = {
   operations: [],
   preparedOrders: [],
   targets: [],
-  evidence: [],
   dispatch: {
     eventId: "event-1",
     state: "started",
@@ -141,9 +140,8 @@ describe("import report blocks", () => {
     ).toBe("No purchases were changed by this run.");
   });
 
-  it("leaves out targets and evidence for a run that retained neither", () => {
+  it("leaves out targets for a run that retained none", () => {
     expect(importReportBlocks("run.import-targets", run())).toEqual([]);
-    expect(importReportBlocks("run.import-evidence", run())).toEqual([]);
   });
 
   it("describes a target's frozen source, outcome and warning", () => {
@@ -253,36 +251,6 @@ describe("import report blocks", () => {
     });
   });
 
-  it("lists the run's evidence by filename", () => {
-    const blocks = importReportBlocks(
-      "run.import-evidence",
-      run({
-        evidence: [
-          {
-            id: "evidence-1",
-            targetId: null,
-            sourceKind: "browser_capture",
-            filename: "fixture-order.pdf",
-            mediaUrl: "/api/import/evidence?retained=synthetic",
-            mediaType: "application/pdf",
-            checksum: "fixture-checksum",
-            createdAt: "2026-09-20T16:00:00.000Z",
-          },
-        ],
-      }),
-    );
-    expect(recordsOf(blocks, "Retained sources").rows[0]).toMatchObject({
-      title: "fixture-order.pdf",
-      originalMediaUrl: "/api/import/evidence?retained=synthetic",
-      lines: [
-        {
-          text: "browser_capture · application/pdf · fixture-checksum",
-          tone: "muted",
-        },
-      ],
-    });
-  });
-
   it("lists operations oldest first and shows a failed operation's raw error", () => {
     const blocks = importReportBlocks(
       "run.import-timeline",
@@ -290,7 +258,6 @@ describe("import report blocks", () => {
         operations: [
           {
             operationId: "extract-1",
-            browserTiming: null,
             kind: "extract",
             state: "failed",
             startedAt: "2026-09-20T16:01:00.000Z",
@@ -624,7 +591,7 @@ describe("prepared orders", () => {
   });
   const reviewing = (preparedOrders: Prepared[], overrides = {}) =>
     run({
-      purpose: "account_sync",
+      purpose: "file_import",
       status: "running",
       preparedOrders,
       ...overrides,
@@ -807,13 +774,13 @@ describe("prepared orders", () => {
       "a stopped run",
       {},
       { status: "completed" as const },
-      "Prepared orders can be approved only while an account sync run is running.",
+      "Prepared orders can be approved only while their import run is running.",
     ],
     [
       "a validation run",
       {},
       { purpose: "purchase_validation" as const },
-      "Prepared orders can be approved only while an account sync run is running.",
+      "Prepared orders can be approved only while their import run is running.",
     ],
   ])(
     "offers no choices for %s and says why",
@@ -858,9 +825,6 @@ describe("liveProgressBlocks", () => {
     status: "running" as const,
     progress: events([300, 200]),
     discovery: null,
-    savedState: null,
-    orders: [{ orderId: "fixture-order", state: "pending" as const }],
-    charges: [],
     workflow: {
       purpose: "mail_discovery" as const,
       attempt: 2,
@@ -956,14 +920,6 @@ describe("liveProgressBlocks", () => {
         liveProgressBlocks(RUN_ID, { ...progress, status: "completed" }),
       ),
     ).toEqual([]);
-  });
-
-  it("preserves per-order outcomes in generic progress", () => {
-    const blocks = liveProgressBlocks(RUN_ID, progress);
-    expect(recordsOf(blocks, "Selected orders").rows[0]).toMatchObject({
-      title: "fixture-order",
-      statuses: [{ label: "Waiting" }],
-    });
   });
 
   it("closes with the run's outcome once it has stopped", () => {

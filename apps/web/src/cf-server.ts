@@ -43,10 +43,7 @@ import {
   serverTimingHeader,
   withDatabaseRequestMetrics,
 } from "./server/db-observability";
-import {
-  IMAGE_PROCESSING_SOCKET_PATH,
-  PURCHASE_IMPORT_SOCKET_PATH,
-} from "./server/direct-socket-paths";
+import { IMAGE_PROCESSING_SOCKET_PATH } from "./server/direct-socket-paths";
 import {
   reportServerError,
   withErrorReporting,
@@ -304,28 +301,18 @@ const handler = {
                           async () => {
                             const imageProcessingSocket =
                               url.pathname === IMAGE_PROCESSING_SOCKET_PATH;
-                            const purchaseImportSocket =
-                              url.pathname === PURCHASE_IMPORT_SOCKET_PATH;
-                            if (imageProcessingSocket || purchaseImportSocket) {
+                            if (imageProcessingSocket) {
                               const response = await withTrace(
-                                imageProcessingSocket
-                                  ? "cf.imageProcessingSocket"
-                                  : "cf.purchaseImportSocket",
+                                "cf.imageProcessingSocket",
                                 () =>
                                   runWithExecutionCtx(
                                     ctx,
                                     async () =>
-                                      imageProcessingSocket
-                                        ? (
-                                            await import("./server/image-processing/direct-socket-route")
-                                          ).handleImageProcessingSocketUpgrade(
-                                            request,
-                                          )
-                                        : (
-                                            await import("./server/purchase-import/direct-socket-route")
-                                          ).handleDirectBrowserSocketUpgrade(
-                                            request,
-                                          ),
+                                      (
+                                        await import("./server/image-processing/direct-socket-route")
+                                      ).handleImageProcessingSocketUpgrade(
+                                        request,
+                                      ),
                                     url.origin,
                                   ),
                               );
@@ -835,7 +822,6 @@ export { CalendarFeedDurableObject } from "./server/calendar/durable-object";
 export { DatabaseFreshnessDurableObject } from "./server/database-freshness/durable-object";
 export { ImageProcessingDurableObject } from "./server/image-processing/durable-object";
 export { PurchaseImportRunAgent } from "./server/purchase-import/agent-host";
-export { PurchaseImportDurableObject } from "./server/purchase-import/durable-object";
 export { UsdaReleaseDurableObject } from "./server/usda-release/durable-object";
 export { SearchIndexRepairWorkflow } from "./server/search-index-repair-workflow";
 export { MailDiscoveryWorkflow } from "./server/gmail-workflows";

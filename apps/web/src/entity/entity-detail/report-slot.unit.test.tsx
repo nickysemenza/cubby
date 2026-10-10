@@ -358,7 +358,7 @@ describe("EntityReportSlot records", () => {
   it("renders nothing for a report with no blocks", async () => {
     answer = () => ({ live: false, status: "completed", blocks: [] });
     const { container } = render(
-      <EntityReportSlot slot="run.import-evidence" id={RUN_ID} />,
+      <EntityReportSlot slot="run.import-findings" id={RUN_ID} />,
       { wrapper: harness.wrapper },
     );
     await waitFor(() => expect(calls).toHaveLength(1));

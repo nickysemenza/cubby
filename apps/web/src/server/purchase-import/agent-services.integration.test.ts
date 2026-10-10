@@ -1,115 +1,52 @@
-import { productResearchRunInput } from "@cubby/schemas/run-fields";
 import { fromPartial } from "@total-typescript/shoehorn";
 import { eq } from "drizzle-orm";
 import { withTestDb } from "tooling/test-setup";
 import { afterEach, describe, expect, it } from "vitest";
 
-import { setCfEnv, type getTestAiGateway } from "~/server/cf-env";
-import { run, runProgress, runTarget } from "~/server/db/schema";
+import { setCfEnv } from "~/server/cf-env";
+import { run, runProgress } from "~/server/db/schema";
 import { getDb } from "~/server/repo/database-helpers";
 import { insertWithShortcode } from "~/server/repo/shortcode-utils";
 
 import { runServicesFor } from "./agent-services";
+import { startAgentRunFixture } from "./import-run.fixtures";
 
-// A research Run must not acquire photo-only MCP/legacy mutation authority
+// A Run without an agent must not acquire agent MCP/legacy mutation authority
 // through the host adapter, even if a caller bypasses the tool registry.
-describe("research host service authority", () => {
+describe("non-agent host service authority", () => {
   const ctx = withTestDb();
   afterEach(() => setCfEnv(undefined));
-  async function services(
-    gateway?: NonNullable<ReturnType<typeof getTestAiGateway>>,
-  ) {
+  async function services() {
     const party = await insertWithShortcode(ctx.db, "ledgerParty", {
-      name: "Synthetic research member",
+      name: "Synthetic import member",
       kind: "member",
       userId: ctx.actor.userId,
     });
     const owned = await insertWithShortcode(ctx.db, "run", {
-      agentSessionId: "synthetic-research-agent",
-      purpose: "product_enrichment",
+      // An agent identity on a non-agent purpose must still be refused.
+      agentSessionId: "synthetic-legacy-agent",
+      purpose: "file_import",
       trigger: "manual",
       status: "running",
       ledgerPartyId: party.id,
       actorUserId: ctx.actor.userId,
       actorName: party.name,
-      actorEmail: "research@example.test",
+      actorEmail: "member@example.test",
       actorLedgerPartyShortcode: party.shortcode,
       actorLedgerPartyName: party.name,
       actorLedgerPartyKind: party.kind,
     });
-    const env = fromPartial<Env & { CUBBY_TEST_AI_GATEWAY?: typeof gateway }>({
+    const env = fromPartial<Env>({
       HYPERDRIVE: fromPartial({ connectionString: ctx.databaseUrl }),
-      CUBBY_TEST_AI_GATEWAY: gateway,
     });
     return {
+      party,
+      env,
       owned,
       host: runServicesFor(env, { waitUntil: () => {} }, owned.id),
     };
   }
-  it("routes mounted research to explicitly enabled fixture sources without an AI search binding", async () => {
-    const requests: string[] = [];
-    const { owned, host } = await services({
-      fetch: async (input) => {
-        const request = input instanceof Request ? input : new Request(input);
-        const path = new URL(request.url).pathname;
-        requests.push(path);
-        if (path === "/research-fixture-config")
-          return Response.json({ enabled: true });
-        if (path === "/research-search")
-          return Response.json({
-            items: [
-              {
-                url: "https://maker.example.test/small-device",
-                title: "Small device",
-              },
-            ],
-          });
-        return new Response("Unexpected fixture request", { status: 404 });
-      },
-    });
-    const item = await insertWithShortcode(ctx.db, "product", {
-      name: "Small device",
-      manufacturer: "Example maker",
-    });
-    const [target] = await getDb(ctx.db)
-      .insert(runTarget)
-      .values({
-        runId: owned.id,
-        entityKind: "product",
-        entityId: item.id,
-        workKey: item.id,
-        targetFingerprint: "a".repeat(64),
-      })
-      .returning();
-    if (!target) throw new Error("Synthetic target missing");
-    await getDb(ctx.db)
-      .update(run)
-      .set({
-        input: productResearchRunInput.parse({
-          kind: "product_research",
-          instructionRevision: 1,
-          products: [
-            { productId: item.id, contextFingerprint: "a".repeat(64) },
-          ],
-        }),
-      })
-      .where(eq(run.id, owned.id));
-    expect(
-      await host.researchWebSearch(
-        { workRef: target.id, query: "Small device exact model" },
-        crypto.randomUUID(),
-      ),
-    ).toMatchObject({
-      results: [
-        {
-          url: "https://maker.example.test/small-device",
-          title: "Small device",
-        },
-      ],
-    });
-    expect(requests).toEqual(["/research-fixture-config", "/research-search"]);
-  }, 60_000);
-  it("rejects broad MCP on a research Run before delegation or endpoint dispatch", async () => {
+  it("rejects broad MCP on a non-agent Run before delegation or endpoint dispatch", async () => {
     const { host } = await services();
     await expect(
       host.mcpFetch(
@@ -120,13 +57,13 @@ describe("research host service authority", () => {
       ),
     ).rejects.toThrow(/photo.inventory/i);
   }, 60_000);
-  it("rejects legacy photo review on a research Run without stopping its work", async () => {
+  it("rejects legacy photo review on a non-agent Run without stopping its work", async () => {
     const { owned, host } = await services();
     await expect(
       host.stopForReview({
         operationId: "synthetic-review",
         reason: "other",
-        detail: "A legacy caller cannot stop research.",
+        detail: "A legacy caller cannot stop a member import.",
       }),
     ).rejects.toThrow(/photo.inventory/i);
     const [current] = await getDb(ctx.db)
@@ -135,14 +72,18 @@ describe("research host service authority", () => {
       .where(eq(run.id, owned.id));
     expect(current).toEqual({ status: "running", endedAt: null });
   }, 60_000);
-  it("records coordinator progress for research without granting legacy model tools", async () => {
-    const { owned, host } = await services();
+  it("records coordinator progress for a Mail import agent Run", async () => {
+    const { party, env } = await services();
+    const owned = await startAgentRunFixture(ctx.db, {
+      ledgerPartyId: party.id,
+    });
+    const host = runServicesFor(env, { waitUntil: () => {} }, owned.id);
     const eventId = crypto.randomUUID();
     expect(
       await host.updateAgentProgress({
         eventId,
         phase: "preparing",
-        detail: "Coordinator started research.",
+        detail: "Coordinator started Mail import.",
       }),
     ).toEqual({ recorded: true });
     const rows = await getDb(ctx.db)
@@ -150,7 +91,11 @@ describe("research host service authority", () => {
       .from(runProgress)
       .where(eq(runProgress.runId, owned.id));
     expect(rows).toMatchObject([
-      { eventId, phase: "preparing", detail: "Coordinator started research." },
+      {
+        eventId,
+        phase: "preparing",
+        detail: "Coordinator started Mail import.",
+      },
     ]);
   }, 60_000);
 });

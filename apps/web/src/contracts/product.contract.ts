@@ -1,6 +1,5 @@
 import { productShortcode } from "@cubby/schemas/identifiers";
 import {
-  patchProductExternalIdsInput,
   productCreateManyInput,
   productExternalIdCollisionInput,
   productExternalIdCollisionsOut,
@@ -241,13 +240,6 @@ export const productContract = defineContract("product", {
     http: false,
     input: productExternalIdCollisionInput,
     output: productExternalIdCollisionsOut,
-  }),
-  /** One product's slot-addressed identifier patch (MCP batches it). */
-  patchExternalIds: mutation({
-    http: false,
-    input: patchProductExternalIdsInput,
-    output: productWithFoodOut,
-    invalidates: ["product"],
   }),
   /** Fetch every attached file from R2 and record its integrity state. */
   verifyImages: mutation({

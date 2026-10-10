@@ -23,7 +23,6 @@ import {
 } from "~/server/db/schema";
 import { getDb } from "~/server/repo/database-helpers";
 import { issueExecutionAuthorization } from "~/server/runs/execution-authorization";
-import { executionAuthorizationFromInput } from "~/server/runs/execution-context";
 
 import {
   ensurePurchaseAgentOAuthClient,
@@ -83,42 +82,6 @@ export async function authorizeSyntheticBackfill(
       expiresAt: new Date(Date.now() + 60 * 60_000).toISOString(),
     }),
   );
-}
-
-/** Explicit fixture approval is attached before a retained event can execute. */
-export async function authorizeSyntheticRunInference(
-  context: Pick<TestDbContext, "db" | "actor">,
-  rawRunId: string,
-  mailboxId: string,
-) {
-  const id = runEntityId.parse(rawRunId);
-  const database = getDb(context.db);
-  const [scope] = await database
-    .select()
-    .from(runTable)
-    .where(eq(runTable.id, id));
-  if (!scope?.ledgerPartyId || scope.actorUserId !== context.actor.userId)
-    throw new Error("Synthetic inference Run has no matching member owner.");
-  if (
-    !scope.input ||
-    scope.status !== "running" ||
-    scope.retiredAt ||
-    scope.coordinatorStartedAt ||
-    executionAuthorizationFromInput(scope.input)
-  )
-    throw new Error(
-      "Synthetic inference approval requires an unstarted Run without existing authority.",
-    );
-  const approval = await authorizeSyntheticBackfill(
-    context,
-    scope.ledgerPartyId,
-    mailboxId,
-  );
-  await database
-    .update(runTable)
-    .set({ input: { ...scope.input, executionAuthorization: approval } })
-    .where(eq(runTable.id, id));
-  return approval;
 }
 
 /** The member's active Purchase Agent grant, which MCP delegation requires. */
@@ -212,19 +175,20 @@ export async function workerdDiagnostic(
 export type ScenarioHarness = Awaited<ReturnType<typeof startScenarioHarness>>;
 
 /**
- * Start the purchase-agent workerd harness and load one
- * scenario: the scripted model's steps and the web Worker's extractor/audit
- * outputs. Call `close()` in `afterEach`.
+ * Start the built Worker with deterministic purchase-agent peers and load one
+ * scenario: the scripted model's steps and the gateway's extraction, audit
+ * and decision outputs. `gmail-research` adds the local Google provider and
+ * real background consumers. Call `close()` in `afterEach`.
  */
 export async function startScenarioHarness(
   databaseUrl: string,
   scenario: ScriptedScenario,
+  profile: "purchase-agent" | "gmail-research" = "purchase-agent",
 ) {
   const { runtime, prepared: controls } = await openWorkerdRuntime(
     {
-      profile: "purchase-agent",
+      profile,
       database: { borrowed: databaseUrl },
-      // The server stores each captured page's DOM as run evidence.
       objectStorage: {},
     },
     async ({ harness }) => {
@@ -233,5 +197,11 @@ export async function startScenarioHarness(
       return controls;
     },
   );
-  return { harness: runtime.harness, ...controls, close: runtime.close };
+  return {
+    harness: runtime.harness,
+    origin: runtime.origin,
+    googleProvider: runtime.googleProvider,
+    ...controls,
+    close: runtime.close,
+  };
 }

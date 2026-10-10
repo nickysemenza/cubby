@@ -5,10 +5,11 @@ import {
   MAILBOX_RESEARCH_VERSION,
   type MailboxCoverage,
   type MailboxClassification,
+  type MailboxClassificationStage,
   type MailboxMessageStatus,
 } from "@cubby/schemas/mailbox-research";
 import { sha256Hex } from "@cubby/shared/sha256";
-import { and, eq, inArray, ne, sql } from "drizzle-orm";
+import { and, eq, inArray, isNotNull, ne, sql } from "drizzle-orm";
 
 import type { Database } from "~/server/db";
 import { account } from "~/server/db/auth.schema";
@@ -16,7 +17,6 @@ import {
   mailboxCursor,
   mailboxMessage,
   orderMailCandidateDecision,
-  run,
   orderMail,
   orderMailAttachment,
   orderMailEvent,
@@ -158,6 +158,8 @@ export async function saveMailboxMessage(
     messageId: string;
     checksum: string;
     classification: MailboxClassification;
+    classificationStage?: MailboxClassificationStage;
+    classificationReason?: string;
     status: MailboxMessageStatus;
     orderMailId?: string | null;
   },
@@ -165,6 +167,8 @@ export async function saveMailboxMessage(
   const fields = {
     checksum: input.checksum,
     classification: input.classification,
+    classificationStage: input.classificationStage ?? null,
+    classificationReason: input.classificationReason ?? null,
     classificationVersion: MAILBOX_RESEARCH_VERSION,
     status: input.status,
     orderMailId: input.orderMailId ?? null,
@@ -232,13 +236,6 @@ export async function clearUnrelatedOriginal(
       )
       .where(eq(orderMailEvent.orderMailId, original.id))
       .limit(1);
-    const [attempt] = await tx
-      .select({ id: run.id })
-      .from(run)
-      .where(
-        sql`position(${original.id} in ${run.input}::text) > 0 OR EXISTS (SELECT 1 FROM "OrderMailEvent" e WHERE e."orderMailId" = ${original.id} AND position(e.id::text in ${run.input}::text) > 0)`,
-      )
-      .limit(1);
     const attachments = await tx
       .select({
         id: orderMailAttachment.id,
@@ -256,7 +253,6 @@ export async function clearUnrelatedOriginal(
     if (
       decision ||
       sourceClaimIds.length ||
-      attempt ||
       attachments.some((attachment) => attachment.imageId)
     )
       return protectedOriginal;
@@ -275,6 +271,33 @@ export async function clearUnrelatedOriginal(
     await tx.delete(orderMail).where(eq(orderMail.id, original.id));
     return null;
   });
+}
+
+/**
+ * Durable retry for disposal: an unrelated MailboxMessage whose original
+ * survived (disposal failed after its disposition committed) is disposed of
+ * again; a protected original is kept, as at resolve time.
+ */
+export async function disposeUnrelatedOriginals(
+  db: Database,
+  storage: OrderMailAttachmentStorage,
+) {
+  const retained = await getDb(db)
+    .select({
+      ledgerPartyId: mailboxMessage.ledgerPartyId,
+      mailboxId: mailboxMessage.mailboxId,
+      messageId: mailboxMessage.messageId,
+    })
+    .from(mailboxMessage)
+    .where(
+      and(
+        eq(mailboxMessage.classification, "unrelated"),
+        isNotNull(mailboxMessage.orderMailId),
+      ),
+    );
+  for (const message of retained)
+    await clearUnrelatedOriginal(db, message, storage);
+  return retained.length;
 }
 
 class GmailPersistenceError extends Error {

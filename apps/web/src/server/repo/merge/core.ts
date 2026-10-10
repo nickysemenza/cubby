@@ -22,6 +22,7 @@ import { logAuditEntries } from "~/server/repo/audit-log";
 import { notDeleted } from "~/server/repo/database-helpers";
 import { recordMergeRedirects } from "~/server/repo/entity-identity";
 import { parseLinkEdgeKey } from "~/server/repo/entity-links";
+import { repointEntitySources } from "~/server/repo/entity-source";
 import type { RemovableEntity } from "~/server/repo/removal/core";
 import { cascadeRemoval } from "~/server/repo/removal/core";
 import { resolveAllOrThrow } from "~/server/repo/shortcode-resolver";
@@ -205,6 +206,10 @@ export const finalizeMerge = async <E extends RemovableEntity>(
       }
     }
   }
+
+  // Sources are history about the merged record and follow it to the
+  // survivor; a source the survivor already has is not kept twice.
+  await repointEntitySources(tx, { keepId, loserIds: ids });
 
   // The row removal stays here rather than moving into `cascadeRemoval`:
   // removal differs per entity (soft for products/purchases/vendors, hard for

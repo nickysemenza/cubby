@@ -1,7 +1,9 @@
 import { runEntityId } from "@cubby/schemas/identifiers";
+import { agentImportRunPurpose } from "@cubby/schemas/import-run-agent";
 import type { PurchaseAgentEvent } from "@cubby/schemas/purchase-import";
 import { and, eq, inArray, sql } from "drizzle-orm";
 
+import { getPurchaseAgentQueue } from "~/server/cf-env";
 import type { Database } from "~/server/db";
 import { run as runTable } from "~/server/db/schema";
 import type { PurchaseAgentQueueProducer } from "~/server/purchase-agent-queue-types";
@@ -89,4 +91,32 @@ export async function dispatchRunEvent(
     runId: event.runId,
     eventId: event.eventId,
   });
+}
+
+/** Hand a newly admitted agent Run to its coordinator; a failure stays retryable. */
+export async function dispatchStartedRun(
+  db: Database,
+  run: { id: string; eventId: string; purpose: string },
+): Promise<"running" | "dispatch_failed"> {
+  const queue = getPurchaseAgentQueue();
+  if (!queue) {
+    await recordRunDispatchAttempt(db, {
+      runId: run.id,
+      eventId: run.eventId,
+      error: "Purchase import agent queue is unavailable",
+    });
+    return "dispatch_failed";
+  }
+  try {
+    await dispatchRunEvent(db, queue, {
+      version: 1,
+      runId: run.id,
+      purpose: agentImportRunPurpose.parse(run.purpose),
+      eventId: run.eventId,
+      type: "start_or_resume",
+    });
+    return "running";
+  } catch {
+    return "dispatch_failed";
+  }
 }

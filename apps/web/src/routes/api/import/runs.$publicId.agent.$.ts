@@ -1,6 +1,5 @@
 import { createFileRoute } from "@tanstack/react-router";
 
-import { getPurchaseImportNamespace } from "~/server/cf-env";
 import { createRequestContext, requireActor } from "~/server/request-context";
 
 async function handler(input: {
@@ -11,8 +10,7 @@ async function handler(input: {
     await createRequestContext({ headers: input.request.headers }),
   );
   // Loaded on request: run-service reaches the AI SDK stack.
-  const { controlRun, loadRunScopeByShortcode } =
-    await import("~/server/purchase-import/run-service");
+  const { controlRun } = await import("~/server/purchase-import/run-service");
   const party = await context.currentParty();
   if (!party)
     return Response.json(
@@ -20,30 +18,11 @@ async function handler(input: {
       { status: 403 },
     );
   const suffix = input.params._splat ?? "";
-  if (input.request.method === "POST" && suffix === "abort") {
-    const cancellation = await controlRun(context.db, context.actorContext, {
+  if (input.request.method === "POST" && suffix === "abort")
+    await controlRun(context.db, context.actorContext, {
       runPublicId: input.params.publicId,
       action: "cancel",
     });
-    if (
-      "cancelledBrowserCommandIds" in cancellation &&
-      cancellation.cancelledBrowserCommandIds
-    ) {
-      const scope = await loadRunScopeByShortcode(
-        context.db,
-        input.params.publicId,
-      );
-      const namespace = getPurchaseImportNamespace();
-      if (namespace && scope.public.vendorAccountId) {
-        const broker = namespace.getByName(scope.public.vendorAccountId);
-        await Promise.all(
-          cancellation.cancelledBrowserCommandIds.map((commandId) =>
-            broker.cancel(commandId),
-          ),
-        );
-      }
-    }
-  }
   // Loaded on request: the proxy reaches run-service and the AI SDK stack.
   const { proxyPurchaseAgentRequest } =
     await import("~/server/purchase-import/agent-proxy");

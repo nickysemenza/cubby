@@ -500,8 +500,13 @@ export const MCP_TOOLS = defineMcpTools({
 
   imports_read: {
     description:
-      "Import-run and enrichment reads: purchase-import operation status, one run's live status and target outcomes, vendor coverage, what a targeted or charge-search run would use, photo-run context and proposals, image processing, external-id collisions, and barcode lookup.",
+      "Import reads: one retained Email, purchase-import operation status, one run's live status and target outcomes, vendor coverage, photo-run context and proposals, image processing, external-id collisions, and barcode lookup.",
     actions: {
+      mail: mcpAction({
+        op: purchaseImportContract.ops.mailRead,
+        description:
+          "Read one retained Email: sender, subject, received time, readable body, exact links, attachment list and its `checksum`. Pass `attachmentId` to receive that attachment's original bytes (PDF or image, at most 3 MiB). Start Product and Purchase research here, from the original order Email and its links.",
+      }),
       purchase_status: mcpAction({
         op: purchaseImportContract.ops.operationStatus,
         description:
@@ -534,22 +539,7 @@ export const MCP_TOOLS = defineMcpTools({
           ),
         }),
         description:
-          "One Run's live state: status, counts, findings, each target's outcome (`warning` holds a skip's reason), the agent's progress history, and its browser and write operations. Read this to follow a run instead of polling entity_read.",
-      }),
-      sync_plan: mcpAction({
-        op: runContract.ops.syncPlan,
-        description:
-          "Preview browser sync for the current member's enabled accounts, optionally one Vendor account. Shows first sync, incremental cursor, resumable work with progress, or the run blocking sync. Advisory: starting rechecks admission.",
-      }),
-      run_launch_preview: mcpAction({
-        op: runContract.ops.targetedLaunch,
-        description:
-          'What run.start would use for one target, without starting anything. `purpose: "product_enrichment"` with a Product shortcode returns `products[0]`: its `sourceId` (the newest import source claim of a Purchase that bought it) and `reason` when none exists — a Product with no import source cannot be enriched by a run. `purpose: "purchase_validation"` with a Purchase shortcode returns its replayable `sources`; the `default` one is the usual choice, and none means the run searches Gmail, then an owned browser account.',
-      }),
-      charge_hunts: mcpAction({
-        op: vendorContract.ops.chargeHunts,
-        description:
-          "One Vendor account's open, unallocated statement charges that a browser run can search for — the candidates for run.start_charge_run. A charge is selectable when `reason` is null; otherwise `reason` says why not, and `runId` names the unfinished run that already holds it.",
+          "One Run's live state: status, counts, findings, each target's outcome (`warning` holds a skip's reason), the agent's progress history, and its write operations. Read this to follow a run instead of polling entity_read.",
       }),
       photo_context: mcpAction({
         op: photoImportContract.ops.runContext,
@@ -635,29 +625,41 @@ export const MCP_TOOLS = defineMcpTools({
     },
   },
 
+  mail: {
+    description:
+      "A member's retained order Email: search Gmail for a missing original and record what an Email means for Purchases (read one with imports_read.mail). Emails are named by their Gmail mailboxId and messageId, so they correlate with your own Gmail connector.",
+    actions: {
+      search: mcpAction({
+        op: purchaseImportContract.ops.mailSearch,
+        description:
+          "Search the member's connected Gmail (Gmail search syntax; Spam and Trash are always excluded) to recover a missing original, e.g. by order number. Without a Mail import Run no paid classification runs: every match is retained as an `uncertain` candidate you settle with `mail.resolve` (`unrelated` disposes of it). Under Pi's Mail import Run matches are classified like discovery. Searching never advances mailbox coverage. Page with `nextPageToken`. With several connected mailboxes, pass `mailboxId`.",
+      }),
+      resolve: mcpAction({
+        op: purchaseImportContract.ops.mailResolve,
+        description:
+          "Record what one retained Email means, using the checksum imports_read.mail returned: `linked` (a lifecycle event — shipped, delivered, cancelled, refunded … — of an existing Purchase; writes no Expenses), `unresolved` (an order whose Purchase cannot be established yet, with the gap), or `unrelated` (not a purchase; Cubby deletes its retained copy). An order Email you import with purchase_import.commit is linked automatically. Idempotent.",
+      }),
+    },
+  },
+
   purchase_import: {
     description:
-      "The purchase agent's bounded import writers: prepare, validate, and commit one immutable import plan; confirm a merchant's Vendor; reclassify a Purchase document.",
+      "Import a purchase from its source: prepare then commit one immutable import plan; confirm a merchant's Vendor; reclassify a Purchase document. A member's Claude/Codex session and Pi's Mail import use the same writers.",
     actions: {
       prepare: mcpAction({
         op: purchaseImportContract.ops.prepare,
         description:
-          "Persist an immutable proposed purchase import for the authenticated run. Returns stable order and line ids plus existing Product candidates. Never writes Purchases, Expenses, or Products.",
-      }),
-      validate: mcpAction({
-        op: purchaseImportContract.ops.validate,
-        description:
-          "Compare an immutable prepared plan to its live Purchase. Records a target diff and never invokes the import writer, source claims, attachments, or audit repair.",
+          "Persist an immutable proposed purchase import. Each order names its Vendor (`vendorId`, or `vendor.name` to reuse or create an exact-name Vendor) and its source: a retained Email (`mail_message`, key `gmail:<mailboxId>:<messageId>` and the checksum imports_read.mail returned), a receipt photo, or a vendor export. Without `_runExecution.run`, a member's preparation opens its own import Run and returns its RUN- code. Returns stable order and line ids plus existing Product candidates to reuse before creating one. Never writes Purchases, Expenses, or Products.",
       }),
       commit: mcpAction({
         op: purchaseImportContract.ops.commit,
         description:
-          "Commit one exact previously prepared purchase import. Supply a deliberate defaultTrade, or a defaultProjectId whose effective defaults provide a trade, for principal lines. Every principal line maps to an existing Product shortcode, an explicit new Product, or unresolved; unresolved lines create a finding and stop the run for review — never a speculative Product. Replay-safe; rechecks targets and evidence.",
+          "Commit one exact previously prepared purchase import (name its Run in `_runExecution.run`). Supply a deliberate defaultTrade, or a defaultProjectId whose effective defaults provide a trade, for principal lines. Every principal line maps to an existing Product shortcode, an explicit new Product, or unresolved; unresolved lines create a finding for review — never a speculative Product. A retained-Email source is linked to the Purchase as its confirmation. Replay-safe by operation id; rechecks targets and evidence. Commits never start Product research.",
       }),
       confirm_vendor: mcpAction({
         op: purchaseImportContract.ops.confirmMerchantVendor,
         description:
-          "Confirm that one exact statement merchant descriptor belongs to a Vendor for the authenticated household member. This durable mapping enables charge-driven purchase and receipt hunts; a later call replaces the mapping for that exact normalized descriptor.",
+          "Confirm that one exact statement merchant descriptor belongs to a Vendor for the authenticated household member; a later call replaces the mapping for that exact normalized descriptor.",
       }),
       reclassify: mcpAction({
         op: purchaseContract.ops.reclassifyDocument,
@@ -687,23 +689,8 @@ export const MCP_TOOLS = defineMcpTools({
 
   product_enrichment: {
     description:
-      "Source-backed Product identity writes: fill-only enrichment, approved overwrites, identifier slots, image integrity, and match proposals.",
+      "Product identity upkeep: image integrity and match proposals. Product facts and identifier slots are written with entity.update and its `sources`.",
     actions: {
-      commit: mcpAction({
-        op: purchaseImportContract.ops.commitProductEnrichment,
-        description:
-          "Apply a bounded, fill-only Product enrichment to one explicit target. Price, attachments, source claims, identifier reassignment, and populated-field overwrites are forbidden.",
-      }),
-      skip: mcpAction({
-        op: purchaseImportContract.ops.skipProductEnrichment,
-        description:
-          "Close one enrichment target without writing anything, with the reason (no exact source page proves this variant; retired, bundle-only, or ambiguous). The run then claims its next Product; a Product a run committed or skipped is not swept again.",
-      }),
-      overwrite: mcpAction({
-        op: purchaseImportContract.ops.overwriteProductEnrichment,
-        description:
-          "Propose one populated manufacturer, category, or model replacement. Every call pauses for exact typed human approval and revalidates the Product before applying.",
-      }),
       verify_images: mcpAction({
         op: productContract.ops.verifyImages,
         project: slimProductDetail,
@@ -724,14 +711,6 @@ export const MCP_TOOLS = defineMcpTools({
         op: recommendationsContract.ops.proposeProductMatch,
         description:
           'Propose that two Products are the same real item, for a person to review and merge in the product match queue. Use it when you hold evidence the automatic detector cannot see — typically a photo-created Product (e.g. "Gray crew t-shirt — M", stocked, never bought) and a purchase-created Product for the same item, confirmed against the vendor\'s product page. Never merges anything: it records the pair with your evidence, ranked above detector suggestions. Re-proposing the same pair (either order) replaces the evidence; a pair the person dismissed stays dismissed and comes back with state "dismissed".',
-      }),
-      patch_external_ids: mcpAction({
-        op: productContract.ops.patchExternalIds,
-        project: slimProductDetail,
-        output: productMcpDetailOut,
-        batch: { reference: (item) => item.id, uniqueIds: true },
-        description:
-          "Patch named (source, kind) identifier slots on up to 50 products (`items`) in request order, without replacing unrelated identifiers. A slot holds ONE primary plus any number of secondaries — Amazon lists one item twice, so a product legitimately carries two ASINs. An upsert replaces the primary; pass isPrimary: false to add an identifier alongside it, addressed by its own value. Every removal must include the exact current external ID, an item's preconditions are all checked before it changes anything, and removing a primary promotes the oldest surviving secondary. A failed item does not roll back successful items. Check imports_read.external_id_collisions before adding identity.",
       }),
     },
   },
@@ -778,7 +757,7 @@ export const MCP_TOOLS = defineMcpTools({
 
   run: {
     description:
-      'Start a Cubby run. The run\'s coordinator does the work and reads pages through the signed-in browser of the household\'s Mac app, so a run may wait for a connected Mac before it progresses. Each start returns a RUN- shortcode: poll entity_read.get with entity "run" and resultDetail "full" on it until `status` is terminal (completed, failed, needs_review, or dispatch_failed); paused_* statuses are waiting (paused_offline: for the Mac), not finished.',
+      "Control an existing Run (Mail import, photo inventory, or a member's import). Runs are started by Mail discovery, photo uploads, and purchase_import.prepare; read one with imports_read.run_status.",
     actions: {
       lifecycle: mcpAction({
         op: runContract.ops.lifecycle,
@@ -786,27 +765,7 @@ export const MCP_TOOLS = defineMcpTools({
         openWorld: true,
         strict: true,
         description:
-          "Control an owned Run with controlAction cancel, retry or restart. Cancel stops active work; retry/restart preserve the previous attempt and return its admitted successor. Repeated research retries reuse the same successor. These controls do not approve or reject findings, grant paid budgets, or verify unfinished targets. Read imports_read.run_status for available controls and current outcomes; unsupported lifecycle states refuse without changing the Run.",
-      }),
-      start: mcpAction({
-        op: runContract.ops.startTargeted,
-        // The run browses the Vendor's site through the Mac's browser.
-        openWorld: true,
-        description:
-          'Start a targeted run. `purpose: "product_enrichment"` with `targets` (each a Product shortcode and the `sourceId` from imports_read.run_launch_preview; the run browses with the Vendor\'s browsing account) verifies identity facts and images from the Vendor\'s pages; targets are grouped into one run per Vendor account. `purpose: "purchase_validation"` with a `purchaseId` and a `sourceId` (a source id from imports_read.run_launch_preview, or `sourceId: null` when none is chosen) re-reads one Purchase\'s order against its source. Returns one entry per run: `created: true` with `run` (id, status) for a new run, or `created: false` with `blockingRun` when that Vendor account already has an active run — nothing is queued then; poll or wait for the blocking run and start again. Repeating a start while its run is active returns that run as `blockingRun`; a start with no Vendor account is blocked by an active run of the same purpose on the same target.',
-      }),
-      start_sync: mcpAction({
-        op: runContract.ops.startSync,
-        openWorld: true,
-        description:
-          "Start or resume browser sync for one owned, enabled Vendor account. Optional backfill supplies inclusive from/to calendar dates. Returns runId and resumed. Other purposes and selected charge searches block admission.",
-      }),
-      start_charge_run: mcpAction({
-        op: vendorContract.ops.startChargeRun,
-        // The run searches the Vendor's site through the Mac's browser.
-        openWorld: true,
-        description:
-          "Start one browser run that searches a Vendor account's order history for up to 50 selected statement charges (FTX- ids from imports_read.charge_hunts with a null `reason`). The account must have browser sync enabled. All or nothing: a selected charge that is settled, not searchable, or already on another unfinished run, or an account that already has an active run, refuses the whole call and starts nothing. Returns `runId`.",
+          "Control an owned Run with controlAction cancel, retry or restart. Cancel stops active work; retry/restart preserve the previous attempt and return its admitted successor. These controls do not approve or reject findings, grant paid budgets, or verify unfinished targets. Unsupported lifecycle states refuse without changing the Run.",
       }),
     },
   },

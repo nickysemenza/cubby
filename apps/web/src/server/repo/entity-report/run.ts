@@ -26,6 +26,7 @@ import { formatDuration } from "~/lib/format-duration";
 import { formatCurrency, formatPercent } from "~/lib/number-format";
 import type { Database } from "~/server/db";
 import { listAuditLog } from "~/server/operations/audit-log";
+import { runHasCapability } from "~/server/purchase-import/capabilities";
 import {
   loadRunDetail,
   loadRunLog,
@@ -343,72 +344,11 @@ const importApprovals = (run: RunDetail): ReportBlock[] => [
   ),
 ];
 
-/** The reviewable text and apply confirmation of a finding's proposed fix. */
-function captureProfileFix(
-  fix: Extract<
-    NonNullable<RunDetail["findings"][number]["proposedFix"]>,
-    { kind: "vendor_capture_profile" }
-  >,
-) {
-  const lines: Line[] = [];
-  lines.push(
-    line(
-      `Order history: ${fix.current.hints.ordersListUrl ?? "Unknown"} → ${fix.profile.hints.ordersListUrl ?? "Unknown"}`,
-    ),
-  );
-  lines.push(
-    line(
-      `Browser hosts: ${fix.current.browserDomains.join(", ")} → ${fix.profile.browserDomains.join(", ")}`,
-    ),
-  );
-  lines.push(
-    line(
-      `Pagination: ${fix.current.hints.pagination ?? "None"} → ${fix.profile.hints.pagination ?? "None"}`,
-    ),
-  );
-  lines.push(
-    line(
-      `Order links: ${fix.current.hints.orderLinkPattern ?? "None"} → ${fix.profile.hints.orderLinkPattern ?? "None"}`,
-    ),
-  );
-  lines.push(
-    line(
-      `Notes: ${fix.current.hints.notes.join("; ") || "None"} → ${fix.profile.hints.notes.join("; ") || "None"}`,
-    ),
-  );
-  return {
-    lines,
-    applyConfirm:
-      "Apply the displayed account navigation and authorize these browser hosts?",
-  };
-}
-
 function findingFix(finding: RunDetail["findings"][number]) {
   const fix = finding.proposedFix;
   const lines: Line[] = [];
   if (fix === null || fix.kind === "receive_purchase")
     return { lines, applyConfirm: null };
-  if (fix.kind === "vendor_capture_profile") return captureProfileFix(fix);
-  if (fix.kind === "research_field_correction") {
-    for (const correction of fix.corrections) {
-      lines.push(
-        line(
-          `${correction.claim.fieldPath}: ${JSON.stringify(correction.currentValue)} → ${JSON.stringify(correction.claim.value)}`,
-        ),
-        line(correction.claim.support.observation),
-        line(correction.claim.support.reasoning),
-      );
-      if (correction.claim.support.selectedVariant)
-        lines.push(
-          line(correction.claim.support.selectedVariant.reasoning, "muted"),
-        );
-    }
-    return {
-      lines,
-      applyConfirm:
-        "Apply these supported corrections to the saved Product values shown?",
-    };
-  }
   if (fix.kind !== "replace_aggregate_line")
     return { lines, applyConfirm: "Apply this correction to your records?" };
   const snapshot = fix.reviewSnapshot;
@@ -458,10 +398,7 @@ function findingActions(
 ): ReportCommand[] {
   if (finding.status !== "open") return [];
   const reviewedFingerprint =
-    finding.proposedFix?.kind === "replace_aggregate_line" ||
-    finding.proposedFix?.kind === "validation_corrections" ||
-    finding.proposedFix?.kind === "research_field_correction" ||
-    finding.proposedFix?.kind === "vendor_capture_profile"
+    finding.proposedFix?.kind === "replace_aggregate_line"
       ? (finding.proposedFix.reviewSnapshot?.fingerprint ?? null)
       : null;
   const apply: ReportCommand[] =
@@ -533,7 +470,7 @@ const importFindings = (run: RunDetail): ReportBlock[] => [
 ];
 
 const importTargets = (run: RunDetail): ReportBlock[] =>
-  run.targets.length === 0 && run.evidence.length === 0
+  run.targets.length === 0
     ? []
     : [
         note(
@@ -574,71 +511,9 @@ const importTargets = (run: RunDetail): ReportBlock[] =>
         ),
       ];
 
-const importEvidence = (run: RunDetail): ReportBlock[] => {
-  const referencedPreviews = new Set(
-    run.evidence
-      .filter((source) => source.previewUrl !== source.mediaUrl)
-      .map((source) => source.previewUrl),
-  );
-  const sources = run.evidence.filter(
-    (source) => !source.mediaUrl || !referencedPreviews.has(source.mediaUrl),
-  );
-  const evidenceRows = sources.map((evidence) => ({
-    ...row(evidence.id, {
-      title: evidence.title ?? evidence.filename ?? evidence.sourceKind,
-      at: evidence.capturedAt ?? evidence.createdAt,
-      lines: [
-        line(
-          `${evidence.sourceKind}${evidence.mediaType ? ` · ${evidence.mediaType}` : ""}${evidence.checksum ? ` · ${evidence.checksum}` : ""}`,
-          "muted",
-        ),
-        ...(evidence.supportedFacts ?? []).map((fact) =>
-          line(
-            `${fact.entityShortcode} · ${fact.fieldPath}: ${z.string().safeParse(fact.value).data ?? JSON.stringify(fact.value)}`,
-          ),
-        ),
-      ],
-      externalLink: evidence.sourceURL
-        ? { label: "Open live source", url: evidence.sourceURL }
-        : undefined,
-    }),
-    imageUrl: evidence.previewUrl,
-    originalMediaUrl: evidence.mediaUrl,
-  }));
-  const captures = evidenceRows
-    .filter((source) => source.imageUrl)
-    .sort(
-      (left, right) =>
-        (right.at ?? "").localeCompare(left.at ?? "") ||
-        (right.key ?? "").localeCompare(left.key ?? ""),
-    );
-  const otherSources = evidenceRows.filter((source) => !source.imageUrl);
-  return [
-    ...(captures.length
-      ? [
-          {
-            ...records(captures, {
-              title: "Captured pages",
-              empty: "No retained captures.",
-            }),
-            presentation: "filmstrip" as const,
-          },
-        ]
-      : []),
-    ...(otherSources.length
-      ? [
-          records(otherSources, {
-            title: "Retained sources",
-            empty: "No retained sources.",
-          }),
-        ]
-      : []),
-  ];
-};
-
 const importTimeline = (run: RunDetail): ReportBlock[] => [
   note(
-    "Oldest first. System and Mac events are retained as structured operation evidence; sensitive page content and credentials are excluded.",
+    "Oldest first. System and agent events are retained as structured operation evidence; sensitive content and credentials are excluded.",
   ),
   records(
     run.operations.map((operation) =>
@@ -648,14 +523,6 @@ const importTimeline = (run: RunDetail): ReportBlock[] => [
         badges: [badge(operation.state, toneForState(operation.state))],
         lines: [
           line(operation.operationId, "muted"),
-          ...(operation.browserTiming
-            ? [
-                line(
-                  `Mac command duration ${formatDuration(operation.browserTiming.durationMs)} · ${operation.browserTiming.retryCount} linked retries`,
-                  "muted",
-                ),
-              ]
-            : []),
           ...(operation.error ? [line(operation.error, "destructive")] : []),
         ],
       }),
@@ -669,7 +536,7 @@ type PreparedLine = PreparedOrder["lines"][number];
 
 const COMMITTED = "Prepared import approved and committed.";
 const APPROVE_BLOCKED =
-  "Prepared orders can be approved only while an account sync run is running.";
+  "Prepared orders can be approved only while their import run is running.";
 const TRADE_CHOICE_ID = "trade";
 
 /** One decision per line; the id joins the ids' own character set, which excludes "/". */
@@ -771,7 +638,9 @@ function preparedBatch(
   title: string | undefined,
 ): Block<"records"> {
   const committed = orders.every((order) => order.committed);
-  const blocked = run.status !== "running" || run.purpose !== "account_sync";
+  const blocked =
+    run.status !== "running" ||
+    !runHasCapability(run.purpose, "commit_purchase_import");
   const disabledReason = committed
     ? COMMITTED
     : blocked
@@ -869,7 +738,6 @@ const IMPORT_BUILDERS = {
   "run.import-approvals": importApprovals,
   "run.import-findings": importFindings,
   "run.import-targets": importTargets,
-  "run.import-evidence": importEvidence,
   "run.import-prepared-orders": importPreparedOrders,
   "run.import-timeline": importTimeline,
 } as const satisfies Record<string, (run: RunDetail) => ReportBlock[]>;
@@ -887,20 +755,6 @@ export function importReportBlocks(
     return slot === "run.import-timeline" ? importTimeline(run) : [];
   return hasImportRunReports(run.purpose) ? IMPORT_BUILDERS[slot](run) : [];
 }
-
-const ORDER_OUTCOME = {
-  pending: ["Waiting", undefined],
-  imported: ["Imported", undefined],
-  skipped: ["Needs review", "muted"],
-  covered: ["Already covered", undefined],
-} as const satisfies Record<string, readonly [string, Tone | undefined]>;
-
-const CHARGE_OUTCOME = {
-  pending: "Searching",
-  resolved: "Settled",
-  deferred: "Needs review",
-  not_found: "Order not found",
-} as const;
 
 /** The status sentence over the progress rows: what the run is doing, or how it ended. */
 function progressHeadline(progress: RunLiveProgress): string {
@@ -1042,42 +896,6 @@ function discoveryCountsBlock(
 }
 
 /** The selected orders and charges a targeted mail or charge-search run works through. */
-function selectionBlocks(progress: RunLiveProgress): ReportBlock[] {
-  const blocks: ReportBlock[] = [];
-  if (progress.orders.length)
-    blocks.push(
-      records(
-        progress.orders.map((order) => {
-          const [label, tone] = ORDER_OUTCOME[order.state];
-          return row(order.orderId, {
-            title: order.orderId,
-            badges: [badge(label, tone)],
-          });
-        }),
-        { title: "Selected orders" },
-      ),
-    );
-  if (progress.charges.length)
-    blocks.push(
-      records(
-        progress.charges.map((charge) =>
-          row(charge.chargeId, {
-            title: charge.chargeId,
-            ref: { entity: "financialTransaction", id: charge.chargeId },
-            badges: [
-              badge(
-                CHARGE_OUTCOME[charge.outcome],
-                charge.outcome === "resolved" ? undefined : "muted",
-              ),
-            ],
-          }),
-        ),
-        { title: "Selected charges" },
-      ),
-    );
-  return blocks;
-}
-
 /** Durable progress for every Run, including work done outside the page that opened it. */
 export function liveProgressBlocks(
   runId: RunDetail["publicId"],
@@ -1091,23 +909,6 @@ export function liveProgressBlocks(
     ...workflowBlocks(runId, progress),
     ...(progress.discovery
       ? [discoveryCountsBlock(progress.discovery, active)]
-      : []),
-    ...selectionBlocks(progress),
-    ...(progress.savedState
-      ? [
-          records(
-            Object.entries(progress.savedState).map(([key, value]) =>
-              row(key, {
-                title: phaseLabel(key),
-                detail: {
-                  label: "Saved data",
-                  text: JSON.stringify(value, null, 2),
-                },
-              }),
-            ),
-            { title: "Saved Run data" },
-          ),
-        ]
       : []),
     records(
       progress.progress.map((event) =>

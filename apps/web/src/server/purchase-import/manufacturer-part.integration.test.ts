@@ -27,7 +27,7 @@ import {
   PurchaseProductExternalIdCollisionError,
 } from "./external-id-learning";
 import { commitPurchaseImport, preparePurchaseImport } from "./import-orders";
-import { startOrResumeRun } from "./run-service";
+import { startImportRunFixture } from "./import-run.fixtures";
 
 const checksum = (digit: string) => digit.repeat(64);
 const MAKER = "ForgeWear Apparel";
@@ -102,7 +102,7 @@ describe("manufacturer_part identity", () => {
       vendorId: vendor.id,
       ledgerPartyId: party.id,
     });
-    const run = await startOrResumeRun(ctx.db, {
+    const run = await startImportRunFixture(ctx.db, {
       ledgerPartyId: party.id,
       vendorAccountId: account.id,
       trigger: "manual",
@@ -127,7 +127,7 @@ describe("manufacturer_part identity", () => {
             stableOrderId: "forge-1",
             itemOperationId: "prepare-item:forge-1",
             source: {
-              kind: "browser_order" as const,
+              kind: "vendor_export" as const,
               externalKey: "forgewear:order:1001",
               checksum: checksum("a"),
             },
@@ -225,7 +225,7 @@ describe("manufacturer_part identity", () => {
       vendorId: vendor.id,
       ledgerPartyId: party.id,
     });
-    const run = await startOrResumeRun(ctx.db, {
+    const run = await startImportRunFixture(ctx.db, {
       ledgerPartyId: party.id,
       vendorAccountId: account.id,
       trigger: "manual",
@@ -243,7 +243,7 @@ describe("manufacturer_part identity", () => {
             stableOrderId: "ranked-kit",
             itemOperationId: "prepare-item:ranked-kit",
             source: {
-              kind: "browser_order",
+              kind: "vendor_export",
               externalKey: "synthetic:ranked-kit",
               checksum: checksum("a"),
             },

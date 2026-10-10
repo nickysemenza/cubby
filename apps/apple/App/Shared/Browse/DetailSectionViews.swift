@@ -516,45 +516,14 @@ struct FieldExplanationLabel: View {
                     }
                     if !resolved.verifications.isEmpty {
                         Divider()
-                        explanationSectionLabel("Verified against sources")
+                        explanationSectionLabel("Sources")
                         ForEach(resolved.verifications, id: \.key) { verification in
-                            VStack(alignment: .leading, spacing: FieldGuideTokens.Space.xs) {
-                                if let entity = EntityKey(rawValue: verification.run.entityKind.rawValue) {
-                                    NavigationLink(
-                                        verification.run.entityId,
-                                        value: Route.entityDetail(entity, id: verification.run.entityId))
-                                }
-                                Text(verification.verifiedAt.formatted(date: .abbreviated, time: .shortened))
-                                    .font(.caption).foregroundStyle(.secondary)
-                                Text(field.label).font(.caption.weight(.medium)).foregroundStyle(.secondary)
-                                if let value = try? JSONValue(encoding: verification.value) {
-                                    ExplanationEvidenceValue(value: value, hidesByteIdentity: true)
-                                }
-                                if let support = verification.support {
-                                    Text(support.reasoning).font(.callout)
-                                    Text("“\(support.observation)”").font(.callout).foregroundStyle(
-                                        .secondary)
-                                    if let variant = support.selectedVariant {
-                                        Text("Selected variant: \(variant.identity)").font(
-                                            .callout.weight(.medium))
-                                        if let attributes = try? JSONValue(encoding: variant.attributes) {
-                                            ExplanationEvidenceValue(value: attributes)
-                                        }
-                                        Text(variant.reasoning).font(.callout)
-                                    }
-                                }
-                                if let source = verification.source.url, let url = URL(string: source) {
-                                    Link(verification.source.label, destination: url)
-                                } else {
-                                    Text(verification.source.label).font(.caption).foregroundStyle(.secondary)
-                                }
-                                if let entity = EntityKey(rawValue: verification.subject.entityKind.rawValue)
-                                {
-                                    NavigationLink(
-                                        verification.subject.entityId,
-                                        value: Route.entityDetail(entity, id: verification.subject.entityId))
-                                }
-                            }
+                            EntitySourceRow(
+                                label: nil, supportsCurrentValue: verification.supportsCurrentValue,
+                                quote: verification.quote, selectedVariant: verification.selectedVariant,
+                                url: verification.url,
+                                seenAt: verification.observedAt ?? verification.createdAt,
+                                runID: verification.recorder.runId)
                         }
                     }
                     if !resolved.sources.isEmpty {
@@ -1283,6 +1252,46 @@ private struct RecordReferenceList: View {
                 if !filters.isEmpty {
                     NavigationLink("View all", value: Route.entityList(target, filters: filters))
                 }
+            }
+        }
+    }
+}
+
+/// One Source: where a fact about a record was seen. A field-scoped source says whether it still
+/// supports the field's current value or describes a value since overwritten.
+struct EntitySourceRow: View {
+    let label: String?
+    let supportsCurrentValue: Bool?
+    let quote: String?
+    let selectedVariant: String?
+    let url: String?
+    let seenAt: Date
+    let runID: String?
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: FieldGuideTokens.Space.xs) {
+            HStack(spacing: FieldGuideTokens.Space.xs) {
+                if let label { Text(label).font(.callout.weight(.medium)) }
+                if let supports = supportsCurrentValue {
+                    Text(supports ? "Current value" : "Earlier value")
+                        .font(.caption.weight(.medium))
+                        .foregroundStyle(
+                            supports ? FieldGuideTokens.graphite : FieldGuideTokens.graphiteSecondary)
+                }
+            }
+            if let quote, !quote.isEmpty {
+                Text("“\(quote)”").font(.callout).foregroundStyle(.secondary)
+            }
+            if let selectedVariant, !selectedVariant.isEmpty {
+                Text("Selected variant: \(selectedVariant)").font(.callout.weight(.medium))
+            }
+            if let url, let link = URL(string: url) {
+                Link(link.host() ?? url, destination: link).font(.caption)
+            }
+            Text(seenAt.formatted(date: .abbreviated, time: .shortened))
+                .font(.caption).foregroundStyle(.secondary)
+            if let runID {
+                NavigationLink(runID, value: Route.entityDetail(.run, id: runID)).font(.caption)
             }
         }
     }

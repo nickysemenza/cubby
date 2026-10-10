@@ -43,16 +43,6 @@ export const collectionActions = {
       default: m.ReviewLabelNutritionAction,
     })),
   ),
-  validatePurchase: action<"purchase">(() =>
-    import("~/app/purchases/slots").then((m) => ({
-      default: m.ValidatePurchaseAction,
-    })),
-  ),
-  enrichProduct: action<"product">(() =>
-    import("~/app/products/product-runs").then((m) => ({
-      default: m.ProductEnrichmentAction,
-    })),
-  ),
 } satisfies Record<
   CollectionActionId,
   LazyExoticComponent<FunctionComponent<CollectionActionProps<never>>>

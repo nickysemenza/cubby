@@ -44,22 +44,3 @@ export function parseSignal(text: string): AgentSignal | undefined {
   if (Object.keys(rest).length > 0) signal.attributes = rest;
   return signal;
 }
-
-/** Consume broker results on the host before the model sees a retained observation. */
-export async function resumeResearchSignal(
-  signal: AgentSignal,
-  resume: (signal: AgentSignal) => Promise<object | null>,
-): Promise<AgentSignal | null> {
-  const observation = await resume(signal);
-  // A stopped host task must not wake a parked model after cancellation or retirement.
-  if (
-    observation &&
-    "status" in observation &&
-    observation.status === "stopped"
-  )
-    return null;
-  if (observation)
-    return { type: "research_observation", body: JSON.stringify(observation) };
-  if (signal.type === "purchase-import.browser_result") return null;
-  return signal;
-}

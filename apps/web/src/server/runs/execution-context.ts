@@ -10,17 +10,12 @@ import {
 import type { RunId } from "@cubby/schemas/identifiers";
 import type { RunInput } from "@cubby/schemas/run-fields";
 import { sha256Hex } from "@cubby/shared/sha256";
-import { and, desc, eq, inArray, isNull, or, sql } from "drizzle-orm";
+import { and, desc, eq, inArray, or, sql } from "drizzle-orm";
 import { z } from "zod";
 
 import type { Database, DrizzleTransaction } from "~/server/db";
 import { account } from "~/server/db/auth.schema";
-import {
-  run,
-  orderMail,
-  importSourceClaim,
-  researchRetention,
-} from "~/server/db/schema";
+import { run, orderMail, importSourceClaim } from "~/server/db/schema";
 import {
   unwrapDb,
   notDeleted,
@@ -36,7 +31,7 @@ const executionContext = z.object({
   executionAuthorization: executionAuthorizationRef.optional(),
 });
 
-export class ExecutionLimitError extends Error {
+class ExecutionLimitError extends Error {
   constructor(readonly reason: "candidate_limit" | "product_limit") {
     super(`Execution allowance refused: ${reason}.`);
     this.name = "ExecutionLimitError";
@@ -121,21 +116,12 @@ export async function bindRetainedMailBackfill<T extends RunInput>(
       checksum: orderMail.rawChecksum,
     })
     .from(orderMail)
-    .leftJoin(
-      researchRetention,
-      and(
-        eq(researchRetention.ledgerPartyId, orderMail.ledgerPartyId),
-        eq(researchRetention.orderMailId, orderMail.id),
-        eq(researchRetention.checksum, orderMail.rawChecksum),
-      ),
-    )
     .where(
       and(
         eq(orderMail.ledgerPartyId, owner.ledgerPartyId),
         eq(orderMail.mailboxId, mailbox.id),
-        isNull(researchRetention.id),
         // Cleanup preserves identity/checksum tombstones; only readable content
-        // outside a retirement fence can establish a retained original.
+        // can establish a retained original.
         sql`COALESCE(
           NULLIF(BTRIM(${orderMail.content}->>'bodyText'), ''),
           NULLIF(BTRIM(${orderMail.content}->>'bodyHtml'), ''),

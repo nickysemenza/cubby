@@ -108,7 +108,6 @@ export const actionVerbs = {
   suggest: { label: "Suggest", icon: SparkleIcon },
   analyze: { label: "Analyze photos", icon: SparkleIcon },
   identify: { label: "Identify product", icon: SparkleIcon },
-  enrichProducts: { label: "Enrich products...", icon: SparkleIcon },
   detect: { label: "Detect items", icon: SparkleIcon },
   regenerate: { label: "Regenerate flow", icon: SparkleIcon },
 
