@@ -9,7 +9,10 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import * as featureRunner from "~/server/ai/run-feature";
 import { Database } from "~/server/db";
 
-import { assessResearchProposal } from "./research-support";
+import {
+  assessResearchProposal,
+  researchAssessmentRequest,
+} from "./research-support";
 
 const db = new Database(() => {
   throw new Error("Source support transport tests do not query a database.");
@@ -101,6 +104,42 @@ describe("independent original attachment assessment", () => {
     expect.soft(text).toContain(evidenceId);
     expect.soft(text).not.toContain(f.originalAttachment.dataBase64);
     expect.soft(accepted.acceptedFacts).toEqual([0]);
+  });
+  it("delivers one original binary for repeated observations while retaining every source binding", async () => {
+    const f = await input();
+    const otherEvidenceId = "00000000-0000-4000-8000-000000000005";
+    const otherAttachmentRef = "00000000-0000-4000-8000-000000000006";
+    f.assessment.observations.push({
+      evidenceId: otherEvidenceId,
+      metadata: {
+        attachmentRef: otherAttachmentRef,
+        attachmentChecksum: f.originalAttachment.checksum,
+      },
+      content: JSON.stringify({
+        originalAttachment: {
+          ...f.originalAttachment,
+          attachmentRef: otherAttachmentRef,
+          filename: "order-copy.pdf",
+        },
+      }),
+    });
+    const request = await researchAssessmentRequest(f.assessment);
+    const parts = request.messages.flatMap((message) => message.content);
+    expect(parts.filter((part) => part.type === "document")).toHaveLength(1);
+    const text = parts
+      .filter((part) => part.type === "text")
+      .map((part) => part.content)
+      .join("\n");
+    expect(text).toContain(evidenceId);
+    expect(text).toContain(otherEvidenceId);
+    expect(text).toContain(otherAttachmentRef);
+    expect(text).toContain("order-copy.pdf");
+    expect(text).not.toContain(f.originalAttachment.dataBase64);
+    // Deduplication must not bypass integrity checks on a later observation.
+    f.assessment.observations[1]!.metadata.attachmentChecksum = "f".repeat(64);
+    await expect(researchAssessmentRequest(f.assessment)).rejects.toThrow(
+      "binding changed",
+    );
   });
   it.each(["bytes", "binding"] as const)(
     "rejects a changed attachment %s before semantic inference",

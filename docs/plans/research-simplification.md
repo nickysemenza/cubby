@@ -105,6 +105,23 @@ this ownership split. Audit its extra settlement/exposure records rather than
 replacing Pi recovery with another generic engine. Preserve the existing
 interrupted-write and retained-browser-delivery regressions.
 
+### Forwarding-only prototype
+
+A controlled registration prototype replaced eight handwritten Pi forwarding
+registrations and duplicate service signatures with one schema/service/description
+declaration and a generated adapter. It increased handwritten production code by
+17 lines, added 23 generated lines and 45 preservation-test lines. Seven focused
+runtime tests passed, including replay admission and original media; app typecheck
+passed after supplying unchanged WASM declarations. An independent review found
+that a static schema import would run before shortcode-registry bootstrap on a
+fresh checkout. The prototype was discarded rather than shipped as a reduction.
+
+Keep the existing shared runtime until bounded composition provides an actual
+second caller and deletes mechanical model sequencing or other implementation.
+Generate only after bootstrap dependencies exist. A registration-only migration
+is insufficient evidence for adopting additional machinery. No model comparison,
+production migration or live research ran in this experiment.
+
 ### Code Mode and Computer workspace
 
 The [official Code Mode package](https://github.com/cloudflare/agents/blob/main/packages/codemode/README.md)
