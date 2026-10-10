@@ -764,3 +764,12 @@ Before deleting apparently unused provider state, search the repository, check
 provider usage/audit logs, and confirm that it is absent from current deployed
 bindings. A resource being absent from this file is evidence of drift, not by
 itself authorization to delete it.
+
+## Suggestion sweep model routing
+
+A `suggestion_sweep` Run pins one decision model for its lifetime. A deterministic
+sample of targets is evaluated by both Jev and Clef; the paired Suggestions share
+a pair key, and only the pinned-model row can auto-apply an Addition at confidence
+0.85 or higher. Corrections remain pending regardless of confidence. The shared
+paced batch loop checkpoints progress and observes persisted pause state between
+items; image-processing backfill can move onto it in a later change.
