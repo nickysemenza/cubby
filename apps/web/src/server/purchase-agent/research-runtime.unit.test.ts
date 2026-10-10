@@ -25,6 +25,41 @@ function named(name: string, services: RunServices) {
 }
 
 describe("bounded research runtime", () => {
+  it("reports failed and recovered host calls to the durable research bound with the same replay identity", async () => {
+    const observe = vi
+      .fn()
+      .mockRejectedValueOnce(new Error("Public page refused: HTTP 403"))
+      .mockResolvedValue({ state: "ready" });
+    const outcome = vi.fn();
+    const tool = purchaseImportTools(
+      () => fromPartial<RunServices>({ researchObserve: observe }),
+      undefined,
+      undefined,
+      outcome,
+    ).find((candidate) => candidate.name === "work_observe");
+    if (!tool) throw new Error("Missing research observation tool");
+    const execution = api();
+    const args = {
+      workRef,
+      action: { kind: "navigate", url: "https://shop.example.test/orders" },
+    };
+    await expect(
+      tool.execute(args, execution, BACKGROUND_CONTEXT),
+    ).rejects.toThrow("HTTP 403");
+    expect(outcome).toHaveBeenCalledWith(
+      "work_observe",
+      args,
+      expect.any(String),
+      "Public page refused: HTTP 403",
+    );
+    await tool.execute(args, execution, BACKGROUND_CONTEXT);
+    expect(outcome.mock.calls[1]?.slice(0, 3)).toEqual([
+      "work_observe",
+      args,
+      outcome.mock.calls[0]?.[2],
+    ]);
+    expect(outcome.mock.calls[1]?.[3]).toBeUndefined();
+  });
   it("retains a hidden call identity across a failed effect and terminates waiting browser work", async () => {
     const observe = vi
       .fn()

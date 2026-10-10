@@ -284,6 +284,14 @@ SDK hooks may report an exception and continue; a hook exception alone cannot
 enforce the allowance. The local denial is terminal, avoiding provider retries
 for intentionally stopped work. Explicit member aborts retain their failure
 semantics, while allowance exhaustion leaves unfinished targets for review.
+Research host tools also stop after three distinct calls repeat identical
+arguments and the same credential-scrubbed error. The existing Durable Object
+state retains call receipts and the failure count atomically with the review
+reason; replay does not count twice and a successful action clears its failures.
+The terminating tool preserves the diagnostic, and the same provider fence
+denies further inference. Changed arguments or errors are separate attempts.
+This bound covers thrown service failures, not returned domain refusals or
+active-time accounting; those remain separate follow-ups.
 
 The replacement's migration chain follows the current main journal, including
 Neon diagnostics. Its populated-history rehearsal rebuilds main's actual schema,
@@ -337,6 +345,19 @@ and deployment/readback order are owned by the
    leaves Purchase defaults and adjustments intact.
    A returned domain refusal that leaves the same task active upgrades the
    coordinator from Luna/medium to Sol/low for the remainder of that Run.
+   Independent source assessment uses Sol/low with the same retained-original
+   inputs and structured acceptance/refusal contract.
+   Mail relevance presents visible HTML text, exact links and structured order
+   JSON-LD through the shared
+   page compactor, omits layout bytes and identical plain/HTML text, and bounds
+   the serialized model content to 256 KiB including attachment encoding.
+   Original attachment acquisition retains its separate 10 MiB envelope, so
+   an attachment omitted from the model view remains available for retention.
+   Image labels and source URLs remain visible; missing image pixels cannot
+   justify unrelated mail. Omitted structured blocks also keep relevance
+   uncertain. An oversized readable body goes directly to uncertain without an inference request;
+   incomplete compacted views or attachments cannot establish unrelated mail.
+   Original mail remains unchanged for retention and subsequent research.
    Both purchase and Product research start with Luna/medium. The host
    retains this mode before returning the tool result and reapplies it after
    eviction or result replay. Settled ambiguity, member contradictions,
@@ -525,6 +546,18 @@ and deployment/readback order are owned by the
    browser choice and permissions, with a link to the pane. The run page proxies the agent conversation through
    `agent-proxy.ts` to the run's agent Durable Object. Member controls go
    through `controlRun` and `recordRunControlEvent`.
+
+Independent support assessment delivers identical retained attachment bytes once
+per MIME type and checksum in a request. Every observation keeps its evidence
+reference, attachment descriptor and binding validation; repeated observations
+refer to the already supplied original. The summed original-byte admission limit
+remains unchanged. This changes model delivery only, never retained evidence.
+
+Independent Product support assessment shares byte-identical serialized order
+extractions within one request. Each purchased-line/source row retains its own
+context and indices into the complete shared originals; retained records are not
+changed. Distinct extractions are preserved, and an unshared context keeps its
+existing shape. The support skill describes how to resolve these references.
 
 ## Run evidence uploads
 

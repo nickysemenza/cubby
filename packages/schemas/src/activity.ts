@@ -1,7 +1,7 @@
 import { z } from "zod";
 import { dataQuality } from "./data-quality";
 import { parseShortcode } from "@cubby/shared";
-import { imageShortcode } from "./identifiers";
+import { imageShortcode, runEntityId } from "./identifiers";
 import { entitySchema, type Entity } from "./entity";
 import { imageDescriptionAnalysis } from "./image-processing";
 import { imageUrlSummary } from "./image-summary";
@@ -194,7 +194,19 @@ export function activityWorkSummary(
     .filter((part) => part !== null)
     .join(" · ");
 }
-export const activityDetailInput = z.object({ id: activityRunId });
+export const activityDetailInput = z.object({
+  id: z
+    .string()
+    .refine(
+      (value) =>
+        activityRunId.safeParse(value).success ||
+        runEntityId.safeParse(value).success,
+      "Expected an activity shortcode or Run UUID",
+    )
+    .describe(
+      "Activity shortcode or internal Run UUID; responses retain the canonical public shortcode",
+    ),
+});
 export const activityAttempt = z.object({
   number: z.int().positive(),
   state: z.string(),

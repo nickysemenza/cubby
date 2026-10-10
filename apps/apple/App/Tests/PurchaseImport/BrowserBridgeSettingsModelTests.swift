@@ -43,6 +43,68 @@ struct BrowserBridgeSettingsModelTests {
         func appDidBecomeActive() {}
     }
 
+    #if os(macOS)
+        @Test func replacedControllerCannotRestoreExecutingBrowserRun() {
+            let settings = BrowserBridgeSettingsModel()
+            let baseURL = URL(string: "http://127.0.0.1:19876")!
+            let credentials = CredentialProvider(
+                host: "127.0.0.1:19876", store: InMemorySessionTokenStore())
+            let client = CubbyClient(baseURL: baseURL, credentials: credentials)
+            let previous = MacBrowserBridgeController(
+                baseURL: baseURL, client: client, credentials: credentials, settings: settings)
+            settings.install(controller: previous)
+            previous.project(
+                .accounts([
+                    .init(
+                        id: "account-first", label: "Example account", ledgerPartyID: "household-example",
+                        browser: .chrome)
+                ]))
+            previous.project(.executingRuns(accountID: "account-first", runIDs: ["RUN-4K7M"]))
+            #expect(settings.accountStates.first?.executingRuns.count == 1)
+
+            let replacement = MacBrowserBridgeController(
+                baseURL: baseURL, client: client, credentials: credentials, settings: settings)
+            settings.install(controller: replacement)
+            // A callback already queued on the old bridge can arrive before asynchronous retirement.
+            previous.project(.executingRuns(accountID: "account-first", runIDs: ["RUN-4K7M"]))
+            #expect(settings.accountStates.first?.executingRuns.isEmpty == true)
+            replacement.project(.executingRuns(accountID: "account-first", runIDs: ["RUN-EXAMPLE"]))
+            #expect(Set(settings.accountStates.first?.executingRuns.keys.map { $0 } ?? []) == ["RUN-EXAMPLE"])
+        }
+    #endif
+
+    // Browser execution must be visible outside manual submission, preserve a stable start
+    // through reconnect, deduplicate shared Runs, and disappear with retired connections.
+    @Test func automaticBrowserRunsProjectIntoExistingActivity() async {
+        let model = BrowserBridgeSettingsModel()
+        model.install(controller: StubController())
+        model.setAccounts([
+            .init(
+                id: "account-first", label: "Example account", ledgerPartyID: "household-example",
+                browser: .chrome),
+            .init(
+                id: "account-second", label: "Another account", ledgerPartyID: "household-example",
+                browser: .chrome),
+        ])
+        model.setExecutingRuns(["RUN-4K7M"], accountID: "account-first")
+        model.setExecutingRuns(["RUN-4K7M", "RUN-EXAMPLE"], accountID: "account-second")
+        model.setLastCommand("navigate · shop.example/item", runID: "RUN-4K7M", accountID: "account-first")
+        #expect(model.accountStates.first { $0.id == "account-first" }?.lastCommandRunID == "RUN-4K7M")
+        let initial = model.currentActivities
+        #expect(initial.count == 2)
+        #expect(Set(initial.map(\.link)) == [.serverRun("RUN-4K7M"), .serverRun("RUN-EXAMPLE")])
+        model.setAccountStatus(.waitingToReconnect(attempt: 1), accountID: "account-first")
+        model.setExecutingRuns(["RUN-4K7M"], accountID: "account-first")
+        #expect(model.currentActivities == initial)
+        model.setExecutingRuns([], accountID: "account-second")
+        #expect(model.currentActivities.count == 1)
+        model.install(controller: StubController())
+        #expect(model.currentActivities.isEmpty)
+        model.setExecutingRuns(["RUN-4K7M"], accountID: "account-first")
+        await model.disconnect()
+        #expect(model.currentActivities.isEmpty)
+    }
+
     private struct ServerRefusal: LocalizedError {
         var errorDescription: String? { "The account already has an active run." }
     }

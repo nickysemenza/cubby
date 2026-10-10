@@ -25,6 +25,8 @@ struct BrowserBridgeAccountState: Identifiable, Equatable {
     /// The last browser command and what the Mac observed, e.g. "capture · window minimized →
     /// screenshot unavailable".
     var lastCommand: String? = nil
+    var lastCommandRunID: String?
+    var executingRuns: [String: Date] = [:]
 
     var statusLabel: String {
         if needsAuthentication { return "Sign-in required" }
@@ -62,11 +64,16 @@ final class BrowserBridgeSettingsModel {
 
     var isConfigured: Bool { controller != nil }
 
+    func isInstalled(_ candidate: any BrowserBridgeControlling) -> Bool {
+        controller === candidate
+    }
+
     func install(controller: any BrowserBridgeControlling) {
         syncPlanGeneration = UUID()
         syncGeneration = UUID()
         isSyncing = false
         syncStartedAt = nil
+        for index in accountStates.indices { accountStates[index].executingRuns = [:] }
         self.controller = controller
         error = nil
     }
@@ -125,9 +132,18 @@ final class BrowserBridgeSettingsModel {
         accountStates[index].error = message
     }
 
-    func setLastCommand(_ summary: String, accountID: String) {
+    func setExecutingRuns(_ runIDs: Set<String>, accountID: String) {
+        guard let index = accountStates.firstIndex(where: { $0.id == accountID }) else { return }
+        let existing = accountStates[index].executingRuns
+        let now = Date.now
+        accountStates[index].executingRuns = Dictionary(
+            uniqueKeysWithValues: runIDs.map { ($0, existing[$0] ?? now) })
+    }
+
+    func setLastCommand(_ summary: String, runID: String, accountID: String) {
         guard let index = accountStates.firstIndex(where: { $0.id == accountID }) else { return }
         accountStates[index].lastCommand = summary
+        accountStates[index].lastCommandRunID = runID
     }
 
     func markRunCompleted(accountID: String, runID: String) {

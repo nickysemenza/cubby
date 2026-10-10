@@ -56,7 +56,7 @@ struct BrowserSyncPane: View {
                     .help(row.plan.shortcode)
                 }
                 .width(min: 130, ideal: 200)
-                TableColumn("Status", value: \.status) { row in
+                TableColumn("Connection", value: \.status) { row in
                     VStack(alignment: .leading) {
                         Text(row.status)
                         if let state = row.state {
@@ -66,6 +66,12 @@ struct BrowserSyncPane: View {
                                 }
                             }
                             if let command = state.lastCommand {
+                                Text("Last browser command").font(.caption).foregroundStyle(.secondary)
+                                if let runID = state.lastCommandRunID {
+                                    Button("View command run") {
+                                        model.navigator.openActivity(.serverRun(runID))
+                                    }
+                                }
                                 Text(command).font(.caption).foregroundStyle(.secondary).lineLimit(2)
                                     .help(command)
                             }
@@ -77,7 +83,7 @@ struct BrowserSyncPane: View {
                     }
                 }
                 .width(min: 120, ideal: 160)
-                TableColumn("Next sync") { row in
+                TableColumn("Import plan") { row in
                     Text(row.plan.line).lineLimit(2).help(row.plan.line)
                 }
                 .width(min: 160, ideal: 300)

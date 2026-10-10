@@ -1,3 +1,4 @@
+import { activityAttemptInput } from "@cubby/schemas/activity";
 import { parseEntityId } from "@cubby/schemas/identifiers";
 import { runPurpose } from "@cubby/schemas/run-fields";
 import { generateShortcode } from "@cubby/shared";
@@ -48,6 +49,27 @@ import { insertWithShortcode } from "./shortcode-utils";
 
 describe("activity image processing projection", () => {
   const ctx = withTestDb();
+
+  it("opens browser-carried internal Run identity through the canonical activity read", async () => {
+    const runId = await ensureRun(ctx.db, ctx.actor, { purpose: "background" });
+    const [saved] = await getDb(ctx.db)
+      .select({ shortcode: runTable.shortcode })
+      .from(runTable)
+      .where(eq(runTable.id, runId));
+    if (!saved) throw new Error("Synthetic browser Run unavailable");
+    const input = activityAttemptInput.parse({ id: runId });
+    const canonical = await activityDetail(ctx.db, null, {
+      ...input,
+      id: saved.shortcode,
+    });
+    expect(await activityDetail(ctx.db, null, input)).toEqual(canonical);
+    expect(await activityEvents(ctx.db, null, input)).toEqual(
+      await activityEvents(ctx.db, null, { ...input, id: saved.shortcode }),
+    );
+    await expect(
+      activityDetail(ctx.db, null, { ...input, id: crypto.randomUUID() }),
+    ).rejects.toThrow("Activity run was not found");
+  });
 
   it("keeps submission cost on its exact attempts and filters actual device execution", async () => {
     const uploaded = await createUploadedImageRecord(ctx.db, {
