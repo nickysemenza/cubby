@@ -359,7 +359,10 @@ research acceptance.
   selectors and existing order-detail URLs with accepted order lines shipped in
   [#1801](https://github.com/nickysemenza/cubby/pull/1801). The maintained skill
   recovers missing originals through owned email and authenticated account history
-  before broader name search. Validate a real plant and a real
+  before broader name search. Mail HTML links now use the shared bounded typed
+  observation links as well as readable text, so text truncation cannot hide exact
+  order/item leads; persisted original/replay and URL-policy coverage passes.
+  Deployment and real-model acceptance remain pending. Validate a real plant and a real
   hardware-retailer Product after deployment; old per-order source associations
   remain explicit gaps until a supported original is recovered. Do not invent
   historical mappings or treat a search match as proof of the purchased variant.

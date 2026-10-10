@@ -236,37 +236,38 @@ function readableMail(content: string) {
   try {
     original = JSON.parse(readable);
   } catch {
-    return readable;
+    return { text: readable, links: [] };
   }
   const parsed = mailEnvelope.safeParse(original);
-  if (!parsed.success) return readable;
+  if (!parsed.success) return { text: readable, links: [] };
   const { bodyHtml, ...body } = parsed.data.content;
   const html = bodyHtml ? wasm.compact_browser_page(bodyHtml, "") : null;
-  return JSON.stringify({
-    ...parsed.data,
-    content: {
-      ...body,
-      htmlText: html?.text ?? null,
-      links:
-        html?.links.map(({ href, text }) => ({ url: href, label: text })) ?? [],
-    },
-  });
+  return {
+    links: html?.links ?? [],
+    text: JSON.stringify({
+      ...parsed.data,
+      content: {
+        ...body,
+        htmlText: html?.text ?? null,
+        links:
+          html?.links.map(({ href, text }) => ({ url: href, label: text })) ??
+          [],
+      },
+    }),
+  };
 }
 
 function pageObservation(
   input: z.output<typeof retentionInput>,
   page: CompactedResearchPage | null,
+  mail: ReturnType<typeof readableMail> | null,
   structured: ReturnType<typeof structuredProductsFromJsonLd> | null,
   capturedAt: string,
 ): ResearchObservation {
   const metadata = input.sourceMetadata;
   const sourceURL = publicURL(metadata.sourceURL);
   const servedURL = publicURL(metadata.servedURL ?? metadata.sourceURL);
-  const text =
-    page?.text ??
-    (["mail_message", "upload_evidence"].includes(input.kind)
-      ? readableMail(input.content)
-      : input.content);
+  const text = page?.text ?? mail?.text ?? input.content;
   return {
     sourceURL,
     servedURL,
@@ -285,7 +286,7 @@ function pageObservation(
     variantMarkers: (page?.variant_markers ?? [])
       .map((marker) => marker.slice(0, 500))
       .slice(0, 50),
-    links: (page?.links ?? [])
+    links: (page?.links ?? mail?.links ?? [])
       .flatMap((link, index) => {
         const url = publicURL(link.href);
         return url
@@ -314,6 +315,9 @@ async function deriveObservation(
   const page = ["mail_message", "upload_evidence"].includes(input.kind)
     ? null
     : wasm.compact_browser_page(input.content, servedURL ?? "");
+  const mail = ["mail_message", "upload_evidence"].includes(input.kind)
+    ? readableMail(input.content)
+    : null;
   const structured =
     page && servedURL
       ? structuredProductsFromJsonLd({
@@ -324,7 +328,7 @@ async function deriveObservation(
       : null;
   return retainedResearchObservation.parse({
     evidenceId,
-    observation: pageObservation(input, page, structured, capturedAt),
+    observation: pageObservation(input, page, mail, structured, capturedAt),
     identifierCandidates: await identifierCandidates(
       structured,
       servedURL,
