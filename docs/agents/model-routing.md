@@ -40,8 +40,30 @@ contract.
 | Second review: production migration or major infra change | `gpt-6-astra` / high                        |
 | Implementation and review disagree on something material  | fable (`claude-fable-5-1`) / high           |
 
-Opus at medium implements whatever the main session delegates, including long
-mechanical bodies; Sonnet and Terra are no longer routine implementation lanes.
+### Trial: Codex implementation lane (from 2026-10-09)
+
+To move implementation load off Claude, a trial routes delegated work as
+follows. It governs development agents only; the production research runtime's
+Luna/Sol routing (#1803) is separate.
+
+| Work                                                         | Model / effort                       |
+| ------------------------------------------------------------ | ------------------------------------ |
+| Implementing an approved brief, one commit-sized step        | `gpt-6-luna` / high                  |
+| Cross-subsystem, ambiguous brief, or hard diagnosis          | opus / medium                        |
+| PR review, default                                           | `gpt-6.1-sol` / medium               |
+| PR review of write-path enforcement, money, migrations, auth | `gpt-6.1-sol` / high                 |
+| Search and extraction                                        | haiku (the alias is Haiku 5.5) / low |
+
+First result (the classification-in-the-manifest PR): Luna at medium finished
+narrow mechanical steps but stopped partway, or skipped the requested tests,
+on every step spanning several layers with database tests, so the lane runs
+at high. Brief one commit-sized step at a time, name the exact test command,
+and have the root agent write the regression tests a step skipped. Migrations
+stay with the root agent. Recheck after about ten PRs: rework rounds per PR,
+review findings, and Claude token share.
+
+Outside the trial, Opus at medium implements whatever the main session
+delegates, including long mechanical bodies; Sonnet and Terra are no longer routine implementation lanes.
 The full-repository audit (`.claude/skills/repo-audit`) is the one exception:
 its workflow declares its own measured audit lanes.
 A Codex main session reaches the Opus lane through T3 `delegate_task`.
