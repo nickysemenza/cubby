@@ -33,6 +33,7 @@ import { withInvocationTrace } from "~/server/tracing";
 
 import { connectedChatGptInference } from "../ai/chatgpt/client";
 import { gatewayEnvironment } from "../ai/gateway";
+import { testDurationOverrideMs } from "../test-duration-override";
 import { workerSentryOptions } from "../worker-sentry";
 import { purchaseAgentMcpTools, runServicesFor } from "./agent-services";
 
@@ -71,9 +72,7 @@ function purchaseAgentEnvironment(
     services: runServicesFor(env, ctx, runId),
     mcpTools: purchaseAgentMcpTools,
     ...(testModel && { testModel }),
-    ...(env.CUBBY_TEST_SETTLEMENT_POLL_MS && {
-      settlementPollMs: Number(env.CUBBY_TEST_SETTLEMENT_POLL_MS),
-    }),
+    settlementPollMs: testDurationOverrideMs(env.CUBBY_TEST_SETTLEMENT_POLL_MS),
   };
 }
 
