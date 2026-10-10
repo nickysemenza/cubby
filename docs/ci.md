@@ -11,7 +11,9 @@ deployment never waits for post-merge CI.
 
 `ci.yaml` holds only those checks, so every job in a PR's run graph gates it.
 The long native and Tester Army journeys live in `e2e-journeys.yaml`: manual
-dispatch with a `journey` input, plus the weekly Tester Army import run.
+dispatch with a `journey` input, a PR label (`simulator-e2e`, `tester-army`,
+`tester-army:ios`, `tester-army:import`) that runs it on that PR, and the
+weekly Tester Army import run.
 
 ## Cache keys and the remote cache
 

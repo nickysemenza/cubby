@@ -1,8 +1,14 @@
 name: E2E journeys
 
-# Long native and Tester Army journeys; never a merge gate. PR checks live in
+# Long native and Tester Army journeys; never a merge gate. Run one by manual
+# dispatch or by labeling a PR (simulator-e2e, tester-army, tester-army:ios,
+# tester-army:import). PR checks live in
 # ci.yaml, so a PR's run graph shows only what gates it.
 on:
+  # A label on a PR runs its journey on the PR head as an informational
+  # check, again on each push while the label stays.
+  pull_request:
+    types: [labeled, synchronize]
   schedule:
     # Weekly live Tester Army import journeys (the coupled harness).
     - cron: "17 9 * * 1"
@@ -21,7 +27,7 @@ on:
         default: simulator-search
 
 concurrency:
-  group: ${{ github.workflow }}-${{ github.ref }}-${{ inputs.journey }}
+  group: ${{ github.workflow }}-${{ github.ref }}-${{ inputs.journey || github.event.label.name || 'push' }}
   cancel-in-progress: true
 
 permissions:
@@ -36,7 +42,7 @@ env:
 jobs:
   simulator-e2e:
     name: iPhone simulator E2E (manual)
-    if: startsWith(inputs.journey, 'simulator-')
+    if: startsWith(inputs.journey, 'simulator-') || (github.event_name == 'pull_request' && contains(github.event.pull_request.labels.*.name, 'simulator-e2e') && (github.event.action != 'labeled' || github.event.label.name == 'simulator-e2e'))
     runs-on: macos-26
     timeout-minutes: 40
     steps:
@@ -127,7 +133,7 @@ jobs:
 
   tester-army-web:
     name: Tester Army web (manual)
-    if: inputs.journey == 'tester-army-web' || inputs.journey == 'tester-army-both'
+    if: inputs.journey == 'tester-army-web' || inputs.journey == 'tester-army-both' || (github.event_name == 'pull_request' && contains(github.event.pull_request.labels.*.name, 'tester-army') && (github.event.action != 'labeled' || github.event.label.name == 'tester-army'))
     runs-on: ubuntu-latest
     timeout-minutes: 25
     env:
@@ -185,7 +191,7 @@ jobs:
 
   tester-army-import:
     name: Tester Army import journeys (manual or weekly, live models)
-    if: github.event_name == 'schedule' || inputs.journey == 'tester-army-import'
+    if: github.event_name == 'schedule' || inputs.journey == 'tester-army-import' || (github.event_name == 'pull_request' && contains(github.event.pull_request.labels.*.name, 'tester-army:import') && (github.event.action != 'labeled' || github.event.label.name == 'tester-army:import'))
     runs-on: ubuntu-latest
     timeout-minutes: 30
     env:
@@ -220,7 +226,7 @@ jobs:
 
   tester-army-ios:
     name: Tester Army iOS (manual)
-    if: inputs.journey == 'tester-army-ios' || inputs.journey == 'tester-army-both'
+    if: inputs.journey == 'tester-army-ios' || inputs.journey == 'tester-army-both' || (github.event_name == 'pull_request' && contains(github.event.pull_request.labels.*.name, 'tester-army:ios') && (github.event.action != 'labeled' || github.event.label.name == 'tester-army:ios'))
     runs-on: macos-26
     timeout-minutes: 40
     env:
