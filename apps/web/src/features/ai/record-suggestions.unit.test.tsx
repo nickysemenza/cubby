@@ -343,7 +343,10 @@ describe("record suggestions", () => {
     const view = render(<Cell name="red apple" />, {
       wrapper: harness.wrapper,
     });
-    await screen.findByRole("button", { name: "Accept suggested value" });
+    // The value is inert inside the button, so its text names the button.
+    await screen.findByRole("button", {
+      name: /^Accept suggested value: \S/,
+    });
     expect(screen.queryByRole("button", { name: "Use suggestion" })).toBeNull();
     fireEvent.click(screen.getByRole("button", { name: "Suggestion actions" }));
     fireEvent.click(
@@ -351,7 +354,7 @@ describe("record suggestions", () => {
     );
     await waitFor(() => expect(misses).toHaveLength(1));
     expect(
-      screen.queryByRole("button", { name: "Accept suggested value" }),
+      screen.queryByRole("button", { name: /^Accept suggested value/ }),
     ).toBeNull();
 
     // Keeping the current value through the editor still rejects the answer.
@@ -367,7 +370,7 @@ describe("record suggestions", () => {
     await waitFor(() => expect(misses).toHaveLength(2));
     await waitFor(() =>
       expect(
-        screen.queryByRole("button", { name: "Accept suggested value" }),
+        screen.queryByRole("button", { name: /^Accept suggested value/ }),
       ).toBeNull(),
     );
 
@@ -376,7 +379,7 @@ describe("record suggestions", () => {
     expect(screen.getByText("row scoped")).toBeInTheDocument();
     expect(screen.queryByLabelText(/Food/)).toBeNull();
     expect(
-      screen.queryByRole("button", { name: "Accept suggested value" }),
+      screen.queryByRole("button", { name: /^Accept suggested value/ }),
     ).toBeNull();
   });
 

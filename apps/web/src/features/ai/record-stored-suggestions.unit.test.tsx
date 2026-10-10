@@ -400,10 +400,10 @@ describe("stored suggestions in generic list cells", () => {
     );
 
     expect(
-      await screen.findByRole("button", { name: "Accept suggested value" }),
+      await screen.findByRole("button", { name: /^Accept suggested value/ }),
     ).toBeInTheDocument();
     fireEvent.click(
-      screen.getByRole("button", { name: "Accept suggested value" }),
+      screen.getByRole("button", { name: /^Accept suggested value/ }),
     );
     await waitFor(() => expect(operations.accept).toHaveBeenCalledOnce());
     harness.dispose();
@@ -495,7 +495,7 @@ describe("stored suggestions in generic list cells", () => {
     });
     fireEvent.click(
       await screen.findByRole("button", {
-        name: "Accept suggested value",
+        name: /^Accept suggested value/,
       }),
     );
     await waitFor(() =>

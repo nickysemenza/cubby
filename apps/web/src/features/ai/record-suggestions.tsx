@@ -19,6 +19,7 @@ import {
 import {
   createContext,
   useContext,
+  useEffect,
   useRef,
   useState,
   type ContextType,
@@ -1253,6 +1254,27 @@ function LiveSuggestionCell({
   );
 }
 
+/** The live text of a rendered subtree — a reference value resolves its
+ * label asynchronously, so this follows the DOM rather than reading once. */
+function useRenderedText() {
+  const ref = useRef<HTMLSpanElement>(null);
+  const [text, setText] = useState("");
+  useEffect(() => {
+    const element = ref.current;
+    if (!element) return;
+    const read = () => setText(element.textContent?.trim() ?? "");
+    read();
+    const observer = new MutationObserver(read);
+    observer.observe(element, {
+      subtree: true,
+      childList: true,
+      characterData: true,
+    });
+    return () => observer.disconnect();
+  }, []);
+  return { ref, text };
+}
+
 function GhostSuggestionCell({
   context,
   record,
@@ -1283,10 +1305,14 @@ function GhostSuggestionCell({
   children: ReactNode;
 }) {
   const [editOpen, setEditOpen] = useState(false);
+  const valueText = useRenderedText();
   // Inert: a reference value renders as a navigating link, which would
   // swallow the click meant to accept it (and nest a link in a button).
+  // Inert content leaves the accessibility tree, so the button's name
+  // carries the rendered value text instead.
   const ghost = (
     <span
+      ref={valueText.ref}
       inert
       className="pointer-events-none inline-flex min-w-0 items-center gap-1 rounded-sm border border-dashed border-muted-foreground/50 px-1 opacity-65"
     >
@@ -1312,7 +1338,11 @@ function GhostSuggestionCell({
           variant="ghost"
           size="sm"
           className="h-6 max-w-full min-w-0 px-1"
-          aria-label="Accept suggested value"
+          aria-label={
+            valueText.text
+              ? `Accept suggested value: ${valueText.text}`
+              : "Accept suggested value"
+          }
           onClick={(event) => {
             event.stopPropagation();
             void accept();
