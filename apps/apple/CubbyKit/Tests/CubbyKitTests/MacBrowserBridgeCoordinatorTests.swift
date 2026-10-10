@@ -166,9 +166,11 @@
                         #"""
                         {"accounts":[
                           {"shortcode":"VACCT-AAAA","label":"Blocked","vendorName":"Example shop",
+                           "accountStatus":"active","connected":false,"lastSuccessAt":null,
                            "action":{"kind":"blocked","runId":"RUN-EXAMPLE","purpose":"product_enrichment"},
                            "line":"Finish selected work.","disabledReason":"Finish selected work."},
                           {"shortcode":"VACCT-BBBB","label":"Eligible","vendorName":"Example shop",
+                           "accountStatus":"active","connected":false,"lastSuccessAt":null,
                            "action":{"kind":"firstSync"},"line":"First sync.","disabledReason":null}
                         ]}
                         """#.utf8))

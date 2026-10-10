@@ -939,3 +939,18 @@ Media refusals use the canonical API error shape, preserving checksum, storage
 and admission diagnostics in both clients, including nested database causes and
 SQLSTATE; only credential-shaped values are scrubbed. Invalid query identifiers
 retain HTTP 400 and BAD_REQUEST classification; database failures retain the run stage.
+
+### Browser account status projection
+
+`run.syncPlan` keeps server broker connectivity separate from account status.
+A currently admitted Run's sign-in/offline pause takes precedence over the
+persisted VendorAccount status; resumed work falls back to that persisted status.
+A connected socket does not clear a sign-in/offline pause. Missing broker
+bindings return unknown connectivity; broker errors remain raw errors. Read only
+owned, enabled accounts before asking their broker. The last completed account Run
+time reuses the VendorAccount derived activity query; a later failed attempt cannot
+replace it. This timestamp is not proof of mailbox coverage or Product verification.
+Mac Browser Sync renders account status through the generic manifest enum labels,
+beside the shared admission plan and its Run links. Connection, sign-in and Run-completion
+events refresh the projection; the visible pane also refreshes every ten seconds for
+server-side changes. Closing the pane cancels that read-only refresh loop.

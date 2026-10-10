@@ -48,6 +48,117 @@ describe("account sync planning and start", () => {
     return { party, vendor, account, queue, events };
   };
 
+  // A live socket must not erase persisted sign-in/offline authorization, and a
+  // later failed attempt must not replace the last successful sync timestamp.
+  it("projects persisted account authorization separately from sync admission", async () => {
+    const { party, account } = await fixture();
+    await getDb(ctx.db)
+      .update(vendorAccount)
+      .set({ status: "paused_auth" })
+      .where(eq(vendorAccount.id, account.id));
+    const before = await loadSyncPlan(ctx.db, party.id, {});
+    expect(before.accounts[0]).toMatchObject({
+      accountStatus: "paused_auth",
+      lastSuccessAt: null,
+      action: { kind: "firstSync" },
+    });
+    await getDb(ctx.db)
+      .update(vendorAccount)
+      .set({ status: "paused_offline" })
+      .where(eq(vendorAccount.id, account.id));
+    expect(
+      (await loadSyncPlan(ctx.db, party.id, {})).accounts[0],
+    ).toMatchObject({
+      accountStatus: "paused_offline",
+      lastSuccessAt: null,
+    });
+  });
+
+  it("keeps the last completed account run when a later attempt fails", async () => {
+    const { party, account, queue } = await fixture();
+    const completed = await startAccountSync(
+      ctx.db,
+      party.id,
+      { vendorAccountId: account.shortcode },
+      queue,
+    );
+    const endedAt = new Date("2026-09-01T12:00:00Z");
+    await getDb(ctx.db)
+      .update(run)
+      .set({ status: "completed", endedAt })
+      .where(eq(run.shortcode, completed.runId));
+    const failed = await startAccountSync(
+      ctx.db,
+      party.id,
+      { vendorAccountId: account.shortcode },
+      queue,
+    );
+    await getDb(ctx.db)
+      .update(run)
+      .set({ status: "failed", endedAt: new Date("2026-09-02T12:00:00Z") })
+      .where(eq(run.shortcode, failed.runId));
+    expect(
+      (await loadSyncPlan(ctx.db, party.id, {})).accounts[0],
+    ).toMatchObject({
+      lastSuccessAt: endedAt.toISOString(),
+      accountStatus: "active",
+    });
+  });
+
+  it.each(["paused_auth", "paused_offline"] as const)(
+    "projects a live %s Run even when the account remains active",
+    async (status) => {
+      const { party, account, queue } = await fixture();
+      const started = await startAccountSync(
+        ctx.db,
+        party.id,
+        { vendorAccountId: account.shortcode },
+        queue,
+      );
+      await getDb(ctx.db)
+        .update(run)
+        .set({ status })
+        .where(eq(run.shortcode, started.runId));
+      expect(
+        (await loadSyncPlan(ctx.db, party.id, {})).accounts[0],
+      ).toMatchObject({
+        accountStatus: status,
+        action: { kind: "resume", status },
+      });
+      await getDb(ctx.db)
+        .update(run)
+        .set({ status: "running" })
+        .where(eq(run.shortcode, started.runId));
+      expect(
+        (await loadSyncPlan(ctx.db, party.id, {})).accounts[0],
+      ).toMatchObject({ accountStatus: "active" });
+    },
+  );
+
+  it("reads broker connectivity only for the selected member-owned account", async () => {
+    const { party, account } = await fixture();
+    const reads: string[] = [];
+    const result = await loadSyncPlan(
+      ctx.db,
+      party.id,
+      { vendorAccountId: account.shortcode },
+      {
+        connected: async (id) => {
+          reads.push(id);
+          return false;
+        },
+      },
+    );
+    expect(reads).toEqual([account.id]);
+    expect(result.accounts[0]).toMatchObject({
+      connected: false,
+      accountStatus: "active",
+    });
+    expect(
+      (await loadSyncPlan(ctx.db, party.id, {})).accounts[0],
+    ).toMatchObject({ connected: null });
+  });
+
   it("plans first and incremental syncs, then resumes the same admitted run with its progress", async () => {
     const { party, account, queue, events } = await fixture();
     expect(

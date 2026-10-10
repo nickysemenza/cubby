@@ -1,5 +1,8 @@
 import { buildActorContext } from "@cubby/schemas/context";
-import type { LedgerPartyId } from "@cubby/schemas/identifiers";
+import type {
+  LedgerPartyId,
+  VendorAccountId,
+} from "@cubby/schemas/identifiers";
 import {
   syncPlanOutput,
   type SyncPlanInput,
@@ -21,6 +24,7 @@ import {
 import type { PurchaseAgentQueueProducer } from "~/server/purchase-agent-queue-types";
 import { getDb, notDeleted } from "~/server/repo/database-helpers";
 import { resolveOrThrow } from "~/server/repo/shortcode-resolver";
+import { loadVendorAccountRunActivity } from "~/server/repo/vendor-account";
 
 import { dispatchRunEvent } from "./dispatch";
 import { controlRun, startOrResumeRun } from "./run-service";
@@ -33,6 +37,7 @@ export async function loadSyncPlan(
   db: Database,
   partyId: LedgerPartyId,
   input: SyncPlanInput,
+  bridge?: { connected(accountId: VendorAccountId): Promise<boolean> },
 ) {
   const client = getDb(db);
   const accounts = await client
@@ -42,6 +47,7 @@ export async function loadSyncPlan(
       label: vendorAccount.label,
       vendorName: vendor.name,
       cursor: vendorAccount.cursor,
+      accountStatus: vendorAccount.status,
     })
     .from(vendorAccount)
     .innerJoin(
@@ -65,6 +71,10 @@ export async function loadSyncPlan(
       ),
     )
     .orderBy(vendorAccount.label, vendorAccount.shortcode);
+  const activity = await loadVendorAccountRunActivity(
+    db,
+    accounts.map((account) => account.id),
+  );
   return syncPlanOutput.parse({
     accounts: await Promise.all(
       accounts.map(async (account) => {
@@ -113,6 +123,14 @@ export async function loadSyncPlan(
           shortcode: account.shortcode,
           label: account.label,
           vendorName: account.vendorName,
+          accountStatus:
+            admission?.run.status === "paused_auth" ||
+            admission?.run.status === "paused_offline"
+              ? admission.run.status
+              : account.accountStatus,
+          connected: bridge ? await bridge.connected(account.id) : null,
+          lastSuccessAt:
+            activity.get(account.id)?.lastSuccessAt?.toISOString() ?? null,
           action,
           line,
           disabledReason,

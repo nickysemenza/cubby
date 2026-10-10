@@ -106,24 +106,29 @@ final class BrowserBridgeSettingsModel {
                 state.label = account.label
                 return state
             }
-        if rosterChanged {
-            let generation = syncPlanGeneration
-            Task { [weak self] in
-                guard let self, syncPlanGeneration == generation else { return }
-                await refreshSyncPlan()
-            }
+        if rosterChanged { requestSyncPlanRefresh() }
+    }
+
+    private func requestSyncPlanRefresh() {
+        let generation = syncPlanGeneration
+        Task { [weak self] in
+            guard let self, syncPlanGeneration == generation else { return }
+            await refreshSyncPlan()
         }
     }
 
     func setAccountStatus(_ status: BrowserBridgeConnectionStatus, accountID: String) {
         guard let index = accountStates.firstIndex(where: { $0.id == accountID }) else { return }
+        guard accountStates[index].connection != status else { return }
         accountStates[index].connection = status
+        requestSyncPlanRefresh()
     }
 
     func requireAuthentication(accountID: String, message: String) {
         guard let index = accountStates.firstIndex(where: { $0.id == accountID }) else { return }
         accountStates[index].needsAuthentication = true
         accountStates[index].error = message
+        requestSyncPlanRefresh()
     }
 
     func setAccountError(_ message: String?, accountID: String) {
@@ -152,6 +157,7 @@ final class BrowserBridgeSettingsModel {
         accountStates[index].error = nil
         accountStates[index].lastCompletedRunID = runID
         lastCompletedAt = .now
+        requestSyncPlanRefresh()
     }
 
     func raiseAuthenticationWindow(accountID: String) {
@@ -227,6 +233,7 @@ final class BrowserBridgeSettingsModel {
                 await refreshSyncPlan()
                 guard syncGeneration == generation else { return }
                 lastCompletedAt = .now
+                requestSyncPlanRefresh()
                 isSyncing = false
                 syncStartedAt = nil
             } catch {
