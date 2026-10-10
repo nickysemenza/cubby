@@ -100,8 +100,7 @@ export default defineConfig({
     {
       name: "Authenticated tests",
       testMatch: /\.spec\.ts$/,
-      testIgnore:
-        /(^|\/)(unauth\.[^/]*|field-guide-mobile|purchase-import-run)\.spec\.ts$/,
+      testIgnore: /(^|\/)(unauth\.[^/]*|purchase-import-run)\.spec\.ts$/,
       metadata: { authenticated: true },
       use: {
         ...devices["Desktop Chrome"],
@@ -115,15 +114,6 @@ export default defineConfig({
       metadata: { authenticated: true },
       use: {
         ...devices["Desktop Chrome"],
-      },
-    },
-    {
-      name: "Mobile Safari",
-      testMatch:
-        /(^|\/)(ai-usage|chatgpt-settings|field-guide-mobile|project-contribution|product-clarity|quality-explanations|spending-classification-review|record-emoji-categories)\.spec\.ts$/,
-      metadata: { authenticated: true },
-      use: {
-        ...devices["iPhone 17"],
       },
     },
   ],

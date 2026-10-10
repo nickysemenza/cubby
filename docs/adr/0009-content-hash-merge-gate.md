@@ -23,7 +23,8 @@ is roughly ten times the allowance.
   `apps/nx-cache` Worker over an R2 bucket), keyed by the hash of the
   target's inputs.
 - Test inputs are deliberately broad: every non-documentation file, the
-  lockfile, toolchain versions, and the CI configuration. Any code change
+  lockfile, and the CI configuration; the Apple lanes key on what the Apple
+  build reads. Any code change
   misses the cache. Rebases, documentation-only changes, and re-pushes of an
   already-tested tree hit it.
 - CI and the developer's Mac write to the cache; fork PRs receive no
