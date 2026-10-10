@@ -43,7 +43,9 @@ test("Run attention exposes a scoped child's failure and opens its inspector", a
   await attention.getByText("Failure details", { exact: true }).click();
   await expect(attention.getByText(diagnostic, { exact: true })).toBeVisible();
   await attention.getByRole("button", { name: "Show attention only" }).click();
-  await expect(page).toHaveURL(/attentionOnly=true/u);
+  await expect(
+    attention.getByRole("button", { name: "Show all statuses" }),
+  ).toBeVisible();
   const summary = page.getByRole("status", { name: "Matching attempts" });
   await expect(summary).toContainText("1 failed");
   await expect(summary).not.toContainText("completed");
