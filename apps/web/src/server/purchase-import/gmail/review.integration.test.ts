@@ -36,6 +36,37 @@ import {
 describe("Vendor order mail review", () => {
   const ctx = withTestDb();
 
+  it.each(["deleted", "excluded"] as const)(
+    "retains owned %s processing history after the original link is cleared",
+    async (status) => {
+      const f = await retainedReviewFixture();
+      const updatedAt = new Date("2026-10-02T13:00:00Z");
+      await getDb(ctx.db).insert(mailboxMessage).values({
+        ledgerPartyId: f.source.ledgerPartyId,
+        mailboxId: f.source.mailboxId,
+        messageId: f.source.messageId,
+        orderMailId: null,
+        classification: "related",
+        classificationVersion: "synthetic-classifier/v1",
+        checksum: f.source.rawChecksum,
+        status,
+        runId: f.receipt.runId,
+        updatedAt,
+      });
+      const result = await listVendorOrderMail(ctx.db, {
+        vendorId: f.vendor.shortcode,
+      });
+      const item = result.items.find(
+        (row) => row.messageId === f.source.messageId,
+      );
+      expect(item?.processing).toMatchObject({
+        status,
+        updatedAt: updatedAt.toISOString(),
+      });
+      expect(item?.researchRun).toBeNull();
+    },
+  );
+
   // Mail processing is not Purchase linking or Product verification. Its clock
   // comes from the exact owned mailbox ledger, never email receipt time.
   it("shows owned mail processing separately from accepted sources and reviewed links", async () => {

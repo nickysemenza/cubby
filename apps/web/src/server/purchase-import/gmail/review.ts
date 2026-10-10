@@ -237,13 +237,19 @@ export async function listVendorOrderMail(
     .leftJoin(
       mailboxMessage,
       and(
-        eq(mailboxMessage.orderMailId, orderMail.id),
         eq(mailboxMessage.ledgerPartyId, orderMail.ledgerPartyId),
         eq(mailboxMessage.mailboxId, orderMail.mailboxId),
         eq(mailboxMessage.messageId, orderMail.messageId),
       ),
     )
-    .leftJoin(run, and(eq(run.id, mailboxMessage.runId), notDeleted(run)))
+    .leftJoin(
+      run,
+      and(
+        eq(run.id, mailboxMessage.runId),
+        eq(mailboxMessage.orderMailId, orderMail.id),
+        notDeleted(run),
+      ),
+    )
     .where(
       and(
         or(
