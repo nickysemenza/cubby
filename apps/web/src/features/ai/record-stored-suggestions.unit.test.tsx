@@ -1,10 +1,27 @@
 import type { SuggestionReviewRow } from "@cubby/schemas/ai";
+import {
+  suggestionReviewListInput,
+  suggestionReviewListOut,
+} from "@cubby/schemas/ai";
 import { testShortcode } from "@cubby/schemas/testing";
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import {
+  fireEvent,
+  render,
+  renderHook,
+  screen,
+  waitFor,
+} from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 
 import { ai } from "~/integrations/tanstack-query/generated/catalog.gen";
 import { createBrowserTestHarness } from "~/lib/test/browser-harness";
+import { MobileCardView } from "~/ui/data-table/MobileCardView";
+import {
+  createCubbyColumnCollection,
+  createCubbyColumnHelper,
+  materializeCubbyColumns,
+  useCubbyTable,
+} from "~/ui/data-table/table-features";
 
 import type { EntitySuggestionsOperations } from "./field-suggestion";
 import {
@@ -17,7 +34,6 @@ import {
 const rowId = "11111111-1111-4111-8111-111111111111";
 const record = {
   id: testShortcode("product", "stored-suggestion"),
-  _id: "33333333-3333-4333-8333-333333333333",
   categoryId: null,
 };
 const suggestion = (overrides: Partial<SuggestionReviewRow> = {}) =>
@@ -25,7 +41,7 @@ const suggestion = (overrides: Partial<SuggestionReviewRow> = {}) =>
     id: rowId,
     runId: "22222222-2222-4222-8222-222222222222",
     entity: "product",
-    recordId: "33333333-3333-4333-8333-333333333333",
+    recordId: record.id,
     field: "categoryId",
     currentValue: null,
     suggestedValue: "CAT-2222",
@@ -35,6 +51,29 @@ const suggestion = (overrides: Partial<SuggestionReviewRow> = {}) =>
     correctValue: null,
     ...overrides,
   }) satisfies SuggestionReviewRow;
+
+function shortcodeSuggestion(recordId: string) {
+  return suggestion({ recordId });
+}
+
+function validatedStoredOperations(stored: SuggestionReviewRow[]) {
+  return {
+    list: vi.fn(
+      async (input: Parameters<StoredSuggestionOperations["list"]>[0]) => {
+        suggestionReviewListInput.parse(input);
+        return suggestionReviewListOut.parse(stored);
+      },
+    ),
+    accept: vi.fn(async ({ id }: { id: string }) => ({
+      id,
+      status: "applied" as const,
+    })),
+    reject: vi.fn(async ({ id }: { id: string }) => ({
+      id,
+      status: "rejected" as const,
+    })),
+  } satisfies StoredSuggestionOperations;
+}
 
 function setup(
   stored: SuggestionReviewRow[],
@@ -80,6 +119,164 @@ function setup(
 }
 
 describe("stored suggestions in generic list cells", () => {
+  it("loads a shortcode-only list row, renders its stored ghost, and bulk accepts it", async () => {
+    const publicId = record.id;
+    const harness = createBrowserTestHarness();
+    const operations = validatedStoredOperations([
+      shortcodeSuggestion(publicId),
+    ]);
+    render(
+      <RecordSuggestionsProvider
+        entity="product"
+        records={[record]}
+        fieldKeys={["categoryId"]}
+        operations={{
+          suggestFields: ai.suggestFields.withTransport(async () => ({
+            suggestions: {},
+            outcomes: {},
+          })),
+        }}
+        storedSuggestionOperations={operations}
+      >
+        <RecordFieldSuggestion
+          record={record}
+          field="categoryId"
+          surface="cell"
+          renderValue={(value) => (
+            <span>{String(value) === "CAT-2222" ? "Food" : String(value)}</span>
+          )}
+        >
+          <span>Current category</span>
+        </RecordFieldSuggestion>
+        <RecordSuggestionsBulkAction records={[record]} />
+      </RecordSuggestionsProvider>,
+      { wrapper: harness.wrapper },
+    );
+
+    expect(await screen.findByText("Food")).toBeInTheDocument();
+    expect(operations.list).toHaveBeenCalledWith({
+      entity: "product",
+      recordIds: [publicId],
+      fields: expect.any(Array),
+    });
+    fireEvent.click(
+      await screen.findByRole("button", { name: "Accept suggestions (1)" }),
+    );
+    await waitFor(() =>
+      expect(operations.accept).toHaveBeenCalledWith(
+        { id: rowId },
+        expect.anything(),
+      ),
+    );
+    harness.dispose();
+  });
+
+  it("shows and accepts a stored Addition in a mobile card", async () => {
+    const harness = createBrowserTestHarness();
+    const cardRecord = { ...record, name: "Synthetic product" };
+    const helper = createCubbyColumnHelper<typeof cardRecord>();
+    const columns = createCubbyColumnCollection<typeof cardRecord>((add) => {
+      add(
+        helper.accessor("name", {
+          header: "Name",
+          meta: { mobile: { slot: "title" } },
+        }),
+      );
+    });
+    const { result } = renderHook(() =>
+      useCubbyTable({
+        data: [cardRecord],
+        columns: materializeCubbyColumns(columns),
+        getRowId: (row) => row.id,
+        enableRowSelection: false,
+      }),
+    );
+    const operations = validatedStoredOperations([
+      shortcodeSuggestion(cardRecord.id),
+    ]);
+
+    render(
+      <RecordSuggestionsProvider
+        entity="product"
+        records={[cardRecord]}
+        fieldKeys={["categoryId"]}
+        operations={{
+          suggestFields: ai.suggestFields.withTransport(async () => ({
+            suggestions: {},
+            outcomes: {},
+          })),
+        }}
+        storedSuggestionOperations={operations}
+      >
+        <MobileCardView table={result.current} />
+      </RecordSuggestionsProvider>,
+      { wrapper: harness.wrapper },
+    );
+
+    expect(
+      await screen.findByRole("button", { name: "Accept suggested value" }),
+    ).toBeInTheDocument();
+    fireEvent.click(
+      screen.getByRole("button", { name: "Accept suggested value" }),
+    );
+    await waitFor(() => expect(operations.accept).toHaveBeenCalledOnce());
+    harness.dispose();
+  });
+
+  it("shows the current value before a stored Correction in a mobile card", async () => {
+    const harness = createBrowserTestHarness();
+    const cardRecord = { ...record, name: "Synthetic product" };
+    const helper = createCubbyColumnHelper<typeof cardRecord>();
+    const columns = createCubbyColumnCollection<typeof cardRecord>((add) => {
+      add(
+        helper.accessor("name", {
+          header: "Name",
+          meta: { mobile: { slot: "title" } },
+        }),
+      );
+    });
+    const { result } = renderHook(() =>
+      useCubbyTable({
+        data: [cardRecord],
+        columns: materializeCubbyColumns(columns),
+        getRowId: (row) => row.id,
+        enableRowSelection: false,
+      }),
+    );
+    const operations = validatedStoredOperations([
+      suggestion({
+        recordId: cardRecord.id,
+        field: "name",
+        currentValue: "Synthetic product",
+        suggestedValue: "Replacement product",
+        kind: "correction",
+      }),
+    ]);
+
+    render(
+      <RecordSuggestionsProvider
+        entity="product"
+        records={[cardRecord]}
+        fieldKeys={["name"]}
+        operations={{
+          suggestFields: ai.suggestFields.withTransport(async () => ({
+            suggestions: {},
+            outcomes: {},
+          })),
+        }}
+        storedSuggestionOperations={operations}
+      >
+        <MobileCardView table={result.current} />
+      </RecordSuggestionsProvider>,
+      { wrapper: harness.wrapper },
+    );
+
+    expect(await screen.findByText("Replacement product")).toBeInTheDocument();
+    expect(screen.getAllByText("Synthetic product").length).toBeGreaterThan(1);
+    expect(screen.getByLabelText("Suggested replacement")).toBeInTheDocument();
+    harness.dispose();
+  });
+
   it("renders an Addition ghost with the field's display label", async () => {
     const { harness } = setup([suggestion()]);
     expect(await screen.findByText("Food")).toBeInTheDocument();

@@ -789,7 +789,7 @@ describe("persisted Suggestion sweeps", () => {
     expect(
       await listPagePendingSuggestions(ctx.db, {
         entity: "product",
-        recordIds: [...new Set(rows.map((row) => row.recordId))],
+        recordIds: ids,
         fields: ["categoryId"],
       }),
     ).toHaveLength(0);
@@ -1298,7 +1298,7 @@ describe("persisted Suggestion sweeps", () => {
     expect(
       await listPagePendingSuggestions(ctx.db, {
         entity: "product",
-        recordIds: [row.recordId],
+        recordIds: [product.id],
         fields: ["categoryId"],
       }),
     ).toHaveLength(0);
@@ -1356,15 +1356,21 @@ describe("persisted Suggestion sweeps", () => {
     expect(
       await listPagePendingSuggestions(ctx.db, {
         entity: "product",
-        recordIds: [row.recordId],
+        recordIds: [product.id],
         fields: ["categoryId"],
       }),
-    ).toEqual([expect.objectContaining({ id: row.id, model: "typesafe/jev" })]);
+    ).toEqual([
+      expect.objectContaining({
+        id: row.id,
+        model: "typesafe/jev",
+        recordId: product.id,
+      }),
+    ]);
     await acceptSuggestion(ctx.db, context, { id: row.id });
     expect(
       await listPagePendingSuggestions(ctx.db, {
         entity: "product",
-        recordIds: [row.recordId],
+        recordIds: [product.id],
         fields: ["categoryId"],
       }),
     ).toHaveLength(0);

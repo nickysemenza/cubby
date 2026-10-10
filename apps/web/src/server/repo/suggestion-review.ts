@@ -20,7 +20,10 @@ import { getDb, withTransactionDatabase } from "~/server/repo/database-helpers";
 import { spendingClassificationRevision } from "~/server/repo/expense-category-resolution";
 import { applyFinanceCategorySuggestion } from "~/server/repo/finance-suggestion-context";
 import { SHORTCODE_TABLE } from "~/server/repo/generated/shortcode-tables.gen";
-import { resolveLiveShortcode } from "~/server/repo/shortcode-resolver";
+import {
+  resolveLiveShortcode,
+  resolveLiveShortcodes,
+} from "~/server/repo/shortcode-resolver";
 
 const rowIdInput = z.object({ id: z.string().uuid() });
 const filtersSchema = z.object({
@@ -33,7 +36,7 @@ const filtersSchema = z.object({
 const jsonSchema = z.json();
 const pageSuggestionsInput = z.object({
   entity: fieldSuggestionsInput.shape.entity,
-  recordIds: z.array(z.string().uuid()).max(250),
+  recordIds: z.array(z.string().min(1)).max(250),
   fields: z.array(z.string()).max(100),
 });
 const suggestionRowSchema = z.object({
@@ -86,14 +89,25 @@ export async function listPendingSuggestions(
   });
 }
 
-/** One bounded read for the visible list page. Stored rows take precedence over
- * live suggestions in cells; paired evaluation candidates never reach review. */
+/** One bounded shortcode-keyed read for the visible list page. Stored rows take
+ * precedence over live suggestions on list surfaces; paired evaluation
+ * candidates never reach review. */
 export async function listPagePendingSuggestions(
   db: Database,
   rawInput: z.input<typeof pageSuggestionsInput>,
 ) {
   const input = pageSuggestionsInput.parse(rawInput);
   if (!input.recordIds.length || !input.fields.length) return [];
+  const uuidByPublicId = await resolveLiveShortcodes(
+    db,
+    input.recordIds,
+    input.entity,
+  );
+  const publicIdByUuid = new Map<string, string>();
+  for (const [publicId, uuid] of uuidByPublicId)
+    publicIdByUuid.set(uuid, publicId);
+  const recordUuids = [...new Set(uuidByPublicId.values())];
+  if (recordUuids.length === 0) return [];
   const rows = await getDb(db)
     .select({ suggestion: suggestionTable, runInput: runTable.input })
     .from(suggestionTable)
@@ -102,7 +116,7 @@ export async function listPagePendingSuggestions(
       and(
         eq(suggestionTable.entity, input.entity),
         eq(suggestionTable.status, "pending"),
-        inArray(suggestionTable.recordId, input.recordIds),
+        inArray(suggestionTable.recordId, recordUuids),
         inArray(suggestionTable.field, input.fields),
       ),
     );
@@ -111,8 +125,15 @@ export async function listPagePendingSuggestions(
       .object({ decisionModel: z.string().optional() })
       .passthrough()
       .safeParse(runInput).data?.decisionModel;
-    return !suggestion.pairKey || decisionModel === suggestion.model
-      ? [suggestionRowSchema.parse(suggestion)]
+    const publicRecordId = publicIdByUuid.get(suggestion.recordId);
+    return (!suggestion.pairKey || decisionModel === suggestion.model) &&
+      publicRecordId
+      ? [
+          {
+            ...suggestionRowSchema.parse(suggestion),
+            recordId: publicRecordId,
+          },
+        ]
       : [];
   });
 }

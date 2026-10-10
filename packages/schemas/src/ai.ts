@@ -483,14 +483,14 @@ export const suggestionReviewListInput = z.object({
   minConfidence: z.number().min(0).max(1).default(0.5),
   runId: z.string().uuid().optional(),
   /** Bounded list-page read; both are supplied together by generic entity lists. */
-  recordIds: z.array(z.string().uuid()).max(250).optional(),
+  recordIds: z.array(z.string().min(1)).max(250).optional(),
   fields: z.array(z.string()).max(100).optional(),
 });
 export const suggestionReviewRowSchema = z.object({
   id: z.string().uuid(),
   runId: z.string().uuid(),
   entity: z.enum(shortcodeEntities),
-  recordId: z.string().uuid(),
+  recordId: z.string().min(1),
   field: z.string(),
   currentValue: z.json().nullable(),
   suggestedValue: z.json(),

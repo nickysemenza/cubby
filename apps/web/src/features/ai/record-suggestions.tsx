@@ -181,17 +181,13 @@ const productionStoredSuggestionOperations: StoredSuggestionOperations = {
   reject: (input) => ai.rejectSuggestion.call(input),
 };
 
-const recordInternalId = (record: unknown) => {
+const recordPublicId = (record: unknown) => {
   const parsed = z
     .looseObject({
       id: z.string(),
-      _id: z.string().optional(),
-      uuid: z.string().optional(),
     })
     .safeParse(record);
-  return parsed.success
-    ? (parsed.data.uuid ?? parsed.data._id ?? parsed.data.id)
-    : null;
+  return parsed.success ? parsed.data.id : null;
 };
 
 const storedSuggestionKey = (recordId: string, field: string) =>
@@ -536,7 +532,7 @@ function requestsForRecords(
           (target) =>
             !stored.has(
               storedSuggestionKey(
-                recordInternalId(raw) ?? parsed.data.id,
+                recordPublicId(raw) ?? parsed.data.id,
                 target.key,
               ),
             ),
@@ -688,7 +684,7 @@ function BoundRecordSuggestions({
   const targets = visibleSuggestTargets(entity, fieldKeys);
   const pageRecordIds = [
     ...new Set(
-      records.map(recordInternalId).filter((id): id is string => id !== null),
+      records.map(recordPublicId).filter((id): id is string => id !== null),
     ),
   ];
   const pageFields = entityFieldModels[entity].fields
@@ -796,7 +792,7 @@ function BoundRecordSuggestions({
     },
     storedCountFor: (items: readonly unknown[]) => {
       const ids = new Set(
-        items.map(recordInternalId).filter((id): id is string => id !== null),
+        items.map(recordPublicId).filter((id): id is string => id !== null),
       );
       return [...stored.values()].filter((item) => ids.has(item.recordId))
         .length;
@@ -1112,9 +1108,9 @@ export function RecordFieldSuggestion({
   const field = fieldModel?.key;
   if (!context || !field) return children;
   const storedSuggestion = context.stored.get(
-    storedSuggestionKey(recordInternalId(record) ?? "", field),
+    storedSuggestionKey(recordPublicId(record) ?? "", field),
   );
-  if (surface === "cell" && storedSuggestion)
+  if (storedSuggestion)
     return (
       <StoredSuggestionField
         context={context}
@@ -1290,7 +1286,7 @@ export function RecordSuggestionsBulkAction({
   const [errors, setErrors] = useState<string[]>([]);
   if (!context) return null;
   const ids = new Set(
-    records.map(recordInternalId).filter((id): id is string => id !== null),
+    records.map(recordPublicId).filter((id): id is string => id !== null),
   );
   const suggestions = [...context.stored.values()].filter((item) =>
     ids.has(item.recordId),
@@ -1325,8 +1321,16 @@ export function RecordRowSuggestions({ record }: { record: unknown }) {
   const visit = useSuggestionVisit();
   const parsed = recordSchema.safeParse(record);
   const row = parsed.success ? context?.rows.get(parsed.data.id) : undefined;
-  if (!context || !row) return null;
-  const fields = [...row.sourceByField.keys()].filter((field) => {
+  if (!context || !parsed.success) return null;
+  const storedFields = [...context.stored.values()]
+    .filter((suggestion) => suggestion.recordId === parsed.data.id)
+    .map((suggestion) => suggestion.field);
+  const fields = [
+    ...new Set([...(row?.sourceByField.keys() ?? []), ...storedFields]),
+  ].filter((field) => {
+    if (context.stored.has(storedSuggestionKey(parsed.data.id, field)))
+      return true;
+    if (!row) return false;
     const current = recordValue(context.entity, row.record, field).value;
     const suggestion = row.suggestions[field] ?? null;
     const question = JSON.stringify([
@@ -1347,20 +1351,33 @@ export function RecordRowSuggestions({ record }: { record: unknown }) {
   if (fields.length === 0) return null;
   return (
     <Stack gap="sm">
-      {fields.map((field) => (
-        <Stack key={field} gap="xs">
-          <Description size="xs">
-            {
-              entityFieldModels[context.entity].fields.find(
-                (candidate) => candidate.key === field,
-              )?.label
-            }
-          </Description>
-          <RecordFieldSuggestion record={record} field={field}>
-            {null}
-          </RecordFieldSuggestion>
-        </Stack>
-      ))}
+      {fields.map((field) => {
+        const stored = context.stored.get(
+          storedSuggestionKey(parsed.data.id, field),
+        );
+        const current = recordValue(context.entity, parsed.data, field);
+        return (
+          <Stack key={field} gap="xs">
+            <Description size="xs">
+              {
+                entityFieldModels[context.entity].fields.find(
+                  (candidate) => candidate.key === field,
+                )?.label
+              }
+            </Description>
+            <RecordFieldSuggestion record={record} field={field}>
+              {stored?.kind === "correction"
+                ? renderSuggestedListFieldValue(
+                    context.entity,
+                    parsed.data,
+                    field,
+                    current.value ?? "—",
+                  )
+                : null}
+            </RecordFieldSuggestion>
+          </Stack>
+        );
+      })}
     </Stack>
   );
 }
