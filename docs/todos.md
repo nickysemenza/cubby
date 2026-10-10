@@ -210,13 +210,16 @@ mailbox and authenticated-device acceptance only after explicit resumption.
   permissions and Mac-offline waits do not consume active time. Reuse Run state
   and existing usage/cost authorization; do not introduce another job engine.
 
-- 🤔 **Reviewed Vendor capture profiles.** Reuse the Vendor declaration for
-  learned order-history URLs, sign-in hosts, reviewed additional hosts and
-  pagination hints. A typed proposal through the shared research resolver and the existing Run
-  review is under implementation. Keep source/account/current-profile binding,
-  explicit member host authorization and stale-review refusal. Generation,
-  independent review, UI acceptance and delivery remain pending; page content
-  cannot grant itself host authorization.
+- ⏳ **Accept reviewed Vendor capture profiles.**
+  [#1831](https://github.com/nickysemenza/cubby/pull/1831) ships typed proposals
+  through the shared research resolver and existing Run review for learned
+  order-history URLs, sign-in hosts, reviewed additional hosts and pagination
+  hints. Source/account/current-profile binding, explicit member host
+  authorization and stale-review refusal remain deterministic. Generation,
+  focused regressions, independent review, synthetic UI acceptance, exact-head
+  hosted checks, merge and production deployment completed. Installed-client
+  review and real-source acceptance remain open while live research is paused;
+  page content cannot grant itself host authorization.
 
 - 🤔 **Recognize email-code and hosted sign-in.** Combine retained page
   interpretation with deterministic host/path checks. Exercise a hosted customer
@@ -273,13 +276,14 @@ mailbox and authenticated-device acceptance only after explicit resumption.
   through the existing server status contract instead of local socket state alone. Local
   browser execution now derives Run links from the existing command registry; the
   connection and import-plan columns remain distinct, and last commands link their
-  actual Run. Exact-revision UI and authenticated-device acceptance are still pending.
-  The shared sync plan now separates server broker connectivity from persisted
-  account status and reuses the VendorAccount last-completed-Run derivation.
-  Native account labels use the generic manifest. Focused persisted-state
-  regressions establish pause visibility, failed-attempt history and owned
-  broker reads; review, hosted delivery and synthetic UI acceptance remain
-  pending. Current target/step and installed-client acceptance remain open.
+  actual Run. The shared sync plan separates server broker connectivity from
+  persisted account status and reuses the VendorAccount last-completed-Run
+  derivation. Native account labels use the generic manifest.
+  [#1830](https://github.com/nickysemenza/cubby/pull/1830) completed focused
+  persisted-state regressions for pause visibility, failed-attempt history and
+  owned broker reads, independent review, exact-head hosted checks, merge,
+  deployment and synthetic UI acceptance. Current target/step and installed
+  authenticated-device acceptance remain open.
 
 - 🟢 **Generate remaining Mac agent-route contracts.** Accounts and debug batches
   now use shared generated Vendor/Run operations in
@@ -299,10 +303,13 @@ mailbox and authenticated-device acceptance only after explicit resumption.
   Keep this conditional; do not introduce another log table merely to remove the
   projection branches.
 
-- 🟢 **Complete Run cost/time explanations.** The Runs list already shows cost,
-  duration and attempts, and detail shows model timing. Add the missing browser
-  time/retry attribution to the same shared projection; unknown intervals and
-  prices stay unknown. Subscription savings use the existing AI usage ledger.
+- 🟢 **Complete Run cost/time explanations.** The Runs list shows cost,
+  duration and attempts, and detail shows model timing. Browser command receipt
+  time and distinct retry attribution ship through the shared projection in
+  [#1820](https://github.com/nickysemenza/cubby/pull/1820). Total active-time
+  accounting and subscription savings remain open; reuse the existing AI usage
+  ledger. Unknown intervals and prices stay unknown, and suspended wall time
+  never substitutes for active work.
 
 ## Runs, enrichment & browser capture
 
@@ -361,8 +368,10 @@ research acceptance.
   recovers missing originals through owned email and authenticated account history
   before broader name search. Mail HTML links now use the shared bounded typed
   observation links as well as readable text, so text truncation cannot hide exact
-  order/item leads; persisted original/replay and URL-policy coverage passes.
-  Deployment and real-model acceptance remain pending. Validate a real plant and a real
+  order/item leads. [#1835](https://github.com/nickysemenza/cubby/pull/1835)
+  completed persisted original/replay and URL-policy coverage, independent
+  review, exact-head hosted checks, merge and production deployment.
+  Real-model acceptance remains pending. Validate a real plant and a real
   hardware-retailer Product after deployment; old per-order source associations
   remain explicit gaps until a supported original is recovered. Do not invent
   historical mappings or treat a search match as proof of the purchased variant.
@@ -409,8 +418,9 @@ research acceptance.
   request-only delivery of repeated attachment bytes once, preserving every
   observation binding and the existing admission limit. Complete repeated order
   context sharing in [#1807](https://github.com/nickysemenza/cubby/pull/1807)
-  has independent review, exact-head hosted checks and scripted acceptance; it
-  merged, with production deployment still pending.
+  has independent review, exact-head hosted checks and scripted acceptance;
+  merge and production deployment completed. Real-model comparison remains
+  pending while live research is paused.
   Request-sharing changes must preserve every source binding and complete order
   context. Compare supported outcomes, physical calls and transmitted bytes on
   unchanged synthetic sources, then verify real-model quality only when live
