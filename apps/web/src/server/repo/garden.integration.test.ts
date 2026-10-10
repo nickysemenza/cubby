@@ -1,5 +1,6 @@
 import { and, eq } from "drizzle-orm";
 import { buildEntity } from "tooling/factories/build";
+import { taxonomyShortcode } from "tooling/product-category-fixtures";
 import { TEST_ACTOR, withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 
@@ -635,6 +636,34 @@ describe("garden workflows", () => {
     const ids = new Set(data.map((row) => row.id));
     expect(ids.has(fromSeed.id)).toBe(true);
     expect(ids.has(fromElsewhere.id)).toBe(false);
+  });
+
+  it("refuses a food Product as a planting source", async () => {
+    const crop = await createPlantFixture(
+      ctx.db,
+      { name: "Source policy crop" },
+      TEST_ACTOR,
+    );
+    const foodProduct = await createProductFixture(
+      ctx.db,
+      makeProductInput({
+        name: "Source policy food",
+        categoryId: taxonomyShortcode("food"),
+      }),
+      TEST_ACTOR,
+    );
+
+    await expect(
+      createPlanting(
+        ctx.db,
+        {
+          plantId: crop.id,
+          status: "planned",
+          sourceProductId: foodProduct.id,
+        },
+        TEST_ACTOR,
+      ),
+    ).rejects.toThrow(/planting source Product must be a garden product/);
   });
 
   it("plantingList activeOn scopes to a planting's live date window", async () => {

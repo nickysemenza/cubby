@@ -10,6 +10,7 @@ import {
   noUnboundedPageSizeRule,
 } from "./rules/generic-paths.ts";
 import { noErrorToastInHandlerRule } from "./rules/no-error-toast-in-handler.ts";
+import { noRawEnumLiteralInSqlRule } from "./rules/no-raw-enum-literal-in-sql.ts";
 import { noSwallowedCatchRule } from "./rules/no-swallowed-catch.ts";
 import { noUnsafeIdentifiersRule } from "./rules/no-unsafe-identifiers.ts";
 import { purchaseAgentBoundaryRule } from "./rules/purchase-agent-boundary.ts";
@@ -25,6 +26,7 @@ const cubbyPlugin = eslintCompatPlugin({
     "no-hand-parsed-create-input": noHandParsedCreateInputRule,
     "no-kernel-action-guard": noKernelActionGuardRule,
     "no-raw-console": noRawConsoleRule,
+    "no-raw-enum-literal-in-sql": noRawEnumLiteralInSqlRule,
     "no-raw-table": noRawTableRule,
     "no-unbounded-page-size": noUnboundedPageSizeRule,
     "no-swallowed-catch": noSwallowedCatchRule,

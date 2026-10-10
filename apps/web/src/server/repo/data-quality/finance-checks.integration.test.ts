@@ -503,6 +503,17 @@ describe("data quality: finance and project entities", () => {
       },
       TEST_ACTOR,
     );
+    const harvestGap = await createGardenEntry(
+      ctx.db,
+      {
+        locationId: bed.id,
+        kind: "harvest",
+        observedOn: "2026-08-01",
+        harvestAmount: null,
+        pendingImageIds: [],
+      },
+      TEST_ACTOR,
+    );
 
     const gapId = parseEntityId(
       "gardenEntry",
@@ -512,12 +523,20 @@ describe("data quality: finance and project entities", () => {
       "gardenEntry",
       (await resolveLiveShortcode(ctx.db, complete.id, "gardenEntry"))!,
     );
+    const harvestGapId = parseEntityId(
+      "gardenEntry",
+      (await resolveLiveShortcode(ctx.db, harvestGap.id, "gardenEntry"))!,
+    );
     const hydrated = await loadDataQualities(ctx.db, "gardenEntry", [
       gapId,
       completeId,
+      harvestGapId,
     ]);
     const gapChecks = hydrated.get(gapId)?.gaps.map((g) => g.check);
     expect(gapChecks).toContain("garden_entry_note");
+    expect(hydrated.get(harvestGapId)?.gaps.map((g) => g.check)).toContain(
+      "garden_entry_harvest_amount",
+    );
     expect(hydrated.get(completeId)).toMatchObject({
       status: "complete",
       gaps: [],

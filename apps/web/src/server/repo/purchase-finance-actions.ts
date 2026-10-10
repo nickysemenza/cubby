@@ -24,6 +24,7 @@ import {
   purchase,
 } from "~/server/db/schema";
 import { AppError, createAppError } from "~/server/errors/app-error";
+import { assertClassificationPolicies } from "~/server/repo/classification-field-policy";
 import { getDb, notDeleted } from "~/server/repo/database-helpers";
 import { validateExpenseInheritance } from "~/server/repo/expense-inheritance";
 import { getExpenseByShortcode } from "~/server/repo/expense/crud";
@@ -213,11 +214,7 @@ export async function checkSplitFor(
           ? await resolveOrThrow(db, "product", part.productId)
           : null;
         const lineKind = inferExpenseLineKind({ name: part.name, productId });
-        if (lineKind !== "principal" && productId !== null)
-          throw createAppError(
-            "CONSTRAINT_VIOLATION",
-            "Only principal Expenses may link a Product.",
-          );
+        assertClassificationPolicies("expense", { lineKind, productId });
         await validateExpenseInheritance(db, {
           lineKind,
           projectId: part.projectId

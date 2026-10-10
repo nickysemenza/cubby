@@ -506,11 +506,13 @@ export default defineEntity({
             field: "notes",
             byValue: { note: "required" },
             otherwise: "unknown",
+            gap: "garden_entry_note",
           },
           {
             field: "harvestAmount",
             byValue: { harvest: "required" },
             otherwise: "unknown",
+            gap: "garden_entry_harvest_amount",
           },
         ],
       },

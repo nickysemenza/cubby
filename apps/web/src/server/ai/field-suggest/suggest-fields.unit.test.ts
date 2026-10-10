@@ -733,6 +733,25 @@ describe("suggestFields", () => {
     },
   );
 
+  // Regression guard: a record panel asks for every target at once, so one
+  // refused target must not fail the request for the allowed ones.
+  it("drops a refused target and still suggests the allowed ones", async () => {
+    const jev = jevPortPicking("Kitchen Remodel");
+    const result = await suggestFields(
+      fakeDb,
+      fixtureRunId,
+      {
+        basisMode: "provided",
+        entity: "expense",
+        targets: ["projectId", "costType"],
+        basis: { name: "Sales tax", lineKind: "tax" },
+      },
+      { jev, registry: { "expense.projectId": fakeProjectSpec() } },
+    );
+    expect(result.suggestions.projectId).toBeUndefined();
+    expect(jev).toHaveBeenCalled();
+  });
+
   it("resolves automatic principal line kinds before asking for projects", async () => {
     const result = await suggestFields(
       fakeDb,

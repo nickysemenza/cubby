@@ -55,6 +55,7 @@ import {
 } from "~/server/ai/selection";
 import type { Database } from "~/server/db";
 import { createAppError } from "~/server/errors/app-error";
+import { classificationAllowsField } from "~/server/repo/classification-field-policy";
 import { classificationRefusesField } from "~/server/repo/classification-field-policy";
 import { resolveDraftExpenseFields } from "~/server/repo/expense-inheritance";
 import {
@@ -96,7 +97,7 @@ export interface SuggestFieldsPorts {
   jev?: JevPort;
   resolveLabels?: LabelResolverPort;
   force?: boolean;
-  /** Eval-only model override; production decisions continue to use routing. */
+  /** Pins the decision model (a Suggestion sweep or eval); otherwise routing samples. */
   decisionModel?: SupportedDecisionModel;
   /** Keep usage persistence disabled for read-only decision evaluations. */
   recordUsage?: boolean;
@@ -411,6 +412,7 @@ async function resolveReferenceTarget(
   rawBasis: RawBasis,
   usage: AiSelectionUsage,
   jev: JevPort | undefined,
+  decisionModel?: SupportedDecisionModel,
 ): Promise<TargetResolution> {
   const candidates = await spec.roster(db, resolvedBasis, rawBasis);
   const selectionSpec: AiSelectionSpec<unknown> = {
@@ -425,6 +427,7 @@ async function resolveReferenceTarget(
     candidates,
     usage,
     jev,
+    decisionModel,
   });
   if (!outcome.evaluated) return skipped("no_candidates");
   if (outcome.selected === null) {
@@ -501,6 +504,7 @@ async function resolveTextTarget(
   resolvedBasis: ResolvedBasis,
   usage: AiSelectionUsage,
   jev: JevPort | undefined,
+  decisionModel?: SupportedDecisionModel,
 ): Promise<TargetResolution> {
   const candidates = await spec.roster(db, resolvedBasis);
   const selectionSpec: AiSelectionSpec<string> = {
@@ -515,6 +519,7 @@ async function resolveTextTarget(
     candidates,
     usage,
     jev,
+    decisionModel,
   });
   if (!outcome.evaluated) return skipped("no_candidates");
   const alternatives = mapAlternatives(
@@ -571,7 +576,15 @@ async function resolveSpec(
   }) => void,
 ): Promise<TargetResolution> {
   if (spec.kind === "prune") {
-    return resolvePruneTarget(db, spec, resolvedBasis, rawBasis, usage, jev);
+    return resolvePruneTarget(
+      db,
+      spec,
+      resolvedBasis,
+      rawBasis,
+      usage,
+      jev,
+      decisionModel,
+    );
   }
   return resolveOneTarget(
     db,
@@ -625,9 +638,18 @@ async function resolveOneTarget(
       rawBasis,
       usage,
       jev,
+      decisionModel,
     );
   }
-  return resolveTextTarget(db, spec, subject, resolvedBasis, usage, jev);
+  return resolveTextTarget(
+    db,
+    spec,
+    subject,
+    resolvedBasis,
+    usage,
+    jev,
+    decisionModel,
+  );
 }
 
 /** A tag's stored removal reason for a Jev-classified (not deterministic)
@@ -671,6 +693,7 @@ async function resolvePruneTarget(
   rawBasis: RawBasis,
   usage: AiSelectionUsage,
   jev: JevPort | undefined,
+  decisionModel?: SupportedDecisionModel,
 ): Promise<TargetResolution> {
   const candidates = spec.candidates(resolvedBasis, rawBasis);
   if (candidates.length === 0) return skipped("no_candidates");
@@ -698,6 +721,7 @@ async function resolvePruneTarget(
       usage,
       allowNone: false,
       port: jev,
+      decisionModel,
     });
     const { redundant, genuine } = pruneJudgment(result);
     judged.push({ value, redundant, genuine });
@@ -864,7 +888,7 @@ export async function suggestFields(
   ports?: SuggestFieldsPorts,
 ): Promise<FieldSuggestionsOut> {
   const financeContext = await savedSuggestionContext(db, rawInput);
-  const input =
+  const classifiedInput =
     rawInput.entity === "expense"
       ? {
           ...rawInput,
@@ -874,15 +898,23 @@ export async function suggestFields(
           },
         }
       : rawInput;
-  if (
-    input.entity === "expense" &&
-    input.targets.includes("projectId") &&
-    input.basis.lineKind != null &&
-    input.basis.lineKind !== "principal"
-  ) {
+  // A record panel asks for every suggest target at once; a target its own
+  // classification refuses (a tax line's product) is dropped, and only a
+  // request left with nothing to suggest is refused.
+  const input = {
+    ...classifiedInput,
+    targets: classifiedInput.targets.filter((target) =>
+      classificationAllowsField(
+        classifiedInput.entity,
+        classifiedInput.basis,
+        target,
+      ),
+    ),
+  };
+  if (input.targets.length === 0) {
     throw createAppError(
       "SUGGEST_FIELD_FORBIDDEN",
-      "Only principal expense lines can receive project suggestions.",
+      `This record's classification refuses ${classifiedInput.targets.join(", ")}.`,
     );
   }
   // SAFETY: `input.entity` is validated by `fieldSuggestionsInput`'s

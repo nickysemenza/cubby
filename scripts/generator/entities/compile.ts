@@ -1732,6 +1732,41 @@ const parseDeclaration = (declared: DeclarationObject, context: string) => {
 
 // One compiler pass keeps cross-field capability errors attached to the exact
 // entity declaration rather than losing context across partial validators.
+const classificationPolicyGapKinds = (
+  policies: EntityDeclarationMetadata["capabilities"]["classificationPolicies"],
+  context: string,
+): Readonly<Record<string, "missing" | "defect">> => {
+  const entries = policies.flatMap((policy) =>
+    policy.target
+      ? []
+      : policy.fields.flatMap((field) => {
+          if (!field.gap) return [];
+          const outcomes = [...Object.values(field.byValue), field.otherwise];
+          const hasRequired = outcomes.includes("required");
+          const hasRefused = outcomes.includes("not_allowed");
+          if (hasRequired && hasRefused)
+            throw new EntityDeclarationError(
+              `${context}.classificationPolicies.${field.field}.gap ${field.gap} mixes required and not_allowed outcomes.`,
+            );
+          return [[field.gap, hasRequired ? "missing" : "defect"] as const];
+        }),
+  );
+  return Object.fromEntries(entries);
+};
+
+const assertPolicyGapChecksExist = (
+  gaps: Readonly<Record<string, "missing" | "defect">>,
+  dataQuality: EntityDeclarationMetadata["capabilities"]["dataQuality"],
+  context: string,
+): void => {
+  for (const gap of Object.keys(gaps)) {
+    if (dataQuality?.checks.some((check) => check.id === gap)) continue;
+    throw new EntityDeclarationError(
+      `${context}.classificationPolicies gap ${gap} must name a declared data-quality check.`,
+    );
+  }
+};
+
 export const compileEntity = (
   // oxlint-disable-next-line anti-slop/no-unknown-parameters -- imported declaration boundary
   value: unknown,
@@ -1789,6 +1824,15 @@ export const compileEntity = (
       `${context}.filters.descriptors[${index}]`,
     ),
   );
+  const policyGapKinds = classificationPolicyGapKinds(
+    declaration.capabilities.classificationPolicies,
+    context,
+  );
+  assertPolicyGapChecksExist(
+    policyGapKinds,
+    declaration.capabilities.dataQuality,
+    context,
+  );
   const {
     dataQuality,
     fieldModel,
@@ -1801,6 +1845,7 @@ export const compileEntity = (
     declaration.fields !== null,
     filterSchema !== null,
     context,
+    policyGapKinds,
   );
   const descriptorColumns = filterDescriptors.map(({ columnId }) => columnId);
   if (new Set(descriptorColumns).size !== descriptorColumns.length) {

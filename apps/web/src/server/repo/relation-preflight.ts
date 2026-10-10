@@ -34,7 +34,7 @@ import type {
 } from "@cubby/schemas/entity-integrity";
 import { toPublicImpact } from "@cubby/schemas/entity-integrity";
 import type { ProductId } from "@cubby/schemas/identifiers";
-import { projectResourceFeatures } from "@cubby/schemas/product-category-fields";
+import { projectResourceFeatures } from "@cubby/schemas/product-category-relations";
 import type { AppErrorReason } from "@cubby/shared";
 import { inArray, sql } from "drizzle-orm";
 

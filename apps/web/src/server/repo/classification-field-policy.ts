@@ -1,8 +1,10 @@
 import {
   type ClassifiedField,
+  columnClassificationPolicy,
   classificationReference,
   classificationValuesWhere,
   type DeclaredClassificationPolicyId,
+  type ClassificationPolicyId,
   declaredPoliciesGoverning,
   declaredClassificationPolicies,
   type FieldPolicyValue,
@@ -59,15 +61,30 @@ const classificationSource = (id: DeclaredClassificationPolicyId) =>
     : undefined;
 
 /** SQL: the record's classification sets `policy` for `field`. */
-export const classificationPolicySql = <
-  Id extends DeclaredClassificationPolicyId,
->(
+export const classificationPolicySql = <Id extends ClassificationPolicyId>(
   id: Id,
-  field: ClassifiedField<Id>,
+  field: Id extends DeclaredClassificationPolicyId
+    ? ClassifiedField<Id>
+    : string,
   policy: FieldPolicyValue,
   reference: SQL,
 ): SQL<boolean> => {
-  const values = classificationValuesWhere(id, field, policy);
+  if (id === "spendingCategory.productExpectation") {
+    const columnPolicy = columnClassificationPolicy(id);
+    if (columnPolicy.target.field !== field) return sql<boolean>`false`;
+    return sql<boolean>`EXISTS (
+      SELECT 1 FROM ${sql.identifier(columnPolicy.table)} classification_policy
+      WHERE classification_policy.id = ${reference}
+        AND classification_policy.${sql.identifier(columnPolicy.column)} = ${policy}
+        AND classification_policy."deletedAt" IS NULL
+    )`;
+  }
+  // SAFETY: column policies returned above, so both values are a declared id and field.
+  const values = classificationValuesWhere(
+    id as DeclaredClassificationPolicyId,
+    field as ClassifiedField<DeclaredClassificationPolicyId>,
+    policy,
+  );
   if (classificationReference(id) === null)
     return values.length
       ? sql<boolean>`${inArray(reference, values)}`
@@ -118,41 +135,11 @@ export async function classificationRefusesField(
   return false;
 }
 
-type ClassificationPolicyRow = Readonly<{
-  lineKind?: string | null;
-  lineBasis?: string | null;
-  type?: string | null;
-  productId?: string | null;
-  spendingCategoryId?: string | null;
-  projectId?: string | null;
-}>;
-
-const policyRowValue = (
-  row: ClassificationPolicyRow,
-  field: string,
-): string | null | undefined => {
-  switch (field) {
-    case "lineKind":
-      return row.lineKind;
-    case "lineBasis":
-      return row.lineBasis;
-    case "type":
-      return row.type;
-    case "productId":
-      return row.productId;
-    case "spendingCategoryId":
-      return row.spendingCategoryId;
-    case "projectId":
-      return row.projectId;
-    default:
-      return undefined;
-  }
-};
-
 /** Enforce every same-record, database-enforced classification policy. */
 export function assertClassificationPolicies(
   entity: string,
-  row: ClassificationPolicyRow,
+  // oxlint-disable-next-line anti-slop/no-unsafe-dictionary-type -- policy fields are manifest strings; this must read row[field] generically.
+  row: Readonly<Record<string, unknown>>,
 ): void {
   for (const [id, policy] of Object.entries(declaredClassificationPolicies)) {
     if (
@@ -161,9 +148,9 @@ export function assertClassificationPolicies(
       policy.target.reference !== null
     )
       continue;
-    const classifier = policyRowValue(row, policy.classifier);
+    const classifier = row[policy.classifier];
     for (const declaration of policy.fields) {
-      const value = policyRowValue(row, declaration.field);
+      const value = row[declaration.field];
       const status =
         (classifier === null || classifier === undefined
           ? undefined
@@ -173,7 +160,8 @@ export function assertClassificationPolicies(
       if (status === "not_allowed" && value !== null && value !== undefined) {
         throw createAppError(
           "CONSTRAINT_VIOLATION",
-          `${String(classifier)} may not set ${declaration.field} (${id}).`,
+          ("refusal" in declaration ? declaration.refusal : undefined) ??
+            `${String(classifier)} may not set ${declaration.field} (${id}).`,
         );
       }
       if (status === "required" && (value === null || value === undefined)) {
@@ -184,4 +172,63 @@ export function assertClassificationPolicies(
       }
     }
   }
+}
+
+/** Fields currently set that become forbidden after a same-record reclassification. */
+export function classificationFieldsToClear(
+  entity: string,
+  // oxlint-disable-next-line anti-slop/no-unsafe-dictionary-type -- source and target fields are manifest-declared strings.
+  current: Readonly<Record<string, unknown>>,
+  // oxlint-disable-next-line anti-slop/no-unsafe-dictionary-type -- source and target fields are manifest-declared strings.
+  update: Readonly<Record<string, unknown>>,
+): string[] {
+  const clear = new Set<string>();
+  for (const policy of Object.values(declaredClassificationPolicies)) {
+    if (
+      !policy.enforced ||
+      policy.target.entity !== entity ||
+      policy.target.reference !== null
+    )
+      continue;
+    const classifier = update[policy.classifier] ?? current[policy.classifier];
+    for (const declaration of policy.fields) {
+      if (
+        update[declaration.field] !== undefined ||
+        current[declaration.field] == null
+      )
+        continue;
+      const byValue: Readonly<Record<string, FieldPolicyValue>> =
+        declaration.byValue;
+      const status =
+        (classifier == null ? undefined : byValue[String(classifier)]) ??
+        declaration.otherwise;
+      if (status === "not_allowed") clear.add(declaration.field);
+    }
+  }
+  return [...clear];
+}
+
+/** Evaluate same-record declarations for a classifier basis. */
+export function classificationAllowsField(
+  entity: string,
+  // oxlint-disable-next-line anti-slop/no-unsafe-dictionary-type -- classifier fields are manifest-declared strings.
+  basis: Readonly<Record<string, unknown>>,
+  field: string,
+): boolean {
+  return Object.values(declaredClassificationPolicies).every((policy) => {
+    if (
+      policy.target.entity !== entity ||
+      policy.target.reference !== null ||
+      !policy.fields.some((item) => item.field === field)
+    )
+      return true;
+    const classifier = basis[policy.classifier];
+    const declaration = policy.fields.find((item) => item.field === field)!;
+    const byValue: Readonly<Record<string, FieldPolicyValue>> =
+      declaration.byValue;
+    return (
+      ((classifier == null ? undefined : byValue[String(classifier)]) ??
+        declaration.otherwise) !== "not_allowed"
+    );
+  });
 }

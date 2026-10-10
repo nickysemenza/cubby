@@ -96,6 +96,22 @@ describe("field resolution indicators", () => {
     expect(screen.queryByRole("link")).not.toBeInTheDocument();
   });
 
+  it("labels an empty allocation as following its source items", () => {
+    const resolution: FieldResolution = {
+      ...base,
+      mode: "allocated",
+      value: null,
+      source: "Follows items",
+      sourceEntity: null,
+    };
+    const { rerender } = render(
+      <FieldResolutionStatus resolution={resolution} />,
+    );
+    expect(screen.getByText("Follows items")).toBeInTheDocument();
+    rerender(<FieldResolutionStatus resolution={resolution} compact />);
+    expect(screen.getByText("Follows items")).toHaveClass("sr-only");
+  });
+
   // Regression: the source rendered as a bare shortcode link with no mark.
   it("names the source record in detail provenance", () => {
     const harness = createBrowserTestHarness();

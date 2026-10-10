@@ -1212,7 +1212,9 @@ admitting value, then emits `classification-field-policies.gen.ts`. A
 household-editable classification keeps its policy per row instead
 (SpendingCategory `productExpectation`), and `@cubby/schemas/classification-field-policy`
 registers both shapes behind one evaluator (`isFieldAllowed`,
-`classificationValuesWhere`, `impliedClassification`).
+`classificationValuesWhere`, `impliedClassification`). The server SQL evaluator
+also compiles column policies against their declared owner table, so inherited
+Expense category resolution and policy evaluation share the same path.
 
 ProductCategory `feature` is the first declared instance, resolved through the
 Product's category and its nearest bound ancestor. An ingredient or USDA link
@@ -1228,6 +1230,30 @@ unclassified record is not refused, since the write classifies it), and
 post-import auto-fill re-checks under its row lock. Each declared
 classification supplies its effective-value resolver in that server module's
 typed `classificationSources` map.
+
+A same-record policy reads the classifier from the governed row. Expense
+`lineKind` refuses a product, a stored spending category and a stored project
+on every line except `principal` — a tax, shipping, fee, tip or discount line
+always follows the split of the Purchase's item lines (shown as "Follows
+items") — and `lineBasis: allocation` refuses a product; Location `furniture`
+requires its Product; GardenEntry `kind` expects notes on a note and an amount
+on a harvest. `enforced: true` (same-record only) makes the generator emit one
+CHECK per field into the derived DDL, so every write path is refused by the
+database as well as by `assertClassificationPolicies`, which every write calls
+first; a field's `refusal` is the actionable message it raises, and its `gap`
+names the public data-quality check that reports a missing `required` value or
+a present `not_allowed` one. Reclassifying a row clears a stored field the new
+value refuses unless the same write sets it. The editor hides a field the
+record's classification refuses, and a Suggestion request drops refused
+targets, refusing the request only when none remain.
+
+A `relation: true` entry governs a relation the classified record takes part
+in instead of a stored field: ProductCategory `feature` admits a Product as a
+project tool only under Tools, Tool accessories and Software, and refuses a
+Food Product as a Planting source. Relation entries never imply a
+classification. Category change, Planting writes, project-tool attach and
+Product merge read them through `@cubby/schemas/product-category-relations`,
+which entity declarations must not import.
 
 ## Product classification and photos
 

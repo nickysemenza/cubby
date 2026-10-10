@@ -1,3 +1,4 @@
+import type { LocationType } from "@cubby/shared/location-type-theme";
 import { sql } from "drizzle-orm";
 
 import { location } from "~/server/db/schema";
@@ -7,6 +8,7 @@ import { locationAiDescriptionSql } from "~/server/repo/location/ai-description"
 import { defineEntityChecks } from "../registry";
 
 type Location = typeof location;
+const furnitureLocationType: LocationType = "furniture";
 
 const hasDisplayableImage = (t: Location) => sql`EXISTS (
   SELECT 1 FROM "EntityAttachment" dq_loc_img
@@ -26,7 +28,7 @@ export const locationChecks = defineEntityChecks({
         sql`(coalesce(trim(${locationAiDescriptionSql(t.id)}), '') = '')`,
     },
     location_furniture_counted: {
-      expected: (t) => sql`${t.type} = 'furniture'`,
+      expected: (t) => sql`${t.type} = ${furnitureLocationType}`,
       // Literal foreign-table SQL: the same alias-rewriting hazard as every
       // correlated subquery in this registry.
       missing: (t) => sql`EXISTS (

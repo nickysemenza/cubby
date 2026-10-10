@@ -23,6 +23,24 @@ const classifierValues = (
   return options.map((option) => option.value);
 };
 
+const assertPolicySubject = (
+  target: CompiledEntity,
+  fieldPolicy: DeclaredPolicy["fields"][number],
+  context: string,
+) => {
+  const isField = target.fieldModel.fields.some(
+    (field) => field.key === fieldPolicy.field,
+  );
+  if (fieldPolicy.relation && isField)
+    throw new EntityDeclarationError(
+      `${context} is a field of ${target.key}; drop \`relation\`.`,
+    );
+  if (!fieldPolicy.relation && !isField)
+    throw new EntityDeclarationError(
+      `${context} is not a field of ${target.key}.`,
+    );
+};
+
 const assertEnforcedIsSameRecord = (
   policy: DeclaredPolicy,
   context: string,
@@ -30,6 +48,29 @@ const assertEnforcedIsSameRecord = (
   if (policy.enforced && policy.target !== undefined)
     throw new EntityDeclarationError(
       `${context}.enforced applies only to same-record policies; a referenced classification cannot be a row CHECK.`,
+    );
+};
+
+const assertGapIsValid = (
+  policy: DeclaredPolicy,
+  field: DeclaredPolicy["fields"][number],
+  context: string,
+  seen: Set<string>,
+): void => {
+  if (!field.gap) return;
+  if (policy.target !== undefined)
+    throw new EntityDeclarationError(
+      `${context}.gap applies only to same-record policies.`,
+    );
+  if (seen.has(field.gap))
+    throw new EntityDeclarationError(
+      `${context}.gap ${field.gap} is duplicated.`,
+    );
+  seen.add(field.gap);
+  const outcomes = [...Object.values(field.byValue), field.otherwise];
+  if (outcomes.includes("required") === outcomes.includes("not_allowed"))
+    throw new EntityDeclarationError(
+      `${context}.gap needs required or not_allowed outcomes, but not both.`,
     );
 };
 
@@ -45,6 +86,7 @@ export const validateClassificationPolicies = (
 ): void => {
   const byKey = new Map(entities.map((entity) => [entity.key, entity]));
   for (const owner of entities) {
+    const seenGaps = new Set<string>();
     for (const [index, policy] of owner.classificationPolicies.entries()) {
       const context = `${owner.key}.capabilities.classificationPolicies[${index}]`;
       const values = classifierValues(owner, policy, context);
@@ -74,17 +116,18 @@ export const validateClassificationPolicies = (
         if (seen.has(fieldPolicy.field))
           throw new EntityDeclarationError(`${fieldContext} is duplicated.`);
         seen.add(fieldPolicy.field);
-        if (!target.fieldModel.fields.some((f) => f.key === fieldPolicy.field))
-          throw new EntityDeclarationError(
-            `${fieldContext} is not a field of ${target.key}.`,
-          );
+        assertPolicySubject(target, fieldPolicy, fieldContext);
         for (const value of Object.keys(fieldPolicy.byValue)) {
           if (!values.includes(value))
             throw new EntityDeclarationError(
               `${fieldContext}.byValue: ${value} is not a ${policy.classifier} value.`,
             );
         }
-        if (fieldPolicy.otherwise !== "not_allowed") continue;
+        assertGapIsValid(policy, fieldPolicy, fieldContext, seenGaps);
+        // Relations never imply a classification, so they may admit several
+        // values; only refused-by-default fields carry implying evidence.
+        if (fieldPolicy.relation || fieldPolicy.otherwise !== "not_allowed")
+          continue;
         const admitting = Object.entries(fieldPolicy.byValue).filter(
           ([, value]) => value !== "not_allowed",
         );
@@ -140,6 +183,9 @@ export const renderClassificationPolicyArtifacts = (
     "    field: string;\n" +
     "    byValue: Readonly<Record<string, FieldPolicyValue>>;\n" +
     "    otherwise: FieldPolicyValue;\n" +
+    "    relation: boolean;\n" +
+    "    refusal?: string;\n" +
+    "    gap?: string;\n" +
     "  }>[];\n" +
     "}>;\n\n" +
     `export const declaredClassificationPolicies = {\n${entries.join("\n")}\n} as const satisfies Record<string, DeclaredClassificationPolicy>;\n`;

@@ -7,7 +7,7 @@ import {
   isProjectResourceFeature,
   projectResourceFeatureLabels,
   projectResourceFeatures,
-} from "@cubby/schemas/product-category-fields";
+} from "@cubby/schemas/product-category-relations";
 import type {
   ProductProjectUsesOut,
   ProjectResourceOut,

@@ -28,12 +28,20 @@ const columnClassificationPolicies = {
   "spendingCategory.productExpectation": {
     owner: "spendingCategory",
     column: "productExpectation",
+    table: "SpendingCategory",
     target: { entity: "expense", field: "productId" },
   },
 } as const;
-type ColumnPolicyId = keyof typeof columnClassificationPolicies;
+export type ColumnClassificationPolicyId =
+  keyof typeof columnClassificationPolicies;
+type ColumnPolicyId = ColumnClassificationPolicyId;
 
-type ClassificationPolicyId = DeclaredClassificationPolicyId | ColumnPolicyId;
+export type ClassificationPolicyId =
+  | DeclaredClassificationPolicyId
+  | ColumnPolicyId;
+
+export const columnClassificationPolicy = (id: ColumnPolicyId) =>
+  columnClassificationPolicies[id];
 
 const isColumnPolicy = (id: ClassificationPolicyId): id is ColumnPolicyId =>
   id in columnClassificationPolicies;
@@ -42,6 +50,7 @@ type FieldDeclaration = Readonly<{
   field: string;
   byValue: Readonly<Partial<Record<string, FieldPolicyValue>>>;
   otherwise: FieldPolicyValue;
+  relation: boolean;
 }>;
 
 const declaredFields = (
@@ -105,7 +114,8 @@ export function impliedClassification<
 ): ClassificationValue<Id> | null {
   const presentFields: ReadonlySet<string> = present;
   for (const declaration of declaredFields(id)) {
-    if (declaration.otherwise !== "not_allowed") continue;
+    if (declaration.relation || declaration.otherwise !== "not_allowed")
+      continue;
     if (!presentFields.has(declaration.field)) continue;
     // The generator proves exactly one admitting value per refused field.
     const admitting = declaredClassificationPolicies[id].values.find(

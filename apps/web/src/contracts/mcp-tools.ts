@@ -11,7 +11,7 @@ import {
   productMcpDetailOut,
   productMcpOut,
 } from "@cubby/schemas/product";
-import { projectResourceFeatureLabels } from "@cubby/schemas/product-category-fields";
+import { projectResourceFeatureLabels } from "@cubby/schemas/product-category-relations";
 import {
   recipesUsingIngredientOut,
   recipeTagsOut,

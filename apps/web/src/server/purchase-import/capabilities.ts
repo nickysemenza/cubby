@@ -72,11 +72,11 @@ const capabilityMatrix = {
   ]),
   // Runs that only group AI work never authorize purchase-agent writes.
   ai_suggest: new Set(),
+  suggestion_sweep: new Set(),
   background: new Set(),
   file_import: new Set(),
   mail_search: new Set(),
   mail_discovery: new Set(),
-  suggestion_sweep: new Set(),
 } satisfies Record<RunPurpose, ReadonlySet<Capability>>;
 
 /**

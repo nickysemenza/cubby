@@ -31,7 +31,7 @@ function ExpenseProjectField({ expense }: { expense: ExpenseOut }) {
   });
   return (
     <Stack gap="xs">
-      {expense.lineKind !== "principal" ? (
+      {expense.fieldResolutions?.projectId?.mode === "allocated" ? (
         <Stack gap="xs">
           {(expense.projectAllocations ?? []).map((share) => (
             <div
@@ -67,7 +67,7 @@ function ExpenseProjectField({ expense }: { expense: ExpenseOut }) {
       ) : projectField ? (
         renderDetailFieldValue("expense", expense, projectField)
       ) : null}
-      {expense.lineKind === "principal" ? (
+      {expense.fieldResolutions?.projectId?.mode !== "allocated" ? (
         <ProjectSuggestionChips
           expense={expense}
           isPending={update.isPending}
