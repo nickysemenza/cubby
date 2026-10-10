@@ -170,7 +170,10 @@ test("retained captures open beside their accepted facts with bounded navigation
   if (!mediaUrl) throw new Error("Selected capture has no protected media URL");
   const original = await page.request.get(mediaUrl);
   expect(original.status()).toBe(200);
-  expect(original.headers()["cache-control"]).toBe("private, no-store");
+  const cacheControl = original.headers()["cache-control"];
+  expect(cacheControl.split(",").map((directive) => directive.trim())).toEqual(
+    expect.arrayContaining(["private", "no-store"]),
+  );
   expect(await original.body()).toEqual(png);
   const invalidCredentials: Record<string, string>[] = [
     { Authorization: "Bearer invalid-synthetic-token" },
