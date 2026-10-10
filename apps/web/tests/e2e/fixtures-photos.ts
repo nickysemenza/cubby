@@ -126,7 +126,11 @@ export const attachProductImagePrerequisite = async (
   );
 
 /** Durable failed history only; this fixture never dispatches or calls AI. */
-export async function seedActiveResearchHistory(page: Page, name: string) {
+export async function seedActiveResearchHistory(
+  page: Page,
+  name: string,
+  childTrigger: "discovery" | "ephemeral" = "discovery",
+) {
   const db = getFixtureDb();
   const actorUserId = await fixtureUserId(page);
   const party = await ensureMemberParty(page, name);
@@ -160,7 +164,7 @@ export async function seedActiveResearchHistory(page: Page, name: string) {
       ...values,
       shortcode: generateShortcode("run"),
       purpose: "mail_import",
-      trigger: "discovery",
+      trigger: childTrigger,
       status: "running",
       parentRunId: root.id,
     })
@@ -170,6 +174,7 @@ export async function seedActiveResearchHistory(page: Page, name: string) {
     rootId: root.shortcode,
     childId: child.shortcode,
     vendorId: vendor.shortcode,
+    name,
   };
 }
 

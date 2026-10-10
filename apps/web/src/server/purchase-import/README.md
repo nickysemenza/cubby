@@ -47,6 +47,8 @@ scope filter still applies, including to descendant attempts beneath completed
 parents. Its five newest matching attempts show subjects, retained steps and raw
 failures, then open the existing inspector; the full attention filter remains
 paged. Read refreshes do not resume research or authorize inference.
+The Run declaration owns the attention URL key and its generated string codec;
+attention narrows the effective scope without clearing default exclusions.
 
 Product and Purchase research history use the shared entity report and record
 renderer on web and Apple clients. Each attempt shows its Run lifecycle alongside

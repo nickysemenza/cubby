@@ -19,7 +19,7 @@ const searchSchema = z.object({
   kind: activityKind.optional().catch(undefined),
   purpose: z.string().optional().catch(undefined),
   state: z.string().optional().catch(undefined),
-  attentionOnly: z.boolean().optional().catch(undefined),
+  attentionOnly: z.enum(["true", "false"]).optional().catch(undefined),
   status: z.string().optional().catch(undefined),
   trigger: runTrigger.optional().catch(undefined),
   routine: z.enum(["true", "false"]).optional().catch(undefined),
@@ -64,13 +64,13 @@ function RunHistorySlot({ search, navigate }: ListSlotProps) {
   // is the person's choice of what to see; the default only opens a bare list.
   const namesFilter =
     Boolean(parsed.kind) ||
-    parsed.attentionOnly === true ||
     runFilterUrlKeys.some((key) => Boolean(search[key]));
   const hasDefaultFilter = hiddenByDefault.length > 0 || routineHiddenByDefault;
   const hideDefault =
     hasDefaultFilter && !namesFilter && parsed.filters !== "none";
   const filters = {
     ...parsed,
+    attentionOnly: parsed.attentionOnly === "true" ? true : undefined,
     excludeTriggers:
       hideDefault && hiddenByDefault.length ? hiddenByDefault : undefined,
     routine:

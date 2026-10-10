@@ -47,9 +47,59 @@ test("Run attention exposes a scoped child's failure and opens its inspector", a
   const summary = page.getByRole("status", { name: "Matching attempts" });
   await expect(summary).toContainText("1 failed");
   await expect(summary).not.toContainText("completed");
+  await page.reload();
+  await expect(summary).toContainText("1 failed");
+  await expect(summary).not.toContainText("completed");
+  await expect(
+    attention.getByRole("button", { name: "Show all statuses" }),
+  ).toBeVisible();
   await attention.getByRole("button", { name: "Open Run" }).click();
   await expect(page).toHaveURL(new RegExp(`selected=${sample.childId}`));
   await expectViewportBounded(page);
+});
+
+test("Run attention preserves default exclusions across toggle and reload", async ({
+  page,
+}) => {
+  const visible = await seedActiveResearchHistory(
+    page,
+    uniqueName(test.info(), "Default attention"),
+  );
+  const hidden = await seedActiveResearchHistory(
+    page,
+    uniqueName(test.info(), "Ephemeral attention"),
+    "ephemeral",
+  );
+  await setResearchHistoryStatus(
+    visible.childId,
+    "failed",
+    "Synthetic default attention failure",
+  );
+  await setResearchHistoryStatus(
+    hidden.childId,
+    "failed",
+    "Synthetic excluded ephemeral failure",
+  );
+  await gotoAuthenticatedPage(page, "/runs");
+  const attention = page.getByRole("region", { name: "Needs attention" });
+  await expect(attention).toContainText("Synthetic default attention failure");
+  await expect(attention).not.toContainText(
+    "Synthetic excluded ephemeral failure",
+  );
+  await attention.getByRole("button", { name: "Show attention only" }).click();
+  await expect(attention).not.toContainText(
+    "Synthetic excluded ephemeral failure",
+  );
+  await page.reload();
+  await expect(
+    attention.getByRole("button", { name: "Show all statuses" }),
+  ).toBeVisible();
+  const table = page.getByRole("table", { name: "Runs and image jobs" });
+  await expect(table).toContainText(visible.name);
+  await expect(table).not.toContainText(hidden.name);
+  await expect(attention).not.toContainText(
+    "Synthetic excluded ephemeral failure",
+  );
 });
 
 test("Runs summarize matching attempts without claiming Product verification", async ({
