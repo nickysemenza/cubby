@@ -903,7 +903,30 @@ export function fieldSuggestSpecFor(
   const key = `${entity}.${field}`;
   // SAFETY: `Object.hasOwn` just proved `key` names one of
   // `FIELD_SUGGEST_REGISTRY`'s own declared keys, not an arbitrary string.
-  return Object.hasOwn(FIELD_SUGGEST_REGISTRY, key)
-    ? FIELD_SUGGEST_REGISTRY[key as keyof typeof FIELD_SUGGEST_REGISTRY]
-    : undefined;
+  if (!Object.hasOwn(FIELD_SUGGEST_REGISTRY, key)) return undefined;
+  // SAFETY: Object.hasOwn above proves this dynamic key belongs to the
+  // registry, while TypeScript retains only its full literal union.
+  const spec =
+    FIELD_SUGGEST_REGISTRY[key as keyof typeof FIELD_SUGGEST_REGISTRY];
+  if (spec.kind !== "enum" || !Object.hasOwn(entityFieldModels, entity))
+    return spec;
+  // SAFETY: the preceding own-property check proves `entity` is a model key.
+  const fieldModel =
+    entityFieldModels[entity as keyof typeof entityFieldModels];
+  const options: readonly { value: string; description?: string }[] =
+    fieldModel.fields.find((candidate) => candidate.key === field)?.control
+      ?.options ?? [];
+  if (!options?.some((option) => option.description)) return spec;
+  // SAFETY: `spec.kind === "enum"` narrows this registry member to the enum
+  // contract; widening its concrete value union is safe for option lookup.
+  const enumSpec = spec as EnumSuggestSpec<string>;
+  return {
+    ...enumSpec,
+    describe(value: string) {
+      return (
+        options.find((option) => option.value === value)?.description ??
+        enumSpec.describe(value)
+      );
+    },
+  };
 }

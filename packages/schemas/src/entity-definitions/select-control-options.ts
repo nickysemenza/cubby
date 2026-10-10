@@ -33,12 +33,31 @@ const labeled = <Value extends string>(
   values: readonly Value[],
   labels: Record<Value, string>,
   colors?: Record<Value, string>,
+  descriptions?: Record<Value, string>,
 ) =>
-  values.map((value) =>
-    colors
-      ? { value, label: labels[value], color: colors[value] }
-      : { value, label: labels[value] },
-  );
+  values.map((value) => {
+    if (colors && descriptions)
+      return {
+        value,
+        label: labels[value],
+        color: colors[value],
+        description: descriptions[value],
+      };
+    if (colors) return { value, label: labels[value], color: colors[value] };
+    if (descriptions)
+      return { value, label: labels[value], description: descriptions[value] };
+    return { value, label: labels[value] };
+  });
+
+const expenseLineKindDescriptions = {
+  principal: "The main item or service purchased",
+  tax: "Sales tax or other tax charges",
+  shipping: "Shipping, delivery, or freight charges",
+  discount: "Discounts, coupons, or promotional reductions",
+  fee: "Processing, handling, or service fees",
+  tip: "Tips or gratuity",
+  other_adjustment: "Other receipt adjustments that don't fit above",
+} satisfies Record<(typeof expenseLineKindValues)[number], string>;
 
 /**
  * Labels and optional color overrides shared by web and Apple. The compiler
@@ -97,15 +116,20 @@ export const selectControlOptions = {
   }),
   trade: labeled(tradeValues, TRADE_LABELS),
   productKind: labeled(productKindValues, PRODUCT_KIND_LABELS),
-  expenseLineKind: labeled(expenseLineKindValues, EXPENSE_LINE_KIND_LABELS, {
-    principal: "var(--slate)",
-    tax: "var(--slate)",
-    shipping: "var(--slate)",
-    discount: "var(--positive)",
-    fee: "var(--warning)",
-    tip: "var(--plum)",
-    other_adjustment: "var(--slate)",
-  }),
+  expenseLineKind: labeled(
+    expenseLineKindValues,
+    EXPENSE_LINE_KIND_LABELS,
+    {
+      principal: "var(--slate)",
+      tax: "var(--slate)",
+      shipping: "var(--slate)",
+      discount: "var(--positive)",
+      fee: "var(--warning)",
+      tip: "var(--plum)",
+      other_adjustment: "var(--slate)",
+    },
+    expenseLineKindDescriptions,
+  ),
   expenseLineBasis: labeled(expenseLineBasisValues, EXPENSE_LINE_BASIS_LABELS, {
     item_line: "var(--slate)",
     allocation: "var(--plum)",
