@@ -141,6 +141,49 @@ describe("independent original attachment assessment", () => {
       "binding changed",
     );
   });
+  it("shares complete repeated order extractions without dropping purchased-line context", async () => {
+    const f = await input();
+    const extraction = {
+      candidate: {
+        orderId: "SYNTHETIC-ORDER",
+        lines: Array.from({ length: 30 }, (_, index) => ({
+          name: `Synthetic variant ${index}`,
+          url: `https://shop.example.test/items/${index}`,
+          sku: `SYNTHETIC-SKU-${index}`,
+          notes: "Original exact variant detail ".repeat(100),
+        })),
+      },
+    };
+    const orderedVariant = Array.from({ length: 12 }, (_, index) => ({
+      currentLine: { name: `Synthetic purchased line ${index}` },
+      source: { sourceRef: `synthetic-source-${index}` },
+      originalExtractions: [extraction],
+    }));
+    const context = { product: { name: "Synthetic product" }, orderedVariant };
+    const request = await researchAssessmentRequest({
+      ...f.assessment,
+      context,
+    });
+    const first = request.messages[0]?.content[0];
+    if (!first || first.type !== "text")
+      throw new Error("Missing assessment context");
+    // This assertion measures transmitted bytes, not object identity in memory.
+    expect(first.content.split('"orderId":"SYNTHETIC-ORDER"')).toHaveLength(2);
+    const packet = JSON.parse(first.content);
+    expect(packet.context.originalExtractions).toEqual([extraction]);
+    for (const [index, row] of packet.context.orderedVariant.entries()) {
+      expect(row.currentLine).toEqual(orderedVariant[index]?.currentLine);
+      expect(row.source).toEqual(orderedVariant[index]?.source);
+      expect(row.originalExtractionIndices).toEqual([0]);
+      expect(row.originalExtractions).toBeUndefined();
+    }
+    expect(first.content.length).toBeLessThan(
+      JSON.stringify(context).length / 4,
+    );
+    expect(context.orderedVariant[0]?.originalExtractions).toEqual([
+      extraction,
+    ]);
+  });
   it.each(["bytes", "binding"] as const)(
     "rejects a changed attachment %s before semantic inference",
     async (changed) => {

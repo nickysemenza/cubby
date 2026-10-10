@@ -545,6 +545,12 @@ reference, attachment descriptor and binding validation; repeated observations
 refer to the already supplied original. The summed original-byte admission limit
 remains unchanged. This changes model delivery only, never retained evidence.
 
+Independent Product support assessment shares byte-identical serialized order
+extractions within one request. Each purchased-line/source row retains its own
+context and indices into the complete shared originals; retained records are not
+changed. Distinct extractions are preserved, and an unshared context keeps its
+existing shape. The support skill describes how to resolve these references.
+
 ## Run evidence uploads
 
 `run-evidence.ts` allocates an immutable target-scoped storage manifest before
