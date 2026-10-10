@@ -191,7 +191,11 @@ final class MacBrowserBridgeController: BrowserBridgeControlling {
                     return settings?.isInstalled(self) == true
                 })
             guard fresh, raiseWindow, let self, settings?.isInstalled(self) == true else { return }
-            coordinator.raiseAuthenticationWindow(for: accountID)
+            coordinator.raiseAuthenticationWindow(for: accountID) { [weak self, notifier] in
+                guard let self, settings?.isInstalled(self) == true else { return false }
+                return notifier.isAttentionCurrent(
+                    accountID: accountID, runID: runID, reason: reason, generation: generation)
+            }
         }
     }
 

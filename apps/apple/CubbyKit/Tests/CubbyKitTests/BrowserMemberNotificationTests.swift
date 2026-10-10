@@ -5,6 +5,16 @@
 
     @MainActor
     struct BrowserMemberNotificationTests {
+        @Test func staleAttentionCannotRaiseAfterOwnedWindowLookupSuspends() async throws {
+            var current = true
+            var raised = false
+            try await MacBrowserCommandExecutor.raiseAttentionWindow(
+                isCurrent: { current },
+                requireWindow: { current = false },
+                raise: { raised = true })
+            #expect(!raised)
+        }
+
         @Test func resolvedPauseCannotDeliverOrRaiseAfterAuthorizationSuspends() async throws {
             let suite = "browser-attention-test-\(UUID().uuidString)"
             let defaults = try #require(UserDefaults(suiteName: suite))

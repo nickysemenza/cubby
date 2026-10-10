@@ -857,5 +857,6 @@ deliver, and resolution during posting retracts only the stale generation.
 Unrelated accounts and permission reasons retain their edges. Permission notices retain
 the raw command diagnostic and name the setting to change. A newly observed
 permission pause raises that account's owned Cubby browser window, only while
-the controller remains installed. Sign-in retains the coordinator's existing
+the controller remains installed. The permission edge and controller are checked
+again after owned-window lookup, before raising. Sign-in retains the coordinator's existing
 owned-window behavior. No new browser transport or Run state is introduced.

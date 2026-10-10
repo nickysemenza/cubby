@@ -70,6 +70,12 @@
 
         private var center: UNUserNotificationCenter { notificationCenter ?? .current() }
 
+        public func isAttentionCurrent(
+            accountID: String, runID: String, reason: String, generation: UUID
+        ) -> Bool {
+            attentionGenerations[attentionKey(accountID: accountID, runID: runID)]?[reason] == generation
+        }
+
         public func resolveAttentionEdge(accountID: String, runID: String, reason: String) {
             var edges = attentionEdges
             let key = attentionKey(accountID: accountID, runID: runID)
@@ -111,9 +117,10 @@
             accountID: String, runID: String, reason: String, generation: UUID,
             isCurrent: () -> Bool, canPresent: () async -> Bool, post: () async -> Void, remove: () -> Void
         ) async -> Bool {
-            let key = attentionKey(accountID: accountID, runID: runID)
             func current() -> Bool {
-                isCurrent() && attentionGenerations[key]?[reason] == generation
+                isCurrent()
+                    && isAttentionCurrent(
+                        accountID: accountID, runID: runID, reason: reason, generation: generation)
             }
             guard current() else { return false }
             let permitted = await canPresent()

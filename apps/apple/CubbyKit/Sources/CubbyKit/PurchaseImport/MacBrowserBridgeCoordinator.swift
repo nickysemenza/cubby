@@ -177,8 +177,10 @@
             await tearDown(reportStatus: true)
         }
 
-        public func raiseAuthenticationWindow(for accountID: String) {
-            executors[accountID]?.raiseAuthenticationWindow()
+        public func raiseAuthenticationWindow(
+            for accountID: String, isCurrent: @escaping @MainActor () -> Bool = { true }
+        ) {
+            executors[accountID]?.raiseAuthenticationWindow(isCurrent: isCurrent)
         }
 
         public func retire() async {
@@ -381,7 +383,9 @@
 
         private func didRequestAuthentication(runID: String, accountID: String, token: UUID) {
             guard bridgeTokens[accountID] == token else { return }
-            executors[accountID]?.raiseAuthenticationWindow()
+            executors[accountID]?.raiseAuthenticationWindow { [weak self] in
+                self?.bridgeTokens[accountID] == token
+            }
             observer(.authenticationRequired(accountID: accountID, runID: runID))
         }
 

@@ -97,12 +97,26 @@
             try await captureStore.forget(runID: runID)
         }
 
-        public func raiseAuthenticationWindow() {
+        static func raiseAttentionWindow(
+            isCurrent: () -> Bool,
+            requireWindow: () async throws -> Void, raise: () async throws -> Void
+        ) async throws {
+            guard isCurrent() else { return }
+            try await requireWindow()
+            guard isCurrent() else { return }
+            try await raise()
+        }
+
+        public func raiseAuthenticationWindow(
+            isCurrent: @escaping @MainActor () -> Bool = { true }
+        ) {
             Task { [weak self] in
                 guard let self else { return }
                 do {
-                    try await requireOwnedWindow()
-                    try await raiseOwnedWindow()
+                    try await Self.raiseAttentionWindow(
+                        isCurrent: isCurrent,
+                        requireWindow: { try await self.requireOwnedWindow() },
+                        raise: { try await self.raiseOwnedWindow() })
                 } catch {
                     BrowserBridgeDebugLog.emit(
                         .windowRaiseFailed, browser: browser, accountID: accountID, error: error
