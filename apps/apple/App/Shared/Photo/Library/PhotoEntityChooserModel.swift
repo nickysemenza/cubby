@@ -26,7 +26,7 @@ final class PhotoEntityChooserModel {
     private let dateLane: GenericEntityListModel
     private let recentLane: GenericEntityListModel
     /// The one owner of recent next-page requests; see `drainRecents`.
-    private var drainTask: Task<Void, Never>?
+    private(set) var drainTask: Task<Void, Never>?
     private var drainGeneration = 0
     private var recentTarget = 0
     private var isDrainingRecents: Bool { drainTask != nil }
@@ -117,6 +117,11 @@ final class PhotoEntityChooserModel {
     /// completes inside the list model, whose request task does not observe this cancellation;
     /// its rows land in the cached model, and no further page is requested. Reappearance joins
     /// that surviving page before its replacement drain decides whether to request another.
+    /// Returns once the recent-lane drain, including any drain that replaced it, has ended.
+    func drained() async {
+        while let drainTask { await drainTask.value }
+    }
+
     func stopPaging() {
         lifecycleGeneration += 1
         drainTask?.cancel()

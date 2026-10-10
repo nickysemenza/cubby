@@ -136,7 +136,7 @@ final class PhotoClassificationSweep {
     @ObservationIgnored private var isParticipating: Bool
     @ObservationIgnored private var window: PhotoAnalysisWindow
     @ObservationIgnored private var visibleMonthIDs: Set<Date> = []
-    @ObservationIgnored private var runTask: Task<Void, Never>?
+    @ObservationIgnored private(set) var runTask: Task<Void, Never>?
     /// Identifies the in-flight `run()` call. `reconcile(force:)` replaces `runTask` and mints a
     /// new token whenever it force-restarts a run (a window change) while a previous run is still
     /// winding down from cancellation; that previous run's completion handler checks this before
@@ -250,6 +250,11 @@ final class PhotoClassificationSweep {
     /// `PhotoLibraryStore.monthsRevision` changes (a fresh or newly-populated `library.months` —
     /// `run()` reads candidates once at the top of its pass, so nothing else re-checks a candidate
     /// source that changed after a run already started, or after one finished with none to do).
+    /// Returns once the current run has ended.
+    func idle() async {
+        while let runTask { await runTask.value }
+    }
+
     func reconcile(force: Bool = false) {
         guard shouldRunNow else {
             runTask?.cancel()

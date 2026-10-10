@@ -10,7 +10,9 @@ import Synchronization
 /// `release(_:)` or `open()`. A release with nobody parked is banked for the next caller. `pass()` throws
 /// `CancellationError` when its task is cancelled, so a double standing in for long work stops
 /// the way that work would.
-final class Gate: Sendable {
+// `nonisolated` because the app test targets default to MainActor isolation, and a double parks
+// on the gate from any isolation.
+nonisolated final class Gate: Sendable {
     private struct Parked {
         let id: Int
         let continuation: CheckedContinuation<Void, any Error>

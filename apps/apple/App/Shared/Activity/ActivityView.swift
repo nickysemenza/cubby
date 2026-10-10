@@ -67,6 +67,13 @@ final class ActivityListModel {
             submissionID: submissionID.nilIfBlank, executor: executor, from: dateRange.start)
     }
 
+    /// Waits between polls; tests substitute a gate for the clock.
+    @ObservationIgnored private let pause: @Sendable (Duration) async throws -> Void
+
+    init(pause: @escaping @Sendable (Duration) async throws -> Void = { try await Task.sleep(for: $0) }) {
+        self.pause = pause
+    }
+
     var filterIdentity: String {
         "\(kind?.rawValue ?? "all"):\(state):\(subjectID):\(submissionID):\(execution):\(dateRange.rawValue)"
     }
@@ -229,7 +236,7 @@ final class ActivityListModel {
                 await refreshLoaded(client: client, context: "activity.poll")
             }
             do {
-                try await Task.sleep(for: .seconds(5))
+                try await pause(.seconds(5))
             } catch {
                 return
             }

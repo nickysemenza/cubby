@@ -48,7 +48,8 @@ final class SearchModel {
     private let client: CubbyClient
     private let debouncer = SearchDebouncer()
     private var watchTask: Task<Void, Never>?
-    private var searchTask: Task<Void, Never>?
+    /// The search in flight; `nil` once it publishes (tests await it).
+    private(set) var searchTask: Task<Void, Never>?
     private var lookupTask: Task<LookupOutcome, Never>?
     private var searchGeneration = 0
     private var lookupGeneration = 0

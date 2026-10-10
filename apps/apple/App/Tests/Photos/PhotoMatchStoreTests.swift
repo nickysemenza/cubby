@@ -349,7 +349,7 @@ struct PhotoMatchStoreTests {
             index: """
                 {"algorithmRevision":1,"items":[{"id":"IMG-2345","perceptualHash":"0123456789abcdef","sourceFingerprint":null,"width":2,"height":2,"directOwnerShortcodes":[]}],"repair":[]}
                 """)
-        let store = PhotoMatchStore()
+        let store = PhotoMatchStore(registrationPause: {})
         defer { store.reset() }
         let selected = try selection(hash: "0123456789abcdef")
         try await store.check([selected], client: client)
@@ -365,10 +365,7 @@ struct PhotoMatchStoreTests {
         }
         await store.refresh(client: client, priorityIDs: [selected.id])
         #expect(store.storedCandidates(for: selected.id).isEmpty)
-        for _ in 0..<100 {
-            if background.keys.allSatisfy({ store.storedCandidates(for: $0).isEmpty }) { break }
-            try await Task.sleep(for: .milliseconds(10))
-        }
+        await store.registrationsDrained()
         #expect(background.keys.allSatisfy { store.storedCandidates(for: $0).isEmpty })
     }
 

@@ -124,12 +124,13 @@ struct LibraryMetadataSyncTests {
 
     @Test func endingBackgroundRunStopsAnInFlightRunWithoutUserCancel() async throws {
         let store = try PhotoAnalysisStore.make(inMemory: true)
+        let sends = Gate()
         let sync = makeSync(
             analysisStore: store, candidates: [candidate("a")],
-            send: { _ in try await Task.sleep(for: .seconds(30)) })
+            send: { _ in try await sends.pass() })
         sync.setSceneActive(false)
-        let worker = Task { await sync.runInBackground() }
-        while !sync.isRunning { await Task.yield() }
+        let worker = Task.immediate { await sync.runInBackground() }
+        #expect(sync.isRunning)
         sync.endBackgroundRun()
         await worker.value
         #expect(!sync.isRunning)
@@ -145,8 +146,8 @@ struct LibraryMetadataSyncTests {
             isParticipating: false,
             send: { _ in sent.withLock { $0 += 1 } })
         sync.reconcile()
-        try? await Task.sleep(for: .milliseconds(80))
         #expect(!sync.isRunning)
+        #expect(sync.runTask == nil)
         #expect(sent.withLock { $0 } == 0)
     }
 
@@ -158,7 +159,7 @@ struct LibraryMetadataSyncTests {
             analysisStore: store, candidates: [candidate("a")], isSignedIn: false,
             send: { _ in sent.withLock { $0 += 1 } })
         sync.reconcile()
-        try? await Task.sleep(for: .milliseconds(80))
+        #expect(sync.runTask == nil)
         #expect(sent.withLock { $0 } == 0)
     }
 
@@ -171,7 +172,7 @@ struct LibraryMetadataSyncTests {
             analysisStore: store, candidates: [candidate("a")], deviceShortcode: nil,
             send: { _ in sent.withLock { $0 += 1 } })
         sync.reconcile()
-        for _ in 0..<50 where sync.isRunning { try await Task.sleep(for: .milliseconds(10)) }
+        await sync.idle()
         #expect(sent.withLock { $0 } == 0)
     }
 
@@ -183,6 +184,7 @@ struct LibraryMetadataSyncTests {
         let inFlight = Mutex<Int>(0)
         let maxObserved = Mutex<Int>(0)
         let sizes = Mutex<[Int]>([])
+        let pages = Gate()
         let sync = LibraryMetadataSync(
             analysisStore: store, host: "cubby.example", installationID: "installation-1",
             isParticipating: true, isSignedIn: true,
@@ -197,11 +199,16 @@ struct LibraryMetadataSyncTests {
                     return count
                 }
                 maxObserved.withLock { $0 = max($0, current) }
-                try? await Task.sleep(for: .milliseconds(30))
+                await pages.hold()
                 inFlight.withLock { $0 -= 1 }
             })
         sync.reconcile()
-        for _ in 0..<200 where sync.isRunning { try await Task.sleep(for: .milliseconds(10)) }
+        for page in 1...3 {
+            await pages.arrivals(page)
+            #expect(inFlight.withLock { $0 } == 1)
+            pages.release()
+        }
+        await sync.idle()
         #expect(maxObserved.withLock { $0 } == 1)
         #expect(sizes.withLock { $0 } == [50, 50, 20])
     }
@@ -225,14 +232,14 @@ struct LibraryMetadataSyncTests {
                 if attempt == 1 { throw NSError(domain: "synthetic", code: 1) }
             })
         sync.reconcile()
-        for _ in 0..<200 where sync.isRunning { try await Task.sleep(for: .milliseconds(10)) }
+        await sync.idle()
         #expect(
             try await !store.librarySightingSent(
                 host: "cubby.example", localIdentifier: "asset-0", imageId: "IMG-0",
                 version: LibraryMetadataSync.version,
                 modificationDate: Date(timeIntervalSince1970: 1_700_000_200)))
         sync.reconcile()
-        for _ in 0..<200 where sync.isRunning { try await Task.sleep(for: .milliseconds(10)) }
+        await sync.idle()
         #expect(attempts.withLock { $0 } == 2)
         #expect(
             try await store.librarySightingSent(
@@ -247,6 +254,7 @@ struct LibraryMetadataSyncTests {
         let store = try PhotoAnalysisStore.make(inMemory: true)
         let candidates = (0..<120).map { candidate("asset-\($0)", imageID: "IMG-\($0)") }
         let sentCount = Mutex<Int>(0)
+        let pages = Gate()
         let sync = LibraryMetadataSync(
             analysisStore: store, host: "cubby.example", installationID: "installation-1",
             isParticipating: true, isSignedIn: true,
@@ -256,16 +264,17 @@ struct LibraryMetadataSyncTests {
             deviceShortcodeProvider: { "DEV-0001" },
             sendPage: { page in
                 sentCount.withLock { $0 += page.count }
-                try? await Task.sleep(for: .milliseconds(100))
+                // A send in flight finishes even when its run is cancelled.
+                await pages.hold()
             })
         sync.reconcile()
-        for _ in 0..<100 where sentCount.withLock({ $0 }) == 0 {
-            try await Task.sleep(for: .milliseconds(5))
-        }
+        await pages.arrivals(1)
         #expect(sentCount.withLock { $0 } == 50)
+        let run = sync.runTask
         sync.cancel()
         #expect(!sync.isRunning)
-        try? await Task.sleep(for: .milliseconds(200))
+        pages.open()
+        await run?.value
         #expect(sentCount.withLock { $0 } == 50)
     }
 
@@ -278,7 +287,7 @@ struct LibraryMetadataSyncTests {
             analysisStore: store, candidates: [candidate("asset-1", imageID: "IMG-1")],
             send: { input in sentInputs.withLock { $0.append(input) } })
         sync.reconcile()
-        for _ in 0..<200 where sync.isRunning { try await Task.sleep(for: .milliseconds(10)) }
+        await sync.idle()
         #expect(sentInputs.withLock { $0 }.count == 1)
 
         let alreadySent = try await store.librarySightingSent(
@@ -289,7 +298,7 @@ struct LibraryMetadataSyncTests {
 
         // A re-plan with the same candidate set must not resend it.
         sync.reconcile()
-        for _ in 0..<200 where sync.isRunning { try await Task.sleep(for: .milliseconds(10)) }
+        await sync.idle()
         #expect(sentInputs.withLock { $0 }.count == 1)
     }
 
@@ -310,7 +319,7 @@ struct LibraryMetadataSyncTests {
             candidates: [candidate("asset-a", imageID: "IMG-A"), candidate("asset-b", imageID: "IMG-B")],
             send: { input in sentInputs.withLock { $0.append(input) } })
         sync.reconcile()
-        for _ in 0..<200 where sync.isRunning { try await Task.sleep(for: .milliseconds(10)) }
+        await sync.idle()
         #expect(sentInputs.withLock { $0 }.map { $0.localIdentifier ?? "" } == ["asset-b"])
         #expect(sync.totalCount == 1)
     }
@@ -327,7 +336,7 @@ struct LibraryMetadataSyncTests {
             analysisStore: store, candidates: candidates,
             send: { _ in throw URLError(.badServerResponse) })
         sync.reconcile()
-        for _ in 0..<200 where sync.isRunning { try await Task.sleep(for: .milliseconds(10)) }
+        await sync.idle()
         #expect(sync.totalCount == 5)
         #expect(sync.processedCount == sync.totalCount)
         #expect(sync.sentCount == 0)
@@ -345,6 +354,7 @@ struct LibraryMetadataSyncTests {
             candidate("asset-0", imageID: "IMG-0"), candidate("asset-1", imageID: "IMG-1"),
         ])
         let sentIdentifiers = Mutex<[String]>([])
+        let pages = Gate()
         let sync = LibraryMetadataSync(
             analysisStore: store, host: "cubby.example", installationID: "installation-1",
             isParticipating: true, isSignedIn: true,
@@ -354,15 +364,16 @@ struct LibraryMetadataSyncTests {
             deviceShortcodeProvider: { "DEV-0001" },
             sendPage: { inputs in
                 sentIdentifiers.withLock { $0.append(contentsOf: inputs.map { $0.localIdentifier ?? "" }) }
-                // Holds the first pass open long enough for the test to append a candidate and
-                // call `reconcile()` while `runTask` is still in flight.
-                try? await Task.sleep(for: .milliseconds(30))
+                // Holds the first pass open while the test appends a candidate and calls
+                // `reconcile()` with `runTask` still in flight.
+                await pages.hold()
             })
         sync.reconcile()
-        try? await Task.sleep(for: .milliseconds(10))
+        await pages.arrivals(1)
         candidatesBox.withLock { $0.append(candidate("asset-2", imageID: "IMG-2")) }
         sync.reconcile()
-        for _ in 0..<300 where sync.isRunning { try await Task.sleep(for: .milliseconds(10)) }
+        pages.open()
+        await sync.idle()
         let sent = sentIdentifiers.withLock { $0 }
         #expect(Set(sent) == Set(["asset-0", "asset-1", "asset-2"]))
         #expect(sent.count == 3)
@@ -372,17 +383,19 @@ struct LibraryMetadataSyncTests {
 
     @Test func startedAtIsStableAcrossReads() async throws {
         let store = try PhotoAnalysisStore.make(inMemory: true)
+        let sends = Gate()
         let sync = makeSync(
             analysisStore: store, candidates: [candidate("asset-1", imageID: "IMG-1")],
-            send: { _ in try? await Task.sleep(for: .milliseconds(30)) })
+            send: { _ in await sends.hold() })
         #expect(sync.startedAt == nil)
         sync.reconcile()
         let first = sync.startedAt
         #expect(first != nil)
-        try? await Task.sleep(for: .milliseconds(5))
+        await sends.arrivals(1)
         // Re-reading mid-run must return the exact same instant, not a freshly computed `.now`.
         #expect(sync.startedAt == first)
-        for _ in 0..<200 where sync.isRunning { try await Task.sleep(for: .milliseconds(10)) }
+        sends.open()
+        await sync.idle()
         #expect(sync.startedAt == nil)
     }
 
@@ -395,19 +408,21 @@ struct LibraryMetadataSyncTests {
             analysisStore: store, candidates: [candidate("asset-1", imageID: "IMG-1")],
             send: { _ in sentCount.withLock { $0 += 1 } })
         sync.reconcile()
+        let cancelled = sync.runTask
         sync.cancel()
         #expect(!sync.isRunning)
+        await cancelled?.value
 
         // A gate change that is not participation or sign-in (a thermal/power notification calling
         // `reconcile()`, exactly as `observeSystemConditions` does) must not undo the cancel.
         sync.reconcile()
-        try? await Task.sleep(for: .milliseconds(50))
         #expect(!sync.isRunning)
+        #expect(sync.runTask == nil)
         #expect(sentCount.withLock { $0 } == 0)
 
         // Only a participation/sign-in flip clears the sticky cancel.
         sync.setParticipating(true)
-        for _ in 0..<200 where sync.isRunning { try await Task.sleep(for: .milliseconds(10)) }
+        await sync.idle()
         #expect(sentCount.withLock { $0 } == 1)
     }
 }
