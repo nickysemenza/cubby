@@ -360,7 +360,7 @@ export function workerdHarnessOptions(
           // takes precedence over the Gateway transport anyway.
           AI_GATEWAY_API_KEY: "",
           // A scripted Run settles in a test's time, not production's 10s poll.
-          CUBBY_TEST_SETTLEMENT_POLL_MS: "250",
+          CUBBY_TEST_SETTLEMENT_POLL_MS: "25",
           ...(options.poolIdleTimeoutMs !== undefined && {
             CUBBY_TEST_POOL_IDLE_TIMEOUT_MS: String(options.poolIdleTimeoutMs),
           }),
