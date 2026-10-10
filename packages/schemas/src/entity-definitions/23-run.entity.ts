@@ -170,6 +170,7 @@ export default defineEntity({
             "recordType",
             "kind",
             "state",
+            "attentionOnly",
             "subjectId",
             "submissionId",
             "executor",

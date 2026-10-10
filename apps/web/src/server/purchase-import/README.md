@@ -41,6 +41,19 @@ state policy as individual groups. Filters bound those totals; an empty result
 returns zero counts. Web and native present the summary as matching Run/image-job
 attempts, not verified Product facts, completed research objectives or mailbox
 coverage. Native filter resets clear the previous summary before a new read.
+The web overview reuses the same paged list with `attentionOnly`: waiting,
+review and failed predicates are shared with the all-page counts. Every other
+scope filter still applies, including to descendant attempts beneath completed
+parents. Its five newest matching attempts show subjects, retained steps and raw
+failures, then open the existing inspector; the full attention filter remains
+paged. Read refreshes do not resume research or authorize inference.
+The Run declaration owns the attention URL key and its generated string codec;
+attention narrows the effective scope without clearing default exclusions.
+For browser-paused Runs, the shared list and inspector step uses the latest
+unresolved browser operation pause reason instead of stale progress. Delivered,
+failed and retried operations cannot revive an old reason; newer pending work
+without a reason falls back to ordinary progress. Retained pause history stays
+immutable.
 
 Product and Purchase research history use the shared entity report and record
 renderer on web and Apple clients. Each attempt shows its Run lifecycle alongside

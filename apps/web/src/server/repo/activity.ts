@@ -27,7 +27,11 @@ import {
   imageDescriptionResult,
 } from "@cubby/schemas/image-processing";
 import { RUN_TARGET_BUCKET } from "@cubby/schemas/purchase-import";
-import { runTargetEntityKind, runWorkLabel } from "@cubby/schemas/run-fields";
+import {
+  runStatus,
+  runTargetEntityKind,
+  runWorkLabel,
+} from "@cubby/schemas/run-fields";
 import { parseShortcode } from "@cubby/shared";
 import { and, desc, eq, sql, type SQL } from "drizzle-orm";
 import { z } from "zod";
@@ -306,9 +310,19 @@ async function loadRunFacts(db: Database, internalIds: readonly string[]) {
     SELECT
       r.id AS "internalId",
       r.input,
-      (SELECT coalesce(p.detail, p.phase) FROM "RunProgress" p
-        WHERE p."runId" = r.id
-        ORDER BY p."createdAt" DESC, p.id DESC LIMIT 1) AS "currentStep",
+      coalesce(
+        CASE WHEN r.status IN (${runStatus.enum.paused_auth}, ${runStatus.enum.paused_offline}) THEN (
+          SELECT nullif(o.result->>'pausedAt', '') FROM "RunOperation" o
+          WHERE o."runId" = r.id AND o.kind = 'browser_command'
+            AND o.state <> ${"failed"}
+            AND coalesce(o.result->'observationDelivered', 'false'::jsonb) <> 'true'::jsonb
+            AND coalesce(o.result->'retries', '[]'::jsonb) = '[]'::jsonb
+          ORDER BY o."updatedAt" DESC, o.id DESC LIMIT 1
+        ) END,
+        (SELECT coalesce(p.detail, p.phase) FROM "RunProgress" p
+          WHERE p."runId" = r.id
+          ORDER BY p."createdAt" DESC, p.id DESC LIMIT 1)
+      ) AS "currentStep",
       (SELECT jsonb_build_object('total', count(*), ${targetBucketCounts})
         FROM "RunTarget" t WHERE t."runId" = r.id) AS "targetCounts",
       coalesce((SELECT jsonb_agg(jsonb_build_object(
@@ -420,6 +434,11 @@ async function presentActivityRuns(db: Database, rows: readonly RunWire[]) {
   });
 }
 
+const waitingAttempt = sql`state IN ('paused_auth', 'paused_offline', 'paused_approval', 'waiting_for_device')`;
+const reviewAttempt = sql`state = 'needs_review'`;
+const failedAttempt = sql`state IN ('failed', 'dispatch_failed')`;
+
+// oxlint-disable-next-line complexity -- independent optional scopes share one predicate across flat, grouped and attention reads.
 function listPredicate(input: ActivityListInput): SQL {
   const clauses: SQL[] = [sql`true`];
   if (input.recordType) clauses.push(sql`"recordType" = ${input.recordType}`);
@@ -442,6 +461,10 @@ function listPredicate(input: ActivityListInput): SQL {
   if (input.ledgerPartyId)
     clauses.push(sql`"ledgerPartyId" = ${input.ledgerPartyId}`);
   if (input.state) clauses.push(sql`state = ${input.state}`);
+  if (input.attentionOnly)
+    clauses.push(
+      sql`(${waitingAttempt} OR ${reviewAttempt} OR ${failedAttempt})`,
+    );
   if (input.from)
     clauses.push(
       sql`"createdAt" >= (${input.from}::timestamptz AT TIME ZONE 'UTC')`,
@@ -505,9 +528,9 @@ function listPredicate(input: ActivityListInput): SQL {
 /** One state policy for flat, grouped and all-page attempt summaries. */
 const workCountsProjection = sql`jsonb_build_object(
           'working', count(*) FILTER (WHERE state IN ('running', 'pending', 'leased')),
-          'waiting', count(*) FILTER (WHERE state IN ('paused_auth', 'paused_offline', 'paused_approval', 'waiting_for_device')),
-          'needsReview', count(*) FILTER (WHERE state = 'needs_review'),
-          'failed', count(*) FILTER (WHERE state IN ('failed', 'dispatch_failed')),
+          'waiting', count(*) FILTER (WHERE ${waitingAttempt}),
+          'needsReview', count(*) FILTER (WHERE ${reviewAttempt}),
+          'failed', count(*) FILTER (WHERE ${failedAttempt}),
           'completed', count(*) FILTER (WHERE state IN ('completed', 'ready')),
           'skipped', count(*) FILTER (WHERE state = 'skipped')
         )`;

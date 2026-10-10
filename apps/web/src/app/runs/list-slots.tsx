@@ -19,6 +19,7 @@ const searchSchema = z.object({
   kind: activityKind.optional().catch(undefined),
   purpose: z.string().optional().catch(undefined),
   state: z.string().optional().catch(undefined),
+  attentionOnly: z.enum(["true", "false"]).optional().catch(undefined),
   status: z.string().optional().catch(undefined),
   trigger: runTrigger.optional().catch(undefined),
   routine: z.enum(["true", "false"]).optional().catch(undefined),
@@ -69,6 +70,7 @@ function RunHistorySlot({ search, navigate }: ListSlotProps) {
     hasDefaultFilter && !namesFilter && parsed.filters !== "none";
   const filters = {
     ...parsed,
+    attentionOnly: parsed.attentionOnly === "true" ? true : undefined,
     excludeTriggers:
       hideDefault && hiddenByDefault.length ? hiddenByDefault : undefined,
     routine:
