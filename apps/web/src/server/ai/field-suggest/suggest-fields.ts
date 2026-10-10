@@ -96,9 +96,16 @@ const defaultResolveLabels: LabelResolverPort = async (db, codes) => {
 
 export interface SuggestFieldsPorts {
   jev?: JevPort;
-  decisionModel?: SupportedDecisionModel;
   resolveLabels?: LabelResolverPort;
   force?: boolean;
+  /** Pins the decision model (a Suggestion sweep or eval); otherwise routing samples. */
+  decisionModel?: SupportedDecisionModel;
+  /** Keep usage persistence disabled for read-only decision evaluations. */
+  recordUsage?: boolean;
+  onTokenUsage?: (usage: {
+    inputTokens: number | null;
+    outputTokens: number | null;
+  }) => void;
   /** Test-only: overrides individual registry entries (fake rosters) without
    * a database. Keyed the same as `FIELD_SUGGEST_REGISTRY` (`"entity.field"`). */
   registry?: Partial<Record<string, FieldSuggestSpec>>;
@@ -108,6 +115,23 @@ export interface SuggestFieldsPorts {
     db: Database,
     input: FieldSuggestionsInput,
   ) => Promise<FieldResolutions>;
+}
+
+function suggestionUsage(
+  db: Database,
+  runId: RunId,
+  operation: string,
+  ports: SuggestFieldsPorts | undefined,
+  cacheRevision: string,
+): AiSelectionUsage {
+  return {
+    db: ports?.recordUsage === false ? undefined : db,
+    runId,
+    operation,
+    cacheRevision,
+    cacheStatus: "none",
+    force: ports?.force,
+  };
 }
 
 async function resolveSuggestionInheritance(
@@ -334,6 +358,10 @@ async function resolveEnumTarget(
   usage: AiSelectionUsage,
   jev: JevPort | undefined,
   decisionModel?: SupportedDecisionModel,
+  onTokenUsage?: (usage: {
+    inputTokens: number | null;
+    outputTokens: number | null;
+  }) => void,
 ): Promise<TargetResolution> {
   const values = spec.candidates
     ? await spec.candidates(db, rawBasis)
@@ -348,6 +376,7 @@ async function resolveEnumTarget(
     usage,
     port: jev,
     decisionModel,
+    onTokenUsage,
   });
   const alternatives = result.alternatives.map((alternative) => ({
     value: alternative.value,
@@ -544,6 +573,10 @@ async function resolveSpec(
   jev: JevPort | undefined,
   linkedSubject?: string,
   decisionModel?: SupportedDecisionModel,
+  onTokenUsage?: (usage: {
+    inputTokens: number | null;
+    outputTokens: number | null;
+  }) => void,
 ): Promise<TargetResolution> {
   if (spec.kind === "prune") {
     return resolvePruneTarget(
@@ -569,6 +602,7 @@ async function resolveSpec(
     usage,
     jev,
     decisionModel,
+    onTokenUsage,
   );
 }
 
@@ -581,6 +615,10 @@ async function resolveOneTarget(
   usage: AiSelectionUsage,
   jev: JevPort | undefined,
   decisionModel?: SupportedDecisionModel,
+  onTokenUsage?: (usage: {
+    inputTokens: number | null;
+    outputTokens: number | null;
+  }) => void,
 ): Promise<TargetResolution> {
   if (spec.kind === "enum") {
     return resolveEnumTarget(
@@ -591,6 +629,7 @@ async function resolveOneTarget(
       usage,
       jev,
       decisionModel,
+      onTokenUsage,
     );
   }
   if (spec.kind === "reference") {
@@ -1010,14 +1049,13 @@ export async function suggestFields(
         return;
       }
 
-      const usage: AiSelectionUsage = {
+      const usage = suggestionUsage(
         db,
         runId,
-        operation: `suggestFields.${input.entity}.${target}`,
-        cacheRevision: taxonomyRevision,
-        cacheStatus: "none",
-        force: ports?.force,
-      };
+        `suggestFields.${input.entity}.${target}`,
+        ports,
+        taxonomyRevision,
+      );
       const { suggestion, rawValue, outcome } = await resolveSpec(
         db,
         spec,
@@ -1026,6 +1064,8 @@ export async function suggestFields(
         usage,
         ports?.jev,
         linkedContext?.subject,
+        ports?.decisionModel,
+        ports?.onTokenUsage,
       );
       suggestions[target] = reviewedSuggestion(
         input,

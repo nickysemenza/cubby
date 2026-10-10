@@ -19,6 +19,7 @@
     "test:e2e": "NODE_ENV=test node ../../scripts/test-services.ts -- playwright test",
     "eval:agent-models": "NODE_ENV=test node ../../scripts/test-services.ts -- vitest run --project live-eval src/server/purchase-import/agent-model-eval.live-eval.ts",
     "eval:features": "NODE_ENV=test node ../../scripts/test-services.ts -- vitest run --project live-eval src/server/ai/feature-routing-eval.live-eval.ts",
+    "eval:decisions": "NODE_ENV=test node ../../scripts/test-services.ts -- vitest run --project live-eval src/server/ai/decision-eval.live-eval.ts",
     "eval:purchase-decisions": "NODE_ENV=test node ../../scripts/test-services.ts -- vitest run --project live-eval src/server/purchase-import/purchase-decision-eval.live-eval.ts",
     "eval:purchase-mail": "NODE_ENV=test node ../../scripts/test-services.ts -- vitest run --project live-eval src/server/purchase-import/purchase-mail-research.live-eval.ts",
     "test:e2e:hmr": "playwright test --config=playwright.dev.config.ts",

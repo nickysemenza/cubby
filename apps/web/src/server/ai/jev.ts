@@ -351,6 +351,10 @@ export async function runJevChoice(args: {
    */
   allowNone?: boolean;
   port?: JevPort;
+  onTokenUsage?: (usage: {
+    inputTokens: number | null;
+    outputTokens: number | null;
+  }) => void;
   /** A long-lived Run may pin the sampled decision tier for reproducibility. */
   decisionModel?: SupportedDecisionModel;
 }): Promise<JevChoiceResult> {
@@ -415,6 +419,10 @@ export async function runJevChoice(args: {
       const response = await (args.port
         ? args.port(input)
         : requestJev(input, args.usage, feature, applicationCacheStatus));
+      args.onTokenUsage?.({
+        inputTokens: response.usage?.input_tokens ?? null,
+        outputTokens: response.usage?.output_tokens ?? null,
+      });
       const answer = response.answers.selection;
       validateProbabilities(
         answer.probabilities,
