@@ -429,11 +429,16 @@ research acceptance.
   manual interaction suspends commands and resumes through the existing run
   lifecycle before adding controls; preserve background operation by default.
 
-- 🟢 **Captured pages beside their results.** Add a bounded capture filmstrip
-  to the run console and open a selected page beside the order lines or Product
-  facts derived from it. Show capture time, source URL, and the changes it
-  supports, so a suspicious result can be checked without hunting through logs.
-  Reuse RunEvidence; distinguish captured evidence from the current preview.
+- ⏳ **Accept captured pages beside their results.** Shared Run records now
+  present a bounded, newest-first capture filmstrip beside source-bound accepted
+  Product facts, capture time and live source links. Retained screenshots and PDF
+  originals use authenticated, checksum-verified delivery; native originals stay
+  in memory. Synthetic persisted-state regressions and the focused web journey
+  cover ownership, retirement, supported-fact binding and bounded navigation;
+  the native client and viewer compile. Review, hosted checks and deployment are
+  pending. Installed native viewing and real-source acceptance remain open while
+  live research is paused. Retained evidence remains distinct from current preview
+  and does not establish research completion.
 
 - 🟢 **Attention-first browser workspace.** Put accounts needing sign-in,
   permissions, or review ahead of routine background work, with an explicit
