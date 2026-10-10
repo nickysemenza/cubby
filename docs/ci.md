@@ -19,7 +19,7 @@ photo-inventory-import skills), the Node version, and the platform and
 architecture. Web targets add ignored `.env*` files and the environment their
 configs branch on, `CI` included (`webGate` in `apps/web/project.json`); the
 Rust targets add `rustc -V`, because `rust-toolchain.toml` names a floating
-channel; the Apple targets add `xcodebuild -version`. The key is deliberately
+channel; the Apple targets swap the Node version for `xcodebuild -version`. The key is deliberately
 broad. A false hit skips a check that should have run, so a target that starts
 reading something new must have it in its inputs. A change to ordinary
 documentation, a rebase that leaves the content unchanged, or a re-push of a
@@ -124,7 +124,9 @@ and on a miss the script fails before building (Nx never caches that failure).
 Only a miss pays for the FFI, XcodeGen, and Xcode build caches and the real
 run. `main` skips the probe and runs both with `--skip-nx-cache` as the
 backstop. The Apple key leaves out the Rust compiler: CI hashes before its Rust
-setup, and the probe and the run must agree on the key.
+setup, and the probe and the run must agree on the key. Each job first selects the
+Xcode in `apps/apple/.xcode-version` when the image has it, so a Mac result
+with that Xcode satisfies CI; bump the file when the Mac's Xcode changes.
 The host job runs the automatically generated
 `CubbyKit-Package` scheme with `xcodebuild test` on the ARM macOS host — no
 simulator. The aggregate package scheme includes all CubbyKit tests and the CLI
