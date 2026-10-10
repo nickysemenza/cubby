@@ -567,6 +567,7 @@ and deployment/readback order are owned by the
    photo inventory retains its shared-household control semantics. MCP
    `run.lifecycle` admits only `cancel`, `retry` and `restart`, delegates to that
    same control/dispatch path, and returns the Run status and successor identity.
+   Its MCP action is destructive because cancellation stops active work.
    It cannot approve/reject findings or grant inference allowances. Settled
    research attempts remain unchanged; repeated retries reuse their successor.
 

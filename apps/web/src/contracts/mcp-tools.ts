@@ -782,6 +782,7 @@ export const MCP_TOOLS = defineMcpTools({
     actions: {
       lifecycle: mcpAction({
         op: runContract.ops.lifecycle,
+        destructive: true,
         openWorld: true,
         strict: true,
         description:
