@@ -5,7 +5,18 @@ import type {
 } from "@cubby/schemas/identifiers";
 import { acceptedSourceOrder } from "@cubby/schemas/purchase-import";
 import { researchPurchaseContextBatch } from "@cubby/schemas/research-context";
-import { and, asc, eq, inArray, or, isNotNull } from "drizzle-orm";
+import { purchaseOrderUrl } from "@cubby/schemas/vendor";
+import {
+  and,
+  asc,
+  eq,
+  inArray,
+  or,
+  isNotNull,
+  ne,
+  notInArray,
+  sql,
+} from "drizzle-orm";
 
 import type { Database } from "~/server/db";
 import {
@@ -14,6 +25,8 @@ import {
   importSourceClaim,
   importSourceOrder,
   importSourceProduct,
+  mailboxMessage,
+  orderMail,
   purchase,
   product,
   run,
@@ -21,6 +34,7 @@ import {
 } from "~/server/db/schema";
 import { getDb, notDeleted } from "~/server/repo/database-helpers";
 
+import { HISTORICAL_MAIL_SOURCE_IDENTITY_VERSION } from "./mail-source-identity";
 import { loadImportSourceClaimRoots } from "./source-claim-family";
 
 /** Same-run source associations survive replay and precede asynchronous search indexing. */
@@ -120,6 +134,7 @@ export async function loadProductPurchaseContext(
       },
       purchase,
       vendor: { name: vendor.name, website: vendor.website },
+      orderUrlTemplate: vendor.orderUrlTemplate,
       source: importSourceClaim,
       association: importSourceOrder,
       originalLineIndex: importSourceProduct.lineIndex,
@@ -167,6 +182,41 @@ export async function loadProductPurchaseContext(
       ...[...roots.values()].map((source) => source.externalKey),
     ]),
   ];
+  // A source association is not a mail_read selector. Resolve the canonical
+  // owned original explicitly; missing originals remain recoverable research gaps.
+  const mailKey = sql<string>`'gmail:' || ${orderMail.mailboxId} || ':' || ${orderMail.messageId}`;
+  const originals = keys.length
+    ? await database
+        .select({
+          sourceKey: mailKey,
+          messageRef: orderMail.id,
+          checksum: orderMail.rawChecksum,
+        })
+        .from(orderMail)
+        .innerJoin(
+          mailboxMessage,
+          and(
+            eq(mailboxMessage.ledgerPartyId, orderMail.ledgerPartyId),
+            eq(mailboxMessage.mailboxId, orderMail.mailboxId),
+            eq(mailboxMessage.messageId, orderMail.messageId),
+            eq(mailboxMessage.orderMailId, orderMail.id),
+            eq(mailboxMessage.checksum, orderMail.rawChecksum),
+          ),
+        )
+        .where(
+          and(
+            eq(orderMail.ledgerPartyId, input.ledgerPartyId),
+            inArray(mailKey, keys),
+            ne(mailboxMessage.classification, "unrelated"),
+            ne(
+              mailboxMessage.classificationVersion,
+              HISTORICAL_MAIL_SOURCE_IDENTITY_VERSION,
+            ),
+            notInArray(mailboxMessage.status, ["excluded", "deleted"]),
+          ),
+        )
+        .limit(30)
+    : [];
   const prepared = keys.length
     ? await database
         .select({
@@ -192,7 +242,21 @@ export async function loadProductPurchaseContext(
     const original = row.association.originalOrder
       ? acceptedSourceOrder.parse(row.association.originalOrder)
       : null;
+    const originalMail =
+      root.kind === "mail_message"
+        ? originals.find(
+            (mail) =>
+              mail.sourceKey === root.externalKey &&
+              mail.checksum === root.checksum,
+          )
+        : undefined;
     return {
+      originalMail: originalMail
+        ? {
+            messageRef: originalMail.messageRef,
+            checksum: originalMail.checksum,
+          }
+        : null,
       orderedLine:
         row.originalLineIndex !== null
           ? (original?.extraction.candidate?.lines[row.originalLineIndex] ??
@@ -210,6 +274,10 @@ export async function loadProductPurchaseContext(
         orderId: row.purchase.orderId,
         date: row.purchase.date,
         statedTotal: row.purchase.statedTotal,
+        orderUrl: purchaseOrderUrl({
+          orderUrlTemplate: row.orderUrlTemplate,
+          orderId: row.purchase.orderId,
+        }),
       },
       vendor: row.vendor,
       source: {

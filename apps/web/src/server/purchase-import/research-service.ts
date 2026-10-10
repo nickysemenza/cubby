@@ -249,6 +249,10 @@ export function researchServiceFor(
   env: Env,
   rawRunId: string,
   ports: ResearchServicePorts = {},
+  preloadedPurchaseContexts?: ReadonlyMap<
+    string,
+    Awaited<ReturnType<typeof loadProductPurchaseContext>>
+  >,
 ): ResearchServices {
   const runId = runEntityId.parse(rawRunId);
   const database = getDb(db);
@@ -456,16 +460,42 @@ export function researchServiceFor(
           .for("no key update");
         // Source exposure/retirement locks mail before Runs; preserve that order.
         const sources = await loadMailResearchSources(transactionDb, runId);
-        if (sources?.length)
+        const productTargets = await getDb(transactionDb)
+          .select({ entityId: runTarget.entityId })
+          .from(runTarget)
+          .where(
+            and(
+              eq(runTarget.runId, runId),
+              eq(runTarget.entityKind, "product"),
+              inArray(runTarget.state, activeStates),
+            ),
+          );
+        const purchasedContexts = await Promise.all(
+          productTargets.map((target) =>
+            loadProductPurchaseContext(transactionDb, {
+              productId: parseEntityId("product", target.entityId),
+              ledgerPartyId: parseEntityId(
+                "ledgerParty",
+                member.ledgerPartyId!,
+              ),
+            }),
+          ),
+        );
+        const sourceIds = [
+          ...new Set([
+            ...(sources ?? []).map((source) => source.orderMailId),
+            ...purchasedContexts
+              .flat()
+              .flatMap(({ originalMail }) =>
+                originalMail ? [originalMail.messageRef] : [],
+              ),
+          ]),
+        ];
+        if (sourceIds.length)
           await getDb(transactionDb)
             .select({ id: orderMail.id })
             .from(orderMail)
-            .where(
-              inArray(
-                orderMail.id,
-                sources.map((source) => source.orderMailId),
-              ),
-            )
+            .where(inArray(orderMail.id, sourceIds))
             .orderBy(asc(orderMail.id))
             .for("update");
         // Cancellation and continuation admission share the Run write boundary.
@@ -478,7 +508,18 @@ export function researchServiceFor(
         const scope = await owner(transactionDb);
         if (!["running", "paused_offline"].includes(scope.status))
           return { status: "stopped", reason: scope.status };
-        const scoped = researchServiceFor(transactionDb, env, runId, ports);
+        const scoped = researchServiceFor(
+          transactionDb,
+          env,
+          runId,
+          ports,
+          new Map(
+            productTargets.map((target, index) => [
+              target.entityId,
+              purchasedContexts[index]!,
+            ]),
+          ),
+        );
         const next = await scoped.researchNext({}, `${callId}:next`);
         // pi may discard a proposed continuation in favor of queued input/reset.
         if (!admitted) return next;
@@ -536,6 +577,32 @@ export function researchServiceFor(
               db,
               current,
             );
+            const purchasedItems = preloadedPurchaseContexts
+              ? preloadedPurchaseContexts.get(current.id)
+              : await loadProductPurchaseContext(db, {
+                  productId: current.id,
+                  ledgerPartyId: parseEntityId(
+                    "ledgerParty",
+                    scope.ledgerPartyId!,
+                  ),
+                });
+            if (!purchasedItems)
+              throw new Error(
+                "Product research targets changed during continuation admission.",
+              );
+            await exposeResearchSources(db, {
+              runId,
+              sources: purchasedItems.flatMap(({ originalMail }) =>
+                originalMail
+                  ? [
+                      {
+                        orderMailId: originalMail.messageRef,
+                        checksum: originalMail.checksum,
+                      },
+                    ]
+                  : [],
+              ),
+            });
             return {
               status: "working",
               work: {
@@ -548,13 +615,7 @@ export function researchServiceFor(
                   categoryContext,
                   ...values,
                 },
-                purchasedItems: await loadProductPurchaseContext(db, {
-                  productId: current.id,
-                  ledgerPartyId: parseEntityId(
-                    "ledgerParty",
-                    scope.ledgerPartyId!,
-                  ),
-                }),
+                purchasedItems,
               },
             };
           }

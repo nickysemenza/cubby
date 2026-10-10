@@ -362,9 +362,12 @@ and deployment/readback order are owned by the
    the same transaction, so cancellation cannot commit between its status check
    and ledger writes. Derived Product work dispatches after that transaction commits.
    Continuations acquire the owning member before sources and Runs, matching
-   mail admission and the terminal Product sweep. Mail continuations then lock
-   their frozen source set in ID order before the Run,
+   mail admission and the terminal Product sweep. Continuations then lock
+   frozen mail sources and eligible Product targets' owned originals in ID order
+   before the Run,
    matching source exposure, retirement and history erasure so those paths cannot invert locks.
+   Product selection reuses that preloaded context for the continuation; a newly
+   committed original appears on the next call, never after the Run lock.
    Run status/ledger fences use key-preserving locks: cancellation still waits,
    while a concurrent child admission can check its parent foreign key.
    Retained mail observations present plain text and compact visible HTML with
@@ -762,3 +765,19 @@ Scoped pagination remains task/query/account-bound and replayable. An interrupte
 classification or dispatch reuses its frozen page without advancing mailbox-wide
 coverage. Mechanical mailbox discovery retains its own exact checkpoints,
 cancellation, dispatch-failure handling and ended-instance reconciliation.
+
+### Original purchase sources lead Product research
+
+`work_next` supplies accepted order lines, current ledger context, and the
+existing `purchaseOrderUrl` projection. It resolves canonical owned retained mail
+into an explicit `originalMail.messageRef`; an order association is not a mail
+selector. Issued originals are exposed through the existing retention fence
+before delivery. The mail reader still enforces ownership, current checksum,
+classification and disposal rules. Missing originals remain null and are
+recovered through owned mail search or authenticated order history, without
+inventing a mapping or rewriting historical source associations.
+
+The maintained Product skill prioritizes those sources and exact item URLs.
+Broader search resolves unavailable sources or remaining facts. Pi keeps hosting
+the adaptive conversation; shared tools keep retaining observations and enforcing
+writes. No new workflow, transport, status model or table is introduced.

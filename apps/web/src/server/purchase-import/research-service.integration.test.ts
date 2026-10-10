@@ -10,6 +10,9 @@ import { z } from "zod";
 import { runContract } from "~/contracts/run.contract";
 import type { DrizzleTransaction } from "~/server/db";
 import {
+  importSourceClaim,
+  importSourceOrder,
+  importSourceProduct,
   ledgerParty,
   mailboxMessage,
   orderMail,
@@ -844,6 +847,166 @@ describe("research host lifecycle", () => {
       });
       expect(await continuation).toMatchObject({ status: "working" });
     } finally {
+      await continuation;
+    }
+  });
+  it("locks purchased Product originals before continuation so overlapping source admission cannot deadlock", async () => {
+    const { f } = await importPrimary(1);
+    const [child] = await getDb(ctx.db)
+      .select()
+      .from(run)
+      .where(eq(run.parentRunId, parseEntityId("run", f.started.runId)));
+    if (!child) throw new Error("Synthetic Product child missing");
+    const services = researchServiceFor(ctx.db, fromPartial<Env>({}), child.id);
+    let continuation: ReturnType<typeof services.researchContinue> | undefined;
+    try {
+      await withTransaction(ctx.db, async (tx) => {
+        await tx
+          .select()
+          .from(orderMail)
+          .where(eq(orderMail.id, f.mail.id))
+          .for("update");
+        continuation = services.researchContinue(crypto.randomUUID(), false);
+        await waitForBlockedBackend(tx);
+        // A source reader holding mail must still be able to acquire its Run.
+        await tx
+          .select()
+          .from(run)
+          .where(eq(run.id, child.id))
+          .for("update", { noWait: true });
+      });
+      expect(await continuation).toMatchObject({
+        status: "working",
+        work: { purchasedItems: [{ originalMail: { messageRef: f.mail.id } }] },
+      });
+    } finally {
+      await continuation;
+    }
+  });
+  it("keeps continuation's purchased context frozen when another original commits during source prelocking", async () => {
+    const { f } = await importPrimary(1);
+    const [child] = await getDb(ctx.db)
+      .select()
+      .from(run)
+      .where(eq(run.parentRunId, parseEntityId("run", f.started.runId)));
+    if (!child) throw new Error("Synthetic Product child missing");
+    const services = researchServiceFor(ctx.db, fromPartial<Env>({}), child.id);
+    let continuation: ReturnType<typeof services.researchContinue> | undefined;
+    let releaseFirst!: () => void;
+    let ready!: () => void;
+    const release = new Promise<void>((resolve) => {
+      releaseFirst = resolve;
+    });
+    const prelocked = new Promise<void>((resolve) => {
+      ready = resolve;
+    });
+    const firstLock = withTransaction(ctx.db, async (tx) => {
+      await tx
+        .select()
+        .from(orderMail)
+        .where(eq(orderMail.id, f.mail.id))
+        .for("update");
+      continuation = services.researchContinue(crypto.randomUUID(), false);
+      await waitForBlockedBackend(tx);
+      ready();
+      await release;
+    });
+    try {
+      await prelocked;
+      const [association] = await getDb(ctx.db)
+        .select()
+        .from(importSourceOrder);
+      const [line] = await getDb(ctx.db).select().from(importSourceProduct);
+      if (!association || !line)
+        throw new Error("Synthetic accepted context missing");
+      const [claim] = await getDb(ctx.db)
+        .select()
+        .from(importSourceClaim)
+        .where(eq(importSourceClaim.id, association.sourceClaimId));
+      if (!claim) throw new Error("Synthetic accepted claim missing");
+      const [later] = await getDb(ctx.db)
+        .insert(orderMail)
+        .values({
+          ...f.mail,
+          id: crypto.randomUUID(),
+          messageId: "synthetic-later-original",
+          rawChecksum: "b".repeat(64),
+        })
+        .returning();
+      if (!later) throw new Error("Synthetic later original missing");
+      await getDb(ctx.db).insert(mailboxMessage).values({
+        ledgerPartyId: f.party.id,
+        mailboxId: later.mailboxId,
+        messageId: later.messageId,
+        checksum: later.rawChecksum,
+        orderMailId: later.id,
+        classification: "related",
+        classificationVersion: "synthetic-v1",
+        status: "completed",
+      });
+      const [laterClaim] = await getDb(ctx.db)
+        .insert(importSourceClaim)
+        .values({
+          ...claim,
+          id: crypto.randomUUID(),
+          externalKey: `gmail:${later.mailboxId}:${later.messageId}`,
+          checksum: later.rawChecksum,
+        })
+        .returning();
+      if (!laterClaim) throw new Error("Synthetic later claim missing");
+      const [laterOrder] = await getDb(ctx.db)
+        .insert(importSourceOrder)
+        .values({
+          ...association,
+          id: crypto.randomUUID(),
+          sourceClaimId: laterClaim.id,
+        })
+        .returning();
+      if (!laterOrder) throw new Error("Synthetic later association missing");
+      await getDb(ctx.db)
+        .insert(importSourceProduct)
+        .values({
+          ...line,
+          id: crypto.randomUUID(),
+          sourceOrderId: laterOrder.id,
+        });
+      await withTransaction(ctx.db, async (tx) => {
+        await tx
+          .select()
+          .from(orderMail)
+          .where(eq(orderMail.id, later.id))
+          .for("update");
+        releaseFirst();
+        await firstLock;
+        let timer: ReturnType<typeof setTimeout> | undefined;
+        try {
+          const next = await Promise.race([
+            continuation,
+            new Promise<never>((_resolve, reject) => {
+              timer = setTimeout(
+                () =>
+                  reject(
+                    new Error(
+                      "Continuation waited for a source outside its prelocked snapshot.",
+                    ),
+                  ),
+                5_000,
+              );
+            }),
+          ]);
+          expect(next).toMatchObject({
+            status: "working",
+            work: {
+              purchasedItems: [{ originalMail: { messageRef: f.mail.id } }],
+            },
+          });
+        } finally {
+          clearTimeout(timer);
+        }
+      });
+    } finally {
+      releaseFirst();
+      await firstLock;
       await continuation;
     }
   });

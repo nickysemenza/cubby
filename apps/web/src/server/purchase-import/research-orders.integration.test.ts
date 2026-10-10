@@ -13,6 +13,8 @@ import {
   importPreparedOrder,
   importSourceOrder,
   inventoryEntry,
+  orderMail,
+  mailboxMessage,
   product,
   productCategory,
   project,
@@ -29,6 +31,7 @@ import { insertWithShortcode } from "~/server/repo/shortcode-utils";
 import { ensureRun } from "~/server/runs/ensure-run";
 
 import { sweepPendingEnrichment } from "./enrichment-sweep";
+import { HISTORICAL_MAIL_SOURCE_IDENTITY_VERSION } from "./mail-source-identity";
 import { loadProductPurchaseContext } from "./research-context";
 import { importVendorOrder } from "./writer";
 
@@ -711,6 +714,35 @@ describe("research order writes", () => {
         },
       ],
     };
+    // Exact original acquisition must survive missing legacy line snapshots;
+    // an unrelated, excluded or changed original must never be offered to research.
+    const [mail] = await getDb(ctx.db)
+      .insert(orderMail)
+      .values({
+        ledgerPartyId: party.id,
+        mailboxId: "synthetic-mailbox",
+        messageId: "variant-receipt",
+        sender: "seller@example.test",
+        subject: "Synthetic variant receipt",
+        rawChecksum: "d".repeat(64),
+        content: {
+          snippet: null,
+          bodyHtml: null,
+          bodyText: candidate.lines[0]!.productUrl,
+        },
+      })
+      .returning();
+    if (!mail) throw new Error("Expected original mail");
+    await getDb(ctx.db).insert(mailboxMessage).values({
+      ledgerPartyId: party.id,
+      mailboxId: mail.mailboxId,
+      messageId: mail.messageId,
+      checksum: mail.rawChecksum,
+      orderMailId: mail.id,
+      classification: "related",
+      classificationVersion: "synthetic-v1",
+      status: "completed",
+    });
     const input: ImportWriterInput = {
       runId,
       ledgerPartyId: party.id,
@@ -749,6 +781,7 @@ describe("research order writes", () => {
       }),
     ).toMatchObject([
       {
+        originalMail: { messageRef: mail.id, checksum: mail.rawChecksum },
         orderedLine: candidate.lines[0],
         originalExtractions: [{ status: "ready", candidate }],
         currentLine: {
@@ -770,6 +803,20 @@ describe("research order writes", () => {
           ),
         ),
     ).toEqual([{ name: "Member's renamed device" }]);
+    // A checksum match cannot resolve ownership blocked during historical cutover.
+    await getDb(ctx.db)
+      .update(mailboxMessage)
+      .set({
+        status: "blocked",
+        classificationVersion: HISTORICAL_MAIL_SOURCE_IDENTITY_VERSION,
+      })
+      .where(eq(mailboxMessage.orderMailId, mail.id));
+    expect(
+      await loadProductPurchaseContext(ctx.db, {
+        productId: item.id,
+        ledgerPartyId: party.id,
+      }),
+    ).toMatchObject([{ originalMail: null, orderedLine: candidate.lines[0] }]);
   });
 
   it("excludes another member's prepared extraction sharing a source key and checksum", async () => {
