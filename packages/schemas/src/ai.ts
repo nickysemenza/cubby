@@ -470,6 +470,12 @@ export const fieldSuggestionsInput = z.object({
 });
 export type FieldSuggestionsInput = z.infer<typeof fieldSuggestionsInput>;
 
+export const suggestionStatus = z.enum([
+  "pending",
+  "applied",
+  "rejected",
+  "superseded",
+]);
 export const suggestionReviewListInput = z.object({
   entity: z.enum(shortcodeEntities).optional(),
   field: z.string().optional(),
@@ -519,7 +525,7 @@ export const fieldSuggestionMissInput = z.object({
 export const fieldSuggestionMissOut = z.object({ recorded: z.literal(true) });
 export const suggestionSweepStartInput = z.object({
   entity: z.enum(shortcodeEntities),
-  field: z.string().min(1),
+  fields: z.array(z.string().min(1)).min(1),
   filters: z.record(z.string(), z.json()).default({}),
 });
 export const suggestionSweepStartOut = z.object({ id: z.string().uuid() });
@@ -528,6 +534,8 @@ export const suggestionSweepControlInput = z.object({
 });
 export const suggestionSweepStatusOut = z.object({
   latestRunId: z.string().uuid().nullable(),
+  entity: z.string().nullable(),
+  fields: z.array(z.string()),
   taxonomyChanged: z.boolean(),
   status: z.string().nullable(),
   paused: z.boolean(),

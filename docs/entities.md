@@ -1291,6 +1291,8 @@ Pending Suggestions appear in those cells. A changed target field supersedes
 its older pending Suggestions, and a later sweep supersedes prior pending rows
 for the same record and field. Suggestions remain available to evaluation after
 review; there is no separate classification review page.
+Entity lists expose a generic pending-suggestion filter (any, Addition, or
+Correction) and can start a sweep across every declared target using the list's active filters.
 
 Product Category describes identity and can supply a Spending category mapping
 through its ancestry. Cost type describes the Expense's accounting role; Trade

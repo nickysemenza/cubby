@@ -1,6 +1,9 @@
 import { isSlotListView } from "@cubby/schemas/entity-definitions/definition";
 import { entityFieldModels } from "@cubby/schemas/entity-fields";
-import type { BrowserRoutedEntity } from "@cubby/schemas/entity-manifest";
+import {
+  shortcodeEntities,
+  type BrowserRoutedEntity,
+} from "@cubby/schemas/entity-manifest";
 import { entityManifest } from "@cubby/schemas/entity-manifest";
 import { entitySummary } from "@cubby/schemas/entity-summary";
 import { useNavigate, useSearch } from "@tanstack/react-router";
@@ -25,6 +28,7 @@ import {
 import { entityListBaseFor } from "~/entity/entity-list";
 import { identityListConfig } from "~/entity/entity-list/identity-list-config";
 import { ListTotalSummary } from "~/entity/entity-list/list-total-summary";
+import { SuggestionSweepAction } from "~/entity/entity-list/suggestion-sweep-action";
 import {
   type ListEntity,
   listEntities,
@@ -413,6 +417,13 @@ function ServerListBody({
       }
     />
   );
+  const sweepEntity = z.enum(shortcodeEntities).safeParse(entity);
+  const sweepAction = sweepEntity.success ? (
+    <SuggestionSweepAction
+      entity={sweepEntity.data}
+      filters={list.currentFilters}
+    />
+  ) : null;
   const contextualStatus =
     workbenchProps.contextualStatus === undefined ? (
       scopeChips
@@ -432,6 +443,7 @@ function ServerListBody({
         state={list.summaryState}
         onRetry={list.retrySummary}
       />
+      {sweepAction}
       {list.enrichmentFailures?.map(({ pageIndex, group, state }) => (
         <div key={`${pageIndex}:${group}`} className="min-w-0 text-sm">
           <p role="alert" className="text-destructive">

@@ -4,6 +4,7 @@ import {
 } from "@cubby/schemas/ai";
 import type { RunId } from "@cubby/schemas/identifiers";
 import { parseEntityId } from "@cubby/schemas/identifiers";
+import { suggestionSweepRunInput } from "@cubby/schemas/run-fields";
 import { and, desc, eq, gte, inArray } from "drizzle-orm";
 import { z } from "zod";
 
@@ -322,6 +323,8 @@ export async function latestSuggestionSweepStatus(db: Database) {
   if (!latest)
     return {
       latestRunId: null,
+      entity: null,
+      fields: [],
       taxonomyChanged: false,
       status: null,
       paused: false,
@@ -334,8 +337,11 @@ export async function latestSuggestionSweepStatus(db: Database) {
     })
     .passthrough()
     .parse(latest.input);
+  const sweep = suggestionSweepRunInput.safeParse(latest.input);
   return {
     latestRunId: latest.id,
+    entity: sweep.success ? sweep.data.entity : null,
+    fields: sweep.success ? sweep.data.fields : [],
     taxonomyChanged:
       stored.taxonomyRevision !== (await spendingClassificationRevision(db)),
     status: latest.status,

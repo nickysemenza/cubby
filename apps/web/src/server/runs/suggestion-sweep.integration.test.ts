@@ -1,7 +1,7 @@
 import { fieldSuggestionsOut } from "@cubby/schemas/ai";
-import { parseEntityId } from "@cubby/schemas/identifiers";
+import { parseEntityId, parseShortcodeFor } from "@cubby/schemas/identifiers";
 import { suggestionSweepRunProgress } from "@cubby/schemas/run-fields";
-import { eq } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
 import {
   taxonomyId,
   taxonomyShortcode,
@@ -18,6 +18,7 @@ import {
   suggestion as suggestionTable,
   vendor as vendorTable,
 } from "~/server/db/schema";
+import { executeEntity } from "~/server/entity-kernel";
 import { entityKernelContextSchema } from "~/server/entity-kernel/adapter";
 import { getDb } from "~/server/repo/database-helpers";
 import { loadFinanceSuggestionContext } from "~/server/repo/finance-suggestion-context";
@@ -37,10 +38,22 @@ import { createTestRequestContext } from "~/server/testing/request-context";
 
 import { aiCallRunInput, ensureRun } from "./ensure-run";
 import {
-  startSuggestionSweep,
-  resumeSuggestionSweep,
+  startSuggestionSweep as startSweep,
+  resumeSuggestionSweep as resumeSweep,
   pauseSuggestionSweep,
 } from "./suggestion-sweep";
+
+const noPairedSample = () => false;
+const startSuggestionSweep = (
+  db: Parameters<typeof startSweep>[0],
+  input: Parameters<typeof startSweep>[1],
+  ports: Parameters<typeof startSweep>[2],
+) => startSweep(db, input, { pairSample: noPairedSample, ...ports });
+const resumeSuggestionSweep = (
+  db: Parameters<typeof resumeSweep>[0],
+  runId: Parameters<typeof resumeSweep>[1],
+  ports: Parameters<typeof resumeSweep>[2],
+) => resumeSweep(db, runId, { pairSample: noPairedSample, ...ports });
 
 type CategoryCandidate = { id: string; title: string };
 const categorySpec: ReferenceSuggestSpec<CategoryCandidate> = {
@@ -123,7 +136,7 @@ describe("persisted Suggestion sweeps", () => {
       ctx.db,
       {
         entity: "expense",
-        field: "spendingCategoryId",
+        fields: ["spendingCategoryId"],
         filters: { ids: expenses.map(({ shortcode }) => shortcode) },
       },
       {
@@ -202,7 +215,7 @@ describe("persisted Suggestion sweeps", () => {
       ctx.db,
       {
         entity: "expense",
-        field: "spendingCategoryId",
+        fields: ["spendingCategoryId"],
         filters: { ids: [line.shortcode] },
       },
       {
@@ -274,7 +287,7 @@ describe("persisted Suggestion sweeps", () => {
       ctx.db,
       {
         entity: "vendor",
-        field: "defaultSpendingCategoryId",
+        fields: ["defaultSpendingCategoryId"],
         filters: { ids: [vendor.shortcode] },
       },
       {
@@ -330,7 +343,7 @@ describe("persisted Suggestion sweeps", () => {
       ctx.db,
       {
         entity: "product",
-        field: "categoryId",
+        fields: ["categoryId"],
         filters: { ids: [product.id] },
       },
       {
@@ -367,7 +380,7 @@ describe("persisted Suggestion sweeps", () => {
       ctx.db,
       {
         entity: "product",
-        field: "categoryId",
+        fields: ["categoryId"],
         filters: {},
       },
       {
@@ -390,7 +403,7 @@ describe("persisted Suggestion sweeps", () => {
     expect(saved?.purpose).toBe("suggestion_sweep");
     expect(saved?.input).toMatchObject({
       entity: "product",
-      field: "categoryId",
+      fields: ["categoryId"],
       filters: {},
       decisionModel: "typesafe/jev",
     });
@@ -488,7 +501,7 @@ describe("persisted Suggestion sweeps", () => {
         ctx.db,
         {
           entity: "product",
-          field: "categoryId",
+          fields: ["categoryId"],
           filters: { ids: [correction.id] },
         },
         {
@@ -524,7 +537,7 @@ describe("persisted Suggestion sweeps", () => {
         ctx.db,
         {
           entity: "product",
-          field: "categoryId",
+          fields: ["categoryId"],
           filters: { ids: [addition.id] },
         },
         {
@@ -571,13 +584,15 @@ describe("persisted Suggestion sweeps", () => {
       );
       ids.push(product.id);
     }
+    const pairSample = vi.fn(() => true);
     const runId = (
       await startSuggestionSweep(
         ctx.db,
-        { entity: "product", field: "categoryId", filters: { ids } },
+        { entity: "product", fields: ["categoryId"], filters: { ids } },
         {
           context: entityKernelContextSchema.parse(context),
           decisionModel: () => "typesafe/jev",
+          pairSample,
           wait: async () => {},
           suggestPorts: {
             jev: vi.fn(highConfidence),
@@ -592,6 +607,7 @@ describe("persisted Suggestion sweeps", () => {
       .from(suggestionTable)
       .where(eq(suggestionTable.runId, runId));
     const pairedRows = rows.filter((row) => row.pairKey !== null);
+    expect(pairSample).toHaveBeenCalledTimes(ids.length);
     expect(pairedRows.length).toBeGreaterThan(0);
     const reviewQueue = await listPendingSuggestions(ctx.db, {
       runId,
@@ -615,6 +631,177 @@ describe("persisted Suggestion sweeps", () => {
         "superseded",
       );
     }
+  });
+
+  it("filters pending pinned suggestions by kind and clears after a generic update", async () => {
+    const context = entityKernelContextSchema.parse(
+      createTestRequestContext(ctx.db, { auth: { userId: ctx.actor.userId } }),
+    );
+    const addition = await createProduct(
+      ctx.db,
+      makeProductInput({
+        name: "Synthetic suggestion addition",
+        manufacturer: "Synthetic maker",
+      }),
+      ctx.actor,
+    );
+    const correction = await createProduct(
+      ctx.db,
+      makeProductInput({
+        name: "Synthetic suggestion correction",
+        manufacturer: "Synthetic maker",
+        categoryId: taxonomyId("tools"),
+      }),
+      ctx.actor,
+    );
+    const started = await startSuggestionSweep(
+      ctx.db,
+      {
+        entity: "product",
+        fields: ["categoryId"],
+        filters: { ids: [addition.id, correction.id] },
+      },
+      {
+        context,
+        decisionModel: () => "typesafe/jev",
+        pairSample: () => true,
+        wait: async () => {},
+        suggestPorts: {
+          jev: vi.fn(decisionAt(0.6)),
+          registry: { "product.categoryId": categorySpec },
+        },
+      },
+    );
+    const additionRecordId = await resolveLiveShortcode(
+      ctx.db,
+      addition.id,
+      "product",
+    );
+    if (!additionRecordId)
+      throw new Error("synthetic addition did not resolve");
+    const list = async (kind: "any" | "addition" | "correction") => {
+      const result = await executeEntity(context, {
+        action: "list",
+        entity: "product",
+        filters: { suggestionPresenceFilter: kind },
+        pagination: { pageIndex: 0, pageSize: 100 },
+      });
+      if (result.action !== "list") throw new Error("Expected list result");
+      return result.items.map((row) => row.id);
+    };
+    expect(await list("any")).toEqual(
+      expect.arrayContaining([addition.id, correction.id]),
+    );
+    expect(await list("addition")).toContain(addition.id);
+    expect(await list("addition")).not.toContain(correction.id);
+    expect(await list("correction")).toContain(correction.id);
+    expect(await list("correction")).not.toContain(addition.id);
+    const [unpinned] = await getDb(ctx.db)
+      .select()
+      .from(suggestionTable)
+      .where(
+        and(
+          eq(suggestionTable.runId, started.id),
+          eq(
+            suggestionTable.recordId,
+            parseEntityId("product", additionRecordId),
+          ),
+          eq(suggestionTable.model, "@cf/cloudflare/clef"),
+        ),
+      );
+    expect(unpinned?.status).toBe("pending");
+    const [pinned] = await getDb(ctx.db)
+      .select({ id: suggestionTable.id })
+      .from(suggestionTable)
+      .where(
+        and(
+          eq(suggestionTable.runId, started.id),
+          eq(
+            suggestionTable.recordId,
+            parseEntityId("product", additionRecordId),
+          ),
+          eq(suggestionTable.model, "typesafe/jev"),
+        ),
+      );
+    if (!pinned)
+      throw new Error("synthetic pinned suggestion was not persisted");
+    await getDb(ctx.db)
+      .update(suggestionTable)
+      .set({ status: "superseded" })
+      .where(eq(suggestionTable.id, pinned.id));
+    expect(await list("any")).not.toContain(addition.id);
+    await executeEntity(context, {
+      action: "update",
+      entity: "product",
+      id: parseShortcodeFor("product", addition.id),
+      data: { categoryId: taxonomyShortcode("tools") },
+    });
+    expect(await list("any")).not.toContain(addition.id);
+  });
+
+  it("sweeps every target field only for rows selected by the list filters", async () => {
+    const context = entityKernelContextSchema.parse(
+      createTestRequestContext(ctx.db, { auth: { userId: ctx.actor.userId } }),
+    );
+    const matching = await createProduct(
+      ctx.db,
+      makeProductInput({
+        name: "Synthetic selected product",
+        manufacturer: "Synthetic maker",
+      }),
+      ctx.actor,
+    );
+    await createProduct(
+      ctx.db,
+      makeProductInput({
+        name: "Synthetic unselected product",
+        manufacturer: "Other maker",
+      }),
+      ctx.actor,
+    );
+    const processed: Array<{ id: string; field: string }> = [];
+    const suggest = vi.fn(async (_db, _runId, input) => {
+      const field = input.targets[0]!;
+      processed.push({ id: input.entityId!, field });
+      return fieldSuggestionsOut.parse({
+        suggestions: { [field]: null },
+        outcomes: {
+          [field]: {
+            kind: "evaluated",
+            answer: "none",
+            confidence: "high",
+            probability: 0.9,
+            alternatives: [],
+          },
+        },
+      });
+    });
+    const sweepInput = {
+      entity: "product" as const,
+      fields: ["categoryId", "tags"],
+      filters: { manufacturerSearch: "Synthetic maker", ids: [matching.id] },
+    };
+    const ports = {
+      context,
+      decisionModel: () => "typesafe/jev" as const,
+      pairSample: () => false,
+      suggest,
+      wait: async () => {},
+    };
+    const started = await startSuggestionSweep(ctx.db, sweepInput, {
+      ...ports,
+      pauseAfter: 1,
+    });
+    const paused = await getDb(ctx.db)
+      .select({ progress: runTable.progress })
+      .from(runTable)
+      .where(eq(runTable.id, started.id));
+    expect(suggestionSweepRunProgress.parse(paused[0]?.progress).done).toBe(1);
+    await resumeSuggestionSweep(ctx.db, started.id, ports);
+    expect(processed).toEqual([
+      { id: matching.id, field: "categoryId" },
+      { id: matching.id, field: "tags" },
+    ]);
   });
 
   it("keeps a stale high-confidence Expense Addition pending during auto-apply", async () => {
@@ -665,7 +852,7 @@ describe("persisted Suggestion sweeps", () => {
       ctx.db,
       {
         entity: "expense",
-        field: "spendingCategoryId",
+        fields: ["spendingCategoryId"],
         filters: { ids: [expense.shortcode] },
       },
       {
@@ -744,7 +931,7 @@ describe("persisted Suggestion sweeps", () => {
       ctx.db,
       {
         entity: "vendor",
-        field: "defaultSpendingCategoryId",
+        fields: ["defaultSpendingCategoryId"],
         filters: { ids: [vendor.shortcode] },
       },
       {
@@ -788,7 +975,7 @@ describe("persisted Suggestion sweeps", () => {
       ctx.db,
       {
         entity: "product",
-        field: "categoryId",
+        fields: ["categoryId"],
         filters: {
           ids: products.map((p) => p.id),
           categoryPresenceFilter: "none",
@@ -864,12 +1051,13 @@ describe("persisted Suggestion sweeps", () => {
       ctx.db,
       {
         entity: "product",
-        field: "categoryId",
+        fields: ["categoryId"],
         filters: { ids: products.map((p) => p.id) },
       },
       {
         context,
         decisionModel: () => "typesafe/jev",
+        pairSample: () => true,
         suggest,
         wait: async () => {},
       },
@@ -912,7 +1100,7 @@ describe("persisted Suggestion sweeps", () => {
         ctx.db,
         {
           entity: "product",
-          field: "categoryId",
+          fields: ["categoryId"],
           filters: { ids: [product.id] },
         },
         {
@@ -974,7 +1162,7 @@ describe("persisted Suggestion sweeps", () => {
         ctx.db,
         {
           entity: "product",
-          field: "categoryId",
+          fields: ["categoryId"],
           filters: { ids: [product.id] },
         },
         {
@@ -1046,7 +1234,7 @@ describe("persisted Suggestion sweeps", () => {
     };
     const input = {
       entity: "product" as const,
-      field: "categoryId",
+      fields: ["categoryId"],
       filters: { ids: [product.id] },
     };
     await startSuggestionSweep(ctx.db, input, ports);
@@ -1090,7 +1278,7 @@ describe("persisted Suggestion sweeps", () => {
         ctx.db,
         {
           entity: "product",
-          field: "categoryId",
+          fields: ["categoryId"],
           filters: { ids: [product.id, secondProduct.id] },
         },
         {

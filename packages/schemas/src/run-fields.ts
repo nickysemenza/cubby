@@ -355,7 +355,7 @@ export const chargeHuntOutcomeOf = (
 export const suggestionSweepRunInput = z.object({
   kind: z.literal("suggestion_sweep"),
   entity: z.string().min(1),
-  field: z.string().min(1),
+  fields: z.array(z.string().min(1)).min(1),
   filters: z.record(z.string(), z.json()),
   decisionModel: supportedDecisionModelSchema,
   taxonomyRevision: z.string().optional(),

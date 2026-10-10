@@ -1767,6 +1767,40 @@ const assertPolicyGapChecksExist = (
   }
 };
 
+const suggestionFilterDescriptors = (
+  fields: readonly EntityField[],
+): FilterDescriptor[] => {
+  if (!fields.some((field) => field.control?.suggest)) return [];
+  return [
+    {
+      columnId: "suggestionPresenceFilter",
+      field: "suggestionPresenceFilter",
+      urlKey: "suggestionPresenceFilter",
+      kind: "select",
+      placeholder: "Has suggestion",
+      options: [
+        { value: "any", label: "Any" },
+        { value: "addition", label: "Addition" },
+        { value: "correction", label: "Correction" },
+      ],
+      optionsRef: null,
+      optionsKey: null,
+      label: "Has suggestion",
+      schemaDescription: null,
+      deriveSchema: true,
+      schemaFromRead: false,
+      brandRef: null,
+      expandRef: null,
+      schemaRef: null,
+      stored: null,
+      range: null,
+      urlOnly: false,
+      nullable: null,
+      wire: { kind: "param", name: "suggestionPresenceFilter" },
+    },
+  ];
+};
+
 export const compileEntity = (
   // oxlint-disable-next-line anti-slop/no-unknown-parameters -- imported declaration boundary
   value: unknown,
@@ -1937,6 +1971,7 @@ export const compileEntity = (
     : [];
   const filterDescriptorsWithAudit = [
     ...filterDescriptors,
+    ...suggestionFilterDescriptors(declaredFieldModel.fields),
     ...auditDescriptors,
   ];
   const descriptorUrlKeys = filterDescriptorsWithAudit.map(

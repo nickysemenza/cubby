@@ -21,6 +21,26 @@ const PRODUCT_ID = testShortcode("product", "PRD-4K7M");
 const PURCHASE_ID = testShortcode("purchase", "PUR-4K7M");
 
 describe("manifestFilterConfig", () => {
+  it("exposes the generated suggestion filter only on entities with suggest targets", () => {
+    expect(
+      getEntityFilters("product").find(
+        (spec) => spec.columnId === "suggestionPresenceFilter",
+      ),
+    ).toMatchObject({
+      label: "Has suggestion",
+      kind: "select",
+      options: [
+        { value: "any", label: "Any" },
+        { value: "addition", label: "Addition" },
+        { value: "correction", label: "Correction" },
+      ],
+    });
+    expect(
+      getEntityFilters("recipe").some(
+        (spec) => spec.columnId === "suggestionPresenceFilter",
+      ),
+    ).toBe(false);
+  });
   it.each([
     ["task", "status"],
     ["task", "trade"],
