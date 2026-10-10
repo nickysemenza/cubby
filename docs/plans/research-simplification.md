@@ -149,6 +149,30 @@ Generate only after bootstrap dependencies exist. A registration-only migration
 is insufficient evidence for adopting additional machinery. No model comparison,
 production migration or live research ran in this experiment.
 
+### Debug observation storage
+
+The current browser debug-batch operation has one production caller:
+`operations/run.server.ts` calls `insertDebugEventOperations`. That helper uses
+the shared `insertOperation` writer with conflict-ignore event identity. Its
+completed rows are observations, not executable recovery checkpoints. The
+existing resend regression in `runs/operation.integration.test.ts` retains each
+event once after a lost response.
+
+`repo/activity.ts` projects these rows through three small kind-specific
+branches: device source, event name and original diagnostic payload. RunProgress
+stores typed discovery/suggestion snapshots, not equivalent diagnostic events;
+ImageProcessingEvent belongs to image jobs. Neither is an existing generic
+replacement for these Run observations. Changing stores would require new
+payload/read contracts and a preserving historical transformation or permanent
+dual reads. No measured deletion currently justifies that change.
+
+Retain the existing writer and projection. No caller, file, table or test is
+deleted by this audit; net code/schema reduction is zero. A future proposal must
+preserve event identity, raw diagnostics, actor ownership, retention and
+historical rendering, establish stronger coverage before deleting the resend
+regression, and obtain approval for any production migration. Do not count a
+renamed special case or a new event table as simplification.
+
 ### Code Mode and Computer workspace
 
 The [official Code Mode package](https://github.com/cloudflare/agents/blob/main/packages/codemode/README.md)

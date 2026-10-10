@@ -286,7 +286,11 @@ mailbox and authenticated-device acceptance only after explicit resumption.
 - 🤔 **Separate debug observations from replayable operations.** Replace
   `__debug_event` special cases with an existing bounded event/report path if it
   removes storage/read code. Preserve raw diagnostics, retention and historical
-  rendering; a new log table needs a demonstrated reduction and migration plan.
+  rendering. The [current storage audit](plans/research-simplification.md#debug-observation-storage)
+  found no equivalent reusable event store; moving these rows to RunProgress
+  would add contracts and a preserving migration without demonstrated reduction.
+  Keep this conditional; do not introduce another log table merely to remove the
+  projection branches.
 
 - 🟢 **Complete Run cost/time explanations.** The Runs list already shows cost,
   duration and attempts, and detail shows model timing. Add the missing browser
@@ -452,8 +456,10 @@ research acceptance.
   originals use authenticated, checksum-verified delivery; native originals stay
   in memory. Synthetic persisted-state regressions and the focused web journey
   cover ownership, retirement, supported-fact binding and bounded navigation;
-  the native client and viewer compile. Review, hosted checks and deployment are
-  pending. Installed native viewing and real-source acceptance remain open while
+  the native client and viewer compile. Independent review, exact-head hosted
+  checks, checksum-verified hosted artifacts and production deployment completed
+  in [#1825](https://github.com/nickysemenza/cubby/pull/1825). Synthetic native
+  viewing also passed. Installed household viewing and real-source acceptance remain open while
   live research is paused. Retained evidence remains distinct from current preview
   and does not establish research completion.
 
