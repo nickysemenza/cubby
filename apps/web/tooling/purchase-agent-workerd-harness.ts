@@ -10,6 +10,7 @@ import type { ScriptStep } from "./purchase-agent-script";
 /** One scripted purchase-agent scenario: the coordinator's steps and the gateway's outputs. */
 export type ScriptedScenario = {
   steps: ScriptStep[];
+  expectedInference?: { model: string; effort: string };
   purposeSteps?: Partial<Record<RunPurpose, ScriptStep[]>>;
   sourceSteps?: Array<{
     call: string;
@@ -66,6 +67,7 @@ export function scenarioControls(harness: TestHarness) {
     configure: async (scenario: ScriptedScenario) => {
       await post(toModel, "https://model.test/configure", {
         steps: scenario.steps,
+        expectedInference: scenario.expectedInference,
         purposeSteps: scenario.purposeSteps,
         sourceSteps: scenario.sourceSteps,
       });

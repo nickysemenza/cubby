@@ -204,6 +204,7 @@ test("imports saved order mail from the generic Vendor report and follows the li
   await authorizePurchaseAgent(getFixtureDb(), await fixtureUserId(page));
   await authorizeSeed(await createEvidenceHarnessContext(page), seed);
   await agent.configure({
+    expectedInference: { model: "gpt-6-luna", effort: "medium" },
     steps: researchOrder("mail", seed, "SYN-CONFIRM-1", "original-read"),
     purposeSteps: { product_enrichment: productGapSteps },
     assessments: [
@@ -308,6 +309,7 @@ test("imports saved order mail from the generic Vendor report and follows the li
       .from(schema.inventoryEntry)
       .where(eq(schema.inventoryEntry.productId, productId)),
   ).toEqual([]);
+  await expect.poll(async () => agent.emitted()).toContain("product-gap");
   expect(await agent.violations()).toEqual([]);
   const purchase = graph.purchases[0];
   if (!purchase) throw new Error("No Purchase was committed");
