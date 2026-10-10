@@ -156,5 +156,8 @@ nonisolated final class Gate: Sendable {
 /// it, and a value that turns true and back between two reads is missed.
 @MainActor
 func observe(until condition: @escaping @MainActor @Sendable () -> Bool) async {
-    for await satisfied in Observations(condition) where satisfied || Task.isCancelled { return }
+    // A closure literal, not `Observations(condition)`: converting the stored closure to
+    // `@isolated(any)` crashes Swift 6.3.3 (Xcode 26.6) in IR generation.
+    let changes = Observations { @MainActor in condition() }
+    for await satisfied in changes where satisfied || Task.isCancelled { return }
 }
