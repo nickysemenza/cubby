@@ -477,6 +477,11 @@ const main = () => {
     case "test":
       return test();
     case "check":
+      // Both halves run in parallel under one Nx process, and each would
+      // otherwise start a nested `nx run cubby-checks:apple-ffi`, which Nx
+      // rejects as already invoked in the chain. Ensuring it first lets both
+      // see a current xcframework.
+      ensureFfi();
       return run("pnpm", ["exec", "nx", "run", "apple:check"]);
     case "help":
     case "--help":
