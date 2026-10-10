@@ -344,11 +344,51 @@ const importApprovals = (run: RunDetail): ReportBlock[] => [
 ];
 
 /** The reviewable text and apply confirmation of a finding's proposed fix. */
+function captureProfileFix(
+  fix: Extract<
+    NonNullable<RunDetail["findings"][number]["proposedFix"]>,
+    { kind: "vendor_capture_profile" }
+  >,
+) {
+  const lines: Line[] = [];
+  lines.push(
+    line(
+      `Order history: ${fix.current.hints.ordersListUrl ?? "Unknown"} → ${fix.profile.hints.ordersListUrl ?? "Unknown"}`,
+    ),
+  );
+  lines.push(
+    line(
+      `Browser hosts: ${fix.current.browserDomains.join(", ")} → ${fix.profile.browserDomains.join(", ")}`,
+    ),
+  );
+  lines.push(
+    line(
+      `Pagination: ${fix.current.hints.pagination ?? "None"} → ${fix.profile.hints.pagination ?? "None"}`,
+    ),
+  );
+  lines.push(
+    line(
+      `Order links: ${fix.current.hints.orderLinkPattern ?? "None"} → ${fix.profile.hints.orderLinkPattern ?? "None"}`,
+    ),
+  );
+  lines.push(
+    line(
+      `Notes: ${fix.current.hints.notes.join("; ") || "None"} → ${fix.profile.hints.notes.join("; ") || "None"}`,
+    ),
+  );
+  return {
+    lines,
+    applyConfirm:
+      "Apply the displayed account navigation and authorize these browser hosts?",
+  };
+}
+
 function findingFix(finding: RunDetail["findings"][number]) {
   const fix = finding.proposedFix;
   const lines: Line[] = [];
   if (fix === null || fix.kind === "receive_purchase")
     return { lines, applyConfirm: null };
+  if (fix.kind === "vendor_capture_profile") return captureProfileFix(fix);
   if (fix.kind === "research_field_correction") {
     for (const correction of fix.corrections) {
       lines.push(
@@ -420,7 +460,8 @@ function findingActions(
   const reviewedFingerprint =
     finding.proposedFix?.kind === "replace_aggregate_line" ||
     finding.proposedFix?.kind === "validation_corrections" ||
-    finding.proposedFix?.kind === "research_field_correction"
+    finding.proposedFix?.kind === "research_field_correction" ||
+    finding.proposedFix?.kind === "vendor_capture_profile"
       ? (finding.proposedFix.reviewSnapshot?.fingerprint ?? null)
       : null;
   const apply: ReportCommand[] =

@@ -1,5 +1,8 @@
 import { parseEntityId } from "@cubby/schemas/identifiers";
-import type { PurchaseAgentEvent } from "@cubby/schemas/purchase-import";
+import {
+  proposedImportFix,
+  type PurchaseAgentEvent,
+} from "@cubby/schemas/purchase-import";
 import {
   researchSourceMetadata,
   retainedResearchObservation,
@@ -24,6 +27,9 @@ import {
   run,
   runTarget,
   runEvidence,
+  runFinding,
+  vendor,
+  vendorAccount,
 } from "~/server/db/schema";
 import { getDb, withTransaction } from "~/server/repo/database-helpers";
 import { insertWithShortcode } from "~/server/repo/shortcode-utils";
@@ -31,6 +37,7 @@ import { insertWithShortcode } from "~/server/repo/shortcode-utils";
 import { startAccountSync } from "./account-sync";
 import { startSelectedChargeRun } from "./charge-runs";
 import { dispatchRunEvent } from "./dispatch";
+import { resolveRunFinding } from "./findings";
 import { dispatchImportHunts } from "./hunts";
 import { submitReceiptEvidence } from "./receipt-evidence";
 import { resolveImportResearch } from "./research-import";
@@ -292,6 +299,263 @@ describe("durable research objective admission", () => {
       next,
     };
   }
+
+  it.each([
+    "dismiss",
+    "apply",
+    "stale_vendor",
+    "tampered_source",
+    "unrelated_http_link",
+    "rebound_account",
+    "rebound_vendor",
+  ] as const)(
+    "retains learned account navigation as one reviewed proposal without granting browser hosts: %s",
+    async (action) => {
+      const s = await fixture();
+      const started = await startAccountSync(
+        ctx.db,
+        s.party.id,
+        { vendorAccountId: s.account.shortcode },
+        s.queue,
+      );
+      const admitted = await s.admitted(started.runId);
+      await s.next(admitted.id);
+      const database = getDb(ctx.db);
+      const target = await database.query.runTarget.findFirst({
+        where: eq(runTarget.runId, admitted.id),
+      });
+      if (!target) throw new Error("Synthetic history objective missing");
+      const stored = new Map<string, string>();
+      const service = researchServiceFor(
+        ctx.db,
+        fromPartial<Env>({ R2_KEY_PREFIX: "synthetic-profile" }),
+        admitted.id,
+        {
+          observations: {
+            fetchPage: async () => ({
+              status: "fetched",
+              url: "https://shop.example.test/account",
+              html:
+                '<a href="/account/orders">Orders</a><a href="https://signin.example.test/customer">Customer sign-in</a>' +
+                (action === "unrelated_http_link"
+                  ? '<a href="http://help.example.test/">Help</a>'
+                  : ""),
+              durationMs: 1,
+            }),
+            storage: {
+              put: async (key, bytes) => {
+                stored.set(key, new TextDecoder().decode(bytes));
+              },
+            },
+          },
+        },
+      );
+      const observed = retainedResearchObservation.parse(
+        await service.researchWebRead(
+          { workRef: target.id, url: "https://shop.example.test/account" },
+          "synthetic-profile-source",
+        ),
+      );
+      const proposal = {
+        workRef: target.id,
+        status: "ambiguous" as const,
+        identity: {
+          evidenceIds: [observed.evidenceId],
+          reasoning:
+            "The retained account page exposes order history and hosted sign-in.",
+        },
+        captureProfile: {
+          evidenceIds: [observed.evidenceId],
+          hints: {
+            ordersListUrl: "https://shop.example.test/account/orders",
+            pagination: null,
+            orderLinkPattern: null,
+            notes: [],
+          },
+          browserDomains: ["shop.example.test", "signin.example.test"],
+        },
+        detail:
+          "Review the learned account navigation and additional sign-in host before use.",
+      };
+      const input = {
+        runId: admitted.id,
+        workRef: target.id,
+        callId: "synthetic-profile-proposal",
+        proposal,
+      };
+      const ports: Parameters<typeof resolveImportResearch>[2] = {
+        readEvidence: async (row) => {
+          const content = stored.get(row.objectKey);
+          if (!content) throw new Error("Synthetic profile source missing");
+          return content;
+        },
+        assess: async () => ({
+          identityVerified: true,
+          acceptedFacts: [],
+          acceptedIdentifiers: [],
+          acceptedImages: [],
+          acceptedOrders: [],
+          rejected: [],
+        }),
+      };
+      const checkRebound = async () => {
+        const otherVendor = await insertWithShortcode(ctx.db, "vendor", {
+          name: "Synthetic second shop",
+          browserDomains: ["shop.example.test"],
+        });
+        const otherAccount = await insertWithShortcode(
+          ctx.db,
+          "vendorAccount",
+          {
+            label: "Synthetic second account",
+            vendorId: otherVendor.id,
+            ledgerPartyId: s.party.id,
+            browserSyncEnabled: true,
+          },
+        );
+        await database
+          .update(run)
+          .set({ vendorAccountId: otherAccount.id })
+          .where(eq(run.id, admitted.id));
+        await expect(
+          resolveImportResearch(ctx.db, input, ports),
+        ).rejects.toThrow(/frozen.*account/i);
+        expect(
+          await database
+            .select()
+            .from(runFinding)
+            .where(eq(runFinding.runId, admitted.id)),
+        ).toHaveLength(0);
+      };
+      if (action === "rebound_account") {
+        await checkRebound();
+        return;
+      }
+      const checkVendorRebound = async () => {
+        const other = await insertWithShortcode(ctx.db, "vendor", {
+          name: "Synthetic rebound Vendor",
+          browserDomains: ["shop.example.test"],
+        });
+        await database
+          .update(vendorAccount)
+          .set({ vendorId: other.id })
+          .where(eq(vendorAccount.id, s.account.id));
+        await expect(
+          resolveImportResearch(ctx.db, input, ports),
+        ).rejects.toThrow(/retained.*Vendor/i);
+        expect(
+          await database
+            .select()
+            .from(runFinding)
+            .where(eq(runFinding.runId, admitted.id)),
+        ).toHaveLength(0);
+      };
+      if (action === "rebound_vendor") {
+        await checkVendorRebound();
+        return;
+      }
+      const result = await resolveImportResearch(ctx.db, input, ports);
+      expect(await resolveImportResearch(ctx.db, input, ports)).toEqual(result);
+      const findings = await database
+        .select()
+        .from(runFinding)
+        .where(eq(runFinding.runId, admitted.id));
+      expect(findings).toHaveLength(1);
+      const finding = findings[0]!;
+      expect(finding).toMatchObject({
+        entityKind: "run",
+        entityId: admitted.id,
+        status: "open",
+        proposedFix: { kind: "vendor_capture_profile", vendorId: s.vendor.id },
+      });
+      const current = await database.query.vendor.findFirst({
+        where: eq(vendor.id, s.vendor.id),
+      });
+      expect(current?.browserDomains).toEqual(["shop.example.test"]);
+      expect(current?.agentHints).toMatchObject({ ordersListUrl: null });
+      await expect(
+        resolveRunFinding(
+          ctx.db,
+          { id: finding.id, action: "apply" },
+          ctx.actor,
+        ),
+      ).rejects.toThrow(/review/i);
+      const fix = proposedImportFix.parse(finding.proposedFix);
+      if (fix.kind !== "vendor_capture_profile")
+        throw new Error("Synthetic profile fix missing");
+      const apply = () =>
+        resolveRunFinding(
+          ctx.db,
+          {
+            id: finding.id,
+            action: "apply",
+            reviewedFingerprint: fix.reviewSnapshot.fingerprint,
+          },
+          ctx.actor,
+          undefined,
+          ports.readEvidence,
+        );
+      const checkApply = async () => {
+        await expect(apply()).resolves.toMatchObject({ status: "applied" });
+        const applied = await database.query.vendor.findFirst({
+          where: eq(vendor.id, s.vendor.id),
+        });
+        expect(applied?.browserDomains).toEqual(
+          proposal.captureProfile.browserDomains,
+        );
+        expect(applied?.agentHints).toEqual(proposal.captureProfile.hints);
+        await expect(apply()).rejects.toThrow(/already.*resolved/i);
+      };
+      const checkStale = async () => {
+        await database
+          .update(vendor)
+          .set({
+            agentHints: {
+              ...proposal.captureProfile.hints,
+              ordersListUrl: "https://shop.example.test/member-choice",
+            },
+          })
+          .where(eq(vendor.id, s.vendor.id));
+        await expect(apply()).rejects.toThrow(/changed.*review/i);
+        const current = await database.query.vendor.findFirst({
+          where: eq(vendor.id, s.vendor.id),
+        });
+        expect(current?.agentHints).toMatchObject({
+          ordersListUrl: "https://shop.example.test/member-choice",
+        });
+      };
+      const checkTampered = async () => {
+        const source = await database.query.runEvidence.findFirst({
+          where: eq(runEvidence.id, observed.evidenceId),
+        });
+        if (!source) throw new Error("Synthetic source missing");
+        stored.set(source.objectKey, "Changed retained source bytes");
+        await expect(apply()).rejects.toThrow(/checksum changed/i);
+      };
+      const checks = {
+        apply: checkApply,
+        stale_vendor: checkStale,
+        tampered_source: checkTampered,
+        dismiss: async () => {},
+        unrelated_http_link: async () => {},
+        rebound_account: async () => {},
+        rebound_vendor: async () => {},
+      };
+      await checks[action]();
+      if (action !== "apply")
+        await resolveRunFinding(
+          ctx.db,
+          { id: finding.id, action: "dismiss" },
+          ctx.actor,
+        );
+      expect(
+        await database
+          .select()
+          .from(runEvidence)
+          .where(eq(runEvidence.id, observed.evidenceId)),
+      ).toHaveLength(1);
+    },
+  );
 
   it("starts account history as owned research work instead of completing an empty Run", async () => {
     const s = await fixture();

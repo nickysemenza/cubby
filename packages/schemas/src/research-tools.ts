@@ -1,3 +1,4 @@
+import { vendorCaptureProfile } from "./vendor-import-fields";
 import { z } from "zod";
 import { tradeSchema } from "./task-fields";
 import { externalIdKind } from "./external-id";
@@ -170,6 +171,7 @@ export const researchWorkResolve = z.strictObject({
     .describe(
       "Scope coverage for an assigned frozen account-history or explicit backfill objective. Omit for an individual mail or Product task; one source does not establish broader scope exhaustion.",
     ),
+  captureProfile: vendorCaptureProfile.optional(),
   detail: z.string().trim().min(1).max(8_000),
 });
 /** Receipt decoding only: never mounted as a live tool input. Preserves the

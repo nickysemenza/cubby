@@ -1,3 +1,8 @@
+import {
+  vendorCaptureProfile,
+  vendorAgentHints,
+  vendorDomainList,
+} from "./vendor-import-fields";
 import { tradeSchema } from "./task-fields";
 import { z } from "zod";
 import { productCategoryShortcode } from "./identifier-fields";
@@ -487,6 +492,21 @@ export const researchFieldCorrection = z.object({
 
 export const proposedImportFix = z.discriminatedUnion("kind", [
   researchFieldCorrection,
+  z.object({
+    kind: z.literal("vendor_capture_profile"),
+    runId: z.uuid(),
+    vendorId: z.uuid(),
+    vendorAccountId: z.uuid(),
+    targetId: z.uuid(),
+    profile: vendorCaptureProfile,
+    current: z.object({
+      hints: vendorAgentHints,
+      browserDomains: vendorDomainList,
+    }),
+    reviewSnapshot: z.object({
+      fingerprint: z.string().regex(/^[a-f0-9]{64}$/u),
+    }),
+  }),
   z.object({
     kind: z.literal("validation_corrections"),
     purchaseId: z.uuid(),

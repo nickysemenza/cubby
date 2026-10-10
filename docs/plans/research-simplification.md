@@ -266,3 +266,53 @@ checks cover checkpoint-before-next-page, failure, and cancellation. Adaptive
 research keeps provider diagnostics and frozen acquisition replay; it does not
 retain the retired fixed vendor-page choreography. Live model acceptance remains
 separate from these deterministic checks.
+
+### Vendor capture-profile implementation contract
+
+The current researcher mounts no general Vendor mutation actions
+(`import-run-agent.ts`). `loadRunScope` already reads `Vendor.agentHints` and
+`browserDomains`; the maintained Vendor writer and generic entity editor already
+own their persisted representation. The missing capability is retained learning
+and explicit review, not another profile store or a second browser runtime.
+
+Use the existing `work_resolve` evidence/write contract to propose an observed
+profile for an owned account-history objective. Store the typed proposal in the
+existing `RunFinding.proposedFix` JSON using the existing `other` finding kind,
+as a review of the owning Run, with the exact Vendor target in the typed fix,
+and apply it through `resolveRunFinding` and `updateVendor`. Keep navigation
+hints (`ordersListUrl`, pagination, order-link pattern and notes) separate from
+host authorization (`browserDomains`). A retained page can suggest a host; it
+cannot authorize one. Applying a reviewed host change requires the member's
+explicit fingerprint-bound review. Preserve existing Vendor choices until that
+review; do not expose general Vendor patching to unattended research.
+
+Admission binds the live member-owned VendorAccount, its Vendor, Run, objective,
+operation and server-issued evidence references. Reject foreign sources,
+retired/deleted evidence, non-HTTPS URLs and credential-bearing navigation hints.
+A URL must come from retained source metadata or an observed link; arbitrary
+proposal text is insufficient. Keep original source bytes and support when a
+proposal is dismissed. The review fingerprint covers the current profile,
+proposed changes and live evidence checksums. A changed Vendor, account binding
+or source requires a fresh review. Operation replay returns the same proposal;
+settled targets remain immutable.
+
+The expected caller changes are the shared research resolution and proposed-fix
+schemas, the account-history resolver, existing finding apply/target validation,
+generic finding preview, and the maintained purchase-import skill. Generate
+native/OpenAPI/MCP shapes from those contracts. Both interactive and unattended
+execution keep the same evidence/write admission; this does not add an MCP
+launch mode or edit the MCP HTTP handler.
+
+Failure-first persisted regressions must establish: reviewed admission is
+required; matching source/profile replay is idempotent; a foreign account or
+source cannot propose/apply; changed profile or evidence refuses an old review;
+dismissal retains evidence; learning never changes browser permissions before
+review. A small synthetic UI journey must show the profile diff and apply/dismiss
+actions. Real-model account-history learning and authenticated redirects remain
+separate acceptance after research resumes.
+
+No new table, database reset, or production data migration is expected. No file
+or named regression is currently scheduled for deletion in this capability
+slice; report its measured net addition honestly. It reuses the current profile,
+review and write infrastructure rather than claiming an unimplemented code
+reduction. Broader Code Mode and storage consolidation remains a distinct audit.

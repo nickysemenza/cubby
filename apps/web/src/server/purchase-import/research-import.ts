@@ -85,6 +85,7 @@ import {
 } from "./research-retention";
 import { loadMailResearchSources } from "./research-run";
 import type { ResearchAssessor } from "./research-support";
+import { proposeVendorCaptureProfile } from "./research-vendor-profile";
 import { lockPartySettlement } from "./retained-settlement";
 import {
   loadImportSourceFamilyOrders,
@@ -948,6 +949,7 @@ export async function resolveImportResearch(
           ...proposal.emailLinks.flatMap((link) => link.evidenceIds),
           ...proposal.facts.map((fact) => fact.evidenceId),
           ...(proposal.progress?.evidenceIds ?? []),
+          ...(proposal.captureProfile?.evidenceIds ?? []),
         ]),
       ];
       const observations = await loadResearchEvidence(
@@ -1192,6 +1194,17 @@ export async function resolveImportResearch(
         let progressed = false;
         let hasWriteGaps = false;
         let hasMemberContradictions = false;
+        if (proposal.captureProfile) {
+          await proposeVendorCaptureProfile(
+            tx,
+            scope.id,
+            target.id,
+            proposal.captureProfile,
+            ports.readEvidence,
+          );
+          progressed = true;
+          hasMemberContradictions = true;
+        }
         const canonicalNoIdOrders = new Set<string>();
         const acceptedPurchases = new Map<
           number,
