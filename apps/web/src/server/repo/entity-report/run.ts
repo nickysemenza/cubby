@@ -547,7 +547,10 @@ const importEvidence = (run: RunDetail): ReportBlock[] => {
       title: evidence.title ?? evidence.filename ?? evidence.sourceKind,
       at: evidence.capturedAt ?? evidence.createdAt,
       lines: [
-        line(evidence.sourceKind, "muted"),
+        line(
+          `${evidence.sourceKind}${evidence.mediaType ? ` · ${evidence.mediaType}` : ""}${evidence.checksum ? ` · ${evidence.checksum}` : ""}`,
+          "muted",
+        ),
         ...(evidence.supportedFacts ?? []).map((fact) =>
           line(
             `${fact.entityShortcode} · ${fact.fieldPath}: ${z.string().safeParse(fact.value).data ?? JSON.stringify(fact.value)}`,
@@ -559,6 +562,7 @@ const importEvidence = (run: RunDetail): ReportBlock[] => {
         : undefined,
     }),
     imageUrl: evidence.previewUrl,
+    originalMediaUrl: evidence.mediaUrl,
   }));
   const captures = evidenceRows
     .filter((source) => source.imageUrl)

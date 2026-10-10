@@ -1,6 +1,7 @@
 import CubbyKit
 import Nuke
 import NukeUI
+import PDFKit
 import SwiftUI
 
 /// The record a report slot belongs to, so a `records` block's verbs have something to act on.
@@ -18,6 +19,7 @@ struct RecordRowView: View {
     var large = false
     /// Runs the row's commands (a run's approve, apply, dismiss); nil where none are offered.
     var model: ReportSlotModel?
+    @State private var showingOriginal = false
 
     var body: some View {
         if let entity = row.entity, let id = row.recordID {
@@ -83,6 +85,13 @@ struct RecordRowView: View {
                 Text(text).font(.caption.monospaced()).textSelection(.enabled)
             }
             .font(.caption)
+        }
+        if let url = row.originalMediaURL {
+            Button("Open original") { showingOriginal = true }
+                .font(.fieldGuideLabel).frame(minHeight: 44)
+                .sheet(isPresented: $showingOriginal) {
+                    ReportOriginalMedia(url: url).nativeSheet(.preview)
+                }
         }
         if let label = row.externalLinkLabel, let url = row.externalLinkURL {
             Link(label, destination: url).font(.fieldGuideLabel).frame(minHeight: 44)
@@ -287,6 +296,79 @@ extension ReportPresentation.Tone {
 /// A `records` report block: the server's rows and the slot's declared verbs, which the one
 /// generic hero-action runner executes from their plans. Nothing here is per entity: the server
 /// says which rows and which verbs; the plans say which operations.
+private struct ReportOriginalMedia: View {
+    let url: URL
+    @Environment(AppModel.self) private var appModel
+    @Environment(\.dismiss) private var dismiss
+    @State private var document: PDFDocument?
+    @State private var bytes: Data?
+    @State private var error: String?
+
+    var body: some View {
+        VStack {
+            HStack {
+                Text("Retained original").font(.headline); Spacer(); Button("Done") { dismiss() }
+            }
+            if let document {
+                RetainedPDFView(document: document)
+            } else if let bytes {
+                LazyImage(
+                    request: ImageRequest(
+                        id: url.absoluteString, data: { bytes },
+                        options: [.disableMemoryCache, .disableDiskCache])
+                ) { state in
+                    if let image = state.image {
+                        image.resizable().scaledToFit()
+                    } else if let error = state.error {
+                        Text(error.localizedDescription).textSelection(.enabled)
+                    } else {
+                        ProgressView()
+                    }
+                }
+                .onCompletion { result in
+                    if case .failure(let error) = result {
+                        Diagnostics.report(error, context: "Retained original")
+                    }
+                }
+            } else if let error {
+                Text(error).textSelection(.enabled)
+            } else {
+                ProgressView()
+            }
+        }
+        .padding()
+        .task(id: url) {
+            do {
+                let data = try await appModel.client.reportMedia(url.absoluteString)
+                try Task.checkCancellation()
+                document = PDFDocument(data: data)
+                if document == nil { bytes = data }
+            } catch is CancellationError {} catch {
+                Diagnostics.report(error, context: "Retained original")
+                self.error = error.localizedDescription
+            }
+        }
+    }
+}
+
+#if os(macOS)
+    private struct RetainedPDFView: NSViewRepresentable {
+        let document: PDFDocument
+        func makeNSView(context: Context) -> PDFView {
+            let view = PDFView(); view.autoScales = true; return view
+        }
+        func updateNSView(_ view: PDFView, context: Context) { view.document = document }
+    }
+#else
+    private struct RetainedPDFView: UIViewRepresentable {
+        let document: PDFDocument
+        func makeUIView(context: Context) -> PDFView {
+            let view = PDFView(); view.autoScales = true; return view
+        }
+        func updateUIView(_ view: PDFView, context: Context) { view.document = document }
+    }
+#endif
+
 private struct ReportMediaImage: View {
     let url: URL
     @Environment(AppModel.self) private var appModel
@@ -305,6 +387,11 @@ private struct ReportMediaImage: View {
                         ProgressView()
                     }
                 }
+                .onCompletion { result in
+                    if case .failure(let error) = result {
+                        Diagnostics.report(error, context: "Retained report media")
+                    }
+                }
             } else if let error {
                 Text(error).font(.caption)
             } else {
@@ -315,10 +402,12 @@ private struct ReportMediaImage: View {
             request = nil
             error = nil
             do {
-                let prepared = try await appModel.client.reportMediaRequest(url.absoluteString)
+                let client = appModel.client
                 try Task.checkCancellation()
                 request = ImageRequest(
-                    urlRequest: prepared, options: [.disableMemoryCache, .disableDiskCache])
+                    id: url.absoluteString,
+                    data: { try await client.reportMedia(url.absoluteString) },
+                    options: [.disableMemoryCache, .disableDiskCache])
             } catch is CancellationError {} catch {
                 Diagnostics.report(error, context: "Retained report media")
                 self.error = error.localizedDescription

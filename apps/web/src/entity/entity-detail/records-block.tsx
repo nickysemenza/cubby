@@ -164,6 +164,16 @@ function RowExtras({
         </details>
       ) : null}
       <RowActionPlacement inDetailBar={inDetailBar}>
+        {row.originalMediaUrl ? (
+          <a
+            href={row.originalMediaUrl}
+            target="_blank"
+            rel="noreferrer"
+            className={buttonVariants({ variant: "outline" })}
+          >
+            Open original
+          </a>
+        ) : null}
         {row.externalLink ? (
           <a
             href={row.externalLink.url}

@@ -143,6 +143,7 @@ public struct ReportPresentation: Hashable, Sendable {
         /// Raw material kept out of the way (an operation's arguments).
         public let detailLabel: String?
         public let detailText: String?
+        public var originalMediaURL: URL? = nil
         public var externalLinkLabel: String? = nil
         public var externalLinkURL: URL? = nil
         /// Commands on this row; each runs an existing operation after its declared confirmation.
@@ -452,6 +453,7 @@ public struct ReportPresentation: Hashable, Sendable {
                                 Line(text: $0.text, tone: $0.tone.flatMap { Tone(rawValue: $0.rawValue) })
                             },
                             detailLabel: row.detail?.label, detailText: row.detail?.text,
+                            originalMediaURL: row.originalMediaUrl.flatMap { URL(string: $0) },
                             externalLinkLabel: row.externalLink?.label,
                             externalLinkURL: row.externalLink.flatMap { URL(string: $0.url) },
                             commands: row.commands ?? [], choice: row.choice.map(choice))

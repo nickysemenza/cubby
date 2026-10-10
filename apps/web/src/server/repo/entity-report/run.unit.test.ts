@@ -263,6 +263,7 @@ describe("import report blocks", () => {
             targetId: null,
             sourceKind: "browser_capture",
             filename: "fixture-order.pdf",
+            mediaUrl: "/api/import/evidence?retained=synthetic",
             mediaType: "application/pdf",
             checksum: "fixture-checksum",
             createdAt: "2026-09-20T16:00:00.000Z",
@@ -270,8 +271,9 @@ describe("import report blocks", () => {
         ],
       }),
     );
-    expect(recordsOf(blocks).rows[0]).toMatchObject({
+    expect(recordsOf(blocks, "Retained sources").rows[0]).toMatchObject({
       title: "fixture-order.pdf",
+      originalMediaUrl: "/api/import/evidence?retained=synthetic",
       lines: [
         {
           text: "browser_capture · application/pdf · fixture-checksum",

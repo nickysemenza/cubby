@@ -49,6 +49,16 @@ struct ClientQueryTests {
         }
     }
 
+    @Test func retainedOriginalUsesAuthenticatedTransportAndPreservesBytes() async throws {
+        let bytes = Data("%PDF-synthetic-original".utf8)
+        let request = try await capture(returning: bytes) { client in
+            let received = try await client.reportMedia("/api/import/evidence?evidenceId=synthetic")
+            #expect(received == bytes)
+        }
+        #expect(request.value(forHTTPHeaderField: "Authorization") == "Bearer tok")
+        #expect(request.url?.path == "/api/import/evidence")
+    }
+
     private func capture(returning payload: Data, _ body: (CubbyClient) async throws -> Void) async throws
         -> URLRequest
     {

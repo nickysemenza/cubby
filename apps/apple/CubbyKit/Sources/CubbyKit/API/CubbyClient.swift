@@ -16,6 +16,8 @@ public actor CubbyClient {
     public let credentials: CredentialProvider
     /// Internal so `Generated/ClientOperations.swift` can extend the client.
     let api: Client
+    private let mediaTransport: URLSessionTransport
+    private let mediaAuth: CubbyAuthMiddleware
 
     public init(
         baseURL: URL, credentials: CredentialProvider, identity: ClientIdentity = .unknown,
@@ -27,6 +29,8 @@ public actor CubbyClient {
         let transport = URLSessionTransport(configuration: .init(session: session))
         let auth = CubbyAuthMiddleware(
             credentials: credentials, identity: identity, observer: requestObserver)
+        self.mediaTransport = transport
+        self.mediaAuth = auth
         // The spec's `servers` entry is "/", so the base URL must always be supplied here.
         // `JSONNullMiddleware` is inert unless `sending(_:_:)` scopes a composed body around a
         // call, so every other request through `api` keeps the typed body exactly.
@@ -55,6 +59,27 @@ public actor CubbyClient {
             request.setValue(field.value, forHTTPHeaderField: field.name.rawName)
         }
         return request
+    }
+
+    /// Retained originals use the same response authentication and raw error handling as RPCs.
+    public func reportMedia(_ reference: String) async throws -> Data {
+        let prepared = try await reportMediaRequest(reference)
+        guard let url = prepared.url else {
+            throw CubbyAPIError(status: 0, operationID: "report.media", detail: nil)
+        }
+        let components = URLComponents(url: url, resolvingAgainstBaseURL: false)!
+        var request = HTTPRequest(
+            method: .get, scheme: nil, authority: nil,
+            path: components.percentEncodedPath + (components.percentEncodedQuery.map { "?" + $0 } ?? ""))
+        request.headerFields[.cacheControl] = "no-store"
+        let transport = mediaTransport
+        let (_, body) = try await mediaAuth.intercept(
+            request, body: nil, baseURL: baseURL, operationID: "report.media"
+        ) { request, body, baseURL in
+            try await transport.send(request, body: body, baseURL: baseURL, operationID: "report.media")
+        }
+        guard let body else { return Data() }
+        return try await Data(collecting: body, upTo: 50 * 1024 * 1024)
     }
 
     // MARK: - Products

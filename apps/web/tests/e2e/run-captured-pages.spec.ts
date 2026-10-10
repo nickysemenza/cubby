@@ -1,3 +1,4 @@
+import { z } from "zod";
 import { parseShortcodeFor } from "@cubby/schemas/identifiers";
 import { sha256Hex } from "@cubby/shared/sha256";
 import { eq } from "drizzle-orm";
@@ -171,10 +172,11 @@ test("retained captures open beside their accepted facts with bounded navigation
   expect(original.status()).toBe(200);
   expect(original.headers()["cache-control"]).toBe("private, no-store");
   expect(await original.body()).toEqual(png);
-  for (const headers of [
+  const invalidCredentials: Record<string, string>[] = [
     { Authorization: "Bearer invalid-synthetic-token" },
     { "x-api-key": "invalid-synthetic-key" },
-  ]) {
+  ];
+  for (const headers of invalidCredentials) {
     expect((await page.request.get(mediaUrl, { headers })).status()).toBe(401);
   }
   const anonymous = await browser.newContext({
@@ -185,6 +187,33 @@ test("retained captures open beside their accepted facts with bounded navigation
       new URL(mediaUrl, page.url()).href,
     );
     expect(denied.status()).toBe(401);
+    const keyResponse = await page.request.post("/api/auth/api-key/create", {
+      data: { name: "Retained media acceptance", configId: "http-api" },
+      headers: { Origin: new URL(page.url()).origin },
+    });
+    expect(keyResponse.status()).toBe(200);
+    const key = z
+      .object({ id: z.string(), key: z.string() })
+      .parse(await keyResponse.json());
+    try {
+      const admitted = await anonymous.request.get(
+        new URL(mediaUrl, page.url()).href,
+        {
+          headers: { "x-api-key": key.key },
+        },
+      );
+      expect(admitted.status()).toBe(200);
+      expect(await admitted.body()).toEqual(png);
+    } finally {
+      expect(
+        (
+          await page.request.post("/api/auth/api-key/delete", {
+            data: { keyId: key.id, configId: "http-api" },
+            headers: { Origin: new URL(page.url()).origin },
+          })
+        ).status(),
+      ).toBe(200);
+    }
   } finally {
     await anonymous.close();
   }
