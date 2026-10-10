@@ -5,8 +5,9 @@ report flakes, infrastructure, and unavailable checks separately. Use an
 isolated worktree when maintenance must not alter the configured checkout.
 
 GitHub Actions verifies every PR and `main` push. Observe required checks on
-the exact final head before merge; a green earlier commit is not evidence for a
-later one. Validate deploy-only steps against CI token scopes because PR jobs do
+the final head before merge; a pass replayed from the shared Nx cache for the
+same content counts, but a green earlier commit with different content is not
+evidence for a later one. Validate deploy-only steps against CI token scopes because PR jobs do
 not exercise them. Prefer a fresh branch after a squash merge.
 
 Playwright CI covers desktop Chromium only. For changes to phone-web layout or

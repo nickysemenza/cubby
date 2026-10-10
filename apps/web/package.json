@@ -6,7 +6,7 @@
     "dev": "tsx tooling/dev/index.ts start",
     "build": "pnpm run build:cf",
     "deploy": "pnpm run deploy:cf",
-    "test:prepare": "node ../../scripts/generator/ensure.ts && node ../mcp-apps/build.mjs --if-stale",
+    "test:prepare": "node ../../scripts/generator/ensure.ts && pnpm exec nx run @cubby/mcp-apps:build",
     "test:mark-success": "node -e \"require('node:fs').writeFileSync('.vitest-failures.txt', '')\"",
     "test": "pnpm test:prepare && vitest run --project unit --project mcp-contract --project worker-safety --project ui && pnpm test:mark-success",
     "test:unit": "vitest run --project unit",

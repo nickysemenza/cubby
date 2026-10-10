@@ -40,12 +40,15 @@
     },
     "bindings": {
       "command": "pnpm --filter @cubby/web types:check",
-      "cache": false
+      "cache": true,
+      "inputs": ["gate"]
     },
     "script-tests": {
       "command": "pnpm test:scripts",
-      "cache": false
+      "cache": true,
+      "inputs": ["gate"]
     },
+    // The advisory database changes without any repository change.
     "security": {
       "command": "pnpm audit:security",
       "cache": false

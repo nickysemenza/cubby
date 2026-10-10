@@ -1,0 +1,17 @@
+{
+  "$schema": "../../node_modules/nx/schemas/project-schema.json",
+  "name": "@cubby/mcp-apps",
+  "targets": {
+    // Package.json infers the command. The gitignored bundle is restored from
+    // the cache when these sources are unchanged.
+    "build": {
+      "cache": true,
+      "inputs": [
+        "default",
+        "{workspaceRoot}/packages/design-tokens/**/*",
+        "{workspaceRoot}/package.json"
+      ],
+      "outputs": ["{projectRoot}/dist"]
+    }
+  }
+}

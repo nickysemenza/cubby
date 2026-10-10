@@ -178,12 +178,11 @@ including a screenshot and UI tree after replay failure; use
 
 ## Build reuse and a clean checkout
 
-Every simulator lane, local or hosted, builds one simulator-generic profile
-(`scripts/apple-simulator-build-cache.ts`) and stamps the bundle with a
-certificate of its compiler inputs, resolved packages, toolchain, and bundle
-bytes. A later lane, worktree restart, or disposable simulator installs that
-bundle without compiling when the certificate still matches; the run bundle
-records `runtime.appBuild` as `reused-certified` or `compiled`. Its
+Every simulator lane, local or hosted, builds through the cached
+`apple:simulator-build` Nx target (one simulator-generic profile in
+`scripts/apple-check.sh`). A later lane, worktree restart, or disposable
+simulator gets that app restored from the Nx cache, locally or from the shared
+remote cache, when its inputs and Xcode version are unchanged. Its
 `native-build` phase includes `pnpm apple gen`, so setup and scenario time
 stay separate in `phases`.
 

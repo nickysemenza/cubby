@@ -1,19 +1,38 @@
 {
   "$schema": "../../node_modules/nx/schemas/project-schema.json",
   "name": "apple",
+  "namedInputs": {
+    // The merge-gate key plus the selected Xcode. Rust is absent: CI hashes
+    // before its Rust setup can change the active compiler, and the probe and
+    // the run must agree on the key.
+    "appleGate": [
+      "gate",
+      {
+        "runtime": "xcodebuild -version 2>/dev/null || echo none"
+      }
+    ]
+  },
+  // No explicit `cwd`: nx:run-commands defaults to the workspace root, which
+  // scripts/apple-check.sh (and the paths inside it) assume.
   "targets": {
-    "apple-check": {
-      // No explicit `cwd`: nx:run-commands defaults to the workspace root,
-      // which scripts/apple-check.sh (and the paths inside it) assume.
-      "command": "sh scripts/apple-check.sh",
+    "host-tests": {
+      "command": "sh scripts/apple-check.sh host",
       "cache": true,
-      "inputs": [
-        "{projectRoot}/**",
-        "{workspaceRoot}/cubby-ffi/**",
-        {
-          "runtime": "xcode-select -p 2>/dev/null || echo none"
-        }
+      "inputs": ["appleGate"]
+    },
+    "simulator-build": {
+      "command": "sh scripts/apple-check.sh app",
+      "cache": true,
+      "inputs": ["appleGate"],
+      // Restored on a hit, so the simulator E2E installs the cached app.
+      "outputs": [
+        "{projectRoot}/DerivedData/Build/Products/Debug-iphonesimulator/Cubby.app"
       ]
+    },
+    // `pnpm apple check`; CI runs the two halves on parallel runners.
+    "check": {
+      "executor": "nx:noop",
+      "dependsOn": ["host-tests", "simulator-build"]
     }
   }
 }

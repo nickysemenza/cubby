@@ -18,7 +18,7 @@ const run = (command: string, args: string[], env = process.env) => {
 
 function buildCloudflare() {
   run(process.execPath, ["../../scripts/generator/ensure.ts"]);
-  run(process.execPath, ["../mcp-apps/build.mjs", "--if-stale"]);
+  run("pnpm", ["exec", "nx", "run", "@cubby/mcp-apps:build"]);
   rmSync(path.join(webRoot, "dist"), { recursive: true, force: true });
   const source = webBuildSourceFingerprint(repoRoot);
   run("pnpm", ["exec", "vite", "build"], {

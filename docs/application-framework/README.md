@@ -130,9 +130,9 @@ while editing, then the full relevant gates:
 4. Commit with mandatory hooks and run `pnpm verify:local:full` on the exact clean
    final commit before merge. Record that commit and its results in the PR.
 
-GitHub Actions is required on the exact final PR head. A local passing run does
-not imply hosted CI passed, and an earlier working-tree result is not
-final-commit validation.
+Required GitHub checks must pass for the final PR head's content. A local run
+satisfies one only through the shared Nx remote cache for the same input hash,
+and an earlier working-tree result is not final-commit validation.
 
 Test shared compilers and runtime behavior with representative contracts, then
 retain domain-specific exceptions and real database/browser integration coverage.

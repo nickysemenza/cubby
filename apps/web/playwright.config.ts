@@ -32,7 +32,7 @@ const isCI = !!process.env.CI;
 export default defineConfig({
   testDir: "./tests/e2e",
   /* Public-repository ubuntu-latest CI runners have 4 vCPU, shared by the
-     browser, Worker, and database. CI shards desktop tests across two runners;
+     browser, Worker, and database. CI shards desktop tests across four runners;
      its workflow currently benchmarks two workers per runner via --workers.
      Preserve the local fast-failure budget while giving CI scenarios more
      wall-clock room. */

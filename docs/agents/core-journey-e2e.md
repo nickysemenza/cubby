@@ -84,7 +84,7 @@ pnpm test:e2e label-nutrition-review.spec.ts
 
 Playwright's standalone command uses the built web app, so build it after web
 source changes. See [validation policy](validation.md) for test tiers and the
-exact-head GitHub merge gate.
+GitHub merge gate.
 
 ## Available native input checks
 

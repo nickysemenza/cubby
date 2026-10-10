@@ -16,7 +16,7 @@ editing and supported visible outcomes. AI chooses a path through the real UI;
 deterministic read-back establishes whether the action worked. Previews cover
 presentation states, not writes or navigation. Live model journeys always use Jev decisions through Cloudflare AI Gateway;
 manual workflow dispatch controls when they run. They do not replace the
-exact-head deterministic CI gate.
+deterministic content-hash merge gate.
 
 Keep an isolated test only when its named failure cannot reasonably be observed
 by the retained flow or an existing compiler/generator guard. Remove tests of
@@ -29,7 +29,7 @@ test guarded no runtime behavior. Preserve named regressions before removal.
 Reuse a healthy HMR session for iteration and fingerprint-verified native
 builds. Report setup separately from scenario time. A failed provenance/startup
 check is not a scenario result. Measure CI's natural job timings before changing
-shards; retain the existing cache keys and exact-head merge gate.
+shards; keep test-lane cache keys broad.
 
 ## During implementation
 
@@ -83,8 +83,14 @@ base ref. Committing, pushing, or handing off work does not trigger additional
 local checks. Report local results and anything unrun without implying that a
 successful push proves correctness.
 
-GitHub Actions must pass on the exact final PR head before merge. `main` runs CI
-after deployment starts, so post-merge CI does not replace this gate.
+Every required check must pass for the final PR head's content before merge. A
+passing result in the shared Nx remote cache for the same input hash satisfies
+a check, whether CI or the developer's Mac produced it; CI replays it in
+seconds ([ADR 0009](../adr/0009-content-hash-merge-gate.md),
+[CI](../ci.md#cache-keys-and-the-remote-cache)). Running `pnpm apple check`
+locally before a PR therefore lets CI replay the Apple lanes. A green earlier
+commit with different content is not evidence. `main` runs CI after deployment
+starts, so post-merge CI does not replace this gate.
 
 `deploy.yaml` deploys every `main` push and never applies schema. A PR that adds
 a migration under `apps/web/drizzle/` is opened without auto-merge and merges

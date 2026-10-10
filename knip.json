@@ -20,7 +20,6 @@
         "scripts/check-outward-text.ts!",
         "scripts/ci-flakes.ts!",
         "scripts/dev-db.ts!",
-        "scripts/apple-simulator-build-cache.ts!",
         "scripts/benchmark-apple-runner.ts!",
         "scripts/pristine-simulator-cache.ts!",
         "scripts/generator/ensure.ts!"
@@ -36,7 +35,7 @@
         "agent-device",
         "@neon/env"
       ],
-      // xcode-select: scripts/apple-check.sh (the `apple` Nx target) uses it
+      // xcode-select: scripts/apple-check.sh (the `apple` Nx targets) uses it
       // to detect a machine without Xcode (so it can skip, not fail). pkill:
       // apple.ts quits the running Mac app before relaunching. container: the
       // Apple test-service runtime. All are system tools, never npm

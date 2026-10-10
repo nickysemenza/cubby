@@ -158,7 +158,7 @@ Disposable test services remain separate from this persistent session.
 with guarded named database leases, and own their native processes
 and sanitized replay artifacts; see [validation](agents/validation.md) and
 [Apple iteration](../apps/apple/ITERATION.md). A manual local session does not
-replace the exact-head GitHub merge gate.
+replace the GitHub merge gate.
 
 For finite simulator smoke or QA journeys in the shared T3 Device panel, set
 `CUBBY_E2E_AGENT_DEVICE` to the JSON `{command,targetArgs}` returned by
@@ -187,7 +187,7 @@ checkout id and database before writing. It creates run-owned synthetic records
 and deletes only those records after each case, retaining failed deletions for
 retry. Sanitized artifacts identify the source revision and fingerprint; source
 changes during the run fail provenance. HMR evidence helps local iteration;
-GitHub still gates the exact final head with built Workers.
+GitHub still gates the final head with built Workers.
 
 Default simulator smoke proves search and detail navigation, while headless
 proves native-client edits and stored values. UI editing and view switching
@@ -254,11 +254,10 @@ need separate validation.
 `apps/apple/Package.resolved` owns the app graph (including Nuke and Sentry);
 `CubbyKit/Package.resolved` owns only the Swift package graph. XcodeGen links the
 app lockfile into the generated workspace, so app resolution leaves the Kit
-file unchanged and deliberate app pin changes appear in Git. Simulator build
-certificates and CI dependency caches include both lockfiles. Local simulator
-runs reuse the same certified bundle as CI when sources, pins, compiler settings,
-toolchain and bundle bytes match. Run bundles distinguish `compiled` from
-`reused-certified` and report build time separately. The composed Mac import
+file unchanged and deliberate app pin changes appear in Git. CI dependency
+caches include both lockfiles. Local simulator runs build through the cached
+`apple:simulator-build` Nx target, which restores the same app as CI when its
+inputs and Xcode version match; run bundles report build time separately. The composed Mac import
 lane retains its Kit-pin verification wrapper as a defensive acceptance check.
 
 Mac fixture apps retain their stable Developer ID identity. The presentation

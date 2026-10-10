@@ -8,12 +8,6 @@ import { pollUntil } from "@cubby/shared/retry";
 import { walkFiles } from "../../../scripts/lib/tree-digest.ts";
 import { spawnToExit } from "../../../scripts/lib/run.ts";
 import { sharedDeviceCommand } from "../../../scripts/lib/shared-device-command.ts";
-import {
-  hasMatchingSimulatorBuild,
-  simulatorBuildArgs,
-  simulatorBuildFingerprint,
-  stampSimulatorBuild,
-} from "../../../scripts/apple-simulator-build-cache.ts";
 import { createHash, randomBytes } from "node:crypto";
 import {
   appendFileSync,
@@ -277,7 +271,6 @@ let testerArmyDriverModel: string | undefined;
 let nativeBuildBinary: string | undefined;
 let nativeBuildSourceVersion: string | undefined;
 /** Whether the run installed a certified bundle instead of compiling one. */
-let nativeBuildReused: boolean | undefined;
 let currentNativeSourceVersion: (() => string) | undefined;
 let nativeBuildReady = false;
 const scenarioEvidence: string[] = [];
@@ -1215,9 +1208,6 @@ function nativeBuildMetadata() {
     ...(fingerprint && {
       [headless ? "cliBinarySha256" : "appBinarySha256"]: fingerprint,
     }),
-    ...(nativeBuildReused !== undefined && {
-      appBuild: nativeBuildReused ? "reused-certified" : "compiled",
-    }),
   };
   return {
     build: {
@@ -2079,53 +2069,8 @@ async function main(): Promise<void> {
         await run("pnpm", ["apple", "gen"]);
         nativeBuildSourceVersion = nativeSourceFingerprint(true);
         currentNativeSourceVersion = () => nativeSourceFingerprint(true);
-        // Local and hosted lanes share one simulator-generic profile, so a
-        // certified bundle is reusable across lanes, worktree restarts, and
-        // disposable simulators. The certificate binds the resolved package
-        // state, compiler inputs, toolchain, and bundle bytes; resolve and
-        // build only when one of them no longer matches.
-        const buildArgs = simulatorBuildArgs;
-        let certifiedInput: string | undefined;
-        let reuseCertifiedApp = hasMatchingSimulatorBuild(
-          repoRoot,
-          nativeToolchain,
-          buildArgs,
-        );
-        if (!reuseCertifiedApp) {
-          await run("xcodebuild", [
-            ...buildArgs,
-            "-resolvePackageDependencies",
-          ]);
-          try {
-            certifiedInput = simulatorBuildFingerprint(
-              repoRoot,
-              nativeToolchain,
-              buildArgs,
-            );
-          } catch (error) {
-            console.warn(
-              `[${lane}] Simulator cache unavailable: ${String(error)}`,
-            );
-          }
-          reuseCertifiedApp = hasMatchingSimulatorBuild(
-            repoRoot,
-            nativeToolchain,
-            buildArgs,
-          );
-        }
-        if (reuseCertifiedApp) {
-          console.log(`[${lane}] Reusing the verified simulator app bundle`);
-        } else {
-          await run("xcodebuild", [...buildArgs, "build"]);
-          if (certifiedInput)
-            stampSimulatorBuild(
-              repoRoot,
-              nativeToolchain,
-              certifiedInput,
-              buildArgs,
-            );
-        }
-        nativeBuildReused = reuseCertifiedApp;
+        // The cached Nx target restores the app when its inputs are unchanged.
+        await run("pnpm", ["exec", "nx", "run", "apple:simulator-build"]);
         nativeBuildBinary = path.join(appPath, "Cubby");
         nativeBuildReady = true;
         phases.push({

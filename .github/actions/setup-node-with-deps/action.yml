@@ -20,6 +20,22 @@ inputs:
 runs:
   using: "composite"
   steps:
+    # The one remote-cache seam (docs/ci.md): the workflow exposes the
+    # NX_CACHE_URL/NX_CACHE_TOKEN secrets, and Nx reads them under its own
+    # names. A fork PR receives no secrets, so both stay unset and Nx uses
+    # only its local cache.
+    - name: Connect the shared Nx cache
+      shell: bash
+      run: |
+        if [[ -n "${NX_CACHE_URL:-}" && -n "${NX_CACHE_TOKEN:-}" ]]; then
+          {
+            echo "NX_SELF_HOSTED_REMOTE_CACHE_SERVER=$NX_CACHE_URL"
+            echo "NX_SELF_HOSTED_REMOTE_CACHE_ACCESS_TOKEN=$NX_CACHE_TOKEN"
+          } >> "$GITHUB_ENV"
+        else
+          echo "No shared Nx cache credentials; using the local cache only."
+        fi
+
     - name: Setup pnpm
       uses: pnpm/action-setup@0ebf47130e4866e96fce0953f49152a61190b271 # v6
       with:
@@ -56,8 +72,10 @@ runs:
         # wasm32 and native artifacts must not share a cache bucket.
         cache-key: wasm32
 
+    # Also needed on a restore: the Nx `wasm` target's runtime input
+    # (ensure-wasm.ts --fingerprint) runs `wasm-pack --version`.
     - name: Install wasm-pack
-      if: inputs.wasm == 'restore' && steps.wasm-cache.outputs.cache-hit != 'true'
+      if: inputs.wasm == 'restore'
       uses: taiki-e/install-action@2ca9b94c269419b7b0c711c09d0b21c4e1d51145 # v2
       with:
         tool: wasm-pack

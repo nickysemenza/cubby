@@ -49,7 +49,7 @@ presentation journeys and an owned database fixture visible in the real list,
 then removed by cleanup. Switching preview states through its controls avoids
 reloading the module graph four times; the previous product case exhausted its
 30-second budget. The HMR bundle records source stability and replay under
-`apps/web/playwright-report/hmr/`. CI still owns exact-head built acceptance.
+`apps/web/playwright-report/hmr/`. CI still owns built acceptance.
 
 Sol and Astra independently reviewed the change. Both confirmed the shared
 simulator target is selected/validated before mutation, and failed HMR fixture
@@ -71,7 +71,7 @@ spent 1m49s in Auxiliary tests/builds, 5m12s in PostgreSQL tests and 7m12s/6m44s
 in the two desktop E2E shards. These are whole-job times including setup, not
 scenario-only benchmarks. One sample does not establish repeatable imbalance;
 retain natural sharding and avoid a duration database or custom sequencer.
-The exact final PR head still requires passing GitHub checks.
+The final PR head still requires passing GitHub checks.
 
 ## Routing measurement
 
