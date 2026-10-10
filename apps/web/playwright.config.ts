@@ -58,6 +58,9 @@ export default defineConfig({
      identically. Kept loose enough that a genuine multi-test regression still
      reports most of its failures in one go. */
   maxFailures: isCI ? 6 : 0,
+  /* Name the slowest spec files after the run; per-test page-load time is
+     the `e2e-navigation-ms` annotation in the HTML report. */
+  reportSlowTests: { max: 10, threshold: 60_000 },
   /* Reporter to use. See https://playwright.dev/docs/test-reporters */
   reporter: isCI
     ? [["github"], ["html"], ["./tests/e2e/e2e-harness-reporter.ts"]]

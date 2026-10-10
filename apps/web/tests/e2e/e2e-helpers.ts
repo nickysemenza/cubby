@@ -63,7 +63,7 @@ const testFakers = new WeakMap<TestInfo, Faker>();
  * The running test's seeded Faker, for filler fields no assertion reads. Seeded
  * from the test's title path, so it replays; one instance per test, so
  * successive draws differ. The seed is recorded as a `faker-seed` annotation,
- * which the report and run bundle show beside a failure.
+ * which the HTML report shows beside a failure.
  */
 export function e2eFaker(): Faker {
   const info = test.info();

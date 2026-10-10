@@ -15,7 +15,7 @@ Durations above come from GitHub job/step timestamps. Suite logs report node
 durations of 66.32 / 45.41 / 68.56s and UI durations of 38.56 / 43.35 / 53.66s.
 The browser jobs determine the critical path in all three runs.
 
-Navigation reporting records 167 page loads per run, consuming 42–46% of
+Navigation annotations recorded 167 page loads per run, consuming 42–46% of
 cumulative test time (parallel test time is not job wall time). Median observed
 hydration takes 1.76–3.35s; HTML completes in 71–114ms. Investigate navigation
 before increasing runner count or changing PostgreSQL sharding.
