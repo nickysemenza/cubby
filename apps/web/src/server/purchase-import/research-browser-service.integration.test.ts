@@ -34,7 +34,7 @@ import {
   researchBrowserFor,
 } from "./research-browser-service";
 import { researchServiceFor } from "./research-service";
-import { reconcileSettledRun } from "./run-service";
+import { loadRunDetail, reconcileSettledRun } from "./run-service";
 
 // Failures: borrowed transport changes source ownership; reconnect/replay repeats
 // a mutation; a stale or foreign target's control becomes actionable; a forged
@@ -462,6 +462,28 @@ describe("research browser host", () => {
       state: "unresolved",
       outcome: "researched_with_gaps",
     });
+  });
+
+  it("reports successful browser timing from the real retained completion receipt", async () => {
+    const f = await fixture();
+    const result = await f.completed();
+    const [savedRun] = await getDb(ctx.db)
+      .select({ shortcode: run.shortcode })
+      .from(run)
+      .where(eq(run.id, f.runId));
+    if (!savedRun) throw new Error("Synthetic Run unavailable");
+    const detail = await loadRunDetail(ctx.db, savedRun.shortcode);
+    expect(
+      detail.operations.find(
+        (op) => op.operationId === result.command.operationId,
+      ),
+    ).toMatchObject({
+      browserTiming: {
+        durationMs: result.outcome.observation.durationMs,
+        retryCount: 0,
+      },
+    });
+    expect(await f.service.resume(result.event)).toEqual(result.observed);
   });
 
   it("retains selected source evidence through failed submit and acknowledges only its durable receipt", async () => {

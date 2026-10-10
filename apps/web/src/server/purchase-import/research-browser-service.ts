@@ -804,6 +804,7 @@ export function researchBrowserFor(
       );
       await completeOperation(tx, key, {
         ...current,
+        serverResult: result,
         page,
         pausedAt: page.research.observation.authenticationRequired
           ? "auth"
