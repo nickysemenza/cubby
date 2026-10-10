@@ -43,7 +43,6 @@ const researchOrder = (
   orderId: string,
   gate?: string,
   productRef?: ScriptValue,
-  omitProductDecision = false,
 ): ScriptStep[] => [
   step(`${prefix}-next`, "work_next"),
   step(`${prefix}-read`, "mail_read", {
@@ -82,13 +81,11 @@ const researchOrder = (
           payments: [],
           allShipmentsDelivered: false,
         },
-        productResolutions: omitProductDecision
-          ? []
-          : [
-              productRef
-                ? { kind: "existing", lineIndex: 0, productId: productRef }
-                : { kind: "new", lineIndex: 0 },
-            ],
+        productResolutions: [
+          productRef
+            ? { kind: "existing", lineIndex: 0, productId: productRef }
+            : { kind: "new", lineIndex: 0 },
+        ],
       },
     ],
     detail: `Imported ${orderId} from the retained original without receiving stock.`,
@@ -217,22 +214,28 @@ test("imports saved order mail from the generic Vendor report and follows the li
         0,
         -1,
       ),
-      ...researchOrder(
-        "mail",
-        seed,
-        "SYN-CONFIRM-1",
-        undefined,
-        undefined,
-        true,
-      )
-        .slice(-1)
-        .map((entry) =>
-          "call" in entry ? { ...entry, call: "mail-refused" } : entry,
-        ),
+      step("mail-refused", "work_resolve", {
+        workRef: from("mail-next", "work.workRef"),
+        status: "verified",
+        identity: {
+          evidenceIds: [from("mail-read", "evidenceId")],
+          reasoning:
+            "Synthetic first identity refusal: identity remains unsupported.",
+        },
+        detail: "The first observation needs further identity research.",
+      }),
       ...researchOrder("mail", seed, "SYN-CONFIRM-1").slice(-1),
     ],
     purposeSteps: { product_enrichment: productGapSteps },
     assessments: [
+      {
+        match: "Synthetic first identity refusal",
+        output: {
+          ...supportedOrder,
+          identityVerified: false,
+          acceptedOrders: [],
+        },
+      },
       { match: "printed five-dollar total", output: supportedOrder },
       {
         match: "Synthetic catalog gap",
