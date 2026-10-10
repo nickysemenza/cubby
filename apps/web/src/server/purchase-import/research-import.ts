@@ -45,6 +45,7 @@ import {
   withTransactionDatabase,
 } from "~/server/repo/database-helpers";
 import { lockExternalIdentifierParents } from "~/server/repo/entity-external-ids";
+import { findProductNameCandidates } from "~/server/repo/product/resolve-names";
 import { resolveOrThrow } from "~/server/repo/shortcode-resolver";
 import { insertWithShortcode } from "~/server/repo/shortcode-utils";
 import { executeAtomicOperation } from "~/server/runs/operation";
@@ -530,7 +531,32 @@ async function loadSelectedProductContext(
     throw new Error(
       "Product retrieval is too broad; refine the research references.",
     );
-  const selectedProducts = productRefs.length
+  const newProductCandidates = [];
+  for (const [orderIndex, order] of orders.entries()) {
+    for (const resolution of order.productResolutions ?? []) {
+      if (resolution.kind !== "new") continue;
+      const line = order.candidate.lines[resolution.lineIndex];
+      if (!line)
+        throw new Error("New Product resolution names a missing line.");
+      const candidates = await findProductNameCandidates(db, line.title);
+      newProductCandidates.push({
+        orderIndex,
+        lineIndex: resolution.lineIndex,
+        productRefs: candidates.map(({ shortcode }) => shortcode),
+      });
+    }
+  }
+  const contextRefs = [
+    ...new Set([
+      ...productRefs,
+      ...newProductCandidates.flatMap(({ productRefs }) => productRefs),
+    ]),
+  ];
+  if (contextRefs.length > 100)
+    throw new Error(
+      "Product retrieval is too broad; refine the research proposal.",
+    );
+  const selectedProducts = contextRefs.length
     ? await database
         .select({
           id: product.id,
@@ -542,7 +568,7 @@ async function loadSelectedProductContext(
         })
         .from(product)
         .where(
-          and(notDeleted(product), inArray(product.shortcode, productRefs)),
+          and(notDeleted(product), inArray(product.shortcode, contextRefs)),
         )
         .orderBy(asc(product.shortcode))
     : [];
@@ -581,6 +607,7 @@ async function loadSelectedProductContext(
       "Product identifier context needs narrower research references.",
     );
   return {
+    newProductCandidates,
     productSnapshot: selectedProducts.map(({ id, productRef }) => ({
       id,
       productRef,
@@ -600,7 +627,10 @@ async function loadSelectedProductContext(
 async function lockAcceptedProductIdentities(
   db: Database,
   orders: ResearchWorkResolution["orders"],
-  assessed: Awaited<ReturnType<typeof loadSelectedProductContext>>,
+  assessed: Pick<
+    Awaited<ReturnType<typeof loadSelectedProductContext>>,
+    "productSnapshot" | "products" | "unavailableProductRefs"
+  >,
 ) {
   const tx = getDb(db);
   if (!isTransaction(tx))

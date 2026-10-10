@@ -2,7 +2,12 @@ import { and, eq } from "drizzle-orm";
 import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 
-import { entityExternalId, product } from "~/server/db/schema";
+import {
+  entityExternalId,
+  expense,
+  inventoryEntry,
+  product,
+} from "~/server/db/schema";
 import {
   getDb,
   notDeleted,
@@ -14,13 +19,14 @@ import {
   createProductFixture,
   makeProductInput,
 } from "~/server/repo/repo.fixtures";
+import { refreshSearchDocuments } from "~/server/repo/search-document";
 import { insertWithShortcode } from "~/server/repo/shortcode-utils";
 
 import {
   learnPurchaseProductExternalId,
   PurchaseProductExternalIdCollisionError,
 } from "./external-id-learning";
-import { preparePurchaseImport } from "./import-orders";
+import { commitPurchaseImport, preparePurchaseImport } from "./import-orders";
 import { startOrResumeRun } from "./run-service";
 
 const checksum = (digit: string) => digit.repeat(64);
@@ -175,6 +181,131 @@ describe("manufacturer_part identity", () => {
       expect(candidate.exactIdentifierMatch).toBe(false);
       expect(candidate.matchReason).toContain("confirm size and color");
     }
+  });
+
+  // Common leading brand/category words can crowd the bounded candidate list;
+  // aliases and later variant terms must rank before the limit, without proving identity.
+  it("ranks an existing variant beyond alphabetic brand distractors before admitting a new Product", async () => {
+    const existing = await createProductFixture(
+      ctx.db,
+      makeProductInput({
+        name: "Zeta deep socket kit 36-piece",
+        manufacturer: "ForgeTools",
+        model: "KIT-360",
+        aliases: ["Impact Pro deep socket kit 36-piece"],
+      }),
+      ctx.actor,
+    );
+    const distractors = await Promise.all(
+      Array.from({ length: 24 }, (_, index) =>
+        createProductFixture(
+          ctx.db,
+          makeProductInput({ name: `A ForgeTools impact drill ${index}` }),
+          ctx.actor,
+        ),
+      ),
+    );
+    await refreshSearchDocuments(
+      ctx.db,
+      [existing, ...distractors].map(({ entityId }) => ({
+        entityKind: "product",
+        entityId,
+      })),
+    );
+    const party = await insertWithShortcode(ctx.db, "ledgerParty", {
+      name: "Synthetic matching member",
+      kind: "member",
+      userId: ctx.actor.userId,
+    });
+    const vendor = await insertWithShortcode(ctx.db, "vendor", {
+      name: "Synthetic tools retailer",
+    });
+    const account = await insertWithShortcode(ctx.db, "vendorAccount", {
+      label: "Synthetic tools account",
+      vendorId: vendor.id,
+      ledgerPartyId: party.id,
+    });
+    const run = await startOrResumeRun(ctx.db, {
+      ledgerPartyId: party.id,
+      vendorAccountId: account.id,
+      trigger: "manual",
+    });
+    const prepared = await preparePurchaseImport(
+      ctx.db,
+      {
+        _runExecution: {
+          runId: run.id,
+          operationId: "prepare:ranked-kit",
+          itemOperationIds: ["prepare-item:ranked-kit"],
+        },
+        orders: [
+          {
+            stableOrderId: "ranked-kit",
+            itemOperationId: "prepare-item:ranked-kit",
+            source: {
+              kind: "browser_order",
+              externalKey: "synthetic:ranked-kit",
+              checksum: checksum("a"),
+            },
+            evidenceChecksum: checksum("b"),
+            extractionRevision: "synthetic@1",
+            extraction: {
+              status: "ready",
+              candidate: {
+                orderId: "ranked-kit",
+                orderedAt: "2026-09-20",
+                merchant: vendor.name,
+                currency: "USD",
+                printedGrandTotal: 20,
+                lines: [
+                  {
+                    title: "ForgeTools Impact Pro deep socket kit 36-piece",
+                    amount: 20,
+                    quantity: 1,
+                    lineKind: "principal",
+                  },
+                ],
+                payments: [],
+                allShipmentsDelivered: false,
+              },
+            },
+            lineIds: ["ranked-kit:line-1"],
+            primaryDocumentImageId: null,
+            screenshotImageId: null,
+          },
+        ],
+      },
+      ctx.actor,
+    );
+    expect(prepared.orders[0]?.lines[0]?.candidates[0]).toMatchObject({
+      productId: existing.id,
+      exactIdentifierMatch: false,
+    });
+    const commit = {
+      _runExecution: { runId: run.id, operationId: "commit:ranked-kit" },
+      prepareOperationId: "prepare:ranked-kit",
+      defaultTrade: "other" as const,
+      resolutions: [
+        {
+          stableOrderId: "ranked-kit",
+          stableLineId: "ranked-kit:line-1",
+          resolution: { kind: "existing" as const, productId: existing.id },
+        },
+      ],
+    };
+    const written = await commitPurchaseImport(ctx.db, commit, ctx.actor);
+    expect(await commitPurchaseImport(ctx.db, commit, ctx.actor)).toEqual(
+      written,
+    );
+    expect(
+      await getDb(ctx.db)
+        .select({ productId: expense.productId, cost: expense.cost })
+        .from(expense),
+    ).toEqual([{ productId: existing.entityId, cost: 20 }]);
+    expect(await getDb(ctx.db).select().from(inventoryEntry)).toEqual([]);
+    expect(
+      await getDb(ctx.db).select({ id: product.id }).from(product),
+    ).toHaveLength(25);
   });
 
   it("refuses a second Product claiming the same manufacturer part", async () => {

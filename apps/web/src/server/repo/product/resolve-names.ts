@@ -6,10 +6,13 @@ import type {
   ProductResolveNamesInput,
   ProductResolveNamesOut,
 } from "@cubby/schemas/product";
+import { and, inArray } from "drizzle-orm";
 
 import type { Database } from "~/server/db";
+import { product } from "~/server/db/schema";
 import { resolveNames } from "~/server/entity-kernel/resolve";
 import { createAppError } from "~/server/errors/app-error";
+import { getDb, notDeleted } from "~/server/repo/database-helpers";
 
 import { getProductPickerItemsByIds } from "./crud";
 import {
@@ -125,5 +128,32 @@ export const resolveProductNames = async (
         name,
       })),
     };
+  });
+};
+
+/** Ranked name/alias candidates only: semantic variant admission remains with the caller. */
+export const findProductNameCandidates = async (db: Database, name: string) => {
+  const [resolved] = await resolveNames(db, "product", [{ name }], {
+    create: false,
+  });
+  const ids = [
+    ...(resolved?.row ? [resolved.row.id] : []),
+    ...(resolved?.candidates.map(({ id }) => id) ?? []),
+  ];
+  if (ids.length === 0) return [];
+  const rows = await getDb(db)
+    .select({
+      id: product.id,
+      shortcode: product.shortcode,
+      name: product.name,
+      manufacturer: product.manufacturer,
+      model: product.model,
+    })
+    .from(product)
+    .where(and(notDeleted(product), inArray(product.id, ids)));
+  const byId = new Map(rows.map((row) => [row.id, row]));
+  return ids.flatMap((id) => {
+    const row = byId.get(id);
+    return row ? [row] : [];
   });
 };
