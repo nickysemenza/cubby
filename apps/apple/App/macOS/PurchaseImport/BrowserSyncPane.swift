@@ -179,7 +179,7 @@ struct BrowserSyncPane: View {
     }
 }
 
-nonisolated private struct BrowserSyncRow: Identifiable {
+nonisolated struct BrowserSyncRow: Identifiable {
     let plan: SyncPlanAccount
     let state: BrowserBridgeAccountState?
     var id: String { plan.shortcode }
@@ -206,7 +206,15 @@ nonisolated private struct BrowserSyncRow: Identifiable {
         return "Sync"
     }
     var runID: String? {
-        switch plan.action {
+        if let state {
+            if let id = state.lastCommandRunID, state.executingRuns[id] != nil { return id }
+            if let id = state.executingRuns.sorted(by: {
+                $0.value == $1.value ? $0.key < $1.key : $0.value > $1.value
+            }).first?.key {
+                return id
+            }
+        }
+        return switch plan.action {
         case .resume(let action): action.runId
         case .blocked(let action): action.runId
         default: nil

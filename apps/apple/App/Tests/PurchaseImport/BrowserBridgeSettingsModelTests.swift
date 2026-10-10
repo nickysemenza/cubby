@@ -44,6 +44,23 @@ struct BrowserBridgeSettingsModelTests {
     }
 
     #if os(macOS)
+        @Test func browserWorkspaceOpensTheExecutingRunInsteadOfAnOlderBlockedRun() {
+            let plan = SyncPlanAccount(
+                shortcode: "account-first", label: "Example shop", vendorName: "Example shop",
+                accountStatus: .active, connected: true, lastSuccessAt: nil,
+                action: .blocked(.init(kind: .blocked, runId: "RUN-OLD", purpose: .accountSync)),
+                line: "Earlier attempt needs review", disabledReason: "Earlier attempt")
+            let state = BrowserBridgeAccountState(
+                id: "account-first", label: "Example shop", connection: .connected,
+                error: nil, needsAuthentication: false, lastCompletedRunID: nil,
+                lastCommand: "navigate · shop.example/item", lastCommandRunID: "RUN-4K7M",
+                executingRuns: ["RUN-4K7M": Date(timeIntervalSince1970: 100)])
+            #expect(BrowserSyncRow(plan: plan, state: state).runID == "RUN-4K7M")
+            #expect(BrowserSyncRow(plan: plan, state: nil).runID == "RUN-OLD")
+        }
+    #endif
+
+    #if os(macOS)
         @Test func replacedControllerCannotRestoreExecutingBrowserRun() {
             let settings = BrowserBridgeSettingsModel()
             let baseURL = URL(string: "http://127.0.0.1:19876")!

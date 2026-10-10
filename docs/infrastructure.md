@@ -376,7 +376,10 @@ Browser Sync's connection column describes each account socket, and its import-p
 column describes `run.syncPlan`. Neither establishes vendor authentication or Product
 verification. A research command may use an available account connection for a different
 retailer; its last-command display links the actual Run rather than attributing the
-research subject to the carrying account. The existing Activity detail/events read accepts
+research subject to the carrying account. Browser Sync’s Run action prefers the
+last command’s Run while it is executing, then the newest executing Run with a
+stable identity tie-break, before falling back to the account’s resume or blocked
+plan. A retained command alone does not establish ongoing execution. The existing Activity detail/events read accepts
 that internal Run UUID and returns the canonical public Run shortcode; browser delivery,
 replay records and their stored identities keep the same shape.
 
