@@ -165,7 +165,7 @@ struct BrowserSyncPane: View {
     private var cannotSync: Bool { !model.browserBridge.isConfigured || model.browserBridge.isSyncing }
 
     private func openRun(_ id: String) {
-        model.navigator.openRecord(.init(key: .run, id: id))
+        model.navigator.openActivity(.serverRun(id))
     }
 
     private func sync(accountID: String? = nil, backfill: BrowserBridgeBackfillRange? = nil) {
