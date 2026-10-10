@@ -926,4 +926,5 @@ middleware and in-memory PDF or image presentation, without writing private docu
 browser preview and does not establish research completion.
 Media refusals use the canonical API error shape, preserving checksum, storage
 and admission diagnostics in both clients, including nested database causes and
-SQLSTATE; only credential-shaped values are scrubbed.
+SQLSTATE; only credential-shaped values are scrubbed. Invalid query identifiers
+retain HTTP 400 and BAD_REQUEST classification; database failures retain the run stage.

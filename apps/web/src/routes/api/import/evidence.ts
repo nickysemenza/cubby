@@ -78,7 +78,7 @@ export async function handleEvidenceMediaRequest(
   } catch (error) {
     const { publicError } = normalizeStartOperationError(
       error,
-      actor ? "run" : "context",
+      error instanceof z.ZodError ? "input" : actor ? "run" : "context",
       undefined,
       {
         operation: runEvidenceMediaRead.operationId,

@@ -51,3 +51,38 @@ it("preserves an authenticated retained-media SQL failure and its nested SQLSTAT
     },
   });
 });
+
+it.each(["", "?runId=malformed&targetId=malformed&evidenceId=malformed"])(
+  "classifies invalid retained-media query input before reading storage: %s",
+  async (query) => {
+    const { readRunEvidenceMedia } =
+      await import("~/server/purchase-import/run-evidence");
+    const member = testUserId("synthetic-media-member");
+    const context = createTestRequestContext(
+      new Database(() => {
+        throw new Error("Invalid media input must not query a database");
+      }),
+      { auth: { userId: member } },
+    );
+    const response = await handleEvidenceMediaRequest(
+      new Request(`https://cubby.example/api/import/evidence${query}`),
+      {
+        authenticate: async () => ({
+          actor: {
+            userId: member,
+            sessionId: "synthetic-session",
+            channel: "api",
+          },
+          authHeaders: new Headers(),
+        }),
+        context: async () => context,
+        readMedia: readRunEvidenceMedia,
+      },
+    );
+    expect(response.status).toBe(400);
+    expect(await response.json()).toMatchObject({
+      code: "BAD_REQUEST",
+      diagnostics: { stage: "input" },
+    });
+  },
+);
