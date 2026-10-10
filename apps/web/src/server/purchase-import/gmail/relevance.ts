@@ -31,12 +31,13 @@ function readableMailView({
       links:
         html?.links.map(({ href, text }) => ({ url: href, label: text })) ?? [],
       images: html?.images.map(({ src, alt }) => ({ url: src, alt })) ?? [],
+      jsonLd: html?.json_ld ?? [],
     }),
     // The shared compactor bounds text and links; a bounded view cannot prove absence.
     complete:
       (!bodyHtml ||
         new TextEncoder().encode(bodyHtml).byteLength < 200 * 1024) &&
-      (!html || html.links.length < 500) &&
+      (!html || (html.links.length < 500 && html.json_ld_omitted === 0)) &&
       // Labels are useful context; unobserved image pixels cannot prove absence.
       !/<img\b/iu.test(bodyHtml ?? ""),
   };

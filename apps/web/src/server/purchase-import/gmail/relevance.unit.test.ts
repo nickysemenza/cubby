@@ -60,6 +60,26 @@ describe("transient original attachment relevance", () => {
     expect(request.length).toBeLessThan(4_000);
     expect(JSON.stringify(normalized)).toBe(before);
   });
+  it("preserves structured order evidence behind a generic visible notification", async () => {
+    const normalized = {
+      ...original,
+      attachments: [],
+      mail: {
+        ...original.mail,
+        bodyText: "Your account has an update",
+        bodyHtml:
+          '<p>Your account has an update</p><script type="application/ld+json">{"@type":"Order","orderNumber":"synthetic-order","orderedItem":{"name":"Synthetic basil plant"}}</script>',
+      },
+    };
+    const interpret = vi.fn<MailRelevance>(async (request) => ({
+      classification: JSON.stringify(request).includes("synthetic-order")
+        ? "related"
+        : "unrelated",
+    }));
+    await expect(
+      interpretMailRelevance(gmail(500), normalized, interpret),
+    ).resolves.toEqual({ classification: "related" });
+  });
   it("routes oversized readable mail as uncertain without spending inference on an incomplete excerpt", async () => {
     const normalized = {
       ...original,
