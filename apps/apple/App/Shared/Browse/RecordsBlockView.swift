@@ -1,4 +1,7 @@
 import CubbyKit
+import Nuke
+import NukeUI
+import PDFKit
 import SwiftUI
 
 /// The record a report slot belongs to, so a `records` block's verbs have something to act on.
@@ -16,6 +19,7 @@ struct RecordRowView: View {
     var large = false
     /// Runs the row's commands (a run's approve, apply, dismiss); nil where none are offered.
     var model: ReportSlotModel?
+    @State private var showingOriginal = false
 
     var body: some View {
         if let entity = row.entity, let id = row.recordID {
@@ -28,9 +32,13 @@ struct RecordRowView: View {
     private var content: some View {
         HStack(alignment: .top, spacing: FieldGuideTokens.Space.sm) {
             if let url = row.imageURL {
-                Thumb(
-                    url: url, size: large ? 112 : 48,
-                    symbol: row.entity.map { EntityCatalog[$0].sfSymbol } ?? "photo")
+                if url.path == "/api/import/evidence" {
+                    ReportRetainedMedia(url: url).frame(width: large ? 112 : 48, height: large ? 112 : 48)
+                } else {
+                    Thumb(
+                        url: url, size: large ? 112 : 48,
+                        symbol: row.entity.map { EntityCatalog[$0].sfSymbol } ?? "photo")
+                }
             }
             VStack(alignment: .leading, spacing: 2) {
                 Text(row.title)
@@ -77,6 +85,13 @@ struct RecordRowView: View {
                 Text(text).font(.caption.monospaced()).textSelection(.enabled)
             }
             .font(.caption)
+        }
+        if let url = row.originalMediaURL {
+            Button("Open original") { showingOriginal = true }
+                .font(.fieldGuideLabel).frame(minHeight: 44)
+                .sheet(isPresented: $showingOriginal) {
+                    ReportOriginalMedia(url: url).nativeSheet(.preview)
+                }
         }
         if let label = row.externalLinkLabel, let url = row.externalLinkURL {
             Link(label, destination: url).font(.fieldGuideLabel).frame(minHeight: 44)
@@ -278,6 +293,135 @@ extension ReportPresentation.Tone {
     }
 }
 
+private struct ReportOriginalMedia: View {
+    let url: URL
+    var fixture: ReportRetainedMedia.Phase?
+    @Environment(\.dismiss) private var dismiss
+
+    var body: some View {
+        VStack {
+            HStack {
+                Text("Retained original").font(.headline); Spacer(); Button("Done") { dismiss() }
+            }
+            ReportRetainedMedia(url: url, allowsPDF: true, fixture: fixture)
+        }
+        .padding()
+    }
+}
+
+#if os(macOS)
+    private struct RetainedPDFView: NSViewRepresentable {
+        let document: PDFDocument
+        func makeNSView(context: Context) -> PDFView {
+            let view = PDFView(); view.autoScales = true; return view
+        }
+        func updateNSView(_ view: PDFView, context: Context) { view.document = document }
+    }
+#else
+    private struct RetainedPDFView: UIViewRepresentable {
+        let document: PDFDocument
+        func makeUIView(context: Context) -> PDFView {
+            let view = PDFView(); view.autoScales = true; return view
+        }
+        func updateUIView(_ view: PDFView, context: Context) { view.document = document }
+    }
+#endif
+
+/// One authenticated in-memory loader for report thumbnails and original documents.
+private struct ReportRetainedMedia: View {
+    enum Phase {
+        case loading, image(Data), pdf(PDFDocument), failure(String)
+    }
+
+    let url: URL
+    var allowsPDF = false
+    var fixture: Phase?
+    @Environment(AppModel.self) private var appModel
+    @State private var phase: Phase = .loading
+
+    var body: some View {
+        Group {
+            switch fixture ?? phase {
+            case .loading:
+                ProgressView()
+            case .failure(let message):
+                Text(message).textSelection(.enabled)
+            case .pdf(let document):
+                RetainedPDFView(document: document)
+            case .image(let bytes):
+                LazyImage(
+                    request: ImageRequest(
+                        id: url.absoluteString, data: { bytes },
+                        options: [.disableMemoryCache, .disableDiskCache])
+                ) { state in
+                    if let image = state.image {
+                        image.resizable().scaledToFit()
+                    } else if let error = state.error {
+                        Text(error.localizedDescription).textSelection(.enabled)
+                    } else {
+                        ProgressView()
+                    }
+                }
+                .onCompletion { result in
+                    if case .failure(let error) = result {
+                        Diagnostics.report(error, context: "Retained report media")
+                    }
+                }
+            }
+        }
+        .task(id: url) {
+            guard fixture == nil else { return }
+            phase = .loading
+            do {
+                let bytes = try await appModel.client.reportMedia(url.absoluteString)
+                try Task.checkCancellation()
+                if allowsPDF, let document = PDFDocument(data: bytes) {
+                    phase = .pdf(document)
+                } else {
+                    phase = .image(bytes)
+                }
+            } catch is CancellationError {} catch {
+                Diagnostics.report(error, context: "Retained report media")
+                phase = .failure(error.userMessage)
+            }
+        }
+    }
+}
+
+#Preview("Retained original loading") {
+    ReportOriginalMedia(url: PreviewFixtures.previewURL, fixture: .loading)
+        .environment(PreviewFixtures.signedInModel())
+}
+
+#Preview("Retained original failure") {
+    ReportOriginalMedia(
+        url: PreviewFixtures.previewURL, fixture: .failure("HTTP_503: Synthetic storage refusal")
+    )
+    .environment(PreviewFixtures.signedInModel())
+}
+
+#Preview("Retained original image") {
+    ReportOriginalMedia(url: PreviewFixtures.previewURL, fixture: .image(PreviewFixtures.sampleMediaPNG))
+        .environment(PreviewFixtures.signedInModel())
+}
+
+#Preview("Retained original PDF") {
+    ReportOriginalMedia(
+        url: PreviewFixtures.previewURL, fixture: .pdf(PDFDocument(data: PreviewFixtures.sampleMediaPDF)!)
+    )
+    .environment(PreviewFixtures.signedInModel())
+}
+
+#Preview("Retained thumbnail") {
+    ReportRetainedMedia(url: PreviewFixtures.previewURL, fixture: .image(PreviewFixtures.sampleMediaPNG))
+        .frame(width: 160, height: 100)
+        .environment(PreviewFixtures.signedInModel())
+}
+
+#Preview("Retained PDF") {
+    RetainedPDFView(document: PDFDocument(data: PreviewFixtures.sampleMediaPDF)!)
+}
+
 /// A `records` report block: the server's rows and the slot's declared verbs, which the one
 /// generic hero-action runner executes from their plans. Nothing here is per entity: the server
 /// says which rows and which verbs; the plans say which operations.
@@ -295,6 +439,8 @@ struct RecordsBlockView: View {
     @State private var busy = false
     // Finance verbs (`records.verbs`): checked rows, and the flows they open.
     @State private var selection: Set<String> = []
+    @State private var selectedCapture: String?
+    @State private var captureOffset = 0
     @State private var statementMatch: StatementMatchSession?
     @State private var receiving: ReceivingModel?
     @State private var splitting: ExpenseSplitSession?
@@ -337,6 +483,40 @@ struct RecordsBlockView: View {
         }
     }
 
+    private var captureFilmstrip: some View {
+        let start = min(captureOffset, max(0, ((records.rows.count - 1) / 8) * 8))
+        let selected = records.rows.first { $0.key == selectedCapture } ?? records.rows.first
+        return VStack(alignment: .leading, spacing: FieldGuideTokens.Space.sm) {
+            ScrollView(.horizontal) {
+                HStack {
+                    ForEach(Array(records.rows.dropFirst(start).prefix(8))) { row in
+                        Button {
+                            selectedCapture = row.key
+                        } label: {
+                            Text(row.title)
+                        }
+                        .accessibilityLabel("View \(row.title)")
+                        .accessibilityAddTraits(row.id == selected?.id ? .isSelected : [])
+                    }
+                }
+            }
+            HStack {
+                Button("Previous captures") { captureOffset = start - 8 }.disabled(start == 0)
+                Text("\(start + 1)–\(min(start + 8, records.rows.count)) of \(records.rows.count)").font(
+                    .caption)
+                Button("Next captures") { captureOffset = start + 8 }.disabled(
+                    start + 8 >= records.rows.count)
+            }
+            if let selected {
+                if let url = selected.imageURL {
+                    ReportRetainedMedia(url: url).frame(maxWidth: .infinity, maxHeight: 500)
+                        .accessibilityLabel(selected.title)
+                }
+                RecordRowView(row: selected, model: model)
+            }
+        }
+    }
+
     var body: some View {
         VStack(alignment: .leading, spacing: FieldGuideTokens.Space.sm) {
             if let title = records.title, !records.rows.isEmpty { Eyebrow(title) }
@@ -346,7 +526,8 @@ struct RecordsBlockView: View {
             if records.rows.isEmpty, !records.empty.isEmpty {
                 Text(records.empty).foregroundStyle(.secondary)
             }
-            ForEach(records.rows) { row in
+            if records.filmstrip { captureFilmstrip }
+            ForEach(records.filmstrip ? [] : records.rows) { row in
                 HStack(alignment: .top, spacing: FieldGuideTokens.Space.sm) {
                     if offersSelection, let key = row.key {
                         Button {

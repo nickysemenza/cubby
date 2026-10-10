@@ -1,6 +1,8 @@
 import { buildActorContext, type ActorContext } from "@cubby/schemas/context";
 import { entityRefKey } from "@cubby/schemas/entity";
+import { runEvidenceMediaRead } from "@cubby/schemas/http-byte-transports";
 import {
+  anyShortcodeSchema,
   parseEntityId,
   imageId,
   imageShortcode,
@@ -27,7 +29,10 @@ import {
   type AgentProgressEvent,
   agentProgressEvent,
 } from "@cubby/schemas/purchase-agent-services";
-import { retainedCaptureInterpretation } from "@cubby/schemas/purchase-import";
+import {
+  retainedCaptureInterpretation,
+  initiateRunEvidenceUploadInput,
+} from "@cubby/schemas/purchase-import";
 import {
   proposedImportFix,
   extractedPurchaseLine,
@@ -44,6 +49,7 @@ import {
 } from "@cubby/schemas/purchase-import";
 import type { PurchaseAgentEvent } from "@cubby/schemas/purchase-import";
 import { purchaseImportDebugEvent } from "@cubby/schemas/purchase-import-debug";
+import { researchSourceMetadata } from "@cubby/schemas/research";
 import {
   purchaseValidationResearchRunInput,
   CHARGE_HUNT_STATE,
@@ -55,6 +61,7 @@ import {
   orderMailImportRunOrders,
   type RunRestartInput,
   runWorkLabel,
+  runTargetEntityKind,
 } from "@cubby/schemas/run-fields";
 import { ACTIVE_RUN_STATUSES } from "@cubby/shared/client-constants";
 import { sha256Hex } from "@cubby/shared/sha256";
@@ -96,6 +103,7 @@ import {
   runApproval,
   runControlEvent,
   runEvidence,
+  runFactEvidence,
   runFinding,
   runOperation,
   runProgress,
@@ -1787,6 +1795,7 @@ export async function loadRunDetail(
       .select({
         id: runTable.id,
         dispatchEventId: runTable.dispatchEventId,
+        retiredAt: runTable.retiredAt,
         actorLedgerPartyShortcode: runTable.actorLedgerPartyShortcode,
         actorLedgerPartyName: runTable.actorLedgerPartyName,
         input: runTable.input,
@@ -1808,6 +1817,7 @@ export async function loadRunDetail(
     controlHistory,
     targets,
     evidence,
+    acceptedFacts,
     agentModelUsage,
     restartTargets,
   ] = await Promise.all([
@@ -1929,6 +1939,9 @@ export async function loadRunDetail(
     database
       .select({
         id: runEvidence.id,
+        targetId: runEvidence.targetId,
+        sourceMetadata: runEvidence.sourceMetadata,
+        byteSize: runEvidence.byteSize,
         kind: runEvidence.kind,
         checksum: runEvidence.checksum,
         mediaType: runEvidence.mediaType,
@@ -1937,6 +1950,43 @@ export async function loadRunDetail(
       .from(runEvidence)
       .where(eq(runEvidence.runId, run.id))
       .orderBy(asc(runEvidence.createdAt)),
+    database
+      .select({
+        evidenceId: runFactEvidence.evidenceId,
+        entityKind: runFactEvidence.entityKind,
+        entityShortcode: entityIdentity.shortcode,
+        fieldPath: runFactEvidence.fieldPath,
+        value: runFactEvidence.value,
+      })
+      .from(runFactEvidence)
+      .innerJoin(
+        runEvidence,
+        and(
+          eq(runEvidence.id, runFactEvidence.evidenceId),
+          eq(runEvidence.targetId, runFactEvidence.targetId),
+        ),
+      )
+      .innerJoin(
+        runTarget,
+        and(
+          eq(runTarget.id, runFactEvidence.targetId),
+          eq(runTarget.runId, runEvidence.runId),
+        ),
+      )
+      .innerJoin(
+        entityIdentity,
+        and(
+          eq(entityIdentity.id, runFactEvidence.entityId),
+          eq(entityIdentity.kind, runFactEvidence.entityKind),
+        ),
+      )
+      .where(
+        and(
+          eq(runEvidence.runId, run.id),
+          isNull(runFactEvidence.supportRetiredAt),
+        ),
+      )
+      .orderBy(asc(runFactEvidence.createdAt), asc(runFactEvidence.id)),
     database
       .select({
         durationMs: sql<number>`coalesce(sum(${aiUsage.durationMs}), 0)`,
@@ -1973,6 +2023,60 @@ export async function loadRunDetail(
     ...event,
     createdAt: event.createdAt.toISOString(),
   }));
+  const evidenceById = new Map(evidence.map((item) => [item.id, item]));
+  const targetIds = new Set(targets.map((target) => target.id));
+  const captureContext = researchSourceMetadata
+    .pick({
+      title: true,
+      sourceURL: true,
+      capturedAt: true,
+      researchUploadState: true,
+      screenshots: true,
+    })
+    .loose();
+  const contexts = new Map(
+    evidence.map((item) => {
+      const parsed = captureContext.safeParse(item.sourceMetadata);
+      return [item.id, parsed.success ? parsed.data : null];
+    }),
+  );
+  const retainedMediaUrl = (item: (typeof evidence)[number]) => {
+    if (
+      run.retiredAt ||
+      !item.targetId ||
+      !targetIds.has(item.targetId) ||
+      !initiateRunEvidenceUploadInput.shape.contentType.safeParse(
+        item.mediaType,
+      ).success ||
+      !initiateRunEvidenceUploadInput.shape.byteSize.safeParse(item.byteSize)
+        .success ||
+      contexts.get(item.id)?.researchUploadState === "pending"
+    )
+      return undefined;
+    const query = new URLSearchParams({
+      runId: publicId,
+      targetId: item.targetId,
+      evidenceId: item.id,
+    });
+    return `${runEvidenceMediaRead.path}?${query}`;
+  };
+  const factsByEvidence = new Map<
+    string,
+    NonNullable<RunDetail["evidence"][number]["supportedFacts"]>
+  >();
+  for (const fact of acceptedFacts) {
+    const facts = factsByEvidence.get(fact.evidenceId) ?? [];
+    facts.push({
+      entityKind: fact.entityKind,
+      entityShortcode: anyShortcodeSchema([
+        runTargetEntityKind.enum.product,
+        ...runTargetEntityKind.options,
+      ]).parse(fact.entityShortcode),
+      fieldPath: fact.fieldPath,
+      value: fact.value,
+    });
+    factsByEvidence.set(fact.evidenceId, facts);
+  }
   return {
     publicId,
     status: header.status,
@@ -2095,16 +2199,50 @@ export async function loadRunDetail(
         .parse(target.diff ?? null),
       completedAt: iso(target.completedAt),
     })),
-    evidence: evidence.map((item) => ({
-      id: item.id,
-      // Run-target UUIDs are internal. Evidence still renders under the run.
-      targetId: null,
-      sourceKind: item.kind,
-      filename: null,
-      mediaType: item.mediaType,
-      checksum: item.checksum,
-      createdAt: item.createdAt.toISOString(),
-    })),
+    evidence: evidence.map((item) => {
+      const context = contexts.get(item.id);
+      const sourceURL =
+        context?.sourceURL &&
+        ["https:", "http:"].includes(new URL(context.sourceURL).protocol)
+          ? context.sourceURL
+          : undefined;
+      const mediaUrl = retainedMediaUrl(item);
+      const screenshot = context?.screenshots.find((reference) => {
+        const retained = evidenceById.get(reference.id);
+        return (
+          reference.kind === "screenshot" &&
+          retained &&
+          retained.targetId === item.targetId &&
+          retained.checksum === reference.checksum &&
+          retained.mediaType === reference.contentType &&
+          retained.mediaType.startsWith("image/") &&
+          retainedMediaUrl(retained)
+        );
+      });
+      const screenshotRow = screenshot
+        ? evidenceById.get(screenshot.id)
+        : undefined;
+      const previewUrl = item.mediaType.startsWith("image/")
+        ? mediaUrl
+        : screenshotRow
+          ? retainedMediaUrl(screenshotRow)
+          : undefined;
+      return {
+        id: item.id,
+        targetId: null,
+        sourceKind: item.kind,
+        title: context?.title,
+        sourceURL,
+        capturedAt: context?.capturedAt,
+        mediaUrl,
+        previewUrl,
+        supportedFacts: factsByEvidence.get(item.id) ?? [],
+        filename: null,
+        mediaType: item.mediaType,
+        checksum: item.checksum,
+        createdAt: item.createdAt.toISOString(),
+      };
+    }),
     approvals: approvals.map((approval) => ({
       id: approval.id,
       operationId: approval.operationId,

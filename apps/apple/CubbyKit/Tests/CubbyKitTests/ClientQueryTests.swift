@@ -34,6 +34,31 @@ struct ClientQueryTests {
             session: QueryStub.session())
     }
 
+    @Test func protectedReportMediaKeepsAuthenticationOnItsOwnOriginOnly() async throws {
+        let client = try makeClient()
+        let request = try await client.reportMediaRequest("/api/import/evidence?evidenceId=synthetic")
+        #expect(
+            request.url?.absoluteString == "http://localhost:3000/api/import/evidence?evidenceId=synthetic")
+        #expect(request.value(forHTTPHeaderField: "Authorization") == "Bearer tok")
+        #expect(request.cachePolicy == .reloadIgnoringLocalCacheData)
+        await #expect(throws: CubbyAPIError.self) {
+            try await client.reportMediaRequest("https://foreign.example.test/api/import/evidence")
+        }
+        await #expect(throws: CubbyAPIError.self) {
+            try await client.reportMediaRequest("/api/debug/other")
+        }
+    }
+
+    @Test func retainedOriginalUsesAuthenticatedTransportAndPreservesBytes() async throws {
+        let bytes = Data("%PDF-synthetic-original".utf8)
+        let request = try await capture(returning: bytes) { client in
+            let received = try await client.reportMedia("/api/import/evidence?evidenceId=synthetic")
+            #expect(received == bytes)
+        }
+        #expect(request.value(forHTTPHeaderField: "Authorization") == "Bearer tok")
+        #expect(request.url?.path == "/api/import/evidence")
+    }
+
     private func capture(returning payload: Data, _ body: (CubbyClient) async throws -> Void) async throws
         -> URLRequest
     {

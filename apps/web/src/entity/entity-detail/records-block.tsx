@@ -13,7 +13,7 @@ import { cn } from "~/lib/utils";
 import { CloudflareIcon } from "~/ui/icons/cloudflare";
 import { Row, Stack } from "~/ui/layout";
 import { Badge } from "~/ui/primitives/badge";
-import { buttonVariants } from "~/ui/primitives/button";
+import { Button, buttonVariants } from "~/ui/primitives/button";
 import { Checkbox } from "~/ui/primitives/checkbox";
 import { Description } from "~/ui/primitives/description";
 import { Eyebrow } from "~/ui/primitives/eyebrow";
@@ -164,6 +164,16 @@ function RowExtras({
         </details>
       ) : null}
       <RowActionPlacement inDetailBar={inDetailBar}>
+        {row.originalMediaUrl ? (
+          <a
+            href={row.originalMediaUrl}
+            target="_blank"
+            rel="noreferrer"
+            className={buttonVariants({ variant: "outline" })}
+          >
+            Open original
+          </a>
+        ) : null}
         {row.externalLink ? (
           <a
             href={row.externalLink.url}
@@ -336,6 +346,103 @@ function RecordRow({
   );
 }
 
+function RecordFilmstrip({
+  block,
+  commands,
+}: {
+  block: RecordsBlock;
+  commands: ReportCommands;
+}) {
+  const [selectedKey, setSelectedKey] = useState<string>();
+  const [offset, setOffset] = useState(0);
+  const selected =
+    block.rows.find((row) => row.key === selectedKey) ?? block.rows[0];
+  const start = Math.min(
+    offset,
+    Math.max(0, Math.floor((block.rows.length - 1) / 8) * 8),
+  );
+  if (!selected) return null;
+  return (
+    <Stack gap="sm" className="min-w-0">
+      <Row gap="sm" className="flex-wrap">
+        {block.rows.slice(start, start + 8).map((row) => (
+          <Button
+            key={row.key ?? row.title}
+            variant={row === selected ? "secondary" : "outline"}
+            aria-label={`View ${row.title}`}
+            aria-pressed={row === selected}
+            onClick={() => setSelectedKey(row.key)}
+          >
+            {row.imageUrl ? (
+              <Image
+                src={row.imageUrl}
+                alt=""
+                displayWidth={64}
+                className="size-12 object-contain"
+              />
+            ) : null}
+            {row.title}
+          </Button>
+        ))}
+      </Row>
+      <Row gap="sm">
+        <Button
+          variant="outline"
+          disabled={start === 0}
+          onClick={() => setOffset(start - 8)}
+        >
+          Previous captures
+        </Button>
+        <span className="text-sm text-muted-foreground">
+          {start + 1}–{Math.min(start + 8, block.rows.length)} of{" "}
+          {block.rows.length}
+        </span>
+        <Button
+          variant="outline"
+          disabled={start + 8 >= block.rows.length}
+          onClick={() => setOffset(start + 8)}
+        >
+          Next captures
+        </Button>
+      </Row>
+      <section
+        aria-label="Selected record"
+        className="grid min-w-0 gap-4 md:grid-cols-2"
+      >
+        {selected.imageUrl ? (
+          <a
+            href={selected.imageUrl}
+            target="_blank"
+            rel="noreferrer"
+            className="min-w-0"
+          >
+            <Image
+              src={selected.imageUrl}
+              alt={selected.title}
+              displayWidth={800}
+              className="max-h-[32rem] w-full rounded-md border border-border object-contain"
+            />
+          </a>
+        ) : null}
+        <ul className="min-w-0">
+          <RecordRow
+            row={{ ...selected, imageUrl: undefined }}
+            commands={commands}
+            choices={null}
+            choicesLocked={false}
+            inDetailBar={false}
+            record={undefined}
+            large={false}
+            selectable={false}
+            checked={false}
+            onCheckedChange={() => {}}
+          />
+        </ul>
+      </section>
+    </Stack>
+  );
+}
+
 /**
  * The `records` report block: the server's rows, each opening the record it names, with the
  * row verbs the server offered. `record` is the loaded detail record those verbs act on; the
@@ -377,7 +484,9 @@ export function RecordsBlockView({
         <Eyebrow>{block.title}</Eyebrow>
       ) : null}
       {list ??
-        (block.rows.length === 0 ? (
+        (block.presentation === "filmstrip" ? (
+          <RecordFilmstrip block={block} commands={commands} />
+        ) : block.rows.length === 0 ? (
           block.empty ? (
             <Description>{block.empty}</Description>
           ) : null

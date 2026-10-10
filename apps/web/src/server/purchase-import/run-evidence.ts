@@ -1,3 +1,4 @@
+import { runEvidenceMediaRead } from "@cubby/schemas/http-byte-transports";
 import { runEntityId, userId } from "@cubby/schemas/identifiers";
 import {
   initiateRunEvidenceUploadInput,
@@ -13,6 +14,7 @@ import { z } from "zod";
 
 import { env } from "~/env";
 import { APP_ORIGIN } from "~/lib/auth-constants";
+import { scrubErrorMessage } from "~/lib/error-diagnostics";
 import { getExecutionCtx } from "~/server/cf-env";
 import type { Database } from "~/server/db";
 import {
@@ -22,6 +24,7 @@ import {
   runTarget,
 } from "~/server/db/schema";
 import { notDeleted, withTransaction } from "~/server/repo/database-helpers";
+import { getS3Object } from "~/server/utils/s3";
 
 import {
   productionBrowserEvidenceStorage,
@@ -114,7 +117,7 @@ export async function initiateRunEvidenceUpload(
       expiresIn,
     );
     const uploadUrl = new URL(
-      "/api/import/evidence",
+      runEvidenceMediaRead.path,
       getExecutionCtx()?.origin ?? env.BETTER_AUTH_URL ?? APP_ORIGIN,
     );
     uploadUrl.searchParams.set("grant", grant);
@@ -230,5 +233,109 @@ export async function receiveRunEvidenceUpload(
         })
         .where(eq(runEvidence.id, owned.evidence.id));
     return new Response(null, { status: 204 });
+  });
+}
+
+/** Read immutable originals through the same ownership and retirement fence as uploads. */
+export async function readRunEvidenceMedia(
+  db: Database,
+  selection: z.input<typeof runEvidenceMediaRead.input>,
+  actorUserId: string,
+  readObject: (key: string) => Promise<Response> = getS3Object,
+): Promise<Response> {
+  const input = runEvidenceMediaRead.input.parse(selection);
+  const actor = userId.parse(actorUserId);
+  const headers = {
+    "Cache-Control": "private, no-store",
+    "X-Content-Type-Options": "nosniff",
+    "Content-Security-Policy": "sandbox; default-src 'none'",
+  };
+  const failure = (status: number, code: string, message: string) =>
+    Response.json(
+      { code, message: scrubErrorMessage(message) },
+      { status, headers },
+    );
+  return withTransaction(db, async (database) => {
+    const [owned] = await database
+      .select({ evidence: runEvidence })
+      .from(runEvidence)
+      .innerJoin(runTable, eq(runTable.id, runEvidence.runId))
+      .innerJoin(
+        runTarget,
+        and(
+          eq(runTarget.id, runEvidence.targetId),
+          eq(runTarget.runId, runTable.id),
+        ),
+      )
+      .innerJoin(
+        ledgerParty,
+        and(
+          eq(ledgerParty.id, runTable.ledgerPartyId),
+          eq(ledgerParty.userId, actor),
+          eq(ledgerParty.kind, "member"),
+          notDeleted(ledgerParty),
+        ),
+      )
+      .where(
+        and(
+          eq(runTable.shortcode, input.runId),
+          eq(runTable.actorUserId, actor),
+          notDeleted(runTable),
+          isNull(runTable.retiredAt),
+          eq(runTarget.id, input.targetId),
+          eq(runEvidence.id, input.evidenceId),
+        ),
+      )
+      .limit(1)
+      .for("update", { of: runTable });
+    if (!owned)
+      return failure(
+        404,
+        "NOT_FOUND",
+        "Retained evidence is unavailable or no longer owned",
+      );
+    const evidence = owned.evidence;
+    const mediaType =
+      initiateRunEvidenceUploadInput.shape.contentType.safeParse(
+        evidence.mediaType,
+      );
+    const size = initiateRunEvidenceUploadInput.shape.byteSize.safeParse(
+      evidence.byteSize,
+    );
+    const staged = z
+      .object({ researchUploadState: z.literal("pending") })
+      .safeParse(evidence.sourceMetadata);
+    if (staged.success)
+      return failure(409, "CONFLICT", "Retained evidence upload is pending");
+    if (!mediaType.success || !size.success)
+      return failure(
+        415,
+        "UNSUPPORTED_MEDIA_TYPE",
+        "Retained evidence cannot be displayed as verified media",
+      );
+    const original = await readObject(evidence.objectKey);
+    if (!original.ok)
+      return failure(
+        original.status,
+        `HTTP_${original.status}`,
+        await original.text(),
+      );
+    const bytes = await readResponseWithLimit(original, size.data);
+    if (
+      bytes.byteLength !== size.data ||
+      (await sha256Hex(bytes)) !== evidence.checksum
+    )
+      return failure(
+        422,
+        "UNPROCESSABLE_CONTENT",
+        "Retained evidence bytes differ from their manifest",
+      );
+    return new Response(new Uint8Array(bytes).buffer, {
+      headers: {
+        ...headers,
+        "Content-Type": mediaType.data,
+        "Content-Length": String(bytes.byteLength),
+      },
+    });
   });
 }

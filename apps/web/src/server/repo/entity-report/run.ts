@@ -533,29 +533,67 @@ const importTargets = (run: RunDetail): ReportBlock[] =>
         ),
       ];
 
-const importEvidence = (run: RunDetail): ReportBlock[] =>
-  run.targets.length === 0 && run.evidence.length === 0
-    ? []
-    : [
-        note(
-          "Retained source observations belong to this run. Current field explanations show which values they support.",
+const importEvidence = (run: RunDetail): ReportBlock[] => {
+  const referencedPreviews = new Set(
+    run.evidence
+      .filter((source) => source.previewUrl !== source.mediaUrl)
+      .map((source) => source.previewUrl),
+  );
+  const sources = run.evidence.filter(
+    (source) => !source.mediaUrl || !referencedPreviews.has(source.mediaUrl),
+  );
+  const evidenceRows = sources.map((evidence) => ({
+    ...row(evidence.id, {
+      title: evidence.title ?? evidence.filename ?? evidence.sourceKind,
+      at: evidence.capturedAt ?? evidence.createdAt,
+      lines: [
+        line(
+          `${evidence.sourceKind}${evidence.mediaType ? ` · ${evidence.mediaType}` : ""}${evidence.checksum ? ` · ${evidence.checksum}` : ""}`,
+          "muted",
         ),
-        records(
-          run.evidence.map((evidence) =>
-            row(evidence.id, {
-              title: evidence.filename ?? evidence.sourceKind,
-              at: evidence.createdAt,
-              lines: [
-                line(
-                  `${evidence.sourceKind}${evidence.mediaType ? ` · ${evidence.mediaType}` : ""}${evidence.checksum ? ` · ${evidence.checksum}` : ""}`,
-                  "muted",
-                ),
-              ],
-            }),
+        ...(evidence.supportedFacts ?? []).map((fact) =>
+          line(
+            `${fact.entityShortcode} · ${fact.fieldPath}: ${z.string().safeParse(fact.value).data ?? JSON.stringify(fact.value)}`,
           ),
-          { empty: "No run-scoped evidence was retained." },
         ),
-      ];
+      ],
+      externalLink: evidence.sourceURL
+        ? { label: "Open live source", url: evidence.sourceURL }
+        : undefined,
+    }),
+    imageUrl: evidence.previewUrl,
+    originalMediaUrl: evidence.mediaUrl,
+  }));
+  const captures = evidenceRows
+    .filter((source) => source.imageUrl)
+    .sort(
+      (left, right) =>
+        (right.at ?? "").localeCompare(left.at ?? "") ||
+        (right.key ?? "").localeCompare(left.key ?? ""),
+    );
+  const otherSources = evidenceRows.filter((source) => !source.imageUrl);
+  return [
+    ...(captures.length
+      ? [
+          {
+            ...records(captures, {
+              title: "Captured pages",
+              empty: "No retained captures.",
+            }),
+            presentation: "filmstrip" as const,
+          },
+        ]
+      : []),
+    ...(otherSources.length
+      ? [
+          records(otherSources, {
+            title: "Retained sources",
+            empty: "No retained sources.",
+          }),
+        ]
+      : []),
+  ];
+};
 
 const importTimeline = (run: RunDetail): ReportBlock[] => [
   note(

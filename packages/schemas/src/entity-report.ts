@@ -463,6 +463,8 @@ const reportRecordRow = z.object({
   trailing: z.string().nullable(),
   /** A thumbnail the row leads with. */
   imageUrl: z.string().optional(),
+  /** Authenticated retained original, separate from the live source and preview. */
+  originalMediaUrl: z.string().optional(),
   /** Short chips worded by the server (a status, a failure code). */
   badges: z.array(z.string()).optional(),
   /** An ISO instant each client prints in its own locale and zone. */
@@ -507,6 +509,7 @@ export type ReportRecordRow = z.infer<typeof reportRecordRow>;
  * plan in `nativeCollectionActionPlans`.
  */
 const reportRecords = z.object({
+  presentation: z.literal("filmstrip").optional(),
   kind: z.literal("records"),
   title: z.string().optional(),
   rows: z.array(reportRecordRow),
