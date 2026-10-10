@@ -218,13 +218,21 @@ const stableImportItemId = z
  * Reusing an operation id with changed arguments is a fenced conflict, while
  * retrying it verbatim returns the original ledger result.
  */
-export const purchaseImportRunExecution = z.object({
-  // The private run id: it is what the delegation token and agent instance
-  // carry, so the public code can change without touching agent state.
-  runId: z.uuid(),
-  operationId: importOperationId,
-  itemOperationIds: z.array(importItemOperationId).min(1).max(50).optional(),
-});
+export const purchaseImportRunExecution = z
+  .object({
+    // The private run id: it is what the delegation token and agent instance
+    // carry, so the public code can change without touching agent state.
+    runId: z.uuid().optional(),
+    // A member names the Run its own preparation returned. A member's
+    // preparation without either opens a new import Run.
+    run: runShortcode.optional(),
+    operationId: importOperationId,
+    itemOperationIds: z.array(importItemOperationId).min(1).max(50).optional(),
+  })
+  .refine((value) => !(value.runId && value.run), {
+    message: "Name the import Run once: runId (agent) or run (member)",
+    path: ["run"],
+  });
 export type PurchaseImportRunExecution = z.infer<
   typeof purchaseImportRunExecution
 >;
@@ -1130,6 +1138,9 @@ export type ImportWriterOutput = z.infer<typeof importWriterOutput>;
 
 const preparedImportOrderInput = z
   .object({
+    vendorId: vendorShortcode.describe(
+      "The Vendor this order was bought from; find or create it first.",
+    ),
     targetPurchaseId: purchaseShortcode.nullable().optional(),
     stableOrderId: stableImportItemId,
     itemOperationId: importItemOperationId,

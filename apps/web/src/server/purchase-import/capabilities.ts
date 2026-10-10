@@ -30,9 +30,9 @@ type Capability =
 
 const capabilityMatrix = {
   mail_import: new Set([
+    "prepare",
+    "commit_purchase_import",
     "business_writer",
-    "evidence",
-    "browser",
     "finalize",
     "match_proposal",
   ]),
@@ -74,7 +74,14 @@ const capabilityMatrix = {
   ai_suggest: new Set(),
   suggestion_sweep: new Set(),
   background: new Set(),
-  file_import: new Set(),
+  // A member's own import (a receipt, an order Email, a vendor export).
+  file_import: new Set([
+    "prepare",
+    "commit_purchase_import",
+    "business_writer",
+    "attachment",
+    "finalize",
+  ]),
   mail_search: new Set(),
   mail_discovery: new Set(),
 } satisfies Record<RunPurpose, ReadonlySet<Capability>>;

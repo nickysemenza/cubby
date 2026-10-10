@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { purchaseShortcode } from "./identifier-fields";
 import { executionAuthorizationRef } from "./execution-authorization.js";
 import { acceptedResearchFact } from "./research-facts";
 import { researchAssessment } from "./research-assessment";
@@ -125,3 +126,93 @@ export const researchImportResult = z.object({
   refusals: researchAssessment.shape.rejected.default([]),
 });
 export type ResearchImportResult = z.infer<typeof researchImportResult>;
+
+/** Lifecycle event an Email records about a Purchase. */
+export const mailEvent = z.enum([
+  "confirmation",
+  "shipped",
+  "delivered",
+  "cancelled",
+  "refunded",
+  "other",
+]);
+export type MailEvent = z.infer<typeof mailEvent>;
+
+const sha256 = z.string().regex(/^[a-f0-9]{64}$/);
+
+/**
+ * A retained Email, named by its provider identity so a caller can correlate
+ * it with its own mail connector (Gmail `messageId`; `threadId` is context).
+ */
+export const mailMessageRef = z.object({
+  mailboxId: z.string().trim().min(1).max(320),
+  messageId: z.string().trim().min(1).max(200),
+});
+export type MailMessageRef = z.infer<typeof mailMessageRef>;
+
+export const mailReadInput = mailMessageRef.extend({
+  attachmentId: z
+    .string()
+    .trim()
+    .min(1)
+    .max(200)
+    .optional()
+    .describe("A provider attachment id from the message's attachment list."),
+});
+export type MailReadInput = z.infer<typeof mailReadInput>;
+
+export const mailSearchInput = z.object({
+  mailboxId: z.string().trim().min(1).max(320).optional(),
+  query: z
+    .string()
+    .trim()
+    .min(1)
+    .max(500)
+    .describe(
+      "Gmail search syntax, e.g. an order number or `from:shop.example`. Spam and Trash are always excluded.",
+    ),
+  pageToken: z.string().min(1).max(2_000).optional(),
+});
+export type MailSearchInput = z.infer<typeof mailSearchInput>;
+
+export const mailResolveDisposition = z.discriminatedUnion("kind", [
+  z
+    .object({
+      kind: z.literal("linked"),
+      purchaseId: purchaseShortcode,
+      event: mailEvent,
+    })
+    .describe(
+      "The Email records this lifecycle event of an existing Purchase (shipment, delivery, cancellation, refund …). Writes no Expenses.",
+    ),
+  z
+    .object({
+      kind: z.literal("unresolved"),
+      reason: z.string().trim().min(1).max(1_000),
+    })
+    .describe(
+      "An order Email whose Purchase cannot be established yet; the reason names the gap.",
+    ),
+  z
+    .object({
+      kind: z.literal("unrelated"),
+      reason: z.string().trim().min(1).max(1_000),
+    })
+    .describe(
+      "Not about a purchase. Cubby deletes its retained copy unless a reviewed decision or import already uses it.",
+    ),
+]);
+export type MailResolveDisposition = z.infer<typeof mailResolveDisposition>;
+
+export const mailResolveInput = mailMessageRef.extend({
+  checksum: sha256.describe("The checksum mail.read returned for this Email."),
+  disposition: mailResolveDisposition,
+});
+export type MailResolveInput = z.infer<typeof mailResolveInput>;
+
+export const mailResolveOut = mailMessageRef.extend({
+  status: mailboxMessageStatus,
+  disposition: z.enum(["linked", "unresolved", "unrelated"]),
+  purchaseId: purchaseShortcode.nullable(),
+});
+export type MailResolveOut = z.infer<typeof mailResolveOut>;

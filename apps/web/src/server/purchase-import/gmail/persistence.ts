@@ -16,7 +16,6 @@ import {
   mailboxCursor,
   mailboxMessage,
   orderMailCandidateDecision,
-  run,
   orderMail,
   orderMailAttachment,
   orderMailEvent,
@@ -232,13 +231,6 @@ export async function clearUnrelatedOriginal(
       )
       .where(eq(orderMailEvent.orderMailId, original.id))
       .limit(1);
-    const [attempt] = await tx
-      .select({ id: run.id })
-      .from(run)
-      .where(
-        sql`position(${original.id} in ${run.input}::text) > 0 OR EXISTS (SELECT 1 FROM "OrderMailEvent" e WHERE e."orderMailId" = ${original.id} AND position(e.id::text in ${run.input}::text) > 0)`,
-      )
-      .limit(1);
     const attachments = await tx
       .select({
         id: orderMailAttachment.id,
@@ -256,7 +248,6 @@ export async function clearUnrelatedOriginal(
     if (
       decision ||
       sourceClaimIds.length ||
-      attempt ||
       attachments.some((attachment) => attachment.imageId)
     )
       return protectedOriginal;
