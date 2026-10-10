@@ -1847,6 +1847,8 @@ Rules:
             field: "productId",
             byValue: { principal: "unknown" },
             otherwise: "not_allowed",
+            refusal:
+              "Only principal Expenses may link a Product. For a disposal or write-off, use lineKind=principal, cost=0, and a negative productQuantity; use other_adjustment only for purchase-level amounts with no Product.",
           },
           {
             field: "spendingCategoryId",
@@ -1868,6 +1870,8 @@ Rules:
             field: "productId",
             byValue: { allocation: "not_allowed" },
             otherwise: "unknown",
+            refusal:
+              "An allocation Expense may not link a Product — the money is a slice of an un-itemized total, so it buys no particular item.",
           },
         ],
       },

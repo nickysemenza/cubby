@@ -54,6 +54,7 @@ import {
 } from "~/server/ai/selection";
 import type { Database } from "~/server/db";
 import { createAppError } from "~/server/errors/app-error";
+import { classificationAllowsField } from "~/server/repo/classification-field-policy";
 import { classificationRefusesField } from "~/server/repo/classification-field-policy";
 import { resolveDraftExpenseFields } from "~/server/repo/expense-inheritance";
 import {
@@ -823,14 +824,13 @@ export async function suggestFields(
         }
       : rawInput;
   if (
-    input.entity === "expense" &&
-    input.targets.includes("projectId") &&
-    input.basis.lineKind != null &&
-    input.basis.lineKind !== "principal"
+    input.targets.some(
+      (target) => !classificationAllowsField(input.entity, input.basis, target),
+    )
   ) {
     throw createAppError(
       "SUGGEST_FIELD_FORBIDDEN",
-      "Only principal expense lines can receive project suggestions.",
+      "The target field is forbidden by this record classification.",
     );
   }
   // SAFETY: `input.entity` is validated by `fieldSuggestionsInput`'s

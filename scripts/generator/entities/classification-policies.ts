@@ -140,6 +140,7 @@ export const renderClassificationPolicyArtifacts = (
     "    field: string;\n" +
     "    byValue: Readonly<Record<string, FieldPolicyValue>>;\n" +
     "    otherwise: FieldPolicyValue;\n" +
+    "    refusal?: string;\n" +
     "  }>[];\n" +
     "}>;\n\n" +
     `export const declaredClassificationPolicies = {\n${entries.join("\n")}\n} as const satisfies Record<string, DeclaredClassificationPolicy>;\n`;

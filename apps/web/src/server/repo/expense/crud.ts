@@ -33,7 +33,10 @@ import type { IncomingEdgePolicy } from "~/server/db/entity-incoming-edges";
 import { expense, product, purchase } from "~/server/db/schema";
 import { createAppError } from "~/server/errors/app-error";
 import { computeChanges, logAuditEntry } from "~/server/repo/audit-log";
-import { assertClassificationPolicies } from "~/server/repo/classification-field-policy";
+import {
+  assertClassificationPolicies,
+  classificationFieldsToClear,
+} from "~/server/repo/classification-field-policy";
 import { loadDataQualities } from "~/server/repo/data-quality/hydrate";
 import {
   buildPartialUpdateValues,
@@ -548,18 +551,16 @@ export const updateExpense = async (
 
   type UpdateState = Awaited<ReturnType<typeof loadUpdateState>>;
 
-  // Reclassifying a principal line as an adjustment drops its project: an
-  // adjustment cannot store one (`validateExpenseInheritance` rejects it),
-  // and every editing surface — list, embedded relation table, detail —
-  // relies on the server owning that rule rather than each sending
-  // `projectId: null` alongside.
-  const dropProjectOnReclassify = (update: ResolvedExpenseUpdate) => {
-    if (
-      update.lineKind !== undefined &&
-      update.lineKind !== "principal" &&
-      update.projectId === undefined
-    ) {
-      update.projectId = null;
+  const clearReclassifiedFields = (
+    previous: UpdateState["qualityBefore"],
+    update: ResolvedExpenseUpdate,
+  ) => {
+    for (const field of classificationFieldsToClear(
+      "expense",
+      previous ?? {},
+      update,
+    )) {
+      Object.assign(update, { [field]: null });
     }
   };
 
@@ -570,7 +571,7 @@ export const updateExpense = async (
     resultingPurchaseId: PurchaseId | null,
   ) => {
     const previous = state.qualityBefore;
-    dropProjectOnReclassify(update);
+    clearReclassifiedFields(previous, update);
     // Detaching a source preserves its effective attribution unless the same
     // edit explicitly replaces or resets that assignment.
     if (

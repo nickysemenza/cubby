@@ -1795,6 +1795,8 @@ const buildMetadataSchemas = () => {
       byValue: z.record(z.string().min(1), fieldPolicyValue),
       /** The policy for every other value, and for no value at all. */
       otherwise: fieldPolicyValue,
+      /** Actionable explanation shown when this policy refuses the field. */
+      refusal: nonEmptyString().optional(),
     })
     .strict();
 
