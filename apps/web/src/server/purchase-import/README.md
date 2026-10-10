@@ -901,6 +901,11 @@ claim and does not contradict otherwise agreeing identifiers. Tracking query par
 path. A refused Offer remains ambiguous, and historical replay receipts are
 not rewritten when the derivation revision changes.
 
+The activity timeline orders retained browser debug observations by their
+original `occurredAt`, including delayed/replayed batches. Operation events keep
+their ledger start time. The same projected timestamp owns keyset pagination;
+reading history does not rewrite observation bytes or replay receipts.
+
 The Mac browser account roster uses generated `vendor.browserAccounts`; debug
 batches use generated `run.browserDebugEvents`. Both pass through the shared
 request context. The roster includes only this member's live browser-enabled

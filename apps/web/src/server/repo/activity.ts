@@ -803,7 +803,9 @@ export async function activityEvents(
     : sql`
         SELECT
           id::text,
-          "startedAt" AS "occurredAt",
+          CASE WHEN kind = '__debug_event'
+            THEN (result->>'occurredAt')::timestamptz AT TIME ZONE 'UTC'
+            ELSE "startedAt" END AS "occurredAt",
           CASE
             WHEN kind = '__debug_event' THEN 'device'
             WHEN executor->>'kind' = 'device' THEN 'device'
