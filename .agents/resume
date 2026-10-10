@@ -1,6 +1,0 @@
-#!/usr/bin/env bash
-# Amp orb resume: runs on activation and every wake; must finish in seconds.
-# The Docker daemon starts on first use through its socket (see .agents/setup).
-set -euo pipefail
-
-sudo systemctl start docker.socket
