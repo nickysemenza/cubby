@@ -10,6 +10,8 @@ invalidation/inline-error/multi-mutation cases.
 Pass the displayed selection as mutation variables at the action boundary.
 A mutation function must not read changing selection state from its closure:
 observer options can lag the render that enabled the action.
+Resolve table selection updaters at the event boundary: they look up live rows
+and must not be deferred to a React state replay after optimistic removal.
 For hook-default and `useQueries` examples, load the relevant heading in the
 [web UI reference](web-ui-reference.md).
 
