@@ -191,9 +191,11 @@ scan authority.
 Discovery skips classifying a message only when both its checksum and its
 `classificationVersion` match `MAILBOX_RESEARCH_VERSION` (`gmail/ingest.ts`). An
 older classifier or research version's completion markers prove nothing:
-bumping the version makes unchanged, already processed mail actionable again,
-while explicit human link/dismiss decisions and existing domain associations
-stay intact.
+bumping the version makes eligible unchanged, already processed mail actionable
+again, while explicit human link/dismiss decisions and existing domain
+associations stay intact. A message marked
+`HISTORICAL_MAIL_SOURCE_IDENTITY_VERSION` (unresolved historical ownership) is
+not eligible: discovery returns `blocked` before classifying it.
 
 Mail retry and restart re-enter the original source admission boundary rather
 than copying Run inputs or targets. Retry carries only unresolved supported
