@@ -337,6 +337,16 @@ and deployment/readback order are owned by the
    leaves Purchase defaults and adjustments intact.
    A returned domain refusal that leaves the same task active upgrades the
    coordinator from Luna/medium to Sol/low for the remainder of that Run.
+   Mail relevance presents visible HTML text and exact links through the shared
+   page compactor, omits layout bytes and identical plain/HTML text, and bounds
+   the serialized model content to 256 KiB including attachment encoding.
+   Original attachment acquisition retains its separate 10 MiB envelope, so
+   an attachment omitted from the model view remains available for retention.
+   Image labels and source URLs remain visible; missing image pixels cannot
+   justify unrelated mail. An oversized
+   readable body goes directly to uncertain without an inference request;
+   incomplete compacted views or attachments cannot establish unrelated mail.
+   Original mail remains unchanged for retention and subsequent research.
    Both purchase and Product research start with Luna/medium. The host
    retains this mode before returning the tool result and reapplies it after
    eviction or result replay. Settled ambiguity, member contradictions,
