@@ -1,0 +1,10 @@
+{
+  // Nx remote cache for CI and the developer's Mac; see
+  // docs/adr/0009-content-hash-merge-gate.md.
+  "name": "cubby-nx-cache",
+  "main": "src/index.ts",
+  "compatibility_date": "2026-09-19",
+  "workers_dev": true,
+  "r2_buckets": [{ "binding": "CACHE", "bucket_name": "cubby-nx-cache" }]
+  // Secret: CACHE_TOKEN (`wrangler secret put CACHE_TOKEN`).
+}
