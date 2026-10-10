@@ -61,6 +61,17 @@ the target outcome, retained warning and target completion time (or Run start
 while unfinished). A completed attempt does not imply a verified purchased
 variant. No-write research remains visible, and each row opens its actual Run.
 
+Vendor, VendorAccount and Purchase email-evidence reports share one records
+renderer. They distinguish the owned mailbox ledger's classification and
+processing state from accepted Purchase source associations and reviewed event
+links. Receipt time, processing last-update time, first source acceptance,
+decision last-update time and Run start/end time retain their separate meanings.
+Processing history matches the owned member, mailbox and message identity even
+when deletion or exclusion clears the original link. Run linkage still requires
+that original link. Legacy originals without a matching ledger show unavailable processing history;
+a missing clock is never replaced with the receipt date. Counts describe the
+retained emails shown for the record, not mailbox coverage or Product verification.
+
 Execution allowance is separate from causal lineage. A member's explicit
 approval is an immutable, completed background Run; completed RunOperation
 receipts retain every conservative paid reservation and distinct candidate or

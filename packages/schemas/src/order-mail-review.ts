@@ -10,6 +10,10 @@ import {
   vendorShortcode,
 } from "./identifier-fields.js";
 import { chargeHuntOutcome } from "./run-fields.js";
+import {
+  mailboxClassification,
+  mailboxMessageStatus,
+} from "./mailbox-research.js";
 
 export const vendorOrderMailInput = z.object({
   vendorId: vendorShortcode,
@@ -36,6 +40,7 @@ export const orderMailCandidate = z.object({
   ]),
   decision: z.enum(["linked", "dismissed"]).nullable(),
   evidenceChecksum: z.string().nullable(),
+  decisionUpdatedAt: z.iso.datetime().nullable(),
 });
 
 export const orderMailReviewItem = z.object({
@@ -45,18 +50,29 @@ export const orderMailReviewItem = z.object({
   subject: z.string(),
   receivedAt: z.iso.datetime().nullable(),
   ledgerPartyId: ledgerPartyShortcode,
+  processing: z
+    .object({
+      classification: mailboxClassification,
+      version: z.string(),
+      status: mailboxMessageStatus,
+      updatedAt: z.iso.datetime(),
+    })
+    .nullable(),
   researchRun: z
     .object({
       id: runShortcode,
       status: z.string(),
       sourceStatus: z.string(),
       evidenceChecksum: z.string(),
+      startedAt: z.iso.datetime().nullable(),
+      endedAt: z.iso.datetime().nullable(),
     })
     .nullable(),
   associations: z.array(
     z.object({
       purchaseId: purchaseShortcode,
       evidenceChecksum: z.string(),
+      acceptedAt: z.iso.datetime(),
     }),
   ),
   events: z.array(

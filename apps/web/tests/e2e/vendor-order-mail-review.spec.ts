@@ -40,6 +40,19 @@ test("reviews a vendor email match through the generic report and shows the link
     page,
     `Synthetic Outfitters ${Date.now()}`,
   );
+  await getDb(getFixtureDb())
+    .insert(schema.mailboxMessage)
+    .values({
+      ledgerPartyId: seed.mail.ledgerPartyId,
+      mailboxId: seed.mail.mailboxId,
+      messageId: seed.mail.messageId,
+      orderMailId: seed.mail.id,
+      checksum: seed.mail.rawChecksum,
+      classification: "uncertain",
+      classificationVersion: "synthetic-review/v1",
+      status: "blocked",
+      updatedAt: new Date("2026-09-11T12:00:00Z"),
+    });
   await gotoAuthenticatedPage(
     page,
     `/vendors/${seed.vendor.shortcode}`,
@@ -47,6 +60,12 @@ test("reviews a vendor email match through the generic report and shows the link
   );
   await expect(
     page.getByRole("button", { name: "Research purchases", exact: true }),
+  ).toBeVisible();
+  await expect(
+    page.getByText("Classification: uncertain", { exact: true }),
+  ).toBeVisible();
+  await expect(
+    page.getByText("Processing: blocked", { exact: true }),
   ).toBeVisible();
   const exactRow = page.getByRole("listitem").filter({
     has: page.locator(`a[href="/purchases/${seed.purchase.shortcode}"]`),
@@ -82,6 +101,9 @@ test("reviews a vendor email match through the generic report and shows the link
     /^https:\/\/mail\.google\.com\/mail\/u\/0\/#all\/synthetic-thread-/u,
   );
   await expect(page.getByText("Linked", { exact: true })).toBeVisible();
+  await expect(
+    page.getByText("Processing: blocked", { exact: true }),
+  ).toBeVisible();
 });
 
 test("launches cloud Vendor purchase research from the generic report without a website or account", async ({

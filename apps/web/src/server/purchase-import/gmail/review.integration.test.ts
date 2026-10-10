@@ -13,6 +13,7 @@ import { describe, expect, it } from "vitest";
 import {
   importSourceClaim,
   importSourceOrder,
+  mailboxMessage,
   orderMail,
   orderMailCandidateDecision,
   orderMailEvent,
@@ -34,6 +35,136 @@ import {
 
 describe("Vendor order mail review", () => {
   const ctx = withTestDb();
+
+  it.each(["deleted", "excluded"] as const)(
+    "retains owned %s processing history after the original link is cleared",
+    async (status) => {
+      const f = await retainedReviewFixture();
+      const updatedAt = new Date("2026-10-02T13:00:00Z");
+      await getDb(ctx.db).insert(mailboxMessage).values({
+        ledgerPartyId: f.source.ledgerPartyId,
+        mailboxId: f.source.mailboxId,
+        messageId: f.source.messageId,
+        orderMailId: null,
+        classification: "related",
+        classificationVersion: "synthetic-classifier/v1",
+        checksum: f.source.rawChecksum,
+        status,
+        runId: f.receipt.runId,
+        updatedAt,
+      });
+      const result = await listVendorOrderMail(ctx.db, {
+        vendorId: f.vendor.shortcode,
+      });
+      const item = result.items.find(
+        (row) => row.messageId === f.source.messageId,
+      );
+      expect(item?.processing).toMatchObject({
+        status,
+        updatedAt: updatedAt.toISOString(),
+      });
+      expect(item?.researchRun).toBeNull();
+    },
+  );
+
+  // Mail processing is not Purchase linking or Product verification. Its clock
+  // comes from the exact owned mailbox ledger, never email receipt time.
+  it("shows owned mail processing separately from accepted sources and reviewed links", async () => {
+    const f = await retainedReviewFixture();
+    const updatedAt = new Date("2026-10-02T13:00:00Z");
+    await getDb(ctx.db)
+      .insert(mailboxMessage)
+      .values([
+        {
+          ledgerPartyId: f.source.ledgerPartyId,
+          mailboxId: f.source.mailboxId,
+          messageId: f.source.messageId,
+          orderMailId: f.source.id,
+          checksum: f.source.rawChecksum,
+          classification: "uncertain",
+          classificationVersion: "synthetic-classifier/v1",
+          status: "blocked",
+          runId: f.receipt.runId,
+          updatedAt,
+        },
+        {
+          ledgerPartyId: f.source.ledgerPartyId,
+          mailboxId: "synthetic-other-mailbox",
+          messageId: f.source.messageId,
+          orderMailId: f.source.id,
+          checksum: f.source.rawChecksum,
+          classification: "related",
+          classificationVersion: "synthetic-wrong-ledger/v1",
+          status: "completed",
+          updatedAt: new Date("2026-10-03T13:00:00Z"),
+        },
+      ]);
+    const decidedAt = new Date("2026-10-02T14:00:00Z");
+    await getDb(ctx.db).insert(orderMailCandidateDecision).values({
+      eventId: f.event.id,
+      purchaseId: f.purchase.id,
+      decision: "linked",
+      evidenceChecksum: f.source.rawChecksum,
+      decidedByUserId: ctx.actor.userId,
+      updatedAt: decidedAt,
+    });
+    const [claim] = await getDb(ctx.db)
+      .insert(importSourceClaim)
+      .values({
+        ledgerPartyId: f.source.ledgerPartyId,
+        kind: "mail_message",
+        externalKey: `gmail:${f.source.mailboxId}:${f.source.messageId}`,
+        checksum: f.source.rawChecksum,
+        firstRunId: f.receipt.runId,
+        lastRunId: f.receipt.runId,
+      })
+      .returning();
+    if (!claim) throw new Error("Synthetic accepted mail claim missing");
+    const acceptedAt = new Date("2026-10-02T15:00:00Z");
+    await getDb(ctx.db).insert(importSourceOrder).values({
+      sourceClaimId: claim.id,
+      orderKey: "synthetic-accepted-order",
+      purchaseId: f.purchase.id,
+      checksum: f.source.rawChecksum,
+      outputFingerprint: "synthetic-accepted-mail",
+      createdAt: acceptedAt,
+    });
+    const report = await buildEntityReport(
+      ctx.db,
+      { slot: "purchase.order-mail", id: f.purchase.shortcode },
+      async () => null,
+      ctx.actor,
+    );
+    const rows = report.blocks.flatMap((block) =>
+      block.kind === "records" ? block.rows : [],
+    );
+    const original = rows.find((row) => row.title === f.source.subject);
+    expect(original?.at).toBe(f.source.receivedAt?.toISOString());
+    expect(original?.statuses).toEqual(
+      expect.arrayContaining([
+        { label: "Classification: uncertain" },
+        { label: "Processing: blocked" },
+      ]),
+    );
+    expect(original?.detail?.text).toContain(updatedAt.toISOString());
+    expect(original?.detail?.text).toContain("synthetic-classifier/v1");
+    expect(original?.detail?.text).not.toContain("synthetic-wrong-ledger/v1");
+    const linked = rows.find((row) =>
+      row.statuses?.some((status) => status.label === "Linked"),
+    );
+    expect(linked?.at).toBe(decidedAt.toISOString());
+    expect(linked?.id).toBe(f.purchase.shortcode);
+    const accepted = rows.find((row) =>
+      row.statuses?.some((status) => status.label === "Accepted source"),
+    );
+    expect(accepted?.at).toBe(acceptedAt.toISOString());
+    expect(accepted?.id).toBe(f.purchase.shortcode);
+    expect(
+      rows.some((row) =>
+        row.statuses?.some((status) => status.label === "Verified"),
+      ),
+    ).toBe(false);
+  });
 
   // Accepted source associations, not a nullable sender hint or order-id coincidence,
   // must make a multi-merchant original readable on every supported Purchase.

@@ -226,19 +226,30 @@ export async function listVendorOrderMail(
       researchRunStatus: run.status,
       researchSourceStatus: mailboxMessage.status,
       researchChecksum: mailboxMessage.checksum,
+      classification: mailboxMessage.classification,
+      classificationVersion: mailboxMessage.classificationVersion,
+      processingUpdatedAt: mailboxMessage.updatedAt,
+      researchStartedAt: run.startedAt,
+      researchEndedAt: run.endedAt,
     })
     .from(orderMail)
     .innerJoin(ledgerParty, eq(ledgerParty.id, orderMail.ledgerPartyId))
     .leftJoin(
       mailboxMessage,
       and(
-        eq(mailboxMessage.orderMailId, orderMail.id),
         eq(mailboxMessage.ledgerPartyId, orderMail.ledgerPartyId),
         eq(mailboxMessage.mailboxId, orderMail.mailboxId),
         eq(mailboxMessage.messageId, orderMail.messageId),
       ),
     )
-    .leftJoin(run, and(eq(run.id, mailboxMessage.runId), notDeleted(run)))
+    .leftJoin(
+      run,
+      and(
+        eq(run.id, mailboxMessage.runId),
+        eq(mailboxMessage.orderMailId, orderMail.id),
+        notDeleted(run),
+      ),
+    )
     .where(
       and(
         or(
@@ -271,6 +282,7 @@ export async function listVendorOrderMail(
       orderMailId: orderMail.id,
       purchaseId: purchase.shortcode,
       evidenceChecksum: importSourceOrder.checksum,
+      acceptedAt: importSourceOrder.createdAt,
     })
     .from(orderMail)
     .innerJoin(importSourceClaim, mailSourceIdentity)
@@ -394,6 +406,18 @@ export async function listVendorOrderMail(
       subject: mail.subject,
       receivedAt: mail.receivedAt?.toISOString() ?? null,
       ledgerPartyId: mail.ledgerPartyShortcode,
+      processing:
+        mail.classification &&
+        mail.classificationVersion &&
+        mail.researchSourceStatus &&
+        mail.processingUpdatedAt
+          ? {
+              classification: mail.classification,
+              version: mail.classificationVersion,
+              status: mail.researchSourceStatus,
+              updatedAt: mail.processingUpdatedAt.toISOString(),
+            }
+          : null,
       researchRun:
         mail.researchRunId &&
         mail.researchRunStatus &&
@@ -404,13 +428,16 @@ export async function listVendorOrderMail(
               status: mail.researchRunStatus,
               sourceStatus: mail.researchSourceStatus,
               evidenceChecksum: mail.researchChecksum,
+              startedAt: mail.researchStartedAt?.toISOString() ?? null,
+              endedAt: mail.researchEndedAt?.toISOString() ?? null,
             }
           : null,
       associations: associations
         .filter((association) => association.orderMailId === mail.id)
-        .map(({ purchaseId, evidenceChecksum }) => ({
+        .map(({ purchaseId, evidenceChecksum, acceptedAt }) => ({
           purchaseId,
           evidenceChecksum,
+          acceptedAt: acceptedAt.toISOString(),
         })),
       events: (eventsByMail.get(mail.id) ?? []).map((event) => ({
         id: event.id,
@@ -443,6 +470,7 @@ export async function listVendorOrderMail(
                 reason: reason ?? ("previous_decision" as const),
                 decision: decision?.decision ?? null,
                 evidenceChecksum: decision?.evidenceChecksum ?? null,
+                decisionUpdatedAt: decision?.updatedAt.toISOString() ?? null,
               },
             ];
           })
