@@ -123,7 +123,8 @@ struct BrowserBridgeSettingsModelTests {
         let controller = StubController()
         let first = SyncPlanAccount(
             shortcode: "VACCT-4K7M", label: "Example Seeds",
-            vendorName: "Example Seeds", action: .firstSync(.init(kind: .firstSync)),
+            vendorName: "Example Seeds", accountStatus: .active, connected: false, lastSuccessAt: nil,
+            action: .firstSync(.init(kind: .firstSync)),
             line: "First sync", disabledReason: nil)
         var second = first
         second.shortcode = "VACCT-EXAMPLE"

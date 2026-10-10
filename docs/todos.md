@@ -271,8 +271,13 @@ mailbox and authenticated-device acceptance only after explicit resumption.
   through the existing server status contract instead of local socket state alone. Local
   browser execution now derives Run links from the existing command registry; the
   connection and import-plan columns remain distinct, and last commands link their
-  actual Run. Exact-revision UI and authenticated-device acceptance are still pending;
-  server authorization, target/step and last-success projection remain open.
+  actual Run. Exact-revision UI and authenticated-device acceptance are still pending.
+  The shared sync plan now separates server broker connectivity from persisted
+  account status and reuses the VendorAccount last-completed-Run derivation.
+  Native account labels use the generic manifest. Focused persisted-state
+  regressions establish pause visibility, failed-attempt history and owned
+  broker reads; review, hosted delivery and synthetic UI acceptance remain
+  pending. Current target/step and installed-client acceptance remain open.
 
 - 🟢 **Generate remaining Mac agent-route contracts.** Accounts and debug batches
   now use shared generated Vendor/Run operations in

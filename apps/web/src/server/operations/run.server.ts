@@ -6,7 +6,10 @@ import { and, eq, isNull } from "drizzle-orm";
 import type { z } from "zod";
 
 import { runContract } from "~/contracts/run.contract";
-import { getPurchaseAgentQueue } from "~/server/cf-env";
+import {
+  getPurchaseImportNamespace,
+  getPurchaseAgentQueue,
+} from "~/server/cf-env";
 import { account } from "~/server/db/auth.schema";
 import { oauthRefreshToken, run as runTable } from "~/server/db/schema";
 import { implementOperationDomain } from "~/server/operation-domain.server";
@@ -184,8 +187,17 @@ export const runHandlers = implementOperationDomain(runContract, {
         mailboxId: input.mailboxId,
       },
     }),
-  syncPlan: async (context, input) =>
-    loadSyncPlan(context.db, (await memberParty(context)).id, input),
+  syncPlan: async (context, input) => {
+    const namespace = getPurchaseImportNamespace();
+    return loadSyncPlan(
+      context.db,
+      (await memberParty(context)).id,
+      input,
+      namespace
+        ? { connected: (id) => namespace.getByName(id).connected() }
+        : undefined,
+    );
+  },
   startSync: async (context, input) =>
     startAccountSync(
       context.db,

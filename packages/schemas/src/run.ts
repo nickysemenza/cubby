@@ -1,6 +1,7 @@
 import { z } from "zod";
 
 import { plainDate } from "./base-entity";
+import { vendorAccountStatus } from "./vendor-account-fields";
 import { runStatus, runPurpose } from "./run-fields";
 
 import {
@@ -133,6 +134,9 @@ export const syncPlanAccount = z.object({
   shortcode: vendorAccountShortcode,
   label: z.string(),
   vendorName: z.string(),
+  accountStatus: vendorAccountStatus,
+  connected: z.boolean().nullable(),
+  lastSuccessAt: z.iso.datetime().nullable(),
   action: accountSyncAction,
   line: z.string(),
   disabledReason: z.string().nullable(),

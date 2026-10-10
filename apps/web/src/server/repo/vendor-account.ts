@@ -88,7 +88,7 @@ type VendorAccountRow = typeof vendorAccount.$inferSelect;
  * `Run_vendorAccount_started_idx`) rather than stored on the account, so the
  * two can never disagree with the run history they summarize.
  */
-const loadRunActivity = async (
+export const loadVendorAccountRunActivity = async (
   db: Database | DrizzleTransaction,
   ids: readonly VendorAccountId[],
 ) => {
@@ -146,7 +146,7 @@ const hydrateRead = async (
           ),
         ),
         loadListGroup(projection, "derived", () =>
-          loadRunActivity(
+          loadVendorAccountRunActivity(
             db,
             rows.map((row) => row.id),
           ),
