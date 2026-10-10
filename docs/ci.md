@@ -475,7 +475,11 @@ database contracts; it does not establish a five-minute full suite.
   0.4s for a second navigation in the same context). Serving `/assets/` from a
   per-worker in-memory `context.route` cache doubled navigation time in a
   local shard and timed out a CPU-throttled case, because any route disables
-  Chromium's HTTP and code cache for the context.
+  Chromium's HTTP and code cache for the context. Merging the shared client
+  modules into fewer chunks (a catch-all entries-aware group, or one for
+  modules under 4 KiB) broke hydration on every route with a module
+  initialization-order error, and `strictExecutionOrder` turned that into a
+  hydration stall, so the client bundle keeps its bounded groups.
 - Playwright's `--shard` with `fullyParallel` takes contiguous, equal-count
   slices of the ordered test list, so one slow case lands wholly on one shard.
   Keep individual cases short (wait on a fast-forwarded page clock or a
