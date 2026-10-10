@@ -28,7 +28,9 @@ and activity details for the selected group's members. Native Activity uses thes
 same grouped and child reads, refreshes from group liveness, and retains the
 Activity inspector action for both parent and child rows. Expanded child pages
 refresh through settlement; parent pagination preserves pending child reads, and
-child refresh/retry preserves loaded depth. Filter changes discard old child responses. Native
+child refresh/retry preserves loaded depth. Expanded children that still report
+active work keep polling until their settlement refresh completes, even after
+parent-group liveness settles. Filter changes discard old child responses. Native
 visible acceptance remains separate from model/transport tests and compilation.
 
 Product and Purchase research history use the shared entity report and record
