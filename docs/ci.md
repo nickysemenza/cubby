@@ -143,7 +143,27 @@ the `CubbyAPI` build plugin; none is committed), and, except for host tests,
 `xcodegen generate --use-cache`. The script skips itself (with a message, not a
 failure) when `xcode-select -p` fails; that skip is keyed on the missing Xcode
 and never matches a real result. The `rust` target runs fmt/clippy/test per
-crate (`recipebridge/project.json`, `cubby-ffi/project.json`).
+crate (`recipebridge/project.json`, `cubby-ffi/project.json`). Clippy and tests
+use the root workspace's `ci` profile: no debuginfo, incremental compilation,
+or dependency optimization. These tests run in under a second; the development
+profile's optimized dependencies add compilation work without useful runtime savings.
+Cargo still needs check metadata and linked test artifacts, and the default
+and browser/native feature sets remain separate checks. Both targets share
+`target/ci` and run sequentially to avoid Cargo's target-directory lock.
+Their broad `gate` inputs include the root profile and workflow; `rustc -V`
+still keys the floating compiler.
+
+The Rust job's `rust-gate-v2` dependency-cache key also hashes root
+`Cargo.toml`: rust-cache hashes member manifests but omits the virtual
+workspace's profiles. Only successful jobs save this cache; immutable partial
+entries from the previous generation cannot be repaired by later exact hits.
+A [successful PR run](https://github.com/nickysemenza/cubby/actions/runs/38092783727/job/114332463103)
+on 2026-10-10 took 4:14 overall, including a 208s Nx step and about 34s of
+Node/dependency setup. Despite an exact 39 MB Rust-cache restore, recipebridge
+spent 96s + 12s in clippy and 52s compiling tests; FFI spent 19s + 26s.
+Tests themselves took under one second. The new profile and cache generation
+target a warm job under about 2.5 minutes; local compilation reuse cannot
+establish hosted timing, and the first successful cache seed pays a cold build.
 
 `cubby-ffi` and the WASM packages share the `recipebridge` Rust core and Cargo
 lockfile, but each target needs its own compiled artifacts. EPUB extraction is

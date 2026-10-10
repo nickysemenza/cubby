@@ -114,6 +114,10 @@ jobs:
         with:
           cache: true
           cache-workspaces: ". -> target"
+          # Root workspace profiles are not part of rust-cache's member manifest hash.
+          # A new generation also retires exact entries saved by interrupted builds.
+          cache-key: rust-gate-v2-${{ hashFiles('Cargo.toml') }}
+          cache-on-failure: false
       # One crate at a time: both share the workspace target directory.
       - run: pnpm exec nx run-many -t rust --parallel=1 --outputStyle=stream
 

@@ -3,7 +3,7 @@
   "name": "cubby-ffi",
   "targets": {
     "rust": {
-      "command": "cargo fmt --check && cargo clippy --all-targets -- -D warnings && cargo test",
+      "command": "cargo fmt --check && cargo clippy --locked --profile ci --all-targets -- -D warnings && cargo test --locked --profile ci",
       "options": {
         "cwd": "{projectRoot}"
       },
