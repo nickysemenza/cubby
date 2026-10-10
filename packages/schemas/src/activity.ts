@@ -166,6 +166,7 @@ export const activityGroupsOutput = z.object({
         completed: z.int().nonnegative(),
         skipped: z.int().nonnegative(),
       }),
+      workSummary: z.string(),
       childCount: z.int().nonnegative(),
       contextOnly: z.boolean(),
       latestAt: z.iso.datetime(),

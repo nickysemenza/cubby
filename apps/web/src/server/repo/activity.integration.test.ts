@@ -848,6 +848,7 @@ describe("unified Runs history", () => {
       [
         {
           active: true,
+          workSummary: "1 working · 1 completed",
           root: { active: false, state: "completed" },
           workCounts: {
             working: 1,
@@ -871,6 +872,19 @@ describe("unified Runs history", () => {
       const group = (await listActivityGroups(ctx.db, null, input)).items[0];
       expect(group).toMatchObject({
         workCounts: { working: 0, [bucket]: 1, completed: 1 },
+      });
+      const filtered = (
+        await listActivityGroups(ctx.db, null, { ...input, state: status })
+      ).items[0];
+      expect(filtered).toMatchObject({
+        contextOnly: true,
+        root: { state: "completed" },
+        workSummary:
+          status === "paused_auth"
+            ? "1 waiting"
+            : status === "needs_review"
+              ? "1 need review"
+              : "1 failed",
       });
     }
     await getDb(ctx.db)

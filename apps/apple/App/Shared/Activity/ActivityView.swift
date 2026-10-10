@@ -276,12 +276,14 @@ struct ActivityView: View {
                         } label: {
                             VStack(alignment: .leading) {
                                 runButton(group.root)
-                                Text("\(group.childCount) related work records")
+                                Text(group.workSummary)
                                     .font(.caption).foregroundStyle(.secondary)
-                                if group.active, !group.root.active {
-                                    Text("Related work in progress")
+                                if group.contextOnly {
+                                    Text("Parent shown for context; related work matches the filters")
                                         .font(.caption).foregroundStyle(.secondary)
                                 }
+                                Text("\(group.childCount) related work records")
+                                    .font(.caption).foregroundStyle(.secondary)
                             }
                         }
                         .accessibilityIdentifier("activity.group.\(group.root.id)")

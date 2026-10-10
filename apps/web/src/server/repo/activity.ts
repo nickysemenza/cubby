@@ -7,6 +7,7 @@ import {
   activityEvent,
   activityEventsOutput,
   activityGroupsOutput,
+  activityWorkSummary,
   activityListOutput,
   activityRun,
   activityIconEntity,
@@ -623,9 +624,11 @@ export async function listActivityGroups(
       totalItems: z.coerce.number(),
       items: z.array(
         z.object({
-          item: activityGroupsOutput.shape.items.element.extend({
-            root: runWire,
-          }),
+          item: activityGroupsOutput.shape.items.element
+            .omit({ workSummary: true })
+            .extend({
+              root: runWire,
+            }),
           cursorAt: z.iso.datetime(),
           rootId: z.string(),
         }),
@@ -639,7 +642,11 @@ export async function listActivityGroups(
     pageItems.map((row) => row.item.root),
   );
   return activityGroupsOutput.parse({
-    items: pageItems.map((row, index) => ({ ...row.item, root: roots[index] })),
+    items: pageItems.map((row, index) => ({
+      ...row.item,
+      root: roots[index],
+      workSummary: activityWorkSummary(row.item.workCounts),
+    })),
     total: data.total,
     totalItems: data.totalItems,
     nextCursor:

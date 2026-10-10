@@ -20,7 +20,8 @@ the same filters and cursor protocol. A deleted parent starts a new visible root
 at its live child. Historical null lineage stays independent, and retry
 predecessors do not become causal parents.
 Group liveness includes retained descendants without changing the root's own
-state. Collapsed active groups continue refreshing; expanded child pages use
+state. Each group carries a server-formatted matching-attempt summary shared by
+web and native, with context-only parents identified separately from matching work. Collapsed active groups continue refreshing; expanded child pages use
 the shared query cache, refresh through settlement, and reload when reopened.
 Child pagination traverses lightweight lineage before evaluating accounting
 and activity details for the selected group's members. Native Activity uses these
