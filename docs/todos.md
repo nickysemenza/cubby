@@ -196,8 +196,9 @@ mailbox and authenticated-device acceptance only after explicit resumption.
   adds a reviewed three-distinct-call bound for identical thrown service failures
   using existing durable Run state. Its exact-head hosted checks and scripted
   acceptance passed, it merged and production deployment succeeded. Returned
-  browser `blocked` replies now share that bound in the local follow-up; review,
-  hosted checks and deployment remain pending. Corrective resolution refusals
+  browser `blocked` replies share that bound in
+  [#1813](https://github.com/nickysemenza/cubby/pull/1813), independently reviewed,
+  exact-head hosted tested, merged and deployed. Corrective resolution refusals
   already have a three-zero-progress-attempt allowance per task, retained through
   completed operation receipts. Active-time accounting remains open. Pause
   repeated unchanged failures with their raw last observation. Member sign-in,
@@ -381,8 +382,8 @@ research acceptance.
   [#1810](https://github.com/nickysemenza/cubby/pull/1810) replaces bounded
   alphabetical brand-token candidate searches with shared name/alias relevance
   and exposes live candidates when assessing a proposed new Product. Focused
-  persisted-state regressions and independent review pass; final-head hosted
-  acceptance and merge remain pending. Verify real-model reuse after explicit
+  persisted-state regressions, independent review and checksum-verified
+  final-head hosted acceptance passed; merge and deployment completed. Verify real-model reuse after explicit
   research resumption. Existing duplicates require a supported, preserving
   merge plan before household cleanup; matching names alone never prove variants.
 
@@ -444,10 +445,12 @@ research acceptance.
   only the successor's writes. Carry the predecessor's unaudited purchases
   into the successor's audit, or allow a terminal audit retry.
 
-- 🟢 **Stop and restart runs over MCP.** `imports_read.run_status` reads a
-  Run; offer stop, retry, and restart beside it. Approve and reject stay
-  human (`run.control` is omitted from MCP as `human_approval`), so this is a
-  narrower operation, not that one exposed.
+- 🟢 **Stop and restart runs over MCP.** The local `run.lifecycle` follow-up
+  exposes cancel, retry and restart through the existing control/dispatch path;
+  `imports_read.run_status` remains the detailed read. Shared research controls
+  enforce member ownership, while photo inventory retains shared-household
+  control. Approve/reject and budget grants remain human-only. Final review,
+  hosted checks, merge and deployment are pending; live research stays paused.
 
 - 🤔 **Measure capture model routing before changing it.** Keep the current
   evaluated routing until a controlled comparison establishes safe purchased-
