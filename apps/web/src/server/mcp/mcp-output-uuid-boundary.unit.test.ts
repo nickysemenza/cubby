@@ -53,6 +53,12 @@ const DECLARED_UUID_OUTPUT_PATHS = new Set([
   "activity.runFindings[].proposedFix.targetId",
   "activity.runFindings[].proposedFix.corrections[].claim.evidenceId",
   "activity.runFindings[].proposedFix.evidenceIds[]",
+  // Capture-profile approval fingerprints bind the exact Run, Vendor,
+  // account, and retained sources rechecked by the reviewed transaction.
+  "activity.runFindings[].proposedFix.runId",
+  "activity.runFindings[].proposedFix.vendorId",
+  "activity.runFindings[].proposedFix.vendorAccountId",
+  "activity.runFindings[].proposedFix.profile.evidenceIds[]",
   // Nullable row handles in the reviewed replacement snapshot participate in
   // the approval fingerprint and attribution comparison in applyFix.
   "activity.runFindings[].proposedFix.reviewedLineIdentities[].productId",
