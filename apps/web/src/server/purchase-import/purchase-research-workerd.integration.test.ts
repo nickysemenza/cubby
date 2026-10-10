@@ -123,7 +123,7 @@ function verifyQueuedMaintenance(status: number, body: string) {
 
 describe("purchase research through the built Worker", () => {
   const ctx = withTestDb();
-  let release: (() => void) | undefined;
+  let release: (() => Promise<void>) | undefined;
   beforeAll(async () => {
     release = await holdWorkerdHarness();
   }, HOLD_WORKERD_HARNESS_TIMEOUT_MS);
@@ -1256,7 +1256,7 @@ describe("purchase research through the built Worker", () => {
 // work. A completed receipt without a cold disposal ACK is not deletion proof.
 describe("unrelated mail retention through the built Worker", () => {
   const ctx = withTestDb();
-  let release: (() => void) | undefined;
+  let release: (() => Promise<void>) | undefined;
   beforeAll(async () => {
     release = await holdWorkerdHarness();
   }, HOLD_WORKERD_HARNESS_TIMEOUT_MS);

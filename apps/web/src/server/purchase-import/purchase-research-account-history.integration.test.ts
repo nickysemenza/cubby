@@ -156,7 +156,7 @@ const steps: ScriptStep[] = [
 
 describe("research account-history clickable numeric row", () => {
   const ctx = withTestDb();
-  let releaseHarness: (() => void) | undefined;
+  let releaseHarness: (() => Promise<void>) | undefined;
   beforeAll(async () => {
     releaseHarness = await holdWorkerdHarness();
   }, HOLD_WORKERD_HARNESS_TIMEOUT_MS);

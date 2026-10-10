@@ -3,8 +3,6 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "chatgpt:connect": "node scripts/chatgpt-connect.ts",
-    "ci:flakes": "node scripts/ci-flakes.ts",
     "agent:setup": "pnpm install --frozen-lockfile && node scripts/ensure-wasm.ts",
     "dev": "pnpm --filter @cubby/web dev",
     "build": "node scripts/generator/ensure.ts && pnpm -r build",
@@ -73,6 +71,7 @@
     "@tanstack/router-generator": "1.167.40",
     "@ts-rest/open-api": "3.53.0-rc.1",
     "@types/node": "^26.6.3",
+    "@types/proper-lockfile": "^4.1.4",
     "agent-device": "0.21.22",
     "concurrently": "^10.0.5",
     "husky": "^9.1.7",
@@ -82,6 +81,7 @@
     "oxc-parser": "0.152.0",
     "oxfmt": "0.72.0",
     "oxlint": "1.87.0",
+    "proper-lockfile": "^4.1.2",
     "tsx": "^4.23.15",
     "typescript": "^7.0.2",
     "zod": "^4.6.5"

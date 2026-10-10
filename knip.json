@@ -8,19 +8,15 @@
         "neon.ts!",
         "scripts/apple.ts!",
         "scripts/apple-release.ts!",
-        "scripts/chatgpt-connect.ts!",
         "scripts/test-services.ts!",
         "scripts/ensure-apple-ffi.ts!",
         "scripts/ensure-wasm.ts!",
-        "scripts/typecheck-web.ts!",
         "scripts/generator/main.ts!",
         // Reached from hooks, CI, or package scripts rather than an import
         // (production mode does not read those): .husky/commit-msg,
         // ci.yaml, and the Nx targets.
         "scripts/check-outward-text.ts!",
-        "scripts/ci-flakes.ts!",
         "scripts/dev-db.ts!",
-        "scripts/benchmark-apple-runner.ts!",
         "scripts/pristine-simulator-cache.ts!",
         "scripts/generator/ensure.ts!"
       ],

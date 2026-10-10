@@ -8,7 +8,7 @@ import { createTestHarness, type TestHarnessOptions } from "wrangler";
 import { z } from "zod";
 
 import { SYNTHETIC_USDA_RELEASE } from "../../../scripts/lib/dev-profile.ts";
-import { acquireHarnessLock } from "../../../scripts/lib/harness-lock.ts";
+import lockfile from "proper-lockfile";
 
 import { seedUsdaRelease } from "./dev/usda-synthetic-release";
 import { COUPLED_WORKER_BUILDS, ensureWorkerBuilds } from "./worker-builds";
@@ -407,12 +407,43 @@ function installDatabaseEnvironment(databaseUrl: string) {
  * `beforeAll` with a long timeout and releases in `afterAll`, so the wait and
  * any rebuild never count against a test's timeout.
  */
-export async function holdWorkerdHarness(): Promise<() => void> {
-  const release = await acquireHarnessLock("coupled Workers harness");
+export async function holdWorkerdHarness(): Promise<() => Promise<void>> {
+  const priorOwner = process.env.CUBBY_HARNESS_LOCK_OWNER;
+  const ownerPid = Number(priorOwner);
+  let inheritedOwner = false;
+  if (Number.isSafeInteger(ownerPid) && ownerPid > 0) {
+    try {
+      process.kill(ownerPid, 0);
+      inheritedOwner = true;
+    } catch (error) {
+      inheritedOwner =
+        error instanceof Error && "code" in error && error.code === "EPERM";
+    }
+  }
+  const releaseLock = inheritedOwner
+    ? undefined
+    : await lockfile.lock("/tmp/cubby-harness", {
+        realpath: false,
+        stale: 30_000,
+        update: 10_000,
+        retries: {
+          retries: Number.POSITIVE_INFINITY,
+          minTimeout: 1000,
+          maxTimeout: 1000,
+        },
+      });
+  if (releaseLock) process.env.CUBBY_HARNESS_LOCK_OWNER = String(process.pid);
+  const release = async () => {
+    if (releaseLock) await releaseLock();
+    if (releaseLock) {
+      if (priorOwner === undefined) delete process.env.CUBBY_HARNESS_LOCK_OWNER;
+      else process.env.CUBBY_HARNESS_LOCK_OWNER = priorOwner;
+    }
+  };
   try {
     ensureWorkerBuilds(COUPLED_WORKER_BUILDS);
   } catch (error) {
-    release();
+    await release();
     throw error;
   }
   return release;

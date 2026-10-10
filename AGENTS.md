@@ -6,7 +6,8 @@
   verify its behavior. Follow [validation policy](docs/agents/validation.md)
   for local feedback, cheap Git operations, and the required GitHub merge gate.
 - A failing test run already lists what failed, at the end of its output and in
-  `apps/web/.vitest-failures.txt`. Read those instead of re-running the tier —
+  `apps/web/.vitest-results.json`. Read failed tests from it instead of
+  re-running the tier —
   measured, 24% of all test runs were a re-run of one that had just failed.
 - A subagent runs only focused tests and returns distilled evidence (result, command,
   duration, relevant output, and limits). The root owns any needed broad

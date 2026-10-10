@@ -9,10 +9,10 @@ Measured October 1–2, 2026 on the 8-core, 24 GiB ARM Mac with TypeScript 7.0.2
 `/usr/bin/time -l`, load average 5–20. Wall time moves with load; CPU and peak
 RSS are the comparable figures.
 
-`pnpm --dir apps/web typecheck` runs `scripts/typecheck-web.ts`, which runs
-`tsc --noEmit --checkers 1`. One checker avoids duplicating the large generic
-type graph: in September it halved CPU (50.4 → 21.5 s) and RSS (5.9 → 3.1 GB)
-without excluding files or changing diagnostics.
+`pnpm --dir apps/web typecheck` runs `tsc --noEmit --checkers 1` directly. One
+checker avoids duplicating the large generic type graph: in September it halved
+CPU (50.4 → 21.5 s) and RSS (5.9 → 3.1 GB) without excluding files or changing
+diagnostics.
 
 Current layout (after the changes below), load 5–10:
 
@@ -54,10 +54,9 @@ thin: the slowest file (`entity-list-read-bindings.gen.ts`) is about 1.3 s of
 a 24 s check, and annotating it saved only 0.2 s, so it was not kept.
 
 **The resident set is live data.** `GOGC=25` cut peak RSS 7% for 73% more
-CPU; `GOMEMLIMIT=2GiB` took 13× the CPU. Concurrent checks therefore cannot
-shrink, only queue: the wrapper holds one of two machine-wide slots under
-`~/.cache/cubby/typecheck-slots` (`CUBBY_TYPECHECK_SLOTS`; skipped in CI),
-reclaiming slots whose holder died.
+CPU; `GOMEMLIMIT=2GiB` took 13× the CPU. The former wrapper's machine-wide
+queue was removed; concurrent direct typechecks can compete for memory. Nx
+caches the web typecheck target and its incremental build-info output.
 
 **Why a small edit can cost more than a cold check.** Under `--noEmit`, tsc
 never emits declarations, so a fresh build records each file's version as its

@@ -247,7 +247,7 @@ jobs:
         run: pnpm exec nx run @cubby/web:e2e --outputStyle=stream ${{ github.event_name == 'schedule' && '--skip-nx-cache' || '' }}
         env:
           CUBBY_E2E_SHARD: ${{ matrix.shard }}
-      - name: Save Playwright run bundle
+      - name: Upload Playwright HTML report and traces
         if: always()
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
         with:
@@ -296,7 +296,7 @@ jobs:
         run: pnpm --filter @cubby/web run test:e2e:install-browser -- chromium
       - name: Run purchase import browser E2E
         run: pnpm exec nx run @cubby/web:e2e-purchase-import --outputStyle=stream ${{ github.event_name == 'schedule' && '--skip-nx-cache' || '' }}
-      - name: Save Playwright run bundle
+      - name: Upload Playwright HTML report and traces
         if: always()
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
         with:
@@ -315,7 +315,7 @@ jobs:
   web-checks:
     name: Web checks
     needs: [build-worker, test-aux, test-postgres, test-e2e]
-    if: ${{ !cancelled() && (github.event_name == 'pull_request' || github.event_name == 'push' || (!inputs.simulator_e2e && inputs.tester_army == 'none')) }}
+    if: ${{ !cancelled() && (github.event_name == 'pull_request' || github.event_name == 'push' || github.event.schedule == '23 8 * * *' || (github.event_name == 'workflow_dispatch' && !inputs.simulator_e2e && inputs.tester_army == 'none')) }}
     runs-on: ubuntu-slim
     timeout-minutes: 5
     steps:
@@ -450,7 +450,7 @@ jobs:
   test-apple:
     name: Apple checks
     needs: [test-apple-host, test-apple-simulator]
-    if: ${{ !cancelled() && (github.event_name == 'pull_request' || github.event_name == 'push' || (!inputs.simulator_e2e && inputs.tester_army == 'none')) }}
+    if: ${{ !cancelled() && (github.event_name == 'pull_request' || github.event_name == 'push' || github.event.schedule == '23 8 * * *' || (github.event_name == 'workflow_dispatch' && !inputs.simulator_e2e && inputs.tester_army == 'none')) }}
     runs-on: ubuntu-slim
     timeout-minutes: 5
     steps:

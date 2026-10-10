@@ -33,7 +33,31 @@
         }
       ],
       "inputs": ["webGate"],
-      "outputs": ["{projectRoot}/.vitest-failures.txt"]
+      "outputs": ["{projectRoot}/.vitest-results.json"]
+    },
+    "typecheck": {
+      "command": "pnpm run typecheck",
+      "options": { "cwd": "apps/web" },
+      "cache": true,
+      "dependsOn": [{ "projects": ["cubby-checks"], "target": "wasm" }],
+      "inputs": [
+        "repo",
+        "sharedGlobals",
+        { "dependentTasksOutputFiles": "packages/wasm/**/*" }
+      ],
+      "outputs": ["{projectRoot}/tsconfig.tsbuildinfo"]
+    },
+    "typecheck:app": {
+      "command": "pnpm run typecheck:app",
+      "options": { "cwd": "apps/web" },
+      "cache": true,
+      "dependsOn": [{ "projects": ["cubby-checks"], "target": "wasm" }],
+      "inputs": [
+        "repo",
+        "sharedGlobals",
+        { "dependentTasksOutputFiles": "packages/wasm/**/*" }
+      ],
+      "outputs": ["{projectRoot}/tsconfig.app.tsbuildinfo"]
     },
     // CUBBY_POSTGRES_SHARD (`index/count`) splits the files across CI runners.
     "postgres": {
@@ -113,7 +137,7 @@
     // splits it across CI runners; the restored run bundle is the evidence of
     // the run that produced a cached pass. See workerd-tests for the build.
     "e2e": {
-      "command": "pnpm exec tsx tooling/build-cf.ts --ensure && pnpm run test:e2e:ci:desktop --workers=2 --trace=off --shard=${CUBBY_E2E_SHARD:-1/1}",
+      "command": "pnpm exec tsx tooling/build-cf.ts --ensure && pnpm run test:e2e:ci:desktop --workers=2 --shard=${CUBBY_E2E_SHARD:-1/1}",
       "options": {
         "cwd": "apps/web"
       },

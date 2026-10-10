@@ -29,7 +29,7 @@ for current commands, cheap Git operations, and local versus hosted gates.
    artifacts as application failures.
 5. Run the failed gate and affected checks according to the validation guide.
    Distinguish fixed failures from unrelated failures and unavailable checks.
-   Read `apps/web/.vitest-failures.txt` instead of repeating a failed tier.
+   Read failed tests from `apps/web/.vitest-results.json` instead of repeating a failed tier.
    Choose local checks for the changed behavior and reuse valid results;
    publication and handoff do not require a broad local validation run.
 6. When publication is requested, commit and push the scoped changes following

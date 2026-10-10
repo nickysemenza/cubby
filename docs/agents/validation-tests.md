@@ -150,12 +150,11 @@ count individual operation attempts separately from transport fallback.
 Compare related layout bounds in one browser evaluation so their rectangles
 come from the same render state.
 
-Playwright E2E and the coupled Workers harness share a machine-wide lock
-(`/tmp/cubby-harness.lock`, `scripts/lib/harness-lock.ts`): a second suite on
-the same machine queues and logs who holds the lock instead of starving both
-of CPU. A lock whose owner process exited is reclaimed. Processes the holder
-spawns pass straight through. Lock regression tests measure the held interval
-up to immediately before unlock; output after unlock is outside that interval. `test:e2e:watch` (`--ui`) skips the lock, since
+Playwright E2E and the coupled Workers harness share a machine-wide lock at
+`/tmp/cubby-harness.lock`, managed by `proper-lockfile`. It prevents concurrent
+suites on one machine from starving both of CPU; the library refreshes the lock
+while held and reclaims it after an interrupted process. Child processes inherit
+the owner marker and pass through. `test:e2e:watch` (`--ui`) skips the lock, since
 its idle session would otherwise hold it indefinitely. A spec's `test.use` of a
 worker-scoped option (`video`, `trace`, `screenshot`, browser launch options),
 even to its default, moves its tests into extra workers that each boot another
@@ -354,18 +353,21 @@ orders for the same item reuse the Product reference returned by resolution.
 
 CI's web E2E artifact is Playwright's built-in HTML report and retained traces.
 Each Playwright job uploads them under an artifact name containing the tested
-commit SHA; failed tests retain traces through `trace: "retain-on-failure"`.
-Open `playwright-report/index.html` from the downloaded artifact to inspect the
+commit SHA and includes retained trace files. The Playwright config uses
+`trace: "retain-on-failure"`; `ci.yaml` currently passes `--trace=off`, so CI
+will not produce traces until that override is removed. Open
+`playwright-report/index.html` from the downloaded artifact to inspect the
 run. Local native runs keep the `sim-e2e` artifacts, which record their build,
 process, simulator, watchdog, scenario and replay evidence.
 
 A failed E2E test attaches the Worker harness's structured workerd logs
 (`harness.getLogs()`, credential-shaped values scrubbed) to the Playwright
-result and copies them into the bundle under `workerd-logs/`; the case entry in
-`run-results.json` records the harness explorer URL. Each Playwright worker also
-prints `<origin>/cdn-cgi/local/explorer` at startup, so a paused (`PWDEBUG`,
-headed, or `--ui`) test can be inspected for Durable Object, queue, workflow,
-and R2 state. The URL is only valid while that worker is alive.
+result, where the HTML report can open the attachment. The local reporter also
+keeps its workerd logs and run bundle in `playwright-report`; CI excludes those
+custom bundle files. Each Playwright worker prints
+`<origin>/cdn-cgi/local/explorer` at startup, so a paused (`PWDEBUG`, headed, or
+`--ui`) test can be inspected for Durable Object, queue, workflow, and R2 state.
+The URL is only valid while that worker is alive.
 
 Run `pnpm wasm` after WASM changes. The shared `CARGO_TARGET_DIR` can be
 written by another checkout, so confirm generated output is current. Generated

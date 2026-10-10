@@ -76,9 +76,7 @@ lcov.info
 .pnpm-store.codex/
 .pnpm-store/
 
-# Written by tooling/failure-summary-reporter.ts so a truncated run
-# does not have to be repeated to recover the failure list.
-.vitest-failures.txt
+.vitest-results.json
 
 # Vitest browser-mode (`preview` project) failure screenshots/traces.
 .vitest/

@@ -20,12 +20,11 @@ diagnostics; a connected account never silently falls back to paid API billing.
 3. Run the command shown in Settings:
 
    ```sh
-   pnpm chatgpt:connect --base-url https://cubby.example.com
+   pnpm apple cli chatgpt connect --base-url https://cubby.example.com
    ```
 
-   This thin launcher runs `cubby chatgpt connect`, reusing the CLI's stored Cubby
-   credential. CubbyKit opens the system browser. Choose the ChatGPT
-   account/workspace and allow plan usage.
+   The CLI reuses its stored Cubby credential. CubbyKit opens the system browser.
+   Choose the ChatGPT account/workspace and allow plan usage.
 
 4. Wait for the CLI to report Connected. The browser's “Authorization received”
    page only confirms the local callback; an exchange or persistence failure

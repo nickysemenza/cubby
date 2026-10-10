@@ -188,23 +188,19 @@ export default defineConfig({
     // Dependency prebundling regresses this import-heavy graph; remeasure before
     // enabling it. WASM initialization is not the material cost.
 
-    // Under GitHub Actions, `github-actions` turns failures into inline PR
-    // annotations, so `default` (progress + full diffs) covers the terminal
-    // side and the failure-summary reporter's re-print at the end is
-    // redundant. Locally, `dot` keeps output quiet and the failure summary
-    // re-prints just the failing test names so a `| tail` of the run still
-    // shows what broke. See the reporter for the measured re-run waste that
-    // motivated it.
+    // The default reporter covers terminal output; JSON preserves failed
+    // tests when output is truncated. CI also emits GitHub annotations.
     reporters:
       process.env.GITHUB_ACTIONS === "true"
         ? [
             "default",
             "github-actions",
+            ["json", { outputFile: ".vitest-results.json" }],
             "./tooling/test-run-contract-reporter.ts",
           ]
         : [
-            "dot",
-            "./tooling/failure-summary-reporter.ts",
+            "default",
+            ["json", { outputFile: ".vitest-results.json" }],
             "./tooling/test-run-contract-reporter.ts",
           ],
     // Passing fixtures intentionally exercise error logging and transport

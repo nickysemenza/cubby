@@ -154,7 +154,7 @@ async function realConsumers(harness: TestHarness, expected: string[]) {
 }
 
 const ctx = withTestDb();
-let releaseHarness: (() => void) | undefined;
+let releaseHarness: (() => Promise<void>) | undefined;
 beforeAll(async () => {
   releaseHarness = await holdWorkerdHarness();
   await prepareTemplate("browser");
