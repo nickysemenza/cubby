@@ -4,11 +4,13 @@
   "namedInputs": {
     // What the Apple build reads, so a web-only change replays the Apple
     // lanes: its own tree, the Rust FFI crates, the check scripts and CI
-    // config, the generated Swift (ignored by git, so hashed at runtime; the
-    // Rust-built FFI shim is left out because CI's probe runs before it
-    // exists and its Rust inputs are already keyed). Toolchains (Xcode, Rust)
-    // are absent so a developer Mac's pass counts for CI; the nightly uncached
-    // run covers CI's toolchain (docs/adr/0009-content-hash-merge-gate.md).
+    // config, the shared golden vectors, and the generated Swift. Git ignores
+    // the generated files, so they are hashed at runtime in git's byte order;
+    // `sort` would follow the locale, which differs between a Mac shell and
+    // the runner. The Rust-built FFI shim is left out: CI probes before it
+    // exists, and its Rust inputs are keyed. Toolchains (Xcode, Rust) are
+    // absent so a developer Mac's pass counts for CI; the nightly uncached run
+    // covers CI's toolchain (docs/adr/0009-content-hash-merge-gate.md).
     "appleGate": [
       "{projectRoot}/**/*",
       "{workspaceRoot}/cubby-ffi/**/*",
@@ -21,7 +23,7 @@
       "{workspaceRoot}/.github/workflows/ci.yaml",
       "{workspaceRoot}/.github/actions/**/*",
       {
-        "runtime": "git ls-files -o -i --exclude-standard -- apps/apple/App/Shared/Previews/Fixtures apps/apple/CubbyKit/Sources apps/apple/Generated ':!apps/apple/CubbyKit/Sources/CubbyFFI' | sort | xargs shasum -a 256"
+        "runtime": "git ls-files -o -i --exclude-standard -- apps/apple/App/Shared/Previews/Fixtures apps/apple/CubbyKit/Sources apps/apple/Generated ':!apps/apple/CubbyKit/Sources/CubbyFFI' | xargs shasum -a 256"
       }
     ]
   },
