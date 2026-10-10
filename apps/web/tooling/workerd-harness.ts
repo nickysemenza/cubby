@@ -424,10 +424,16 @@ export async function holdWorkerdHarness(): Promise<() => Promise<void>> {
     ? undefined
     : await lockfile.lock("/tmp/cubby-harness", {
         realpath: false,
-        stale: 30_000,
+        // The owner rebuilds the Worker synchronously while holding the lock,
+        // which blocks the refresh timer; a shorter threshold lets a second
+        // suite reclaim a live owner's lock mid-build.
+        stale: 10 * 60_000,
         update: 10_000,
+        // Wait indefinitely, once a second. `retries: Infinity` throws a
+        // RangeError inside the `retry` package; `forever` repeats the last delay.
         retries: {
-          retries: Number.POSITIVE_INFINITY,
+          retries: 1,
+          forever: true,
           minTimeout: 1000,
           maxTimeout: 1000,
         },
