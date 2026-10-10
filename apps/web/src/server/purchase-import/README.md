@@ -290,8 +290,11 @@ state retains call receipts and the failure count atomically with the review
 reason; replay does not count twice and a successful action clears its failures.
 The terminating tool preserves the diagnostic, and the same provider fence
 denies further inference. Changed arguments or errors are separate attempts.
-This bound covers thrown service failures, not returned domain refusals or
-active-time accounting; those remain separate follow-ups.
+This bound covers thrown service failures and returned browser `blocked`
+responses. Browser and member waits do not count as failures. Zero-progress
+corrective resolution refusals already use the task's three-attempt allowance
+from completed operation receipts; they do not need another counter. Active-time
+accounting remains a separate follow-up.
 
 The replacement's migration chain follows the current main journal, including
 Neon diagnostics. Its populated-history rehearsal rebuilds main's actual schema,

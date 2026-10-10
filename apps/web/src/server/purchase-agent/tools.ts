@@ -263,8 +263,21 @@ export function purchaseImportTools(
             return { ...result({ failure: detail }, true), isError: true };
           throw error;
         }
-        await recordOutcome?.(name, z.json().parse(args), callId);
+        const state = browserCommandState.safeParse(output);
+        const detail = await recordOutcome?.(
+          name,
+          z.json().parse(args),
+          callId,
+          state.success && state.data.status === "blocked"
+            ? JSON.stringify(output)
+            : undefined,
+        );
         await retainOutput?.(output);
+        if (detail)
+          return {
+            ...result({ failure: detail, observation: output }, true),
+            isError: true,
+          };
         return originalMediaResult(output, researchTerminated(output));
       },
     });
