@@ -314,7 +314,10 @@ research acceptance.
   projection groups research descendants and image jobs through retained live
   causal parents, with filtered, cursor-paged children. Persisted-state
   regressions cover nested work, deleted ancestors and independent legacy rows.
-  Verify a small visible client journey after deployment; historical null
+  Native Activity now uses the shared grouped/child reads, expandable related
+  rows and the existing inspector. Focused transport and isolated model
+  regressions passed after RED; the Mac UI compiled. Independent review, hosted
+  delivery and a small visible client journey remain pending. Historical null
   lineage remains independent and retry predecessors never imply parentage.
 
 - 🟢 **Derive research-purpose presentation consistently.** Audit the duplicated

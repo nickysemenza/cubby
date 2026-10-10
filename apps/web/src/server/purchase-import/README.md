@@ -23,7 +23,11 @@ Group liveness includes retained descendants without changing the root's own
 state. Collapsed active groups continue refreshing; expanded child pages use
 the shared query cache, refresh through settlement, and reload when reopened.
 Child pagination traverses lightweight lineage before evaluating accounting
-and activity details for the selected group's members.
+and activity details for the selected group's members. Native Activity uses these
+same grouped and child reads, refreshes from group liveness, and retains the
+Activity inspector action for both parent and child rows. Expanded child pages
+refresh through settlement; filter changes discard old child responses. Native
+visible acceptance remains separate from model/transport tests and compilation.
 
 Product and Purchase research history use the shared entity report and record
 renderer on web and Apple clients. Each attempt shows its Run lifecycle alongside
