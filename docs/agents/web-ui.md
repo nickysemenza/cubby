@@ -48,6 +48,12 @@ context, server search, or creation. The `cmdk` command menu is for navigation
 and actions, never a form field. Preserve each control's value, focus, and search
 contract when sharing visual chrome; do not introduce a universal picker.
 
+Entity picker empty results use the mounted Base UI `Combobox.Empty` part,
+with conditional children for loading and errors. A plain empty-state element
+does not register the popup's empty state and lets Escape close its parent
+dialog. Keep the library's live region mounted and test dismissal through the
+real dialog journey.
+
 Use `RTable` for interactive lists, Table primitives for static tables, and raw
 tables only for matrices/debug/external content. `useTableColumnLayout` owns
 table order/pinning/visibility/sizing. Decorated cells render through
