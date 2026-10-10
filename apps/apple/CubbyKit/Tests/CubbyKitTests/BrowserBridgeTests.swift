@@ -207,6 +207,29 @@ struct BrowserBridgeTests {
         tasks.cancelAll()
     }
 
+    @Test("Browser Run visibility survives overlap and reconnect, then clears on finish or cancellation")
+    func executingRunVisibility() {
+        var tasks = BrowserBridgeCommandTaskRegistry()
+        let claimed0 = tasks.claim("command-first", runID: "RUN-EXAMPLE")
+        #expect(claimed0)
+        let claimed1 = tasks.claim("command-second", runID: "RUN-EXAMPLE")
+        #expect(claimed1)
+        let claimed2 = tasks.claim("command-other", runID: "RUN-4K7M")
+        #expect(claimed2)
+        #expect(tasks.executingRunIDs == ["RUN-EXAMPLE", "RUN-4K7M"])
+        tasks.finish("command-first")
+        tasks.transientDisconnect()
+        #expect(tasks.executingRunIDs == ["RUN-EXAMPLE", "RUN-4K7M"])
+        tasks.cancel("command-second")
+        #expect(tasks.executingRunIDs == ["RUN-4K7M"])
+        _ = tasks.cancelRun("RUN-4K7M")
+        #expect(tasks.executingRunIDs.isEmpty)
+        let claimed3 = tasks.claim("command-last", runID: "RUN-EXAMPLE")
+        #expect(claimed3)
+        tasks.cancelAll()
+        #expect(tasks.executingRunIDs.isEmpty)
+    }
+
     @Test("Cancellation prevents a late command result from entering replay")
     func cancellationWinsRace() {
         let uuid = UUID(uuidString: "33333333-3333-3333-3333-333333333333")!

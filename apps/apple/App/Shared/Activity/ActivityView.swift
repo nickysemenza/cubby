@@ -255,21 +255,19 @@ struct ActivityView: View {
 
     @ViewBuilder private var localExecution: some View {
         let activities = appModel.backgroundActivity.visibleActivities
-        let elsewhere = model.runs.filter(\.active).count
         Section {
             if activities.isEmpty {
-                if elsewhere > 0 {
-                    ContentUnavailableView(
-                        elsewhere == 1
-                            ? "1 run in progress elsewhere" : "\(elsewhere) runs in progress elsewhere",
-                        systemImage: "antenna.radiowaves.left.and.right")
-                } else {
-                    ContentUnavailableView("Nothing running on this device", systemImage: "checkmark.circle")
-                }
+                ContentUnavailableView(
+                    "No device-local work reported", systemImage: "checkmark.circle")
             } else {
                 ForEach(activities) { activity in
-                    LocalActivityRow(activity: activity) {
+                    let row = LocalActivityRow(activity: activity) {
                         appModel.backgroundActivity.cancel(id: activity.id)
+                    }
+                    if case .serverRun(let runID) = activity.link {
+                        NavigationLink(value: ActivitySelection.serverRun(runID)) { row }
+                    } else {
+                        row
                     }
                 }
             }

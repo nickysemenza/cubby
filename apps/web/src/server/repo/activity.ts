@@ -15,7 +15,11 @@ import {
   type ActivityListInput,
 } from "@cubby/schemas/activity";
 import { entityRefKey } from "@cubby/schemas/entity";
-import { parseEntityId, parseEntityRef } from "@cubby/schemas/identifiers";
+import {
+  parseEntityId,
+  parseEntityRef,
+  runEntityId,
+} from "@cubby/schemas/identifiers";
 import {
   imageDescriptionAnalysis,
   imageDescriptionResult,
@@ -658,9 +662,13 @@ async function resolveActivity(
   _partyId: string | null,
   id: string,
 ) {
+  const internalRunId = runEntityId.safeParse(id);
   const query = await getDb(db).execute(sql`
     WITH runs AS (${runProjection()})
-    SELECT * FROM runs WHERE id = ${id} LIMIT 1
+    SELECT * FROM runs
+    WHERE id = ${id}
+      OR ("recordType" = 'run' AND internal_id = ${internalRunId.success ? internalRunId.data : null})
+    LIMIT 1
   `);
   const found = z
     .object({ internal_id: z.string() })

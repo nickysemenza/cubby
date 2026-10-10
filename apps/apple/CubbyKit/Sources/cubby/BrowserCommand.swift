@@ -237,6 +237,12 @@
             case .accounts(let accounts): try printJSON(accounts)
             case .result(_, let result, _): try printJSON(result)
             case .runCompleted(_, let completion): try printJSON(completion)
+            case .executingRuns(let accountID, let runIDs):
+                try printJSON(
+                    JSONValue.object([
+                        "event": "executing_runs", "accountId": .string(accountID),
+                        "runIds": .array(runIDs.sorted().map { .string($0) }),
+                    ]))
             case .fleetStatus(let status, let connected, let total):
                 try printJSON(
                     JSONValue.object([

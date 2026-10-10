@@ -109,10 +109,12 @@ final class MacBrowserBridgeController: BrowserBridgeControlling {
             if status == .connected {
                 Task { [notifier] in await notifier.notifyDelayedOfflineIfNeeded(accountID: accountID) }
             }
+        case .executingRuns(let accountID, let runIDs):
+            settings?.setExecutingRuns(runIDs, accountID: accountID)
         case .result(let accountID, let result, let operation):
             settings?.setLastCommand(
                 BrowserBridgeCommandSummary.line(operation: operation, outcome: result.outcome),
-                accountID: accountID)
+                runID: result.runID, accountID: accountID)
             switch result.outcome {
             case .completed:
                 settings?.setAccountError(nil, accountID: accountID)

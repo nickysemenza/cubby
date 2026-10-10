@@ -232,7 +232,11 @@ contracts remain in [infrastructure](infrastructure.md#browser-bridge).
 
 - 🟢 **Server-owned account status in Mac Settings.** Project browser-sync
   authorization, socket connectivity, current Run/step and last successful sync
-  through the existing server status contract instead of local socket state alone.
+  through the existing server status contract instead of local socket state alone. Local
+  browser execution now derives Run links from the existing command registry; the
+  connection and import-plan columns remain distinct, and last commands link their
+  actual Run. Exact-revision UI and authenticated-device acceptance are still pending;
+  server authorization, target/step and last-success projection remain open.
 
 - 🟢 **Generate remaining Mac agent-route contracts.** Move accounts and debug
   events from hand-written `/api/import/agent/*` routes onto shared contracts and

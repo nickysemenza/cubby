@@ -43,6 +43,38 @@ struct BrowserBridgeSettingsModelTests {
         func appDidBecomeActive() {}
     }
 
+    // Browser execution must be visible outside manual submission, preserve a stable start
+    // through reconnect, deduplicate shared Runs, and disappear with retired connections.
+    @Test func automaticBrowserRunsProjectIntoExistingActivity() async {
+        let model = BrowserBridgeSettingsModel()
+        model.install(controller: StubController())
+        model.setAccounts([
+            .init(
+                id: "account-first", label: "Example account", ledgerPartyID: "household-example",
+                browser: .chrome),
+            .init(
+                id: "account-second", label: "Another account", ledgerPartyID: "household-example",
+                browser: .chrome),
+        ])
+        model.setExecutingRuns(["RUN-4K7M"], accountID: "account-first")
+        model.setExecutingRuns(["RUN-4K7M", "RUN-EXAMPLE"], accountID: "account-second")
+        model.setLastCommand("navigate · shop.example/item", runID: "RUN-4K7M", accountID: "account-first")
+        #expect(model.accountStates.first { $0.id == "account-first" }?.lastCommandRunID == "RUN-4K7M")
+        let initial = model.currentActivities
+        #expect(initial.count == 2)
+        #expect(Set(initial.map(\.link)) == [.serverRun("RUN-4K7M"), .serverRun("RUN-EXAMPLE")])
+        model.setAccountStatus(.waitingToReconnect(attempt: 1), accountID: "account-first")
+        model.setExecutingRuns(["RUN-4K7M"], accountID: "account-first")
+        #expect(model.currentActivities == initial)
+        model.setExecutingRuns([], accountID: "account-second")
+        #expect(model.currentActivities.count == 1)
+        model.install(controller: StubController())
+        #expect(model.currentActivities.isEmpty)
+        model.setExecutingRuns(["RUN-4K7M"], accountID: "account-first")
+        await model.disconnect()
+        #expect(model.currentActivities.isEmpty)
+    }
+
     private struct ServerRefusal: LocalizedError {
         var errorDescription: String? { "The account already has an active run." }
     }

@@ -371,6 +371,20 @@ Mac is a thin hand; the server reads and decides:
   cannot supply the needed page or interaction. Offline browser work stays
   queued while other server-capable tasks continue.
 
+The Mac Activity screen derives executing browser Run IDs from the existing bridge
+command registry and projects them into its shared Activity center. Overlapping commands
+for one Run produce one link; transient socket reconnect preserves in-flight execution,
+while finish, cancellation and connection replacement remove it. Empty local activity
+does not establish that server Runs execute elsewhere. Server Run history remains separate.
+
+Browser Sync's connection column describes each account socket, and its import-plan
+column describes `run.syncPlan`. Neither establishes vendor authentication or Product
+verification. A research command may use an available account connection for a different
+retailer; its last-command display links the actual Run rather than attributing the
+research subject to the carrying account. The existing Activity detail/events read accepts
+that internal Run UUID and returns the canonical public Run shortcode; browser delivery,
+replay records and their stored identities keep the same shape.
+
 Settings previews each browser-sync account with `run.syncPlan`: first sync, incremental since the
 newest-order cursor, resume (with the current run and progress), or blocked by other work. Each
 account has Sync; history-range controls appear only for a new sync, with a separate draft per

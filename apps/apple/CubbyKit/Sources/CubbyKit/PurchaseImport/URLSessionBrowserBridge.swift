@@ -56,6 +56,8 @@ struct BrowserBridgeCommandTaskRegistry {
     private var runs: [String: String] = [:]
     private var retiredRuns: Set<String> = []
 
+    var executingRunIDs: Set<String> { Set(runs.values) }
+
     mutating func claim(_ commandID: String, runID: String) -> Bool {
         guard !settled.contains(commandID), !retiredRuns.contains(runID) else { return false }
         guard claimed.insert(commandID).inserted else { return false }
@@ -110,6 +112,7 @@ public actor URLSessionBrowserBridge {
     public typealias StatusObserver = @Sendable (BrowserBridgeConnectionStatus) -> Void
     public typealias ResultObserver = @Sendable (BrowserBridgeCommandResult, BrowserBridgeOperation) -> Void
     public typealias AuthWindowObserver = @Sendable (String) -> Void
+    public typealias ExecutionObserver = @Sendable (Set<String>, UInt64) -> Void
     public typealias RunCompletionObserver = @Sendable (BrowserBridgeRunCompletion) -> Void
 
     private let session: URLSession
@@ -119,6 +122,8 @@ public actor URLSessionBrowserBridge {
     private let resultObserver: ResultObserver?
     private let authWindowObserver: AuthWindowObserver?
     private let runCompletionObserver: RunCompletionObserver?
+    private let executionObserver: ExecutionObserver?
+    private var executionRevision: UInt64 = 0
     private var configuration: BrowserBridgeConnectionConfiguration?
     private var socket: URLSessionWebSocketTask?
     private var connectionTask: Task<Void, Never>?
@@ -133,7 +138,8 @@ public actor URLSessionBrowserBridge {
         statusObserver: StatusObserver? = nil,
         resultObserver: ResultObserver? = nil,
         authWindowObserver: AuthWindowObserver? = nil,
-        runCompletionObserver: RunCompletionObserver? = nil
+        runCompletionObserver: RunCompletionObserver? = nil,
+        executionObserver: ExecutionObserver? = nil
     ) {
         self.replayStore = replayStore
         self.executor = executor
@@ -142,6 +148,7 @@ public actor URLSessionBrowserBridge {
         self.resultObserver = resultObserver
         self.authWindowObserver = authWindowObserver
         self.runCompletionObserver = runCompletionObserver
+        self.executionObserver = executionObserver
     }
 
     deinit {
@@ -182,6 +189,7 @@ public actor URLSessionBrowserBridge {
         socket?.cancel(with: .goingAway, reason: nil)
         socket = nil
         commandTasks.cancelAll()
+        publishExecution()
         configuration = nil
         publish(.disconnected)
     }
@@ -279,6 +287,7 @@ public actor URLSessionBrowserBridge {
         case .forgetRun(let payload):
             ledger.forget(runID: payload.runID, retirementID: payload.retirementID)
             let pending = commandTasks.cancelRun(payload.runID)
+            publishExecution()
             for command in pending {
                 if let commandID = UUID(uuidString: command.commandID) {
                     await executor.cancel(commandID: commandID)
@@ -323,6 +332,7 @@ public actor URLSessionBrowserBridge {
                 BrowserBridgeDebugLog.emit(.commandDuplicate, command: command)
                 return
             }
+            publishExecution()
             if let interrupted = ledger.interruptedResult(for: command.id) {
                 // A task lost during stop/relaunch must never repeat an interactive side effect.
                 try await finish(interrupted, operation: command.operation)
@@ -343,6 +353,7 @@ public actor URLSessionBrowserBridge {
                 ledger.beginInteractive(command)
                 do { try await replayStore.save(ledger) } catch {
                     commandTasks.finish(command.id)
+                    publishExecution()
                     throw error
                 }
             case .navigate, .read, .scroll, .window: break
@@ -372,6 +383,7 @@ public actor URLSessionBrowserBridge {
             BrowserBridgeDebugLog.emit(
                 .cancellationReceived, commandID: UUID(uuidString: commandID))
             commandTasks.cancel(commandID)
+            publishExecution()
             if let commandUUID = UUID(uuidString: commandID) {
                 await executor.cancel(commandID: commandUUID)
             }
@@ -422,7 +434,10 @@ public actor URLSessionBrowserBridge {
     private func finish(
         _ result: BrowserBridgeCommandResult, operation: BrowserBridgeOperation
     ) async throws {
-        defer { commandTasks.finish(result.commandID) }
+        defer {
+            commandTasks.finish(result.commandID)
+            publishExecution()
+        }
         guard ledger.retiredRuns[result.runID] == nil,
             !ledger.cancelled.contains(result.commandID)
         else { return }
@@ -447,6 +462,11 @@ public actor URLSessionBrowserBridge {
     ) async throws {
         let data = try BrowserBridgeWire.encode(message)
         try await socket.send(.data(data))
+    }
+
+    private func publishExecution() {
+        executionRevision += 1
+        executionObserver?(commandTasks.executingRunIDs, executionRevision)
     }
 
     private func publish(_ value: BrowserBridgeConnectionStatus) {
