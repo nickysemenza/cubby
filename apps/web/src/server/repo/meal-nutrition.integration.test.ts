@@ -211,6 +211,7 @@ describe("meal nutrition service", () => {
       carbs: { status: "partial", lower: 15 },
       fat: { status: "complete", lower: 6 },
     });
+    expect(person.meals).toHaveLength(2);
     expect(
       [sourceMeal, targetMeal].map(({ shortcode }) =>
         person.meals.find(({ meal }) => meal.id === mealCode(shortcode)),
