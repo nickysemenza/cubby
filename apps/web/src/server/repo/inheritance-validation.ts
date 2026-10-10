@@ -3,6 +3,7 @@ import { sql } from "drizzle-orm";
 
 import type { Database, DrizzleTransaction } from "~/server/db";
 import { createBlockedError } from "~/server/errors/app-error";
+import { classificationPolicySql } from "~/server/repo/classification-field-policy";
 import { unwrapDb } from "~/server/repo/database-helpers";
 
 import { effectiveExpenseSpendingCategorySql } from "./expense-category-resolution";
@@ -97,15 +98,15 @@ async function validateLiveProductPolicy(
     JOIN "SpendingCategory" sc
       ON sc.id = ${effectiveExpenseSpendingCategorySql("e")}
       AND sc."deletedAt" IS NULL
-    WHERE EXISTS (
-        SELECT 1 FROM "SpendingCategory" forbidding
-        WHERE forbidding."productExpectation" = 'not_allowed'
-          AND forbidding."deletedAt" IS NULL
-      )
-      AND e."deletedAt" IS NULL
+    WHERE e."deletedAt" IS NULL
       AND e."lineKind" = 'principal'
       AND e."productId" IS NOT NULL
-      AND sc."productExpectation" = 'not_allowed'
+      AND ${classificationPolicySql(
+        "spendingCategory.productExpectation",
+        "productId",
+        "not_allowed",
+        effectiveExpenseSpendingCategorySql("e"),
+      )}
       ${
         !scope
           ? sql``

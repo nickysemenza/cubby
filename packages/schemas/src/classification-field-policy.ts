@@ -28,12 +28,20 @@ const columnClassificationPolicies = {
   "spendingCategory.productExpectation": {
     owner: "spendingCategory",
     column: "productExpectation",
+    table: "SpendingCategory",
     target: { entity: "expense", field: "productId" },
   },
 } as const;
-type ColumnPolicyId = keyof typeof columnClassificationPolicies;
+export type ColumnClassificationPolicyId =
+  keyof typeof columnClassificationPolicies;
+type ColumnPolicyId = ColumnClassificationPolicyId;
 
-type ClassificationPolicyId = DeclaredClassificationPolicyId | ColumnPolicyId;
+export type ClassificationPolicyId =
+  | DeclaredClassificationPolicyId
+  | ColumnPolicyId;
+
+export const columnClassificationPolicy = (id: ColumnPolicyId) =>
+  columnClassificationPolicies[id];
 
 const isColumnPolicy = (id: ClassificationPolicyId): id is ColumnPolicyId =>
   id in columnClassificationPolicies;

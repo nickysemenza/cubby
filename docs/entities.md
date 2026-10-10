@@ -1212,7 +1212,9 @@ admitting value, then emits `classification-field-policies.gen.ts`. A
 household-editable classification keeps its policy per row instead
 (SpendingCategory `productExpectation`), and `@cubby/schemas/classification-field-policy`
 registers both shapes behind one evaluator (`isFieldAllowed`,
-`classificationValuesWhere`, `impliedClassification`).
+`classificationValuesWhere`, `impliedClassification`). The server SQL evaluator
+also compiles column policies against their declared owner table, so inherited
+Expense category resolution and policy evaluation share the same path.
 
 ProductCategory `feature` is the first declared instance, resolved through the
 Product's category and its nearest bound ancestor. An ingredient or USDA link

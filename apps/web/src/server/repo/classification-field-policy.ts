@@ -1,8 +1,10 @@
 import {
   type ClassifiedField,
+  columnClassificationPolicy,
   classificationReference,
   classificationValuesWhere,
   type DeclaredClassificationPolicyId,
+  type ClassificationPolicyId,
   declaredPoliciesGoverning,
   declaredClassificationPolicies,
   type FieldPolicyValue,
@@ -59,15 +61,30 @@ const classificationSource = (id: DeclaredClassificationPolicyId) =>
     : undefined;
 
 /** SQL: the record's classification sets `policy` for `field`. */
-export const classificationPolicySql = <
-  Id extends DeclaredClassificationPolicyId,
->(
+export const classificationPolicySql = <Id extends ClassificationPolicyId>(
   id: Id,
-  field: ClassifiedField<Id>,
+  field: Id extends DeclaredClassificationPolicyId
+    ? ClassifiedField<Id>
+    : string,
   policy: FieldPolicyValue,
   reference: SQL,
 ): SQL<boolean> => {
-  const values = classificationValuesWhere(id, field, policy);
+  if (id === "spendingCategory.productExpectation") {
+    const columnPolicy = columnClassificationPolicy(id);
+    if (columnPolicy.target.field !== field) return sql<boolean>`false`;
+    return sql<boolean>`EXISTS (
+      SELECT 1 FROM ${sql.identifier(columnPolicy.table)} classification_policy
+      WHERE classification_policy.id = ${reference}
+        AND classification_policy.${sql.identifier(columnPolicy.column)} = ${policy}
+        AND classification_policy."deletedAt" IS NULL
+    )`;
+  }
+  // SAFETY: column policies returned above, so both values are a declared id and field.
+  const values = classificationValuesWhere(
+    id as DeclaredClassificationPolicyId,
+    field as ClassifiedField<DeclaredClassificationPolicyId>,
+    policy,
+  );
   if (classificationReference(id) === null)
     return values.length
       ? sql<boolean>`${inArray(reference, values)}`
