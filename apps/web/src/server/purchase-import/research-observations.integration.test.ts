@@ -20,8 +20,9 @@ import { insertWithShortcode } from "~/server/repo/shortcode-utils";
 import { ensureRun } from "~/server/runs/ensure-run";
 
 import { resolveResearchBrowserOperation } from "./agent-browser-command";
-import { encodeSnapshotDom } from "./browser-page";
+import { derivePageCapture, encodeSnapshotDom } from "./browser-page";
 import { materializeCapture } from "./browser-results";
+import { rederiveRetainedCapture } from "./capture-maintenance";
 import { productEnrichmentTarget } from "./product-enrichment-target";
 import { loadResearchEvidence } from "./research-evidence";
 import {
@@ -29,6 +30,7 @@ import {
   webReadResearch,
   webSearchResearch,
 } from "./research-observations";
+import { loadRunLog } from "./run-service";
 
 // Evidence must not drift to another target or overwrite a completed call.
 // A selected variant without JSON-LD remains readable; candidates never prove
@@ -120,6 +122,118 @@ describe("retained research observations", () => {
     title: "Synthetic shirt",
     capturedAt: "2026-10-07T12:00:00Z",
   };
+
+  // Maintenance must work after settlement, reject substituted originals, and
+  // append a versioned receipt without changing the original command replay.
+  it("re-derives settled retained captures without rewriting original receipts", async () => {
+    const s = await scope();
+    const html = "<p>Retained selected green shirt</p>";
+    const research = await retainResearchObservation(
+      ctx.db,
+      {
+        runId: s.runId,
+        workRef: s.first.id,
+        callId: crypto.randomUUID(),
+        kind: "browser_capture",
+        sourceMetadata,
+        content: html,
+      },
+      s.ports,
+    );
+    const operationId = "synthetic-capture";
+    const commandId = crypto.randomUUID();
+    const capture = derivePageCapture({
+      html,
+      sourceURL: sourceMetadata.servedURL,
+      title: sourceMetadata.title,
+      capturedAt: sourceMetadata.capturedAt,
+      allowedHosts: ["shop.example.test"],
+      requestedURL: sourceMetadata.sourceURL,
+      evidence: [],
+      truncated: false,
+    });
+    const original = {
+      commandId,
+      workRef: s.first.id,
+      command: {
+        protocolVersion: 4,
+        id: commandId,
+        operationId,
+        runID: s.runId,
+        deadline: "2026-10-07T12:05:00Z",
+        operation: {
+          type: "navigate",
+          url: sourceMetadata.sourceURL,
+          allowedHosts: ["shop.example.test"],
+        },
+      },
+      page: {
+        capture: { ...capture, captureVersion: 1 },
+        domEvidenceId: research.evidenceId,
+        research,
+        observation: {
+          url: sourceMetadata.servedURL,
+          title: sourceMetadata.title,
+          readyState: "complete",
+          window: null,
+          screenRecording: "granted",
+          durationMs: 1,
+        },
+      },
+    };
+    await insertOperation(getDb(ctx.db), {
+      runId: s.runId,
+      operationId,
+      kind: "browser_command",
+      inputFingerprint: "synthetic",
+      state: "completed",
+      result: original,
+    });
+    await getDb(ctx.db)
+      .update(runTarget)
+      .set({ state: "completed" })
+      .where(eq(runTarget.id, s.first.id));
+    await getDb(ctx.db)
+      .update(run)
+      .set({ status: "completed" })
+      .where(eq(run.id, s.runId));
+    const input = { actor: ctx.actor, key: { runId: s.runId, operationId } };
+    await expect(
+      rederiveRetainedCapture(ctx.db, input, async () => "substituted bytes"),
+    ).rejects.toThrow(/checksum/u);
+    const result = await rederiveRetainedCapture(
+      ctx.db,
+      input,
+      async () => html,
+    );
+    expect(result.capture.readableText).toContain(
+      "Retained selected green shirt",
+    );
+    expect(result.capture.captureVersion).toBeGreaterThan(1);
+    expect(result.evidenceId).toBe(research.evidenceId);
+    expect((await loadRunLog(ctx.db, s.shortcode)).entries).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          event: "capture.reinterpreted",
+          state: "completed",
+        }),
+      ]),
+    );
+    expect(
+      await rederiveRetainedCapture(ctx.db, input, async () => html),
+    ).toEqual(result);
+    expect((await readOperation(getDb(ctx.db), input.key))?.result).toEqual(
+      original,
+    );
+    expect(
+      (
+        await getDb(ctx.db)
+          .select()
+          .from(runTarget)
+          .where(eq(runTarget.id, s.first.id))
+      )[0]?.state,
+    ).toBe("completed");
+  });
 
   it("reads receipt facts after oversized mail styles without changing retained originals", async () => {
     const s = await scope();

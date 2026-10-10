@@ -15,6 +15,7 @@ import {
 import { mailboxDiscoveryStartOutput } from "@cubby/schemas/mailbox-research";
 import { runTargetDeviceWorkState } from "@cubby/schemas/photo-import-run";
 import {
+  retainedCaptureInterpretation,
   proposedImportFix,
   confirmMerchantVendorRuleInput,
   commitPurchaseImportInput,
@@ -456,6 +457,15 @@ export const runContract = defineContract("run", {
         })
         .nullable(),
     }),
+    invalidates: ["runOnly"],
+  }),
+  rederiveCapture: mutation({
+    mcp: { omit: "operator_maintenance" },
+    input: z.object({
+      runId: runShortcode,
+      operationId: z.string().min(1).max(500),
+    }),
+    output: retainedCaptureInterpretation,
     invalidates: ["runOnly"],
   }),
   logs: query({

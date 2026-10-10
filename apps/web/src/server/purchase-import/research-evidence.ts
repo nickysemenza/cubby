@@ -79,16 +79,25 @@ export async function loadResearchEvidence(
     throw new Error("Research evidence does not belong to this task.");
   return Promise.all(
     rows.map(async (row) => {
-      const metadata = researchSourceMetadata
-        .pick({ researchUploadState: true })
-        .loose()
-        .parse(row.sourceMetadata);
-      if (metadata.researchUploadState === "pending")
-        throw new Error("Retained research evidence upload is pending.");
-      const content = await readEvidence(row);
-      if ((await sha256Hex(content)) !== row.checksum)
-        throw new Error("Retained research evidence checksum changed.");
+      const content = await readVerifiedResearchEvidence(row, readEvidence);
       return { evidenceId: row.id, metadata: row.sourceMetadata, content };
     }),
   );
+}
+
+/** Integrity is shared by active research and read-only historical interpretation. */
+export async function readVerifiedResearchEvidence(
+  row: typeof runEvidence.$inferSelect,
+  readEvidence: ResearchEvidenceReader = readRetainedResearchEvidence,
+) {
+  const metadata = researchSourceMetadata
+    .pick({ researchUploadState: true })
+    .loose()
+    .parse(row.sourceMetadata);
+  if (metadata.researchUploadState === "pending")
+    throw new Error("Retained research evidence upload is pending.");
+  const content = await readEvidence(row);
+  if ((await sha256Hex(content)) !== row.checksum)
+    throw new Error("Retained research evidence checksum changed.");
+  return content;
 }

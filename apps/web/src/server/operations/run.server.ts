@@ -15,6 +15,7 @@ import {
   findActivePurchaseAgentGrant,
   PURCHASE_AGENT_OAUTH_CLIENT_ID,
 } from "~/server/purchase-import/agent-auth";
+import { rederiveRetainedCapture } from "~/server/purchase-import/capture-maintenance";
 import { dispatchRunEvent } from "~/server/purchase-import/dispatch";
 import { startMailDiscovery } from "~/server/purchase-import/gmail/discovery";
 import {
@@ -57,6 +58,16 @@ async function memberParty(context: AuthenticatedRequestContext) {
 }
 
 export const runHandlers = implementOperationDomain(runContract, {
+  rederiveCapture: async (context, input) => {
+    await memberParty(context);
+    return rederiveRetainedCapture(context.db, {
+      actor: context.actorContext,
+      key: {
+        runId: await resolveOrThrow(context.db, "run", input.runId),
+        operationId: input.operationId,
+      },
+    });
+  },
   executionMailboxes: async (context) => {
     await memberParty(context);
     const mailboxes = await getDb(context.db)
