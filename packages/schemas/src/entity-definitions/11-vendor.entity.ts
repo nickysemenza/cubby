@@ -171,6 +171,9 @@ export default defineEntity({
           suggest: {
             basis: ["name", "website", "notes"],
             reviewRequired: true,
+            rules: [
+              `Suggest this vendor's spending profile using saved independent purchase and ProductCategory evidence. Food products alone do not distinguish groceries from restaurant meals. Mixed goods support mixed_retail; ambiguous or truncated evidence supports unspecified. The current profile is a review target, never proof. Return a proposal only.`,
+            ],
           },
           options: [
             {
@@ -233,7 +236,12 @@ export default defineEntity({
         nullable: true,
         control: {
           kind: "select",
-          suggest: { basis: ["name", "website", "notes"] },
+          suggest: {
+            basis: ["name", "website", "notes"],
+            rules: [
+              `Suggest the household's receipt/order evidence expectation, not whether a merchant is capable of issuing receipts. Amazon and Home Depot purchases are expected (required). Restaurant meals, BiRite groceries and friend reimbursements are not_expected. Use the actual purchase/source description when available; broad or mixed vendor/category evidence without a clear purpose remains unknown. Missing receipt evidence alone never means not_expected. Return a reviewed proposal only; never overwrite explicit decisions.`,
+            ],
+          },
           options: [
             {
               value: "unknown",

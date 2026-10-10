@@ -141,6 +141,7 @@ type EntityFieldControl = Readonly<{
   required: boolean | null;
   suggest: Readonly<{
     basis: readonly string[];
+    rules?: readonly string[];
     mode: "fill" | "prune";
     reviewRequired: boolean;
   }> | null;

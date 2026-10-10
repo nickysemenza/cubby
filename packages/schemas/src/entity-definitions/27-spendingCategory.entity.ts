@@ -118,7 +118,12 @@ export default defineEntity({
         kind: "enum",
         control: {
           kind: "select",
-          suggest: { basis: ["name", "parentId"] },
+          suggest: {
+            basis: ["name", "parentId"],
+            rules: [
+              `Suggest the household's receipt/order evidence expectation, not whether a merchant is capable of issuing receipts. Amazon and Home Depot purchases are expected (required). Restaurant meals, BiRite groceries and friend reimbursements are not_expected. Use the actual purchase/source description when available; broad or mixed vendor/category evidence without a clear purpose remains unknown. Missing receipt evidence alone never means not_expected. Return a reviewed proposal only; never overwrite explicit decisions.`,
+            ],
+          },
           options: [
             {
               value: "unknown",
@@ -151,7 +156,12 @@ export default defineEntity({
         kind: "enum",
         control: {
           kind: "select",
-          suggest: { basis: ["name", "parentId"] },
+          suggest: {
+            basis: ["name", "parentId"],
+            rules: [
+              `Suggest Product expectation independently from receipt expectation using the spending category and parent context. Durable goods such as tools, furniture, clothing and tracked software require Product records (required). Groceries, services and friend reimbursements do not require one but may link one (not_expected). Restaurant meals, event tickets, rides and donations can never be a Product (not_allowed); choose not_allowed only when every Expense in the category is such spending. A mixed or unclear category must remain unknown. Do not infer that every receipted purchase requires Products. Return a reviewed proposal only; never overwrite explicit decisions.`,
+            ],
+          },
           options: [
             {
               value: "unknown",

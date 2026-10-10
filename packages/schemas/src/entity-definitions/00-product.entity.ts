@@ -684,6 +684,14 @@ export default defineEntity({
           suggest: {
             basis: ["manufacturer", "categoryId", "aliases"],
             mode: "prune",
+            rules: [
+              `You are auditing one household product's compatibility tags. The subject above lists the product's manufacturer, classification, feature, and aliases, plus one candidate tag. Decide whether that candidate tag only restates one of those already-recorded facts (the manufacturer's name, a classification path segment, or a generic category word) or whether it names a genuine compatibility or ecosystem detail — a battery platform, mount, thread, or size standard — worth keeping.
+
+Rules:
+1. A tag matching (or a trivial plural/singular of) the manufacturer name, any classification path segment, or the category feature restates the record — prefer removal.
+2. A tag naming a real compatibility shape (a battery platform like "M18", a mount, a thread size, a size standard) is genuine even if it superficially resembles a category word — prefer keeping it.
+3. When genuinely unsure, prefer keeping the tag: a false "restates" costs a real compatibility signal, while a missed one is caught by a later pass.`,
+            ],
           },
         },
         display: {

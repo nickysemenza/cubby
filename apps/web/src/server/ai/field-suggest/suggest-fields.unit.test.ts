@@ -15,6 +15,11 @@ import type {
   ReferenceSuggestSpec,
 } from "~/server/ai/field-suggest/registry";
 import { FIELD_SUGGEST_REGISTRY } from "~/server/ai/field-suggest/registry";
+
+const productCategoryFeatureSpec =
+  FIELD_SUGGEST_REGISTRY["productCategory.feature"];
+if (productCategoryFeatureSpec.kind !== "enum")
+  throw new Error("productCategory.feature must remain an enum suggestion");
 import type { JevPort } from "~/server/ai/jev";
 import type { Database } from "~/server/db";
 
@@ -464,7 +469,7 @@ describe("suggestFields", () => {
       jev: jevPortPicking("supplies:"),
       registry: {
         "productCategory.feature": {
-          ...FIELD_SUGGEST_REGISTRY["productCategory.feature"],
+          ...productCategoryFeatureSpec,
           candidates: async () => ["supplies", "storage"],
         },
       },

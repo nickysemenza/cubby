@@ -202,7 +202,12 @@ export default defineEntity({
         kind: "enum",
         control: {
           kind: "select",
-          suggest: { basis: ["transplantedOn", "finishedOn"] },
+          suggest: {
+            basis: ["transplantedOn", "finishedOn"],
+            rules: [
+              `Infer the planting lifecycle status from its dates, compared with Today. A finished date on or before Today indicates finished. A sow or transplant date on or before Today indicates growing. A sow or transplant date after Today is an estimate on a planned planting, so choose planned; with no dates choose planned.`,
+            ],
+          },
           options: [
             {
               value: "planned",

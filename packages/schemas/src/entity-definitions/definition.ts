@@ -334,6 +334,7 @@ const buildMetadataSchemas = () => {
       suggest: z
         .object({
           basis: z.array(nonEmptyString()).min(1),
+          rules: z.array(nonEmptyString()).optional(),
           mode: z.enum(["fill", "prune"]).optional().default("fill"),
           reviewRequired: z.boolean().optional().default(false),
         })

@@ -302,7 +302,17 @@ export default defineEntity({
               description: "Clothing, footwear, and wearable accessories",
             },
           ],
-          suggest: { basis: ["name", "parentId"] },
+          suggest: {
+            basis: ["name", "parentId"],
+            rules: [
+              `You are a product-category classification assistant. Given a category's name and its parent category, determine which behavior namespace it belongs to.
+
+Rules:
+1. Match the category's own subject, not an ancestor's — a feature binds to the nearest category that carries one and descendants inherit it, so only assign a feature this category itself should own.
+2. Prefer the most specific feature that fits over "household", the catch-all — reserve "household" for a genuinely general-purpose category with no more specific behavior.
+3. A consumable used alongside a tool (blades, bits, abrasives) is "tool-consumables"; a durable attachment for one is "tool-accessories"; the tool itself is "tools".`,
+            ],
+          },
         },
         display: {
           list: true,

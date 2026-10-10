@@ -81,7 +81,12 @@ export default defineEntity({
         kind: "enum",
         control: {
           kind: "select",
-          suggest: { basis: ["harvestAmount", "notes"] },
+          suggest: {
+            basis: ["harvestAmount", "notes"],
+            rules: [
+              `Choose harvest when a harvest amount is present; otherwise choose note for an observation or photo journal entry.`,
+            ],
+          },
           options: [
             {
               value: "note",
