@@ -5,7 +5,7 @@
  */
 import { runEntityId } from "@cubby/schemas/identifiers";
 import { agentImportRunPurpose } from "@cubby/schemas/import-run-agent";
-import { and, eq, inArray, isNotNull, isNull, lt } from "drizzle-orm";
+import { and, asc, eq, inArray, isNotNull, isNull, lt } from "drizzle-orm";
 
 import type { Database } from "~/server/db";
 import { run as runTable } from "~/server/db/schema";
@@ -39,17 +39,21 @@ export async function assertRetirableRun(db: Database, runId: string) {
 }
 
 /**
- * Destroy the coordinators of agent Runs that settled before `before`, a
- * bounded batch per call; a destroyed coordinator reports `disposed` on a
- * later cold call, which then stamps `retiredAt`. Any Run with an agent
- * session qualifies, including retired purposes (account_sync,
- * product_enrichment, ...), addressed by the identity stored at creation.
+ * Destroy the coordinators of agent Runs that settled before `before`, oldest
+ * first, a bounded batch per call (one catch-up makes at most two coordinator
+ * RPCs per Run). A destroying call reports `disposed: false` (SDK destroy may
+ * even abort it); an immediate follow-up reaches a fresh instance whose empty
+ * inventory acknowledges disposal, which stamps `retiredAt`. Any Run with an
+ * agent session qualifies, including retired purposes (account_sync,
+ * product_enrichment, ...), addressed by the identity stored at creation. A
+ * failing coordinator does not stall the Runs behind it; failures are thrown
+ * after the batch.
  */
 export async function retireSettledCoordinators(
   db: Database,
   coordinator: (agentId: string) => Pick<PurchaseImportRunAgentRpc, "retire">,
   before: Date,
-  limit = 25,
+  limit = 200,
 ) {
   const rows = await getDb(db)
     .select({ id: runTable.id, agentId: runTable.agentSessionId })
@@ -62,17 +66,28 @@ export async function retireSettledCoordinators(
         lt(runTable.updatedAt, before),
       ),
     )
+    .orderBy(asc(runTable.updatedAt), asc(runTable.id))
     .limit(limit);
   let retired = 0;
-  for (const row of rows) {
-    if (!row.agentId) continue;
-    const { disposed } = await coordinator(row.agentId).retire();
-    if (!disposed) continue;
-    await getDb(db)
-      .update(runTable)
-      .set({ retiredAt: new Date(), retirementReason: "settled" })
-      .where(eq(runTable.id, row.id));
-    retired += 1;
+  const failures: string[] = [];
+  for (const { id, agentId } of rows) {
+    if (!agentId) continue;
+    const retire = async () => (await coordinator(agentId).retire()).disposed;
+    try {
+      // A real failure repeats on the follow-up, which reports it.
+      if (!((await retire().catch(() => false)) || (await retire()))) continue;
+      await getDb(db)
+        .update(runTable)
+        .set({ retiredAt: new Date(), retirementReason: "settled" })
+        .where(eq(runTable.id, id));
+      retired += 1;
+    } catch (error) {
+      failures.push(`${id}: ${String(error)}`);
+    }
   }
+  if (failures.length)
+    throw new Error(
+      `Coordinator retirement failed for ${failures.length} of ${rows.length} Runs (${retired} retired): ${failures.join("; ")}`,
+    );
   return { considered: rows.length, retired };
 }

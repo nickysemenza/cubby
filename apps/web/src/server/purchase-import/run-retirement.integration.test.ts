@@ -49,7 +49,6 @@ import { startAgentRunFixture } from "./import-run.fixtures";
 import {
   startScenarioHarness,
   type ScenarioHarness,
-  waitFor,
 } from "./purchase-agent-workerd.fixtures";
 import {
   assertRetirableRun,
@@ -120,12 +119,13 @@ describe("settled coordinator retirement", () => {
     });
     const before = new Date(Date.now() - 1_000);
 
-    // The first call destroys the transcript; only a later cold empty
-    // inventory is proof, so nothing is stamped yet.
+    // The first call destroys the transcript and one follow-up asks for the
+    // empty-inventory proof; without it nothing is stamped yet.
     expect(
       await retireSettledCoordinators(ctx.db, coordinator, before),
     ).toEqual({ considered: 1, retired: 0 });
-    expect(calls).toEqual([importRunAgentIdentity(settled, "mail_import")]);
+    const settledAgent = importRunAgentIdentity(settled, "mail_import");
+    expect(calls).toEqual([settledAgent, settledAgent]);
     expect(await coordinatorRetired(ctx.db, settled)).toBe(false);
 
     disposed = true;
@@ -166,6 +166,70 @@ describe("settled coordinator retirement", () => {
     ).toEqual({ considered: 1, retired: 1 });
     expect(calls).toEqual([importRunAgentIdentity(historical, "mail_import")]);
     expect(await coordinatorRetired(ctx.db, historical)).toBe(true);
+  });
+
+  // Regression: 25 unordered Runs per daily pass, each needing a second pass
+  // for its acknowledgement, left a production backlog of months.
+  it("retires a backlog oldest first in one pass, confirming each disposal immediately", async () => {
+    const runs = [];
+    for (let index = 0; index < 30; index += 1) runs.push(await agentRun());
+    // Settled newest first, so storage order differs from age order.
+    for (const [index, runId] of runs.entries())
+      await settle(runId, new Date(Date.now() - 60_000 * (index + 1)));
+    const oldestFirst = [...runs].reverse();
+    // Real semantics: the destroying call reports disposed=false; a fresh
+    // call then sees only the fence and acknowledges.
+    const destroyed = new Set<string>();
+    const calls: string[] = [];
+    const coordinator = (agentId: string) => ({
+      retire: async () => {
+        calls.push(agentId);
+        if (destroyed.has(agentId)) return { disposed: true };
+        destroyed.add(agentId);
+        return { disposed: false };
+      },
+    });
+    const before = new Date(Date.now() - 1_000);
+
+    expect(
+      await retireSettledCoordinators(ctx.db, coordinator, before, 2),
+    ).toEqual({ considered: 2, retired: 2 });
+    expect([...new Set(calls)]).toEqual(
+      oldestFirst
+        .slice(0, 2)
+        .map((runId) => importRunAgentIdentity(runId, "mail_import")),
+    );
+
+    expect(
+      await retireSettledCoordinators(ctx.db, coordinator, before),
+    ).toEqual({ considered: 28, retired: 28 });
+    for (const runId of runs)
+      expect(await coordinatorRetired(ctx.db, runId)).toBe(true);
+  });
+
+  // Oldest-first ordering would let one failing coordinator stall every pass.
+  it("keeps retiring after one coordinator fails, then reports the failure", async () => {
+    const failing = await agentRun();
+    const healthy = await agentRun();
+    await settle(failing, new Date(Date.now() - 120_000));
+    await settle(healthy);
+    const failingAgent = importRunAgentIdentity(failing, "mail_import");
+    const coordinator = (agentId: string) => ({
+      retire: async () => {
+        if (agentId === failingAgent)
+          throw new Error("Synthetic coordinator failure");
+        return { disposed: true };
+      },
+    });
+    await expect(
+      retireSettledCoordinators(
+        ctx.db,
+        coordinator,
+        new Date(Date.now() - 1_000),
+      ),
+    ).rejects.toThrow("Synthetic coordinator failure");
+    expect(await coordinatorRetired(ctx.db, healthy)).toBe(true);
+    expect(await coordinatorRetired(ctx.db, failing)).toBe(false);
   });
 
   it("authorizes coordinator disposal only for a settled Run", async () => {
@@ -332,7 +396,7 @@ describe("coordinator host retirement", () => {
     });
   });
 
-  it("stamps retiredAt only after a cold empty retry, then fences fetch and dispatch", async () => {
+  it("stamps retiredAt in one pass only after a cold empty retry, then fences fetch and dispatch", async () => {
     const runId = await agentRun();
     runtime = await startScenarioHarness(ctx.databaseUrl, { steps: [] });
     const peer = runtime.harness.getWorker("cubby-queue-producer");
@@ -359,31 +423,20 @@ describe("coordinator host retirement", () => {
         return disposal.parse(await response.json());
       },
     });
-    // SDK destroy may abort the first RPC; neither outcome stamps retiredAt.
+    // SDK destroy aborts the destroying isolate (and may abort that RPC); the
+    // immediate follow-up reaches a fresh instance whose empty inventory
+    // acknowledges disposal, so one pass stamps retiredAt.
     const first = await retireSettledCoordinators(
       ctx.db,
       coordinator,
       new Date(),
-    ).catch(() => ({ retired: 0 }));
+    );
     observations.push({
-      boundary: "first disposal call",
-      expected: 0,
+      boundary: "single-pass disposal",
+      expected: 1,
       actual: first.retired,
     });
-    expect(first.retired).toBe(0);
-    expect(await coordinatorRetired(ctx.db, runId)).toBe(false);
-    await waitFor(
-      async () =>
-        (
-          await retireSettledCoordinators(
-            ctx.db,
-            coordinator,
-            new Date(),
-          ).catch(() => ({ retired: 0 }))
-        ).retired === 1,
-      "Coordinator disposal never received a cold empty-storage acknowledgement",
-      3_000,
-    );
+    expect(first).toEqual({ considered: 1, retired: 1 });
     expect(await readRun(runId)).toMatchObject({
       retirementReason: "settled",
       retiredAt: expect.any(Date),
@@ -446,22 +499,11 @@ describe("coordinator host retirement", () => {
       new Date(),
     );
     observations.push({
-      boundary: "historical first disposal call",
+      boundary: "historical single-pass disposal",
       expected: 1,
-      actual: first.considered,
+      actual: first.retired,
     });
-    expect(first).toEqual({ considered: 1, retired: 0 });
-    const second = await retireSettledCoordinators(
-      ctx.db,
-      coordinator,
-      new Date(),
-    );
-    observations.push({
-      boundary: "historical empty-storage acknowledgement",
-      expected: 1,
-      actual: second.retired,
-    });
-    expect(second).toEqual({ considered: 1, retired: 1 });
+    expect(first).toEqual({ considered: 1, retired: 1 });
     expect((await request("/coordinator-fetch")).status).toBe(410);
     status = "passed";
   }, 90_000);

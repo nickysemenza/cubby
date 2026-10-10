@@ -54,8 +54,11 @@ pending: nothing here starts Product research.
    name the retired `browser_order` source kind; stored rows keep it.
 5. **Settlement**: Pi's settled submission reconciles the Run
    (`run-service.ts` `reconcileSettledRun`); the daily cron expires stale Runs
-   and destroys settled Runs' transcripts (`run-retirement.ts`), stamping
-   `Run.retiredAt`. Runs of retired purposes are destroyed by their stored
+   and destroys settled Runs' transcripts (`run-retirement.ts`), oldest
+   first in bounded batches; the destroying call and an immediate follow-up
+   that reaches a fresh, empty coordinator let one pass stamp
+   `Run.retiredAt`, and a failing coordinator does not block the Runs behind
+   it. Runs of retired purposes are destroyed by their stored
    coordinator identity without loading the current agent. Once disposal is
    authorized the coordinator writes a durable fence table, refuses every
    entry point (also after a restart) and drains admitted ones before
