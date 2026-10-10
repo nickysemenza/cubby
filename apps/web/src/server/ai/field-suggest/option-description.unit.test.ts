@@ -216,17 +216,17 @@ describe("suggestion enum descriptions", () => {
           "key": "spendingCategory.productExpectation",
           "options": [
             {
-              "description": "Insufficient or mixed evidence; leave receipt expectation unclassified",
+              "description": "Insufficient or mixed evidence; leave Product expectation unclassified",
               "label": "Unclassified",
               "value": "unknown",
             },
             {
-              "description": "Household expects a receipt or order evidence",
+              "description": "Durable goods such as tools, furniture, clothing, and tracked software need a Product record",
               "label": "Expected",
               "value": "required",
             },
             {
-              "description": "Household does not expect receipt or order evidence",
+              "description": "Groceries, services, and friend reimbursements do not need a Product record, but may link one",
               "label": "Not expected",
               "value": "not_expected",
             },

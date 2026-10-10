@@ -114,7 +114,7 @@ function projectedValue<T extends { id: string }>(
   return value;
 }
 
-export const storedExpenseSpendingCategorySql = (
+const storedExpenseSpendingCategorySql = (
   alias: string,
   draft?: ExpenseSpendingCategoryResolutionDraft,
 ): SQL =>
