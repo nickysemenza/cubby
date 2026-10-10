@@ -15,7 +15,10 @@ import { insertWithShortcode } from "~/server/repo/shortcode-utils";
 
 import { preparePurchaseImport } from "./import-orders";
 import { startOrResumeRun } from "./run-service";
-import { readImportSourceClaimFamily } from "./source-claim-family";
+import {
+  loadImportSourceFamilyOrders,
+  readImportSourceClaimFamily,
+} from "./source-claim-family";
 import { importVendorOrder } from "./writer";
 
 // A canonical source must replay its historical associations before any write;
@@ -23,6 +26,7 @@ import { importVendorOrder } from "./writer";
 // select an arbitrary owner, and refreshing one order cannot duplicate payment
 // sets or change a sibling's accepted checksum/history. Preparation must fence
 // against the same retained association regardless of canonicalization.
+// Every historical alias key keeps resolving its own owner after canonicalization.
 describe("canonical source claim families", () => {
   const ctx = withTestDb();
   const canonicalKey = "browser:example-account:consolidated";
@@ -190,6 +194,22 @@ describe("canonical source claim families", () => {
     expect(await f.db.select().from(expense)).toEqual(expenses);
     expect(await f.prepare(canonical, "prepare:after-family")).toBe(
       fingerprint,
+    );
+  });
+
+  it("resolves every historical alias key to its original association after canonicalization", async () => {
+    const f = await world();
+    const associations = await f.db.select().from(importSourceOrder);
+    await f.canonicalize();
+    const history = await loadImportSourceFamilyOrders(f.db, {
+      ledgerPartyId: f.party.id,
+      externalKeys: [f.firstAlias.externalKey, f.secondAlias.externalKey],
+    });
+    expect(history.map(({ association }) => association.id).sort()).toEqual(
+      associations.map(({ id }) => id).sort(),
+    );
+    expect(history.map(({ claim }) => claim.externalKey).sort()).toEqual(
+      [f.firstAlias.externalKey, f.secondAlias.externalKey].sort(),
     );
   });
 
