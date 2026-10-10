@@ -33,6 +33,29 @@ const assertEnforcedIsSameRecord = (
     );
 };
 
+const assertGapIsValid = (
+  policy: DeclaredPolicy,
+  field: DeclaredPolicy["fields"][number],
+  context: string,
+  seen: Set<string>,
+): void => {
+  if (!field.gap) return;
+  if (policy.target !== undefined)
+    throw new EntityDeclarationError(
+      `${context}.gap applies only to same-record policies.`,
+    );
+  if (seen.has(field.gap))
+    throw new EntityDeclarationError(
+      `${context}.gap ${field.gap} is duplicated.`,
+    );
+  seen.add(field.gap);
+  const outcomes = [...Object.values(field.byValue), field.otherwise];
+  if (outcomes.includes("required") === outcomes.includes("not_allowed"))
+    throw new EntityDeclarationError(
+      `${context}.gap needs required or not_allowed outcomes, but not both.`,
+    );
+};
+
 /**
  * Cross-entity checks for `capabilities.classificationPolicies`: the
  * classifier is an enum on the owner, the target references the owner, every
@@ -45,6 +68,7 @@ export const validateClassificationPolicies = (
 ): void => {
   const byKey = new Map(entities.map((entity) => [entity.key, entity]));
   for (const owner of entities) {
+    const seenGaps = new Set<string>();
     for (const [index, policy] of owner.classificationPolicies.entries()) {
       const context = `${owner.key}.capabilities.classificationPolicies[${index}]`;
       const values = classifierValues(owner, policy, context);
@@ -84,6 +108,7 @@ export const validateClassificationPolicies = (
               `${fieldContext}.byValue: ${value} is not a ${policy.classifier} value.`,
             );
         }
+        assertGapIsValid(policy, fieldPolicy, fieldContext, seenGaps);
         if (fieldPolicy.otherwise !== "not_allowed") continue;
         const admitting = Object.entries(fieldPolicy.byValue).filter(
           ([, value]) => value !== "not_allowed",
@@ -141,6 +166,7 @@ export const renderClassificationPolicyArtifacts = (
     "    byValue: Readonly<Record<string, FieldPolicyValue>>;\n" +
     "    otherwise: FieldPolicyValue;\n" +
     "    refusal?: string;\n" +
+    "    gap?: string;\n" +
     "  }>[];\n" +
     "}>;\n\n" +
     `export const declaredClassificationPolicies = {\n${entries.join("\n")}\n} as const satisfies Record<string, DeclaredClassificationPolicy>;\n`;

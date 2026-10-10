@@ -41,9 +41,9 @@ const FACET_COLUMN_IDS = {
 } as const;
 
 const rowClassName = (row: { original: ExpenseOut }) =>
-  row.original.lineKind === "principal"
-    ? undefined
-    : "bg-[var(--row-zebra)] text-muted-foreground";
+  row.original.fieldResolutions?.projectId?.mode === "allocated"
+    ? "bg-[var(--row-zebra)] text-muted-foreground"
+    : undefined;
 
 /**
  * Facet counts are calculated over the complete server population, never the

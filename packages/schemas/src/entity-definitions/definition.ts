@@ -1797,6 +1797,8 @@ const buildMetadataSchemas = () => {
       otherwise: fieldPolicyValue,
       /** Actionable explanation shown when this policy refuses the field. */
       refusal: nonEmptyString().optional(),
+      /** Public data-quality check id for same-record required/refused values. */
+      gap: nonEmptyString().optional(),
     })
     .strict();
 

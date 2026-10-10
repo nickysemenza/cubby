@@ -1,3 +1,4 @@
+import { declaredClassificationPolicies } from "@cubby/schemas/classification-field-policy";
 import type { Entity } from "@cubby/schemas/entity";
 import type {
   CompiledEditSection,
@@ -1089,27 +1090,65 @@ export function EntityIntentFields({
     });
     return hidden;
   }, [hiddenWhen, hiddenWhenValues]);
-  const [lineKind, expenseName, expenseProduct]: unknown[] = useWatch({
+  const sameRecordPolicies = useMemo(
+    () =>
+      Object.entries(declaredClassificationPolicies).filter(
+        ([, policy]) =>
+          policy.target.entity === entity && policy.target.reference === null,
+      ),
+    [entity],
+  );
+  const policyClassifierValues: unknown[] = useWatch({
     control: form.control,
-    name: ["lineKind", "name", "productId"],
+    name: sameRecordPolicies.map(([, policy]) => policy.classifier),
   });
-  const projectIsAllocated =
-    entity === "expense" &&
-    resolveExpenseLineKind({
-      lineKind: basisValueOf(lineKind),
-      name: basisValueOf(expenseName),
-      productId: basisValueOf(expenseProduct),
-    }) !== "principal";
+  const [expenseName, expenseProduct]: unknown[] = useWatch({
+    control: form.control,
+    name: ["name", "productId"],
+  });
+  const policyHiddenFields = useMemo(() => {
+    const hidden = new Set<string>();
+    sameRecordPolicies.forEach(([, policy], index) => {
+      const classifier =
+        entity === "expense" && policy.classifier === "lineKind"
+          ? resolveExpenseLineKind({
+              lineKind: basisValueOf(policyClassifierValues[index]),
+              name: basisValueOf(expenseName),
+              productId: basisValueOf(expenseProduct),
+            })
+          : basisValueOf(policyClassifierValues[index]);
+      for (const declaration of policy.fields) {
+        if (classifier === null) continue;
+        const value =
+          Object.entries(declaration.byValue).find(
+            ([candidate]) => candidate === classifier,
+          )?.[1] ?? declaration.otherwise;
+        if (value === "not_allowed") hidden.add(declaration.field);
+      }
+    });
+    return hidden;
+  }, [
+    entity,
+    expenseName,
+    expenseProduct,
+    policyClassifierValues,
+    sameRecordPolicies,
+  ]);
+  const policyHiddenFieldValues: unknown[] = useWatch({
+    control: form.control,
+    name: [...policyHiddenFields],
+  });
   useEffect(() => {
-    if (projectIsAllocated && basisValueOf(form.getValues("projectId"))) {
-      form.setValue("projectId", null, { shouldDirty: true });
-    }
-  }, [form, projectIsAllocated]);
+    [...policyHiddenFields].forEach((field, index) => {
+      if (basisValueOf(policyHiddenFieldValues[index]) !== null)
+        form.setValue(field, null, { shouldDirty: true });
+    });
+  }, [form, policyHiddenFieldValues, policyHiddenFields]);
   const fields = model.fields.filter(
     (field) =>
       intentFieldKeys.includes(field.key) &&
       field.control !== null &&
-      !(projectIsAllocated && field.key === "projectId") &&
+      !policyHiddenFields.has(field.key) &&
       !hiddenFieldKeys.has(field.key),
   );
   const scopedFieldKeys = useMemo(

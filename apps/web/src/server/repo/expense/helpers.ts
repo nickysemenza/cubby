@@ -233,6 +233,9 @@ const expenseSourceClaims = (row: ExpenseRow): ExpenseOut["sourceClaims"] =>
       updatedAt: value.updatedAt,
     }));
 
+const expenseSpendingCategoryAllocationSource = (hasSingleCategory: boolean) =>
+  hasSingleCategory ? "Principal line allocation" : "Follows items";
+
 const expenseSpendingCategoryFieldResolution = (
   row: ExpenseRow,
   purchaseRow: ExpenseRow["purchase"],
@@ -254,7 +257,7 @@ const expenseSpendingCategoryFieldResolution = (
       storedValue: null,
       value: categories.length === 1 ? categories[0]! : null,
       fallbackValue: null,
-      source: "Principal line allocation",
+      source: expenseSpendingCategoryAllocationSource(categories.length === 1),
       sourceEntity: null,
       matchesFallback: true,
       canReset: false,
@@ -293,6 +296,26 @@ const expenseSpendingCategoryFieldResolution = (
   };
 };
 
+const expenseProjectResolutionSource = (
+  row: ExpenseRow,
+  mode: "allocated" | "explicit" | "inherit",
+  storedProjectShortcode: string | null,
+  effectiveProjectShortcode: string | null,
+): string => {
+  if (mode === "allocated" && effectiveProjectShortcode === null)
+    return "Follows items";
+  return (
+    row.projectResolutionSource ??
+    (row.lineKind !== "principal"
+      ? "purchase allocation"
+      : storedProjectShortcode
+        ? "expense override"
+        : effectiveProjectShortcode
+          ? "inherited default"
+          : "none")
+  );
+};
+
 const expenseProjectFieldResolution = (
   row: ExpenseRow,
   purchaseRow: ExpenseRow["purchase"],
@@ -303,15 +326,12 @@ const expenseProjectFieldResolution = (
   if (row.lineKind !== "principal") mode = "allocated";
   else if (storedProjectShortcode) mode = "explicit";
 
-  const source =
-    row.projectResolutionSource ??
-    (row.lineKind !== "principal"
-      ? "purchase allocation"
-      : storedProjectShortcode
-        ? "expense override"
-        : effectiveProjectShortcode
-          ? "inherited default"
-          : "none");
+  const source = expenseProjectResolutionSource(
+    row,
+    mode,
+    storedProjectShortcode,
+    effectiveProjectShortcode,
+  );
   let sourceEntity: NonNullable<
     ExpenseOut["fieldResolutions"]
   >[string]["sourceEntity"] = effectiveProjectShortcode
