@@ -38,8 +38,9 @@ switch, and the variables that select or reorder tests (`webGate` in
 `rust-toolchain.toml` names a floating channel. The Apple targets key on what
 the Apple build reads instead of the whole tree (`appleGate` in
 `apps/apple/project.json`): `apps/apple`, the Rust FFI crates, the check
-scripts and CI configuration, the shared golden vectors, the generated Swift,
-and `xcodebuild -version`; `pnpm apple check` regenerates before hashing,
+scripts and CI configuration, the shared golden vectors, and the generated
+Swift, but no toolchain version, so a Mac pass on a newer Xcode than the
+runner's counts for CI; `pnpm apple check` regenerates before hashing,
 so a web-only change replays the Apple lanes. Workflows that only deploy,
 publish or review (`deploy.yaml`, `apple-testflight.yaml`, the Claude
 workflows) are outside every key. The nightly scheduled run sets `NX_SKIP_NX_CACHE` for
@@ -169,10 +170,8 @@ generates the Swift inputs) and, outside the nightly run, first runs its Nx targ
 `CUBBY_NX_CACHE_PROBE=1`: Nx replays a cached pass for the same input hash,
 and on a miss the script fails before building (Nx never caches that failure).
 Only a miss pays for the FFI, XcodeGen, and Xcode build caches and the real
-run. The nightly run skips the probe and runs both with `--skip-nx-cache`. The Apple key leaves out the Rust compiler: CI hashes before its Rust
-setup, and the probe and the run must agree on the key. Each job first selects the
-Xcode in `apps/apple/.xcode-version` when the image has it, so a Mac result
-with that Xcode satisfies CI; bump the file when the Mac's Xcode changes.
+run. The nightly run skips the probe and runs both with `--skip-nx-cache` on
+the runner's own Xcode.
 The host job runs the automatically generated
 `CubbyKit-Package` scheme with `xcodebuild test` on the ARM macOS host — no
 simulator. The aggregate package scheme includes all CubbyKit tests and the CLI

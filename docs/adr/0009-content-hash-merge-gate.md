@@ -33,8 +33,8 @@ is roughly ten times the allowance.
   exactly as a CI result does.
 - The Apple lane runs locally through the same Nx target. On a PR cache miss,
   CI falls back to the hosted macOS run.
-- Keys leave out platform, Node version, locale, and CI's own environment, so
-  a Mac result counts for Linux lanes too. A nightly run executes every lane
+- Keys leave out platform, Node and Xcode versions, locale, and CI's own
+  environment, so a Mac result counts for CI's Linux and macOS lanes. A nightly run executes every lane
   uncached on CI as the backstop for platform-only failures; `main` pushes
   reuse the cache.
 
