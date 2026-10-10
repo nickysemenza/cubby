@@ -43,6 +43,7 @@ const researchOrder = (
   orderId: string,
   gate?: string,
   productRef?: ScriptValue,
+  omitProductDecision = false,
 ): ScriptStep[] => [
   step(`${prefix}-next`, "work_next"),
   step(`${prefix}-read`, "mail_read", {
@@ -81,11 +82,13 @@ const researchOrder = (
           payments: [],
           allShipmentsDelivered: false,
         },
-        productResolutions: [
-          productRef
-            ? { kind: "existing", lineIndex: 0, productId: productRef }
-            : { kind: "new", lineIndex: 0 },
-        ],
+        productResolutions: omitProductDecision
+          ? []
+          : [
+              productRef
+                ? { kind: "existing", lineIndex: 0, productId: productRef }
+                : { kind: "new", lineIndex: 0 },
+            ],
       },
     ],
     detail: `Imported ${orderId} from the retained original without receiving stock.`,
@@ -204,8 +207,30 @@ test("imports saved order mail from the generic Vendor report and follows the li
   await authorizePurchaseAgent(getFixtureDb(), await fixtureUserId(page));
   await authorizeSeed(await createEvidenceHarnessContext(page), seed);
   await agent.configure({
-    expectedInference: { model: "gpt-6-luna", effort: "medium" },
-    steps: researchOrder("mail", seed, "SYN-CONFIRM-1", "original-read"),
+    expectedInference: {
+      model: "gpt-6-luna",
+      effort: "medium",
+      afterCall: { call: "mail-refused", model: "gpt-6-sol", effort: "low" },
+    },
+    steps: [
+      ...researchOrder("mail", seed, "SYN-CONFIRM-1", "original-read").slice(
+        0,
+        -1,
+      ),
+      ...researchOrder(
+        "mail",
+        seed,
+        "SYN-CONFIRM-1",
+        undefined,
+        undefined,
+        true,
+      )
+        .slice(-1)
+        .map((entry) =>
+          "call" in entry ? { ...entry, call: "mail-refused" } : entry,
+        ),
+      ...researchOrder("mail", seed, "SYN-CONFIRM-1").slice(-1),
+    ],
     purposeSteps: { product_enrichment: productGapSteps },
     assessments: [
       { match: "printed five-dollar total", output: supportedOrder },

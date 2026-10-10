@@ -10,7 +10,11 @@ import type { ScriptStep } from "./purchase-agent-script";
 /** One scripted purchase-agent scenario: the coordinator's steps and the gateway's outputs. */
 export type ScriptedScenario = {
   steps: ScriptStep[];
-  expectedInference?: { model: string; effort: string };
+  expectedInference?: {
+    model: string;
+    effort: string;
+    afterCall?: { call: string; model: string; effort: string };
+  };
   purposeSteps?: Partial<Record<RunPurpose, ScriptStep[]>>;
   sourceSteps?: Array<{
     call: string;

@@ -107,11 +107,6 @@ const purchaseAgent = {
   mcpActions: [],
   mcpTools: [],
 } satisfies ImportRunAgentConfig;
-const enrichmentAgent = {
-  ...purchaseAgent,
-  model: "gpt-6-sol",
-  effort: "high",
-} satisfies ImportRunAgentConfig;
 
 /** Purpose-specific research authority; photo inventory retains its legacy surface. */
 export const importRunAgentManifest = {
@@ -129,7 +124,7 @@ export const importRunAgentManifest = {
   account_sync: purchaseAgent,
   mail_import: purchaseAgent,
   purchase_validation: purchaseAgent,
-  product_enrichment: enrichmentAgent,
+  product_enrichment: purchaseAgent,
 } as const satisfies Record<AgentImportRunPurpose, ImportRunAgentConfig>;
 
 /**

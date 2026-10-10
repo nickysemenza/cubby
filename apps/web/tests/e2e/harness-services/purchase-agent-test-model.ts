@@ -113,7 +113,11 @@ function selectedScript(input: InputItem[]) {
 
 type ScriptConfiguration = {
   steps: ScriptStep[];
-  expectedInference?: { model: string; effort: string };
+  expectedInference?: {
+    model: string;
+    effort: string;
+    afterCall?: { call: string; model: string; effort: string };
+  };
   purposeSteps?: Record<string, ScriptStep[]>;
   /** Branch only on a retained source the real researcher has already read. */
   sourceSteps?: Array<{
@@ -280,13 +284,18 @@ function checkInference(body: {
   model?: string;
   reasoning?: { effort?: string };
 }) {
+  const expected =
+    expectedInference?.afterCall &&
+    issued(JSON.stringify(body), expectedInference.afterCall.call)
+      ? expectedInference.afterCall
+      : expectedInference;
   if (
-    expectedInference &&
-    (body.model !== expectedInference.model ||
-      body.reasoning?.effort !== expectedInference.effort)
+    expected &&
+    (body.model !== expected.model ||
+      body.reasoning?.effort !== expected.effort)
   ) {
     violations.push(
-      `Inference requested ${body.model}/${body.reasoning?.effort}; expected ${expectedInference.model}/${expectedInference.effort}`,
+      `Inference requested ${body.model}/${body.reasoning?.effort}; expected ${expected.model}/${expected.effort}`,
     );
   }
 }
