@@ -30,7 +30,8 @@ Activity inspector action for both parent and child rows. Expanded child pages
 refresh through settlement; parent pagination preserves pending child reads, and
 child refresh/retry preserves loaded depth. Expanded children that still report
 active work keep polling until their settlement refresh completes, even after
-parent-group liveness settles. Filter changes discard old child responses. Native
+parent-group liveness settles. Only rendered, expandable groups contribute child
+liveness; hidden cached children cannot keep polling. Filter changes discard old child responses. Native
 visible acceptance remains separate from model/transport tests and compilation.
 
 Product and Purchase research history use the shared entity report and record

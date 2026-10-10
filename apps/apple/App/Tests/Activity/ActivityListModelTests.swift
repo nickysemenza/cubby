@@ -7,6 +7,7 @@ import Testing
 
 nonisolated private final class ActivityListStub: URLProtocol, @unchecked Sendable {
     static let settled = Mutex(false)
+    static let hideSettledGroups = Mutex(false)
     static let holdGroups = Mutex(false)
     static let heldGroup = Mutex<(@Sendable () -> Void)?>(nil)
     static let failNextChild = Mutex(false)
@@ -29,6 +30,12 @@ nonisolated private final class ActivityListStub: URLProtocol, @unchecked Sendab
             body = Self.children(secondPage: cursor != nil)
         } else {
             body = Self.empty
+        }
+        if path == "/api/v1/activity/groups", Self.holdGroups.withLock({ $0 }) {
+            let completion: @Sendable () -> Void = { self.finish(body: body) }
+            Self.heldGroup.withLock { $0 = completion }
+            Self.observer.withLock { $0 }?.yield(path)
+            return
         }
         if path == "/api/v1/activity/groupChildren",
             Self.failNextChild.withLock({ flag in
@@ -74,6 +81,9 @@ nonisolated private final class ActivityListStub: URLProtocol, @unchecked Sendab
     }
 
     static var groupBody: Data {
+        if Self.settled.withLock({ $0 }), Self.hideSettledGroups.withLock({ $0 }) {
+            return Data(#"{"items":[],"total":0,"totalItems":0,"nextCursor":null}"#.utf8)
+        }
         guard Self.settled.withLock({ $0 }) else { return Self.groups }
         var body = try! JSONSerialization.jsonObject(with: Self.groups) as! [String: Any]
         var items = body["items"] as! [[String: Any]]
@@ -97,7 +107,50 @@ nonisolated private final class ActivityListStub: URLProtocol, @unchecked Sendab
 @MainActor
 @Suite("Activity grouped list", .serialized)
 struct ActivityListModelTests {
-    @Test func settlementRefreshSurvivesConcurrentChildPagination() async throws {
+    @Test func hiddenSettledGroupsDoNotPollFromOrphanedChildCaches() async throws {
+        let store = InMemorySessionTokenStore()
+        try store.save(.bearer("tok"), for: "localhost:3000")
+        let configuration = URLSessionConfiguration.ephemeral
+        configuration.protocolClasses = [ActivityListStub.self]
+        let client = CubbyClient(
+            baseURL: URL(string: "http://localhost:3000")!,
+            credentials: CredentialProvider(host: "localhost:3000", store: store),
+            session: URLSession(configuration: configuration))
+        let model = ActivityListModel()
+        model.state = "running"
+        await model.load(client: client)
+        model.expandedRoots.insert("RUN-4K7M")
+        await model.loadChildren(rootID: "RUN-4K7M", client: client)
+        ActivityListStub.settled.withLock { $0 = true }
+        ActivityListStub.hideSettledGroups.withLock { $0 = true }
+        await model.refreshLoaded(client: client)
+        #expect(model.runs.isEmpty)
+        let (requests, continuation) = AsyncStream<String>.makeStream()
+        ActivityListStub.observer.withLock { $0 = continuation }
+        let poll = Task {
+            continuation.yield("poll-started")
+            await model.pollActive(client: client)
+        }
+        var iterator = requests.makeAsyncIterator()
+        #expect(await iterator.next() == "poll-started")
+        let deadline = Task {
+            try? await Task.sleep(for: .seconds(2))
+            continuation.finish()
+        }
+        defer {
+            poll.cancel()
+            deadline.cancel()
+            continuation.finish()
+            ActivityListStub.observer.withLock { $0 = nil }
+            ActivityListStub.settled.withLock { $0 = false }
+            ActivityListStub.hideSettledGroups.withLock { $0 = false }
+        }
+        #expect(await iterator.next() == nil)
+        poll.cancel()
+        await poll.value
+    }
+
+    @Test(.timeLimit(.minutes(1))) func settlementRefreshSurvivesConcurrentChildPagination() async throws {
         let store = InMemorySessionTokenStore()
         try store.save(.bearer("tok"), for: "localhost:3000")
         let configuration = URLSessionConfiguration.ephemeral
@@ -115,28 +168,11 @@ struct ActivityListModelTests {
         ActivityListStub.settled.withLock { $0 = true }
         ActivityListStub.holdGroups.withLock { $0 = true }
         var iterator = requests.makeAsyncIterator()
-        let refresh = Task { await model.refreshLoaded(client: client) }
-        #expect(await iterator.next() == "/api/v1/activity/groups")
-        ActivityListStub.holdChildren.withLock { $0 = true }
-        let more = Task { await model.loadChildren(rootID: "RUN-4K7M", client: client, reset: false) }
-        #expect(await iterator.next() == "/api/v1/activity/groupChildren")
-        ActivityListStub.holdGroups.withLock { $0 = false }
-        ActivityListStub.heldGroup.withLock { $0 }?()
-        await refresh.value
-        ActivityListStub.holdChildren.withLock { $0 = false }
-        ActivityListStub.heldChild.withLock { $0 }?()
-        await more.value
-        #expect(model.groups?.items.first?.active == false)
-        #expect(model.children["RUN-4K7M"]?.items.first?.active == true)
-        let poll = Task { await model.pollActive(client: client) }
         let deadline = Task {
             try? await Task.sleep(for: .seconds(2))
             continuation.finish()
         }
         defer {
-            refresh.cancel()
-            more.cancel()
-            poll.cancel()
             deadline.cancel()
             continuation.finish()
             ActivityListStub.observer.withLock { $0 = nil }
@@ -146,6 +182,24 @@ struct ActivityListModelTests {
             ActivityListStub.heldGroup.withLock { $0 = nil }
             ActivityListStub.heldChild.withLock { $0 = nil }
         }
+        let refresh = Task { await model.refreshLoaded(client: client) }
+        defer { refresh.cancel() }
+        try #require(await iterator.next() == "/api/v1/activity/groups")
+        ActivityListStub.holdChildren.withLock { $0 = true }
+        let more = Task { await model.loadChildren(rootID: "RUN-4K7M", client: client, reset: false) }
+        defer { more.cancel() }
+        try #require(await iterator.next() == "/api/v1/activity/groupChildren")
+        #expect(ActivityListStub.heldGroup.withLock { $0 != nil })
+        ActivityListStub.holdGroups.withLock { $0 = false }
+        ActivityListStub.heldGroup.withLock { $0 }?()
+        await refresh.value
+        ActivityListStub.holdChildren.withLock { $0 = false }
+        ActivityListStub.heldChild.withLock { $0 }?()
+        await more.value
+        #expect(model.groups?.items.first?.active == false)
+        #expect(model.children["RUN-4K7M"]?.items.first?.active == true)
+        let poll = Task { await model.pollActive(client: client) }
+        defer { poll.cancel() }
         #expect(await iterator.next() == "/api/v1/activity/groups")
         #expect(await iterator.next() == "/api/v1/activity/groupChildren")
         #expect(await iterator.next() == "/api/v1/activity/groupChildren")

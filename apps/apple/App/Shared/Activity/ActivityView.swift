@@ -209,10 +209,11 @@ final class ActivityListModel {
     func pollActive(client: CubbyClient) async {
         while !Task.isCancelled {
             if !loading,
-                groups?.items.contains(where: \.active) == true
-                    || expandedRoots.contains(where: {
-                        children[$0]?.items.contains(where: \.active) == true
-                    })
+                groups?.items.contains(where: { group in
+                    group.active
+                        || (group.childCount > 0 && expandedRoots.contains(group.root.id)
+                            && children[group.root.id]?.items.contains(where: \.active) == true)
+                }) == true
             {
                 await refreshLoaded(client: client, context: "activity.poll")
             }
