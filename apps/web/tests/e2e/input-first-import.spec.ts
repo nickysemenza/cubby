@@ -525,17 +525,20 @@ for (const statementFirst of [true, false]) {
     await researchMail(purchaseCode);
 
     await gotoAuthenticatedPage(page, `/vendors/${prerequisites.vendor.id}`);
-    const mail = page
-      .locator("#order-mail")
+    const mailReport = page.locator("#order-mail");
+    await expect(
+      mailReport.getByText(`Order ${names.orderId}`, { exact: true }),
+    ).toBeVisible();
+    // Accepted source support is separate from original mail and its processing state.
+    const acceptedSource = mailReport
       .getByRole("listitem")
       .filter({
-        has: page.getByText(`Order ${names.orderId}`, { exact: true }),
-      });
-    // Exact-order mail is already linked before following its canonical Purchase.
-    const purchaseLink = mail.getByRole("link", {
-      name: purchaseCode,
-      exact: true,
-    });
+        has: page.getByText("Accepted email source", { exact: true }),
+      })
+      .filter({ has: page.locator(`a[href="/purchases/${purchaseCode}"]`) });
+    const purchaseLink = acceptedSource.locator(
+      `a[href="/purchases/${purchaseCode}"]`,
+    );
     await expect(purchaseLink).toBeVisible();
     await expect(purchaseLink).toHaveAttribute(
       "href",
