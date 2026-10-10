@@ -37,6 +37,7 @@ import {
   merchantVendorRule,
   orderMail,
   orderMailAttachment,
+  suggestion,
   photoGroupProposal,
   productConversionCoverage,
   productMatchCandidate,
@@ -1615,6 +1616,20 @@ const SOURCE_FACTORIES = {
       runId: parseEntityId("run", targetId),
       entityId: product.id,
       entityKind: "product",
+    });
+  },
+
+  "Suggestion.runId": async (db, targetId) => {
+    const product = await mkProduct(db);
+    return insertAndReturn(db, suggestion, {
+      runId: parseEntityId("run", targetId),
+      entity: "product",
+      recordId: product.id,
+      field: "categoryId",
+      suggestedValue: "CAT-4K7M",
+      confidence: 0.5,
+      model: "typesafe/jev",
+      kind: "addition",
     });
   },
 
