@@ -116,6 +116,7 @@ const eventRows = (mail: Mail, canDecide: boolean): ReportRecordRow[] =>
           ? null
           : `${event.amount}${event.currency ? ` ${event.currency}` : ""}`,
       statuses: [candidateStatus(candidate)],
+      at: candidate?.decisionUpdatedAt ?? undefined,
       lines: changedDecision(event, candidate),
       detail: {
         label: "Source and decision",
@@ -151,9 +152,15 @@ const mailRows = (
       label: "Open Gmail original",
       url: `https://mail.google.com/mail/u/0/#all/${encodeURIComponent(mail.threadId ?? mail.messageId)}`,
     },
-    lines: mail.associations.map((association) => ({
-      text: `Accepted source for ${association.purchaseId}`,
-    })),
+    statuses: mail.processing
+      ? [
+          { label: `Classification: ${mail.processing.classification}` },
+          { label: `Processing: ${mail.processing.status}` },
+        ]
+      : [{ label: "Processing history unavailable", tone: "muted" }],
+    lines: mail.processing
+      ? [{ text: `Processing updated: ${mail.processing.updatedAt}` }]
+      : [],
     detail: {
       label: "Original source",
       text: JSON.stringify(
@@ -162,6 +169,7 @@ const mailRows = (
           threadId: mail.threadId,
           member: mail.ledgerPartyId,
           associations: mail.associations,
+          processing: mail.processing,
         },
         null,
         2,
@@ -194,6 +202,7 @@ const mailRows = (
           title: `Research ${research.id}`,
           subtitle: `Run ${research.status} · source ${research.sourceStatus}`,
           trailing: null,
+          at: research.endedAt ?? research.startedAt ?? undefined,
           detail: {
             label: "Research source",
             text: `Evidence checksum: ${research.evidenceChecksum}`,
@@ -201,7 +210,38 @@ const mailRows = (
         },
       ]
     : [];
-  return [original, ...researchRows, ...eventRows(mail, canDecide)];
+  const associations: ReportRecordRow[] = mail.associations.map(
+    (association) => ({
+      entity: "purchase",
+      id: association.purchaseId,
+      key: `accepted:${mail.messageId}:${association.purchaseId}`,
+      title: `Purchase ${association.purchaseId}`,
+      subtitle: "Accepted email source",
+      trailing: null,
+      at: association.acceptedAt,
+      statuses: [{ label: "Accepted source" }],
+      lines:
+        association.evidenceChecksum !== mail.events[0]?.evidenceChecksum &&
+        mail.events.length > 0
+          ? [
+              {
+                text: "Original changed since acceptance; the earlier source link is retained.",
+                tone: "warning",
+              },
+            ]
+          : [],
+      detail: {
+        label: "Accepted source",
+        text: `Evidence checksum: ${association.evidenceChecksum}`,
+      },
+    }),
+  );
+  return [
+    original,
+    ...associations,
+    ...researchRows,
+    ...eventRows(mail, canDecide),
+  ];
 };
 
 const composeMailReport = async (
@@ -212,6 +252,10 @@ const composeMailReport = async (
 ): Promise<ReportBlock[]> => {
   const member = await currentMemberLedgerParty(db, actor);
   return [
+    {
+      kind: "note",
+      text: `Showing ${mail.items.length} retained order emails associated with this record. Processing, accepted source links and reviewed event links are separate states; none establishes Product verification or mailbox-wide coverage.`,
+    },
     {
       kind: "records",
       rows: mail.items.flatMap((item) => mailRows(item, member?.shortcode)),

@@ -48,7 +48,7 @@ export async function seedVendorMailReviewPrerequisite(
       receivedAt: new Date("2026-09-10T15:00:00.000Z"),
       rawChecksum: checksum,
     })
-    .returning({ id: schema.orderMail.id });
+    .returning();
   if (!mail) throw new Error("Synthetic mail was not saved");
   await getDb(db)
     .insert(schema.orderMailEvent)
@@ -60,7 +60,7 @@ export async function seedVendorMailReviewPrerequisite(
       currency: "USD",
       sourceKey: `classified:${checksum}:0`,
     });
-  return { vendor, purchase };
+  return { vendor, purchase, mail };
 }
 
 /** Saved originals with an actual body checksum and shared mailbox ledger. */

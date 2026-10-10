@@ -330,6 +330,12 @@ research acceptance.
   writes. Keep classification, linking, financial review and verification
   distinct. Reuse shared entity/report presentation; disclose count scope rather
   than extrapolating loaded pages into household totals.
+  The existing Vendor, VendorAccount and Purchase email-evidence report now
+  separates owned classification/processing, first accepted source links and
+  reviewed event links with their authoritative timestamps. It discloses the
+  retained email count and marks missing legacy processing history unknown.
+  This record-scoped view does not establish mailbox-wide processing coverage;
+  independent review, hosted delivery and live acceptance remain pending.
 
 - ⏳ **Accept research root grouping in the clients.** The shared activity
   projection groups research descendants and image jobs through retained live
