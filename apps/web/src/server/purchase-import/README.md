@@ -337,6 +337,8 @@ and deployment/readback order are owned by the
    leaves Purchase defaults and adjustments intact.
    A returned domain refusal that leaves the same task active upgrades the
    coordinator from Luna/medium to Sol/low for the remainder of that Run.
+   Independent source assessment uses Sol/low with the same retained-original
+   inputs and structured acceptance/refusal contract.
    Mail relevance presents visible HTML text, exact links and structured order
    JSON-LD through the shared
    page compactor, omits layout bytes and identical plain/HTML text, and bounds
