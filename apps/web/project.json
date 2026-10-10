@@ -19,7 +19,10 @@
       { "env": "CUBBY_DEV_PREVIEW_BUILD" },
       { "env": "NODE_ENV" },
       { "env": "CUBBY_TEST_SHUFFLE_SEED" },
-      { "env": "CUBBY_TEST_INTEGRATION" }
+      { "env": "CUBBY_TEST_INTEGRATION" },
+      // The browser lanes sign in with these.
+      { "env": "E2E_TEST_USER_EMAIL" },
+      { "env": "E2E_TEST_USER_PASSWORD" }
     ]
   },
   "targets": {
@@ -152,12 +155,7 @@
           "target": "wasm"
         }
       ],
-      "inputs": [
-        "webGate",
-        { "env": "CUBBY_E2E_SHARD" },
-        { "env": "E2E_TEST_USER_EMAIL" },
-        { "env": "E2E_TEST_USER_PASSWORD" }
-      ],
+      "inputs": ["webGate", { "env": "CUBBY_E2E_SHARD" }],
       "outputs": ["{projectRoot}/playwright-report"]
     },
     // Informative only (never a merge gate); keyed like the other web lanes.
