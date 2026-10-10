@@ -64,6 +64,7 @@ const run: RunDetail = {
   operations: [
     {
       operationId: "extract-1",
+      browserTiming: null,
       kind: "extract",
       state: "completed",
       startedAt: "2026-09-20T16:01:00.000Z",
@@ -320,6 +321,7 @@ it("shows durable progress and diagnostics alongside photo group review", async 
     operations: [
       {
         operationId: "group-1",
+        browserTiming: null,
         kind: "commit_photo_group",
         state: "completed",
         startedAt: "2026-09-20T16:01:00.000Z",

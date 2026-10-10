@@ -571,6 +571,12 @@ and deployment/readback order are owned by the
    It cannot approve/reject findings or grant inference allowances. Settled
    research attempts remain unchanged; repeated retries reuse their successor.
 
+Run operation reports expose the latest bound Mac command receipt's duration
+and the number of distinct linked retries. Missing or mismatched receipts report
+unknown timing. Operation wall time includes suspension and is never substituted
+for command duration; these values do not measure total active research or waiting
+time. The generic report consumes the shared Run operation shape.
+
 Independent support assessment delivers identical retained attachment bytes once
 per MIME type and checksum in a request. Every observation keeps its evidence
 reference, attachment descriptor and binding validation; repeated observations
