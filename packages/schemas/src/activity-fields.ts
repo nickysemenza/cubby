@@ -10,6 +10,7 @@ export const runPurpose = z.enum([
   // Every AI call belongs to a run; these purposes group work that is not an
   // import. Their lifetime is set by `trigger` (`ephemeral` or not).
   "ai_suggest",
+  "suggestion_sweep",
   "background",
   "file_import",
   "mail_search",
@@ -51,6 +52,7 @@ export const RUN_PURPOSE_LABEL = {
   product_enrichment: "Product enrichment",
   photo_inventory: "Photo inventory",
   ai_suggest: "AI suggestions",
+  suggestion_sweep: "Suggestion sweep",
   background: "Background",
   file_import: "File import",
   mail_search: "Mail search",

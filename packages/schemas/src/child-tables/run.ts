@@ -1299,4 +1299,74 @@ export const runChildren = [
       { name: "ImportHunt_receipt_run_idx", on: ["receiptRunId"] },
     ],
   }),
+  defineChildTable({
+    name: "Suggestion",
+    exportName: "suggestion",
+    columns: [
+      {
+        key: "id",
+        kind: "uuid",
+        primaryKey: true,
+        default: { sql: "gen_random_uuid()" },
+      },
+      {
+        key: "runId",
+        kind: "uuid",
+        notNull: true,
+        reference: { table: "run", column: "id", onDelete: "cascade" },
+      },
+      { key: "entity", kind: "text", notNull: true },
+      { key: "recordId", kind: "uuid", notNull: true },
+      { key: "field", kind: "text", notNull: true },
+      { key: "currentValue", kind: "jsonb" },
+      { key: "suggestedValue", kind: "jsonb", notNull: true },
+      { key: "confidence", kind: "real", notNull: true },
+      { key: "runnerUpValue", kind: "jsonb" },
+      { key: "runnerUpConfidence", kind: "real" },
+      { key: "model", kind: "text", notNull: true },
+      { key: "pairKey", kind: "uuid" },
+      { key: "kind", kind: "text", notNull: true },
+      {
+        key: "status",
+        kind: "text",
+        notNull: true,
+        default: { sql: "'pending'" },
+      },
+      { key: "correctValue", kind: "jsonb" },
+      {
+        key: "createdAt",
+        kind: "timestamp",
+        notNull: true,
+        default: { now: true },
+      },
+      {
+        key: "updatedAt",
+        kind: "timestamp",
+        notNull: true,
+        default: { now: true },
+        onUpdateNow: true,
+      },
+    ],
+    indexes: [
+      { name: "Suggestion_run_status_idx", on: ["runId", "status"] },
+      {
+        name: "Suggestion_entity_field_status_idx",
+        on: ["entity", "field", "status"],
+      },
+    ],
+    checks: [
+      {
+        name: "Suggestion_kind_check",
+        sql: "{kind} IN ('correction', 'addition')",
+      },
+      {
+        name: "Suggestion_status_check",
+        sql: "{status} IN ('pending', 'applied', 'rejected')",
+      },
+      {
+        name: "Suggestion_confidence_check",
+        sql: "{confidence} BETWEEN 0 AND 1",
+      },
+    ],
+  }),
 ];

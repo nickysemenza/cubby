@@ -197,6 +197,13 @@
       "when": 1791598570177,
       "tag": "0027_derived_ddl",
       "breakpoints": true
+    },
+    {
+      "idx": 28,
+      "version": "7",
+      "when": 1791599225944,
+      "tag": "0028_suggestion-sweep",
+      "breakpoints": true
     }
   ]
 }
