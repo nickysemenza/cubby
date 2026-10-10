@@ -73,9 +73,9 @@ final class ActivityListModel {
     func load(client: CubbyClient, reset: Bool = true) async {
         guard reset || !loading else { return }
         let requestedFilters = filters
-        requestGeneration += 1
-        childLoading.removeAll()
         if reset {
+            requestGeneration += 1
+            childLoading.removeAll()
             children.removeAll()
             childErrors.removeAll()
             expandedRoots.removeAll()
@@ -96,7 +96,9 @@ final class ActivityListModel {
             nextCursor = page.nextCursor
             error = nil
         } catch {
-            guard !Task.isCancelled else { return }
+            guard !Task.isCancelled, generation == requestGeneration, requestedFilters == filters else {
+                return
+            }
             self.error = error.localizedDescription
             Diagnostics.report(error, context: "activity.list")
         }
@@ -155,7 +157,7 @@ final class ActivityListModel {
     }
 
     func loadChildren(
-        rootID: String, client: CubbyClient, reset: Bool = true, preserveLoaded: Bool = false
+        rootID: String, client: CubbyClient, reset: Bool = true, preserveLoaded: Bool = true
     ) async {
         let generation = requestGeneration
         guard childLoading[rootID] != generation, runs.contains(where: { $0.id == rootID }) else { return }
@@ -177,7 +179,11 @@ final class ActivityListModel {
                 rows += page.items.filter { seen.insert($0.id).inserted }
                 let previous = cursor
                 cursor = page.nextCursor
-                if !preserveLoaded || rows.count >= desired || cursor == previous { break }
+                if cursor != nil, cursor == previous {
+                    lastPage?.nextCursor = nil
+                    break
+                }
+                if !reset || existing == nil || !preserveLoaded || rows.count >= desired { break }
             } while cursor != nil
             guard generation == requestGeneration, requestedFilters == filters else { return }
             lastPage?.items = rows

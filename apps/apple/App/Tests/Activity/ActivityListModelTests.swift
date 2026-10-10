@@ -6,6 +6,9 @@ import Testing
 @testable import Cubby
 
 nonisolated private final class ActivityListStub: URLProtocol, @unchecked Sendable {
+    static let failNextChild = Mutex(false)
+    static let heldChild = Mutex<(@Sendable () -> Void)?>(nil)
+    static let holdChildren = Mutex(false)
     static let paths = Mutex<[String]>([])
     static let observer = Mutex<AsyncStream<String>.Continuation?>(nil)
     override class func canInit(with request: URLRequest) -> Bool { true }
@@ -14,7 +17,6 @@ nonisolated private final class ActivityListStub: URLProtocol, @unchecked Sendab
     override func startLoading() {
         let path = request.url!.path
         Self.paths.withLock { $0.append(path) }
-        Self.observer.withLock { $0 }?.yield(path)
         let body: Data
         if path == "/api/v1/activity/groups" {
             body = Self.groups
@@ -25,6 +27,27 @@ nonisolated private final class ActivityListStub: URLProtocol, @unchecked Sendab
         } else {
             body = Self.empty
         }
+        if path == "/api/v1/activity/groupChildren",
+            Self.failNextChild.withLock({ flag in
+                let fail = flag
+                flag = false
+                return fail
+            })
+        {
+            client?.urlProtocol(self, didFailWithError: URLError(.networkConnectionLost))
+            return
+        }
+        if path == "/api/v1/activity/groupChildren", Self.holdChildren.withLock({ $0 }) {
+            let completion: @Sendable () -> Void = { self.finish(body: body) }
+            Self.heldChild.withLock { $0 = completion }
+            Self.observer.withLock { $0 }?.yield(path)
+            return
+        }
+        Self.observer.withLock { $0 }?.yield(path)
+        finish(body: body)
+    }
+
+    func finish(body: Data) {
         let response = HTTPURLResponse(
             url: request.url!, statusCode: 200, httpVersion: "HTTP/1.1",
             headerFields: ["Content-Type": "application/json"])!
@@ -56,6 +79,60 @@ nonisolated private final class ActivityListStub: URLProtocol, @unchecked Sendab
 @MainActor
 @Suite("Activity grouped list", .serialized)
 struct ActivityListModelTests {
+    @Test func parentPaginationKeepsAnExpandedChildRequestAlive() async throws {
+        let store = InMemorySessionTokenStore()
+        try store.save(.bearer("tok"), for: "localhost:3000")
+        let configuration = URLSessionConfiguration.ephemeral
+        configuration.protocolClasses = [ActivityListStub.self]
+        let client = CubbyClient(
+            baseURL: URL(string: "http://localhost:3000")!,
+            credentials: CredentialProvider(host: "localhost:3000", store: store),
+            session: URLSession(configuration: configuration))
+        let model = ActivityListModel()
+        await model.load(client: client)
+        model.expandedRoots.insert("RUN-4K7M")
+        let (requests, continuation) = AsyncStream<String>.makeStream()
+        ActivityListStub.observer.withLock { $0 = continuation }
+        ActivityListStub.holdChildren.withLock { $0 = true }
+        let child = Task { await model.loadChildren(rootID: "RUN-4K7M", client: client) }
+        defer {
+            child.cancel()
+            continuation.finish()
+            ActivityListStub.observer.withLock { $0 = nil }
+            ActivityListStub.holdChildren.withLock { $0 = false }
+            ActivityListStub.heldChild.withLock { $0 = nil }
+        }
+        var iterator = requests.makeAsyncIterator()
+        #expect(await iterator.next() == "/api/v1/activity/groupChildren")
+        await model.load(client: client, reset: false)
+        #expect(model.childLoading["RUN-4K7M"] != nil)
+        ActivityListStub.heldChild.withLock { $0 }?()
+        await child.value
+        #expect(model.children["RUN-4K7M"]?.items.map(\.id) == ["RUN-4K7N"])
+    }
+
+    @Test func retryingChildRefreshPreservesLoadedDepth() async throws {
+        let store = InMemorySessionTokenStore()
+        try store.save(.bearer("tok"), for: "localhost:3000")
+        let configuration = URLSessionConfiguration.ephemeral
+        configuration.protocolClasses = [ActivityListStub.self]
+        let client = CubbyClient(
+            baseURL: URL(string: "http://localhost:3000")!,
+            credentials: CredentialProvider(host: "localhost:3000", store: store),
+            session: URLSession(configuration: configuration))
+        let model = ActivityListModel()
+        await model.load(client: client)
+        await model.loadChildren(rootID: "RUN-4K7M", client: client)
+        await model.loadChildren(rootID: "RUN-4K7M", client: client, reset: false)
+        ActivityListStub.failNextChild.withLock { $0 = true }
+        await model.loadChildren(rootID: "RUN-4K7M", client: client)
+        #expect(model.childErrors["RUN-4K7M"] != nil)
+        #expect(model.children["RUN-4K7M"]?.items.count == 2)
+        await model.loadChildren(rootID: "RUN-4K7M", client: client)
+        #expect(model.childErrors["RUN-4K7M"] == nil)
+        #expect(model.children["RUN-4K7M"]?.items.map(\.id) == ["RUN-4K7N", "RUN-4K7P"])
+    }
+
     @Test func childPagesAppendWithoutReplacingTheirRoot() async throws {
         let store = InMemorySessionTokenStore()
         try store.save(.bearer("tok"), for: "localhost:3000")
