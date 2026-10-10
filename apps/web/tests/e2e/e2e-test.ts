@@ -11,7 +11,11 @@ import {
   type E2EWorkerRuntime,
 } from "./e2e-worker-runtime";
 
-type TestFixtures = { e2eFailureDiagnostics: void };
+type TestFixtures = {
+  e2eFailureDiagnostics: void;
+  /** `false` starts the test's browser signed out of the worker's account. */
+  signedIn: boolean;
+};
 type WorkerFixtures = {
   e2eRuntime: E2EWorkerRuntime;
   /** Which queues and peers the Worker runs (`WORKERD_PROFILES`). */
@@ -32,7 +36,7 @@ const test = base.extend<TestFixtures, WorkerFixtures>({
   e2eRuntime: [
     async ({ workerdProfile, objectStoragePublicUrl }, provide, workerInfo) => {
       const runtime = await createE2EWorkerRuntime({
-        authenticated: workerInfo.project.metadata.authenticated === true,
+        authenticated: true,
         parallelIndex: workerInfo.parallelIndex,
         profile: workerdProfile,
         objectStorage: { publicUrl: objectStoragePublicUrl },
@@ -48,8 +52,11 @@ const test = base.extend<TestFixtures, WorkerFixtures>({
   baseURL: async ({ e2eRuntime }, provide) => {
     await provide(e2eRuntime.baseURL);
   },
-  storageState: async ({ e2eRuntime }, provide) => {
-    await provide(e2eRuntime.storageState);
+  signedIn: [true, { option: true }],
+  storageState: async ({ e2eRuntime, signedIn }, provide) => {
+    await provide(
+      signedIn ? e2eRuntime.storageState : { cookies: [], origins: [] },
+    );
   },
   context: async ({ context }, provide) => {
     // Routing even one URL disables Chromium's HTTP cache for this context.
