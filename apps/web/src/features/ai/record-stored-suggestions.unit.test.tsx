@@ -119,6 +119,70 @@ function setup(
 }
 
 describe("stored suggestions in generic list cells", () => {
+  it("edits only the suggested field and commits through the correction operation", async () => {
+    const harness = createBrowserTestHarness();
+    const reject = vi.fn(async () => ({
+      id: rowId,
+      status: "rejected" as const,
+    }));
+    const expense = {
+      id: testShortcode("expense", "suggestion-editor"),
+      name: "Synthetic expense",
+      cost: 10,
+      costType: "services",
+    };
+    const operations = validatedStoredOperations([
+      suggestion({
+        entity: "expense",
+        recordId: expense.id,
+        field: "costType",
+        currentValue: "services",
+        suggestedValue: "materials",
+      }),
+    ]);
+    operations.reject = reject;
+    render(
+      <RecordSuggestionsProvider
+        entity="expense"
+        records={[expense]}
+        fieldKeys={["costType"]}
+        operations={{
+          suggestFields: ai.suggestFields.withTransport(async () => ({
+            suggestions: {},
+            outcomes: {},
+          })),
+        }}
+        storedSuggestionOperations={operations}
+      >
+        <RecordFieldSuggestion record={expense} field="costType">
+          <span>Current cost type</span>
+        </RecordFieldSuggestion>
+      </RecordSuggestionsProvider>,
+      { wrapper: harness.wrapper },
+    );
+
+    fireEvent.click(
+      await screen.findByRole("button", { name: "Suggestion actions" }),
+    );
+    fireEvent.click(
+      await screen.findByRole("menuitem", { name: "Use a different value" }),
+    );
+    expect(await screen.findByRole("dialog")).toBeInTheDocument();
+    expect(screen.queryByLabelText("Name")).not.toBeInTheDocument();
+    expect(screen.queryByLabelText("Cost")).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Save changes" }));
+    await waitFor(() =>
+      expect(reject).toHaveBeenCalledWith(
+        {
+          id: rowId,
+          correctValue: "services",
+        },
+        expect.anything(),
+      ),
+    );
+    harness.dispose();
+  });
+
   it("loads a shortcode-only list row, renders its stored ghost, and bulk accepts it", async () => {
     const publicId = record.id;
     const harness = createBrowserTestHarness();

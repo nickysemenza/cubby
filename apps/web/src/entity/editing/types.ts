@@ -285,6 +285,8 @@ export interface EntityEditRequest<
   operation: O;
   /** Omit to use the operation's configured default intent. */
   intent?: I;
+  /** Limit a generic update editor to one declared field. */
+  fieldScope?: string;
   surface: EntityEditSurface;
   record?: R;
   context?: EntityEditContext;
@@ -297,6 +299,7 @@ export interface RuntimeEntityEditRequest<E extends EditableEntity> {
   entity: E;
   operation: EntityEditOperation;
   intent?: string;
+  fieldScope?: string;
   surface: EntityEditSurface;
   record?: EntityEditRecord;
   context?: EntityEditContext;

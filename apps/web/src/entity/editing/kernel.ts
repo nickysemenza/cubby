@@ -71,7 +71,18 @@ export function resolveEntityEdit<E extends EditableEntity>(
     };
   }
 
-  const requestedFields = intentDefinition.fields;
+  const requestedFields = request.fieldScope
+    ? intentDefinition.fields.filter((field) => field === request.fieldScope)
+    : intentDefinition.fields;
+  if (request.fieldScope && requestedFields.length === 0) {
+    return {
+      issues: [
+        issue(
+          `${request.entity} does not expose ${request.fieldScope} in the ${intent} ${request.operation} intent.`,
+        ),
+      ],
+    };
+  }
   const byId = new Map(definition.fields.map((field) => [field.id, field]));
   const fields = requestedFields.map((fieldId) => byId.get(fieldId));
   const missing = requestedFields.filter((_, index) => !fields[index]);

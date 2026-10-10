@@ -33,7 +33,6 @@ import {
 } from "~/server/repo/shortcode-resolver";
 import { TraceNames, withTrace } from "~/server/tracing";
 
-import { supersedePendingSuggestionsForWrite } from "../suggestion-superseding";
 import { unwrapDb, withTransactionOn } from "./core";
 import { notDeleted } from "./query";
 
@@ -226,12 +225,6 @@ export const updateLiveAndReturn = async <
       table,
       values,
       and(eq(table.id, id), notDeleted(table)),
-    );
-    await supersedePendingSuggestionsForWrite(
-      tx,
-      getTableName(table),
-      [id],
-      Object.keys(values),
     );
     return updated;
   });

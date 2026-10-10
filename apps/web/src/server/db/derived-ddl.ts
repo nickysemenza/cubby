@@ -1,7 +1,87 @@
 import { declaredClassificationPolicies } from "@cubby/schemas/classification-field-policy";
+import { entityFieldModels } from "@cubby/schemas/entity-fields";
+import { getTableColumns, getTableName } from "drizzle-orm";
 
+import { SHORTCODE_TABLE } from "../repo/generated/shortcode-tables.gen";
 import { entityIdentityTriggerSql } from "./entity-identity-schema";
 import { entityLinkLivenessTriggerSql } from "./entity-link-schema";
+
+const quoteIdentifier = (value: string) => `"${value.replaceAll('"', '""')}"`;
+const quoteLiteral = (value: string) => `'${value.replaceAll("'", "''")}'`;
+
+/** Any SQL writer that changes a manifest-suggestable column invalidates the
+ * pending advice for that field. Targets without a physical column (for
+ * example projection-only resolution fields) are explicitly skipped below. */
+const suggestionSupersedingTriggerSql = (): string => {
+  const byTable = new Map<
+    string,
+    { tableName: string; columns: Array<{ entity: string; field: string }> }
+  >();
+  const skipped: string[] = [];
+  for (const [entity, model] of Object.entries(entityFieldModels)) {
+    // SAFETY: SHORTCODE_TABLE is generated from the same entity manifest and
+    // this loop's key is one of its declared entity keys when present.
+    const table = SHORTCODE_TABLE[entity as keyof typeof SHORTCODE_TABLE];
+    if (!table) {
+      for (const field of model.fields) {
+        if (field.control?.suggest)
+          skipped.push(
+            `-- Skipped suggest target ${entity}.${field.key}: entity has no writable table.`,
+          );
+      }
+      continue;
+    }
+    const tableName = getTableName(table);
+    const columns = getTableColumns(table);
+    for (const field of model.fields) {
+      if (!field.control?.suggest) continue;
+      // SAFETY: the preceding key lookup is checked below before the column
+      // is used; this assertion only adapts the manifest key to Drizzle's
+      // column-key type.
+      const column = columns[field.key as keyof typeof columns];
+      if (!column) {
+        skipped.push(
+          `-- Skipped suggest target ${entity}.${field.key}: no column on ${tableName}.`,
+        );
+        continue;
+      }
+      const entry = byTable.get(tableName) ?? { tableName, columns: [] };
+      entry.columns.push({ entity, field: column.name });
+      byTable.set(tableName, entry);
+    }
+  }
+  const triggers = [...byTable.values()].map(({ tableName, columns }) => {
+    const functionName = `${tableName}_supersede_suggestions_after_update`;
+    const triggerName = `${tableName}_supersede_suggestions_after_update`;
+    const body = columns
+      .map(
+        ({
+          entity,
+          field,
+        }) => `  IF OLD.${quoteIdentifier(field)} IS DISTINCT FROM NEW.${quoteIdentifier(field)} THEN
+    UPDATE "Suggestion"
+    SET "status" = 'superseded', "updatedAt" = now()
+    WHERE "entity" = ${quoteLiteral(entity)}
+      AND "recordId" = NEW."id"
+      AND "field" = ${quoteLiteral(field)}
+      AND "status" = 'pending';
+  END IF;`,
+      )
+      .join("\n");
+    const updatedColumns = [...new Set(columns.map(({ field }) => field))]
+      .map(quoteIdentifier)
+      .join(", ");
+    return `CREATE OR REPLACE FUNCTION ${quoteIdentifier(functionName)}() RETURNS trigger LANGUAGE plpgsql AS $$
+BEGIN
+${body}
+  RETURN NEW;
+END;
+$$;
+DROP TRIGGER IF EXISTS ${quoteIdentifier(triggerName)} ON ${quoteIdentifier(tableName)};
+CREATE TRIGGER ${quoteIdentifier(triggerName)} AFTER UPDATE OF ${updatedColumns} ON ${quoteIdentifier(tableName)} FOR EACH ROW EXECUTE FUNCTION ${quoteIdentifier(functionName)}();`;
+  });
+  return [...skipped, ...triggers].join("\n\n");
+};
 
 /**
  * One CHECK per field of an enforced same-record classification policy:
@@ -51,8 +131,8 @@ const classificationConstraintSql = (): string =>
 
 /**
  * DDL derived from the application model that drizzle-kit cannot express:
- * the entity identity functions and triggers (ADR 0006) and the EntityLink
- * live-endpoint trigger (ADR 0007). Every statement is idempotent
+ * entity identity, EntityLink liveness and Suggestion superseding triggers,
+ * plus classification constraints. Every statement is idempotent
  * (`CREATE OR REPLACE`, or drop-and-create where Postgres has no replace), so
  * `pnpm db:generate` can emit the whole script as a custom migration whenever
  * it changes and the result replays cleanly over any earlier version.
@@ -60,5 +140,5 @@ const classificationConstraintSql = (): string =>
  * migrations already contain.
  */
 export function renderDerivedDdl(): string {
-  return `${entityIdentityTriggerSql()}\n\n${entityLinkLivenessTriggerSql()}\n\n${classificationConstraintSql()}\n`;
+  return `${entityIdentityTriggerSql()}\n\n${entityLinkLivenessTriggerSql()}\n\n${suggestionSupersedingTriggerSql()}\n\n${classificationConstraintSql()}\n`;
 }

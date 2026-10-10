@@ -26,6 +26,7 @@ import {
   getEntityEditorPresentation,
 } from "./editor-presentations";
 import type { EntityEditDialogProps } from "./entity-edit-dialog";
+import { EntityEditFieldScopeProvider } from "./entity-primitive-fields";
 import { isResolvedEntityEdit, resolveEntityEdit } from "./kernel";
 import { mergeOwnedIds } from "./shared-id-field";
 import type {
@@ -271,7 +272,7 @@ export function EntityEditDialogContent<E extends EditableEntity>({
   const record = request.record;
   const resolved = resolveEntityEdit(entityEditRegistry, sessionRequest);
   const intentFields = isResolvedEntityEdit(resolved)
-    ? resolved.intentDefinition.fields
+    ? resolved.fields.map((field) => field.id)
     : NO_FIELDS;
   // An intent whose active field roster includes `pendingImageIds` gets the
   // generic photo-capture field below the presentation's own fields; no
@@ -394,11 +395,13 @@ export function EntityEditDialogContent<E extends EditableEntity>({
             "dialog",
           ])}
         >
-          <presentation.Fields
-            form={session.form}
-            context={context}
-            record={record}
-          />
+          <EntityEditFieldScopeProvider fieldScope={request.fieldScope}>
+            <presentation.Fields
+              form={session.form}
+              context={context}
+              record={record}
+            />
+          </EntityEditFieldScopeProvider>
         </FieldSuggestionProvider>
         {showPendingImageUpload && (
           <EntityEditorImages

@@ -286,6 +286,7 @@ const bespokeEditRequestFor = (
 export function detailEditRequest<E extends EditableEntity>(
   entity: E,
   record: { id: string },
+  fieldScope?: string,
 ): UpdateRequest<E> {
   const bespoke = bespokeEditRequestFor(entity);
   if (bespoke !== undefined) {
@@ -293,6 +294,7 @@ export function detailEditRequest<E extends EditableEntity>(
     // this entity, so its request is this entity's own `update:full` and
     // `record` is the detail record it was typed against.
     const built = bespoke(record as never) as UpdateRequest<E>;
+    if (fieldScope) built.fieldScope = fieldScope;
     return built;
   }
   const seed: Partial<Record<string, string | null>> = {};
@@ -305,11 +307,13 @@ export function detailEditRequest<E extends EditableEntity>(
   // SAFETY: the seed names this entity's own single-reference fields with
   // the shortcodes its record carries; the registry validates every value,
   // which is what lets this generic builder stand in for a typed draft.
-  return {
+  const request: UpdateRequest<E> = {
     entity,
     operation: "update",
     intent: "full",
     record,
     seed,
   } as UpdateRequest<E>;
+  if (fieldScope) request.fieldScope = fieldScope;
+  return request;
 }

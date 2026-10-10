@@ -1261,14 +1261,11 @@ function StoredSuggestionCell({
           detailEditRequest(
             context.entity,
             record as never,
+            field,
           ) as EntityEditDialogRequest<EditableEntity>
         }
         onSubmitOverride={async (values) => {
-          const readKey =
-            entityFieldModels[context.entity].fields.find(
-              (candidate) => candidate.key === field,
-            )?.readKey ?? field;
-          const correctedValue = z.json().parse(values[readKey]);
+          const correctedValue = z.json().parse(values[field]);
           await reject(suggestion.id, correctedValue);
           setEditOpen(false);
         }}

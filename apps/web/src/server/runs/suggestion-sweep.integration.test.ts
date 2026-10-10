@@ -3,8 +3,11 @@ import { join } from "node:path";
 
 import { fieldSuggestionsOut } from "@cubby/schemas/ai";
 import { parseEntityId, parseShortcodeFor } from "@cubby/schemas/identifiers";
+import { createProjectFromTasksInput } from "@cubby/schemas/project";
 import { suggestionSweepRunProgress } from "@cubby/schemas/run-fields";
+import { testShortcode } from "@cubby/schemas/testing";
 import { and, eq, sql } from "drizzle-orm";
+import { createRepoEntity } from "tooling/factories/repo";
 import {
   taxonomyId,
   taxonomyShortcode,
@@ -23,10 +26,11 @@ import {
 } from "~/server/db/schema";
 import { executeEntity } from "~/server/entity-kernel";
 import { entityKernelContextSchema } from "~/server/entity-kernel/adapter";
+import { projectCreateFromTasksWorkflow } from "~/server/operations/project.server";
 import { getDb } from "~/server/repo/database-helpers";
 import { updateExpensesInBulk } from "~/server/repo/expense/crud";
 import { loadFinanceSuggestionContext } from "~/server/repo/finance-suggestion-context";
-import { createProduct, updateProduct } from "~/server/repo/product/crud";
+import { createProduct } from "~/server/repo/product/crud";
 import { makeProductInput } from "~/server/repo/repo.fixtures";
 import { resolveLiveShortcode } from "~/server/repo/shortcode-resolver";
 import { insertWithShortcode } from "~/server/repo/shortcode-utils";
@@ -180,7 +184,7 @@ describe("persisted Suggestion sweeps", () => {
     expect(suggest).not.toHaveBeenCalled();
   });
 
-  it("supersedes pending Suggestions on direct repository writes used by imports", async () => {
+  it("supersedes pending Suggestions on raw entity writes used by imports", async () => {
     const product = await createProduct(
       ctx.db,
       makeProductInput({
@@ -216,16 +220,100 @@ describe("persisted Suggestion sweeps", () => {
         kind: "correction",
         status: "pending",
       });
-    await updateProduct(
+    await getDb(ctx.db).execute(sql`
+      UPDATE "Product"
+      SET "categoryId" = ${taxonomyId("food")}
+      WHERE "id" = ${productRecordId}
+    `);
+    const [saved] = await getDb(ctx.db)
+      .select({ status: suggestionTable.status })
+      .from(suggestionTable)
+      .where(eq(suggestionTable.recordId, productRecordId));
+    expect(saved?.status).toBe("superseded");
+  });
+
+  it("leaves pending Suggestions alone when an entity column is unchanged", async () => {
+    const product = await createProduct(
       ctx.db,
-      parseEntityId("product", productRecordId),
-      { categoryId: taxonomyId("food") },
+      makeProductInput({
+        name: "Synthetic unchanged classification",
+        manufacturer: "Synthetic maker",
+        categoryId: taxonomyId("tools"),
+      }),
+      ctx.actor,
+    );
+    const recordId = await resolveLiveShortcode(ctx.db, product.id, "product");
+    if (!recordId) throw new Error("Synthetic product record is missing");
+    const runId = await ensureRun(ctx.db, ctx.actor, {
+      purpose: "ai_suggest",
+      trigger: "manual",
+      status: "completed",
+    });
+    const [row] = await getDb(ctx.db)
+      .insert(suggestionTable)
+      .values({
+        runId,
+        entity: "product",
+        recordId,
+        field: "categoryId",
+        currentValue: taxonomyShortcode("tools"),
+        suggestedValue: taxonomyShortcode("food"),
+        confidence: 0.8,
+        model: "typesafe/jev",
+        kind: "correction",
+        status: "pending",
+      })
+      .returning({ id: suggestionTable.id });
+    await getDb(ctx.db).execute(sql`
+      UPDATE "Product"
+      SET "categoryId" = ${taxonomyId("tools")}
+      WHERE "id" = ${recordId}
+    `);
+    const [saved] = await getDb(ctx.db)
+      .select({ status: suggestionTable.status })
+      .from(suggestionTable)
+      .where(eq(suggestionTable.id, row!.id));
+    expect(saved?.status).toBe("pending");
+  });
+
+  it("supersedes pending Task project Suggestions on repository writes", async () => {
+    const task = await createRepoEntity(ctx, "task", {
+      trade: "other",
+      name: "Synthetic task assignment",
+    });
+    const recordId = await resolveLiveShortcode(ctx.db, task.output.id, "task");
+    if (!recordId) throw new Error("Synthetic task record is missing");
+    const runId = await ensureRun(ctx.db, ctx.actor, {
+      purpose: "ai_suggest",
+      trigger: "manual",
+      status: "completed",
+    });
+    await getDb(ctx.db)
+      .insert(suggestionTable)
+      .values({
+        runId,
+        entity: "task",
+        recordId,
+        field: "projectId",
+        currentValue: null,
+        suggestedValue: testShortcode("project", "suggested-task-project"),
+        confidence: 0.8,
+        model: "typesafe/jev",
+        kind: "addition",
+        status: "pending",
+      });
+    await projectCreateFromTasksWorkflow(
+      ctx.db,
+      createProjectFromTasksInput.parse({
+        taskIds: [task.output.id],
+        project: { name: "Synthetic task project" },
+      }),
       ctx.actor,
     );
     const [saved] = await getDb(ctx.db)
       .select({ status: suggestionTable.status })
       .from(suggestionTable)
-      .where(eq(suggestionTable.recordId, productRecordId));
+      .where(eq(suggestionTable.recordId, recordId));
     expect(saved?.status).toBe("superseded");
   });
 
@@ -261,10 +349,13 @@ describe("persisted Suggestion sweeps", () => {
       kind: "addition",
       status: "pending",
     });
+    const project = await createRepoEntity(ctx, "project", {
+      name: "Synthetic bulk assignment project",
+    });
     await updateExpensesInBulk(
       ctx.db,
       [expense.shortcode],
-      { projectId: null },
+      { projectId: project.output.id },
       ctx.actor,
     );
     const [saved] = await getDb(ctx.db)
@@ -1366,6 +1457,26 @@ describe("persisted Suggestion sweeps", () => {
         recordId: product.id,
       }),
     ]);
+    const productRecordId = await resolveLiveShortcode(
+      ctx.db,
+      product.id,
+      "product",
+    );
+    const [sibling] = await getDb(ctx.db)
+      .insert(suggestionTable)
+      .values({
+        runId,
+        entity: "product",
+        recordId: productRecordId!,
+        field: "categoryId",
+        currentValue: taxonomyShortcode("tools"),
+        suggestedValue: taxonomyShortcode("food"),
+        confidence: 0.75,
+        model: "typesafe/jev",
+        kind: "correction",
+        status: "pending",
+      })
+      .returning({ id: suggestionTable.id });
     await acceptSuggestion(ctx.db, context, { id: row.id });
     expect(
       await listPagePendingSuggestions(ctx.db, {
@@ -1385,6 +1496,11 @@ describe("persisted Suggestion sweeps", () => {
       .from(productTable)
       .where(eq(productTable.id, recordId));
     expect(saved?.status).toBe("applied");
+    const [savedSibling] = await getDb(ctx.db)
+      .select({ status: suggestionTable.status })
+      .from(suggestionTable)
+      .where(eq(suggestionTable.id, sibling!.id));
+    expect(savedSibling?.status).toBe("superseded");
     expect(updated?.categoryId).toBeTruthy();
   });
 

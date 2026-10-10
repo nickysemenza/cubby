@@ -10,8 +10,10 @@ import type { ControlRendererId } from "@cubby/schemas/entity-manifest";
 import { entitySummary } from "@cubby/schemas/entity-summary";
 import { resolveExpenseLineKind } from "@cubby/schemas/expense-line-kind";
 import {
+  createContext,
   type ComponentType,
   type ReactNode,
+  useContext,
   useEffect,
   useId,
   useMemo,
@@ -43,6 +45,24 @@ import {
   isReferencePickerEntity,
   requireReferenceEntitySearch,
 } from "~/ui/combobox/reference-entity-search";
+
+const EntityEditFieldScopeContext = createContext<string | undefined>(
+  undefined,
+);
+
+export function EntityEditFieldScopeProvider({
+  fieldScope,
+  children,
+}: {
+  fieldScope?: string;
+  children: ReactNode;
+}) {
+  return (
+    <EntityEditFieldScopeContext.Provider value={fieldScope}>
+      {children}
+    </EntityEditFieldScopeContext.Provider>
+  );
+}
 import type { SearchProviderProps } from "~/ui/combobox/with-search-hook";
 import {
   NullableNumericField,
@@ -1053,6 +1073,7 @@ export function EntityIntentFields({
   record?: EntityEditRecord | undefined;
 }) {
   const form = useFormContext<FieldValues>();
+  const fieldScope = useContext(EntityEditFieldScopeContext);
   const idPrefix = useId();
   const model = entityFieldModels[entity];
   // SAFETY: `generatedEntityEditIntents` only declares the entities that
@@ -1065,8 +1086,11 @@ export function EntityIntentFields({
       { fields: Record<string, readonly string[]> } | undefined
     >
   )[entity];
-  const intentFieldKeys: readonly string[] =
+  const declaredFieldKeys: readonly string[] =
     declaredIntents?.fields[intent] ?? [];
+  const intentFieldKeys = fieldScope
+    ? declaredFieldKeys.filter((key) => key === fieldScope)
+    : declaredFieldKeys;
   // `entitySummary` is compiled `as const`; indexed by the broad `Entity`
   // union, each entity's literal `hiddenWhen` narrows only through the
   // schema-level type, so read it through that annotation.
