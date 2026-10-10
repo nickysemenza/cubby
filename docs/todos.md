@@ -252,8 +252,14 @@ mailbox and authenticated-device acceptance only after explicit resumption.
 - 🤔 **One source contract, without a second extractor.** Mail, browser, file
   and photo readers should return retained text, links, media, typed identifiers
   and selected-variant context through the existing research observation spine.
-  Generate adapters over shared domain services. Preserve original-media delivery
-  and each source's retention policy; a giant flattened text call is insufficient.
+  Generate adapters over shared domain services. Retained mail now exposes exact
+  HTTPS links through the shared typed observation in
+  [#1835](https://github.com/nickysemenza/cubby/pull/1835), independently of
+  readable-text truncation. The existing WASM reader supplies both text and links;
+  there is no second extractor. Persisted unsafe-link rejection,
+  original-byte and replay checks, independent review, exact-head hosted checks
+  and deployment passed. Original-media delivery and source-specific retention
+  remain required; source-first real-model acceptance remains paused.
 
 - 🤔 **Repeatable real Mac/browser acceptance.** The fixture-retailer journey
   still requires a signed app and persistent Automation/Screen Recording grants.

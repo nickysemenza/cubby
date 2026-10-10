@@ -8,21 +8,27 @@ import Testing
 nonisolated private final class ActivityListStub: URLProtocol, @unchecked Sendable {
     static let settled = Mutex(false)
     static let hideSettledGroups = Mutex(false)
+    static let holdAttention = Mutex(false)
+    static let heldAttention = Mutex<(@Sendable () -> Void)?>(nil)
     static let holdGroups = Mutex(false)
     static let heldGroup = Mutex<(@Sendable () -> Void)?>(nil)
     static let failNextChild = Mutex(false)
     static let heldChild = Mutex<(@Sendable () -> Void)?>(nil)
     static let holdChildren = Mutex(false)
     static let paths = Mutex<[String]>([])
+    static let urls = Mutex<[URL]>([])
     static let observer = Mutex<AsyncStream<String>.Continuation?>(nil)
     override class func canInit(with request: URLRequest) -> Bool { true }
     override class func canonicalRequest(for request: URLRequest) -> URLRequest { request }
     override func stopLoading() {}
     override func startLoading() {
+        Self.urls.withLock { $0.append(request.url!) }
         let path = request.url!.path
         Self.paths.withLock { $0.append(path) }
         let body: Data
-        if path == "/api/v1/activity/groups" {
+        if path == "/api/v1/activity/list" {
+            body = Self.children(secondPage: false)
+        } else if path == "/api/v1/activity/groups" {
             body = Self.groupBody
         } else if path == "/api/v1/activity/groupChildren" {
             let cursor = URLComponents(url: request.url!, resolvingAgainstBaseURL: false)?
@@ -30,6 +36,11 @@ nonisolated private final class ActivityListStub: URLProtocol, @unchecked Sendab
             body = Self.children(secondPage: cursor != nil)
         } else {
             body = Self.empty
+        }
+        if path == "/api/v1/activity/list", Self.holdAttention.withLock({ $0 }) {
+            Self.heldAttention.withLock { $0 = { self.finish(body: body) } }
+            Self.observer.withLock { $0 }?.yield(path)
+            return
         }
         if path == "/api/v1/activity/groups", Self.holdGroups.withLock({ $0 }) {
             let completion: @Sendable () -> Void = { self.finish(body: body) }
@@ -114,6 +125,73 @@ nonisolated private final class ActivityListStub: URLProtocol, @unchecked Sendab
 @MainActor
 @Suite("Activity grouped list", .serialized)
 struct ActivityListModelTests {
+    @Test func loadFetchesBoundedAttentionWithTheSameScope() async throws {
+        let store = InMemorySessionTokenStore()
+        try store.save(.bearer("tok"), for: "localhost:3000")
+        let configuration = URLSessionConfiguration.ephemeral
+        configuration.protocolClasses = [ActivityListStub.self]
+        let client = CubbyClient(
+            baseURL: URL(string: "http://localhost:3000")!,
+            credentials: CredentialProvider(host: "localhost:3000", store: store),
+            session: URLSession(configuration: configuration))
+        ActivityListStub.urls.withLock { $0.removeAll() }
+        let model = ActivityListModel()
+        model.state = "needs_review"
+        model.dateRange = .week
+        model.execution = .cloud
+        await model.load(client: client)
+        let url = try #require(
+            ActivityListStub.urls.withLock { urls in
+                urls.first { $0.path == "/api/v1/activity/list" }
+            })
+        let query = URLComponents(url: url, resolvingAgainstBaseURL: false)?.queryItems ?? []
+        #expect(query.first { $0.name == "attentionOnly" }?.value == "true")
+        #expect(query.first { $0.name == "state" }?.value == "needs_review")
+        #expect(query.first { $0.name == "executor" }?.value == "cloud")
+        #expect(query.first { $0.name == "limit" }?.value == "5")
+        #expect(query.first { $0.name == "from" }?.value != nil)
+    }
+
+    @Test func delayedAttentionCannotRestoreThePreviousFilterScope() async throws {
+        let store = InMemorySessionTokenStore()
+        try store.save(.bearer("tok"), for: "localhost:3000")
+        let configuration = URLSessionConfiguration.ephemeral
+        configuration.protocolClasses = [ActivityListStub.self]
+        let client = CubbyClient(
+            baseURL: URL(string: "http://localhost:3000")!,
+            credentials: CredentialProvider(host: "localhost:3000", store: store),
+            session: URLSession(configuration: configuration))
+        let model = ActivityListModel()
+        let (requests, continuation) = AsyncStream<String>.makeStream()
+        ActivityListStub.observer.withLock { $0 = continuation }
+        ActivityListStub.holdAttention.withLock { $0 = true }
+        let deadline = Task {
+            try? await Task.sleep(for: .seconds(2))
+            continuation.finish()
+        }
+        defer {
+            deadline.cancel()
+            continuation.finish()
+            ActivityListStub.observer.withLock { $0 = nil }
+            ActivityListStub.holdAttention.withLock { $0 = false }
+            ActivityListStub.heldAttention.withLock { $0 = nil }
+        }
+        let oldLoad = Task { await model.load(client: client) }
+        var iterator = requests.makeAsyncIterator()
+        while let path = await iterator.next() {
+            if path == "/api/v1/activity/list" { break }
+        }
+        let release = try #require(ActivityListStub.heldAttention.withLock { $0 })
+        ActivityListStub.holdAttention.withLock { $0 = false }
+        ActivityListStub.settled.withLock { $0 = true }
+        defer { ActivityListStub.settled.withLock { $0 = false } }
+        model.state = "completed"
+        await model.load(client: client)
+        release()
+        await oldLoad.value
+        #expect(model.attention?.items.first?.state == "completed")
+    }
+
     @Test func hiddenSettledGroupsDoNotPollFromOrphanedChildCaches() async throws {
         let store = InMemorySessionTokenStore()
         try store.save(.bearer("tok"), for: "localhost:3000")
@@ -312,9 +390,9 @@ struct ActivityListModelTests {
         await model.refreshLoaded(client: client)
         #expect(model.runs.count == 1)
         #expect(
-            ActivityListStub.paths.withLock { $0 } == [
-                "/api/v1/activity/groups", "/api/v1/activity/groups",
-            ])
+            ActivityListStub.paths.withLock { paths in
+                paths.filter { $0 == "/api/v1/activity/groups" }.count
+            } == 2)
         let (requests, continuation) = AsyncStream<String>.makeStream()
         ActivityListStub.observer.withLock { $0 = continuation }
         let poll = Task { await model.pollActive(client: client) }
