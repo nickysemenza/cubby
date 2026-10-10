@@ -1,0 +1,25 @@
+#!/usr/bin/env bash
+# Amp orb setup (https://ampcode.com/docs/orbs). Reruns on stale snapshots.
+set -euxo pipefail
+cd "$(dirname "$0")/.."
+
+# Rust and wasm-pack build packages/wasm.
+[ -f "$HOME/.cargo/env" ] || curl -fsSL https://sh.rustup.rs | sh -s -- -y --profile minimal -c rustfmt,clippy -t wasm32-unknown-unknown
+. "$HOME/.cargo/env"
+command -v wasm-pack || curl -fsSL https://wasm-bindgen.github.io/wasm-pack/installer/init.sh | sh
+
+# An empty Cargo cache changes the WASM build's Nx cache key once
+# (scripts/rust-fingerprint.ts), so fetch first.
+cargo fetch --locked
+pnpm agent:setup
+
+# Docker without sudo for `pnpm dev` and `docker compose -p cubby up -d`:
+# Amp's processes lack the docker group, so the socket goes to the user group.
+docker compose version || { sudo apt-get update -qq && sudo apt-get install -y -qq docker-compose-plugin; }
+if [ ! -f /etc/systemd/system/docker.socket.d/amp-orb.conf ]; then
+  sudo mkdir -p /etc/systemd/system/docker.socket.d
+  printf '[Socket]\nSocketGroup=user\n' | sudo tee /etc/systemd/system/docker.socket.d/amp-orb.conf
+  sudo systemctl daemon-reload
+  sudo systemctl stop docker.service docker.socket
+fi
+sudo systemctl enable --now docker.socket
