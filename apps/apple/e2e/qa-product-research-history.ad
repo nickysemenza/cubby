@@ -12,5 +12,5 @@ click "label=\"Enrichment history\""
 scroll down 0.4 --until "text=Partially verified"
 wait text "Partially verified" 90000
 wait text "Exact model remains unsupported" 90000
-click "text=Product enrichment"
+click "text=\"Product enrichment\""
 wait text "${PRODUCT_RESEARCH_RUN_ID}" 90000
