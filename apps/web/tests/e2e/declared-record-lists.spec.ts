@@ -296,6 +296,8 @@ test("purchase and expense totals follow the full filtered set in tables and car
     .getByRole("textbox", { name: "Search expenses or shortcode", exact: true })
     .fill("zero");
   await expect(summaryValue("Ledger cost")).toHaveText("$0.00");
+  // The throttle guards the early typing above; card totals need no typing.
+  await session.send("Emulation.setCPUThrottlingRate", { rate: 1 });
 
   await page.setViewportSize({ width: 390, height: 844 });
   for (const [path, label, value, count] of [
