@@ -314,7 +314,9 @@ async function loadRunFacts(db: Database, internalIds: readonly string[]) {
         CASE WHEN r.status IN (${runStatus.enum.paused_auth}, ${runStatus.enum.paused_offline}) THEN (
           SELECT nullif(o.result->>'pausedAt', '') FROM "RunOperation" o
           WHERE o."runId" = r.id AND o.kind = 'browser_command'
-            AND jsonb_typeof(o.result->'pausedAt') = ${"string"}
+            AND o.state <> ${"failed"}
+            AND coalesce(o.result->'observationDelivered', 'false'::jsonb) <> 'true'::jsonb
+            AND coalesce(o.result->'retries', '[]'::jsonb) = '[]'::jsonb
           ORDER BY o."updatedAt" DESC, o.id DESC LIMIT 1
         ) END,
         (SELECT coalesce(p.detail, p.phase) FROM "RunProgress" p

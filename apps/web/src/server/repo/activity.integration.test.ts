@@ -1010,6 +1010,38 @@ describe("unified Runs history", () => {
       (await activityDetail(ctx.db, null, { id: childCode, limit: 5 })).run
         .currentStep,
     ).toBe("Reading an order");
+    await getDb(ctx.db)
+      .update(runOperation)
+      .set({
+        result: { pausedAt: pauseReason, retries: ["browser-recovered"] },
+      })
+      .where(eq(runOperation.runId, childId));
+    await getDb(ctx.db)
+      .insert(runOperation)
+      .values([
+        {
+          runId: childId,
+          operationId: "browser-recovered",
+          kind: "browser_command",
+          inputFingerprint: "recovered",
+          result: { observationDelivered: true },
+        },
+        {
+          runId: childId,
+          operationId: "browser-new-offline",
+          kind: "browser_command",
+          inputFingerprint: "new-offline",
+          result: {},
+        },
+      ]);
+    await getDb(ctx.db)
+      .update(runTable)
+      .set({ status: "paused_offline" })
+      .where(eq(runTable.id, childId));
+    expect(
+      (await activityDetail(ctx.db, null, { id: childCode, limit: 5 })).run
+        .currentStep,
+    ).toBe("Reading an order");
   });
 
   it("counts matching work across every group independently of cursor pagination", async () => {
