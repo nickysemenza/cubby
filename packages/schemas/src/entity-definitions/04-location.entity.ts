@@ -1041,8 +1041,12 @@ Rules:
     bulkUpdate: { fields: ["parentId"] },
     merge: false,
     classificationPolicies: [
+      // `furniture` marks a Product-instance location (the bin or rack
+      // itself). One direction only: a garden bed or planter may link a
+      // Product and keep its own type, so a Product does not imply furniture.
       {
         classifier: "type",
+        enforced: true,
         fields: [
           {
             field: "productId",

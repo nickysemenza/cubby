@@ -3,45 +3,50 @@ import { declaredClassificationPolicies } from "@cubby/schemas/classification-fi
 import { entityIdentityTriggerSql } from "./entity-identity-schema";
 import { entityLinkLivenessTriggerSql } from "./entity-link-schema";
 
-const classificationConstraintSql = (): string => {
-  const statements: string[] = [];
-  for (const policy of Object.values(declaredClassificationPolicies)) {
-    if (policy.target.reference !== null || policy.owner === "gardenEntry")
-      continue;
-    const table = policy.owner[0]!.toUpperCase() + policy.owner.slice(1);
-    for (const fieldPolicy of policy.fields) {
-      const refused = Object.entries(fieldPolicy.byValue)
-        .filter(([, value]) => value === "not_allowed")
-        .map(([value]) => value);
-      const allowed = Object.entries(fieldPolicy.byValue)
-        .filter(([, value]) => value !== "not_allowed")
-        .map(([value]) => value);
-      const deniedValues =
-        fieldPolicy.otherwise === "not_allowed" ? allowed : refused;
-      const required = Object.entries(fieldPolicy.byValue)
-        .filter(([, value]) => value === "required")
-        .map(([value]) => value);
-      const clauses = [
-        ...(deniedValues.length
-          ? [
-              `"${policy.classifier}" NOT IN (${deniedValues.map((v) => `'${v}'`).join(", ")}) OR "${fieldPolicy.field}" IS NULL`,
-            ]
-          : []),
-        ...(required.length
-          ? [
-              `"${policy.classifier}" NOT IN (${required.map((v) => `'${v}'`).join(", ")}) OR "${fieldPolicy.field}" IS NOT NULL`,
-            ]
-          : []),
-      ];
-      if (!clauses.length) continue;
-      const name = `${table}_classification_${policy.classifier}_${fieldPolicy.field}_check`;
-      statements.push(
-        `ALTER TABLE "${table}" DROP CONSTRAINT IF EXISTS "${name}";\nALTER TABLE "${table}" ADD CONSTRAINT "${name}" CHECK (${clauses.join(" AND ")}) NOT VALID;`,
-      );
-    }
-  }
-  return statements.join("\n");
-};
+/**
+ * One `NOT VALID` CHECK per field of an enforced same-record classification
+ * policy: values whose policy is `not_allowed` require the field empty, and
+ * values whose policy is `required` require it present. `NOT VALID` enforces
+ * new writes without rewriting or rejecting existing household rows.
+ */
+const classificationConstraintSql = (): string =>
+  Object.values(declaredClassificationPolicies)
+    .filter((policy) => policy.enforced)
+    .flatMap((policy) => {
+      const table = policy.owner[0]!.toUpperCase() + policy.owner.slice(1);
+      const valuesWith = (
+        fieldPolicy: (typeof policy.fields)[number],
+        wanted: string,
+      ) =>
+        policy.values.filter(
+          (value) =>
+            // SAFETY: the generator keys `byValue` only by this classifier's
+            // `values`; widening drops the literal key types, not entries.
+            ((fieldPolicy.byValue as Record<string, string>)[value] ??
+              fieldPolicy.otherwise) === wanted,
+        );
+      const inList = (values: readonly string[]) =>
+        values.map((value) => `'${value}'`).join(", ");
+      return policy.fields.flatMap((fieldPolicy) => {
+        const clauses = [
+          ["not_allowed", "IS NULL"],
+          ["required", "IS NOT NULL"],
+        ].flatMap(([policyValue, test]) => {
+          const values = valuesWith(fieldPolicy, policyValue!);
+          return values.length === 0
+            ? []
+            : [
+                `("${policy.classifier}" NOT IN (${inList(values)}) OR "${fieldPolicy.field}" ${test})`,
+              ];
+        });
+        if (clauses.length === 0) return [];
+        const name = `${table}_classification_${policy.classifier}_${fieldPolicy.field}_check`;
+        return [
+          `ALTER TABLE "${table}" DROP CONSTRAINT IF EXISTS "${name}";\nALTER TABLE "${table}" ADD CONSTRAINT "${name}" CHECK (${clauses.join(" AND ")}) NOT VALID;`,
+        ];
+      });
+    })
+    .join("\n");
 
 /**
  * DDL derived from the application model that drizzle-kit cannot express:

@@ -23,6 +23,16 @@ const classifierValues = (
   return options.map((option) => option.value);
 };
 
+const assertEnforcedIsSameRecord = (
+  policy: DeclaredPolicy,
+  context: string,
+) => {
+  if (policy.enforced && policy.target !== undefined)
+    throw new EntityDeclarationError(
+      `${context}.enforced applies only to same-record policies; a referenced classification cannot be a row CHECK.`,
+    );
+};
+
 /**
  * Cross-entity checks for `capabilities.classificationPolicies`: the
  * classifier is an enum on the owner, the target references the owner, every
@@ -57,6 +67,7 @@ export const validateClassificationPolicies = (
         throw new EntityDeclarationError(
           `${context}.target.reference ${policy.target.reference} must be a ${target.key} field referencing ${owner.key}.`,
         );
+      assertEnforcedIsSameRecord(policy, context);
       const seen = new Set<string>();
       for (const fieldPolicy of policy.fields) {
         const fieldContext = `${context}.fields.${fieldPolicy.field}`;
@@ -110,6 +121,7 @@ export const renderClassificationPolicyArtifacts = (
           target: policy.target
             ? { ...policy.target }
             : { entity: owner.key, reference: null },
+          enforced: policy.enforced,
           fields: policy.fields,
         },
       )},`;
@@ -123,6 +135,7 @@ export const renderClassificationPolicyArtifacts = (
     "  classifier: string;\n" +
     "  values: readonly string[];\n" +
     "  target: Readonly<{ entity: string; reference: string | null }>;\n" +
+    "  enforced: boolean;\n" +
     "  fields: readonly Readonly<{\n" +
     "    field: string;\n" +
     "    byValue: Readonly<Record<string, FieldPolicyValue>>;\n" +

@@ -1841,6 +1841,7 @@ Rules:
     classificationPolicies: [
       {
         classifier: "lineKind",
+        enforced: true,
         fields: [
           {
             field: "productId",
@@ -1861,6 +1862,7 @@ Rules:
       },
       {
         classifier: "lineBasis",
+        enforced: true,
         fields: [
           {
             field: "productId",
