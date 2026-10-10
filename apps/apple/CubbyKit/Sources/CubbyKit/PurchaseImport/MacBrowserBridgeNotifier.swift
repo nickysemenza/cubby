@@ -1,6 +1,13 @@
 #if os(macOS)
     import Foundation
+    import Synchronization
     import UserNotifications
+
+    public final class BrowserAttentionValidity: Sendable {
+        private let current = Mutex(true)
+        public var isCurrent: Bool { current.withLock { $0 } }
+        public func invalidate() { current.withLock { $0 = false } }
+    }
 
     /// Persists notification edges before asking UserNotifications to present them. The broker may
     /// replay a terminal run event until its acknowledgement arrives, so this local ledger—not the
@@ -14,6 +21,7 @@
         }
 
         private var attentionGenerations: [String: [String: UUID]] = [:]
+        private var attentionValidity: [UUID: BrowserAttentionValidity] = [:]
         private let defaults: UserDefaults
         private let notificationCenter: UNUserNotificationCenter?
 
@@ -76,10 +84,23 @@
             attentionGenerations[attentionKey(accountID: accountID, runID: runID)]?[reason] == generation
         }
 
+        public func validity(for generation: UUID) -> BrowserAttentionValidity? {
+            attentionValidity[generation]
+        }
+
+        public func invalidateAttention() {
+            for validity in attentionValidity.values { validity.invalidate() }
+            attentionValidity.removeAll()
+            attentionGenerations.removeAll()
+        }
+
         public func resolveAttentionEdge(accountID: String, runID: String, reason: String) {
             var edges = attentionEdges
             let key = attentionKey(accountID: accountID, runID: runID)
             guard let current = edges[key], current.contains(reason) else { return }
+            if let generation = attentionGenerations[key]?[reason] {
+                attentionValidity.removeValue(forKey: generation)?.invalidate()
+            }
             attentionGenerations[key]?[reason] = nil
             let remaining = current.filter { $0 != reason }
             if remaining.isEmpty { edges.removeValue(forKey: key) } else { edges[key] = remaining }
@@ -92,6 +113,7 @@
             var reasons = Set(edges[key] ?? [])
             guard reasons.insert(reason).inserted else { return nil }
             let generation = UUID()
+            attentionValidity[generation] = BrowserAttentionValidity()
             attentionGenerations[key, default: [:]][reason] = generation
             edges[key] = reasons.sorted()
             defaults.set(edges, forKey: Key.attentionEdges)

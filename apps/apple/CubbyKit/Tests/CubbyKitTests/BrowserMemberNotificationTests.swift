@@ -5,6 +5,16 @@
 
     @MainActor
     struct BrowserMemberNotificationTests {
+        @Test func invalidatedAttentionCannotDispatchUsingEarlierActorCheck() throws {
+            var dispatched = false
+            do {
+                try MacBrowserCommandExecutor.executeCurrentScript(
+                    current: true, dispatchIsCurrent: { false },
+                    execute: { dispatched = true })
+            } catch ExecutionFailure.cancelled {}
+            #expect(!dispatched)
+        }
+
         @Test func staleAttentionCannotActivateAfterRaiseScriptSuspends() async throws {
             var current = true
             var activated = false

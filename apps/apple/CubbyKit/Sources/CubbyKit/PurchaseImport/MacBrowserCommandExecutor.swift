@@ -107,6 +107,13 @@
             try activate()
         }
 
+        nonisolated static func executeCurrentScript<T>(
+            current: Bool, dispatchIsCurrent: () -> Bool, execute: () throws -> T
+        ) throws -> T {
+            guard current, dispatchIsCurrent() else { throw ExecutionFailure.cancelled }
+            return try execute()
+        }
+
         static func raiseAttentionWindow(
             isCurrent: () -> Bool,
             requireWindow: () async throws -> Void, raise: () async throws -> Void
@@ -120,13 +127,22 @@
         public func raiseAuthenticationWindow(
             isCurrent: @escaping @MainActor () -> Bool = { true }
         ) {
+            raiseAuthenticationWindow(isCurrent: isCurrent, dispatchValidity: nil)
+        }
+
+        public func raiseAuthenticationWindow(
+            isCurrent: @escaping @MainActor () -> Bool, dispatchValidity: BrowserAttentionValidity?
+        ) {
             Task { [weak self] in
                 guard let self else { return }
                 do {
                     try await Self.raiseAttentionWindow(
                         isCurrent: isCurrent,
                         requireWindow: { try await self.requireOwnedWindow() },
-                        raise: { try await self.raiseOwnedWindow(isCurrent: isCurrent) })
+                        raise: {
+                            try await self.raiseOwnedWindow(
+                                isCurrent: isCurrent, dispatchValidity: dispatchValidity)
+                        })
                 } catch {
                     BrowserBridgeDebugLog.emit(
                         .windowRaiseFailed, browser: browser, accountID: accountID, error: error
@@ -484,7 +500,8 @@
         }
 
         private func raiseOwnedWindow(
-            isCurrent: @escaping @MainActor () -> Bool = { true }
+            isCurrent: @escaping @MainActor () -> Bool = { true },
+            dispatchValidity: BrowserAttentionValidity? = nil
         ) async throws {
             guard let ownedWindowID else { throw ExecutionFailure.browserUnavailable }
             let script = """
@@ -498,7 +515,9 @@
             try await Self.performWindowRaise(
                 isCurrent: isCurrent,
                 script: {
-                    _ = try await self.runAppleScript(script, action: "raise_window", isCurrent: isCurrent)
+                    _ = try await self.runAppleScript(
+                        script, action: "raise_window", isCurrent: isCurrent,
+                        dispatchValidity: dispatchValidity)
                 },
                 activate: {
                     try self.target.verifyOwnership()
@@ -861,11 +880,12 @@
 
         private func runAppleScript(
             _ script: String, action: String, timeoutSeconds: Int = 15,
-            isCurrent: (@MainActor () -> Bool)? = nil
+            isCurrent: (@MainActor () -> Bool)? = nil, dispatchValidity: BrowserAttentionValidity? = nil
         ) async throws -> String {
             do {
                 return try await appleScript.execute(
-                    script, action: action, timeoutSeconds: timeoutSeconds, isCurrent: isCurrent
+                    script, action: action, timeoutSeconds: timeoutSeconds, isCurrent: isCurrent,
+                    dispatchValidity: dispatchValidity
                 )
             } catch let error as AppleScriptFailure {
                 failureDiagnostic = error.diagnostic
@@ -922,7 +942,7 @@
 
         func execute(
             _ source: String, action: String, timeoutSeconds: Int = 15,
-            isCurrent: (@MainActor () -> Bool)? = nil
+            isCurrent: (@MainActor () -> Bool)? = nil, dispatchValidity: BrowserAttentionValidity? = nil
         ) async throws -> String {
             try await target.verifyOwnership()
             if let isCurrent, !(await isCurrent()) { throw ExecutionFailure.cancelled }
@@ -951,9 +971,11 @@
             guard let script = NSAppleScript(source: bounded) else {
                 throw ExecutionFailure.invalidCommand
             }
-            if let isCurrent, !(await isCurrent()) { throw ExecutionFailure.cancelled }
+            let current = if let isCurrent { await isCurrent() } else { true }
             var details: NSDictionary?
-            let result = script.executeAndReturnError(&details)
+            let result = try MacBrowserCommandExecutor.executeCurrentScript(
+                current: current, dispatchIsCurrent: { dispatchValidity?.isCurrent ?? true },
+                execute: { script.executeAndReturnError(&details) })
             if let details {
                 let number = details[NSAppleScript.errorNumber] as? Int
                 let message = details[NSAppleScript.errorMessage] as? String

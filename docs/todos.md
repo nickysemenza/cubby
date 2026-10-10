@@ -219,8 +219,10 @@ mailbox and authenticated-device acceptance only after explicit resumption.
   beyond prolonged offline waits and completion. The local change persists
   account/Run/reason pause edges, names sign-in, Screen Recording and Apple
   Events fixes, and raises the owned account window for a fresh permission
-  pause. The headless persistence regression passes after its intended RED;
-  Mac App compilation, independent review, hosted gates, merge/deployment and
+  pause. Synchronous dispatch validity is invalidated when a pause resolves or
+  its controller is replaced, so an earlier actor check cannot raise a stale
+  window. Headless persistence and suspension regressions pass after intended RED;
+  final Mac App compilation, independent review, hosted gates, merge/deployment and
   real notification/owned-window delivery remain pending. Coordinate with the
   activity strip and attention-first workspace below.
 

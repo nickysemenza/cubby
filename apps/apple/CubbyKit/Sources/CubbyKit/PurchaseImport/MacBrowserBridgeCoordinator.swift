@@ -178,9 +178,11 @@
         }
 
         public func raiseAuthenticationWindow(
-            for accountID: String, isCurrent: @escaping @MainActor () -> Bool = { true }
+            for accountID: String, dispatchValidity: BrowserAttentionValidity? = nil,
+            isCurrent: @escaping @MainActor () -> Bool = { true }
         ) {
-            executors[accountID]?.raiseAuthenticationWindow(isCurrent: isCurrent)
+            executors[accountID]?.raiseAuthenticationWindow(
+                isCurrent: isCurrent, dispatchValidity: dispatchValidity)
         }
 
         public func retire() async {

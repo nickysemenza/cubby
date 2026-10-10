@@ -72,7 +72,10 @@ final class MacBrowserBridgeController: BrowserBridgeControlling {
         await coordinator.disconnect()
     }
 
+    func invalidateAttention() { notifier.invalidateAttention() }
+
     func retire() async {
+        invalidateAttention()
         await coordinator.retire()
     }
 
@@ -191,7 +194,9 @@ final class MacBrowserBridgeController: BrowserBridgeControlling {
                     return settings?.isInstalled(self) == true
                 })
             guard fresh, raiseWindow, let self, settings?.isInstalled(self) == true else { return }
-            coordinator.raiseAuthenticationWindow(for: accountID) { [weak self, notifier] in
+            guard let validity = notifier.validity(for: generation) else { return }
+            coordinator.raiseAuthenticationWindow(for: accountID, dispatchValidity: validity) {
+                [weak self, notifier] in
                 guard let self, settings?.isInstalled(self) == true else { return false }
                 return notifier.isAttentionCurrent(
                     accountID: accountID, runID: runID, reason: reason, generation: generation)
