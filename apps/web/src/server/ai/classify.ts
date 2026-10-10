@@ -10,6 +10,7 @@
  * implementation.
  */
 import type { Confidence } from "@cubby/schemas/ai";
+import type { SupportedDecisionModel } from "@cubby/shared/ai/models";
 
 import type { AiDecisionFeature } from "~/server/ai/features";
 import { type JevPort, runJevChoice } from "~/server/ai/jev";
@@ -49,6 +50,7 @@ export async function classifyWithJev<Value extends string>(args: {
   describe: (value: Value) => string;
   usage: AiRunContext;
   port?: JevPort;
+  decisionModel?: SupportedDecisionModel;
 }): Promise<{
   value: Value;
   confidence: Confidence;
@@ -65,6 +67,7 @@ export async function classifyWithJev<Value extends string>(args: {
       usage: args.usage,
       allowNone: false,
       port: args.port,
+      decisionModel: args.decisionModel,
     },
   );
   const value = selectedIndex === null ? undefined : args.values[selectedIndex];

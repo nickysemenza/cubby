@@ -29,6 +29,7 @@ import {
 } from "@cubby/schemas/field-resolution";
 import { parseShortcodeFor } from "@cubby/schemas/identifiers";
 import type { RunId } from "@cubby/schemas/identifiers";
+import type { SupportedDecisionModel } from "@cubby/shared/ai/models";
 import { z } from "zod";
 
 import { classifyWithJev } from "~/server/ai/classify";
@@ -94,6 +95,7 @@ const defaultResolveLabels: LabelResolverPort = async (db, codes) => {
 
 export interface SuggestFieldsPorts {
   jev?: JevPort;
+  decisionModel?: SupportedDecisionModel;
   resolveLabels?: LabelResolverPort;
   force?: boolean;
   /** Test-only: overrides individual registry entries (fake rosters) without
@@ -330,6 +332,7 @@ async function resolveEnumTarget(
   rawBasis: RawBasis,
   usage: AiSelectionUsage,
   jev: JevPort | undefined,
+  decisionModel?: SupportedDecisionModel,
 ): Promise<TargetResolution> {
   const values = spec.candidates
     ? await spec.candidates(db, rawBasis)
@@ -343,6 +346,7 @@ async function resolveEnumTarget(
     describe: spec.describe,
     usage,
     port: jev,
+    decisionModel,
   });
   const alternatives = result.alternatives.map((alternative) => ({
     value: alternative.value,
@@ -381,6 +385,7 @@ async function resolveReferenceTarget(
   rawBasis: RawBasis,
   usage: AiSelectionUsage,
   jev: JevPort | undefined,
+  decisionModel?: SupportedDecisionModel,
 ): Promise<TargetResolution> {
   const candidates = await spec.roster(db, resolvedBasis, rawBasis);
   const selectionSpec: AiSelectionSpec<unknown> = {
@@ -395,6 +400,7 @@ async function resolveReferenceTarget(
     candidates,
     usage,
     jev,
+    decisionModel,
   });
   if (!outcome.evaluated) return skipped("no_candidates");
   if (outcome.selected === null) {
@@ -471,6 +477,7 @@ async function resolveTextTarget(
   resolvedBasis: ResolvedBasis,
   usage: AiSelectionUsage,
   jev: JevPort | undefined,
+  decisionModel?: SupportedDecisionModel,
 ): Promise<TargetResolution> {
   const candidates = await spec.roster(db, resolvedBasis);
   const selectionSpec: AiSelectionSpec<string> = {
@@ -485,6 +492,7 @@ async function resolveTextTarget(
     candidates,
     usage,
     jev,
+    decisionModel,
   });
   if (!outcome.evaluated) return skipped("no_candidates");
   const alternatives = mapAlternatives(
@@ -534,9 +542,18 @@ async function resolveSpec(
   usage: AiSelectionUsage,
   jev: JevPort | undefined,
   linkedSubject?: string,
+  decisionModel?: SupportedDecisionModel,
 ): Promise<TargetResolution> {
   if (spec.kind === "prune") {
-    return resolvePruneTarget(db, spec, resolvedBasis, rawBasis, usage, jev);
+    return resolvePruneTarget(
+      db,
+      spec,
+      resolvedBasis,
+      rawBasis,
+      usage,
+      jev,
+      decisionModel,
+    );
   }
   return resolveOneTarget(
     db,
@@ -550,6 +567,7 @@ async function resolveSpec(
     rawBasis,
     usage,
     jev,
+    decisionModel,
   );
 }
 
@@ -561,9 +579,18 @@ async function resolveOneTarget(
   rawBasis: RawBasis,
   usage: AiSelectionUsage,
   jev: JevPort | undefined,
+  decisionModel?: SupportedDecisionModel,
 ): Promise<TargetResolution> {
   if (spec.kind === "enum") {
-    return resolveEnumTarget(db, spec, subject, rawBasis, usage, jev);
+    return resolveEnumTarget(
+      db,
+      spec,
+      subject,
+      rawBasis,
+      usage,
+      jev,
+      decisionModel,
+    );
   }
   if (spec.kind === "reference") {
     return resolveReferenceTarget(
@@ -574,9 +601,18 @@ async function resolveOneTarget(
       rawBasis,
       usage,
       jev,
+      decisionModel,
     );
   }
-  return resolveTextTarget(db, spec, subject, resolvedBasis, usage, jev);
+  return resolveTextTarget(
+    db,
+    spec,
+    subject,
+    resolvedBasis,
+    usage,
+    jev,
+    decisionModel,
+  );
 }
 
 /** A tag's stored removal reason for a Jev-classified (not deterministic)
@@ -620,6 +656,7 @@ async function resolvePruneTarget(
   rawBasis: RawBasis,
   usage: AiSelectionUsage,
   jev: JevPort | undefined,
+  decisionModel?: SupportedDecisionModel,
 ): Promise<TargetResolution> {
   const candidates = spec.candidates(resolvedBasis, rawBasis);
   if (candidates.length === 0) return skipped("no_candidates");
@@ -647,6 +684,7 @@ async function resolvePruneTarget(
       usage,
       allowNone: false,
       port: jev,
+      decisionModel,
     });
     const { redundant, genuine } = pruneJudgment(result);
     judged.push({ value, redundant, genuine });
