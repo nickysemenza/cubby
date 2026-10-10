@@ -456,16 +456,42 @@ export function researchServiceFor(
           .for("no key update");
         // Source exposure/retirement locks mail before Runs; preserve that order.
         const sources = await loadMailResearchSources(transactionDb, runId);
-        if (sources?.length)
+        const productTargets = await getDb(transactionDb)
+          .select({ entityId: runTarget.entityId })
+          .from(runTarget)
+          .where(
+            and(
+              eq(runTarget.runId, runId),
+              eq(runTarget.entityKind, "product"),
+              inArray(runTarget.state, activeStates),
+            ),
+          );
+        const purchasedContexts = await Promise.all(
+          productTargets.map((target) =>
+            loadProductPurchaseContext(transactionDb, {
+              productId: parseEntityId("product", target.entityId),
+              ledgerPartyId: parseEntityId(
+                "ledgerParty",
+                member.ledgerPartyId!,
+              ),
+            }),
+          ),
+        );
+        const sourceIds = [
+          ...new Set([
+            ...(sources ?? []).map((source) => source.orderMailId),
+            ...purchasedContexts
+              .flat()
+              .flatMap(({ originalMail }) =>
+                originalMail ? [originalMail.messageRef] : [],
+              ),
+          ]),
+        ];
+        if (sourceIds.length)
           await getDb(transactionDb)
             .select({ id: orderMail.id })
             .from(orderMail)
-            .where(
-              inArray(
-                orderMail.id,
-                sources.map((source) => source.orderMailId),
-              ),
-            )
+            .where(inArray(orderMail.id, sourceIds))
             .orderBy(asc(orderMail.id))
             .for("update");
         // Cancellation and continuation admission share the Run write boundary.

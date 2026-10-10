@@ -847,6 +847,39 @@ describe("research host lifecycle", () => {
       await continuation;
     }
   });
+  it("locks purchased Product originals before continuation so overlapping source admission cannot deadlock", async () => {
+    const { f } = await importPrimary(1);
+    const [child] = await getDb(ctx.db)
+      .select()
+      .from(run)
+      .where(eq(run.parentRunId, parseEntityId("run", f.started.runId)));
+    if (!child) throw new Error("Synthetic Product child missing");
+    const services = researchServiceFor(ctx.db, fromPartial<Env>({}), child.id);
+    let continuation: ReturnType<typeof services.researchContinue> | undefined;
+    try {
+      await withTransaction(ctx.db, async (tx) => {
+        await tx
+          .select()
+          .from(orderMail)
+          .where(eq(orderMail.id, f.mail.id))
+          .for("update");
+        continuation = services.researchContinue(crypto.randomUUID(), false);
+        await waitForBlockedBackend(tx);
+        // A source reader holding mail must still be able to acquire its Run.
+        await tx
+          .select()
+          .from(run)
+          .where(eq(run.id, child.id))
+          .for("update", { noWait: true });
+      });
+      expect(await continuation).toMatchObject({
+        status: "working",
+        work: { purchasedItems: [{ originalMail: { messageRef: f.mail.id } }] },
+      });
+    } finally {
+      await continuation;
+    }
+  });
   it("serializes continuation admission with a cancellation still committing", async () => {
     const f = await admitted();
     let continuation:

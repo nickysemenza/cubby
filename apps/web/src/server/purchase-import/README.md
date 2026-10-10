@@ -362,8 +362,9 @@ and deployment/readback order are owned by the
    the same transaction, so cancellation cannot commit between its status check
    and ledger writes. Derived Product work dispatches after that transaction commits.
    Continuations acquire the owning member before sources and Runs, matching
-   mail admission and the terminal Product sweep. Mail continuations then lock
-   their frozen source set in ID order before the Run,
+   mail admission and the terminal Product sweep. Continuations then lock
+   frozen mail sources and eligible Product targets' owned originals in ID order
+   before the Run,
    matching source exposure, retirement and history erasure so those paths cannot invert locks.
    Run status/ledger fences use key-preserving locks: cancellation still waits,
    while a concurrent child admission can check its parent foreign key.
