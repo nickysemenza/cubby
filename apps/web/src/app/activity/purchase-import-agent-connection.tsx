@@ -1,10 +1,10 @@
+import type { PurchaseAgentConnectionStatus } from "@cubby/schemas/purchase-import-debug";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { toast } from "sonner";
 
 import { run } from "~/integrations/tanstack-query/generated/catalog.gen";
 import { formatInstant } from "~/lib/date-format";
 import { getErrorMessage } from "~/lib/error-utils";
-import type { PurchaseAgentConnectionStatus } from "~/lib/purchase-import-debug";
 import { Row } from "~/ui/layout";
 import { Button } from "~/ui/primitives/button";
 import {

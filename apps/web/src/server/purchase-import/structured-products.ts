@@ -47,7 +47,14 @@ type Variant = string | null | typeof INVALID;
  * values are decoded, and anything but exactly one non-empty value is invalid.
  */
 function variantOf(url: Json | undefined): Variant {
-  const beforeFragment = String(url ?? "").split("#")[0] ?? "";
+  if (url === undefined || url === null) return null;
+  let normalized: string;
+  try {
+    normalized = new URL(String(url)).href;
+  } catch {
+    return INVALID;
+  }
+  const beforeFragment = normalized.split("#")[0] ?? "";
   const start = beforeFragment.indexOf("?");
   if (start < 0) return null;
   const found: string[] = [];
@@ -162,7 +169,29 @@ export function structuredProductsFromJsonLd(input: {
       return own;
     }
     const offerSets = offers.map(identifiers);
-    const offerVariants = offers.map((item) => variantOf(item.url));
+    const offerVariants = offers.map((item): Variant => {
+      if (servedVariant && item.url !== undefined) {
+        try {
+          const served = new URL(input.pageURL);
+          const offered = new URL(String(item.url), served);
+          const variant = variantOf(offered.href);
+          if (variant === null) return null;
+          // Variant ids are local to the product page, not global identities.
+          if (
+            offered.protocol !== "https:" ||
+            offered.username ||
+            offered.password ||
+            offered.origin !== served.origin ||
+            offered.pathname !== served.pathname
+          )
+            return INVALID;
+          return variant;
+        } catch {
+          return INVALID;
+        }
+      }
+      return variantOf(item.url);
+    });
     const first = offerSets[0]!;
     const agree =
       offerSets.every((set) => sameSet(set, first)) &&

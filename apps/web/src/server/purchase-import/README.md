@@ -563,6 +563,13 @@ and deployment/readback order are owned by the
    browser choice and permissions, with a link to the pane. The run page proxies the agent conversation through
    `agent-proxy.ts` to the run's agent Durable Object. Member controls go
    through `controlRun` and `recordRunControlEvent`.
+   Research controls require the Run's owning member across web, native and MCP;
+   photo inventory retains its shared-household control semantics. MCP
+   `run.lifecycle` admits only `cancel`, `retry` and `restart`, delegates to that
+   same control/dispatch path, and returns the Run status and successor identity.
+   Its MCP action is destructive because cancellation stops active work.
+   It cannot approve/reject findings or grant inference allowances. Settled
+   research attempts remain unchanged; repeated retries reuse their successor.
 
 Independent support assessment delivers identical retained attachment bytes once
 per MIME type and checksum in a request. Every observation keeps its evidence
@@ -862,3 +869,20 @@ the controller remains installed. The permission edge and controller are checked
 again after owned-window lookup, before the queued AppleScript dispatch, and
 after the script returns before AppKit activation. Sign-in retains the coordinator's existing
 owned-window behavior. No new browser transport or Run state is introduced.
+
+Structured Offer variant selection binds the single decoded `?variant=` to the
+served HTTPS origin and product path. Resolve relative Offer URLs against that
+page; another host/path or URL credentials cannot establish selected-variant
+identity. An Offer URL without a variant parameter makes no selected-variant
+claim and does not contradict otherwise agreeing identifiers. Tracking query parameters and fragments do not change the product
+path. A refused Offer remains ambiguous, and historical replay receipts are
+not rewritten when the derivation revision changes.
+
+The Mac browser account roster uses generated `vendor.browserAccounts`; debug
+batches use generated `run.browserDebugEvents`. Both pass through the shared
+request context. The roster includes only this member's live browser-enabled
+accounts in active/auth-paused/offline-paused states. Debug ingestion checks
+both member and initiating actor for every Run before writing any event, and
+replayed event IDs remain idempotent. The socket and OAuth routes remain device
+transports; the old accounts/debug HTTP routes and custom request helper are
+removed. Apple compatibility 2.17 ships the changed paths.

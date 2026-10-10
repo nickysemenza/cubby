@@ -295,7 +295,7 @@ function EntityPickerPopup<TId extends string>({
       setIsCreating(false);
     }
   };
-  const showStatus = isLoading || error || orderedItems.length === 0;
+  const showStatus = isLoading || error;
   return (
     <ComboboxPrimitive.Portal>
       <ComboboxPrimitive.Positioner
@@ -358,11 +358,16 @@ function EntityPickerPopup<TId extends string>({
                 </span>
               ) : error ? (
                 <span className="text-destructive">{error}</span>
-              ) : (
-                <span className="text-muted-foreground">{emptyMessage}</span>
-              )}
+              ) : null}
             </div>
           ) : null}
+          <ComboboxPrimitive.Empty>
+            {!isLoading && !error ? (
+              <div className="shrink-0 border-t border-[var(--border)] px-2 py-4 text-sm text-muted-foreground">
+                {emptyMessage}
+              </div>
+            ) : null}
+          </ComboboxPrimitive.Empty>
           {create ? (
             <button
               type="button"

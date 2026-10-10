@@ -780,6 +780,14 @@ export const MCP_TOOLS = defineMcpTools({
     description:
       'Start a Cubby run. The run\'s coordinator does the work and reads pages through the signed-in browser of the household\'s Mac app, so a run may wait for a connected Mac before it progresses. Each start returns a RUN- shortcode: poll entity_read.get with entity "run" and resultDetail "full" on it until `status` is terminal (completed, failed, needs_review, or dispatch_failed); paused_* statuses are waiting (paused_offline: for the Mac), not finished.',
     actions: {
+      lifecycle: mcpAction({
+        op: runContract.ops.lifecycle,
+        destructive: true,
+        openWorld: true,
+        strict: true,
+        description:
+          "Control an owned Run with controlAction cancel, retry or restart. Cancel stops active work; retry/restart preserve the previous attempt and return its admitted successor. Repeated research retries reuse the same successor. These controls do not approve or reject findings, grant paid budgets, or verify unfinished targets. Read imports_read.run_status for available controls and current outcomes; unsupported lifecycle states refuse without changing the Run.",
+      }),
       start: mcpAction({
         op: runContract.ops.startTargeted,
         // The run browses the Vendor's site through the Mac's browser.

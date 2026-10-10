@@ -22,6 +22,7 @@ import {
   commitPurchaseImportOut,
   preparePurchaseImportOut,
 } from "@cubby/schemas/purchase-import";
+import { purchaseImportDebugEventsRequest } from "@cubby/schemas/purchase-import-debug";
 import {
   syncPlanInput,
   syncPlanOutput,
@@ -310,7 +311,31 @@ export type TargetedImportLaunch = z.infer<typeof targetedImportLaunch>;
 // members must resolve to real components.
 export { type TargetedImportStartInput, type TargetedImportStartOutput };
 
+const runControlInput = z.object({
+  runId: runShortcode,
+  action: runControlAction,
+  operationId: z.string().min(1).optional(),
+  approvalId: z.string().min(1).optional(),
+});
+const runControlOutput = z.object({
+  run: runDetail,
+  successor: z
+    .object({
+      publicId: runShortcode,
+      status: z.string().min(1),
+      created: z.boolean(),
+    })
+    .nullable(),
+});
+
 export const runContract = defineContract("run", {
+  browserDebugEvents: mutation({
+    native: "Report actor-owned Mac browser bridge diagnostic batches",
+    mcp: { omit: "device_protocol" },
+    input: purchaseImportDebugEventsRequest,
+    output: z.object({ accepted: z.number().int().nonnegative() }),
+    invalidates: ["runOnly"],
+  }),
   executionMailboxes: query({
     native: "Select a connected owned mailbox for an execution approval",
     mcp: { omit: "human_approval" },
@@ -441,21 +466,23 @@ export const runContract = defineContract("run", {
   control: mutation({
     mcp: { omit: "human_approval" },
     native: "Approve, reject, stop or retry a Run from its detail sections",
-    input: z.object({
-      runId: runShortcode,
-      action: runControlAction,
-      operationId: z.string().min(1).optional(),
-      approvalId: z.string().min(1).optional(),
-    }),
-    output: z.object({
-      run: runDetail,
-      successor: z
-        .object({
-          publicId: runShortcode,
-          status: z.string().min(1),
-          created: z.boolean(),
-        })
-        .nullable(),
+    input: runControlInput,
+    output: runControlOutput,
+    invalidates: ["runOnly"],
+  }),
+  lifecycle: mutation({
+    input: runControlInput
+      .omit({ action: true, operationId: true, approvalId: true })
+      .extend({
+        controlAction: runControlAction.extract(["cancel", "retry", "restart"]),
+      }),
+    output: runControlOutput.extend({
+      run: runDetail.pick({
+        publicId: true,
+        status: true,
+        failureCode: true,
+        endedAt: true,
+      }),
     }),
     invalidates: ["runOnly"],
   }),

@@ -23,23 +23,6 @@ enum AuthenticatedSocketSupport {
         return url
     }
 
-    /// A bearer-authenticated request to one of the browser bridge's HTTP routes
-    /// (`/api/import/agent/*`). They sit beside its socket, outside the `/api/v1` OpenAPI
-    /// document, so the generated client cannot reach them. A `jsonBody` makes it a POST.
-    static func agentRequest(
-        baseURL: URL, path: String, credentials: CredentialProvider, jsonBody: Data? = nil
-    ) async throws -> URLRequest {
-        guard let url = try endpoint(baseURL, path: path).url else { throw URLError(.badURL) }
-        var request = URLRequest(url: url)
-        request.setValue("Bearer \(try await credentials.bearerToken())", forHTTPHeaderField: "Authorization")
-        if let jsonBody {
-            request.httpMethod = "POST"
-            request.setValue("application/json", forHTTPHeaderField: "Content-Type")
-            request.httpBody = jsonBody
-        }
-        return request
-    }
-
     private static func endpoint(
         _ baseURL: URL, path: String, queryItems: [URLQueryItem]? = nil
     ) throws -> URLComponents {

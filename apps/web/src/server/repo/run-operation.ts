@@ -10,10 +10,10 @@
  * canonicalize it and never add `kind` to the identity.
  */
 import { type RunId, runEntityId } from "@cubby/schemas/identifiers";
+import type { purchaseImportDebugEvent } from "@cubby/schemas/purchase-import-debug";
 import { and, asc, eq, inArray } from "drizzle-orm";
 import type { z } from "zod";
 
-import type { purchaseImportDebugEvent } from "~/lib/purchase-import-debug";
 import type { DrizzleClient, DrizzleTransaction } from "~/server/db";
 import { researchRetention, run, runOperation } from "~/server/db/schema";
 

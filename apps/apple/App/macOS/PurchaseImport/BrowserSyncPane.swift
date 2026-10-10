@@ -252,7 +252,7 @@ private struct BrowserSyncHistoryButton: View {
                     model.browserBridge.setAccounts(
                         controller.plans.map {
                             .init(
-                                id: $0.shortcode, label: $0.label, ledgerPartyID: "PARTY-EXAMPLE",
+                                id: $0.shortcode, label: $0.label, ledgerPartyId: "PARTY-EXAMPLE",
                                 browser: .chrome)
                         })
                     for plan in controller.plans {

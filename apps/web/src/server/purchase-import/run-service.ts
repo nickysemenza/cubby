@@ -43,6 +43,7 @@ import {
   type RunTrigger,
 } from "@cubby/schemas/purchase-import";
 import type { PurchaseAgentEvent } from "@cubby/schemas/purchase-import";
+import { purchaseImportDebugEvent } from "@cubby/schemas/purchase-import-debug";
 import {
   purchaseValidationResearchRunInput,
   CHARGE_HUNT_STATE,
@@ -79,7 +80,6 @@ import type {
   PhotoImportFinalizeOutput,
 } from "~/contracts/photo-import.contract";
 import type { RunDetail, RunLogEntry } from "~/contracts/run.contract";
-import { purchaseImportDebugEvent } from "~/lib/purchase-import-debug";
 import type { Database, DrizzleClient, DrizzleTransaction } from "~/server/db";
 import {
   aiUsage,
@@ -2485,6 +2485,11 @@ export async function controlRun(
   if (!controller)
     throw new Error("Purchase import run is not owned by this member");
   if (
+    scope.public.purpose !== "photo_inventory" &&
+    scope.ledgerPartyId !== controller.ledgerPartyId
+  )
+    throw new Error("Only the member this Run belongs to can control it");
+  if (
     [
       "mail_import",
       "product_enrichment",
@@ -2557,6 +2562,8 @@ export async function controlRun(
       if (!locked) throw new Error("Purchase import run was not found");
       if (locked.vendorAccountId !== scope.public.vendorAccountId)
         throw new Error("Purchase import control account changed.");
+      if (locked.ledgerPartyId !== scope.ledgerPartyId)
+        throw new Error("Purchase import control owner changed.");
       if (input.action === "restart") {
         if (
           !new Set([

@@ -37,8 +37,6 @@ const STATIC_TRACE_ROUTES = new Set([
   "/api/ai/chatgpt",
   "/api/debug/timing",
   "/api/debug/usda-release",
-  "/api/import/agent/accounts",
-  "/api/import/agent/debug-events",
   "/api/import/agent/oauth/callback",
   "/api/import/agent/oauth/start",
   "/api/import/agent/socket",

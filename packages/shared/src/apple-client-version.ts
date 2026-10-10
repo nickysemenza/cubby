@@ -5,4 +5,4 @@
  * answers older apps with HTTP 426 once it deploys. Compatible changes ship in
  * the nightly release without touching it. Three numeric components.
  */
-export const APPLE_CLIENT_COMPATIBILITY_VERSION = "2.16.0";
+export const APPLE_CLIENT_COMPATIBILITY_VERSION = "2.17.0";
