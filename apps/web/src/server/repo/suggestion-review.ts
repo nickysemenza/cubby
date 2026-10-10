@@ -99,10 +99,13 @@ export async function listPendingSuggestions(
     .map((row) => suggestionRowSchema.parse(row));
 }
 
-async function writeSuggestedValue(
+export async function applySuggestionValue(
   db: Database,
   context: EntityKernelContext,
-  row: z.infer<typeof suggestionRowSchema>,
+  row: Pick<
+    z.infer<typeof suggestionRowSchema>,
+    "entity" | "recordId" | "field" | "financeReviewFingerprint"
+  >,
   value: unknown,
 ) {
   const typedValue = z.json().parse(value);
@@ -172,7 +175,7 @@ export async function acceptSuggestion(
     .limit(1);
   if (!row) throw new Error(`Pending Suggestion not found: ${id}`);
   const parsed = suggestionRowSchema.parse(row);
-  await writeSuggestedValue(db, context, parsed, row.suggestedValue);
+  await applySuggestionValue(db, context, parsed, row.suggestedValue);
   await getDb(db)
     .update(suggestionTable)
     .set({ status: "applied" })
@@ -215,7 +218,7 @@ export async function rejectSuggestion(
   if (parsedInput.correctValue !== undefined) {
     if (!context)
       throw new Error("Applying a corrected value requires the entity context");
-    await writeSuggestedValue(db, context, parsed, parsedInput.correctValue);
+    await applySuggestionValue(db, context, parsed, parsedInput.correctValue);
   }
   await getDb(db)
     .update(suggestionTable)

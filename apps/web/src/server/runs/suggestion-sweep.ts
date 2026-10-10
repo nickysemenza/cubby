@@ -13,6 +13,7 @@ import { selectDecisionModel } from "@cubby/shared/ai/models";
 import { and, eq, sql } from "drizzle-orm";
 import { z } from "zod";
 
+import { scrubErrorMessage } from "~/lib/error-diagnostics";
 import {
   suggestFields,
   type SuggestFieldsPorts,
@@ -28,6 +29,7 @@ import { entityCommandSchema } from "~/server/entity-kernel/contracts";
 import { getDb } from "~/server/repo/database-helpers";
 import { spendingClassificationRevision } from "~/server/repo/expense-category-resolution";
 import { resolveLiveShortcode } from "~/server/repo/shortcode-resolver";
+import { applySuggestionValue } from "~/server/repo/suggestion-review";
 
 import { ensureRun } from "./ensure-run";
 import { runPacedBatch, type PacedBatchPorts } from "./paced-batch";
@@ -123,31 +125,45 @@ async function suggestTarget(
     pairKey,
   });
   const entries = primary ? [primary] : [];
+  const diagnostics: {
+    targetId: string;
+    stage: "paired_model";
+    reason: string;
+  }[] = [];
   if (pairKey) {
     const pairedModel = alternateModel(input.decisionModel);
-    const paired = await recommend(db, runId, fieldInput, {
-      ...ports.suggestPorts,
-      decisionModel: pairedModel,
-    });
-    const alt = paired.suggestions[input.field];
-    const pairedRow =
-      alt &&
-      makeSweepSuggestion({
-        currentValue: target.currentValue,
-        decision: {
-          value: jsonValue(alt.value),
-          confidence: alt.probability ?? 0,
-        },
-        model: pairedModel,
-        pinnedModel: input.decisionModel,
-        pairKey,
+    try {
+      const paired = await recommend(db, runId, fieldInput, {
+        ...ports.suggestPorts,
+        decisionModel: pairedModel,
       });
-    if (pairedRow) entries.push(pairedRow);
+      const alt = paired.suggestions[input.field];
+      const pairedRow =
+        alt &&
+        makeSweepSuggestion({
+          currentValue: target.currentValue,
+          decision: {
+            value: jsonValue(alt.value),
+            confidence: alt.probability ?? 0,
+          },
+          model: pairedModel,
+          pinnedModel: input.decisionModel,
+          pairKey,
+        });
+      if (pairedRow) entries.push(pairedRow);
+    } catch (error) {
+      diagnostics.push({
+        targetId: target.id,
+        stage: "paired_model",
+        reason: scrubErrorMessage(String(error)),
+      });
+    }
   }
   return {
     primary,
     entries,
     financeReviewFingerprint: decision.financeReview?.fingerprint ?? null,
+    diagnostics,
   };
 }
 
@@ -244,7 +260,9 @@ async function executeSweep(
     saved.progress === null
       ? null
       : suggestionSweepRunProgress.parse(saved.progress);
-  const totalTargets = Math.max(targets.length, processed.size);
+  // Total counts processed targets plus currently eligible targets still to process.
+  const totalTargets = processed.size + pending.length;
+  const diagnostics = progress?.diagnostics ?? [];
   const batchPorts: PacedBatchPorts = {
     isPaused: async () => {
       if (
@@ -265,6 +283,7 @@ async function executeSweep(
         queued: (progress?.queued ?? 0) + p.queued,
         failed: (progress?.failed ?? 0) + p.failed,
         processedTargetIds: [...processed],
+        diagnostics,
       };
       await getDb(db)
         .update(runTable)
@@ -288,8 +307,13 @@ async function executeSweep(
         const pairKey = stablePair(target.entityId)
           ? crypto.randomUUID()
           : null;
-        const { primary, entries, financeReviewFingerprint } =
-          await suggestTarget(db, runId, input, target, pairKey, ports);
+        const {
+          primary,
+          entries,
+          financeReviewFingerprint,
+          diagnostics: targetDiagnostics = [],
+        } = await suggestTarget(db, runId, input, target, pairKey, ports);
+        diagnostics.push(...targetDiagnostics);
         await insertSuggestions(
           db,
           runId,
@@ -303,13 +327,34 @@ async function executeSweep(
           primary?.status === "applied" ? "applied" : "queued";
         if (primary?.status === "applied") {
           try {
-            const command = entityCommandSchema.parse({
-              action: "update",
-              entity: input.entity,
-              id: target.id,
-              data: { [input.field]: primary.suggestedValue },
-            });
-            await executeEntity(ports.context, command);
+            const [savedSuggestion] = await getDb(db)
+              .select()
+              .from(suggestionTable)
+              .where(
+                and(
+                  eq(suggestionTable.runId, runId),
+                  eq(
+                    suggestionTable.recordId,
+                    parseEntityId(input.entity, target.entityId),
+                  ),
+                  eq(suggestionTable.model, primary.model),
+                ),
+              )
+              .limit(1);
+            if (!savedSuggestion)
+              throw new Error("Auto-apply Suggestion was not persisted");
+            await applySuggestionValue(
+              db,
+              ports.context,
+              {
+                entity: input.entity,
+                recordId: target.entityId,
+                field: input.field,
+                financeReviewFingerprint:
+                  savedSuggestion.financeReviewFingerprint,
+              },
+              primary.suggestedValue,
+            );
             await getDb(db)
               .update(suggestionTable)
               .set({ status: "applied" })
@@ -323,8 +368,12 @@ async function executeSweep(
                   eq(suggestionTable.model, primary.model),
                 ),
               );
-          } catch {
-            // SILENT: preserve the candidate for review and count the failed auto-apply in Run progress.
+          } catch (error) {
+            diagnostics.push({
+              targetId: target.id,
+              stage: "apply",
+              reason: scrubErrorMessage(String(error)),
+            });
             const recordId = parseEntityId(input.entity, target.entityId);
             await getDb(db)
               .update(suggestionTable)
@@ -335,7 +384,7 @@ async function executeSweep(
                   eq(suggestionTable.recordId, recordId),
                 ),
               );
-            outcome = "failed";
+            outcome = "queued";
           }
         }
         processed.add(target.entityId);
@@ -403,6 +452,7 @@ export async function startSuggestionSweep(
     applied: 0,
     queued: 0,
     failed: 0,
+    diagnostics: [],
   });
   const runId = await ensureRun(db, actor, {
     purpose: "suggestion_sweep",

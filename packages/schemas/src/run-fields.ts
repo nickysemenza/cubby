@@ -368,6 +368,15 @@ export const suggestionSweepRunProgress = z.object({
   applied: z.number().int().nonnegative(),
   queued: z.number().int().nonnegative(),
   failed: z.number().int().nonnegative(),
+  diagnostics: z
+    .array(
+      z.object({
+        targetId: z.string(),
+        stage: z.enum(["apply", "paired_model"]),
+        reason: z.string(),
+      }),
+    )
+    .default([]),
 });
 export type SuggestionSweepRunProgress = z.infer<
   typeof suggestionSweepRunProgress
