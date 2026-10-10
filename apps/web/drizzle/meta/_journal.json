@@ -201,15 +201,8 @@
     {
       "idx": 28,
       "version": "7",
-      "when": 1791599225944,
+      "when": 1791605871816,
       "tag": "0028_suggestion-sweep",
-      "breakpoints": true
-    },
-    {
-      "idx": 29,
-      "version": "7",
-      "when": 1791604776996,
-      "tag": "0029_suggestion-finance-review-fingerprint",
       "breakpoints": true
     }
   ]

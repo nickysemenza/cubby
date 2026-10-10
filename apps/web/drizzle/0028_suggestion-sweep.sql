@@ -4,6 +4,7 @@ CREATE TABLE "Suggestion" (
 	"entity" text NOT NULL,
 	"recordId" uuid NOT NULL,
 	"field" text NOT NULL,
+	"financeReviewFingerprint" text,
 	"currentValue" jsonb,
 	"suggestedValue" jsonb NOT NULL,
 	"confidence" real NOT NULL,

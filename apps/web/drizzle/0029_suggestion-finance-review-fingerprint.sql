@@ -1,1 +1,0 @@
-ALTER TABLE "Suggestion" ADD COLUMN "financeReviewFingerprint" text;

@@ -1,5 +1,5 @@
 {
-  "id": "e99a7174-3e4a-4dbe-b02e-5efc53c5eca7",
+  "id": "82885d3a-0095-4e56-8101-74072166be1a",
   "prevId": "70c168d3-2523-4da7-9a59-8abad18f99e8",
   "version": "7",
   "dialect": "postgresql",
@@ -18550,6 +18550,12 @@
           "type": "text",
           "primaryKey": false,
           "notNull": true
+        },
+        "financeReviewFingerprint": {
+          "name": "financeReviewFingerprint",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
         },
         "currentValue": {
           "name": "currentValue",
