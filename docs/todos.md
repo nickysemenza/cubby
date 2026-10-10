@@ -1015,7 +1015,7 @@ consume the declarations.
 The developer loop now defaults to focused headless + simulator smoke, retains
 extended domain lanes by name, uses deterministic stored-outcome read-back with
 small Tester Army navigation, and reuses verified native builds. Low-signal
-source/copy/declaration tests are removed with a [deletion ledger](test-deletion-ledger.md). The shared T3
+source/copy/declaration tests are removed. The shared T3
 device launcher is supported for finite simulator journeys.
 
 - 🤔 **Measure post-change routing speed and quality.** The
