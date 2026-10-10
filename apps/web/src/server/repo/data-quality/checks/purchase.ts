@@ -35,10 +35,12 @@ const hasPrimaryDocument = (t: Purchase) =>
   purchaseHasPrimaryDocumentSql(getTableName(t));
 const hasItemization = (t: Purchase) =>
   purchaseHasItemizationSql(getTableName(t));
+// An imported order that carried an order id (`sourceOrderKey`'s `/order/`
+// form) expects its Purchase to keep one, whatever the source kind; an
+// orderless receipt or statement booking does not.
 const expectsOrderId = (t: Purchase) => sql`EXISTS (
   SELECT 1 FROM "ImportSourceOrder" dq_order
-  JOIN "ImportSourceClaim" dq_order_source ON dq_order_source.id = dq_order."sourceClaimId"
-  WHERE dq_order."purchaseId" = ${t.id} AND dq_order_source.kind = 'browser_order'
+  WHERE dq_order."purchaseId" = ${t.id} AND dq_order."orderKey" LIKE '%/order/%'
 )`;
 
 const hasExpenses = (t: Purchase) => sql`EXISTS (

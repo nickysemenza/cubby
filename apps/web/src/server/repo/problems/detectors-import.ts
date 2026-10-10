@@ -1,4 +1,5 @@
 import { parseShortcodeFor } from "@cubby/schemas/identifiers";
+import { storedImportFix } from "@cubby/schemas/purchase-import";
 import { and, eq, lt } from "drizzle-orm";
 
 import type { Database } from "~/server/db";
@@ -34,7 +35,7 @@ export async function findOpenRunFindings(db: Database) {
     kind: row.kind,
     summary: row.summary,
     probability: row.probability,
-    proposedFix: row.proposedFix,
+    proposedFix: storedImportFix.parse(row.proposedFix),
     createdAt: row.createdAt,
   }));
 }

@@ -3,7 +3,7 @@
  * Run freezes each Email's checksum and owns it through `MailboxMessage.runId`,
  * so discovery replay and a member's import of the same Email converge on one
  * owner. Interpretation (Vendor, orders, Products) happens later, through the
- * public tools (ADR 0008).
+ * public tools (ADR 0010).
  */
 import {
   userId,

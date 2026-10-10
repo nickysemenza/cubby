@@ -26,7 +26,7 @@ failed items after a fresh read.
 
 Runs are started by Mail discovery, photo uploads and a member's own
 `purchase_import.prepare`; nothing on MCP starts research
-([ADR 0008](../adr/0008-mail-import-unattended-burn-down-interactive.md)).
+([ADR 0010](../adr/0010-mail-import-unattended-burn-down-interactive.md)).
 `imports_read.run_status` reads one Run; `run.lifecycle` cancels, retries or
 restarts it. No run purpose holds the `start_run` capability
 (`server/purchase-import/capabilities.ts`), so a coordinator never starts

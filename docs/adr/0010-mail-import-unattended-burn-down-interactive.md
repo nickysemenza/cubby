@@ -1,4 +1,4 @@
-# ADR 0008: Unattended Mail import, interactive Burn-down
+# ADR 0010: Unattended Mail import, interactive Burn-down
 
 Status: Accepted.
 

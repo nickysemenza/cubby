@@ -1,11 +1,17 @@
 import { runEntityId } from "@cubby/schemas/identifiers";
 import { coordinatorModelFor } from "@cubby/schemas/import-run-agent";
+import { runFindingProblemSchema } from "@cubby/schemas/problems";
 import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 
+import { runFinding } from "~/server/db/schema";
+import { getDb } from "~/server/repo/database-helpers";
+import { importReportBlocks } from "~/server/repo/entity-report/run";
+import { findOpenRunFindings } from "~/server/repo/problems/detectors-import";
 import { executeLeasedOperation } from "~/server/runs/operation";
 
 import { dispatchRunEvent, recordRunDispatchAttempt } from "./dispatch";
+import { resolveRunFinding } from "./findings";
 import { startAgentRunFixture } from "./import-run.fixtures";
 import { admitMailImport } from "./mail-import-run";
 import {
@@ -401,6 +407,58 @@ describe("purchase import run admission", () => {
       reconciled: true,
       status: "needs_review",
     });
+  });
+
+  // Production still holds findings whose fix kinds ADR 0010 retired until
+  // the contract migration dismisses them; they must read as non-executable.
+  it("reads findings carrying retired fix kinds as having no executable fix", async () => {
+    const party = await createMember();
+    const run = await startAgentRun(party);
+    const retiredFixes = [
+      { kind: "vendor_capture_profile", vendorId: crypto.randomUUID() },
+      { kind: "research_field_correction", productId: crypto.randomUUID() },
+      { kind: "validation_corrections", corrections: [] },
+    ];
+    const rows = await getDb(ctx.db)
+      .insert(runFinding)
+      .values(
+        retiredFixes.flatMap((proposedFix) =>
+          (["open", "dismissed"] as const).map((status) => ({
+            runId: run.id,
+            ledgerPartyId: party.id,
+            entityKind: "run" as const,
+            entityId: run.id,
+            kind: `retired_${proposedFix.kind}`,
+            summary: "A finding filed before its fix kind was retired.",
+            proposedFix,
+            evidenceFingerprint: `${proposedFix.kind}:${status}`,
+            status,
+          })),
+        ),
+      )
+      .returning({ id: runFinding.id, status: runFinding.status });
+
+    const detail = await loadRunDetail(ctx.db, run.publicId);
+    expect(detail.findings).toHaveLength(6);
+    expect(detail.findings.map((finding) => finding.proposedFix)).toEqual(
+      Array(6).fill(null),
+    );
+    const report = JSON.stringify(
+      importReportBlocks("run.import-findings", detail),
+    );
+    expect(report).toContain('"decision":"dismiss"');
+    expect(report).not.toContain('"decision":"apply"');
+    const problems = runFindingProblemSchema
+      .array()
+      .parse(await findOpenRunFindings(ctx.db));
+    expect(problems.map((problem) => problem.proposedFix)).toEqual(
+      Array(3).fill(null),
+    );
+    const open = rows.find((row) => row.status === "open");
+    if (!open) throw new Error("test setup: no open finding");
+    await expect(
+      resolveRunFinding(ctx.db, { id: open.id, action: "apply" }, ctx.actor),
+    ).rejects.toThrow("no applicable fix");
   });
 
   it("expires only runs with no coordinator activity for two hours", async () => {

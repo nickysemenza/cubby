@@ -25,7 +25,7 @@ import {
   agentProgressEvent,
 } from "@cubby/schemas/purchase-agent-services";
 import {
-  proposedImportFix,
+  storedImportFix,
   extractedPurchaseLine,
   preparePurchaseImportOut,
   commitPurchaseImportOut,
@@ -1683,10 +1683,7 @@ export async function loadRunDetail(
     affectedPurchases,
     findings: findings.map((finding) => ({
       ...finding,
-      proposedFix:
-        finding.proposedFix === null
-          ? null
-          : proposedImportFix.parse(finding.proposedFix),
+      proposedFix: storedImportFix.parse(finding.proposedFix),
       createdAt: finding.createdAt.toISOString(),
       expiresAt: iso(finding.expiresAt),
     })),

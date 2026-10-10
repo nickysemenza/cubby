@@ -1,7 +1,7 @@
 # Caller-driven research: Mail import stays unattended, Burn-down goes interactive
 
 Base: `origin/main` `70915d343`, 2026-10-10. Decision record:
-[ADR 0008](../adr/0008-mail-import-unattended-burn-down-interactive.md).
+[ADR 0010](../adr/0010-mail-import-unattended-burn-down-interactive.md).
 Vocabulary: [GLOSSARY](../../GLOSSARY.md). One big-bang PR with breaking
 changes and a downtime window. Goal: substantial net code deletion. Revised after
 Fable/high and Astra/high plan review (rounds 1 and 2); round-2 dispositions are

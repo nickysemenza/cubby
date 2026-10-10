@@ -235,6 +235,40 @@ SwiftUI app.
 | [apps/mcp-apps](apps/mcp-apps)                                                | Interactive MCP UIs, inlined into `web`                |
 | [packages/](packages), [recipebridge/](recipebridge), [cubby-ffi/](cubby-ffi) | Shared schemas, WASM and Swift FFI                     |
 
+Everything runs in one Cloudflare Worker. Every client and background job
+reaches the same contracts, and every entity write goes through the entity
+kernel ([architecture](docs/development.md#architecture),
+[infrastructure](docs/infrastructure.md)):
+
+```mermaid
+flowchart LR
+  Agents(["Claude / Codex<br/>sessions"]) --> MCP["/api/mcp"]
+  Web(["Web app"]) --> SSR["Pages +<br/>server functions"]
+  Apple(["iOS / macOS app,<br/>cubby CLI"]) --> HTTP["/api/v1<br/>HTTP + OpenAPI"]
+  Cal(["Calendar apps"]) --> Feeds["webcal feeds"]
+  Gmail(["Gmail"]) -- "discovery" --> BG["Cron, queues,<br/>Workflows"]
+
+  MCP & SSR & HTTP & Feeds & BG --> Ops["Contracts +<br/>operations"]
+  BG -- "Mail import Runs" --> Pi["Pi: Mail import +<br/>photo Runs"]
+  Pi -. "same public MCP tools" .-> MCP
+
+  Ops --> Kernel["Entity kernel"] --> Repo["Repositories"] --> PG[("PostgreSQL<br/>Neon / Hyperdrive")]
+  Ops --> DOs["Durable Objects: images,<br/>USDA, ChatGPT plan, feeds"] --> R2[("R2 + Vectorize")]
+  Pi & Ops --> Models(["Models: ChatGPT plan,<br/>AI Gateway, Workers AI"])
+
+  classDef client fill:#eef6ff,stroke:#5b8def
+  classDef entry fill:#f4f0ff,stroke:#8a6bd9
+  classDef store fill:#f2fbf2,stroke:#4a9a4a
+  class Agents,Web,Apple,Cal,Gmail,Models client
+  class MCP,SSR,HTTP,Feeds,BG entry
+  class PG,R2 store
+```
+
+Purchases arrive two ways ([ADR 0010](docs/adr/0010-mail-import-unattended-burn-down-interactive.md)):
+Gmail discovery admits order Email into Mail import Runs that Pi works through
+the same public MCP tools a member uses, and a member's Claude or Codex session
+burns down the Research queue with its own browser.
+
 ```sh
 pnpm install
 pnpm dev        # local workerd + PostgreSQL with synthetic data
