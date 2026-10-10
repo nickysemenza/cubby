@@ -67,7 +67,7 @@ export type RawBasis = Readonly<Record<string, string | null>>;
  * arrow-typed `describe: (v: V) => string` is checked contravariantly and
  * would reject every concrete entry below.
  */
-export interface EnumSuggestSpec<V extends string> {
+interface EnumSuggestSpec<V extends string> {
   kind: "enum";
   values: readonly V[];
   /** Narrows `values` for this record; an empty result skips the target
@@ -101,7 +101,7 @@ export interface ReferenceSuggestSpec<C> {
   parentIdOf?(c: C): string | null;
 }
 
-export interface TextRosterSuggestSpec {
+interface TextRosterSuggestSpec {
   kind: "text";
   rules: string;
   maxCandidates: number;

@@ -8,7 +8,7 @@ import { getTableColumns, inArray, sql, type AnyColumn } from "drizzle-orm";
 import type { CheckBinding, ScoredTable } from "../registry";
 
 /** Build a scored check from one same-record classifier/field declaration. */
-export const classificationFieldCheck = <T extends ScoredTable>(
+const classificationFieldCheck = <T extends ScoredTable>(
   classifier: AnyColumn,
   field: AnyColumn,
   requiredValues: readonly string[],
