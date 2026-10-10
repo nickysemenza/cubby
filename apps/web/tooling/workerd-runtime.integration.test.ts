@@ -390,7 +390,7 @@ describe("workerd test runtime profiles", () => {
               emitted: controls ? await controls.emitted().catch(() => []) : [],
               failure,
               limits: [
-                "External capture simulated; actual Mac acceptance belongs to mac-import-e2e --browser",
+                "External capture simulated; actual Mac acceptance belongs to mac-import-e2e",
               ],
             },
             null,
