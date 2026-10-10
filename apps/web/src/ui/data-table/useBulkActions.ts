@@ -3,7 +3,8 @@ import type {
   RowData,
   RowSelectionState,
 } from "@tanstack/react-table";
-import { useCallback, useState } from "react";
+import { functionalUpdate } from "@tanstack/react-table";
+import { useCallback, useRef, useState } from "react";
 
 import {
   type BulkAction,
@@ -42,6 +43,7 @@ export function useBulkActions<TData extends RowData>({
   config,
 }: UseBulkActionsOptions<TData>): UseBulkActionsReturn<TData> {
   const [rowSelection, setRowSelection] = useState<RowSelectionState>({});
+  const selectionRef = useRef(rowSelection);
   const [isExecuting, setIsExecuting] = useState(false);
   const [currentAction, setCurrentAction] = useState<BulkAction<TData> | null>(
     null,
@@ -52,7 +54,13 @@ export function useBulkActions<TData extends RowData>({
   ).length;
 
   const onRowSelectionChange: OnChangeFn<RowSelectionState> = useCallback(
-    (updater) => setRowSelection(updater),
+    (updater) => {
+      // Table updaters read live rows. Resolve at the event boundary, before
+      // optimistic deletion can remove a row while React replays an update.
+      const next = functionalUpdate(updater, selectionRef.current);
+      selectionRef.current = next;
+      setRowSelection(next);
+    },
     [],
   );
 
@@ -91,19 +99,19 @@ export function useBulkActions<TData extends RowData>({
           !action.preserveSelection &&
           config.clearSelectionOnComplete !== false
         ) {
-          setRowSelection({});
+          onRowSelectionChange({});
         }
       } finally {
         setIsExecuting(false);
         setCurrentAction(null);
       }
     },
-    [config.clearSelectionOnComplete],
+    [config.clearSelectionOnComplete, onRowSelectionChange],
   );
 
   const clearSelection = useCallback(() => {
-    setRowSelection({});
-  }, []);
+    onRowSelectionChange({});
+  }, [onRowSelectionChange]);
 
   return {
     rowSelection,

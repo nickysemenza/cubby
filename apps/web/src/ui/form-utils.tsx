@@ -5,6 +5,7 @@ import {
   Suspense,
   useEffect,
   useId,
+  useMemo,
   useRef,
 } from "react";
 import {
@@ -782,9 +783,11 @@ export function SelectField<TFieldValues extends FieldValues = FieldValues>({
   const controlId = useId();
   const descriptionId = `${controlId}-description`;
   // Build items list, prepending "None" option if nullable
-  const items = nullable
-    ? [{ value: "__none__", label: "None" }, ...options]
-    : options;
+  const items = useMemo(
+    () =>
+      nullable ? [{ value: "__none__", label: "None" }, ...options] : options,
+    [nullable, options],
+  );
 
   return (
     <Controller

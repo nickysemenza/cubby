@@ -1,7 +1,7 @@
 import { searchableEntitySchema, type SearchHit } from "@cubby/schemas/search";
 import { parseShortcode } from "@cubby/shared";
 import { useQuery } from "@tanstack/react-query";
-import { useCallback, useRef, useState } from "react";
+import { useCallback, useMemo, useRef, useState } from "react";
 
 import { entityDetailFor } from "~/entity/entity-detail";
 import { getEntityFilters } from "~/entity/filter-manifest";
@@ -376,14 +376,26 @@ export function useEntitySearchRows<
 
   const onCreateNew = config.useOnCreateNew(openDialog);
 
-  const items = buildSearchItems(
-    searchingByCode,
-    scopeReady,
-    exactItem,
-    useBlankPath,
-    rows,
-    searchHits,
-    config,
+  const items = useMemo(
+    () =>
+      buildSearchItems(
+        searchingByCode,
+        scopeReady,
+        exactItem,
+        useBlankPath,
+        rows,
+        searchHits,
+        config,
+      ),
+    [
+      searchingByCode,
+      scopeReady,
+      exactItem,
+      useBlankPath,
+      rows,
+      searchHits,
+      config,
+    ],
   );
   const isLoading = searchLoading(exactCode, useBlankPath, {
     exact: isExactLoading,

@@ -424,10 +424,14 @@ export default defineConfig(async ({ command }) => {
         },
         router: {
           codeSplittingOptions: {
-            // Keep the route component and its recovery UI in one request. Data
-            // loaders and pending UI remain in their existing eager boundaries.
+            // Keep the route component and its recovery UI in one request, and
+            // split each loader into its own chunk: an eager loader pulled its
+            // whole data-layer graph (filter bindings, entity schemas) into the
+            // app entry for all ~130 routes. SSR preloads the matched route's
+            // loader chunk, and intent preloading covers client navigation.
             defaultBehavior: [
               ["component", "errorComponent", "notFoundComponent"],
+              ["loader"],
             ],
           },
           // Colocated unit tests (e.g. projects.index.unit.test.ts, which imports

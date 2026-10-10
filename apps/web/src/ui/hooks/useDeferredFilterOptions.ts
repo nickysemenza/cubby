@@ -1,7 +1,7 @@
 import type { FilterOptionKind } from "@cubby/schemas/filter-options";
 import { useDebouncedValue } from "@tanstack/react-pacer";
 import { useQuery } from "@tanstack/react-query";
-import { useCallback, useMemo, useState } from "react";
+import { useCallback, useMemo, useRef, useState } from "react";
 
 import { entityFilterOptions } from "~/integrations/tanstack-query/generated/catalog.gen";
 
@@ -34,7 +34,14 @@ export function useDeferredFilterOptions(
     enabled: active,
   });
 
+  // Compared against the last request, not the updater's `current`: see
+  // `useDeferredReferenceFilterOptions` (a rebased low-priority update would
+  // otherwise return a new array on every render and re-fire FilterBar).
+  const requested = useRef<readonly string[] | null>(null);
   const onActivate = useCallback((nextSelectedIds: readonly string[] = []) => {
+    if (requested.current && sameIds(requested.current, nextSelectedIds))
+      return;
+    requested.current = [...nextSelectedIds];
     setActive(true);
     setSelectedIds((current) =>
       sameIds(current, nextSelectedIds) ? current : [...nextSelectedIds],

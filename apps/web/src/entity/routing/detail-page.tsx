@@ -31,7 +31,7 @@ import {
  * const VendorDetailPage = detailPage({ … });
  * const VendorNotFound = notFoundPage("vendor");
  * export const Route = createFileRoute("/_authenticated/vendors/$shortcode")({
- *   loader: …,                         // stays eager — it prefetches
+ *   loader: …,                         // split separately — it prefetches
  *   notFoundComponent: VendorNotFound, // split
  *   component: VendorDetailPage,       // split
  * });

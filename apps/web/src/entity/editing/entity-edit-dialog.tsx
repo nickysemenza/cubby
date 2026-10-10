@@ -1,4 +1,4 @@
-import { Suspense, type ReactNode } from "react";
+import type { ReactNode } from "react";
 
 import { EntityEditDialogContent } from "./entity-edit-dialog-content";
 import type {
@@ -44,19 +44,10 @@ export interface EntityEditDialogProps<E extends EditableEntity> {
   mutationPort?: EntityMutationPort;
 }
 
-/**
- * Keep the semantic and field registries behind the interaction boundary.
- * Route definitions import this typed shell eagerly, but the full editor graph
- * is fetched only when a surface actually mounts a dialog.
- */
 export function EntityEditDialog<E extends EditableEntity>(
   props: EntityEditDialogProps<E>,
 ) {
   if (!props.open) return null;
 
-  return (
-    <Suspense fallback={null}>
-      <EntityEditDialogContent {...props} />
-    </Suspense>
-  );
+  return <EntityEditDialogContent {...props} />;
 }

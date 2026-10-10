@@ -32,6 +32,10 @@ test("task board multi-select bulk-edits status without touching other fields", 
   const taskOne = await seedTaskPrerequisite(page, { name: taskOneName });
   const taskTwo = await seedTaskPrerequisite(page, { name: taskTwoName });
 
+  // Cold form initialization must not recurse through the combobox store
+  // while slower rendering leaves ordinary form updates in flight.
+  const session = await page.context().newCDPSession(page);
+  await session.send("Emulation.setCPUThrottlingRate", { rate: 6 });
   await gotoAuthenticatedPage(page, "/tasks");
 
   for (const name of [taskOneName, taskTwoName]) {

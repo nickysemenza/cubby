@@ -21,14 +21,11 @@
  *   - `getClient` — report-error.ts returns a Sentry event id only when the
  *     installed client will send it; on the worker that is the
  *     `@sentry/cloudflare` client `withSentry` installs.
- *   - `init`, `tanstackRouterBrowserTracingIntegration` — router.tsx. Both sit
- *     behind `if (!router.isServer)`, so they are never called during SSR;
- *     these exist only so the module shape matches.
+ *   - `init` — router.tsx, behind `if (!router.isServer)`, so it is never
+ *     called during SSR; this exists only so the module shape matches.
  *   - `wrapFetchWithSentry` — server.ts, behind `isCfBuild ? … : …`, so also
  *     never called in this build. Identity is the correct fallback regardless:
  *     `withSentry` already wraps the worker's fetch.
- *   - `startInactiveSpan` — the client navigation tracker. The install call is
- *     guarded by `router.isServer`, so SSR only needs a shape-compatible no-op.
  *
  * Adding a new `Sentry.*` call to isomorphic or server code means adding it
  * here too. vite.config.ts fails the SSR build on IMPORT_IS_UNDEFINED so a
@@ -42,31 +39,8 @@ export {
 
 type SentryBrowserApi = typeof import("@sentry/tanstackstart-react");
 type SentryInitOptions = Parameters<SentryBrowserApi["init"]>[0];
-type SentryRouter = Parameters<
-  SentryBrowserApi["tanstackRouterBrowserTracingIntegration"]
->[0];
-type SentrySpanOptions = Parameters<SentryBrowserApi["startInactiveSpan"]>[0];
-type SentrySpanAttributes = Parameters<
-  ReturnType<SentryBrowserApi["startInactiveSpan"]>["setAttributes"]
->[0];
-
 /** No-op: client-only, guarded by `!router.isServer` in router.tsx. */
 export function init(_options?: SentryInitOptions): void {}
-
-/** No-op: client-only, guarded by `!router.isServer` in router.tsx. */
-export function tanstackRouterBrowserTracingIntegration(
-  _router?: SentryRouter,
-) {
-  return { name: "TanStackRouterBrowserTracing" };
-}
-
-/** No-op span: navigation timing is client-only. */
-export function startInactiveSpan(_options?: SentrySpanOptions) {
-  return {
-    setAttributes: (_attributes: SentrySpanAttributes) => {},
-    end: () => {},
-  };
-}
 
 /** Identity: the worker's fetch is already wrapped by `withSentry`. */
 export function wrapFetchWithSentry<T>(handler: T): T {

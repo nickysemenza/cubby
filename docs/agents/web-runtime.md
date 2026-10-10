@@ -10,6 +10,8 @@ invalidation/inline-error/multi-mutation cases.
 Pass the displayed selection as mutation variables at the action boundary.
 A mutation function must not read changing selection state from its closure:
 observer options can lag the render that enabled the action.
+Resolve table selection updaters at the event boundary: they look up live rows
+and must not be deferred to a React state replay after optimistic removal.
 For hook-default and `useQueries` examples, load the relevant heading in the
 [web UI reference](web-ui-reference.md).
 
@@ -60,6 +62,20 @@ with `filterUrlKey` (a runtime spec omits `urlKey` when it equals
 `columnId`). The server and the lazily loaded schema surfaces
 (`features/entity-platform`: the Entities schema sheet and the
 `/entities/schema/$entity` page) keep the full inspector.
+Route loaders split through TanStack Router's `defaultBehavior` alongside
+the component chunks. Keep the generated entity maps and lazy slot registries
+shared: per-entity model registration adds initialization and cross-entity
+Suspense contracts without removing the all-entity list schemas. Scope
+`AuthUIProvider` to the auth/account views; ordinary session reads use
+`authClient.useSession()`. The JSON viewer uses `browserOnlyLazy` at its interaction boundary. Keep the
+generic editor eager: a cold editor graph delays opening and adds a Suspense
+contract to every caller.
+Date-cell inputs stay eager so typing to edit keeps every keystroke while
+focus transfers to the input.
+Keep picker option rosters and Base UI label/equality functions stable across
+form rerenders; use the existing enum roster cache and memoize search projections.
+Resolve the page toolbar's header portal target in a layout effect before paint:
+moving the inline fallback later remounts it and discards an early search draft.
 Keep list page factories (`list-page.tsx`) separate from detail factories
 (`detail-page.tsx`) so lists do not import generic detail sections. Bind each
 factory result to a module-level constant referenced by a splittable property

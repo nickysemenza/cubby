@@ -486,6 +486,13 @@ function EntityPickerInput<TId extends string>({
   );
 }
 
+// Base UI synchronizes these functions into its store; rerenders must not
+// create new identities and recursively notify its subscribers.
+const pickerItemLabel = (item: ComboboxItem) => item.name;
+const pickerItemValue = (item: ComboboxItem) => item.id;
+const pickerItemsEqual = (item: ComboboxItem, selected: ComboboxItem) =>
+  item.id === selected.id;
+
 /**
  * The shared Base UI assignment picker. The input is both the closed display
  * and the open search field, so opening an editor never introduces a second
@@ -635,9 +642,9 @@ export function EntityPicker<TId extends string>({
         if (!open) return;
         setQuery(nextQuery);
       }}
-      itemToStringLabel={(item) => item.name}
-      itemToStringValue={(item) => item.id}
-      isItemEqualToValue={(item, selected) => item.id === selected.id}
+      itemToStringLabel={pickerItemLabel}
+      itemToStringValue={pickerItemValue}
+      isItemEqualToValue={pickerItemsEqual}
       open={open}
       onOpenChange={changeOpen}
       openOnInputClick

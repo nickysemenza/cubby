@@ -41,9 +41,9 @@ import { ViewSwitcher } from "~/ui/primitives/view-switcher";
  * ⚠️ These build **components**, never a `createFileRoute(...)` option object.
  * That is a hard constraint, not a style choice: the router plugin's code
  * splitter only fires when the argument to `createFileRoute(path)(…)` is a
- * literal object expression, and it splits exactly the `component`,
- * `errorComponent`, and `notFoundComponent` properties out of the eager bundle
- * (`defaultCodeSplitGroupings`). Hand it a call expression — a factory that
+ * literal object expression. `defaultBehavior` groups `component`,
+ * `errorComponent`, and `notFoundComponent` together, and splits `loader`
+ * separately out of the eager bundle. Hand it a call expression — a factory that
  * returns the whole options object — and it silently splits nothing, so every
  * route body lands in the first-load app shell.
  *
@@ -53,7 +53,7 @@ import { ViewSwitcher } from "~/ui/primitives/view-switcher";
  * ```tsx
  * const VendorsPage = listPage({ entity: "vendor" });
  * export const Route = createFileRoute("/_authenticated/vendors/")({
- *   loader: …,              // stays eager, by design — it prefetches
+ *   loader: …,              // split separately — it prefetches
  *   component: VendorsPage, // split
  * });
  * ```

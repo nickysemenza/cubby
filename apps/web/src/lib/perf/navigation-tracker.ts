@@ -1,4 +1,3 @@
-import * as Sentry from "@sentry/tanstackstart-react";
 import type { AnyRouter } from "@tanstack/react-router";
 
 import { recordNavigation } from "./perf-store";
@@ -7,7 +6,6 @@ type PendingNavigation = {
   startedAt: number;
   pathname: string;
   pendingShown: boolean;
-  span: ReturnType<typeof Sentry.startInactiveSpan>;
 };
 
 /**
@@ -26,20 +24,10 @@ export function installNavigationTracker(router: AnyRouter): () => void {
   };
   const stopBeforeNavigate = router.subscribe("onBeforeNavigate", (event) => {
     clearPendingTimer();
-    pending?.span.end();
     pending = {
       startedAt: performance.now(),
       pathname: event.toLocation.pathname,
       pendingShown: false,
-      span: Sentry.startInactiveSpan({
-        name: "ui.navigation.usable",
-        op: "ui.navigation",
-        attributes: {
-          "ui.route": event.toLocation.pathname,
-          "deployment.version": __GIT_COMMIT__,
-          "server.address": window.location.hostname,
-        },
-      }),
     };
     pendingTimer = window.setTimeout(() => {
       if (pending) pending.pendingShown = true;
@@ -58,17 +46,10 @@ export function installNavigationTracker(router: AnyRouter): () => void {
         durationMs,
         pendingShown: current.pendingShown,
       });
-      current.span.setAttributes({
-        "ui.route": routeId,
-        "ui.duration_ms": Math.round(durationMs),
-        "ui.pending_shown": current.pendingShown,
-      });
-      current.span.end();
     });
   });
   return () => {
     clearPendingTimer();
-    pending?.span.end();
     stopBeforeNavigate();
     stopRendered();
   };

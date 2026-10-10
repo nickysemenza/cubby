@@ -1,3 +1,8 @@
+import type { Request } from "@playwright/test";
+import { z } from "zod";
+
+import { BROWSER_OPERATION_PATH } from "~/lib/browser-operation-path";
+import { dispatchesOperation } from "./dispatch-wire";
 import { seedTaskPrerequisite } from "./fixtures-catalog";
 import { gotoAuthenticatedPage } from "./e2e-helpers";
 import { expect, test } from "./e2e-test";
@@ -21,6 +26,9 @@ test("task list selection delete shows the impact preview, then removes the rows
     await seedTaskPrerequisite(page, { name: names[1]! }),
   ];
 
+  // Replaying a selection updater after optimistic removal must not crash.
+  const cdp = await page.context().newCDPSession(page);
+  await cdp.send("Emulation.setCPUThrottlingRate", { rate: 6 });
   await gotoAuthenticatedPage(page, "/tasks");
   for (const name of names) {
     await page
@@ -44,7 +52,52 @@ test("task list selection delete shows the impact preview, then removes the rows
   const confirm = dialog.getByRole("button", { name: "Delete", exact: true });
   await expect(confirm).toBeEnabled();
 
-  await confirm.click();
+  const commandSchema = z.object({
+    entity: z.literal("task"),
+    action: z.literal("delete"),
+    ids: z.array(z.string()),
+  });
+  const isDelete = (request: Request) =>
+    dispatchesOperation(request, "entity.mutate", ({ input }) => {
+      const command = commandSchema.safeParse(input);
+      return (
+        command.success &&
+        command.data.ids.length === tasks.length &&
+        tasks.every((task) => command.data.ids.includes(task.id))
+      );
+    });
+  let releaseDelete = () => {};
+  const held = new Promise<void>((resolve) => {
+    releaseDelete = resolve;
+  });
+  let intercepted = false;
+  await page.route(`**${BROWSER_OPERATION_PATH}`, async (route) => {
+    if (!isDelete(route.request())) {
+      await route.continue();
+      return;
+    }
+    intercepted = true;
+    await held;
+    await route.continue();
+  });
+  const deleted = page.waitForResponse((response) =>
+    isDelete(response.request()),
+  );
+  try {
+    await confirm.click();
+    await expect.poll(() => intercepted).toBe(true);
+    await expect(
+      dialog.getByRole("button", { name: "Deleting...", exact: true }),
+    ).toBeDisabled();
+    for (const task of tasks) {
+      const existing = await page.request.get(`/api/v1/tasks/${task.id}`);
+      expect(existing.status()).toBe(200);
+      expect(await existing.json()).toMatchObject({ id: task.id });
+    }
+  } finally {
+    releaseDelete();
+  }
+  expect((await deleted).ok()).toBe(true);
   await expect(dialog).not.toBeVisible();
 
   for (const name of names) {

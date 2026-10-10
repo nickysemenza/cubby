@@ -1,20 +1,12 @@
-import { AuthQueryProvider } from "@daveyplate/better-auth-tanstack";
-import { AuthUIProviderTanstack } from "@daveyplate/better-auth-ui/tanstack";
 import {
   MutationCache,
   QueryCache,
   QueryClient,
   QueryClientProvider,
 } from "@tanstack/react-query";
-import { Link as TanStackLink, useNavigate } from "@tanstack/react-router";
-import type { ReactNode } from "react";
-import { toast } from "sonner";
 import superjson from "superjson";
-import { z } from "zod";
 
-import { authClient } from "~/lib/auth-client";
 import { scheduleDeferredInvalidation } from "~/lib/deferred-invalidation";
-import { GMAIL_READONLY_SCOPE } from "~/lib/google-auth-constants";
 import { showErrorToast } from "~/ui/feedback/error-details";
 
 import {
@@ -32,38 +24,6 @@ import {
   shouldToastQueryError,
 } from "./query-error-policy";
 import { QUERY_CLIENT_DEFAULT_OPTIONS } from "./query-policy";
-
-// Wrapper to adapt TanStack Router Link to better-auth-ui Link format
-const Link = ({
-  href,
-  className,
-  children,
-}: {
-  href: string;
-  className?: string;
-  children: ReactNode;
-}) => (
-  <TanStackLink to={href} className={className}>
-    {children}
-  </TanStackLink>
-);
-
-const googleSignInParams = z.object({
-  provider: z.literal("google"),
-  callbackURL: z.string().optional(),
-});
-
-const signInWithGoogle = (params: unknown) => {
-  const parsed = googleSignInParams.parse(params);
-  return authClient.signIn.social({
-    provider: "google",
-    callbackURL: parsed.callbackURL,
-    errorCallbackURL: "/auth/sign-in?google_error=true",
-    fetchOptions: { throw: true },
-    requestSignUp: false,
-    scopes: [GMAIL_READONLY_SCOPE],
-  });
-};
 
 // React Query fires these cache error callbacks from inside its notify cycle,
 // which can land during React's render/commit phase (e.g. a background query
@@ -159,34 +119,7 @@ export function Provider({
   children: React.ReactNode;
   queryClient: QueryClient;
 }) {
-  const navigate = useNavigate();
-
   return (
-    <AuthQueryProvider>
-      <AuthUIProviderTanstack
-        authClient={authClient}
-        navigate={(href) => navigate({ to: href })}
-        replace={(href) => navigate({ to: href, replace: true })}
-        Link={Link}
-        social={{
-          providers: ["google"],
-          signIn: signInWithGoogle,
-        }}
-        apiKey={{ prefix: "cubby_" }}
-        signUp={false}
-        toast={({ variant, message }) => {
-          const text = message ?? "Something went wrong.";
-          if (variant === "error") toast.error(text);
-          else if (variant === "success") toast.success(text);
-          else if (variant === "warning") toast.warning(text);
-          else if (variant === "info") toast.info(text);
-          else toast(text);
-        }}
-      >
-        <QueryClientProvider client={queryClient}>
-          {children}
-        </QueryClientProvider>
-      </AuthUIProviderTanstack>
-    </AuthQueryProvider>
+    <QueryClientProvider client={queryClient}>{children}</QueryClientProvider>
   );
 }
