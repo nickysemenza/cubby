@@ -72,7 +72,9 @@ struct ClientQueryTests {
     }
 
     @Test func groupedActivityPreservesFiltersAndCursor() async throws {
-        let payload = Data(#"{"items":[],"total":3,"totalItems":7,"nextCursor":"next-groups"}"#.utf8)
+        let payload = Data(
+            #"{"items":[],"total":3,"totalItems":7,"nextCursor":"next-groups","workCounts":{"working":0,"waiting":0,"needsReview":0,"failed":0,"completed":0,"skipped":0},"workSummary":""}"#
+                .utf8)
         let request = try await capture(returning: payload) { client in
             let page = try await client.activityGroups(
                 filters: .init(kind: .productEnrichment, state: "paused_offline", executor: .cloud),
@@ -93,7 +95,9 @@ struct ClientQueryTests {
 
     @Test func groupedActivityChildrenPreserveRootDeviceAndCursor() async throws {
         let deviceID = "00000000-0000-4000-8000-000000000007"
-        let payload = Data(#"{"items":[],"total":2,"nextCursor":"next-children"}"#.utf8)
+        let payload = Data(
+            #"{"items":[],"total":2,"nextCursor":"next-children","workCounts":{"working":0,"waiting":0,"needsReview":0,"failed":0,"completed":0,"skipped":0},"workSummary":""}"#
+                .utf8)
         let request = try await capture(returning: payload) { client in
             let page = try await client.activityGroupChildren(
                 rootID: "RUN-4K7M",

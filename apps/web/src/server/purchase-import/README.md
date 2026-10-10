@@ -33,6 +33,12 @@ active work keep polling until their settlement refresh completes, even after
 parent-group liveness settles. Only rendered, expandable groups contribute child
 liveness; hidden cached children cannot keep polling. Filter changes discard old child responses. Native
 visible acceptance remains separate from model/transport tests and compilation.
+Flat and grouped history return one server-composed work summary and typed status
+counts across all matching attempts, before cursor paging. Both use the same
+state policy as individual groups. Filters bound those totals; an empty result
+returns zero counts. Web and native present the summary as matching Run/image-job
+attempts, not verified Product facts, completed research objectives or mailbox
+coverage. Native filter resets clear the previous summary before a new read.
 
 Product and Purchase research history use the shared entity report and record
 renderer on web and Apple clients. Each attempt shows its Run lifecycle alongside

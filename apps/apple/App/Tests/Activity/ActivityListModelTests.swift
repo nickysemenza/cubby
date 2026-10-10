@@ -77,12 +77,15 @@ nonisolated private final class ActivityListStub: URLProtocol, @unchecked Sendab
         return try! JSONSerialization.data(withJSONObject: [
             "items": [row], "total": 2,
             "nextCursor": secondPage ? NSNull() : "child-page-2",
+            "workCounts": groups["workCounts"]!, "workSummary": groups["workSummary"]!,
         ])
     }
 
     static var groupBody: Data {
         if Self.settled.withLock({ $0 }), Self.hideSettledGroups.withLock({ $0 }) {
-            return Data(#"{"items":[],"total":0,"totalItems":0,"nextCursor":null}"#.utf8)
+            return Data(
+                #"{"items":[],"total":0,"totalItems":0,"nextCursor":null,"workCounts":{"working":0,"waiting":0,"needsReview":0,"failed":0,"completed":0,"skipped":0},"workSummary":""}"#
+                    .utf8)
         }
         guard Self.settled.withLock({ $0 }) else { return Self.groups }
         var body = try! JSONSerialization.jsonObject(with: Self.groups) as! [String: Any]
@@ -94,13 +97,17 @@ nonisolated private final class ActivityListStub: URLProtocol, @unchecked Sendab
             "working": 0, "waiting": 0, "needsReview": 0, "failed": 0, "completed": 3, "skipped": 0,
         ]
         body["totalItems"] = 3
+        body["workCounts"] = items[0]["workCounts"]
+        body["workSummary"] = items[0]["workSummary"]
         body["items"] = items
         return try! JSONSerialization.data(withJSONObject: body)
     }
 
-    static let empty = Data(#"{"items":[],"total":0,"nextCursor":null}"#.utf8)
+    static let empty = Data(
+        #"{"items":[],"total":0,"nextCursor":null,"workCounts":{"working":0,"waiting":0,"needsReview":0,"failed":0,"completed":0,"skipped":0},"workSummary":""}"#
+            .utf8)
     static let groups = Data(
-        #"{"items":[{"root":{"id":"RUN-4K7M","recordType":"run","parentRunId":null,"kind":"mail_discovery","trigger":null,"vendorAccountId":null,"vendorId":null,"ledgerPartyId":null,"subjectId":null,"subjectName":"Sample discovery","iconEntity":"run","dataQuality":null,"subjectImage":null,"workLabel":"Mail discovery","currentStep":null,"targetCounts":null,"targetSummary":null,"targetPreview":[],"changedCount":0,"state":"completed","active":false,"createdAt":"2026-01-01T00:00:00Z","completedAt":"2026-01-01T00:00:01Z","durationMs":1000,"attempts":1,"executors":[],"estimatedCost":null,"error":null,"hasDiagnostics":false,"canRetry":false},"active":true,"workCounts":{"working":1,"waiting":0,"needsReview":0,"failed":0,"completed":1,"skipped":0},"workSummary":"1 working · 1 completed","childCount":1,"contextOnly":false,"latestAt":"2026-01-01T00:00:02Z"}],"total":1,"totalItems":2,"nextCursor":null}"#
+        #"{"items":[{"root":{"id":"RUN-4K7M","recordType":"run","parentRunId":null,"kind":"mail_discovery","trigger":null,"vendorAccountId":null,"vendorId":null,"ledgerPartyId":null,"subjectId":null,"subjectName":"Sample discovery","iconEntity":"run","dataQuality":null,"subjectImage":null,"workLabel":"Mail discovery","currentStep":null,"targetCounts":null,"targetSummary":null,"targetPreview":[],"changedCount":0,"state":"completed","active":false,"createdAt":"2026-01-01T00:00:00Z","completedAt":"2026-01-01T00:00:01Z","durationMs":1000,"attempts":1,"executors":[],"estimatedCost":null,"error":null,"hasDiagnostics":false,"canRetry":false},"active":true,"workCounts":{"working":1,"waiting":0,"needsReview":0,"failed":0,"completed":1,"skipped":0},"workSummary":"1 working · 1 completed","childCount":1,"contextOnly":false,"latestAt":"2026-01-01T00:00:02Z"}],"total":1,"totalItems":2,"nextCursor":null,"workCounts":{"working":1,"waiting":0,"needsReview":0,"failed":0,"completed":1,"skipped":0},"workSummary":"1 working · 1 completed"}"#
             .utf8)
 }
 

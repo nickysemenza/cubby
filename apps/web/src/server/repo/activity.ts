@@ -1,5 +1,7 @@
 import {
   ACTIVITY_KIND_LABEL,
+  activityWorkCounts,
+  activityWorkSummary,
   activityAttempt,
   targetOutcomeSummary,
   activityDetailOutput,
@@ -7,7 +9,6 @@ import {
   activityEvent,
   activityEventsOutput,
   activityGroupsOutput,
-  activityWorkSummary,
   activityListOutput,
   activityRun,
   activityIconEntity,
@@ -501,6 +502,16 @@ function listPredicate(input: ActivityListInput): SQL {
   return sql.join(clauses, sql` AND `);
 }
 
+/** One state policy for flat, grouped and all-page attempt summaries. */
+const workCountsProjection = sql`jsonb_build_object(
+          'working', count(*) FILTER (WHERE state IN ('running', 'pending', 'leased')),
+          'waiting', count(*) FILTER (WHERE state IN ('paused_auth', 'paused_offline', 'paused_approval', 'waiting_for_device')),
+          'needsReview', count(*) FILTER (WHERE state = 'needs_review'),
+          'failed', count(*) FILTER (WHERE state IN ('failed', 'dispatch_failed')),
+          'completed', count(*) FILTER (WHERE state IN ('completed', 'ready')),
+          'skipped', count(*) FILTER (WHERE state = 'skipped')
+        )`;
+
 export async function listActivity(
   db: Database,
   _partyId: string | null,
@@ -527,6 +538,7 @@ export async function listActivity(
     )
     SELECT
       (SELECT count(*)::int FROM filtered) AS total,
+      (SELECT ${workCountsProjection} FROM filtered) AS "workCounts",
       coalesce(
         (SELECT jsonb_agg(
           to_jsonb(page) || jsonb_build_object(
@@ -541,6 +553,7 @@ export async function listActivity(
   const data = z
     .object({
       total: z.coerce.number(),
+      workCounts: activityWorkCounts,
       items: z.array(runWire.extend({ cursorAt: z.iso.datetime() })),
     })
     .parse(query.rows[0]);
@@ -549,6 +562,8 @@ export async function listActivity(
   return activityListOutput.parse({
     items: await presentActivityRuns(db, pageItems),
     total: data.total,
+    workCounts: data.workCounts,
+    workSummary: activityWorkSummary(data.workCounts),
     nextCursor:
       data.items.length > input.limit && last
         ? encodeCursor(last.cursorAt, last.id)
@@ -579,14 +594,7 @@ export async function listActivityGroups(
         max("createdAt") AS "latestAt",
         count(*) FILTER (WHERE id <> "groupRootId")::int AS "childCount",
         bool_or("groupActive") AS active,
-        jsonb_build_object(
-          'working', count(*) FILTER (WHERE state IN ('running', 'pending', 'leased')),
-          'waiting', count(*) FILTER (WHERE state IN ('paused_auth', 'paused_offline', 'paused_approval', 'waiting_for_device')),
-          'needsReview', count(*) FILTER (WHERE state = 'needs_review'),
-          'failed', count(*) FILTER (WHERE state IN ('failed', 'dispatch_failed')),
-          'completed', count(*) FILTER (WHERE state IN ('completed', 'ready')),
-          'skipped', count(*) FILTER (WHERE state = 'skipped')
-        ) AS "workCounts",
+        ${workCountsProjection} AS "workCounts",
         bool_or(id = "groupRootId") AS "rootMatched"
       FROM filtered
       GROUP BY 1
@@ -616,11 +624,13 @@ export async function listActivityGroups(
     SELECT
       (SELECT count(*)::int FROM aggregate) AS total,
       (SELECT count(*)::int FROM filtered) AS "totalItems",
+      (SELECT ${workCountsProjection} FROM filtered) AS "workCounts",
       coalesce((SELECT jsonb_agg(to_jsonb(page) ORDER BY page."cursorAt" ${direction}, page."rootId" ${direction}) FROM page), '[]'::jsonb) AS items
   `);
   const data = z
     .object({
       total: z.coerce.number(),
+      workCounts: activityWorkCounts,
       totalItems: z.coerce.number(),
       items: z.array(
         z.object({
@@ -648,6 +658,8 @@ export async function listActivityGroups(
       workSummary: activityWorkSummary(row.item.workCounts),
     })),
     total: data.total,
+    workCounts: data.workCounts,
+    workSummary: activityWorkSummary(data.workCounts),
     totalItems: data.totalItems,
     nextCursor:
       data.items.length > input.limit && last
