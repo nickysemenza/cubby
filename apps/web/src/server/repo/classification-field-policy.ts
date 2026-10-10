@@ -167,7 +167,8 @@ export function assertClassificationPolicies(
       if (status === "required" && (value === null || value === undefined)) {
         throw createAppError(
           "CONSTRAINT_VIOLATION",
-          `${String(classifier)} requires ${declaration.field} (${id}).`,
+          ("refusal" in declaration ? declaration.refusal : undefined) ??
+            `${String(classifier)} requires ${declaration.field} (${id}).`,
         );
       }
     }

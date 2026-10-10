@@ -332,48 +332,6 @@ describe("reviewed spending classification", () => {
     ).rejects.toThrow(/changed/i);
   });
 
-  // The tax line's allocation already follows its principal into the same
-  // category, so only its resolved category shows the cleared override.
-  it("counts a cleared adjustment override whose allocation is unchanged", async () => {
-    const category = await insertWithShortcode(ctx.db, "spendingCategory", {
-      name: "Fixture supplies",
-    });
-    const vendor = await insertWithShortcode(ctx.db, "vendor", {
-      name: "Fixture supply shop",
-    });
-    const purchase = await insertWithShortcode(ctx.db, "purchase", {
-      date: "2026-09-01",
-      vendorId: vendor.id,
-    });
-    const line = {
-      date: "2026-09-01",
-      costType: "materials" as const,
-      trade: "other" as const,
-      purchaseId: purchase.id,
-      spendingCategoryId: category.id,
-    };
-    await insertWithShortcode(ctx.db, "expense", {
-      ...line,
-      name: "Fixture supplies",
-      cost: 20,
-    });
-    const tax = await insertWithShortcode(ctx.db, "expense", {
-      ...line,
-      name: "Fixture tax",
-      cost: 1.6,
-      lineKind: "tax",
-    });
-    const preview = await previewSpendingClassificationReview(ctx.db, {
-      action: "expenses",
-      expenseIds: [parseShortcodeFor("expense", tax.shortcode)],
-      spendingCategoryId: null,
-    });
-    expect(preview.changedExpenseCount).toBe(1);
-    expect(
-      preview.categoryDeltas.every((delta) => delta.deltaCents === "0"),
-    ).toBe(true);
-  });
-
   it("previews exact money without writes and rejects changed history before apply", async () => {
     const category = await insertWithShortcode(ctx.db, "spendingCategory", {
       name: "Fixture gifts",

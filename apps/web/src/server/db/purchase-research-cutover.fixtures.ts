@@ -24,17 +24,19 @@ const journal = z
       readFileSync(join(MIGRATIONS_FOLDER, "meta/_journal.json"), "utf8"),
     ),
   );
-const mainLength =
-  journal.entries.findIndex(
-    (entry) => entry.tag === "0024_neon_cache_diagnostics",
-  ) + 1;
+const cutoverIndex = journal.entries.findIndex(
+  (entry) => entry.tag === "0025_purchase_research",
+);
 if (
-  mainLength !== 25 ||
-  journal.entries[mainLength]?.tag !== "0025_purchase_research"
+  cutoverIndex < 1 ||
+  journal.entries[cutoverIndex - 1]?.tag !== "0024_neon_cache_diagnostics"
 )
   throw new Error(
     "Cutover rehearsal must use the main prefix and canonical rewrite migration.",
   );
+// Build the schema immediately before the cutover; `migrateDatabase` below
+// must execute the tagged migration against the populated legacy tables.
+const preCutoverLength = cutoverIndex;
 
 export async function saveTables(database: Database): Promise<SavedTable[]> {
   const db = getDb(database);
@@ -82,14 +84,14 @@ export async function openMainCutover(
     const migrations = readMigrationFiles({
       migrationsFolder: MIGRATIONS_FOLDER,
     });
-    if (migrations.length !== mainLength + 1)
+    if (migrations.length <= cutoverIndex)
       throw new Error("Unexpected cutover migration journal.");
     await client.query("BEGIN");
     try {
       await client.query(
         "CREATE SCHEMA drizzle; CREATE TABLE drizzle.__drizzle_migrations (id SERIAL PRIMARY KEY, hash text NOT NULL, created_at bigint)",
       );
-      for (const migration of migrations.slice(0, mainLength)) {
+      for (const migration of migrations.slice(0, preCutoverLength)) {
         for (const statement of migration.sql) await client.query(statement);
         await client.query(
           "INSERT INTO drizzle.__drizzle_migrations (hash, created_at) VALUES ($1, $2)",

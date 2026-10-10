@@ -167,18 +167,19 @@ export default defineEntity({
               value: "unknown",
               label: "Unclassified",
               description:
-                "Insufficient or mixed evidence; leave receipt expectation unclassified",
+                "Insufficient or mixed evidence; leave Product expectation unclassified",
             },
             {
               value: "required",
               label: "Expected",
-              description: "Household expects a receipt or order evidence",
+              description:
+                "Durable goods such as tools, furniture, clothing, and tracked software need a Product record",
             },
             {
               value: "not_expected",
               label: "Not expected",
               description:
-                "Household does not expect receipt or order evidence",
+                "Groceries, services, and friend reimbursements do not need a Product record, but may link one",
             },
             {
               value: "not_allowed",
