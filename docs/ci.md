@@ -32,7 +32,8 @@ switch, and the variables that select or reorder tests (`webGate` in
 `rust-toolchain.toml` names a floating channel. The Apple targets key on what
 the Apple build reads instead of the whole tree (`appleGate` in
 `apps/apple/project.json`): `apps/apple`, the Rust FFI crates, the check
-scripts and CI configuration, the generated Swift, and `xcodebuild -version`,
+scripts and CI configuration, the shared golden vectors, the generated Swift,
+and `xcodebuild -version`; `pnpm apple check` regenerates before hashing,
 so a web-only change replays the Apple lanes. Workflows that only deploy,
 publish or review (`deploy.yaml`, `apple-testflight.yaml`, the Claude
 workflows) are outside every key. The nightly scheduled run sets `NX_SKIP_NX_CACHE` for
