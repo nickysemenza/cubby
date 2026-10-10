@@ -8,7 +8,10 @@ import type { ReactNode } from "react";
 import { useMemo, useRef, useState } from "react";
 
 import { entities, isBrowserRoutedEntity } from "~/entity/entities";
-import { RecordSuggestionsProvider } from "~/features/ai/record-suggestions";
+import {
+  RecordSuggestionsBulkAction,
+  RecordSuggestionsProvider,
+} from "~/features/ai/record-suggestions";
 import type { QueryTiming } from "~/lib/query-timing";
 import { cn } from "~/lib/utils";
 import { ErrorDisplay } from "~/ui/feedback/error-display";
@@ -918,6 +921,18 @@ function tableChrome<TItem extends RowData>({
   };
 }
 
+function withSuggestionsBulkAction<TItem extends RowData>(
+  bulkActionBar: ReactNode,
+  records: readonly TItem[],
+) {
+  return (
+    <>
+      {bulkActionBar}
+      <RecordSuggestionsBulkAction records={records} />
+    </>
+  );
+}
+
 function RTableInner<TItem extends RowData>(props: RTableProps<TItem>) {
   const {
     table,
@@ -995,6 +1010,13 @@ function RTableInner<TItem extends RowData>(props: RTableProps<TItem>) {
   // the path `cell-edit-trigger` documents as unsafe once the range engine
   // owns copy/paste.
   const cellSelectionEnabled = !isMobile;
+  const selectedRecords = table
+    .getSelectedRowModel()
+    .rows.map((row) => row.original);
+  const bulkActionsWithSuggestions = withSuggestionsBulkAction(
+    bulkActionBar,
+    selectedRecords,
+  );
 
   // Embedded tables drop chrome that would carry no information: a toolbar
   // holding only the View menu + page-size control, and a pager for a list that
@@ -1011,7 +1033,7 @@ function RTableInner<TItem extends RowData>(props: RTableProps<TItem>) {
     embedded,
     showColumnMenu,
     actions,
-    bulkActionBar,
+    bulkActionBar: bulkActionsWithSuggestions,
     additionalToolbarContent,
     groupConfig,
     inspectorToggle,
@@ -1052,7 +1074,7 @@ function RTableInner<TItem extends RowData>(props: RTableProps<TItem>) {
       grouped={grouped}
       onGroupedChange={onGroupedChange}
       actions={actions}
-      bulkActionBar={bulkActionBar}
+      bulkActionBar={bulkActionsWithSuggestions}
       bulkActionPreview={bulkActionPreview}
       externalToolbar={externalToolbar}
       isTransitioning={isTransitioning}
@@ -1222,7 +1244,7 @@ function RTableInner<TItem extends RowData>(props: RTableProps<TItem>) {
               onRowClick={onRowClick}
               additionalToolbarContent={additionalToolbarContent}
               actions={actions}
-              bulkActionBar={bulkActionBar}
+              bulkActionBar={bulkActionsWithSuggestions}
               isLoading={isLoading}
               error={error}
               infiniteScroll={infiniteScroll}
