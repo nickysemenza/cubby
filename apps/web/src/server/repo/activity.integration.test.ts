@@ -45,10 +45,54 @@ import {
 } from "./image-processing";
 import { insertEntityAttachments } from "./repo.fixtures";
 import { getRunByShortcode } from "./run";
+import { insertDebugEventOperations } from "./run-operation";
 import { insertWithShortcode } from "./shortcode-utils";
 
 describe("activity image processing projection", () => {
   const ctx = withTestDb();
+
+  it("pages delayed browser observations by their original time after batch replay", async () => {
+    const runId = await ensureRun(ctx.db, ctx.actor, { purpose: "background" });
+    const [saved] = await getDb(ctx.db)
+      .select({ shortcode: runTable.shortcode })
+      .from(runTable)
+      .where(eq(runTable.id, runId));
+    if (!saved) throw new Error("Synthetic Run unavailable");
+    const event = {
+      id: crypto.randomUUID(),
+      runId,
+      occurredAt: "2026-01-01T12:00:00.000Z",
+      event: "command.started" as const,
+      operationKind: "navigate" as const,
+    };
+    const later = {
+      ...event,
+      id: crypto.randomUUID(),
+      occurredAt: "2026-01-01T12:01:00.000Z",
+    };
+    await insertDebugEventOperations(getDb(ctx.db), [later]);
+    await insertDebugEventOperations(getDb(ctx.db), [event]);
+    expect(
+      await insertDebugEventOperations(getDb(ctx.db), [event, later]),
+    ).toBe(0);
+    const first = await activityEvents(ctx.db, null, {
+      id: saved.shortcode,
+      limit: 1,
+    });
+    expect(first.items[0]).toMatchObject({
+      occurredAt: later.occurredAt,
+      event: later.event,
+    });
+    expect(JSON.parse(first.items[0]!.detailsJson!)).toEqual(later);
+    expect(first.nextCursor).toBeTruthy();
+    const second = await activityEvents(ctx.db, null, {
+      id: saved.shortcode,
+      limit: 1,
+      cursor: first.nextCursor!,
+    });
+    expect(second.items[0]).toMatchObject({ occurredAt: event.occurredAt });
+    expect(second.nextCursor).toBeNull();
+  });
 
   it("opens browser-carried internal Run identity through the canonical activity read", async () => {
     const runId = await ensureRun(ctx.db, ctx.actor, { purpose: "background" });
