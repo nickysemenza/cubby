@@ -1,5 +1,9 @@
 import SwiftUI
 
+#if os(iOS)
+    import UIKit
+#endif
+
 #if os(macOS)
     import AppKit
 #endif
@@ -10,8 +14,7 @@ extension View {
         scrollDismissesKeyboard(.interactively)
     }
 
-    /// A "Done" key above the software keyboard. Attached to a field, it shows only while that
-    /// field is focused.
+    /// A "Done" key above the software keyboard for a field or its containing editor.
     func keyboardDismissBar() -> some View {
         modifier(KeyboardDismissBar())
     }
@@ -225,17 +228,19 @@ let fieldGuideTwoColumns = [
 /// SwiftUI focus state, not a UIKit `resignFirstResponder` hack: the modifier owns a focus flag
 /// for the field it wraps and clears it from the Done key.
 private struct KeyboardDismissBar: ViewModifier {
-    @FocusState private var focused: Bool
-
     func body(content: Content) -> some View {
         #if os(iOS)
             content
-                .focused($focused)
                 .toolbar {
                     ToolbarItemGroup(placement: .keyboard) {
                         Spacer()
-                        Button("Done") { focused = false }
-                            .font(.fieldGuideBody.weight(.semibold))
+                        // A Form-level focus binding does not own its descendants' focus.
+                        Button("Done") {
+                            UIApplication.shared.sendAction(
+                                #selector(UIResponder.resignFirstResponder),
+                                to: nil, from: nil, for: nil)
+                        }
+                        .font(.fieldGuideBody.weight(.semibold))
                     }
                 }
         #else

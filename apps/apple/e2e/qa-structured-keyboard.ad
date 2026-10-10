@@ -1,0 +1,25 @@
+context platform=ios timeout=240000
+
+# A structured array row's lower inputs must stay reachable above the keyboard: typing an
+# external ID's source then its id regressed when the whole row was one tall Form cell.
+open com.nickysemenza.cubby
+wait "role=Button label=Find" 240000
+open "cubby://entity/${PRODUCT_ID}"
+wait "role=Button id=detail.product.edit" 90000
+click "role=Button id=detail.product.edit"
+wait text "Edit Product" 90000
+scroll down 0.4 --until "id=editor.product.externalIds.add"
+wait "role=Button label=\"Add external ids\"" 90000
+click "role=Button label=\"Add external ids\""
+wait "id=editor.product.externalIds.0.source" 30000
+fill "id=editor.product.externalIds.0.source" "synthetic-shop"
+click "role=Button label=Done"
+fill "id=editor.product.externalIds.0.externalId" "B0SYNTH001"
+click "role=Button label=Done"
+click "role=Button label=Save"
+wait "role=Button id=detail.product.edit" 90000
+click "role=Button id=detail.product.edit"
+wait text "Edit Product" 90000
+scroll down 0.4 --until "id=editor.product.externalIds.0.source"
+wait "role=TextField value=synthetic-shop" 90000
+wait "role=TextField value=B0SYNTH001" 90000

@@ -145,6 +145,7 @@ struct PhotoRelatedCreateEditor: View {
                             }
                         }
                         .formStyle(.grouped)
+                        .keyboardDismissBar()
                     }
                 } else {
                     LoadingIndicator.screen(label: "Preparing \(descriptor.singular)")
@@ -197,11 +198,14 @@ struct PhotoRelatedCreateEditor: View {
     /// the person hasn't overridden it — never keys off the field or entity's name (A2).
     private func editorFields(_ fields: [FieldDescriptor], model: GenericEntityEditModel) -> some View {
         ForEach(fields, id: \.key) { field in
-            VStack(alignment: .leading, spacing: 2) {
-                EntityFieldControl(field: field, model: model, pickedTitles: $pickedTitles)
-                if let caption = provenanceCaption(for: field, model: model) {
+            if let caption = provenanceCaption(for: field, model: model) {
+                VStack(alignment: .leading, spacing: 2) {
+                    EntityFieldControl(field: field, model: model, pickedTitles: $pickedTitles)
                     Text(caption).font(.caption).foregroundStyle(.secondary)
                 }
+            } else {
+                // Unwrapped, so a structured field keeps its one Form row per input.
+                EntityFieldControl(field: field, model: model, pickedTitles: $pickedTitles)
             }
         }
     }

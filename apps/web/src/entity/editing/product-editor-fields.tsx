@@ -182,8 +182,8 @@ export function ProductUnitMappingsField({
 /**
  * `product.externalIds`: the array-of-object grid (PR 2's `ArrayFieldManager
  * columns` mode) plus PR 1's Jev kind suggestion under the Kind select. Row
- * controls pass `label=""` — the grid's own header row is the label, per the
- * `columns` contract (`array-field-manager.tsx`).
+ * controls keep associated labels visually hidden because the grid supplies
+ * visible column headings. Placeholders are examples, never field names.
  */
 /** A freshly added row has no kind until the operator or Jev picks one; the
  * form schema rejects the blank select on save. */
@@ -229,7 +229,8 @@ export function ProductExternalIdsField({
               <SelectField
                 form={form}
                 name={kindPath}
-                label=""
+                label="Kind"
+                hideLabel
                 placeholder="Select kind"
                 options={externalIdKind.options.map((kind) => ({
                   value: kind,
@@ -250,7 +251,8 @@ export function ProductExternalIdsField({
               <UnifiedTextField
                 form={form}
                 name={sourcePath}
-                label=""
+                label="Source"
+                hideLabel
                 placeholder="e.g. amazon, mcmaster"
               />
             </div>
@@ -258,7 +260,8 @@ export function ProductExternalIdsField({
               <UnifiedTextField
                 form={form}
                 name={externalIdPath}
-                label=""
+                label="Identifier"
+                hideLabel
                 placeholder="e.g. B08N5WRWNW"
               />
             </div>
@@ -266,7 +269,8 @@ export function ProductExternalIdsField({
               <UnifiedTextField
                 form={form}
                 name={urlPath}
-                label=""
+                label="URL"
+                hideLabel
                 placeholder="https://..."
                 nullable
               />

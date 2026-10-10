@@ -85,9 +85,11 @@ export type JourneyStep = {
   check?: StepCheck;
   /** Read back from the screen once the step ends. */
   read?: ScreenRead;
-  /** Replaces `goal` for one engine when the labels differ. */
-  web?: string;
-  ios?: string;
+  /** Engine-specific wording or interaction phases supported by that engine. */
+  web?: string | string[];
+  ios?: string | string[];
+  /** A supported hybrid step uses a known control instead of model completion. */
+  tapTestId?: Partial<Record<Engine, string>>;
 };
 
 export type Journey = {
@@ -137,8 +139,9 @@ export function replayParams(ids: JourneyIds) {
   };
 }
 
-export function stepGoal(step: JourneyStep, engine: Engine) {
-  return step[engine] ?? step.goal;
+export function stepGoals(step: JourneyStep, engine: Engine) {
+  const goals = step[engine] ?? step.goal;
+  return Array.isArray(goals) ? goals : [goals];
 }
 
 export function loadJourneyIds(journey: string): JourneyIds {

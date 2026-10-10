@@ -5,6 +5,10 @@ import SwiftUI
 /// `sourceAliases`, `sourceRefs`, `structuredField`): it draws the field's declared `ValueSchema`,
 /// recursively, into `GenericEntityEditModel.draft`. There is no per-entity or per-field view;
 /// validation stays on the server and its issues arrive at `model.nestedError` by position.
+///
+/// Every input is its own Form row: the editor emits sibling rows rather than one stacked cell,
+/// because keyboard avoidance scrolls a whole row into view, and a tall cell left a lower input
+/// (an external ID's id under its source) behind the keyboard. Keep composites flat — no VStack.
 struct StructuredValueControl: View {
     let field: FieldDescriptor
     let schema: ValueSchema
@@ -58,21 +62,19 @@ private struct StructuredSchemaView: View {
     }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: FieldGuideTokens.Space.xs) {
-            if let notice = schema.notice {
-                Text(notice).font(.caption).foregroundStyle(.secondary)
-            }
-            if schema.nullable && addedAsWhole {
-                nullableComposite
-            } else {
-                content
-            }
-            ForEach(errors, id: \.self) { message in
-                Text(message)
-                    .font(.caption)
-                    .foregroundStyle(FieldGuideTokens.destructive)
-                    .accessibilityLabel("\(title) error: \(message)")
-            }
+        if let notice = schema.notice {
+            Text(notice).font(.caption).foregroundStyle(.secondary)
+        }
+        if schema.nullable && addedAsWhole {
+            nullableComposite
+        } else {
+            content
+        }
+        ForEach(errors, id: \.self) { message in
+            Text(message)
+                .font(.caption)
+                .foregroundStyle(FieldGuideTokens.destructive)
+                .accessibilityLabel("\(title) error: \(message)")
         }
     }
 
@@ -230,120 +232,128 @@ private struct StructuredSchemaView: View {
 
     // MARK: - Composites
 
+    @ViewBuilder
     private func fieldRows(_ fields: [ValueSchema.Field]) -> some View {
-        VStack(alignment: .leading, spacing: FieldGuideTokens.Space.sm) {
-            if !title.isEmpty {
-                Text(title).font(.fieldGuideLabel).foregroundStyle(.secondary)
-            }
-            ForEach(fields.filter(\.schema.isEdited), id: \.key) { child in
-                StructuredSchemaView(
-                    context: context, schema: child.schema,
-                    title: child.required ? "\(child.label) *" : child.label,
-                    path: path + [child.key])
-            }
+        if !title.isEmpty {
+            Text(title).font(.fieldGuideLabel).foregroundStyle(.secondary)
+        }
+        ForEach(fields.filter(\.schema.isEdited), id: \.key) { child in
+            StructuredSchemaView(
+                context: context, schema: child.schema,
+                title: child.required ? "\(child.label) *" : child.label,
+                path: path + [child.key])
         }
     }
 
+    /// A composite item is a heading row, one row per input, and its own Remove row; a scalar
+    /// item keeps its Remove beside the one input.
+    @ViewBuilder
     private func arrayRows(_ item: ValueSchema) -> some View {
         let items = value.arrayValue ?? []
         let rowTitle = title.replacingOccurrences(of: " *", with: "")
-        return VStack(alignment: .leading, spacing: FieldGuideTokens.Space.sm) {
-            Text(title).font(.fieldGuideLabel).foregroundStyle(.secondary)
-            ForEach(items.indices, id: \.self) { index in
-                HStack(alignment: .top) {
-                    VStack(alignment: .leading, spacing: FieldGuideTokens.Space.xs) {
-                        if item.isComposite {
-                            Text("\(rowTitle) \(index + 1)").font(.fieldGuideLabel.weight(.semibold))
-                        }
-                        StructuredSchemaView(
-                            context: context, schema: item,
-                            title: item.isComposite ? "" : "\(rowTitle) \(index + 1)",
-                            path: path + [String(index)])
-                    }
-                    Button("Remove", systemImage: "minus.circle.fill") {
-                        var next = items
-                        next.remove(at: index)
-                        context.set(path, .array(next))
-                    }
-                    .labelStyle(.iconOnly)
-                    .foregroundStyle(FieldGuideTokens.destructive)
-                    .buttonStyle(.borderless)
-                    .frame(minHeight: FieldGuideTokens.touchTarget)
-                    .accessibilityLabel("Remove \(rowTitle) \(index + 1)")
-                    .accessibilityIdentifier(context.identifier(path + [String(index), "remove"]))
-                }
-                if index < items.count - 1 { Divider() }
+        Text(title).font(.fieldGuideLabel).foregroundStyle(.secondary)
+        ForEach(items.indices, id: \.self) { index in
+            let itemTitle = "\(rowTitle) \(index + 1)"
+            let remove = removeButton(
+                label: "Remove \(itemTitle)", identifier: path + [String(index), "remove"]
+            ) {
+                var next = items
+                next.remove(at: index)
+                context.set(path, .array(next))
             }
-            Button("Add \(rowTitle.lowercased())", systemImage: "plus") {
-                context.set(path, .array(items + [StructuredValue.blank(item, populated: true)]))
+            if item.isComposite {
+                Text(itemTitle).font(.fieldGuideLabel.weight(.semibold))
+                StructuredSchemaView(context: context, schema: item, title: "", path: path + [String(index)])
+                remove.labelStyle(.titleAndIcon)
+            } else {
+                HStack {
+                    StructuredSchemaView(
+                        context: context, schema: item, title: itemTitle, path: path + [String(index)])
+                    remove.labelStyle(.iconOnly)
+                }
+            }
+        }
+        Button("Add \(rowTitle.lowercased())", systemImage: "plus") {
+            context.set(path, .array(items + [StructuredValue.blank(item, populated: true)]))
+        }
+        .accessibilityIdentifier(context.identifier(path + ["add"]))
+    }
+
+    private func removeButton(label: String, identifier: [String], action: @escaping () -> Void)
+        -> some View
+    {
+        Button(label, systemImage: "minus.circle.fill", action: action)
+            .foregroundStyle(FieldGuideTokens.destructive)
+            .buttonStyle(.borderless)
+            .frame(minHeight: FieldGuideTokens.touchTarget)
+            .accessibilityIdentifier(context.identifier(identifier))
+    }
+
+    @ViewBuilder
+    private func mapRows(_ keys: [LabeledOption], _ item: ValueSchema) -> some View {
+        let entries = value.objectValue ?? [:]
+        let present = keys.filter { entries[$0.value] != nil }
+        let absent = keys.filter { entries[$0.value] == nil }
+        Text(title).font(.fieldGuideLabel).foregroundStyle(.secondary)
+        ForEach(present, id: \.value) { option in
+            let remove = removeButton(
+                label: "Remove \(option.label)", identifier: path + [option.value, "remove"]
+            ) {
+                var next = entries
+                next.removeValue(forKey: option.value)
+                context.set(path, .object(next))
+            }
+            if item.isComposite {
+                StructuredSchemaView(
+                    context: context, schema: item, title: option.label, path: path + [option.value])
+                remove.labelStyle(.titleAndIcon)
+            } else {
+                HStack {
+                    StructuredSchemaView(
+                        context: context, schema: item, title: option.label, path: path + [option.value])
+                    remove.labelStyle(.iconOnly)
+                }
+            }
+        }
+        if !absent.isEmpty {
+            Menu {
+                ForEach(absent, id: \.value) { option in
+                    Button(option.label) {
+                        var next = entries
+                        next[option.value] = StructuredValue.blank(item, populated: true)
+                        context.set(path, .object(next))
+                    }
+                }
+            } label: {
+                Label("Add", systemImage: "plus")
             }
             .accessibilityIdentifier(context.identifier(path + ["add"]))
         }
     }
 
-    private func mapRows(_ keys: [LabeledOption], _ item: ValueSchema) -> some View {
-        let entries = value.objectValue ?? [:]
-        let present = keys.filter { entries[$0.value] != nil }
-        let absent = keys.filter { entries[$0.value] == nil }
-        return VStack(alignment: .leading, spacing: FieldGuideTokens.Space.sm) {
-            Text(title).font(.fieldGuideLabel).foregroundStyle(.secondary)
-            ForEach(present, id: \.value) { option in
-                HStack {
-                    StructuredSchemaView(
-                        context: context, schema: item, title: option.label,
-                        path: path + [option.value])
-                    Button("Remove", systemImage: "minus.circle.fill") {
-                        var next = entries
-                        next.removeValue(forKey: option.value)
-                        context.set(path, .object(next))
-                    }
-                    .labelStyle(.iconOnly)
-                    .foregroundStyle(FieldGuideTokens.destructive)
-                    .buttonStyle(.borderless)
-                    .accessibilityLabel("Remove \(option.label)")
-                }
-            }
-            if !absent.isEmpty {
-                Menu {
-                    ForEach(absent, id: \.value) { option in
-                        Button(option.label) {
-                            var next = entries
-                            next[option.value] = StructuredValue.blank(item, populated: true)
-                            context.set(path, .object(next))
-                        }
-                    }
-                } label: {
-                    Label("Add", systemImage: "plus")
-                }
-                .accessibilityIdentifier(context.identifier(path + ["add"]))
-            }
-        }
-    }
-
+    @ViewBuilder
     private func variantRows(_ discriminator: String, _ cases: [ValueSchema.Case], locked: Bool) -> some View
     {
         let tag = value[discriminator]?.stringValue
         let selected = cases.first { $0.value == tag }
         let pickerTitle = title.isEmpty ? discriminator.capitalized : "\(title) \(discriminator)"
-        return VStack(alignment: .leading, spacing: FieldGuideTokens.Space.sm) {
-            Picker(
-                pickerTitle,
-                selection: Binding(
-                    get: { tag ?? "" },
-                    set: { chosen in
-                        guard chosen != tag, let next = cases.first(where: { $0.value == chosen }) else {
-                            return
-                        }
-                        context.set(path, StructuredValue.blankCase(discriminator, next))
-                    })
-            ) {
-                if selected == nil { Text("Choose").tag("") }
-                ForEach(cases, id: \.value) { Text($0.label).tag($0.value) }
-            }
-            .disabled(locked)
-            .accessibilityIdentifier(context.identifier(path + [discriminator]))
-            if let selected { fieldRows(selected.fields) }
+        Picker(
+            pickerTitle,
+            selection: Binding(
+                get: { tag ?? "" },
+                set: { chosen in
+                    guard chosen != tag, let next = cases.first(where: { $0.value == chosen }) else {
+                        return
+                    }
+                    context.set(path, StructuredValue.blankCase(discriminator, next))
+                })
+        ) {
+            if selected == nil { Text("Choose").tag("") }
+            ForEach(cases, id: \.value) { Text($0.label).tag($0.value) }
         }
+        .disabled(locked)
+        .accessibilityIdentifier(context.identifier(path + [discriminator]))
+        if let selected { fieldRows(selected.fields) }
     }
 }
 

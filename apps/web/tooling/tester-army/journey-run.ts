@@ -5,7 +5,7 @@ import {
   awaitRun,
   loadJourneyIds,
   replayParams,
-  stepGoal,
+  stepGoals,
   type Engine,
   type Journey,
   type Json,
@@ -30,6 +30,7 @@ type Fixtures = {
   setViewport?: (size: { width: number; height: number }) => Promise<void>;
   /** Reloads the current page so it shows what a live run wrote meanwhile. */
   reload: () => Promise<void>;
+  tapTestId?: (id: string) => Promise<void>;
   /** Exact-text assertions supplied by the engine's own `expect`/`screen`. */
   expectText: (text: string, visible: boolean) => Promise<void>;
 };
@@ -40,6 +41,23 @@ async function expectTexts(
   visible: boolean,
 ) {
   for (const text of texts) await fixtures.expectText(text, visible);
+}
+
+async function runStepActions(
+  step: Journey["steps"][number],
+  engine: Engine,
+  fixtures: Fixtures,
+  params: AgentParams,
+) {
+  for (const goal of stepGoals(step, engine)) {
+    await fixtures.agent.act(goal, { params });
+  }
+  const control = step.tapTestId?.[engine];
+  if (control) {
+    if (!fixtures.tapTestId)
+      throw new Error(`${engine} does not support explicit control taps`);
+    await fixtures.tapTestId(control);
+  }
 }
 
 async function runJourneyBody(
@@ -57,7 +75,7 @@ async function runJourneyBody(
     if (step.ready) await assertDatabase(journey, [step.ready], ids, false);
     if (step.awaitRun) await awaitRun(journey, step.awaitRun, ids);
     if (step.ready || step.awaitRun) await fixtures.reload();
-    await fixtures.agent.act(stepGoal(step, engine), { params });
+    await runStepActions(step, engine, fixtures, params);
     await expectTexts(fixtures, step.check?.visible?.(ids) ?? [], true);
     if (step.check?.db)
       await assertDatabase(journey, step.check.db, ids, false);

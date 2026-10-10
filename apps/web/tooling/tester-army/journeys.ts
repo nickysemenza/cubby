@@ -7,7 +7,8 @@ import type { DbCheck, Journey, JourneyIds, RunWait } from "./journey";
  * Every journey, described once. The agent follows the goals on whichever
  * engine runs them; the exact text and the database read-backs decide the
  * verdict. Keep goals in the words visible on screen. Add `web`/`ios` on a
- * step only when the two clients genuinely label a control differently.
+ * step for different labels or supported interaction phases. End goals name
+ * observable states; exact read-back establishes persistence.
  */
 
 const stock = `SELECT l.name AS location, ie."amountValue"::float8 AS amount, count(*) OVER ()::int AS entries
@@ -339,6 +340,18 @@ export const journeys: Journey[] = [
       {
         goal: `Edit this product, change its Name to "${JOURNEY_NAMES.productUpdatedName}", and save. Wait for the product detail to show the new name before you finish.`,
       },
+      {
+        goal: "Reopen this product's editor to inspect the saved Name. Leave the editor open and do not change any field.",
+        read: {
+          instruction:
+            "Read the current value of the Name input in the open product editor.",
+          schema: z.object({ name: z.string() }),
+          expected: () => ({ name: JOURNEY_NAMES.productUpdatedName }),
+        },
+      },
+      {
+        goal: `Choose Cancel to close the product editor. Finish on the product detail with the heading "${JOURNEY_NAMES.productUpdatedName}" and no editor open.`,
+      },
     ],
     visible: () => [JOURNEY_NAMES.productUpdatedName],
     db: [
@@ -383,7 +396,7 @@ export const journeys: Journey[] = [
     start: "product",
     steps: [
       {
-        goal: `Use the "Add to inventory" action on this product: choose the location "${JOURNEY_NAMES.inventoryShelf}", set the amount to 4, and submit.`,
+        goal: `Use the "Add to inventory" action on this product: search the location field for "${JOURNEY_NAMES.inventoryShelf}" and select the matching location, set the amount to 4, and submit. Finish when the product Stocked at section shows an inventory entry at "${JOURNEY_NAMES.inventoryShelf}" with amount 4.`,
       },
     ],
     visible: () => [],
@@ -603,7 +616,21 @@ export const journeys: Journey[] = [
     start: "product",
     steps: [
       {
-        goal: 'Edit this product and add an external ID with Source "synthetic-shop", Kind "ASIN" and Identifier "B0SYNTH001", then save.',
+        goal: 'Edit this product and add an external ID row. Finish with its Source field showing "synthetic-shop" and the editor still open.',
+        ios: 'Enter Source "synthetic-shop" and tap Done to dismiss the keyboard. Finish with Source showing "synthetic-shop" and the editor still open.',
+      },
+      {
+        goal: 'Set Kind "ASIN" and Identifier "B0SYNTH001". Keep the editor open.',
+        web: [
+          'Type "asin" into the Kind search field. Finish with the matching options open.',
+          'Choose the "asin" option and enter Identifier "B0SYNTH001". Finish with Identifier showing "B0SYNTH001" and the editor still open.',
+        ],
+        ios: 'Enter External id "B0SYNTH001" and tap Done to dismiss the keyboard. Finish with External id showing "B0SYNTH001" and the editor still open.',
+      },
+      {
+        goal: 'Save this product. Finish with the Edit action visible and the product detail showing external ID "B0SYNTH001" from Source "synthetic-shop" with Kind "asin".',
+        ios: [],
+        tapTestId: { ios: "editor.product.save" },
       },
     ],
     visible: () => ["B0SYNTH001"],

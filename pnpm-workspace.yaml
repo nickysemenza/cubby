@@ -31,7 +31,7 @@ minimumReleaseAge: 0
 overrides:
   # The mobile SDK pins its driver independently of our CLI; both must use
   # the same patched runner and simulator startup fixes.
-  agent-device: 0.21.20
+  agent-device: 0.21.22
   # better-auth pins @better-auth/core to its own exact version while the
   # @better-auth/* plugins peer on a caret range; auto-installed peers resolve
   # to the newest patch, so whenever better-auth lags core (Renovate skips
@@ -485,5 +485,5 @@ configDependencies:
   "@pnpm/plugin-types-fixer": 0.1.0
 # Observation events preserve pg-cloudflare startup ordering; port when upgrading.
 patchedDependencies:
-  agent-device@0.21.20: patches/agent-device@0.21.20.patch
+  agent-device@0.21.22: patches/agent-device@0.21.22.patch
   pg-cloudflare@1.4.1: patches/pg-cloudflare@1.4.1.patch

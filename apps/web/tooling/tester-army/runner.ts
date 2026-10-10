@@ -6,7 +6,11 @@ import { fileURLToPath } from "node:url";
 import { runOrThrow, spawnToExit } from "../../../../scripts/lib/run.ts";
 import { captureE2ERunIdentity, writeE2ERunBundle } from "../e2e-run-bundle";
 import { ensureWebBuild } from "../web-build-provenance";
-import { modelConfiguration, preflightTesterArmyModel } from "./model";
+import {
+  testerArmyDriverIdentity,
+  preflightTesterArmyModel,
+  testerArmyReplayCommand,
+} from "./model";
 import { readTesterArmySummary, testerArmyRawOutput } from "./report";
 
 /**
@@ -156,14 +160,17 @@ export async function runTesterArmyLane(input: {
       evidence: [results, ...evidence],
       kind: "browser",
       status,
-      command: input.command,
+      command:
+        phase === "model-preflight"
+          ? input.command
+          : testerArmyReplayCommand(input.command),
       started,
       phase,
       cases: [{ name: input.caseName, status }],
       fixture: input.fixture,
       fixtureVersion: 1,
       runtime: {
-        testerArmy: "0.16.0",
+        testerArmy: "0.19.0",
         model: configuredModel(),
         effort: "medium",
         ...input.runtime,
@@ -175,7 +182,7 @@ export async function runTesterArmyLane(input: {
 
 function configuredModel() {
   try {
-    return modelConfiguration().TESTER_ARMY_MODEL;
+    return testerArmyDriverIdentity();
   } catch {
     return "unconfigured";
   }

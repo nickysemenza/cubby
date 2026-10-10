@@ -204,6 +204,7 @@ struct EntityEditorSheet: View {
             }
         }
         .formStyle(.grouped)
+        .keyboardDismissBar()
         .disabled(isSaving || model.isLoading)
         .accessibilityIdentifier("editor.\(key.rawValue)")
     }

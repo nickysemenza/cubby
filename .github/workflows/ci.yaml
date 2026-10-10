@@ -680,9 +680,6 @@ jobs:
       TESTER_ARMY_CF_API_TOKEN: ${{ secrets.TESTER_ARMY_CF_API_TOKEN }}
       TESTER_ARMY_CF_ACCOUNT_ID: ${{ vars.TESTER_ARMY_CF_ACCOUNT_ID }}
       TESTER_ARMY_MODEL: ${{ vars.TESTER_ARMY_MODEL }}
-      # Hosted runs keep the gateway: a ChatGPT login refreshed in one job
-      # cannot be written back for the next (docs/tester-army.md).
-      TESTER_ARMY_PROVIDER: ${{ vars.TESTER_ARMY_PROVIDER || 'gateway' }}
       E2E_TELEMETRY_DISABLED: "1"
     services: *test-databases
     steps:
@@ -717,9 +714,6 @@ jobs:
       TESTER_ARMY_CF_API_TOKEN: ${{ secrets.TESTER_ARMY_CF_API_TOKEN }}
       TESTER_ARMY_CF_ACCOUNT_ID: ${{ vars.TESTER_ARMY_CF_ACCOUNT_ID }}
       TESTER_ARMY_MODEL: ${{ vars.TESTER_ARMY_MODEL }}
-      # Hosted runs keep the gateway: a ChatGPT login refreshed in one job
-      # cannot be written back for the next (docs/tester-army.md).
-      TESTER_ARMY_PROVIDER: ${{ vars.TESTER_ARMY_PROVIDER || 'gateway' }}
       TESTER_ARMY_AGENT_MODEL: ${{ vars.TESTER_ARMY_AGENT_MODEL }}
       TESTER_ARMY_AGENT_EFFORT: ${{ vars.TESTER_ARMY_AGENT_EFFORT }}
       E2E_TELEMETRY_DISABLED: "1"
@@ -757,9 +751,6 @@ jobs:
       TESTER_ARMY_CF_API_TOKEN: ${{ secrets.TESTER_ARMY_CF_API_TOKEN }}
       TESTER_ARMY_CF_ACCOUNT_ID: ${{ vars.TESTER_ARMY_CF_ACCOUNT_ID }}
       TESTER_ARMY_MODEL: ${{ vars.TESTER_ARMY_MODEL }}
-      # Hosted runs keep the gateway: a ChatGPT login refreshed in one job
-      # cannot be written back for the next (docs/tester-army.md).
-      TESTER_ARMY_PROVIDER: ${{ vars.TESTER_ARMY_PROVIDER || 'gateway' }}
       E2E_TELEMETRY_DISABLED: "1"
       CUBBY_SIM_DB_EXTERNAL: "1"
     steps:

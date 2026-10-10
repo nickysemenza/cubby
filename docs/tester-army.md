@@ -7,7 +7,7 @@ correctness. Existing deterministic suites remain the merge gate.
 ## Journeys
 
 Each journey is described once in `apps/web/tooling/tester-army/journeys.ts`:
-plain-language goals (an optional per-engine wording), exact on-screen text to
+plain-language goals (optional per-engine wording or phases), exact on-screen text to
 expect, and SQL read-backs with their expected rows. `tests/tester-army/web-journeys.e2e.ts`
 and `ios-journeys.e2e.ts` are thin loops over that catalog, and
 `tooling/scenarios/tester-army-journeys.ts` seeds one synthetic household that
@@ -37,8 +37,13 @@ showing a live enrichment run's work label, target summary, latest step,
 named targets and changed count, on desktop and at a phone width; and an
 enrichment run's page counting Products (never orders) and naming its
 targets. The Run console debug log is not cursor-paged in
-the app (it caps at 2,000 events), so paging is not asserted. Three coupled
+the app (it caps at 2,000 events), so paging is not asserted. Four coupled
 import journeys follow (see below).
+
+A goal names both the requested action and its visible end state. Jev must
+recognize when the action has finished; exact UI and SQL checks still decide
+correctness. Product rename reopens the editor, extracts its Name, and closes
+it before the final read-back.
 
 A step can also `read` the screen: `agent.extract` returns structured data
 validated by a Zod schema, and the harness compares it exactly (key order
@@ -48,6 +53,26 @@ must fail when it matches. A journey's `viewport` fixes the web viewport
 before it opens its page, so the same catalog covers phone layouts. Prefer
 exact text that appears once: a label that also names a hidden `<option>`
 matches the hidden node first.
+
+The web fixture waits for `[data-hydrating]` controls to clear after opening or
+reloading a page. Jev cannot choose a server-rendered Edit button while the app
+intentionally disables it until React attaches its handlers. This wait observes
+the application readiness contract; it does not add a fixed delay.
+
+Tester Army and its decision/mobile SDKs run unpatched. Goals use the existing
+searchable web picker inputs. The native external-ID journey splits source,
+and identifier into separate goals that explicitly use the app's Done
+button, then taps the known Save control as a supported hybrid step. Its fixture establishes a reachable structured-entry row, centered in
+the measured Form viewport; product rename covers editor navigation. The generic native editors
+expose that shared Done action and render structured fields as separate Form
+rows for keyboard avoidance. Keep unsupported interaction handling in the
+journeys or product UI rather than patching the E2E SDK. Goals end at observable
+states, with exact database read-back establishing persistence. HTTP and network
+inference failures fail once at Cubby's gateway boundary; aborts stay aborts.
+The iOS Save step uses `tapTestId` rather than model completion: both compound
+and simple Save goals returned inconclusive after successfully saving. The
+following visible-value check and exact SQL assertions verify the saved external
+ID, source and kind. Jev still enters the fields and drives product rename.
 
 ## Failure modes and acceptance
 
@@ -63,7 +88,7 @@ Model calls, tokens, reported cost, and timings are evidence, not a promise of
 equal reliability or savings. The existing deterministic simulator product-edit
 journey must also pass after the agent-device upgrade.
 
-The CLI and mobile SDK share patched `agent-device` 0.21.20 through a workspace
+The CLI and mobile SDK share patched `agent-device` 0.21.22 through a workspace
 override. Its iOS runner stops inspecting windows after finding a usable one
 and avoids retaining full snapshot responses in its command journal. Hosted
 startup and journey timings determine whether these changes improve this lane.
@@ -88,38 +113,44 @@ exercise it.
 
 ## Configuration and commands
 
-The driver runs on the member's ChatGPT subscription by default
-(`TESTER_ARMY_PROVIDER=chatgpt`). Sign in once per machine with
-`pnpm --dir apps/web exec e2e login openai` (add `--device` for a device
-code); the login is stored for the user in `~/.config/e2e/oauth.json` and
-refreshes itself, so every checkout and worktree shares it. Hosted Actions
-lanes default to `gateway` instead: the SDK reads `E2E_OAUTH_CREDENTIALS` as a
-read-only store, so once a refresh rotates the token, the next job (or a
-concurrent lane) presents the spent refresh token and fails `LOGIN_REQUIRED`.
-CI can use the subscription only after refreshed credentials gain a writable,
-serialized handoff between jobs. The default driver
-model is `QUALITY_MODEL` (GPT-6 Sol); `TESTER_ARMY_MODEL` overrides it with an
-id the plan serves (`pnpm --dir apps/web exec e2e models openai` lists them).
-The preflight verifies an image plus a forced function call before builds,
-database provisioning, or simulator startup, and a missing login fails it
-with `LOGIN_REQUIRED`.
+The driver always uses Tester Army's decision executor with `typesafe/jev`
+through Cloudflare's gateway-scoped Workers AI `/ai/run` route. There is no
+provider switch or text-model fallback for decisions. Jev chooses semantic UI
+actions; a separate Gateway OpenAI model writes field values and handles
+extraction and judgment (`TESTER_ARMY_MODEL`, default `openai/${FAST_MODEL}`).
+Jev is text-only, so screenshot/coordinate decisions remain disabled.
 
-`TESTER_ARMY_PROVIDER=gateway` keeps the Cloudflare AI Gateway route: a
-Cloudflare API token authorized for inference through Unified Billing, set as
-`TESTER_ARMY_CF_API_TOKEN` (locally or as an Actions secret). Local commands
-also accept `AI_GATEWAY_API_KEY` from the shell or `apps/web/.env`, falling
-back to the primary checkout's file from a worktree
-(`apps/web/tooling/local-secret.ts`); `TESTER_ARMY_ENV_FILE` names a different
-`.env`. Only the inference token is read from that file, so app database and
-storage settings do not enter the synthetic harness. The account defaults to
-Cubby's configured Cloudflare account; `TESTER_ARMY_CF_ACCOUNT_ID` overrides
-it. Gateway traffic uses gateway `cubby` with `environment=ci` in Actions and
-`environment=development` locally, plus stable `feature` and `operation`
-dimensions; revisions stay in the sanitized E2E run bundle. Gateway models
-are OpenAI Responses ids (`openai/gpt-…`, default `openai/${FAST_MODEL}`).
+Set `TESTER_ARMY_CF_API_TOKEN` locally or as an Actions secret. It must authorize
+Workers AI inference and OpenAI inference through Unified Billing. Local
+commands also accept `AI_GATEWAY_API_KEY` from the shell or `apps/web/.env`,
+falling back to the primary checkout's file from a worktree.
+`TESTER_ARMY_ENV_FILE` names a different `.env`. Only the inference token is
+read from that file; application database/storage settings do not enter the
+synthetic harness. `TESTER_ARMY_CF_ACCOUNT_ID` overrides Cubby's default account.
+All traffic uses gateway `cubby`, cache bypass, `feature=tester-army`,
+`operation=driver`, and `environment=ci` or `development`. Revisions stay in the
+sanitized run bundle. No TypeSafe API key or ChatGPT OAuth login is needed.
 
-The coupled import journeys always need that token as well, whichever
-provider drives: their peers forward the application's own Workers AI (Jev
+Preflight checks a real Jev choice and the text tier's image/function-call
+capability before builds or test services. Missing credentials fail early.
+Bundles name both models; exact database read-backs decide correctness.
+
+The compatible pins are `e2e` 0.19.0, web 0.14.0, mobile 0.11.0 and
+`@e2e-dev/decision` 0.2.0. The CLI and mobile engine share patched agent-device
+0.21.22. Paid hosted engines are not installed.
+
+```sh
+pnpm test:e2e:agent:preflight
+pnpm test:e2e:agent:web -- --journey product-rename
+pnpm test:e2e:agent:web -- --journey product-rename --debug
+pnpm test:e2e:agent:ios -- --journey product-rename
+```
+
+`--debug` on the web lane retains the executor's decision transcript locally
+for diagnosis. Raw model transcripts are excluded from the sanitized upload.
+
+The coupled import journeys always need that token as well, and
+their peers forward the application's own Workers AI (Jev
 decisions, embeddings) and Anthropic recovery calls through the gateway. An
 explicit agent swap accepts only OpenAI chat models because the peer speaks
 the Responses protocol. Blank Actions
@@ -262,6 +293,38 @@ the swap: the run page's generation telemetry and AI spend still name and
 price the agent's pinned model. Deterministic coverage of the same
 orchestration stays in `purchase-agent-scenarios.integration.test.ts`; these
 journeys check that real models complete it.
+
+## Upgrade validation (2026-10-09)
+
+The upgrade passed 18 focused configuration, transport, fail-fast and replay
+checks. HTTP 429 and connection-reset regressions, including failures reading the
+response body after headers, failed with two requests before the boundary fix.
+Both tiers now fail after one, while cancellation is preserved.
+Live Gateway preflight passed for Jev decisions and the separate text tier.
+
+Tester Army and its decision/mobile SDKs are unpatched. Exploratory live runs
+with dirty source established these outcomes:
+
+| Journey                                           | Result                                                                                                     | Evidence bundle                                                                                                                       |
+| ------------------------------------------------- | ---------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------- |
+| Web rename, inventory addition, source references | Passed with exact SQL read-back                                                                            | `artifacts/tester-army/web/bef62b71-ab09-41af-8605-79ce4ba89dc8` (the external-ID case failed before splitting Kind search/selection) |
+| Web external ID                                   | Passed after splitting search and selection                                                                | `artifacts/tester-army/web/a986eced-d766-4d0c-84c4-bb6ef54d3297`                                                                      |
+| Jev iOS external ID                               | Passed Source, Identifier, Save and exact SQL read-back                                                    | `artifacts/sim-tester-army-e2e/cubby_sim_541881df5e92c2a3`                                                                            |
+| Native keyboard entry and reopen                  | Passed all scripted steps on first attempt; saved Source and Identifier read back from the reopened editor | `artifacts/sim-qa-e2e/cubby_sim_b59de09029e84e57`                                                                                     |
+
+The native failure was reproduced without model inference. Structured fields
+now occupy separate Form rows, and the shared Done action dismisses the real
+first responder; a Form-level focus binding did not own its descendant fields.
+Native test setup centers the Add control using measured bounds because the
+upstream SDK's semantic tree can include offscreen rows. Jev still fills and
+saves the values; rename separately covers navigation into the editor.
+
+Dirty-source runs do not meet exact-revision acceptance. The PR records the
+final revision's live sample, negative assertion, replay comparison and required
+extended native editing result. The full journey catalog and Android are outside
+this focused sample. Neither CI speed nor total model cost savings is established;
+Jev decisions still need a paid text/extraction tier. Required GitHub checks must
+pass on the final PR head before merge.
 
 ## Evidence
 

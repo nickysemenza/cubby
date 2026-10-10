@@ -41,7 +41,8 @@ interface ArrayFieldManagerProps<
   maxItems?: number;
   /**
    * Tabular mode: one header row of the given column labels above the
-   * unlabeled row controls (`children` still owns each row's actual
+   * visually unlabeled row controls (`children` retains associated, visually
+   * hidden field labels and owns each row's actual
    * fields), and the title + "+ Add" button move into `FormSection`'s own
    * header slot instead of this component's plain title row. `className`
    * on a column aligns its header label with the matching row control's own

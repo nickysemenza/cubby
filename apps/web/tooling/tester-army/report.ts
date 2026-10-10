@@ -3,7 +3,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import type { Reporter } from "e2e";
 import { z } from "zod";
-import { modelConfiguration } from "./model";
+import { testerArmyDriverIdentity } from "./model";
 
 const summarySchema = z.object({
   schemaVersion: z.literal(1),
@@ -34,7 +34,7 @@ export const testerArmyReporter: Reporter = {
     const summary = summarySchema.parse({
       schemaVersion: 1,
       status: report.run.status,
-      model: modelConfiguration().TESTER_ARMY_MODEL,
+      model: testerArmyDriverIdentity(),
       effort: "medium",
       tokens: report.run.usage.modelTokens,
       estimatedCostUsd: report.run.usage.estimatedCostUsd,

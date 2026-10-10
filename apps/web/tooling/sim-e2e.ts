@@ -2,6 +2,7 @@ import {
   readTesterArmySummary,
   testerArmyRawOutput,
 } from "./tester-army/report";
+import { testerArmyReplayCommand } from "./tester-army/model";
 import { execFileSync, spawn } from "node:child_process";
 import { pollUntil } from "@cubby/shared/retry";
 import { walkFiles } from "../../../scripts/lib/tree-digest.ts";
@@ -1335,7 +1336,10 @@ function finishE2ERun(failure: Error | undefined): Error | undefined {
       evidence: [resultsPath, ...scenarioEvidence],
       kind: "native",
       status,
-      command: ["pnpm", "test:e2e:sim", "--", ...flags],
+      command:
+        testerArmy && testerArmyDriverModel
+          ? testerArmyReplayCommand(["pnpm", "test:e2e:sim", "--", ...rawFlags])
+          : ["pnpm", "test:e2e:sim", "--", ...rawFlags],
       cases: [{ name: lane, status, durationMs }],
       profile: "worker",
       scenario: lane,
@@ -1354,7 +1358,7 @@ function finishE2ERun(failure: Error | undefined): Error | undefined {
       runtime: testerArmy
         ? {
             ...runtime,
-            testerArmy: "0.16.0",
+            testerArmy: "0.19.0",
             ...(testerArmyDriverModel && { model: testerArmyDriverModel }),
             effort: "medium",
           }
@@ -1701,6 +1705,40 @@ async function runQaJourneys(
   else await assertQaOutcomes();
 }
 
+async function runTesterArmyNativeJourney(deviceID: string): Promise<void> {
+  const output = testerArmyRawOutput(artifacts);
+  await run(
+    "pnpm",
+    [
+      "--dir",
+      webRoot,
+      "exec",
+      "e2e",
+      "run",
+      "--output",
+      output,
+      ...(process.env.TESTER_ARMY_DEBUG === "1" ? ["--debug"] : []),
+    ],
+    repoRoot,
+    undefined,
+    false,
+    {
+      ...process.env,
+      E2E_TELEMETRY_DISABLED: "1",
+      TESTER_ARMY_TARGET: "ios",
+      TESTER_ARMY_ORIGIN: process.env.TESTER_ARMY_ORIGIN,
+      TESTER_ARMY_IDS_FILE: journeyIdsFile,
+      TESTER_ARMY_DEVICE_ID: deviceID,
+      TESTER_ARMY_SESSION: `tester-army-${simName}`,
+      ...(testerArmyReplay && { TESTER_ARMY_REPLAY: "1" }),
+      ...(wrongName && { TESTER_ARMY_WRONG: "1" }),
+    },
+  );
+  const summary = readTesterArmySummary(output);
+  if (summary.status !== "passed")
+    throw new Error("Tester Army iOS journey did not pass");
+}
+
 async function runNativeJourney(
   deviceID: string,
   common: string[],
@@ -1708,31 +1746,7 @@ async function runNativeJourney(
   layoutRunID?: string,
   purchaseId?: string,
 ): Promise<void> {
-  if (testerArmy) {
-    const output = testerArmyRawOutput(artifacts);
-    await run(
-      "pnpm",
-      ["--dir", webRoot, "exec", "e2e", "run", "--output", output],
-      repoRoot,
-      undefined,
-      false,
-      {
-        ...process.env,
-        E2E_TELEMETRY_DISABLED: "1",
-        TESTER_ARMY_TARGET: "ios",
-        TESTER_ARMY_ORIGIN: process.env.TESTER_ARMY_ORIGIN,
-        TESTER_ARMY_IDS_FILE: journeyIdsFile,
-        TESTER_ARMY_DEVICE_ID: deviceID,
-        TESTER_ARMY_SESSION: `tester-army-${simName}`,
-        ...(testerArmyReplay && { TESTER_ARMY_REPLAY: "1" }),
-        ...(wrongName && { TESTER_ARMY_WRONG: "1" }),
-      },
-    );
-    const summary = readTesterArmySummary(output);
-    if (summary.status !== "passed")
-      throw new Error("Tester Army iOS journey did not pass");
-    return;
-  }
+  if (testerArmy) return runTesterArmyNativeJourney(deviceID);
   // CLI replay owns a separate daemon. Release the prepare daemon so it
   // cannot retain the runner lease; this hosted daemon belongs to this job.
   if (process.env.GITHUB_ACTIONS === "true")
@@ -1869,9 +1883,9 @@ async function main(): Promise<void> {
   try {
     if (testerArmy) {
       phase = "model-preflight";
-      const { modelConfiguration, preflightTesterArmyModel } =
+      const { testerArmyDriverIdentity, preflightTesterArmyModel } =
         await import("./tester-army/model");
-      testerArmyDriverModel = modelConfiguration().TESTER_ARMY_MODEL;
+      testerArmyDriverModel = testerArmyDriverIdentity();
       process.env.E2E_TELEMETRY_DISABLED = "1";
       await preflightTesterArmyModel();
     }

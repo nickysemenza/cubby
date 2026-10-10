@@ -16,6 +16,7 @@ import { Field, FieldError, FieldLabel } from "~/ui/primitives/field";
 export function FormFieldGroup({
   htmlFor,
   label,
+  hideLabel,
   description,
   error,
   invalid,
@@ -27,6 +28,8 @@ export function FormFieldGroup({
   htmlFor?: string;
   /** Field label. Omit for an unlabeled control (e.g. a bare combobox). */
   label?: string;
+  /** Preserve the accessible name when a surrounding grid supplies visible headings. */
+  hideLabel?: boolean;
   /** Muted helper text rendered between the control and the error. */
   description?: ReactNode;
   /** The field's error (from RHF `fieldState.error`), rendered if present. */
@@ -39,7 +42,14 @@ export function FormFieldGroup({
 }) {
   return (
     <Field data-invalid={invalid}>
-      {label && <FieldLabel htmlFor={htmlFor}>{label}</FieldLabel>}
+      {label && (
+        <FieldLabel
+          htmlFor={htmlFor}
+          className={hideLabel ? "sr-only" : undefined}
+        >
+          {label}
+        </FieldLabel>
+      )}
       {children}
       {description && (
         <p id={descriptionId} className="text-xs text-muted-foreground">
