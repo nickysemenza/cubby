@@ -234,9 +234,11 @@ live evals start the built Worker through `openWorkerdRuntime`
 startup uses `withWorkerdRuntime`, which closes the runtime even when that
 work throws. The runtime acquires the database (a lease it releases, or a
 borrowed database it never closes), owned or borrowed object storage,
-the profile's peers, and the harness. `close()` releases them newest first
-and runs every release even when one fails; a start that fails at any step
-releases everything acquired before it. Borrowed storage carries its S3
+the profile's peers, and the harness into a native `AsyncDisposableStack`
+(`await using`, then `move()` on success). `close()` releases them newest
+first and runs every release even when one fails (failures chain as
+`SuppressedError`); a start that fails at any step releases everything
+acquired before it. Borrowed storage carries its S3
 endpoint and public URL separately; neither startup failure nor close stops
 caller-owned storage.
 

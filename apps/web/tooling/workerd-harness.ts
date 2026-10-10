@@ -421,53 +421,14 @@ export async function holdWorkerdHarness(): Promise<() => void> {
 /** Long enough to queue behind another suite and rebuild every Worker. */
 export const HOLD_WORKERD_HARNESS_TIMEOUT_MS = 30 * 60_000;
 
-type Closer = () => void | Promise<void>;
-
 /**
- * Resources closed newest first. `close()` runs every closer even when one
- * fails, reports all failures together, and is idempotent. `guard` runs an
- * acquisition and, when it throws, closes what it acquired so far; the
- * acquisition error comes first, a cleanup failure after it.
+ * An idempotent `close` for resources moved out of an `await using` stack:
+ * releases run newest first, every one runs even when another fails (native
+ * `SuppressedError` chaining), and concurrent callers share one release.
  */
-export function cleanupStack() {
-  const closers: Array<{ label: string; close: Closer }> = [];
+export function closeOnce(owned: AsyncDisposableStack) {
   let closing: Promise<void> | undefined;
-  const closeAll = async () => {
-    const failures: Error[] = [];
-    for (const { label, close } of [...closers].reverse()) {
-      try {
-        await close();
-      } catch (error) {
-        failures.push(new Error(`Failed to close ${label}`, { cause: error }));
-      }
-    }
-    if (failures.length > 0)
-      throw new AggregateError(failures, "Test runtime cleanup failed");
-  };
-  const close = () => (closing ??= closeAll());
-  return {
-    push(label: string, closer: Closer) {
-      if (closing) throw new Error(`Cannot hold ${label}: already closed`);
-      closers.push({ label, close: closer });
-    },
-    close,
-    async guard<T>(acquire: () => Promise<T>): Promise<T> {
-      try {
-        return await acquire();
-      } catch (error) {
-        try {
-          await close();
-        } catch (cleanupError) {
-          throw new AggregateError(
-            [error, cleanupError],
-            "Test runtime setup failed and its cleanup failed",
-            { cause: cleanupError },
-          );
-        }
-        throw error;
-      }
-    },
-  };
+  return () => (closing ??= owned.disposeAsync());
 }
 
 /**
@@ -478,39 +439,35 @@ export function cleanupStack() {
  * and object storage.
  */
 export async function startWorkerdHarness(options: WorkerdHarnessOptions) {
-  const cleanup = cleanupStack();
-  return cleanup.guard(async () => {
-    if (WORKERD_PROFILES[options.profile].harnessLock)
-      cleanup.push("harness lock", await holdWorkerdHarness());
-    const harnessOptions = workerdHarnessOptions(options);
-    cleanup.push(
-      "database environment",
-      installDatabaseEnvironment(options.databaseUrl),
-    );
-    const harness = createTestHarness(harnessOptions);
-    const closeWorkerd = harness.close.bind(harness);
-    cleanup.push("workerd", closeWorkerd);
-    try {
-      await harness.listen();
-    } catch (error) {
-      // The timeline names which Worker failed to start.
-      harness.debug();
-      throw error;
-    }
-    // The release object loads on its first read and rejects reads until it
-    // is ready, so a scenario starts only once the seeded release has loaded.
-    const env = await harness
-      .getWorker<{
-        USDA_RELEASES: R2Bucket;
-        USDA_RELEASE: { getByName(name: string): UsdaReleaseStatus };
-      }>()
-      .getEnv();
-    await seedUsdaRelease(env.USDA_RELEASES, SYNTHETIC_USDA_RELEASE);
-    await waitForUsdaRelease(
-      env.USDA_RELEASE.getByName(usdaReleaseObjectName(SYNTHETIC_USDA_RELEASE)),
-    );
-    return Object.assign(harness, { close: cleanup.close });
-  });
+  // Released on any throw below; `move()` hands ownership to the caller.
+  await using cleanup = new AsyncDisposableStack();
+  if (WORKERD_PROFILES[options.profile].harnessLock)
+    cleanup.defer(await holdWorkerdHarness());
+  const harnessOptions = workerdHarnessOptions(options);
+  cleanup.defer(installDatabaseEnvironment(options.databaseUrl));
+  const harness = createTestHarness(harnessOptions);
+  const closeWorkerd = harness.close.bind(harness);
+  cleanup.defer(closeWorkerd);
+  try {
+    await harness.listen();
+  } catch (error) {
+    // The timeline names which Worker failed to start.
+    harness.debug();
+    throw error;
+  }
+  // The release object loads on its first read and rejects reads until it
+  // is ready, so a scenario starts only once the seeded release has loaded.
+  const env = await harness
+    .getWorker<{
+      USDA_RELEASES: R2Bucket;
+      USDA_RELEASE: { getByName(name: string): UsdaReleaseStatus };
+    }>()
+    .getEnv();
+  await seedUsdaRelease(env.USDA_RELEASES, SYNTHETIC_USDA_RELEASE);
+  await waitForUsdaRelease(
+    env.USDA_RELEASE.getByName(usdaReleaseObjectName(SYNTHETIC_USDA_RELEASE)),
+  );
+  return Object.assign(harness, { close: closeOnce(cleanup.move()) });
 }
 
 interface UsdaReleaseStatus {

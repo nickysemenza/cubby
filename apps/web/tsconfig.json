@@ -14,7 +14,13 @@
     "target": "ES2022",
     "jsx": "react-jsx",
     "module": "ESNext",
-    "lib": ["ES2022", "ES2024.Promise", "DOM", "DOM.Iterable"],
+    "lib": [
+      "ES2022",
+      "ES2024.Promise",
+      "ESNext.Disposable",
+      "DOM",
+      "DOM.Iterable"
+    ],
     "types": ["vite/client", "@cloudflare/vitest-plugin/types"],
 
     /* Bundler mode */
