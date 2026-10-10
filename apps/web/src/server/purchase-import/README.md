@@ -54,6 +54,14 @@ unresolved browser operation pause reason instead of stale progress. Delivered,
 failed and retried operations cannot revive an old reason; newer pending work
 without a reason falls back to ordinary progress. Retained pause history stays
 immutable.
+Native Activity uses the same five-attempt scoped attention read and all-page
+count, with its existing Run inspector and an attention-only filter. Attention
+refreshes every fifteen seconds even when no attempt is executing; the attention-only
+group list refreshes with it so resolved attempts disappear without manual reload. Late responses
+cannot restore an earlier filter scope. Same-scope group refreshes do not discard
+an independent attention response or diagnostic. Reads never restart paused research.
+Activity rows present execution state and retained progress, not entity record
+completeness: a structurally complete Run record can still be paused or failed.
 
 Product and Purchase research history use the shared entity report and record
 renderer on web and Apple clients. Each attempt shows its Run lifecycle alongside
