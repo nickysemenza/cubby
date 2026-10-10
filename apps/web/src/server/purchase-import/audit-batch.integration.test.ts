@@ -176,4 +176,57 @@ describe("purchase audit restart recovery", () => {
       summary: "Inherited line needs member investigation",
     });
   });
+  it("keeps a mismatched inherited expense fix report-only beside a writable purchase", async () => {
+    const f = await productResearchFixture(ctx.db, ctx.actor, { legacy: true });
+    const successor = await successorFor(f);
+    const writable = await insertWithShortcode(ctx.db, "purchase", {
+      vendorId: f.order.vendorId,
+      orderId: "SYNTHETIC-SUCCESSOR",
+      date: "2026-09-01",
+    });
+    await getDb(ctx.db).insert(auditLog).values({
+      entityKind: "purchase",
+      entityId: writable.id,
+      action: "create",
+      userId: ctx.actor.userId,
+      runId: successor.id,
+    });
+    const batch = await loadPurchaseAuditBatch(ctx.db, successor.id);
+    const expenseId = batch.find((row) => row.id === f.order.id)?.expenses[0]
+      ?.id;
+    if (!expenseId) throw new Error("Synthetic inherited expense missing");
+    await auditImportBatch(
+      ctx.db,
+      {
+        runId: successor.id,
+        operationId: "synthetic-mismatched-audit",
+        offset: 0,
+      },
+      async () => ({
+        findings: [
+          {
+            kind: "wrong_product" as const,
+            targetPurchaseId: writable.id,
+            summary: "Mismatched inherited target",
+            probability: 0.5,
+            proposedFix: {
+              kind: "relink_product" as const,
+              expenseId,
+              productId: f.item.entityId,
+            },
+          },
+        ],
+      }),
+    );
+    const findings = await getDb(ctx.db)
+      .select()
+      .from(runFinding)
+      .where(eq(runFinding.runId, successor.id));
+    expect(findings).toHaveLength(1);
+    expect(findings[0]).toMatchObject({
+      entityKind: "purchase",
+      entityId: writable.id,
+      proposedFix: null,
+    });
+  });
 });

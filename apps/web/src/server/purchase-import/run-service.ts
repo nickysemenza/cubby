@@ -1401,12 +1401,25 @@ export async function auditImportBatch(
     .filter((finding) =>
       purchaseIds.includes(purchaseId.parse(finding.targetPurchaseId)),
     )
-    .map((finding) => ({
-      ...finding,
-      proposedFix: writablePurchases.has(finding.targetPurchaseId)
-        ? finding.proposedFix
-        : null,
-    }));
+    .map((finding) => {
+      const fix = finding.proposedFix;
+      const target = renderedBatch.find(
+        (row) => row.id === finding.targetPurchaseId,
+      );
+      const matchesTarget =
+        fix?.kind === "relink_product"
+          ? target?.expenses.some((row) => row.id === fix.expenseId)
+          : fix &&
+            "purchaseId" in fix &&
+            fix.purchaseId === finding.targetPurchaseId;
+      return {
+        ...finding,
+        proposedFix:
+          writablePurchases.has(finding.targetPurchaseId) && matchesTarget
+            ? fix
+            : null,
+      };
+    });
   for (const finding of findings) {
     const proposedFix = finding.proposedFix;
     const relinkExpenseId =

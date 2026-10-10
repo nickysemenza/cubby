@@ -974,4 +974,6 @@ ids preserve the existing 25-row pagination when retries wrote the same record.
 Cycle detection terminates malformed lineage. The successor records its own
 findings; historical Run records and write receipts remain unchanged. Inherited
 findings are report-only: the host clears proposed fixes unless the current Run
-also wrote that Purchase. Retry lineage never grants additional write rights.
+also wrote that Purchase and the fix targets that same Purchase or one of its
+Expenses. A mismatched fix remains report-only. Retry lineage never grants
+additional write rights.
