@@ -83,50 +83,51 @@ describe("caller-driven purchase import", () => {
       "Order SYN-100 confirmed: Synthetic trowel $18.50",
       "a",
     );
+    const prepareInput = {
+      _runExecution: {
+        operationId: "prepare:syn-100",
+        itemOperationIds: ["prepare-item:syn-100"],
+      },
+      orders: [
+        {
+          vendorId: vendor.shortcode,
+          stableOrderId: "syn-100",
+          itemOperationId: "prepare-item:syn-100",
+          source: {
+            kind: "mail_message",
+            externalKey: `gmail:${mailboxId}:${mail.messageId}`,
+            checksum: mail.rawChecksum,
+          },
+          evidenceChecksum: mail.rawChecksum,
+          extractionRevision: "synthetic@1",
+          extraction: {
+            status: "ready",
+            candidate: {
+              orderId: "SYN-100",
+              orderedAt: "2026-09-20T12:00:00.000Z",
+              merchant: "Synthetic garden shop",
+              currency: "USD",
+              printedGrandTotal: 18.5,
+              lines: [
+                {
+                  title: "Synthetic trowel",
+                  amount: 18.5,
+                  lineKind: "principal",
+                },
+              ],
+              payments: [],
+              allShipmentsDelivered: false,
+            },
+          },
+          lineIds: ["syn-100:line-1"],
+          primaryDocumentImageId: null,
+          screenshotImageId: null,
+        },
+      ],
+    } satisfies Parameters<typeof preparePurchaseImport>[1];
     const prepared = await preparePurchaseImport(
       ctx.db,
-      {
-        _runExecution: {
-          operationId: "prepare:syn-100",
-          itemOperationIds: ["prepare-item:syn-100"],
-        },
-        orders: [
-          {
-            vendorId: vendor.shortcode,
-            stableOrderId: "syn-100",
-            itemOperationId: "prepare-item:syn-100",
-            source: {
-              kind: "mail_message",
-              externalKey: `gmail:${mailboxId}:${mail.messageId}`,
-              checksum: mail.rawChecksum,
-            },
-            evidenceChecksum: mail.rawChecksum,
-            extractionRevision: "synthetic@1",
-            extraction: {
-              status: "ready",
-              candidate: {
-                orderId: "SYN-100",
-                orderedAt: "2026-09-20T12:00:00.000Z",
-                merchant: "Synthetic garden shop",
-                currency: "USD",
-                printedGrandTotal: 18.5,
-                lines: [
-                  {
-                    title: "Synthetic trowel",
-                    amount: 18.5,
-                    lineKind: "principal",
-                  },
-                ],
-                payments: [],
-                allShipmentsDelivered: false,
-              },
-            },
-            lineIds: ["syn-100:line-1"],
-            primaryDocumentImageId: null,
-            screenshotImageId: null,
-          },
-        ],
-      },
+      prepareInput,
       ctx.actor,
     );
     const commitInput = {
@@ -146,7 +147,15 @@ describe("caller-driven purchase import", () => {
       commitInput,
       ctx.actor,
     );
-    return { party, vendor, mail, prepared, commitInput, committed };
+    return {
+      party,
+      vendor,
+      mail,
+      prepareInput,
+      prepared,
+      commitInput,
+      committed,
+    };
   }
 
   it("imports a retained Email for a member without a Run and launches no research", async () => {
@@ -196,6 +205,20 @@ describe("caller-driven purchase import", () => {
       .from(mailboxMessage)
       .where(eq(mailboxMessage.messageId, mail.messageId));
     expect(message?.status).toBe("completed");
+  });
+
+  // A completed prepare replays its recorded result even after its Email was
+  // later excluded or resolved, so a caller retrying a lost response recovers.
+  it("replays a completed prepare after its Email stops being importable", async () => {
+    const { mail, prepareInput, prepared } = await importConfirmation();
+    await getDb(ctx.db)
+      .update(mailboxMessage)
+      .set({ status: "excluded" })
+      .where(eq(mailboxMessage.messageId, mail.messageId));
+
+    await expect(
+      preparePurchaseImport(ctx.db, prepareInput, ctx.actor),
+    ).resolves.toEqual(prepared);
   });
 
   it("links a shipment Email to an existing Purchase without new Expenses, idempotently", async () => {

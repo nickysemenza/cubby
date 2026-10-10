@@ -555,8 +555,6 @@ export async function preparePurchaseImport(
   const input = preparePurchaseImportInput.parse(rawInput);
   const scope = await importRunScope(db, actor, input._runExecution, true);
   assertRunCapability(scope.purpose, "prepare");
-  for (const order of input.orders)
-    await retainedMailSource(db, scope, order.source, order.evidenceChecksum);
   return executeAtomicOperation(
     db,
     {
@@ -577,6 +575,15 @@ export async function preparePurchaseImport(
         if (replayed) return replayed;
         if (scope.status !== "running")
           throw new Error(`Purchase import run is fenced in ${scope.status}`);
+        // After replay: a completed prepare returns its recorded result even
+        // once its Email is excluded or resolved.
+        for (const order of input.orders)
+          await retainedMailSource(
+            transactionDb,
+            scope,
+            order.source,
+            order.evidenceChecksum,
+          );
         await ledger.start(database);
 
         const outputOrders = [];

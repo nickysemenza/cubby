@@ -521,7 +521,8 @@ struct FieldExplanationLabel: View {
                             EntitySourceRow(
                                 label: nil, supportsCurrentValue: verification.supportsCurrentValue,
                                 quote: verification.quote, selectedVariant: verification.selectedVariant,
-                                url: verification.url, seenAt: verification.observedAt ?? verification.createdAt,
+                                url: verification.url,
+                                seenAt: verification.observedAt ?? verification.createdAt,
                                 runID: verification.recorder.runId)
                         }
                     }
@@ -1274,7 +1275,8 @@ struct EntitySourceRow: View {
                 if let supports = supportsCurrentValue {
                     Text(supports ? "Current value" : "Earlier value")
                         .font(.caption.weight(.medium))
-                        .foregroundStyle(supports ? FieldGuideTokens.graphite : FieldGuideTokens.graphiteSecondary)
+                        .foregroundStyle(
+                            supports ? FieldGuideTokens.graphite : FieldGuideTokens.graphiteSecondary)
                 }
             }
             if let quote, !quote.isEmpty {

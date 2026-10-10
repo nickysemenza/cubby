@@ -40,8 +40,9 @@ public struct EntityRow: Identifiable, Sendable, Hashable {
     /// record with none, answers `[]`.
     public var sources: [EntitySourceRead] {
         guard let sources = raw["sources"], sources != .null else { return [] }
-        return (try? JSONDecoder.cubby().decode(
-            [EntitySourceRead].self, from: JSONEncoder.cubby().encode(sources))) ?? []
+        return
+            (try? JSONDecoder.cubby().decode(
+                [EntitySourceRead].self, from: JSONEncoder.cubby().encode(sources))) ?? []
     }
 
     /// The entity's image ids in display order — the order `setImageOrder` rewrites. Read from a
