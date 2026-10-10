@@ -153,17 +153,29 @@ and browser/native feature sets remain separate checks. Both targets share
 Their broad `gate` inputs include the root profile and workflow; `rustc -V`
 still keys the floating compiler.
 
-The Rust job's `rust-gate-v2` dependency-cache key also hashes root
-`Cargo.toml`: rust-cache hashes member manifests but omits the virtual
-workspace's profiles. Only successful jobs save this cache; immutable partial
-entries from the previous generation cannot be repaired by later exact hits.
+The Rust job uses an explicit, pinned `Swatinem/rust-cache` step with prefix
+`rust-gate-v3`; its key also hashes root `Cargo.toml`, because rust-cache hashes
+member manifests but omits the virtual workspace's profiles. When `cache-hit`
+is not `'true'` (a miss or partial match), the job runs Clippy and `cargo test
+--no-run` under the `ci` profile for each Rust target's package and feature
+selection before Nx. This populates both check metadata and linked test
+dependencies even when Nx replays both targets. Exact hits skip population;
+only successful jobs save new entries.
+
+The old 39 MB entry was seeded by a
+[successful main run](https://github.com/nickysemenza/cubby/actions/runs/38073526350/job/114275644002)
+that replayed both Rust targets from Nx's remote cache, compiling nothing and
+saving no dependency artifacts. Success alone does not establish a populated
+cache. Those immutable exact-key entries cannot be repaired by later hits;
+the new prefix prevents restoring them, including through a fallback match.
 A [successful PR run](https://github.com/nickysemenza/cubby/actions/runs/38092783727/job/114332463103)
 on 2026-10-10 took 4:14 overall, including a 208s Nx step and about 34s of
 Node/dependency setup. Despite an exact 39 MB Rust-cache restore, recipebridge
 spent 96s + 12s in clippy and 52s compiling tests; FFI spent 19s + 26s.
-Tests themselves took under one second. The new profile and cache generation
+Tests themselves took under one second. The new profile and populated cache
 target a warm job under about 2.5 minutes; local compilation reuse cannot
-establish hosted timing, and the first successful cache seed pays a cold build.
+establish hosted timing. A cache miss explicitly pays the population cost even
+when Nx has a passing result; later exact hits reuse the saved dependencies.
 
 `cubby-ffi` and the WASM packages share the `recipebridge` Rust core and Cargo
 lockfile, but each target needs its own compiled artifacts. EPUB extraction is
