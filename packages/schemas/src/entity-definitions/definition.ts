@@ -1814,9 +1814,9 @@ const buildMetadataSchemas = () => {
         .strict()
         .optional(),
       /**
-       * Same-record policies only: generate a `NOT VALID` CHECK so every write
-       * path refuses `not_allowed` and enforces `required`. Existing rows are
-       * not rewritten; data quality reports them.
+       * Same-record policies only: generate a CHECK so every write path
+       * refuses `not_allowed` and enforces `required`. Enabling it on existing
+       * data needs a migration that first resolves violators.
        */
       enforced: z
         .boolean({ error: "must be a boolean" })

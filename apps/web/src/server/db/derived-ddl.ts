@@ -4,10 +4,11 @@ import { entityIdentityTriggerSql } from "./entity-identity-schema";
 import { entityLinkLivenessTriggerSql } from "./entity-link-schema";
 
 /**
- * One `NOT VALID` CHECK per field of an enforced same-record classification
- * policy: values whose policy is `not_allowed` require the field empty, and
- * values whose policy is `required` require it present. `NOT VALID` enforces
- * new writes without rewriting or rejecting existing household rows.
+ * One CHECK per field of an enforced same-record classification policy:
+ * values whose policy is `not_allowed` require the field empty, and values
+ * whose policy is `required` require it present. The constraint validates
+ * existing rows, so a migration that meets a violator fails rather than
+ * leaving a row that every later edit would reject.
  */
 const classificationConstraintSql = (): string =>
   Object.values(declaredClassificationPolicies)
@@ -42,7 +43,7 @@ const classificationConstraintSql = (): string =>
         if (clauses.length === 0) return [];
         const name = `${table}_classification_${policy.classifier}_${fieldPolicy.field}_check`;
         return [
-          `ALTER TABLE "${table}" DROP CONSTRAINT IF EXISTS "${name}";\nALTER TABLE "${table}" ADD CONSTRAINT "${name}" CHECK (${clauses.join(" AND ")}) NOT VALID;`,
+          `ALTER TABLE "${table}" DROP CONSTRAINT IF EXISTS "${name}";\nALTER TABLE "${table}" ADD CONSTRAINT "${name}" CHECK (${clauses.join(" AND ")});`,
         ];
       });
     })

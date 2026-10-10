@@ -255,12 +255,12 @@ CREATE CONSTRAINT TRIGGER "EntityLink_live_endpoints" AFTER INSERT OR UPDATE ON 
   EXECUTE FUNCTION "entity_link_require_live_endpoints"();
 
 ALTER TABLE "Location" DROP CONSTRAINT IF EXISTS "Location_classification_type_productId_check";
-ALTER TABLE "Location" ADD CONSTRAINT "Location_classification_type_productId_check" CHECK (("type" NOT IN ('furniture') OR "productId" IS NOT NULL)) NOT VALID;
+ALTER TABLE "Location" ADD CONSTRAINT "Location_classification_type_productId_check" CHECK (("type" NOT IN ('furniture') OR "productId" IS NOT NULL));
 ALTER TABLE "Expense" DROP CONSTRAINT IF EXISTS "Expense_classification_lineKind_productId_check";
-ALTER TABLE "Expense" ADD CONSTRAINT "Expense_classification_lineKind_productId_check" CHECK (("lineKind" NOT IN ('tax', 'shipping', 'discount', 'fee', 'tip', 'other_adjustment') OR "productId" IS NULL)) NOT VALID;
+ALTER TABLE "Expense" ADD CONSTRAINT "Expense_classification_lineKind_productId_check" CHECK (("lineKind" NOT IN ('tax', 'shipping', 'discount', 'fee', 'tip', 'other_adjustment') OR "productId" IS NULL));
 ALTER TABLE "Expense" DROP CONSTRAINT IF EXISTS "Expense_classification_lineKind_spendingCategoryId_check";
-ALTER TABLE "Expense" ADD CONSTRAINT "Expense_classification_lineKind_spendingCategoryId_check" CHECK (("lineKind" NOT IN ('tax', 'shipping', 'discount', 'fee', 'tip', 'other_adjustment') OR "spendingCategoryId" IS NULL)) NOT VALID;
+ALTER TABLE "Expense" ADD CONSTRAINT "Expense_classification_lineKind_spendingCategoryId_check" CHECK (("lineKind" NOT IN ('tax', 'shipping', 'discount', 'fee', 'tip', 'other_adjustment') OR "spendingCategoryId" IS NULL));
 ALTER TABLE "Expense" DROP CONSTRAINT IF EXISTS "Expense_classification_lineKind_projectId_check";
-ALTER TABLE "Expense" ADD CONSTRAINT "Expense_classification_lineKind_projectId_check" CHECK (("lineKind" NOT IN ('tax', 'shipping', 'discount', 'fee', 'tip', 'other_adjustment') OR "projectId" IS NULL)) NOT VALID;
+ALTER TABLE "Expense" ADD CONSTRAINT "Expense_classification_lineKind_projectId_check" CHECK (("lineKind" NOT IN ('tax', 'shipping', 'discount', 'fee', 'tip', 'other_adjustment') OR "projectId" IS NULL));
 ALTER TABLE "Expense" DROP CONSTRAINT IF EXISTS "Expense_classification_lineBasis_productId_check";
-ALTER TABLE "Expense" ADD CONSTRAINT "Expense_classification_lineBasis_productId_check" CHECK (("lineBasis" NOT IN ('allocation') OR "productId" IS NULL)) NOT VALID;
+ALTER TABLE "Expense" ADD CONSTRAINT "Expense_classification_lineBasis_productId_check" CHECK (("lineBasis" NOT IN ('allocation') OR "productId" IS NULL));
