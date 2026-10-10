@@ -54,6 +54,7 @@ import type { PurchaseAgentQueueBatch } from "./server/purchase-agent/environmen
 import { purchaseAgentQueueEnvironment } from "./server/purchase-import/agent-host";
 import type { SearchDocumentCursor } from "./server/repo/search-document";
 import type { TelemetryQueueBatch } from "./server/telemetry-queue-types";
+import { testDurationOverrideMs } from "./server/test-duration-override";
 import {
   type AppSpan,
   getRequestId,
@@ -297,11 +298,9 @@ const handler = {
                             strong: env.HYPERDRIVE.connectionString,
                             boundedStale:
                               env.HYPERDRIVE_CACHED.connectionString,
-                            ...(env.CUBBY_TEST_POOL_IDLE_TIMEOUT_MS && {
-                              poolIdleTimeoutMs: Number(
-                                env.CUBBY_TEST_POOL_IDLE_TIMEOUT_MS,
-                              ),
-                            }),
+                            poolIdleTimeoutMs: testDurationOverrideMs(
+                              env.CUBBY_TEST_POOL_IDLE_TIMEOUT_MS,
+                            ),
                           },
                           async () => {
                             const imageProcessingSocket =
