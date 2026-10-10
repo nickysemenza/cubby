@@ -300,6 +300,9 @@ async function applyFix(
   });
 }
 
+const principalOnly = <T>(lineKind: string, value: T | null): T | null =>
+  lineKind === "principal" ? value : null;
+
 async function applyAggregateReplacement(
   tx: DrizzleTransaction,
   fix: Extract<ProposedImportFix, { kind: "replace_aggregate_line" }>,
@@ -371,8 +374,11 @@ async function applyAggregateReplacement(
       lineKind: identity.lineKind,
       lineBasis: "item_line",
       productId,
-      projectId: identity.lineKind === "principal" ? aggregate.projectId : null,
-      spendingCategoryId: aggregate.spendingCategoryId,
+      projectId: principalOnly(identity.lineKind, aggregate.projectId),
+      spendingCategoryId: principalOnly(
+        identity.lineKind,
+        aggregate.spendingCategoryId,
+      ),
     });
     const row = await insertWithShortcode(tx, "expense", {
       purchaseId,
@@ -389,8 +395,11 @@ async function applyAggregateReplacement(
       economicRole: "vendor",
       costType: costTypeSchema.parse(aggregate.costType),
       trade: tradeSchema.nullable().parse(aggregate.trade),
-      projectId: identity.lineKind === "principal" ? aggregate.projectId : null,
-      spendingCategoryId: aggregate.spendingCategoryId,
+      projectId: principalOnly(identity.lineKind, aggregate.projectId),
+      spendingCategoryId: principalOnly(
+        identity.lineKind,
+        aggregate.spendingCategoryId,
+      ),
       bookingTransactionCode: aggregate.bookingTransactionCode,
       productId,
       productQuantity: quantity,

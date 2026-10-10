@@ -305,6 +305,43 @@ describe("split and attach checks against the ledger", () => {
       expect(check.split).not.toBeNull();
     });
 
+    it("allows a categorized principal to split into an uncategorized shipping part", async () => {
+      const category = await insertWithShortcode(ctx.db, "spendingCategory", {
+        name: "Split category",
+      });
+      const source = await insertWithShortcode(ctx.db, "expense", {
+        ...line,
+        name: "Categorized goods",
+        cost: 10,
+        purchaseId: (
+          await insertWithShortcode(ctx.db, "purchase", {
+            vendorId: (
+              await insertWithShortcode(ctx.db, "vendor", {
+                name: "Synthetic categorized split vendor",
+              })
+            ).id,
+            date: "2026-09-01",
+          })
+        ).id,
+        spendingCategoryId: category.id,
+      });
+      const code = parseShortcodeFor("expense", source.shortcode);
+      const parts = [draft("Item", "8"), draft("Shipping", "2")];
+      const check = await checkSplitFor(ctx.db, { expenseId: code, parts });
+      expect(check.reason).toBeNull();
+      expect(check.split).not.toBeNull();
+      if (!check.split) throw new Error("expected a valid split");
+      const result = await splitExpense(ctx.db, check.split, ctx.actor);
+      expect(result.items).toHaveLength(2);
+      expect(
+        result.items.find((item) => item.name === "Shipping"),
+      ).toMatchObject({ lineKind: "shipping", spendingCategoryId: null });
+      expect(result.items.find((item) => item.name === "Item")).toMatchObject({
+        lineKind: "principal",
+        spendingCategoryId: category.shortcode,
+      });
+    });
+
     it("asks for an attribution choice instead of defaulting one", async () => {
       const source = await original(10);
       const code = parseShortcodeFor("expense", source.shortcode);

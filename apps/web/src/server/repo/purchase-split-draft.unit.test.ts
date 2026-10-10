@@ -17,6 +17,7 @@ const original = (overrides: Partial<SplitOriginal> = {}): SplitOriginal => ({
   cost: 30,
   costType: "materials",
   trade: "other",
+  spendingCategoryId: null,
   projectId: null,
   productId: null,
   productName: null,

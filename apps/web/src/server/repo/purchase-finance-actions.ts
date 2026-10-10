@@ -40,6 +40,7 @@ import {
 import { listPurchaseProducts } from "~/server/repo/purchase-products";
 import {
   checkSplitDraft,
+  resolveSplitPartClassification,
   type SplitOriginal,
 } from "~/server/repo/purchase-split-draft";
 import { resolveOrThrow } from "~/server/repo/shortcode-resolver";
@@ -89,6 +90,7 @@ export async function loadSplitOriginal(
     cost: original.cost,
     costType: original.costType,
     trade: original.trade,
+    spendingCategoryId: original.spendingCategoryId,
     projectId: original.projectId,
     productId: original.productId,
     productName: original.productName,
@@ -214,7 +216,15 @@ export async function checkSplitFor(
           ? await resolveOrThrow(db, "product", part.productId)
           : null;
         const lineKind = inferExpenseLineKind({ name: part.name, productId });
-        assertClassificationPolicies("expense", { lineKind, productId });
+        const classification = resolveSplitPartClassification({
+          originalSpendingCategoryId: original.spendingCategoryId,
+          lineKind,
+          partSpendingCategoryId: part.spendingCategoryId,
+        });
+        assertClassificationPolicies("expense", {
+          ...classification,
+          productId,
+        });
         await validateExpenseInheritance(db, {
           lineKind,
           projectId: part.projectId

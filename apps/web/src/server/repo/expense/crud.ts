@@ -488,12 +488,16 @@ export const updateExpense = async (
     data.future,
     data.productId,
     data.productQuantity,
+    data.lineKind,
+    data.lineBasis,
   ].some((value) => value !== undefined);
   const qualityCanChange = [
     data.cost,
     data.future,
     data.productId,
     data.purchaseId,
+    data.lineKind,
+    data.lineBasis,
   ].some((value) => value !== undefined);
 
   const loadUpdateState = async (tx: DrizzleTransaction) => {
@@ -564,6 +568,31 @@ export const updateExpense = async (
     }
   };
 
+  const normalizeAndAssertUpdateProductLink = (
+    state: UpdateState,
+    update: ResolvedExpenseUpdate,
+  ) => {
+    const previous = state.qualityBefore;
+    clearReclassifiedFields(previous, update);
+    if (update.productId === null && update.productQuantity === undefined) {
+      update.productQuantity = null;
+    }
+    const resultingProductId =
+      update.productId === undefined
+        ? (previous?.productId ?? null)
+        : update.productId;
+    assertExpenseProductLink({
+      productId: resultingProductId,
+      lineKind: update.lineKind ?? previous?.lineKind ?? "principal",
+      lineBasis: update.lineBasis ?? previous?.lineBasis ?? "item_line",
+      productQuantity:
+        update.productQuantity === undefined
+          ? (previous?.productQuantity ?? null)
+          : update.productQuantity,
+      cost: state.nextCost,
+    });
+  };
+
   const validateUpdateState = async (
     tx: DrizzleTransaction,
     state: UpdateState,
@@ -571,7 +600,7 @@ export const updateExpense = async (
     resultingPurchaseId: PurchaseId | null,
   ) => {
     const previous = state.qualityBefore;
-    clearReclassifiedFields(previous, update);
+    normalizeAndAssertUpdateProductLink(state, update);
     // Detaching a source preserves its effective attribution unless the same
     // edit explicitly replaces or resets that assignment.
     if (
@@ -608,21 +637,6 @@ export const updateExpense = async (
     const resolvedProjectId = await resolveOptionalProjectId(tx, projectId);
     const resolvedProductId = await resolveOptionalProductId(tx, productId);
     const explicitPurchaseId = await resolveOptionalPurchaseId(tx, purchaseId);
-    const resultingProductId =
-      resolvedProductId === undefined
-        ? (state.qualityBefore?.productId ?? null)
-        : resolvedProductId;
-    assertExpenseProductLink({
-      productId: resultingProductId,
-      lineKind: data.lineKind ?? state.qualityBefore?.lineKind ?? "principal",
-      lineBasis:
-        data.lineBasis ?? state.qualityBefore?.lineBasis ?? "item_line",
-      productQuantity:
-        data.productQuantity === undefined
-          ? (state.qualityBefore?.productQuantity ?? null)
-          : data.productQuantity,
-      cost: state.nextCost,
-    });
     const update: ResolvedExpenseUpdate = {
       ...restColumns,
       spendingCategoryId:
@@ -641,6 +655,11 @@ export const updateExpense = async (
     }
     if (resolvedProjectId !== undefined) update.projectId = resolvedProjectId;
     if (resolvedProductId !== undefined) update.productId = resolvedProductId;
+    normalizeAndAssertUpdateProductLink(state, update);
+    const resultingProductId =
+      update.productId === undefined
+        ? (state.qualityBefore?.productId ?? null)
+        : update.productId;
     return {
       explicitPurchaseId,
       resolvedProductId,

@@ -778,7 +778,11 @@ describe("shared purchase-import prepare and commit", () => {
    * of the same order commits its itemized line, which leaves a reviewed
    * replacement of the aggregate for approval.
    */
-  async function importOverManualAggregate(targetOrderless: boolean) {
+  async function importOverManualAggregate(
+    targetOrderless: boolean,
+    categorized = false,
+    includeTax = false,
+  ) {
     const party = await insertWithShortcode(ctx.db, "ledgerParty", {
       name: "Manual-then-import member",
       kind: "member",
@@ -802,6 +806,11 @@ describe("shared purchase-import prepare and commit", () => {
       date: "2026-09-18",
       statedTotal: 45,
     });
+    const category = categorized
+      ? await insertWithShortcode(ctx.db, "spendingCategory", {
+          name: "Replacement category",
+        })
+      : null;
     const manualExpense = await insertWithShortcode(ctx.db, "expense", {
       purchaseId: manualPurchase.id,
       name: "Recorded from a paper receipt",
@@ -813,6 +822,7 @@ describe("shared purchase-import prepare and commit", () => {
       future: false,
       productId: null,
       productQuantity: null,
+      spendingCategoryId: category?.id ?? null,
     });
     const existingProduct = await createProductFixture(
       ctx.db,
@@ -858,18 +868,29 @@ describe("shared purchase-import prepare and commit", () => {
               merchant: "Example",
               currency: "USD",
               printedGrandTotal: 45,
-              lines: [
-                {
-                  title: "Manual merge target product",
-                  amount: 45,
-                  lineKind: "principal" as const,
-                },
-              ],
+              lines: includeTax
+                ? [
+                    {
+                      title: "Manual merge target product",
+                      amount: 40,
+                      lineKind: "principal" as const,
+                    },
+                    { title: "Sales tax", amount: 5, lineKind: "tax" as const },
+                  ]
+                : [
+                    {
+                      title: "Manual merge target product",
+                      amount: 45,
+                      lineKind: "principal" as const,
+                    },
+                  ],
               payments: [],
               allShipmentsDelivered: false,
             },
           },
-          lineIds: ["manual-order-1:line-1"],
+          lineIds: includeTax
+            ? ["manual-order-1:line-1", "manual-order-1:line-2"]
+            : ["manual-order-1:line-1"],
           primaryDocumentImageId: null,
           screenshotImageId: null,
         },
@@ -893,8 +914,62 @@ describe("shared purchase-import prepare and commit", () => {
       ],
     });
     const result = await commitPurchaseImport(ctx.db, commitInput, ctx.actor);
-    return { manualPurchase, manualExpense, existingProduct, result };
+    return { manualPurchase, manualExpense, existingProduct, category, result };
   }
+
+  it("replaces a categorized aggregate with an uncategorized tax line", async () => {
+    const { manualPurchase, manualExpense, category } =
+      await importOverManualAggregate(false, true, true);
+    if (!category) throw new Error("Expected the category fixture");
+    const [finding] = await getDb(ctx.db)
+      .select({ id: runFinding.id, proposedFix: runFinding.proposedFix })
+      .from(runFinding)
+      .where(
+        and(
+          eq(runFinding.entityId, manualPurchase.id),
+          eq(runFinding.kind, "duplicate_lines"),
+        ),
+      );
+    if (!finding) throw new Error("Expected replacement finding");
+    const fix = proposedImportFix.parse(finding.proposedFix);
+    if (fix.kind !== "replace_aggregate_line")
+      throw new Error("Expected replacement preview");
+    await resolveRunFinding(
+      ctx.db,
+      {
+        id: finding.id,
+        action: "apply",
+        reviewedFingerprint: fix.reviewSnapshot?.fingerprint,
+      },
+      ctx.actor,
+    );
+    const rows = await getDb(ctx.db)
+      .select({
+        name: expense.name,
+        lineKind: expense.lineKind,
+        spendingCategoryId: expense.spendingCategoryId,
+      })
+      .from(expense)
+      .where(
+        and(
+          eq(expense.purchaseId, manualPurchase.id),
+          isNull(expense.deletedAt),
+        ),
+      );
+    expect(
+      rows.find((row) => row.lineKind === "principal")?.spendingCategoryId,
+    ).toBe(category.id);
+    expect(
+      rows.find((row) => row.lineKind === "tax")?.spendingCategoryId,
+    ).toBeNull();
+    expect(rows).toHaveLength(2);
+    expect(
+      await getDb(ctx.db).query.expense.findFirst({
+        where: eq(expense.id, manualExpense.id),
+        columns: { deletedAt: true },
+      }),
+    ).toMatchObject({ deletedAt: expect.any(Date) });
+  });
 
   it.each([
     [false, false, false],

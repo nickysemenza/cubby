@@ -1252,9 +1252,11 @@ database as well as by `assertClassificationPolicies`, which every write calls
 first; a field's `refusal` is the actionable message it raises, and its `gap`
 names the public data-quality check that reports a missing `required` value or
 a present `not_allowed` one. Reclassifying a row clears a stored field the new
-value refuses unless the same write sets it. The editor hides a field the
-record's classification refuses, and a Suggestion request drops refused
-targets, refusing the request only when none remain.
+value refuses unless the same write sets it, then validates the resulting
+record once. Split parts and receipt replacement lines inherit a stored
+spending category only when their final line kind allows it. The editor hides a
+field the record's classification refuses, and a Suggestion request drops
+refused targets, refusing the request only when none remain.
 
 A `relation: true` entry governs a relation the classified record takes part
 in instead of a stored field: ProductCategory `feature` admits a Product as a
