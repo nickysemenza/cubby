@@ -52,8 +52,8 @@
   system in isolation, write down all plausible ways it could fail, then write a failing
   test for the relevant behavior before implementation. Prefer E2E as the sole
   automated test for a feature when it covers those failures.
-- Every completed E2E run leaves a sanitized, verifiable artifact with the
-  tested revision, replay command, results, and evidence. See
+- CI's Playwright HTML report and traces are the web E2E artifact; local native
+  runs keep `sim-e2e` artifacts. See
   [test tiers and E2E artifacts](docs/agents/validation-tests.md).
 - Spend tool calls on bytes that earn their place. Batch independent read-only
   shell into one call, but prefer a targeted `Grep`/`Glob` over dumping a large

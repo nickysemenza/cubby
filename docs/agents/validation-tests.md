@@ -352,20 +352,12 @@ it in the retained original and proposal: tests share a worker database, so
 unrelated fixtures must not collide on Product name/manufacturer. Repeated
 orders for the same item reuse the Product reference returned by resolution.
 
-Every completed E2E run produces a sanitized run bundle with its revision,
-replay command, runtime versions, case results, and SHA-256 checksums. CI uploads
-successful and failed bundles for seven days. A dirty local checkout or a build
-that cannot be tied to its source revision is marked as not exactly replayable.
-Raw HTML reports, traces, screenshots, and database dumps stay local because
-they can contain household data or credentials. Run `shasum -a 256 -c
-SHA256SUMS` from the downloaded bundle directory to verify its contents, then
-replay the `command` array in `run-manifest.json` against the recorded commit.
-Desktop CI disables trace recording because raw traces are never uploaded.
-Before another local browser replay, archive and verify the completed sanitized
-bundle outside `playwright-report`; the reporter replaces that directory on the
-next run. Keep failed-run evidence as well as successful acceptance bundles.
-For a local debugging replay, replace its `--trace=off` argument with
-`--trace=retain-on-failure`; local runs otherwise retain traces on failure.
+CI's web E2E artifact is Playwright's built-in HTML report and retained traces.
+Each Playwright job uploads them under an artifact name containing the tested
+commit SHA; failed tests retain traces through `trace: "retain-on-failure"`.
+Open `playwright-report/index.html` from the downloaded artifact to inspect the
+run. Local native runs keep the `sim-e2e` artifacts, which record their build,
+process, simulator, watchdog, scenario and replay evidence.
 
 A failed E2E test attaches the Worker harness's structured workerd logs
 (`harness.getLogs()`, credential-shaped values scrubbed) to the Playwright

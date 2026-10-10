@@ -251,13 +251,15 @@ jobs:
         if: always()
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
         with:
-          name: playwright-run-${{ matrix.slug }}
+          name: playwright-${{ github.sha }}-${{ matrix.slug }}
           path: |
-            apps/web/playwright-report/run-manifest.json
-            apps/web/playwright-report/run-results.json
-            apps/web/playwright-report/SHA256SUMS
-            apps/web/playwright-report/workerd-logs
-          if-no-files-found: error
+            apps/web/playwright-report/**
+            !apps/web/playwright-report/run-manifest.json
+            !apps/web/playwright-report/run-results.json
+            !apps/web/playwright-report/SHA256SUMS
+            !apps/web/playwright-report/workerd-logs/**
+            apps/web/test-results/**/trace.zip
+          if-no-files-found: warn
           retention-days: 7
 
   # Informative only: the purchase agent driven through the browser against a
@@ -298,13 +300,15 @@ jobs:
         if: always()
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
         with:
-          name: playwright-run-purchase-import
+          name: playwright-${{ github.sha }}-purchase-import
           path: |
-            apps/web/playwright-report/run-manifest.json
-            apps/web/playwright-report/run-results.json
-            apps/web/playwright-report/SHA256SUMS
-            apps/web/playwright-report/workerd-logs
-          if-no-files-found: error
+            apps/web/playwright-report/**
+            !apps/web/playwright-report/run-manifest.json
+            !apps/web/playwright-report/run-results.json
+            !apps/web/playwright-report/SHA256SUMS
+            !apps/web/playwright-report/workerd-logs/**
+            apps/web/test-results/**/trace.zip
+          if-no-files-found: warn
           retention-days: 7
 
   # The stable required check over the web matrix lanes.
