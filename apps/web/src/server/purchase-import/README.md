@@ -855,7 +855,8 @@ delivery even when the same reason is re-armed during notification authorization
 Claims occur synchronously with projected attention; retired controllers cannot
 deliver, and resolution during posting retracts only the stale generation.
 Unrelated accounts and permission reasons retain their edges. Permission notices retain
-the raw command diagnostic and name the setting to change. A newly observed
+the raw command diagnostic and name the setting to change with browser-neutral
+JavaScript guidance. A newly observed
 permission pause raises that account's owned Cubby browser window, only while
 the controller remains installed. The permission edge and controller are checked
 again after owned-window lookup, before the queued AppleScript dispatch, and

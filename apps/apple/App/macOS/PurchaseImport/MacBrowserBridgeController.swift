@@ -149,7 +149,7 @@ final class MacBrowserBridgeController: BrowserBridgeControlling {
                 } else if failure.code == .javascriptDisabled {
                     attention = (
                         "javascript_disabled",
-                        "In Chrome, enable View > Developer > Allow JavaScript from Apple Events."
+                        "Enable Allow JavaScript from Apple Events in your browser's developer settings."
                     )
                 } else {
                     attention = nil
