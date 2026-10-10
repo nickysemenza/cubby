@@ -195,8 +195,11 @@ mailbox and authenticated-device acceptance only after explicit resumption.
   new operation IDs early enough. [#1808](https://github.com/nickysemenza/cubby/pull/1808)
   adds a reviewed three-distinct-call bound for identical thrown service failures
   using existing durable Run state. Its exact-head hosted checks and scripted
-  acceptance passed and it merged; production deployment remains pending.
-  Returned domain refusals and active-time accounting remain open. Pause
+  acceptance passed, it merged and production deployment succeeded. Returned
+  browser `blocked` replies now share that bound in the local follow-up; review,
+  hosted checks and deployment remain pending. Corrective resolution refusals
+  already have a three-zero-progress-attempt allowance per task, retained through
+  completed operation receipts. Active-time accounting remains open. Pause
   repeated unchanged failures with their raw last observation. Member sign-in,
   permissions and Mac-offline waits do not consume active time. Reuse Run state
   and existing usage/cost authorization; do not introduce another job engine.
