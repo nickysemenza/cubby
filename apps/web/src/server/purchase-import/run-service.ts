@@ -2067,9 +2067,10 @@ export async function loadRunDetail(
     const facts = factsByEvidence.get(fact.evidenceId) ?? [];
     facts.push({
       entityKind: fact.entityKind,
-      entityShortcode: anyShortcodeSchema(runTargetEntityKind.options).parse(
-        fact.entityShortcode,
-      ),
+      entityShortcode: anyShortcodeSchema([
+        runTargetEntityKind.enum.product,
+        ...runTargetEntityKind.options,
+      ]).parse(fact.entityShortcode),
       fieldPath: fact.fieldPath,
       value: fact.value,
     });

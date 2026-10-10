@@ -507,6 +507,7 @@ export type ReportRecordRow = z.infer<typeof reportRecordRow>;
  * plan in `nativeCollectionActionPlans`.
  */
 const reportRecords = z.object({
+  presentation: z.literal("filmstrip").optional(),
   kind: z.literal("records"),
   title: z.string().optional(),
   rows: z.array(reportRecordRow),

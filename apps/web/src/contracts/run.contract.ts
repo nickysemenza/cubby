@@ -207,7 +207,10 @@ const runDetail = z
           .array(
             acceptedResearchFact.pick({ fieldPath: true, value: true }).extend({
               entityKind: runTargetEntityKind,
-              entityShortcode: anyShortcodeSchema(runTargetEntityKind.options),
+              entityShortcode: anyShortcodeSchema([
+                runTargetEntityKind.enum.product,
+                ...runTargetEntityKind.options,
+              ]),
             }),
           )
           .optional(),

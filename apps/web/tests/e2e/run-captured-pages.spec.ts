@@ -73,6 +73,16 @@ test("retained captures open beside their accepted facts with bounded navigation
       })
       .returning();
     if (!screenshot) throw new Error("Synthetic screenshot missing");
+    const retainedPage = "Synthetic retained page";
+    const storedPage = await fetch(
+      `${e2eRuntime.objectStorageUrl}/e2e-bucket/${encodeURIComponent(`${key}.html`)}`,
+      {
+        method: "PUT",
+        headers: { "Content-Type": "text/html" },
+        body: retainedPage,
+      },
+    );
+    expect(storedPage.ok).toBe(true);
     const [source] = await db
       .insert(schema.runEvidence)
       .values({
@@ -80,9 +90,9 @@ test("retained captures open beside their accepted facts with bounded navigation
         targetId: target.id,
         kind: "browser_capture",
         objectKey: `${key}.html`,
-        checksum: await sha256Hex("Synthetic retained page"),
+        checksum: await sha256Hex(retainedPage),
         mediaType: "text/html",
-        byteSize: 23,
+        byteSize: new TextEncoder().encode(retainedPage).byteLength,
         sourceMetadata: {
           title: `Captured page ${index + 1}`,
           sourceURL: `https://shop.example.test/orders/${index + 1}`,

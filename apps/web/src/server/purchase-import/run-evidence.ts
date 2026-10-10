@@ -329,7 +329,7 @@ export async function readRunEvidenceMedia(
         "Retained evidence bytes differ from their manifest",
         { status: 422, headers },
       );
-    return new Response(bytes, {
+    return new Response(new Uint8Array(bytes).buffer, {
       headers: {
         ...headers,
         "Content-Type": mediaType.data,
