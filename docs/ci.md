@@ -9,6 +9,10 @@ gate ([ADR 0009](adr/0009-content-hash-merge-gate.md),
 deploys every production Worker, including after a documentation-only change;
 deployment never waits for post-merge CI.
 
+`ci.yaml` holds only those checks, so every job in a PR's run graph gates it.
+The long native and Tester Army journeys live in `e2e-journeys.yaml`: manual
+dispatch with a `journey` input, plus the weekly Tester Army import run.
+
 ## Cache keys and the remote cache
 
 ```mermaid
@@ -336,7 +340,7 @@ startup, PostgreSQL health wait, logs, and cleanup. PostgreSQL also maps port
 settings in the fresh PostgreSQL 17 configuration. IntegreSQL retries its
 PostgreSQL connection during startup; its pinned distroless image has no
 `/bin/sh` for Docker shell health checks. The optional purchase-import and
-Tester Army Linux lanes use the same service definitions.The
+Tester Army Linux lanes use the same service definitions. The
 `@claude` mention workflow (`claude.yml`) remains manual;
 `claude-code-review.yml` reviews each non-Renovate, non-fork PR once,
 on `opened`/`ready_for_review`/`reopened` (never on `synchronize`, so a push
