@@ -1643,13 +1643,13 @@ describe("persisted Suggestion sweeps", () => {
     expect(first).toBeDefined();
     await startSuggestionSweep(ctx.db, input, ports);
     const saved = await getDb(ctx.db)
-      .select({ status: suggestionTable.status })
+      .select({ id: suggestionTable.id, status: suggestionTable.status })
       .from(suggestionTable)
       .where(eq(suggestionTable.recordId, first!.recordId));
-    expect(saved.map(({ status }) => status)).toEqual([
-      "superseded",
-      "pending",
-    ]);
+    // The read has no order; identify the earlier suggestion by id.
+    expect(saved).toHaveLength(2);
+    expect(saved.find(({ id }) => id === first!.id)?.status).toBe("superseded");
+    expect(saved.find(({ id }) => id !== first!.id)?.status).toBe("pending");
   });
 
   it("accepts a reviewed value and groups Misses by field and suggested value", async () => {
