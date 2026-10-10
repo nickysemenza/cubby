@@ -1,5 +1,6 @@
 import type { Locator, Page } from "@playwright/test";
 
+import { buildEntityReport } from "~/server/repo/entity-report";
 import { attachPurchaseProducts } from "~/server/repo/purchase-products";
 import { resolveLiveShortcode } from "~/server/repo/shortcode-resolver";
 
@@ -244,7 +245,7 @@ for (const state of ["owned", "exited", "uncertain"] as const) {
     page,
   }, testInfo) => {
     const name = uniqueName(testInfo, `Synthetic ${state} overview`);
-    await ensureMemberParty(page, name);
+    const member = await ensureMemberParty(page, name);
     const feature = state === "owned" ? "food" : "tools";
     const category = await seedProductCategoryPrerequisite(page, {
       name: `${name} category`,
@@ -381,10 +382,23 @@ for (const state of ["owned", "exited", "uncertain"] as const) {
     await page
       .getByRole("menuitem", { name: "Enrichment history", exact: true })
       .click();
+    const { db, actor } = await createEvidenceHarnessContext(page);
+    const report = await buildEntityReport(
+      db,
+      { slot: "product.runs", id: product.id },
+      async () => member,
+      actor,
+    );
+    const history = report.blocks.find((block) => block.kind === "records");
+    if (history?.kind !== "records" || !history.empty)
+      throw new Error("Missing empty Product research history");
+    expect(history.rows).toHaveLength(0);
+    await expect(page.getByText(history.empty, { exact: true })).toBeVisible();
     await expect(
-      page.getByText("No targeted enrichment runs have been recorded.", {
-        exact: true,
-      }),
+      page
+        .getByRole("group", { name: "Entity actions", exact: true })
+        .getByRole("button", { name: "Enrich product", exact: true })
+        .first(),
     ).toBeVisible();
   });
 }

@@ -15,7 +15,7 @@ import {
   recipeShortcode,
 } from "@cubby/schemas/identifiers";
 import { runPurpose } from "@cubby/schemas/run-fields";
-import { and, asc, eq } from "drizzle-orm";
+import { and, asc, eq, inArray } from "drizzle-orm";
 
 import { computeParseDrift, driftAxes } from "~/lib/parse-drift";
 import type { Database } from "~/server/db";
@@ -26,8 +26,9 @@ import {
   ingredient,
   product,
   recipe,
+  runTarget,
 } from "~/server/db/schema";
-import { listRuns } from "~/server/purchase-import/run-target";
+import { listRuns, listProductRuns } from "~/server/purchase-import/run-target";
 import {
   aiDescriptionItems,
   cookbookItems,
@@ -35,6 +36,7 @@ import {
   labelImageItems,
   recipeUsageItems,
   runHistoryItems,
+  phaseLabel,
   type UsageForItems,
 } from "~/server/repo/collection-items";
 import { getDb, mapImages, notDeleted } from "~/server/repo/database-helpers";
@@ -42,10 +44,7 @@ import { getImageById } from "~/server/repo/image";
 import { getImageProcessingReadProjection } from "~/server/repo/image-processing";
 import { getRecipeUsagesForIngredient } from "~/server/repo/ingredient/search";
 import { readLocationAiDescription } from "~/server/repo/location/ai-description";
-import {
-  resolveLiveShortcode,
-  resolveOrThrow,
-} from "~/server/repo/shortcode-resolver";
+import { resolveOrThrow } from "~/server/repo/shortcode-resolver";
 
 /** Who is asking, for the reads that are scoped to a member's own ledger party. */
 export type ReportViewer = () => Promise<{ id: LedgerPartyId } | null>;
@@ -292,27 +291,97 @@ export const locationAiDescriptionReport = async (
   );
 };
 
-export const purchaseRunsReport = async (
-  db: Database,
-  code: string,
-  viewer: ReportViewer,
-) => {
-  const party = await viewer();
-  if (!party)
-    throw new Error("This login is not linked to a member ledger party yet.");
-  const purchaseId = await resolveLiveShortcode(db, code, "purchase");
-  if (purchaseId === null) throw new Error("Purchase was not found");
-  const runs = await listRuns(db, party.id, purchaseId);
-  return records(
-    runHistoryItems(
-      runs.map((run) => ({
-        ...run,
-        purpose: runPurpose.parse(run.purpose),
-        startedAt: run.startedAt.toISOString(),
-        endedAt: run.endedAt?.toISOString() ?? null,
-      })),
-    ),
-    "No import run has been recorded for this purchase.",
-    reportSlotActions["purchase.runs"],
-  );
-};
+export const recordRunsReport =
+  (kind: "product" | "purchase") =>
+  async (db: Database, code: string, viewer: ReportViewer) => {
+    const party = await viewer();
+    if (!party)
+      throw new Error("This login is not linked to a member ledger party yet.");
+    const entityId = await resolveOrThrow(db, kind, code);
+    const runs =
+      kind === "product"
+        ? await listProductRuns(
+            db,
+            party.id,
+            parseEntityId("product", entityId),
+          )
+        : await listRuns(db, party.id, parseEntityId("purchase", entityId));
+    const targets = runs.length
+      ? await getDb(db)
+          .select({
+            runId: runTarget.runId,
+            state: runTarget.state,
+            outcome: runTarget.outcome,
+            warning: runTarget.warning,
+            completedAt: runTarget.completedAt,
+          })
+          .from(runTarget)
+          .where(
+            and(
+              eq(runTarget.entityId, entityId),
+              inArray(
+                runTarget.runId,
+                runs.map((item) => item.id),
+              ),
+            ),
+          )
+      : [];
+    return records(
+      runHistoryItems(
+        runs.map((run) => ({
+          ...run,
+          purpose: runPurpose.parse(run.purpose),
+          startedAt: run.startedAt.toISOString(),
+          endedAt: run.endedAt?.toISOString() ?? null,
+        })),
+      ).map((row, index) => {
+        const scoped = targets.filter(
+          (target) => target.runId === runs[index]?.id,
+        );
+        const completed = scoped
+          .flatMap((target) =>
+            target.completedAt ? [target.completedAt.toISOString()] : [],
+          )
+          .sort()
+          .at(-1);
+        return {
+          ...row,
+          title:
+            runs[index]?.vendorName ??
+            runs[index]?.vendorAccountLabel ??
+            (kind === "product" ? "Product enrichment" : row.title),
+          subtitle: [
+            kind === "product" ? row.subtitle?.split("\n")[0] : row.subtitle,
+            ...scoped.flatMap((target) =>
+              target.warning ? [target.warning] : [],
+            ),
+          ]
+            .filter(Boolean)
+            .join("\n"),
+          at: completed ?? row.at,
+          trailing: null,
+          statuses: [
+            { label: phaseLabel(runs[index]!.status) },
+            ...Array.from(
+              new Set(scoped.map((target) => target.outcome ?? target.state)),
+            ).map((outcome) => ({
+              label: phaseLabel(outcome),
+              tone:
+                outcome === "verified"
+                  ? ("positive" as const)
+                  : [
+                        "partially_verified",
+                        "ambiguous",
+                        "temporarily_blocked",
+                        "researched_with_gaps",
+                      ].includes(outcome)
+                    ? ("warning" as const)
+                    : undefined,
+            })),
+          ],
+        };
+      }),
+      `No research run has been recorded for this ${kind}.`,
+      reportSlotActions[`${kind}.runs`],
+    );
+  };

@@ -129,6 +129,48 @@ export async function seedNativeQa(
   });
   const split = await seedSplitSettlement(pool, userId);
   const approvalRun = await seedPendingApprovalRun(pool, userId);
+  const researchMember = await pool.query<{
+    id: string;
+    shortcode: string;
+    name: string;
+  }>(
+    'SELECT id, shortcode, name FROM "LedgerParty" WHERE "userId" = $1 AND kind = $2 AND "deletedAt" IS NULL LIMIT 1',
+    [userId, "member"],
+  );
+  const member = researchMember.rows[0];
+  if (!member) throw new Error("Synthetic research member is missing");
+  const researchProduct = await pool.query<{ id: string }>(
+    'SELECT id FROM "Product" WHERE shortcode = $1',
+    [product.id],
+  );
+  const productId = researchProduct.rows[0]?.id;
+  if (!productId) throw new Error("Synthetic research Product is missing");
+  const research = await insertWithShortcode(db, "run", {
+    purpose: "product_enrichment",
+    trigger: "manual",
+    status: "completed",
+    ledgerPartyId: parseEntityId("ledgerParty", member.id),
+    actorUserId: testUserId(userId),
+    actorName: "Synthetic member",
+    actorEmail: "member@example.test",
+    actorLedgerPartyShortcode: member.shortcode,
+    actorLedgerPartyName: member.name,
+    actorLedgerPartyKind: "member",
+  });
+  await getDb(db)
+    .insert(runTarget)
+    .values({
+      runId: research.id,
+      entityKind: "product",
+      entityId: parseEntityId("product", productId),
+      workKey: "synthetic-product-research",
+      targetFingerprint: "synthetic-product-fingerprint",
+      state: "completed",
+      outcome: "partially_verified",
+      completedAt: new Date("2026-09-20T12:00:00Z"),
+      warning: "Exact model remains unsupported",
+      diff: {},
+    });
   const photoRun = await seedProposedPhotoRun(pool, userId);
   const garden = await seedScopedPlantingPicker(pool, context);
   return {
@@ -140,6 +182,7 @@ export async function seedNativeQa(
     SHELF_ID: shelf.id,
     INGREDIENT_ID: ingredient.id,
     PRODUCT_ID: product.id,
+    PRODUCT_RESEARCH_RUN_ID: research.shortcode,
     INVENTORY_ID: inventory.id,
     SHELF_INVENTORY_ID: shelfInventory.id,
     RECIPE_ID: recipe.id,

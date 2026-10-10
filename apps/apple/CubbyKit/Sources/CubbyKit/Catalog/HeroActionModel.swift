@@ -90,9 +90,9 @@ public final class HeroActionModel: Identifiable {
         switch currentPreview {
         case .launch(let launch)?:
             // The server's own words, as a neutral note: with no replayable evidence the run can
-            // still search for it itself, so only `canValidate` blocks.
-            if !launch.canValidate {
-                return (launch.reason ?? "Validation is not available for this purchase.", false)
+            // still search for it itself, so only server eligibility blocks.
+            if !launch.canStart {
+                return (launch.reason ?? "Research is not available for this target.", false)
             }
             return launch.reason.map { ($0, false) }
         case .discard(let preview)?:
@@ -130,7 +130,7 @@ public final class HeroActionModel: Identifiable {
         if operation.preview != nil {
             guard let current = currentPreview else { return false }
             if case .discard(let discard) = current, discard.needsShelfChoice { return false }
-            if case .launch(let launch) = current, !launch.canValidate { return false }
+            if case .launch(let launch) = current, !launch.canStart { return false }
         }
         return (try? HeroActionRunner.resolvedValues(operation.fields, values: values)) != nil
     }

@@ -38,7 +38,7 @@ import {
   productCookbooksReport,
   productLabelsReport,
   productRecipeAppearancesReport,
-  purchaseRunsReport,
+  recordRunsReport,
   type ReportViewer,
 } from "./records";
 import type { RunReportSlot } from "./run";
@@ -105,7 +105,8 @@ const BUILDERS = {
   "cookbook.extraction-report": cookbookExtractionReport,
   "cookbook.import-progress": cookbookImportProgressReport,
   "image.associations": imageAssociationsReport,
-  "purchase.runs": purchaseRunsReport,
+  "purchase.runs": recordRunsReport("purchase"),
+  "product.runs": recordRunsReport("product"),
   "purchase.order-mail": (db, id, _viewer, actor) =>
     purchaseOrderMailReport(db, id, actor),
   "vendor.order-mail": (db, id, _viewer, actor) =>

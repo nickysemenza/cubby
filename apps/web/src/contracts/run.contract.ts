@@ -46,8 +46,6 @@ import { z } from "zod";
 
 import { defineContract, mutation, query } from "~/contracts/define";
 
-export type { RunSummary } from "@cubby/schemas/run";
-
 const runProgress = z.object({
   eventId: z.string().min(1),
   phase: z.string().min(1),

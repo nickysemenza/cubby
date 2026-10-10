@@ -17,6 +17,9 @@ import type { RunSummary } from "@cubby/schemas/run";
 const count = (value: number, noun: string) =>
   `${value} ${noun}${value === 1 ? "" : "s"}`;
 
+export const phaseLabel = (phase: string) =>
+  phase.replaceAll("_", " ").replace(/^./u, (letter) => letter.toUpperCase());
+
 /** The cookbooks whose physical copies this product is, one row each opening the cookbook. */
 export const cookbookItems = (
   cookbooks: readonly Pick<

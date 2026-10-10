@@ -304,6 +304,18 @@ struct CollectionActionTests {
 
     // MARK: - Launching a validation
 
+    @Test func productLaunchUsesItsSelectedTargetAndRetainedEvidence() throws {
+        let data = Data(
+            #"{"purpose":"product_enrichment","purchase":null,"products":[{"productId":"PRD-4K7M","productName":"Synthetic bag","selected":true,"sourceId":"synthetic-source","sourceLabel":"Original order","vendorAccountId":null,"vendorAccountLabel":null,"needsAccountChoice":false,"accountChoices":[],"reason":null}]}"#
+                .utf8)
+        let preview = try TargetedLaunchPreview(
+            JSONDecoder().decode(RunTargetedLaunchOutput.self, from: data))
+        #expect(preview.canStart)
+        #expect(preview.sources.map(\.id) == ["synthetic-source"])
+        #expect(preview.sources.first?.usable == true)
+        #expect(preview.sources.first?.isDefault == true)
+    }
+
     nonisolated private static let launch = Data(
         #"{"purpose":"purchase_validation","purchase":{"id":"PUR-4K7M","label":"Sample order","canValidate":true,"reason":null,"sources":[{"id":"src-a","label":"Email receipt","kind":"mail","fingerprint":null,"vendorAccountId":null,"vendorAccountLabel":"Sample Account","usable":true,"reason":null,"default":false},{"id":"src-b","label":"Statement","kind":"statement","fingerprint":null,"vendorAccountId":null,"vendorAccountLabel":null,"usable":true,"reason":null,"default":true},{"id":"src-c","label":"Old export","kind":"file","fingerprint":null,"vendorAccountId":null,"vendorAccountLabel":null,"usable":false,"reason":"expired","default":false}],"products":[]},"products":[]}"#
             .utf8)
