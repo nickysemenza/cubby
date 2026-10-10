@@ -22,6 +22,7 @@ import {
   type plantingCreateInput,
   type plantingUpdateData,
 } from "@cubby/schemas/planting";
+import { isPlantingSourceFeature } from "@cubby/schemas/product-category-relations";
 import {
   and,
   desc,
@@ -142,7 +143,9 @@ const validatePlantingSource = async (
     columns: { categoryId: true, growsPlantId: true },
   });
   if (!source) return;
-  if ((await getCategoryFeature(db, source.categoryId)) === "food") {
+  if (
+    !isPlantingSourceFeature(await getCategoryFeature(db, source.categoryId))
+  ) {
     throw createAppError(
       "CONSTRAINT_VIOLATION",
       "A planting source Product must be a garden product, not a food Product.",

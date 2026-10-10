@@ -5,7 +5,9 @@ import { validateClassificationPolicies } from "../../../scripts/generator/entit
 import type { CompiledEntity } from "../../../scripts/generator/entities/declarations";
 
 type Policy = CompiledEntity["classificationPolicies"][number];
-type FieldPolicy = Policy["fields"][number];
+type FieldPolicy = Omit<Policy["fields"][number], "relation"> & {
+  relation?: boolean;
+};
 
 // The validator reads only keys, field rosters, enum options and policies.
 const entities = (fields: FieldPolicy[], classifier = "kind") => [
@@ -29,7 +31,7 @@ const entities = (fields: FieldPolicy[], classifier = "kind") => [
       {
         classifier,
         target: { entity: "item", reference: "shelfKindId" },
-        fields,
+        fields: fields.map((field) => ({ relation: false, ...field })),
       },
     ],
   }),
@@ -104,6 +106,28 @@ describe("classification policy declarations", () => {
       );
     },
   );
+
+  it("lets a relation entry admit several values but not name a field", () => {
+    expect(() =>
+      validateClassificationPolicies(
+        entities([
+          {
+            field: "shelvedOn",
+            relation: true,
+            byValue: { pantry: "unknown", library: "unknown" },
+            otherwise: "not_allowed",
+          },
+        ]),
+      ),
+    ).not.toThrow();
+    expect(() =>
+      validateClassificationPolicies(
+        entities([
+          { field: "isbn", relation: true, byValue: {}, otherwise: "unknown" },
+        ]),
+      ),
+    ).toThrow(/drop `relation`/);
+  });
 
   it("rejects a classifier without enum options", () => {
     expect(() =>

@@ -16,6 +16,7 @@
     "./collection": "./src/collection.ts",
     "./cookbook": "./src/cookbook.ts",
     "./cookbook-fields": "./src/cookbook-fields.ts",
+    "./product-category-relations": "./src/product-category-relations.ts",
     "./display-images": "./src/display-images.ts",
     "./entity-definitions/collection-actions": "./src/entity-definitions/collection-actions.ts",
     "./entity-report": "./src/entity-report.ts",

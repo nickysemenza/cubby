@@ -50,6 +50,7 @@ type FieldDeclaration = Readonly<{
   field: string;
   byValue: Readonly<Partial<Record<string, FieldPolicyValue>>>;
   otherwise: FieldPolicyValue;
+  relation: boolean;
 }>;
 
 const declaredFields = (
@@ -113,7 +114,8 @@ export function impliedClassification<
 ): ClassificationValue<Id> | null {
   const presentFields: ReadonlySet<string> = present;
   for (const declaration of declaredFields(id)) {
-    if (declaration.otherwise !== "not_allowed") continue;
+    if (declaration.relation || declaration.otherwise !== "not_allowed")
+      continue;
     if (!presentFields.has(declaration.field)) continue;
     // The generator proves exactly one admitting value per refused field.
     const admitting = declaredClassificationPolicies[id].values.find(

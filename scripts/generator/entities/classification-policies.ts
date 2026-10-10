@@ -23,6 +23,24 @@ const classifierValues = (
   return options.map((option) => option.value);
 };
 
+const assertPolicySubject = (
+  target: CompiledEntity,
+  fieldPolicy: DeclaredPolicy["fields"][number],
+  context: string,
+) => {
+  const isField = target.fieldModel.fields.some(
+    (field) => field.key === fieldPolicy.field,
+  );
+  if (fieldPolicy.relation && isField)
+    throw new EntityDeclarationError(
+      `${context} is a field of ${target.key}; drop \`relation\`.`,
+    );
+  if (!fieldPolicy.relation && !isField)
+    throw new EntityDeclarationError(
+      `${context} is not a field of ${target.key}.`,
+    );
+};
+
 const assertEnforcedIsSameRecord = (
   policy: DeclaredPolicy,
   context: string,
@@ -98,10 +116,7 @@ export const validateClassificationPolicies = (
         if (seen.has(fieldPolicy.field))
           throw new EntityDeclarationError(`${fieldContext} is duplicated.`);
         seen.add(fieldPolicy.field);
-        if (!target.fieldModel.fields.some((f) => f.key === fieldPolicy.field))
-          throw new EntityDeclarationError(
-            `${fieldContext} is not a field of ${target.key}.`,
-          );
+        assertPolicySubject(target, fieldPolicy, fieldContext);
         for (const value of Object.keys(fieldPolicy.byValue)) {
           if (!values.includes(value))
             throw new EntityDeclarationError(
@@ -109,7 +124,10 @@ export const validateClassificationPolicies = (
             );
         }
         assertGapIsValid(policy, fieldPolicy, fieldContext, seenGaps);
-        if (fieldPolicy.otherwise !== "not_allowed") continue;
+        // Relations never imply a classification, so they may admit several
+        // values; only refused-by-default fields carry implying evidence.
+        if (fieldPolicy.relation || fieldPolicy.otherwise !== "not_allowed")
+          continue;
         const admitting = Object.entries(fieldPolicy.byValue).filter(
           ([, value]) => value !== "not_allowed",
         );
@@ -165,6 +183,7 @@ export const renderClassificationPolicyArtifacts = (
     "    field: string;\n" +
     "    byValue: Readonly<Record<string, FieldPolicyValue>>;\n" +
     "    otherwise: FieldPolicyValue;\n" +
+    "    relation: boolean;\n" +
     "    refusal?: string;\n" +
     "    gap?: string;\n" +
     "  }>[];\n" +

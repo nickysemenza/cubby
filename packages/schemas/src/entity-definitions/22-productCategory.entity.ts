@@ -739,6 +739,24 @@ Rules:
             },
             otherwise: "unknown",
           },
+          {
+            field: "projectTool",
+            relation: true,
+            byValue: {
+              tools: "unknown",
+              "tool-accessories": "unknown",
+              software: "unknown",
+            },
+            otherwise: "not_allowed",
+          },
+          {
+            field: "plantingSource",
+            relation: true,
+            byValue: { food: "not_allowed" },
+            otherwise: "unknown",
+            refusal:
+              "A planting source Product must be a garden product, not a food Product.",
+          },
         ],
       },
     ],

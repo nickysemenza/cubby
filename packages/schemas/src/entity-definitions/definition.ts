@@ -1789,8 +1789,18 @@ const buildMetadataSchemas = () => {
 
   const classificationFieldPolicyMetadataSchema = z
     .object({
-      /** A field of the classified (target) entity. */
+      /** A field of the classified (target) entity, or with `relation`, a
+       * relation it may be linked through (a link kind or reference role). */
       field: nonEmptyString(),
+      /**
+       * `field` names a relation the classified record may take part in (a
+       * Planting source, a project tool) rather than a stored field. Relation
+       * entries never imply a classification.
+       */
+      relation: z
+        .boolean({ error: "must be a boolean" })
+        .optional()
+        .default(false),
       /** The policy where the effective classifier value is a listed key. */
       byValue: z.record(z.string().min(1), fieldPolicyValue),
       /** The policy for every other value, and for no value at all. */
