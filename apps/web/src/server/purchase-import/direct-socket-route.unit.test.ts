@@ -19,7 +19,7 @@ describe("isDirectBrowserSocketUpgrade", () => {
     ).toBe(true);
     expect(
       isDirectBrowserSocketUpgrade(
-        new Request("https://cubby.example/api/import/agent/accounts", {
+        new Request("https://cubby.example/api/v1/vendor/browserAccounts", {
           headers: { Upgrade: "websocket" },
         }),
       ),

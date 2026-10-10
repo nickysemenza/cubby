@@ -19,10 +19,18 @@ import {
   vendorCoverageOut,
   vendorOut,
 } from "@cubby/schemas/vendor";
+import { browserBridgeAccountsOut } from "@cubby/schemas/vendor-account";
+import { z } from "zod";
 
 import { defineContract, mutation, query } from "~/contracts/define";
 
 export const vendorContract = defineContract("vendor", {
+  browserAccounts: query({
+    native: "List this member's eligible browser bridge accounts",
+    mcp: { omit: "device_protocol" },
+    input: z.object({}),
+    output: browserBridgeAccountsOut,
+  }),
   orderMail: query({
     mcp: {
       omit: "deferred_capability",

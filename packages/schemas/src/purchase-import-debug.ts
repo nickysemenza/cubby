@@ -1,4 +1,4 @@
-import { activityExecutor } from "@cubby/schemas/activity";
+import { activityExecutor } from "./activity";
 import { z } from "zod";
 
 const purchaseImportDebugEventName = z.enum([

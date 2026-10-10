@@ -22,6 +22,7 @@ import {
   commitPurchaseImportOut,
   preparePurchaseImportOut,
 } from "@cubby/schemas/purchase-import";
+import { purchaseImportDebugEventsRequest } from "@cubby/schemas/purchase-import-debug";
 import {
   syncPlanInput,
   syncPlanOutput,
@@ -328,6 +329,13 @@ const runControlOutput = z.object({
 });
 
 export const runContract = defineContract("run", {
+  browserDebugEvents: mutation({
+    native: "Report actor-owned Mac browser bridge diagnostic batches",
+    mcp: { omit: "device_protocol" },
+    input: purchaseImportDebugEventsRequest,
+    output: z.object({ accepted: z.number().int().nonnegative() }),
+    invalidates: ["runOnly"],
+  }),
   executionMailboxes: query({
     native: "Select a connected owned mailbox for an execution approval",
     mcp: { omit: "human_approval" },

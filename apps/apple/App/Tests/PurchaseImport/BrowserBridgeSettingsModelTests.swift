@@ -56,7 +56,7 @@ struct BrowserBridgeSettingsModelTests {
             previous.project(
                 .accounts([
                     .init(
-                        id: "account-first", label: "Example account", ledgerPartyID: "household-example",
+                        id: "account-first", label: "Example account", ledgerPartyId: "household-example",
                         browser: .chrome)
                 ]))
             previous.project(.executingRuns(accountID: "account-first", runIDs: ["RUN-4K7M"]))
@@ -80,10 +80,10 @@ struct BrowserBridgeSettingsModelTests {
         model.install(controller: StubController())
         model.setAccounts([
             .init(
-                id: "account-first", label: "Example account", ledgerPartyID: "household-example",
+                id: "account-first", label: "Example account", ledgerPartyId: "household-example",
                 browser: .chrome),
             .init(
-                id: "account-second", label: "Another account", ledgerPartyID: "household-example",
+                id: "account-second", label: "Another account", ledgerPartyId: "household-example",
                 browser: .chrome),
         ])
         model.setExecutingRuns(["RUN-4K7M"], accountID: "account-first")

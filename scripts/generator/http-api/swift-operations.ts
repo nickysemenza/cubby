@@ -743,6 +743,8 @@ extension JSONValue {
  * hand-written in `CubbyClient.swift`.
  */
 const CLIENT_PASSTHROUGH_METHODS = {
+  "vendor.browserAccounts": { method: "browserBridgeAccounts", doc: null },
+  "run.browserDebugEvents": { method: "reportBrowserDebugEvents", doc: null },
   "run.syncPlan": {
     method: "syncPlan",
     doc: "Preview the member browser account syncs.",

@@ -1,5 +1,7 @@
+import { runEntityId } from "@cubby/schemas/identifiers";
 import { runShortcode } from "@cubby/schemas/identifiers";
 import { runPurpose, runStatus } from "@cubby/schemas/run-fields";
+import { inArray } from "drizzle-orm";
 import { and, eq, isNull } from "drizzle-orm";
 import type { z } from "zod";
 
@@ -45,6 +47,7 @@ import {
 } from "~/server/purchase-import/targeted-run";
 import { listAiUsageForRun } from "~/server/repo/ai-usage";
 import { getDb } from "~/server/repo/database-helpers";
+import { insertDebugEventOperations } from "~/server/repo/run-operation";
 import { resolveOrThrow } from "~/server/repo/shortcode-resolver";
 import type { AuthenticatedRequestContext } from "~/server/request-context";
 import { issueExecutionAuthorization } from "~/server/runs/execution-authorization";
@@ -125,6 +128,30 @@ export const runHandlers = implementOperationDomain(runContract, {
         operationId: input.operationId,
       },
     });
+  },
+  browserDebugEvents: async (context, input) => {
+    const party = await memberParty(context);
+    const database = getDb(context.db);
+    const runIds = [...new Set(input.events.map((event) => event.runId))];
+    const ownedRuns = await database
+      .select({ id: runTable.id })
+      .from(runTable)
+      .where(
+        and(
+          inArray(
+            runTable.id,
+            runIds.map((id) => runEntityId.parse(id)),
+          ),
+          eq(runTable.ledgerPartyId, party.id),
+          eq(runTable.actorUserId, context.auth.userId),
+        ),
+      );
+    const ownedRunIds = new Set<string>(ownedRuns.map((scope) => scope.id));
+    if (runIds.some((id) => !ownedRunIds.has(id)))
+      throw new Error("Import run was not found");
+    return {
+      accepted: await insertDebugEventOperations(database, input.events),
+    };
   },
   executionMailboxes: async (context) => {
     await memberParty(context);

@@ -57,9 +57,7 @@ private actor BrowserBridgeDebugHub {
 
 public actor URLSessionBrowserBridgeDebugReporter: BrowserBridgeDebugReporting {
     private struct Batch: Encodable { let events: [BrowserBridgeDebugRecord] }
-    private let baseURL: URL
-    private let credentials: CredentialProvider
-    private let session: URLSession
+    private let client: CubbyClient
     private let executor: ActivityExecutor
     private var pending: [BrowserBridgeDebugRecord] = []
     private var flushTask: Task<Void, Never>?
@@ -69,10 +67,8 @@ public actor URLSessionBrowserBridgeDebugReporter: BrowserBridgeDebugReporting {
         baseURL: URL, credentials: CredentialProvider, executor: ActivityExecutor,
         session: URLSession = .cubbyShared
     ) {
-        self.baseURL = baseURL
-        self.credentials = credentials
+        self.client = CubbyClient(baseURL: baseURL, credentials: credentials, session: session)
         self.executor = executor
-        self.session = session
     }
 
     public func report(_ record: BrowserBridgeDebugRecord) async {
@@ -98,12 +94,12 @@ public actor URLSessionBrowserBridgeDebugReporter: BrowserBridgeDebugReporting {
         do {
             let encoder = JSONEncoder()
             encoder.dateEncodingStrategy = .iso8601
-            let request = try await AuthenticatedSocketSupport.agentRequest(
-                baseURL: baseURL, path: "/api/import/agent/debug-events", credentials: credentials,
-                jsonBody: try encoder.encode(Batch(events: batch)))
-            let (_, response) = try await session.data(for: request)
-            guard let http = response as? HTTPURLResponse, (200..<300).contains(http.statusCode)
-            else { throw URLError(.badServerResponse) }
+            let decoder = JSONDecoder()
+            decoder.dateDecodingStrategy = .iso8601
+            let input = try decoder.decode(
+                PurchaseImportDebugEventsRequest.self,
+                from: encoder.encode(Batch(events: batch)))
+            _ = try await client.reportBrowserDebugEvents(input)
             retryAttempt = 0
         } catch {
             pending = Array((batch + pending).suffix(500))
