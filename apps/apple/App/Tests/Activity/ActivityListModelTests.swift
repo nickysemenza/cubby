@@ -149,6 +149,12 @@ struct ActivityListModelTests {
         #expect(await iterator.next() == "/api/v1/activity/groups")
         #expect(await iterator.next() == "/api/v1/activity/groupChildren")
         #expect(await iterator.next() == "/api/v1/activity/groupChildren")
+        let settlementDeadline = ContinuousClock.now.advanced(by: .seconds(2))
+        while model.children["RUN-4K7M"]?.items.allSatisfy({ !$0.active }) != true,
+            ContinuousClock.now < settlementDeadline
+        {
+            await Task.yield()
+        }
         poll.cancel()
         await poll.value
         #expect(model.children["RUN-4K7M"]?.items.allSatisfy { !$0.active } == true)
