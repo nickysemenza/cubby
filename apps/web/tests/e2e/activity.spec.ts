@@ -128,11 +128,13 @@ test("Runs summarize matching attempts without claiming Product verification", a
 test("Grouped research refreshes collapsed roots and expanded or reopened children", async ({
   page,
 }) => {
-  test.setTimeout(60_000);
   const sample = await seedActiveResearchHistory(
     page,
     uniqueName(test.info(), "Active research"),
   );
+  // Active rows refresh on the page's 15s poll; the controlled clock jumps
+  // each poll instead of waiting it out.
+  await page.clock.install();
   await gotoAuthenticatedPage(
     page,
     `/runs?group=run&vendorId=${sample.vendorId}`,
@@ -145,15 +147,13 @@ test("Grouped research refreshes collapsed roots and expanded or reopened childr
   // The completed discovery parent must not hide its running research child.
   await expect(table).toContainText("1 working · 1 completed");
   await setResearchHistoryStatus(sample.rootId, "failed");
-  await expect(table.getByText("failed", { exact: true })).toBeVisible({
-    timeout: 25_000,
-  });
+  await page.clock.fastForward(15_000);
+  await expect(table.getByText("failed", { exact: true })).toBeVisible();
   await expand.click();
   await expect(table.getByText("running", { exact: true })).toBeVisible();
   await setResearchHistoryStatus(sample.childId, "completed");
-  await expect(table.getByText("running", { exact: true })).toHaveCount(0, {
-    timeout: 25_000,
-  });
+  await page.clock.fastForward(15_000);
+  await expect(table.getByText("running", { exact: true })).toHaveCount(0);
   await expect(table.getByText("completed", { exact: true })).toBeVisible();
   await page
     .getByRole("button", { name: `Collapse jobs for ${sample.rootId}` })
