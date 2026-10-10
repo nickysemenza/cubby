@@ -116,6 +116,17 @@ test("runtime typeof is allowed only in explicitly annotated predicates", () => 
   );
 });
 
+test("raw enum values in Drizzle SQL are rejected", () => {
+  const diagnostics = lintScopedFixture(
+    "no-raw-enum-literal-in-sql",
+    "no-raw-enum-literal-in-sql.txt",
+  );
+  assert.deepEqual(
+    diagnostics.map((diagnostic) => diagnostic.labels[0]?.span.line),
+    [2],
+  );
+});
+
 test("unknown input is allowed at predicates and genuine decoder seams", () => {
   const allowed = lintFixture(
     "no-unknown-parameters",
