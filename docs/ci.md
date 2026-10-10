@@ -482,9 +482,10 @@ database contracts; it does not establish a five-minute full suite.
   response, not a poll interval or a full expect timeout inside `toPass`)
   rather than reordering specs.
 - Each browser shard and the workerd job build the web Worker themselves
-  (about 40s). The `build-cf` key includes the commit for provenance, so the
-  remote cache cannot share it between concurrent shards, and a separate
-  build job would add its own runner start and install ahead of every shard.
+  (about 40s): their commands run `build-cf.ts --ensure` directly rather than
+  depend on the Nx `build-cf` target, and concurrent shards on a new revision
+  would all miss its cache at once anyway. A separate build job would add its
+  own runner start and install ahead of every shard.
 - Caching `node_modules` was slower than installing from the warm pnpm store.
   Saving the pnpm store from Playwright containers likewise cost more than the
   filtered install. Retain exact-key caches for generated artifacts and Apple
