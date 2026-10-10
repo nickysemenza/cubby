@@ -86,6 +86,9 @@ lcov.info
 # Nx project graph and local task metadata
 .nx/
 
+# Amp orb portal registrations (per orb)
+.amp/portals/*
+
 # iOS/macOS native app (apps/apple/) build artifacts
 apps/apple/**/.build/
 apps/apple/**/.swiftpm/

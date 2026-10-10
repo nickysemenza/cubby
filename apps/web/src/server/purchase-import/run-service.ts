@@ -27,6 +27,7 @@ import {
   type AgentProgressEvent,
   agentProgressEvent,
 } from "@cubby/schemas/purchase-agent-services";
+import { retainedCaptureInterpretation } from "@cubby/schemas/purchase-import";
 import {
   proposedImportFix,
   extractedPurchaseLine,
@@ -2137,39 +2138,59 @@ const emptyLogMetadata = {
   error: null,
 } as const;
 
+function debugOperationLogEntry(
+  operation: Parameters<typeof operationLogEntry>[0],
+): RunLogEntry | null {
+  const event = purchaseImportDebugEvent.safeParse(operation.result);
+  if (!event.success) return null;
+  return {
+    id: operation.id,
+    occurredAt: event.data.occurredAt,
+    source: "mac",
+    level:
+      event.data.outcome?.startsWith("failed:") || event.data.errorType
+        ? "error"
+        : "debug",
+    event: event.data.event,
+    state: operation.state,
+    commandId: event.data.commandId ?? null,
+    operationId: event.data.operationId ?? null,
+    operationKind: event.data.operationKind ?? null,
+    host: event.data.host ?? null,
+    browser: event.data.browser ?? null,
+    attempt: event.data.attempt ?? null,
+    count: event.data.count ?? null,
+    outcome: event.data.outcome ?? null,
+    messageType: event.data.messageType ?? null,
+    errorType: event.data.errorType ?? null,
+    errorCode: event.data.errorCode ?? null,
+    error: null,
+  };
+}
+
 function operationLogEntry(
   operation: Pick<
     typeof runOperation.$inferSelect,
     "id" | "operationId" | "kind" | "state" | "result" | "error" | "startedAt"
   >,
 ): RunLogEntry | null {
-  if (operation.kind === DEBUG_EVENT_KIND) {
-    const event = purchaseImportDebugEvent.safeParse(operation.result);
-    if (!event.success) return null;
+  if (operation.kind === "capture_interpretation") {
+    const receipt = retainedCaptureInterpretation.parse(operation.result);
     return {
       id: operation.id,
-      occurredAt: event.data.occurredAt,
-      source: "mac",
-      level:
-        event.data.outcome?.startsWith("failed:") || event.data.errorType
-          ? "error"
-          : "debug",
-      event: event.data.event,
+      occurredAt: operation.startedAt.toISOString(),
+      source: "server",
+      level: "info",
+      event: "capture.reinterpreted",
       state: operation.state,
-      commandId: event.data.commandId ?? null,
-      operationId: event.data.operationId ?? null,
-      operationKind: event.data.operationKind ?? null,
-      host: event.data.host ?? null,
-      browser: event.data.browser ?? null,
-      attempt: event.data.attempt ?? null,
-      count: event.data.count ?? null,
-      outcome: event.data.outcome ?? null,
-      messageType: event.data.messageType ?? null,
-      errorType: event.data.errorType ?? null,
-      errorCode: event.data.errorCode ?? null,
-      error: null,
+      ...emptyLogMetadata,
+      operationId: operation.operationId,
+      outcome: `Revision ${receipt.originalVersion} → ${receipt.capture.captureVersion}; changed ${receipt.changedFields.join(", ") || "none"}; supported facts ${receipt.supportedFactFields.join(", ") || "none"}. Accepted facts unchanged.`,
     };
   }
+  if (operation.kind === DEBUG_EVENT_KIND)
+    return debugOperationLogEntry(operation);
+
   return {
     id: operation.id,
     occurredAt: operation.startedAt.toISOString(),

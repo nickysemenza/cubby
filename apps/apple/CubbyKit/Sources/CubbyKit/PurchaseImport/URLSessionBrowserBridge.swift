@@ -393,7 +393,7 @@ public actor URLSessionBrowserBridge {
             try await send(.pong(timestamp: payload.timestamp), on: socket)
         case .raiseAuthWindow(let payload):
             guard ledger.retiredRuns[payload.runID] == nil else { return }
-            await executor.raiseAuthenticationWindow()
+            await executor.raiseAuthenticationWindow(isCurrent: { true })
             authWindowObserver?(payload.runID)
         case .runCompleted(let payload):
             guard ledger.retiredRuns[payload.runID] == nil else { return }

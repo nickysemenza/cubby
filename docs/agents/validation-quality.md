@@ -22,6 +22,12 @@ CI, or package script needs a `!` entry in `knip.json`; a test seam (fixture,
 mock, harness) belongs in the negated `project` patterns. Name reusable test
 fixtures `*.fixtures.ts` or `*.fixtures.tsx` to match the existing exclusion;
 do not add production entry points or per-file ignores for test-only modules.
+Scoped lint tests temporarily write under `apps/web/src/server/.lint-fixture-*`
+so path-sensitive rules execute. Knip excludes only that disposable directory
+pattern because its scan runs concurrently with those tests; lint still checks
+the fixtures and removes them afterward. Persisted sampled-path regressions
+select their path explicitly through the existing service ports rather than
+hoping randomly generated record IDs enter the production sample.
 
 `pnpm verify:local` runs the clean-tree full graph sequentially. Its target
 order is not dependency order; Nx supplies generation and build prerequisites.

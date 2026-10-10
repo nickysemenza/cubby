@@ -832,3 +832,33 @@ The maintained Product skill prioritizes those sources and exact item URLs.
 Broader search resolves unavailable sources or remaining facts. Pi keeps hosting
 the adaptive conversation; shared tools keep retaining observations and enforcing
 writes. No new workflow, transport, status model or table is introduced.
+
+### Retained capture maintenance
+
+`run.rederiveCapture` is an authenticated operator-maintenance operation. It reads
+an owned retained browser command, verifies its task-bound original checksum,
+and derives a new interpretation under that command's original allowed hosts.
+A revision-keyed completed RunOperation retains the interpretation and its
+changed capture fields and supported fact fields. The generic Run log reports
+that receipt. The original capture replay, accepted facts, source bytes and
+settled targets remain unchanged; research of new evidence uses a new Run.
+Retired Runs and missing/pending originals refuse maintenance.
+
+### Mac member attention
+
+The existing Mac notifier handles sign-in, denied Screen Recording or browser
+Automation, and disabled JavaScript from Apple Events. Its account/Run/reason
+edges are persisted before delivery, so reconnect replay cannot repeat an
+unchanged alert. Successful page reads re-arm observed permission reasons; a
+successful Run clears sign-in attention. Resolving an edge invalidates pending
+delivery even when the same reason is re-armed during notification authorization.
+Claims occur synchronously with projected attention; retired controllers cannot
+deliver, and resolution during posting retracts only the stale generation.
+Unrelated accounts and permission reasons retain their edges. Permission notices retain
+the raw command diagnostic and name the setting to change with browser-neutral
+JavaScript guidance. A newly observed
+permission pause raises that account's owned Cubby browser window, only while
+the controller remains installed. The permission edge and controller are checked
+again after owned-window lookup, before the queued AppleScript dispatch, and
+after the script returns before AppKit activation. Sign-in retains the coordinator's existing
+owned-window behavior. No new browser transport or Run state is introduced.

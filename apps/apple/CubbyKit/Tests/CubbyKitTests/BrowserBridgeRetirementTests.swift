@@ -275,7 +275,7 @@ private final class CaptureCleanupExecutor: BrowserCommandExecuting {
     }
 
     func cancel(commandID: UUID) {}
-    func raiseAuthenticationWindow() {}
+    func raiseAuthenticationWindow(isCurrent: @escaping @MainActor () -> Bool) {}
 
     func forget(runID: String) async throws {
         erasedRuns.append(runID)

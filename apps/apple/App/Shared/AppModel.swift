@@ -660,6 +660,7 @@ final class AppModel {
     #if os(macOS)
         private func configureBrowserBridge() {
             let previous = browserBridgeController
+            previous?.invalidateAttention()
             let controller = MacBrowserBridgeController(
                 baseURL: baseURL, client: client, credentials: credentials, settings: browserBridge)
             browserBridgeController = controller

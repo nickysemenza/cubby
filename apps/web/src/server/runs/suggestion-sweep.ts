@@ -44,13 +44,14 @@ export type SuggestionSweepPorts = {
   /** Entity operations need the authenticated request's kernel services. */
   context: EntityKernelContext;
   decisionModel?: () => SupportedDecisionModel;
-  pairSample?: (recordId: string) => boolean;
   suggest?: typeof suggestFields;
   suggestPorts?: SuggestFieldsPorts;
   pacePerMinute?: number;
   wait?: (milliseconds: number) => Promise<void>;
   /** Test seam that pauses after a persisted number of processed targets. */
   pauseAfter?: number;
+  /** Persisted pairing regressions must not depend on randomly generated record IDs. */
+  samplePair?: (entityId: string) => boolean;
 };
 type SweepTarget = {
   id: string;
@@ -326,7 +327,7 @@ async function executeSweep(
     ports: batchPorts,
     work: async (target) => {
       try {
-        const pairKey = (ports.pairSample ?? stablePair)(target.entityId)
+        const pairKey = (ports.samplePair ?? stablePair)(target.entityId)
           ? crypto.randomUUID()
           : null;
         const {
