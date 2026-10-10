@@ -1,3 +1,4 @@
+import { fieldSuggestionsOut } from "@cubby/schemas/ai";
 import { parseEntityId } from "@cubby/schemas/identifiers";
 import { suggestionSweepRunProgress } from "@cubby/schemas/run-fields";
 import { eq } from "drizzle-orm";
@@ -12,14 +13,17 @@ import type { ReferenceSuggestSpec } from "~/server/ai/field-suggest/registry";
 import type { JevPort } from "~/server/ai/jev";
 import {
   product as productTable,
+  expense as expenseTable,
   run as runTable,
   suggestion as suggestionTable,
+  vendor as vendorTable,
 } from "~/server/db/schema";
 import { entityKernelContextSchema } from "~/server/entity-kernel/adapter";
 import { getDb } from "~/server/repo/database-helpers";
 import { createProduct } from "~/server/repo/product/crud";
 import { makeProductInput } from "~/server/repo/repo.fixtures";
 import { resolveLiveShortcode } from "~/server/repo/shortcode-resolver";
+import { insertWithShortcode } from "~/server/repo/shortcode-utils";
 import {
   acceptSuggestion,
   listPendingSuggestions,
@@ -27,6 +31,7 @@ import {
   recordFieldSuggestionMiss,
   summarizeSuggestionMisses,
 } from "~/server/repo/suggestion-review";
+import { loadVendorSuggestionContext } from "~/server/repo/vendor-suggestion-context";
 import { createTestRequestContext } from "~/server/testing/request-context";
 
 import { aiCallRunInput, ensureRun } from "./ensure-run";
@@ -80,6 +85,266 @@ const highConfidence = decisionAt(0.97);
 // share provenance and never apply; pause/resume checkpoints by unprocessed row.
 describe("persisted Suggestion sweeps", () => {
   const ctx = withTestDb();
+
+  it("uses public ids for finance inference and checkpoints no-proposal targets", async () => {
+    const context = entityKernelContextSchema.parse(
+      createTestRequestContext(ctx.db, { auth: { userId: ctx.actor.userId } }),
+    );
+    const expenses = await Promise.all(
+      ["Alpha", "Beta"].map((name) =>
+        insertWithShortcode(ctx.db, "expense", {
+          name: `Synthetic ${name} expense`,
+          cost: 12,
+          date: "2026-09-01",
+          costType: "materials",
+          trade: "other",
+        }),
+      ),
+    );
+    const seen: string[] = [];
+    const suggest = vi.fn(async (_db, _runId, input) => {
+      seen.push(input.entityId!);
+      const target = input.targets[0]!;
+      return fieldSuggestionsOut.parse({
+        suggestions: { [target]: null },
+        outcomes: {
+          [target]: {
+            kind: "evaluated" as const,
+            answer: "none" as const,
+            confidence: "high" as const,
+            probability: 0.9,
+            alternatives: [],
+          },
+        },
+      });
+    });
+    const started = await startSuggestionSweep(
+      ctx.db,
+      {
+        entity: "expense",
+        field: "spendingCategoryId",
+        filters: { ids: expenses.map(({ shortcode }) => shortcode) },
+      },
+      {
+        context,
+        decisionModel: () => "typesafe/jev",
+        suggest,
+        pauseAfter: 1,
+        wait: async () => {},
+      },
+    );
+    expect(seen).toHaveLength(1);
+    expect(seen[0]).toBe(
+      expenses.find(({ shortcode }) => shortcode === seen[0])?.shortcode,
+    );
+    await resumeSuggestionSweep(ctx.db, started.id, {
+      context,
+      decisionModel: () => "typesafe/jev",
+      suggest,
+      wait: async () => {},
+    });
+    expect(seen).toHaveLength(2);
+    expect(new Set(seen)).toEqual(
+      new Set(expenses.map(({ shortcode }) => shortcode)),
+    );
+    const [saved] = await getDb(ctx.db)
+      .select()
+      .from(runTable)
+      .where(eq(runTable.id, started.id));
+    expect(saved?.progress).toMatchObject({ done: 2, total: 2 });
+    await expect(
+      resumeSuggestionSweep(ctx.db, started.id, {
+        context,
+        suggest,
+        wait: async () => {},
+      }),
+    ).rejects.toThrow(/completed suggestion sweep/i);
+    expect(seen).toHaveLength(2);
+  });
+
+  it("refuses accepting a finance suggestion after its inference evidence changes", async () => {
+    const context = entityKernelContextSchema.parse(
+      createTestRequestContext(ctx.db, { auth: { userId: ctx.actor.userId } }),
+    );
+    const category = await insertWithShortcode(ctx.db, "spendingCategory", {
+      name: "Synthetic review category",
+    });
+    const line = await insertWithShortcode(ctx.db, "expense", {
+      name: "Synthetic reviewed expense",
+      cost: 12,
+      date: "2026-09-01",
+      costType: "materials",
+      trade: "other",
+    });
+    const suggest = vi.fn(async () =>
+      fieldSuggestionsOut.parse({
+        suggestions: {
+          spendingCategoryId: {
+            value: category.shortcode,
+            label: category.name,
+            detail: null,
+            confidence: "medium",
+            probability: 0.7,
+            reasoning: "Synthetic evidence review",
+            alternatives: [],
+            financeReview: {
+              entity: "expense" as const,
+              entityId: line.shortcode,
+              field: "spendingCategoryId" as const,
+              fingerprint: "a".repeat(64),
+            },
+          },
+        },
+      }),
+    );
+    const started = await startSuggestionSweep(
+      ctx.db,
+      {
+        entity: "expense",
+        field: "spendingCategoryId",
+        filters: { ids: [line.shortcode] },
+      },
+      {
+        context,
+        decisionModel: () => "typesafe/jev",
+        suggest,
+        wait: async () => {},
+      },
+    );
+    const [row] = await listPendingSuggestions(ctx.db, {
+      runId: started.id,
+      minConfidence: 0,
+    });
+    if (!row) throw new Error("Synthetic finance suggestion was not persisted");
+    await getDb(ctx.db)
+      .update(expenseTable)
+      .set({ cost: 13 })
+      .where(eq(expenseTable.id, line.id));
+    await expect(
+      acceptSuggestion(ctx.db, context, { id: row.id }),
+    ).rejects.toThrow(/changed|fresh suggestion/i);
+  });
+
+  it("accepts a Vendor default category through reviewed finance apply with Expense history", async () => {
+    const context = entityKernelContextSchema.parse(
+      createTestRequestContext(ctx.db, { auth: { userId: ctx.actor.userId } }),
+    );
+    const category = await insertWithShortcode(ctx.db, "spendingCategory", {
+      name: "Synthetic vendor category",
+    });
+    const vendor = await insertWithShortcode(ctx.db, "vendor", {
+      name: "Synthetic reviewed vendor",
+    });
+    const purchase = await insertWithShortcode(ctx.db, "purchase", {
+      vendorId: vendor.id,
+      date: "2026-09-01",
+    });
+    await insertWithShortcode(ctx.db, "expense", {
+      name: "Synthetic vendor expense",
+      cost: 12,
+      date: "2026-09-01",
+      costType: "materials",
+      trade: "other",
+      purchaseId: purchase.id,
+    });
+    const review = await loadVendorSuggestionContext(ctx.db, vendor.shortcode);
+    const suggest = vi.fn(async () =>
+      fieldSuggestionsOut.parse({
+        suggestions: {
+          defaultSpendingCategoryId: {
+            value: category.shortcode,
+            label: category.name,
+            detail: null,
+            confidence: "medium",
+            probability: 0.7,
+            reasoning: "Synthetic vendor review",
+            alternatives: [],
+            financeReview: {
+              entity: "vendor" as const,
+              entityId: vendor.shortcode,
+              field: "defaultSpendingCategoryId" as const,
+              fingerprint: review.fingerprint,
+            },
+          },
+        },
+      }),
+    );
+    const started = await startSuggestionSweep(
+      ctx.db,
+      {
+        entity: "vendor",
+        field: "defaultSpendingCategoryId",
+        filters: { ids: [vendor.shortcode] },
+      },
+      {
+        context,
+        decisionModel: () => "typesafe/jev",
+        suggest,
+        wait: async () => {},
+      },
+    );
+    const [row] = await listPendingSuggestions(ctx.db, {
+      runId: started.id,
+      minConfidence: 0,
+    });
+    if (!row) throw new Error("Synthetic Vendor suggestion was not persisted");
+    await acceptSuggestion(ctx.db, context, { id: row.id });
+    const [saved] = await getDb(ctx.db)
+      .select({
+        defaultSpendingCategoryId: vendorTable.defaultSpendingCategoryId,
+      })
+      .from(vendorTable)
+      .where(eq(vendorTable.id, vendor.id));
+    expect(saved?.defaultSpendingCategoryId).toBe(category.id);
+  });
+
+  it("leaves an auto-apply candidate pending when the kernel write throws", async () => {
+    const context = entityKernelContextSchema.parse(
+      createTestRequestContext(ctx.db, { auth: { userId: ctx.actor.userId } }),
+    );
+    const product = await createProduct(
+      ctx.db,
+      makeProductInput({
+        name: "Synthetic failed apply",
+        manufacturer: "Synthetic maker",
+      }),
+      ctx.actor,
+    );
+    const suggest = vi.fn(async () =>
+      fieldSuggestionsOut.parse({
+        suggestions: {
+          categoryId: {
+            value: "invalid-category-code",
+            label: "Synthetic invalid category",
+            detail: null,
+            confidence: "high",
+            probability: 0.97,
+            reasoning: "Synthetic failed apply",
+            alternatives: [],
+          },
+        },
+      }),
+    );
+    const started = await startSuggestionSweep(
+      ctx.db,
+      {
+        entity: "product",
+        field: "categoryId",
+        filters: { ids: [product.id] },
+      },
+      {
+        context,
+        decisionModel: () => "typesafe/jev",
+        suggest,
+        wait: async () => {},
+      },
+    );
+    const [row] = await getDb(ctx.db)
+      .select()
+      .from(suggestionTable)
+      .where(eq(suggestionTable.runId, started.id));
+    expect(row?.status).toBe("pending");
+  });
 
   it("persists pinned model, progress and Suggestions, and resumes a paused batch", async () => {
     const context = createTestRequestContext(ctx.db, {
