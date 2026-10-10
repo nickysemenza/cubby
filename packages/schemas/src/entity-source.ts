@@ -1,10 +1,8 @@
 import { z } from "zod";
 
 import { auditChannelSchema } from "./context";
+import { ENTITY_SOURCE_QUOTE_MAX } from "./child-tables/modules";
 import { deviceShortcode, runShortcode } from "./identifiers";
-
-/** A quote is the relevant excerpt, not a page dump. */
-export const ENTITY_SOURCE_QUOTE_MAX = 2000;
 
 const sourceFields = {
   url: z

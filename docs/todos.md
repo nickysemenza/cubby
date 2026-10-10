@@ -159,6 +159,12 @@ historical Runs stay readable through generic reports.
   caps. It cannot reach logged-in order pages; those stay Burn-down work.
   Compare filled-at-import quality against Burn-down cost before adopting.
 
+- 🤔 **Settle a member search's abandoned matches.** A member's `mail.search`
+  runs only the free rule stage, so every non-Spam/Trash match is retained as
+  `uncertain` until the session settles it with `mail.resolve`. A session that
+  ends early leaves those copies retained. Either expire unsettled member
+  matches or let members retain one Email by Gmail id instead of searching.
+
 - ⏳ **Accept live Mail import and Burn-down.** Live work stays paused until the
   member resumes it. Remaining acceptance: the approved 26-Product scope, the
   remaining evidence-supported facts and the separate Row 7 naming question,

@@ -1,7 +1,13 @@
 import { imageProcessingChildren } from "./image-processing.js";
 import { AUDIT_CHANNELS } from "../context.js";
 import { defineChildTable } from "../entity-definitions/child-definition.js";
-import { ENTITY_SOURCE_QUOTE_MAX } from "../entity-source.js";
+
+/**
+ * A Source quote is the relevant excerpt, not a page dump. Declared here, not
+ * in entity-source.ts: the generator loads child tables before it writes the
+ * shortcode registry that entity-source.ts reaches through `identifiers`.
+ */
+export const ENTITY_SOURCE_QUOTE_MAX = 2000;
 
 export const modulesChildren = [
   ...imageProcessingChildren,
