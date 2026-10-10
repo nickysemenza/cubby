@@ -6,7 +6,7 @@ import Testing
 @testable import Cubby
 
 @MainActor
-@Suite("Photo entity chooser")
+@Suite("Photo entity chooser", .timeLimit(.minutes(1)))
 struct PhotoEntityChooserModelTests {
     @Test func recentPagesAdvancePastSameDayRowsAndDateMatchesStayIndependent() async throws {
         let captureDate = Self.day("2026-09-10")
@@ -44,7 +44,6 @@ struct PhotoEntityChooserModelTests {
         let searchCalls = Mutex(0)
         let firstQuery = Gate()
         let secondQuery = Gate()
-        let dateStarted = Mutex<Set<String>>([])
         let scopeB = Gate()
         let scopeC = Gate()
         let model = PhotoEntityChooserModel(
@@ -59,13 +58,12 @@ struct PhotoEntityChooserModelTests {
                         value += 1
                         return value
                     }
-                    await (call == 1 ? firstQuery : secondQuery).wait()
+                    await (call == 1 ? firstQuery : secondQuery).hold()
                     return Self.page([Self.row("MEA-\(query)", date: "2026-08-01")], page: page, total: 1)
                 }
                 if let day = filters["from"]?.strings.first {
-                    dateStarted.withLock { _ = $0.insert(day) }
-                    if page == 1, day == "2026-09-05" { await scopeB.wait() }
-                    if page == 1, day == "2026-09-01" { await scopeC.wait() }
+                    if page == 1, day == "2026-09-05" { await scopeB.hold() }
+                    if page == 1, day == "2026-09-01" { await scopeC.hold() }
                     return Self.page([Self.row("MEA-\(day)-\(page)", date: day)], page: page, total: 2)
                 }
                 let date = ["2026-09-01", "2026-09-10", "2026-09-05", "2026-09-03"][page - 1]
@@ -74,7 +72,7 @@ struct PhotoEntityChooserModelTests {
 
         await model.loadInitial()
         model.setSearchQuery("plum")
-        #expect(await waitUntil { searchCalls.withLock { $0 } == 1 })
+        await firstQuery.arrivals(1)
         #expect(model.isSearching)
         #expect(model.searchRows.isEmpty)
 
@@ -85,15 +83,15 @@ struct PhotoEntityChooserModelTests {
         #expect(!model.hasMoreDateMatches)
 
         firstQuery.open()
-        #expect(await waitUntil { model.searchRows.map(\.id) == ["MEA-plum"] })
+        await observe { model.searchRows.map(\.id) == ["MEA-plum"] }
         #expect(model.dateMatches.map(\.id) == ["MEA-2026-09-10-1", "MEA-2026-09-10-2"])
 
         model.setSearchQuery("fig")
-        #expect(await waitUntil { searchCalls.withLock { $0 } == 2 })
+        await secondQuery.arrivals(1)
         let toB = Task { await model.setScope(captureDates: [Self.day("2026-09-05")]) }
-        #expect(await waitUntil { dateStarted.withLock { $0.contains("2026-09-05") } })
+        await scopeB.arrivals(1)
         let toC = Task { await model.setScope(captureDates: [Self.day("2026-09-01"), nil]) }
-        #expect(await waitUntil { dateStarted.withLock { $0.contains("2026-09-01") } })
+        await scopeC.arrivals(1)
         // Both lanes describe C while its date page is in flight: C's day leaves recents and
         // B's and A's days stay in them.
         #expect(model.dateMatches.isEmpty)
@@ -107,7 +105,7 @@ struct PhotoEntityChooserModelTests {
         #expect(model.recentRows.map(\.id) == ["MEA-recent-2026-09-10", "MEA-recent-2026-09-05"])
 
         secondQuery.open()
-        #expect(await waitUntil { model.searchRows.map(\.id) == ["MEA-fig"] })
+        await observe { model.searchRows.map(\.id) == ["MEA-fig"] }
 
         await model.loadMoreDateMatches()
         await model.loadMoreRecents()
@@ -123,7 +121,6 @@ struct PhotoEntityChooserModelTests {
     /// B and B's date page finishes. When page 2 lands, recents keep draining to page 3 instead
     /// of stopping on a baseline taken under scope A.
     @Test func scopeChangeDuringARecentPageKeepsDrainingUnderTheNewScope() async throws {
-        let pageTwoStarted = Mutex(false)
         let pageTwo = Gate()
         let requested = Mutex<[Int]>([])
         let model = PhotoEntityChooserModel(
@@ -136,10 +133,7 @@ struct PhotoEntityChooserModelTests {
                     return Self.page([Self.row("MEA-\(day)", date: day)], page: page, total: 1)
                 }
                 requested.withLock { $0.append(page) }
-                if page == 2 {
-                    pageTwoStarted.withLock { $0 = true }
-                    await pageTwo.wait()
-                }
+                if page == 2 { await pageTwo.hold() }
                 let date = ["2026-09-05", "2026-09-05", "2026-09-03"][page - 1]
                 return Self.page([Self.row("MEA-recent-\(page)", date: date)], page: page, total: 3)
             })
@@ -148,7 +142,7 @@ struct PhotoEntityChooserModelTests {
         #expect(model.recentRows.map(\.id) == ["MEA-recent-1"])
 
         let loadMore = Task { await model.loadMoreRecents() }
-        #expect(await waitUntil { pageTwoStarted.withLock { $0 } })
+        await pageTwo.arrivals(1)
         await model.setScope(captureDates: [Self.day("2026-09-05")])
         #expect(model.dateMatches.map(\.id) == ["MEA-2026-09-05"])
         #expect(model.recentRows.isEmpty)
@@ -181,7 +175,7 @@ struct PhotoEntityChooserModelTests {
                     calls.append(page)
                     return calls.filter { $0 == page }.count
                 }
-                if page == 2, call == 1 { await stuck.wait() }
+                if page == 2, call == 1 { await stuck.hold() }
                 let row: EntityRow =
                     switch (page, call) {
                     case (1, 1): Self.row("MEA-recent-first", date: "2026-09-01")
@@ -196,7 +190,7 @@ struct PhotoEntityChooserModelTests {
         await model.loadInitial()
         #expect(model.recentRows.map(\.id) == ["MEA-recent-first"])
         let loadMore = Task { await model.loadMoreRecents() }
-        #expect(await waitUntil { calls.withLock { $0 } == [1, 2] })
+        await stuck.arrivals(1)
 
         await model.refresh()
         #expect(model.recentRows.map(\.id) == ["MEA-recent-2"])
@@ -216,7 +210,6 @@ struct PhotoEntityChooserModelTests {
         let dateCalls = Mutex(0)
         let dateRefresh = Gate()
         let stalePage = Gate()
-        let finished = Mutex(false)
         let model = PhotoEntityChooserModel(
             descriptor: EntityCatalog[.meal], client: try makeClient(),
             captureDates: [Self.day("2026-09-10")], calendar: Self.utcCalendar,
@@ -225,34 +218,31 @@ struct PhotoEntityChooserModelTests {
                     let count = dateCalls.withLock {
                         $0 += 1; return $0
                     }
-                    if count == 2 { await dateRefresh.wait() }
+                    if count == 2 { await dateRefresh.hold() }
                     return Self.page([], page: page, total: 0)
                 }
                 let attempt = calls.withLock {
                     $0.append(page); return $0.filter { $0 == page }.count
                 }
-                if page == 2, attempt == 1 { await stalePage.wait() }
+                if page == 2, attempt == 1 { await stalePage.hold() }
                 let date = page == 1 && attempt > 1 ? "2026-09-10" : "2026-09-01"
                 return Self.page(
                     [Self.row("MEA-recent-\(page)-\(attempt)", date: date)], page: page, total: 2)
             })
 
         await model.loadInitial()
-        let refreshing = Task {
-            await model.refresh()
-            finished.withLock { $0 = true }
-        }
-        #expect(await waitUntil { dateCalls.withLock { $0 } == 2 })
+        let refreshing = Task { await model.refresh() }
+        await dateRefresh.arrivals(1)
         let more = Task { await model.loadMoreRecents() }
-        #expect(await waitUntil { calls.withLock { $0 } == [1, 2] })
+        await stalePage.arrivals(1)
         dateRefresh.open()
 
-        #expect(await waitUntil { finished.withLock { $0 } })
+        // The refresh finishes while the obsolete page is still held.
+        await refreshing.waitUnlessCancelled()
         #expect(calls.withLock { $0 } == [1, 2, 1, 2])
         #expect(model.recentRows.map(\.id) == ["MEA-recent-2-2"])
         stalePage.open()
-        await more.value
-        await refreshing.value
+        await more.waitUnlessCancelled()
         #expect(model.recentRows.map(\.id) == ["MEA-recent-2-2"])
     }
 
@@ -269,18 +259,19 @@ struct PhotoEntityChooserModelTests {
             loader: { filters, _, page, _ in
                 if filters["from"] != nil { return Self.page([], page: page, total: 0) }
                 calls.withLock { $0.append(page) }
-                if page == 2 { await pageTwo.wait() }
+                if page == 2 { await pageTwo.hold() }
                 // Every recent is on the capture day, so the drain would page to the end.
                 return Self.page([Self.row("MEA-same-\(page)", date: "2026-09-10")], page: page, total: 4)
             })
 
         let initial = Task { await model.loadInitial() }
-        #expect(await waitUntil { calls.withLock { $0 } == [1, 2] })
+        await pageTwo.arrivals(1)
+        let drain = model.drainTask
         initial.cancel()
         model.stopPaging()
         pageTwo.open()
         await initial.value
-        try await Task.sleep(nanoseconds: 20_000_000)
+        await drain?.waitUnlessCancelled()
 
         #expect(calls.withLock { $0 } == [1, 2])
         #expect(model.hasMoreRecents)
@@ -292,27 +283,23 @@ struct PhotoEntityChooserModelTests {
     @Test func immediateReappearanceJoinsThePageSurvivingDismissal() async throws {
         let calls = Mutex<[Int]>([])
         let pageTwo = Gate()
-        let reappeared = Mutex(false)
         let model = PhotoEntityChooserModel(
             descriptor: EntityCatalog[.meal], client: try makeClient(),
             captureDates: [Self.day("2026-09-10")], calendar: Self.utcCalendar,
             loader: { filters, _, page, _ in
                 if filters["from"] != nil { return Self.page([], page: page, total: 0) }
                 calls.withLock { $0.append(page) }
-                if page == 2 { await pageTwo.wait() }
+                if page == 2 { await pageTwo.hold() }
                 let date = page < 3 ? "2026-09-10" : "2026-09-01"
                 return Self.page([Self.row("MEA-recent-\(page)", date: date)], page: page, total: 3)
             })
 
         let initial = Task { await model.loadInitial() }
-        #expect(await waitUntil { calls.withLock { $0 } == [1, 2] })
+        await pageTwo.arrivals(1)
         initial.cancel()
         model.stopPaging()
-        let returning = Task {
-            reappeared.withLock { $0 = true }
-            await model.loadInitial()
-        }
-        #expect(await waitUntil { reappeared.withLock { $0 } })
+        // The chooser reappears before the surviving page lands.
+        let returning = Task.immediate { await model.loadInitial() }
         pageTwo.open()
         await initial.value
         await returning.value
@@ -327,7 +314,6 @@ struct PhotoEntityChooserModelTests {
     @Test func reappearanceJoinsTheRefreshBeforeEvaluatingCachedRecents() async throws {
         let calls = Mutex<[Int]>([])
         let recentRefresh = Gate()
-        let returningFinished = Mutex(false)
         let model = PhotoEntityChooserModel(
             descriptor: EntityCatalog[.meal], client: try makeClient(),
             captureDates: [Self.day("2026-09-10")], calendar: Self.utcCalendar,
@@ -336,7 +322,7 @@ struct PhotoEntityChooserModelTests {
                 let attempt = calls.withLock {
                     $0.append(page); return $0.filter { $0 == page }.count
                 }
-                if page == 1, attempt == 2 { await recentRefresh.wait() }
+                if page == 1, attempt == 2 { await recentRefresh.hold() }
                 let date = page == 1 && attempt == 2 ? "2026-09-10" : "2026-09-01"
                 return Self.page(
                     [Self.row("MEA-recent-\(page)-\(attempt)", date: date)], page: page, total: 2)
@@ -345,16 +331,13 @@ struct PhotoEntityChooserModelTests {
         await model.loadInitial()
         #expect(model.recentRows.map(\.id) == ["MEA-recent-1-1"])
         let refreshing = Task { await model.refresh() }
-        #expect(await waitUntil { calls.withLock { $0 } == [1, 1] })
+        await recentRefresh.arrivals(1)
         model.stopPaging()
-        let returning = Task {
-            await model.loadInitial()
-            returningFinished.withLock { $0 = true }
-        }
-
-        #expect(await waitUntil { returningFinished.withLock { $0 } } == false)
+        // Reappearance joins the held refresh; deciding on the cached rows instead would never
+        // request page 2.
+        let returning = Task.immediate { await model.loadInitial() }
         recentRefresh.open()
-        await refreshing.value
+        await refreshing.waitUnlessCancelled()
         await returning.value
 
         #expect(calls.withLock { $0 } == [1, 1, 2])
@@ -373,19 +356,20 @@ struct PhotoEntityChooserModelTests {
             loader: { filters, _, page, _ in
                 if filters["from"] != nil { return Self.page([], page: page, total: 0) }
                 calls.withLock { $0.append(page) }
-                if page == 2 { await pageTwo.wait() }
+                if page == 2 { await pageTwo.hold() }
                 let date = page < 3 ? "2026-09-05" : "2026-09-01"
                 return Self.page([Self.row("MEA-recent-\(page)", date: date)], page: page, total: 3)
             })
 
         await model.loadInitial()
         let toB = Task { await model.setScope(captureDates: [Self.day("2026-09-05")]) }
-        #expect(await waitUntil { calls.withLock { $0 } == [1, 2] })
+        await pageTwo.arrivals(1)
         toB.cancel()
         await model.setScope(captureDates: [Self.day("2026-09-05").addingTimeInterval(60)])
         pageTwo.open()
         await toB.value
-        #expect(await waitUntil { !model.isLoading })
+        await model.drained()
+        #expect(!model.isLoading)
 
         #expect(calls.withLock { $0 } == [1, 2, 3])
         #expect(model.recentRows.map(\.id) == ["MEA-recent-3"])
@@ -405,7 +389,7 @@ struct PhotoEntityChooserModelTests {
                     let count = dateCalls.withLock {
                         $0 += 1; return $0
                     }
-                    if count == 2 { await dateRefresh.wait() }
+                    if count == 2 { await dateRefresh.hold() }
                     return Self.page([], page: page, total: 0)
                 }
                 let count = calls.withLock {
@@ -417,10 +401,10 @@ struct PhotoEntityChooserModelTests {
 
         await model.loadInitial()
         let refreshing = Task { await model.refresh() }
-        #expect(await waitUntil { dateCalls.withLock { $0 } == 2 })
+        await dateRefresh.arrivals(1)
         model.stopPaging()
         dateRefresh.open()
-        await refreshing.value
+        await refreshing.waitUnlessCancelled()
 
         #expect(calls.withLock { $0 } == [1])
         #expect(model.recentRows.map(\.id) == ["MEA-recent-1"])
@@ -574,14 +558,6 @@ struct PhotoEntityChooserModelTests {
             credentials: CredentialProvider(host: "localhost:3000", store: store))
     }
 
-    private func waitUntil(_ condition: @MainActor () -> Bool) async -> Bool {
-        for _ in 0..<2_000 {
-            if condition() { return true }
-            try? await Task.sleep(nanoseconds: 1_000_000)
-        }
-        return condition()
-    }
-
     private nonisolated static func day(_ value: String) -> Date {
         let formatter = DateFormatter()
         formatter.calendar = Calendar(identifier: .gregorian)
@@ -635,31 +611,5 @@ private nonisolated final class FilterRecorder: @unchecked Sendable {
         lock.lock()
         defer { lock.unlock() }
         return calls
-    }
-}
-
-/// A one-shot release for a test loader; waiting ignores cancellation so a superseded request
-/// completes only when the test releases it.
-private final class Gate: Sendable {
-    private let state = Mutex<(isOpen: Bool, waiters: [CheckedContinuation<Void, Never>])>(
-        (false, []))
-
-    func wait() async {
-        await withCheckedContinuation { continuation in
-            let isOpen = state.withLock { state in
-                if !state.isOpen { state.waiters.append(continuation) }
-                return state.isOpen
-            }
-            if isOpen { continuation.resume() }
-        }
-    }
-
-    func open() {
-        let waiters = state.withLock { state in
-            state.isOpen = true
-            defer { state.waiters = [] }
-            return state.waiters
-        }
-        for waiter in waiters { waiter.resume() }
     }
 }

@@ -10,13 +10,13 @@ private final class ListStub: URLProtocol, @unchecked Sendable {
     override class func canonicalRequest(for request: URLRequest) -> URLRequest { request }
     override func startLoading() {
         StubNetworking.startLoading(
-            request, client: client, target: self, handler: Self.handler.withLock { $0 })
+            request, client: client, target: self, handler: Self.handler.withLock { $0 }, detached: true)
     }
     override func stopLoading() {}
     static func session() -> URLSession { StubNetworking.session(protocolClass: self) }
 }
 
-@Suite("GenericEntityListModel", .serialized)
+@Suite("GenericEntityListModel", .timeLimit(.minutes(1)), .serialized)
 @MainActor
 struct GenericEntityListModelTests {
     private func makeClient(credential: CubbyCredential = .bearer("tok")) throws -> CubbyClient {
@@ -70,7 +70,7 @@ struct GenericEntityListModelTests {
     @Test func sortReplaysPendingSearchInTheNewOrder() async throws {
         defer { ListStub.handler.withLock { $0 = nil } }
         let search = try #require(EntityCatalog[.product].primarySearch)
-        let staleStarted = Mutex(false)
+        let staleGate = Gate()
         let base = try productPage(id: "PRD-2345", name: "Base", page: 1, total: 1)
         let stale = try productPage(id: "PRD-3456", name: "Old order", page: 1, total: 1)
         let sorted = try productPage(id: "PRD-4567", name: "New order", page: 1, total: 1)
@@ -81,21 +81,22 @@ struct GenericEntityListModelTests {
                     return (200, base)
                 }
                 if items.contains(URLQueryItem(name: "sort", value: "-name")) { return (200, sorted) }
-                staleStarted.withLock { $0 = true }
-                Thread.sleep(forTimeInterval: 0.08)
+                staleGate.holdBlocking()
                 return (200, stale)
             }
         }
         let model = GenericEntityListModel(
-            descriptor: EntityCatalog[.product], client: try makeClient(), progressive: false)
+            descriptor: EntityCatalog[.product], client: try makeClient(), progressive: false,
+            searchDebounceNanoseconds: 0)
         await model.loadInitial()
         model.setSearchQuery("sample")
-        #expect(await waitUntil { staleStarted.withLock { $0 } })
+        await staleGate.arrivals(1)
         await model.apply(sort: "-name")
         let searchModel = try #require(model.searchModel)
-        #expect(await waitUntil { searchModel.phase == .loaded })
+        await observe { searchModel.phase == .loaded }
         #expect(searchModel.query == "sample")
         #expect(searchModel.rows.map(\.id) == ["PRD-4567"])
+        staleGate.open()
     }
 
     @Test func loadsProductsIntoRows() async throws {
@@ -123,13 +124,14 @@ struct GenericEntityListModelTests {
     @Test func accumulatesPagesAndCollapsesDuplicateNextPageTriggers() async throws {
         defer { ListStub.handler.withLock { $0 = nil } }
         let calls = Mutex<[Int]>([])
+        let pageTwo = Gate()
         let first = try productPage(id: "PRD-2345", name: "First", page: 1, total: 2)
         let second = try productPage(id: "PRD-3456", name: "Second", page: 2, total: 2)
         ListStub.handler.withLock { handler in
             handler = { request in
                 let page = Self.page(in: request)
                 calls.withLock { $0.append(page) }
-                if page == 2 { Thread.sleep(forTimeInterval: 0.05) }
+                if page == 2 { pageTwo.holdBlocking() }
                 return (200, page == 1 ? first : second)
             }
         }
@@ -137,9 +139,12 @@ struct GenericEntityListModelTests {
             descriptor: EntityCatalog[.product], client: try makeClient(), pageSize: 1, progressive: false)
 
         await model.loadInitial()
-        async let firstTrigger: Void = model.loadNextPage()
-        async let duplicateTrigger: Void = model.loadNextPage()
-        _ = await (firstTrigger, duplicateTrigger)
+        let firstTrigger = Task.immediate { await model.loadNextPage() }
+        let duplicateTrigger = Task.immediate { await model.loadNextPage() }
+        await pageTwo.arrivals(1)
+        pageTwo.open()
+        await firstTrigger.waitUnlessCancelled()
+        await duplicateTrigger.waitUnlessCancelled()
 
         #expect(model.rows.map(\.id) == ["PRD-2345", "PRD-3456"])
         #expect(model.page == 2)
@@ -257,15 +262,14 @@ struct GenericEntityListModelTests {
     @Test func refreshSupersedesALateNextPageResponse() async throws {
         defer { ListStub.handler.withLock { $0 = nil } }
         let pageOneCalls = Mutex(0)
-        let pageTwoStarted = Mutex(false)
+        let pageTwo = Gate()
         let initial = try productPage(id: "PRD-2345", name: "Initial", page: 1, total: 2)
         let late = try productPage(id: "PRD-3456", name: "Late", page: 2, total: 2)
         let refreshed = try productPage(id: "PRD-4567", name: "Refreshed", page: 1, total: 1)
         ListStub.handler.withLock { handler in
             handler = { request in
                 if Self.page(in: request) == 2 {
-                    pageTwoStarted.withLock { $0 = true }
-                    Thread.sleep(forTimeInterval: 0.08)
+                    pageTwo.holdBlocking()
                     return (200, late)
                 }
                 let call = pageOneCalls.withLock { value in
@@ -280,12 +284,9 @@ struct GenericEntityListModelTests {
         await model.loadInitial()
 
         let loadMore = Task { await model.loadNextPage() }
-        for _ in 0..<10_000 {
-            if pageTwoStarted.withLock({ $0 }) { break }
-            await Task.yield()
-        }
-        #expect(pageTwoStarted.withLock { $0 })
+        await pageTwo.arrivals(1)
         await model.refresh()
+        pageTwo.open()
         await loadMore.value
 
         #expect(model.rows.map(\.id) == ["PRD-4567"])
@@ -298,7 +299,7 @@ struct GenericEntityListModelTests {
     @Test func filterChangeWhileQueryIsPendingReplaysItInTheNewScope() async throws {
         defer { ListStub.handler.withLock { $0 = nil } }
         let search = try #require(EntityCatalog[.product].primarySearch)
-        let staleStarted = Mutex(false)
+        let staleGate = Gate()
         let base = try productPage(id: "PRD-2345", name: "Base", page: 1, total: 1)
         let stale = try productPage(id: "PRD-3456", name: "Unscoped", page: 1, total: 1)
         let scoped = try productPage(id: "PRD-4567", name: "Scoped", page: 1, total: 1)
@@ -310,21 +311,22 @@ struct GenericEntityListModelTests {
                     return (200, base)
                 }
                 if items.contains(where: { $0.name == "upcFilter" }) { return (200, scoped) }
-                staleStarted.withLock { $0 = true }
-                Thread.sleep(forTimeInterval: 0.08)
+                staleGate.holdBlocking()
                 return (200, stale)
             }
         }
         let model = GenericEntityListModel(
-            descriptor: EntityCatalog[.product], client: try makeClient(), progressive: false)
+            descriptor: EntityCatalog[.product], client: try makeClient(), progressive: false,
+            searchDebounceNanoseconds: 0)
         await model.loadInitial()
         let searchModel = try #require(model.searchModel)
 
         model.setSearchQuery("sample")
-        #expect(await waitUntil { staleStarted.withLock { $0 } })
+        await staleGate.arrivals(1)
         await model.apply(filters: EntityFilterState(["upcFilter": .single("000000000000")]))
-        #expect(await waitUntil { searchModel.phase == .loaded })
-        try await Task.sleep(nanoseconds: 120_000_000)
+        await observe { searchModel.phase == .loaded }
+        // The replay cancelled the unscoped request, so its answer, released now, never lands.
+        staleGate.open()
 
         #expect(searchModel.query == "sample")
         #expect(searchModel.rows.map(\.id) == ["PRD-4567"])
@@ -337,8 +339,6 @@ struct GenericEntityListModelTests {
     /// released only after the new one — never becomes visible.
     @Test func sourceChangeWhileQueryIsPendingReplaysItInTheNewScope() async throws {
         let oldCalls = Mutex(0)
-        let oldRefreshStarted = Mutex(false)
-        let newSearchStarted = Mutex(false)
         let oldGate = Gate()
         let newGate = Gate()
         let old = EntityListPageSource(
@@ -352,16 +352,14 @@ struct GenericEntityListModelTests {
                 guard call > 1 else {
                     return Self.page([Self.row("old-\(query)")], page: page, total: 1)
                 }
-                oldRefreshStarted.withLock { $0 = true }
-                await oldGate.wait()
+                await oldGate.hold()
                 return Self.page([Self.row("old-late")], page: page, total: 1)
             })
         let new = EntityListPageSource(
             id: "new",
             loadPage: { page in Self.page([Self.row("new-base")], page: page, total: 1) },
             searchPage: { query, page in
-                newSearchStarted.withLock { $0 = true }
-                await newGate.wait()
+                await newGate.hold()
                 return Self.page([Self.row("new-\(query)")], page: page, total: 1)
             })
         let model = GenericEntityListModel(
@@ -370,22 +368,22 @@ struct GenericEntityListModelTests {
         await model.loadInitial()
         let searchModel = try #require(model.searchModel)
         model.setSearchQuery("sample")
-        #expect(await waitUntil { searchModel.phase == .loaded })
+        await observe { searchModel.phase == .loaded }
         #expect(searchModel.rows.map(\.title) == ["old-sample"])
 
         let oldRefresh = Task { await searchModel.refresh() }
-        #expect(await waitUntil { oldRefreshStarted.withLock { $0 } })
+        await oldGate.arrivals(1)
         #expect(searchModel.rows.map(\.title) == ["old-sample"])
 
         await model.setSource(new)
         #expect(model.rows.map(\.title) == ["new-base"])
         #expect(searchModel.rows.isEmpty)
-        #expect(await waitUntil { newSearchStarted.withLock { $0 } })
+        await newGate.arrivals(1)
         #expect(searchModel.rows.isEmpty)
         #expect(searchModel.phase == .loading)
 
         newGate.open()
-        #expect(await waitUntil { searchModel.phase == .loaded })
+        await observe { searchModel.phase == .loaded }
         #expect(searchModel.rows.map(\.title) == ["new-sample"])
 
         oldGate.open()
@@ -441,7 +439,7 @@ struct GenericEntityListModelTests {
     @Test func sourceChangeDropsTheDeclaredTimelineAndItsLateResponse() async throws {
         defer { ListStub.handler.withLock { $0 = nil } }
         let timelineCalls = Mutex(0)
-        let release = DispatchSemaphore(value: 0)
+        let lateTimeline = Gate()
         let list = try productPage(id: "PRD-2345", name: "Base", page: 1, total: 1)
         let timeline = Data(
             (#"{"groups":[],"stats":[],"notes":[],"#
@@ -453,7 +451,7 @@ struct GenericEntityListModelTests {
                     value += 1
                     return value
                 }
-                if call > 1 { release.wait() }
+                if call > 1 { lateTimeline.holdBlocking() }
                 return (200, timeline)
             }
         }
@@ -464,7 +462,7 @@ struct GenericEntityListModelTests {
         #expect(model.timeline != nil)
 
         let late = Task { await model.loadTimeline() }
-        #expect(await waitUntil { timelineCalls.withLock { $0 } == 2 })
+        await lateTimeline.arrivals(1)
         await model.setSource(
             EntityListPageSource(id: "scope") { page in
                 Self.page([Self.row("scoped")], page: page, total: 1)
@@ -472,7 +470,7 @@ struct GenericEntityListModelTests {
         #expect(model.timeline == nil)
         #expect(model.isLoadingTimeline == false)
 
-        release.signal()
+        lateTimeline.open()
         await late.value
         #expect(model.timeline == nil)
         #expect(model.timelineError == nil)
@@ -511,15 +509,11 @@ struct GenericEntityListModelTests {
     /// supersedes an in-flight next page of the old source, even one released after the swap.
     @Test func sourceIdentityGatesReloadsAndSupersedesALateNextPage() async throws {
         let calls = Mutex<[String]>([])
-        let pageTwoStarted = Mutex(false)
         let oldPageTwo = Gate()
         func source(_ scope: String) -> EntityListPageSource {
             EntityListPageSource(id: scope) { page in
                 calls.withLock { $0.append("\(scope):\(page)") }
-                if scope == "old", page == 2 {
-                    pageTwoStarted.withLock { $0 = true }
-                    await oldPageTwo.wait()
-                }
+                if scope == "old", page == 2 { await oldPageTwo.hold() }
                 return Self.page([Self.row("\(scope)-\(page)")], page: page, total: 2)
             }
         }
@@ -530,7 +524,7 @@ struct GenericEntityListModelTests {
         #expect(calls.withLock { $0 } == ["old:1"])
 
         let loadMore = Task { await model.loadNextPage() }
-        #expect(await waitUntil { pageTwoStarted.withLock { $0 } })
+        await oldPageTwo.arrivals(1)
         await model.setSource(source("new"))
         #expect(model.rows.map(\.title) == ["new-1"])
 
@@ -568,14 +562,6 @@ struct GenericEntityListModelTests {
         #expect(calls.withLock { $0 } == 2)
     }
 
-    private func waitUntil(_ condition: @MainActor () -> Bool) async -> Bool {
-        for _ in 0..<2_000 {
-            if condition() { return true }
-            try? await Task.sleep(nanoseconds: 1_000_000)
-        }
-        return condition()
-    }
-
     nonisolated private static func row(_ title: String, raw: [String: JSONValue]? = nil) -> EntityRow {
         EntityRow(
             id: "PRD-\(title)", title: title, subtitle: nil, imageURL: nil,
@@ -610,31 +596,5 @@ struct GenericEntityListModelTests {
         if let sums { meta["sums"] = sums }
         object["meta"] = meta
         return try JSONSerialization.data(withJSONObject: object)
-    }
-}
-
-/// A one-shot release for a test loader. Waiting ignores task cancellation on purpose, so a
-/// superseded request completes only when the test releases it.
-private final class Gate: Sendable {
-    private let state = Mutex<(isOpen: Bool, waiters: [CheckedContinuation<Void, Never>])>(
-        (false, []))
-
-    func wait() async {
-        await withCheckedContinuation { continuation in
-            let isOpen = state.withLock { state in
-                if !state.isOpen { state.waiters.append(continuation) }
-                return state.isOpen
-            }
-            if isOpen { continuation.resume() }
-        }
-    }
-
-    func open() {
-        let waiters = state.withLock { state in
-            state.isOpen = true
-            defer { state.waiters = [] }
-            return state.waiters
-        }
-        for waiter in waiters { waiter.resume() }
     }
 }

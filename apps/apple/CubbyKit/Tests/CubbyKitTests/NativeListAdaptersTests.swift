@@ -20,7 +20,7 @@ private final class NativeListStub: URLProtocol, @unchecked Sendable {
     static func session() -> URLSession { StubNetworking.session(protocolClass: self) }
 }
 
-@Suite("Native list adapters", .serialized)
+@Suite("Native list adapters", .timeLimit(.minutes(1)), .serialized)
 @MainActor
 struct NativeListAdaptersTests {
     private func makeClient() throws -> CubbyClient {
@@ -39,7 +39,8 @@ struct NativeListAdaptersTests {
         }
 
         let model = GenericEntityListModel(
-            descriptor: EntityCatalog[.cookbook], client: try makeClient(), pageSize: 1)
+            descriptor: EntityCatalog[.cookbook], client: try makeClient(), pageSize: 1,
+            searchDebounceNanoseconds: 0)
         await model.loadInitial()
 
         #expect(model.rows.map(\.id) == ["CKB-1"])
@@ -51,7 +52,8 @@ struct NativeListAdaptersTests {
         #expect(model.hasMore == false)
 
         model.setSearchQuery("Beta")
-        #expect(await waitUntil { model.searchModel?.phase == .loaded })
+        await model.searchModel?.settled()
+        #expect(model.searchModel?.phase == .loaded)
         #expect(model.searchModel?.rows.map(\.id) == ["CKB-2"])
         #expect(model.searchModel?.rows.first?.title == "Beta Cookbook")
     }
@@ -190,14 +192,6 @@ struct NativeListAdaptersTests {
         }
         try #require(queryItems.count == 2)
         #expect(queryItems[1].contains(URLQueryItem(name: "id", value: "12345")))
-    }
-
-    private func waitUntil(_ condition: @MainActor () -> Bool) async -> Bool {
-        for _ in 0..<1_000 {
-            if condition() { return true }
-            try? await Task.sleep(nanoseconds: 1_000_000)
-        }
-        return condition()
     }
 
     nonisolated private static let imagesPage: Data = {

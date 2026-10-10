@@ -112,7 +112,7 @@ nonisolated private final class ActivityListStub: URLProtocol, @unchecked Sendab
 }
 
 @MainActor
-@Suite("Activity grouped list", .serialized)
+@Suite("Activity grouped list", .timeLimit(.minutes(1)), .serialized)
 struct ActivityListModelTests {
     @Test func hiddenSettledGroupsDoNotPollFromOrphanedChildCaches() async throws {
         let store = InMemorySessionTokenStore()
@@ -123,7 +123,8 @@ struct ActivityListModelTests {
             baseURL: URL(string: "http://localhost:3000")!,
             credentials: CredentialProvider(host: "localhost:3000", store: store),
             session: URLSession(configuration: configuration))
-        let model = ActivityListModel()
+        let pauses = Gate()
+        let model = ActivityListModel(pause: { _ in try await pauses.pass() })
         model.state = "running"
         await model.load(client: client)
         model.expandedRoots.insert("RUN-4K7M")
@@ -140,13 +141,11 @@ struct ActivityListModelTests {
         }
         var iterator = requests.makeAsyncIterator()
         #expect(await iterator.next() == "poll-started")
-        let deadline = Task {
-            try? await Task.sleep(for: .seconds(2))
-            continuation.finish()
-        }
+        // The first pass decided whether to refresh before it waits for the next poll.
+        await pauses.arrivals(1)
+        continuation.finish()
         defer {
             poll.cancel()
-            deadline.cancel()
             continuation.finish()
             ActivityListStub.observer.withLock { $0 = nil }
             ActivityListStub.settled.withLock { $0 = false }
@@ -154,10 +153,10 @@ struct ActivityListModelTests {
         }
         #expect(await iterator.next() == nil)
         poll.cancel()
-        await poll.value
+        await poll.waitUnlessCancelled()
     }
 
-    @Test(.timeLimit(.minutes(1))) func settlementRefreshSurvivesConcurrentChildPagination() async throws {
+    @Test func settlementRefreshSurvivesConcurrentChildPagination() async throws {
         let store = InMemorySessionTokenStore()
         try store.save(.bearer("tok"), for: "localhost:3000")
         let configuration = URLSessionConfiguration.ephemeral
@@ -166,7 +165,8 @@ struct ActivityListModelTests {
             baseURL: URL(string: "http://localhost:3000")!,
             credentials: CredentialProvider(host: "localhost:3000", store: store),
             session: URLSession(configuration: configuration))
-        let model = ActivityListModel()
+        let pauses = Gate()
+        let model = ActivityListModel(pause: { _ in try await pauses.pass() })
         await model.load(client: client)
         model.expandedRoots.insert("RUN-4K7M")
         await model.loadChildren(rootID: "RUN-4K7M", client: client)
@@ -175,12 +175,7 @@ struct ActivityListModelTests {
         ActivityListStub.settled.withLock { $0 = true }
         ActivityListStub.holdGroups.withLock { $0 = true }
         var iterator = requests.makeAsyncIterator()
-        let deadline = Task {
-            try? await Task.sleep(for: .seconds(2))
-            continuation.finish()
-        }
         defer {
-            deadline.cancel()
             continuation.finish()
             ActivityListStub.observer.withLock { $0 = nil }
             ActivityListStub.settled.withLock { $0 = false }
@@ -202,7 +197,7 @@ struct ActivityListModelTests {
         await refresh.value
         ActivityListStub.holdChildren.withLock { $0 = false }
         ActivityListStub.heldChild.withLock { $0 }?()
-        await more.value
+        await more.waitUnlessCancelled()
         #expect(model.groups?.items.first?.active == false)
         #expect(model.children["RUN-4K7M"]?.items.first?.active == true)
         let poll = Task { await model.pollActive(client: client) }
@@ -210,14 +205,9 @@ struct ActivityListModelTests {
         #expect(await iterator.next() == "/api/v1/activity/groups")
         #expect(await iterator.next() == "/api/v1/activity/groupChildren")
         #expect(await iterator.next() == "/api/v1/activity/groupChildren")
-        let settlementDeadline = ContinuousClock.now.advanced(by: .seconds(2))
-        while model.children["RUN-4K7M"]?.items.allSatisfy({ !$0.active }) != true,
-            ContinuousClock.now < settlementDeadline
-        {
-            await Task.yield()
-        }
+        await pauses.arrivals(1)
         poll.cancel()
-        await poll.value
+        await poll.waitUnlessCancelled()
         #expect(model.children["RUN-4K7M"]?.items.allSatisfy { !$0.active } == true)
     }
 
@@ -318,13 +308,8 @@ struct ActivityListModelTests {
         let (requests, continuation) = AsyncStream<String>.makeStream()
         ActivityListStub.observer.withLock { $0 = continuation }
         let poll = Task { await model.pollActive(client: client) }
-        let deadline = Task {
-            try? await Task.sleep(for: .seconds(2))
-            continuation.finish()
-        }
         defer {
             poll.cancel()
-            deadline.cancel()
             continuation.finish()
             ActivityListStub.observer.withLock { $0 = nil }
         }

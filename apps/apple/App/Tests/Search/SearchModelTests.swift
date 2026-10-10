@@ -16,14 +16,18 @@ nonisolated private final class SearchModelStub: URLProtocol, @unchecked Sendabl
             client?.urlProtocol(self, didFailWithError: URLError(.badServerResponse))
             return
         }
-        let (status, data) = handler(request)
-        let response = HTTPURLResponse(
-            url: request.url!, statusCode: status, httpVersion: "HTTP/1.1",
-            headerFields: ["Content-Type": "application/json"]
-        )!
-        client?.urlProtocol(self, didReceive: response, cacheStoragePolicy: .notAllowed)
-        client?.urlProtocol(self, didLoad: data)
-        client?.urlProtocolDidFinishLoading(self)
+        // Off the loading thread, so a handler parked on a Gate cannot stall a later request.
+        let request = request
+        DispatchQueue.global().async {
+            let (status, data) = handler(request)
+            let response = HTTPURLResponse(
+                url: request.url!, statusCode: status, httpVersion: "HTTP/1.1",
+                headerFields: ["Content-Type": "application/json"]
+            )!
+            self.client?.urlProtocol(self, didReceive: response, cacheStoragePolicy: .notAllowed)
+            self.client?.urlProtocol(self, didLoad: data)
+            self.client?.urlProtocolDidFinishLoading(self)
+        }
     }
     override func stopLoading() {}
 
@@ -35,17 +39,19 @@ nonisolated private final class SearchModelStub: URLProtocol, @unchecked Sendabl
 }
 
 @MainActor
-@Suite("SearchModel", .serialized)
+@Suite("SearchModel", .timeLimit(.minutes(1)), .serialized)
 struct SearchModelTests {
-    @Test(.timeLimit(.minutes(1)))
+    @Test
     func laterQueryPublishesWithoutWaitingForOrAcceptingTheEarlierResponse() async throws {
         defer { SearchModelStub.handler.withLock { $0 = nil } }
         let requestedQueries = Mutex<[String]>([])
+        let first = Gate()
+        defer { first.open() }
         SearchModelStub.handler.withLock { handler in
             handler = { request in
                 let query = Self.queryItem("query", in: request) ?? ""
                 requestedQueries.withLock { $0.append(query) }
-                if query == "first" { Thread.sleep(forTimeInterval: 0.08) }
+                if query == "first" { first.holdBlocking() }
                 return (200, Self.searchPayload(title: query))
             }
         }
@@ -53,18 +59,17 @@ struct SearchModelTests {
 
         model.query = "first"
         model.retry()
-        let firstStarted = await waitUntil { requestedQueries.withLock { $0.contains("first") } }
-        #expect(firstStarted)
+        await first.arrivals(1)
         model.query = "second"
         model.retry()
-        let secondFinished = await waitUntil { Self.resultTitle(in: model.phase) == "second" }
+        // The earlier response is still held while the later one publishes.
+        await model.searchTask?.waitUnlessCancelled()
 
-        #expect(secondFinished)
         #expect(Self.resultTitle(in: model.phase) == "second")
         #expect(requestedQueries.withLock { $0.contains("second") })
     }
 
-    @Test(.timeLimit(.minutes(1)))
+    @Test
     func changingScopeInvalidatesVisibleResultsImmediatelyAndUsesTheLatestScope() async throws {
         defer { SearchModelStub.handler.withLock { $0 = nil } }
         let entityKinds = Mutex<[String]>([])
@@ -84,28 +89,27 @@ struct SearchModelTests {
 
         #expect(model.phase == .searching)
         model.retry()
-        let finished = await waitUntil { Self.resultTitle(in: model.phase) == "scoped" }
+        await model.searchTask?.waitUnlessCancelled()
 
-        #expect(finished)
+        #expect(Self.resultTitle(in: model.phase) == "scoped")
         #expect(entityKinds.withLock { $0 } == ["product"])
     }
 
-    @Test(.timeLimit(.minutes(1)))
+    @Test
     func queryChangeCancelsAStaleSubmittedCodeLookup() async throws {
         defer { SearchModelStub.handler.withLock { $0 = nil } }
-        let requestStarted = Mutex(false)
+        let lookup = Gate()
+        defer { lookup.open() }
         SearchModelStub.handler.withLock { handler in
             handler = { _ in
-                requestStarted.withLock { $0 = true }
-                Thread.sleep(forTimeInterval: 0.08)
+                lookup.holdBlocking()
                 return (500, Data(#"{"code":"TEST","message":"cancelled"}"#.utf8))
             }
         }
         let model = SearchModel(client: try makeClient())
         model.query = "012345678905"
         let submitted = Task { await model.submit() }
-        let started = await waitUntil { requestStarted.withLock { $0 } }
-        #expect(started)
+        await lookup.arrivals(1)
 
         model.query = "new words"
         let outcome = await submitted.value
@@ -115,7 +119,7 @@ struct SearchModelTests {
         #expect(model.phase == .searching)
     }
 
-    @Test(.timeLimit(.minutes(1)))
+    @Test
     func watcherDoesNotKeepADiscardedSearchModelAlive() async throws {
         let defaults = UserDefaults.standard
         let recentsKey = "cubby.intents.recent"
@@ -171,13 +175,5 @@ struct SearchModelTests {
     private static func resultTitle(in phase: SearchModel.Phase) -> String? {
         guard case .results(let groups) = phase else { return nil }
         return groups.first?.hits.first?.title
-    }
-
-    private func waitUntil(_ condition: @MainActor () -> Bool) async -> Bool {
-        for _ in 0..<10_000 {
-            if condition() { return true }
-            await Task.yield()
-        }
-        return false
     }
 }

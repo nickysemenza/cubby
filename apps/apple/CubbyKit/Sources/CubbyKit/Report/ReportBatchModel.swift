@@ -37,20 +37,25 @@ public final class ReportBatchModel {
 
     @ObservationIgnored private let service: any ReportServing
     @ObservationIgnored private let slots: [ReportSlot]
-    @ObservationIgnored private let pollInterval: Duration
+    @ObservationIgnored private let waitForNextPoll: @Sendable () async throws -> Void
     @ObservationIgnored private var watchers = 0
-    @ObservationIgnored private var pollTask: Task<Void, Never>?
+    @ObservationIgnored private(set) var pollTask: Task<Void, Never>?
+    /// Callers waiting for the read in flight to finish; a later read never overlaps it.
+    @ObservationIgnored private var loadWaiters: [CheckedContinuation<Void, Never>] = []
     @ObservationIgnored private var staleStatusReported: String?
 
     public init(
         id: String, slots: [ReportSlot] = RunReportBatch.slots, shownStatus: String? = nil,
-        service: any ReportServing, pollInterval: Duration = .seconds(3)
+        service: any ReportServing,
+        waitForNextPoll: @escaping @Sendable () async throws -> Void = {
+            try await Task.sleep(for: .seconds(3))
+        }
     ) {
         self.id = id
         self.slots = slots
         self.shownStatus = shownStatus
         self.service = service
-        self.pollInterval = pollInterval
+        self.waitForNextPoll = waitForNextPoll
     }
 
     public func presentation(for slot: ReportSlot) -> ReportPresentation? { presentations[slot] }
@@ -58,9 +63,9 @@ public final class ReportBatchModel {
     /// Reads the batch. A refresh asked for while one is in flight waits for it and then reads
     /// again, so a change made just before (an action) is never hidden behind a stale poll.
     public func refresh() async {
-        while isLoading { try? await Task.sleep(for: .milliseconds(5)) }
+        await loadFinished()
         isLoading = true
-        defer { isLoading = false }
+        defer { endLoading() }
         do {
             let reports = try await service.reports(slots: slots, id: id)
             var next: [ReportSlot: ReportPresentation] = [:]
@@ -84,6 +89,17 @@ public final class ReportBatchModel {
             staleStatusReported = status
             onRecordStale?()
         }
+    }
+
+    private func loadFinished() async {
+        while isLoading { await withCheckedContinuation { loadWaiters.append($0) } }
+    }
+
+    private func endLoading() {
+        isLoading = false
+        let waiters = loadWaiters
+        loadWaiters = []
+        for waiter in waiters { waiter.resume() }
     }
 
     // MARK: Polling
@@ -113,7 +129,7 @@ public final class ReportBatchModel {
             guard let self else { return }
             await self.refresh()
             while !Task.isCancelled, self.live {
-                try? await Task.sleep(for: self.pollInterval)
+                try? await self.waitForNextPoll()
                 if Task.isCancelled { return }
                 await self.refresh()
             }

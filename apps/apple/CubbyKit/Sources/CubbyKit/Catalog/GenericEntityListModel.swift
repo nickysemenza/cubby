@@ -133,7 +133,8 @@ public final class GenericEntityListModel {
         filters: EntityFilterState = EntityFilterState(),
         view: ListView? = nil,
         progressive: Bool = true,
-        searchLoader: EntityListSearchModel.PageLoader? = nil
+        searchLoader: EntityListSearchModel.PageLoader? = nil,
+        searchDebounceNanoseconds: UInt64 = 250_000_000
     ) {
         self.descriptor = descriptor
         self.enrichment = EntityListEnrichmentModel(descriptor: descriptor)
@@ -141,15 +142,18 @@ public final class GenericEntityListModel {
         self.pageSize = pageSize
         self.sort = sort
         self.progressive = progressive
-        self.searchDebounceNanoseconds = 250_000_000
+        self.searchDebounceNanoseconds = searchDebounceNanoseconds
         self.filters = filters
         let selectedView = view ?? descriptor.presentation.listViews.first ?? .table
         self.view = selectedView
         self.searchModel =
-            searchLoader.map { EntityListSearchModel(descriptor: descriptor, loader: $0) }
+            searchLoader.map {
+                EntityListSearchModel(
+                    descriptor: descriptor, debounceNanoseconds: searchDebounceNanoseconds, loader: $0)
+            }
             ?? descriptor.primarySearch.map { _ in
                 EntityListSearchModel(
-                    descriptor: descriptor,
+                    descriptor: descriptor, debounceNanoseconds: searchDebounceNanoseconds,
                     loader: Self.searchLoader(
                         descriptor: descriptor, client: client, filters: filters,
                         pageSize: pageSize, sort: sort,

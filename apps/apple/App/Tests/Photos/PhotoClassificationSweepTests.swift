@@ -5,7 +5,7 @@ import Testing
 @testable import Cubby
 
 @MainActor
-@Suite("PhotoClassificationSweep")
+@Suite("PhotoClassificationSweep", .timeLimit(.minutes(1)))
 struct PhotoClassificationSweepTests {
     private func candidate(_ id: String, day: Int, monthID: Date = Date(timeIntervalSince1970: 0))
         -> PhotoSweepScheduler.Candidate
@@ -161,20 +161,16 @@ struct PhotoClassificationSweepTests {
                 PhotoClassificationSweep.Outcome(categories: ["home"], topLabels: [], classifyMs: 1)
             })
         sweep.setActive(true)
+        let stopped = sweep.runTask
         sweep.setParticipating(false)
         #expect(!sweep.isRunning)
-        // Give any in-flight classification a chance to land before asserting nothing progressed.
-        try? await Task.sleep(for: .milliseconds(50))
+        // Let any in-flight classification land before asserting nothing progressed.
+        await stopped?.waitUnlessCancelled()
         let classifiedWhileOff = try await store.classifiedCount(
             newerThan: PhotoClassificationSweep.classifyVersion)
 
         sweep.setParticipating(true)
-        for _ in 0..<200 {
-            if try await store.classifiedCount(newerThan: PhotoClassificationSweep.classifyVersion) == 4 {
-                break
-            }
-            try await Task.sleep(for: .milliseconds(10))
-        }
+        await sweep.idle()
         #expect(try await store.classifiedCount(newerThan: PhotoClassificationSweep.classifyVersion) == 4)
         #expect(classifiedWhileOff < 4)
     }
@@ -196,12 +192,7 @@ struct PhotoClassificationSweepTests {
                 PhotoClassificationSweep.Outcome(categories: ["home"], topLabels: [], classifyMs: 1)
             })
         sweep.setActive(true)
-        for _ in 0..<200 {
-            if try await store.classifiedCount(newerThan: PhotoClassificationSweep.classifyVersion) == 4 {
-                break
-            }
-            try await Task.sleep(for: .milliseconds(10))
-        }
+        await sweep.idle()
         #expect(try await store.classifiedCount(newerThan: PhotoClassificationSweep.classifyVersion) == 4)
         sweep.setPaused(true)
         #expect(!sweep.isRunning)
@@ -226,18 +217,13 @@ struct PhotoClassificationSweepTests {
             })
 
         sweep.setActive(true)  // months still empty: run() sees zero candidates, returns at once.
-        for _ in 0..<200 where sweep.isRunning { try await Task.sleep(for: .milliseconds(10)) }
+        await sweep.idle()
         #expect(!sweep.isRunning)
 
         box.candidates = [candidate("late-arrival", day: 1)]
         sweep.reconcile()  // what PhotosRootView calls on `library.monthsRevision` changing.
 
-        for _ in 0..<200 {
-            if try await store.classifiedCount(newerThan: PhotoClassificationSweep.classifyVersion) == 1 {
-                break
-            }
-            try await Task.sleep(for: .milliseconds(10))
-        }
+        await sweep.idle()
         #expect(try await store.classifiedCount(newerThan: PhotoClassificationSweep.classifyVersion) == 1)
     }
 }

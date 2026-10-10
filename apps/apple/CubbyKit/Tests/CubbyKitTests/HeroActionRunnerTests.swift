@@ -19,7 +19,7 @@ private final class HeroStub: URLProtocol, @unchecked Sendable {
 /// The generic hero-action runner: a manifest verb maps to one generated operation, destructive
 /// verbs cannot run unconfirmed, and the request body is exactly the plan's template filled from
 /// the form. Synthetic ids throughout.
-@Suite("HeroActionRunner", .serialized)
+@Suite("HeroActionRunner", .timeLimit(.minutes(1)), .serialized)
 struct HeroActionRunnerTests {
     private struct Seen: Sendable {
         let method: String?
@@ -318,7 +318,7 @@ struct HeroActionRunnerTests {
         model.submit(confirmed: true) { _ in finished.withLock { $0 += 1 } }
         model.submit(confirmed: true) { _ in finished.withLock { $0 += 1 } }
         #expect(model.isRunning)
-        while model.isRunning { await Task.yield() }
+        await model.submission?.waitUnlessCancelled()
         #expect(recorder.requests.filter { $0.path.hasSuffix("/discard") }.count == 1)
         #expect(finished.withLock { $0 } == 1)
     }

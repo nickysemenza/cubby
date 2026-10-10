@@ -58,7 +58,7 @@ final class LibraryMetadataSync {
     @ObservationIgnored private var isSignedIn: Bool
     @ObservationIgnored private var isSceneActive = true
     @ObservationIgnored private var isParticipating: Bool
-    @ObservationIgnored private var runTask: Task<Void, Never>?
+    @ObservationIgnored private(set) var runTask: Task<Void, Never>?
     @ObservationIgnored private var runGeneration = UUID()
     /// Set by `reconcile()` when it is called while a run is already in flight, instead of
     /// cancelling that run: `PhotoMatchStore.revision` bumps on every 32-asset scan batch and every
@@ -157,6 +157,11 @@ final class LibraryMetadataSync {
         runTask = nil
         isRunning = false
         startedAt = nil
+    }
+
+    /// Returns once the scheduled run, including any replanned pass, has ended.
+    func idle() async {
+        while !Task.isCancelled, let runTask { await runTask.waitUnlessCancelled() }
     }
 
     /// Runs the sync to completion inside a `BGProcessingTask`, bypassing the scene-active gate.

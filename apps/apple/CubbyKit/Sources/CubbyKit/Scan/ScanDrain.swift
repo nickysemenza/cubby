@@ -37,7 +37,8 @@ public final class ScanDrain<Outcome: Sendable> {
     private let work: Work
     private let debounceInterval: TimeInterval
     private var queue: [(read: ScanRead, token: UUID)] = []
-    private var draining = false
+    /// The running drain loop; `nil` once the queue is empty (tests await it through `idle()`).
+    private var drainTask: Task<Void, Never>?
     private var lastAccepted: (raw: String, at: Date)?
 
     public init(anchor: LocationCode? = nil, debounceInterval: TimeInterval = 1.5, work: @escaping Work) {
@@ -58,7 +59,12 @@ public final class ScanDrain<Outcome: Sendable> {
         let token = UUID()
         pendingCount += 1
         queue.append((ScanRead(raw: raw, anchor: anchor, at: date), token))
-        Task { await drain() }
+        if drainTask == nil {
+            drainTask = Task {
+                await drain()
+                drainTask = nil
+            }
+        }
         return token
     }
 
@@ -70,10 +76,13 @@ public final class ScanDrain<Outcome: Sendable> {
         lastAccepted = nil
     }
 
+    /// Returns once every read submitted so far has finished, including work in flight whose
+    /// outcome a `reset()` discards.
+    func idle() async {
+        while !Task.isCancelled, let drainTask { await drainTask.waitUnlessCancelled() }
+    }
+
     private func drain() async {
-        if draining { return }
-        draining = true
-        defer { draining = false }
         while !queue.isEmpty {
             let (read, token) = queue.removeFirst()
             let outcome = await work(read)

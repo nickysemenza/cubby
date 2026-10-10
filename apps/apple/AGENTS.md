@@ -103,6 +103,10 @@ CubbyAPI plugin's OpenAPI inputs) → `xcodegen generate --spec apps/apple/proje
   cannot be a single shared `StubURLProtocol<Tag>`. `Tests/CubbyKitTests/Support/StubURLProtocol.swift`
   holds the shared plumbing (`StubNetworking`); each suite that stubs the network declares its own
   tiny concrete subclass with its own `static let handler`, per that file's doc comment.
+- Tests never wait on the clock (no `Task.sleep`, deadlines, polling, or yield spins): await
+  the work through an internal hook on the model (its `Task`, `idle()`), park a double on the
+  shared `Tests/CubbyKitTests/Support/Gate.swift` (also compiled into the app test targets), and
+  inject a production pause or expiry where the code itself waits.
 - App Intents: `perform()` is not `@MainActor` in the SDK and entities/queries are `Sendable`.
   Entity and query types are declared `nonisolated`; intent structs keep the MainActor default
   (their `@Parameter` stored properties cannot be nonisolated) and mark sync statics such as

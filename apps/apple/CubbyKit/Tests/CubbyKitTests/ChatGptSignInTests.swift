@@ -4,7 +4,7 @@
     import Testing
     @testable import CubbyKit
 
-    @Suite("ChatGPT local sign-in")
+    @Suite("ChatGPT local sign-in", .timeLimit(.minutes(1)))
     struct ChatGptSignInTests {
         @Test("PKCE and registration survive the browser round trip")
         func registration() throws {
@@ -48,7 +48,7 @@
             let (_, invalid) = try await URLSession.shared.data(
                 from: URL(string: "\(redirect)?state=wrong&code=forged")!)
             #expect((invalid as? HTTPURLResponse)?.statusCode == 400)
-            async let callback = listener.receive(timeout: .seconds(5))
+            async let callback = listener.receive()
             let (_, valid) = try await URLSession.shared.data(
                 from: URL(string: "\(redirect)?state=expected&code=example")!)
             #expect((valid as? HTTPURLResponse)?.statusCode == 200)
@@ -61,7 +61,8 @@
             defer { listener.close() }
             _ = try await listener.start()
             await #expect(throws: ChatGptSignInError.self) {
-                try await listener.receive(timeout: .milliseconds(20))
+                // The sign-in's lifetime ends before any callback arrives.
+                try await listener.receive(expiry: {})
             }
         }
     }

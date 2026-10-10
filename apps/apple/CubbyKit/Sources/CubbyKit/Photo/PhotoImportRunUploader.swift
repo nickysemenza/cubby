@@ -396,6 +396,11 @@ public actor PhotoImportRunUploader {
         }
     }
 
+    /// Returns once every device-work report issued so far has settled.
+    func reportsSettled() async {
+        await pendingReport?.waitUnlessCancelled()
+    }
+
     /// A short, PII-free description for a `failed` device-work report: a Vision or Photos error's
     /// `localizedDescription` can carry on-device detail (file paths, asset identifiers), so this
     /// keeps only the error's type name (plus the HTTP status for an API error).
@@ -528,6 +533,11 @@ public final class PhotoImportRunSession {
             self.failedAnalysisPhotos = await uploader.failedAnalysisPhotos
             self.task = nil
         }
+    }
+
+    /// Returns once the running upload or analysis retry has finished.
+    func idle() async {
+        while !Task.isCancelled, let task { await task.waitUnlessCancelled() }
     }
 
     /// Stops further chunks from starting; chunks already finalized stay finalized (the server has

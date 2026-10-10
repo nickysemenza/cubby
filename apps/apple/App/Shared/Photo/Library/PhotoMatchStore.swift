@@ -61,6 +61,16 @@ final class PhotoMatchStore {
     @ObservationIgnored private var repairTask: Task<Void, Never>?
     @ObservationIgnored private var loadingTask: Task<Void, Never>?
     @ObservationIgnored private var registrationTask: Task<Void, Never>?
+    /// Spaces background registration batches so they yield to interactive work.
+    @ObservationIgnored private let registrationPause: @Sendable () async throws -> Void
+
+    init(
+        registrationPause: @escaping @Sendable () async throws -> Void = {
+            try await Task.sleep(for: .milliseconds(20))
+        }
+    ) {
+        self.registrationPause = registrationPause
+    }
     @ObservationIgnored private var pendingQueries: [String: HashQuery] = [:]
     @ObservationIgnored private var generation = UUID()
     @ObservationIgnored private var accountGeneration = UUID()
@@ -444,12 +454,20 @@ final class PhotoMatchStore {
 
     func isCurrentIndex(_ revision: Int) -> Bool { hasIndex && entriesRevision == revision }
 
+    /// Returns once every queued background registration has been matched.
+    func registrationsDrained() async {
+        while !Task.isCancelled, let registrationTask {
+            await registrationTask.waitUnlessCancelled()
+        }
+    }
+
     private func schedulePendingRegistrations() {
         guard registrationTask == nil, !pendingQueries.isEmpty else { return }
         let token = generation
         registrationTask = Task { [weak self] in
+            guard let pause = self?.registrationPause else { return }
             do {
-                try await Task.sleep(for: .milliseconds(20))
+                try await pause()
             } catch {
                 return
             }
