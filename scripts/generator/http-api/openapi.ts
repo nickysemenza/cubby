@@ -334,6 +334,8 @@ const buildOpenApiDocument = async (): Promise<{
             ([name, schema]) => ({
               name,
               in: "query",
+              style: "form",
+              explode: true,
               required: parameters.required?.includes(name) ?? false,
               schema,
             }),
