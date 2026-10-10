@@ -17,6 +17,7 @@ import {
 import { renderToString } from "react-dom/server";
 import { toast } from "sonner";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { z } from "zod";
 
 import { createEntityMutationPort } from "~/entity/editing/use-entity-commands";
 import { ai } from "~/integrations/tanstack-query/generated/catalog.gen";
@@ -274,6 +275,77 @@ describe("record suggestions", () => {
       screen.getByText("No suggestions · 1 field checked"),
     ).toBeInTheDocument();
     expect(calls).toHaveLength(3);
+  });
+
+  it("shows a confident live answer in a table cell as a ghost pill and a weak one as nothing", async () => {
+    const answers = { "red apple": 0.97, "steel wrench": 0.4 };
+    const misses: unknown[] = [];
+    const operations: EntitySuggestionsOperations = {
+      suggestFields: ai.suggestFields.withTransport(async ({ input }) => {
+        const probability =
+          answers[
+            z.enum(["red apple", "steel wrench"]).parse(input.basis.name)
+          ];
+        return {
+          suggestions: { categoryId: { ...food, probability } },
+          outcomes: {
+            categoryId: {
+              kind: "evaluated" as const,
+              answer: "pick" as const,
+              confidence: "high" as const,
+              probability,
+              alternatives: [],
+            },
+          },
+        };
+      }),
+      recordFieldSuggestionMiss: ai.recordFieldSuggestionMiss.withTransport(
+        async ({ input }) => {
+          misses.push(input);
+          return { recorded: true as const };
+        },
+      ),
+    };
+    function Cell({ name }: { name: keyof typeof answers }) {
+      const record = { id, name, manufacturer: null, categoryId: null };
+      return (
+        <RecordSuggestionsProvider
+          entity="product"
+          records={[record]}
+          fieldKeys={["categoryId"]}
+          operations={operations}
+          storedSuggestionOperations={emptyStoredSuggestionOperations}
+        >
+          <RecordFieldSuggestion
+            record={record}
+            field="categoryId"
+            surface="cell"
+          >
+            <span>Empty category</span>
+          </RecordFieldSuggestion>
+        </RecordSuggestionsProvider>
+      );
+    }
+    const view = render(<Cell name="red apple" />, {
+      wrapper: harness.wrapper,
+    });
+    await screen.findByRole("button", { name: "Accept suggested value" });
+    expect(screen.queryByRole("button", { name: "Use suggestion" })).toBeNull();
+    fireEvent.click(screen.getByRole("button", { name: "Suggestion actions" }));
+    fireEvent.click(
+      await screen.findByRole("menuitem", { name: "Reject (Miss)" }),
+    );
+    await waitFor(() => expect(misses).toHaveLength(1));
+    expect(
+      screen.queryByRole("button", { name: "Accept suggested value" }),
+    ).toBeNull();
+
+    view.rerender(<Cell name="steel wrench" />);
+    await screen.findByText("No suggestions · 1 field checked");
+    expect(screen.queryByLabelText(/Food/)).toBeNull();
+    expect(
+      screen.queryByRole("button", { name: "Accept suggested value" }),
+    ).toBeNull();
   });
 
   it("opens the normal editor with the saved value after acceptance fails", async () => {

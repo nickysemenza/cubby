@@ -93,7 +93,7 @@ export function SuggestionVisitProvider({ children }: { children: ReactNode }) {
 /** Dismiss/apply/saving/failure state shared by both the `remove` and `set`
  * review bodies — factored out so `SuggestionReview` itself stays a thin
  * gate + layout switch instead of owning every branch. */
-function useSuggestionActions(
+export function useSuggestionActions(
   key: string,
   onApply: () => void | Promise<void>,
   pending: boolean | undefined,
