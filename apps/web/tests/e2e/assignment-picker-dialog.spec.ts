@@ -75,9 +75,8 @@ test("an assignment picker keeps its label through search, clear, and create", a
   await picker.click();
   await picker.fill(missing);
   await expect(page.getByText("No location found.")).toBeVisible();
-  await dialog
-    .getByText("Select the new parent location for the selected locations.")
-    .click();
+  await picker.press("Escape");
+  await expect(dialog).toBeVisible();
   await expect(page.getByText("No location found.")).toHaveCount(0);
   await expect(picker).toHaveValue(`${parentName} — room`);
   await expect(effectTargets(parentName)).toHaveCount(2);

@@ -5,6 +5,7 @@ import {
   MAX_SHARD_ATTEMPTS,
   releaseShardLine,
   shardKey,
+  UsdaReleaseStore,
   type ReleaseManifest,
   type ReleaseShardLine,
 } from "@cubby/usda/release";
@@ -106,7 +107,7 @@ async function seedRelease(
   const object = env.USDA_RELEASE.getByName(usdaReleaseObjectName(release));
   // The generated binding types stubs loosely; results are read through the RPC contract.
   const stub: UsdaReleaseRpc = object;
-  return { release, object, stub };
+  return { release, manifest, object, stub };
 }
 
 type Seeded = Awaited<ReturnType<typeof seedRelease>>;
@@ -246,11 +247,15 @@ describe("USDA release Durable Object", () => {
   });
 
   it("fails a shard whose attempts were all killed before they could report", async () => {
-    const { stub, object } = await seedRelease([
+    const { release, manifest, stub, object } = await seedRelease([
       [current({ fdc_id: 471, description: "Spelt, raw" })],
     ]);
-    await stub.status();
     await runInDurableObject(object, (_instance, state) => {
+      // Plant killed-attempt recovery before an RPC schedules an automatic alarm.
+      const store = new UsdaReleaseStore(state.storage.sql, (fn) =>
+        state.storage.transactionSync(fn),
+      );
+      store.begin(release, manifest);
       state.storage.sql.exec(
         "UPDATE release_state SET attempts = ? WHERE id = 1",
         MAX_SHARD_ATTEMPTS,

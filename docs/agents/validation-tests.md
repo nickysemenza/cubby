@@ -26,6 +26,12 @@ For a named-case handoff, copy the exact replay selector or confirm the literal
 test title with `rg` before invoking the runner. A title inferred from the task
 description can select no cases; that setup failure supplies no regression evidence.
 
+Plant Durable Object recovery state before the first RPC schedules an automatic
+alarm. Mutating attempt counters after a status read races real work and can
+turn the recovery regression into a successful load. In popover journeys,
+close the popover through its supported keyboard action and assert that the
+parent dialog remains open; do not click obscured instructional text.
+
 Scripted multi-task decisions must use the task returned by Next or its declared
 stable ordering. Ordering fixture rows by a different column can apply a judgment
 to another task even when the issued references are valid. Inspect the task
