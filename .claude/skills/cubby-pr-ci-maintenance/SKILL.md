@@ -29,12 +29,12 @@ for current commands, cheap Git operations, and local versus hosted gates.
    artifacts as application failures.
 5. Run the failed gate and affected checks according to the validation guide.
    Distinguish fixed failures from unrelated failures and unavailable checks.
-   Read `apps/web/.vitest-failures.txt` instead of repeating a failed tier.
+   Read failed tests from `apps/web/.vitest-results.json` instead of repeating a failed tier.
    Choose local checks for the changed behavior and reuse valid results;
    publication and handoff do not require a broad local validation run.
 6. When publication is requested, commit and push the scoped changes following
-   the validation policy. Require passing GitHub checks on the exact final PR
-   head before merge; if hosted verification is requested, wait for results on
+   the validation policy. Require passing GitHub checks on the final PR head
+   before merge (a replayed cache hit for the same content counts); if hosted verification is requested, wait for results on
    that commit. Report local and hosted evidence separately.
 7. When monitoring is requested, use the host's supported automation and update
    an existing matching monitor where possible. Keep it quiet while the state

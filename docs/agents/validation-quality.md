@@ -35,10 +35,11 @@ order is not dependency order; Nx supplies generation and build prerequisites.
 disable the Nx daemon. Stop only processes this task started; use `pnpm exec nx
 reset` after interrupting its own interactive Nx work.
 
-When adding a Workers suite, update the `workers-tests` target's explicit Nx
-inputs in `apps/web/project.json` to include its production sources, shared
-contracts, and Worker entrypoint/configuration. A test discovered by Vitest but
-missing from those inputs can silently reuse a cached pass after a regression.
+Merge-gate targets key on the broad `gate` input in `nx.json`, so a cached pass
+is reused only for identical non-documentation content and toolchain. A target
+that starts reading something outside that set (an ignored file, Markdown, an
+environment variable, a tool outside the workspace) must add it to its inputs,
+or a cached pass can hide a regression ([CI](../ci.md#cache-keys-and-the-remote-cache)).
 
 Oxlint's project rules protect unsafe identifier boundaries and soft-delete
 filters. Keep constraint-focused one-line local exceptions. Oxfmt owns

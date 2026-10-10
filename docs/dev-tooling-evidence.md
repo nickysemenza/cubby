@@ -49,7 +49,7 @@ presentation journeys and an owned database fixture visible in the real list,
 then removed by cleanup. Switching preview states through its controls avoids
 reloading the module graph four times; the previous product case exhausted its
 30-second budget. The HMR bundle records source stability and replay under
-`apps/web/playwright-report/hmr/`. CI still owns exact-head built acceptance.
+`apps/web/playwright-report/hmr/`. CI still owns built acceptance.
 
 Sol and Astra independently reviewed the change. Both confirmed the shared
 simulator target is selected/validated before mutation, and failed HMR fixture
@@ -71,7 +71,7 @@ spent 1m49s in Auxiliary tests/builds, 5m12s in PostgreSQL tests and 7m12s/6m44s
 in the two desktop E2E shards. These are whole-job times including setup, not
 scenario-only benchmarks. One sample does not establish repeatable imbalance;
 retain natural sharding and avoid a duration database or custom sequencer.
-The exact final PR head still requires passing GitHub checks.
+The final PR head still requires passing GitHub checks.
 
 ## Routing measurement
 
@@ -105,6 +105,22 @@ checks cannot establish those production shapes.
 Scope: test cleanup under `apps/web/src` and `packages/*`. Regression tests added elsewhere in this change cover runtime recovery, replay, signed helper reuse and native cache invalidation.
 
 ## Deletions
+
+- Deleted `apps/web/tooling/dev/smoke.ts` (17 scenarios). Its product-facing
+  cases moved to `apps/web/tests/e2e/dev-runtime.hmr.ts` (dev login, dev
+  sign-in, HMR update, synthetic USDA/UPC fixtures, signed R2 paths) or are
+  covered by `tooling/dev/storage.unit.test.ts`, `scripts/dev-profile.test.ts`
+  and `search-index-repair.service.integration.test.ts`. Not retained: restart
+  persistence, isolation between two development instances, reset confined to
+  one instance, the queue consumer seen only in supervisor output, the
+  readiness-marker rejection, and the wrangler Explorer binding list. These
+  guard the local development supervisor, not the app; a regression there
+  shows up the next time a developer starts or resets a session.
+- Reduced the actual-Mac purchase-import E2E to the composed CSV → photo →
+  receipt journey. The receipt-first order and the six-order batch remain
+  covered at the backend by `import-order-convergence.integration.test.ts` and
+  `import-order-convergence.spec.ts`; the native receipt-first booking screen
+  loses Mac coverage.
 
 - Deleted `apps/web/src/entity/editing/architecture.unit.test.ts` (2 tests). Both tests scanned source text for forbidden imports/calls and module placement. This was brittle architecture policing rather than an observable runtime contract. Related runtime coverage remains in `entity/editing/definitions.unit.test.ts`, `kernel.unit.test.ts`, and the `entity-edit-dialog.*.unit.test.tsx` cases. There is no retained check that enforces the exact source-boundary rules; those checks are intentionally removed as requested.
 - Deleted `apps/web/src/server/services/problem-read-architecture.unit.test.ts` (2 tests). It scanned source strings for pagination tokens and a named constant/cast spelling. Runtime problem-domain tests remain in `entity/problem-query.unit.test.ts`, `entity/problem-registry.unit.test.ts`, `app/problems/problem-lane-state.unit.test.ts`, and `server/operations/problems.workflow.unit.test.ts`. No retained test enforces the exact pagination-token/source-shape rules; the removed source-text guard did not establish runtime behavior.

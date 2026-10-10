@@ -5,7 +5,7 @@ import {
 import { createE2EObjectStorage } from "./local-object-storage";
 import type { DatabaseLease } from "./test-database-lease";
 import {
-  cleanupStack,
+  closeOnce,
   startWorkerdHarness,
   WORKERD_PROFILES,
   type WorkerdHarness,
@@ -73,70 +73,73 @@ export async function openWorkerdRuntime<T>(
   options: WorkerdRuntimeOptions,
   prepare: (runtime: WorkerdRuntime) => Promise<T>,
 ): Promise<{ runtime: WorkerdRuntime; prepared: T }> {
-  const cleanup = cleanupStack();
+  // Released on any throw below; `move()` hands ownership to `close()`.
+  await using cleanup = new AsyncDisposableStack();
   const phase = options.onPhase ?? (() => {});
-  return cleanup.guard(async () => {
-    let databaseUrl: string;
-    let databaseName: string | undefined;
-    if ("lease" in options.database) {
-      const lease = await options.database.lease();
-      cleanup.push(`database ${lease.name}`, lease.close);
-      databaseUrl = lease.databaseUrl;
-      databaseName = lease.name;
-      phase("database checkout");
-    } else {
-      databaseUrl = options.database.borrowed;
+  let databaseUrl: string;
+  let databaseName: string | undefined;
+  if ("lease" in options.database) {
+    const lease = await options.database.lease();
+    cleanup.defer(lease.close);
+    databaseUrl = lease.databaseUrl;
+    databaseName = lease.name;
+    phase("database checkout");
+  } else {
+    databaseUrl = options.database.borrowed;
+  }
+
+  let objectStorage: WorkerdHarnessOptions["objectStorage"];
+  if (options.objectStorage && "borrowed" in options.objectStorage) {
+    objectStorage = options.objectStorage.borrowed;
+  } else if (options.objectStorage) {
+    const storage = await createE2EObjectStorage();
+    cleanup.defer(storage.close);
+    let publicUrl = options.objectStorage.publicUrl ?? storage.url;
+    if (options.objectStorage.publish) {
+      const published = await options.objectStorage.publish(storage.url);
+      cleanup.defer(published.close);
+      publicUrl = published.origin;
     }
+    objectStorage = { endpoint: storage.url, publicUrl };
+    phase("object storage");
+  }
 
-    let objectStorage: WorkerdHarnessOptions["objectStorage"];
-    if (options.objectStorage && "borrowed" in options.objectStorage) {
-      objectStorage = options.objectStorage.borrowed;
-    } else if (options.objectStorage) {
-      const storage = await createE2EObjectStorage();
-      cleanup.push("object storage", storage.close);
-      let publicUrl = options.objectStorage.publicUrl ?? storage.url;
-      if (options.objectStorage.publish) {
-        const published = await options.objectStorage.publish(storage.url);
-        cleanup.push("public object storage", published.close);
-        publicUrl = published.origin;
-      }
-      objectStorage = { endpoint: storage.url, publicUrl };
-      phase("object storage");
-    }
+  const googleProvider = WORKERD_PROFILES[options.profile].googleProvider
+    ? await createLocalGoogleProvider()
+    : undefined;
+  if (googleProvider) cleanup.defer(googleProvider.close);
 
-    const googleProvider = WORKERD_PROFILES[options.profile].googleProvider
-      ? await createLocalGoogleProvider()
-      : undefined;
-    if (googleProvider) cleanup.push("Google provider", googleProvider.close);
-
-    const harness = await startWorkerdHarness({
-      profile: options.profile,
-      databaseUrl,
-      objectStorage,
-      googleProviderUrl: googleProvider?.url,
-      models: options.models,
-    });
-    cleanup.push("workerd harness", harness.close);
-    const { url } = await harness.listen();
-    phase("harness create+listen");
-
-    const runtime: WorkerdRuntime = {
-      profile: options.profile,
-      harness,
-      origin: url.origin,
-      databaseUrl,
-      databaseName,
-      objectStorageUrl: objectStorage?.endpoint,
-      googleProvider,
-      close: cleanup.close,
-    };
-    try {
-      return { runtime, prepared: await prepare(runtime) };
-    } catch (error) {
-      harness.debug();
-      throw error;
-    }
+  const harness = await startWorkerdHarness({
+    profile: options.profile,
+    databaseUrl,
+    objectStorage,
+    googleProviderUrl: googleProvider?.url,
+    models: options.models,
   });
+  cleanup.defer(harness.close);
+  const { url } = await harness.listen();
+  phase("harness create+listen");
+
+  let prepared: T;
+  const runtime: WorkerdRuntime = {
+    profile: options.profile,
+    harness,
+    origin: url.origin,
+    databaseUrl,
+    databaseName,
+    objectStorageUrl: objectStorage?.endpoint,
+    googleProvider,
+    // Until `prepare` succeeds, the stack still owns every resource.
+    close: () => cleanup.disposeAsync(),
+  };
+  try {
+    prepared = await prepare(runtime);
+  } catch (error) {
+    harness.debug();
+    throw error;
+  }
+  runtime.close = closeOnce(cleanup.move());
+  return { runtime, prepared };
 }
 
 /**

@@ -5,9 +5,12 @@ on:
     branches: [main]
   push:
     branches: [main]
-  # Weekly live Tester Army import journeys (the coupled harness); never a merge gate.
   schedule:
+    # Weekly live Tester Army import journeys (the coupled harness); never a merge gate.
     - cron: "17 9 * * 1"
+    # Nightly backstop: every lane uncached, so a pass reused from another
+    # platform or toolchain is rechecked on CI's (docs/adr/0009-content-hash-merge-gate.md).
+    - cron: "23 8 * * *"
   workflow_dispatch:
     inputs:
       simulator_e2e:
@@ -28,8 +31,7 @@ on:
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}-${{ github.event_name }}-${{ inputs.simulator_e2e }}-${{ inputs.simulator_journey }}-${{ inputs.tester_army }}
   # PR updates supersede old results. Main must finish publishing reusable
-  # caches, even when the next merge does not select the same native lanes.
-  # The default single pending slot retains only the newest waiting run.
+  # caches. The default single pending slot retains only the newest waiting run.
   cancel-in-progress: ${{ github.event_name != 'push' }}
 
 permissions:
@@ -37,33 +39,37 @@ permissions:
   actions: read
   pull-requests: read
 
+env:
+  # The nightly backstop bypasses the Nx cache for every command, nested ones
+  # included; other runs replay passes for the same input hash.
+  NX_SKIP_NX_CACHE: ${{ github.event.schedule == '23 8 * * *' && 'true' || 'false' }}
+  # Read by setup-node-with-deps, which connects Nx to the shared remote cache
+  # only when both are present (a fork PR receives neither) and it responds.
+  NX_CACHE_URL: ${{ secrets.NX_CACHE_URL }}
+  NX_CACHE_TOKEN: ${{ secrets.NX_CACHE_TOKEN }}
+
+# Every required lane runs its Nx targets unconditionally. Each target's
+# inputs (nx.json `gate`) decide whether a pass for the same content already
+# exists in the shared cache; a hit replays it in seconds (docs/ci.md).
 jobs:
+  # A stable required check that also keeps live entity codes out of PR text.
   scope:
     name: Scope
-    if: github.event_name == 'pull_request' || github.event_name == 'push' || (!inputs.simulator_e2e && inputs.tester_army == 'none')
+    if: &verification github.event_name == 'pull_request' || github.event_name == 'push' || github.event.schedule == '23 8 * * *' || (github.event_name == 'workflow_dispatch' && !inputs.simulator_e2e && inputs.tester_army == 'none')
     runs-on: ubuntu-latest
     timeout-minutes: 5
-    outputs:
-      validation: ${{ steps.paths.outputs.full != 'false' || steps.paths.outputs.validation == 'true' }}
-      generation: ${{ steps.paths.outputs.full != 'false' || steps.paths.outputs.generation == 'true' }}
-      web: ${{ steps.paths.outputs.full != 'false' || steps.paths.outputs.web == 'true' || steps.paths.outputs.webMarkdown == 'true' }}
-      auxiliary: ${{ steps.paths.outputs.full != 'false' || steps.paths.outputs.auxiliary == 'true' }}
-      rust: ${{ steps.paths.outputs.full != 'false' || steps.paths.outputs.rust == 'true' }}
-      apple: ${{ steps.paths.outputs.full != 'false' || steps.paths.outputs.apple == 'true' }}
-      docs: ${{ steps.paths.outputs.full != 'false' || steps.paths.outputs.docs == 'true' }}
-      format: ${{ steps.paths.outputs.full != 'false' || steps.paths.outputs.format == 'true' }}
-      importE2e: ${{ steps.paths.outputs.full != 'false' || steps.paths.outputs.importE2e == 'true' }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        if: github.event_name == 'pull_request'
         with:
           sparse-checkout: |
             .nvmrc
             scripts/check-outward-text.ts
-            .github/ci-paths.yaml
             packages/shared/src/shortcode-alphabet.ts
             packages/schemas/src/entity-definitions
           sparse-checkout-cone-mode: false
       - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7
+        if: github.event_name == 'pull_request'
         with:
           node-version-file: .nvmrc
       # The commit-msg hook gates commit messages; the PR title and body are
@@ -76,18 +82,10 @@ jobs:
         run: |
           gh pr view "$PR" --repo "$GITHUB_REPOSITORY" --json title,body \
             --jq '.title + "\n" + .body' | node scripts/check-outward-text.ts --stdin
-      - name: Classify affected checks
-        if: github.event_name == 'pull_request' || github.event_name == 'push'
-        id: paths
-        uses: dorny/paths-filter@ceb8a2b8f2d89434be7ff52d3de7ec3738c5cc9d # v4
-        with:
-          base: main
-          filters: .github/ci-paths.yaml
-          predicate-quantifier: some-with-excludes
 
   validation:
     name: Validation
-    needs: scope
+    if: *verification
     runs-on: ubuntu-latest
     timeout-minutes: 20
     env:
@@ -96,44 +94,12 @@ jobs:
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
       - uses: ./.github/actions/setup-node-with-deps
-        if: needs.scope.outputs.validation == 'true'
         with:
-          wasm: ${{ needs.scope.outputs.validation == 'true' && 'restore' || 'false' }}
-      - uses: ./.github/actions/setup-node-with-deps
-        if: needs.scope.outputs.validation != 'true' && needs.scope.outputs.generation == 'true'
-        with:
-          wasm: "false"
-          workspace-filter: "@cubby/web..."
-      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7
-        if: needs.scope.outputs.validation != 'true' && needs.scope.outputs.generation != 'true' && needs.scope.outputs.format == 'true'
-        with:
-          node-version-file: .nvmrc
-          package-manager-cache: false
-      # The Nx `wasm` target's runtime input (ensure-wasm.ts --fingerprint)
-      # runs `wasm-pack --version`, which a restored package does not provide.
-      - name: Install wasm-pack for validation
-        if: needs.scope.outputs.validation == 'true'
-        uses: taiki-e/install-action@2ca9b94c269419b7b0c711c09d0b21c4e1d51145 # v2
-        with:
-          tool: wasm-pack
-      - if: needs.scope.outputs.validation == 'true'
-        run: pnpm check:all
-      - if: needs.scope.outputs.validation == 'true'
-        run: pnpm dedupe:check
-      # todos.md owns deferred MCP references; use the existing generator,
-      # without compiling WASM or running unrelated application tests.
-      - name: Check documentation generation inputs
-        if: needs.scope.outputs.generation == 'true' && needs.scope.outputs.validation != 'true'
-        run: |
-          pnpm generate:if-stale
-          pnpm exec redocly lint apps/web/src/lib/generated/http-openapi.gen.json --config redocly.yaml
-      - name: Check documentation formatting
-        if: needs.scope.outputs.format == 'true' && needs.scope.outputs.validation != 'true'
-        run: |
-          formatter_version=$(node -p "require('./package.json').devDependencies.oxfmt")
-          npm exec --yes --package="oxfmt@$formatter_version" -- oxfmt --check .
+          wasm: restore
+      - run: pnpm check:all
+      # Both read the live registry or advisory database, so neither caches.
+      - run: pnpm dedupe:check
       - name: Check relative Markdown links
-        if: needs.scope.outputs.docs == 'true'
         uses: lycheeverse/lychee-action@e7477775783ea5526144ba13e8db5eec57747ce8 # v2.9.0
         with:
           args: >-
@@ -144,54 +110,39 @@ jobs:
             './**/*.md'
             './**/*.mdx'
 
-  # Fast web and auxiliary checks share setup and a required status.
+  # Fast web Vitest projects and every auxiliary package's tests.
   test-aux:
     name: Auxiliary tests and builds
-    needs: scope
-    if: needs.scope.outputs.auxiliary == 'true' || needs.scope.outputs.web == 'true'
+    if: *verification
     runs-on: ubuntu-latest
     timeout-minutes: 20
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
       - uses: ./.github/actions/setup-node-with-deps
         with:
-          wasm: ${{ needs.scope.outputs.web == 'true' && 'restore' || 'false' }}
-          workspace-filter: ${{ needs.scope.outputs.auxiliary != 'true' && '@cubby/web...' || '' }}
-      # The mcp-contract project imports the built MCP App HTML; build:cf used
-      # to produce it here before the Worker build moved to build-worker.
-      - name: Build MCP App assets
-        if: needs.scope.outputs.web == 'true'
-        run: pnpm --filter @cubby/mcp-apps run build
-      - name: Run fast tests
-        if: needs.scope.outputs.web == 'true'
-        run: pnpm --dir apps/web exec vitest run --project unit --project mcp-contract --project worker-safety --project ui
-
-      - name: Run auxiliary package tests
-        if: needs.scope.outputs.auxiliary == 'true'
-        run: pnpm -r --no-sort --workspace-concurrency=2 --no-bail --filter '!@cubby/web' --if-present run test --maxWorkers=1
+          wasm: restore
+      - run: pnpm exec nx run-many -t test --exclude=cubby-checks --outputStyle=static-failures-only
 
   test-rust:
     name: Rust - recipebridge and cubby-ffi
-    needs: scope
-    if: needs.scope.outputs.rust == 'true'
+    if: *verification
     runs-on: ubuntu-24.04-arm
     timeout-minutes: 25
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - uses: ./.github/actions/setup-node-with-deps
       - uses: actions-rust-lang/setup-rust-toolchain@ecabd13d1c56bd1345c230e542e9144811ad706f # v2
         with:
           cache: true
           cache-workspaces: ". -> target"
-      - run: cargo fmt --all --check
-      - run: cargo clippy --workspace --all-targets -- -D warnings
-      - run: cargo test --workspace
+      # One crate at a time: both share the workspace target directory.
+      - run: pnpm exec nx run-many -t rust --parallel=1 --outputStyle=stream
 
-  # Builds and tests the workerd bundle, then shares it with the optional
-  # purchase lane. Desktop shards build independently after Scope.
+  # Migration drift and the workerd PostgreSQL files, which build the Worker
+  # themselves; ordinary integration files run in test-postgres.
   build-worker:
     name: Build Workers and runtime tests
-    needs: scope
-    if: needs.scope.outputs.web == 'true'
+    if: *verification
     runs-on: ubuntu-latest
     timeout-minutes: 20
     services: &test-databases
@@ -221,153 +172,61 @@ jobs:
           PGPASSWORD: password
         ports:
           - 5000:5000
+    env:
+      CUBBY_SOURCE_COMMIT: ${{ github.sha }}
+      CUBBY_SOURCE_BRANCH: ${{ github.ref_name }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
       - uses: ./.github/actions/setup-node-with-deps
         with:
-          wasm: "restore"
-          workspace-filter: "@cubby/web..."
-      - name: Build the Worker
-        env:
-          CUBBY_SOURCE_COMMIT: ${{ github.sha }}
-          CUBBY_SOURCE_BRANCH: ${{ github.ref_name }}
-        run: |
-          pnpm --filter @cubby/web run build:cf
-      # One artifact keeps the three outputs at their repository paths, so
-      # consumers extract it over the checkout.
-      - name: Save Worker build
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
-        with:
-          name: worker-build
-          path: |
-            apps/web/dist
-            apps/mcp-apps/dist
-            packages/wasm
-          if-no-files-found: error
-          retention-days: 1
-      # The workerd project consumes this job's fresh bundle, avoiding another
-      # checkout, dependency setup and artifact download.
-      - name: Run workerd PostgreSQL integration tests
-        run: |
-          pnpm --dir apps/web exec vitest run --project integration-workerd
+          wasm: restore
+      - run: pnpm exec nx run-many -p @cubby/web -t db-check workerd-tests --parallel=1 --outputStyle=stream
 
-  # One four-worker job avoids repeating database and dependency setup.
-  # These files never start workerd, so they start after Scope, not Build
-  # Workers; the files that do run in build-worker.
   test-postgres:
-    name: PostgreSQL integration tests
-    needs: scope
-    if: needs.scope.outputs.web == 'true'
-    runs-on: ubuntu-latest
-    timeout-minutes: 20
-    services: *test-databases
-    steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
-      - uses: ./.github/actions/setup-node-with-deps
-        with:
-          wasm: "restore"
-          workspace-filter: "@cubby/web..."
-      # Compare committed migrations with schema.ts in disposable databases
-      # before the suite, reusing this job's PostgreSQL and dependency setup.
-      - name: Check database migrations
-        run: pnpm --dir apps/web db:check
-      - name: Run PostgreSQL integration tests
-        run: pnpm --dir apps/web exec vitest run --project integration --maxWorkers=4
-
-  test-e2e:
-    name: E2E tests (${{ matrix.lane }})
-    needs: scope
-    if: needs.scope.outputs.web == 'true'
+    name: PostgreSQL integration tests (${{ matrix.shard }})
+    if: *verification
     runs-on: ubuntu-latest
     timeout-minutes: 20
     strategy:
       fail-fast: false
       matrix:
-        include:
-          # Benchmark two workers per standard runner after browser caching and
-          # reduced motion improved the former one-worker suite. Keep Playwright's
-          # built-in sharding; the stable aggregate owns the required status.
-          - lane: "desktop 1/2"
-            slug: desktop-1
-            browser: chromium
-            test-script: test:e2e:ci:desktop
-            shard: "1/2"
-          - lane: "desktop 2/2"
-            slug: desktop-2
-            browser: chromium
-            test-script: test:e2e:ci:desktop
-            shard: "2/2"
-    env:
-      NODE_OPTIONS: "--max-old-space-size=4096"
-      E2E_TEST_USER_EMAIL: nicky@test.com
-      E2E_TEST_USER_PASSWORD: password1234
-      BETTER_AUTH_SECRET: ci-secret-TbGFDRAbhlR8e3RaXsfHR9CQ7r4nIc9
+        shard: ["1/2", "2/2"]
     services: *test-databases
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
       - uses: ./.github/actions/setup-node-with-deps
         with:
-          wasm: "restore"
-          workspace-filter: "@cubby/web..."
-      - name: Resolve installed Playwright version
-        id: playwright
-        working-directory: apps/web
-        run: echo "version=$(node -p "require('@playwright/test/package.json').version")" >> "$GITHUB_OUTPUT"
-      - name: Restore exact Playwright browser
-        id: browser-cache
-        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6
-        with:
-          path: ~/.cache/ms-playwright
-          key: playwright-${{ runner.os }}-${{ steps.playwright.outputs.version }}-${{ matrix.browser }}
-      - name: Install exact Playwright browser
-        if: steps.browser-cache.outputs.cache-hit != 'true'
-        run: pnpm --filter @cubby/web run test:e2e:install-browser -- ${{ matrix.browser }}
-      - name: Save exact Playwright browser
-        if: steps.browser-cache.outputs.cache-hit != 'true'
-        uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6
-        with:
-          path: ~/.cache/ms-playwright
-          key: playwright-${{ runner.os }}-${{ steps.playwright.outputs.version }}-${{ matrix.browser }}
-      - name: Build the Worker
+          wasm: restore
+      - run: pnpm exec nx run @cubby/web:postgres --outputStyle=stream
         env:
-          CUBBY_SOURCE_COMMIT: ${{ github.sha }}
-          CUBBY_SOURCE_BRANCH: ${{ github.ref_name }}
-        run: |
-          pnpm --filter @cubby/web run build:cf
-      - name: Run Playwright tests
-        run: |
-          pnpm --filter @cubby/web run ${{ matrix.test-script }} --shard=${{ matrix.shard }} --workers=2 --trace=off
-      - name: Save Playwright run bundle
-        if: always()
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
-        with:
-          name: playwright-run-${{ matrix.slug }}
-          path: |
-            apps/web/playwright-report/run-manifest.json
-            apps/web/playwright-report/run-results.json
-            apps/web/playwright-report/SHA256SUMS
-            apps/web/playwright-report/workerd-logs
-          if-no-files-found: error
-          retention-days: 7
+          CUBBY_POSTGRES_SHARD: ${{ matrix.shard }}
 
-  # Informative only: the purchase agent driven through the browser against a
-  # scripted model and gateway. It is deliberately absent from `web-checks`
-  # and branch protection, so a failure never blocks a merge.
-  test-e2e-purchase-import:
-    name: E2E tests (purchase import agent, optional)
-    needs: [scope, build-worker]
-    if: needs.scope.outputs.web == 'true' && (github.event_name == 'push' || needs.scope.outputs.importE2e == 'true')
+  test-e2e:
+    name: E2E tests (desktop ${{ matrix.shard }})
+    if: *verification
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        # Two Playwright workers per standard runner; the stable aggregate
+        # owns the required status.
+        include:
+          - { shard: "1/4", slug: desktop-1 }
+          - { shard: "2/4", slug: desktop-2 }
+          - { shard: "3/4", slug: desktop-3 }
+          - { shard: "4/4", slug: desktop-4 }
     env:
       NODE_OPTIONS: "--max-old-space-size=4096"
+      BETTER_AUTH_SECRET: ci-secret-TbGFDRAbhlR8e3RaXsfHR9CQ7r4nIc9
+      CUBBY_SOURCE_COMMIT: ${{ github.sha }}
+      CUBBY_SOURCE_BRANCH: ${{ github.ref_name }}
     services: *test-databases
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
       - uses: ./.github/actions/setup-node-with-deps
         with:
-          wasm: "false"
-          workspace-filter: "@cubby/web..."
+          wasm: restore
       - name: Resolve installed Playwright version
         id: playwright
         working-directory: apps/web
@@ -381,89 +240,136 @@ jobs:
       - name: Install exact Playwright browser
         if: steps.browser-cache.outputs.cache-hit != 'true'
         run: pnpm --filter @cubby/web run test:e2e:install-browser -- chromium
-      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
+      - name: Save exact Playwright browser
+        if: steps.browser-cache.outputs.cache-hit != 'true'
+        uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6
         with:
-          name: worker-build
-          path: .
-      - name: Run purchase import browser E2E
-        run: |
-          pnpm --filter @cubby/web run test:e2e:ci:purchase-import
-      - name: Save Playwright run bundle
+          path: ~/.cache/ms-playwright
+          key: playwright-${{ runner.os }}-${{ steps.playwright.outputs.version }}-chromium
+      - name: Run Playwright tests
+        run: pnpm exec nx run @cubby/web:e2e --outputStyle=stream
+        env:
+          CUBBY_E2E_SHARD: ${{ matrix.shard }}
+      - name: Upload Playwright HTML report and traces
         if: always()
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
         with:
-          name: playwright-run-purchase-import
+          name: playwright-${{ github.sha }}-${{ matrix.slug }}
           path: |
-            apps/web/playwright-report/run-manifest.json
-            apps/web/playwright-report/run-results.json
-            apps/web/playwright-report/SHA256SUMS
-            apps/web/playwright-report/workerd-logs
-          if-no-files-found: error
+            apps/web/playwright-report/**
+            !apps/web/playwright-report/run-manifest.json
+            !apps/web/playwright-report/run-results.json
+            !apps/web/playwright-report/SHA256SUMS
+            !apps/web/playwright-report/workerd-logs/**
+            apps/web/test-results/**/trace.zip
+          if-no-files-found: warn
           retention-days: 7
 
-  # Matrix jobs are omitted entirely when web is unaffected. This stable
-  # required check verifies their combined result whenever they run.
+  # Informative only: the purchase agent driven through the browser against a
+  # scripted model and gateway. It is deliberately absent from `web-checks`
+  # and branch protection, so a failure never blocks a merge. Its Nx key is
+  # the agent's own surface, so an unrelated change replays the last result.
+  test-e2e-purchase-import:
+    name: E2E tests (purchase import agent, optional)
+    if: *verification
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      NODE_OPTIONS: "--max-old-space-size=4096"
+      CUBBY_SOURCE_COMMIT: ${{ github.sha }}
+      CUBBY_SOURCE_BRANCH: ${{ github.ref_name }}
+    services: *test-databases
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - uses: ./.github/actions/setup-node-with-deps
+        with:
+          wasm: restore
+      - name: Resolve installed Playwright version
+        id: playwright
+        working-directory: apps/web
+        run: echo "version=$(node -p "require('@playwright/test/package.json').version")" >> "$GITHUB_OUTPUT"
+      - name: Restore exact Playwright browser
+        id: browser-cache
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6
+        with:
+          path: ~/.cache/ms-playwright
+          key: playwright-${{ runner.os }}-${{ steps.playwright.outputs.version }}-chromium
+      - name: Install exact Playwright browser
+        if: steps.browser-cache.outputs.cache-hit != 'true'
+        run: pnpm --filter @cubby/web run test:e2e:install-browser -- chromium
+      - name: Run purchase import browser E2E
+        run: pnpm exec nx run @cubby/web:e2e-purchase-import --outputStyle=stream
+      - name: Upload Playwright HTML report and traces
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        with:
+          name: playwright-${{ github.sha }}-purchase-import
+          path: |
+            apps/web/playwright-report/**
+            !apps/web/playwright-report/run-manifest.json
+            !apps/web/playwright-report/run-results.json
+            !apps/web/playwright-report/SHA256SUMS
+            !apps/web/playwright-report/workerd-logs/**
+            apps/web/test-results/**/trace.zip
+          if-no-files-found: warn
+          retention-days: 7
+
+  # The stable required check over the web matrix lanes.
   web-checks:
     name: Web checks
-    needs: [scope, build-worker, test-aux, test-postgres, test-e2e]
-    if: ${{ !cancelled() && (github.event_name == 'pull_request' || github.event_name == 'push' || (!inputs.simulator_e2e && inputs.tester_army == 'none')) }}
+    needs: [build-worker, test-aux, test-postgres, test-e2e]
+    if: ${{ !cancelled() && (github.event_name == 'pull_request' || github.event_name == 'push' || github.event.schedule == '23 8 * * *' || (github.event_name == 'workflow_dispatch' && !inputs.simulator_e2e && inputs.tester_army == 'none')) }}
     runs-on: ubuntu-slim
     timeout-minutes: 5
     steps:
-      - name: Require affected web lanes to pass
+      - name: Require every web lane to pass
         env:
-          SCOPE_RESULT: ${{ needs.scope.result }}
-          WEB: ${{ needs.scope.outputs.web }}
           BUILD_RESULT: ${{ needs.build-worker.result }}
           WEB_RESULT: ${{ needs.test-aux.result }}
           POSTGRES_RESULT: ${{ needs.test-postgres.result }}
           E2E_RESULT: ${{ needs.test-e2e.result }}
         run: |
-          test "$SCOPE_RESULT" = success || exit 1
-          if [ "$WEB" = true ]; then
-            test "$BUILD_RESULT" = success || exit 1
-            test "$WEB_RESULT" = success || exit 1
-            test "$POSTGRES_RESULT" = success || exit 1
-            test "$E2E_RESULT" = success || exit 1
-          fi
+          test "$BUILD_RESULT" = success
+          test "$WEB_RESULT" = success
+          test "$POSTGRES_RESULT" = success
+          test "$E2E_RESULT" = success
 
-  # The Swift the Apple jobs compile from `pnpm generate` (never committed);
-  # generated here on Linux so the macOS jobs need no Node install.
-  apple-generated:
-    name: Apple generated inputs
-    needs: scope
-    if: needs.scope.outputs.apple == 'true'
-    runs-on: ubuntu-latest
-    timeout-minutes: 10
-    steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
-      - uses: ./.github/actions/generate-apple-inputs
-
-  # Separate SDK builds run in parallel; neither job boots a Simulator.
+  # The two halves of `apple:check` run on parallel macOS runners. A PR first
+  # asks Nx only for a cached pass of the same input hash (from CI or a
+  # developer's Mac): CUBBY_NX_CACHE_PROBE makes a miss fail before any build,
+  # and Nx never caches that failure. Only a miss pays for the native setup.
+  # `main` skips the cache and always rebuilds as the backstop.
   test-apple-host:
     name: Apple host tests
-    needs: [scope, apple-generated]
-    if: needs.scope.outputs.apple == 'true'
+    if: *verification
     runs-on: macos-26
     timeout-minutes: 40
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - uses: ./.github/actions/select-xcode
+      - uses: ./.github/actions/setup-node-with-deps
+      - name: Reuse a cached pass
+        id: cached
+        if: github.event_name != 'schedule'
+        continue-on-error: true
+        env:
+          CUBBY_NX_CACHE_PROBE: "1"
+        run: pnpm exec nx run apple:host-tests --outputStyle=stream
       - uses: ./.github/actions/setup-apple-ffi
+        if: steps.cached.outcome != 'success'
         with:
           targets: mac
-      - uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131 # v7
-        with:
-          name: apple-generated
-          path: apps/apple
-      # The package scheme runs host-only tests through Xcode's supported CAS.
-      # Build products are disposable; unchanged compiler inputs replay without
-      # forging checkout timestamps. Keep SwiftPM's warning-generator products.
+      # Build products are disposable; unchanged compiler inputs replay through
+      # Xcode's compilation cache without forging checkout timestamps. Keep
+      # SwiftPM's warning-generator products.
       - name: Compute host Xcode toolchain hash
+        if: steps.cached.outcome != 'success'
         id: host-xcode-version
         uses: ./.github/actions/toolchain-hash
         with:
           command: xcodebuild -version
       - name: Restore cached host compilation
+        if: steps.cached.outcome != 'success'
         id: host-build
         uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6
         with:
@@ -477,25 +383,11 @@ jobs:
             xcode-host-v1-${{ runner.os }}-${{ steps.host-xcode-version.outputs.hash }}-${{ hashFiles('apps/apple/CubbyKit/Package.resolved') }}-
             xcode-host-v1-${{ runner.os }}-${{ steps.host-xcode-version.outputs.hash }}-
       - name: Run CubbyKit host tests
-        working-directory: apps/apple/CubbyKit
-        run: |
-          /usr/bin/time -l xcodebuild \
-            -scheme CubbyKit-Package -configuration Debug \
-            -destination 'platform=macOS,arch=arm64' \
-            -derivedDataPath .build/xcode \
-            -onlyUsePackageVersionsFromResolvedFile \
-            -skipPackagePluginValidation -skipMacroValidation \
-            COMPILER_INDEX_STORE_ENABLE=NO SWIFT_ENABLE_BATCH_MODE=YES \
-            ARCHS=arm64 ONLY_ACTIVE_ARCH=YES CODE_SIGNING_ALLOWED=NO \
-            COMPILATION_CACHE_ENABLE_CACHING=YES \
-            COMPILATION_CACHE_ENABLE_DIAGNOSTIC_REMARKS=YES test
-      # The build plugin lets a generator warning (a silently dropped schema)
-      # through; this gate fails on one, reusing a recorded pass only when
-      # the document, config, generator pin, toolchain and gate are unchanged.
-      - name: Check OpenAPI generator warnings
-        run: apps/apple/scripts/check-openapi-warnings.sh
+        if: steps.cached.outcome != 'success'
+        run: pnpm exec nx run apple:host-tests --outputStyle=stream
       # Publish only successful builds: exact-key cache entries are immutable.
       - name: Save host compilation cache
+        if: steps.cached.outcome != 'success'
         uses: ./.github/actions/save-cache-main-only
         with:
           path: |
@@ -509,29 +401,38 @@ jobs:
 
   test-apple-simulator:
     name: Apple simulator build
-    needs: [scope, apple-generated]
-    if: needs.scope.outputs.apple == 'true'
+    if: *verification
     runs-on: macos-26
     timeout-minutes: 40
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
-      - uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131 # v7
-        with:
-          name: apple-generated
-          path: apps/apple
+      - uses: ./.github/actions/select-xcode
+      - uses: ./.github/actions/setup-node-with-deps
+      - name: Reuse a cached pass
+        id: cached
+        if: github.event_name != 'schedule'
+        continue-on-error: true
+        env:
+          CUBBY_NX_CACHE_PROBE: "1"
+        run: pnpm exec nx run apple:simulator-build --outputStyle=stream
       - uses: ./.github/actions/setup-apple-ffi
+        if: steps.cached.outcome != 'success'
         with:
           targets: sim
       - uses: ./.github/actions/setup-apple-tools
+        if: steps.cached.outcome != 'success'
         id: apple-tools
       # Xcode's content-addressed compiler cache replays unchanged inputs
       # with ordinary checkout mtimes and filesystem identities.
       - uses: ./.github/actions/setup-apple-build-cache
+        if: steps.cached.outcome != 'success'
         id: derived-data
       - name: Run iOS app checks
-        run: /usr/bin/time -l sh scripts/apple-check.sh ci
+        if: steps.cached.outcome != 'success'
+        run: pnpm exec nx run apple:simulator-build --outputStyle=stream
       # A canceled compile must not permanently populate an exact cache key.
       - name: Save DerivedData cache
+        if: steps.cached.outcome != 'success'
         uses: ./.github/actions/save-cache-main-only
         with:
           path: ${{ steps.derived-data.outputs.cache-paths }}
@@ -539,6 +440,7 @@ jobs:
           cache-hit: ${{ steps.derived-data.outputs.cache-hit }}
           matched-key: ${{ steps.derived-data.outputs.save-matched-key }}
       - name: Save SPM clone cache
+        if: steps.cached.outcome != 'success'
         uses: ./.github/actions/save-cache-main-only
         with:
           path: apps/apple/SourcePackages
@@ -546,13 +448,13 @@ jobs:
           cache-hit: ${{ steps.apple-tools.outputs.spm-clones-cache-hit }}
           matched-key: ${{ steps.apple-tools.outputs.spm-clones-cache-matched-key }}
 
-  # Keep the required context stable and fail if either selected build fails,
-  # is canceled, or is unexpectedly skipped.
+  # Keep the required context stable and fail if either Apple job fails, is
+  # canceled, or is unexpectedly skipped.
   test-apple:
     name: Apple checks
-    needs: [scope, test-apple-host, test-apple-simulator]
-    if: ${{ !cancelled() && needs.scope.result == 'success' && needs.scope.outputs.apple == 'true' }}
-    runs-on: ubuntu-latest
+    needs: [test-apple-host, test-apple-simulator]
+    if: ${{ !cancelled() && (github.event_name == 'pull_request' || github.event_name == 'push' || github.event.schedule == '23 8 * * *' || (github.event_name == 'workflow_dispatch' && !inputs.simulator_e2e && inputs.tester_army == 'none')) }}
+    runs-on: ubuntu-slim
     timeout-minutes: 5
     steps:
       - name: Require both Apple jobs
@@ -659,7 +561,7 @@ jobs:
 
   tester-army-inputs:
     name: Tester Army dispatch inputs
-    if: github.event_name == 'schedule' || (github.event_name == 'workflow_dispatch' && inputs.tester_army != 'none')
+    if: github.event.schedule == '17 9 * * 1' || (github.event_name == 'workflow_dispatch' && inputs.tester_army != 'none')
     runs-on: ubuntu-latest
     # Inputs are empty on `schedule`, which runs the import lane.
     outputs:

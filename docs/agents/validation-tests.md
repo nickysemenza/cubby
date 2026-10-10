@@ -26,6 +26,13 @@ For a named-case handoff, copy the exact replay selector or confirm the literal
 test title with `rg` before invoking the runner. A title inferred from the task
 description can select no cases; that setup failure supplies no regression evidence.
 
+CI retries a failed Vitest or Playwright test once; locally nothing retries.
+A test that passes only on retry is reported as flaky, not failed. The second
+time a test is reported flaky, fix it or delete it, recording the named
+failure and the deleting commit in a `docs/todos.md` entry so it can be
+restored once fixed. Do not skip it in place: the test-run contract fails a
+lane that reports skipped or pending tests. Never raise the retry count.
+
 Plant Durable Object recovery state before the first RPC schedules an automatic
 alarm. Mutating attempt counters after a status read races real work and can
 turn the recovery regression into a successful load. In popover journeys,
@@ -144,12 +151,11 @@ count individual operation attempts separately from transport fallback.
 Compare related layout bounds in one browser evaluation so their rectangles
 come from the same render state.
 
-Playwright E2E and the coupled Workers harness share a machine-wide lock
-(`/tmp/cubby-harness.lock`, `scripts/lib/harness-lock.ts`): a second suite on
-the same machine queues and logs who holds the lock instead of starving both
-of CPU. A lock whose owner process exited is reclaimed. Processes the holder
-spawns pass straight through. Lock regression tests measure the held interval
-up to immediately before unlock; output after unlock is outside that interval. `test:e2e:watch` (`--ui`) skips the lock, since
+Playwright E2E and the coupled Workers harness share a machine-wide lock at
+`/tmp/cubby-harness.lock`, managed by `proper-lockfile`. It prevents concurrent
+suites on one machine from starving both of CPU; the library refreshes the lock
+while held and reclaims it after an interrupted process. Child processes inherit
+the owner marker and pass through. `test:e2e:watch` (`--ui`) skips the lock, since
 its idle session would otherwise hold it indefinitely. A spec's `test.use` of a
 worker-scoped option (`video`, `trace`, `screenshot`, browser launch options),
 even to its default, moves its tests into extra workers that each boot another
@@ -228,9 +234,11 @@ live evals start the built Worker through `openWorkerdRuntime`
 startup uses `withWorkerdRuntime`, which closes the runtime even when that
 work throws. The runtime acquires the database (a lease it releases, or a
 borrowed database it never closes), owned or borrowed object storage,
-the profile's peers, and the harness. `close()` releases them newest first
-and runs every release even when one fails; a start that fails at any step
-releases everything acquired before it. Borrowed storage carries its S3
+the profile's peers, and the harness into a native `AsyncDisposableStack`
+(`await using`, then `move()` on success). `close()` releases them newest
+first and runs every release even when one fails (failures chain as
+`SuppressedError`); a start that fails at any step releases everything
+acquired before it. Borrowed storage carries its S3
 endpoint and public URL separately; neither startup failure nor close stops
 caller-owned storage.
 
@@ -344,28 +352,22 @@ it in the retained original and proposal: tests share a worker database, so
 unrelated fixtures must not collide on Product name/manufacturer. Repeated
 orders for the same item reuse the Product reference returned by resolution.
 
-Every completed E2E run produces a sanitized run bundle with its revision,
-replay command, runtime versions, case results, and SHA-256 checksums. CI uploads
-successful and failed bundles for seven days. A dirty local checkout or a build
-that cannot be tied to its source revision is marked as not exactly replayable.
-Raw HTML reports, traces, screenshots, and database dumps stay local because
-they can contain household data or credentials. Run `shasum -a 256 -c
-SHA256SUMS` from the downloaded bundle directory to verify its contents, then
-replay the `command` array in `run-manifest.json` against the recorded commit.
-Desktop CI disables trace recording because raw traces are never uploaded.
-Before another local browser replay, archive and verify the completed sanitized
-bundle outside `playwright-report`; the reporter replaces that directory on the
-next run. Keep failed-run evidence as well as successful acceptance bundles.
-For a local debugging replay, replace its `--trace=off` argument with
-`--trace=retain-on-failure`; local runs otherwise retain traces on failure.
+CI's web E2E artifact is Playwright's built-in HTML report and retained traces.
+Each Playwright job uploads them under an artifact name containing the tested
+commit SHA. CI traces only the retry of a failed test (`on-first-retry`);
+local runs keep failure traces (`retain-on-failure`). Open
+`playwright-report/index.html` from the downloaded artifact to inspect the
+run. Local native runs keep the `sim-e2e` artifacts, which record their build,
+process, simulator, watchdog, scenario and replay evidence.
 
 A failed E2E test attaches the Worker harness's structured workerd logs
 (`harness.getLogs()`, credential-shaped values scrubbed) to the Playwright
-result and copies them into the bundle under `workerd-logs/`; the case entry in
-`run-results.json` records the harness explorer URL. Each Playwright worker also
-prints `<origin>/cdn-cgi/local/explorer` at startup, so a paused (`PWDEBUG`,
-headed, or `--ui`) test can be inspected for Durable Object, queue, workflow,
-and R2 state. The URL is only valid while that worker is alive.
+result, where the HTML report can open the attachment. The local reporter also
+keeps its workerd logs and run bundle in `playwright-report`; CI excludes those
+custom bundle files. Each Playwright worker prints
+`<origin>/cdn-cgi/local/explorer` at startup, so a paused (`PWDEBUG`, headed, or
+`--ui`) test can be inspected for Durable Object, queue, workflow, and R2 state.
+The URL is only valid while that worker is alive.
 
 Run `pnpm wasm` after WASM changes. The shared `CARGO_TARGET_DIR` can be
 written by another checkout, so confirm generated output is current. Generated

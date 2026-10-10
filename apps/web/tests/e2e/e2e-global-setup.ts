@@ -1,7 +1,7 @@
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
-import { acquireHarnessLock } from "../../../../scripts/lib/harness-lock.ts";
+import { holdHarnessLock } from "../../tooling/harness-lock";
 import { prepareTemplate } from "../../tooling/test-database-lease";
 import { webBuildNeedsBuild } from "../../tooling/web-build-provenance";
 
@@ -15,20 +15,25 @@ const __dirname = path.dirname(__filename);
  * persistent `--ui` session keeps global setup alive while idle, so it would
  * hold the lock indefinitely; it skips the lock instead.
  */
-async function globalSetup(): Promise<() => void> {
+async function globalSetup(): Promise<() => void | Promise<void>> {
   const release = process.argv.includes("--ui")
-    ? () => {}
-    : await acquireHarnessLock("Playwright E2E");
-  // Workers start the built bundle; a stale one fails here, once.
-  webBuildNeedsBuild(path.join(__dirname, "../../../.."), true);
+    ? async () => {}
+    : await holdHarnessLock();
+  try {
+    // Workers start the built bundle; a stale one fails here, once.
+    webBuildNeedsBuild(path.join(__dirname, "../../../.."), true);
 
-  console.log("[E2E Setup] Preparing shared PostgreSQL template...");
-  const templateStart = performance.now();
-  await prepareTemplate("browser");
-  console.log(
-    `[E2E Setup] Shared PostgreSQL template is ready ${Math.round(performance.now() - templateStart)}ms`,
-  );
-  return release;
+    console.log("[E2E Setup] Preparing shared PostgreSQL template...");
+    const templateStart = performance.now();
+    await prepareTemplate("browser");
+    console.log(
+      `[E2E Setup] Shared PostgreSQL template is ready ${Math.round(performance.now() - templateStart)}ms`,
+    );
+    return release;
+  } catch (error) {
+    await release();
+    throw error;
+  }
 }
 
 export default globalSetup;

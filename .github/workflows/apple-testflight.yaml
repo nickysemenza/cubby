@@ -51,7 +51,9 @@ jobs:
           PUSH_BEFORE: ${{ github.event.before }}
           PUSH_AFTER: ${{ github.event.after }}
         run: node scripts/apple-release.ts plan
-      # Native changes since the uploaded commit, by CI's own full/apple lanes.
+      # Changes since the uploaded commit that can reach the shipped app:
+      # native and generator sources (`apple`), or root, CI, and tooling
+      # files outside every app (`full`). Documentation never selects either.
       - name: Classify changes since the last upload
         id: paths
         if: steps.plan.outputs.action == 'compare'
@@ -59,8 +61,28 @@ jobs:
         with:
           base: ${{ steps.plan.outputs.base }}
           ref: ${{ steps.plan.outputs.sha }}
-          filters: .github/ci-paths.yaml
           predicate-quantifier: some-with-excludes
+          filters: |
+            full:
+              - "**"
+              - &notMarkdown "!**/*.@([mM][dD]|[mM][dD][xX]|[mM][aA][rR][kK][dD][oO][wW][nN])"
+              - "!apps/**"
+              - "!packages/**"
+              - "!cubby-ffi/**"
+              - "!recipebridge/**"
+              - "!Cargo.{toml,lock}"
+              - "!docker-compose*"
+            apple:
+              - "apps/apple/**"
+              - "cubby-ffi/**"
+              - "recipebridge/**"
+              - "Cargo.{toml,lock}"
+              - "packages/{schemas,shared}/**"
+              - "apps/web/src/**"
+              - "apps/web/scripts/apple-preview-fixtures.ts"
+              - "apps/web/wrangler.jsonc"
+              - "apps/web/tooling/wrangler-public-config.ts"
+              - *notMarkdown
       - name: Report
         env:
           ACTION: ${{ steps.plan.outputs.action }}

@@ -9,10 +9,8 @@
       },
       "cache": true,
       "inputs": [
-        "{projectRoot}/**",
-        "{workspaceRoot}/rust-toolchain.toml",
-        "{workspaceRoot}/Cargo.toml",
-        "{workspaceRoot}/Cargo.lock",
+        "gate",
+        // rust-toolchain.toml names a floating channel.
         {
           "runtime": "rustc -V"
         }

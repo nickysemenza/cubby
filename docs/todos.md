@@ -1038,8 +1038,10 @@ evidence](dev-tooling-evidence.md).
 Fixture-backed generic list previews and optional warm HMR Playwright validation
 are implemented. See [local development](local-development.md#fixture-previews-and-warm-hmr-validation).
 
-- ⏳ **Natural CI evidence.** Revisit sharding only when exact-head runs show
-  a repeatable tail imbalance; no duration databases or custom sequencers.
+- 🤔 **Evaluate off-the-shelf OpenAPI generation.** The HTTP/Swift emitters
+  under `scripts/generator/http-api/` might be replaceable by
+  `swift-openapi-generator` and `openapi-typescript`; establish whether they
+  cover the generated client contracts before replacing any emitter.
 
 ---
 

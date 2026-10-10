@@ -142,18 +142,18 @@ launchd's SIGTERM-to-SIGKILL window (20s by default) is longer than the 10s stop
 
 ## Verification
 
-- `pnpm apple check` runs native formatting, CubbyKit package tests, generated API
-  drift checks, and an iOS simulator build (`scripts/apple-check.sh full`).
+- `pnpm apple check` runs `nx run apple:check`: native formatting, CubbyKit
+  package tests, generated API drift checks, and an iOS simulator build
+  (`scripts/apple-check.sh`). A pass is cached for its input hash, and CI
+  replays it on a PR with the same content and Xcode.
 - `pnpm apple test` runs package tests only. It does **not** run the hosted app tests.
-- Hosted CI runs this as two path-filtered macOS jobs instead of one: `Apple
-  package tests` runs `swift test --package-path apps/apple/CubbyKit
-  --force-resolved-versions` on the macOS host (no simulator), and `Apple
-  checks` runs `sh scripts/apple-check.sh ci` — the same formatting and drift
-  checks, then a generic-simulator `xcodebuild build` with no tests, reusing a
-  CI-cached SPM clone directory. They were one merged job that also ran
-  `xcodebuild test` on a concrete simulator, but a hosted runner's first
-  simulator boot cost about 6 minutes plus roughly 10 more of CPU starvation,
-  so that job took 13 minutes warm; splitting it back into two is faster.
+- Hosted CI runs the two halves as parallel macOS jobs: `Apple host tests`
+  (`apple:host-tests`, CubbyKit's package tests on the macOS host, no
+  simulator) and `Apple simulator build` (`apple:simulator-build`, formatting
+  and drift checks, then a generic-simulator `xcodebuild build` with no tests).
+  A merged job that also ran `xcodebuild test` on a concrete simulator took 13
+  minutes warm: a hosted runner's first simulator boot cost about 6 minutes
+  plus roughly 10 more of CPU starvation.
   `CubbyKit/Tests/CubbyKitTests/VisionHardware.swift`'s `.requiresVisionHardware`
   trait still matters for anyone running these tests on a simulator, e.g. via
   `xcodebuild test -scheme Cubby-iOS` locally (the scheme lists

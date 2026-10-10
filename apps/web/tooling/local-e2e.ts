@@ -23,16 +23,7 @@ const simulatorLanes = [
 ];
 const lanes = [
   ...simulatorLanes.map((lane) => ({ ...lane, script: "sim-e2e.ts" })),
-  {
-    name: "mac:csv-first",
-    script: "mac-import-e2e.ts",
-    args: ["--order", "csv,photo,receipt"],
-  },
-  {
-    name: "mac:receipt-first",
-    script: "mac-import-e2e.ts",
-    args: ["--order", "receipt,photo,csv"],
-  },
+  { name: "mac:import", script: "mac-import-e2e.ts", args: [] },
 ];
 const only = process.argv.slice(2).filter((argument) => argument !== "--");
 if (only.includes("--help")) {

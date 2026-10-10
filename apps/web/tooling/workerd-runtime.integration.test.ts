@@ -154,7 +154,7 @@ async function realConsumers(harness: TestHarness, expected: string[]) {
 }
 
 const ctx = withTestDb();
-let releaseHarness: (() => void) | undefined;
+let releaseHarness: (() => Promise<void>) | undefined;
 beforeAll(async () => {
   releaseHarness = await holdWorkerdHarness();
   await prepareTemplate("browser");
@@ -390,7 +390,7 @@ describe("workerd test runtime profiles", () => {
               emitted: controls ? await controls.emitted().catch(() => []) : [],
               failure,
               limits: [
-                "External capture simulated; actual Mac acceptance belongs to mac-import-e2e --browser",
+                "External capture simulated; actual Mac acceptance belongs to mac-import-e2e",
               ],
             },
             null,

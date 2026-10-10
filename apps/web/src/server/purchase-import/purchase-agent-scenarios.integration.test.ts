@@ -180,7 +180,7 @@ const readScenarioEvidence = async (active: ScenarioHarness | undefined) => ({
 
 describe("current purchase-agent system boundaries", () => {
   const ctx = withTestDb();
-  let releaseHarness: (() => void) | undefined;
+  let releaseHarness: (() => Promise<void>) | undefined;
   beforeAll(async () => {
     releaseHarness = await holdWorkerdHarness();
   }, HOLD_WORKERD_HARNESS_TIMEOUT_MS);

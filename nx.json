@@ -50,6 +50,22 @@
       "!{workspaceRoot}/cubby-ffi/**",
       "!{workspaceRoot}/**/*.md",
       "!{workspaceRoot}/.claude/**"
+    ],
+    // Merge-gate test lanes (docs/adr/0009-content-hash-merge-gate.md). A
+    // passing result for this hash satisfies the gate, so a false cache hit
+    // skips a check that should have run: keep it broad. Every
+    // non-documentation file (lockfile and CI configuration included) and the
+    // Markdown that the Worker bundles or generation reads; Nx applies a
+    // negation to every file input, so that Markdown is hashed at runtime.
+    // Platform and Node version stay out so a developer Mac's pass counts as
+    // CI's; the nightly CI run reruns every lane uncached as the backstop.
+    "gate": [
+      "{workspaceRoot}/**/*",
+      "!{workspaceRoot}/**/*.{md,mdx,MD,markdown}",
+      "!{workspaceRoot}/.claude/**",
+      {
+        "runtime": "git ls-files -z -co --exclude-standard -- docs/README.md docs/todos.md .claude/skills/purchase-import .claude/skills/product-enrichment .claude/skills/photo-inventory-import | xargs -0 shasum -a 256"
+      }
     ]
   },
   "analytics": false,
@@ -58,13 +74,12 @@
       "inputs": ["default"],
       "outputs": []
     },
-    // Applies to every package.json-inferred `test` target (the aux packages
-    // under apps/* and packages/*); `{projectRoot}` resolves per-project.
-    // apps/web/project.json replaces these narrow inputs with its complete
-    // cross-workspace/runtime contract while retaining target-level caching.
+    // Every package.json-inferred `test` target (the aux packages under
+    // apps/* and packages/*) is a merge-gate lane; a project-scoped key would
+    // reuse a pass after a dependency it imports changed.
     "test": {
       "cache": true,
-      "inputs": ["{projectRoot}/**/*"]
+      "inputs": ["gate"]
     }
   }
 }

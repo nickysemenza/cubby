@@ -75,7 +75,7 @@ export function ChatGptPlanCard() {
     },
   });
   const command = hydrated
-    ? `pnpm chatgpt:connect --base-url ${window.location.origin}`
+    ? `pnpm apple cli chatgpt connect --base-url ${window.location.origin}`
     : "";
 
   return (

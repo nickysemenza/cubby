@@ -229,15 +229,15 @@ means `pnpm generate` (or `build-rust.sh`) has not run in this checkout.
 - `xcodegen generate --spec apps/apple/project.yml` (when `project.yml` changes)
 - Full app build needs the xcframework from `ensure-apple-ffi.ts` first.
 - `swift format lint --strict --configuration apps/apple/.swift-format --recursive` (see
-  `scripts/apple-check.sh`, the `apple` Nx target on `apps/apple/project.json`) gates
+  `scripts/apple-check.sh`, the `apple:simulator-build` Nx target) gates
   formatting; run
   `swift format --in-place --configuration apps/apple/.swift-format --recursive` to fix.
-  `pnpm verify:local(:full)` runs the `apple` target locally when a full native
-  diagnostic is needed. GitHub Actions selects native checks on PRs and `main`
-  pushes that touch Apple, its shared schemas/constants/vectors, generated
-  client inputs, Rust/FFI, or CI policy; unrelated web changes skip them.
-  `Apple checks` requires both parallel macOS jobs: host Swift tests with the
-  OpenAPI warning gate, and iOS app formatting/build. See [CI](../../docs/ci.md).
+  `pnpm verify:local(:full)` runs `apple:check` locally when a full native
+  diagnostic is needed. GitHub Actions runs the native checks on every PR and
+  `main` push, replaying a cached pass for unchanged content (including one from
+  a local `pnpm apple check`). `Apple checks` requires both parallel macOS jobs:
+  host Swift tests with the OpenAPI warning gate, and iOS app formatting/build.
+  See [CI](../../docs/ci.md).
 - **Visual and interaction checks:** the Xcode MCP renders `#Preview`s headlessly and drives a
   simulator (tap, swipe, type, capture) — setup, loops, and failure fixes in
   [docs/agents/xcode-mcp.md](../../docs/agents/xcode-mcp.md). Preferred over launching the app

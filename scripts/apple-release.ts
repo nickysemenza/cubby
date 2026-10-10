@@ -87,7 +87,7 @@ export function decide(facts: {
     return { action: "publish", reason: "30-day refresh" };
   if (facts.sha === checkpoint.sha)
     return { action: "skip", reason: "main is the uploaded commit" };
-  // The workflow classifies the diff with ci-paths.yaml's full/apple filters.
+  // apple-testflight.yaml classifies the diff with its full/apple filters.
   return { action: "compare", base: checkpoint.sha };
 }
 

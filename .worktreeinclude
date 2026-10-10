@@ -8,4 +8,4 @@
 
 # Not `*.tsbuildinfo`: the main checkout's copy is usually commits behind, and
 # TS 7 checks from a stale buildinfo at ~2x the cost of a fresh one (see
-# docs/local-check-performance.md). scripts/typecheck-web.ts drops stale state.
+# docs/local-check-performance.md).

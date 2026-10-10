@@ -477,7 +477,7 @@ const main = () => {
     case "test":
       return test();
     case "check":
-      return run("sh", [join(ROOT, "scripts/apple-check.sh")]);
+      return run("pnpm", ["exec", "nx", "run", "apple:check"]);
     case "help":
     case "--help":
     case "-h":

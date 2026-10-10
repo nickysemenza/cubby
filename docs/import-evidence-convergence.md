@@ -75,9 +75,8 @@ and refund capacity.
 The Mac runner is documented in
 [mac-import-e2e.md](../apps/web/tooling/mac-import-e2e.md). It builds and signs a
 separate app identity, uses fixture account/browser state, and records each
-exercised boundary independently. A successful build or HTTPS retailer
-preflight does not establish native intake, capture, photo approval, or CSV
-save. Locked-host or authentication failures must remain failed milestones.
+exercised boundary independently. A successful build does not establish
+native intake, capture, photo approval, or CSV save. Locked-host or authentication failures must remain failed milestones.
 Live Gmail authorization, live retailer changes, and physical iPhone photo
 quality remain distinct from deterministic import convergence.
 

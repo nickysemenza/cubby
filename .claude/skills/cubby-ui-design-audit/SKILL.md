@@ -40,7 +40,7 @@ contracts and validation. Do not copy either source into this skill.
    directed by Impeccable.
 8. Follow `docs/agents/validation.md` for current commands and PR delivery. Rebase
    or refresh against the requested base before final proof, and report only
-   checks that belong to the exact final head.
+   checks that belong to the final head.
 
 ## Handoff
 

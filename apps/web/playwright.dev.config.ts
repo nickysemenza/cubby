@@ -4,7 +4,7 @@ import { defineConfig, devices } from "@playwright/test";
  * Optional lane against this checkout's running `pnpm dev` origin
  * (`pnpm --dir apps/web test:e2e:hmr`). It reuses the warm HMR session instead
  * of a built Worker and disposable database, so it is local iteration evidence
- * only; the exact-head CI suite stays the merge gate.
+ * only; the CI suite stays the merge gate.
  *
  * The worker fixture discovers and binds the local environment before any
  * writes. Configuration inspection itself needs no running development session.

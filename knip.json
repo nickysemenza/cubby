@@ -8,20 +8,15 @@
         "neon.ts!",
         "scripts/apple.ts!",
         "scripts/apple-release.ts!",
-        "scripts/chatgpt-connect.ts!",
         "scripts/test-services.ts!",
         "scripts/ensure-apple-ffi.ts!",
         "scripts/ensure-wasm.ts!",
-        "scripts/typecheck-web.ts!",
         "scripts/generator/main.ts!",
         // Reached from hooks, CI, or package scripts rather than an import
         // (production mode does not read those): .husky/commit-msg,
         // ci.yaml, and the Nx targets.
         "scripts/check-outward-text.ts!",
-        "scripts/ci-flakes.ts!",
         "scripts/dev-db.ts!",
-        "scripts/apple-simulator-build-cache.ts!",
-        "scripts/benchmark-apple-runner.ts!",
         "scripts/pristine-simulator-cache.ts!",
         "scripts/generator/ensure.ts!"
       ],
@@ -36,7 +31,7 @@
         "agent-device",
         "@neon/env"
       ],
-      // xcode-select: scripts/apple-check.sh (the `apple` Nx target) uses it
+      // xcode-select: scripts/apple-check.sh (the `apple` Nx targets) uses it
       // to detect a machine without Xcode (so it can skip, not fail). pkill:
       // apple.ts quits the running Mac app before relaunching. container: the
       // Apple test-service runtime. All are system tools, never npm

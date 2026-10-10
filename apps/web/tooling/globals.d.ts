@@ -10,6 +10,6 @@
 declare var cubbyPgConcurrentQueries: Error[] | undefined;
 
 interface Window {
-  // Set by the HMR probe module `dev/smoke.ts` writes into the dev server.
-  __cubbySmokeHmr?: string;
+  // Set by the HMR probe module `tests/e2e/dev-runtime.hmr.ts` writes into the dev server.
+  __cubbyHmrProbe?: string;
 }

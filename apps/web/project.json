@@ -2,54 +2,70 @@
   "$schema": "../../node_modules/nx/schemas/project-schema.json",
   "name": "@cubby/web",
   "implicitDependencies": ["recipebridge"],
+  "namedInputs": {
+    // The merge-gate key plus what only web lanes read: ignored env files and
+    // the settings that select or reorder tests. CI, locale, time zone, and
+    // worker count stay out so a developer Mac's pass counts as CI's; the
+    // configs' CI branches only add a retry and looser timeouts, and focused
+    // tests fail lint. The nightly CI run reruns the lanes uncached.
+    "webGate": [
+      "gate",
+      {
+        "runtime": "git ls-files --others --ignored --exclude-standard -- ':(glob)**/.env*' | git hash-object --stdin-paths"
+      },
+      // Built from Rust inputs and toolchain the file key cannot see.
+      { "dependentTasksOutputFiles": "packages/wasm/**/*" },
+      // Switches the built Worker to its development preview configuration.
+      { "env": "CUBBY_DEV_PREVIEW_BUILD" },
+      { "env": "NODE_ENV" },
+      { "env": "CUBBY_TEST_SHUFFLE_SEED" },
+      { "env": "CUBBY_TEST_INTEGRATION" }
+    ]
+  },
   "targets": {
-    // Package.json infers a "test" target for the fast Vitest projects. Its
-    // cache key is intentionally broader than the project-scoped default:
-    // these tests import shared workspace code, generated WASM, ignored env
-    // files, and runtime-sensitive configuration.
+    // Package.json infers the command for the fast Vitest projects.
     "test": {
       "cache": true,
       "dependsOn": [
         {
           "projects": ["cubby-checks"],
           "target": "wasm"
+        },
+        {
+          "projects": ["@cubby/mcp-apps"],
+          "target": "build"
         }
       ],
+      "inputs": ["webGate"],
+      "outputs": ["{projectRoot}/.vitest-results.json"]
+    },
+    "typecheck": {
+      "command": "pnpm run typecheck",
+      "options": { "cwd": "apps/web" },
+      "cache": true,
+      "dependsOn": [{ "projects": ["cubby-checks"], "target": "wasm" }],
       "inputs": [
         "repo",
         "sharedGlobals",
-        {
-          "runtime": "git ls-files --others --ignored --exclude-standard -- ':(glob)**/.env*' | git hash-object --stdin-paths"
-        },
-        {
-          "dependentTasksOutputFiles": "packages/wasm/**/*"
-        },
-        {
-          "env": "NODE_ENV"
-        },
-        {
-          "env": "TZ"
-        },
-        {
-          "env": "LANG"
-        },
-        {
-          "env": "CUBBY_TEST_SHUFFLE_SEED"
-        },
-        {
-          "env": "CUBBY_TEST_INTEGRATION"
-        },
-        {
-          "env": "VITEST_MAX_WORKERS"
-        }
+        { "dependentTasksOutputFiles": "packages/wasm/**/*" }
       ],
-      "outputs": [
-        "{workspaceRoot}/apps/mcp-apps/dist",
-        "{projectRoot}/.vitest-failures.txt"
-      ]
+      "outputs": ["{projectRoot}/tsconfig.tsbuildinfo"]
     },
+    "typecheck:app": {
+      "command": "pnpm run typecheck:app",
+      "options": { "cwd": "apps/web" },
+      "cache": true,
+      "dependsOn": [{ "projects": ["cubby-checks"], "target": "wasm" }],
+      "inputs": [
+        "repo",
+        "sharedGlobals",
+        { "dependentTasksOutputFiles": "packages/wasm/**/*" }
+      ],
+      "outputs": ["{projectRoot}/tsconfig.app.tsbuildinfo"]
+    },
+    // CUBBY_POSTGRES_SHARD (`index/count`) splits the files across CI runners.
     "postgres": {
-      "command": "pnpm run test:postgres",
+      "command": "pnpm exec node ../../scripts/test-services.ts -- vitest run --project integration --shard=${CUBBY_POSTGRES_SHARD:-1/1}",
       "options": {
         "cwd": "apps/web"
       },
@@ -60,20 +76,32 @@
           "target": "wasm"
         }
       ],
-      "inputs": [
-        "{projectRoot}/src/server/**",
-        "{projectRoot}/drizzle/**",
-        "{projectRoot}/tooling/**",
-        "{projectRoot}/vitest.config.ts",
-        "{workspaceRoot}/packages/schemas/**",
-        "{workspaceRoot}/scripts/test-services.ts",
+      "inputs": ["webGate", { "env": "CUBBY_POSTGRES_SHARD" }]
+    },
+    "db-check": {
+      "command": "pnpm run db:check",
+      "options": {
+        "cwd": "apps/web"
+      },
+      "cache": true,
+      "inputs": ["webGate"]
+    },
+    // Builds the Worker inside the command rather than through `dependsOn`:
+    // build-cf's key includes HEAD for provenance, so as a dependency it
+    // would rebuild before every cache hit here.
+    "workerd-tests": {
+      "command": "pnpm exec tsx tooling/build-cf.ts --ensure && pnpm exec node ../../scripts/test-services.ts -- vitest run --project integration-workerd",
+      "options": {
+        "cwd": "apps/web"
+      },
+      "cache": true,
+      "dependsOn": [
         {
-          "env": "CUBBY_TEST_SHUFFLE_SEED"
-        },
-        {
-          "dependentTasksOutputFiles": "packages/wasm/**/*"
+          "projects": ["cubby-checks"],
+          "target": "wasm"
         }
-      ]
+      ],
+      "inputs": ["webGate"]
     },
     "build-cf": {
       "command": "pnpm run build:cf",
@@ -109,23 +137,61 @@
       ],
       "outputs": ["{projectRoot}/dist"]
     },
+    // The required desktop browser lane. CUBBY_E2E_SHARD (`index/count`)
+    // splits it across CI runners; the restored run bundle is the evidence of
+    // the run that produced a cached pass. See workerd-tests for the build.
     "e2e": {
-      "command": "pnpm run test:e2e",
+      "command": "pnpm exec tsx tooling/build-cf.ts --ensure && pnpm run test:e2e:ci:desktop --workers=2 --shard=${CUBBY_E2E_SHARD:-1/1}",
       "options": {
         "cwd": "apps/web"
       },
-      // Not cached: real browser runs against disposable Postgres/IntegreSQL
-      // containers have side effects and (documented, measured) flake, so a
-      // blind replay would hide either. dependsOn ensures the bundle it
-      // serves from dist/ is current before it runs.
-      "cache": false,
-      "dependsOn": ["build-cf"],
+      "cache": true,
+      "dependsOn": [
+        {
+          "projects": ["cubby-checks"],
+          "target": "wasm"
+        }
+      ],
       "inputs": [
-        "{projectRoot}/src/**",
-        "{projectRoot}/tests/e2e/**",
+        "webGate",
+        { "env": "CUBBY_E2E_SHARD" },
+        { "env": "E2E_TEST_USER_EMAIL" },
+        { "env": "E2E_TEST_USER_PASSWORD" }
+      ],
+      "outputs": ["{projectRoot}/playwright-report"]
+    },
+    // Informative only (never a merge gate), so its key is the import
+    // agent's own surface and harness rather than the broad gate.
+    "e2e-purchase-import": {
+      "command": "pnpm exec tsx tooling/build-cf.ts --ensure && pnpm run test:e2e:ci:purchase-import",
+      "options": {
+        "cwd": "apps/web"
+      },
+      "cache": true,
+      "dependsOn": [
+        {
+          "projects": ["cubby-checks"],
+          "target": "wasm"
+        }
+      ],
+      "inputs": [
+        "{projectRoot}/src/server/purchase-import/**",
+        "{projectRoot}/src/server/purchase-agent/**",
+        "{projectRoot}/src/app/purchases/**",
+        "{projectRoot}/src/app/runs/**",
+        "{projectRoot}/src/app/vendors/order-mail*",
+        "{projectRoot}/src/routes/_authenticated/runs.*",
+        "{projectRoot}/tooling/purchase-agent-*",
+        "{projectRoot}/tooling/workerd-{harness,runtime}.ts",
+        "{projectRoot}/tests/e2e/harness-services/purchase-*",
+        "{projectRoot}/tests/e2e/purchase-import-run.spec.ts",
+        "{projectRoot}/tests/e2e/e2e-{test,worker-runtime}.ts",
+        "{projectRoot}/tests/e2e/fixtures-{core,mail}.ts",
         "{projectRoot}/playwright.config.ts",
-        "{projectRoot}/vite.config.ts"
-      ]
+        "{workspaceRoot}/.claude/skills/{purchase-import,product-enrichment}/**",
+        "sharedGlobals"
+      ],
+      "outputs": ["{projectRoot}/playwright-report"]
     },
     "workers-tests": {
       "command": "pnpm run test:calendar",
@@ -133,16 +199,7 @@
         "cwd": "apps/web"
       },
       "cache": true,
-      "inputs": [
-        "{projectRoot}/src/server/calendar/**",
-        "{projectRoot}/src/server/database-freshness/**",
-        "{projectRoot}/src/server/purchase-import/**/*.workers.test.ts",
-        "{projectRoot}/src/server/ai/**",
-        "{projectRoot}/tooling/calendar-test-worker.ts",
-        "{projectRoot}/wrangler.calendar-test.jsonc",
-        "{workspaceRoot}/packages/schemas/src/chatgpt.ts",
-        "{workspaceRoot}/apps/web-worker-tests/**"
-      ]
+      "inputs": ["webGate"]
     }
   }
 }

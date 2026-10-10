@@ -3,7 +3,6 @@ import { createHash, X509Certificate } from "node:crypto";
 import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { createServer } from "node:https";
 import path from "node:path";
-import { fileURLToPath } from "node:url";
 import {
   acquireMacFixtureLease,
   assertMacFixturesIdle,
@@ -25,7 +24,7 @@ import {
 export async function createMacRetailerFixture(
   artifacts: string,
   nonce: string,
-  options?: {
+  options: {
     identity: ReturnType<typeof macFixtureSigningIdentity>;
     lease: ReturnType<typeof acquireMacFixtureLease>;
   },
@@ -33,40 +32,23 @@ export async function createMacRetailerFixture(
   if (process.platform !== "darwin" || !/^[a-f\d]{16}$/u.test(nonce))
     throw new Error("Mac retailer fixture requires macOS and a fixture nonce");
   const paths = macFixturePaths();
-  const ownsLease = !options;
-  const lease = options?.lease ?? acquireMacFixtureLease(paths.root, nonce);
-  try {
-    if (lease.nonce !== nonce || lease.root !== paths.root)
-      throw new Error("Retailer fixture requires its owning Mac run lease");
-    assertMacFixturesIdle();
-    const identity =
-      options?.identity ??
-      macFixtureSigningIdentity(
-        path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../../.."),
-      );
-    const fixture = await prepareRetailerFixture(artifacts, identity);
-    return {
-      bundleID: fixture.bundleID,
-      origin: fixture.origin,
-      profile: fixture.profile,
-      appPath: fixture.appPath,
-      historyURL: fixture.historyURL,
-      get pid() {
-        return fixture.pid;
-      },
-      launch: () => fixture.launch(),
-      async close() {
-        await fixture.close();
-        if (ownsLease) {
-          assertMacFixturesIdle();
-          lease.release();
-        }
-      },
-    };
-  } catch (error) {
-    if (ownsLease) lease.release();
-    throw error;
-  }
+  const { lease, identity } = options;
+  if (lease.nonce !== nonce || lease.root !== paths.root)
+    throw new Error("Retailer fixture requires its owning Mac run lease");
+  assertMacFixturesIdle();
+  const fixture = await prepareRetailerFixture(artifacts, identity);
+  return {
+    bundleID: fixture.bundleID,
+    origin: fixture.origin,
+    profile: fixture.profile,
+    appPath: fixture.appPath,
+    historyURL: fixture.historyURL,
+    get pid() {
+      return fixture.pid;
+    },
+    launch: () => fixture.launch(),
+    close: () => fixture.close(),
+  };
 }
 
 async function prepareRetailerFixture(

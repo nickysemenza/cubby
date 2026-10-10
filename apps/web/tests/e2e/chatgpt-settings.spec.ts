@@ -34,7 +34,9 @@ test("settings explains local authorization and exposes no model selectors", asy
     card.getByRole("heading", { name: "ChatGPT plan" }),
   ).toBeVisible();
   await card.getByRole("button", { name: "Continue with ChatGPT" }).click();
-  await expect(card.getByText(/pnpm chatgpt:connect --base-url/)).toBeVisible();
+  await expect(
+    card.getByText(/pnpm apple cli chatgpt connect --base-url/),
+  ).toBeVisible();
   await expect(card.getByRole("combobox")).toHaveCount(0);
 });
 

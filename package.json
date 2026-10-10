@@ -3,8 +3,6 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "chatgpt:connect": "node scripts/chatgpt-connect.ts",
-    "ci:flakes": "node scripts/ci-flakes.ts",
     "agent:setup": "pnpm install --frozen-lockfile && node scripts/ensure-wasm.ts",
     "dev": "pnpm --filter @cubby/web dev",
     "build": "node scripts/generator/ensure.ts && pnpm -r build",
@@ -25,8 +23,8 @@
     "lint:fix": "oxlint --fix .",
     "format:check": "NX_DAEMON=false nx run cubby-checks:format --outputStyle=stream",
     "format": "oxfmt .",
-    "verify:local": "pnpm check:clean && NX_DAEMON=false nx run-many -t generate,types,lint,format,knip,test,postgres,build-cf,e2e,rust,apple-check --parallel=1 --nxBail --outputStyle=static-failures-only && pnpm check:clean",
-    "verify:local:full": "pnpm check:clean && NX_DAEMON=false NX_SKIP_NX_CACHE=true nx run-many -t generate,types,lint,format,knip,test,postgres,build-cf,e2e,rust,apple-check --parallel=1 --nxBail --outputStyle=static-failures-only && pnpm check:clean",
+    "verify:local": "pnpm check:clean && NX_DAEMON=false nx run-many -t generate,types,lint,format,knip,test,db-check,postgres,workerd-tests,e2e,rust,check --parallel=1 --nxBail --outputStyle=static-failures-only && pnpm check:clean",
+    "verify:local:full": "pnpm check:clean && NX_DAEMON=false NX_SKIP_NX_CACHE=true nx run-many -t generate,types,lint,format,knip,test,db-check,postgres,workerd-tests,e2e,rust,check --parallel=1 --nxBail --outputStyle=static-failures-only && pnpm check:clean",
     "test": "NX_DAEMON=false nx run-many --projects=cubby-checks -t fast-tests --outputStyle=static-failures-only",
     "test:unit": "pnpm --filter @cubby/web test:unit",
     "test:ui": "pnpm --filter @cubby/web test:ui",
@@ -61,8 +59,7 @@
     "dev:reset": "pnpm --filter @cubby/web dev:reset",
     "dev:down": "pnpm --filter @cubby/web dev:down",
     "dev:sim": "pnpm --filter @cubby/web dev:sim",
-    "dev:integrations": "pnpm --filter @cubby/web dev:integrations",
-    "test:e2e:dev": "pnpm --dir apps/web exec tsx tooling/dev/smoke.ts"
+    "dev:integrations": "pnpm --filter @cubby/web dev:integrations"
   },
   "dependencies": {
     "@neon/config": "^1.8.3",
@@ -74,6 +71,7 @@
     "@tanstack/router-generator": "1.167.40",
     "@ts-rest/open-api": "3.53.0-rc.1",
     "@types/node": "^26.6.3",
+    "@types/proper-lockfile": "^4.1.4",
     "agent-device": "0.21.22",
     "concurrently": "^10.0.5",
     "husky": "^9.1.7",
@@ -83,6 +81,7 @@
     "oxc-parser": "0.152.0",
     "oxfmt": "0.72.0",
     "oxlint": "1.87.0",
+    "proper-lockfile": "^4.1.2",
     "tsx": "^4.23.15",
     "typescript": "^7.0.2",
     "zod": "^4.6.5"

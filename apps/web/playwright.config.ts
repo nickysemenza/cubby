@@ -32,7 +32,7 @@ const isCI = !!process.env.CI;
 export default defineConfig({
   testDir: "./tests/e2e",
   /* Public-repository ubuntu-latest CI runners have 4 vCPU, shared by the
-     browser, Worker, and database. CI shards desktop tests across two runners;
+     browser, Worker, and database. CI shards desktop tests across four runners;
      its workflow currently benchmarks two workers per runner via --workers.
      Preserve the local fast-failure budget while giving CI scenarios more
      wall-clock room. */
@@ -45,8 +45,10 @@ export default defineConfig({
   fullyParallel: true,
   /* Fail the build on CI if you accidentally left test.only in the source code. */
   forbidOnly: !!process.env.CI,
-  /* Browser canaries are deterministic contracts; retries hide flakes. */
-  retries: 0,
+  /* One CI retry turns a flake into a seconds-long "flaky" report instead of a
+     whole-job rerun. A test reported flaky twice is quarantined with
+     `test.fixme` and a docs/todos.md entry; local runs keep failing fast. */
+  retries: isCI ? 1 : 0,
   /* Each worker owns an isolated database and harness. Three local macOS
      workers made iPhone WebKit flake across four unrelated specs under host
      contention, so macOS defaults to two and other hosts to one. Use
@@ -56,6 +58,9 @@ export default defineConfig({
      identically. Kept loose enough that a genuine multi-test regression still
      reports most of its failures in one go. */
   maxFailures: isCI ? 6 : 0,
+  /* Name the slowest spec files after the run; per-test page-load time is
+     the `e2e-navigation-ms` annotation in the HTML report. */
+  reportSlowTests: { max: 10, threshold: 60_000 },
   /* Reporter to use. See https://playwright.dev/docs/test-reporters */
   reporter: isCI
     ? [["github"], ["html"], ["./tests/e2e/e2e-harness-reporter.ts"]]
@@ -75,9 +80,9 @@ export default defineConfig({
     // contract.
     reducedMotion: "reduce",
 
-    /* retries: 0 means "on-first-retry" never fires — there is no retry to
-       collect a trace on. Record on the first (only) failure instead. */
-    trace: "retain-on-failure",
+    /* CI records only the retry of a failed test, so passing tests pay no
+       tracing cost; locally nothing retries, so record and keep failures. */
+    trace: isCI ? "on-first-retry" : "retain-on-failure",
     screenshot: "only-on-failure",
   },
 
