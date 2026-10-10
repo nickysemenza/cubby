@@ -302,7 +302,11 @@ research acceptance.
   related discovery, purchase research, enrichment and retries using existing
   lineage. Grouped matching working, waiting, review, failed and completed
   attempt counts now ship independently of root status and Product verification.
-  A household overview with reasons and next actions remains open. Finish a
+  All-page matching-attempt totals now use the same state policy in flat and
+  grouped queries, with one server-composed summary in web and native. Persisted
+  pagination/filter/empty-result coverage passed; visible acceptance, review and
+  delivery are pending. A household overview with reasons and next actions remains
+  open. Finish a
   record-level view of processed emails, matched orders, linked
   Purchases and enriched Products with processing time, outcome, evidence and
   links. Include supported unchanged facts and unresolved work, not only audit

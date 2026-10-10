@@ -35,6 +35,7 @@ private final class ActivityListModel {
 
     private(set) var runs: [ActivityRun] = []
     private(set) var total = 0
+    private(set) var workSummary: String?
     private(set) var nextCursor: String?
     private(set) var loading = false
     private(set) var devices: [ActivityExecutor] = []
@@ -68,6 +69,7 @@ private final class ActivityListModel {
     func load(client: CubbyClient, reset: Bool = true) async {
         guard reset || !loading else { return }
         let requestedFilters = filters
+        if reset { workSummary = nil }
         requestGeneration += 1
         let generation = requestGeneration
         loading = true
@@ -83,6 +85,7 @@ private final class ActivityListModel {
                 runs += page.items.filter { !known.contains($0.id) }
             }
             total = page.total
+            workSummary = page.workSummary
             nextCursor = page.nextCursor
             error = nil
         } catch {
@@ -105,11 +108,13 @@ private final class ActivityListModel {
             var seen: Set<String> = []
             var cursor: String?
             var total = 0
+            var workSummary: String?
             repeat {
                 let page = try await client.activityRuns(
                     filters: requestedFilters, cursor: cursor,
                     limit: min(100, targetCount - refreshed.count))
                 total = page.total
+                workSummary = page.workSummary
                 for run in page.items where seen.insert(run.id).inserted {
                     refreshed.append(run)
                     if refreshed.count == targetCount { break }
@@ -127,6 +132,7 @@ private final class ActivityListModel {
             guard generation == requestGeneration, requestedFilters == filters else { return }
             runs = refreshed
             self.total = total
+            self.workSummary = workSummary
             nextCursor = cursor
             error = nil
         } catch {
@@ -166,6 +172,15 @@ struct ActivityView: View {
         List {
             localExecution
             filters
+            if let summary = model.workSummary {
+                Section("Matching work") {
+                    Text(summary.isEmpty ? "No matching attempts" : summary)
+                    Text(
+                        "All matching Runs and image jobs, including unloaded pages. Completion does not imply verified Product facts."
+                    )
+                    .font(.caption).foregroundStyle(.secondary)
+                }
+            }
             Section {
                 if let error = model.error {
                     LoadFailureView(title: "Couldn’t load activity", message: error) {
@@ -191,7 +206,7 @@ struct ActivityView: View {
                     .disabled(model.loading)
                 }
             } header: {
-                Text(model.total == 1 ? "1 run" : "\(model.total) runs")
+                Text(model.total == 1 ? "1 work record" : "\(model.total) work records")
             }
         }
         .navigationTitle("Activity")
