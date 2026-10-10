@@ -151,7 +151,6 @@ artifacts/feature-routing-eval/
 /apps/apple/CubbyKit/Sources/CubbyFFI/cubby_ffi.swift
 .neon
 .cubby-dev/
-artifacts/local-dev-smoke/
 artifacts/local-dev-native/
 artifacts/local-dev-fixtures/
 

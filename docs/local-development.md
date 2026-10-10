@@ -68,9 +68,11 @@ supervisor and commands; `config.ts` owns main/peer bindings and their small
 synthetic datasets; `state.ts` owns portable local identity, guards, and session
 contracts. `fixtures.ts` manages auth and fixture markers, while `scenarios.ts`
 builds the optional domain graphs. `worker.ts` and `storage.ts` own the local
-Worker entry and R2 transport. `smoke.ts` verifies the complete lifecycle,
-including raw browser CORS and failed/pending fixture work, through one command:
-`pnpm test:e2e:dev`. Build provenance and disposable E2E tooling remain separate.
+Worker entry and R2 transport. The warm HMR lane's `dev-runtime.hmr.ts`
+verifies dev login, browser HMR, the synthetic USDA/UPC fixtures and local R2
+routing against the running session; `storage.unit.test.ts` owns the R2 adapter
+contract, and the Problems pack seeder asserts its own failed/pending work.
+Build provenance and disposable E2E tooling remain separate.
 
 Core corpus values use an independent seeded Faker instance and the existing
 Zod create-input schemas. Scenario states and relationships remain explicit;
@@ -185,7 +187,10 @@ environment before importing server modules, which capture database settings
 at import time. The optional lane discovers the supervisor and verifies its local origin,
 checkout id and database before writing. It creates run-owned synthetic records
 and deletes only those records after each case, retaining failed deletions for
-retry. Sanitized artifacts identify the source revision and fingerprint; source
+retry. `dev-runtime.hmr.ts` covers the development Worker's own contracts:
+native and one-click dev login mint real sessions, a Vite HMR update reaches the
+page without navigation, the synthetic USDA release and UPC cache load, and one
+dummy-signed R2 upload is served through signed, public and CDN paths. Sanitized artifacts identify the source revision and fingerprint; source
 changes during the run fail provenance. HMR evidence helps local iteration;
 GitHub still gates the final head with built Workers.
 
@@ -229,8 +234,7 @@ matching build and warm services are reused.
 
 Local acceptance samples on 2026-09-29 (dirty source, macOS, warm PostgreSQL
 service) measured a fresh development session at 26.2 seconds, a later warm
-session at 23.5 seconds, and a browser HMR update at 250 ms. The full local
-runtime acceptance passed 13 scenarios in 126.8 seconds. The focused built
+session at 23.5 seconds, and a browser HMR update at 250 ms. The focused built
 Worker HTTP/API run passed four scenarios with two browser workers in 15.3
 seconds; warm service discovery and database-template reuse took 46 ms and
 13 ms respectively.
