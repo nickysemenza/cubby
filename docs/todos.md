@@ -326,8 +326,11 @@ research acceptance.
   regressions cover nested work, deleted ancestors and independent legacy rows.
   Native Activity now uses the shared grouped/child reads, expandable related
   rows and the existing inspector. Focused transport and isolated model
-  regressions passed after RED; the Mac UI compiled. Independent review, hosted
-  delivery and a small visible client journey remain pending. Historical null
+  regressions passed after RED; the Mac UI compiled. Independent review,
+  exact-head hosted checks, a sanitized isolated Mac journey and deployment
+  completed in [#1828](https://github.com/nickysemenza/cubby/pull/1828). The
+  journey covers filtered parent context, descendant failure and child-inspector
+  navigation. Installed household acceptance remains pending. Historical null
   lineage remains independent and retry predecessors never imply parentage.
 
 - 🟢 **Derive research-purpose presentation consistently.** Audit the duplicated
