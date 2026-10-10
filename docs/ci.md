@@ -469,6 +469,23 @@ database contracts; it does not establish a five-minute full suite.
   JavaScript chunks under the harness's HTTP/1.1 connection limit. A measured
   HTTPS/HTTP/2 proxy added runner time without a useful end-to-end gain.
   Preloading the recipebridge WASM also did not improve hydration.
+  Across three PR runs sampled on 2026-10-10, page navigation and hydration
+  waits were about 36% of desktop case time: each test's fresh context loads
+  roughly 240 JavaScript modules cold (about 1.1s to hydrate locally, versus
+  0.4s for a second navigation in the same context). Serving `/assets/` from a
+  per-worker in-memory `context.route` cache doubled navigation time in a
+  local shard and timed out a CPU-throttled case, because any route disables
+  Chromium's HTTP and code cache for the context.
+- Playwright's `--shard` with `fullyParallel` takes contiguous, equal-count
+  slices of the ordered test list, so one slow case lands wholly on one shard.
+  Keep individual cases short (wait on a fast-forwarded page clock or a
+  response, not a poll interval or a full expect timeout inside `toPass`)
+  rather than reordering specs.
+- Each browser shard and the workerd job build the web Worker themselves
+  (about 40s): their commands run `build-cf.ts --ensure` directly rather than
+  depend on the Nx `build-cf` target, and concurrent shards on a new revision
+  would all miss its cache at once anyway. A separate build job would add its
+  own runner start and install ahead of every shard.
 - Caching `node_modules` was slower than installing from the warm pnpm store.
   Saving the pnpm store from Playwright containers likewise cost more than the
   filtered install. Retain exact-key caches for generated artifacts and Apple
