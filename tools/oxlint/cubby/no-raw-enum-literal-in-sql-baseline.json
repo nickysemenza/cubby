@@ -89,7 +89,6 @@
   "apps/web/src/server/repo/connected-records.ts": 1,
   "apps/web/src/server/purchase-import/run-target.integration.test.ts": 1,
   "apps/web/src/server/repo/data-quality/checks/product.ts": 1,
-  "apps/web/src/server/repo/data-quality/checks/garden-entry.ts": 2,
   "apps/web/src/server/repo/data-quality/checks/financial-account.ts": 2,
   "apps/web/src/server/purchase-import/charge-hunt-state.ts": 3,
   "apps/web/src/server/purchase-import/research-product.ts": 1,
