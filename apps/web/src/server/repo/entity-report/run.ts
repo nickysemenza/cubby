@@ -569,6 +569,14 @@ const importTimeline = (run: RunDetail): ReportBlock[] => [
         badges: [badge(operation.state, toneForState(operation.state))],
         lines: [
           line(operation.operationId, "muted"),
+          ...(operation.browserTiming
+            ? [
+                line(
+                  `Mac command duration ${formatDuration(operation.browserTiming.durationMs)} · ${operation.browserTiming.retryCount} linked retries`,
+                  "muted",
+                ),
+              ]
+            : []),
           ...(operation.error ? [line(operation.error, "destructive")] : []),
         ],
       }),

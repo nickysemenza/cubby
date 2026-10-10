@@ -288,6 +288,7 @@ describe("import report blocks", () => {
         operations: [
           {
             operationId: "extract-1",
+            browserTiming: null,
             kind: "extract",
             state: "failed",
             startedAt: "2026-09-20T16:01:00.000Z",

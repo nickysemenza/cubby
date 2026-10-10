@@ -17,6 +17,7 @@ import { runTargetDeviceWorkState } from "@cubby/schemas/photo-import-run";
 import {
   retainedCaptureInterpretation,
   proposedImportFix,
+  browserObservation,
   confirmMerchantVendorRuleInput,
   commitPurchaseImportInput,
   commitPurchaseImportOut,
@@ -89,6 +90,14 @@ const restartInputs = z.object({
   ),
 });
 
+const browserTiming = browserObservation
+  .pick({ durationMs: true })
+  .extend({
+    /** Distinct retained retry-operation links, not inferred attempts. */
+    retryCount: z.number().int().nonnegative(),
+  })
+  .nullable();
+
 /** The run work view. Private UUIDs and operation payloads never cross it. */
 const runDetail = z
   .object({
@@ -150,6 +159,7 @@ const runDetail = z
         startedAt: z.iso.datetime(),
         completedAt: z.iso.datetime().nullable(),
         error: z.string().nullable(),
+        browserTiming,
       }),
     ),
     preparedOrders: z.array(
@@ -416,13 +426,7 @@ export const runContract = defineContract("run", {
         }),
       ),
       operations: z.array(
-        z.object({
-          kind: z.string(),
-          state: z.string(),
-          startedAt: z.iso.datetime(),
-          completedAt: z.iso.datetime().nullable(),
-          error: z.string().nullable(),
-        }),
+        runDetail.shape.operations.element.omit({ operationId: true }),
       ),
     }),
     cache: { tags: [] },

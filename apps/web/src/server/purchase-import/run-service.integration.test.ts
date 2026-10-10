@@ -13,7 +13,7 @@ import {
 } from "~/server/repo/repo.fixtures";
 import { executeLeasedOperation } from "~/server/runs/operation";
 
-import { completedCapture } from "./browser.fixtures";
+import { completedCapture, observation } from "./browser.fixtures";
 import { dispatchRunEvent, recordRunDispatchAttempt } from "./dispatch";
 import { admitProductResearch } from "./product-research-run";
 import { admitPurchaseValidationResearch } from "./purchase-validation-research";
@@ -57,6 +57,89 @@ describe("purchase import run admission", () => {
       ledgerPartyId,
     });
   };
+
+  // Command intervals are not Run active time: authorization and offline waits
+  // may occupy most of the operation wall span. Missing receipts stay unknown.
+  it("reports retained browser duration and retry links without inferring wait time", async () => {
+    const party = await createMember();
+    const { insertWithShortcode } =
+      await import("~/server/repo/shortcode-utils");
+    const { getDb } = await import("~/server/repo/database-helpers");
+    const { runOperation } = await import("~/server/db/schema");
+    const scope = await insertWithShortcode(ctx.db, "run", {
+      purpose: "mail_import",
+      status: "completed",
+      trigger: "manual",
+      ledgerPartyId: party.id,
+      actorUserId: ctx.actor.userId,
+      actorName: party.name,
+      actorEmail: "synthetic@example.test",
+      actorLedgerPartyShortcode: party.shortcode,
+      actorLedgerPartyName: party.name,
+      actorLedgerPartyKind: "member",
+    });
+    const commandId = crypto.randomUUID();
+    const workRef = crypto.randomUUID();
+    await getDb(ctx.db)
+      .insert(runOperation)
+      .values([
+        {
+          runId: scope.id,
+          operationId: "synthetic-browser",
+          kind: "browser_command",
+          state: "completed",
+          inputFingerprint: "a".repeat(64),
+          startedAt: new Date("2026-09-20T16:00:00Z"),
+          completedAt: new Date("2026-09-20T17:00:00Z"),
+          result: {
+            commandId,
+            workRef,
+            retries: ["synthetic-retry"],
+            command: {
+              protocolVersion: BROWSER_BRIDGE_PROTOCOL,
+              id: commandId,
+              operationId: "synthetic-browser",
+              runID: scope.id,
+              deadline: "2026-09-20T16:01:00Z",
+              operation: { type: "window", action: "raise" },
+            },
+            serverResult: {
+              protocolVersion: BROWSER_BRIDGE_PROTOCOL,
+              commandID: commandId,
+              operationID: "synthetic-browser",
+              runID: scope.id,
+              completedAt: "2026-09-20T17:00:00Z",
+              outcome: {
+                status: "completed",
+                snapshot: null,
+                observation: observation({ durationMs: 2000 }),
+              },
+            },
+          },
+        },
+        {
+          runId: scope.id,
+          operationId: "synthetic-unmeasured",
+          kind: "browser_command",
+          inputFingerprint: "b".repeat(64),
+          result: null,
+        },
+      ]);
+    const detail = await loadRunDetail(ctx.db, scope.shortcode);
+    expect(
+      detail.operations.find((op) => op.operationId === "synthetic-browser"),
+    ).toMatchObject({
+      browserTiming: { durationMs: 2000, retryCount: 1 },
+    });
+    expect(
+      detail.operations.find((op) => op.operationId === "synthetic-unmeasured"),
+    ).toMatchObject({
+      browserTiming: null,
+    });
+    const disclosure = JSON.stringify(detail.operations);
+    expect(disclosure).not.toContain(commandId);
+    expect(disclosure).not.toContain(workRef);
+  });
 
   it("discloses retained mail restart scope without exposing private source identities", async () => {
     const party = await createMember();

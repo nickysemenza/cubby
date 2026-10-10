@@ -200,7 +200,11 @@ mailbox and authenticated-device acceptance only after explicit resumption.
   [#1813](https://github.com/nickysemenza/cubby/pull/1813), independently reviewed,
   exact-head hosted tested, merged and deployed. Corrective resolution refusals
   already have a three-zero-progress-attempt allowance per task, retained through
-  completed operation receipts. Active-time accounting remains open. Pause
+  completed operation receipts. A local follow-up projects bound Mac command
+  receipt duration and distinct retry links through the shared Run operation
+  shape and generic report; it never substitutes suspended operation wall time.
+  Review, hosted gates and visible acceptance remain pending. Total active-time
+  accounting remains open. Pause
   repeated unchanged failures with their raw last observation. Member sign-in,
   permissions and Mac-offline waits do not consume active time. Reuse Run state
   and existing usage/cost authorization; do not introduce another job engine.

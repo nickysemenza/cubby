@@ -135,6 +135,7 @@ import { finalizeImportedImages } from "~/server/services/photo-import-finalize.
 import { WORKFLOW_RUN_PURPOSES } from "~/server/workflow-runs/contract";
 
 import { loadPurchaseAuditBatch } from "./audit-batch";
+import { browserCommandRecord } from "./browser-results";
 import { CAPTURE_INTERIM_NOTE } from "./capture-interim-note";
 import { notHeldByChargeRun } from "./charge-hunt-state";
 import type { PurchaseImportDurableObjectRpc } from "./contracts";
@@ -2046,11 +2047,30 @@ export async function loadRunDetail(
     skillRevision: header.skillRevision,
     runtimeRevision: header.runtimeRevision,
     agentModelMs: Number(agentModelUsage[0]?.durationMs ?? 0),
-    operations: operations.map(({ result: _result, ...operation }) => ({
-      ...operation,
-      startedAt: operation.startedAt.toISOString(),
-      completedAt: iso(operation.completedAt),
-    })),
+    operations: operations.map(({ result, ...operation }) => {
+      const parsed =
+        operation.kind === "browser_command"
+          ? browserCommandRecord.safeParse(result)
+          : null;
+      const record = parsed?.success ? parsed.data : null;
+      const receipt = record?.serverResult;
+      const bound =
+        receipt &&
+        receipt.commandID === record.commandId &&
+        receipt.operationID === operation.operationId &&
+        receipt.runID === run.id;
+      return {
+        ...operation,
+        startedAt: operation.startedAt.toISOString(),
+        completedAt: iso(operation.completedAt),
+        browserTiming: bound
+          ? {
+              durationMs: receipt.outcome.observation.durationMs,
+              retryCount: new Set(record.retries ?? []).size,
+            }
+          : null,
+      };
+    }),
     preparedOrders: projectPreparedOrders(preparedOrders, operations),
     targets: targets.map((target) => ({
       id: target.id,
