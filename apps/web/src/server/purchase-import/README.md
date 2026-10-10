@@ -885,4 +885,4 @@ accounts in active/auth-paused/offline-paused states. Debug ingestion checks
 both member and initiating actor for every Run before writing any event, and
 replayed event IDs remain idempotent. The socket and OAuth routes remain device
 transports; the old accounts/debug HTTP routes and custom request helper are
-removed. Apple compatibility 2.16 ships the changed paths.
+removed. Apple compatibility 2.17 ships the changed paths.
