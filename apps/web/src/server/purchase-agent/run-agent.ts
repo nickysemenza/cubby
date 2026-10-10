@@ -437,7 +437,7 @@ export class PurchaseImportRunAgent
     await root.configure(
       {
         model: { provider: "openai", modelId: "gpt-6-sol" },
-        thinkingLevel: "high",
+        thinkingLevel: "low",
       },
       context,
     );
@@ -614,7 +614,7 @@ export class PurchaseImportRunAgent
           provider: "openai",
           modelId: escalated ? "gpt-6-sol" : manifest.model,
         },
-        thinkingLevel: escalated ? "high" : manifest.effort,
+        thinkingLevel: escalated ? "low" : manifest.effort,
         instructions: workflowForRun(identity.purpose, identity.runId)
           .instructions,
       },

@@ -336,7 +336,8 @@ and deployment/readback order are owned by the
    is separate from source-verified facts, preserves member attribution and
    leaves Purchase defaults and adjustments intact.
    A returned domain refusal that leaves the same task active upgrades the
-   coordinator from Luna to Sol/high for the remainder of that Run. The host
+   coordinator from Luna/medium to Sol/low for the remainder of that Run.
+   Both purchase and Product research start with Luna/medium. The host
    retains this mode before returning the tool result and reapplies it after
    eviction or result replay. Settled ambiguity, member contradictions,
    exhausted attempts and unrelated-source retirement do not upgrade another

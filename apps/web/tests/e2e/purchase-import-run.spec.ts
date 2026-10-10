@@ -204,9 +204,38 @@ test("imports saved order mail from the generic Vendor report and follows the li
   await authorizePurchaseAgent(getFixtureDb(), await fixtureUserId(page));
   await authorizeSeed(await createEvidenceHarnessContext(page), seed);
   await agent.configure({
-    steps: researchOrder("mail", seed, "SYN-CONFIRM-1", "original-read"),
+    expectedInference: {
+      model: "gpt-6-luna",
+      effort: "medium",
+      afterCall: { call: "mail-refused", model: "gpt-6-sol", effort: "low" },
+    },
+    steps: [
+      ...researchOrder("mail", seed, "SYN-CONFIRM-1", "original-read").slice(
+        0,
+        -1,
+      ),
+      step("mail-refused", "work_resolve", {
+        workRef: from("mail-next", "work.workRef"),
+        status: "verified",
+        identity: {
+          evidenceIds: [from("mail-read", "evidenceId")],
+          reasoning:
+            "Synthetic first identity refusal: identity remains unsupported.",
+        },
+        detail: "The first observation needs further identity research.",
+      }),
+      ...researchOrder("mail", seed, "SYN-CONFIRM-1").slice(-1),
+    ],
     purposeSteps: { product_enrichment: productGapSteps },
     assessments: [
+      {
+        match: "Synthetic first identity refusal",
+        output: {
+          ...supportedOrder,
+          identityVerified: false,
+          acceptedOrders: [],
+        },
+      },
       { match: "printed five-dollar total", output: supportedOrder },
       {
         match: "Synthetic catalog gap",
@@ -308,6 +337,7 @@ test("imports saved order mail from the generic Vendor report and follows the li
       .from(schema.inventoryEntry)
       .where(eq(schema.inventoryEntry.productId, productId)),
   ).toEqual([]);
+  await expect.poll(async () => agent.emitted()).toContain("product-gap");
   expect(await agent.violations()).toEqual([]);
   const purchase = graph.purchases[0];
   if (!purchase) throw new Error("No Purchase was committed");

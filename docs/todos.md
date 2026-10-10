@@ -154,8 +154,11 @@ See also the image operational passes at the end of this file.
   changing matching or purchase-run model routing. Baseline, 2026-10-03:
   GPT-6 Sol high 12/12 correct, 0 unsafe, about $0.58 per run; GPT-6 Luna
   high 8/12, 1 unsafe (duplicate Product) and three runs that misread the
-  extractor result, so purchase runs stay on Sol. Scripted agent scenarios
-  prove orchestration, not model judgment.
+  extractor result. That historical result does not establish quality for the
+  current source-first researcher. The selected runtime starts purchase and
+  Product work on Luna/medium and escalates a continuing domain refusal to
+  Sol/low. Recheck those candidates against the same sources and budgets;
+  scripted provider-boundary coverage proves routing, not model judgment.
 - 🔭 **Grow the purchase evals from member dismissals.** A dismissed mail
   link, a dismissed import finding, or a cancelled automatic import is a
   labeled mistake. A scheduled worker skill would read recent ones and draft

@@ -17,6 +17,7 @@ let script: ScriptStep[] | undefined;
 let purposeScripts: Record<string, ScriptStep[]> = {};
 let sourceScripts: NonNullable<ScriptConfiguration["sourceSteps"]> = [];
 let violations: string[] = [];
+let expectedInference: ScriptConfiguration["expectedInference"];
 /** Each emitted step, in order: what the real import-run agent was told to do. */
 let emitted: string[] = [];
 /** A waiting model is asked again on every nudge; record the wait once. */
@@ -112,6 +113,11 @@ function selectedScript(input: InputItem[]) {
 
 type ScriptConfiguration = {
   steps: ScriptStep[];
+  expectedInference?: {
+    model: string;
+    effort: string;
+    afterCall?: { call: string; model: string; effort: string };
+  };
   purposeSteps?: Record<string, ScriptStep[]>;
   /** Branch only on a retained source the real researcher has already read. */
   sourceSteps?: Array<{
@@ -123,6 +129,7 @@ type ScriptConfiguration = {
 };
 function configureScript(configured: ScriptConfiguration) {
   script = configured.steps;
+  expectedInference = configured.expectedInference;
   purposeScripts = configured.purposeSteps ?? {};
   sourceScripts = configured.sourceSteps ?? [];
   violations = [];
@@ -273,6 +280,26 @@ const issued = (body: string, callId: string) =>
  * command ids, purchase codes) flow through the conversation the way a real
  * model would carry them.
  */
+function checkInference(body: {
+  model?: string;
+  reasoning?: { effort?: string };
+}) {
+  const expected =
+    expectedInference?.afterCall &&
+    issued(JSON.stringify(body), expectedInference.afterCall.call)
+      ? expectedInference.afterCall
+      : expectedInference;
+  if (
+    expected &&
+    (body.model !== expected.model ||
+      body.reasoning?.effort !== expected.effort)
+  ) {
+    violations.push(
+      `Inference requested ${body.model}/${body.reasoning?.effort}; expected ${expected.model}/${expected.effort}`,
+    );
+  }
+}
+
 export default {
   async fetch(request: Request) {
     const url = new URL(request.url);
@@ -290,7 +317,12 @@ export default {
     if (!script)
       return new Response("Script is not configured", { status: 409 });
 
-    const body = (await request.json()) as { input?: InputItem[] };
+    const body = (await request.json()) as {
+      input?: InputItem[];
+      model?: string;
+      reasoning?: { effort?: string };
+    };
+    checkInference(body);
     const input = body.input ?? [];
     const steps = selectedScript(input);
     const requestBody = JSON.stringify(body);
