@@ -9,7 +9,7 @@ import {
   type MailboxMessageStatus,
 } from "@cubby/schemas/mailbox-research";
 import { sha256Hex } from "@cubby/shared/sha256";
-import { and, eq, inArray, ne, sql } from "drizzle-orm";
+import { and, eq, inArray, isNotNull, ne, sql } from "drizzle-orm";
 
 import type { Database } from "~/server/db";
 import { account } from "~/server/db/auth.schema";
@@ -271,6 +271,33 @@ export async function clearUnrelatedOriginal(
     await tx.delete(orderMail).where(eq(orderMail.id, original.id));
     return null;
   });
+}
+
+/**
+ * Durable retry for disposal: an unrelated MailboxMessage whose original
+ * survived (disposal failed after its disposition committed) is disposed of
+ * again; a protected original is kept, as at resolve time.
+ */
+export async function disposeUnrelatedOriginals(
+  db: Database,
+  storage: OrderMailAttachmentStorage,
+) {
+  const retained = await getDb(db)
+    .select({
+      ledgerPartyId: mailboxMessage.ledgerPartyId,
+      mailboxId: mailboxMessage.mailboxId,
+      messageId: mailboxMessage.messageId,
+    })
+    .from(mailboxMessage)
+    .where(
+      and(
+        eq(mailboxMessage.classification, "unrelated"),
+        isNotNull(mailboxMessage.orderMailId),
+      ),
+    );
+  for (const message of retained)
+    await clearUnrelatedOriginal(db, message, storage);
+  return retained.length;
 }
 
 class GmailPersistenceError extends Error {

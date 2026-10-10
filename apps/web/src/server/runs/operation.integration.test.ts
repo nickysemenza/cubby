@@ -413,7 +413,7 @@ describe("RunOperation rows written by earlier code", () => {
         stableOrderId: "order-1",
         itemOperationId: "prepare-item:order-1",
         source: {
-          kind: "browser_order" as const,
+          kind: "vendor_export" as const,
           externalKey: "shop:order:1",
           checksum: "a".repeat(64),
         },

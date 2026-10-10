@@ -260,6 +260,8 @@ export interface BrowserOrderImport {
   /** An agent's private Run id; a member caller omits it and prepare opens the Run. */
   runId?: string;
   actor: ActorContext;
+  /** The order's Vendor shortcode; an agent's Run may supply its own instead. */
+  vendorId?: string;
   /** Operation ids: `prepare`, `commit`, `order`, `line`, `item`. */
   ids: {
     prepare: string;
@@ -294,11 +296,12 @@ export async function importBrowserOrder(
       },
       orders: [
         {
+          vendorId: input.vendorId,
           targetPurchaseId: input.targetPurchaseId,
           stableOrderId: ids.order,
           itemOperationId: ids.item,
           source: {
-            kind: "browser_order",
+            kind: "vendor_export",
             externalKey: input.externalKey,
             checksum: input.checksum,
           },

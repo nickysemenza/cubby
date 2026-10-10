@@ -591,7 +591,7 @@ describe("prepared orders", () => {
   });
   const reviewing = (preparedOrders: Prepared[], overrides = {}) =>
     run({
-      purpose: "account_sync",
+      purpose: "file_import",
       status: "running",
       preparedOrders,
       ...overrides,
@@ -774,13 +774,13 @@ describe("prepared orders", () => {
       "a stopped run",
       {},
       { status: "completed" as const },
-      "Prepared orders can be approved only while an account sync run is running.",
+      "Prepared orders can be approved only while their import run is running.",
     ],
     [
       "a validation run",
       {},
       { purpose: "purchase_validation" as const },
-      "Prepared orders can be approved only while an account sync run is running.",
+      "Prepared orders can be approved only while their import run is running.",
     ],
   ])(
     "offers no choices for %s and says why",

@@ -145,6 +145,15 @@ describe("retained mail source associations", () => {
         },
         "did not admit that Email",
       ],
+      // A non-mail kind must not sidestep the admitted-Email check.
+      [
+        {
+          kind: "vendor_export" as const,
+          externalKey: "synthetic:unadmitted-export",
+          checksum: "f".repeat(64),
+        },
+        "imports only the Emails it admitted",
+      ],
     ] as const) {
       await expect(
         preparePurchaseImport(

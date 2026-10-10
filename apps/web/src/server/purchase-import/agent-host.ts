@@ -138,7 +138,7 @@ class PurchaseImportRunAgentHost
 
   async retire(): Promise<{ disposed: boolean }> {
     assertNotInMaintenance(this.env);
-    await this.services().authorizeRetirement();
+    const { current } = await this.services().authorizeRetirement();
     const keys = await this.ctx.storage.list();
     const alarm = await this.ctx.storage.getAlarm();
     const tables = this.ctx.storage.sql
@@ -174,6 +174,14 @@ class PurchaseImportRunAgentHost
     });
     if (!keys.size && !rows && alarm === null)
       return { disposed: !this.disposalAttempted };
+    if (!current) {
+      // A retired purpose's stored identity cannot open the current agent, and
+      // its settled Run has no turn to abort: erase storage without loading it.
+      // The next call's empty inventory acknowledges the disposal.
+      await this.ctx.storage.deleteAlarm();
+      await this.ctx.storage.deleteAll();
+      return { disposed: false };
+    }
     this.disposalAttempted = true;
     const agent = await this.loaded();
     await agent.abortForRetirement();

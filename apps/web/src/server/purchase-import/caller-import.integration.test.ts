@@ -912,6 +912,96 @@ describe("caller-driven purchase import writes", () => {
     );
   });
 
+  it("refuses the retired browser_order source kind on a new preparation", async () => {
+    const { vendor } = await scope();
+    await expect(
+      prepareMemberImport(ctx.db, ctx.actor, {
+        key: "retired-browser-order",
+        orders: [
+          {
+            stableOrderId: "retired-browser-order",
+            vendorId: vendor.shortcode,
+            source: {
+              // SAFETY: the retired kind is outside the input type on purpose;
+              // the runtime parse must refuse it.
+              kind: "browser_order" as never,
+              externalKey: "synthetic:browser-order",
+              checksum: "b".repeat(64),
+            },
+            extraction: {
+              status: "ready",
+              candidate: candidate("ORDER-ONE", [service()]),
+            },
+          },
+        ],
+        defaultTrade: "other",
+      }),
+    ).rejects.toThrow(/source|kind/i);
+    expect(await getDb(ctx.db).select().from(run)).toEqual([]);
+  });
+
+  it("links and settles the parent Email when its attachment creates the Purchase", async () => {
+    const { party, vendor } = await scope();
+    const mail = await retainedOrderMail(party.id, "attachment-original");
+    const attachmentChecksum = await sha256Hex("synthetic attachment receipt");
+    await getDb(ctx.db).insert(orderMailAttachment).values({
+      orderMailId: mail.id,
+      providerAttachmentId: "receipt-part",
+      filename: "receipt.pdf",
+      mimeType: "application/pdf",
+      checksum: attachmentChecksum,
+    });
+    const { committed } = await memberImport(ctx.db, ctx.actor, {
+      key: "attachment-original",
+      orders: [
+        {
+          stableOrderId: "attachment-original",
+          vendorId: vendor.shortcode,
+          source: {
+            kind: "mail_attachment",
+            externalKey: `gmail:${mailboxId}:${mail.messageId}:attachment:receipt-part`,
+            checksum: attachmentChecksum,
+          },
+          extraction: {
+            status: "ready",
+            candidate: candidate("ORDER-ONE", [service()]),
+          },
+        },
+      ],
+      defaultTrade: "other",
+    });
+    const saved = await purchaseByShortcode(committed.items[0]?.purchaseId);
+    expect(
+      (await getDb(ctx.db).select().from(orderMailCandidateDecision)).map(
+        ({ purchaseId, decision, evidenceChecksum }) => ({
+          purchaseId,
+          decision,
+          evidenceChecksum,
+        }),
+      ),
+    ).toEqual([
+      {
+        purchaseId: saved.id,
+        decision: "linked",
+        evidenceChecksum: mail.rawChecksum,
+      },
+    ]);
+    const [message] = await getDb(ctx.db)
+      .select({ status: mailboxMessage.status })
+      .from(mailboxMessage)
+      .where(eq(mailboxMessage.messageId, mail.messageId));
+    expect(message?.status).toBe("completed");
+    // The import-source identity keeps the attachment's own checksum.
+    expect(
+      await getDb(ctx.db)
+        .select({
+          kind: importSourceClaim.kind,
+          checksum: importSourceClaim.checksum,
+        })
+        .from(importSourceClaim),
+    ).toEqual([{ kind: "mail_attachment", checksum: attachmentChecksum }]);
+  });
+
   it("records the shipping event when its Email creates the Purchase first", async () => {
     const { party, vendor } = await scope();
     const mail = await retainedOrderMail(party.id, "shipping-first");

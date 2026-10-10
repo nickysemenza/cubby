@@ -82,9 +82,10 @@ export const LEDGER_PARTY_DELETE_EDGE_POLICY = {
     description: "Import findings retain the member scope.",
   },
   "ImportHunt.ledgerPartyId": {
-    code: "block-import-hunts",
-    effect: "block",
-    description: "Import hunts retain the member scope.",
+    code: "preserve-retired-research",
+    effect: "preserve",
+    description:
+      "Retired research history stays on the tombstone until the contract migration drops it.",
   },
   "MerchantVendorRule.ledgerPartyId": {
     code: "block-merchant-rules",
@@ -103,16 +104,16 @@ export const LEDGER_PARTY_DELETE_EDGE_POLICY = {
       "Mailbox classification and recovery metadata retain their member scope.",
   },
   "ResearchSourceExposure.ledgerPartyId": {
-    code: "block-research-exposure",
-    effect: "block",
+    code: "preserve-retired-research",
+    effect: "preserve",
     description:
-      "Research source exposure retains its authenticated member scope.",
+      "Retired research history stays on the tombstone until the contract migration drops it.",
   },
   "ResearchRetention.ledgerPartyId": {
-    code: "block-research-retention",
-    effect: "block",
+    code: "preserve-retired-research",
+    effect: "preserve",
     description:
-      "Research disposal authority retains its authenticated member scope.",
+      "Retired research history stays on the tombstone until the contract migration drops it.",
   },
   "OrderMail.ledgerPartyId": {
     code: "block-order-mail",
@@ -203,9 +204,10 @@ export const LEDGER_PARTY_MERGE_EDGE_POLICY = {
     description: "Import findings prevent member merges.",
   },
   "ImportHunt.ledgerPartyId": {
-    code: "block-import-hunts",
-    effect: "block",
-    description: "Import hunts prevent member merges.",
+    code: "preserve-retired-research",
+    effect: "preserve",
+    description:
+      "Retired research history stays on the tombstone until the contract migration drops it.",
   },
   "MerchantVendorRule.ledgerPartyId": {
     code: "block-merchant-rules",
@@ -224,15 +226,16 @@ export const LEDGER_PARTY_MERGE_EDGE_POLICY = {
       "Mailbox classification and recovery metadata prevent member merges.",
   },
   "ResearchSourceExposure.ledgerPartyId": {
-    code: "block-research-exposure",
-    effect: "block",
-    description: "Authenticated research exposure prevents member merges.",
+    code: "preserve-retired-research",
+    effect: "preserve",
+    description:
+      "Retired research history stays on the tombstone until the contract migration drops it.",
   },
   "ResearchRetention.ledgerPartyId": {
-    code: "block-research-retention",
-    effect: "block",
+    code: "preserve-retired-research",
+    effect: "preserve",
     description:
-      "Authenticated research disposal authority prevents member merges.",
+      "Retired research history stays on the tombstone until the contract migration drops it.",
   },
   "OrderMail.ledgerPartyId": {
     code: "block-order-mail",

@@ -129,7 +129,7 @@ describe("shared purchase-import prepare and commit", () => {
           stableOrderId: "amazon-order-1",
           itemOperationId: "prepare-item:amazon-order-1",
           source: {
-            kind: "browser_order" as const,
+            kind: "vendor_export" as const,
             externalKey: "amazon:order:111-2222222-3333333",
             checksum: checksum("a"),
           },
@@ -305,7 +305,7 @@ describe("shared purchase-import prepare and commit", () => {
             stableOrderId: "barcode-order-1",
             itemOperationId: "prepare-item:barcode-order-1",
             source: {
-              kind: "browser_order" as const,
+              kind: "vendor_export" as const,
               externalKey: "example:order:barcode-1",
               checksum: checksum("c"),
             },
@@ -388,7 +388,7 @@ describe("shared purchase-import prepare and commit", () => {
           stableOrderId: "adjustments-order-1",
           itemOperationId: "prepare-item:adjustments-order-1",
           source: {
-            kind: "browser_order" as const,
+            kind: "vendor_export" as const,
             externalKey: "adjustments:order:1",
             checksum: checksum("e"),
           },
@@ -508,7 +508,7 @@ describe("shared purchase-import prepare and commit", () => {
           stableOrderId: "failing-order-1",
           itemOperationId: "prepare-item:failing-order-1",
           source: {
-            kind: "browser_order" as const,
+            kind: "vendor_export" as const,
             externalKey: "failing:order:1",
             checksum: checksum("1"),
           },
@@ -660,7 +660,7 @@ describe("shared purchase-import prepare and commit", () => {
             : undefined,
           itemOperationId: "prepare-item:manual-order-1",
           source: {
-            kind: "browser_order" as const,
+            kind: "vendor_export" as const,
             externalKey: "manual-then-import:order:1",
             checksum: checksum("5"),
           },
@@ -1020,7 +1020,7 @@ describe("shared purchase-import prepare and commit", () => {
           stableOrderId: "manual-order-2",
           itemOperationId: "prepare-item:manual-order-2",
           source: {
-            kind: "browser_order" as const,
+            kind: "vendor_export" as const,
             externalKey: "manual-conflict:order:1",
             checksum: checksum("7"),
           },

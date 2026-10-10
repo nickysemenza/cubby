@@ -107,7 +107,7 @@ describe("purchase import identifier collisions", () => {
           stableOrderId: "collision-order",
           itemOperationId: "prepare-item:collision-order",
           source: {
-            kind: "browser_order" as const,
+            kind: "vendor_export" as const,
             externalKey: "amazon:order:111-0000000-4444444",
             checksum: checksum("c"),
           },

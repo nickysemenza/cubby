@@ -160,12 +160,19 @@ export async function assertPurchaseAgentAction(
   assertRunCapability(purpose, capabilityForPurchaseAgentAction(action));
 }
 
+export function runHasCapability(
+  purpose: RunPurpose,
+  capability: Capability,
+): boolean {
+  const allowed: ReadonlySet<Capability> = capabilityMatrix[purpose];
+  return allowed.has(capability);
+}
+
 export function assertRunCapability(
   purpose: RunPurpose,
   capability: Capability,
 ): void {
-  const allowed: ReadonlySet<Capability> = capabilityMatrix[purpose];
-  if (allowed.has(capability)) return;
+  if (runHasCapability(purpose, capability)) return;
   throw new Error(
     `Import run purpose ${purpose} forbids ${capability}; this cannot be overridden by approval`,
   );

@@ -668,7 +668,7 @@ async function importSyntheticPurchase(
           stableOrderId: "synthetic-wardrobe-order",
           itemOperationId: "prepare-item:synthetic-wardrobe-order",
           source: {
-            kind: "browser_order",
+            kind: "vendor_export",
             externalKey: evidence.orderUrl,
             checksum: evidence.sourceChecksum,
           },
@@ -791,7 +791,7 @@ async function reimportInNewRunAndAssertNoOp(
           stableOrderId: "synthetic-wardrobe-order-reimport",
           itemOperationId: "prepare-item:synthetic-wardrobe-order-reimport",
           source: {
-            kind: "browser_order",
+            kind: "vendor_export",
             externalKey: evidence.orderUrl,
             checksum: evidence.sourceChecksum,
           },
@@ -1005,7 +1005,7 @@ async function commitDuplicateOrderHistoryCapture(
           stableOrderId: "synthetic-wardrobe-order-duplicate",
           itemOperationId: "prepare-item:synthetic-wardrobe-order-duplicate",
           source: {
-            kind: "browser_order",
+            kind: "vendor_export",
             externalKey: duplicateExternalKey,
             checksum: duplicateChecksum,
           },

@@ -26,6 +26,7 @@ import { formatDuration } from "~/lib/format-duration";
 import { formatCurrency, formatPercent } from "~/lib/number-format";
 import type { Database } from "~/server/db";
 import { listAuditLog } from "~/server/operations/audit-log";
+import { runHasCapability } from "~/server/purchase-import/capabilities";
 import {
   loadRunDetail,
   loadRunLog,
@@ -535,7 +536,7 @@ type PreparedLine = PreparedOrder["lines"][number];
 
 const COMMITTED = "Prepared import approved and committed.";
 const APPROVE_BLOCKED =
-  "Prepared orders can be approved only while an account sync run is running.";
+  "Prepared orders can be approved only while their import run is running.";
 const TRADE_CHOICE_ID = "trade";
 
 /** One decision per line; the id joins the ids' own character set, which excludes "/". */
@@ -637,7 +638,9 @@ function preparedBatch(
   title: string | undefined,
 ): Block<"records"> {
   const committed = orders.every((order) => order.committed);
-  const blocked = run.status !== "running" || run.purpose !== "account_sync";
+  const blocked =
+    run.status !== "running" ||
+    !runHasCapability(run.purpose, "commit_purchase_import");
   const disabledReason = committed
     ? COMMITTED
     : blocked

@@ -24,7 +24,7 @@ import {
   type MailSearchInput,
 } from "@cubby/schemas/mailbox-research";
 import { sha256Hex } from "@cubby/shared/sha256";
-import { and, asc, eq, inArray, sql } from "drizzle-orm";
+import { and, asc, eq, inArray, isNull, sql } from "drizzle-orm";
 
 import type { Database } from "~/server/db";
 import { account } from "~/server/db/auth.schema";
@@ -79,16 +79,31 @@ async function memberPartyIds(db: Database, userId: UserId) {
   return rows.map(({ id }) => id);
 }
 
-/** The Mail import Run this call executes under, when Pi is the caller. */
+/**
+ * The Mail import Run this call executes under, when Pi is the caller. The
+ * Run is share-locked so a concurrent cancel waits for this transaction, and a
+ * cancelled, finished, retired or deleted Run refuses the call.
+ */
 async function mailImportRun(db: Database, runId: RunId | null) {
   if (!runId) return null;
-  const tx = getDb(db);
-  const [row] = await tx
-    .select({ id: runTable.id, purpose: runTable.purpose })
+  const [row] = await getDb(db)
+    .select({
+      id: runTable.id,
+      purpose: runTable.purpose,
+      status: runTable.status,
+      retiredAt: runTable.retiredAt,
+      deletedAt: runTable.deletedAt,
+    })
     .from(runTable)
     .where(eq(runTable.id, runId))
+    .for("share")
     .limit(1);
-  return row?.purpose === "mail_import" ? row.id : null;
+  if (row?.purpose !== "mail_import") return null;
+  if (row.status !== "running" || row.retiredAt || row.deletedAt)
+    throw new Error(
+      `This Mail import Run is no longer running (${row.deletedAt ? "deleted" : row.retiredAt ? "retired" : row.status}).`,
+    );
+  return row.id;
 }
 
 /**
@@ -102,6 +117,7 @@ async function ownedMail(
   lock: "update" | "share",
 ): Promise<{ mail: RetainedMail; importRunId: RunId | null }> {
   const tx = getDb(db);
+  const importRunId = await mailImportRun(db, actor.runId);
   const parties = await memberPartyIds(db, actor.userId);
   if (parties.length === 0)
     throw new Error("Only a household member can read retained Email.");
@@ -121,7 +137,6 @@ async function ownedMail(
     throw new Error(
       `No retained Email ${ref.messageId} in mailbox ${ref.mailboxId} belongs to this member.`,
     );
-  const importRunId = await mailImportRun(db, actor.runId);
   if (importRunId) {
     const [target] = await tx
       .select({ id: runTarget.id })
@@ -444,6 +459,40 @@ export async function settleMail(
       );
 }
 
+/**
+ * A repeated `unrelated` resolve whose original was already disposed of
+ * replays from the MailboxMessage: the retained Email it names is gone.
+ */
+async function disposedUnrelatedMail(
+  db: Database,
+  input: MailResolveInput,
+  actor: ActorContext,
+) {
+  await mailImportRun(db, actor.runId);
+  const [message] = await getDb(db)
+    .select({
+      ledgerPartyId: mailboxMessage.ledgerPartyId,
+      mailboxId: mailboxMessage.mailboxId,
+      messageId: mailboxMessage.messageId,
+    })
+    .from(mailboxMessage)
+    .where(
+      and(
+        inArray(
+          mailboxMessage.ledgerPartyId,
+          await memberPartyIds(db, actor.userId),
+        ),
+        eq(mailboxMessage.mailboxId, input.mailboxId),
+        eq(mailboxMessage.messageId, input.messageId),
+        eq(mailboxMessage.checksum, input.checksum),
+        eq(mailboxMessage.classification, "unrelated"),
+        isNull(mailboxMessage.orderMailId),
+      ),
+    )
+    .limit(1);
+  return message;
+}
+
 export async function resolveMail(
   db: Database,
   rawInput: MailResolveInput,
@@ -453,6 +502,15 @@ export async function resolveMail(
   const input = mailResolveInput.parse(rawInput);
   const { disposition } = input;
   const settled = await withTransactionDatabase(db, async (tdb) => {
+    if (disposition.kind === "unrelated") {
+      const disposed = await disposedUnrelatedMail(tdb, input, actor);
+      if (disposed)
+        return {
+          mail: disposed,
+          purchaseId: null,
+          status: "completed" as const,
+        };
+    }
     const { mail, importRunId } = await ownedMail(tdb, input, actor, "update");
     if (mail.rawChecksum !== input.checksum)
       throw new Error(
@@ -500,7 +558,8 @@ export async function resolveMail(
     return { mail, purchaseId: null, status: "completed" as const };
   });
   // Disposal runs after the disposition commits; a protected original (one a
-  // reviewed decision or import already uses) is kept.
+  // reviewed decision or import already uses) is kept. A disposal lost here
+  // is retried by the daily catch-up (disposeUnrelatedOriginals).
   if (disposition.kind === "unrelated")
     await clearUnrelatedOriginal(
       db,
@@ -520,39 +579,35 @@ export async function resolveMail(
   });
 }
 
-/** A mail-sourced import commit links its Email for the event it records. */
+/**
+ * A mail-sourced import commit links its Email for the event it records. An
+ * attachment's commit links its parent Email, by the Email's own checksum.
+ */
 export async function linkImportedMail(
   db: Database,
   input: {
-    ledgerPartyId: string;
+    mail: RetainedMail;
     event: MailEvent;
-    externalKey: string;
-    checksum: string;
     purchaseId: string;
     actorUserId: string;
     runId: RunId;
   },
 ) {
-  const match = /^gmail:(.+):([^:]+)$/u.exec(input.externalKey);
-  if (!match) return;
-  const [, mailboxId, messageId] = match;
   const [mail] = await getDb(db)
     .select()
     .from(orderMail)
     .where(
       and(
-        eq(
-          orderMail.ledgerPartyId,
-          parseEntityId("ledgerParty", input.ledgerPartyId),
-        ),
-        eq(orderMail.mailboxId, mailboxId!),
-        eq(orderMail.messageId, messageId!),
-        eq(orderMail.rawChecksum, input.checksum),
+        eq(orderMail.id, input.mail.id),
+        eq(orderMail.rawChecksum, input.mail.rawChecksum),
       ),
     )
     .for("update")
     .limit(1);
-  if (!mail) return;
+  if (!mail)
+    throw new Error(
+      "The imported Email changed or was disposed of; read it again.",
+    );
   await linkOrderMail(db, {
     mail,
     purchaseId: input.purchaseId,
@@ -621,6 +676,8 @@ export async function searchMail(
   actor: ActorContext,
 ) {
   const input = mailSearchInput.parse(rawInput);
+  // Before any Gmail fetch or classification spends against the Run.
+  await mailImportRun(db, actor.runId);
   const database = getDb(db);
   const connected = await database
     .select({ mailboxId: account.accountId })

@@ -89,7 +89,7 @@
   "apps/web/src/server/repo/cookbook.ts": 1,
   "apps/web/src/server/repo/product/crud.ts": 1,
   "apps/web/src/server/repo/entity-embedding-cleanup.ts": 5,
-  "apps/web/src/server/repo/product/orphan-condition.ts": 2,
+  "apps/web/src/server/repo/product/orphan-condition.ts": 1,
   "apps/web/src/server/runs/ensure-run.ts": 2,
   "apps/web/src/server/repo/product/classification-evidence.ts": 2,
   "apps/web/src/server/runs/execution-context.ts": 2,

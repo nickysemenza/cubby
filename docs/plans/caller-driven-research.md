@@ -194,13 +194,16 @@ These supersede earlier sections where they conflict.
 - **Receipt Purchases.** Receipt ingress sets the Purchase evidence expectation
   to `required` so `purchase_itemization` applies; the charge amount is not
   booked as Expense money until itemization (money stays `SUM(Expense.cost)`).
-- **Cutover order.** One owner (the implementing agent): (1) apply additive
-  migration (EntitySource, columns, RunOperation re-key, source copy, finding
-  dismissals) while old code still runs; (2) merge and deploy code that no
-  longer reads dropped tables; (3) drain pending disposal and destroy retired
-  DO instances, recording a private manifest of R2 keys and DO identities
-  outside the repository; (4) apply the contract migration dropping tables and
-  delete the R2 objects; (5) read back schema and retained reads.
+- **Cutover order.** One owner (the implementing agent): (1) apply the
+  additive migration (EntitySource and columns) while old code still runs;
+  (2) merge and deploy code that no longer reads the retired tables; (3) with
+  no old writer left, apply the data migration (source copy, finding
+  dismissals, stopping retired Runs) from the contract PR, then let retirement
+  destroy settled coordinators, recording a private manifest of R2 keys and DO
+  identities outside the repository; (4) apply the contract migration dropping
+  tables and delete the R2 objects; (5) read back schema and retained reads.
+  Running the data copy after the deploy (not before) is the writer fence: the
+  old code is the only writer of research facts and retired Runs.
 - **Skills.** purchase-import keeps vendor export, receipt itemization and
   settlement; product-enrichment becomes the Burn-down skill; Mail import gets
   its own Pi-facing reference.

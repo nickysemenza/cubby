@@ -443,7 +443,7 @@ for (const statementFirst of [true, false]) {
         db,
         actor,
         runtime: e2eRuntime,
-
+        vendorId: canonicalVendor.id,
         targetPurchaseId: purchaseCode,
         token,
         url,
@@ -521,16 +521,16 @@ for (const statementFirst of [true, false]) {
     await expect(
       mailReport.getByText(`Order ${names.orderId}`, { exact: true }),
     ).toBeVisible();
-    // Accepted source support is separate from original mail and its processing state.
-    const acceptedSource = mailReport
+    // The caller's `mail.resolve` link is separate from original mail and its
+    // processing state.
+    const linkedEvent = mailReport
       .getByRole("listitem")
-      .filter({
-        has: page.getByText("Accepted email source", { exact: true }),
-      })
+      .filter({ has: page.getByText("Linked", { exact: true }) })
       .filter({ has: page.locator(`a[href="/purchases/${purchaseCode}"]`) });
-    const purchaseLink = acceptedSource.locator(
-      `a[href="/purchases/${purchaseCode}"]`,
-    );
+    const purchaseLink = linkedEvent.getByRole("link", {
+      name: purchaseCode,
+      exact: true,
+    });
     await expect(purchaseLink).toBeVisible();
     await expect(purchaseLink).toHaveAttribute(
       "href",

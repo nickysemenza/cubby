@@ -5,7 +5,10 @@
  * surfaces as a crash instead of a reconnect result; `mail.read` returns
  * another message's attachment, loses the original once storage moves to its
  * Image, serves changed bytes, or truncates an oversized original; an
- * unrelated disposition deletes an original a Purchase still depends on.
+ * unrelated disposition deletes an original a Purchase still depends on, a
+ * disposal lost after the disposition commits is never retried, or a replay
+ * fails once the original is gone; a cancelled, retired or deleted Mail import
+ * Run still reads, resolves, or spends on search.
  */
 import { MAIL_ATTACHMENT_MAX_BYTES } from "@cubby/schemas/mailbox-research";
 import { sha256Hex } from "@cubby/shared/sha256";
@@ -25,6 +28,8 @@ import {
   orderMailAttachment,
   orderMailCandidateDecision,
   orderMailEvent,
+  run,
+  runTarget,
 } from "~/server/db/schema";
 import { getDb } from "~/server/repo/database-helpers";
 import { insertWithShortcode } from "~/server/repo/shortcode-utils";
@@ -32,11 +37,13 @@ import * as s3 from "~/server/utils/s3";
 
 import { loadMailAttachmentOriginal } from "./gmail/attachment-original";
 import type { OrderMailAttachmentStorage } from "./gmail/attachment-storage";
+import { disposeUnrelatedOriginals } from "./gmail/persistence";
 import * as gmail from "./gmail/provider";
 import { GmailAuthorizationError } from "./gmail/tokens";
 import * as routing from "./gmail/triage-model";
 import { GmailApiError, type GmailProvider } from "./gmail/types";
 import { readMail, resolveMail, searchMail } from "./mail-tool";
+import { retainedMailFixture } from "./order-import.fixtures";
 
 const mailboxId = "synthetic-mailbox";
 const receiptBytes = new TextEncoder().encode(
@@ -609,7 +616,16 @@ describe("public mail tool", () => {
           ctx.actor,
           storage,
         );
-      return { party, source, seller, positive, importRun, deleted, resolve };
+      return {
+        party,
+        source,
+        seller,
+        positive,
+        importRun,
+        deleted,
+        storage,
+        resolve,
+      };
     }
 
     async function expectOriginalKept(f: Awaited<ReturnType<typeof fixture>>) {
@@ -694,6 +710,46 @@ describe("public mail tool", () => {
       },
     );
 
+    it("retries a disposal lost after the disposition committed, then replays without the original", async () => {
+      const f = await fixture();
+      const outage = fromPartial<OrderMailAttachmentStorage>({
+        delete: async () => {
+          throw new Error("Synthetic storage outage");
+        },
+      });
+      await expect(
+        resolveMail(
+          ctx.db,
+          {
+            mailboxId,
+            messageId: f.source.messageId,
+            checksum: f.source.rawChecksum,
+            disposition: { kind: "unrelated", reason: "Marketing only" },
+          },
+          ctx.actor,
+          outage,
+        ),
+      ).rejects.toThrow("Synthetic storage outage");
+      await expectOriginalKept(f);
+
+      await disposeUnrelatedOriginals(ctx.db, f.storage);
+      expect(f.deleted).toEqual(["synthetic/private/protected-original"]);
+      expect(
+        await getDb(ctx.db)
+          .select({ id: orderMail.id })
+          .from(orderMail)
+          .where(eq(orderMail.id, f.source.id)),
+      ).toEqual([]);
+
+      await expect(f.resolve()).resolves.toEqual({
+        mailboxId,
+        messageId: f.source.messageId,
+        status: "completed",
+        disposition: "unrelated",
+        purchaseId: null,
+      });
+    });
+
     it("keeps an original a reviewed Purchase link still uses", async () => {
       const f = await fixture();
       const [event] = await getDb(ctx.db)
@@ -719,5 +775,87 @@ describe("public mail tool", () => {
         await getDb(ctx.db).select().from(orderMailCandidateDecision),
       ).toHaveLength(1);
     });
+  });
+
+  describe("a delegated Mail import Run", () => {
+    it.each([
+      ["cancelled", { status: "failed", failureCode: "user_cancelled" }],
+      ["retired", { retiredAt: new Date() }],
+      ["deleted", { deletedAt: new Date() }],
+    ] as const)(
+      "refuses read, resolve and search once it is %s",
+      async (_, fence) => {
+        const party = await member();
+        await connect(mailboxId);
+        const mail = await retainedMailFixture(ctx.db, {
+          ledgerPartyId: party.id,
+          messageId: "fenced-message",
+          checksum: "f".repeat(64),
+          mailboxId,
+        });
+        const importRun = await insertWithShortcode(ctx.db, "run", {
+          purpose: "mail_import",
+          status: "running",
+          trigger: "manual",
+          ledgerPartyId: party.id,
+          actorUserId: ctx.actor.userId,
+          actorName: party.name,
+          actorEmail: "mail@example.test",
+          actorLedgerPartyShortcode: party.shortcode,
+          actorLedgerPartyName: party.name,
+          actorLedgerPartyKind: "member",
+        });
+        await getDb(ctx.db)
+          .insert(runTarget)
+          .values({
+            runId: importRun.id,
+            entityKind: "run",
+            entityId: importRun.id,
+            workKey: mail.id,
+            sourceKind: "mail_message",
+            sourceExternalKey: mail.id,
+            targetFingerprint: "a".repeat(64),
+          });
+        await getDb(ctx.db)
+          .update(run)
+          .set(fence)
+          .where(eq(run.id, importRun.id));
+        const actor = { ...ctx.actor, runId: importRun.id };
+        const providers = vi.spyOn(gmail, "gmailProviderForUser");
+        const ref = { mailboxId, messageId: mail.messageId };
+
+        await expect(readMail(ctx.db, ref, actor)).rejects.toThrow(
+          /no longer running/,
+        );
+        await expect(
+          resolveMail(
+            ctx.db,
+            {
+              ...ref,
+              checksum: mail.rawChecksum,
+              disposition: { kind: "unrelated", reason: "Marketing only" },
+            },
+            actor,
+          ),
+        ).rejects.toThrow(/no longer running/);
+        await expect(
+          searchMail(ctx.db, { query: "synthetic" }, actor),
+        ).rejects.toThrow(/no longer running/);
+        expect(providers).not.toHaveBeenCalled();
+        const [message] = await getDb(ctx.db)
+          .select({
+            classification: mailboxMessage.classification,
+            status: mailboxMessage.status,
+            orderMailId: mailboxMessage.orderMailId,
+          })
+          .from(mailboxMessage)
+          .where(eq(mailboxMessage.messageId, mail.messageId));
+        expect(message).toEqual({
+          classification: "related",
+          status: "pending",
+          orderMailId: mail.id,
+        });
+      },
+    );
   });
 });

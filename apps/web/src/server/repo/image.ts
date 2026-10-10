@@ -77,7 +77,6 @@ import {
   gardenEntry,
   image,
   imageSighting,
-  importHunt,
   importPreparedOrder,
   run as runTable,
   runTarget,
@@ -1115,12 +1114,8 @@ const imageReferenceCondition = (
         .from(importPreparedOrder)
         .where(eq(importPreparedOrder.screenshotImageId, outerImage.id)),
     ),
-    "ImportHunt.receiptImageId": exists(
-      dbc
-        .select({ one: sql`1` })
-        .from(importHunt)
-        .where(eq(importHunt.receiptImageId, outerImage.id)),
-    ),
+    // Retired hunt history; its table is dropped by the contract migration.
+    "ImportHunt.receiptImageId": sql`FALSE`,
     "OrderMailAttachment.imageId": exists(
       dbc
         .select({ one: sql`1` })
@@ -1680,9 +1675,14 @@ type ImageEdgeOperation = {
   countsAsOwnership: boolean;
 };
 
-/** Edges that record processing of an image, never who owns it. */
+/**
+ * Edges that record processing of an image, never who owns it. Retired
+ * research rows (`RunFactEvidence`, `ImportHunt`) are only cleared on delete,
+ * never read, until the contract migration drops their tables.
+ */
 const PROCESSING_EDGES: ReadonlySet<string> = new Set([
   "RunFactEvidence.entityId",
+  "ImportHunt.receiptImageId",
   "RunTarget.entityId",
   "ImageProcessingJob.imageId",
   "ImageDerivative.imageId",

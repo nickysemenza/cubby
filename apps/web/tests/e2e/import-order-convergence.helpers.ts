@@ -143,6 +143,7 @@ export async function createConvergenceHarness(
     const html = names.retailerHtml;
     const committed = await importBrowserOrder(db, {
       actor,
+      vendorId: vendor.id,
       ids: syntheticOrderIds(token),
       externalKey: `history:${orderId}`,
       checksum: sha256Hex(html),

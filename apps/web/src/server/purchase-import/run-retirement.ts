@@ -4,11 +4,8 @@
  * `Run.retiredAt` records that the coordinator can never execute again.
  */
 import { runEntityId } from "@cubby/schemas/identifiers";
-import {
-  agentImportRunPurpose,
-  importRunAgentIdentity,
-} from "@cubby/schemas/import-run-agent";
-import { and, eq, inArray, isNull, lt } from "drizzle-orm";
+import { agentImportRunPurpose } from "@cubby/schemas/import-run-agent";
+import { and, eq, inArray, isNotNull, isNull, lt } from "drizzle-orm";
 
 import type { Database } from "~/server/db";
 import { run as runTable } from "~/server/db/schema";
@@ -26,21 +23,27 @@ export async function coordinatorRetired(db: Database, runId: string) {
   return !row || row.retiredAt !== null;
 }
 
-/** Only a settled Run's coordinator may be destroyed. */
+/**
+ * Only a settled Run's coordinator may be destroyed. `current` is false for a
+ * retired purpose, whose stored identity the current agent cannot open.
+ */
 export async function assertRetirableRun(db: Database, runId: string) {
   const [row] = await getDb(db)
-    .select({ status: runTable.status })
+    .select({ status: runTable.status, purpose: runTable.purpose })
     .from(runTable)
     .where(eq(runTable.id, runEntityId.parse(runId)))
     .limit(1);
   if (!row || !TERMINAL.some((status) => status === row.status))
     throw new Error("Only a settled Run's coordinator can be retired.");
+  return { current: agentImportRunPurpose.safeParse(row.purpose).success };
 }
 
 /**
  * Destroy the coordinators of agent Runs that settled before `before`, a
  * bounded batch per call; a destroyed coordinator reports `disposed` on a
- * later cold call, which then stamps `retiredAt`.
+ * later cold call, which then stamps `retiredAt`. Any Run with an agent
+ * session qualifies, including retired purposes (account_sync,
+ * product_enrichment, ...), addressed by the identity stored at creation.
  */
 export async function retireSettledCoordinators(
   db: Database,
@@ -49,11 +52,11 @@ export async function retireSettledCoordinators(
   limit = 25,
 ) {
   const rows = await getDb(db)
-    .select({ id: runTable.id, purpose: runTable.purpose })
+    .select({ id: runTable.id, agentId: runTable.agentSessionId })
     .from(runTable)
     .where(
       and(
-        inArray(runTable.purpose, agentImportRunPurpose.options),
+        isNotNull(runTable.agentSessionId),
         inArray(runTable.status, [...TERMINAL]),
         isNull(runTable.retiredAt),
         lt(runTable.updatedAt, before),
@@ -62,10 +65,8 @@ export async function retireSettledCoordinators(
     .limit(limit);
   let retired = 0;
   for (const row of rows) {
-    const purpose = agentImportRunPurpose.parse(row.purpose);
-    const { disposed } = await coordinator(
-      importRunAgentIdentity(row.id, purpose),
-    ).retire();
+    if (!row.agentId) continue;
+    const { disposed } = await coordinator(row.agentId).retire();
     if (!disposed) continue;
     await getDb(db)
       .update(runTable)

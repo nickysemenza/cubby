@@ -9,7 +9,6 @@ import { describe, expect, it } from "vitest";
 
 import {
   financialTransactionAllocation,
-  importHunt,
   inventoryEntry,
   merchantVendorRule,
   purchase,
@@ -83,7 +82,7 @@ describe("settlement from retained order evidence", () => {
             stableOrderId: stable,
             itemOperationId: `prepare-item:${stable}`,
             source: {
-              kind: "browser_order" as const,
+              kind: "vendor_export" as const,
               externalKey: `shop:${order.source ?? "browser"}:${order.orderId}`,
               checksum: checksum(seed),
             },
@@ -308,23 +307,8 @@ describe("settlement from retained order evidence", () => {
   });
 
   it("never treats orders whose totals merely add up to a charge as a group", async () => {
-    const { party, vendor, account, card, run } = await world();
-    const combined = await charge(card.id, {
-      amount: 50,
-      postedDate: "2026-09-04",
-    });
-    await getDb(ctx.db)
-      .insert(importHunt)
-      .values({
-        ledgerPartyId: party.id,
-        financialTransactionId: combined.id,
-        vendorId: vendor.id,
-        vendorAccountId: account.id,
-        state: "pending_browser",
-        dateFrom: "2026-08-28",
-        dateTo: "2026-09-11",
-        matchedOrderIds: ["FW-5001", "FW-5002"],
-      });
+    const { card, run } = await world();
+    await charge(card.id, { amount: 50, postedDate: "2026-09-04" });
     const purchases = [
       await importOrder(run, {
         orderId: "FW-5001",

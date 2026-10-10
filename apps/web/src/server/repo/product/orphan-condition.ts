@@ -25,11 +25,6 @@ const noLiveProductLink = (
 // Drizzle Column in predicates/orderings to the outer Product alias, but leave
 // nested QueryBuilder wrappers opaque (including their outer Product refs).
 const PRODUCT_RETAINING_NOT_EXISTS = {
-  "RunFactEvidence.entityId": (t) => sql`NOT EXISTS (
-    SELECT 1 FROM "RunFactEvidence" dq_orphan_proof
-    WHERE dq_orphan_proof."entityKind" = 'product'
-      AND dq_orphan_proof."entityId" = ${t.id}
-  )`,
   "ImportSourceProduct.productId": (t) => sql`NOT EXISTS (
     SELECT 1 FROM "ImportSourceProduct" dq_orphan_original
     WHERE dq_orphan_original."productId" = ${t.id}

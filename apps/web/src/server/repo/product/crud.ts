@@ -83,7 +83,6 @@ import {
   productConversionCoverage,
   productUnitMappings,
   runTarget,
-  runFactEvidence,
   task,
 } from "~/server/db/schema";
 import { createAppError } from "~/server/errors/app-error";
@@ -2825,20 +2824,6 @@ const liveLinksToProducts =
     ).map((row) => ({ productId: parseEntityId("product", row.productId) }));
 
 const PRODUCT_RETAINING_DEPENDENTS = {
-  "RunFactEvidence.entityId": async (tx, ids) => {
-    const rows = await tx
-      .select({ entityId: runFactEvidence.entityId })
-      .from(runFactEvidence)
-      .where(
-        and(
-          eq(runFactEvidence.entityKind, "product"),
-          inArray(runFactEvidence.entityId, ids),
-        ),
-      );
-    return rows.map(({ entityId }) => ({
-      productId: parseEntityId("product", entityId),
-    }));
-  },
   "ImportSourceProduct.productId": (tx, ids) =>
     tx
       .select({ productId: importSourceProduct.productId })

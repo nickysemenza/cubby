@@ -239,10 +239,10 @@ export const PURCHASE_DELETE_EDGE_POLICY = {
 
 export const PURCHASE_MERGE_EDGE_POLICY = {
   "RunFactEvidence.entityId": {
-    code: "move-dedupe-canonical-research-proof",
-    effect: "move-dedupe",
+    code: "preserve-retired-research",
+    effect: "preserve",
     description:
-      "Accepted proofs follow the surviving Purchase; exact proof identities fold while independent retained originals remain.",
+      "Retired research facts stay on the merged-away Purchase tombstone until the contract migration drops them.",
   },
   "ImportPreparedOrder.targetPurchaseId": {
     code: "preserve-prepared-target",

@@ -1,4 +1,8 @@
-import { preparePurchaseImportInput } from "@cubby/schemas/purchase-import";
+import {
+  importExtractionModelOutput,
+  normalizeImportExtractionModelOutput,
+  preparePurchaseImportInput,
+} from "@cubby/schemas/purchase-import";
 import type { Database } from "~/server/db";
 import { preparePurchaseImport } from "~/server/purchase-import/import-orders";
 import {
@@ -23,6 +27,8 @@ export async function prepareCapturedRetailerOrder(input: {
   db: Database;
   actor: Parameters<typeof preparePurchaseImport>[2];
   runtime: Pick<E2EWorkerRuntime, "googleProvider">;
+  /** The retailer's Vendor shortcode: a member's import names its Vendor. */
+  vendorId: string;
   targetPurchaseId?: string;
   token: string;
   url: string;
@@ -58,14 +64,17 @@ export async function prepareCapturedRetailerOrder(input: {
     ),
     images: [],
   };
-  // The caller extracts its own reading; the server validates and prepares it.
+  // The caller extracts and normalizes its own reading, as the production
+  // extractor does; the server validates and prepares it.
   const response = await fetch(`${providerURL}/model/extract-capture`, {
     method: "POST",
     headers: { "content-type": "application/json" },
     body: JSON.stringify(capture),
   });
   if (!response.ok) throw new Error(await response.text());
-  const extraction: unknown = await response.json();
+  const extraction = normalizeImportExtractionModelOutput(
+    importExtractionModelOutput.parse(await response.json()),
+  );
   const checksum = sha256Hex(JSON.stringify({ orderHtml, productHtml }));
   const prepared = await preparePurchaseImport(
     db,
@@ -76,10 +85,11 @@ export async function prepareCapturedRetailerOrder(input: {
       },
       orders: [
         {
+          vendorId: input.vendorId,
           targetPurchaseId: input.targetPurchaseId,
           stableOrderId: ids.order,
           itemOperationId: ids.item,
-          source: { kind: "browser_order", externalKey: url, checksum },
+          source: { kind: "vendor_export", externalKey: url, checksum },
           evidenceChecksum: checksum,
           extractionRevision: "synthetic-provider@1",
           extraction,

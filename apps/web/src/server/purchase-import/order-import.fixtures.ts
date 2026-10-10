@@ -74,7 +74,7 @@ export async function importOrderHistory(
           stableOrderId,
           itemOperationId: `item:${stableOrderId}`,
           source: {
-            kind: "browser_order",
+            kind: "vendor_export",
             externalKey: `history:order:${input.orderId}`,
             checksum: input.revision.repeat(64),
           },

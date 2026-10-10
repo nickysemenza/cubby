@@ -47,35 +47,54 @@ export async function recoverMissedWork(db: Database) {
     { reconcileWorkflowRuns },
     { pruneRoutineRuns },
     { retireSettledCoordinators },
+    { disposeUnrelatedOriginals },
+    { productionOrderMailAttachmentStorage },
   ] = await Promise.all([
     import("~/server/repo/image-processing-maintenance"),
     import("~/server/purchase-import/run-service"),
     import("~/server/workflow-runs/lifecycle"),
     import("~/server/purchase-import/gmail/discovery"),
     import("~/server/purchase-import/run-retirement"),
+    import("~/server/purchase-import/gmail/persistence"),
+    import("~/server/purchase-import/gmail/attachment-storage"),
   ]);
   const coordinators = getPurchaseImportRunAgentNamespace();
-  const [image, staleResult, workflowResult, pruneResult, retireResult] =
-    await Promise.allSettled([
-      repairImageProcessingWork(db),
-      expireStaleRuns(db),
-      reconcileWorkflowRuns(db),
-      pruneRoutineRuns(db),
-      // A settled agent Run's transcript (including Email text it read) is
-      // destroyed after a day, leaving time to read the conversation.
-      coordinators
-        ? retireSettledCoordinators(
-            db,
-            (agentId) => coordinators.getByName(agentId),
-            new Date(Date.now() - 24 * 60 * 60_000),
+  const [
+    image,
+    staleResult,
+    workflowResult,
+    pruneResult,
+    retireResult,
+    disposalResult,
+  ] = await Promise.allSettled([
+    repairImageProcessingWork(db),
+    expireStaleRuns(db),
+    reconcileWorkflowRuns(db),
+    pruneRoutineRuns(db),
+    // A settled agent Run's transcript (including Email text it read) is
+    // destroyed after a day, leaving time to read the conversation.
+    coordinators
+      ? retireSettledCoordinators(
+          db,
+          (agentId) => coordinators.getByName(agentId),
+          new Date(Date.now() - 24 * 60 * 60_000),
+        )
+      : isCloudflareRuntime()
+        ? Promise.reject(
+            new Error("PURCHASE_IMPORT_RUN binding is unavailable"),
           )
-        : isCloudflareRuntime()
-          ? Promise.reject(
-              new Error("PURCHASE_IMPORT_RUN binding is unavailable"),
-            )
-          : Promise.resolve(null),
-    ]);
-  const errors = [image, staleResult, workflowResult, pruneResult, retireResult]
+        : Promise.resolve(null),
+    // Retries an unrelated Email's disposal lost after its disposition.
+    disposeUnrelatedOriginals(db, productionOrderMailAttachmentStorage),
+  ]);
+  const errors = [
+    image,
+    staleResult,
+    workflowResult,
+    pruneResult,
+    retireResult,
+    disposalResult,
+  ]
     .filter((result) => result.status === "rejected")
     .map((result) => String(result.reason));
   const stale = staleResult.status === "fulfilled" ? staleResult.value : null;
@@ -88,6 +107,8 @@ export async function recoverMissedWork(db: Database) {
       pruneResult.status === "fulfilled" ? pruneResult.value : null,
     coordinatorsRetired:
       retireResult.status === "fulfilled" ? retireResult.value?.retired : null,
+    unrelatedDisposalsChecked:
+      disposalResult.status === "fulfilled" ? disposalResult.value : null,
   });
   for (const failure of stale?.failures ?? [])
     Sentry.captureMessage(

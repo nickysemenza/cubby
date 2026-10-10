@@ -181,7 +181,7 @@ test("reviews CSV charge groups and refunds against captured retailer orders", a
       db,
       actor,
       runtime: e2eRuntime,
-
+      vendorId: prerequisites.vendor.id,
       token: orderToken,
       url,
       productUrl,
@@ -208,11 +208,12 @@ test("reviews CSV charge groups and refunds against captured retailer orders", a
       .selectOption("other");
     await expect(approve).toBeEnabled();
     await approve.click();
+    // Each captured order is a member's own import Run.
     await expect(
       page.getByText("Prepared import approved and committed.", {
         exact: true,
       }),
-    ).toHaveCount(index + 1);
+    ).toBeVisible();
     const purchase = await database.query.purchase.findFirst({
       where: and(
         eq(schema.purchase.vendorId, vendorId),

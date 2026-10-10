@@ -92,10 +92,10 @@ import { ensureSlotPrimaries } from "./update-helpers";
 
 export const PRODUCT_MERGE_EDGE_POLICY = {
   "RunFactEvidence.entityId": {
-    code: "move-dedupe-canonical-research-proof",
-    effect: "move-dedupe",
+    code: "preserve-retired-research",
+    effect: "preserve",
     description:
-      "Accepted proofs follow the surviving Product; exact proof identities fold while independent retained originals remain.",
+      "Retired research facts stay on the merged-away Product tombstone until the contract migration drops them.",
   },
   "ImportSourceProduct.productId": {
     code: "repoint-original-order-evidence",

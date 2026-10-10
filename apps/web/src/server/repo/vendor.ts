@@ -115,9 +115,10 @@ export const VENDOR_DELETE_EDGE_POLICY = {
     description: "Vendor accounts retain their configured vendor.",
   },
   "ImportHunt.vendorId": {
-    code: "block-import-hunts",
-    effect: "block",
-    description: "Import hunts retain their routed vendor.",
+    code: "preserve-retired-research",
+    effect: "preserve",
+    description:
+      "Retired research history stays on the tombstone until the contract migration drops it.",
   },
   "MerchantVendorRule.vendorId": {
     code: "block-merchant-rules",
@@ -174,9 +175,10 @@ export const VENDOR_MERGE_EDGE_POLICY = {
       "Vendor accounts must be reassigned explicitly before merging vendors.",
   },
   "ImportHunt.vendorId": {
-    code: "block-import-hunts",
-    effect: "block",
-    description: "Historical import hunts prevent an ambiguous vendor merge.",
+    code: "preserve-retired-research",
+    effect: "preserve",
+    description:
+      "Retired research history stays on the tombstone until the contract migration drops it.",
   },
   "MerchantVendorRule.vendorId": {
     code: "block-merchant-rules",

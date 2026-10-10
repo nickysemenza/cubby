@@ -127,7 +127,7 @@ describe("manufacturer_part identity", () => {
             stableOrderId: "forge-1",
             itemOperationId: "prepare-item:forge-1",
             source: {
-              kind: "browser_order" as const,
+              kind: "vendor_export" as const,
               externalKey: "forgewear:order:1001",
               checksum: checksum("a"),
             },
@@ -243,7 +243,7 @@ describe("manufacturer_part identity", () => {
             stableOrderId: "ranked-kit",
             itemOperationId: "prepare-item:ranked-kit",
             source: {
-              kind: "browser_order",
+              kind: "vendor_export",
               externalKey: "synthetic:ranked-kit",
               checksum: checksum("a"),
             },

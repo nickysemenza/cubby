@@ -17,7 +17,10 @@ Claude or Codex session researches it later through the Research queue.
      `purchase_import` `prepare` the order from this Email
      (`source.kind: "mail_message"`, `externalKey`
      `gmail:<mailboxId>:<messageId>`, the read `checksum` as both source and
-     evidence checksum, and the extraction rules below). Then `commit` it,
+     evidence checksum, and the extraction rules below; when the order lives
+     in an attachment, use `source.kind: "mail_attachment"`, `externalKey`
+     `gmail:<mailboxId>:<messageId>:attachment:<attachmentId>` and that
+     attachment's `checksum`). Then `commit` it,
      resolving every principal line: an existing Product returned as a
      candidate when its exact item and variant match, `new` for a supported
      tracked item, `unresolved` with the identity gap, or `expense_only` for

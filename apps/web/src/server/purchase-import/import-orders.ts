@@ -12,6 +12,7 @@ import {
   commitPurchaseImportOut,
   extractedPurchaseLine,
   importExtractionOutcome,
+  importSourceIdentity,
   importSourceKind,
   runPurpose,
   preparePurchaseImportInput,
@@ -187,17 +188,21 @@ type RetainedMailSource = typeof orderMail.$inferSelect;
 
 /**
  * A mail-sourced order must name the member's own retained Email unchanged,
- * never a model-provided key or bytes. A Mail import Run may use only the
- * Emails it admitted.
+ * never a model-provided key or bytes. A Mail import Run may use only mail
+ * sources of the Emails it admitted: any other kind would carry an arbitrary
+ * key and checksum past that check.
  */
 async function retainedMailSource(
   db: Database,
   scope: ImportScope,
-  source: PreparePurchaseImportInput["orders"][number]["source"],
+  source: z.infer<typeof importSourceIdentity>,
   evidenceChecksum: string,
 ): Promise<RetainedMailSource | null> {
-  if (source.kind !== "mail_message" && source.kind !== "mail_attachment")
+  if (source.kind !== "mail_message" && source.kind !== "mail_attachment") {
+    if (scope.purpose === "mail_import")
+      throw new Error("A Mail import Run imports only the Emails it admitted.");
     return null;
+  }
   const match = /^gmail:(.+?):([^:]+)(?::attachment:(.+))?$/u.exec(
     source.externalKey,
   );
@@ -1002,13 +1007,12 @@ export async function commitPurchaseImport(
                   )
                   .limit(1)
               : [];
-            const linksMail =
-              order.sourceKind === "mail_message" &&
-              result.outcome !== "conflict";
+            // An attachment's commit links and settles its parent Email.
+            const linksMail = result.outcome !== "conflict";
             // A member's dismissal of this Email for the Purchase the writer
             // reached wins over the import; the whole commit rolls back.
             // linkOrderMail refuses it for a linked Email; this covers the
-            // attachment and conflict outcomes that are not linked.
+            // conflict outcome that is not linked.
             if (result.purchaseId && mailSource && !linksMail) {
               const [dismissed] = await database
                 .select({ id: orderMailCandidateDecision.id })
@@ -1035,10 +1039,8 @@ export async function commitPurchaseImport(
             }
             if (result.purchaseId && mailSource && linksMail) {
               await linkImportedMail(transactionDb, {
-                ledgerPartyId: scope.ledgerPartyId,
+                mail: mailSource,
                 event: extraction.candidate?.sourceEvent ?? "confirmation",
-                externalKey: order.sourceExternalKey,
-                checksum: order.sourceChecksum,
                 purchaseId: result.purchaseId,
                 actorUserId: actor.userId,
                 runId: scope.runId,

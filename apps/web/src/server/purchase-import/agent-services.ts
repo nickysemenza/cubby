@@ -92,7 +92,7 @@ export function runServicesFor(
     authorizeRetirement: () =>
       withDatabase(async (db) => {
         const { assertRetirableRun } = await import("./run-retirement");
-        await assertRetirableRun(db, runId);
+        return assertRetirableRun(db, runId);
       }),
     loadScope: () =>
       withDatabase(async (db, service) => {

@@ -57,8 +57,11 @@ type OperationRef = z.input<typeof purchaseAgentOperationRef>;
 export interface RunServices {
   /** True once the Run's coordinator was destroyed; it never executes again. */
   coordinatorRetired(): Promise<boolean>;
-  /** Refuse to destroy the coordinator of a Run that has not settled. */
-  authorizeRetirement(): Promise<void>;
+  /**
+   * Refuse to destroy the coordinator of a Run that has not settled; `current`
+   * is false for a retired purpose the current agent cannot open.
+   */
+  authorizeRetirement(): Promise<{ current: boolean }>;
   /**
    * Require the member's live Purchase Agent grant before a new coordinator
    * starts; without one the host pauses the Run for authorization and throws.

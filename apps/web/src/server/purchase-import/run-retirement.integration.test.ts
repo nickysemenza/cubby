@@ -88,6 +88,13 @@ const retire = (runId: string) =>
     .set({ retiredAt: new Date(), retirementReason: "settled" })
     .where(eq(run.id, runEntityId.parse(runId)));
 
+// A Run of a retired purpose keeps its original coordinator identity.
+const retirePurpose = (runId: string) =>
+  getDb(ctx.db)
+    .update(run)
+    .set({ purpose: "product_enrichment" })
+    .where(eq(run.id, runEntityId.parse(runId)));
+
 const readRun = async (runId: string) => {
   const [row] = await getDb(ctx.db)
     .select()
@@ -139,6 +146,28 @@ describe("settled coordinator retirement", () => {
     }
   });
 
+  it("offers a settled Run of a retired purpose by its stored coordinator identity", async () => {
+    const historical = await agentRun();
+    await retirePurpose(historical);
+    await settle(historical);
+    const calls: string[] = [];
+    const coordinator = (agentId: string) => ({
+      retire: async () => {
+        calls.push(agentId);
+        return { disposed: true };
+      },
+    });
+    expect(
+      await retireSettledCoordinators(
+        ctx.db,
+        coordinator,
+        new Date(Date.now() - 1_000),
+      ),
+    ).toEqual({ considered: 1, retired: 1 });
+    expect(calls).toEqual([importRunAgentIdentity(historical, "mail_import")]);
+    expect(await coordinatorRetired(ctx.db, historical)).toBe(true);
+  });
+
   it("authorizes coordinator disposal only for a settled Run", async () => {
     const live = await agentRun();
     await expect(assertRetirableRun(ctx.db, live)).rejects.toThrow(
@@ -148,7 +177,9 @@ describe("settled coordinator retirement", () => {
       assertRetirableRun(ctx.db, crypto.randomUUID()),
     ).rejects.toThrow("Only a settled Run's coordinator can be retired.");
     await settle(live);
-    await expect(assertRetirableRun(ctx.db, live)).resolves.toBeUndefined();
+    await expect(assertRetirableRun(ctx.db, live)).resolves.toEqual({
+      current: true,
+    });
     // A missing Run reads as retired, so no coordinator executes for it.
     expect(await coordinatorRetired(ctx.db, crypto.randomUUID())).toBe(true);
   });
@@ -384,6 +415,54 @@ describe("coordinator host retirement", () => {
     });
     expect(admission).toEqual({ accepted: false });
     expect(await runtime.emitted()).toEqual([]);
+    status = "passed";
+  }, 90_000);
+
+  it("destroys a retired purpose's coordinator storage and acknowledges it cold", async () => {
+    const runId = await agentRun();
+    await retirePurpose(runId);
+    runtime = await startScenarioHarness(ctx.databaseUrl, { steps: [] });
+    const peer = runtime.harness.getWorker("cubby-queue-producer");
+    const agentId = importRunAgentIdentity(runId, "mail_import");
+    const request = (pathname: string) =>
+      peer.fetch(new URL(pathname, "https://queue.test"), {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ agentId }),
+      });
+    // Historical SDK storage, as a pre-retirement coordinator left it.
+    expect((await request("/coordinator-fetch")).status).toBe(200);
+    await settle(runId);
+    const coordinator = () => ({
+      retire: async () => {
+        const response = await request("/coordinator-retire");
+        if (!response.ok) throw new Error(await response.text());
+        return disposal.parse(await response.json());
+      },
+    });
+    const first = await retireSettledCoordinators(
+      ctx.db,
+      coordinator,
+      new Date(),
+    );
+    observations.push({
+      boundary: "historical first disposal call",
+      expected: 1,
+      actual: first.considered,
+    });
+    expect(first).toEqual({ considered: 1, retired: 0 });
+    const second = await retireSettledCoordinators(
+      ctx.db,
+      coordinator,
+      new Date(),
+    );
+    observations.push({
+      boundary: "historical empty-storage acknowledgement",
+      expected: 1,
+      actual: second.retired,
+    });
+    expect(second).toEqual({ considered: 1, retired: 1 });
+    expect((await request("/coordinator-fetch")).status).toBe(410);
     status = "passed";
   }, 90_000);
 });

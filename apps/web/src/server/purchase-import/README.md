@@ -42,15 +42,21 @@ pending: nothing here starts Product research.
    via `server/purchase-agent/import-run-workflows.ts`.
 4. **Writes**: `imports_read.mail` reads a retained Email (`mail-tool.ts`
    `readMail`); `purchase_import.prepare/commit` (`import-orders.ts`) import an
-   order through `writer.ts`, and a mail-sourced commit links the Email as the
-   Purchase's confirmation; `mail.resolve` records a lifecycle link, an
-   unresolved gap or an unrelated disposal (which deletes the retained copy
-   unless a reviewed decision or import uses it). A Mail import Run may touch
-   only the Emails it admitted.
+   order through `writer.ts`, and a mail-sourced commit (message or
+   attachment) links and settles the Email as the Purchase's confirmation;
+   `mail.resolve` records a lifecycle link, an unresolved gap or an unrelated
+   disposal (which deletes the retained copy unless a reviewed decision or
+   import uses it; the daily catch-up retries a disposal lost after its
+   disposition, and a repeated `unrelated` resolve replays without the
+   copy). A Mail import Run may touch only the Emails it admitted, may
+   prepare only their mail sources, and is refused by every mail call once
+   it is cancelled, finished, retired or deleted. New preparations may not
+   name the retired `browser_order` source kind; stored rows keep it.
 5. **Settlement**: Pi's settled submission reconciles the Run
    (`run-service.ts` `reconcileSettledRun`); the daily cron expires stale Runs
    and destroys settled Runs' transcripts (`run-retirement.ts`), stamping
-   `Run.retiredAt`.
+   `Run.retiredAt`. Runs of retired purposes are destroyed by their stored
+   coordinator identity without loading the current agent.
 
 ## Member imports
 

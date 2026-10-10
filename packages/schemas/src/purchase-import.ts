@@ -28,6 +28,7 @@ export const vendorOrderEvidence = z.enum([
   "receipt_only",
   "not_expected",
 ]);
+/** Every stored source kind; `browser_order` is retired and only read. */
 export const importSourceKind = z.enum([
   "browser_order",
   "mail_message",
@@ -547,7 +548,9 @@ const preparedImportOrderInput = z
     targetPurchaseId: purchaseShortcode.nullable().optional(),
     stableOrderId: stableImportItemId,
     itemOperationId: importItemOperationId,
-    source: importSourceIdentity,
+    source: importSourceIdentity.extend({
+      kind: importSourceKind.exclude(["browser_order"]),
+    }),
     evidenceChecksum: z.string().regex(/^[a-f0-9]{64}$/),
     extractionRevision: z.string().trim().min(1).max(200),
     extraction: importExtractionOutcome,

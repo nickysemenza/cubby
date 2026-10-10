@@ -53,40 +53,6 @@ const foldFactEvidence = async (
   }
 };
 
-/** Repoint canonical subjects, preserving the task and original source identity. */
-export const mergeResearchFactSubjects = async (
-  tx: DrizzleTransaction,
-  entityKind: RunTargetEntityKind,
-  keepId: string,
-  loserIds: readonly string[],
-): Promise<void> => {
-  const rows = await tx
-    .select()
-    .from(runFactEvidence)
-    .where(
-      and(
-        eq(runFactEvidence.entityKind, entityKind),
-        inArray(runFactEvidence.entityId, [keepId, ...loserIds]),
-      ),
-    )
-    .orderBy(asc(runFactEvidence.id))
-    .for("update");
-  await foldFactEvidence(
-    tx,
-    rows,
-    (row) => row.entityId === keepId,
-    (row) =>
-      JSON.stringify([
-        row.targetId,
-        row.evidenceId,
-        row.entityKind,
-        row.fieldPath,
-        row.valueFingerprint,
-      ]),
-    { entityId: keepId },
-  );
-};
-
 /**
  * Merge only colliding tasks of the same Run, entity kind, and frozen work key.
  * Move both original evidence and accepted proof references before deleting a

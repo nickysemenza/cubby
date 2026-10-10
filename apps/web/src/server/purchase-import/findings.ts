@@ -31,7 +31,6 @@ import {
   expense,
   auditLog,
   runFinding,
-  importHunt,
   expenseAttribution,
   inventoryEntry,
   ledgerParty,
@@ -515,36 +514,7 @@ export async function resolveRunFinding(
       .where(eq(runFinding.id, input.id))
       .limit(1)
       .for("update", { of: runFinding });
-    if (!finding) {
-      const [hunt] = await tx
-        .select({ id: importHunt.id, state: importHunt.state })
-        .from(importHunt)
-        .innerJoin(
-          ledgerParty,
-          and(
-            eq(ledgerParty.id, importHunt.ledgerPartyId),
-            eq(ledgerParty.userId, actor.userId),
-            notDeleted(ledgerParty),
-          ),
-        )
-        .where(eq(importHunt.id, input.id))
-        .limit(1)
-        .for("update");
-      if (!hunt) throw new Error("Import finding not found for this member.");
-      if (input.action === "apply") {
-        throw new Error(
-          "Open Cubby on iPhone or Mac to attach receipt evidence.",
-        );
-      }
-      await tx
-        .update(importHunt)
-        .set({ state: "dismissed", updatedAt: new Date() })
-        .where(eq(importHunt.id, hunt.id));
-      return resolveRunFindingOut.parse({
-        id: hunt.id,
-        status: "dismissed",
-      });
-    }
+    if (!finding) throw new Error("Import finding not found for this member.");
     await assertFindingOwner(tx, actor, finding.ledgerPartyId);
     if (finding.status !== "open") {
       throw new Error("This import finding has already been resolved.");
