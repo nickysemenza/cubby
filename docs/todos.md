@@ -200,11 +200,12 @@ mailbox and authenticated-device acceptance only after explicit resumption.
   [#1813](https://github.com/nickysemenza/cubby/pull/1813), independently reviewed,
   exact-head hosted tested, merged and deployed. Corrective resolution refusals
   already have a three-zero-progress-attempt allowance per task, retained through
-  completed operation receipts. A local follow-up projects bound Mac command
-  receipt duration and distinct retry links through the shared Run operation
-  shape and generic report; it never substitutes suspended operation wall time.
-  Review, hosted gates and visible acceptance remain pending. Total active-time
-  accounting remains open. Pause
+  completed operation receipts. Bound Mac command receipt duration and distinct retry links now ship through
+  the shared Run operation shape and generic report in
+  [#1820](https://github.com/nickysemenza/cubby/pull/1820), independently reviewed,
+  exact-head hosted tested, merged and deployed. It never substitutes suspended
+  operation wall time. Visible acceptance and total active-time accounting remain
+  open. Pause
   repeated unchanged failures with their raw last observation. Member sign-in,
   permissions and Mac-offline waits do not consume active time. Reuse Run state
   and existing usage/cost authorization; do not introduce another job engine.
@@ -221,24 +222,27 @@ mailbox and authenticated-device acceptance only after explicit resumption.
   bridge. Model classification alone must not broaden browser permissions.
 
 - 🟢 **Notify when a Run needs the member.** Extend the Mac's existing notifier
-  beyond prolonged offline waits and completion. The local change persists
+  beyond prolonged offline waits and completion.
+  [#1819](https://github.com/nickysemenza/cubby/pull/1819) persists
   account/Run/reason pause edges, names sign-in, Screen Recording and Apple
   Events fixes, and raises the owned account window for a fresh permission
   pause. Synchronous dispatch validity is invalidated when a pause resolves or
   its controller is replaced, so an earlier actor check cannot raise a stale
   window. Headless persistence and suspension regressions pass after intended RED;
-  final Mac App compilation, independent review, hosted gates, merge/deployment and
-  real notification/owned-window delivery remain pending. Coordinate with the
+  Mac App compilation, independent review, exact-head hosted checks, merge and
+  deployment passed. Real notification/owned-window delivery remains pending. Coordinate with the
   activity strip and attention-first workspace below.
 
 - 🟢 **Re-derive retained captures without rewriting committed history.**
-  `PAGE_DERIVATION_REVISION` stamps captures. The local shared
+  `PAGE_DERIVATION_REVISION` stamps captures.
+  [#1818](https://github.com/nickysemenza/cubby/pull/1818) ships the shared
   `run.rederiveCapture` operation appends revision-keyed interpretation receipts
   under the original command host authority, reports changed capture fields and
   source-supported fact fields in the generic Run log, and preserves original
   bytes, checksums, accepted claims and replay results. Its settled-capture and
-  checksum regression passes; final typecheck, independent review, hosted gates,
-  merge and deployment remain pending. Fresh research remains a separate Run.
+  checksum regressions, synthetic browser acceptance, independent review,
+  exact-head hosted checks, merge and deployment passed. Installed-client and
+  live acceptance remain pending. Fresh research remains a separate Run.
 
 - 🤔 **One source contract, without a second extractor.** Mail, browser, file
   and photo readers should return retained text, links, media, typed identifiers
@@ -271,12 +275,13 @@ mailbox and authenticated-device acceptance only after explicit resumption.
   server authorization, target/step and last-success projection remain open.
 
 - 🟢 **Generate remaining Mac agent-route contracts.** Accounts and debug batches
-  now use shared generated Vendor/Run operations in the local implementation;
+  now use shared generated Vendor/Run operations in
+  [#1817](https://github.com/nickysemenza/cubby/pull/1817);
   both Mac callers migrated, the old HTTP routes/request helper were deleted,
   and debug schemas moved into the shared package. Persisted eligibility,
-  mixed-owner rejection and replay regressions pass. Native validation,
-  independent review, exact-head hosted checks, merge and deployment remain
-  pending. Keep the separately owned MCP HTTP handler out of this work.
+  mixed-owner rejection and replay regressions, native compilation, independent
+  review, exact-head hosted checks, merge and deployment passed. The wire break
+  requires Apple compatibility 2.17; installed-client acceptance remains pending. Keep the separately owned MCP HTTP handler out of this work.
 
 - 🤔 **Separate debug observations from replayable operations.** Replace
   `__debug_event` special cases with an existing bounded event/report path if it
@@ -453,12 +458,13 @@ research acceptance.
   only the successor's writes. Carry the predecessor's unaudited purchases
   into the successor's audit, or allow a terminal audit retry.
 
-- 🟢 **Stop and restart runs over MCP.** The local `run.lifecycle` follow-up
+- 🟢 **Stop and restart runs over MCP.** [#1814](https://github.com/nickysemenza/cubby/pull/1814)
   exposes cancel, retry and restart through the existing control/dispatch path;
   `imports_read.run_status` remains the detailed read. Shared research controls
   enforce member ownership, while photo inventory retains shared-household
-  control. Approve/reject and budget grants remain human-only. Final review,
-  hosted checks, merge and deployment are pending; live research stays paused.
+  control. Approve/reject and budget grants remain human-only. Independent review,
+  exact-head hosted checks, merge and deployment passed; live acceptance remains
+  pending while research stays paused.
 
 - 🤔 **Measure capture model routing before changing it.** Keep the current
   evaluated routing until a controlled comparison establishes safe purchased-
