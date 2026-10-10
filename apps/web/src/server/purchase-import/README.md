@@ -869,3 +869,11 @@ the controller remains installed. The permission edge and controller are checked
 again after owned-window lookup, before the queued AppleScript dispatch, and
 after the script returns before AppKit activation. Sign-in retains the coordinator's existing
 owned-window behavior. No new browser transport or Run state is introduced.
+
+Structured Offer variant selection binds the single decoded `?variant=` to the
+served HTTPS origin and product path. Resolve relative Offer URLs against that
+page; another host/path or URL credentials cannot establish selected-variant
+identity. An Offer URL without a variant parameter makes no selected-variant
+claim and does not contradict otherwise agreeing identifiers. Tracking query parameters and fragments do not change the product
+path. A refused Offer remains ambiguous, and historical replay receipts are
+not rewritten when the derivation revision changes.

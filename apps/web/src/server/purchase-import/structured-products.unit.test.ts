@@ -43,6 +43,22 @@ const offer = (sku: string, variant: number) => ({
 const base = "https://shop.forgewear.example.test/products/tee";
 
 describe("structured product identifiers from JSON-LD", () => {
+  it("keeps agreeing Offer identifiers when its URL makes no variant claim", () => {
+    const block = JSON.stringify({
+      "@type": "Product",
+      sku: "SYN-EXACT",
+      offers: {
+        "@type": "Offer",
+        sku: "SYN-EXACT",
+        url: "https://affiliate.example.test/tee",
+      },
+    });
+    const capture = walk("https://shop.example.test/products/tee?variant=111", [
+      block,
+    ]);
+    expect(capture.variantGroup).toBe(false);
+  });
+
   it("contributes a Shopify Product's single Offer", () => {
     const block = JSON.stringify({
       "@context": "https://schema.org",
@@ -112,6 +128,66 @@ describe("structured product identifiers from JSON-LD", () => {
       ],
       variantGroup: false,
     });
+  });
+
+  it("does not select an Offer on another host or product path by a coincident variant id", () => {
+    for (const url of [
+      "https://other.example.test/products/tee?variant=222",
+      "https://shop.forgewear.example.test/products/other?variant=222",
+      "https://member:secret@shop.forgewear.example.test/products/tee?variant=222",
+    ]) {
+      const block = JSON.stringify({
+        "@type": "Product",
+        sku: "SYN-DEFAULT",
+        offers: { "@type": "Offer", sku: "SYN-OTHER", url },
+      });
+      const result = walk(`${base}?variant=222`, [block]);
+      expect(result.variantGroup).toBe(true);
+      expect(result.products.map((product) => product.skus)).toEqual([
+        ["SYN-DEFAULT"],
+      ]);
+    }
+  });
+
+  it("refuses repeated Offer variants revealed by URL control-character normalization", () => {
+    for (const control of ["\n", "\r", "\t"]) {
+      const block = JSON.stringify({
+        "@type": "Product",
+        sku: "SYN-DEFAULT",
+        offers: {
+          "@type": "Offer",
+          sku: "SYN-SELECTED",
+          url: `/products/tee?vari${control}ant=111&variant=222`,
+        },
+      });
+      expect(walk(`${base}?variant=222`, [block]).variantGroup).toBe(true);
+      const singleOffer = JSON.stringify({
+        "@type": "Product",
+        sku: "SYN-DEFAULT",
+        offers: offer("SYN-SELECTED", 222),
+      });
+      expect(
+        walk(`${base}?vari${control}ant=111&variant=222`, [singleOffer])
+          .variantGroup,
+      ).toBe(true);
+    }
+  });
+
+  it("resolves a relative Offer on the served product page without matching unrelated query parameters", () => {
+    const block = JSON.stringify({
+      "@type": "Product",
+      sku: "SYN-DEFAULT",
+      offers: {
+        "@type": "Offer",
+        sku: "SYN-SELECTED",
+        url: "/products/tee?variant=222&utm_source=synthetic",
+      },
+    });
+    const result = walk(`${base}?variant=222#details`, [block]);
+    expect(result.variantGroup).toBe(false);
+    expect(result.products.map((product) => product.skus)).toEqual([
+      ["SYN-SELECTED"],
+    ]);
   });
 
   it("reads differing Offers without a served variant as an ambiguous group", () => {
