@@ -18,6 +18,7 @@ import { Database } from "~/server/db";
 
 import {
   PURCHASE_IMPORT_REPAIR_FEATURE,
+  RESEARCH_SUPPORT_FEATURE,
   LOCATION_DESCRIPTION_FEATURE,
   PRODUCT_IDENTIFICATION_FEATURE,
   RECIPE_FLOW_PRIMARY_FEATURE,
@@ -297,6 +298,34 @@ describe("runStructuredFeature", () => {
     ]);
   });
 
+  it("sends source assessment at low effort while preserving structured refusals", async () => {
+    const refusal = {
+      identityVerified: false,
+      scopeCompletionVerified: false,
+      acceptedFacts: [],
+      acceptedIdentifiers: [],
+      acceptedIdentifierClaims: [],
+      acceptedImages: [],
+      acceptedOrders: [],
+      acceptedEmailLinks: [],
+      rejected: [
+        {
+          path: "identity",
+          reason: "Synthetic receipt does not identify the selected variant",
+        },
+      ],
+    };
+    const { calls, ports } = fakePorts([respondWith(refusal)]);
+    const result = await runStructuredFeature(
+      RESEARCH_SUPPORT_FEATURE,
+      request,
+      { db, runId, operation: "research-source-support" },
+      ports,
+    );
+    expect(result).toEqual(refusal);
+    expect(calls[0]?.options).toMatchObject({ reasoningEffort: "low" });
+    expect(calls[0]?.context.tools?.[0]?.name).toBe(RESPOND_TOOL_NAME);
+  });
   it("maps the fast tier to OpenAI Responses options and forces the respond tool", async () => {
     const { calls, ports } = fakePorts([
       respondWith(PRODUCT_IDENTIFICATION_FIXTURE),

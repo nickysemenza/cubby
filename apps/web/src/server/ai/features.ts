@@ -218,11 +218,11 @@ export const MAILBOX_RELEVANCE_FEATURE = defineFeature({
 
 export const RESEARCH_SUPPORT_FEATURE = defineFeature({
   feature: "research-source-support",
-  promptVersion: "2026-10-07.1",
+  promptVersion: "2026-10-09.1",
   cache: false,
   collectPayload: false,
   tier: "quality",
-  effort: "high",
+  effort: "low",
   maxTokens: 6_000,
   schema: researchAssessment,
 });
