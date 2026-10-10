@@ -188,6 +188,13 @@ allowance through parent or predecessor lineage. Without any approval, the
 existing new-mail baseline behavior remains available; it grants no historical
 scan authority.
 
+Discovery skips classifying a message only when both its checksum and its
+`classificationVersion` match `MAILBOX_RESEARCH_VERSION` (`gmail/ingest.ts`). An
+older classifier or research version's completion markers prove nothing:
+bumping the version makes unchanged, already processed mail actionable again,
+while explicit human link/dismiss decisions and existing domain associations
+stay intact.
+
 Mail retry and restart re-enter the original source admission boundary rather
 than copying Run inputs or targets. Retry carries only unresolved supported
 messages; an explicit restart may also research supported settled messages.
