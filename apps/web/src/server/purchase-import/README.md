@@ -917,3 +917,5 @@ action, MIME type and checksum independently of the live source link. Native
 originals use the shared response-authentication middleware and in-memory PDF
 or image presentation, without writing private documents to disk. Retained evidence is distinct from the live
 browser preview and does not establish research completion.
+Media refusals use the canonical API error shape, preserving checksum, storage
+and admission diagnostics in both clients; only credential-shaped values are scrubbed.

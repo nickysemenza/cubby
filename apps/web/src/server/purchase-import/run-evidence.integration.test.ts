@@ -229,7 +229,21 @@ describe("run-scoped evidence upload admission", () => {
       async () => new Response("oops"),
     );
     expect(corrupted.status).toBe(422);
-    expect(await corrupted.text()).not.toContain("oops");
+    expect(await corrupted.json()).toEqual({
+      code: "UNPROCESSABLE_CONTENT",
+      message: "Retained evidence bytes differ from their manifest",
+    });
+    const storageFailure = await readRunEvidenceMedia(
+      ctx.db,
+      selection,
+      ctx.actor.userId,
+      async () => new Response("Synthetic storage refusal", { status: 503 }),
+    );
+    expect(storageFailure.status).toBe(503);
+    expect(await storageFailure.json()).toEqual({
+      code: "HTTP_503",
+      message: "Synthetic storage refusal",
+    });
     await getDb(ctx.db)
       .update(run)
       .set({ retiredAt: new Date(), retirementReason: "unrelated_source" })

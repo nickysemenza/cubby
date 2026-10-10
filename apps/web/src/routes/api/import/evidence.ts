@@ -36,8 +36,11 @@ export const Route = createFileRoute("/api/import/evidence")({
               };
           }
           if (!actor)
-            return new Response(
-              "Valid API key, bearer token or session required",
+            return Response.json(
+              {
+                code: "UNAUTHORIZED",
+                message: "Valid API key, bearer token or session required",
+              },
               {
                 status: 401,
                 headers: { "Cache-Control": "private, no-store" },
@@ -63,18 +66,29 @@ export const Route = createFileRoute("/api/import/evidence")({
           );
           return response;
         } catch (error) {
-          return new Response(scrubErrorMessage(getErrorMessage(error)), {
-            status:
-              error instanceof AppError && error.code === "UNAUTHORIZED"
-                ? 401
-                : error instanceof z.ZodError
-                  ? 400
-                  : 500,
-            headers: {
-              "Cache-Control": "private, no-store",
-              "X-Content-Type-Options": "nosniff",
+          return Response.json(
+            {
+              code:
+                error instanceof AppError
+                  ? error.code
+                  : error instanceof z.ZodError
+                    ? "BAD_REQUEST"
+                    : "INTERNAL_SERVER_ERROR",
+              message: scrubErrorMessage(getErrorMessage(error)),
             },
-          });
+            {
+              status:
+                error instanceof AppError && error.code === "UNAUTHORIZED"
+                  ? 401
+                  : error instanceof z.ZodError
+                    ? 400
+                    : 500,
+              headers: {
+                "Cache-Control": "private, no-store",
+                "X-Content-Type-Options": "nosniff",
+              },
+            },
+          );
         }
       },
       PUT: async ({ request }) => {

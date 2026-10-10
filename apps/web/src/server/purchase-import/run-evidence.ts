@@ -13,6 +13,7 @@ import { z } from "zod";
 
 import { env } from "~/env";
 import { APP_ORIGIN } from "~/lib/auth-constants";
+import { scrubErrorMessage } from "~/lib/error-diagnostics";
 import { getExecutionCtx } from "~/server/cf-env";
 import type { Database } from "~/server/db";
 import {
@@ -255,6 +256,11 @@ export async function readRunEvidenceMedia(
     "X-Content-Type-Options": "nosniff",
     "Content-Security-Policy": "sandbox; default-src 'none'",
   };
+  const failure = (status: number, code: string, message: string) =>
+    Response.json(
+      { code, message: scrubErrorMessage(message) },
+      { status, headers },
+    );
   return withTransaction(db, async (database) => {
     const [owned] = await database
       .select({ evidence: runEvidence })
@@ -289,9 +295,10 @@ export async function readRunEvidenceMedia(
       .limit(1)
       .for("update", { of: runTable });
     if (!owned)
-      return new Response(
+      return failure(
+        404,
+        "NOT_FOUND",
         "Retained evidence is unavailable or no longer owned",
-        { status: 404, headers },
       );
     const evidence = owned.evidence;
     const mediaType =
@@ -305,29 +312,29 @@ export async function readRunEvidenceMedia(
       .object({ researchUploadState: z.literal("pending") })
       .safeParse(evidence.sourceMetadata);
     if (staged.success)
-      return new Response("Retained evidence upload is pending", {
-        status: 409,
-        headers,
-      });
+      return failure(409, "CONFLICT", "Retained evidence upload is pending");
     if (!mediaType.success || !size.success)
-      return new Response(
+      return failure(
+        415,
+        "UNSUPPORTED_MEDIA_TYPE",
         "Retained evidence cannot be displayed as verified media",
-        { status: 415, headers },
       );
     const original = await readObject(evidence.objectKey);
     if (!original.ok)
-      return new Response(await original.text(), {
-        status: original.status,
-        headers,
-      });
+      return failure(
+        original.status,
+        `HTTP_${original.status}`,
+        await original.text(),
+      );
     const bytes = await readResponseWithLimit(original, size.data);
     if (
       bytes.byteLength !== size.data ||
       (await sha256Hex(bytes)) !== evidence.checksum
     )
-      return new Response(
+      return failure(
+        422,
+        "UNPROCESSABLE_CONTENT",
         "Retained evidence bytes differ from their manifest",
-        { status: 422, headers },
       );
     return new Response(new Uint8Array(bytes).buffer, {
       headers: {
