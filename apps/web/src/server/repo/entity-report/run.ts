@@ -560,7 +560,13 @@ const importEvidence = (run: RunDetail): ReportBlock[] => {
     }),
     imageUrl: evidence.previewUrl,
   }));
-  const captures = evidenceRows.filter((source) => source.imageUrl);
+  const captures = evidenceRows
+    .filter((source) => source.imageUrl)
+    .sort(
+      (left, right) =>
+        (right.at ?? "").localeCompare(left.at ?? "") ||
+        (right.key ?? "").localeCompare(left.key ?? ""),
+    );
   const otherSources = evidenceRows.filter((source) => !source.imageUrl);
   return [
     ...(captures.length

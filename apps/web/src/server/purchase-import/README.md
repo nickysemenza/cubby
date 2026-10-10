@@ -906,7 +906,7 @@ private and uncached, with MIME sniffing disabled and a sandbox policy. No publi
 Image attachment or second capture store is created.
 
 The shared records report presents screenshot-backed sources in a bounded
-eight-row filmstrip. Selecting a capture opens its original screenshot beside
+eight-row filmstrip, newest capture first. Selecting a capture opens its original screenshot beside
 its timestamp, live source link and accepted facts on that source; retired
 support and other targets are excluded. Referenced screenshots appear with
 their source page rather than as duplicate captures. Sources without displayable
