@@ -83,8 +83,16 @@ export default defineEntity({
           kind: "select",
           suggest: { basis: ["harvestAmount", "notes"] },
           options: [
-            { value: "note", label: "Note" },
-            { value: "harvest", label: "Harvest" },
+            {
+              value: "note",
+              label: "Note",
+              description: "A note, observation, or photo record",
+            },
+            {
+              value: "harvest",
+              label: "Harvest",
+              description: "A record of gathered produce",
+            },
           ],
         },
         display: { list: true, detail: true },

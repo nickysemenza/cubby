@@ -240,72 +240,66 @@ export default defineEntity({
               value: "food",
               label: "Food",
               description:
-                "Expenses with no project fall to the household project, and the unit-mapping check covers these products. Required for products linked to an ingredient or a USDA food.",
+                "Edible/consumable products tracked against nutrition (USDA-linkable)",
             },
             {
               value: "books",
               label: "Books",
-              description: "Required for products that carry an ISBN.",
+              description: "Books, manuals, and other bound reading matter",
             },
             {
               value: "tools",
               label: "Tools",
-              description:
-                "Reusable project resources: tool matrix and gallery, wishlist candidates. Data quality expects a model number.",
+              description: "Durable hand or power tools",
             },
             {
               value: "tool-consumables",
               label: "Tool consumables",
               description:
-                "Blades, bits, abrasives. Classification only: color, icon, and the category-family filter.",
+                "Consumed alongside tool use: blades, bits, abrasives",
             },
             {
               value: "tool-accessories",
               label: "Tool accessories",
-              description:
-                "Attachments and add-ons for tools. Classification only: color, icon, and the category-family filter.",
+              description: "Non-consumed attachments and add-ons for tools",
             },
             {
               value: "storage",
               label: "Storage",
               description:
-                "Bins, totes, shelving. Data quality expects a model number.",
+                "Bins, totes, shelving, and other organizational containers",
             },
             {
               value: "hardware",
               label: "Hardware",
-              description:
-                "Fasteners and fittings. Classification only: color, icon, and the category-family filter.",
+              description: "Fasteners, fittings, and small hardware components",
             },
             {
               value: "electronics",
               label: "Electronics",
-              description:
-                "Devices and components. Data quality expects a model number.",
+              description: "Electronic devices and components",
             },
             {
               value: "software",
               label: "Software",
-              description:
-                "Licenses and subscriptions. Can be used as a reusable project resource.",
+              description: "Software, licenses, and digital subscriptions",
             },
             {
               value: "household",
               label: "Household",
               description:
-                "General household goods. Data quality expects a model number.",
+                "General household goods with no more specific feature",
             },
             {
               value: "supplies",
               label: "Supplies",
               description:
-                "Tape, paper, cleaning. Classification only: color, icon, and the category-family filter.",
+                "Consumable general-purpose supplies (tape, paper, cleaning, …)",
             },
             {
               value: "apparel",
               label: "Apparel",
-              description:
-                "Clothing and wearables. Classification only: color, icon, and the category-family filter.",
+              description: "Clothing, footwear, and wearable accessories",
             },
           ],
           suggest: { basis: ["name", "parentId"] },

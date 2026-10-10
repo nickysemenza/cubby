@@ -336,9 +336,23 @@ export default defineEntity({
             ],
           },
           options: [
-            { value: "unknown", label: "Unclassified" },
-            { value: "required", label: "Expected" },
-            { value: "not_expected", label: "Not expected" },
+            {
+              value: "unknown",
+              label: "Unclassified",
+              description:
+                "Insufficient or mixed evidence; leave receipt expectation unclassified",
+            },
+            {
+              value: "required",
+              label: "Expected",
+              description: "Household expects a receipt or order evidence",
+            },
+            {
+              value: "not_expected",
+              label: "Not expected",
+              description:
+                "Household does not expect receipt or order evidence",
+            },
           ],
         },
         display: { list: true, detail: true },

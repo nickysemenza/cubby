@@ -204,9 +204,22 @@ export default defineEntity({
           kind: "select",
           suggest: { basis: ["transplantedOn", "finishedOn"] },
           options: [
-            { value: "planned", label: "Planned" },
-            { value: "growing", label: "Growing" },
-            { value: "finished", label: "Finished" },
+            {
+              value: "planned",
+              label: "Planned",
+              description:
+                "Planned for a future or not-yet-established planting",
+            },
+            {
+              value: "growing",
+              label: "Growing",
+              description: "Currently transplanted or actively growing",
+            },
+            {
+              value: "finished",
+              label: "Finished",
+              description: "No longer growing or completed",
+            },
           ],
         },
         display: { list: true, detail: true },

@@ -173,11 +173,31 @@ export default defineEntity({
             reviewRequired: true,
           },
           options: [
-            { value: "unspecified", label: "Unspecified" },
-            { value: "mixed_retail", label: "Mixed retailer" },
-            { value: "food_retail", label: "Groceries" },
-            { value: "restaurant", label: "Restaurant" },
-            { value: "coffee_shop", label: "Coffee shop" },
+            {
+              value: "unspecified",
+              label: "Unspecified",
+              description: "Insufficient evidence",
+            },
+            {
+              value: "mixed_retail",
+              label: "Mixed retailer",
+              description: "Mixed retailer selling multiple kinds of goods",
+            },
+            {
+              value: "food_retail",
+              label: "Groceries",
+              description: "Groceries and food retail",
+            },
+            {
+              value: "restaurant",
+              label: "Restaurant",
+              description: "Prepared restaurant meals",
+            },
+            {
+              value: "coffee_shop",
+              label: "Coffee shop",
+              description: "Coffee shop",
+            },
           ],
         },
         display: { list: true, detail: true },
@@ -215,9 +235,23 @@ export default defineEntity({
           kind: "select",
           suggest: { basis: ["name", "website", "notes"] },
           options: [
-            { value: "unknown", label: "Unclassified" },
-            { value: "required", label: "Expected" },
-            { value: "not_expected", label: "Not expected" },
+            {
+              value: "unknown",
+              label: "Unclassified",
+              description:
+                "Insufficient or mixed evidence; leave receipt expectation unclassified",
+            },
+            {
+              value: "required",
+              label: "Expected",
+              description: "Household expects a receipt or order evidence",
+            },
+            {
+              value: "not_expected",
+              label: "Not expected",
+              description:
+                "Household does not expect receipt or order evidence",
+            },
           ],
         },
         display: { list: true, detail: true },

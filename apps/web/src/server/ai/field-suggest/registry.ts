@@ -63,22 +63,14 @@ import { z } from "zod";
 
 import { householdLocalDate } from "~/lib/household-date";
 import {
-  COST_TYPE_DESCRIPTIONS,
   COST_TYPE_RULES,
-  LINE_KIND_DESCRIPTIONS,
   LINE_KIND_RULES,
-  LOCATION_TYPE_DESCRIPTIONS,
   LOCATION_TYPE_RULES,
-  MEAL_KIND_DESCRIPTIONS,
   MEAL_KIND_RULES,
-  MEAL_TYPE_DESCRIPTIONS,
   MEAL_TYPE_RULES,
-  PRODUCT_CATEGORY_FEATURE_DESCRIPTIONS,
   PRODUCT_CATEGORY_FEATURE_RULES,
-  PROJECT_KIND_DESCRIPTIONS,
   PROJECT_KIND_RULES,
   TAG_PRUNE_RULES,
-  TRADE_DESCRIPTIONS,
   TRADE_RULES,
 } from "~/server/ai/vocabularies";
 import type { Database } from "~/server/db";
@@ -491,14 +483,8 @@ function expectationSpec(
   return {
     kind: "enum",
     values: evidenceExpectationValues,
+    describe: (value) => value,
     labelOf: (value) => expectationLabels[value],
-    describe: (value) =>
-      ({
-        unknown:
-          "Insufficient or mixed evidence; leave receipt expectation unclassified",
-        required: "Household expects a receipt or order evidence",
-        not_expected: "Household does not expect receipt or order evidence",
-      })[value],
     rules:
       "Suggest the household's receipt/order evidence expectation, not whether a merchant is capable of issuing receipts. Amazon and Home Depot purchases are expected (required). Restaurant meals, BiRite groceries and friend reimbursements are not_expected. Use the actual purchase/source description when available; broad or mixed vendor/category evidence without a clear purpose remains unknown. Missing receipt evidence alone never means not_expected. Return a reviewed proposal only; never overwrite explicit decisions.",
     subject: (basis) => renderSubject(entity, basis),
@@ -508,16 +494,8 @@ function expectationSpec(
 const productExpectationSpec: EnumSuggestSpec<ProductExpectation> = {
   kind: "enum",
   values: productExpectationValues,
+  describe: (value) => value,
   labelOf: (value) => expectationLabels[value],
-  describe: (value) =>
-    ({
-      unknown: "Insufficient evidence for durable Product records",
-      required: "Durable purchased goods should have Product records",
-      not_expected:
-        "Groceries, services, reimbursements or other non-durable spending do not require Product records, but may link one",
-      not_allowed:
-        "Restaurant meals, event tickets, rides and donations never link a Product",
-    })[value],
   rules:
     "Suggest Product expectation independently from receipt expectation using the spending category and parent context. Durable goods such as tools, furniture, clothing and tracked software require Product records (required). Groceries, services and friend reimbursements do not require one but may link one (not_expected). Restaurant meals, event tickets, rides and donations can never be a Product (not_allowed); choose not_allowed only when every Expense in the category is such spending. A mixed or unclear category must remain unknown. Do not infer that every receipted purchase requires Products. Return a reviewed proposal only; never overwrite explicit decisions.",
   subject: (basis) => renderSubject("spendingCategory", basis),
@@ -532,14 +510,7 @@ export const FIELD_SUGGEST_REGISTRY = {
   "vendor.spendingProfile": {
     kind: "enum",
     values: vendorSpendingProfileValues,
-    describe: (value) =>
-      ({
-        unspecified: "Insufficient evidence",
-        mixed_retail: "Mixed retailer selling multiple kinds of goods",
-        food_retail: "Groceries and food retail",
-        restaurant: "Prepared restaurant meals",
-        coffee_shop: "Coffee shop",
-      })[value] ?? value,
+    describe: (value) => value,
     rules:
       "Suggest this vendor's spending profile using saved independent purchase and ProductCategory evidence. Food products alone do not distinguish groceries from restaurant meals. Mixed goods support mixed_retail; ambiguous or truncated evidence supports unspecified. The current profile is a review target, never proof. Return a proposal only.",
     subject: (basis) => renderSubject("vendor", basis),
@@ -556,12 +527,7 @@ export const FIELD_SUGGEST_REGISTRY = {
   "planting.status": {
     kind: "enum",
     values: plantingStatus.options,
-    describe: (v) =>
-      ({
-        planned: "Planned for a future or not-yet-established planting",
-        growing: "Currently transplanted or actively growing",
-        finished: "No longer growing or completed",
-      })[v],
+    describe: (value) => value,
     rules:
       "Infer the planting lifecycle status from its dates, compared with Today. A finished date on or before Today indicates finished. A sow or transplant date on or before Today indicates growing. A sow or transplant date after Today is an estimate on a planned planting, so choose planned; with no dates choose planned.",
     // Without today's date the model reads any filled-in transplant date as
@@ -572,10 +538,7 @@ export const FIELD_SUGGEST_REGISTRY = {
   "gardenEntry.kind": {
     kind: "enum",
     values: gardenEntryKind.options,
-    describe: (v) =>
-      v === "harvest"
-        ? "A record of gathered produce"
-        : "A note, observation, or photo record",
+    describe: (value) => value,
     rules:
       "Choose harvest when a harvest amount is present; otherwise choose note for an observation or photo journal entry.",
     subject: (basis) => renderSubject("gardenEntry", basis),
@@ -669,10 +632,10 @@ export const FIELD_SUGGEST_REGISTRY = {
     subject: productTagPruneSubject,
   } satisfies ArrayPruneSuggestSpec,
   "location.type": {
+    describe: (value) => value,
     kind: "enum",
     // `furniture` is a Product instance; only a productId link can make one.
     values: locationType.options.filter((value) => value !== "furniture"),
-    describe: (v) => LOCATION_TYPE_DESCRIPTIONS[v],
     rules: LOCATION_TYPE_RULES,
     subject: (basis) => renderSubject("location", basis),
   } satisfies EnumSuggestSpec<LocationType>,
@@ -699,32 +662,32 @@ export const FIELD_SUGGEST_REGISTRY = {
     subject: (basis) => renderSubject("inventory", basis),
   } satisfies ReferenceSuggestSpec<LocationPutAwayCandidate>,
   "project.kind": {
+    describe: (value) => value,
     kind: "enum",
     values: projectKindValues,
-    describe: (v) => PROJECT_KIND_DESCRIPTIONS[v],
     rules: PROJECT_KIND_RULES,
     subject: (basis) => renderSubject("project", basis),
   } satisfies EnumSuggestSpec<ProjectKind>,
   "project.defaultTrade": {
+    describe: (value) => value,
     kind: "enum",
     values: tradeValues,
-    describe: (v) => TRADE_DESCRIPTIONS[v],
     labelOf: (v) => TRADE_LABELS[v],
     rules: TRADE_RULES,
     subject: (basis) => renderSubject("project", basis),
   } satisfies EnumSuggestSpec<Trade>,
   "meal.mealType": {
+    describe: (value) => value,
     kind: "enum",
     values: mealTypeValues,
-    describe: (v) => MEAL_TYPE_DESCRIPTIONS[v],
     labelOf: (v) => MEAL_TYPE_LABELS[v],
     rules: MEAL_TYPE_RULES,
     subject: (basis) => renderSubject("meal", basis),
   } satisfies EnumSuggestSpec<MealType>,
   "meal.mealKind": {
+    describe: (value) => value,
     kind: "enum",
     values: mealKindValues,
-    describe: (v) => MEAL_KIND_DESCRIPTIONS[v],
     labelOf: (v) => MEAL_KIND_LABELS[v],
     rules: MEAL_KIND_RULES,
     subject: (basis) => renderSubject("meal", basis),
@@ -756,31 +719,31 @@ export const FIELD_SUGGEST_REGISTRY = {
     subject: (basis) => renderSubject("task", basis),
   } satisfies ReferenceSuggestSpec<InternalSearchCandidate>,
   "task.trade": {
+    describe: (value) => value,
     kind: "enum",
     values: tradeValues,
-    describe: (v) => TRADE_DESCRIPTIONS[v],
     labelOf: (v) => TRADE_LABELS[v],
     rules: TRADE_RULES,
     subject: (basis) => renderSubject("task", basis),
   } satisfies EnumSuggestSpec<Trade>,
   "expense.costType": {
+    describe: (value) => value,
     kind: "enum",
     values: costTypeValues,
-    describe: (v) => COST_TYPE_DESCRIPTIONS[v],
     rules: COST_TYPE_RULES,
     subject: (basis) => renderSubject("expense", basis),
   } satisfies EnumSuggestSpec<CostType>,
   "expense.lineKind": {
+    describe: (value) => value,
     kind: "enum",
     values: expenseLineKindValues,
-    describe: (v) => LINE_KIND_DESCRIPTIONS[v],
     rules: LINE_KIND_RULES,
     subject: (basis) => renderSubject("expense", basis),
   } satisfies EnumSuggestSpec<ExpenseLineKind>,
   "expense.trade": {
+    describe: (value) => value,
     kind: "enum",
     values: tradeValues,
-    describe: (v) => TRADE_DESCRIPTIONS[v],
     labelOf: (v) => TRADE_LABELS[v],
     rules: TRADE_RULES,
     subject: (basis) => renderSubject("expense", basis),
@@ -826,9 +789,9 @@ export const FIELD_SUGGEST_REGISTRY = {
     subject: (basis) => renderSubject("expense", basis),
   } satisfies TextRosterSuggestSpec,
   "purchase.defaultTrade": {
+    describe: (value) => value,
     kind: "enum",
     values: tradeValues,
-    describe: (v) => TRADE_DESCRIPTIONS[v],
     labelOf: (v) => TRADE_LABELS[v],
     rules: TRADE_RULES,
     subject: (basis) => renderSubject("purchase", basis),
@@ -866,6 +829,7 @@ export const FIELD_SUGGEST_REGISTRY = {
   } satisfies ReferenceSuggestSpec<ProjectOptionsOut>,
   "productCategory.feature": {
     kind: "enum",
+    describe: (value) => value,
     values: productCategoryFeatureValues,
     // A child already inherits its ancestor's binding, and a nested binding is
     // a deliberate override, not a guess. Each feature binds one category
@@ -876,7 +840,6 @@ export const FIELD_SUGGEST_REGISTRY = {
       const bound = new Set(await listBoundCategoryFeatures(db));
       return productCategoryFeatureValues.filter((v) => !bound.has(v));
     },
-    describe: (v) => PRODUCT_CATEGORY_FEATURE_DESCRIPTIONS[v],
     rules: PRODUCT_CATEGORY_FEATURE_RULES,
     subject: (basis) => renderSubject("productCategory", basis),
   } satisfies EnumSuggestSpec<ProductCategoryFeature>,
