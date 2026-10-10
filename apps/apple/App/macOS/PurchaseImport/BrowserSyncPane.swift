@@ -62,7 +62,7 @@ struct BrowserSyncPane: View {
                     VStack(alignment: .leading) {
                         Text(row.status)
                         if let state = row.state {
-                            if state.needsAuthentication && row.plan.accountStatus != .paused_auth {
+                            if state.needsAuthentication && row.plan.accountStatus != .pausedAuth {
                                 Button("Open sign-in") {
                                     model.browserBridge.raiseAuthenticationWindow(accountID: row.id)
                                 }
@@ -88,16 +88,16 @@ struct BrowserSyncPane: View {
                 TableColumn("Account status") { row in
                     VStack(alignment: .leading) {
                         Text(row.accountStatus)
-                        if row.plan.accountStatus == .paused_auth {
+                        if row.plan.accountStatus == .pausedAuth {
                             Button("Open sign-in") {
                                 model.browserBridge.raiseAuthenticationWindow(accountID: row.id)
                             }
                         }
-                        if let timestamp = row.plan.lastSuccessAt,
-                            let value = EntityFieldValue.date(.string(timestamp))
-                        {
-                            Text("Last completed account run: \(value)")
-                                .font(.caption).foregroundStyle(.secondary)
+                        if let timestamp = row.plan.lastSuccessAt {
+                            Text(
+                                "Last completed account run: \(timestamp.formatted(date: .abbreviated, time: .shortened))"
+                            )
+                            .font(.caption).foregroundStyle(.secondary)
                         }
                     }
                 }
@@ -155,6 +155,10 @@ struct BrowserSyncPane: View {
         .task {
             await model.browserBridge.refreshSyncPlan()
             loading = false
+            while !Task.isCancelled {
+                do { try await Task.sleep(for: .seconds(10)) } catch { return }
+                await model.browserBridge.refreshSyncPlan()
+            }
         }
     }
 
@@ -193,7 +197,7 @@ nonisolated private struct BrowserSyncRow: Identifiable {
         status = plan.connected.map { $0 ? "Connected" : "Disconnected" } ?? "Connection unavailable"
     }
     var accountStatus: String {
-        let field = EntityManifest[.vendorAccount].fields.first { $0.key == "status" }
+        let field = EntityCatalog[.vendorAccount].fields.first { $0.key == "status" }
         return field.map { EntityFieldValue.enumLabel(plan.accountStatus.rawValue, field: $0) }
             ?? plan.accountStatus.rawValue
     }
@@ -249,11 +253,13 @@ private struct BrowserSyncHistoryButton: View {
     /// Synthetic fleet exercises scrolling and two distinct accounts at the same vendor.
     private final class BrowserSyncPreviewController: BrowserBridgeControlling {
         let plans: [SyncPlanAccount] = (1...100).map { index in
-            .init(
+            let accountStatus: VendorAccountStatus =
+                index == 1 ? .pausedAuth : (index == 2 ? .pausedOffline : .active)
+            return .init(
                 shortcode: "VACCT-EXAMPLE-\(index)",
                 label: index == 2 ? "Second account" : "Example shop \(index == 1 ? 1 : index)",
                 vendorName: "Example shop \(index == 2 ? 1 : index)",
-                accountStatus: index == 1 ? .paused_auth : (index == 2 ? .paused_offline : .active),
+                accountStatus: accountStatus,
                 connected: index == 2 ? false : true, lastSuccessAt: nil,
                 action: .firstSync(.init(kind: .firstSync)),
                 line: "First sync: read available order history.", disabledReason: nil)

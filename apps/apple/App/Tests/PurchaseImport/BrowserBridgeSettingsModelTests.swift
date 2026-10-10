@@ -119,6 +119,32 @@ struct BrowserBridgeSettingsModelTests {
 
     // Failure modes: duplicated plan rows can repeat actions; same-vendor accounts must not
     // coalesce; a submitted/resumed run can lose its navigation target; refusals must not navigate.
+    // Server snapshots must follow socket/authentication/completion events, rather than
+    // depending on a changed roster or the member manually refreshing Browser Sync.
+    @Test func lifecycleEventsRefreshServerAccountProjection() async {
+        let controller = StubController()
+        let model = BrowserBridgeSettingsModel()
+        model.setAccounts([
+            .init(id: "VACCT-4K7M", label: "Example account", ledgerPartyId: "LP-EXAMPLE", browser: .chrome)
+        ])
+        model.install(controller: controller)
+        await model.refreshSyncPlan()
+        var expected = controller.planReads
+        func expectRefresh() async {
+            expected += 1
+            for _ in 0..<500 where controller.planReads < expected { await Task.yield() }
+            #expect(controller.planReads >= expected)
+        }
+        model.setAccountStatus(.connected, accountID: "VACCT-4K7M")
+        await expectRefresh()
+        model.requireAuthentication(accountID: "VACCT-4K7M", message: "Sign in")
+        await expectRefresh()
+        model.markRunCompleted(accountID: "VACCT-4K7M", runID: "RUN-4K7M")
+        await expectRefresh()
+        model.setAccountStatus(.disconnected, accountID: "VACCT-4K7M")
+        await expectRefresh()
+    }
+
     @Test func repeatedAccountAppearsOnceButDistinctAccountsRemain() async {
         let controller = StubController()
         let first = SyncPlanAccount(
@@ -193,7 +219,8 @@ struct BrowserBridgeSettingsModelTests {
         old.plans = [
             .init(
                 shortcode: "VACCT-4K7M", label: "Old server account",
-                vendorName: "Example shop", action: .firstSync(.init(kind: .firstSync)),
+                vendorName: "Example shop", accountStatus: .active, connected: false, lastSuccessAt: nil,
+                action: .firstSync(.init(kind: .firstSync)),
                 line: "First sync", disabledReason: nil)
         ]
         let model = BrowserBridgeSettingsModel()

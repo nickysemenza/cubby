@@ -947,4 +947,6 @@ owned, enabled accounts before asking their broker. The last completed account R
 time reuses the VendorAccount derived activity query; a later failed attempt cannot
 replace it. This timestamp is not proof of mailbox coverage or Product verification.
 Mac Browser Sync renders account status through the generic manifest enum labels,
-beside the shared admission plan and its Run links.
+beside the shared admission plan and its Run links. Connection, sign-in and Run-completion
+events refresh the projection; the visible pane also refreshes every ten seconds for
+server-side changes. Closing the pane cancels that read-only refresh loop.
