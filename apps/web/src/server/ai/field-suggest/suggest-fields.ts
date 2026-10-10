@@ -813,7 +813,7 @@ export async function suggestFields(
   ports?: SuggestFieldsPorts,
 ): Promise<FieldSuggestionsOut> {
   const financeContext = await savedSuggestionContext(db, rawInput);
-  const input =
+  const classifiedInput =
     rawInput.entity === "expense"
       ? {
           ...rawInput,
@@ -823,14 +823,23 @@ export async function suggestFields(
           },
         }
       : rawInput;
-  if (
-    input.targets.some(
-      (target) => !classificationAllowsField(input.entity, input.basis, target),
-    )
-  ) {
+  // A record panel asks for every suggest target at once; a target its own
+  // classification refuses (a tax line's product) is dropped, and only a
+  // request left with nothing to suggest is refused.
+  const input = {
+    ...classifiedInput,
+    targets: classifiedInput.targets.filter((target) =>
+      classificationAllowsField(
+        classifiedInput.entity,
+        classifiedInput.basis,
+        target,
+      ),
+    ),
+  };
+  if (input.targets.length === 0) {
     throw createAppError(
       "SUGGEST_FIELD_FORBIDDEN",
-      "The target field is forbidden by this record classification.",
+      `This record's classification refuses ${classifiedInput.targets.join(", ")}.`,
     );
   }
   // SAFETY: `input.entity` is validated by `fieldSuggestionsInput`'s
