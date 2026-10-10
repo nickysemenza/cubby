@@ -20,6 +20,8 @@ public final class HeroActionModel: Identifiable {
     public private(set) var previewError: String?
     public private(set) var isRunning = false
     public private(set) var errorMessage: String?
+    /// The running submission (tests await it).
+    @ObservationIgnored private(set) var submission: Task<Void, Never>?
     /// The (normalized) values the current `preview` was computed for. A preview is only the
     /// answer to the form as it stood then; it never vouches for later edits.
     private var previewValues: [String: JSONValue]?
@@ -164,7 +166,7 @@ public final class HeroActionModel: Identifiable {
         guard canSubmit else { return }
         isRunning = true
         errorMessage = nil
-        Task {
+        submission = Task {
             defer { isRunning = false }
             do {
                 let outcome = try await runner.perform(

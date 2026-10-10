@@ -206,9 +206,11 @@ public final class ReportSlotModel {
 
     @ObservationIgnored private let service: any ReportServing
     @ObservationIgnored private let batch: ReportBatchModel?
-    @ObservationIgnored private let pollInterval: Duration
+    @ObservationIgnored private let waitForNextPoll: @Sendable () async throws -> Void
     @ObservationIgnored private var watchers = 0
-    @ObservationIgnored private var pollTask: Task<Void, Never>?
+    @ObservationIgnored private(set) var pollTask: Task<Void, Never>?
+    /// Callers waiting for the read in flight to finish; a later read never overlaps it.
+    @ObservationIgnored private var loadWaiters: [CheckedContinuation<Void, Never>] = []
     @ObservationIgnored private var staleStatusReported: String?
     /// Pages after the first, kept across a refresh so polling never drops what was loaded.
     @ObservationIgnored private var laterPages: [ReportPresentation] = []
@@ -217,14 +219,17 @@ public final class ReportSlotModel {
     /// the screen's slots); without, it reads its own report and pages with the cursor.
     public init(
         slot: ReportSlot, id: String, shownStatus: String? = nil, batch: ReportBatchModel? = nil,
-        service: any ReportServing, pollInterval: Duration = .seconds(3)
+        service: any ReportServing,
+        waitForNextPoll: @escaping @Sendable () async throws -> Void = {
+            try await Task.sleep(for: .seconds(3))
+        }
     ) {
         self.slot = slot
         self.id = id
         self.shownStatus = shownStatus
         self.batch = batch
         self.service = service
-        self.pollInterval = pollInterval
+        self.waitForNextPoll = waitForNextPoll
     }
 
     public var presentation: ReportPresentation? {
@@ -238,9 +243,9 @@ public final class ReportSlotModel {
     /// again, so a change made just before (an action) is never hidden behind a stale poll.
     public func refresh() async {
         if let batch { return await batch.refresh() }
-        while isLoading { try? await Task.sleep(for: .milliseconds(5)) }
+        await loadFinished()
         isLoading = true
-        defer { isLoading = false }
+        defer { endLoading() }
         do {
             let first = ReportPresentation(try await service.report(slot: slot, id: id, cursor: nil))
             ownPresentation = laterPages.reduce(first) { $0.appending($1) }
@@ -253,10 +258,10 @@ public final class ReportSlotModel {
 
     /// Appends the next page under the first page's blocks; a poll in flight finishes first.
     public func loadMore() async {
-        while isLoading { try? await Task.sleep(for: .milliseconds(5)) }
+        await loadFinished()
         guard let current = ownPresentation, let cursor = current.nextCursor else { return }
         isLoading = true
-        defer { isLoading = false }
+        defer { endLoading() }
         do {
             let page = ReportPresentation(try await service.report(slot: slot, id: id, cursor: cursor))
             laterPages.append(page)
@@ -273,6 +278,17 @@ public final class ReportSlotModel {
             staleStatusReported = status
             onRecordStale?()
         }
+    }
+
+    private func loadFinished() async {
+        while isLoading { await withCheckedContinuation { loadWaiters.append($0) } }
+    }
+
+    private func endLoading() {
+        isLoading = false
+        let waiters = loadWaiters
+        loadWaiters = []
+        for waiter in waiters { waiter.resume() }
     }
 
     // MARK: Polling
@@ -307,7 +323,7 @@ public final class ReportSlotModel {
             guard let self else { return }
             await self.refresh()
             while !Task.isCancelled, self.live {
-                try? await Task.sleep(for: self.pollInterval)
+                try? await self.waitForNextPoll()
                 if Task.isCancelled { return }
                 await self.refresh()
             }

@@ -153,6 +153,14 @@ public final class EntityListSearchModel {
         }
     }
 
+    /// Returns once the debounced request, if any, has applied its result or been superseded.
+    func settled() async {
+        while let requestTask {
+            await requestTask.value
+            if self.requestTask == requestTask { return }
+        }
+    }
+
     /// Clears the query and all search results. The owning list keeps its unsearched projection,
     /// so clearing can restore the prior shelf/timeline state without another request.
     public func clear() {

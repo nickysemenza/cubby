@@ -162,10 +162,10 @@ struct PhotoUploaderTests {
         let original = try ImageEncoding.encode(
             TestImages.canvas(width: 120, height: 80, subject: true), as: .png)
         let uploadedURL = Mutex<URL?>(nil)
-        let pending = PendingImageUpload(service: StubPhotoService()) { fileURL, _, _ in
+        let pending = PendingImageUpload(service: StubPhotoService()) { fileURL, _, _ throws in
             uploadedURL.withLock { $0 = fileURL }
+            // Suspend once, as a real transfer does, before reading the file.
             await Task.yield()
-            try await Task.sleep(for: .milliseconds(20))
             #expect(try Data(contentsOf: fileURL) == original)
         }
         _ = try await pending.upload(

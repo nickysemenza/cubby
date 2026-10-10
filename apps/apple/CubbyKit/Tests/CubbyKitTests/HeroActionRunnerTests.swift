@@ -318,7 +318,7 @@ struct HeroActionRunnerTests {
         model.submit(confirmed: true) { _ in finished.withLock { $0 += 1 } }
         model.submit(confirmed: true) { _ in finished.withLock { $0 += 1 } }
         #expect(model.isRunning)
-        while model.isRunning { await Task.yield() }
+        await model.submission?.value
         #expect(recorder.requests.filter { $0.path.hasSuffix("/discard") }.count == 1)
         #expect(finished.withLock { $0 } == 1)
     }

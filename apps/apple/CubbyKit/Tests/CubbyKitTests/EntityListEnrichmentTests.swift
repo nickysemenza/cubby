@@ -1,4 +1,5 @@
 import Foundation
+import Synchronization
 import Testing
 
 @testable import CubbyKit
@@ -10,7 +11,7 @@ import Testing
 @MainActor
 struct EntityListEnrichmentTests {
     @Test func coreIsVisibleBeforeGroupsAndRemovedOptionalIsCleared() async throws {
-        let gate = Gate<[EntityListGroupResult]>()
+        let gate = Reply<[EntityListGroupResult]>()
         let model = EntityListEnrichmentModel(descriptor: EntityCatalog[.product])
         let page = Self.page(enrich: { _, _ in await gate.wait() })
         model.accept(page, replacing: true)
@@ -20,7 +21,7 @@ struct EntityListEnrichmentTests {
         #expect(core.pendingFields.contains("displayImages"))
         #expect(core.raw["displayImages"] != nil)
 
-        await gate.resolve([.ready(id: "media", rows: [["id": "PRD-2345"]])])
+        gate.resolve([.ready(id: "media", rows: [["id": "PRD-2345"]])])
         await model.waitForBackground()
         let resolved = try #require(model.project(page.items).first)
         #expect(resolved.raw["displayImages"] == nil)
@@ -29,21 +30,22 @@ struct EntityListEnrichmentTests {
     }
 
     @Test func lateGroupAndSummaryCannotCrossARefresh() async {
-        let groups = Gate<[EntityListGroupResult]>()
-        let summary = Gate<[String: Double]?>()
+        let groups = Reply<[EntityListGroupResult]>()
+        let summary = Reply<[String: Double]?>()
         let model = EntityListEnrichmentModel(descriptor: EntityCatalog[.product])
         let old = Self.page(
             enrich: { _, _ in await groups.wait() }, summary: { await summary.wait() })
         model.accept(old, replacing: true)
-        await groups.waitUntilStarted()
-        await summary.waitUntilStarted()
+        await groups.gate.arrivals(1)
+        await summary.gate.arrivals(1)
+        let stale = model.tasks + [model.summaryTask].compactMap { $0 }
         model.invalidate()
         let fresh = Self.page(enrich: { _, _ in [] }, summary: { ["price": 3] })
         model.accept(fresh, replacing: true)
         await model.waitForBackground()
-        await groups.resolve([.ready(id: "media", rows: [["id": "PRD-2345", "displayImages": []]])])
-        await summary.resolve(["price": 99])
-        await Task.yield()
+        groups.resolve([.ready(id: "media", rows: [["id": "PRD-2345", "displayImages": []]])])
+        summary.resolve(["price": 99])
+        for task in stale { await task.value }
 
         #expect(model.sums?["price"] == 3)
         #expect(model.project(fresh.items).first?.raw["displayImages"] != .array([]))
@@ -105,26 +107,17 @@ struct EntityListEnrichmentTests {
         private var count = 0
         func next() -> Int { count += 1; return count }
     }
-    private actor Gate<T: Sendable> {
-        private var result: T?
-        private var continuation: CheckedContinuation<T, Never>?
-        private var started = false
-        private var startContinuation: CheckedContinuation<Void, Never>?
+    /// A late answer: the double parks until the test resolves it with a value.
+    private final class Reply<T: Sendable>: Sendable {
+        let gate = Gate()
+        private let value = Mutex<T?>(nil)
         func wait() async -> T {
-            started = true
-            startContinuation?.resume()
-            startContinuation = nil
-            if let result { return result }
-            return await withCheckedContinuation { continuation = $0 }
-        }
-        func waitUntilStarted() async {
-            if started { return }
-            await withCheckedContinuation { startContinuation = $0 }
+            await gate.hold()
+            return value.withLock { $0! }
         }
         func resolve(_ value: T) {
-            result = value
-            continuation?.resume(returning: value)
-            continuation = nil
+            self.value.withLock { $0 = value }
+            gate.open()
         }
     }
 }

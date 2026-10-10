@@ -124,9 +124,9 @@ struct EntityRelationshipsTests {
         let model = EntityRelationshipsModel(client: client)
 
         let firstLoad = Task { await model.loadInitial(source: first) }
-        await client.waitUntilFirstRequestStarts()
+        await client.first.arrivals(1)
         await model.loadInitial(source: second)
-        await client.finishFirstRequest()
+        client.first.open()
         await firstLoad.value
 
         #expect(model.source == second)
@@ -174,9 +174,9 @@ struct EntityRelationshipsTests {
         let acceptance = Task {
             await model.accept(.expenseProject(proposal), basisKey: "basis-\(expense.id)")
         }
-        await client.waitUntilAcceptanceStarts()
+        await client.acceptance.arrivals(1)
         await model.loadInitial(source: product)
-        await client.finishAcceptance()
+        client.acceptance.open()
 
         #expect(await acceptance.value == nil)
         #expect(model.source == product)
@@ -426,27 +426,16 @@ private actor RelationshipClientStub: EntityRelationshipsClient {
 private actor SuspendedRelationshipClient: EntityRelationshipsClient {
     let firstSource: EntityRef
     let graphs: [EntityRef: EntityGraph]
-    var firstStarted = false
-    var firstContinuation: CheckedContinuation<Void, Never>?
+    let first = Gate()
 
     init(firstSource: EntityRef, graphs: [EntityRef: EntityGraph]) {
         self.firstSource = firstSource
         self.graphs = graphs
     }
 
-    func waitUntilFirstRequestStarts() async {
-        while !firstStarted { await Task.yield() }
-    }
-
-    func finishFirstRequest() {
-        firstContinuation?.resume()
-        firstContinuation = nil
-    }
-
     func exploreRelationships(root: EntityRef, depth: Int) async throws -> EntityGraph {
         if root == firstSource {
-            firstStarted = true
-            await withCheckedContinuation { continuation in firstContinuation = continuation }
+            await first.hold()
             try Task.checkCancellation()
         }
         return graphs[root]!
@@ -473,19 +462,9 @@ private actor SuspendedRelationshipClient: EntityRelationshipsClient {
 
 private actor SuspendedAcceptanceClient: EntityRelationshipsClient {
     let graphs: [EntityRef: EntityGraph]
-    var acceptanceStarted = false
-    var acceptanceContinuation: CheckedContinuation<Void, Never>?
+    let acceptance = Gate()
 
     init(graphs: [EntityRef: EntityGraph]) { self.graphs = graphs }
-
-    func waitUntilAcceptanceStarts() async {
-        while !acceptanceStarted { await Task.yield() }
-    }
-
-    func finishAcceptance() {
-        acceptanceContinuation?.resume()
-        acceptanceContinuation = nil
-    }
 
     func exploreRelationships(root: EntityRef, depth: Int) throws -> EntityGraph {
         guard let graph = graphs[root] else { throw URLError(.resourceUnavailable) }
@@ -506,8 +485,7 @@ private actor SuspendedAcceptanceClient: EntityRelationshipsClient {
     }
 
     func assignExpense(_ expenseID: String, toProject projectID: String) async {
-        acceptanceStarted = true
-        await withCheckedContinuation { continuation in acceptanceContinuation = continuation }
+        await acceptance.hold()
         // Deliberately ignore cancellation to exercise the model's generation guard.
     }
 

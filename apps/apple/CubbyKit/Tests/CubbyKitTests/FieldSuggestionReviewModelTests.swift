@@ -3,30 +3,13 @@ import Testing
 
 @testable import CubbyKit
 
-@MainActor
-private final class SuggestionApplyGate {
-    private var continuation: CheckedContinuation<FinanceCategoryApplyOut, Never>?
-
-    func wait() async -> FinanceCategoryApplyOut {
-        await withCheckedContinuation { continuation = $0 }
-    }
-
-    func waitUntilRequested() async {
-        while continuation == nil { await Task.yield() }
-    }
-
-    func complete() {
-        continuation?.resume(
-            returning: .init(
-                entity: .expense, entityId: "EXP-4K7M", spendingCategoryId: "SPC-4K7M", sideEffects: .init()))
-        continuation = nil
-    }
-}
-
 /// Transport is the external seam; the real editor and review state handle delayed responses and explicit acceptance.
 @Suite("Field suggestion review model")
 @MainActor
 struct FieldSuggestionReviewModelTests {
+    private static let applied = FinanceCategoryApplyOut(
+        entity: .expense, entityId: "EXP-4K7M", spendingCategoryId: "SPC-4K7M", sideEffects: .init())
+
     private func editor(_ key: EntityKey = .expense) -> GenericEntityEditModel {
         GenericEntityEditModel(
             descriptor: EntityCatalog[key], mode: .update(id: key == .expense ? "EXP-4K7M" : "PUR-4K7M"),
@@ -70,15 +53,19 @@ struct FieldSuggestionReviewModelTests {
     @Test func delayedSavedCategoryPreservesNewerCategoryAndSiblingDraft() async throws {
         let editor = editor()
         let response = try response()
-        let gate = SuggestionApplyGate()
+        let gate = Gate()
         let review = FieldSuggestionReviewModel(
-            editor: editor, fetch: { _ in response }, saveCategory: { _ in await gate.wait() })
+            editor: editor, fetch: { _ in response },
+            saveCategory: { _ in
+                await gate.hold()
+                return Self.applied
+            })
         try await review.request()
         let apply = Task { try await review.apply("spendingCategoryId") }
-        await gate.waitUntilRequested()
+        await gate.arrivals(1)
         editor.draft["notes"] = .string("Unsaved sibling")
         editor.draft["spendingCategoryId"] = .string("SPC-8K7M")
-        gate.complete()
+        gate.open()
         #expect(try await apply.value == .saved(field: "spendingCategoryId", value: .string("SPC-4K7M")))
         #expect(editor.original?["spendingCategoryId"] == .string("SPC-4K7M"))
         #expect(editor.draft["spendingCategoryId"] == .string("SPC-8K7M"))
@@ -88,14 +75,18 @@ struct FieldSuggestionReviewModelTests {
     @Test func leavingEditorRejectsLateApplyAndStaleFailureClearsReview() async throws {
         let editor = editor()
         let response = try response()
-        let gate = SuggestionApplyGate()
+        let gate = Gate()
         let review = FieldSuggestionReviewModel(
-            editor: editor, fetch: { _ in response }, saveCategory: { _ in await gate.wait() })
+            editor: editor, fetch: { _ in response },
+            saveCategory: { _ in
+                await gate.hold()
+                return Self.applied
+            })
         try await review.request()
         let apply = Task { try await review.apply("spendingCategoryId") }
-        await gate.waitUntilRequested()
+        await gate.arrivals(1)
         review.invalidate()
-        gate.complete()
+        gate.open()
         #expect(try await apply.value == nil)
         #expect(editor.original?["spendingCategoryId"] == .null)
 

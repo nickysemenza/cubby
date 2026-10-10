@@ -60,9 +60,9 @@ public final class EntityListEnrichmentModel {
     private var states: [String: [String: State]] = [:]
     private var fields: [String: [String]] = [:]
     private var patches: [String: [String: JSONValue]] = [:]
-    private var tasks: [Task<Void, Never>] = []
+    private(set) var tasks: [Task<Void, Never>] = []
     private var enrichmentTail: Task<Void, Never>?
-    private var summaryTask: Task<Void, Never>?
+    private(set) var summaryTask: Task<Void, Never>?
     private var summaryLoader: EntityListDeferred.SummaryLoader?
 
     public init(descriptor: EntityDescriptor) { self.descriptor = descriptor }

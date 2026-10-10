@@ -18,7 +18,8 @@ struct EntityListSearchModelTests {
 
         model.setQuery("old")
         model.setQuery("new")
-        #expect(await waitUntil { model.phase == .loaded })
+        await model.settled()
+        #expect(model.phase == .loaded)
 
         #expect(recorder.values == ["new:1"])
         #expect(model.rows.map(\.title) == ["new"])
@@ -36,11 +37,11 @@ struct EntityListSearchModelTests {
             })
 
         model.setQuery("sample")
-        #expect(await waitUntil { model.phase == .failed("failed") })
+        await model.settled()
         #expect(model.phase == .failed("failed"))
 
         model.retry()
-        #expect(await waitUntil { model.phase == .loaded })
+        await model.settled()
         #expect(model.phase == .loaded)
         #expect(model.rows.count == 1)
 
@@ -57,14 +58,16 @@ struct EntityListSearchModelTests {
             loader: { query, _ in Self.page(Self.row(query)) })
 
         model.setQuery("old")
-        #expect(await waitUntil { model.phase == .loaded })
+        await model.settled()
+        #expect(model.phase == .loaded)
         #expect(model.rows.map(\.title) == ["old"])
 
         model.setQuery("PRD-2D6R")
 
         #expect(model.rows.isEmpty)
         #expect(model.phase == .debouncing || model.phase == .loading)
-        #expect(await waitUntil { model.phase == .loaded })
+        await model.settled()
+        #expect(model.phase == .loaded)
         #expect(model.rows.map(\.title) == ["PRD-2D6R"])
     }
 
@@ -83,7 +86,8 @@ struct EntityListSearchModelTests {
                     meta: ListPageMeta(pageIndex: 2, pageSize: 1, totalCount: 2))
             })
         model.setQuery("second")
-        #expect(await waitUntil { model.phase == .loaded })
+        await model.settled()
+        #expect(model.phase == .loaded)
         await model.loadNextPage()
 
         #expect(model.page == 2)
@@ -95,18 +99,16 @@ struct EntityListSearchModelTests {
             debounceNanoseconds: 1,
             sleeper: { _ in },
             loader: { query, page in
-                if page == 2 {
-                    // Deliberately swallow cancellation to exercise the model's stale/cancelled
-                    // completion guard rather than relying on cooperative loaders.
-                    try? await Task.sleep(nanoseconds: 50_000_000)
-                    return Self.page(Self.row(query))
-                }
+                // Page 2 ignores cancellation, so the model's own cancelled-completion guard is
+                // what keeps the page from landing.
+                if page == 2 { return Self.page(Self.row(query)) }
                 return ListPage(
                     items: [Self.row("first")],
                     meta: ListPageMeta(pageIndex: 1, pageSize: 1, totalCount: 2))
             })
         model.setQuery("second")
-        #expect(await waitUntil { model.phase == .loaded })
+        await model.settled()
+        #expect(model.phase == .loaded)
         let nextPage = Task { await model.loadNextPage() }
         nextPage.cancel()
         await nextPage.value
@@ -128,7 +130,8 @@ struct EntityListSearchModelTests {
                 }
             })
         model.setQuery("sample")
-        #expect(await waitUntil { model.phase == .loaded })
+        await model.settled()
+        #expect(model.phase == .loaded)
 
         await model.refresh()
         #expect(model.phase == .loaded)
@@ -155,11 +158,13 @@ struct EntityListSearchModelTests {
                         sums: .init(additionalProperties: ["price": 25])))
             })
         model.setQuery("sample")
-        #expect(await waitUntil { model.phase == .loaded })
+        await model.settled()
+        #expect(model.phase == .loaded)
         #expect(model.meta?.sums?.additionalProperties["price"] == 25)
 
         model.setLoader { _, _ in throw TestFailure.failed }
-        #expect(await waitUntil { model.phase == .failed("failed") })
+        await model.settled()
+        #expect(model.phase == .failed("failed"))
 
         #expect(model.rows.map(\.title) == ["old"])
         #expect(model.meta == nil)
@@ -173,14 +178,6 @@ struct EntityListSearchModelTests {
 
     private nonisolated static func page(_ row: EntityRow) -> ListPage<EntityRow> {
         ListPage(items: [row], meta: ListPageMeta(pageIndex: 1, pageSize: 25, totalCount: 1))
-    }
-
-    private func waitUntil(_ condition: @MainActor () -> Bool) async -> Bool {
-        for _ in 0..<1_000 {
-            if condition() { return true }
-            try? await Task.sleep(nanoseconds: 1_000_000)
-        }
-        return condition()
     }
 
     private enum TestFailure: Error { case failed }

@@ -27,28 +27,29 @@ private final class FakeReports: ReportServing {
     let controlFails = Mutex(false)
     let pages: Mutex<[EntityReportOut]>
 
-    /// How long a read takes, so a test can act while one is in flight.
-    let delay: Duration
+    /// Holds every read until released, so a test can act while one is in flight.
+    let reads: Gate
     /// When set, a read answers by its cursor (`-` for the first page) instead of in sequence.
     let byCursor: [String: EntityReportOut]?
 
     init(
-        _ pages: [EntityReportOut], delay: Duration = .zero, byCursor: [String: EntityReportOut]? = nil
+        _ pages: [EntityReportOut], reads: Gate = Gate(open: true),
+        byCursor: [String: EntityReportOut]? = nil
     ) {
         self.pages = Mutex(pages)
-        self.delay = delay
+        self.reads = reads
         self.byCursor = byCursor
     }
 
     func report(slot: ReportSlot, id: String, cursor: String?) async throws -> EntityReportOut {
         calls.withLock { $0.reads.append("\(slot.rawValue)|\(cursor ?? "-")") }
-        try? await Task.sleep(for: delay)
+        await reads.hold()
         if let byCursor { return byCursor[cursor ?? "-"] ?? byCursor["-"]! }
         return pages.withLock { $0.count > 1 ? $0.removeFirst() : $0[0] }
     }
     func reports(slots: [ReportSlot], id: String) async throws -> [(ReportSlot, EntityReportOut)] {
         calls.withLock { $0.reads.append("batch:\(slots.count)") }
-        try? await Task.sleep(for: delay)
+        await reads.hold()
         let page = pages.withLock { $0.count > 1 ? $0.removeFirst() : $0[0] }
         return slots.map { ($0, page) }
     }
@@ -187,19 +188,16 @@ private let yieldCommand = #"""
      "request": {"kind": "meal-yield", "mealRecipeId": "\#(mealRecipeID)", "field": "actual", "grams": null}}
     """#
 
-/// Waits (bounded) for `condition`, so a polling test does not depend on how loaded the machine is.
-@MainActor
-private func eventually(_ condition: () -> Bool) async {
-    for _ in 0..<400 where !condition() { try? await Task.sleep(for: .milliseconds(5)) }
-}
-
 @MainActor
 @Suite("Report slot model")
 struct ReportSlotModelTests {
-    private func model(_ service: FakeReports, shown: String? = nil) -> ReportSlotModel {
+    /// `polls` stands in for the wait between polls: a poll proceeds only once the test lets it.
+    private func model(
+        _ service: FakeReports, shown: String? = nil, polls: Gate = Gate()
+    ) -> ReportSlotModel {
         ReportSlotModel(
             slot: .run_importApprovals, id: "RUN-4K7M", shownStatus: shown, service: service,
-            pollInterval: .milliseconds(5))
+            waitForNextPoll: { try await polls.pass() })
     }
 
     private func rowIDs(_ presentation: ReportPresentation?) -> [String] {
@@ -446,9 +444,9 @@ struct ReportSlotModelTests {
             try report(live: true, rows: [row("a")]),
             try report(live: false, status: "completed", rows: [row("b")]),
         ])
-        let model = model(service)
+        let model = model(service, polls: Gate(open: true))
         model.retain()
-        await eventually { model.presentation != nil && !model.live }
+        await model.pollTask?.value
         model.release()
         #expect(service.calls.withLock { $0.reads.count } == 3)
         #expect(!model.live)
@@ -458,18 +456,20 @@ struct ReportSlotModelTests {
     @Test("Releasing the last reader stops polling")
     func releaseStopsPolling() async throws {
         let service = FakeReports([try report(live: true, rows: [row("a")])])
-        let model = model(service)
+        let polls = Gate()
+        let model = model(service, polls: polls)
         model.retain()
         model.retain()
         model.release()
         // One reader remains, so polling goes on.
-        await eventually { service.calls.withLock { $0.reads.count } > 2 }
+        await polls.arrivals(1)
+        polls.release()
+        await polls.arrivals(2)
+        let polling = model.pollTask
         model.release()
-        try await Task.sleep(for: .milliseconds(30))
-        let settled = service.calls.withLock { $0.reads.count }
-        try await Task.sleep(for: .milliseconds(80))
-        #expect(service.calls.withLock { $0.reads.count } == settled)
-        #expect(settled > 2)
+        await polling?.value
+        #expect(service.calls.withLock { $0.reads.count } == 2)
+        #expect(polls.arrived == 2)
     }
 
     @Test("Load more appends the next page's rows under the first page")
@@ -514,14 +514,15 @@ struct ReportSlotModelTests {
     @Test("Slots sharing a batch make one request per poll, however many sections there are")
     func batchedSlotsShareOneRead() async throws {
         let service = FakeReports([try report(live: false, status: "completed", rows: [row("a")])])
-        let batch = ReportBatchModel(id: "RUN-4K7M", service: service, pollInterval: .milliseconds(5))
+        let batch = ReportBatchModel(id: "RUN-4K7M", service: service)
         let first = ReportSlotModel(
             slot: .run_importStats, id: "RUN-4K7M", batch: batch, service: service)
         let second = ReportSlotModel(
             slot: .run_importTimeline, id: "RUN-4K7M", batch: batch, service: service)
         first.retain()
         second.retain()
-        await eventually { first.presentation != nil && second.presentation != nil }
+        // The completed record is read once and never polled.
+        await batch.pollTask?.value
         #expect(rowIDs(first.presentation) == ["a"])
         #expect(rowIDs(second.presentation) == ["a"])
         #expect(service.calls.withLock { $0.reads } == ["batch:\(RunReportBatch.slots.count)"])
@@ -531,20 +532,24 @@ struct ReportSlotModelTests {
 
     @Test("A poll never drops pages that were loaded, and load more waits for a read in flight")
     func pollingKeepsLoadedPages() async throws {
+        let reads = Gate()
         let service = FakeReports(
-            [], delay: .milliseconds(20),
+            [], reads: reads,
             byCursor: [
                 "-": try report(
                     live: false, status: "completed", rows: [row("one")], nextCursor: "c2"),
                 "c2": try report(live: false, status: "completed", rows: [row("two")]),
             ])
         let model = model(service)
+        reads.release()
         await model.refresh()
         // Asked for while a refresh is in flight: it must still load the page, not no-op.
-        async let refreshing: Void = model.refresh()
-        await eventually { model.isLoading }
-        await model.loadMore()
-        await refreshing
+        let refreshing = Task.immediate { await model.refresh() }
+        #expect(model.isLoading)
+        let more = Task.immediate { await model.loadMore() }
+        reads.open()
+        await refreshing.value
+        await more.value
         #expect(rowIDs(model.presentation) == ["one", "two"])
         // A later refresh keeps the loaded page.
         await model.refresh()
@@ -554,16 +559,19 @@ struct ReportSlotModelTests {
     @Test("An action's refresh waits for a read in flight and reads again")
     func actionRefreshIsNotSwallowed() async throws {
         let action: ReportCommand = try decode(dismiss)
+        let reads = Gate()
         let service = FakeReports(
             [
                 try report(live: false, status: "completed", rows: [row("stale")]),
                 try report(live: false, status: "completed", rows: [row("fresh")]),
-            ], delay: .milliseconds(30))
+            ], reads: reads)
         let model = model(service)
-        async let poll: Void = model.refresh()
-        await eventually { model.isLoading }
-        _ = await model.run(action, confirmed: false)
-        await poll
+        let poll = Task.immediate { await model.refresh() }
+        #expect(model.isLoading)
+        let ran = Task.immediate { _ = await model.run(action, confirmed: false) }
+        reads.open()
+        await poll.value
+        await ran.value
         #expect(rowIDs(model.presentation) == ["fresh"])
     }
 
@@ -575,14 +583,14 @@ struct ReportSlotModelTests {
             try report(live: true, status: "running", rows: [row("c")]),
             try report(live: false, status: "completed", rows: [row("d")]),
         ])
-        let model = model(service)
+        let model = model(service, polls: Gate(open: true))
         model.retain()
-        await eventually { model.presentation != nil }
-        let before = service.calls.withLock { $0.reads.count }
-        try await Task.sleep(for: .milliseconds(40))
-        #expect(service.calls.withLock { $0.reads.count } == before)
+        await model.pollTask?.value
+        // The stopped record ended the loop after one read.
+        #expect(model.pollTask == nil)
+        #expect(service.calls.withLock { $0.reads.count } == 1)
         model.restartPolling()
-        await eventually { rowIDs(model.presentation) == ["d"] }
+        await model.pollTask?.value
         #expect(rowIDs(model.presentation) == ["d"])
         model.release()
     }
