@@ -889,6 +889,42 @@ describe("unified Runs history", () => {
       .update(runTable)
       .set({ status: "paused_offline" })
       .where(eq(runTable.id, childId));
+    const pauseReason =
+      "Enable screen recording, then resume the browser work.";
+    await getDb(ctx.db).insert(runProgress).values({
+      runId: childId,
+      eventId: "attention-progress",
+      phase: "research",
+      detail: "Reading an order",
+    });
+    await getDb(ctx.db)
+      .insert(runOperation)
+      .values([
+        {
+          runId: childId,
+          operationId: "browser-pause-old",
+          kind: "browser_command",
+          inputFingerprint: "old",
+          result: { pausedAt: "Older pause" },
+          updatedAt: new Date("2026-01-01T00:00:00Z"),
+        },
+        {
+          runId: childId,
+          operationId: "browser-pause-current",
+          kind: "browser_command",
+          inputFingerprint: "current",
+          result: { pausedAt: pauseReason },
+          updatedAt: new Date("2026-01-02T00:00:00Z"),
+        },
+        {
+          runId: childId,
+          operationId: "unrelated-pause",
+          kind: "agent_tool",
+          inputFingerprint: "unrelated",
+          result: { pausedAt: "Not a browser reason" },
+          updatedAt: new Date("2026-01-03T00:00:00Z"),
+        },
+      ]);
     const reviewId = await ensureRun(ctx.db, ctx.actor, {
       purpose: "product_enrichment",
       trigger: "manual",
@@ -918,6 +954,13 @@ describe("unified Runs history", () => {
       cursor: first.nextCursor,
     });
     const ids = [first.items[0]?.id, second.items[0]?.id];
+    expect
+      .soft(
+        [...first.items, ...second.items].find(
+          (row) => row.state === "paused_offline",
+        )?.currentStep,
+      )
+      .toBe(pauseReason);
     const saved = await getDb(ctx.db)
       .select({ id: runTable.id, shortcode: runTable.shortcode })
       .from(runTable);
@@ -952,6 +995,21 @@ describe("unified Runs history", () => {
     expect(
       await listActivity(ctx.db, null, { ...input, kind: "background" }),
     ).toMatchObject({ total: 0, items: [] });
+    const childCode = saved.find((row) => row.id === childId)!.shortcode;
+    expect
+      .soft(
+        (await activityDetail(ctx.db, null, { id: childCode, limit: 5 })).run
+          .currentStep,
+      )
+      .toBe(pauseReason);
+    await getDb(ctx.db)
+      .update(runTable)
+      .set({ status: "running" })
+      .where(eq(runTable.id, childId));
+    expect(
+      (await activityDetail(ctx.db, null, { id: childCode, limit: 5 })).run
+        .currentStep,
+    ).toBe("Reading an order");
   });
 
   it("counts matching work across every group independently of cursor pagination", async () => {

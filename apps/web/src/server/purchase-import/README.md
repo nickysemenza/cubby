@@ -49,6 +49,9 @@ failures, then open the existing inspector; the full attention filter remains
 paged. Read refreshes do not resume research or authorize inference.
 The Run declaration owns the attention URL key and its generated string codec;
 attention narrows the effective scope without clearing default exclusions.
+For browser-paused Runs, the shared list and inspector step uses the latest
+retained browser operation pause reason instead of stale progress. Resumed Runs
+return to ordinary progress; retained pause history stays immutable.
 
 Product and Purchase research history use the shared entity report and record
 renderer on web and Apple clients. Each attempt shows its Run lifecycle alongside

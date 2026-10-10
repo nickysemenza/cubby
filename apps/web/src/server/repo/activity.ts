@@ -27,7 +27,11 @@ import {
   imageDescriptionResult,
 } from "@cubby/schemas/image-processing";
 import { RUN_TARGET_BUCKET } from "@cubby/schemas/purchase-import";
-import { runTargetEntityKind, runWorkLabel } from "@cubby/schemas/run-fields";
+import {
+  runStatus,
+  runTargetEntityKind,
+  runWorkLabel,
+} from "@cubby/schemas/run-fields";
 import { parseShortcode } from "@cubby/shared";
 import { and, desc, eq, sql, type SQL } from "drizzle-orm";
 import { z } from "zod";
@@ -306,9 +310,17 @@ async function loadRunFacts(db: Database, internalIds: readonly string[]) {
     SELECT
       r.id AS "internalId",
       r.input,
-      (SELECT coalesce(p.detail, p.phase) FROM "RunProgress" p
-        WHERE p."runId" = r.id
-        ORDER BY p."createdAt" DESC, p.id DESC LIMIT 1) AS "currentStep",
+      coalesce(
+        CASE WHEN r.status IN (${runStatus.enum.paused_auth}, ${runStatus.enum.paused_offline}) THEN (
+          SELECT nullif(o.result->>'pausedAt', '') FROM "RunOperation" o
+          WHERE o."runId" = r.id AND o.kind = 'browser_command'
+            AND jsonb_typeof(o.result->'pausedAt') = ${"string"}
+          ORDER BY o."updatedAt" DESC, o.id DESC LIMIT 1
+        ) END,
+        (SELECT coalesce(p.detail, p.phase) FROM "RunProgress" p
+          WHERE p."runId" = r.id
+          ORDER BY p."createdAt" DESC, p.id DESC LIMIT 1)
+      ) AS "currentStep",
       (SELECT jsonb_build_object('total', count(*), ${targetBucketCounts})
         FROM "RunTarget" t WHERE t."runId" = r.id) AS "targetCounts",
       coalesce((SELECT jsonb_agg(jsonb_build_object(
