@@ -76,6 +76,7 @@ const capabilityMatrix = {
   file_import: new Set(),
   mail_search: new Set(),
   mail_discovery: new Set(),
+  suggestion_sweep: new Set(),
 } satisfies Record<RunPurpose, ReadonlySet<Capability>>;
 
 /**

@@ -29,6 +29,7 @@ import {
 } from "@cubby/schemas/field-resolution";
 import { parseShortcodeFor } from "@cubby/schemas/identifiers";
 import type { RunId } from "@cubby/schemas/identifiers";
+import type { SupportedDecisionModel } from "@cubby/shared/ai/models";
 import { z } from "zod";
 
 import { classifyWithJev } from "~/server/ai/classify";
@@ -95,6 +96,14 @@ export interface SuggestFieldsPorts {
   jev?: JevPort;
   resolveLabels?: LabelResolverPort;
   force?: boolean;
+  /** Eval-only model override; production decisions continue to use routing. */
+  decisionModel?: SupportedDecisionModel;
+  /** Keep usage persistence disabled for read-only decision evaluations. */
+  recordUsage?: boolean;
+  onTokenUsage?: (usage: {
+    inputTokens: number | null;
+    outputTokens: number | null;
+  }) => void;
   /** Test-only: overrides individual registry entries (fake rosters) without
    * a database. Keyed the same as `FIELD_SUGGEST_REGISTRY` (`"entity.field"`). */
   registry?: Partial<Record<string, FieldSuggestSpec>>;
@@ -104,6 +113,21 @@ export interface SuggestFieldsPorts {
     db: Database,
     input: FieldSuggestionsInput,
   ) => Promise<FieldResolutions>;
+}
+
+function suggestionUsage(
+  db: Database,
+  runId: RunId,
+  operation: string,
+  ports: SuggestFieldsPorts | undefined,
+): AiSelectionUsage {
+  return {
+    db: ports?.recordUsage === false ? undefined : db,
+    runId,
+    operation,
+    cacheStatus: "none",
+    force: ports?.force,
+  };
 }
 
 async function resolveSuggestionInheritance(
@@ -329,6 +353,11 @@ async function resolveEnumTarget(
   rawBasis: RawBasis,
   usage: AiSelectionUsage,
   jev: JevPort | undefined,
+  decisionModel?: SupportedDecisionModel,
+  onTokenUsage?: (usage: {
+    inputTokens: number | null;
+    outputTokens: number | null;
+  }) => void,
 ): Promise<TargetResolution> {
   const values = spec.candidates
     ? await spec.candidates(db, rawBasis)
@@ -342,6 +371,8 @@ async function resolveEnumTarget(
     describe: spec.describe,
     usage,
     port: jev,
+    decisionModel,
+    onTokenUsage,
   });
   const alternatives = result.alternatives.map((alternative) => ({
     value: alternative.value,
@@ -533,6 +564,11 @@ async function resolveSpec(
   usage: AiSelectionUsage,
   jev: JevPort | undefined,
   linkedSubject?: string,
+  decisionModel?: SupportedDecisionModel,
+  onTokenUsage?: (usage: {
+    inputTokens: number | null;
+    outputTokens: number | null;
+  }) => void,
 ): Promise<TargetResolution> {
   if (spec.kind === "prune") {
     return resolvePruneTarget(db, spec, resolvedBasis, rawBasis, usage, jev);
@@ -549,6 +585,8 @@ async function resolveSpec(
     rawBasis,
     usage,
     jev,
+    decisionModel,
+    onTokenUsage,
   );
 }
 
@@ -560,9 +598,23 @@ async function resolveOneTarget(
   rawBasis: RawBasis,
   usage: AiSelectionUsage,
   jev: JevPort | undefined,
+  decisionModel?: SupportedDecisionModel,
+  onTokenUsage?: (usage: {
+    inputTokens: number | null;
+    outputTokens: number | null;
+  }) => void,
 ): Promise<TargetResolution> {
   if (spec.kind === "enum") {
-    return resolveEnumTarget(db, spec, subject, rawBasis, usage, jev);
+    return resolveEnumTarget(
+      db,
+      spec,
+      subject,
+      rawBasis,
+      usage,
+      jev,
+      decisionModel,
+      onTokenUsage,
+    );
   }
   if (spec.kind === "reference") {
     return resolveReferenceTarget(
@@ -961,13 +1013,12 @@ export async function suggestFields(
         return;
       }
 
-      const usage: AiSelectionUsage = {
+      const usage = suggestionUsage(
         db,
         runId,
-        operation: `suggestFields.${input.entity}.${target}`,
-        cacheStatus: "none",
-        force: ports?.force,
-      };
+        `suggestFields.${input.entity}.${target}`,
+        ports,
+      );
       const { suggestion, rawValue, outcome } = await resolveSpec(
         db,
         spec,
@@ -976,6 +1027,8 @@ export async function suggestFields(
         usage,
         ports?.jev,
         linkedContext?.subject,
+        ports?.decisionModel,
+        ports?.onTokenUsage,
       );
       suggestions[target] = reviewedSuggestion(
         input,
